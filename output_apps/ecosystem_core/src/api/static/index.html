@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" id="htmlRoot">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROXIRA Global Omnichannel Control Plane</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <style>
+        body { font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">R</div>
+                <div>
+                    <h1 class="font-bold text-base md:text-lg" id="txtTitle">ROXIRA GLOBAL CONTROL PLANE</h1>
+                    <p class="text-xs text-slate-400" id="txtSubtitle">Enterprise OS & Legal AI Studio</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <!-- 7-Language Global Switcher -->
+                <select id="langSelect" onchange="switchLanguage(this.value)" class="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none text-slate-200">
+                    <option value="fa">🇮🇷 فارسی (RTL)</option>
+                    <option value="en">🇬🇧 English (LTR)</option>
+                    <option value="ar">🇦🇪 العربية (RTL)</option>
+                    <option value="ru">🇷🇺 Русский (LTR)</option>
+                    <option value="de">🇩🇪 Deutsch (LTR)</option>
+                    <option value="fr">🇫🇷 Français (LTR)</option>
+                    <option value="zh">🇨🇳 中文 (LTR)</option>
+                </select>
+
+                <span class="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Live 5.75.200.67
+                </span>
+                
+                <a href="/docs" target="_blank" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition font-medium">API Docs</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+            <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <p class="text-xs text-slate-400" id="c1Title">حسابداری و صرافی چندارزی</p>
+                <p class="text-xl font-bold text-slate-100 mt-2" id="c1Val">USD, AED, USDT, EUR</p>
+                <p class="text-xs text-emerald-400 mt-1" id="c1Sub">خزانه چندشعبه‌ای و تسعیر ارز</p>
+            </div>
+            <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <p class="text-xs text-slate-400" id="c2Title">درگاه پرداخت و انبار</p>
+                <p class="text-xl font-bold text-slate-100 mt-2" id="c2Val">شاپرک + تتر TRC20</p>
+                <p class="text-xs text-indigo-400 mt-1" id="c2Sub">ردیابی محموله و FIFO</p>
+            </div>
+            <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <p class="text-xs text-slate-400" id="c3Title">سامانه قاضی هوشمند</p>
+                <p class="text-xl font-bold text-slate-100 mt-2" id="c3Val">LegalGraphRAG</p>
+                <p class="text-xs text-amber-400 mt-1" id="c3Sub">آرای وحدت رویه و ماده ۵۲۲</p>
+            </div>
+            <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <p class="text-xs text-slate-400" id="c4Title">مغز هوش مصنوعی</p>
+                <p class="text-xl font-bold text-slate-100 mt-2" id="c4Val">روتر ۶ سطحی ضدقطعی</p>
+                <p class="text-xs text-emerald-400 mt-1" id="c4Sub">Nemotron 1M ➔ DeepSeek Flash</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-6 shadow-sm">
+            <h2 class="font-bold text-base text-slate-200 mb-3 flex items-center gap-2" id="txtAiTitle">
+                <span>⚡</span>
+                <span>کنسول هوش مصنوعی و تحلیلگر چندزبانه</span>
+            </h2>
+            <div class="flex flex-col md:flex-row gap-3">
+                <input id="promptInput" type="text" placeholder="پرسش مالی، محاسباتی یا حقوقی خود را وارد کنید..." class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition text-slate-100">
+                <button onclick="sendPrompt()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-indigo-600/30 whitespace-nowrap" id="btnSend">ارسال به هوش مصنوعی</button>
+            </div>
+            <div id="aiResponse" class="mt-4 p-4 rounded-lg bg-slate-950 border border-slate-800 text-sm text-slate-300 hidden whitespace-pre-wrap leading-relaxed"></div>
+        </div>
+    </main>
+
+    <script>
+        const i18n = {
+            fa: { dir: "rtl", title: "اتاق فرمان بین‌المللی ROXIRA", subtitle: "مدیریت چندارزی صرافی و استودیوی قضایی", c1Title: "حسابداری و صرافی چندارزی", c1Val: "USD, AED, USDT, EUR", c1Sub: "خزانه چندشعبه‌ای و تسعیر ارز", c2Title: "درگاه پرداخت و انبار", c2Val: "شاپرک + تتر TRC20", c2Sub: "ردیابی محموله و FIFO", c3Title: "سامانه قاضی هوشمند", c3Val: "LegalGraphRAG", c3Sub: "آرای وحدت رویه و ماده ۵۲۲", c4Title: "مغز هوش مصنوعی", c4Val: "روتر ۶ سطحی ضدقطعی", c4Sub: "Nemotron 1M ➔ DeepSeek Flash", aiTitle: "کنسول هوش مصنوعی و تحلیلگر چندزبانه", placeholder: "پرسش مالی، محاسباتی یا حقوقی خود را وارد کنید...", btnSend: "ارسال به هوش مصنوعی" },
+            en: { dir: "ltr", title: "ROXIRA GLOBAL CONTROL PLANE", subtitle: "Multi-Currency Exchange OS & Legal AI Studio", c1Title: "Multi-Currency & Treasury", c1Val: "USD, AED, USDT, EUR", c1Sub: "Multi-Branch Vaults & FX Valuation", c2Title: "Payment Gateway & Supply", c2Val: "Shaparak + USDT TRC20", c2Sub: "Shipment Tracking & FIFO", c3Title: "Smart Judge Legal Studio", c3Val: "LegalGraphRAG", c3Sub: "Supreme Precedents & Article 522", c4Title: "AI Brain Engine", c4Val: "6-Tier Failover Router", c4Sub: "Nemotron 1M ➔ DeepSeek Flash", aiTitle: "Global Multilingual AI Console", placeholder: "Enter financial, legal, or currency exchange query...", btnSend: "Submit Query" },
+            ar: { dir: "rtl", title: "غرفة التحكم العالمية ROXIRA", subtitle: "نظام الصرافة متعددة العملات والذكاء القضائي", c1Title: "المحاسبة والصرافة", c1Val: "USD, AED, USDT, EUR", c1Sub: "الخزائن متعددة الفروع وتقييم العملات", c2Title: "بوابات الدفع والمخازن", c2Val: "شاپرک + USDT TRC20", c2Sub: "تتبع الشحنات والوارد أولاً صادر أولاً", c3Title: "استوديو القاضي الذكي", c3Val: "LegalGraphRAG", c3Sub: "السوابق القضائية وحساب التعويضات", c4Title: "محرك الذكاء الاصطناعي", c4Val: "راوتر سداسي المستويات", c4Sub: "Nemotron 1M ➔ DeepSeek Flash", aiTitle: "منصة الذكاء الاصطناعي متعددة اللغات", placeholder: "أدخل استفسارك المالي أو القانوني...", btnSend: "إرسال الاستفسار" },
+            ru: { dir: "ltr", title: "ГЛОБАЛЬНАЯ ПАНЕЛЬ ROXIRA", subtitle: "Мультивалютная платформа и правовой ИИ", c1Title: "Финансы и валюта", c1Val: "USD, AED, USDT, RUB", c1Sub: "Многофилиальное казначейство", c2Title: "Платежи и логистика", c2Val: "Shaparak + USDT TRC20", c2Sub: "Отслеживание партий и FIFO", c3Title: "Правовая студия", c3Val: "LegalGraphRAG", c3Sub: "Судебная практика и расчет пени", c4Title: "ИИ Архитектура", c4Val: "6-уровневый маршрутизатор", c4Sub: "Nemotron 1M ➔ DeepSeek Flash", aiTitle: "Многоязычная ИИ-консоль", placeholder: "Введите финансовый или правовой запрос...", btnSend: "Отправить запрос" },
+            de: { dir: "ltr", title: "ROXIRA LEITSTAND", subtitle: "Unternehmens-OS & Rechtliche KI-Plattform", c1Title: "Buchhaltung & Devisen", c1Val: "EUR, USD, AED, USDT", c1Sub: "Mehrfilial-Tresor & FX-Bewertung", c2Title: "Zahlungsgateways & Lager", c2Val: "Shaparak + USDT TRC20", c2Sub: "Sendungsverfolgung & FIFO", c3Title: "Rechts-KI Studio", c3Val: "LegalGraphRAG", c3Sub: "Präzedenzfälle & Verzugszinsen", c4Title: "KI-Kern", c4Val: "6-Stufen-Failover-Router", c4Sub: "Nemotron 1M ➔ DeepSeek Flash", aiTitle: "Globale KI-Konsole", placeholder: "Geben Sie eine finanzielle oder rechtliche Anfrage ein...", btnSend: "Anfrage senden" },
+            fr: { dir: "ltr", title: "PANNEAU DE COMMANDE ROXIRA", subtitle: "Système d'Entreprise Multi-Devises & IA Juridique", c1Title: "Comptabilité & Trésorerie", c1Val: "EUR, USD, AED, USDT", c1Sub: "Coffres Multi-Branches & Évaluation FX", c2Title: "Passerelle de Paiement & Stock", c2Val: "Shaparak + USDT TRC20", c2Sub: "Suivi des Expéditions & FIFO", c3Title: "Studio Juridique IA", c3Val: "LegalGraphRAG", c3Sub: "Jurisprudence & Indemnités", c4Title: "Moteur IA", c4Val: "Routeur à 6 Niveaux", c4Sub: "Nemotron 1M ➔ DeepSeek Flash", aiTitle: "Console IA Multilingue", placeholder: "Entrez votre requête financière ou juridique...", btnSend: "Envoyer la requête" },
+            zh: { dir: "ltr", title: "ROXIRA 全球企业控制台", subtitle: "多币种兑换系统与法律人工智能工作室", c1Title: "会计与多币种金库", c1Val: "CNY, USD, AED, USDT", c1Sub: "多分支金库与汇率结算", c2Title: "支付网关与供应链", c2Val: "Shaparak + USDT TRC20", c2Sub: "货物追踪与先进先出", c3Title: "智能法官法律工作室", c3Val: "LegalGraphRAG", c3Sub: "最高法院判例与赔偿计算", c4Title: "人工智能引擎", c4Val: "6级故障切换路由器", c4Sub: "Nemotron 1M ➔ DeepSeek Flash", aiTitle: "多语言人工智能控制台", placeholder: "输入财务、法律或外汇查询...", btnSend: "提交查询" }
+        };
+
+        function switchLanguage(lang) {
+            const data = i18n[lang] || i18n.fa;
+            document.getElementById("htmlRoot").setAttribute("dir", data.dir);
+            document.getElementById("htmlRoot").setAttribute("lang", lang);
+            document.getElementById("txtTitle").innerText = data.title;
+            document.getElementById("txtSubtitle").innerText = data.subtitle;
+            document.getElementById("c1Title").innerText = data.c1Title;
+            document.getElementById("c1Val").innerText = data.c1Val;
+            document.getElementById("c1Sub").innerText = data.c1Sub;
+            document.getElementById("c2Title").innerText = data.c2Title;
+            document.getElementById("c2Val").innerText = data.c2Val;
+            document.getElementById("c2Sub").innerText = data.c2Sub;
+            document.getElementById("c3Title").innerText = data.c3Title;
+            document.getElementById("c3Val").innerText = data.c3Val;
+            document.getElementById("c3Sub").innerText = data.c3Sub;
+            document.getElementById("c4Title").innerText = data.c4Title;
+            document.getElementById("c4Val").innerText = data.c4Val;
+            document.getElementById("c4Sub").innerText = data.c4Sub;
+            document.getElementById("txtAiTitle").innerHTML = `<span>⚡</span> <span>${data.aiTitle}</span>`;
+            document.getElementById("promptInput").placeholder = data.placeholder;
+            document.getElementById("btnSend").innerText = data.btnSend;
+        }
+
+        async function sendPrompt() {
+            const input = document.getElementById('promptInput');
+            const resDiv = document.getElementById('aiResponse');
+            if (!input.value.trim()) return;
+
+            resDiv.classList.remove('hidden');
+            resDiv.innerText = 'Processing through Global 6-Tier Smart Router...';
+
+            try {
+                const response = await fetch('/api/v1/ai/smart-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: input.value })
+                });
+                const data = await response.json();
+                resDiv.innerText = `[Active Model: ${data.model_used || 'Auto-Routed'}]\n\n${data.output || JSON.stringify(data)}`;
+            } catch (err) {
+                resDiv.innerText = 'Error connecting to backend: ' + err;
+            }
+        }
+    </script>
+</body>
+</html>

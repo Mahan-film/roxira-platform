@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir psycopg fastapi uvicorn pydantic python-docx redis httpx langgraph sentence-transformers
+
+COPY output_apps /app/output_apps
+COPY src /app/src
+COPY run_unified_server.py /app/run_unified_server.py
+
+EXPOSE 8000
+
+CMD ["python3", "run_unified_server.py"]

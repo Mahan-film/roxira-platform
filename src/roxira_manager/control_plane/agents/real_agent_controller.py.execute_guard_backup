@@ -1,0 +1,83 @@
+from .contract_guard import AgentContractGuard
+
+
+import subprocess
+
+
+
+class RealAgentController:
+
+
+    def execute(self,agent,task):
+
+
+        commands={
+
+            "opencode":[
+
+                "opencode",
+
+                "run",
+
+                task
+
+            ],
+
+            "aider":[
+
+                "aider",
+
+                "--message",
+
+                task
+
+            ],
+
+            "openhands":[
+
+                "openhands",
+
+                task
+
+            ]
+
+        }
+
+
+        if agent not in commands:
+
+            return {
+
+                "status":"AGENT_NOT_FOUND"
+
+            }
+
+
+
+        result=subprocess.run(
+
+            commands[agent],
+
+            capture_output=True,
+
+            text=True,
+
+            timeout=600
+
+        )
+
+
+        return {
+
+            "agent":agent,
+
+            "stdout":result.stdout,
+
+            "stderr":result.stderr,
+
+            "code":result.returncode,
+
+            "status":"EXECUTION_FINISHED"
+
+        }
+

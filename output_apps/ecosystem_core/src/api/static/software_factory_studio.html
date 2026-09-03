@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROXIRA AI Software Factory | کارخانه خودکار تولید نرم‌افزار چندسکویی</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; }
+        .glass-panel { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .indigo-gradient { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl indigo-gradient flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 text-xl">⚡</div>
+                <div>
+                    <h1 class="font-bold text-base md:text-lg">کارخانه خودکار تولید نرم‌افزار ROXIRA</h1>
+                    <p class="text-xs text-slate-400">تولید کامل اپلیکیشن‌های وب، موبایل و دسکتاپ با هوش مصنوعی و پرامپت</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 rounded-lg font-mono">AUTONOMOUS SOFTWARE ENGINE</span>
+                <a href="/docs" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-1.5 rounded-lg transition">API Docs</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+        <!-- Generator Controls -->
+        <div class="glass-panel rounded-3xl p-6 shadow-2xl space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">سکوی هدف نرم‌افزار (Target Platform):</label>
+                    <select id="targetPlatform" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 focus:outline-none focus:border-indigo-500 text-slate-100">
+                        <option value="web_nextjs">وب اپلیکیشن کامل (Next.js 15, React 19, Tailwind, Shadcn/UI)</option>
+                        <option value="mobile_expo">اپلیکیشن موبایل (iOS & Android با React Native و Expo SDK 52)</option>
+                        <option value="desktop_tauri">نرم‌افزار دسکتاپ نیتیو (Tauri 2.0, Rust, Mac/Win/Linux)</option>
+                        <option value="backend_fastapi">مایکروسرویس بک‌اند (FastAPI, PostgreSQL 17, Redis 7, Qdrant)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">مدل هوش مصنوعی سازنده:</label>
+                    <select id="factoryModel" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 focus:outline-none focus:border-indigo-500 text-slate-100">
+                        <option value="deepseek-r1">DeepSeek R1 (استدلال معمارانه عمیق، لاجیک و الگوهای تمیز)</option>
+                        <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (تولید فوق‌پیشرفته UI و کدنویسی فول‌استک)</option>
+                        <option value="gpt-4o">GPT-4o (معماری چندسکویی و انتزاع دیتابیس)</option>
+                        <option value="deepseek-v3">DeepSeek V3 (تولید سریع بویلرپلیت‌ها)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">پرامپت یا ایده نرم‌افزار موردنظر خود را بنویسید:</label>
+                <textarea id="appPrompt" rows="3" placeholder="مثال: یک سامانه مدیریت کلینیک پزشکی با رزرو نوبت آنلاین، پنل بیمار و پزشک، درگاه پرداخت و گزارش‌گیری مالی بساز..." class="w-full bg-slate-900 border border-slate-700 rounded-2xl p-4 text-xs focus:outline-none focus:border-indigo-500 text-slate-100 leading-relaxed"></textarea>
+            </div>
+
+            <button onclick="buildApplication()" class="w-full indigo-gradient hover:opacity-95 text-white font-bold py-3.5 rounded-2xl text-xs transition shadow-lg shadow-indigo-600/20" id="buildBtn">
+                ⚡ تولید خودکار نرم‌افزار، ساخت درخت فایل‌ها و رندر پیش‌نمایش زنده
+            </button>
+        </div>
+
+        <!-- Output Studio -->
+        <div id="studioOutput" class="glass-panel rounded-3xl p-6 hidden space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div>
+                    <h3 class="font-bold text-sm text-indigo-400" id="outputAppName">پروژه تولیدشده</h3>
+                    <p class="text-xs text-slate-400" id="outputAppMeta"></p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="switchTab('preview')" class="text-xs px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold" id="tabBtnPreview">پیش‌نمایش زنده</button>
+                    <button onclick="switchTab('code')" class="text-xs px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold" id="tabBtnCode">مشاهده سورسکد فایل‌ها</button>
+                </div>
+            </div>
+
+            <!-- Tab 1: Live Interactive IFrame Preview -->
+            <div id="tabPreview">
+                <iframe id="previewIframe" class="w-full h-[500px] rounded-2xl border border-slate-800 bg-slate-950"></iframe>
+            </div>
+
+            <!-- Tab 2: Code Viewer -->
+            <div id="tabCode" class="hidden space-y-3">
+                <div class="flex gap-2 overflow-x-auto pb-2" id="fileTreeTabs"></div>
+                <pre id="codeDisplay" class="p-4 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-slate-300 font-mono overflow-auto max-h-[450px] leading-relaxed whitespace-pre"></pre>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentGeneratedData = null;
+
+        async function buildApplication() {
+            const prompt = document.getElementById('appPrompt').value.trim();
+            const platform = document.getElementById('targetPlatform').value;
+            const model = document.getElementById('factoryModel').value;
+            const btn = document.getElementById('buildBtn');
+            const studio = document.getElementById('studioOutput');
+
+            if(!prompt) { alert('لطفاً شرح نرم‌افزار موردنظر را وارد کنید.'); return; }
+
+            btn.disabled = true;
+            btn.innerText = 'در حال پردازش پرامپت، تفکیک نیازمندی‌ها، طراحی UI و تولید کدها...';
+            studio.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/v1/factory/generate-app', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt, target_platform: platform, model: model })
+                });
+                const d = await res.json();
+                currentGeneratedData = d;
+
+                document.getElementById('outputAppName').innerText = d.architecture_spec.app_name;
+                document.getElementById('outputAppMeta').innerText = `مدل سازنده: ${d.architecture_spec.generator_model} | الگو: ${d.architecture_spec.architecture_pattern}`;
+
+                // رندر پیش‌نمایش در IFrame
+                const iframe = document.getElementById('previewIframe');
+                iframe.srcdoc = d.live_preview_html;
+
+                // رندر تب‌های فایل‌ها
+                const tabContainer = document.getElementById('fileTreeTabs');
+                tabContainer.innerHTML = '';
+                const files = Object.keys(d.file_tree);
+                files.forEach((f, idx) => {
+                    const b = document.createElement('button');
+                    b.className = `text-xs px-3 py-1.5 rounded-lg border font-mono ${idx === 0 ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'}`;
+                    b.innerText = f;
+                    b.onclick = () => selectFile(f, b);
+                    tabContainer.appendChild(b);
+                });
+                if(files.length > 0) selectFile(files[0]);
+
+            } catch(e) {
+                alert('خطا در تولید نرم‌افزار: ' + e);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '⚡ تولید خودکار نرم‌افزار، ساخت درخت فایل‌ها و رندر پیش‌نمایش زنده';
+            }
+        }
+
+        function selectFile(filename, btnElem) {
+            if(!currentGeneratedData) return;
+            document.getElementById('codeDisplay').innerText = currentGeneratedData.file_tree[filename] || '';
+            if(btnElem) {
+                Array.from(document.getElementById('fileTreeTabs').children).forEach(b => {
+                    b.className = 'text-xs px-3 py-1.5 rounded-lg border font-mono bg-slate-900 border-slate-800 text-slate-400';
+                });
+                btnElem.className = 'text-xs px-3 py-1.5 rounded-lg border font-mono bg-indigo-600 border-indigo-500 text-white';
+            }
+        }
+
+        function switchTab(tab) {
+            if(tab === 'preview') {
+                document.getElementById('tabPreview').classList.remove('hidden');
+                document.getElementById('tabCode').classList.add('hidden');
+                document.getElementById('tabBtnPreview').className = 'text-xs px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold';
+                document.getElementById('tabBtnCode').className = 'text-xs px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold';
+            } else {
+                document.getElementById('tabPreview').classList.add('hidden');
+                document.getElementById('tabCode').classList.remove('hidden');
+                document.getElementById('tabBtnPreview').className = 'text-xs px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold';
+                document.getElementById('tabBtnCode').className = 'text-xs px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold';
+            }
+        }
+    </script>
+</body>
+</html>

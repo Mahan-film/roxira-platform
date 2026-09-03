@@ -1,0 +1,63 @@
+services:
+  postgres-db:
+    image: postgres:17
+    container_name: roxira-prod-db
+    restart: always
+    environment:
+      POSTGRES_DB: enterprise_db
+      POSTGRES_USER: enterprise_admin
+      POSTGRES_PASSWORD: REDACTED_SECRET_19
+    volumes:
+      - prod_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enterprise_admin -d enterprise_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  valkey-cache:
+    image: valkey/valkey:8
+    container_name: roxira-prod-cache
+    restart: always
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  core-api:
+    image: python:3.13-slim
+    container_name: roxira-core-api
+    restart: always
+    working_dir: /app
+    volumes:
+      - ./ecosystem_core:/app
+      - ../project_memory:/project_memory
+    environment:
+      - APP_ENV=production
+    command: sh -c "pip install --no-cache-dir fastapi uvicorn psycopg pydantic && python -m src.api.main"
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  smart-judge-api:
+    image: python:3.13-slim
+    container_name: roxira-smart-judge-api
+    restart: always
+    working_dir: /app
+    volumes:
+      - ./smart_judge:/app
+      - ../project_memory:/project_memory
+    environment:
+      - APP_ENV=production
+    command: sh -c "pip install --no-cache-dir fastapi uvicorn pydantic && python -m src.engines.legal_drafter"
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+volumes:
+  prod_db_data:

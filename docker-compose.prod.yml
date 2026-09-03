@@ -1,0 +1,92 @@
+services:
+  enterprise_app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: roxira_app_prod
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+      - ./output_apps:/app/output_apps
+      - ./run_unified_server.py:/app/run_unified_server.py
+    environment:
+      - POSTGRES_HOST=postgres_prod
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=enterprise_admin
+      - POSTGRES_PASSWORD=REDACTED_SECRET_19
+      - POSTGRES_DB=enterprise_db
+      - REDIS_HOST=redis_prod
+      - REDIS_PORT=6379
+      - QDRANT_HOST=qdrant_prod
+      - QDRANT_PORT=6333
+    depends_on:
+      - postgres_prod
+      - redis_prod
+      - qdrant_prod
+    networks:
+      - roxira_net
+
+  postgres_prod:
+    image: postgres:17-alpine
+    container_name: roxira_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_USER: enterprise_admin
+      POSTGRES_PASSWORD: REDACTED_SECRET_19
+      POSTGRES_DB: enterprise_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - roxira_net
+
+  redis_prod:
+    image: redis:7-alpine
+    container_name: roxira_redis_prod
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - roxira_net
+
+  qdrant_prod:
+    image: qdrant/qdrant:latest
+    container_name: roxira_qdrant_prod
+    restart: always
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - roxira_net
+
+  nginx_gateway:
+    image: nginx:alpine
+    container_name: roxira_nginx_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./production_bundle/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - certbot_web:/var/www/certbot
+    depends_on:
+      - enterprise_app
+    networks:
+      - roxira_net
+
+networks:
+  roxira_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  certbot_web:

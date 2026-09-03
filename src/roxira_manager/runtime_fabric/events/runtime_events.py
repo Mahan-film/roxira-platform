@@ -1,0 +1,8 @@
+class RuntimeEvents:
+
+
+    START="AGENT_STARTED"
+
+    COMPLETE="AGENT_COMPLETED"
+
+    FAILED="AGENT_FAILED"

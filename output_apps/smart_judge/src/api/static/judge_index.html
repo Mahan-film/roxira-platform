@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سامانه قاضی هوشمند | استودیوی هوش قضایی و خدمات حقوقی ایران</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; }
+        .glass-panel { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .gold-gradient { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <!-- Navigation -->
+    <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center font-bold text-slate-950 shadow-lg shadow-amber-500/20 text-xl">⚖️</div>
+                <div>
+                    <h1 class="font-bold text-base md:text-lg">سامانه قاضی هوشمند</h1>
+                    <p class="text-xs text-amber-400/90">Smart Judge AI Studio (ghazihoushmand.ir)</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/docs" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-lg transition font-medium">مستندات API</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <!-- Interactive Service Tabs Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Tab 1: Jurisdiction & Court Router -->
+            <div class="glass-panel rounded-2xl p-6 space-y-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">🏛️</span>
+                    <h3 class="font-bold text-sm text-slate-100">تشخیص مرجع صالح دادرسی</h3>
+                </div>
+                <p class="text-xs text-slate-400 leading-relaxed">ارزیابی خودکار صلاحیت دادگاه صلح (تا ۱۰۰ میلیون)، اجرای ثبت مهریه یا دادگاه عمومی حقوقی.</p>
+                <input id="jurisSubject" type="text" placeholder="موضوع دعوا (مثلاً: مطالبه طلب / مهریه)..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                <input id="jurisAmount" type="number" placeholder="مبلغ خواسته به تومان (اختیاری)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                <button onclick="checkJurisdiction()" class="w-full gold-gradient text-slate-950 font-bold py-2 rounded-lg text-xs transition">استعلام مرجع صالح</button>
+                <div id="jurisResult" class="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 hidden leading-relaxed"></div>
+            </div>
+
+            <!-- Tab 2: Automatic Lawsuit Drafter & DOCX Download -->
+            <div class="glass-panel rounded-2xl p-6 space-y-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">📑</span>
+                    <h3 class="font-bold text-sm text-slate-100">تنظیم و دانلود دادخواست Word</h3>
+                </div>
+                <p class="text-xs text-slate-400 leading-relaxed">تولید مستقیم فایل قابل ویرایش DOCX برای دادگاه و دفاتر خدمات الکترونیک قضایی.</p>
+                <select id="draftScenario" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                    <option value="CHEQUE_ART23">اجرائیه مستقیم چک صیادی (ماده ۲۳)</option>
+                    <option value="LIQUIDATED_DAMAGES_805">وجه التزام قراردادی (رای وحدت رویه ۸۰۵)</option>
+                    <option value="DEED_REGISTRATION">الزام به تنظیم سند رسمی انتقال ملک</option>
+                </select>
+                <input id="plaintiffName" type="text" placeholder="نام خواهان (طلبکار / شاکی)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none">
+                <input id="defendantName" type="text" placeholder="نام خوانده (بدهکار / صادرکننده)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none">
+                <button onclick="downloadLawsuitDocx()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-lg text-xs transition flex items-center justify-center gap-1.5">
+                    <span>📥</span> <span>تولید و دانلود فایل Word (.docx)</span>
+                </button>
+            </div>
+
+            <!-- Tab 3: Docling Legal Document Parser -->
+            <div class="glass-panel rounded-2xl p-6 space-y-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">📄</span>
+                    <h3 class="font-bold text-sm text-slate-100">پارسر ساختاریافته اسناد (Docling)</h3>
+                </div>
+                <p class="text-xs text-slate-400 leading-relaxed">استخراج خودکار جدول‌ها و بخش‌های متون حقوقی و تبدیل به فرمت استاندارد JSON/Markdown.</p>
+                <textarea id="doclingInput" rows="4" placeholder="متن قرارداد یا لایحه را اینجا وارد کنید..." class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-100 focus:outline-none"></textarea>
+                <button onclick="parseWithDocling()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold py-2 rounded-lg text-xs transition">تبدیل به ساختار Docling</button>
+                <div id="doclingResult" class="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 hidden max-h-36 overflow-y-auto font-mono"></div>
+            </div>
+        </div>
+
+        <!-- Main AI Legal Assistant Console -->
+        <div class="glass-panel rounded-3xl p-7 border-amber-500/30 shadow-2xl">
+            <h3 class="font-bold text-base text-slate-200 mb-3 flex items-center gap-2">
+                <span>⚡</span>
+                <span>کنسول استنتاج هوش قضایی و گراف احکام (Live Legal Graph Reasoner)</span>
+            </h3>
+            <div class="flex flex-col md:flex-row gap-3">
+                <input id="legalPrompt" type="text" placeholder="شرح ماوقع پرونده را وارد کنید تا مستندات قانونی و راهکار استخراج شود..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-500 transition text-slate-100">
+                <button onclick="sendLegalQuery()" class="gold-gradient text-slate-950 px-6 py-3 rounded-xl font-bold text-sm transition whitespace-nowrap">تحلیل پرونده</button>
+            </div>
+            <div id="legalResponse" class="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-300 hidden whitespace-pre-wrap leading-relaxed"></div>
+        </div>
+    </main>
+
+    <script>
+        async function checkJurisdiction() {
+            const subj = document.getElementById('jurisSubject').value;
+            const amt = parseFloat(document.getElementById('jurisAmount').value) || 0;
+            const resBox = document.getElementById('jurisResult');
+            if (!subj) return;
+            resBox.classList.remove('hidden');
+            resBox.innerText = 'در حال ارزیابی صلاحیت قضایی...';
+            try {
+                const res = await fetch('/api/v1/smart-judge/classify-jurisdiction', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subject: subj, amount_toman: amt })
+                });
+                const data = await res.json();
+                resBox.innerHTML = `<b>مرجع صالح:</b> ${data.competent_court}<br><b>نوع اقدام:</b> ${data.pleading_type}<br><b>قطعیت رای:</b> ${data.appeal_status}<br><b>مستند:</b> ${data.statute_reference}`;
+            } catch(e) { resBox.innerText = 'خطا در ارزیابی: ' + e; }
+        }
+
+        async function downloadLawsuitDocx() {
+            const sc = document.getElementById('draftScenario').value;
+            const pl = document.getElementById('plaintiffName').value || 'خواهان';
+            const df = document.getElementById('defendantName').value || 'خوانده';
+            try {
+                const res = await fetch('/api/v1/smart-judge/export-docx', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scenario: sc, plaintiff: pl, defendant: df, amount_toman: 0 })
+                });
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `lawsuit_${sc}.docx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } catch(e) { alert('خطا در دانلود فایل: ' + e); }
+        }
+
+        async function parseWithDocling() {
+            const text = document.getElementById('doclingInput').value;
+            const box = document.getElementById('doclingResult');
+            if (!text) return;
+            box.classList.remove('hidden');
+            box.innerText = 'در حال پارس ساختاریافته با استاندارد Docling...';
+            try {
+                const res = await fetch('/api/v1/documents/docling-parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: 'user_doc.docx', content: text })
+                });
+                const data = await res.json();
+                box.innerText = JSON.stringify(data, null, 2);
+            } catch(e) { box.innerText = 'خطا: ' + e; }
+        }
+
+        async function sendLegalQuery() {
+            const input = document.getElementById('legalPrompt');
+            const resDiv = document.getElementById('legalResponse');
+            if (!input.value.trim()) return;
+            resDiv.classList.remove('hidden');
+            resDiv.innerText = 'در حال بازیابی از گراف احکام و استنتاج حقوقی...';
+            try {
+                const response = await fetch('/api/v1/smart-judge/graph-reason', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ case_facts: input.value })
+                });
+                const data = await response.json();
+                resDiv.innerText = `[مستندات مبنا: ${data.grounded_statutes ? data.grounded_statutes.join(' | ') : 'قوانین عام'}]\n\n${data.legal_opinion || JSON.stringify(data)}`;
+            } catch(e) { resDiv.innerText = 'خطا در ارتباط: ' + e; }
+        }
+    </script>
+</body>
+</html>

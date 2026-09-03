@@ -1,0 +1,24 @@
+{
+  "agents": [
+    {
+      "name": "court_classifier",
+      "role": "Classify Iranian court jurisdiction",
+      "tier": ["free","pro","max"]
+    },
+    {
+      "name": "legal_research",
+      "role": "Retrieve laws, precedents and procedures",
+      "tier": ["pro","max"]
+    },
+    {
+      "name": "legal_drafting",
+      "role": "Generate legal documents",
+      "tier": ["pro","max"]
+    },
+    {
+      "name": "legal_update",
+      "role": "Monitor legal changes",
+      "tier": ["max"]
+    }
+  ]
+}

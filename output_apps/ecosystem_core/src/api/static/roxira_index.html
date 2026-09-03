@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROXIRA Enterprise OS | پلتفرم اتوماسیون سازمانی، ERP و کارخانه نرم‌افزار</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #030712; color: #f8fafc; }
+        .glass-card { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3); }
+        .indigo-gradient { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); }
+        .emerald-gradient { background: linear-gradient(135deg, #059669 0%, #0d9488 100%); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-indigo-600 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3.5">
+                <div class="w-11 h-11 rounded-2xl indigo-gradient flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20 text-2xl">R</div>
+                <div>
+                    <span class="font-extrabold text-base tracking-tight text-slate-100 flex items-center gap-2">
+                        ROXIRA Enterprise OS <span class="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono">v4.5</span>
+                    </span>
+                    <p class="text-[11px] text-slate-400">اتوماسیون مالی ۴ سطحی، انبارداری FIFO، سامانه مؤدیان و کارخانه نرم‌افزار</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <a href="/studio" class="text-xs indigo-gradient text-white px-4 py-2 rounded-xl transition font-bold shadow-md shadow-indigo-500/20">⚡ کارخانه نرم‌افزار</a>
+                <a href="/docs" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-xl transition">مستندات API</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-10 flex-1 w-full space-y-10">
+
+        <!-- Hero Section -->
+        <div class="text-center max-w-3xl mx-auto space-y-4 pt-4">
+            <span class="text-xs px-4 py-1.5 rounded-full bg-indigo-500/10 text-indigo-400 font-extrabold border border-indigo-500/30">سیستم مدیریت یکپارچه سازمانی و مالی</span>
+            <h1 class="text-3xl md:text-5xl font-black text-slate-100 tracking-tight leading-tight">
+                زیرساخت ابری هوشمند مدیریت مالی و توسعه نرم‌افزار
+            </h1>
+            <p class="text-xs md:text-sm text-slate-400 leading-relaxed max-w-2xl mx-auto">
+                حسابداری دوبل ۴ سطحی منطبق بر استانداردهای حسابداری، کنترل موجودی کالا به روش FIFO، صدور صورتحساب الکترونیکی سامانه مؤدیان و تولید خودکار کد اپلیکیشن‌ها.
+            </p>
+        </div>
+
+        <!-- Modules Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="glass-card rounded-3xl p-6 space-y-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg">💼</div>
+                <h3 class="font-bold text-sm text-slate-100">دفاتر حسابداری و اسناد دوبل</h3>
+                <p class="text-xs text-slate-400 leading-relaxed">گروه، کل، معین و تفصیلی با تراز آزمایشی لحظه‌ای در پایگاه داده پایدار PostgreSQL 17.</p>
+            </div>
+
+            <div class="glass-card rounded-3xl p-6 space-y-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg">📦</div>
+                <h3 class="font-bold text-sm text-slate-100">انبارداری FIFO و قیمت تمام‌شده</h3>
+                <p class="text-xs text-slate-400 leading-relaxed">ارزیابی گردش موجودی کالا به روش اولین صادره از اولین وارده و صدور سند تعدیل انبار.</p>
+            </div>
+
+            <div class="glass-card rounded-3xl p-6 space-y-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg">🌍</div>
+                <h3 class="font-bold text-sm text-slate-100">سامانه مؤدیان و مالیات بین‌الملل</h3>
+                <p class="text-xs text-slate-400 leading-relaxed">تطبیق فاکتورهای الکترونیکی با قوانین ۱۰٪ مالیات بر ارزش افزوده و استانداردهای جهانی IFRS.</p>
+            </div>
+        </div>
+
+        <!-- Software Factory Banner -->
+        <div class="glass-card rounded-3xl p-8 border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl">
+            <div>
+                <span class="text-xs px-3 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-full font-bold">Autonomous Code Engine</span>
+                <h3 class="text-xl font-bold text-slate-100 mt-2">کارخانه خودکار ساخت نرم‌افزار رکسیرار</h3>
+                <p class="text-xs text-slate-400 mt-1">تولید کامل اپلیکیشن‌های وب Next.js، موبایل React Native و دسکتاپ Tauri از روی پرامپت.</p>
+            </div>
+            <a href="/studio" class="indigo-gradient text-white px-6 py-3.5 rounded-2xl font-bold text-xs whitespace-nowrap shadow-lg shadow-indigo-600/30">ورود به استودیوی نرم‌افزار ⚡</a>
+        </div>
+
+    </main>
+
+    <!-- Footer with Official e-Namad Seal -->
+    <footer class="border-t border-slate-800 bg-slate-950 py-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 items-center">
+            
+            <!-- Brand Info -->
+            <div class="space-y-2 md:col-span-2">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl indigo-gradient flex items-center justify-center font-bold text-white text-sm">R</div>
+                    <span class="font-black text-slate-100 text-sm">پلتفرم سازمانی ROXIRA</span>
+                </div>
+                <p class="text-slate-500 leading-relaxed">ارائه‌دهنده راه‌کارهای ابری سازمانی، اتوماسیون فرایندهای تجاری و زیرساخت‌های هوش مصنوعی سازمانی.</p>
+                <div class="pt-1">
+                    <span>مدیریت پلتفرم: <b class="text-slate-200">آقای محمدی</b></span> | 
+                    <span>تماس مستقیم: <a href="tel:09129367796" class="text-indigo-400 font-mono font-bold">09129367796</a></span> | 
+                    <span class="font-mono">info@roxira.ir</span>
+                </div>
+            </div>
+
+            <!-- Domains & Legal -->
+            <div class="space-y-1">
+                <h4 class="font-bold text-slate-200">دامنه‌های فعال پلتفرم:</h4>
+                <p class="font-mono text-indigo-400">roxira.ir</p>
+                <p class="font-mono text-indigo-400">roxira.net</p>
+                <p class="text-slate-500 text-[11px]">تمامی حقوق مادی و معنوی محفوظ است © ۲۰۲۶</p>
+            </div>
+
+            <!-- Official e-Namad Trust Seal Container -->
+            <div class="flex flex-col items-center md:items-end justify-center">
+                <div class="p-3 bg-white rounded-2xl shadow-lg inline-block border border-slate-200">
+                    <!-- کد رسمی نماد اعتماد الکترونیکی roxira.ir -->
+                    <a referrerpolicy='origin' target='_blank' href='https://trustseal.enamad.ir/?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp'>
+                        <img referrerpolicy='origin' src='https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp' alt='نماد اعتماد الکترونیکی roxira.ir' style='cursor:pointer' code='y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp' class="w-24 h-auto">
+                    </a>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-2 font-bold">نماد اعتماد الکترونیکی کسب‌وکار</span>
+            </div>
+
+        </div>
+    </footer>
+
+</body>
+</html>

@@ -1,0 +1,36 @@
+[project]
+name = "project-foundry"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "crawlee[adaptive-crawler,beautifulsoup,parsel,playwright]>=1.8.3,<2",
+    "django==5.2.16",
+    "django-environ>=0.14.0",
+    "django-ninja>=1.6.2",
+    "httpx>=0.28.1",
+    "license-expression>=30.4.4",
+    "mypy>=2.3.0",
+    "parsel>=1.11.0",
+    "psycopg[binary]>=3.3.4",
+    "pydantic>=2.13.4",
+    "pytest>=9.1.1",
+    "pytest-django>=4.13.0",
+    "ruff>=0.16.2",
+]
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["**/migrations/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/migrations/*.py" = ["RUF012"]
+
+[dependency-groups]
+dev = [
+    "beautifulsoup4>=4.15.0",
+]

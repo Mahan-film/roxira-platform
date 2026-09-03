@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roxira OS | سامانه یکپارچه سازمانی و قاضی هوشمند</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; }
+        .glass { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <!-- Navigation Bar -->
+    <header class="glass sticky top-0 z-50 border-b border-slate-800 px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-400 flex items-center justify-center font-bold text-lg">R</div>
+            <div>
+                <h1 class="font-bold text-lg tracking-wide text-white">Roxira Enterprise OS</h1>
+                <p class="text-xs text-cyan-400">هسته هوشمند سازمانی & سامانه قاضی هوشمند</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                ● سیستم فعال (Port 8000)
+            </span>
+            <div class="text-xs text-slate-400 border-r border-slate-800 pr-4">SuperAdmin: مبین خرمی</div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+        <!-- Top Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="glass p-5 rounded-2xl">
+                <div class="text-slate-400 text-xs font-medium">فروش کل (دفترکل مرکزی)</div>
+                <div class="text-2xl font-bold text-white mt-2">۶,۳۰۰,۰۰۰ <span class="text-xs font-normal text-slate-400">تومان/معادل</span></div>
+                <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1">↑ تراز ۱۰۰٪ متوازن</div>
+            </div>
+            <div class="glass p-5 rounded-2xl">
+                <div class="text-slate-400 text-xs font-medium">وضعیت انبارها</div>
+                <div class="text-2xl font-bold text-white mt-2">۲ <span class="text-xs font-normal text-slate-400">فروشگاه فعال</span></div>
+                <div class="text-xs text-cyan-400 mt-2">لوازم یدکی + نرم‌افزار</div>
+            </div>
+            <div class="glass p-5 rounded-2xl">
+                <div class="text-slate-400 text-xs font-medium">انطباق مالیاتی</div>
+                <div class="text-2xl font-bold text-white mt-2">سامانه مودیان</div>
+                <div class="text-xs text-emerald-400 mt-2">پکت‌های JSON آماده ارسال</div>
+            </div>
+            <div class="glass p-5 rounded-2xl">
+                <div class="text-slate-400 text-xs font-medium">موتور قاضی هوشمند</div>
+                <div class="text-2xl font-bold text-cyan-300 mt-2">ماده ۵۱ و ۶۸</div>
+                <div class="text-xs text-slate-400 mt-2">استناد دقیق به مواد قانونی</div>
+            </div>
+        </div>
+
+        <!-- Main Workspace Tabs -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left Panel: Smart Judge Console -->
+            <div class="glass p-6 rounded-2xl space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                    <h2 class="font-bold text-cyan-400 flex items-center gap-2">⚖️ استودیوی تنظیم دادخواست و شکواییه</h2>
+                    <span class="text-xs bg-cyan-500/10 text-cyan-400 px-2.5 py-1 rounded-lg">ghazihoushmand.ir</span>
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">نوع سند قضایی:</label>
+                        <select id="docType" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+                            <option value="CIVIL_LAWSUIT">دادخواست حقوقی (الزام به تنظیم سند، مطالبه خسارت)</option>
+                            <option value="CRIMINAL_COMPLAINT">شکواییه کیفری (کلاهبرداری، خیانت در امانت)</option>
+                            <option value="DEFENSE_BRIEF">لایحه دفاعیه تخصصی</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">شرح ماوقع و ادله خواهان:</label>
+                        <textarea id="caseFacts" rows="4" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500" placeholder="شرح ماجرا، تاریخ قرارداد، مبالغ و تخلف طرف مقابل را وارد کنید..."></textarea>
+                    </div>
+                    <button onclick="generateDoc()" class="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl text-sm transition-all">
+                        تولید دادخواست مستدل با هوش مصنوعی
+                    </button>
+                    <div id="judgeOutput" class="hidden p-4 bg-slate-900/90 rounded-xl border border-slate-800 text-xs text-slate-300 max-h-60 overflow-y-auto whitespace-pre-wrap"></div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Financial & Multi-Store Manager -->
+            <div class="glass p-6 rounded-2xl space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                    <h2 class="font-bold text-emerald-400 flex items-center gap-2">📊 تسعیر ارز و ثبت تراکنش فروشگاه‌ها</h2>
+                    <span class="text-xs bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-lg">roxira.net</span>
+                </div>
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">فروشگاه انتخابی:</label>
+                            <select id="tenantSelect" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                                <option value="store_auto_parts">فروشگاه لوازم یدکی (تومان)</option>
+                                <option value="store_software_co">شرکت نرم‌افزار (دلار/یورو)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">ارز مبادله:</label>
+                            <select id="txCurrency" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                                <option value="TOMAN">تومان (TOMAN)</option>
+                                <option value="USD">دلار (USD)</option>
+                                <option value="EUR">یورو (EUR)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input id="itemSku" type="text" placeholder="شناسه کالا (SKU)" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm">
+                        <input id="itemPrice" type="number" placeholder="قیمت واحد" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm">
+                    </div>
+                    <input id="itemDesc" type="text" placeholder="شرح فاکتور و نام خریدار" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm">
+                    <button onclick="submitSale()" class="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl text-sm transition-all">
+                        ثبت سند در دفترکل و کسر انبار
+                    </button>
+                    <div id="saleOutput" class="hidden p-3 bg-slate-900/90 rounded-xl border border-slate-800 text-xs text-emerald-300"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function generateDoc() {
+            const out = document.getElementById('judgeOutput');
+            const facts = document.getElementById('caseFacts').value;
+            if(!facts) return alert('لطفاً شرح ماجرا را وارد کنید.');
+            out.classList.remove('hidden');
+            out.innerText = 'در حال تدوین استدلال حقوقی و انطباق با مواد قانون مدنی و آیین دادرسی...';
+            
+            try {
+                const res = await fetch('/api/v1/smart-judge/draft', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        doc_type: document.getElementById('docType').value,
+                        case_facts: facts,
+                        client_info: { claimant_name: "مبین خرمی", claimant_national_id: "0012345678" }
+                    })
+                });
+                const data = await res.json();
+                out.innerText = data.formal_text || JSON.stringify(data, null, 2);
+            } catch(e) {
+                out.innerText = 'خطا در ارتباط با سرور: ' + e;
+            }
+        }
+
+        async function submitSale() {
+            const out = document.getElementById('saleOutput');
+            out.classList.remove('hidden');
+            out.innerText = 'در حال ثبت سند و تسعیر ارز...';
+            try {
+                const tenant = document.getElementById('tenantSelect').value;
+                const res = await fetch('/api/v1/sales', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-tenant-id': tenant
+                    },
+                    body: JSON.stringify({
+                        sku: document.getElementById('itemSku').value || "SKU-PROD-01",
+                        item_name: document.getElementById('itemDesc').value || "کالای سازمانی",
+                        quantity: 1,
+                        unit_price: parseFloat(document.getElementById('itemPrice').value || 1000),
+                        currency: document.getElementById('txCurrency').value,
+                        debit_account: "1101",
+                        credit_account: "4101",
+                        description: document.getElementById('itemDesc').value || "فروش از طریق وب‌کنسول"
+                    })
+                });
+                const data = await res.json();
+                out.innerText = data.result || 'تراکنش با موفقیت ثبت شد.';
+            } catch(e) {
+                out.innerText = 'خطا: ' + e;
+            }
+        }
+    </script>
+</body>
+</html>

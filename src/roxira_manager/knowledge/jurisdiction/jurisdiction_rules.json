@@ -1,0 +1,25 @@
+{
+  "rules": [
+    {
+      "name": "peace_court_threshold",
+      "country": "IR",
+      "court": "peace_court",
+      "active": true,
+      "conditions": {
+        "case_type": "civil"
+      },
+      "source": "legal_update_agent"
+    },
+
+    {
+      "name": "civil_general_default",
+      "country": "IR",
+      "court": "general_civil_court",
+      "active": true,
+      "conditions": {
+        "case_type": "civil"
+      },
+      "source": "legal_update_agent"
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "architecture": "ROXIRA_INTELLIGENT_INTEGRATION_BOOTSTRAP_V1",
+  "time": "2026-08-23T19:40:07.469917+00:00",
+  "components": [
+    {
+      "name": "master_orchestrator",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/master_orchestrator"
+      ]
+    },
+    {
+      "name": "system_integration",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/system_integration"
+      ]
+    },
+    {
+      "name": "system_integration_bus",
+      "status": "NOT_FOUND",
+      "paths": []
+    },
+    {
+      "name": "agent_execution_platform",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/agent_execution_platform"
+      ]
+    },
+    {
+      "name": "agent_command_center",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/agent_command_center"
+      ]
+    },
+    {
+      "name": "architecture_intelligence",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/architecture_intelligence"
+      ]
+    },
+    {
+      "name": "architecture_consolidation",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/architecture_consolidation"
+      ]
+    },
+    {
+      "name": "architecture_graph_v2",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/architecture_graph_v2"
+      ]
+    },
+    {
+      "name": "migration_engine",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/migration_engine"
+      ]
+    },
+    {
+      "name": "validation_engine",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/validation_engine"
+      ]
+    },
+    {
+      "name": "memory",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/memory",
+        "src/roxira_manager/autonomous_core/memory",
+        "src/roxira_manager/mission_core/memory",
+        "src/roxira_manager/agent_os/memory",
+        "src/roxira_manager/master_agent/memory",
+        "src/roxira_manager/master_agent/v2/memory",
+        "src/roxira_manager/master_agent/v4/memory"
+      ]
+    },
+    {
+      "name": "memory_v2",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/memory_v2"
+      ]
+    },
+    {
+      "name": "governance",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/governance"
+      ]
+    },
+    {
+      "name": "governance_v2",
+      "status": "FOUND",
+      "paths": [
+        "src/roxira_manager/governance_v2"
+      ]
+    }
+  ],
+  "principle": "USE_EXISTING_MODULES_FIRST",
+  "status": "DISCOVERY_COMPLETE"
+}
