@@ -1,2 +1,2 @@
-# مانیفست رسمی تحویل سیستم به محیط عملیاتی (Production Handover Manifest)
-**سند شماره:** `RX-AUDIT-2025-PROD-01`  
+# مانیفست ممیزی نهایی و تحویل عملیاتی (Production Handover Manifest)
+**سیستم‌عامل سازمانی رکسایرا (Roxira OS Enterprise Release)**  
