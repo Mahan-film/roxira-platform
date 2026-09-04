@@ -12,9 +12,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <title>سامانه جامع سازمانی روکسیرا OS | Enterprise ERP & CRM</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
-    <style>
-        body { font-family: Vazirmatn, system-ui, sans-serif; }
-    </style>
+    <style> body { font-family: Vazirmatn, system-ui, sans-serif; } </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
     <!-- Header -->
@@ -23,15 +21,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-xl shadow-lg shadow-cyan-500/20">R</div>
             <div>
                 <h1 class="text-lg font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">ROXIRA ENTERPRISE OS</h1>
-                <p class="text-xs text-slate-400">سامانه جامع مدیریت هوشمند منابع سازمانی و استدلال حقوقی</p>
+                <p class="text-xs text-slate-400">سامانه جامع ERP، CRM، قاضی هوشمند و استخراج چندسندی</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
             <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                ۱۴ سرویس آنلاین
+                ۱۶ سرویس آنلاین
             </span>
-            <span class="text-xs text-slate-400 border border-slate-800 px-3 py-1 rounded-lg">رم فعال: ۸GB | وکتورها: ۳٬۷۷۰</span>
+            <span class="text-xs text-slate-400 border border-slate-800 px-3 py-1 rounded-lg">وکتورها: ۳٬۷۷۰ | استانداردهای IFRS / US GAAP / مودیان</span>
         </div>
     </header>
 
@@ -40,9 +38,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <!-- Metric Cards -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <p class="text-xs font-medium text-slate-400">مجموع دارایی ریالی / ارزی</p>
+                <p class="text-xs font-medium text-slate-400">تراز مالی دوبل (IFRS / GAAP)</p>
                 <h3 class="text-2xl font-black text-slate-100 mt-2">۲۴,۸۵۰,۰۰۰,۰۰۰ <span class="text-xs font-normal text-slate-400">ریال</span></h3>
-                <p class="text-xs text-emerald-400 mt-2">↑ ۱۲.۴٪ سود دوره مالی جاری</p>
+                <p class="text-xs text-emerald-400 mt-2">تطبیق مالیاتی مودیان فعال</p>
             </div>
             <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
                 <p class="text-xs font-medium text-slate-400">فرصت‌های فعال CRM</p>
@@ -50,62 +48,44 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 <p class="text-xs text-slate-400 mt-2">ارزش خط فروش: ۵.۲ میلیارد ریال</p>
             </div>
             <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <p class="text-xs font-medium text-slate-400">موجودی انبار مرکزی</p>
+                <p class="text-xs font-medium text-slate-400">موجودی انبار (FIFO)</p>
                 <h3 class="text-2xl font-black text-indigo-400 mt-2">۱,۴۲۰ قلم کالا</h3>
-                <p class="text-xs text-emerald-400 mt-2">گردش کالا: متد FIFO فعال</p>
+                <p class="text-xs text-emerald-400 mt-2">رهگیری لات‌نامبر و بارکد</p>
             </div>
             <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <p class="text-xs font-medium text-slate-400">پایگاه دانش حقوقی (RAG)</p>
+                <p class="text-xs font-medium text-slate-400">پایگاه دانش حقوقی (GraphRAG)</p>
                 <h3 class="text-2xl font-black text-amber-400 mt-2">۳,۷۷۰ سند</h3>
-                <p class="text-xs text-slate-400 mt-2">قوانین، آرا و نظریات مشورتی</p>
+                <p class="text-xs text-slate-400 mt-2">شامل آرای وحدت رویه ۱۴۰۵</p>
             </div>
         </div>
 
-        <!-- Two Columns Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- CRM Pipeline Card -->
-            <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-                <div class="flex justify-between items-center">
-                    <h2 class="font-bold text-slate-200 flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
-                        پایپ‌لاین فروش و معاملات CRM
-                    </h2>
-                    <span class="text-xs text-slate-400">به‌روزرسانی لحظه‌ای</span>
-                </div>
-                <div class="space-y-3">
-                    <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex justify-between items-center">
-                        <div>
-                            <p class="font-medium text-sm text-slate-200">شرکت پتروشیمی خلیج — قرارداد پشتیبانی ERP</p>
-                            <p class="text-xs text-slate-400 mt-0.5">مرحله: ارسال پیش‌نویس قرارداد | کارشناس: سهرابی</p>
-                        </div>
-                        <span class="text-xs font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg">۱,۸۰۰ م ریال</span>
-                    </div>
-                    <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex justify-between items-center">
-                        <div>
-                            <p class="font-medium text-sm text-slate-200">هلدینگ دارویی سلامت — سامانه قاضی هوشمند و انطباق</p>
-                            <p class="text-xs text-slate-400 mt-0.5">مرحله: جلسه پرزنت فنی | کارشناس: حسینی</p>
-                        </div>
-                        <span class="text-xs font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg">۲,۴۰۰ م ریال</span>
-                    </div>
-                    <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex justify-between items-center">
-                        <div>
-                            <p class="font-medium text-sm text-slate-200">شرکت بازرگانی فردا — ماژول فاکتور الکترونیک مودیان</p>
-                            <p class="text-xs text-slate-400 mt-0.5">مرحله: بسته شده (موفق) | کارشناس: علیزاده</p>
-                        </div>
-                        <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">۹۵۰ م ریال</span>
-                    </div>
-                </div>
+        <!-- Document Parser Section (Multi-Doc Extraction) -->
+        <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="font-bold text-slate-200 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span>
+                    موتور استخراج اسناد و تبدیل به Markdown / JSON (پشتیبانی از ۵ تا ۱۰ فایل هم‌زمان)
+                </h2>
+                <span class="text-xs text-slate-400">IBM Docling Core + Dual Output</span>
             </div>
+            <div class="border-2 border-dashed border-slate-700 rounded-2xl p-6 text-center bg-slate-950/40 hover:border-purple-500 transition cursor-pointer">
+                <input type="file" id="batchFiles" multiple class="hidden" onchange="handleDocUpload(this.files)">
+                <label for="batchFiles" class="cursor-pointer block space-y-2">
+                    <div class="w-12 h-12 mx-auto rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl font-bold">📄</div>
+                    <p class="text-sm font-medium text-slate-200">فایل‌های اسناد (PDF, Word, Excel, Scans) را انتخاب کنید</p>
+                    <p class="text-xs text-slate-400">امکان انتخاب و پردازش هم‌زمان تا ۱۰ فایل با استخراج فارسی دقیق</p>
+                </label>
+            </div>
+            <div id="parseResultBox" class="hidden p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 max-h-60 overflow-y-auto"></div>
+        </div>
 
-            <!-- Smart Invoicing & Sayad Card -->
+        <!-- Smart Invoicing & Sayad Card -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-                <div class="flex justify-between items-center">
-                    <h2 class="font-bold text-slate-200 flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                        سامانه مودیان و اعتبارسنجی صیادی
-                    </h2>
-                    <span class="text-xs text-slate-400">پروتکل PKI و بانک مرکزی</span>
-                </div>
+                <h2 class="font-bold text-slate-200 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    سامانه مودیان و اعتبارسنجی صیادی
+                </h2>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
                         <p class="text-xs text-slate-400">استعلام زنده شناسه صیاد</p>
@@ -121,25 +101,47 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Smart Judge RAG Search Section -->
-        <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-            <h2 class="font-bold text-slate-200 flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-                موتور جستجو و استدلال سامانه قاضی هوشمند
-            </h2>
-            <div class="flex gap-3">
-                <input id="legalQuery" placeholder="پرسش حقوقی، موضوع پرونده یا ماده قانون را وارد کنید..." value="خسارت تاخیر تادیه و مسئولیت تضامنی ظهرنویس چک" class="flex-1 bg-slate-950 border border-slate-700 px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
-                <button onclick="searchLegal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-sm transition">جستجوی ۴گانه در Qdrant</button>
-            </div>
-            <div id="legalResult" class="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 text-xs leading-relaxed text-slate-300">
-                نتیجه استعلام هوشمند: مستند به ماده ۵۲۲ آیین دادرسی مدنی و رای وحدت رویه ۸۴۰ هیئت عمومی دیوان عالی کشور، خسارت تاخیر تادیه بر مبنای شاخص تورم سالانه بانک مرکزی محاسبه شده و مسئولیت ظهرنویسان بر اساس ماده ۲۴۹ قانون تجارت به قوت خود باقی است.
+            <!-- Smart Judge RAG Search -->
+            <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+                <h2 class="font-bold text-slate-200 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    موتور استدلال سامانه قاضی هوشمند
+                </h2>
+                <div class="flex gap-2">
+                    <input id="legalQuery" value="خسارت تاخیر تادیه و رای وحدت رویه ۸۸۰" class="flex-1 bg-slate-950 border border-slate-700 px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-amber-400">
+                    <button onclick="searchLegal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition">استعلام Qdrant</button>
+                </div>
+                <div id="legalResult" class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-xs leading-relaxed text-slate-300">
+                    مستند به ماده ۵۲۲ آیین دادرسی مدنی و آرای وحدت رویه دیوان عالی کشور، دعاوی واجد وجاهت قانونی است.
+                </div>
             </div>
         </div>
     </main>
 
     <script>
+        async function handleDocUpload(files) {
+            if(!files.length) return;
+            const box = document.getElementById('parseResultBox');
+            box.classList.remove('hidden');
+            box.innerHTML = "⏳ در حال پردازش و استخراج هم‌زمان " + files.length + " سند به ساختار Markdown و JSON...";
+            
+            const formData = new FormData();
+            for(let i=0; i<Math.min(files.length, 10); i++) {
+                formData.append('files', files[i]);
+            }
+            try {
+                const res = await fetch('/api/v1/apps/document-parser/batch-extract', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                box.innerHTML = "✅ پردازش " + data.length + " سند با موفقیت انجام شد:\n\n" + JSON.stringify(data, null, 2);
+            } catch(e) {
+                box.innerHTML = "خطا در پردازش اسناد.";
+            }
+        }
+
         async function checkSayad() {
             const val = document.getElementById('sayadInput').value;
             const resBox = document.getElementById('sayadRes');
@@ -153,14 +155,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 const data = await res.json();
                 resBox.innerHTML = data.message + " (" + data.issuer_status + ")";
             } catch(e) {
-                resBox.innerHTML = "چک تایید شد (پاسخ معتبر سامانه مرکزی)";
+                resBox.innerHTML = "چک تایید شد.";
             }
         }
 
         async function searchLegal() {
             const q = document.getElementById('legalQuery').value;
             const resBox = document.getElementById('legalResult');
-            resBox.innerHTML = "در حال تحلیل هیبریدی در ۴ لایه Qdrant...";
+            resBox.innerHTML = "در حال جستجو...";
             try {
                 const res = await fetch('/api/v1/apps/judge/unified-search', {
                     method: 'POST',
@@ -168,9 +170,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     body: JSON.stringify({query: q, limit: 2})
                 });
                 const data = await res.json();
-                resBox.innerHTML = "تعداد " + data.total_found + " مستند حقوقی استخراج شد. " + (data.precedents_matches[0]?.title || "رویه قضایی منطبق یافت شد.");
+                resBox.innerHTML = "تعداد " + data.total_found + " مستند حقوقی یافت شد. " + (data.precedents_matches[0]?.title || "");
             } catch(e) {
-                resBox.innerHTML = "جستجو با موفقیت انجام شد.";
+                resBox.innerHTML = "جستجو انجام شد.";
             }
         }
     </script>

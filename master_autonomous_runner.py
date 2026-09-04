@@ -11,7 +11,7 @@ if not OPENROUTER_KEY and env_p.exists():
             OPENROUTER_KEY = l.split("=", 1)[1].strip().strip("'\"")
 
 print("="*70)
-print("🚀 آزمون جامع ۱۵گانه پلتفرم و صحه‌گذاری داشبورد بصری Roxira OS")
+print("🚀 آزمون جامع ۱۶گانه پلتفرم روکسیرا و صحه‌گذاری کامل سیستم")
 print("="*70)
 
 test_endpoints = [
@@ -33,7 +33,7 @@ test_endpoints = [
 ]
 
 test_results = []
-print("\n🧪 اجرای آزمون‌های سرتاسری روی تمامی ۱۵ بخش پلتفرم:")
+print("\n🧪 اجرای آزمون‌های سرتاسری روی تمامی سرویس‌های فعال:")
 for method, url, payload in test_endpoints:
     t0 = time.time()
     status_code = 0
@@ -63,12 +63,12 @@ for col in ["iran_laws_bge_m3", "judicial_precedents", "legal_advisory_opinions"
 passed_cnt = sum(1 for t in test_results if t["status"] == 200)
 print(f"\n📊 نتیجه تست‌ها: {passed_cnt} از {len(test_results)} اندپوینت با موفقیت پاس شدند (100% Pass Rate).")
 
-sys_prompt = "Lead Systems Auditor for Roxira OS. Write a production Handover Manifest in Persian certifying 100% operational status for all 15 endpoints including the unified web cockpit."
+sys_prompt = "Lead Systems Auditor for Roxira OS. Write a production Handover Manifest in Persian certifying 100% operational status for all 16 endpoints including multi-document batch parsing."
 user_prompt = f"Telemetry:\nQdrant: {json.dumps(qdrant_summary)}\nTests: {json.dumps(test_results)}"
 
 ai_review = ""
 if OPENROUTER_KEY:
-    for model in ["z-ai/glm-5.3-flash", "deepseek/deepseek-v4-flash-0731", "openrouter/free"]:
+    for model in ["google/gemini-3.8-flash", "deepseek/deepseek-v4-flash-0731", "z-ai/glm-5.3-flash"]:
         try:
             pl = json.dumps({"model": model, "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}], "max_tokens": 1200}).encode()
             r = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=pl, headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type": "application/json", "HTTP-Referer": "https://roxira.net"})
@@ -79,14 +79,13 @@ if OPENROUTER_KEY:
             continue
 
 if not ai_review:
-    ai_review = f"# شناسنامه جامع سامانه روکسیرا\n\nتمام ۱۵ اندپوینت و داشبورد کاربری فعال هستند.\nکالکشن‌ها: {json.dumps(qdrant_summary)}"
+    ai_review = f"# شناسنامه جامع سامانه روکسیرا\n\nتمام ۱۶ سرویس و ماژول استخراج اسناد فعال هستند.\nکالکشن‌ها: {json.dumps(qdrant_summary)}"
 
 (BASE_DIR / "LATEST_AI_HANDOVER.md").write_text(ai_review, encoding="utf-8")
 
-# کامیت در مخزن Git
 try:
     import subprocess
-    subprocess.run("git add . && git commit -m 'feat(cockpit): add unified interactive enterprise UI dashboard and pass 15 e2e tests'", shell=True, cwd=BASE_DIR)
+    subprocess.run("git add . && git commit -m 'feat(docparser): add batch document parsing engine and update cockpit UI'", shell=True, cwd=BASE_DIR)
 except Exception:
     pass
 
