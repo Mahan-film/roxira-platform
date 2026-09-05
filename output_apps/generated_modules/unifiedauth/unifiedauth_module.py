@@ -19,7 +19,7 @@ GOOGLE_CLIENT_ID = ENV_VARS.get("GOOGLE_CLIENT_ID", "32324849132-d0iln7dvbdppjmf
 
 class OTPRequest(BaseModel):
     phone_number: str
-    email: EmailStr
+    email: Optional[EmailStr] = None  # ایمیل اختیاری است (ورود فقط با شماره موبایل)
     target_service: Optional[str] = "roxira"
 
     @field_validator("phone_number")
@@ -77,7 +77,7 @@ async def request_otp(req: OTPRequest, request: Request):
     otp_code = str(random.randint(100000, 999999))
     OTP_CACHE[req.phone_number] = {
         "code": otp_code,
-        "email": str(req.email),
+        "email": str(req.email) if req.email else "",
         "target_service": target
     }
     
