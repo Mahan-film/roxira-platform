@@ -1,126 +1,590 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ROXIRA Enterprise OS | پلتفرم اتوماسیون سازمانی، ERP و کارخانه نرم‌افزار</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
-    <style>
-        body { font-family: 'Vazirmatn', sans-serif; background-color: #030712; color: #f8fafc; }
-        .glass-card { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3); }
-        .indigo-gradient { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); }
-        .emerald-gradient { background: linear-gradient(135deg, #059669 0%, #0d9488 100%); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="رکسایرا؛ سامانه جامع مدیریت منابع سازمانی (ERP)، کارخانه نرم‌افزاری خودمختار، اتوماسیون انبارداری FIFO، حسابداری دوبل IFRS و اتصال مستقیم به سامانه مودیان مالیاتی">
+<title>رکسایرا | سامانه جامع مدیریت منابع سازمانی (ERP) و کارخانه نرم‌افزاری</title>
+<meta name="theme-color" content="#020617">
+<style>
+:root{
+  --bg:#020617;--bg2:#0f172a;--card:#0b1220;--line:#1e293b;
+  --text:#f8fafc;--muted:#94a3b8;--brand:#4f46e5;--brand2:#7c3aed;--accent:#22d3ee;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:"Vazirmatn","Tahoma",system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;background-image:radial-gradient(1000px 500px at 80% -10%,rgba(79,70,229,.18),transparent 60%),radial-gradient(800px 400px at 10% 20%,rgba(34,211,238,.08),transparent 60%);background-attachment:fixed}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+.flex{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.grid{display:grid;gap:20px}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:960px){.grid-2,.grid-4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.grid-2,.grid-4{grid-template-columns:1fr}}
+.card{background:linear-gradient(160deg,rgba(15,23,42,.7),rgba(11,18,32,.95));border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 10px 34px -12px rgba(0,0,0,.6)}
+.badge{display:inline-block;font-size:.72rem;font-weight:800;padding:6px 14px;border-radius:999px;background:rgba(79,70,229,.14);color:#a5b4fc;border:1px solid rgba(99,102,241,.35)}
+.btn{display:inline-flex;align-items:center;gap:8px;font-size:.85rem;font-weight:700;padding:13px 24px;border-radius:14px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 10px 28px -8px rgba(79,70,229,.6);border:0;cursor:pointer}
+.btn.ghost{background:transparent;box-shadow:none;border:1px solid var(--line);color:var(--muted)}
+.btn:hover{filter:brightness(1.1)}
+h1{font-size:clamp(1.9rem,4.6vw,3.2rem);font-weight:900;line-height:1.3;letter-spacing:-.5px}
+h2{font-size:clamp(1.4rem,3vw,2rem);font-weight:800}
+h3{font-size:1.02rem;font-weight:700}
+p{color:var(--muted)}
+.muted{color:var(--muted)}
+.lead{color:var(--muted);max-width:720px;margin:14px auto 0}
+.center{text-align:center}
+.ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:1.4rem;background:rgba(79,70,229,.16);margin-bottom:14px}
+.spacer{padding:72px 0}
+header.sticky{position:sticky;top:0;z-index:50;background:rgba(2,6,23,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:grid;place-items:center;font-weight:900;font-size:1.3rem;color:#fff;box-shadow:0 6px 18px -6px rgba(79,70,229,.7)}
+nav{display:flex;gap:6px}
+nav a{font-size:.82rem;font-weight:600;color:var(--muted);padding:9px 14px;border-radius:10px}
+nav a:hover{color:#fff;background:rgba(255,255,255,.05)}
+footer{border-top:1px solid var(--line);padding:34px 0;font-size:.78rem;color:var(--muted)}
+.enamad-white{background:#fff;border-radius:14px;padding:10px;display:inline-block;box-shadow:0 8px 22px -8px rgba(0,0,0,.5)}
+.hidden{display:none!important}
+input,textarea{width:100%;background:#0a1120;border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:#fff;font-family:inherit;font-size:.85rem;box-sizing:border-box}
+input:focus,textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+label{font-size:.74rem;font-weight:700;color:#cbd5e1;display:block;margin-bottom:6px}
+.field{margin-bottom:14px}
+ul.clean{list-style:none}
+ul.clean li{padding:5px 0;color:var(--muted);display:flex;gap:9px;align-items:flex-start}
+ul.clean li::before{content:"✓";color:var(--accent);font-weight:900}
+@media(max-width:720px){nav{display:none}}
+</style>
 </head>
-<body class="min-h-screen flex flex-col justify-between selection:bg-indigo-600 selection:text-white">
+<body>
 
-    <!-- Header Navigation -->
-    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-2xl indigo-gradient flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20 text-2xl">R</div>
-                <div>
-                    <span class="font-extrabold text-base tracking-tight text-slate-100 flex items-center gap-2">
-                        ROXIRA Enterprise OS <span class="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono">v4.5</span>
-                    </span>
-                    <p class="text-[11px] text-slate-400">اتوماسیون مالی ۴ سطحی، انبارداری FIFO، سامانه مؤدیان و کارخانه نرم‌افزار</p>
-                </div>
-            </div>
+<header class="sticky">
+  <div class="wrap flex" style="padding-top:14px;padding-bottom:14px">
+    <a href="#top" class="brand">
+      <div class="logo">R</div>
+      <div>
+        <div style="font-weight:900">رکسایرا</div>
+        <div class="muted" style="font-size:.72rem">Roxira Enterprise OS</div>
+      </div>
+    </a>
+    <nav>
+      <a href="#features">امکانات</a>
+      <a href="#about">درباره ما</a>
+      <a href="#contact">تماس با ما</a>
+    </nav>
+    <div class="flex" style="gap:10px;flex-wrap:none">
+      <button type="button" onclick="openAuthModal()" id="portalLoginBtn" class="btn" style="min-width:max-content;box-shadow:0 10px 30px -8px rgba(79,70,229,.75)">🔐 ورود به پرتال سازمانی</button>
+      <a href="#contact" class="btn ghost" style="min-width:max-content">درخواست نسخه آزمایشی</a>
+      <a href="/docs" target="_blank" class="btn ghost" style="min-width:max-content">مستندات API</a>
+    </div>
+  </div>
+</header>
 
-            <div class="flex items-center gap-3">
-                <a href="/studio" class="text-xs indigo-gradient text-white px-4 py-2 rounded-xl transition font-bold shadow-md shadow-indigo-500/20">⚡ کارخانه نرم‌افزار</a>
-                <a href="/docs" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-xl transition">مستندات API</a>
-            </div>
+<main id="top">
+<!-- Hero -->
+  <section class="wrap center spacer" style="padding-top:90px;padding-bottom:60px">
+    <span class="badge">سیستم مدیریت یکپارچه سازمانی و مالی</span>
+    <h1 style="margin-top:22px">سامانه جامع مدیریت منابع سازمانی (ERP)<br>و کارخانه نرم‌افزاری رکسایرا</h1>
+    <p class="lead">یک زیرساخت ابری هوشمند برای یکپارچه‌سازی تمام فرایندهای سازمان شما؛ از کنترل موجودی و حسابداری استاندارد تا اتصال مستقیم به سامانه مودیان مالیاتی و تولید خودکار نرم‌افزار.</p>
+    <div style="margin-top:30px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <a href="#contact" class="btn">شروع استفاده رایگان</a>
+      <a href="#features" class="btn ghost">آشنایی با ماژول‌ها</a>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="wrap spacer" style="padding-top:20px">
+    <div class="center" style="margin-bottom:34px">
+      <span class="badge">ماژول‌های کلیدی</span>
+      <h2 style="margin-top:14px;color:#fff">قابلیت‌های یکپارچه پلتفرم رکسایرا</h2>
+    </div>
+    <div class="grid grid-4">
+      <div class="card">
+        <div class="ic">📦</div>
+        <h3>اتوماسیون انبارداری FIFO</h3>
+        <p style="font-size:.85rem">مدیریت موجودی و بهای تمام‌شده به روش اولین‌ورودی اولین‌خروجی، با ردیابی دسته‌های انبار و کنترل خودکار گردش کالا.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🧾</div>
+        <h3>حسابداری دوبل IFRS</h3>
+        <p style="font-size:.85rem">دفاتر حسابداری دوبل تفصیلی منطبق بر استانداردهای بین‌المللی گزارشگری مالی (IFRS) با کنترل تعادل سندها.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🏛️</div>
+        <h3>اتصال به سامانه مودیان مالیاتی</h3>
+        <p style="font-size:.85rem">صدور و ارسال صورتحساب‌های الکترونیکی مطابق قوانین سامانه مؤدیان و مالیات بر ارزش افزوده ۱۰٪.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🤝</div>
+        <h3>مدیریت مشتریان (CRM)</h3>
+        <p style="font-size:.85rem">مدیریت چرخه فروش، اتوماسیون معاملات موفق، مدیریت سرنخ‌ها و اعلان‌های هوشمند به مشتریان.</p>
+      </div>
+    </div>
+    <div class="grid grid-2" style="margin-top:20px">
+      <div class="card">
+        <div class="ic">⚙️</div>
+        <h3>کارخانه نرم‌افزاری خودمختار</h3>
+        <p style="font-size:.85rem">تولید کامل اپلیکیشن‌های وب، موبایل و دسکتاپ از روی پرامپت؛ طراحی، تولید و استقرار خودکار ماژول‌های کسب‌وکار.</p>
+      </div>
+      <div class="card">
+        <div class="ic">☁️</div>
+        <h3>زیرساخت ابری چندلایه</h3>
+        <p style="font-size:.85rem">میزبانی ابری امن با پایگاه داده، کش توزیع‌شده و موتور جستجوی برداری برای مقیاس‌پذیری و سرعت بالا.</p>
+      </div>
+    </div>
+  </section>
+<!-- About -->
+  <section id="about" class="wrap spacer" style="padding-top:30px">
+    <div class="card" style="padding:38px">
+      <div class="grid grid-2" style="align-items:center">
+        <div>
+          <span class="badge">درباره ما</span>
+          <h2 style="margin-top:14px">مأموریت رکسایرا: سازمان‌های هوشمند و شفاف</h2>
+          <p style="font-size:.9rem;margin-top:14px">رکسایرا با هدف یکپارچه‌سازی فرایندهای مالی، انبارداری، فروش و توسعه نرم‌افزار در یک پلتفرم واحد شکل گرفت. ما معتقدیم سازمان‌های ایرانی به زیرساختی استاندارد و منطبق بر مقررات نیاز دارند که هم در داخل کشور پاسخگوی الزامات قانونی باشد و هم قابلیت هم‌ترازی با استانداردهای جهانی را داشته باشد.</p>
+          <ul class="clean" style="margin-top:16px">
+            <li>استاندارد حسابداری دوبلِ منطبق بر IFRS و سامانه مودیان مالیاتی</li>
+            <li>زیرساخت فناوری ابری امن، مقیاس‌پذیر و مبتنی بر معماری ماژولار</li>
+            <li>عملکرد ۲۴/۷ با پشتیبانی تخصصی و مستندات کامل API</li>
+          </ul>
         </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-6 py-10 flex-1 w-full space-y-10">
-
-        <!-- Hero Section -->
-        <div class="text-center max-w-3xl mx-auto space-y-4 pt-4">
-            <span class="text-xs px-4 py-1.5 rounded-full bg-indigo-500/10 text-indigo-400 font-extrabold border border-indigo-500/30">سیستم مدیریت یکپارچه سازمانی و مالی</span>
-            <h1 class="text-3xl md:text-5xl font-black text-slate-100 tracking-tight leading-tight">
-                زیرساخت ابری هوشمند مدیریت مالی و توسعه نرم‌افزار
-            </h1>
-            <p class="text-xs md:text-sm text-slate-400 leading-relaxed max-w-2xl mx-auto">
-                حسابداری دوبل ۴ سطحی منطبق بر استانداردهای حسابداری، کنترل موجودی کالا به روش FIFO، صدور صورتحساب الکترونیکی سامانه مؤدیان و تولید خودکار کد اپلیکیشن‌ها.
-            </p>
+        <div style="text-align:center">
+          <div style="font-size:3.4rem">🛠️</div>
+          <h3>استانداردهای پلتفرم</h3>
+          <p class="muted" style="font-size:.82rem">IFRS · سامانه مؤدیان · FIFO · معماری ابری · امنیت داده</p>
         </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- Modules Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="glass-card rounded-3xl p-6 space-y-3">
-                <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg">💼</div>
-                <h3 class="font-bold text-sm text-slate-100">دفاتر حسابداری و اسناد دوبل</h3>
-                <p class="text-xs text-slate-400 leading-relaxed">گروه، کل، معین و تفصیلی با تراز آزمایشی لحظه‌ای در پایگاه داده پایدار PostgreSQL 17.</p>
-            </div>
-
-            <div class="glass-card rounded-3xl p-6 space-y-3">
-                <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg">📦</div>
-                <h3 class="font-bold text-sm text-slate-100">انبارداری FIFO و قیمت تمام‌شده</h3>
-                <p class="text-xs text-slate-400 leading-relaxed">ارزیابی گردش موجودی کالا به روش اولین صادره از اولین وارده و صدور سند تعدیل انبار.</p>
-            </div>
-
-            <div class="glass-card rounded-3xl p-6 space-y-3">
-                <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg">🌍</div>
-                <h3 class="font-bold text-sm text-slate-100">سامانه مؤدیان و مالیات بین‌الملل</h3>
-                <p class="text-xs text-slate-400 leading-relaxed">تطبیق فاکتورهای الکترونیکی با قوانین ۱۰٪ مالیات بر ارزش افزوده و استانداردهای جهانی IFRS.</p>
-            </div>
-        </div>
-
-        <!-- Software Factory Banner -->
-        <div class="glass-card rounded-3xl p-8 border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl">
+  <!-- Contact -->
+  <section id="contact" class="wrap spacer" style="padding-top:30px">
+    <div class="center" style="margin-bottom:30px">
+      <span class="badge">تماس با ما</span>
+      <h2 style="margin-top:14px">با ما در ارتباط باشید</h2>
+    </div>
+    <div class="grid grid-2">
+      <form class="card" action="#" onsubmit="event.preventDefault();document.getElementById('cfMsg').style.display='block';this.reset();return false;">
+        <div class="field"><label for="cfName">نام و نام خانوادگی</label><input id="cfName" name="name" required placeholder="نام شما"></div>
+        <div class="field"><label for="cfPhone">شماره تماس</label><input id="cfPhone" name="phone" type="tel" placeholder="0912..."></div>
+        <div class="field"><label for="cfEmail">ایمیل</label><input id="cfEmail" name="email" type="email" placeholder="you@example.com"></div>
+        <div class="field"><label for="cfMsg2">پیام شما</label><textarea id="cfMsg2" name="message" rows="4" placeholder="توضیح نیاز سازمان شما..."></textarea></div>
+        <div id="cfMsg" class="badge" style="background:rgba(16,185,129,.15);color:#6ee7b7;border-color:rgba(16,185,129,.4);display:none;margin-bottom:12px">✅ پیام شما ثبت شد؛ کارشناسان ما به‌زودی با شما تماس می‌گیرند.</div>
+        <button class="btn" type="submit">ارسال پیام</button>
+      </form>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card">
+          <h3>اطلاعات تماس</h3>
+          <ul class="clean" style="margin-top:12px">
+            <li>📞 شماره پشتیبانی: <a href="tel:09129367796" dir="ltr" class="font-mono text-emerald-400 font-bold hover:underline" style="display:inline-block;white-space:nowrap;direction:ltr">0912 936 7796</a></li>
+            <li>✉️ ایمیل سازمانی: <a href="mailto:info@roxira.ir" style="font-weight:700;color:#38bdf8;font-family:monospace">info@roxira.ir</a></li>
+            <li>🌐 دامنه رسمی: <span style="font-family:monospace">roxira.ir</span></li>
+            <li>🕘 ساعات پاسخگویی: شنبه تا چهارشنبه ۹ صبح تا ۶ عصر</li>
+          </ul>
+          <div class="flex items-start gap-2 text-xs text-slate-300" style="margin-top:14px">
+            <span class="text-amber-400">📍</span>
             <div>
-                <span class="text-xs px-3 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-full font-bold">Autonomous Code Engine</span>
-                <h3 class="text-xl font-bold text-slate-100 mt-2">کارخانه خودکار ساخت نرم‌افزار رکسیرار</h3>
-                <p class="text-xs text-slate-400 mt-1">تولید کامل اپلیکیشن‌های وب Next.js، موبایل React Native و دسکتاپ Tauri از روی پرامپت.</p>
+              <span class="font-bold text-white">نشانی دفتر مرکزی:</span>
+              <p class="leading-relaxed text-slate-300 mt-1">تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵</p>
             </div>
-            <a href="/studio" class="indigo-gradient text-white px-6 py-3.5 rounded-2xl font-bold text-xs whitespace-nowrap shadow-lg shadow-indigo-600/30">ورود به استودیوی نرم‌افزار ⚡</a>
+          </div>
         </div>
-
-    </main>
-
-    <!-- Footer with Official e-Namad Seal -->
-    <footer class="border-t border-slate-800 bg-slate-950 py-10 text-xs text-slate-400">
-        <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 items-center">
-            
-            <!-- Brand Info -->
-            <div class="space-y-2 md:col-span-2">
-                <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 rounded-xl indigo-gradient flex items-center justify-center font-bold text-white text-sm">R</div>
-                    <span class="font-black text-slate-100 text-sm">پلتفرم سازمانی ROXIRA</span>
-                </div>
-                <p class="text-slate-500 leading-relaxed">ارائه‌دهنده راه‌کارهای ابری سازمانی، اتوماسیون فرایندهای تجاری و زیرساخت‌های هوش مصنوعی سازمانی.</p>
-                <div class="pt-1">
-                    <span>مدیریت پلتفرم: <b class="text-slate-200">آقای محمدی</b></span> | 
-                    <span>تماس مستقیم: <a href="tel:09129367796" class="text-indigo-400 font-mono font-bold">09129367796</a></span> | 
-                    <span class="font-mono">info@roxira.ir</span>
-                </div>
-            </div>
-
-            <!-- Domains & Legal -->
-            <div class="space-y-1">
-                <h4 class="font-bold text-slate-200">دامنه‌های فعال پلتفرم:</h4>
-                <p class="font-mono text-indigo-400">roxira.ir</p>
-                <p class="font-mono text-indigo-400">roxira.net</p>
-                <p class="text-slate-500 text-[11px]">تمامی حقوق مادی و معنوی محفوظ است © ۲۰۲۶</p>
-            </div>
-
-            <!-- Official e-Namad Trust Seal Container -->
-            <div class="flex flex-col items-center md:items-end justify-center">
-                <div class="p-3 bg-white rounded-2xl shadow-lg inline-block border border-slate-200">
-                    <!-- کد رسمی نماد اعتماد الکترونیکی roxira.ir -->
-                    <a referrerpolicy='origin' target='_blank' href='https://trustseal.enamad.ir/?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp'>
-                        <img referrerpolicy='origin' src='https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp' alt='نماد اعتماد الکترونیکی roxira.ir' style='cursor:pointer' code='y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp' class="w-24 h-auto">
-                    </a>
-                </div>
-                <span class="text-[10px] text-slate-500 mt-2 font-bold">نماد اعتماد الکترونیکی کسب‌وکار</span>
-            </div>
-
+        <div class="card">
+          <h3>نشان‌های اعتماد</h3>
+          <p class="muted" style="font-size:.82rem;margin-bottom:14px">هویت رسمی کسب‌وکار شما در اینماد ثبت شده است؛ برای بررسی اصالت، فیلترشکن را خاموش کرده و روی نشان کلیک کنید.</p>
+          <div class="enamad-white">
+            <a referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp">
+              <img referrerpolicy="origin" src="https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp" alt="نماد تجارت الکترونیکی" style="cursor:pointer;width:75px;height:auto" id="y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp">
+            </a>
+          </div>
         </div>
-    </footer>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap flex" style="padding-top:12px">
+    <div>© ۱۴۰۵ رکسایرا — تمامی حقوق مادی و معنوی محفوظ است.</div>
+    <div class="flex" style="gap:16px">
+      <a href="https://roxira.ir">roxira.ir</a>
+      <a href="https://ghazihoushmand.ir">ghazihoushmand.ir</a>
+    </div>
+  </div>
+  <div class="wrap flex" style="padding-top:10px;justify-content:flex-start">
+    <div class="flex items-start gap-2 text-xs text-slate-300">
+      <span class="text-amber-400">📍</span>
+      <div>
+        <span class="font-bold text-white">نشانی دفتر مرکزی:</span>
+        <p class="leading-relaxed text-slate-300 mt-1">تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵</p>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ================= UNIFIED AUTH MODAL (Password / SMS OTP / Google) ================= -->
+<style>
+  .auth-modal{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;padding:16px}
+  .auth-modal.open{display:flex}
+  .auth-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.86);backdrop-filter:blur(6px)}
+  .auth-box{position:relative;width:100%;max-width:430px;max-height:92vh;overflow-y:auto;background:linear-gradient(165deg,#0b1220,#0a0f1c);border:1px solid var(--line);border-radius:24px;padding:28px;box-shadow:0 30px 80px -20px rgba(0,0,0,.85)}
+  .auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#0a1120;border:1px solid var(--line);border-radius:14px;padding:6px;margin-top:18px}
+  .auth-tab{border:1px solid transparent;background:transparent;color:var(--muted);font-size:.72rem;font-weight:800;padding:10px 8px;border-radius:10px;cursor:pointer;font-family:inherit;transition:all .2s}
+  .auth-tab.active{background:rgba(79,70,229,.16);color:#a5b4fc;border-color:rgba(99,102,241,.4)}
+  .auth-label{font-size:.7rem;font-weight:700;color:#cbd5e1;display:block;margin-bottom:6px}
+  .auth-input{width:100%;background:#0a1120;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:.86rem;color:var(--text);font-family:inherit;direction:ltr;text-align:left}
+  .auth-input:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .otp-input{letter-spacing:.5em;text-align:center;font-weight:800;font-size:1.05rem;color:#a5b4fc}
+  .auth-link{background:none;border:0;cursor:pointer;font-family:inherit;font-size:.72rem;font-weight:700;color:var(--muted);padding:0}
+  .auth-link:hover{color:#a5b4fc}
+  .google-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:13px 16px;border-radius:14px;border:1px solid #fff;background:#fff;color:#1f2937;font-size:.82rem;font-weight:800;cursor:pointer;font-family:inherit;transition:background .2s}
+  .google-btn:hover{background:#eef2ff}
+  .google-btn:disabled{opacity:.6;cursor:wait}
+  .auth-msg{margin-top:14px;border-radius:12px;padding:11px 14px;font-size:.74rem;font-weight:700;line-height:1.8}
+  .auth-msg.ok{background:rgba(16,185,129,.12);color:#6ee7b7;border:1px solid rgba(16,185,129,.35)}
+  .auth-msg.err{background:rgba(244,63,94,.12);color:#fda4af;border:1px solid rgba(244,63,94,.35)}
+</style>
+
+<div id="authModal" class="auth-modal" role="dialog" aria-modal="true">
+  <div class="auth-backdrop" onclick="closeAuthModal()"></div>
+  <div class="auth-box">
+    <button type="button" onclick="closeAuthModal()" aria-label="بستن" style="position:absolute;top:14px;left:14px;background:none;border:0;color:var(--muted);font-size:1.3rem;font-weight:900;cursor:pointer">&times;</button>
+    <h3 style="font-size:1rem;font-weight:900;color:#fff">ورود / ثبت‌نام در پرتال رکسایرا</h3>
+    <p style="font-size:.76rem;color:var(--muted);margin-top:6px">به روش دلخواه وارد شوید؛ رمز عبور یا کد پیامکی ۶ رقمی کاوه‌نگار.</p>
+
+    <div class="auth-tabs">
+      <button type="button" id="tabBtnPassword" class="auth-tab active" onclick="switchAuthTab('password')">ورود با نام کاربری / رمز عبور</button>
+      <button type="button" id="tabBtnOtp" class="auth-tab" onclick="switchAuthTab('otp')">ورود سریع پیامکی (OTP)</button>
+    </div>
+
+    <!-- TAB 1: Username / Password -->
+    <div id="passwordStep" style="margin-top:20px">
+      <div class="field">
+        <label class="auth-label" for="loginIdentifier">نام کاربری، ایمیل یا شماره موبایل</label>
+        <input id="loginIdentifier" class="auth-input" type="text" autocomplete="username" placeholder="username | email | 09xxxxxxxxx">
+      </div>
+      <div class="field">
+        <label class="auth-label" for="loginPasswordField">رمز عبور</label>
+        <input id="loginPasswordField" class="auth-input" type="password" autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 14px">
+        <button type="button" class="auth-link" style="color:#a5b4fc" onclick="showRegisterStep()">حساب ندارید؟ ثبت‌نام</button>
+        <button type="button" class="auth-link" onclick="forgotPassword()">فراموشی رمز عبور</button>
+      </div>
+      <button type="button" id="loginSubmitBtn" class="btn" style="width:100%;justify-content:center" onclick="loginPassword()">ورود به پرتال سازمانی</button>
+    </div>
+
+    <!-- TAB 1b: Register -->
+    <div id="registerStep" class="hidden" style="margin-top:20px">
+      <div class="field"><label class="auth-label" for="regUsername">نام کاربری (لاتین)</label><input id="regUsername" class="auth-input" type="text" autocomplete="username" placeholder="username"></div>
+      <div class="field"><label class="auth-label" for="regPassword">رمز عبور (حداقل ۶ کاراکتر)</label><input id="regPassword" class="auth-input" type="password" autocomplete="new-password" placeholder="••••••••"></div>
+      <div class="grid grid-2" style="gap:10px">
+        <div class="field"><label class="auth-label" for="regEmail">ایمیل (اختیاری)</label><input id="regEmail" class="auth-input" type="email" autocomplete="email" placeholder="you@example.com"></div>
+        <div class="field"><label class="auth-label" for="regPhone">موبایل (اختیاری)</label><input id="regPhone" class="auth-input" type="tel" autocomplete="tel" placeholder="09xxxxxxxxx"></div>
+      </div>
+      <button type="button" id="registerSubmitBtn" class="btn" style="width:100%;justify-content:center" onclick="submitRegister()">ایجاد حساب کاربری</button>
+      <button type="button" class="auth-link" style="width:100%;margin-top:10px" onclick="showLoginStep()">بازگشت به ورود</button>
+    </div>
+
+    <!-- TAB 2: SMS OTP (Kavenegar) -->
+    <div id="otpStep1" class="hidden" style="margin-top:20px">
+      <p style="font-size:.76rem;color:var(--muted);margin-bottom:12px">شماره موبایل خود را وارد کنید؛ کد تأیید ۶ رقمی از طریق کاوه‌نگار (قالب roxira-verify) ارسال می‌شود. حساب کاربری به‌صورت خودکار ساخته می‌شود.</p>
+      <div class="field"><input id="otpPhone" class="auth-input" type="tel" inputmode="tel" autocomplete="tel" placeholder="09xxxxxxxxx"></div>
+      <button type="button" id="otpSendBtn" class="btn" style="width:100%;justify-content:center" onclick="requestOtp()">دریافت کد تأیید</button>
+    </div>
+
+    <div id="otpStep2" class="hidden" style="margin-top:20px">
+      <p style="font-size:.78rem;color:var(--muted);margin-bottom:12px">کد ۶ رقمی ارسال‌شده به <span id="otpPhoneEcho" style="font-weight:800;color:#a5b4fc;direction:ltr;display:inline-block"></span> را وارد کنید.</p>
+      <div class="field"><input id="otpCode" class="auth-input otp-input" type="text" inputmode="numeric" maxlength="6" placeholder="──────"></div>
+      <button type="button" id="otpVerifyBtn" class="btn" style="width:100%;justify-content:center" onclick="verifyOtp()">تأیید و ورود به میز کار</button>
+      <button type="button" id="otpResend" class="auth-link" style="width:100%;margin-top:10px" onclick="requestOtp()">ارسال مجدد کد</button>
+    </div>
+
+    <div id="authMsg" class="auth-msg" style="display:none"></div>
+
+    <!-- Social login -->
+    <div style="display:flex;align-items:center;gap:12px;margin:20px 0 14px;color:#475569;font-size:.68rem">
+      <span style="height:1px;flex:1;background:var(--line)"></span><span>یا</span><span style="height:1px;flex:1;background:var(--line)"></span>
+    </div>
+    <button type="button" id="googleLoginBtn" class="google-btn" onclick="loginWithGoogle()">
+      <svg viewBox="0 0 48 48" style="width:20px;height:20px;flex-shrink:0" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.5 6.1 29.5 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.5 6.1 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.4l6.3 5.3C41.4 34.9 44 29.9 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>
+      <span>ورود مستقیم با حساب گوگل (Google Sign-In)</span>
+    </button>
+
+    <p style="font-size:.66rem;color:#64748b;text-align:center;margin-top:18px">با ورود یا ثبت‌نام، <a href="#about" style="text-decoration:underline">قوانین و حریم خصوصی</a> سامانه را می‌پذیرید.</p>
+  </div>
+
+<script>
+/* ================= ROXIRA UNIFIED AUTH (Password / SMS OTP / Google) — PART 1 ================= */
+const $ = (id) => document.getElementById(id);
+
+function toEnDigits(s) {
+  const fa = '۰۱۲۳۴۵۶۷۸۹', ar = '٠١٢٣٤٥٦٧٨٩';
+  return String(s || '').replace(/[۰-۹٠-٩]/g, ch => {
+    const i = fa.indexOf(ch); if (i > -1) return String(i);
+    return String(ar.indexOf(ch));
+  });
+}
+function normalizePhone(raw) {
+  let s = toEnDigits(raw).trim().replace(/[\s\-()]/g, '');
+  if (s.startsWith('+98')) s = '0' + s.slice(3);
+  else if (s.startsWith('0098')) s = '0' + s.slice(4);
+  else if (s.startsWith('98') && s.length === 12) s = '0' + s.slice(2);
+  return s;
+}
+
+let otpCountdown = null, otpPhone = '';
+
+function authFeedback(msg, ok) {
+  const m = $('authMsg');
+  m.style.display = 'block';
+  m.className = 'auth-msg ' + (ok ? 'ok' : 'err');
+  m.innerHTML = msg;
+}
+function resetAuthPanels() {
+  ['passwordStep', 'registerStep', 'otpStep1', 'otpStep2'].forEach(id => $(id).classList.add('hidden'));
+  $('authMsg').style.display = 'none';
+}
+function switchAuthTab(tab) {
+  resetAuthPanels();
+  const isPassword = tab === 'password';
+  $(isPassword ? 'passwordStep' : 'otpStep1').classList.remove('hidden');
+  $('tabBtnPassword').classList.toggle('active', isPassword);
+  $('tabBtnOtp').classList.toggle('active', !isPassword);
+}
+/* ---------- Safe user display name (recursive JSON parse) ---------- */
+function sanitizeDisplayName(raw) {
+  if (!raw) return 'کاربر گرامی';
+  try {
+    while (typeof raw === 'string' && (raw.startsWith('{') || raw.startsWith('"'))) {
+      raw = JSON.parse(raw);
+    }
+  } catch (e) {}
+  if (typeof raw === 'object' && raw !== null) {
+    return raw.full_name || raw.username || raw.phone || raw.phone_number || raw.email || 'کاربر گرامی';
+  }
+  return String(raw || 'کاربر گرامی');
+}
+function getCleanDisplayName(userData) { return sanitizeDisplayName(userData); }
+
+function openAuthModal(tab = 'password') {
+  resetAuthPanels();
+  switchAuthTab(tab);
+  // Autofill از کش (Task 2)
+  try {
+    const cachedPhone = localStorage.getItem('roxira_phone') || localStorage.getItem('ghazi_phone') || '';
+    const cachedEmail = localStorage.getItem('roxira_email') || localStorage.getItem('ghazi_email') || '';
+    if (cachedPhone) {
+      if ($('otpPhone') && !$('otpPhone').value) $('otpPhone').value = cachedPhone;
+      if ($('regPhone') && !$('regPhone').value) $('regPhone').value = cachedPhone;
+    }
+    if (cachedEmail && $('regEmail') && !$('regEmail').value) $('regEmail').value = cachedEmail;
+  } catch (e) {}
+  $('authModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => $(tab === 'otp' ? 'otpPhone' : 'loginIdentifier').focus(), 60);
+}
+function closeAuthModal() {
+  $('authModal').classList.remove('open');
+  document.body.style.overflow = '';
+  if (otpCountdown) { clearInterval(otpCountdown); otpCountdown = null; }
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAuthModal(); });
+
+function handleAuthSuccess(data) {
+  try {
+    localStorage.setItem('roxira_jwt_token', data.token || data.access_token || '');
+    localStorage.setItem('roxira_user', JSON.stringify(data.user || {}));
+  } catch (e) {}
+  authFeedback('✅ ورود موفق! در حال انتقال به میز کار سازمانی...', true);
+  setTimeout(() => { window.location.href = '/app'; }, 900);
+}
+
+/* ---------- TAB 1: ورود با نام کاربری / رمز عبور ---------- */
+async function loginPassword() {
+  const identifier = ($('loginIdentifier').value || '').trim();
+  const password = $('loginPasswordField').value || '';
+  if (!identifier || !password) { authFeedback('نام کاربری و رمز عبور را وارد کنید.', false); return; }
+  const btn = $('loginSubmitBtn');
+  btn.disabled = true; btn.textContent = 'در حال بررسی...';
+  try {
+    const r = await fetch('/api/v1/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: identifier, password: password })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.token) handleAuthSuccess(d);
+    else authFeedback(d.detail || 'ورود ناموفق بود؛ اطلاعات را بررسی کنید.', false);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور؛ اتصال اینترنت خود را بررسی کنید.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'ورود به پرتال سازمانی';
+  }
+}
+
+/* ---------- TAB 1b: ثبت‌نام ---------- */
+function showRegisterStep() { resetAuthPanels(); $('registerStep').classList.remove('hidden'); setTimeout(() => $('regUsername').focus(), 60); }
+function showLoginStep() { switchAuthTab('password'); }
+async function submitRegister() {
+  const payload = {
+    username: ($('regUsername').value || '').trim(),
+    password: $('regPassword').value || '',
+    email: ($('regEmail').value || '').trim() || null,
+    phone: ($('regPhone').value || '').trim() || null
+  };
+  if (!payload.username || !payload.password) { authFeedback('نام کاربری و رمز عبور الزامی است.', false); return; }
+  // ذخیره فوری در کش (Task 2)
+  try {
+    if (payload.phone) localStorage.setItem('roxira_phone', payload.phone);
+    if (payload.email) localStorage.setItem('roxira_email', payload.email);
+  } catch (e) {}
+  const btn = $('registerSubmitBtn');
+  btn.disabled = true; btn.textContent = 'در حال ایجاد حساب...';
+  try {
+    const r = await fetch('/api/v1/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.token) handleAuthSuccess(d);
+    else authFeedback(d.detail || 'ثبت‌نام ناموفق بود.', false);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور؛ دوباره تلاش کنید.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'ایجاد حساب کاربری';
+  }
+}
+
+/* ---------- فراموشی رمز عبور ---------- */
+async function forgotPassword() {
+  const email = prompt('ایمیل حساب خود را وارد کنید تا لینک بازیابی رمز عبور ارسال شود:');
+  if (email === null) return;
+  const clean = (email || '').trim();
+  if (!/[^@\s]+@[^@\s]+\.[^@\s]+/.test(clean)) { authFeedback('قالب ایمیل معتبر نیست.', false); return; }
+  try {
+    const r = await fetch('/api/v1/auth/forgot-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: clean })
+    });
+    const d = await r.json().catch(() => ({}));
+    authFeedback(d.message || (d.detail || 'درخواست بازیابی ثبت شد.'), r.ok);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور.', false);
+  }
+}
+</script>
+
+</div>
+
+<script>
+/* ================= ROXIRA UNIFIED AUTH — PART 2 (SMS OTP + Google) ================= */
+/* ---------- TAB 2: ورود سریع پیامکی (OTP کاوه‌نگار) ---------- */
+async function requestOtp() {
+  const p = normalizePhone($('otpPhone').value);
+  if (!/^09\d{9}$/.test(p)) { authFeedback('شماره موبایل معتبر نیست؛ مثال: ۰۹۱۲۳۴۵۶۷۸۹', false); return; }
+  otpPhone = p;
+  try { localStorage.setItem('roxira_phone', p); } catch (e) {}  // ذخیره فوری (Task 2)
+  const btn = $('otpSendBtn');
+  btn.disabled = true; btn.textContent = 'در حال ارسال کد...';
+  try {
+    const r = await fetch('/api/v1/auth/request-otp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone_number: p, target_service: 'roxira' })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) {
+      $('otpStep1').classList.add('hidden');
+      $('otpStep2').classList.remove('hidden');
+      $('otpPhoneEcho').textContent = p;
+      authFeedback(d.message || 'کد تأیید پیامکی با موفقیت ارسال شد.', true);
+      startCountdown(90);
+      setTimeout(() => $('otpCode').focus(), 100);
+    } else {
+      authFeedback(d.detail || 'ارسال کد ناموفق بود؛ لطفاً دوباره تلاش کنید.', false);
+    }
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور؛ اتصال اینترنت خود را بررسی کنید.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'دریافت کد تأیید';
+  }
+}
+function startCountdown(sec) {
+  const rb = $('otpResend'); let left = sec;
+  rb.disabled = true; rb.style.opacity = '.5';
+  rb.textContent = 'ارسال مجدد کد (' + left + ' ثانیه)';
+  if (otpCountdown) clearInterval(otpCountdown);
+  otpCountdown = setInterval(() => {
+    left--;
+    if (left <= 0) {
+      clearInterval(otpCountdown); otpCountdown = null;
+      rb.disabled = false; rb.style.opacity = ''; rb.textContent = 'ارسال مجدد کد';
+    } else {
+      rb.textContent = 'ارسال مجدد کد (' + left + ' ثانیه)';
+    }
+  }, 1000);
+}
+async function verifyOtp() {
+  const code = toEnDigits($('otpCode').value).replace(/\D/g, '');
+  if (code.length !== 6) { authFeedback('کد ۶ رقمی را کامل وارد کنید.', false); return; }
+  const btn = $('otpVerifyBtn');
+  btn.disabled = true; btn.textContent = 'در حال بررسی کد...';
+  try {
+    const r = await fetch('/api/v1/auth/verify-otp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone_number: otpPhone, code: code })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && (d.status === 'AUTHENTICATED' || d.token)) handleAuthSuccess(d);
+    else authFeedback(d.detail || 'کد وارد شده نامعتبر یا منقضی است.', false);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور؛ دوباره تلاش کنید.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'تأیید و ورود به میز کار';
+  }
+}
+
+/* ---------- Social Login: Google Sign-In ---------- */
+async function loginWithGoogle() {
+  const btn = $('googleLoginBtn');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/v1/auth/google/url', { headers: { 'Accept': 'application/json' } });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.url) { window.location.href = d.url; return; }
+    authFeedback(d.detail || 'ورود با گوگل در دسترس نیست؛ از ورود با رمز عبور یا کد پیامکی استفاده کنید.', false);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور در فرایند گوگل.', false);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* Enter key shortcuts */
+$('otpPhone').addEventListener('keydown', e => { if (e.key === 'Enter') requestOtp(); });
+$('otpCode').addEventListener('keydown', e => { if (e.key === 'Enter') verifyOtp(); });
+$('loginPasswordField').addEventListener('keydown', e => { if (e.key === 'Enter') loginPassword(); });
+$('loginIdentifier').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPasswordField').focus(); });
+$('regPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitRegister(); });
+
+/* ---------- Google OAuth return (redirect back با ?code=...&state=...) ---------- */
+(function handleGoogleRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code'), state = params.get('state');
+  if (!code) return;
+  openAuthModal('password');
+  authFeedback('در حال تکمیل ورود با گوگل...', true);
+  fetch('/api/v1/auth/google/callback', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code, state: state })
+  })
+    .then(r => r.json().then(d => ({ ok: r.ok, d })))
+    .then(({ ok, d }) => {
+      if (ok && d.token) handleAuthSuccess(d);
+      else authFeedback(d.detail || 'تکمیل ورود با گوگل ناموفق بود.', false);
+    })
+    .catch(() => authFeedback('خطای ارتباط با سرور در فرایند گوگل.', false));
+})();
+</script>
 
 </body>
 </html>
+

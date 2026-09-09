@@ -1,7 +1,16 @@
 """
 ROXIRA OMNICHANNEL NOTIFICATION & SMS ENGINE
 سرویس هوشمند ارسال پیامک خدماتی و اعلانات رویدادهای مالی و حقوقی
+
+⚠ DEPRECATED (منسوخ):
+    موتور پیامک پترنی (KavehNegar / FarazSMS / Pattern API) منسوخ شده و با
+    وب‌سرویس رسمی sms.ir (Fast/Verify) جایگزین میشود. برای ارسال OTP و پیامک
+    خدماتی از ماژول اختصاصی:
+        output_apps.ecosystem_core.src.notifications.sms_ir_service
+    استفاده کنید. این کلاس تنها برای سازگاری عقب‌گرد (backward-compat) و
+    حالت شبیه‌ساز (Simulation) نگه داشته شده است.
 """
+import warnings
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 import datetime
@@ -17,13 +26,19 @@ class SMSDispatchResult:
 
 class EnterpriseSMSDispatcher:
     """
-    موتور ماژولار پیامک با پشتیبانی از وب‌سرویس‌های خدماتی مبتنی بر پترن (Pattern/Template)
-    پشتیبانی از KavehNegar, MeliPayamak, IPPanel و حالت شبیه‌ساز امن (Simulation Mode)
+    ⚠ DEPRECATED — از sms_ir_service.SmsIrService استفاده کنید.
+    موتور ماژولار قدیمی پیامک مبتنی بر پترن (Pattern/Template).
     """
-    
-    SUPPORTED_PROVIDERS = ["IPPANEL", "KAVEHNEGAR", "MELIPAYAMAK", "SIMULATOR"]
+
+    SUPPORTED_PROVIDERS = ["SIMULATOR"]  # فقط حالت شبیه‌ساز (تغییر: سرویس واقعی sms.ir)
 
     def __init__(self, provider: str = "SIMULATOR", api_key: Optional[str] = None):
+        warnings.warn(
+            "EnterpriseSMSDispatcher is deprecated; use SmsIrService from "
+            "output_apps.ecosystem_core.src.notifications.sms_ir_service instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.provider = provider.upper() if provider else "SIMULATOR"
         self.api_key = api_key or "demo-sms-key"
 

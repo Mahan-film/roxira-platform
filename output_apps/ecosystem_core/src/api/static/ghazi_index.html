@@ -3,37 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>سامانه قاضی هوشمند | Smart Judge System</title>
-    <script src="https://cdn.tailwindcss.com">
-        async function executeRetrialAnalysis() {
-            if (!authToken) { alert('لطفاً ابتدا وارد حساب کاربری خود شوید.'); openAuthModal('register'); return; }
-            const q = document.getElementById('retrialQueryText').value.trim();
-            const btn = document.getElementById('btnRetrialSubmit');
-            const box = document.getElementById('retrialOutputCard');
-            const out = document.getElementById('retrialOutputText');
-
-            if (!q) { alert('لطفاً شرح ادله جدید و موضوع دادنامه را وارد نمایید.'); return; }
-            btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> <span>در حال تطبیق ادله با بندهای هفت‌گانه ماده ۴۷۴...</span>';
-            box.classList.remove('hidden');
-            out.innerText = 'در حال محاسبه شانس پذیرش و انشای دادخواست اعاده دادرسی...';
-
-            try {
-                const res = await fetch('/api/v1/legal/retrial-evaluation', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`},
-                    body: JSON.stringify({query: q, model: 'deepseek-v4-pro'})
-                });
-                const d = await res.json();
-                out.innerText = d.analysis_result || JSON.stringify(d);
-            } catch(e) { out.innerText = 'خطا: ' + e; }
-            finally {
-                btn.disabled = false;
-                btn.innerHTML = '<span>🏛️</span> <span>سنجش هوشمند شانس اعاده دادرسی و انشای دادخواست دیوان عالی</span>';
-            }
-        }
-        
+    <title>قاضی هوشمند | سیستم مشاوره حقوقی و استدلال قضایی با هوش مصنوعی</title>
+    <meta name="description" content="سامانه آنلاین استدلال قضایی، مشاوره حقوقی با هوش مصنوعی، استعلام آرای وحدت رویه و تنظیم لایحه و دادخواست.">
+    <meta name="keywords" content="قاضی هوشمند, smart judge, مشاوره حقوقی, هوش مصنوعی حقوقی, استعلام آرای وحدت رویه, دادخواست, لایحه, ایران">
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="قاضی هوشمند | ghazihoushmand.ir">
+    <meta name="theme-color" content="#059669">
+    <link rel="canonical" href="https://ghazihoushmand.ir">
+    <meta property="og:title" content="قاضی هوشمند | سیستم مشاوره حقوقی و استدلال قضایی با هوش مصنوعی">
+    <meta property="og:description" content="سامانه آنلاین استدلال قضایی، مشاوره حقوقی با هوش مصنوعی، استعلام آرای وحدت رویه و تنظیم لایحه و دادخواست.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://ghazihoushmand.ir">
+    <meta property="og:locale" content="fa_IR">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="قاضی هوشمند | سیستم مشاوره حقوقی با هوش مصنوعی">
+    <meta name="twitter:description" content="استدلال قضایی، استعلام آرای وحدت رویه و تنظیم لایحه و دادخواست با هوش مصنوعی.">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "قاضی هوشمند | دستیار و سیستم قاضی هوشمند ایران",
+      "alternateName": ["Smart Judge System Iran", "اسمارت جاج", "دستیار قاضی هوشمند"],
+      "applicationCategory": "LegalSoftware",
+      "operatingSystem": "Web",
+      "description": "سامانه آنلاین استدلال قضایی، مشاوره حقوقی با هوش مصنوعی، استعلام آرای وحدت رویه و تنظیم لایحه و دادخواست.",
+      "url": "https://ghazihoushmand.ir",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "IRR"
+      }
+    }
     </script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
     <style>
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f8fafc; color: #0f172a; }
@@ -42,6 +44,10 @@
         .emerald-btn:hover { opacity: 0.95; }
         .gold-badge { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; }
         .pro-card-bg { background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%); }
+        /* Fix pricing badge clip: keep the "پرفروش‌ترین" badge inside the card instead of overflowing */
+        .pricing-badge { position: absolute; top: -1px; right: 24px; transform: translateY(-50%); z-index: 2; }
+        .pricing-grid { position: relative; }
+        .pricing-grid .glass-card { overflow: visible; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between selection:bg-emerald-600 selection:text-white">
@@ -51,13 +57,8 @@
         <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
             <div class="flex items-center gap-3 cursor-pointer" onclick="switchPage('home')">
                 <!-- Official Smart Judge Logo -->
-                <div class="w-12 h-12 rounded-2xl bg-slate-950 flex items-center justify-center p-1.5 shadow-md border border-slate-800">
-                    <svg viewBox="0 0 100 100" class="w-full h-full">
-                        <path d="M50 5 L85 20 L85 55 C85 75 50 95 50 95 C50 95 15 75 15 55 L15 20 Z" fill="none" stroke="#10b981" stroke-width="3.5"/>
-                        <polygon points="50,38 60,45 60,55 50,62 40,55 40,45" fill="#38bdf8" opacity="0.9"/>
-                        <path d="M28 42 L72 42 M50 25 L50 68" stroke="#ffffff" stroke-width="2.5"/>
-                        <path d="M28 42 L22 55 L34 55 Z M72 42 L66 55 L78 55 Z" stroke="#10b981" stroke-width="2" fill="none"/>
-                    </svg>
+                <div class="flex items-center justify-center" style="height:48px;width:auto;object-fit:contain">
+                    <img src="/static/ghazi_logo.png" onerror="this.onerror=null;this.src='/static/ghazi_logo.svg';" alt="سامانه تخصصی قاضی هوشمند" style="height:48px;width:auto;max-width:160px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(245,158,11,0.2));" referrerpolicy="origin">
                 </div>
                 <div>
                     <span class="font-black text-base text-slate-900 flex items-center gap-2">
@@ -73,6 +74,7 @@
                 <button onclick="switchPage('studio')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-studio">میز دادرسی و پرونده‌ها</button>
                 <button onclick="switchPage('retrial')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white text-rose-800 bg-rose-50 font-bold" id="lnk-retrial">⚖️ اعاده دادرسی (ماده ۴۷۴)</button>
                 <button onclick="switchPage('laws')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-laws">بانک قوانین (۵۱۸۴ گره)</button>
+                <button onclick="switchPage('calcs')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-calcs">🧮 محاسبات حقوقی</button>
                 <button onclick="switchPage('pricing')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-pricing">پلن‌های اشتراک</button>
                 <button onclick="switchPage('tickets')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-tickets">ثبت تیکت</button>
                 <button onclick="switchPage('admin')" class="nav-link px-3.5 py-2 rounded-xl transition text-indigo-900 hover:bg-white font-mono" id="lnk-admin">👑 پنل مدیریت</button>
@@ -172,7 +174,7 @@
             </div>
 
             <!-- 3 Pricing Cards Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+            <div class="pricing-grid grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch pt-4">
                 <!-- Card 1: Free -->
                 <div class="glass-card rounded-3xl p-7 space-y-5 flex flex-col justify-between shadow-sm">
                     <div class="space-y-4">
@@ -189,20 +191,22 @@
                 </div>
 
                 <!-- Card 2: Pro (Featured with Golden Badge) -->
-                <div class="glass-card pro-card-bg rounded-3xl p-7 space-y-5 flex flex-col justify-between border-2 border-emerald-600 shadow-xl relative">
-                    <div class="absolute -top-3.5 right-6 gold-badge text-[11px] font-black px-3.5 py-1 rounded-full shadow-md">پرفروش‌ترین</div>
-                    <div class="space-y-4">
-                        <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-2xl">🧠</div>
-                        <h3 class="font-black text-base text-emerald-950">پلن حرفه‌ای (پرو)</h3>
-                        <div class="text-3xl font-black text-slate-900">۳,۰۰۰,۰۰۰ <span class="text-xs font-normal text-slate-500">تومان / ماه</span></div>
-                        <ul class="text-xs text-slate-700 space-y-3 pt-3 border-t border-emerald-200 font-medium">
-                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>درخواست‌های نامحدود هوش مصنوعی</span></li>
-                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>دسترسی به مدل‌های برتر ۲۰۲۶ (Claude 5 / DeepSeek V4)</span></li>
-                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>تولید و تحلیل اسناد حجیم و پیچیده پرونده</span></li>
-                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>پشتیبانی اولویت‌دار و سریع</span></li>
-                        </ul>
+                <div class="relative">
+                    <div class="pricing-badge gold-badge text-[11px] font-black px-3.5 py-1 rounded-full shadow-md">پرفروش‌ترین</div>
+                    <div class="glass-card pro-card-bg rounded-3xl p-7 space-y-5 flex flex-col justify-between border-2 border-emerald-600 shadow-xl h-full">
+                        <div class="space-y-4 pt-2">
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-2xl">🧠</div>
+                            <h3 class="font-black text-base text-emerald-950">پلن حرفه‌ای (پرو)</h3>
+                            <div class="text-3xl font-black text-slate-900">۳,۰۰۰,۰۰۰ <span class="text-xs font-normal text-slate-500">تومان / ماه</span></div>
+                            <ul class="text-xs text-slate-700 space-y-3 pt-3 border-t border-emerald-200 font-medium">
+                                <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>درخواست‌های نامحدود هوش مصنوعی</span></li>
+                                <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>دسترسی به مدل‌های برتر ۲۰۲۶ (Claude 5 / DeepSeek V4)</span></li>
+                                <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>تولید و تحلیل اسناد حجیم و پیچیده پرونده</span></li>
+                                <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>پشتیبانی اولویت‌دار و سریع</span></li>
+                            </ul>
+                        </div>
+                        <button onclick="openAuthModal('register')" class="w-full emerald-btn py-3.5 rounded-2xl text-xs font-black shadow-md">انتخاب پلن پرو</button>
                     </div>
-                    <button onclick="openAuthModal('register')" class="w-full emerald-btn py-3.5 rounded-2xl text-xs font-black shadow-md">انتخاب پلن پرو</button>
                 </div>
 
                 <!-- Card 3: Enterprise -->
@@ -262,9 +266,9 @@
                         <div class="flex items-center gap-2">
                             <label class="text-xs text-slate-600 font-bold">سطح موتور استدلال:</label>
                             <select id="caseModelSelector" class="bg-slate-50 border border-slate-300 text-xs rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none focus:border-emerald-600">
-                                <option value="free-ox-alpha">🎓 موتور هوشمند پایه (سطح ۱ - رایگان)</option>
-                                <option value="gemini-3-7-flash" selected>⚖️ موتور پیشرفته دادرسی (سطح ۲ - دقت بالا)</option>
-                                <option value="deepseek-v4-pro">🏛️ موتور عالی دیوان و داوری (سطح ۳ - تحلیل عمیق)</option>
+                                <option value="tier1">🎓 موتور هوشمند پایه (سطح ۱ - رایگان)</option>
+                                <option value="tier2" selected>⚖️ موتور پیشرفته دادرسی (سطح ۲ - رایگان)</option>
+                                <option value="tier3">🏛️ موتور عالی دیوان و داوری (سطح ۳ - رایگان)</option>
                             </select>
                         </div>
                     </div>
@@ -273,8 +277,8 @@
                     <div class="space-y-2">
                         <label class="block text-xs font-bold text-slate-700">بارگذاری مدارک پرونده یا فایل صوتی (امکان انتخاب همزمان تا ۲۰ فایل):</label>
                         <div class="p-4 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 text-center space-y-2">
-                            <input id="multiFileInput" type="file" multiple onchange="handleFilesSelected(this.files)" class="hidden">
-                            <button type="button" onclick="document.getElementById('multiFileInput').click()" class="text-xs bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 px-4 py-2 rounded-xl font-bold transition shadow-sm">
+                            <input id="fileAttach" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.mp3,.wav,.ogg" onchange="handleFilesSelected(this.files)" class="hidden">
+                            <button type="button" onclick="document.getElementById('fileAttach').click()" class="text-xs bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 px-4 py-2 rounded-xl font-bold transition shadow-sm">
                                 📎 انتخاب اسناد (PDF, Word, عکس، ویس صوتی)
                             </button>
                             <div id="attachedFilesList" class="flex flex-wrap gap-2 pt-2 justify-center"></div>
@@ -290,15 +294,30 @@
                             </button>
                         </div>
                         <textarea id="caseTextQuery" rows="4" placeholder="جزئیات پرونده را تایپ کنید یا با صوت بیان فرمایید..." class="w-full bg-white border border-slate-300 rounded-2xl p-4 text-xs text-slate-900 focus:border-emerald-600 focus:outline-none leading-relaxed shadow-sm"></textarea>
+                        <div id="micStatus" class="text-[11px] text-emerald-700 font-bold min-h-[16px]" aria-live="polite"></div>
                     </div>
 
                     <button type="button" onclick="executeLegalInference()" id="btnSubmitCase" class="w-full emerald-btn font-black py-4 rounded-2xl text-xs shadow-md flex items-center justify-center gap-2">
                         <span>⚖️</span> <span>ارسال پرونده و دریافت نظریه دادرسی و احکام حاکم</span>
                     </button>
 
-                    <div id="caseOutputCard" class="hidden p-6 rounded-2xl bg-emerald-50/90 border border-emerald-200 space-y-3">
+                    <div id="caseOutputCard" class="hidden p-6 rounded-2xl bg-emerald-50/90 border border-emerald-200 space-y-4">
                         <h4 class="font-bold text-xs text-emerald-950">نظریه قضایی و مستندات قانونی استخراج‌شده:</h4>
-                        <div id="caseOutputText" class="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap"></div>
+                        <div class="flex flex-wrap gap-2 text-[11px] font-bold">
+                            <span id="caseOutputTier" class="px-3 py-1.5 rounded-full bg-emerald-600 text-white shadow-sm"></span>
+                            <span id="caseOutputWinRate" class="px-3 py-1.5 rounded-full bg-gradient-to-l from-amber-500 to-amber-600 text-white shadow-sm"></span>
+                            <span id="caseOutputJurisdiction" class="px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200"></span>
+                        </div>
+                        <div id="caseOutputText" class="space-y-2.5 text-xs text-slate-800 leading-relaxed"></div>
+                        <div id="caseOutputPrecedents" class="flex flex-wrap gap-2"></div>
+                        <div id="caseDraftBlock" class="hidden space-y-2 border-t border-emerald-200 pt-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="font-bold text-xs text-emerald-950">📝 پیش‌نویس رسمی لایحه / دادخواست (آماده کپی و ثبت):</div>
+                                <button type="button" onclick="copyDraftText()" id="btnCopyDraft" class="text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl transition shadow-sm whitespace-nowrap">📋 کپی متن لایحه</button>
+                            </div>
+                            <textarea id="caseDraftText" readonly rows="10" dir="rtl" class="w-full bg-white border border-emerald-200 rounded-xl p-3.5 text-[11px] text-slate-800 leading-relaxed focus:outline-none"></textarea>
+                        </div>
+                        <div id="caseOutputLaws" class="text-xs text-slate-700 space-y-2 border-t border-emerald-200 pt-3"></div>
                     </div>
                 </div>
             </div>
@@ -332,6 +351,121 @@
                     <span class="text-emerald-700 font-bold font-mono">قانون برنامه ششم - ماده ۱۱۳ بند ب</span>
                     <h4 class="font-bold text-slate-900">رویه الزامی اجرای مهریه از دوایر ثبتی</h4>
                     <p class="text-slate-600 leading-relaxed">الزام قانونی به اقدام اولیه از اجرای ثبت اسناد قبل از طرح دعوا در دادگاه‌های خانواده.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 4.4 RETRIAL — اعاده دادرسی (ماده ۴۷۴/۴۲۶/۴۷۷) ================= -->
+        <div id="page-retrial" class="page-content hidden space-y-6">
+            <div class="text-center max-w-xl mx-auto space-y-2">
+                <h2 class="text-2xl font-bold text-slate-900">سنجش اکید جهات اعاده دادرسی</h2>
+                <p class="text-xs text-slate-500">ماده ۴۷۴ کیفری (۷ بند) | ماده ۴۲۶ حقوقی | ماده ۴۷۷ خلاف بیّن شرع — انشای دادخواست دیوان عالی کشور</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <div class="glass-card rounded-3xl p-6 md:p-8 space-y-4">
+                    <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2"><span>⚖️</span> <span>مشخصات پرونده واخواهی</span></h3>
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-slate-700">نوع اعاده دادرسی:</label>
+                        <select id="retrialType" class="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:border-emerald-600">
+                            <option value="CRIMINAL_474" selected>کیفری — جهات هفت‌گانه ماده ۴۷۴</option>
+                            <option value="CIVIL_426">حقوقی — جهات ماده ۴۲۶</option>
+                            <option value="SPECIAL_477">خاص — ماده ۴۷۷ (خلاف بیّن شرع)</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-slate-700">شرح ادله جدید و ابطال‌خواهی:</label>
+                        <textarea id="retrialCaseText" rows="5" placeholder="ادله جدید، مغایرت‌های شرعی/قانونی دادنامه و جهات احتمالی را شرح دهید..." class="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-xs text-slate-900 leading-relaxed focus:outline-none focus:border-emerald-600"></textarea>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-slate-700">متن یا خلاصه دادنامه واخواهی (اختیاری):</label>
+                        <textarea id="retrialVerdictText" rows="4" placeholder="شعبه صادره، تاریخ، مستندات و استدلال دادگاه صادرکننده..." class="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-xs text-slate-900 leading-relaxed focus:outline-none focus:border-emerald-600"></textarea>
+                    </div>
+                    <button type="button" onclick="executeRetrialAnalysis()" id="btnRetrialSubmit" class="w-full emerald-btn font-black py-3.5 rounded-xl text-xs shadow-md flex items-center justify-center gap-2">
+                        <span>🏛️</span> <span>سنجش اکید جهات قانونی و انشای دادخواست دیوان عالی</span>
+                    </button>
+                    <p class="text-[11px] text-slate-500 leading-relaxed">🔐 این سرویس نیازمند ورود با احراز هویت پیامکی است و برای هر کاربر یک تحلیل رایگان ارائه می‌شود.</p>
+                </div>
+                <div class="glass-card rounded-3xl p-6 md:p-8 space-y-4">
+                    <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2"><span>📋</span> <span>جهات قانونی بررسی‌شده</span></h3>
+                    <ul class="space-y-2.5 text-xs text-slate-600">
+                        <li class="flex gap-2"><span class="text-emerald-600 font-black">✓</span> تطبیق ادله با بندهای هفت‌گانه ماده ۴۷۴ (کیفری)</li>
+                        <li class="flex gap-2"><span class="text-emerald-600 font-black">✓</span> بندهای الف تا و ماده ۴۲۶ آیین دادرسی مدنی</li>
+                        <li class="flex gap-2"><span class="text-emerald-600 font-black">✓</span> فرض خلاف بیّن شرع (ماده ۴۷۷)</li>
+                        <li class="flex gap-2"><span class="text-emerald-600 font-black">✓</span> استناد به آرای وحدت رویه و گره‌های نظامی/انتظامی گراف دانش</li>
+                    </ul>
+                    <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 leading-relaxed">
+                        💡 خروجی شامل امتیاز شانس پذیرش، بند قانونی منطبق و پیش‌نویس رسمی دادخواست دیوان عالی کشور است.
+                    </div>
+                </div>
+            </div>
+            <div id="retrialOutputCard" class="glass-card rounded-3xl p-6 md:p-8 space-y-4 hidden">
+                <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2"><span>📜</span> <span>نتیجه سنجش اعاده دادرسی</span></h3>
+                <div id="retrialOutputText" class="text-xs text-slate-700 leading-relaxed"></div>
+                <div id="retrialDraftBlock" class="hidden space-y-2">
+                    <label class="text-xs font-bold text-slate-700">پیش‌نویس رسمی دادخواست اعاده دادرسی (دیوان عالی کشور):</label>
+                    <textarea id="retrialDraftText" rows="12" readonly class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-[11px] text-slate-800 leading-relaxed font-mono focus:outline-none"></textarea>
+                    <button type="button" onclick="copyRetrialPetition()" class="emerald-btn font-bold px-4 py-2.5 rounded-xl text-xs shadow-sm">📋 کپی متن دادخواست</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 4.5 LEGAL CALCULATORS (heavy tools moved from public landing — post-auth only) ================= -->
+        <div id="page-calcs" class="page-content hidden space-y-6">
+            <div class="text-center max-w-xl mx-auto space-y-2">
+                <h2 class="text-2xl font-bold text-slate-900">محاسبات تخصصی حقوقی</h2>
+                <p class="text-xs text-slate-500">ابزارهای دقیق محاسباتی؛ فعال در پنل کاربری شما</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <div class="glass-card rounded-3xl p-6 md:p-8 space-y-4">
+                    <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                        <span>🧮</span> <span>محاسبه خسارت تاخیر تادیه (ماده ۵۲۲)</span>
+                    </h3>
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-slate-700">مبلغ اصل خواسته (ریال):</label>
+                        <input id="calcAmount" type="number" min="0" value="1000000000" class="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-600">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-bold text-slate-700">سال شروع:</label>
+                            <select id="calcStartYear" class="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:border-emerald-600">
+                                <option value="1398" selected>۱۳۹۸</option>
+                                <option value="1399">۱۳۹۹</option>
+                                <option value="1400">۱۴۰۰</option>
+                                <option value="1401">۱۴۰۱</option>
+                                <option value="1402">۱۴۰۲</option>
+                                <option value="1403">۱۴۰۳</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-bold text-slate-700">سال پایان:</label>
+                            <select id="calcEndYear" class="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:border-emerald-600">
+                                <option value="1399">۱۳۹۹</option>
+                                <option value="1400">۱۴۰۰</option>
+                                <option value="1401">۱۴۰۱</option>
+                                <option value="1402">۱۴۰۲</option>
+                                <option value="1403">۱۴۰۳</option>
+                                <option value="1404" selected>۱۴۰۴</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" onclick="executeDelayCalc()" id="btnDelayCalc" class="w-full emerald-btn font-black py-3.5 rounded-xl text-xs shadow-md flex items-center justify-center gap-2">
+                        <span>🧮</span> <span>محاسبه ارزش روز و خسارت تاخیر</span>
+                    </button>
+                    <div id="delayResult" class="hidden space-y-2"></div>
+                </div>
+                <div class="glass-card rounded-3xl p-6 md:p-8 space-y-4">
+                    <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                        <span>📋</span> <span>مبنای قانونی محاسبه</span>
+                    </h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">خسارت تاخیر تادیه بر اساس ماده ۵۲۲ قانون آیین دادرسی مدنی و رأی وحدت رویه شماره ۸۴۰ دیوان عالی کشور، با تکیه بر شاخص بهای کالا و خدمات بانک مرکزی محاسبه می‌شود.</p>
+                    <ul class="space-y-2.5 text-xs text-slate-600">
+                        <li class="flex gap-2"><span class="text-emerald-600 font-black">✓</span> محاسبه از سال سررسید تا سال وصول یا اجرا</li>
+                        <li class="flex gap-2"><span class="text-emerald-600 font-black">✓</span> کاربرد در دعاوی مطالبه وجه، مهریه و قراردادها</li>
+                        <li class="flex gap-2"><span class="text-emerald-600 font-black">✓</span> قابلیت درج در دادخواست و لوایح دفاعیه</li>
+                    </ul>
+                    <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 leading-relaxed">
+                        💡 نتیجه محاسبه را می‌توانید در میز دادرسی ضمیمه شرح پرونده کنید تا در نظریه قضایی و لایحه نهایی لحاظ شود.
+                    </div>
                 </div>
             </div>
         </div>
@@ -393,15 +527,22 @@
             <div class="space-y-2">
                 <h4 class="font-bold text-slate-900">ارتباط مستقیم با مدیریت:</h4>
                 <p>مدیریت سامانه: <b class="text-slate-900">آقای محمدی</b></p>
-                <p>شماره تماس مستقیم: <a href="tel:09129367796" class="text-emerald-700 font-bold font-mono">09129367796</a></p>
+                <p>شماره تماس مستقیم: <a href="tel:09129367796" dir="ltr" class="font-mono text-emerald-700 font-bold hover:underline" style="display:inline-block;white-space:nowrap;direction:ltr">0912 936 7796</a></p>
                 <p>پست الکترونیک: <span class="font-mono text-slate-800">info@ghazihooshmand.ir</span> | <span class="font-mono">mahan.official.film@gmail.com</span></p>
+                <div class="flex items-start gap-2 text-xs text-slate-300">
+                    <span class="text-amber-400">📍</span>
+                    <div>
+                        <span class="font-bold text-slate-700">نشانی دفتر مرکزی:</span>
+                        <p class="leading-relaxed text-slate-500 mt-1">تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Official e-Namad Trust Seal for ghazihoushmand.ir -->
             <div class="flex flex-col items-center md:items-end justify-center">
                 <div class="p-3 bg-white rounded-2xl shadow-md inline-block border border-slate-200">
-                    <a referrerpolicy='origin' target='_blank' href='https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa'>
-                        <img referrerpolicy='origin' src='https://trustseal.enamad.ir/logo.aspx?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa' alt='نماد اعتماد الکترونیکی سامانه قاضی هوشمند' style='cursor:pointer' code='yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa' class="w-24 h-auto">
+                    <a referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa">
+                        <img referrerpolicy="origin" src="https://trustseal.enamad.ir/logo.aspx?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" alt="نماد تجارت الکترونیکی" style="cursor:pointer" id="yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" class="w-24 h-auto">
                     </a>
                 </div>
                 <span class="text-[10px] text-slate-500 mt-2 font-bold">نماد اعتماد الکترونیکی قضایی</span>
@@ -419,11 +560,11 @@
             </div>
 
             <div class="space-y-3">
-                <input id="regFullName" type="text" placeholder="نام و نام خانوادگی" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none hidden">
-                <input id="regPhone" type="text" placeholder="شماره تلفن همراه" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none font-mono hidden">
-                <input id="authEmail" type="email" placeholder="آدرس ایمیل" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none hidden">
-                <input id="authUsername" type="text" placeholder="نام کاربری (برای مدیریت: admin)" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none">
-                <input id="authPassword" type="password" placeholder="کلمه عبور" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none">
+                <input id="regFullName" type="text" placeholder="نام و نام خانوادگی" autocomplete="name" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none hidden">
+                <input id="regPhone" type="tel" placeholder="شماره تلفن همراه (اختیاری)" autocomplete="tel" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none font-mono hidden">
+                <input id="authEmail" type="email" placeholder="آدرس ایمیل (اختیاری)" autocomplete="email" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none hidden">
+                <input id="authUsername" type="text" placeholder="نام کاربری" autocomplete="username" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none">
+                <input id="authPassword" type="password" placeholder="کلمه عبور" autocomplete="current-password" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none">
             </div>
 
             <button type="button" onclick="executeAuthAction()" class="w-full emerald-btn font-black py-3.5 rounded-xl text-xs shadow-md" id="authSubmitBtn">ورود به حساب</button>
@@ -443,16 +584,70 @@
         let recognition = null;
         let isRecording = false;
 
+        /* ---------- Safe user display name (recursive JSON parse) (Task 1/2) ---------- */
+        function sanitizeDisplayName(raw) {
+            if (!raw) return 'کاربر گرامی';
+            try {
+                while (typeof raw === 'string' && (raw.startsWith('{') || raw.startsWith('"'))) {
+                    raw = JSON.parse(raw);
+                }
+            } catch (e) {}
+            if (typeof raw === 'object' && raw !== null) {
+                return raw.full_name || raw.username || raw.phone || raw.phone_number || raw.email || 'کاربر گرامی';
+            }
+            return String(raw || 'کاربر گرامی');
+        }
+        /* سازگاری با نام قدیمی تابع */
+        function getCleanDisplayName(userData) { return sanitizeDisplayName(userData); }
+
         function checkUserAuth() {
             if (authToken) {
                 document.getElementById('userBadge').classList.remove('hidden');
-                document.getElementById('userNameDisplay').innerText = localStorage.getItem('ghazi_user') || 'وکیل فعال';
+                document.getElementById('userNameDisplay').innerText = sanitizeDisplayName(localStorage.getItem('ghazi_user'));
                 document.getElementById('btnLoginNav').innerText = 'خروج';
                 document.getElementById('btnLoginNav').onclick = () => { localStorage.clear(); location.reload(); };
                 document.getElementById('btnRegNav').classList.add('hidden');
             }
         }
         checkUserAuth();
+
+        /* ---------- Restore case draft + phone/email from cache (Task 2) ---------- */
+        (function restoreCachedDraft() {
+            try {
+                const draft = localStorage.getItem('ghazi_case_draft');
+                const ta = document.getElementById('caseTextQuery');
+                if (draft && ta && !ta.value) {
+                    ta.value = draft;
+                }
+            } catch (e) {}
+            // پیش‌پر کردن مخفی تلفن/ایمیل از کش هنگام بازشدن مودال انجام می‌شود (openAuthModal)
+        })();
+
+        /* ---------- Auto-save case draft while typing (Task 2) ---------- */
+        (function bindDraftAutosave() {
+            const ta = document.getElementById('caseTextQuery');
+            if (ta) {
+                let t;
+                ta.addEventListener('input', function () {
+                    clearTimeout(t);
+                    t = setTimeout(() => {
+                        try { localStorage.setItem('ghazi_case_draft', ta.value); } catch (e) {}
+                    }, 400);
+                });
+            }
+            const phoneField = document.getElementById('regPhone');
+            if (phoneField) {
+                phoneField.addEventListener('input', function () {
+                    try { localStorage.setItem('ghazi_phone', phoneField.value.trim()); } catch (e) {}
+                });
+            }
+            const emailField = document.getElementById('authEmail');
+            if (emailField) {
+                emailField.addEventListener('input', function () {
+                    try { localStorage.setItem('ghazi_email', emailField.value.trim()); } catch (e) {}
+                });
+            }
+        })();
 
         function switchPage(pageId) {
             document.querySelectorAll('.page-content').forEach(el => el.classList.add('hidden'));
@@ -484,13 +679,20 @@
             renderFilesList();
         }
 
+        function formatFileSize(bytes) {
+            if (!bytes && bytes !== 0) return '';
+            if (bytes < 1024) return bytes + ' بایت';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
         function renderFilesList() {
             const box = document.getElementById('attachedFilesList');
             box.innerHTML = '';
             selectedFiles.forEach((file, index) => {
                 const b = document.createElement('div');
                 b.className = 'flex items-center gap-1 bg-white border border-slate-300 px-3 py-1 rounded-xl text-xs text-slate-800 shadow-sm';
-                b.innerHTML = `<span>📄</span> <span class="font-mono text-[11px] truncate max-w-[130px]">${file.name}</span> <button type="button" onclick="removeFile(${index})" class="text-rose-600 font-bold hover:text-rose-800 mr-1">✕</button>`;
+                b.innerHTML = `<span>📄</span> <span class="font-mono text-[11px] truncate max-w-[130px]">${file.name}</span> <span class="text-[9px] text-slate-500 font-mono">${formatFileSize(file.size)}</span> <button type="button" onclick="removeFile(${index})" class="text-rose-600 font-bold hover:text-rose-800 mr-1">✕</button>`;
                 box.appendChild(b);
             });
         }
@@ -500,38 +702,154 @@
             renderFilesList();
         }
 
+        /* ---------- ضمیمه‌سازی برنامه‌ای فایل (مثل ویس ضبط‌شده) (Task 1) ---------- */
+        function addUploadedFile(file) {
+            if (!file) return;
+            if (selectedFiles.length >= 20) selectedFiles.shift();
+            selectedFiles.push(file);
+            renderFilesList();
+        }
+        window.addUploadedFile = addUploadedFile;
+
+        /* ---------- MediaRecorder + سرور STT (پایپ‌لاین تبدیل گفتار) (Task 2) ---------- */
+        let mediaRecorderRef = null;
+        async function startMediaRecordingFallback() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mediaRecorder = new MediaRecorder(stream);
+                let chunks = [];
+                mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    const file = new File([blob], `voice_case_${Date.now()}.webm`, { type: 'audio/webm' });
+                    if (window.addUploadedFile) window.addUploadedFile(file);
+                    const statusEl = document.getElementById('micStatus');
+                    const btn = document.getElementById('btnVoiceInput');
+                    const txt = document.getElementById('caseTextQuery');
+                    if (btn) btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>';
+                    stream.getTracks().forEach(t => t.stop());
+                    // ارسال صدا به سرور برای تبدیل به متن
+                    try {
+                        if (statusEl) statusEl.innerText = 'در حال تبدیل گفتار به متن...';
+                        const fd = new FormData();
+                        fd.append('file', file, file.name);
+                        const r = await fetch('/api/v1/apps/judge/transcribe-audio', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${authToken}` },
+                            body: fd
+                        });
+                        const d = await r.json().catch(() => ({}));
+                        if (r.ok && d.transcript) {
+                            txt.value += (txt.value ? '\n' : '') + d.transcript;
+                            txt.scrollTop = txt.scrollHeight;
+                            if (statusEl) statusEl.innerText = '✅ متن گفتار به شرح پرونده اضافه شد.';
+                            setTimeout(() => { if (statusEl) statusEl.innerText = ''; }, 4000);
+                        } else {
+                            if (statusEl) statusEl.innerText = (d.detail || 'تبدیل گفتار ناموفق بود؛ لطفاً دوباره تلاش کنید.');
+                        }
+                    } catch (err) {
+                        if (statusEl) statusEl.innerText = 'خطا در ارسال صدا: ' + err;
+                    }
+                };
+                mediaRecorder.start();
+                mediaRecorderRef = mediaRecorder;
+                isRecording = true;
+                const btn = document.getElementById('btnVoiceInput');
+                if (btn) btn.innerHTML = '<span class="text-amber-600 font-bold animate-pulse">🎙️ در حال ضبط ویس پرونده... [توقف]</span>';
+                const statusEl = document.getElementById('micStatus');
+                if (statusEl) statusEl.innerText = 'در حال ضبط ویس پرونده... برای توقف دوباره کلیک کنید.';
+            } catch (err) {
+                if (statusEl) statusEl.innerText = 'دسترسی به میکروفون مسدود است؛ لطفاً اجازه دسترسی را از تنظیمات مرورگر فعال کنید.';
+            }
+        }
+
         function toggleVoiceInput() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) { alert('مرورگر شما از تبدیل گفتار به متن پشتیبانی نمی‌کند.'); return; }
-
             const btn = document.getElementById('btnVoiceInput');
             const txt = document.getElementById('caseTextQuery');
+            const statusEl = document.getElementById('micStatus');
 
-            if (isRecording && recognition) {
-                recognition.stop();
+            // توقف ضبط MediaRecorder (حالت fallback)
+            if (isRecording && mediaRecorderRef && mediaRecorderRef.state === 'recording') {
+                mediaRecorderRef.stop();
                 isRecording = false;
-                btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>';
+                mediaRecorderRef = null;
+                return;
+            }
+            // توقف Web Speech
+            if (isRecording && recognition) {
+                try { recognition.stop(); } catch (e) {}
+                isRecording = false;
+                if (btn) btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>';
+                if (statusEl) statusEl.innerText = '';
+                return;
+            }
+
+            // بدون پشتیبانی از هر دو API
+            if (!SpeechRecognition && !(navigator.mediaDevices && window.MediaRecorder)) {
+                if (statusEl) statusEl.innerText = 'مرورگر شما از تبدیل گفتار به متن یا ضبط صدا پشتیبانی نمی‌کند.';
+                return;
+            }
+            // فقط MediaRecorder موجود است (مثلاً فایرفاکس) — ضبط و تبدیل سمت سرور
+            if (!SpeechRecognition) {
+                startMediaRecordingFallback();
                 return;
             }
 
             recognition = new SpeechRecognition();
             recognition.lang = 'fa-IR';
+            recognition.continuous = true;
+            recognition.interimResults = true;
             recognition.onstart = () => {
                 isRecording = true;
-                btn.innerHTML = '<span class="text-rose-600 font-bold animate-pulse">🔴 در حال شنیدن...</span>';
+                if (btn) btn.innerHTML = '<span class="text-rose-600 font-bold animate-pulse">🔴 در حال شنیدن...</span>';
+                if (statusEl) statusEl.innerText = '';
             };
-            recognition.onresult = (e) => { txt.value += (txt.value ? ' ' : '') + e.results[0][0].transcript; };
-            recognition.onerror = () => { btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>'; isRecording = false; };
-            recognition.onend = () => { btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>'; isRecording = false; };
-            recognition.start();
+            recognition.onresult = (e) => {
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    const chunk = e.results[i][0].transcript;
+                    if (e.results[i].isFinal) { txt.value += (txt.value ? ' ' : '') + chunk; }
+                }
+            };
+            recognition.onerror = (e) => {
+                isRecording = false;
+                if (btn) btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>';
+                // graceful fallback instead of blocking alert (Task 1)
+                if (e.error === 'service-not-allowed' || e.error === 'network') {
+                    if (statusEl) statusEl.innerText = 'سرویس تبدیل گفتار در دسترس نیست؛ در حال ضبط ویس پرونده...';
+                    startMediaRecordingFallback();
+                } else if (e.error === 'not-allowed') {
+                    alert('دسترسی به میکروفون رد شد. لطفاً از تنظیمات مرورگر اجازه استفاده از میکروفون را فعال کنید.');
+                } else if (e.error === 'no-speech') {
+                    alert('صدایی شنیده نشد؛ لطفاً نزدیک‌تر به میکروفون صحبت کنید.');
+                } else {
+                    if (statusEl) statusEl.innerText = 'خطای تشخیص صوت: ' + (e.error || 'نامشخص');
+                }
+            };
+            recognition.onend = () => {
+                if (!mediaRecorderRef) {
+                    if (btn) btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>';
+                    isRecording = false;
+                }
+            };
+            try { recognition.start(); } catch (err) {}
         }
 
         function openAuthModal(mode) {
             authMode = mode;
             document.getElementById('authModal').classList.remove('hidden');
+            // Autofill از کش (Task 2)
+            const cachedPhone = localStorage.getItem('ghazi_phone') || '';
+            const cachedEmail = localStorage.getItem('ghazi_email') || '';
+            const regPhone = document.getElementById('regPhone');
+            const authEmail = document.getElementById('authEmail');
+            if (regPhone && cachedPhone && !regPhone.value) regPhone.value = cachedPhone;
+            if (authEmail && cachedEmail && !authEmail.value) authEmail.value = cachedEmail;
+
             if (mode === 'register') {
                 document.getElementById('authTitle').innerText = 'ثبت‌نام در سامانه قاضی هوشمند';
-                document.getElementById('regFullName').classList.remove('hidden');
+                // شماره تماس و ایمیل اختیاری (از کش) — فقط نام کاربری و رمز الزامی (Task 3)
+                document.getElementById('regFullName').classList.add('hidden');
                 document.getElementById('regPhone').classList.remove('hidden');
                 document.getElementById('authEmail').classList.remove('hidden');
                 document.getElementById('authSubmitBtn').innerText = 'تکمیل ثبت‌نام و ساخت حساب';
@@ -560,34 +878,61 @@
 
             if (!u || !p) { alert('نام کاربری و کلمه عبور الزامی است.'); return; }
 
+            // ذخیره فوری در کش (Task 2)
+            if (ph) { try { localStorage.setItem('ghazi_phone', ph); } catch (e) {} }
+            if (em) { try { localStorage.setItem('ghazi_email', em); } catch (e) {} }
+
             try {
                 if (authMode === 'register') {
-                    if (!fn || !ph) { alert('نام و شماره تلفن همراه الزامی است.'); return; }
+                    // فقط نام کاربری و رمز عبور الزامی است (Task 3)
                     const res = await fetch('/api/v1/auth/register', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({username: u, password: p, email: em || (u + '@ghazihooshmand.ir'), full_name: fn, phone: ph})
+                        body: JSON.stringify({
+                            username: u, password: p,
+                            email: em || null,
+                            phone: ph || null,
+                            full_name: fn || null
+                        })
                     });
                     const d = await res.json();
+                    if (d.access_token || d.token) {
+                        // ثبت‌نام + ورود خودکار
+                        localStorage.setItem('ghazi_jwt_token', d.access_token || d.token);
+                        localStorage.setItem('ghazi_user', JSON.stringify(d.user || {username: u, phone: ph, email: em}));
+                        redirectToWorkspaceWithDraft();
+                        return;
+                    }
                     alert(d.message || 'ثبت‌نام انجام شد. اکنون وارد شوید.');
                     openAuthModal('login');
                 } else {
                     const res = await fetch('/api/v1/auth/login', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({username: u, password: p})
+                        body: JSON.stringify({identifier: u, password: p})
                     });
                     const d = await res.json();
-                    if (d.access_token) {
-                        localStorage.setItem('ghazi_jwt_token', d.access_token);
-                        localStorage.setItem('ghazi_user', u);
-                        alert('ورود با موفقیت انجام شد.');
-                        location.reload();
+                    if (d.access_token || d.token) {
+                        localStorage.setItem('ghazi_jwt_token', d.access_token || d.token);
+                        localStorage.setItem('ghazi_user', JSON.stringify(d.user || {username: u}));
+                        redirectToWorkspaceWithDraft();
                     } else {
                         alert(d.detail || 'نام کاربری یا رمز عبور اشتباه است.');
                     }
                 }
             } catch(e) { alert('خطا: ' + e); }
+        }
+
+        /* ---------- Case draft continuity به میز کار (Task 2) ---------- */
+        function redirectToWorkspaceWithDraft() {
+            // متن پرونده هم می‌تواند از کش نیاید — اگر در همین صفحه بخش استودیو باز بود حفظ می‌شود
+            // فایل‌ها (selectedFiles) و متن پرونده (caseTextQuery) از پیش در حافظه هاست.
+            const draft = document.getElementById('caseTextQuery');
+            if (draft && draft.value.trim()) {
+                try { localStorage.setItem('ghazi_case_draft', draft.value.trim()); } catch (e) {}
+            }
+            alert('ورود با موفقیت انجام شد.');
+            location.reload();
         }
 
         function selectCase(id, title) {
@@ -635,18 +980,153 @@
             out.innerText = 'در حال استنتاج قضایی و انطباق با مواد قانون مدنی، مجازات، آیین دادرسی و آراء دیوان عالی...';
 
             try {
-                const res = await fetch('/api/v1/legal/analyze-stream', {
+                const res = await fetch('/api/v1/apps/judge/analyze-case', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`},
-                    body: JSON.stringify({query: q, model: m, event_date: '2024-01-01', files_count: selectedFiles.length})
+                    body: JSON.stringify({
+                        case_text: q,
+                        engine_tier: m,
+                        attached_files: selectedFiles.map(f => f.name)
+                    })
                 });
                 const data = await res.json();
-                out.innerText = data.analysis_result || JSON.stringify(data);
-            } catch(err) { out.innerText = 'خطا: ' + err; }
+                if (!res.ok) {
+                    out.innerText = data.detail || 'خطا در تحلیل پرونده؛ لطفاً دوباره تلاش کنید.';
+                    return;
+                }
+                renderCaseResult(data);
+            } catch(err) {
+                out.innerText = 'خطای ارتباط با سرور: ' + err;
+            }
             finally {
                 btn.disabled = false;
                 btn.innerHTML = '<span>⚖️</span> <span>ارسال پرونده و دریافت نظریه دادرسی و احکام حاکم</span>';
             }
+        }
+
+        /* نمایش زیبای نتیجه تحلیل پرونده — پاراگراف‌های تمیز، نشان‌های رنگی، چیپ‌های استناد و لایحه قابل‌کپی (Task 3) */
+        function renderParagraphs(container, text) {
+            const raw = String(text || '').replace(/\r/g, '');
+            let parts = raw.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+            if (parts.length <= 1) parts = raw.split(/\n/).map(s => s.trim()).filter(Boolean);
+            const lines = parts.length ? parts : ['متن تحلیل دریافت نشد؛ لطفاً دوباره تلاش کنید.'];
+            container.innerHTML = lines
+                .map(p => '<p class="text-justify leading-6">' + escapeHtml(p) + '</p>')
+                .join('');
+        }
+
+        /* Task 5 — رندر مینیمال (استاندارد Harvey/CoCounsel): نشان‌ها، چیپ‌ها و لایحه فقط با داده واقعی */
+        function renderCaseResult(data) {
+            const tierLabel = {tier1: 'سطح ۱ — موتور پایه', tier2: 'سطح ۲ — دادرسی پیشرفته', tier3: 'سطح ۳ — دیوان عالی'};
+            const tier = tierLabel[data.tier] || data.tier_label || data.tier || 'تحلیل';
+            const win = String(data.success_probability || '').trim();
+            const jur = String(data.jurisdiction || '').trim();
+            const model = data.model_used ? ' | مدل: ' + data.model_used : '';
+
+            const tierEl = document.getElementById('caseOutputTier');
+            const winEl = document.getElementById('caseOutputWinRate');
+            const jurEl = document.getElementById('caseOutputJurisdiction');
+            const out = document.getElementById('caseOutputText');
+            const lawsEl = document.getElementById('caseOutputLaws');
+            const precEl = document.getElementById('caseOutputPrecedents');
+            const draftBlock = document.getElementById('caseDraftBlock');
+            const draftTa = document.getElementById('caseDraftText');
+
+            if (tierEl) tierEl.innerText = tier + model;
+
+            // نشان شانس موفقیت — فقط با مقدار واقعی؛ در RESEARCH_QA به‌کل پنهان می‌شود
+            if (winEl) {
+                if (win) { winEl.innerText = '🎯 شانس موفقیت: ' + win; winEl.classList.remove('hidden'); }
+                else { winEl.innerText = ''; winEl.classList.add('hidden'); }
+            }
+            // نشان مرجع صالح — فقط با مقدار واقعی
+            if (jurEl) {
+                if (jur) { jurEl.innerText = '🏛️ مرجع صالح: ' + jur; jurEl.classList.remove('hidden'); }
+                else { jurEl.innerText = ''; jurEl.classList.add('hidden'); }
+            }
+
+            // متن روان و تفکیک‌شده فارسی — بدون نقل‌قول escape شده یا براکت خام JSON
+            if (out) renderParagraphs(out, data.legal_advisory);
+
+            // آرای وحدت رویه — چیپ‌های کلیک‌پذیر (کلیک = کپی)؛ در نبود استناد، بخش پنهان می‌شود
+            if (precEl) {
+                const precedents = data.cited_precedents || data.matched_precedents || [];
+                const chips = (precedents || []).map(p => {
+                    const label = typeof p === 'string' ? p : (p && p.title) || '';
+                    const t = String(label).trim();
+                    if (!t) return '';
+                    return '<button type="button" data-text="' + escapeHtml(t) + '" onclick="copyPrecedentChip(this)" '
+                        + 'title="کلیک: کپی متن استناد" '
+                        + 'class="text-right bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-xl px-3 py-1.5 text-[11px] font-bold transition">⚖️ '
+                        + escapeHtml(t) + '</button>';
+                }).join('');
+                precEl.innerHTML = chips;
+                precEl.classList.toggle('hidden', !chips);
+            }
+
+            // پیش‌نویس لایحه — تکست‌area اختصاصی قابل کپی؛ فقط با متن واقعی رندر می‌شود
+            if (draftBlock && draftTa) {
+                const draft = String(data.draft_text || '').trim();
+                draftBlock.classList.toggle('hidden', !draft);
+                draftTa.value = draft;
+            }
+
+            // قوانین — چیپ‌های کلیک‌پذیر (کلیک = کپی)؛ در نبود تطبیق مرتبط، بخش به‌کل پنهان می‌شود
+            if (lawsEl) {
+                const laws = data.matched_laws || [];
+                const lawChips = (laws || []).map(l => {
+                    const t = String((l && l.title) || '').trim();
+                    if (!t) return '';
+                    const txt = String((l && l.text) || '').trim();
+                    const cat = String((l && l.category) || '').trim();
+                    const dataText = txt ? (t + ' — ' + txt.slice(0, 160)) : t;
+                    return '<button type="button" data-text="' + escapeHtml(dataText) + '" onclick="copyPrecedentChip(this)" '
+                        + 'title="کلیک: کپی متن قانون" '
+                        + 'class="text-right bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 rounded-xl px-3 py-1.5 text-[11px] font-bold transition">📜 '
+                        + escapeHtml(t) + (cat ? '<span class="text-[10px] text-slate-500 mr-1.5 font-normal">' + escapeHtml(cat) + '</span>' : '')
+                        + '</button>';
+                }).join('');
+                lawsEl.innerHTML = lawChips;
+                lawsEl.classList.toggle('hidden', !lawChips);
+            }
+        }
+
+        function copyToClipboard(text, btn, okLabel) {
+            const done = () => {
+                if (!btn) return;
+                const old = btn.innerHTML;
+                btn.innerHTML = okLabel;
+                setTimeout(() => { btn.innerHTML = old; }, 1800);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+            } else {
+                fallbackCopy(text, done);
+            }
+        }
+        function fallbackCopy(text, done) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta);
+            if (done) done();
+        }
+        function copyPrecedentChip(btn) {
+            copyToClipboard(btn.dataset.text || btn.innerText, btn, '✅ کپی شد');
+        }
+        function copyDraftText() {
+            const ta = document.getElementById('caseDraftText');
+            const btn = document.getElementById('btnCopyDraft');
+            if (!ta || !ta.value) return;
+            copyToClipboard(ta.value, btn, '✅ کپی شد');
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         }
 
         async function submitTicketAction() {
@@ -714,31 +1194,132 @@
     
         async function executeRetrialAnalysis() {
             if (!authToken) { alert('لطفاً ابتدا وارد حساب کاربری خود شوید.'); openAuthModal('register'); return; }
-            const q = document.getElementById('retrialQueryText').value.trim();
+            const q = document.getElementById('retrialCaseText').value.trim();
+            const verdict = document.getElementById('retrialVerdictText').value.trim();
+            const rtype = document.getElementById('retrialType').value;
             const btn = document.getElementById('btnRetrialSubmit');
             const box = document.getElementById('retrialOutputCard');
             const out = document.getElementById('retrialOutputText');
 
             if (!q) { alert('لطفاً شرح ادله جدید و موضوع دادنامه را وارد نمایید.'); return; }
+            const uid = (localStorage.getItem('ghazi_user') || localStorage.getItem('ghazi_phone') || localStorage.getItem('ghazi_email') || '').slice(0, 100) || 'ghazi-authed-user';
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> <span>در حال تطبیق ادله با بندهای هفت‌گانه ماده ۴۷۴...</span>';
+            btn.innerHTML = '<span>⏳</span> <span>در حال تطبیق ادله با جهات قانونی اعاده دادرسی...</span>';
             box.classList.remove('hidden');
             out.innerText = 'در حال محاسبه شانس پذیرش و انشای دادخواست اعاده دادرسی...';
 
             try {
-                const res = await fetch('/api/v1/legal/retrial-evaluation', {
+                const res = await fetch('/api/v1/apps/judge/retrial-evaluate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`},
-                    body: JSON.stringify({query: q, model: 'deepseek-v4-pro'})
+                    body: JSON.stringify({
+                        case_description: q,
+                        verdict_details: verdict,
+                        retrial_type: rtype,
+                        user_identifier: uid,
+                        is_verified: Boolean(authToken)   // ورود از مسیر OTP پیامکی/ایمیل → احراز شده
+                    })
                 });
                 const d = await res.json();
-                out.innerText = d.analysis_result || JSON.stringify(d);
+                if (!res.ok) {
+                    out.innerHTML = `<div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">⛔ ${String(d.detail || ('خطای ' + res.status))}</div>`;
+                    document.getElementById('retrialDraftBlock').classList.add('hidden');
+                    return;
+                }
+                renderRetrialResult(d);
             } catch(e) { out.innerText = 'خطا: ' + e; }
             finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>🏛️</span> <span>سنجش هوشمند شانس اعاده دادرسی و انشای دادخواست دیوان عالی</span>';
+                btn.innerHTML = '<span>🏛️</span> <span>سنجش اکید جهات قانونی و انشای دادخواست دیوان عالی</span>';
             }
         }
+
+        function renderRetrialResult(d) {
+            const out = document.getElementById('retrialOutputText');
+            const score = parseInt(d.eligibility_score, 10) || 0;
+            const clause = String(d.matched_clause || '').trim() || 'انطباق با جهات قانونی احراز نشد';
+            const badgeStyle = score >= 60 ? 'background:#d1fae5;color:#065f46'
+                : (score >= 30 ? 'background:#fef3c7;color:#92400e' : 'background:#ffe4e6;color:#9f1239');
+            const missReq = Array.isArray(d.missing_requirements) && d.missing_requirements.length
+                ? `<div class="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900"><b>الزامات تکمیلی:</b><ul class="list-disc mr-4 mt-1 space-y-1">${d.missing_requirements.map(m => '<li>' + String(m) + '</li>').join('')}</ul></div>`
+                : '';
+            out.innerHTML =
+                '<div class="flex flex-wrap items-center gap-2.5 mb-3">' +
+                '<span class="px-3 py-1.5 rounded-xl text-xs font-black" style="' + badgeStyle + '">شانس پذیرش: ' + score + '٪</span>' +
+                '<span class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-800">' + clause + '</span>' +
+                '<span class="px-3 py-1.5 rounded-xl text-xs bg-rose-50 text-rose-800">' + String(d.retrial_label || '') + '</span>' +
+                '<span class="px-3 py-1.5 rounded-xl text-xs bg-white border border-slate-200 text-slate-600">سهمیه باقی‌مانده: ' + ((d.quota && d.quota.remaining) || 0) + '</span>' +
+                '</div>' +
+                '<div class="text-xs text-slate-700 leading-relaxed whitespace-pre-line">' + String(d.eligibility_analysis || d.legal_evaluation || '') + '</div>' +
+                missReq;
+            const draftBlock = document.getElementById('retrialDraftBlock');
+            const draftTa = document.getElementById('retrialDraftText');
+            const draft = String(d.petition_text || '').trim();
+            if (draftBlock && draftTa) {
+                draftBlock.classList.toggle('hidden', !draft);
+                draftTa.value = draft;
+            }
+        }
+
+        function copyRetrialPetition() {
+            const ta = document.getElementById('retrialDraftText');
+            if (!ta) return;
+            ta.select();
+            try { document.execCommand('copy'); alert('متن دادخواست کپی شد.'); } catch (e) {}
+        }
+
+        async function executeDelayCalc() {
+            const amount = parseFloat(document.getElementById('calcAmount').value);
+            const startY = parseInt(document.getElementById('calcStartYear').value, 10);
+            const endY = parseInt(document.getElementById('calcEndYear').value, 10);
+            const box = document.getElementById('delayResult');
+            const btn = document.getElementById('btnDelayCalc');
+
+            if (!amount || amount <= 0) { alert('لطفاً مبلغ اصل خواسته (ریال) را وارد فرمایید.'); return; }
+            if (endY < startY) { alert('سال پایان باید بزرگ‌تر یا مساوی سال شروع باشد.'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> <span>در حال محاسبه شاخص تورم بانک مرکزی...</span>';
+            try {
+                const res = await fetch('/api/v1/apps/judge/calculate-delay-damages', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken || ''}`},
+                    body: JSON.stringify({principal_amount_irr: amount, start_year: startY, end_year: endY})
+                });
+                const d = await res.json();
+                if (res.ok) {
+                    box.classList.remove('hidden');
+                    box.innerHTML = `
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                            <span class="text-xs font-bold text-slate-700">ارزش روز خواسته</span>
+                            <span class="text-xs font-black text-slate-900 font-mono">${(d.updated_value_to_date || 0).toLocaleString('fa-IR')} ریال</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-200">
+                            <span class="text-xs font-bold text-amber-800">خسارت تاخیر تادیه</span>
+                            <span class="text-xs font-black text-amber-900 font-mono">${(d.total_delay_damages || 0).toLocaleString('fa-IR')} ریال</span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 leading-relaxed">مبنای قانونی: ${d.legal_basis || 'ماده ۵۲۲ قانون آیین دادرسی مدنی'}</p>`;
+                } else {
+                    alert(d.detail || 'خطا در محاسبه؛ دوباره تلاش کنید.');
+                }
+            } catch(e) { alert('خطای ارتباط با سرور: ' + e); }
+            finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🧮</span> <span>محاسبه ارزش روز و خسارت تاخیر</span>';
+            }
+        }
+
+        // Pre-fill draft sent from the public landing hero (conversion continuity)
+        (function applyLandingDraft() {
+            let draft = null;
+            try { draft = sessionStorage.getItem('ghazi_draft'); } catch (e) {}
+            if (draft) {
+                try { sessionStorage.removeItem('ghazi_draft'); } catch (e) {}
+                const ta = document.getElementById('caseTextQuery');
+                if (ta && !ta.value.trim()) ta.value = draft;
+                if (typeof switchPage === 'function') switchPage('studio');
+            }
+        })();
         
     </script>
 </body>

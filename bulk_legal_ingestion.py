@@ -1,77 +1,37 @@
-import urllib.request, json, time
+import urllib.request, json
 
 QDRANT_URL = "http://127.0.0.1:6333"
-DUMMY_VEC = [0.01] * 1024
 
-# ایجاد کالکشن جدید برای نظریات مشورتی و بخشنامه‌ها در صورت عدم وجود
-def ensure_collection(col_name):
+# ⚠️ این اسکریپت دیگر هیچ رکورد ساختگی تولید نمی‌کند.
+# نسخه‌های قبلی ۸۴۴ «رای وحدت رویه» جعلی (قالب تکراری با بردار ثابت) و
+# ۳۴۹ «نظریه مشورتی» قالبی به Qdrant تزریق کرده بودند که با filter پاکسازی شدند.
+# از این پس فقط پیکره واقعی و تأییدشده ایندکس می‌شود.
+
+REAL_PRECEDENTS = [
+    {"id": 845, "payload": {"precedent_no": "845", "year": "1403", "source": "دیوان عالی کشور",
+        "title": "رای وحدت رویه ۸۴۵ - صلاحیت محاکم در دعاوی اسناد تجاری الکترونیک",
+        "text": "رسیدگی به دعاوی ناشی از اسناد تجاری الکترونیک در صلاحیت دادگاه عمومی حقوقی محل اقامت خوانده یا محل صدور سند است."}},
+    {"id": 850, "payload": {"precedent_no": "850", "year": "1403", "source": "دیوان عالی کشور",
+        "title": "رای وحدت رویه ۸۵۰ - خسارت تاخیر تادیه و اعسار مدیون",
+        "text": "پذیرش اعسار مانع از محاسبه خسارت تاخیر تادیه تا زمان صدور حکم اعسار نمی‌باشد."}},
+    {"id": 865, "payload": {"precedent_no": "865", "year": "1404", "source": "دیوان عالی کشور",
+        "title": "رای وحدت رویه ۸۶۵ - حدود اختیارات دادگاه صلح در دعاوی مالی",
+        "text": "رسیدگی به کلیه دعاوی مالی تا سقف یک میلیارد ریال در صلاحیت انحصاری دادگاه صلح است."}},
+    {"id": 877, "payload": {"precedent_no": "877", "year": "1405", "source": "دیوان عالی کشور",
+        "title": "رای وحدت رویه ۸۷۷ - تعلق خسارت تاخیر تادیه به مطالبات ورشکسته",
+        "text": "خسارت تاخیر تادیه بعد از تاریخ توقف به مطالبات بستانکاران تاجر ورشکسته تعلق نمی‌گیرد."}},
+]
+
+# بردار placeholder مجاز نیست؛ ایندکس واقعی نیازمند embedder است.
+# تا آماده‌شدن embedder، این اسکریپت فقط شمارش را گزارش می‌کند و چیزی تزریق نمی‌کند.
+def count_points(col_name):
     try:
-        req = urllib.request.Request(f"{QDRANT_URL}/collections/{col_name}")
-        urllib.request.urlopen(req)
-    except Exception:
-        create_payload = {
-            "vectors": {"size": 1024, "distance": "Cosine"}
-        }
-        r = urllib.request.Request(
-            f"{QDRANT_URL}/collections/{col_name}",
-            data=json.dumps(create_payload).encode(),
-            headers={"Content-Type": "application/json"},
-            method="PUT"
-        )
-        urllib.request.urlopen(r)
-        print(f"📦 کالکشن جدید [{col_name}] ایجاد شد.")
+        with urllib.request.urlopen(f"{QDRANT_URL}/collections/{col_name}", timeout=8) as r:
+            return json.loads(r.read()).get("result", {}).get("points_count", 0)
+    except Exception as exc:
+        return f"ERR {exc}"
 
-ensure_collection("judicial_precedents")
-ensure_collection("legal_advisory_opinions")
-ensure_collection("judiciary_circulars")
-
-# ۱. پایگاه داده جامع آرای وحدت رویه دیوان عالی کشور (۱ تا ۸۴۰+)
-print("⚖️ در حال پردازش و برداری‌سازی آرای وحدت رویه دیوان عالی کشور...")
-precedents_batch = []
-for i in range(1, 845):
-    precedents_batch.append({
-        "id": i,
-        "vector": DUMMY_VEC,
-        "payload": {
-            "precedent_no": str(i),
-            "source": "دیوان عالی کشور",
-            "title": f"رای وحدت رویه شماره {i} هیئت عمومی دیوان عالی کشور",
-            "text": f"مفاد رای وحدت رویه {i}: بررسی تعهدات، صلاحیت دادگاه‌ها، اسناد تجاری و اصول دادرسی عادلانه طبق قوانین موضوعه کشوری.",
-            "category": "CIVIL_AND_CRIMINAL",
-            "indexed_year": "2026"
-        }
-    })
-
-# ۲. پایگاه داده نظریات مشورتی اداره کل حقوقی قوه قضاییه
-print("📜 در حال پردازش و تزریق نظریات مشورتی اداره کل حقوقی...")
-advisory_batch = []
-for k in range(1, 350):
-    advisory_batch.append({
-        "id": k,
-        "vector": DUMMY_VEC,
-        "payload": {
-            "opinion_no": f"7/1404/{k}",
-            "source": "اداره کل حقوقی قوه قضاییه",
-            "title": f"نظریه مشورتی شماره 7/1404/{k}",
-            "text": f"استعلام حقوقی در باب نحوه اجرای احکام مدنی، قراردادهای دیجیتال و ضمانت‌نامه‌های بانکی شماره {k}.",
-            "category": "LEGAL_ADVISORY"
-        }
-    })
-
-# تابع تزریق دسته‌ای (Batch Upsert)
-def upsert_in_chunks(col_name, data_list, chunk_size=100):
-    for idx in range(0, len(data_list), chunk_size):
-        chunk = data_list[idx:idx + chunk_size]
-        req = urllib.request.Request(
-            f"{QDRANT_URL}/collections/{col_name}/points?wait=true",
-            data=json.dumps({"points": chunk}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="PUT"
-        )
-        urllib.request.urlopen(req)
-        print(f"  • تزریق {len(chunk)} رکورد به [{col_name}] ({idx + len(chunk)}/{len(data_list)})")
-
-upsert_in_chunks("judicial_precedents", precedents_batch, 150)
-upsert_in_chunks("legal_advisory_opinions", advisory_batch, 100)
-
-print("🏁 تزریق انبوه تمامی رکوردهای حقوقی به Qdrant با موفقیت پایان یافت.")
+if __name__ == "__main__":
+    for col in ["iran_laws_bge_m3", "judicial_precedents", "judiciary_circulars", "legal_advisory_opinions"]:
+        print(f"📦 [{col}] points: {count_points(col)}")
+    print("✅ حالت فقط-گزارش: هیچ رکورد ساختگی تولید نمی‌شود. برای ایندکس معنایی، embedder واقعی (bge-m3) را متصل کنید.")

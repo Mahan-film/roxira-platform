@@ -1,0 +1,139 @@
+[
+  {
+    "model": "nvidia/nemotron-3-ultra:free",
+    "tier": "Nvidia Nemotron (FREE)",
+    "status": "HTTP 400",
+    "time_sec": 0.28,
+    "cost_usd": "$0.0",
+    "error": "{\"error\":{\"message\":\"nvidia/nemotron-3-ultra:free is not a valid model ID\",\"code"
+  },
+  {
+    "model": "upstage/solar-pro-4",
+    "tier": "Solar Pro 4 ($0.03/M)",
+    "status": "HTTP 400",
+    "time_sec": 0.25,
+    "cost_usd": "$0.0",
+    "error": "{\"error\":{\"message\":\"upstage/solar-pro-4 is not a valid model ID\",\"code\":400},\"u"
+  },
+  {
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "tier": "DeepSeek V4 Flash ($0.045/M)",
+    "status": "OK",
+    "time_sec": 132.04,
+    "tokens": "151+1200",
+    "cost_usd": "$0.000115",
+    "content_preview": ""
+  },
+  {
+    "model": "z-ai/glm-5.3-flash",
+    "tier": "GLM 5.3 Flash ($0.075/M)",
+    "status": "OK",
+    "time_sec": 27.43,
+    "tokens": "169+1200",
+    "cost_usd": "$0.000313",
+    "content_preview": ""
+  },
+  {
+    "model": "xiaomi/mimo-v2.5",
+    "tier": "Xiaomi MiMo ($0.08/M)",
+    "status": "OK",
+    "time_sec": 41.08,
+    "tokens": "464+1200",
+    "cost_usd": "$0.000277",
+    "content_preview": "با توجه به قوانین جاری (قانون صدور چک مصوب ۱۳۹۷ با اصلاحات بعدی و قانون شوراهای حل اختلاف مصوب ۱۳۹۷ با اصلاحات ۱۴۰۱ و ۱۴۰۲)، پاسخ به سؤالات شما به شرح زیر است:  **۱. مرجع صالح با توجه به قانون جدید** مرجع صالح برای رسیدگی به دعوای مطالبه وجه این چک ۸۵۰ میلیون ریالی، **شورای حل اختلاف** است. طبق ماده"
+  },
+  {
+    "model": "google/gemini-3.5-flash-lite",
+    "tier": "Gemini 3.5 Lite ($0.10/M)",
+    "status": "OK",
+    "time_sec": 5.84,
+    "tokens": "134+953",
+    "cost_usd": "$0.000395",
+    "content_preview": "به عنوان مستشار عالی قضایی، پاسخ پرسش‌های مطروحه مستند به قوانین جاری و آخرین رویه قضایی به شرح زیر است:  ### ۱. مرجع صالح با توجه به قانون جدید دادگاه صلح با عنایت به **ماده ۱۲ قانون شورای حل اختلاف مصوب ۱۴۰۲**، دعاوی مالی راجع به اموال منقول تا نصاب یک میلیارد (۱,۰۰۰,۰۰۰,۰۰۰) ریال در صلاحیت **«داد"
+  },
+  {
+    "model": "moonshotai/kimi-k3",
+    "tier": "Kimi K3 ($0.15/M)",
+    "status": "OK",
+    "time_sec": 12.62,
+    "tokens": "314+1200",
+    "cost_usd": "$0.000647",
+    "content_preview": ""
+  },
+  {
+    "model": "openai/gpt-5.6-luna",
+    "tier": "GPT-5.6 Luna ($0.20/M)",
+    "status": "OK",
+    "time_sec": 15.55,
+    "tokens": "135+1200",
+    "cost_usd": "$0.001467",
+    "content_preview": ""
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "tier": "Gemini 3.8 Flash ($0.75/M)",
+    "status": "OK",
+    "time_sec": 11.86,
+    "tokens": "134+1196",
+    "cost_usd": "$0.002343",
+    "content_preview": "در مقام مستشار عالی قضایی، پاسخ پرسش‌های سه‌گانه به شرح ذیل است:  ### ۱. مرجع صالح با توجه به قانون جدید شورا‌های حل اختلاف (دادگاه صلح) **"
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "tier": "Gemini 3.7 Flash ($0.75/M)",
+    "status": "OK",
+    "time_sec": 10.24,
+    "tokens": "134+1196",
+    "cost_usd": "$0.004586",
+    "content_preview": "** (Zero percent) through direct execution (Article 23 applies ONLY to issuer/account holder).                 *   If through regular lawsuit (دادخواست): Success rate is **۹۵٪+**, supported by:                     *"
+  },
+  {
+    "model": "deepseek/deepseek-reasoner",
+    "tier": "DeepSeek Reasoner ($0.55/M)",
+    "status": "HTTP 400",
+    "time_sec": 0.25,
+    "cost_usd": "$0.0",
+    "error": "{\"error\":{\"message\":\"deepseek/deepseek-reasoner is not a valid model ID\",\"code\":"
+  },
+  {
+    "model": "deepseek/deepseek-v4-pro",
+    "tier": "DeepSeek V4 Pro ($0.87/M)",
+    "status": "OK",
+    "time_sec": 24.07,
+    "tokens": "151+1201",
+    "cost_usd": "$0.002221",
+    "content_preview": ""
+  },
+  {
+    "model": "qwen/qwen-3.8-max-0803",
+    "tier": "Qwen 3.8 Max ($2.00/M)",
+    "status": "HTTP 400",
+    "time_sec": 0.25,
+    "cost_usd": "$0.0",
+    "error": "{\"error\":{\"message\":\"qwen/qwen-3.8-max-0803 is not a valid model ID\",\"code\":400}"
+  },
+  {
+    "model": "anthropic/claude-3.5-sonnet",
+    "tier": "Claude 3.5 Sonnet ($3.00/M)",
+    "status": "HTTP 404",
+    "time_sec": 0.27,
+    "cost_usd": "$0.0",
+    "error": "{\"error\":{\"message\":\"No endpoints found for anthropic/claude-3.5-sonnet.\",\"code\""
+  },
+  {
+    "model": "openai/gpt-6-astra",
+    "tier": "GPT-6 Astra ($3.00/M)",
+    "status": "HTTP 402",
+    "time_sec": 0.27,
+    "cost_usd": "$0.0",
+    "error": "{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. Yo"
+  },
+  {
+    "model": "anthropic/claude-fable-5.1",
+    "tier": "Claude Fable 5.1 ($5.00/M)",
+    "status": "HTTP 404",
+    "time_sec": 0.26,
+    "cost_usd": "$0.0",
+    "error": "{\"error\":{\"message\":\"0 endpoints out of 4 requested are available matching your "
+  }
+]

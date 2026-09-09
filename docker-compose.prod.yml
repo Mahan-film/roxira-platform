@@ -11,6 +11,7 @@ services:
       - ./src:/app/src
       - ./output_apps:/app/output_apps
       - ./run_unified_server.py:/app/run_unified_server.py
+      - ./data:/opt/roxira_platform/data
     environment:
       - POSTGRES_HOST=postgres_prod
       - POSTGRES_PORT=5432
@@ -21,6 +22,19 @@ services:
       - REDIS_PORT=6379
       - QDRANT_HOST=qdrant_prod
       - QDRANT_PORT=6333
+      # sms.ir (Fast/Verify) — سرویس ارسال کد تأیید (از .env مقداردهی می‌شود)
+      - SMS_IR_API_KEY=${SMS_IR_API_KEY:-REDACTED_SECRET_04}
+      - SMS_IR_TEMPLATE_ID=${SMS_IR_TEMPLATE_ID:-000000}
+      # Kavenegar (Verify Lookup) — مسیر رسمی ارسال OTP خطوط ghazi-verify / roxira-verify
+      - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:-REDACTED_SECRET_01}
+      - KAVENEGAR_TEMPLATE_GHAZI=${KAVENEGAR_TEMPLATE_GHAZI:-ghazi-verify}
+      - KAVENEGAR_TEMPLATE_ROXIRA=${KAVENEGAR_TEMPLATE_ROXIRA:-roxira-verify}
+      # Google OAuth 2.0 (ورود مستقیم با حساب گوگل)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
+      # امنیت توکن JWT
+      - JWT_SECRET=${JWT_SECRET:-roxira_enterprise_super_secure_jwt_secret_key_2026}
     depends_on:
       - postgres_prod
       - redis_prod

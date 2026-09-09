@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="قاضی هوشمند؛ سامانه استدلال قضایی مبتنی بر هوش مصنوعی، پایگاه آرای وحدت رویه و متون فقهی و حقوقی — ghazihoushmand.ir">
+<title>قاضی هوشمند | سامانه هوشمند استدلال قضایی و تحلیل حقوقی</title>
+<meta name="theme-color" content="#050505">
+<style>
+:root{--bg:#050505;--panel:#0d0b06;--line:rgba(212,175,55,.35);--gold1:#f7e08a;--gold2:#d4af37;--gold3:#a97c1f;--text:#f8fafc;--muted:#d9d4c8;--dim:#8a8570}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:"Vazirmatn","Tahoma",system-ui,sans-serif;color:var(--text);line-height:1.75;background:radial-gradient(1200px 620px at 50% -10%,#1a1508 0%,#050505 62%);background-attachment:fixed}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1160px;margin:0 auto;padding:0 20px}
+.flex{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.grid{display:grid;gap:20px}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.grid-3{grid-template-columns:1fr}}
+.card{background:linear-gradient(160deg,rgba(30,25,12,.9),rgba(10,10,10,.95));border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:0 0 30px rgba(212,175,55,.07),inset 0 1px 0 rgba(247,224,138,.12)}
+.gold-text{background:linear-gradient(135deg,var(--gold1),var(--gold2) 45%,var(--gold3));background-clip:text;-webkit-background-clip:text;color:transparent}
+.badge{display:inline-block;font-size:.72rem;font-weight:800;padding:6px 14px;border-radius:999px;background:rgba(212,175,55,.12);color:#e6c96a;border:1px solid rgba(212,175,55,.4)}
+.btn{display:inline-flex;align-items:center;gap:8px;font-size:.85rem;font-weight:700;padding:13px 24px;border-radius:14px;background:linear-gradient(135deg,var(--gold1),var(--gold2));color:#1a1508;box-shadow:0 6px 22px -6px rgba(212,175,55,.5);border:0;cursor:pointer}
+.btn.ghost{background:transparent;box-shadow:none;border:1px solid var(--line);color:var(--muted)}
+.btn:hover{filter:brightness(1.08)}
+h1{font-size:clamp(1.9rem,4.6vw,3.1rem);font-weight:900;line-height:1.35}
+h2{font-size:clamp(1.4rem,3vw,2rem);font-weight:800}
+h3{font-size:1.05rem;font-weight:700}
+.center{text-align:center}
+.lead{color:var(--muted);max-width:740px;margin:16px auto 0}
+.muted{color:var(--muted)}
+.dim{color:var(--dim)}
+.ic{width:48px;height:48px;border-radius:13px;display:grid;place-items:center;font-size:1.45rem;background:rgba(212,175,55,.14);margin-bottom:14px}
+header.sticky{position:sticky;top:0;z-index:50;background:rgba(5,5,5,.82);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.3)}
+.brand{display:flex;align-items:center;gap:10px}
+nav{display:flex;gap:6px}
+nav a{font-size:.82rem;font-weight:600;color:var(--muted);padding:9px 14px;border-radius:10px}
+nav a:hover{color:#fff;background:rgba(255,255,255,.06)}
+footer{border-top:1px solid rgba(212,175,55,.28);padding:34px 0;font-size:.78rem;color:var(--dim)}
+.enamad-white{background:#fff;border-radius:13px;padding:10px;display:inline-block;box-shadow:0 8px 22px -8px rgba(0,0,0,.5)}
+.gold-input{background:#0a0a0a;border:1px solid rgba(212,175,55,.35);color:#fff;font-family:inherit;font-size:.88rem;padding:11px 13px;border-radius:11px;width:100%;box-sizing:border-box}
+.gold-input:focus{outline:none;border-color:var(--gold2);box-shadow:0 0 10px rgba(212,175,55,.25)}
+label{font-size:.74rem;font-weight:700;color:#cdbf93;display:block;margin-bottom:6px}
+.field{margin-bottom:13px}
+ul.clean{list-style:none}
+ul.clean li{display:flex;gap:9px;align-items:flex-start;padding:5px 0;color:var(--muted)}
+ul.clean li::before{content:"✓";color:#d4af37;font-weight:900}
+.hidden{display:none!important}
+@media(max-width:720px){nav{display:none}}
+</style>
+</head>
+<body>
+<header class="sticky">
+  <div class="wrap flex" style="padding-top:12px;padding-bottom:12px">
+    <a href="#top" class="brand">
+      <img src="/static/ghazi_logo.png" onerror="this.onerror=null;this.src='/static/ghazi_logo.svg';" alt="سامانه تخصصی قاضی هوشمند" height="48" style="height:48px;width:auto;max-width:160px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(245,158,11,0.2));" referrerpolicy="origin">
+      <div>
+        <span class="gold-text" style="font-weight:900;font-size:1.02rem">سامانه تخصصی قاضی هوشمند</span>
+        <div class="dim" style="font-size:.68rem">ghazihoushmand.ir</div>
+      </div>
+    </a>
+    <nav>
+      <a href="#about">درباره سامانه</a>
+      <a href="#features">قابلیت‌ها</a>
+      <a href="#contact">تماس و پشتیبانی وکلا</a>
+    </nav>
+    <div class="flex" style="gap:10px;flex-wrap:none">
+      <a href="#contact" class="btn ghost">مشاهده پلن‌ها</a>
+      <a href="#tools" class="btn">ورود به سامانه دادرسی</a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- Hero -->
+  <section class="wrap center spacer" style="padding-top:88px;padding-bottom:50px">
+    <span class="badge">مرجع استدلال قضایی مبتنی بر هوش مصنوعی</span>
+    <h1 class="gold-text" style="margin-top:22px">سامانه هوشمند استدلال قضایی،<br>استعلام آرای وحدت رویه و متون فقهی و حقوقی</h1>
+    <p class="lead">دستیار تخصصی برای قضات، وکلا و محققان؛ با دسترسی به پایگاه برداری قوانین، آرای وحدت رویه دیوان عالی، نظریات مشورتی و دادگاه‌های صلح، و ابزارهای تحلیل خودکار پرونده.</p>
+    <div style="margin-top:30px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <a href="#tools" class="btn">استعلام حقوقی رایگان</a>
+      <a href="#contact" class="btn ghost">ثبت‌نام وکیل / موکل</a>
+    </div>
+  </section>
+
+  <!-- About -->
+  <section id="about" class="wrap spacer" style="padding-top:20px">
+    <div class="card" style="padding:38px">
+      <div class="grid" style="grid-template-columns:repeat(2,1fr);gap:28px;align-items:center">
+        <div>
+          <span class="badge">درباره سامانه</span>
+          <h2 style="margin-top:14px">چرا قاضی هوشمند؟</h2>
+          <p style="font-size:.9rem;margin-top:14px">قاضی هوشمند یک سامانه استدلال قضایی است که با ترکیب هوش مصنوعی و دانش حقوقی، به وکلا و محققان در تحلیل ادله، یافتن آرای مشابه، محاسبه خسارت تاخیر تادیه و انشای لوایح کمک می‌کند. داده‌های سامانه از منابع معتبر حقوقی و آرای وحدت رویه گرداوری شده و به‌صورت برداری نمایه‌سازی شده است.</p>
+          <ul class="clean" style="margin-top:16px">
+            <li>پایگاه آرای وحدت رویه دیوان عالی کشور</li>
+            <li>متون فقهی و حقوقی و قوانین مدنی / آیین دادرسی</li>
+            <li>تحلیل هوشمند ادله و ارجحیت استنادات</li>
+            <li>رعایت حریم خصوصی و امنیت داده‌های حقوقی</li>
+          </ul>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:3.2rem">⚖️</div>
+          <h3>تحلیل هوشمند دادرسی</h3>
+          <p class="muted" style="font-size:.84rem">از استعلام حقوقی تا انشای لوایح — یکپارچه و شفاف.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+<!-- Features -->
+  <section id="features" class="wrap spacer" style="padding-top:20px">
+    <div class="center" style="margin-bottom:32px">
+      <span class="badge">قابلیت‌های کلیدی</span>
+      <h2 style="margin-top:14px">ابزارهای تخصصی سامانه</h2>
+    </div>
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="ic">🔎</div>
+        <h3>استعلام برداری قوانین و آرا</h3>
+        <p style="font-size:.85rem">جستجوی هوشمند در ۵٬۱۸۴ گره از قوانین، آرای وحدت رویه، نظریات مشورتی و بخشنامه‌ها.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🧮</div>
+        <h3>محاسبه خسارت تاخیر تادیه (ماده ۵۲۲)</h3>
+        <p style="font-size:.85rem">محاسبه شاخص تورم و خسارت تاخیر از سال تا به‌امروز بر پایه مقررات.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🏛️</div>
+        <h3>تعیین صلاحیت مرجع</h3>
+        <p style="font-size:.85rem">تشخیص دادگاه صالح بر اساس نوع دعوا و مبلغ خواسته منطبق بر دادگاه‌های صلح.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🗂️</div>
+        <h3>انشای لوایح و دادخواست</h3>
+        <p style="font-size:.85rem">تولید پیش‌نویس لوایح و دادخواست‌های اعاده دادرسی (ماده ۴۷۴) با هوش مصنوعی.</p>
+      </div>
+      <div class="card">
+        <div class="ic">📈</div>
+        <h3>تحلیل شانس پذیرش</h3>
+        <p style="font-size:.85rem">سنجش هوشمند ادله جدید و محاسبه شانس پذیرش اعاده دادرسی دیوان عالی.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🧑‍⚖️</div>
+        <h3>پشتیبانی اختصاصی وکلا</h3>
+        <p style="font-size:.85rem">دستیاری اختصاصی و دسترسی اولویت‌دار برای وکلای دادگستری و موکلین.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tools (lightweight, self-contained) -->
+  <section id="tools" class="wrap spacer" style="padding-top:20px">
+    <div class="center" style="margin-bottom:32px">
+      <span class="badge">محاسبه آنلاین</span>
+      <h2 style="margin-top:14px">ابزار محاسبه خسارت تاخیر تادیه</h2>
+    </div>
+    <div class="card">
+      <div class="grid" style="grid-template-columns:2fr 1fr;gap:16px;align-items:end">
+        <div class="field">
+          <label for="amt">مبلغ اصل خواسته (ریال)</label>
+          <input id="amt" class="gold-input" type="number" value="1000000000">
+        </div>
+        <button id="btnCalc" class="btn" style="width:100%" onclick="calcDamage()">محاسبه شاخص تورم</button>
+      </div>
+      <div id="resCalc" style="margin-top:14px;font-size:.88rem;color:#e6c96a"></div>
+      <script>
+        async function calcDamage(){
+          var a=document.getElementById('amt').value;
+          var box=document.getElementById('resCalc');
+          if(!a){box.innerHTML='مبلغ را وارد کنید.';return;}
+          var b=document.getElementById('btnCalc');b.disabled=true;b.innerHTML='در حال محاسبه...';
+          try{
+            var r=await fetch('/api/v1/apps/judge/calculate-delay-damages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({principal_amount_irr:parseFloat(a),start_year:1398,end_year:1404})});
+            var d=await r.json();
+            box.innerHTML = r.ok
+              ? ('ارزش روز: <b>'+(d.updated_value_to_date||0).toLocaleString()+'</b> ریال | خسارت: <b>'+(d.total_delay_damages||0).toLocaleString()+'</b> ریال')
+              : 'خطا در محاسبه.';
+          }catch(e){box.innerHTML='خطای ارتباط با سرور.';}
+          finally{b.disabled=false;b.innerHTML='محاسبه شاخص تورم';}
+        }
+      </script>
+    </div>
+  </section>
+<!-- Contact & Support -->
+  <section id="contact" class="wrap spacer" style="padding-top:20px">
+    <div class="center" style="margin-bottom:30px">
+      <span class="badge">تماس با ما و پشتیبانی وکلا</span>
+      <h2 style="margin-top:14px">پشتیبانی اختصاصی وکیلان و محققان</h2>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(2,1fr);gap:24px">
+      <div class="card">
+        <h3>اطلاعات تماس</h3>
+        <ul class="clean" style="margin-top:12px">
+          <li>📞 تلفن پشتیبانی وکلا: <a href="tel:09129367796" dir="ltr" class="font-mono text-emerald-400 font-bold hover:underline" style="display:inline-block;white-space:nowrap;direction:ltr">0912 936 7796</a></li>
+          <li>✉️ ایمیل سازمانی: <a href="mailto:info@ghazihooshmand.ir" style="font-weight:700;color:#d4af37;font-family:monospace">info@ghazihooshmand.ir</a></li>
+          <li>🌐 دامنه رسمی: <span style="font-family:monospace">ghazihoushmand.ir</span></li>
+          <li>🕘 ساعات پاسخگویی: شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر</li>
+        </ul>
+        <div class="flex items-start gap-2 text-xs text-slate-300" style="margin-top:14px">
+          <span class="text-amber-400">📍</span>
+          <div>
+            <span class="font-bold text-white">نشانی دفتر مرکزی:</span>
+            <p class="leading-relaxed text-slate-300 mt-1">تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵</p>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>ثبت درخواست پشتیبانی</h3>
+        <form action="#" onsubmit="event.preventDefault();document.getElementById('gMsg').style.display='block';this.reset();return false;">
+          <div class="field"><label for="gPhone">شماره تماس</label><input id="gPhone" class="gold-input" type="tel" placeholder="0912..."></div>
+          <div class="field"><label for="gTopic">موضوع</label><input id="gTopic" class="gold-input" type="text" placeholder="بررسی پرونده / تحلیل ادله / پشتیبانی"></div>
+          <div class="field"><label for="gDesc">توضیح</label><textarea id="gDesc" class="gold-input" rows="3" placeholder="توضیح درخواست شما..."></textarea></div>
+          <div id="gMsg" style="background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.4);display:none;margin-bottom:10px;padding:8px 12px;border-radius:10px;font-size:.8rem">✅ درخواست شما ثبت شد؛ تیم پشتیبانی به‌زودی پاسخگوی خواهد شد.</div>
+          <button class="btn" type="submit" style="width:100%">ثبت درخواست</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap flex" style="padding-top:14px;align-items:flex-start;gap:28px">
+    <div>
+      <img src="/static/ghazi_logo.png" onerror="this.onerror=null;this.src='/static/ghazi_logo.svg';" alt="قاضی هوشمند" height="40" style="height:40px;width:auto;max-width:160px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(245,158,11,0.2))">
+      <div style="margin-top:12px;color:var(--dim)">© ۱۴۰۵ سامانه قاضی هوشمند<br>تمامي حقوق مادی و معنوی محفوظ است.</div>
+      <div class="flex items-start gap-2 text-xs text-slate-300" style="margin-top:12px">
+        <span class="text-amber-400">📍</span>
+        <div>
+          <span class="font-bold text-white">نشانی دفتر مرکزی:</span>
+          <p class="leading-relaxed text-slate-300 mt-1">تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵</p>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div style="font-weight:800;color:var(--muted)">نشان اعتماد الکترونیکی</div>
+      <p class="dim" style="font-size:.78rem;max-width:300px">برای بررسی اصالت نماد اعتماد، فیلترشکن را خاموش کرده و بر روی نشان کلیک کنید.</p>
+      <div class="enamad-white" style="margin-top:8px">
+        <a referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" class="inline-block">
+          <img referrerpolicy="origin" src="https://trustseal.enamad.ir/logo.aspx?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" alt="نماد تجارت الکترونیکی" style="cursor:pointer;width:75px;height:auto" id="yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa">
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,8 +1,33 @@
+# Environment & Secrets
 .env
 *.env
+*.pem
+*.key
+*.cert
+
+# Python Cache & Bytecode
 __pycache__/
-*.pyc
-*.pyo
-venv/
+*.py[cod]
+*$py.class
 .pytest_cache/
+
+# Databases & Vector Storages (Local Volumes)
+data/qdrant_storage/
+data/postgres_data/
+*.sqlite3
+*.db
+
+# Temporary Uploads & User Media
+temp_audio/
+uploads/
+*.wav
+*.mp3
+*.webm
+*.ogg
+
+# System & Logs
 *.log
+.DS_Store
+.idea/
+.vscode/
+node_modules/

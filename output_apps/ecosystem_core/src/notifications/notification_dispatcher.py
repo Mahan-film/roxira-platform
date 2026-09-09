@@ -29,6 +29,10 @@ class EnterpriseNotificationDispatcher:
 
     @staticmethod
     def send_sms_alert(recipient_phone: str, message: str) -> NotificationResult:
+        """
+        ⚠ DEPRECATED — شبیه‌ساز پیامک. برای ارسال واقعی از
+        sms_ir_service.SmsIrService.send_verify_code / send_pattern usage استفاده کنید.
+        """
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         track_id = f"SMS-{int(datetime.datetime.now().timestamp())}"
         return NotificationResult(

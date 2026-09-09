@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir psycopg fastapi uvicorn pydantic python-docx redis httpx langgraph sentence-transformers
+RUN pip install --no-cache-dir psycopg fastapi uvicorn pydantic python-docx redis httpx langgraph sentence-transformers sqlalchemy python-multipart "pydantic[email]" faster-whisper
 
 COPY output_apps /app/output_apps
 COPY src /app/src

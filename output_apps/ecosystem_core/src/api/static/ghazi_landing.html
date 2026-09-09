@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="قاضی هوشمند؛ مشاوره حقوقی هوشمند برای عموم مردم — تحلیل پرونده، پیش‌بینی شانس موفقیت، تنظیم دادخواست و شکواییه، ارزیابی اعاده دادرسی و محاسبه خسارت تاخیر تادیه با هوش مصنوعی — ghazihoushmand.ir">
+<title>قاضی هوشمند | سامانه مشاوره و تحلیل پرونده</title>
+<meta name="theme-color" content="#030712">
+<meta name="keywords" content="قاضی هوشمند, smart judge, مشاوره حقوقی, تحلیل پرونده, دادخواست, شکواییه, اعاده دادرسی, خسارت تاخیر تادیه, هوش مصنوعی حقوقی">
+<meta name="robots" content="index, follow">
+<meta name="author" content="قاضی هوشمند | ghazihoushmand.ir">
+<link rel="canonical" href="https://ghazihoushmand.ir">
+<meta property="og:title" content="قاضی هوشمند | سامانه مشاوره و تحلیل پرونده با هوش مصنوعی">
+<meta property="og:description" content="تحلیل پرونده، پیش‌بینی شانس موفقیت، تنظیم دادخواست و شکواییه و محاسبه خسارت تاخیر تادیه با هوش مصنوعی.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ghazihoushmand.ir">
+<meta property="og:locale" content="fa_IR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="قاضی هوشمند | سامانه مشاوره و تحلیل پرونده">
+<meta name="twitter:description" content="تحلیل پرونده و مشاوره حقوقی هوشمند با هوش مصنوعی.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "قاضی هوشمند | دستیار و سیستم قاضی هوشمند ایران",
+  "alternateName": ["Smart Judge System Iran", "اسمارت جاج", "دستیار قاضی هوشمند"],
+  "applicationCategory": "LegalSoftware",
+  "operatingSystem": "Web",
+  "description": "سامانه آنلاین استدلال قضایی، مشاوره حقوقی با هوش مصنوعی، استعلام آرای وحدت رویه و تنظیم لایحه و دادخواست.",
+  "url": "https://ghazihoushmand.ir",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "IRR"
+  }
+}
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { vazir: ['Vazirmatn', 'Tahoma', 'sans-serif'] },
+        boxShadow: { glow: '0 0 50px -12px rgba(245,158,11,.4)' }
+      }
+    }
+  };
+</script>
+<link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css">
+<style>
+  html{scroll-behavior:smooth;scroll-padding-top:100px}
+  body{font-family:'Vazirmatn',Tahoma,sans-serif;background:#030712}
+  ::selection{background:rgba(245,158,11,.35);color:#fff}
+  ::-webkit-scrollbar{width:9px}::-webkit-scrollbar-thumb{background:#1f2937;border-radius:99px}::-webkit-scrollbar-track{background:#030712}
+  .text-gold{background:linear-gradient(120deg,#fde68a 0%,#f59e0b 48%,#d97706 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .glass{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);backdrop-filter:blur(14px)}
+  .hero-glow{position:absolute;border-radius:9999px;filter:blur(95px);pointer-events:none}
+  .grid-bg{background-image:linear-gradient(rgba(148,163,184,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.05) 1px,transparent 1px);background-size:44px 44px;-webkit-mask-image:radial-gradient(ellipse 78% 68% at 50% 0%,#000 55%,transparent 100%);mask-image:radial-gradient(ellipse 78% 68% at 50% 0%,#000 55%,transparent 100%)}
+  #navbar.scrolled{background:rgba(3,7,18,.85);backdrop-filter:blur(16px);border-color:rgba(255,255,255,.07);box-shadow:0 10px 30px -18px rgba(0,0,0,.9)}
+  .nav-link{padding:8px 14px;border-radius:12px;font-weight:600;transition:all .2s}
+  .nav-link:hover{color:#fbbf24;background:rgba(255,255,255,.05)}
+  .btn-amber{background:linear-gradient(135deg,#fbbf24,#f59e0b 55%,#d97706);color:#1c1204;box-shadow:0 10px 30px -10px rgba(245,158,11,.55);transition:all .2s}
+  .btn-amber:hover{filter:brightness(1.07);transform:translateY(-1px)}
+  .btn-amber:active{transform:translateY(0)}
+  .card{background:linear-gradient(165deg,rgba(255,255,255,.045),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08);border-radius:24px;transition:all .25s ease}
+  .card:hover{border-color:rgba(245,158,11,.35);transform:translateY(-4px);box-shadow:0 24px 50px -24px rgba(0,0,0,.85)}
+  .step-num{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font-weight:900;font-size:1.15rem;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#fbbf24}
+  .otp-input{letter-spacing:.55em;text-align:center;font-weight:800}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  .fade-up{animation:fadeUp .7s ease both}
+  .fade-up-2{animation:fadeUp .7s .12s ease both}
+  .fade-up-3{animation:fadeUp .7s .24s ease both}
+</style>
+</head>
+<body id="top" class="bg-[#030712] text-slate-100 antialiased overflow-x-hidden">
+
+<!-- ================= HEADER / NAVBAR ================= -->
+<header id="navbar" class="fixed top-0 inset-x-0 z-40 transition-all duration-300 border-b border-transparent">
+  <div class="max-w-6xl mx-auto px-5 lg:px-8 h-[76px] flex items-center justify-between gap-4">
+    <a href="#top" class="flex items-center gap-3 shrink-0">
+      <img src="/static/ghazi_logo.png" onerror="this.onerror=null;this.src='/static/ghazi_logo.svg';" alt="قاضی هوشمند" style="height:48px;width:auto;max-width:180px;object-fit:contain;" referrerpolicy="origin">
+      <span class="hidden sm:block h-9 w-px bg-white/10" aria-hidden="true"></span>
+      <span class="hidden sm:flex flex-col leading-tight">
+        <span class="font-extrabold text-[15px] text-white">قاضی هوشمند</span>
+        <span class="text-[11px] text-amber-400/90 font-semibold">سامانه مشاوره و تحلیل پرونده</span>
+      </span>
+    </a>
+    <nav class="hidden md:flex items-center gap-1 text-[13px] text-slate-300">
+      <a href="#how-it-works" class="nav-link">چگونه کار می‌کند؟</a>
+      <a href="#services" class="nav-link">خدمات</a>
+      <a href="#about" class="nav-link">درباره ما</a>
+      <a href="#contact" class="nav-link">تماس با ما</a>
+    </nav>
+    <div class="flex items-center gap-2">
+      <button id="ctaAuth" onclick="openAuthModal()" class="btn-amber rounded-2xl px-4 lg:px-5 py-2.5 text-[13px] font-extrabold whitespace-nowrap">ورود / ثبت‌نام سریع</button>
+      <button onclick="toggleMobileMenu()" class="md:hidden glass rounded-xl p-2.5 text-slate-200" aria-label="باز کردن منو">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="mobileMenu" class="hidden md:hidden mx-5 mb-3 glass rounded-2xl p-3 text-sm text-slate-200 space-y-1">
+    <a href="#how-it-works" class="block px-4 py-2.5 rounded-xl hover:bg-white/5 font-semibold" onclick="toggleMobileMenu()">چگونه کار می‌کند؟</a>
+    <a href="#services" class="block px-4 py-2.5 rounded-xl hover:bg-white/5 font-semibold" onclick="toggleMobileMenu()">خدمات</a>
+    <a href="#about" class="block px-4 py-2.5 rounded-xl hover:bg-white/5 font-semibold" onclick="toggleMobileMenu()">درباره ما</a>
+    <a href="#contact" class="block px-4 py-2.5 rounded-xl hover:bg-white/5 font-semibold" onclick="toggleMobileMenu()">تماس با ما</a>
+  </div>
+</header>
+
+<main>
+
+<!-- ================= HERO ================= -->
+<section class="relative overflow-hidden">
+  <div class="absolute inset-0 grid-bg" aria-hidden="true"></div>
+  <div class="hero-glow w-[560px] h-[320px] bg-amber-500/10 -top-44 right-1/2 translate-x-1/2"></div>
+  <div class="hero-glow w-[420px] h-[280px] bg-amber-600/[.07] top-56 -left-36"></div>
+  <div class="relative max-w-6xl mx-auto px-5 lg:px-8 pt-40 pb-24 text-center">
+    <div class="fade-up inline-flex items-center gap-2.5 rounded-full glass px-4 py-2 text-[12px] font-bold text-amber-300 border-amber-500/25">
+      <span class="relative flex h-2 w-2">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+      </span>
+      دستیار هوشمند حقوقی بر پایه هوش مصنوعی
+    </div>
+    <h1 class="fade-up-2 mt-8 text-[clamp(1.8rem,4.6vw,3.4rem)] font-black leading-[1.45] text-white">
+      تحلیل پرونده‌های حقوقی و<br class="hidden sm:block">
+      <span class="text-gold">پیش‌بینی شانس موفقیت</span> با هوش مصنوعی
+    </h1>
+    <p class="fade-up-3 mt-6 max-w-2xl mx-auto text-slate-400 text-[15px] leading-8">
+      متن شکایت، دادخواست یا پرونده خود را بررسی کنید و قبل از هر اقدامی، درصد موفقیت، دادگاه صالح و بهترین مسیر دادرسی را دریافت نمایید.
+    </p>
+
+    <!-- Interactive case card -->
+    <div class="fade-up-3 mt-11 max-w-2xl mx-auto">
+      <div class="glass rounded-[28px] border-amber-500/25 p-3 shadow-glow text-right">
+        <textarea id="heroQuery" rows="3" placeholder="طرح پرسش یا شرح پرونده خود را بنویسید یا با میکروفون بگویید..." class="w-full bg-transparent resize-none px-4 pt-3.5 text-[14px] leading-7 text-slate-100 placeholder:text-slate-500 focus:outline-none"></textarea>
+        <div class="flex items-center justify-between gap-3 px-3 pb-2 pt-1">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <input type="file" id="fileAttach" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.mp3,.wav,.ogg" class="hidden" onchange="renderFileAttachBadges()">
+            <button type="button" onclick="triggerFileAttach()" class="flex items-center gap-1.5 text-[12px] font-bold text-slate-400 hover:text-amber-300 transition rounded-xl border border-white/10 px-3 py-2">
+              📎 انتخاب اسناد (PDF, عکس، ویس صوتی)
+            </button>
+            <button type="button" id="voiceBtn" onclick="toggleVoiceRecognition()" title="تبدیل صوت به متن با هوش مصنوعی" aria-label="تبدیل صوت به متن با هوش مصنوعی" class="flex items-center gap-1.5 text-[12px] font-bold text-slate-400 hover:text-amber-300 transition rounded-xl border border-white/10 px-3 py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V5a3 3 0 00-6 0v10a3 3 0 003 3z"/></svg>
+              <span id="voiceBtnLabel">ضبط صوتی</span>
+              <span id="voicePulse" class="hidden relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+              </span>
+            </button>
+            <span class="hidden sm:inline text-[11px] text-slate-500">PDF، عکس، ویس صوتی و رای دادگاه</span>
+          </div>
+        </div>
+        <div id="fileAttachList" class="flex flex-wrap gap-2 px-3 pb-2"></div>
+        <div id="voiceLiveHint" class="px-3 pb-1 text-[11px] text-amber-300/80 min-h-[16px] empty:before:content-['']" aria-live="polite"></div>
+        <button type="button" onclick="startSmartReview()" class="btn-amber w-full rounded-2xl py-4 text-[15px] font-black flex items-center justify-center gap-2.5">
+          شروع بررسی هوشمند پرونده
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4.5 h-4.5 w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+        </button>
+      </div>
+      <div class="mt-7 flex flex-wrap items-center justify-center gap-x-7 gap-y-2.5 text-[12px] text-slate-500 font-semibold">
+        <span class="flex items-center gap-1.5">⚖️ بیش از ۵٬۱۸۴ ماده و رأی وحدت رویه</span>
+        <span class="flex items-center gap-1.5">🎯 درصد شانس موفقیت، پیش از اقدام</span>
+        <span class="flex items-center gap-1.5">🔒 محرمانگی کامل مدارک شما</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= HOW IT WORKS ================= -->
+<section id="how-it-works" class="relative max-w-6xl mx-auto px-5 lg:px-8 py-20">
+  <div class="text-center max-w-xl mx-auto">
+    <span class="text-[12px] font-bold tracking-wide text-amber-400">چگونه کار می‌کند؟</span>
+    <h2 class="mt-3 text-[clamp(1.4rem,3vw,2.1rem)] font-black text-white">۳ گام ساده تا نتیجه</h2>
+  </div>
+  <div class="relative mt-12 grid md:grid-cols-3 gap-5">
+    <div class="hidden md:block absolute top-[26px] right-[17%] left-[17%] h-px bg-gradient-to-l from-amber-500/40 via-white/10 to-amber-500/40" aria-hidden="true"></div>
+    <div class="card relative p-7">
+      <div class="step-num">۱</div>
+      <h3 class="mt-5 font-extrabold text-white text-[15px]">گام اول: ثبت سوال یا آپلود پرونده</h3>
+      <p class="mt-2.5 text-[13px] leading-7 text-slate-400">آپلود مدارک، شکواییه، رای بدوی یا اعاده دادرسی — به زبان ساده بنویسید، ما می‌فهمیم.</p>
+    </div>
+    <div class="card relative p-7">
+      <div class="step-num">۲</div>
+      <h3 class="mt-5 font-extrabold text-white text-[15px]">گام دوم: تحلیل عمیق هوش مصنوعی</h3>
+      <p class="mt-2.5 text-[13px] leading-7 text-slate-400">تطبیق خودکار با قوانین روز، آرای وحدت رویه و تجارب مشابه.</p>
+    </div>
+    <div class="card relative p-7">
+      <div class="step-num">۳</div>
+      <h3 class="mt-5 font-extrabold text-white text-[15px]">گام سوم: دریافت راهکار و لایحه آماده</h3>
+      <p class="mt-2.5 text-[13px] leading-7 text-slate-400">مشاهده درصد شانس پیروزی، لایحه دفاعیه یا اقدام بعدی.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SERVICES ================= -->
+<section id="services" class="relative max-w-6xl mx-auto px-5 lg:px-8 py-20">
+  <div class="text-center max-w-xl mx-auto">
+    <span class="text-[12px] font-bold tracking-wide text-amber-400">خدمات سامانه</span>
+    <h2 class="mt-3 text-[clamp(1.4rem,3vw,2.1rem)] font-black text-white">هر آنچه پیش و پس از طرح دعوا لازم دارید</h2>
+    <p class="mt-4 text-[13px] leading-7 text-slate-500">بدون اصطلاحات پیچیده؛ دقیقاً همان کمک‌هایی که برای یک تصمیم آگاهانه حقوقی نیاز دارید.</p>
+  </div>
+  <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <div class="card p-7">
+      <div class="w-12 h-12 rounded-2xl bg-amber-500/12 border border-amber-500/30 grid place-items-center text-[22px]">🎯</div>
+      <h3 class="mt-5 font-extrabold text-white text-[14px] leading-7">ارزیابی شانس اعاده دادرسی و فرجام‌خواهی</h3>
+      <p class="mt-2.5 text-[12.5px] leading-6 text-slate-400">پیش از اقدام، بدانید ادله جدید شما چه شانسی برای پذیرش در دیوان عالی کشور دارد.</p>
+      <button type="button" onclick="startSmartReview()" class="mt-5 text-[12px] font-extrabold text-amber-400 hover:text-amber-300 transition">شروع ارزیابی ←</button>
+    </div>
+    <div class="card p-7">
+      <div class="w-12 h-12 rounded-2xl bg-amber-500/12 border border-amber-500/30 grid place-items-center text-[22px]">📝</div>
+      <h3 class="mt-5 font-extrabold text-white text-[14px] leading-7">تنظیم دادخواست، شکواییه و لوایح تخصصی</h3>
+      <p class="mt-2.5 text-[12.5px] leading-6 text-slate-400">تنظیم خودکار لوایح مطابق قالب رسمی دادگاه‌ها؛ آماده ثبت و ارائه.</p>
+      <button type="button" onclick="startSmartReview()" class="mt-5 text-[12px] font-extrabold text-amber-400 hover:text-amber-300 transition">شروع تنظیم ←</button>
+    </div>
+    <div class="card p-7">
+      <div class="w-12 h-12 rounded-2xl bg-amber-500/12 border border-amber-500/30 grid place-items-center text-[22px]">🧮</div>
+      <h3 class="mt-5 font-extrabold text-white text-[14px] leading-7">محاسبه دقیق خسارت تاخیر تادیه و هزینه‌های دادرسی</h3>
+      <p class="mt-2.5 text-[12.5px] leading-6 text-slate-400">بر پایه شاخص تورم بانک مرکزی و رأی وحدت رویه ۸۴۰ دیوان عالی کشور.</p>
+      <button type="button" onclick="startSmartReview()" class="mt-5 text-[12px] font-extrabold text-amber-400 hover:text-amber-300 transition">محاسبه کن ←</button>
+    </div>
+    <div class="card p-7">
+      <div class="w-12 h-12 rounded-2xl bg-amber-500/12 border border-amber-500/30 grid place-items-center text-[22px]">🏛️</div>
+      <h3 class="mt-5 font-extrabold text-white text-[14px] leading-7">تشخیص سریع مرجع صالح رسیدگی</h3>
+      <p class="mt-2.5 text-[12.5px] leading-6 text-slate-400">تعیین خودکار دادگاه صلح یا عمومی بر اساس نوع دعوا و مبلغ خواسته.</p>
+      <button type="button" onclick="startSmartReview()" class="mt-5 text-[12px] font-extrabold text-amber-400 hover:text-amber-300 transition">بررسی مرجع ←</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ABOUT US ================= -->
+<section id="about" class="relative max-w-6xl mx-auto px-5 lg:px-8 py-20">
+  <div class="card p-8 md:p-12 grid md:grid-cols-2 gap-10 items-center hover:transform-none hover:border-white/10">
+    <div>
+      <span class="text-[12px] font-bold tracking-wide text-amber-400">درباره ما</span>
+      <h2 class="mt-3 text-[clamp(1.3rem,2.6vw,1.9rem)] font-black text-white leading-[1.5]">دسترسی عادلانه همه مردم به استدلال دقیق حقوقی</h2>
+      <p class="mt-5 text-[13.5px] leading-8 text-slate-400">
+        قاضی هوشمند با یک مأموریت ساده ساخته شده است: تسهیل دسترسی عموم مردم به خدمات و استدلال‌های دقیق حقوقی، بدون نیاز به دانش تخصصی.
+        ما هوش مصنوعی را با منابع معتبر حقوقی — قوانین روز، آرای وحدت رویه دیوان عالی کشور و رویه قضایی — ترکیب می‌کنیم تا هر شهروند بتواند
+        پیش از هر اقدام قضایی، تصمیمی آگاهانه و مستند بگیرد.
+      </p>
+      <ul class="mt-6 space-y-3 text-[13px] text-slate-300">
+        <li class="flex items-start gap-2.5"><span class="text-amber-400 font-black">✓</span> زبان ساده و قابل فهم برای همه، نه فقط حقوقدانان</li>
+        <li class="flex items-start gap-2.5"><span class="text-amber-400 font-black">✓</span> استناد به منابع رسمی: قوانین، آرای وحدت رویه و نظریات مشورتی</li>
+        <li class="flex items-start gap-2.5"><span class="text-amber-400 font-black">✓</span> محرمانگی کامل داده‌ها و مدارک کاربران</li>
+      </ul>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="glass rounded-2xl p-6 text-center">
+        <div class="text-2xl font-black text-gold">۵٬۱۸۴+</div>
+        <div class="mt-1.5 text-[11.5px] font-bold text-slate-400">ماده و رأی قابل استناد</div>
+      </div>
+      <div class="glass rounded-2xl p-6 text-center">
+        <div class="text-2xl font-black text-gold">~۳ دقیقه</div>
+        <div class="mt-1.5 text-[11.5px] font-bold text-slate-400">تا نخستین تحلیل پرونده</div>
+      </div>
+      <div class="glass rounded-2xl p-6 text-center">
+        <div class="text-2xl font-black text-gold">۲۴/۷</div>
+        <div class="mt-1.5 text-[11.5px] font-bold text-slate-400">پاسخ‌گویی هوشمند</div>
+      </div>
+      <div class="glass rounded-2xl p-6 text-center">
+        <div class="text-2xl font-black text-gold">۱۰۰٪</div>
+        <div class="mt-1.5 text-[11.5px] font-bold text-slate-400">محرمانگی مدارک</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CONTACT US ================= -->
+<section id="contact" class="relative max-w-6xl mx-auto px-5 lg:px-8 py-20">
+  <div class="text-center max-w-xl mx-auto">
+    <span class="text-[12px] font-bold tracking-wide text-amber-400">تماس با ما</span>
+    <h2 class="mt-3 text-[clamp(1.4rem,3vw,2.1rem)] font-black text-white">پاسخ‌گوی شما هستیم</h2>
+  </div>
+  <div class="mt-10 grid md:grid-cols-2 gap-5">
+    <div class="card p-8 space-y-5">
+      <h3 class="font-extrabold text-white text-[15px]">اطلاعات تماس رسمی</h3>
+      <div class="flex items-start gap-3.5">
+        <span class="w-10 h-10 shrink-0 rounded-xl bg-amber-500/10 border border-amber-500/25 grid place-items-center">📞</span>
+        <div>
+          <div class="text-[11.5px] font-bold text-slate-500">تلفن پشتیبانی</div>
+          <a href="tel:09129367796" dir="ltr" class="font-bold text-amber-400">0912 936 7796</a>
+        </div>
+      </div>
+      <div class="flex items-start gap-3.5">
+        <span class="w-10 h-10 shrink-0 rounded-xl bg-amber-500/10 border border-amber-500/25 grid place-items-center">✉️</span>
+        <div>
+          <div class="text-[11.5px] font-bold text-slate-500">ایمیل</div>
+          <a href="mailto:info@ghazihoushmand.ir" class="text-[13px] font-bold text-slate-200 hover:text-amber-300 transition" dir="ltr">info@ghazihoushmand.ir</a>
+        </div>
+      </div>
+      <div class="flex items-start gap-3.5">
+        <span class="w-10 h-10 shrink-0 rounded-xl bg-amber-500/10 border border-amber-500/25 grid place-items-center">📍</span>
+        <div>
+          <div class="text-[11.5px] font-bold text-slate-500">نشانی رسمی</div>
+          <p class="mt-1 text-[13px] leading-7 text-slate-300">تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3.5">
+        <span class="w-10 h-10 shrink-0 rounded-xl bg-amber-500/10 border border-amber-500/25 grid place-items-center">🕘</span>
+        <div>
+          <div class="text-[11.5px] font-bold text-slate-500">ساعات پاسخ‌گویی</div>
+          <p class="mt-1 text-[13px] text-slate-300">شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر</p>
+        </div>
+      </div>
+    </div>
+    <div class="card p-8 flex flex-col items-center justify-center text-center gap-4 hover:transform-none hover:border-white/10">
+      <h3 class="font-extrabold text-white text-[15px]">نماد اعتماد الکترونیکی</h3>
+      <p class="text-[12px] leading-6 text-slate-500 max-w-xs">سامانه قاضی هوشمند دارای نماد اعتماد الکترونیکی رسمی است؛ اصالت آن را مستقیماً از سرور enamad.ir بررسی کنید.</p>
+      <a referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" class="inline-block bg-white/10 p-2 rounded-2xl border border-amber-500/30">
+        <img referrerpolicy="origin" src="https://trustseal.enamad.ir/logo.aspx?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" alt="نماد اعتماد الکترونیکی" style="cursor:pointer; width:75px; height:auto;" id="yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" />
+      </a>
+      <p class="text-[11px] text-slate-600">برای بررسی اصالت، فیلترشکن را خاموش کرده و روی نشان کلیک کنید.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer class="border-t border-white/5 mt-4">
+  <div class="max-w-6xl mx-auto px-5 lg:px-8 py-12 grid md:grid-cols-3 gap-10 text-sm">
+    <div>
+      <img src="/static/ghazi_logo.png" onerror="this.onerror=null;this.src='/static/ghazi_logo.svg';" alt="قاضی هوشمند" style="height:44px;width:auto;max-width:160px;object-fit:contain;" referrerpolicy="origin">
+      <p class="mt-4 text-[12px] leading-6 text-slate-500">© ۱۴۰۵ سامانه قاضی هوشمند<br>تمامی حقوق مادی و معنوی محفوظ است.</p>
+    </div>
+    <div>
+      <div class="font-extrabold text-slate-300 text-[13px]">دسترسی سریع</div>
+      <ul class="mt-4 space-y-2.5 text-[12.5px] text-slate-500">
+        <li><a href="#how-it-works" class="hover:text-amber-400 transition">چگونه کار می‌کند؟</a></li>
+        <li><a href="#services" class="hover:text-amber-400 transition">خدمات</a></li>
+        <li><a href="#about" class="hover:text-amber-400 transition">درباره ما</a></li>
+        <li><a href="#contact" class="hover:text-amber-400 transition">تماس با ما</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="font-extrabold text-slate-300 text-[13px]">نشانی دفتر مرکزی</div>
+      <p class="mt-4 text-[12px] leading-7 text-slate-500">تهران، فرمانیه، خیابان سعیدی،<br>بن‌بست گلریز، پلاک ۱، واحد ۵</p>
+      <a href="tel:09129367796" dir="ltr" class="mt-3 inline-block font-bold text-amber-400 text-[13px]">0912 936 7796</a>
+    </div>
+  </div>
+</footer>
+
+<!-- ================= UNIFIED AUTH MODAL (Password / SMS OTP / Google) ================= -->
+<div id="otpModal" class="hidden fixed inset-0 z-[60] items-center justify-center p-4">
+  <div class="absolute inset-0 bg-[#030712]/85 backdrop-blur-sm" onclick="closeOtpModal()"></div>
+  <div class="relative w-full max-w-md rounded-3xl border border-amber-500/25 bg-[#0a0f1c]/95 p-7 shadow-2xl max-h-[92vh] overflow-y-auto">
+    <button onclick="closeOtpModal()" class="absolute top-4 left-4 text-slate-500 hover:text-slate-200 text-xl font-bold transition" aria-label="بستن">&times;</button>
+    <h3 id="otpTitle" class="font-extrabold text-white text-[16px]">ورود / ثبت‌نام در قاضی هوشمند</h3>
+    <p class="mt-2 text-[12px] leading-6 text-slate-500">به روش دلخواه وارد شوید؛ رمز عبور یا کد پیامکی ۶ رقمی کاوه‌نگار.</p>
+
+    <!-- Tabs -->
+    <div class="mt-5 grid grid-cols-2 gap-1.5 rounded-2xl bg-white/[.04] border border-white/10 p-1.5">
+      <button id="tabBtnPassword" type="button" onclick="switchAuthTab('password')" class="rounded-xl py-2.5 text-[11.5px] font-extrabold transition">ورود با نام کاربری / رمز عبور</button>
+      <button id="tabBtnOtp" type="button" onclick="switchAuthTab('otp')" class="rounded-xl py-2.5 text-[11.5px] font-extrabold transition">ورود سریع پیامکی (OTP)</button>
+    </div>
+
+    <!-- TAB 1: Username / Password -->
+    <div id="passwordStep" class="mt-6 space-y-3">
+      <div>
+        <label class="text-[11px] font-bold text-slate-400 block mb-1.5">نام کاربری، ایمیل یا شماره موبایل</label>
+        <input id="loginIdentifier" type="text" dir="ltr" autocomplete="username" placeholder="username | email | 09xxxxxxxxx" class="w-full rounded-2xl bg-white/[.04] border border-white/10 px-4 py-3.5 text-[14px] text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20 transition text-left">
+      </div>
+      <div>
+        <label class="text-[11px] font-bold text-slate-400 block mb-1.5">رمز عبور</label>
+        <input id="loginPasswordField" type="password" dir="ltr" autocomplete="current-password" placeholder="••••••••" class="w-full rounded-2xl bg-white/[.04] border border-white/10 px-4 py-3.5 text-[14px] text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20 transition text-left">
+      </div>
+      <div class="flex items-center justify-between pt-1 text-[11.5px]">
+        <button type="button" onclick="showRegisterStep()" class="font-bold text-amber-400 hover:text-amber-300 transition">حساب ندارید؟ ثبت‌نام</button>
+        <button type="button" onclick="forgotPassword()" class="font-bold text-slate-400 hover:text-amber-300 transition">فراموشی رمز عبور</button>
+      </div>
+      <button id="loginSubmitBtn" onclick="loginPassword()" class="btn-amber w-full rounded-2xl py-3.5 text-[14px] font-black">ورود به میز کار</button>
+    </div>
+
+    <!-- TAB 1b: Register -->
+    <div id="registerStep" class="mt-6 space-y-3 hidden">
+      <div>
+        <label class="text-[11px] font-bold text-slate-400 block mb-1.5">نام کاربری (لاتین)</label>
+        <input id="regUsername" type="text" dir="ltr" autocomplete="username" placeholder="username" class="w-full rounded-2xl bg-white/[.04] border border-white/10 px-4 py-3 text-[13.5px] text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/60 transition text-left">
+      </div>
+      <div>
+        <label class="text-[11px] font-bold text-slate-400 block mb-1.5">رمز عبور (حداقل ۶ کاراکتر)</label>
+        <input id="regPassword" type="password" dir="ltr" autocomplete="new-password" placeholder="••••••••" class="w-full rounded-2xl bg-white/[.04] border border-white/10 px-4 py-3 text-[13.5px] text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/60 transition text-left">
+      </div>
+      <div class="grid grid-cols-2 gap-2.5">
+        <input id="regEmail" type="email" dir="ltr" autocomplete="email" placeholder="ایمیل (اختیاری)" class="w-full rounded-2xl bg-white/[.04] border border-white/10 px-4 py-3 text-[13.5px] text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/60 transition text-left">
+        <input id="regPhone" type="tel" dir="ltr" autocomplete="tel" placeholder="موبایل (اختیاری)" class="w-full rounded-2xl bg-white/[.04] border border-white/10 px-4 py-3 text-[13.5px] text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/60 transition text-left">
+      </div>
+      <button id="registerSubmitBtn" onclick="submitRegister()" class="btn-amber w-full rounded-2xl py-3.5 text-[14px] font-black">ایجاد حساب کاربری</button>
+      <button type="button" onclick="showLoginStep()" class="w-full text-[11.5px] font-bold text-slate-500 hover:text-amber-300 transition">بازگشت به ورود</button>
+    </div>
+
+    <!-- TAB 2: SMS OTP (Kavenegar) -->
+    <div id="otpStep1" class="mt-6 space-y-3 hidden">
+      <p class="text-[12px] leading-6 text-slate-500">شماره موبایل خود را وارد کنید؛ کد تأیید ۶ رقمی از طریق کاوه‌نگار ارسال می‌شود. حساب کاربری به‌صورت خودکار ساخته می‌شود.</p>
+      <input id="otpPhone" type="tel" dir="ltr" inputmode="tel" autocomplete="tel" placeholder="09xxxxxxxxx" class="w-full rounded-2xl bg-white/[.04] border border-white/10 px-4 py-3.5 text-[14px] text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20 transition text-left">
+      <button id="otpSendBtn" onclick="requestOtp()" class="btn-amber w-full rounded-2xl py-3.5 text-[14px] font-black">دریافت کد تأیید</button>
+    </div>
+
+    <div id="otpStep2" class="mt-6 space-y-3 hidden">
+      <p class="text-[12px] text-slate-400">کد ۶ رقمی ارسال‌شده به <span id="otpPhoneEcho" class="font-bold text-amber-300" dir="ltr"></span> را وارد کنید.</p>
+      <input id="otpCode" type="text" dir="ltr" inputmode="numeric" maxlength="6" placeholder="──────" class="otp-input w-full rounded-2xl bg-white/[.04] border border-white/10 px-4 py-3.5 text-[18px] text-amber-300 placeholder:text-slate-700 focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20 transition">
+      <button id="otpVerifyBtn" onclick="verifyOtp()" class="btn-amber w-full rounded-2xl py-3.5 text-[14px] font-black">تأیید و ورود به میز کار</button>
+      <button id="otpResend" type="button" onclick="requestOtp()" class="w-full text-[11.5px] font-bold text-slate-500 hover:text-amber-300 transition pt-1 disabled:cursor-not-allowed">ارسال مجدد کد</button>
+    </div>
+
+    <div id="otpMsg" class="hidden mt-4 rounded-xl px-4 py-3 text-[12px] font-bold leading-6"></div>
+
+    <!-- Social login -->
+    <div class="my-5 flex items-center gap-3 text-[10.5px] text-slate-600">
+      <span class="h-px flex-1 bg-white/10"></span>
+      <span>یا</span>
+      <span class="h-px flex-1 bg-white/10"></span>
+    </div>
+    <button id="googleLoginBtn" type="button" onclick="loginWithGoogle()" class="w-full flex items-center justify-center gap-3 rounded-2xl border border-white/15 bg-white px-4 py-3.5 text-[13px] font-extrabold text-[#1f2937] hover:bg-slate-100 transition shadow-lg">
+      <svg viewBox="0 0 48 48" class="w-5 h-5 shrink-0" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.5 6.1 29.5 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.5 6.1 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.4l6.3 5.3C41.4 34.9 44 29.9 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>
+      <span>ورود مستقیم با حساب گوگل (Google Sign-In)</span>
+    </button>
+
+    <p class="mt-5 text-center text-[10.5px] leading-5 text-slate-600">با ورود یا ثبت‌نام، <a href="#about" class="underline hover:text-slate-400">قوانین و حریم خصوصی</a> سامانه را می‌پذیرید.</p>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+/* ---------- Navbar scroll state ---------- */
+const navbar = $('navbar');
+window.addEventListener('scroll', () => navbar.classList.toggle('scrolled', window.scrollY > 12), { passive: true });
+
+function toggleMobileMenu() { $('mobileMenu').classList.toggle('hidden'); }
+
+/* ---------- File & Evidence Attachment (انتخاب اسناد) ---------- */
+function triggerFileAttach() {
+  document.getElementById('fileAttach').click();
+}
+function fileIconFor(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (['png', 'jpg', 'jpeg'].includes(ext)) return '🖼️';
+  if (['mp3', 'wav', 'ogg'].includes(ext)) return '🎧';
+  if (ext === 'pdf') return '📕';
+  return '📄';
+}
+function formatBytes(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes < 1024) return bytes + ' بایت';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' کیلوبایت';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' مگابایت';
+}
+function renderFileAttachBadges() {
+  const input = $('fileAttach');
+  const files = [...(input.files || [])];
+  $('fileAttachList').innerHTML = files.map((f, i) =>
+    '<span class="text-[11px] rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5 text-slate-300 flex items-center gap-1.5">' +
+    '<span>' + fileIconFor(f.name) + '</span>' +
+    '<span class="max-w-[140px] truncate" title="' + f.name.replace(/"/g, '&quot;') + '">' +
+    (f.name.length > 22 ? f.name.slice(0, 22) + '…' : f.name) + '</span>' +
+    '<span class="text-[9px] text-slate-500 font-mono" dir="ltr">' + formatBytes(f.size) + '</span>' +
+    '<button type="button" onclick="removeFileAt(' + i + ')" aria-label="حذف فایل" class="text-rose-400 hover:text-rose-300 font-black leading-none px-0.5">✕</button>' +
+    '</span>'
+  ).join('');
+}
+function removeFileAt(index) {
+  const input = $('fileAttach');
+  const dt = new DataTransfer();
+  [...(input.files || [])].forEach((f, i) => { if (i !== index) dt.items.add(f); });
+  input.files = dt.files;
+  renderFileAttachBadges();
+}
+
+/* ---------- ضمیمه‌سازی برنامه‌ای فایل (ویس ضبط‌شده) (Task 1) ---------- */
+function addUploadedFile(file) {
+  if (!file) return;
+  const input = $('fileAttach');
+  const dt = new DataTransfer();
+  [...(input.files || [])].forEach(f => dt.items.add(f));
+  dt.items.add(file);
+  input.files = dt.files;
+  renderFileAttachBadges();
+}
+window.addUploadedFile = addUploadedFile;
+
+/* ---------- MediaRecorder Fallback (در نبود Web Speech service) (Task 1) ---------- */
+let mediaRecorderLanding = null;
+async function startMediaRecordingFallback() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaRecorder = new MediaRecorder(stream);
+    let chunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      const file = new File([blob], `voice_case_${Date.now()}.webm`, { type: 'audio/webm' });
+      if (window.addUploadedFile) window.addUploadedFile(file);
+      const hint = $('voiceLiveHint');
+      stopVoiceUI();
+      stream.getTracks().forEach(t => t.stop());
+      // تبدیل سروری گفتار به متن (LEGAL_STT_PROMPT) و درج دقیق متن در کادر پرونده (Task 3.1)
+      try {
+        if (hint) hint.textContent = 'در حال تبدیل گفتار به متن با هوش مصنوعی...';
+        const fd = new FormData();
+        fd.append('file', file, file.name);
+        const r = await fetch('/api/v1/apps/judge/transcribe-audio', { method: 'POST', body: fd });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.transcript) {
+          const ta = $('heroQuery');
+          ta.value += (ta.value ? '\n' : '') + d.transcript;
+          ta.scrollTop = ta.scrollHeight;
+          if (hint) hint.textContent = '✅ متن گفتار به شرح پرونده اضافه شد.';
+          setTimeout(() => { if (hint) hint.textContent = ''; }, 4000);
+        } else {
+          if (hint) hint.textContent = 'تبدیل گفتار ناموفق بود؛ صوت ضبط‌شده به‌صورت پیوست ضمیمه پرونده شد.';
+        }
+      } catch (err) {
+        if (hint) hint.textContent = 'خطا در ارسال صدا؛ صوت ضبط‌شده به‌صورت پیوست ضمیمه پرونده شد.';
+      }
+    };
+    mediaRecorder.start();
+    mediaRecorderLanding = mediaRecorder;
+    voiceActive = true;
+    $('voicePulse').classList.remove('hidden');
+    $('voiceBtn').classList.add('!text-amber-300', '!border-amber-500/50');
+    $('voiceBtnLabel').textContent = 'در حال ضبط ویس پرونده... [توقف]';
+    if ($('voiceLiveHint')) $('voiceLiveHint').textContent = 'در حال ضبط ویس پرونده... برای توقف دوباره کلیک کنید.';
+  } catch (err) {
+    const hint = $('voiceLiveHint');
+    if (hint) hint.textContent = 'دسترسی به میکروفون مسدود است؛ لطفاً اجازه دسترسی را از تنظیمات مرورگر (آیکون قفل در نوار آدرس) فعال کنید.';
+  }
+}
+
+/* ---------- Voice-to-Text (تبدیل صوت به متن با هوش مصنوعی) ---------- */
+let voiceRecognition = null, voiceActive = false;
+
+function initSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const rec = new SR();
+  rec.lang = 'fa-IR';               // فارسی ایران
+  rec.interimResults = true;        // نمایش زنده متن در حین دیکته
+  rec.continuous = true;            // ادامه دیکته تا توقف
+  rec.maxAlternatives = 1;
+  rec.onresult = (event) => {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const chunk = event.results[i][0].transcript || '';
+      if (event.results[i].isFinal) {
+        const ta = $('heroQuery');
+        const base = ta.value ? ta.value.trimEnd() + ' ' : '';
+        ta.value = base + chunk.trim() + ' ';
+        ta.scrollTop = ta.scrollHeight;
+      } else {
+        interim += chunk;
+      }
+    }
+    $('voiceLiveHint').textContent = interim;
+  };
+  rec.onerror = (event) => {
+    stopVoiceUI();
+    // graceful fallback به MediaRecorder بدون alert مسدودکننده (Task 1)
+    if (event.error === 'service-not-allowed' || event.error === 'network') {
+      const hint = $('voiceLiveHint');
+      if (hint) hint.textContent = 'سرویس تبدیل گفتار در دسترس نیست؛ در حال ضبط ویس پرونده...';
+      startMediaRecordingFallback();
+      return;
+    }
+    const errors = {
+      'not-allowed': 'دسترسی به میکروفون رد شد. لطفاً از تنظیمات مرورگر (آیکون قفل در نوار آدرس) اجازه استفاده از میکروفون را فعال کنید.',
+      'no-speech': 'صدایی شنیده نشد؛ دوباره تلاش کنید و نزدیک‌تر به میکروفون صحبت کنید.',
+      'audio-capture': 'میکروفونی یافت نشد. اتصال میکروفون را بررسی کنید.'
+    };
+    $('voiceLiveHint').textContent = '🎙️ ' + (errors[event.error] || ('خطا در تشخیص صوت: ' + (event.error || 'نامشخص')));
+  };
+  rec.onend = () => { if (voiceActive) { try { rec.start(); } catch (e) {} } else stopVoiceUI(); };
+  return rec;
+}
+function stopVoiceUI() {
+  voiceActive = false;
+  if (mediaRecorderLanding && mediaRecorderLanding.state === 'recording') {
+    try { mediaRecorderLanding.stop(); } catch (e) {}
+  }
+  mediaRecorderLanding = null;
+  $('voicePulse').classList.add('hidden');
+  $('voiceBtn').classList.remove('!text-rose-300', '!border-rose-500/50', '!text-amber-300', '!border-amber-500/50');
+  $('voiceBtnLabel').textContent = 'ضبط صوتی';
+  if ($('voiceLiveHint')) $('voiceLiveHint').textContent = '';
+}
+function toggleVoiceRecognition() {
+  // توقف ضبط MediaRecorder (حالت fallback)
+  if (voiceActive && mediaRecorderLanding && mediaRecorderLanding.state === 'recording') {
+    mediaRecorderLanding.stop();
+    return;
+  }
+  if (voiceActive) {  // توقف تشخیص گفتار
+    voiceActive = false;
+    if (voiceRecognition) { try { voiceRecognition.stop(); } catch (e) {} }
+    stopVoiceUI();
+    return;
+  }
+  if (!voiceRecognition) voiceRecognition = initSpeechRecognition();
+  if (!voiceRecognition) {
+    // بدون Web Speech — مستقیم به MediaRecorder fallback
+    startMediaRecordingFallback();
+    return;
+  }
+  try {
+    voiceRecognition.start();
+    voiceActive = true;
+    $('voicePulse').classList.remove('hidden');
+    $('voiceBtn').classList.add('!text-rose-300', '!border-rose-500/50');
+    $('voiceBtnLabel').textContent = 'در حال ضبط... برای توقف کلیک کنید';
+    $('heroQuery').focus();
+  } catch (e) {
+    if ($('voiceLiveHint')) $('voiceLiveHint').textContent = '🎙️ شروع ضبط ممکن نشد: ' + (e.message || e);
+  }
+}
+
+/* ---------- Persian/Arabic digit normalization ---------- */
+function toEnDigits(s) {
+  const fa = '۰۱۲۳۴۵۶۷۸۹', ar = '٠١٢٣٤٥٦٧٨٩';
+  return String(s || '').replace(/[۰-۹٠-٩]/g, ch => {
+    const i = fa.indexOf(ch); if (i > -1) return String(i);
+    return String(ar.indexOf(ch));
+  });
+}
+function normalizePhone(raw) {
+  let s = toEnDigits(raw).trim().replace(/[\s\-()]/g, '');
+  if (s.startsWith('+98')) s = '0' + s.slice(3);
+  else if (s.startsWith('0098')) s = '0' + s.slice(4);
+  else if (s.startsWith('98') && s.length === 12) s = '0' + s.slice(2);
+  return s;
+}
+
+/* ---------- Unified Auth Modal (Tabs: Password / OTP + Google) ---------- */
+let otpCountdown = null, otpPhone = '';
+
+function resetAuthPanels() {
+  ['passwordStep', 'registerStep', 'otpStep1', 'otpStep2'].forEach(id => $(id).classList.add('hidden'));
+  $('otpMsg').className = 'hidden mt-4 rounded-xl px-4 py-3 text-[12px] font-bold leading-6';
+}
+function switchAuthTab(tab) {
+  resetAuthPanels();
+  const isPassword = tab === 'password';
+  $(isPassword ? 'passwordStep' : 'otpStep1').classList.remove('hidden');
+  $('tabBtnPassword').className = 'rounded-xl py-2.5 text-[11.5px] font-extrabold transition ' +
+    (isPassword ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200');
+  $('tabBtnOtp').className = 'rounded-xl py-2.5 text-[11.5px] font-extrabold transition ' +
+    (!isPassword ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200');
+}
+function openAuthModal(tab = 'password') {
+  resetAuthPanels();
+  switchAuthTab(tab);
+  // Autofill از کش (Task 2): شماره موبایل و ایمیل
+  try {
+    const cachedPhone = localStorage.getItem('ghazi_phone') || '';
+    const cachedEmail = localStorage.getItem('ghazi_email') || '';
+    if (cachedPhone) {
+      if ($('otpPhone') && !$('otpPhone').value) $('otpPhone').value = cachedPhone;
+      if ($('regPhone') && !$('regPhone').value) $('regPhone').value = cachedPhone;
+    }
+    if (cachedEmail && $('regEmail') && !$('regEmail').value) $('regEmail').value = cachedEmail;
+  } catch (e) {}
+  $('otpModal').classList.remove('hidden');
+  $('otpModal').classList.add('flex');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => $(tab === 'otp' ? 'otpPhone' : 'loginIdentifier').focus(), 60);
+}
+/* سازگاری با فراخوانی‌های قدیمی */
+function openOtpModal() { openAuthModal('otp'); }
+function closeOtpModal() {
+  $('otpModal').classList.add('hidden');
+  $('otpModal').classList.remove('flex');
+  document.body.style.overflow = '';
+  if (otpCountdown) { clearInterval(otpCountdown); otpCountdown = null; }
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOtpModal(); });
+
+function authFeedback(html, ok) {
+  const m = $('otpMsg');
+  m.className = 'mt-4 rounded-xl px-4 py-3 text-[12px] font-bold leading-6 border ' +
+    (ok ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/10 text-rose-300 border-rose-500/30');
+  m.innerHTML = html;
+}
+
+/* ---------- Safe user display name (Task 1) ---------- */
+function sanitizeDisplayName(raw) {
+  if (!raw) return 'کاربر گرامی';
+  try {
+    while (typeof raw === 'string' && (raw.startsWith('{') || raw.startsWith('"'))) {
+      raw = JSON.parse(raw);
+    }
+  } catch (e) {}
+  if (typeof raw === 'object' && raw !== null) {
+    return raw.full_name || raw.username || raw.phone || raw.phone_number || raw.email || 'کاربر گرامی';
+  }
+  return String(raw || 'کاربر گرامی');
+}
+function getCleanDisplayName(userData) { return sanitizeDisplayName(userData); }
+
+/* ---------- success handler: ذخیره توکن و ورود به میز کار ---------- */
+function handleAuthSuccess(data) {
+  try {
+    localStorage.setItem('ghazi_jwt_token', data.token || data.access_token || '');
+    localStorage.setItem('ghazi_user', JSON.stringify(data.user || {}));
+    // همراه داشتن متن پرونده (Task 2)
+    const q = ($('heroQuery') && $('heroQuery').value || '').trim();
+    if (q) localStorage.setItem('ghazi_case_draft', q);
+  } catch (e) {}
+  authFeedback('✅ ورود موفق! در حال انتقال به میز کار شما...', true);
+  setTimeout(() => { window.location.href = '/app'; }, 900);
+}
+
+/* ---------- TAB 1: ورود با نام کاربری / رمز عبور ---------- */
+async function loginPassword() {
+  const identifier = ($('loginIdentifier').value || '').trim();
+  const password = $('loginPasswordField').value || '';
+  if (!identifier || !password) { authFeedback('نام کاربری و رمز عبور را وارد کنید.', false); return; }
+  const btn = $('loginSubmitBtn');
+  btn.disabled = true; btn.textContent = 'در حال بررسی...';
+  try {
+    const r = await fetch('/api/v1/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: identifier, password: password })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.token) handleAuthSuccess(d);
+    else authFeedback(d.detail || 'ورود ناموفق بود؛ اطلاعات را بررسی کنید.', false);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور؛ اتصال اینترنت خود را بررسی کنید.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'ورود به میز کار';
+  }
+}
+
+/* ---------- TAB 1b: ثبت‌نام ---------- */
+function showRegisterStep() {
+  resetAuthPanels();
+  $('registerStep').classList.remove('hidden');
+  setTimeout(() => $('regUsername').focus(), 60);
+}
+function showLoginStep() { switchAuthTab('password'); }
+async function submitRegister() {
+  const payload = {
+    username: ($('regUsername').value || '').trim(),
+    password: $('regPassword').value || '',
+    email: ($('regEmail').value || '').trim() || null,
+    phone: ($('regPhone').value || '').trim() || null
+  };
+  if (!payload.username || !payload.password) { authFeedback('نام کاربری و رمز عبور الزامی است.', false); return; }
+  // ذخیره فوری در کش (Task 2)
+  try {
+    if (payload.phone) localStorage.setItem('ghazi_phone', payload.phone);
+    if (payload.email) localStorage.setItem('ghazi_email', payload.email);
+  } catch (e) {}
+  const btn = $('registerSubmitBtn');
+  btn.disabled = true; btn.textContent = 'در حال ایجاد حساب...';
+  try {
+    const r = await fetch('/api/v1/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.token) handleAuthSuccess(d);
+    else authFeedback(d.detail || 'ثبت‌نام ناموفق بود.', false);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور؛ دوباره تلاش کنید.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'ایجاد حساب کاربری';
+  }
+}
+
+/* ---------- فراموشی رمز عبور (بازیابی با ایمیل) ---------- */
+async function forgotPassword() {
+  const email = prompt('ایمیل حساب خود را وارد کنید تا لینک بازیابی رمز عبور ارسال شود:');
+  if (email === null) return;
+  const clean = (email || '').trim();
+  if (!/[^@\s]+@[^@\s]+\.[^@\s]+/.test(clean)) { authFeedback('قالب ایمیل معتبر نیست.', false); return; }
+  try {
+    const r = await fetch('/api/v1/auth/forgot-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: clean })
+    });
+    const d = await r.json().catch(() => ({}));
+    authFeedback(d.message || (d.detail || 'درخواست بازیابی ثبت شد.'), r.ok);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور.', false);
+  }
+}
+
+/* ---------- Social Login: Google Sign-In ---------- */
+async function loginWithGoogle() {
+  const btn = $('googleLoginBtn');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/v1/auth/google/url', { headers: { 'Accept': 'application/json' } });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.url) {
+      window.location.href = d.url;
+      return;
+    }
+    authFeedback(d.detail || 'ورود با گوگل در دسترس نیست؛ از ورود با رمز عبور یا کد پیامکی استفاده کنید.', false);
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور در فرایند گوگل.', false);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function requestOtp() {
+  const p = normalizePhone($('otpPhone').value);
+  if (!/^09\d{9}$/.test(p)) { authFeedback('شماره موبایل معتبر نیست؛ مثال: ۰۹۱۲۳۴۵۶۷۸۹', false); return; }
+  otpPhone = p;
+  try { localStorage.setItem('ghazi_phone', p); } catch (e) {}  // ذخیره فوری (Task 2)
+  const btn = $('otpSendBtn');
+  btn.disabled = true; btn.textContent = 'در حال ارسال کد...';
+  try {
+    const r = await fetch('/api/v1/auth/request-otp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone_number: p, target_service: 'ghazi' })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) {
+      $('otpStep1').classList.add('hidden');
+      $('otpStep2').classList.remove('hidden');
+      $('otpPhoneEcho').textContent = p;
+      authFeedback(d.message || 'کد تأیید پیامکی با موفقیت ارسال شد.', true);
+      startCountdown(90);
+      setTimeout(() => $('otpCode').focus(), 100);
+    } else {
+      authFeedback(d.detail || 'ارسال کد ناموفق بود؛ لطفاً دوباره تلاش کنید.', false);
+    }
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور؛ اتصال اینترنت خود را بررسی کنید.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'دریافت کد تأیید';
+  }
+}
+
+function startCountdown(sec) {
+  const rb = $('otpResend'); let left = sec;
+  rb.disabled = true; rb.classList.add('opacity-50');
+  rb.textContent = 'ارسال مجدد کد (' + left + ' ثانیه)';
+  if (otpCountdown) clearInterval(otpCountdown);
+  otpCountdown = setInterval(() => {
+    left--;
+    if (left <= 0) {
+      clearInterval(otpCountdown); otpCountdown = null;
+      rb.disabled = false; rb.classList.remove('opacity-50'); rb.textContent = 'ارسال مجدد کد';
+    } else {
+      rb.textContent = 'ارسال مجدد کد (' + left + ' ثانیه)';
+    }
+  }, 1000);
+}
+
+async function verifyOtp() {
+  const code = toEnDigits($('otpCode').value).replace(/\D/g, '');
+  if (code.length !== 6) { authFeedback('کد ۶ رقمی را کامل وارد کنید.', false); return; }
+  const btn = $('otpVerifyBtn');
+  btn.disabled = true; btn.textContent = 'در حال بررسی کد...';
+  try {
+    const r = await fetch('/api/v1/auth/verify-otp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone_number: otpPhone, code: code })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && (d.status === 'AUTHENTICATED' || d.token)) {
+      handleAuthSuccess(d);
+    } else {
+      authFeedback(d.detail || 'کد وارد شده نامعتبر یا منقضی است.', false);
+    }
+  } catch (e) {
+    authFeedback('خطای ارتباط با سرور؛ دوباره تلاش کنید.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'تأیید و ورود به میز کار';
+  }
+}
+
+/* ---------- Hero primary CTA ---------- */
+function startSmartReview() {
+  const q = ($('heroQuery').value || '').trim();
+  const hasToken = (localStorage.getItem('ghazi_jwt_token') || '').trim();
+  if (q) {
+    try {
+      sessionStorage.setItem('ghazi_draft', q);
+      localStorage.setItem('ghazi_case_draft', q);  // همراه داشتن تا /app (Task 2)
+    } catch (e) {}
+  }
+  if (hasToken) { window.location.href = '/app'; return; }
+  openOtpModal();
+}
+function goToApp() { window.location.href = '/app'; }
+
+/* ---------- Logged-in CTA state ---------- */
+(function refreshAuthState() {
+  const t = (localStorage.getItem('ghazi_jwt_token') || '').trim();
+  const cta = $('ctaAuth');
+  if (t && cta) {
+    const name = getCleanDisplayName(localStorage.getItem('ghazi_user'));
+    cta.textContent = 'ورود به میز کار من — ' + name;
+    cta.onclick = goToApp;
+  }
+})();
+
+/* ---------- Auto-save: متن پرونده + ایمیل + موبایل (Task 2) ---------- */
+(function bindLandingAutosave() {
+  const hero = $('heroQuery');
+  if (hero) {
+    let t;
+    hero.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(() => { try { localStorage.setItem('ghazi_case_draft', hero.value); } catch (e) {} }, 400);
+    });
+  }
+  ['regPhone', 'otpPhone'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('input', () => { try { localStorage.setItem('ghazi_phone', el.value.trim()); } catch (e) {} });
+  });
+  const regEmail = $('regEmail');
+  if (regEmail) regEmail.addEventListener('input', () => { try { localStorage.setItem('ghazi_email', regEmail.value.trim()); } catch (e) {} });
+})();
+
+/* Enter key shortcuts */
+$('otpPhone').addEventListener('keydown', e => { if (e.key === 'Enter') requestOtp(); });
+$('otpCode').addEventListener('keydown', e => { if (e.key === 'Enter') verifyOtp(); });
+$('loginPasswordField').addEventListener('keydown', e => { if (e.key === 'Enter') loginPassword(); });
+$('loginIdentifier').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPasswordField').focus(); });
+$('regPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitRegister(); });
+
+/* ---------- Google OAuth return (redirect back با ?code=...&state=...) ---------- */
+(function handleGoogleRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code'), state = params.get('state');
+  if (!code) return;
+  openAuthModal('password');
+  authFeedback('در حال تکمیل ورود با گوگل...', true);
+  fetch('/api/v1/auth/google/callback', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code, state: state })
+  })
+    .then(r => r.json().then(d => ({ ok: r.ok, d })))
+    .then(({ ok, d }) => {
+      if (ok && d.token) { handleAuthSuccess(d); }
+      else authFeedback(d.detail || 'تکمیل ورود با گوگل ناموفق بود.', false);
+    })
+    .catch(() => authFeedback('خطای ارتباط با سرور در فرایند گوگل.', false));
+})();
+</script>
+
+</body>
+</html>

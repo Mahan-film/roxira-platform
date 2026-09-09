@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سامانه قاضی هوشمند | Smart Judge System</title>
+    <script src="https://cdn.tailwindcss.com">
+        async function executeRetrialAnalysis() {
+            if (!authToken) { alert('لطفاً ابتدا وارد حساب کاربری خود شوید.'); openAuthModal('register'); return; }
+            const q = document.getElementById('retrialQueryText').value.trim();
+            const btn = document.getElementById('btnRetrialSubmit');
+            const box = document.getElementById('retrialOutputCard');
+            const out = document.getElementById('retrialOutputText');
+
+            if (!q) { alert('لطفاً شرح ادله جدید و موضوع دادنامه را وارد نمایید.'); return; }
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> <span>در حال تطبیق ادله با بندهای هفت‌گانه ماده ۴۷۴...</span>';
+            box.classList.remove('hidden');
+            out.innerText = 'در حال محاسبه شانس پذیرش و انشای دادخواست اعاده دادرسی...';
+
+            try {
+                const res = await fetch('/api/v1/legal/retrial-evaluation', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`},
+                    body: JSON.stringify({query: q, model: 'deepseek-v4-pro'})
+                });
+                const d = await res.json();
+                out.innerText = d.analysis_result || JSON.stringify(d);
+            } catch(e) { out.innerText = 'خطا: ' + e; }
+            finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🏛️</span> <span>سنجش هوشمند شانس اعاده دادرسی و انشای دادخواست دیوان عالی</span>';
+            }
+        }
+        
+    </script>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        .glass-card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); }
+        .emerald-btn { background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #ffffff; }
+        .emerald-btn:hover { opacity: 0.95; }
+        .gold-badge { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; }
+        .pro-card-bg { background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-emerald-600 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="switchPage('home')">
+                <!-- Official Smart Judge Logo -->
+                <div class="flex items-center justify-center" style="height:48px;width:auto;object-fit:contain">
+                    <img src="/static/ghazi_logo.png" onerror="this.onerror=null;this.src='/static/ghazi_logo.svg';" alt="سامانه تخصصی قاضی هوشمند" style="height:48px;width:auto;max-width:160px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(245,158,11,0.2));" referrerpolicy="origin">
+                </div>
+                <div>
+                    <span class="font-black text-base text-slate-900 flex items-center gap-2">
+                        سامانه قاضی هوشمند <span class="text-[10px] bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-bold">SMART JUDGE SYSTEM</span>
+                    </span>
+                    <p class="text-[11px] text-slate-500">پلتفرم دادرسی، مشاوره قضایی و انشای لوایح محاکم ایران</p>
+                </div>
+            </div>
+
+            <!-- Nav Tabs -->
+            <nav class="hidden lg:flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                <button onclick="switchPage('home')" class="nav-link px-3.5 py-2 rounded-xl transition text-emerald-900 bg-white shadow-sm" id="lnk-home">خانه</button>
+                <button onclick="switchPage('studio')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-studio">میز دادرسی و پرونده‌ها</button>
+                <button onclick="switchPage('retrial')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white text-rose-800 bg-rose-50 font-bold" id="lnk-retrial">⚖️ اعاده دادرسی (ماده ۴۷۴)</button>
+                <button onclick="switchPage('laws')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-laws">بانک قوانین (۵۱۸۴ گره)</button>
+                <button onclick="switchPage('pricing')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-pricing">پلن‌های اشتراک</button>
+                <button onclick="switchPage('tickets')" class="nav-link px-3.5 py-2 rounded-xl transition hover:bg-white" id="lnk-tickets">ثبت تیکت</button>
+                <button onclick="switchPage('admin')" class="nav-link px-3.5 py-2 rounded-xl transition text-indigo-900 hover:bg-white font-mono" id="lnk-admin">👑 پنل مدیریت</button>
+            </nav>
+
+            <div class="flex items-center gap-3">
+                <div id="userBadge" class="hidden text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 px-3.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span id="userNameDisplay">کاربر فعال</span>
+                </div>
+                <button onclick="openAuthModal('login')" id="btnLoginNav" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-2 rounded-xl font-bold transition">ورود</button>
+                <button onclick="openAuthModal('register')" id="btnRegNav" class="text-xs emerald-btn px-4 py-2 rounded-xl font-black shadow-sm">ثبت‌نام وکیل / موکل</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-6 py-10 flex-1 w-full space-y-16">
+
+        <!-- ================= 1. HOME VIEW (MATCHING MOCKUP) ================= -->
+        <div id="page-home" class="page-content space-y-16">
+            <div class="text-center max-w-3xl mx-auto space-y-4 pt-2">
+                <span class="text-xs px-4 py-1.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold border border-emerald-300">نسخه هوشمند دادرسی قضایی ۲۰۲۶</span>
+                <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+                    دستیار تخصصی دادرسی، استعلام قوانین و مشاوره قضایی
+                </h1>
+                <p class="text-xs md:text-sm text-slate-600 leading-relaxed max-w-2xl mx-auto">
+                    ترکیبی از هوش مصنوعی و تخصص دادرسی دادگاه‌های ایران با دسترسی کامل به ۵,۱۸۴ ماده و رویه قضایی شامل قانون مدنی، آیین دادرسی، صلاحیت دادگاه‌های صلح و آراء وحدت رویه.
+                </p>
+                <div class="pt-2 flex justify-center gap-3">
+                    <button onclick="switchPage('studio')" class="emerald-btn px-6 py-3.5 rounded-2xl font-black text-xs shadow-md">ورود به میز مشاوره و پرونده‌ها 📁</button>
+                    <button onclick="switchPage('pricing')" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 px-6 py-3.5 rounded-2xl font-bold text-xs">مشاهده پلن‌های اشتراک 💳</button>
+                </div>
+            </div>
+
+            <!-- Features Highlights -->
+            <div class="space-y-6">
+                <h2 class="text-xl font-extrabold text-slate-900 text-center">مزایای بی‌نظیر سامانه قاضی هوشمند</h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="glass-card rounded-3xl p-6 text-center space-y-3">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-2xl mx-auto">👥</div>
+                        <h3 class="font-bold text-sm text-slate-900">ترکیب چت‌بات و انسان</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">ترکیبی از هوش مصنوعی و تخصص وکلای مجرب دادگستری برای استنتاج دقیق.</p>
+                    </div>
+                    <div class="glass-card rounded-3xl p-6 text-center space-y-3">
+                        <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center text-2xl mx-auto">⏱️</div>
+                        <h3 class="font-bold text-sm text-slate-900">دسترسی 24/7</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">دستیار حقوقی شما در هر زمان و مکان بدون محدودیت اداری.</p>
+                    </div>
+                    <div class="glass-card rounded-3xl p-6 text-center space-y-3">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center text-2xl mx-auto">⚡</div>
+                        <h3 class="font-bold text-sm text-slate-900">دقت و سرعت پردازش</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">تحلیل سریع اسناد حقوقی با دقت بی‌نظیر و انطباق زمانمند مواد.</p>
+                    </div>
+                    <div class="glass-card rounded-3xl p-6 text-center space-y-3">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-2xl mx-auto">🔒</div>
+                        <h3 class="font-bold text-sm text-slate-900">حفاظت کامل از حریم خصوصی</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">امنیت سطح بانکی و حفظ محرمانگی کامل مدارک و پرونده‌های قضایی.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Steps -->
+            <div class="space-y-6">
+                <h2 class="text-xl font-extrabold text-slate-900 text-center">چگونه از قاضی هوشمند استفاده کنیم؟</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass-card rounded-3xl p-6 text-center space-y-3">
+                        <span class="w-8 h-8 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center mx-auto text-xs">۱</span>
+                        <h3 class="font-bold text-sm text-slate-900">۱. بارگذاری اسناد و شرح پرونده</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">اسناد، دادخواست، قرارداد یا ویس صوتی پرونده خود را بارگذاری نمایید.</p>
+                    </div>
+                    <div class="glass-card rounded-3xl p-6 text-center space-y-3">
+                        <span class="w-8 h-8 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center mx-auto text-xs">۲</span>
+                        <h3 class="font-bold text-sm text-slate-900">۲. پردازش و تحلیل هوشمند اسناد</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">تطبیق ادله با بیش از ۵۱۸۴ ماده قانونی و آراء دیوان عالی کشور.</p>
+                    </div>
+                    <div class="glass-card rounded-3xl p-6 text-center space-y-3">
+                        <span class="w-8 h-8 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center mx-auto text-xs">۳</span>
+                        <h3 class="font-bold text-sm text-slate-900">۳. دریافت نتیجه و گزارش عدالت</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">صدور نظریه مشورتی، احراز صلاحیت دادگاه و انشای پیش‌نویس لایحه.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 2. PRICING SHOWCASE (EXACT MATCH TO ATTACHED IMAGE) ================= -->
+        <div id="page-pricing" class="page-content hidden space-y-10">
+            <div class="text-center max-w-xl mx-auto space-y-3">
+                <h2 class="text-3xl font-black text-slate-900">پلن‌های اشتراک هوش مصنوعی</h2>
+                <p class="text-xs text-slate-500">ابزارهای هوش مصنوعی برای هر سطح نیاز دادرسی</p>
+                
+                <!-- Monthly / Annual Toggle -->
+                <div class="inline-flex items-center gap-3 p-1.5 rounded-full bg-slate-200 border border-slate-300 text-xs font-bold">
+                    <span class="px-4 py-1.5 rounded-full bg-white text-slate-900 shadow-sm cursor-pointer">ماهانه</span>
+                    <span class="px-4 py-1.5 text-slate-600 cursor-pointer">سالانه (۲۰٪ تخفیف)</span>
+                </div>
+            </div>
+
+            <!-- 3 Pricing Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+                <!-- Card 1: Free -->
+                <div class="glass-card rounded-3xl p-7 space-y-5 flex flex-col justify-between shadow-sm">
+                    <div class="space-y-4">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl">🤖</div>
+                        <h3 class="font-black text-base text-slate-900">پلن آغازین (رایگان)</h3>
+                        <div class="text-3xl font-black text-slate-900">۰ <span class="text-xs font-normal text-slate-500">تومان / ماه</span></div>
+                        <ul class="text-xs text-slate-600 space-y-3 pt-3 border-t border-slate-200">
+                            <li class="flex items-center gap-2"><span>✔️</span> <span>۱۰۰+ درخواست محدود ماهانه</span></li>
+                            <li class="flex items-center gap-2"><span>✔️</span> <span>مدل‌های هوش مصنوعی پایه</span></li>
+                            <li class="flex items-center gap-2"><span>✔️</span> <span>پشتیبانی عمومی و ثبت‌نام رایگان</span></li>
+                        </ul>
+                    </div>
+                    <button onclick="openAuthModal('register')" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-2xl text-xs font-bold transition">ثبت‌نام رایگان</button>
+                </div>
+
+                <!-- Card 2: Pro (Featured with Golden Badge) -->
+                <div class="glass-card pro-card-bg rounded-3xl p-7 space-y-5 flex flex-col justify-between border-2 border-emerald-600 shadow-xl relative">
+                    <div class="absolute -top-3.5 right-6 gold-badge text-[11px] font-black px-3.5 py-1 rounded-full shadow-md">پرفروش‌ترین</div>
+                    <div class="space-y-4">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-2xl">🧠</div>
+                        <h3 class="font-black text-base text-emerald-950">پلن حرفه‌ای (پرو)</h3>
+                        <div class="text-3xl font-black text-slate-900">۳,۰۰۰,۰۰۰ <span class="text-xs font-normal text-slate-500">تومان / ماه</span></div>
+                        <ul class="text-xs text-slate-700 space-y-3 pt-3 border-t border-emerald-200 font-medium">
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>درخواست‌های نامحدود هوش مصنوعی</span></li>
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>دسترسی به مدل‌های برتر ۲۰۲۶ (Claude 5 / DeepSeek V4)</span></li>
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>تولید و تحلیل اسناد حجیم و پیچیده پرونده</span></li>
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔️</span> <span>پشتیبانی اولویت‌دار و سریع</span></li>
+                        </ul>
+                    </div>
+                    <button onclick="openAuthModal('register')" class="w-full emerald-btn py-3.5 rounded-2xl text-xs font-black shadow-md">انتخاب پلن پرو</button>
+                </div>
+
+                <!-- Card 3: Enterprise -->
+                <div class="glass-card rounded-3xl p-7 space-y-5 flex flex-col justify-between shadow-sm">
+                    <div class="space-y-4">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-800 flex items-center justify-center text-2xl">🏛️</div>
+                        <h3 class="font-black text-base text-slate-900">پلن سازمانی</h3>
+                        <div class="text-3xl font-black text-slate-900">۱۹,۰۰۰,۰۰۰ <span class="text-xs font-normal text-slate-500">تومان / ماه</span></div>
+                        <ul class="text-xs text-slate-600 space-y-3 pt-3 border-t border-slate-200">
+                            <li class="flex items-center gap-2"><span>✔️</span> <span>مدل‌های سفارشی و اختصاصی دادرسی</span></li>
+                            <li class="flex items-center gap-2"><span>✔️</span> <span>پشتیبانی اختصاصی 24/7</span></li>
+                            <li class="flex items-center gap-2"><span>✔️</span> <span>مدیریت تیم و امنیت پیشرفته</span></li>
+                            <li class="flex items-center gap-2"><span>✔️</span> <span>استقرار محلی و مشاوره اختصاصی</span></li>
+                        </ul>
+                    </div>
+                    <button onclick="openAuthModal('register')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-3.5 rounded-2xl text-xs font-bold transition">مشاوره رایگان</button>
+                </div>
+            </div>
+
+            <!-- Guarantee 7-day Badge -->
+            <div class="glass-card rounded-2xl p-4 max-w-md mx-auto flex items-center justify-center gap-3 border-amber-300 bg-amber-50/60 shadow-sm">
+                <span class="text-3xl">🛡️</span>
+                <div>
+                    <span class="font-black text-xs text-amber-900 block">گارانتی بازگشت ۱۰۰٪ وجه ۷ روزه</span>
+                    <span class="text-[11px] text-amber-800">در صورت عدم رضایت از تحلیل‌ها، کل وجه عودت داده می‌شود.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 3. JUDICIAL STUDIO & CASE WORKSPACE ================= -->
+        <div id="page-studio" class="page-content hidden space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">میز مشاوره قضایی و دادرسی پرونده‌ها</h2>
+                    <p class="text-xs text-slate-500">برای هر موضوع دعوا یک پرونده اختصاصی ایجاد فرمایید</p>
+                </div>
+                <button onclick="promptNewCase()" class="emerald-btn px-4 py-2 rounded-xl text-xs font-bold shadow-sm">+ پرونده جدید</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Case Sidebar -->
+                <div class="glass-card rounded-3xl p-5 space-y-3 md:col-span-1">
+                    <h3 class="font-bold text-xs text-slate-800 border-b border-slate-200 pb-2">📂 پرونده‌های فعال</h3>
+                    <div id="caseListContainer" class="space-y-2 text-xs">
+                        <div onclick="selectCase(1, 'پرونده چک صیادی و مطالبه وجه')" id="case-btn-1" class="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 font-bold cursor-pointer">پرونده ۱: چک صیادی</div>
+                        <div onclick="selectCase(2, 'پرونده مطالبه مهریه از اجرای ثبت')" id="case-btn-2" class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer">پرونده ۲: اجرای مهریه</div>
+                    </div>
+                </div>
+
+                <!-- Workspace -->
+                <div class="glass-card rounded-3xl p-6 md:p-8 space-y-5 md:col-span-3">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+                        <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                            <span>💬</span> <span id="currentCaseHeading">پرونده ۱: چک صیادی و مطالبه وجه</span>
+                        </h3>
+                        
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs text-slate-600 font-bold">سطح موتور استدلال:</label>
+                            <select id="caseModelSelector" class="bg-slate-50 border border-slate-300 text-xs rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none focus:border-emerald-600">
+                                <option value="free-ox-alpha">🎓 موتور هوشمند پایه (سطح ۱ - رایگان)</option>
+                                <option value="gemini-3-7-flash" selected>⚖️ موتور پیشرفته دادرسی (سطح ۲ - دقت بالا)</option>
+                                <option value="deepseek-v4-pro">🏛️ موتور عالی دیوان و داوری (سطح ۳ - تحلیل عمیق)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Multi-file Dropzone -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-slate-700">بارگذاری مدارک پرونده یا فایل صوتی (امکان انتخاب همزمان تا ۲۰ فایل):</label>
+                        <div class="p-4 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 text-center space-y-2">
+                            <input id="multiFileInput" type="file" multiple onchange="handleFilesSelected(this.files)" class="hidden">
+                            <button type="button" onclick="document.getElementById('multiFileInput').click()" class="text-xs bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 px-4 py-2 rounded-xl font-bold transition shadow-sm">
+                                📎 انتخاب اسناد (PDF, Word, عکس، ویس صوتی)
+                            </button>
+                            <div id="attachedFilesList" class="flex flex-wrap gap-2 pt-2 justify-center"></div>
+                        </div>
+                    </div>
+
+                    <!-- Query Box -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-slate-700">شرح موضوع دعوا یا استعلام حقوقی:</label>
+                            <button type="button" onclick="toggleVoiceInput()" id="btnVoiceInput" class="text-xs bg-slate-100 hover:bg-slate-200 text-emerald-800 border border-slate-300 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 font-bold">
+                                <span>🎙️</span> <span id="voiceText">طرح شفاهی (صوت به متن)</span>
+                            </button>
+                        </div>
+                        <textarea id="caseTextQuery" rows="4" placeholder="جزئیات پرونده را تایپ کنید یا با صوت بیان فرمایید..." class="w-full bg-white border border-slate-300 rounded-2xl p-4 text-xs text-slate-900 focus:border-emerald-600 focus:outline-none leading-relaxed shadow-sm"></textarea>
+                    </div>
+
+                    <button type="button" onclick="executeLegalInference()" id="btnSubmitCase" class="w-full emerald-btn font-black py-4 rounded-2xl text-xs shadow-md flex items-center justify-center gap-2">
+                        <span>⚖️</span> <span>ارسال پرونده و دریافت نظریه دادرسی و احکام حاکم</span>
+                    </button>
+
+                    <div id="caseOutputCard" class="hidden p-6 rounded-2xl bg-emerald-50/90 border border-emerald-200 space-y-3">
+                        <h4 class="font-bold text-xs text-emerald-950">نظریه قضایی و مستندات قانونی استخراج‌شده:</h4>
+                        <div id="caseOutputText" class="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 4. LAWS DIRECTORY ================= -->
+        <div id="page-laws" class="page-content hidden space-y-6">
+            <div class="text-center max-w-xl mx-auto space-y-2">
+                <h2 class="text-2xl font-bold text-slate-900">بانک جامع قوانین و آراء وحدت رویه ایران</h2>
+                <p class="text-xs text-slate-500">پوشش ۵,۱۸۴ گره حقوقی و رویه‌های دیوان عالی کشور</p>
+                <input id="lawSearchInput" type="text" oninput="filterLawsLive(this.value)" placeholder="جستجوی زنده در مواد (مثلاً: کیفری، مدنی، دادگاه صلح، مهریه، چک)..." class="w-full bg-white border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 shadow-sm focus:outline-none focus:border-emerald-600">
+            </div>
+
+            <div id="lawsCardsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div class="law-card glass-card rounded-2xl p-5 space-y-2" data-keywords="کیفری جزا آیین دادرسی مجازات بازپرس دادسرا دادگاه">
+                    <span class="text-emerald-700 font-bold font-mono">قانون آیین دادرسی کیفری (۶۹۹ ماده کامل)</span>
+                    <h4 class="font-bold text-slate-900">تشکیلات دادسراها، حقوق متهم، وکیل و قرارهای تأمین</h4>
+                    <p class="text-slate-600 leading-relaxed">شامل مواد ۴۸ (حق وکیل)، ۲۳۷ (بازداشت موقت)، ۴۷۴ و ۴۷۷ (جهات اعاده دادرسی دیوان عالی).</p>
+                </div>
+                <div class="law-card glass-card rounded-2xl p-5 space-y-2" data-keywords="مدنی قراردادها اموال عقود بیع اجاره خیارات مهریه وصیت ارث">
+                    <span class="text-emerald-700 font-bold font-mono">قانون مدنی (۱۳۳۵ ماده کامل)</span>
+                    <h4 class="font-bold text-slate-900">احکام اموال، عقود، الزامات خارج از قرارداد، نکاح و ارث</h4>
+                    <p class="text-slate-600 leading-relaxed">شامل مواد ۱۰ (آزادی قراردادها)، ۲۱۹ (اصل لزوم)، ۲۳۰ (وجه التزام) و مقررات خانواده.</p>
+                </div>
+                <div class="law-card glass-card rounded-2xl p-5 space-y-2" data-keywords="صلح شورا دادگاه صلح ۱۰۰ میلیون ۵۰ میلیون مالی">
+                    <span class="text-emerald-700 font-bold font-mono">قانون شوراهای حل اختلاف و دادگاه صلح ۱۴۰۲</span>
+                    <h4 class="font-bold text-slate-900">صلاحیت انحصاری تا ۱۰۰ میلیون و قطعیت تا ۵۰ میلیون</h4>
+                    <p class="text-slate-600 leading-relaxed">ماده ۱۲: نصاب دعاوی مالی تا ۱۰۰ میلیون تومان در دادگاه صلح و قطعیت احکام تا ۵۰ میلیون تومان.</p>
+                </div>
+                <div class="law-card glass-card rounded-2xl p-5 space-y-2" data-keywords="مهریه ثبت ازدواج اجراییه برنامه ششم توقیف">
+                    <span class="text-emerald-700 font-bold font-mono">قانون برنامه ششم - ماده ۱۱۳ بند ب</span>
+                    <h4 class="font-bold text-slate-900">رویه الزامی اجرای مهریه از دوایر ثبتی</h4>
+                    <p class="text-slate-600 leading-relaxed">الزام قانونی به اقدام اولیه از اجرای ثبت اسناد قبل از طرح دعوا در دادگاه‌های خانواده.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 5. TICKETING VIEW ================= -->
+        <div id="page-tickets" class="page-content hidden space-y-6">
+            <div class="glass-card rounded-3xl p-6 md:p-8 max-w-2xl mx-auto space-y-4 shadow-sm">
+                <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <span>🎫</span> <span>ثبت تیکت پشتیبانی و استعلام پرونده</span>
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input id="tckName" type="text" placeholder="نام و نام خانوادگی" class="bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none">
+                    <input id="tckPhone" type="text" placeholder="شماره تماس جهت دریافت پاسخ" class="bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none font-mono">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <select id="tckDept" class="bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-800 focus:outline-none">
+                        <option value="LEGAL">دپارتمان مشاوره قضایی و دادگاه‌ها</option>
+                        <option value="ACCOUNT">دپارتمان اشتراک و پرداخت</option>
+                        <option value="MANAGEMENT">ارتباط مستقیم با مدیریت (آقای محمدی)</option>
+                    </select>
+                    <input id="tckSubject" type="text" placeholder="موضوع تیکت" class="bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none">
+                </div>
+                <textarea id="tckMsg" rows="4" placeholder="شرح کامل پیام یا استعلام خود را بنویسید..." class="w-full bg-slate-50 border border-slate-300 rounded-2xl p-4 text-xs text-slate-900 focus:outline-none leading-relaxed"></textarea>
+                <button type="button" onclick="submitTicketAction()" class="w-full emerald-btn font-extrabold py-3.5 rounded-2xl text-xs shadow-md">ثبت تیکت و ارسال آنی به ایمیل مدیریت</button>
+            </div>
+        </div>
+
+        <!-- ================= 6. ADMIN PANEL ================= -->
+        <div id="page-admin" class="page-content hidden space-y-6">
+            <div class="glass-card rounded-3xl p-6 md:p-8 space-y-5 border-2 border-indigo-300">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <h3 class="font-bold text-sm text-indigo-950 flex items-center gap-2">
+                        <span>👑</span> <span>پنل زنده مدیریت تیکت‌ها (مدیریت: آقای محمدی)</span>
+                    </h3>
+                    <button type="button" onclick="fetchLiveAdminTickets()" class="text-xs bg-indigo-100 text-indigo-950 px-3.5 py-1.5 rounded-xl font-bold border border-indigo-300">🔄 بروزرسانی لیست تیکت‌ها</button>
+                </div>
+
+                <div id="adminTicketsContainer" class="space-y-3 text-xs">
+                    <p class="text-slate-500 text-center py-4">در حال خواندن تیکت‌های زنده از دیتابیس PostgreSQL 17...</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer with e-Namad (Without physical address) -->
+    <footer class="border-t border-slate-200 bg-white py-10 text-xs text-slate-600">
+        <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+            
+            <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">⚖️</span>
+                    <span class="font-black text-slate-900">سامانه قاضی هوشمند</span>
+                </div>
+                <p class="text-slate-500 leading-relaxed">تحلیل هوشمند ادله دادرسی، استعلام رویه قضایی و انشای لوایح محاکم ایران.</p>
+                <p class="text-slate-400 font-mono">ghazihoushmand.ir — 2026</p>
+            </div>
+
+            <div class="space-y-2">
+                <h4 class="font-bold text-slate-900">ارتباط مستقیم با مدیریت:</h4>
+                <p>مدیریت سامانه: <b class="text-slate-900">آقای محمدی</b></p>
+                <p>شماره تماس مستقیم: <a href="tel:09129367796" dir="ltr" class="font-mono text-emerald-700 font-bold hover:underline" style="display:inline-block;white-space:nowrap;direction:ltr">0912 936 7796</a></p>
+                <p>پست الکترونیک: <span class="font-mono text-slate-800">info@ghazihooshmand.ir</span> | <span class="font-mono">mahan.official.film@gmail.com</span></p>
+                <div class="flex items-start gap-2 text-xs text-slate-300">
+                    <span class="text-amber-400">📍</span>
+                    <div>
+                        <span class="font-bold text-slate-700">نشانی دفتر مرکزی:</span>
+                        <p class="leading-relaxed text-slate-500 mt-1">تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Official e-Namad Trust Seal for ghazihoushmand.ir -->
+            <div class="flex flex-col items-center md:items-end justify-center">
+                <div class="p-3 bg-white rounded-2xl shadow-md inline-block border border-slate-200">
+                    <a referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa">
+                        <img referrerpolicy="origin" src="https://trustseal.enamad.ir/logo.aspx?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" alt="نماد تجارت الکترونیکی" style="cursor:pointer" id="yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" class="w-24 h-auto">
+                    </a>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-2 font-bold">نماد اعتماد الکترونیکی قضایی</span>
+            </div>
+
+        </div>
+    </footer>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full space-y-4 shadow-2xl border border-slate-200">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="font-bold text-sm text-slate-900" id="authTitle">ورود به سامانه قاضی هوشمند</h3>
+                <button type="button" onclick="closeAuthModal()" class="text-slate-400 hover:text-slate-800 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="space-y-3">
+                <input id="regFullName" type="text" placeholder="نام و نام خانوادگی" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none hidden">
+                <input id="regPhone" type="text" placeholder="شماره تلفن همراه" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none font-mono hidden">
+                <input id="authEmail" type="email" placeholder="آدرس ایمیل" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none hidden">
+                <input id="authUsername" type="text" placeholder="نام کاربری (برای مدیریت: admin)" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none">
+                <input id="authPassword" type="password" placeholder="کلمه عبور" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none">
+            </div>
+
+            <button type="button" onclick="executeAuthAction()" class="w-full emerald-btn font-black py-3.5 rounded-xl text-xs shadow-md" id="authSubmitBtn">ورود به حساب</button>
+            
+            <div class="text-center text-xs text-slate-500 pt-1">
+                <span id="authToggleText">حساب کاربری ندارید؟</span>
+                <button type="button" onclick="toggleAuthMode()" class="text-emerald-700 font-bold underline mr-1" id="authToggleBtn">ثبت‌نام کنید</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        let authMode = 'login';
+        let authToken = localStorage.getItem('ghazi_jwt_token') || null;
+        let selectedFiles = [];
+        let recognition = null;
+        let isRecording = false;
+
+        function checkUserAuth() {
+            if (authToken) {
+                document.getElementById('userBadge').classList.remove('hidden');
+                document.getElementById('userNameDisplay').innerText = localStorage.getItem('ghazi_user') || 'وکیل فعال';
+                document.getElementById('btnLoginNav').innerText = 'خروج';
+                document.getElementById('btnLoginNav').onclick = () => { localStorage.clear(); location.reload(); };
+                document.getElementById('btnRegNav').classList.add('hidden');
+            }
+        }
+        checkUserAuth();
+
+        function switchPage(pageId) {
+            document.querySelectorAll('.page-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-link').forEach(b => {
+                b.className = 'nav-link px-3.5 py-2 rounded-xl transition text-slate-700 hover:bg-white';
+            });
+
+            const target = document.getElementById(`page-${pageId}`);
+            if (target) target.classList.remove('hidden');
+
+            const btn = document.getElementById(`lnk-${pageId}`);
+            if (btn) btn.className = 'nav-link px-3.5 py-2 rounded-xl transition text-emerald-900 bg-white font-bold shadow-sm';
+
+            if (pageId === 'admin') fetchLiveAdminTickets();
+        }
+
+        function filterLawsLive(query) {
+            const term = query.trim().toLowerCase();
+            document.querySelectorAll('.law-card').forEach(c => {
+                const kw = (c.getAttribute('data-keywords') || '') + ' ' + c.innerText.toLowerCase();
+                c.style.display = kw.includes(term) ? 'block' : 'none';
+            });
+        }
+
+        function handleFilesSelected(files) {
+            for (let i = 0; i < files.length; i++) {
+                if (selectedFiles.length < 20) selectedFiles.push(files[i]);
+            }
+            renderFilesList();
+        }
+
+        function renderFilesList() {
+            const box = document.getElementById('attachedFilesList');
+            box.innerHTML = '';
+            selectedFiles.forEach((file, index) => {
+                const b = document.createElement('div');
+                b.className = 'flex items-center gap-1 bg-white border border-slate-300 px-3 py-1 rounded-xl text-xs text-slate-800 shadow-sm';
+                b.innerHTML = `<span>📄</span> <span class="font-mono text-[11px] truncate max-w-[130px]">${file.name}</span> <button type="button" onclick="removeFile(${index})" class="text-rose-600 font-bold hover:text-rose-800 mr-1">✕</button>`;
+                box.appendChild(b);
+            });
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            renderFilesList();
+        }
+
+        function toggleVoiceInput() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) { alert('مرورگر شما از تبدیل گفتار به متن پشتیبانی نمی‌کند.'); return; }
+
+            const btn = document.getElementById('btnVoiceInput');
+            const txt = document.getElementById('caseTextQuery');
+
+            if (isRecording && recognition) {
+                recognition.stop();
+                isRecording = false;
+                btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>';
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.lang = 'fa-IR';
+            recognition.onstart = () => {
+                isRecording = true;
+                btn.innerHTML = '<span class="text-rose-600 font-bold animate-pulse">🔴 در حال شنیدن...</span>';
+            };
+            recognition.onresult = (e) => { txt.value += (txt.value ? ' ' : '') + e.results[0][0].transcript; };
+            recognition.onerror = () => { btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>'; isRecording = false; };
+            recognition.onend = () => { btn.innerHTML = '<span>🎙️</span> <span>طرح شفاهی (صوت به متن)</span>'; isRecording = false; };
+            recognition.start();
+        }
+
+        function openAuthModal(mode) {
+            authMode = mode;
+            document.getElementById('authModal').classList.remove('hidden');
+            if (mode === 'register') {
+                document.getElementById('authTitle').innerText = 'ثبت‌نام در سامانه قاضی هوشمند';
+                document.getElementById('regFullName').classList.remove('hidden');
+                document.getElementById('regPhone').classList.remove('hidden');
+                document.getElementById('authEmail').classList.remove('hidden');
+                document.getElementById('authSubmitBtn').innerText = 'تکمیل ثبت‌نام و ساخت حساب';
+                document.getElementById('authToggleText').innerText = 'قبلاً ثبت‌نام کرده‌اید؟';
+                document.getElementById('authToggleBtn').innerText = 'وارد شوید';
+            } else {
+                document.getElementById('authTitle').innerText = 'ورود به سامانه قاضی هوشمند';
+                document.getElementById('regFullName').classList.add('hidden');
+                document.getElementById('regPhone').classList.add('hidden');
+                document.getElementById('authEmail').classList.add('hidden');
+                document.getElementById('authSubmitBtn').innerText = 'ورود به حساب';
+                document.getElementById('authToggleText').innerText = 'حساب کاربری ندارید؟';
+                document.getElementById('authToggleBtn').innerText = 'ثبت‌نام کنید';
+            }
+        }
+
+        function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
+        function toggleAuthMode() { openAuthModal(authMode === 'login' ? 'register' : 'login'); }
+
+        async function executeAuthAction() {
+            const u = document.getElementById('authUsername').value.trim();
+            const p = document.getElementById('authPassword').value.trim();
+            const fn = document.getElementById('regFullName').value.trim();
+            const ph = document.getElementById('regPhone').value.trim();
+            const em = document.getElementById('authEmail').value.trim();
+
+            if (!u || !p) { alert('نام کاربری و کلمه عبور الزامی است.'); return; }
+
+            try {
+                if (authMode === 'register') {
+                    if (!fn || !ph) { alert('نام و شماره تلفن همراه الزامی است.'); return; }
+                    const res = await fetch('/api/v1/auth/register', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({username: u, password: p, email: em || (u + '@ghazihooshmand.ir'), full_name: fn, phone: ph})
+                    });
+                    const d = await res.json();
+                    alert(d.message || 'ثبت‌نام انجام شد. اکنون وارد شوید.');
+                    openAuthModal('login');
+                } else {
+                    const res = await fetch('/api/v1/auth/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({username: u, password: p})
+                    });
+                    const d = await res.json();
+                    if (d.access_token) {
+                        localStorage.setItem('ghazi_jwt_token', d.access_token);
+                        localStorage.setItem('ghazi_user', u);
+                        alert('ورود با موفقیت انجام شد.');
+                        location.reload();
+                    } else {
+                        alert(d.detail || 'نام کاربری یا رمز عبور اشتباه است.');
+                    }
+                }
+            } catch(e) { alert('خطا: ' + e); }
+        }
+
+        function selectCase(id, title) {
+            document.querySelectorAll('#caseListContainer > div').forEach(d => {
+                d.className = 'p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer transition';
+            });
+            const active = document.getElementById(`case-btn-${id}`);
+            if (active) active.className = 'p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 font-bold cursor-pointer transition';
+            document.getElementById('currentCaseHeading').innerText = title;
+            document.getElementById('caseOutputCard').classList.add('hidden');
+        }
+
+        function promptNewCase() {
+            const title = prompt('عنوان پرونده جدید را وارد فرمایید:', 'پرونده دادرسی');
+            if (title) {
+                const count = document.querySelectorAll('#caseListContainer > div').length + 1;
+                const newDiv = document.createElement('div');
+                newDiv.id = `case-btn-${count}`;
+                newDiv.className = 'p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer transition';
+                newDiv.innerText = `پرونده ${count}: ${title}`;
+                newDiv.onclick = () => selectCase(count, `پرونده ${count}: ${title}`);
+                document.getElementById('caseListContainer').appendChild(newDiv);
+                selectCase(count, `پرونده ${count}: ${title}`);
+            }
+        }
+
+        async function executeLegalInference() {
+            if (!authToken) {
+                alert('برای استفاده از میز دادرسی، لطفاً ابتدا وارد حساب کاربری خود شوید.');
+                openAuthModal('register');
+                return;
+            }
+
+            const q = document.getElementById('caseTextQuery').value.trim();
+            const m = document.getElementById('caseModelSelector').value;
+            const btn = document.getElementById('btnSubmitCase');
+            const box = document.getElementById('caseOutputCard');
+            const out = document.getElementById('caseOutputText');
+
+            if (!q) { alert('لطفاً شرح پرونده را وارد فرمایید.'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> <span>در حال استنتاج قضایی و انطباق با ۵۱۸۴ گره قانونی...</span>';
+            box.classList.remove('hidden');
+            out.innerText = 'در حال استنتاج قضایی و انطباق با مواد قانون مدنی، مجازات، آیین دادرسی و آراء دیوان عالی...';
+
+            try {
+                const res = await fetch('/api/v1/legal/analyze-stream', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`},
+                    body: JSON.stringify({query: q, model: m, event_date: '2024-01-01', files_count: selectedFiles.length})
+                });
+                const data = await res.json();
+                out.innerText = data.analysis_result || JSON.stringify(data);
+            } catch(err) { out.innerText = 'خطا: ' + err; }
+            finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>⚖️</span> <span>ارسال پرونده و دریافت نظریه دادرسی و احکام حاکم</span>';
+            }
+        }
+
+        async function submitTicketAction() {
+            const n = document.getElementById('tckName').value.trim();
+            const p = document.getElementById('tckPhone').value.trim();
+            const d = document.getElementById('tckDept').value;
+            const s = document.getElementById('tckSubject').value.trim();
+            const m = document.getElementById('tckMsg').value.trim();
+
+            if (!n || !p || !m) { alert('لطفاً فیلدهای ضروری تیکت را تکمیل فرمایید.'); return; }
+
+            try {
+                const res = await fetch('/api/v1/tickets/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: n, contact: p, dept: d, subject: s || 'استعلام قضایی', message: m})
+                });
+                const data = await res.json();
+                alert(`تیکت با کد رهگیری ${data.ticket_code} ثبت شد و ایمیل اطلاع‌رسانی برای مدیریت ارسال گردید.`);
+                document.getElementById('tckMsg').value = '';
+                document.getElementById('tckSubject').value = '';
+            } catch(e) { alert('خطا: ' + e); }
+        }
+
+        async function fetchLiveAdminTickets() {
+            const container = document.getElementById('adminTicketsContainer');
+            container.innerHTML = '<p class="text-slate-500 text-center py-4">در حال خواندن تیکت‌های زنده از PostgreSQL 17...</p>';
+            try {
+                const res = await fetch('/api/v1/tickets/all');
+                const tickets = await res.json();
+                if (tickets && tickets.length > 0) {
+                    container.innerHTML = tickets.map(t => `
+                        <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-2.5 shadow-sm">
+                            <div class="flex justify-between items-center font-bold text-slate-800">
+                                <span>کد تیکت: <b class="text-emerald-700 font-mono">${t.ticket_code}</b></span>
+                                <span class="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 text-[10px]">${t.department}</span>
+                            </div>
+                            <p class="text-slate-700"><b>متقاضی:</b> ${t.user_name} (${t.contact_info}) | <b>موضوع:</b> ${t.subject}</p>
+                            <div class="p-2.5 rounded-xl bg-slate-50 text-slate-600 text-[11px] leading-relaxed">${t.message}</div>
+                            <div class="flex gap-2">
+                                <input id="reply-input-${t.id}" type="text" placeholder="پاسخ مدیریت به متقاضی..." class="flex-1 bg-white border border-slate-300 rounded-xl p-2 text-xs text-slate-800 focus:outline-none">
+                                <button type="button" onclick="replyTicket(${t.id}, '${t.ticket_code}')" class="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs">ارسال پاسخ</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p class="text-slate-500 text-center py-4">هیچ تیکت جدیدی در صف بررسی وجود ندارد.</p>';
+                }
+            } catch(e) { container.innerHTML = '<p class="text-rose-600 text-center py-4">خطا در دریافت تیکت‌ها.</p>'; }
+        }
+
+        async function replyTicket(id, code) {
+            const input = document.getElementById(`reply-input-${id}`);
+            if (!input || !input.value.trim()) { alert('لطفاً متن پاسخ را وارد نمایید.'); return; }
+            try {
+                await fetch('/api/v1/tickets/reply', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ticket_id: id, ticket_code: code, reply_text: input.value.trim()})
+                });
+                alert('پاسخ با موفقیت برای متقاضی ثبت شد.');
+                fetchLiveAdminTickets();
+            } catch(e) { alert('خطا: ' + e); }
+        }
+    
+        async function executeRetrialAnalysis() {
+            if (!authToken) { alert('لطفاً ابتدا وارد حساب کاربری خود شوید.'); openAuthModal('register'); return; }
+            const q = document.getElementById('retrialQueryText').value.trim();
+            const btn = document.getElementById('btnRetrialSubmit');
+            const box = document.getElementById('retrialOutputCard');
+            const out = document.getElementById('retrialOutputText');
+
+            if (!q) { alert('لطفاً شرح ادله جدید و موضوع دادنامه را وارد نمایید.'); return; }
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> <span>در حال تطبیق ادله با بندهای هفت‌گانه ماده ۴۷۴...</span>';
+            box.classList.remove('hidden');
+            out.innerText = 'در حال محاسبه شانس پذیرش و انشای دادخواست اعاده دادرسی...';
+
+            try {
+                const res = await fetch('/api/v1/legal/retrial-evaluation', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`},
+                    body: JSON.stringify({query: q, model: 'deepseek-v4-pro'})
+                });
+                const d = await res.json();
+                out.innerText = d.analysis_result || JSON.stringify(d);
+            } catch(e) { out.innerText = 'خطا: ' + e; }
+            finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🏛️</span> <span>سنجش هوشمند شانس اعاده دادرسی و انشای دادخواست دیوان عالی</span>';
+            }
+        }
+        
+    </script>
+</body>
+</html>
