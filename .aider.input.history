@@ -110,3 +110,40 @@
 # 2026-09-09 14:22:49.154344
 +/exit
 +
+
+# 2026-09-09 17:51:31.354898
++y
+
+# 2026-09-09 17:51:50.382412
++Please modularize the monolithic legal engine into a robust, decoupled multi-agent architecture across `/opt/roxira_platform/output_apps/generated_modules/smartjudge/`:
++
++1. Create `security/pii_scrubber.py`:
++   - Implement `mask_pii_entities(text: str) -> Tuple[str, Dict[str, str]]` masking 10-digit National IDs (`[کدملی_X]`), Iranian mobile numbers 09xx (`[شماره_همراه_X]`), bank IBANs/Cards, and party aliases (`[خواهان_X]`, `[خوانده_X]`).
++   - Implement `unmask_pii_entities(text: str, mapping: Dict[str, str]) -> str`.
++
++2. Create `agents/supervisor.py`:
++   - Fast intent classifier parsing queries into `RESEARCH_QA`, `FORMAL_DISPUTE`, `PLAYBOOK_REVIEW`, `RETRIAL_PETITION`.
++   - Strips conversational boilerplate phrases and normalizes queries.
++
++3. Create `agents/researcher.py`:
++   - Handles Dual-Level LightRAG retrieval querying PostgreSQL recursive graph CTE and Qdrant collections (`iran_laws_bge_m3`, `judicial_precedents`).
++   - Drops irrelevant fallback procedural articles scoring below threshold.
++
++4. Create `agents/drafter.py`:
++   - Generates structured legal advisories and formal litigation drafts using OpenRouter models with adaptive thinking.
++   - For `RESEARCH_QA`: outputs concise bulleted summaries and returns empty strings for draft_text and jurisdiction.
++   - For `FORMAL_DISPUTE`: generates full legal petitions and evaluates competent jurisdiction.
++
++5. Create `agents/playbook_reviewer.py`:
++   - Implements parallel clause audit for contracts (force majeure, dispute resolution, limitation of liability, penalty clauses).
++
++6. Create `agents/verifier.py`:
++   - Validates cited law articles against known repealed/modified statutes in PostgreSQL graph.
++
++7. Refactor `smartjudge_module.py`:
++   - Keep all existing FastAPI routes (`/analyze-case`, `/retrial-evaluate`, `/health`, STT audio endpoints) intact.
++   - Import and orchestrate the sub-agents cleanly inside the route handlers.
++
+
+# 2026-09-09 17:52:45.123564
++y

@@ -31,3 +31,4 @@ uploads/
 .idea/
 .vscode/
 node_modules/
+.aider*

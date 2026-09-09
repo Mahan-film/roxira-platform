@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Any
 
 REPEALED_ARTICLES_BLACKLIST = {
     "ماده ۲۱۸ سابق": "منسوخ شده توسط قانون اصلاح ماده ۲۱۸ مدنی مصوب ۱۳۷۰",

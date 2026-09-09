@@ -11,7 +11,6 @@ _PARTY_RE = re.compile(
 )
 
 def mask_pii_entities(text: str) -> Tuple[str, Dict[str, str]]:
-    """ماسک داده‌های حساس هویتی، مالی و القاب طرفین دعوا در متون قضایی."""
     mapping: Dict[str, str] = {}
     counters = {"nid": 0, "phone": 0, "iban": 0, "card": 0, "party": 0}
 
@@ -57,7 +56,6 @@ def mask_pii_entities(text: str) -> Tuple[str, Dict[str, str]]:
     return text, mapping
 
 def unmask_pii_entities(text: str, mapping: Dict[str, str]) -> str:
-    """بازگردانی مقادیر واقعی به لایحه و دادخواست نهایی."""
     for placeholder, original in mapping.items():
         text = text.replace(placeholder, original)
     return text
