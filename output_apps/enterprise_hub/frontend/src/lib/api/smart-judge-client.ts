@@ -238,3 +238,80 @@ export async function getJudgeEngineHealth(
 ): Promise<JudgeEngineHealth> {
   return judgeRequest<JudgeEngineHealth>("/health", { method: "GET", signal });
 }
+
+/** ورودی محاسبه خسارت تاخیر تادیه (`InflationCalcRequest`) */
+export interface DelayDamagesRequest {
+  principal_amount_irr: number;
+  start_year: number;
+  end_year?: number;
+}
+
+/** خروجی محاسبه خسارت تاخیر تادیه (ماده ۵۲۲ و رای وحدت رویه ۸۴۰) */
+export interface DelayDamagesResponse {
+  principal_amount: number;
+  start_year: number;
+  end_year: number;
+  start_index: number;
+  end_index: number;
+  updated_value_to_date: number;
+  total_delay_damages: number;
+  legal_basis: string;
+  index_source: string;
+}
+
+/**
+ * محاسبه خسارت تاخیر تادیه بر پایه شاخص بانک مرکزی (ماده ۵۲۲ ق.آ.د.م).
+ * منطبق با `POST /api/v1/apps/judge/calculate-delay-damages`.
+ */
+export async function calculateDelayDamages(
+  payload: DelayDamagesRequest,
+  signal?: AbortSignal,
+): Promise<DelayDamagesResponse> {
+  return judgeRequest<DelayDamagesResponse>("/calculate-delay-damages", {
+    method: "POST",
+    body: {
+      principal_amount_irr: payload.principal_amount_irr,
+      start_year: payload.start_year,
+      end_year: payload.end_year ?? 1404,
+    },
+    signal,
+  });
+}
+
+/**
+ * تبدیل گفتار به متن (دیکته صوتی) — منطبق با `POST /api/v1/apps/judge/transcribe-audio`.
+ * فایل صوتی ضبط‌شده در مرورگر به‌صورت multipart/form-data ارسال می‌شود.
+ */
+export async function transcribeAudio(
+  audio: Blob,
+  signal?: AbortSignal,
+): Promise<string> {
+  const form = new FormData();
+  const extension = audio.type.includes("ogg")
+    ? "ogg"
+    : audio.type.includes("mp4")
+      ? "mp4"
+      : "webm";
+  form.append("file", audio, `voice.${extension}`);
+
+  const response = await fetch(`${JUDGE_ENDPOINT}/transcribe-audio`, {
+    method: "POST",
+    body: form,
+    signal,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail: unknown = response.statusText;
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      detail = body.detail ?? response.statusText;
+    } catch {
+      detail = response.statusText;
+    }
+    throw new SmartJudgeError(response.status, detail);
+  }
+
+  const data = (await response.json()) as { transcript?: string };
+  return (data.transcript ?? "").trim();
+}

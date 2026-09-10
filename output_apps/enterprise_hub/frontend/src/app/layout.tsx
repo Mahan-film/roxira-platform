@@ -8,9 +8,9 @@ const vazirmatn = Vazirmatn({
 });
 
 export const metadata: Metadata = {
-  title: "محاسبه‌گر خسارت تاخیر تادیه | Roxira Enterprise Hub",
+  title: "پورتال خدمات سازمانی روکسیرا",
   description:
-    "محاسبه خسارت تاخیر تادیه بر اساس شاخص بانک مرکزی (ماده ۵۲۲ ق.آ.د.م) یا نرخ سود سالانه قراردادی - Roxira Enterprise Hub",
+    "محاسبه خسارت تاخیر تادیه، صدور فاکتور سازمانی و مستندات API — پورتال خدمات سازمانی روکسیرا",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

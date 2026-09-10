@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Calculator, Gavel, ReceiptText, Sparkles } from "lucide-react";
+import { ArrowLeft, BookOpen, Calculator, ReceiptText, Sparkles } from "lucide-react";
 
 import { DamagesCalculator } from "@/components/damages/damages-calculator";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -8,22 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const PORTAL_CARDS = [
   {
-    href: "/judge",
-    title: "سامانه قاضی هوشمند",
-    description:
-      "تحلیل پرونده، استخراج مواد قانونی، استدلال قضایی و ارزیابی اعاده دادرسی مبتنی بر Dual-Level GraphRAG.",
-    icon: Gavel,
-    accent: "text-amber-600 dark:text-amber-400",
-    badge: "AI Core",
-  },
-  {
     href: "#damages-calculator",
     title: "محاسبه‌گر خسارت تاخیر تادیه",
     description:
       "محاسبه دقیق خسارت بر اساس شاخص بانک مرکزی (ماده ۵۲۲ ق.آ.د.م) یا نرخ سود سالانه قراردادی.",
     icon: Calculator,
     accent: "text-emerald-600 dark:text-emerald-400",
-    badge: "Enterprise",
   },
   {
     href: "/invoicing",
@@ -32,7 +22,15 @@ const PORTAL_CARDS = [
       "صدور صورتحساب مالیاتی با محاسبه آنی مالیات ۹٪ و مدیریت سوابق فاکتورهای سازمانی.",
     icon: ReceiptText,
     accent: "text-sky-600 dark:text-sky-400",
-    badge: "Enterprise",
+  },
+  {
+    href: "/docs",
+    title: "مستندات API",
+    description:
+      "مستندات رسمی سرویس‌های سازمانی برای یکپارچه‌سازی سامانه‌های شما با پورتال روکسیرا.",
+    icon: BookOpen,
+    accent: "text-violet-600 dark:text-violet-400",
+    external: true,
   },
 ];
 
@@ -44,28 +42,25 @@ export default function Home() {
         <section className="space-y-3 text-center">
           <Badge variant="outline" className="mx-auto">
             <Sparkles className="size-3" />
-            Roxira Enterprise Portal
+            پورتال خدمات سازمانی روکسیرا
           </Badge>
           <h1 className="text-3xl font-extrabold tracking-tight">
-            داشبورد جامع هاب سازمانی روکسیرا
+            خدمات مالی و قضایی سازمانی
           </h1>
           <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
-            پورتال یکپارچه دسترسی به سامانه قاضی هوشمند، ماژول محاسبات قضایی و سامانه فاکتورهای
-            سازمانی — لایه‌های AI Core، Enterprise App و UI/UX.
+            دسترسی یکپارچه به محاسبه خسارت تاخیر تادیه، صدور فاکتورهای سازمانی و مستندات رسمی
+            سرویس‌های روکسیرا.
           </p>
         </section>
 
         <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          {PORTAL_CARDS.map(({ href, title, description, icon: Icon, accent, badge }) => (
-            <Link key={href} href={href} className="group">
+          {PORTAL_CARDS.map(({ href, title, description, icon: Icon, accent, external }) => {
+            const body = (
               <Card className="h-full transition-all group-hover:-translate-y-1 group-hover:border-primary/40 group-hover:shadow-lg">
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <span className="flex size-11 items-center justify-center rounded-xl bg-muted">
-                      <Icon className={`size-6 ${accent}`} />
-                    </span>
-                    <Badge variant="ghost">{badge}</Badge>
-                  </div>
+                  <span className="flex size-11 items-center justify-center rounded-xl bg-muted">
+                    <Icon className={`size-6 ${accent}`} />
+                  </span>
                   <CardTitle className="mt-2 text-lg">{title}</CardTitle>
                   <CardDescription className="leading-relaxed">{description}</CardDescription>
                 </CardHeader>
@@ -76,8 +71,18 @@ export default function Home() {
                   </span>
                 </CardContent>
               </Card>
-            </Link>
-          ))}
+            );
+
+            return external ? (
+              <a key={href} href={href} className="group">
+                {body}
+              </a>
+            ) : (
+              <Link key={href} href={href} className="group">
+                {body}
+              </Link>
+            );
+          })}
         </section>
 
         <section id="damages-calculator" className="scroll-mt-20 space-y-4">
