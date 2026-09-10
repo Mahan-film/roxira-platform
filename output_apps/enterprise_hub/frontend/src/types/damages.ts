@@ -3,6 +3,11 @@ export enum DamageCalculationMethod {
   ANNUAL_RATE = 'ANNUAL_RATE',
 }
 
+export const DAMAGE_CALCULATION_METHOD_LABELS: Record<DamageCalculationMethod, string> = {
+  [DamageCalculationMethod.CPI_INDEX]: 'شاخص تورم بانک مرکزی (ماده ۵۲۲)',
+  [DamageCalculationMethod.ANNUAL_RATE]: 'نرخ سود سالانه قراردادی',
+};
+
 export interface CreateDamageCalculationRequest {
   principalAmount: number;
   dueDate: string;
@@ -26,4 +31,17 @@ export interface DamageCalculationResponse {
   legalBasis: string;
   contractReferenceNumber?: string;
   createdAt: string;
+}
+
+export interface QueryDamageCalculationParams {
+  page?: number;
+  limit?: number;
+  contractReferenceNumber?: string;
+}
+
+export interface PaginatedDamageCalculationResponse {
+  data: DamageCalculationResponse[];
+  total: number;
+  page: number;
+  limit: number;
 }
