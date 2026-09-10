@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ScaleIcon } from "lucide-react";
 
 const NAV_LINKS = [
-  { href: "/", label: "محاسبه‌گر" },
+  { href: "/", label: "داشبورد" },
+  { href: "/judge", label: "قاضی هوشمند" },
   { href: "/damages", label: "تاریخچه محاسبات" },
   { href: "/invoicing", label: "فاکتورها" },
 ];

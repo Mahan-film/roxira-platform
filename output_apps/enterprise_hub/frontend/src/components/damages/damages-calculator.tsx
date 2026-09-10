@@ -42,8 +42,8 @@ export function DamagesCalculator() {
         contractReferenceNumber: contractRef || undefined,
       });
       setResult(data);
-    } catch (err: any) {
-      setError(err?.message || "خطا در برقراری ارتباط با سرور NestJS");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "خطا در برقراری ارتباط با سرور NestJS");
     } finally {
       setLoading(false);
     }

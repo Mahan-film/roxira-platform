@@ -17,3 +17,18 @@ export const INVOICING_RESOURCE_PATH = "enterprise-hub/invoicing";
 
 /** مسیر نسبی سمت مرورگر که توسط rewrite در next.config.ts پروکسی می‌شود */
 export const API_PROXY_BASE_PATH = "/api/backend";
+
+/**
+ * مسیر پایه‌ی موتور قاضی هوشمند (AI Core Layer — FastAPI/Python).
+ * این روتر با پیشوند `/api/v1/apps/judge` در `run_unified_server.py`
+ * بارگذاری می‌شود و در production روی سرویس `roxira_app_prod:8000` اجرا
+ * می‌گردد.
+ */
+export const JUDGE_RESOURCE_PATH = "api/v1/apps/judge";
+
+/**
+ * مسیر هم‌مبدأ سمت مرورگر برای موتور قاضی هوشمند که توسط rewrite در
+ * `next.config.ts` به‌صورت سرور-به-سرور به `JUDGE_API_ORIGIN` پروکسی
+ * می‌شود (پرهیز از CORS و عدم افشای آدرس واقعی سرویس پایتون).
+ */
+export const JUDGE_API_PROXY_BASE_PATH = "/api/judge";

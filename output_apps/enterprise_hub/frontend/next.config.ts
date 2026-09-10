@@ -10,6 +10,12 @@ import path from "path";
 const NEST_API_ORIGIN = process.env.NEST_API_ORIGIN ?? "http://localhost:3000";
 
 /**
+ * آدرس واقعی موتور قاضی هوشمند (AI Core Layer — FastAPI/Python).
+ * در production سرویس `roxira_app_prod` روی پورت ۸۰۰۰ گوش می‌دهد.
+ */
+const JUDGE_API_ORIGIN = process.env.JUDGE_API_ORIGIN ?? "http://localhost:8000";
+
+/**
  * پیشوند نسخه‌بندی global که در `main.ts` با
  * `app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })`
  * فعال شده است.
@@ -37,6 +43,13 @@ const nextConfig: NextConfig = {
         // کد سمت مرورگر افشا نشود.
         source: "/api/backend/:path*",
         destination: `${NEST_API_ORIGIN}/${NEST_API_VERSION_PREFIX}/:path*`,
+      },
+      {
+        // موتور قاضی هوشمند (AI Core Layer) روی پیشوند کامل
+        // `/api/v1/apps/judge` سرو می‌شود؛ درخواست هم‌مبدأ سمت مرورگر
+        // به‌صورت سرور-به-سرور به FastAPI پروکسی می‌گردد.
+        source: "/api/judge/:path*",
+        destination: `${JUDGE_API_ORIGIN}/api/v1/apps/judge/:path*`,
       },
     ];
   },

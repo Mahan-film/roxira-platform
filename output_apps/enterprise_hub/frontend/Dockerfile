@@ -24,6 +24,9 @@ WORKDIR /app
 # آدرس واقعی سرویس NestJS در زمان بیلد برای rewrites (قابل override در ران‌تایم)
 ARG NEST_API_ORIGIN=http://roxira_enterprise_backend:3000
 ENV NEST_API_ORIGIN=${NEST_API_ORIGIN}
+# آدرس واقعی موتور قاضی هوشمند (AI Core Layer — FastAPI/Python)
+ARG JUDGE_API_ORIGIN=http://roxira_app_prod:8000
+ENV JUDGE_API_ORIGIN=${JUDGE_API_ORIGIN}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules

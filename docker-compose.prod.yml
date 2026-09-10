@@ -110,6 +110,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEST_API_ORIGIN: http://roxira_enterprise_backend:3000
+        JUDGE_API_ORIGIN: http://roxira_app_prod:8000
     container_name: roxira_enterprise_frontend
     restart: always
     environment:
@@ -117,6 +118,7 @@ services:
       - PORT=3001
       - HOSTNAME=0.0.0.0
       - NEST_API_ORIGIN=http://roxira_enterprise_backend:3000
+      - JUDGE_API_ORIGIN=http://roxira_app_prod:8000
     ports:
       - "3001:3001"
     depends_on:
