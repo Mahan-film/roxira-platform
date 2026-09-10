@@ -11,7 +11,6 @@ import { DamagesModule } from './modules/damages/damages.module';
       isGlobal: true,
       envFilePath: [
         path.resolve(process.cwd(), '.env'),
-        path.resolve(process.cwd(), '../../.env'),
         path.resolve('/opt/roxira_platform/.env'),
       ],
     }),
@@ -31,7 +30,7 @@ import { DamagesModule } from './modules/damages/damages.module';
         return {
           type: 'postgres',
           host: config.get<string>('DATABASE_HOST', '127.0.0.1'),
-          port: config.get<number>('DATABASE_PORT', 5432),
+          port: Number(config.get<number>('DATABASE_PORT', 5432)),
           username: config.get<string>('DATABASE_USER', 'postgres'),
           password: String(config.get<string>('DATABASE_PASSWORD', config.get<string>('POSTGRES_PASSWORD', ''))),
           database: config.get<string>('DATABASE_NAME', 'roxira_db'),
@@ -44,9 +43,9 @@ import { DamagesModule } from './modules/damages/damages.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const valkeyUrl = config.get<string>('VALKEY_URL', 'redis://127.0.0.1:6379');
+        const rawUrl = config.get<string>('VALKEY_URL', 'redis://127.0.0.1:6379');
         try {
-          const parsed = new URL(valkeyUrl);
+          const parsed = new URL(rawUrl);
           return {
             connection: {
               host: parsed.hostname || '127.0.0.1',
