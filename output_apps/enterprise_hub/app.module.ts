@@ -1,51 +1,58 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
-import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { DamagesModule } from './modules/damages/damages.module';
-
-// بارگذاری قطعی متغیرهای ریشه سرور
-dotenv.config({ path: path.resolve('/opt/roxira_platform/.env') });
-dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-
-const dbHost = process.env.DATABASE_HOST || '127.0.0.1';
-const dbPort = Number(process.env.DATABASE_PORT || 5432);
-const dbUser = process.env.DATABASE_USER || process.env.POSTGRES_USER || 'postgres';
-const dbPass = process.env.DATABASE_PASSWORD || process.env.POSTGRES_PASSWORD || '';
-const dbName = process.env.DATABASE_NAME || process.env.POSTGRES_DB || 'roxira_db';
-const dbUrl = process.env.DATABASE_URL;
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: [
+        path.resolve('/opt/roxira_platform/.env'),
+        path.resolve(process.cwd(), '../../.env'),
+        path.resolve(process.cwd(), '.env'),
+      ],
     }),
-    TypeOrmModule.forRoot(
-      dbUrl && dbUrl.startsWith('postgres')
-        ? {
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        let dbUrl = config.get<string>('DATABASE_URL');
+        if (dbUrl && dbUrl.startsWith('postgres')) {
+          dbUrl = dbUrl.replace('@postgres_prod:', '@127.0.0.1:');
+          return {
             type: 'postgres',
             url: dbUrl,
             autoLoadEntities: true,
             synchronize: false,
-          }
-        : {
-            type: 'postgres',
-            host: dbHost === 'postgres_prod' ? '127.0.0.1' : dbHost,
-            port: dbPort,
-            username: dbUser,
-            password: dbPass,
-            database: dbName,
-            autoLoadEntities: true,
-            synchronize: false,
+          };
+        }
+        
+        const host = config.get<string>('DATABASE_HOST', '127.0.0.1');
+        return {
+          type: 'postgres',
+          host: host === 'postgres_prod' ? '127.0.0.1' : host,
+          port: Number(config.get<number>('DATABASE_PORT', 5432)),
+          username: config.get<string>('DATABASE_USER') || config.get<string>('POSTGRES_USER') || 'postgres',
+          password: String(config.get<string>('DATABASE_PASSWORD') || config.get<string>('POSTGRES_PASSWORD') || ''),
+          database: config.get<string>('DATABASE_NAME') || config.get<string>('POSTGRES_DB') || 'roxira_db',
+          autoLoadEntities: true,
+          synchronize: false,
+        };
+      },
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        return {
+          connection: {
+            host: '127.0.0.1',
+            port: 6379,
           },
-    ),
-    BullModule.forRoot({
-      connection: {
-        host: '127.0.0.1',
-        port: 6379,
+        };
       },
     }),
     DamagesModule,
