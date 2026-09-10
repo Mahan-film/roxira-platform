@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import * as path from 'path';
 import { DamagesModule } from './modules/damages/damages.module';
+import { InvoicingModule } from './modules/invoicing/invoicing.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { DamagesModule } from './modules/damages/damages.module';
       }),
     }),
     DamagesModule,
+    InvoicingModule,
   ],
 })
 export class AppModule {}

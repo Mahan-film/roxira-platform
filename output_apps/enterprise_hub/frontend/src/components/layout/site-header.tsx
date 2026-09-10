@@ -4,6 +4,7 @@ import { ScaleIcon } from "lucide-react";
 const NAV_LINKS = [
   { href: "/", label: "محاسبه‌گر" },
   { href: "/damages", label: "تاریخچه محاسبات" },
+  { href: "/invoicing", label: "فاکتورها" },
 ];
 
 export function SiteHeader() {

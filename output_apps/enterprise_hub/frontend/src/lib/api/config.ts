@@ -12,5 +12,8 @@
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Damages در NestJS (VersioningType.URI, defaultVersion: '1') */
 export const DAMAGES_RESOURCE_PATH = "enterprise-hub/damages";
 
+/** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Smart Invoicing در NestJS */
+export const INVOICING_RESOURCE_PATH = "enterprise-hub/invoicing";
+
 /** مسیر نسبی سمت مرورگر که توسط rewrite در next.config.ts پروکسی می‌شود */
 export const API_PROXY_BASE_PATH = "/api/backend";
