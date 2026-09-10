@@ -14,7 +14,8 @@ ROXIRA SMARTJUDGE — موتور قضایی واقعی مبتنی بر Dual-Leve
   • پرووایدر Kira AI روی https://kiraai.vn/api/v1 — موتور استدلال سنگین قضایی:
       glm-5.3-free (استدلال عمیق؛ استخراج reasoning_content و content با سقف ۲۰۰۰ توکن)
       kira-mini-1.0 (پشتیبان بدون هزینه با بافر ورودی ۱ میلیون توکن — Fallback Engine)
-  • تبدیل گفتار به متن فارسی سمت سرور: Groq Whisper-large-v3-turbo →
+  • تبدیل گفتار به متن فارسی سمت سرور: AssemblyAI (استخر چندکلیدی با چرخش
+    خودکار روی 401/402/429) → Groq Whisper-large-v3-turbo →
     OpenAI whisper-1 → faster-whisper محلی
 
 هر پاسخ حقوقی «فقط» با استنتاج زنده LLM روی اسناد واقعی بازیابی‌شده تولید می‌شود.
@@ -85,6 +86,23 @@ GROQ_API_KEY = _read_env_key("GROQ_API_KEY")
 GROQ_STT_MODEL = _read_env_key("GROQ_STT_MODEL") or "whisper-large-v3-turbo"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# AssemblyAI — استخر چندکلیدی گفتاربه‌متن (ASSEMBLYAI_API_KEYS با جداکننده کاما)
+#   در مواجهه با خطای 401/402/429 کلید به‌صورت خودکار چرخش می‌کند تا خط لوله
+#   STT هرگز روی یک کلید نامعتبر/مصرف‌شده متوقف نشود.
+# ─────────────────────────────────────────────────────────────────────────────
+ASSEMBLYAI_API_KEYS: List[str] = [
+    k.strip()
+    for k in (
+        _read_env_key("ASSEMBLYAI_API_KEYS") or _read_env_key("ASSEMBLYAI_API_KEY")
+    ).split(",")
+    if k.strip()
+]
+ASSEMBLYAI_BASE = (_read_env_key("ASSEMBLYAI_BASE_URL") or "https://api.assemblyai.com/v2").rstrip("/")
+# مدل پیش‌فرض Universal-2 — تنها مدل AssemblyAI با پشتیبانی رسمی از زبان فارسی (fa)
+ASSEMBLYAI_STT_MODEL = _read_env_key("ASSEMBLYAI_STT_MODEL") or "universal-2"
+ASSEMBLYAI_ROTATE_STATUS = {401, 402, 429}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # پرووایدر Kira AI — موتور استدلال سنگین قضایی + پشتیبان بدون هزینه
 #   • KIRA_REASONING_MODEL = glm-5.3-free : تسک‌های استدلال قضایی عمیق
 #     (استخراج هم‌زمان reasoning_content و content با سقف سخت ۲۰۰۰ توکن)
@@ -98,6 +116,9 @@ KIRA_FALLBACK_MODEL = _read_env_key("KIRA_FALLBACK_MODEL") or "kira-mini-1.0"
 KIRA_REASONING_MAX_TOKENS = 2000
 KIRA_FALLBACK_CONTEXT_TOKENS = 1_000_000
 KIRA_FALLBACK_OUTPUT_TOKENS = 8192
+# سقف سخت تایم‌اوت Kira AI (۶ ثانیه): در صورت تأخیر/خطای 504 بلافاصله به
+# OpenRouter هدایت می‌شود تا پاسخ کاربر معطل درگاه کندِ Kira نماند.
+KIRA_MAX_TIMEOUT = 6.0
 
 # ─────────────────────────────────────────────────────────────────────────────
 # سوگیری واژگان تخصصی حقوقی برای گفتاربه‌متن فارسی (Task 1 — High-Precision STT)
@@ -269,7 +290,7 @@ async def _kira_chat_completion(
     model: str = KIRA_REASONING_MODEL,
     max_tokens: int = KIRA_REASONING_MAX_TOKENS,
     temperature: float = 0.2,
-    timeout: float = 120.0,
+    timeout: float = KIRA_MAX_TIMEOUT,
     context_budget: Optional[int] = None,
 ) -> Tuple[str, str]:
     """فراخوانی Chat Completions پرووایدر Kira AI (OpenAI-compatible).
@@ -282,6 +303,8 @@ async def _kira_chat_completion(
     if not KIRA_KEY:
         raise RuntimeError("KIRA_API_KEY تنظیم نشده است.")
     prepared = _trim_messages_to_budget(messages, context_budget)
+    # سقف سخت ۶ ثانیه — هرگز فراخوانی Kira بیش از این معطل نمی‌ماند.
+    timeout = min(timeout, KIRA_MAX_TIMEOUT)
     async with httpx.AsyncClient(timeout=timeout) as client:
         r = await client.post(
             f"{KIRA_BASE}/chat/completions",
@@ -322,6 +345,16 @@ def _kira_engine_chain(max_tokens: int) -> List[Tuple[str, int, Optional[int]]]:
     ]
 
 
+def _is_kira_gateway_failure(exc: Exception) -> bool:
+    """آیا خطای Kira از نوع درگاه در دسترس‌نبودن (504) یا تایم‌اوت است؟
+
+    در این حالت طبق قرارداد، به‌جای مصرف بودجه روی زنجیره Kira، همان لحظه
+    کنترل به OpenRouter منتقل می‌شود.
+    """
+    text = str(exc).lower()
+    return "504" in text or "timeout" in text or "timed out" in text
+
+
 async def _chat_completion(messages: List[Dict[str, str]], models: List[str],
                            max_tokens: int = 1800, temperature: float = 0.2,
                            timeout: float = 90.0,
@@ -352,6 +385,10 @@ async def _chat_completion(messages: List[Dict[str, str]], models: List[str],
             except Exception as exc:
                 errors.append(f"{kmodel}: {exc}")
                 logger.warning("[SMARTJUDGE] Kira AI call failed %s", errors[-1])
+                # درگاه Kira پاسخ 504 داد یا تایم‌اوت شد ⇒ بلافاصله به OpenRouter
+                if _is_kira_gateway_failure(exc):
+                    logger.warning("[SMARTJUDGE] Kira AI gateway unavailable (504/timeout) — bypassing to OpenRouter")
+                    break
 
     if OPENROUTER_KEY:
         try:
@@ -1585,6 +1622,8 @@ async def health():
             "kira_fallback_context_tokens": KIRA_FALLBACK_CONTEXT_TOKENS,
         },
         "groq_stt_configured": bool(GROQ_API_KEY),
+        "assemblyai_stt_configured": _assemblyai_configured(),
+        "assemblyai_stt_keys": len(ASSEMBLYAI_API_KEYS),
         "stt": "groq-whisper-large-v3-turbo" if GROQ_API_KEY else "local-faster-whisper",
         "prompt_caching": "static-prefix-first (OpenRouter prefix cache)",
         "collections": list(VECTOR_COLLECTIONS.values()),
@@ -1840,6 +1879,138 @@ async def _transcribe_groq(tmp_path: str) -> str:
     return _repair_legal_phonetics(str(r.json().get("text") or ""))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# AssemblyAI — استخر چندکلیدی STT با چرخش خودکار کلید روی 401/402/429
+#   مسیر: upload → ایجاد transcript → انتظار (poll) تا completed
+# ─────────────────────────────────────────────────────────────────────────────
+_assemblyai_key_lock = threading.Lock()
+_assemblyai_key_cursor = 0
+
+
+def _assemblyai_configured() -> bool:
+    """آیا استخر کلیدهای AssemblyAI پیکربندی شده است."""
+    return bool(ASSEMBLYAI_API_KEYS)
+
+
+def _assemblyai_key_order() -> List[str]:
+    """ترتیب چرخشی کلیدها از اندیس جاری — round-robin ایمن در چندریسمان.
+
+    هر فراخوانی اندیس جاری را یک گام جلو می‌برد تا بار درخواست‌ها به‌صورت
+    طبیعی بین کلیدهای استخر پخش شود.
+    """
+    global _assemblyai_key_cursor
+    keys = ASSEMBLYAI_API_KEYS
+    if not keys:
+        return []
+    with _assemblyai_key_lock:
+        start = _assemblyai_key_cursor % len(keys)
+        _assemblyai_key_cursor = (start + 1) % len(keys)
+    return keys[start:] + keys[:start]
+
+
+async def _assemblyai_upload(tmp_path: str) -> str:
+    """بارگذاری فایل صوتی روی AssemblyAI — چرخش کلید روی 401/402/429."""
+    if not ASSEMBLYAI_API_KEYS:
+        raise RuntimeError("ASSEMBLYAI_API_KEYS تنظیم نشده است.")
+    mime = _AUDIO_MIME.get(pathlib.Path(tmp_path).suffix.lower(), "audio/webm")
+    with open(tmp_path, "rb") as fh:
+        payload = fh.read()
+    last_err = ""
+    keys = _assemblyai_key_order()
+    for idx, key in enumerate(keys):
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            r = await client.post(
+                f"{ASSEMBLYAI_BASE}/upload",
+                headers={"authorization": key, "content-type": mime},
+                content=payload,
+            )
+        if r.status_code == 200:
+            return str(r.json().get("upload_url") or "")
+        last_err = f"HTTP {r.status_code} {r.text[:160]}"
+        if r.status_code not in ASSEMBLYAI_ROTATE_STATUS:
+            break
+        logger.warning("[SMARTJUDGE] AssemblyAI upload key #%d rejected (%s) — rotating", idx + 1, r.status_code)
+    raise RuntimeError(f"AssemblyAI upload failed: {last_err}")
+
+
+async def _assemblyai_create_transcript(audio_url: str) -> str:
+    """ایجاد رونویس AssemblyAI — چرخش کلید و سازگاری با نسخه‌های قدیمی."""
+    if not ASSEMBLYAI_API_KEYS:
+        raise RuntimeError("ASSEMBLYAI_API_KEYS تنظیم نشده است.")
+    payload = {
+        "audio_url": audio_url,
+        "language_code": "fa",
+        "speech_models": [ASSEMBLYAI_STT_MODEL],
+        "prompt": LEGAL_STT_PROMPT,
+    }
+    last_err = ""
+    keys = _assemblyai_key_order()
+    for idx, key in enumerate(keys):
+        headers = {"authorization": key, "content-type": "application/json"}
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(f"{ASSEMBLYAI_BASE}/transcript", headers=headers, json=payload)
+            if r.status_code == 400:
+                # مدل Universal-2 پارامتر prompt (contextual prompting) را پشتیبانی
+                # نمی‌کند؛ در صورت رد، همان درخواست بدون prompt تکرار می‌شود.
+                fallback = {k: v for k, v in payload.items() if k != "prompt"}
+                r = await client.post(f"{ASSEMBLYAI_BASE}/transcript", headers=headers, json=fallback)
+        if r.status_code == 200:
+            return str(r.json().get("id") or "")
+        last_err = f"HTTP {r.status_code} {r.text[:160]}"
+        if r.status_code not in ASSEMBLYAI_ROTATE_STATUS:
+            break
+        logger.warning("[SMARTJUDGE] AssemblyAI transcript key #%d rejected (%s) — rotating", idx + 1, r.status_code)
+    raise RuntimeError(f"AssemblyAI transcript create failed: {last_err}")
+
+
+async def _assemblyai_poll(transcript_id: str) -> str:
+    """انتظار برای تکمیل رونویس — چرخش کلید روی 401/402/429."""
+    deadline = time.monotonic() + 170.0
+    last_err = ""
+    while time.monotonic() < deadline:
+        keys = _assemblyai_key_order()
+        for idx, key in enumerate(keys):
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.get(
+                    f"{ASSEMBLYAI_BASE}/transcript/{transcript_id}",
+                    headers={"authorization": key},
+                )
+            if r.status_code == 200:
+                body = r.json()
+                status = str(body.get("status") or "")
+                if status == "completed":
+                    return _repair_legal_phonetics(str(body.get("text") or ""))
+                if status == "error":
+                    raise RuntimeError(f"AssemblyAI transcription error: {body.get('error')}")
+                break  # queued/processing → ادامه انتظار
+            last_err = f"HTTP {r.status_code} {r.text[:160]}"
+            if r.status_code not in ASSEMBLYAI_ROTATE_STATUS:
+                break
+            logger.warning("[SMARTJUDGE] AssemblyAI poll key #%d rejected (%s) — rotating", idx + 1, r.status_code)
+        else:
+            break
+        await asyncio.sleep(2.0)
+    raise RuntimeError(f"AssemblyAI transcription timed out: {last_err}")
+
+
+async def _transcribe_assemblyai(tmp_path: str) -> str:
+    """تبدیل گفتار فارسی با AssemblyAI — استخر چندکلیدی با چرخش خودکار.
+
+    در هر گام (upload / create / poll) خطاهای 401 (کلید نامعتبر)، 402 (عدم
+    اعتبار) و 429 (محدودیت نرخ) باعث چرخش به کلید بعدی استخر و تکرار همان
+    گام می‌شوند تا خط لوله STT پیوسته بماند.
+    """
+    if not _assemblyai_configured():
+        raise RuntimeError("ASSEMBLYAI_API_KEYS تنظیم نشده است.")
+    upload_url = await _assemblyai_upload(tmp_path)
+    if not upload_url:
+        raise RuntimeError("AssemblyAI upload URL خالی است.")
+    transcript_id = await _assemblyai_create_transcript(upload_url)
+    if not transcript_id:
+        raise RuntimeError("AssemblyAI transcript id خالی است.")
+    return await _assemblyai_poll(transcript_id)
+
+
 # ── Task 1 — ترمیم آوایی واژگان حقوقی (Persian Whisper misrecognition repair) ──
 # خطاهای آوایی رایج Whisper در متون حقوقی فارسی پیش از بازگشت متن اصلاح می‌شوند.
 _LEGAL_PHONETIC_REPLACEMENTS = {
@@ -1919,14 +2090,21 @@ async def transcribe_audio(file: UploadFile = File(...)):
     tmp_path = _save_temp_audio(raw, file.filename or "input_audio.webm")
     transcript = ""
     try:
-        # ۱) Groq Whisper-large-v3-turbo — پردازش سریع فارسی سمت سرور (در صورت وجود کلید)
-        if GROQ_API_KEY:
+        # ۱) AssemblyAI — استخر چندکلیدی با چرخش خودکار روی 401/402/429
+        if _assemblyai_configured():
+            try:
+                transcript = await _transcribe_assemblyai(tmp_path)
+            except Exception as exc:
+                logger.warning("[SMARTJUDGE] AssemblyAI STT failed: %s", exc)
+
+        # ۲) Groq Whisper-large-v3-turbo — پردازش سریع فارسی سمت سرور (در صورت وجود کلید)
+        if not transcript and GROQ_API_KEY:
             try:
                 transcript = await _transcribe_groq(tmp_path)
             except Exception as exc:
                 logger.warning("[SMARTJUDGE] Groq STT failed: %s", exc)
 
-        # ۲) Fallback محلی — faster-whisper («base», CPU, int8)
+        # ۳) Fallback محلی — faster-whisper («base», CPU, int8)
         if not transcript:
             try:
                 transcript = await asyncio.to_thread(_transcribe_local, tmp_path)

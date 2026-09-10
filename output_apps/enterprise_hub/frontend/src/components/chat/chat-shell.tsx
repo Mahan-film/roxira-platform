@@ -597,10 +597,15 @@ export function ChatShell() {
           )}
         </div>
 
-        <SiteFooter />
+        {!isAuthenticated && <SiteFooter />}
       </main>
 
-      <div className="relative z-20 border-t border-white/5 bg-[#0A0F1C]/85 px-4 py-3 backdrop-blur">
+      <div
+        className={cn(
+          "relative z-20 mt-auto border-t border-white/5 bg-[#0A0F1C]/85 px-4 py-3 backdrop-blur",
+          isAuthenticated && "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+        )}
+      >
         <div className="mx-auto w-full max-w-3xl space-y-3">
           <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {QUICK_ACTIONS.map(({ label, icon: Icon, action }) => (
