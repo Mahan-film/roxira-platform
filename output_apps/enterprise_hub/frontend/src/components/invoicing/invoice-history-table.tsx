@@ -87,7 +87,7 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
           setErrorMessage(error.details.join(" | "));
         } else if (!(error instanceof DOMException)) {
           setErrorMessage(
-            "ارتباط با سرور برقرار نشد. لطفاً از فعال بودن سرویس NestJS (پورت 3000) مطمئن شوید.",
+            "ارتباط با سرور برقرار نشد. لطفاً چند لحظه بعد دوباره تلاش کنید.",
           );
         }
       }

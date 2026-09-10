@@ -43,7 +43,11 @@ export function DamagesCalculator() {
       });
       setResult(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "خطا در برقراری ارتباط با سرور NestJS");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "خطا در برقراری ارتباط با سرور. لطفاً چند لحظه بعد دوباره تلاش کنید.",
+      );
     } finally {
       setLoading(false);
     }
@@ -64,7 +68,7 @@ export function DamagesCalculator() {
               </CardDescription>
             </div>
             <Badge variant="outline" className="text-xs">
-              NestJS + TypeORM
+              استعلام رسمی
             </Badge>
           </div>
         </CardHeader>

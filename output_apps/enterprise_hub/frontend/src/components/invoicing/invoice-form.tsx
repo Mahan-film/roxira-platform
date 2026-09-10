@@ -281,7 +281,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
         setSubmitError(error.details);
       } else {
         setSubmitError([
-          "ارتباط با سرور برقرار نشد. لطفاً از فعال بودن سرویس NestJS مطمئن شوید.",
+          "ارتباط با سرور برقرار نشد. لطفاً چند لحظه بعد دوباره تلاش کنید.",
         ]);
       }
     } finally {
