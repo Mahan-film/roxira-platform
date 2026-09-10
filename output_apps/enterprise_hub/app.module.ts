@@ -9,10 +9,7 @@ import { DamagesModule } from './modules/damages/damages.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [
-        path.resolve('/opt/roxira_platform/.env'),
-        path.resolve(process.cwd(), '.env'),
-      ],
+      envFilePath: [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -20,10 +17,10 @@ import { DamagesModule } from './modules/damages/damages.module';
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
         host: '127.0.0.1',
-        port: Number(config.get<number>('DATABASE_PORT', 5432)),
-        username: config.get<string>('DATABASE_USER') || config.get<string>('POSTGRES_USER') || 'enterprise_admin',
-        password: String(config.get<string>('DATABASE_PASSWORD') || config.get<string>('POSTGRES_PASSWORD') || 'REDACTED_SECRET_19'),
-        database: config.get<string>('DATABASE_NAME') || config.get<string>('POSTGRES_DB') || 'enterprise_db',
+        port: 5432,
+        username: config.get<string>('DATABASE_USER', 'enterprise_admin'),
+        password: config.get<string>('DATABASE_PASSWORD', 'REDACTED_SECRET_19'),
+        database: config.get<string>('DATABASE_NAME', 'enterprise_db'),
         autoLoadEntities: true,
         synchronize: false,
       }),
@@ -32,10 +29,7 @@ import { DamagesModule } from './modules/damages/damages.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        connection: {
-          host: '127.0.0.1',
-          port: 6379,
-        },
+        connection: { host: '127.0.0.1', port: 6379 },
       }),
     }),
     DamagesModule,
