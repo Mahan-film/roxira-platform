@@ -17,6 +17,11 @@ const NEST_API_ORIGIN = process.env.NEST_API_ORIGIN ?? "http://localhost:3000";
 const NEST_API_VERSION_PREFIX = "v1";
 
 const nextConfig: NextConfig = {
+  // خروجی مستقل (standalone) برای بیلد/اجرای پروداکشن داخل Docker؛
+  // فقط فایل‌های لازم اجرای سرور Next.js را در .next/standalone کپی
+  // می‌کند و نیاز به نصب کامل node_modules در ایمیج نهایی را حذف می‌کند.
+  output: "standalone",
+
   // ریشه پروژه را صریحاً به همین پوشه (frontend) محدود می‌کند تا با
   // package-lock.json موجود در enterprise_hub/ (لایه NestJS) اشتباه
   // گرفته نشود (دو لایه مجزا طبق بند ۱ AGENTS.md).

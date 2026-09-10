@@ -16,8 +16,8 @@ import { DamagesModule } from './modules/damages/damages.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
-        host: '127.0.0.1',
-        port: 5432,
+        host: config.get<string>('DATABASE_HOST', '127.0.0.1'),
+        port: config.get<number>('DATABASE_PORT', 5432),
         username: config.get<string>('DATABASE_USER', 'enterprise_admin'),
         password: config.get<string>('DATABASE_PASSWORD', 'REDACTED_SECRET_19'),
         database: config.get<string>('DATABASE_NAME', 'enterprise_db'),
@@ -29,7 +29,10 @@ import { DamagesModule } from './modules/damages/damages.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        connection: { host: '127.0.0.1', port: 6379 },
+        connection: {
+          host: config.get<string>('REDIS_HOST', '127.0.0.1'),
+          port: config.get<number>('REDIS_PORT', 6379),
+        },
       }),
     }),
     DamagesModule,
