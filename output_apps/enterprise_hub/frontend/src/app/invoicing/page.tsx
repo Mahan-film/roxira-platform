@@ -5,6 +5,7 @@ import { useState } from "react";
 import { InvoiceForm } from "@/components/invoicing/invoice-form";
 import { InvoiceHistoryTable } from "@/components/invoicing/invoice-history-table";
 import { SiteHeader } from "@/components/layout/site-header";
+import { RoxiraFooter } from "@/components/layout/roxira-footer";
 
 /**
  * صفحه مدیریت و صدور فاکتور هوشمند (Smart Invoicing).
@@ -16,7 +17,7 @@ export default function InvoicingPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-muted/30">
+    <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <div className="flex flex-col gap-1">
@@ -38,6 +39,7 @@ export default function InvoicingPage() {
           <InvoiceHistoryTable refreshKey={refreshKey} />
         </section>
       </main>
+      <RoxiraFooter />
     </div>
   );
 }
