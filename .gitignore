@@ -31,4 +31,5 @@ uploads/
 .idea/
 .vscode/
 node_modules/
+dist/
 .aider*
