@@ -164,10 +164,14 @@ def main() -> int:
     check("phonetic repair dict",
           mod._repair_legal_phonetics("رئیم باحتت هیئت عمومی") == "رأی وحدت رویه هیئت عمومی"
           and "وحدت رویه" in mod._repair_legal_phonetics("وقتت رویه مهم است")
-          and mod._repair_legal_phonetics("دادگاه صلحا و قوبه قضایی") == "دادگاه صلح و قوه قضاییه")
+          and mod._repair_legal_phonetics("وقتترابی هیئت عمومی") == "وحدت رویه هیئت عمومی"
+          and mod._repair_legal_phonetics("دادگاه صلحا و قوبه قضایی") == "دادگاه صلح و قوه قضاییه"
+          and mod._repair_legal_phonetics("خسارت تاخیر تادیه") == "خسارت تأخیر تأدیه")
+    _src_phon = MODULE_PATH.read_text(encoding="utf-8")
     check("phonetic repair wired in stt+rag+graph",
-          MODULE_PATH.read_text(encoding="utf-8").count("_repair_legal_phonetics(") >= 5
-          and "_repair_legal_phonetics(_normalize_transcript(transcript))" in MODULE_PATH.read_text(encoding="utf-8"))
+          _src_phon.count("_repair_legal_phonetics(") >= 4
+          and "_repair_legal_phonetics(_normalize_transcript(text))" in _src_phon
+          and _src_phon.count("_clean_stt_output(") >= 4)
 
     # پچ بوت‌پلیت — سانیتایزر سخت‌گیرانه در FORMAL_DISPUTE (Task 2)
     async def _fake_chat_boilerplate(messages, models, max_tokens=1000, temperature=0.2, timeout=90.0):
@@ -260,7 +264,7 @@ def main() -> int:
     check("groq turbo model", "whisper-large-v3-turbo" in src)
     check("no voice_case template", "voice_case" not in src and "پردازش گردید" not in src)
     check("stt temp-file pattern", "_save_temp_audio" in src and "input_audio_" in src)
-    check("stt minimal response", 'return {"status": "OK", "transcript": _repair_legal_phonetics(_normalize_transcript(transcript))}' in src)
+    check("stt minimal response", 'return {"status": "OK", "transcript": _clean_stt_output(transcript)}' in src)
 
     # Task 3 — رفع برش دنباله STT
     check("stt tail fix local params", "condition_on_previous_text=False" in src
@@ -268,14 +272,21 @@ def main() -> int:
     check("stt tail fix groq best-effort", 'condition_on_previous_text="false"' in src
           and 'beam_size="5"' in src)
 
-    # Task 3 (فاز ۲) — نرمال‌سازی متن STT
+    # Task 3 (فاز ۲) — نرمال‌سازی متن STT + حذف پیش‌گفتار مذهبی/تشریفاتی
     check("stt normalization preamble", mod._normalize_transcript(
         "سلام علیکم و رحمت الله خب ماده ۵۲۲ آیین دادرسی مدنی چیست ممنون")
         == "ماده ۵۲۲ آیین دادرسی مدنی چیست")
+    check("stt normalization religious preamble", mod._normalize_transcript(
+        "به نام خداوند بخشنده و مهربان سلام علیکم دادگاه صلاحیت کجاست")
+        == "دادگاه صلاحیت کجاست")
     check("stt normalization stt-prompt tail", mod._normalize_transcript(
         "لطفاً به صورت خیلی خلاصه توضیح دهید رای وحدت رویه ۸۴۰ چه بود")
         == "رای وحدت رویه ۸۴۰ چه بود")
-    check("stt normalization applied in endpoint", "_normalize_transcript(transcript)" in src)
+    check("stt clean output pipeline", mod._clean_stt_output(
+        "به نام خداوند بخشنده و مهربان، سلام علیکم و رحمت الله؛ "
+        "خب لطفا به صورت خیلی خلاصه توضیح دهید وقتترابی ماده ۴۷۴ چیست ممنون")
+        == "وحدت رویه ماده ۴۷۴ چیست")
+    check("stt normalization applied in endpoint", "_clean_stt_output(transcript)" in src)
     check("stt prompt conversational tail",
           "لطفاً به صورت خیلی خلاصه توضیح دهید" in mod.LEGAL_STT_PROMPT
           and "دادگاه انتظامی قضات" in mod.LEGAL_STT_PROMPT
