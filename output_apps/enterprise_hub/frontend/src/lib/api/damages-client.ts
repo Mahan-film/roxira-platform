@@ -1,62 +1,65 @@
 import {
-  CreateDamageCalculationRequest,
-  DamageCalculationResponse,
+  CreateDamageCalculationDto,
+  DamageCalculationResponseDto,
   PaginatedDamageCalculationResponse,
-  QueryDamageCalculationParams,
+  QueryDamageCalculationDto,
 } from '@/types/damages';
+import { apiRequest } from '@/lib/api/http-client';
+import { API_PROXY_BASE_PATH, DAMAGES_RESOURCE_PATH } from '@/lib/api/config';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
+// از پروکسی هم‌مبدأ next.config.ts (`rewrites`) عبور می‌کند تا مشکل CORS
+// رخ ندهد و آدرس واقعی سرویس NestJS در کد سمت مرورگر افشا نشود.
+const DAMAGES_ENDPOINT = `${API_PROXY_BASE_PATH}/${DAMAGES_RESOURCE_PATH}`;
 
+/**
+ * ثبت یک محاسبه خسارت تاخیر تادیه جدید.
+ * منطبق با `DamagesController.create` (POST /enterprise-hub/damages).
+ * در صورت خطای اعتبارسنجی، `ApiClientError` (از `http-client.ts`) پرتاب می‌شود.
+ */
 export async function calculateDamage(
-  payload: CreateDamageCalculationRequest,
-): Promise<DamageCalculationResponse> {
-  const response = await fetch(`${API_BASE_URL}/enterprise-hub/damages`, {
+  payload: CreateDamageCalculationDto,
+  signal?: AbortSignal,
+): Promise<DamageCalculationResponseDto> {
+  return apiRequest<DamageCalculationResponseDto>(DAMAGES_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: payload,
+    signal,
   });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const message = Array.isArray(errorData.message)
-      ? errorData.message.join(', ')
-      : errorData.message || 'خطا در محاسبه خسارت';
-    throw new Error(message);
-  }
-
-  return response.json();
 }
 
+export const createDamageCalculation = calculateDamage;
+
+/**
+ * دریافت فهرست صفحه‌بندی‌شده محاسبات خسارت.
+ * منطبق با `DamagesController.findAll` (GET /enterprise-hub/damages) و
+ * `QueryDamageCalculationDto`. پارامتر دوم اختیاری `AbortSignal` است تا
+ * درخواست‌های قدیمی هنگام تغییر فیلتر/صفحه لغو شوند.
+ */
 export async function listDamageCalculations(
-  params: QueryDamageCalculationParams = {},
+  params: QueryDamageCalculationDto = {},
+  signal?: AbortSignal,
 ): Promise<PaginatedDamageCalculationResponse> {
-  const query = new URLSearchParams();
-  if (params.page) query.append('page', String(params.page));
-  if (params.limit) query.append('limit', String(params.limit));
-  if (params.contractReferenceNumber) query.append('contractReferenceNumber', params.contractReferenceNumber);
-
-  const response = await fetch(`${API_BASE_URL}/enterprise-hub/damages?${query.toString()}`, {
+  return apiRequest<PaginatedDamageCalculationResponse>(DAMAGES_ENDPOINT, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    cache: 'no-store',
+    searchParams: {
+      page: params.page,
+      limit: params.limit,
+      contractReferenceNumber: params.contractReferenceNumber,
+    },
+    signal,
   });
-
-  if (!response.ok) {
-    throw new Error('خطا در دریافت فهرست محاسبات');
-  }
-
-  return response.json();
 }
 
-export async function getDamageCalculation(id: string): Promise<DamageCalculationResponse> {
-  const response = await fetch(`${API_BASE_URL}/enterprise-hub/damages/${id}`, {
+/**
+ * دریافت یک رکورد محاسبه خسارت بر اساس شناسه.
+ * منطبق با `DamagesController.findOne` (GET /enterprise-hub/damages/:id).
+ */
+export async function getDamageCalculation(
+  id: string,
+  signal?: AbortSignal,
+): Promise<DamageCalculationResponseDto> {
+  return apiRequest<DamageCalculationResponseDto>(`${DAMAGES_ENDPOINT}/${id}`, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    signal,
   });
-
-  if (!response.ok) {
-    throw new Error('رکورد محاسبه یافت نشد');
-  }
-
-  return response.json();
 }

@@ -8,7 +8,7 @@ export const DAMAGE_CALCULATION_METHOD_LABELS: Record<DamageCalculationMethod, s
   [DamageCalculationMethod.ANNUAL_RATE]: 'نرخ سود سالانه قراردادی',
 };
 
-export interface CreateDamageCalculationRequest {
+export interface CreateDamageCalculationDto {
   principalAmount: number;
   dueDate: string;
   paymentDate: string;
@@ -19,7 +19,9 @@ export interface CreateDamageCalculationRequest {
   contractReferenceNumber?: string;
 }
 
-export interface DamageCalculationResponse {
+export type CreateDamageCalculationRequest = CreateDamageCalculationDto;
+
+export interface DamageCalculationResponseDto {
   id: string;
   principalAmount: number;
   dueDate: string;
@@ -33,14 +35,18 @@ export interface DamageCalculationResponse {
   createdAt: string;
 }
 
-export interface QueryDamageCalculationParams {
+export type DamageCalculationResponse = DamageCalculationResponseDto;
+
+export interface QueryDamageCalculationDto {
   page?: number;
   limit?: number;
   contractReferenceNumber?: string;
 }
 
+export type QueryDamageCalculationParams = QueryDamageCalculationDto;
+
 export interface PaginatedDamageCalculationResponse {
-  data: DamageCalculationResponse[];
+  data: DamageCalculationResponseDto[];
   total: number;
   page: number;
   limit: number;
