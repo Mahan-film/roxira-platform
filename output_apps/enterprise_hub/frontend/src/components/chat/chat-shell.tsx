@@ -60,6 +60,27 @@ const QUICK_ACTIONS = [
   { label: "محاسبه تاخیر تادیه", icon: Calculator, action: "damages" as const },
 ];
 
+/**
+ * فرمت‌های صوتی استاندارد و به‌ترتیب اولویت برای ضبط دیکته.
+ * Opus/WebM سبک‌ترین و سازگارترین گزینه در مرورگرهای مبتنی بر Chromium است
+ * و در صورت پشتیبانی‌نشدن، به ogg/mp4 عقب‌نشینی می‌کنیم تا خروجی ضبط همیشه
+ * با پسوند مجاز سرور (`_ALLOWED_AUDIO_EXT`) منطبق بماند.
+ */
+const RECORDER_MIME_CANDIDATES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/ogg;codecs=opus",
+  "audio/ogg",
+  "audio/mp4",
+];
+
+function pickRecorderMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) {
+    return undefined;
+  }
+  return RECORDER_MIME_CANDIDATES.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
 export function ChatShell() {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState("");
@@ -254,8 +275,15 @@ export function ChatShell() {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      const mimeType = pickRecorderMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
@@ -270,6 +298,7 @@ export function ChatShell() {
           const text = await transcribeAudio(blob);
           if (text) {
             setInput((prev) => (prev ? `${prev} ${text}` : text));
+            inputRef.current?.focus();
           } else {
             setNotice("گفتاری تشخیص داده نشد؛ لطفاً دوباره تلاش کنید.");
           }
@@ -514,6 +543,20 @@ export function ChatShell() {
               </button>
             ))}
           </div>
+
+          {recording && (
+            <p className="flex items-center gap-1.5 text-[11px] text-rose-300">
+              <span className="size-2 animate-pulse rounded-full bg-rose-400" />
+              در حال ضبط صدا… برای پایان، دکمه توقف را بزنید.
+            </p>
+          )}
+
+          {transcribing && (
+            <p className="flex items-center gap-1.5 text-[11px] text-amber-200/90">
+              <Loader2 className="size-3 animate-spin" />
+              در حال تبدیل صوت به متن…
+            </p>
+          )}
 
           {notice && <p className="text-[11px] text-amber-200/80">{notice}</p>}
 
