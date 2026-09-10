@@ -1,4 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { LogIn, LogOut, UserRound } from "lucide-react";
+
+import { useAuth } from "@/components/auth/auth-provider";
+import { inferServiceDomain } from "@/lib/api/auth-client";
 
 const NAV_LINKS = [
   { href: "/", label: "داشبورد" },
@@ -9,6 +15,17 @@ const NAV_LINKS = [
 ];
 
 export function SiteHeader() {
+  const { isAuthenticated, user, openLogin, logout, isLoading } = useAuth();
+
+  const handleLogin = () => {
+    openLogin({
+      serviceDomain: inferServiceDomain(),
+      title: "ورود به پورتال سازمانی",
+      description:
+        "برای دسترسی به فاکتورها، محاسبه خسارت و ابزارهای سازمانی، شماره همراه خود را وارد کنید.",
+    });
+  };
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#020617]/90 text-slate-100 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
@@ -23,6 +40,7 @@ export function SiteHeader() {
             </span>
           </span>
         </Link>
+
         <nav className="hidden items-center gap-1 text-sm md:flex">
           {NAV_LINKS.map((link) => (
             <Link
@@ -34,12 +52,35 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <Link
-          href="/invoicing"
-          className="inline-flex items-center rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
-        >
-          ورود به سامانه
-        </Link>
+
+        {!isLoading && isAuthenticated && user ? (
+          <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-300 sm:inline-flex">
+              <UserRound className="size-3.5" />
+              <span dir="ltr" className="font-mono">
+                {user.phone}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={logout}
+              title="خروج از حساب"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 transition-colors hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-200"
+            >
+              <LogOut className="size-3.5" />
+              خروج
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleLogin}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
+          >
+            <LogIn className="size-3.5" />
+            ورود به سامانه
+          </button>
+        )}
       </div>
     </header>
   );

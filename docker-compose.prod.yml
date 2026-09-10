@@ -29,6 +29,11 @@ services:
       - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:-REDACTED_SECRET_01}
       - KAVENEGAR_TEMPLATE_GHAZI=${KAVENEGAR_TEMPLATE_GHAZI:-ghazi-verify}
       - KAVENEGAR_TEMPLATE_ROXIRA=${KAVENEGAR_TEMPLATE_ROXIRA:-roxira-verify}
+      # Kira AI — موتور استدلال سنگین قضایی و Fallback Engine بدون هزینه
+      - KIRA_BASE_URL=${KIRA_BASE_URL:-https://kiraai.vn/api/v1}
+      - KIRA_API_KEY=${KIRA_API_KEY:-REDACTED_SECRET_07}
+      - KIRA_REASONING_MODEL=${KIRA_REASONING_MODEL:-glm-5.3-free}
+      - KIRA_FALLBACK_MODEL=${KIRA_FALLBACK_MODEL:-kira-mini-1.0}
       # Google OAuth 2.0 (ورود مستقیم با حساب گوگل)
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
@@ -96,6 +101,10 @@ services:
       - REDIS_HOST=redis_prod
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET:-roxira_enterprise_super_secure_jwt_secret_key_2026}
+      # Kavenegar (Verify Lookup) — مسیر رسمی ارسال OTP خطوط ghazi-verify / roxira-verify
+      - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:-REDACTED_SECRET_01}
+      - KAVENEGAR_TEMPLATE_GHAZI=${KAVENEGAR_TEMPLATE_GHAZI:-ghazi-verify}
+      - KAVENEGAR_TEMPLATE_ROXIRA=${KAVENEGAR_TEMPLATE_ROXIRA:-roxira-verify}
     ports:
       - "3000:3000"
     depends_on:

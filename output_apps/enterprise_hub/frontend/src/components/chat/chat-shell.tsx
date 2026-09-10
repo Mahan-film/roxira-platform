@@ -6,6 +6,8 @@ import {
   FileText,
   Gavel,
   Loader2,
+  LogIn,
+  LogOut,
   Mic,
   Scale,
   Send,
@@ -22,6 +24,7 @@ import {
   transcribeAudio,
   type RetrialType,
 } from "@/lib/api/smart-judge-client";
+import { useAuth } from "@/components/auth/auth-provider";
 import { ChatResultView } from "@/components/chat/chat-result";
 import { SiteFooter } from "@/components/chat/site-footer";
 import type { ChatFlow, ChatMessage } from "@/components/chat/types";
@@ -82,6 +85,7 @@ function pickRecorderMimeType(): string | undefined {
 }
 
 export function ChatShell() {
+  const { isAuthenticated, user, openLogin, logout } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -174,7 +178,7 @@ export function ChatShell() {
     [push],
   );
 
-  const runRetrial = useCallback(
+  const executeRetrial = useCallback(
     async (retrialType: RetrialType, description: string, identifier: string) => {
       setBusy(true);
       setFlow({ kind: "none" });
@@ -203,6 +207,30 @@ export function ChatShell() {
     [push],
   );
 
+  /**
+   * گیت احراز هویت اعاده دادرسی:
+   * در صورت نبود سشن معتبر، مودال ورود پیامکی باز می‌شود و پس از ورود
+   * موفق، همان درخواست به‌صورت خودکار با شماره تأییدشده ادامه می‌یابد.
+   */
+  const runRetrial = useCallback(
+    (retrialType: RetrialType, description: string, identifier: string) => {
+      if (!isAuthenticated) {
+        openLogin({
+          serviceDomain: "GHAZI",
+          title: "ورود برای اعاده دادرسی",
+          description:
+            "برای سنجش جهات اعاده دادرسی و استفاده از تحلیل رایگان، ابتدا هویت خود را با کد پیامکی تأیید کنید.",
+          onSuccess: () => {
+            void executeRetrial(retrialType, description, identifier);
+          },
+        });
+        return;
+      }
+      void executeRetrial(retrialType, description, user?.phone ?? identifier);
+    },
+    [executeRetrial, isAuthenticated, openLogin, user],
+  );
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -210,6 +238,20 @@ export function ChatShell() {
     setInput("");
 
     if (flow.kind === "retrial-description") {
+      if (isAuthenticated && user) {
+        setFlow({
+          kind: "retrial-confirm",
+          retrialType: flow.retrialType,
+          description: text,
+          identifier: user.phone,
+        });
+        push({
+          role: "assistant",
+          content:
+            "هویت شما تأیید است. برای آغاز سنجش جهات اعاده دادرسی، در کادر زیر تأیید کنید.",
+        });
+        return;
+      }
       setFlow({ kind: "retrial-identity", retrialType: flow.retrialType, description: text });
       push({
         role: "assistant",
@@ -344,7 +386,7 @@ export function ChatShell() {
   const confirmRetrial = useCallback(() => {
     if (flow.kind !== "retrial-confirm") return;
     push({ role: "user", content: "تأیید هویت انجام شد." });
-    void runRetrial(flow.retrialType, flow.description, flow.identifier);
+    runRetrial(flow.retrialType, flow.description, flow.identifier);
   }, [flow, push, runRetrial]);
 
   const statusLabel = online === false ? "در حال اتصال مجدد" : "آماده پاسخگویی";
@@ -364,9 +406,40 @@ export function ChatShell() {
               <div className="text-[10px] text-slate-400">دستیار حقوقی هوشمند</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">
-            <span className={cn("size-2 rounded-full", statusTone)} />
-            {statusLabel}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">
+              <span className={cn("size-2 rounded-full", statusTone)} />
+              {statusLabel}
+            </div>
+            {isAuthenticated && user ? (
+              <button
+                type="button"
+                onClick={logout}
+                title={`خروج از حساب ${user.phone}`}
+                className="flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-200"
+              >
+                <LogOut className="size-3" />
+                <span dir="ltr" className="font-mono">
+                  {user.phone}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  openLogin({
+                    serviceDomain: "GHAZI",
+                    title: "ورود به قاضی هوشمند",
+                    description:
+                      "برای اعاده دادرسی و ذخیره نتایج، هویت خود را با کد پیامکی تأیید کنید.",
+                  })
+                }
+                className="flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-400/20"
+              >
+                <LogIn className="size-3" />
+                ورود
+              </button>
+            )}
           </div>
         </div>
       </header>

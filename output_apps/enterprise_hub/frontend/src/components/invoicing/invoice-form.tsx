@@ -6,6 +6,7 @@ import {
   CirclePlusIcon,
   Loader2Icon,
   SendHorizonalIcon,
+  ShieldCheckIcon,
   Trash2Icon,
   WandSparklesIcon,
 } from "lucide-react";
@@ -40,6 +41,8 @@ import {
 
 import { createInvoice } from "@/lib/api/invoicing-client";
 import { ApiClientError } from "@/lib/api/http-client";
+import { inferServiceDomain } from "@/lib/api/auth-client";
+import { useAuth } from "@/components/auth/auth-provider";
 import { formatRial } from "@/lib/format";
 import {
   INVOICE_STATUS_LABELS,
@@ -170,6 +173,7 @@ function PartyFields({
  * - متصل به `POST /enterprise-hub/invoicing` از طریق کلاینت تایپ‌سیف.
  */
 export function InvoiceForm({ onCreated }: InvoiceFormProps) {
+  const { isAuthenticated, openLogin } = useAuth();
   const nextItemId = useRef(1);
   const [taxInvoiceNumber, setTaxInvoiceNumber] = useState("");
   const [status, setStatus] = useState<InvoiceStatus>(InvoiceStatus.DRAFT);
@@ -243,14 +247,27 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
     return errors;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitInvoice() {
     setSubmitError(null);
     setCreatedInvoice(null);
 
     const validationErrors = validate();
     if (validationErrors.length > 0) {
       setSubmitError(validationErrors);
+      return;
+    }
+
+    // گیت احراز هویت: صدور فاکتور سازمانی نیازمند سشن معتبر پیامکی است.
+    if (!isAuthenticated) {
+      openLogin({
+        serviceDomain: inferServiceDomain(),
+        title: "ورود برای صدور فاکتور",
+        description:
+          "صدور صورتحساب سازمانی نیازمند احراز هویت است؛ شماره همراه خود را تأیید کنید.",
+        onSuccess: () => {
+          void submitInvoice();
+        },
+      });
       return;
     }
 
@@ -287,6 +304,11 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitInvoice();
   }
 
   return (
@@ -491,6 +513,17 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
             </Alert>
           )}
 
+          {!isAuthenticated && (
+            <Alert className="border-indigo-500/30 bg-indigo-500/5">
+              <ShieldCheckIcon className="size-4 text-indigo-500" />
+              <AlertTitle>احراز هویت لازم است</AlertTitle>
+              <AlertDescription>
+                برای صدور صورتحساب سازمانی، ابتدا با شماره همراه خود وارد شوید.
+                با کلیک روی دکمه صدور، پنجره ورود پیامکی باز می‌شود.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Button type="submit" disabled={isSubmitting} className="self-start">
             {isSubmitting ? (
               <>
@@ -500,7 +533,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
             ) : (
               <>
                 <SendHorizonalIcon />
-                صدور صورتحساب
+                {isAuthenticated ? "صدور صورتحساب" : "ورود و صدور صورتحساب"}
               </>
             )}
           </Button>

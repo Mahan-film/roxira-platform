@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import * as path from 'path';
 import { DamagesModule } from './modules/damages/damages.module';
 import { InvoicingModule } from './modules/invoicing/invoicing.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { InvoicingModule } from './modules/invoicing/invoicing.module';
     }),
     DamagesModule,
     InvoicingModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

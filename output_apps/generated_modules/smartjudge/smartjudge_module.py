@@ -11,6 +11,9 @@ ROXIRA SMARTJUDGE — موتور قضایی واقعی مبتنی بر Dual-Leve
       Tier 2 (دقت بالا):   openai/gpt-5.6-luna | deepseek/deepseek-v4-pro | google/gemini-3.8-flash
       Tier 3 (تحلیل عمیق): openai/gpt-5.6-luna | deepseek/deepseek-v4-pro | google/gemini-3.8-flash
     سقف توکن سخت‌گیرانه: tier1=2000 / tier2=3500 / tier3=4500 (حذف ارورهای 402)
+  • پرووایدر Kira AI روی https://kiraai.vn/api/v1 — موتور استدلال سنگین قضایی:
+      glm-5.3-free (استدلال عمیق؛ استخراج reasoning_content و content با سقف ۲۰۰۰ توکن)
+      kira-mini-1.0 (پشتیبان بدون هزینه با بافر ورودی ۱ میلیون توکن — Fallback Engine)
   • تبدیل گفتار به متن فارسی سمت سرور: Groq Whisper-large-v3-turbo →
     OpenAI whisper-1 → faster-whisper محلی
 
@@ -80,6 +83,21 @@ OPENROUTER_KEY = _read_env_key("OPENROUTER_API_KEY") or _read_env_key("LLM_API_K
 OPENAI_API_KEY = _read_env_key("OPENAI_API_KEY")
 GROQ_API_KEY = _read_env_key("GROQ_API_KEY")
 GROQ_STT_MODEL = _read_env_key("GROQ_STT_MODEL") or "whisper-large-v3-turbo"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# پرووایدر Kira AI — موتور استدلال سنگین قضایی + پشتیبان بدون هزینه
+#   • KIRA_REASONING_MODEL = glm-5.3-free : تسک‌های استدلال قضایی عمیق
+#     (استخراج هم‌زمان reasoning_content و content با سقف سخت ۲۰۰۰ توکن)
+#   • KIRA_FALLBACK_MODEL  = kira-mini-1.0 : پرونده‌های حجیم با بافر ورودی
+#     ۱ میلیون توکن به‌عنوان Fallback Engine رایگان (در نبود/شکست OpenRouter)
+# ─────────────────────────────────────────────────────────────────────────────
+KIRA_BASE = (_read_env_key("KIRA_BASE_URL") or "https://kiraai.vn/api/v1").rstrip("/")
+KIRA_KEY = _read_env_key("KIRA_API_KEY") or "REDACTED_SECRET_07"
+KIRA_REASONING_MODEL = _read_env_key("KIRA_REASONING_MODEL") or "glm-5.3-free"
+KIRA_FALLBACK_MODEL = _read_env_key("KIRA_FALLBACK_MODEL") or "kira-mini-1.0"
+KIRA_REASONING_MAX_TOKENS = 2000
+KIRA_FALLBACK_CONTEXT_TOKENS = 1_000_000
+KIRA_FALLBACK_OUTPUT_TOKENS = 8192
 
 # ─────────────────────────────────────────────────────────────────────────────
 # سوگیری واژگان تخصصی حقوقی برای گفتاربه‌متن فارسی (Task 1 — High-Precision STT)
@@ -158,16 +176,54 @@ def _model_chain(tier: str) -> List[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# کلاینت OpenRouter (OpenAI-compatible)
+# کلاینت‌های چندپرووایدری: OpenRouter (اصلی) + Kira AI (استدلال سنگین/پشتیبان)
 # ─────────────────────────────────────────────────────────────────────────────
-async def _chat_completion(messages: List[Dict[str, str]], models: List[str],
-                           max_tokens: int = 1800, temperature: float = 0.2,
-                           timeout: float = 90.0) -> Tuple[str, str]:
-    """فراخوانی واقعی Chat Completions با تلاش ترتیبی روی مدل‌ها. خروجی: (متن, مدل)."""
-    if not models:
-        raise RuntimeError("هیچ مدلی برای فراخوانی تعریف نشده است.")
-    if not OPENROUTER_KEY:
-        raise RuntimeError("OPENROUTER_API_KEY تنظیم نشده است.")
+def _kira_configured() -> bool:
+    """آیا پرووایدر Kira AI (موتور استدلال سنگین/پشتیبان) فعال است."""
+    return bool(KIRA_KEY)
+
+
+def _approx_tokens(text: str) -> int:
+    """تخمین محافظه‌کارانه تعداد توکن بر مبنای طول کاراکتر (فارسی ≈ ۴ کاراکتر/توکن)."""
+    return max(1, len(text) // 4)
+
+
+def _trim_messages_to_budget(
+    messages: List[Dict[str, str]], token_budget: Optional[int]
+) -> List[Dict[str, str]]:
+    """برش پیام‌ها برای ماندن در بودجه توکن ورودی (بافر ۱M توکن موتور پشتیبان).
+
+    پیام‌های system به‌صورت کامل حفظ می‌شوند؛ در صورت سرریز، محتوای پیام‌های
+    کاربر از انتها برش داده می‌شود تا هرگز از بودجه فراتر نرود.
+    """
+    if not token_budget:
+        return messages
+    used = sum(_approx_tokens(m.get("content", "")) for m in messages)
+    if used <= token_budget:
+        return messages
+
+    system_chars = sum(
+        len(m.get("content", "")) for m in messages if m.get("role") == "system"
+    )
+    remaining = max(0, token_budget * 4 - system_chars)
+    trimmed: List[Dict[str, str]] = []
+    for m in messages:
+        if m.get("role") == "system":
+            trimmed.append(m)
+            continue
+        content = m.get("content", "")
+        if len(content) > remaining:
+            content = content[:remaining]
+        remaining -= len(content)
+        trimmed.append({**m, "content": content})
+    return trimmed
+
+
+async def _openrouter_chat_completion(
+    messages: List[Dict[str, str]], models: List[str],
+    max_tokens: int, temperature: float, timeout: float,
+) -> Tuple[str, str]:
+    """تلاش ترتیبی روی مدل‌های OpenRouter — خروجی: (متن, مدل)."""
     last_err = ""
     for model in models:
         try:
@@ -205,7 +261,125 @@ async def _chat_completion(messages: List[Dict[str, str]], models: List[str],
         except Exception as exc:
             last_err = f"{model}: {exc}"
             logger.warning("[SMARTJUDGE] LLM call failed %s", last_err)
-    raise RuntimeError(f"تمام مدل‌های LLM ناموفق بودند | آخرین خطا: {last_err}")
+    raise RuntimeError(last_err or "هیچ مدل OpenRouterای موفق نشد.")
+
+
+async def _kira_chat_completion(
+    messages: List[Dict[str, str]],
+    model: str = KIRA_REASONING_MODEL,
+    max_tokens: int = KIRA_REASONING_MAX_TOKENS,
+    temperature: float = 0.2,
+    timeout: float = 120.0,
+    context_budget: Optional[int] = None,
+) -> Tuple[str, str]:
+    """فراخوانی Chat Completions پرووایدر Kira AI (OpenAI-compatible).
+
+    موتور استدلال عمیق (glm-5.3-free) هر دو فیلد `reasoning_content` و
+    `content` را برمی‌گرداند؛ ابتدا `content` و در نبود آن `reasoning_content`
+    استخراج می‌شود و سقف خروجی از طریق max_tokens (۲۰۰۰ توکن) اعمال می‌گردد.
+    موتور پشتیبان (kira-mini-1.0) بافر ورودی ۱ میلیون توکنی دارد.
+    """
+    if not KIRA_KEY:
+        raise RuntimeError("KIRA_API_KEY تنظیم نشده است.")
+    prepared = _trim_messages_to_budget(messages, context_budget)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        r = await client.post(
+            f"{KIRA_BASE}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {KIRA_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://ghazihoushmand.ir",
+                "X-Title": "Roxira SmartJudge (Kira AI)",
+            },
+            json={
+                "model": model,
+                "messages": prepared,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+        )
+    if r.status_code != 200:
+        raise RuntimeError(f"{model}: HTTP {r.status_code} {r.text[:180]}")
+
+    body = r.json()
+    msg = ((body.get("choices") or [{}])[0].get("message") or {})
+    content = (msg.get("content") or "").strip()
+    reasoning = str(msg.get("reasoning_content") or msg.get("reasoning") or "").strip()
+    if not content and reasoning:
+        content = reasoning
+    if not content:
+        raise RuntimeError(f"{model}: empty content")
+    return content, model
+
+
+def _kira_engine_chain(max_tokens: int) -> List[Tuple[str, int, Optional[int]]]:
+    """زنجیره Kira AI: (مدل، سقف خروجی، بودجه ورودی) — استدلال عمیق سپس پشتیبان."""
+    reasoning_cap = min(max_tokens, KIRA_REASONING_MAX_TOKENS) or KIRA_REASONING_MAX_TOKENS
+    return [
+        (KIRA_REASONING_MODEL, reasoning_cap, None),
+        # پشتیبان بدون هزینه با بافر ۱ میلیون توکن برای پرونده‌های حجیم
+        (KIRA_FALLBACK_MODEL, max(KIRA_FALLBACK_OUTPUT_TOKENS, max_tokens), KIRA_FALLBACK_CONTEXT_TOKENS),
+    ]
+
+
+async def _chat_completion(messages: List[Dict[str, str]], models: List[str],
+                           max_tokens: int = 1800, temperature: float = 0.2,
+                           timeout: float = 90.0,
+                           prefer_kira: bool = False) -> Tuple[str, str]:
+    """فراخوانی چندپرووایدری Chat Completions با تلاش ترتیبی. خروجی: (متن, مدل).
+
+    ترتیب:
+      ۱) در حالت `prefer_kira` (تسک‌های استدلال سنگین قضایی): ابتدا Kira AI
+      ۲) سپس زنجیره مدل‌های OpenRouter
+      ۳) در نهایت Fallback Engine رایگان Kira (kira-mini-1.0 با بافر ۱M توکن)
+    در نبود کلید OpenRouter، تنها از Kira AI استفاده می‌شود.
+    """
+    if not models and not _kira_configured():
+        raise RuntimeError("هیچ مدلی برای فراخوانی تعریف نشده است.")
+
+    errors: List[str] = []
+
+    if prefer_kira and _kira_configured():
+        for kmodel, kcap, kbudget in _kira_engine_chain(max_tokens):
+            try:
+                content, used = await _kira_chat_completion(
+                    messages, model=kmodel, max_tokens=kcap,
+                    temperature=temperature, timeout=timeout,
+                    context_budget=kbudget,
+                )
+                if content:
+                    return content, used
+            except Exception as exc:
+                errors.append(f"{kmodel}: {exc}")
+                logger.warning("[SMARTJUDGE] Kira AI call failed %s", errors[-1])
+
+    if OPENROUTER_KEY:
+        try:
+            return await _openrouter_chat_completion(
+                messages, models or _EMERGENCY_MODELS, max_tokens, temperature, timeout
+            )
+        except RuntimeError as exc:
+            errors.append(str(exc))
+            logger.warning("[SMARTJUDGE] OpenRouter chain failed: %s", exc)
+    else:
+        errors.append("OPENROUTER_API_KEY تنظیم نشده است.")
+
+    # Fallback Engine رایگان Kira AI (بدون هزینه) — برای پرونده‌های حجیم
+    if _kira_configured():
+        for kmodel, kcap, kbudget in _kira_engine_chain(max_tokens):
+            try:
+                content, used = await _kira_chat_completion(
+                    messages, model=kmodel, max_tokens=kcap,
+                    temperature=temperature, timeout=timeout,
+                    context_budget=kbudget,
+                )
+                if content:
+                    return content, used
+            except Exception as exc:
+                errors.append(f"{kmodel}: {exc}")
+                logger.warning("[SMARTJUDGE] Kira AI fallback failed %s", errors[-1])
+
+    raise RuntimeError("تمام موتورهای LLM ناموفق بودند | " + " | ".join(errors[-6:]))
 
 
 def _extract_json_block(text: str) -> Optional[Dict[str, Any]]:
@@ -920,6 +1094,8 @@ async def _llm_analyze(case_text: str, engine_tier: str, attached_files: List[st
         models=_model_chain(tier),
         max_tokens=TIER_MAX_TOKENS.get(tier, 2200),
         temperature=0.2,
+        # استدلال قضایی عمیق (tier3) با موتور سنگین Kira AI (glm-5.3-free) آغاز می‌شود
+        prefer_kira=(tier == "tier3"),
     )
 
     # ── پارس امن خروجی LLM — حتی اگر JSON دوباره‌انکدشده (رشته داخل رشته) باشد ──
@@ -992,6 +1168,7 @@ async def _llm_analyze(case_text: str, engine_tier: str, attached_files: List[st
                     models=_model_chain(tier),
                     max_tokens=TIER_MAX_TOKENS.get(tier, 2200),
                     temperature=0.2,
+                    prefer_kira=(tier == "tier3"),
                 )
                 draft_parsed = _deep_json_parse(draft_content) or {}
                 draft_text = str(draft_parsed.get("draft_text") or "").strip() \
@@ -1296,6 +1473,8 @@ async def _retrial_evaluate_engine(retrial_type: str, case_description: str,
         models=_model_chain("tier3"),
         max_tokens=TIER_MAX_TOKENS["tier3"],
         temperature=0.2,
+        # انشای دادخواست اعاده دادرسی = استدلال سنگین؛ موتور Kira AI مقدم است
+        prefer_kira=True,
     )
 
     parsed = _deep_json_parse(content) or {}
@@ -1353,8 +1532,8 @@ async def retrial_evaluate(req: RetrialEvalRequest):
     # گیت ۱ — احراز هویت OTP (پیامک/ایمیل)
     if not req.is_verified:
         raise HTTPException(status_code=403, detail="برای سنجش اعاده دادرسی، احراز هویت با کد یک‌بارمصرف (پیامک/ایمیل) الزامی است.")
-    if not OPENROUTER_KEY:
-        raise HTTPException(status_code=503, detail="موتور تحلیل قضایی (OpenRouter) تنظیم نشده است.")
+    if not (OPENROUTER_KEY or _kira_configured()):
+        raise HTTPException(status_code=503, detail="موتور تحلیل قضایی (OpenRouter/Kira AI) تنظیم نشده است.")
     try:
         await _ensure_retrial_schema()
     except Exception as exc:
@@ -1396,8 +1575,15 @@ async def health():
         stats = {"status": "UNAVAILABLE", "error": str(exc)[:160]}
     return {
         "status": "ONLINE",
-        "engine": "Roxira SmartJudge Dual-Level GraphRAG (Qdrant Vector + PostgreSQL Graph + OpenRouter LLM)",
-        "llm_configured": bool(OPENROUTER_KEY),
+        "engine": "Roxira SmartJudge Dual-Level GraphRAG (Qdrant Vector + PostgreSQL Graph + OpenRouter/Kira AI LLM)",
+        "llm_configured": bool(OPENROUTER_KEY or _kira_configured()),
+        "providers": {
+            "openrouter": bool(OPENROUTER_KEY),
+            "kira_ai": _kira_configured(),
+            "kira_reasoning_model": KIRA_REASONING_MODEL,
+            "kira_fallback_model": KIRA_FALLBACK_MODEL,
+            "kira_fallback_context_tokens": KIRA_FALLBACK_CONTEXT_TOKENS,
+        },
         "groq_stt_configured": bool(GROQ_API_KEY),
         "stt": "groq-whisper-large-v3-turbo" if GROQ_API_KEY else "local-faster-whisper",
         "prompt_caching": "static-prefix-first (OpenRouter prefix cache)",
