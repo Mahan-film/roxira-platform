@@ -13,8 +13,8 @@ services:
       - ./run_unified_server.py:/app/run_unified_server.py
       - ./data:/opt/roxira_platform/data
     environment:
-      - POSTGRES_HOST=postgres_prod
-      - POSTGRES_PORT=5432
+      - POSTGRES_HOST=roxira_pgbouncer
+      - POSTGRES_PORT=6432
       - POSTGRES_USER=enterprise_admin
       - POSTGRES_PASSWORD=REDACTED_SECRET_19
       - POSTGRES_DB=enterprise_db
@@ -44,6 +44,7 @@ services:
       - postgres_prod
       - redis_prod
       - qdrant_prod
+      - pgbouncer_prod
     networks:
       - roxira_net
 
@@ -59,6 +60,52 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enterprise_admin -d enterprise_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - roxira_net
+
+  # ------------------------------------------------------------------
+  # PgBouncer — تجمیع اتصالات PostgreSQL برای بارهای ۲۰٬۰۰۰ کاربر
+  # POOL_MODE=transaction و MAX_CLIENT_CONN=10000؛ بک‌اندها به 6432 وصل
+  # می‌شوند تا تعداد اتصال واقعی به Postgres کنترل شود.
+  # ------------------------------------------------------------------
+  pgbouncer_prod:
+    image: edoburu/pgbouncer:latest
+    container_name: roxira_pgbouncer
+    restart: always
+    environment:
+      - DB_HOST=postgres_prod
+      - DB_PORT=5432
+      - DB_USER=enterprise_admin
+      - DB_PASSWORD=REDACTED_SECRET_19
+      - DB_NAME=enterprise_db
+      - LISTEN_PORT=6432
+      - AUTH_TYPE=scram-sha-256
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=10000
+      - DEFAULT_POOL_SIZE=200
+      - MAX_DB_CONNECTIONS=500
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits,options
+    ports:
+      - "6432:6432"
+    ulimits:
+      nofile:
+        soft: 20000
+        hard: 524288
+    depends_on:
+      postgres_prod:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U enterprise_admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - roxira_net
 
@@ -93,8 +140,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_HOST=postgres_prod
-      - DATABASE_PORT=5432
+      - DATABASE_HOST=roxira_pgbouncer
+      - DATABASE_PORT=6432
       - DATABASE_USER=enterprise_admin
       - DATABASE_PASSWORD=REDACTED_SECRET_19
       - DATABASE_NAME=enterprise_db
@@ -110,6 +157,7 @@ services:
     depends_on:
       - postgres_prod
       - redis_prod
+      - pgbouncer_prod
     networks:
       - roxira_net
 

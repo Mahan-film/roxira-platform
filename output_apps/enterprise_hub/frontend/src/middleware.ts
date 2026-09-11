@@ -4,40 +4,58 @@ import { NextResponse, type NextRequest } from "next/server";
  * تفکیک دامنه‌ای لایه UI/UX:
  *
  *   • ghazihoushmand.ir  → سامانه قاضی هوشمند (تجربه چت‌محور در ریشه)
- *   • roxira.ir / roxira.net / IP → پورتال خدمات سازمانی روکسیرا
+ *   • roxira.ir          → پورتال خدمات سازمانی روکسیرا (فارسی، RTL)
+ *   • roxira.net         → Roxira International B2B Hub (انگلیسی، LTR)
  *
- * یک اپلیکیشن Next.js مشترک، بر اساس Hostname دو تجربه کاملاً مجزا ارائه
- * می‌دهد؛ مسیر ریشه دامنه قاضی به صفحه چت بازنویسی (rewrite) می‌شود و
- * مسیرهای اختصاصی هر دامنه از دامنه مقابل به مقصد صحیح هدایت می‌گردند.
+ * یک اپلیکیشن Next.js مشترک، بر اساس Hostname سه تجربه کاملاً مجزا ارائه
+ * می‌دهد؛ ریشه دامنه قاضی به `/chat` و ریشه دامنه بین‌المللی به `/en`
+ * بازنویسی (rewrite) می‌شود و مسیرهای اختصاصی هر دامنه از دامنه مقابل به
+ * مقصد صحیح هدایت می‌گردند.
  */
 
 const GHAZI_HOSTS = ["ghazihoushmand.ir", "www.ghazihoushmand.ir"];
-const ROXIRA_HOSTS = [
-  "roxira.ir",
-  "www.roxira.ir",
-  "roxira.net",
-  "www.roxira.net",
+const ROXIRA_IR_HOSTS = ["roxira.ir", "www.roxira.ir"];
+const ROXIRA_NET_HOSTS = ["roxira.net", "www.roxira.net"];
+
+/** دامنه‌های سازمانی که فقط روی roxira.ir معنا دارند. */
+const ROXIRA_ONLY_PATHS = [
+  "/invoicing",
+  "/damages",
+  "/accounting",
+  "/inventory",
+  "/crm",
 ];
+
+type ServiceDomain = "ghazi" | "roxira_ir" | "roxira_net";
 
 function normalizeHost(host: string): string {
   return host.split(":")[0].trim().toLowerCase();
 }
 
-function isGhaziHost(host: string): boolean {
+function resolveDomain(host: string): ServiceDomain {
   const h = normalizeHost(host);
-  if (!h) return false;
-  if (GHAZI_HOSTS.includes(h)) return true;
-  if (ROXIRA_HOSTS.includes(h)) return false;
-  return h.includes("ghazihoushmand") || h.includes("smartjudge") || h.startsWith("ghazi");
+  if (GHAZI_HOSTS.includes(h)) return "ghazi";
+  if (ROXIRA_NET_HOSTS.includes(h)) return "roxira_net";
+  if (ROXIRA_IR_HOSTS.includes(h)) return "roxira_ir";
+  // IP/میزبان ناشناخته → پورتال فارسی سازمانی
+  if (h.includes("ghazihoushmand") || h.includes("smartjudge") || h.startsWith("ghazi")) {
+    return "ghazi";
+  }
+  if (h.includes("roxira.net")) return "roxira_net";
+  return "roxira_ir";
+}
+
+function redirectGhazi(): NextResponse {
+  return NextResponse.redirect(new URL("https://ghazihoushmand.ir/"));
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const ghazi = isGhaziHost(request.headers.get("host") ?? "");
+  const domain = resolveDomain(request.headers.get("host") ?? "");
 
-  if (ghazi) {
+  if (domain === "ghazi") {
     // مسیرهای پورتال سازمانی در دامنه قاضی معنا ندارند
-    if (pathname.startsWith("/invoicing") || pathname.startsWith("/damages")) {
+    if (ROXIRA_ONLY_PATHS.some((path) => pathname.startsWith(path))) {
       return NextResponse.redirect(new URL("https://roxira.ir/"));
     }
     // ریشه دامنه قاضی = رابط چت هوشمند حقوقی
@@ -46,14 +64,38 @@ export function middleware(request: NextRequest) {
       url.pathname = "/chat";
       return NextResponse.rewrite(url);
     }
-  } else if (pathname === "/chat" || pathname === "/judge") {
-    // قاضی هوشمند فقط روی دامنه اختصاصی خودش سرو می‌شود
-    return NextResponse.redirect(new URL("https://ghazihoushmand.ir/"));
+    return NextResponse.next();
   }
 
+  // قاضی هوشمند فقط روی دامنه اختصاصی خودش سرو می‌شود
+  if (pathname === "/chat" || pathname === "/judge") {
+    return redirectGhazi();
+  }
+
+  if (domain === "roxira_net") {
+    // ریشه دامنه بین‌المللی = پورتال انگلیسی B2B
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/en";
+      return NextResponse.rewrite(url);
+    }
+    return NextResponse.next();
+  }
+
+  // roxira.ir و IP: پورتال فارسی سازمانی
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/", "/chat", "/judge", "/damages", "/invoicing"],
+  matcher: [
+    "/",
+    "/en",
+    "/chat",
+    "/judge",
+    "/damages",
+    "/invoicing",
+    "/accounting",
+    "/inventory",
+    "/crm",
+  ],
 };
