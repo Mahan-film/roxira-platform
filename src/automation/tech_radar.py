@@ -1,3 +1,12 @@
+import os
+import sys
+import pathlib
+
+# افزودن خودکار ریشه مخزن به sys.path جهت اجرای مستقل و ایمن
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from __future__ import annotations
 
 import argparse
