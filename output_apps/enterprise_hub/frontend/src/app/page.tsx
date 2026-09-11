@@ -221,7 +221,9 @@ export default function Home() {
             </Link>
 
             <Link
-              href="/judge"
+              href="https://ghazihoushmand.ir"
+              target="_blank"
+              rel="noopener noreferrer"
               className="group flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 transition-colors hover:border-violet-400/40 lg:col-span-2"
             >
               <div className="flex items-start justify-between gap-4">

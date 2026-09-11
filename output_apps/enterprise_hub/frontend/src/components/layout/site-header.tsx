@@ -6,11 +6,11 @@ import { LogIn, LogOut, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 
-const NAV_LINKS = [
+const NAV_LINKS: { href: string; label: string; external?: boolean }[] = [
   { href: "/", label: "داشبورد" },
   { href: "/invoicing", label: "فاکتورها" },
   { href: "/damages", label: "محاسبه خسارت" },
-  { href: "/judge", label: "قاضی هوشمند" },
+  { href: "https://ghazihoushmand.ir", label: "قاضی هوشمند", external: true },
   { href: "/docs", label: "مستندات API" },
 ];
 
@@ -42,15 +42,27 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-1 text-sm md:flex">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) =>
+            link.external ? (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                {link.label}
+              </a>
+            ) : (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                {link.label}
+              </Link>
+            ),
+          )}
         </nav>
 
         {!isLoading && isAuthenticated && user ? (

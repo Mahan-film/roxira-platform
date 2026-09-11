@@ -1,11 +1,17 @@
+"use client";
+
+import { useCallback, useState } from "react";
 import {
   BookOpenCheck,
+  Check,
   CheckCircle2,
   Coins,
+  Copy,
   FileWarning,
   Gauge,
   Landmark,
   ListChecks,
+  Printer,
   ScrollText,
   Scale,
   TrendingUp,
@@ -13,6 +19,129 @@ import {
 
 import type { ChatResult } from "@/components/chat/types";
 import { formatRial } from "@/lib/format";
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** متن قانونی قابل کپی/چاپ را از نتیجه ساختاریافته استخراج می‌کند. */
+function buildLegalText(result: ChatResult): { title: string; body: string } | null {
+  if (result.kind === "analysis") {
+    const body = result.data.draft_text?.trim() || result.data.legal_advisory?.trim();
+    return body ? { title: "تحلیل حقوقی پرونده و پیش‌نویس لایحه", body } : null;
+  }
+  if (result.kind === "retrial") {
+    const body = result.data.petition_text?.trim() || result.data.eligibility_analysis?.trim();
+    return body
+      ? { title: result.data.retrial_label || "دادخواست رسمی اعاده دادرسی", body }
+      : null;
+  }
+  return null;
+}
+
+function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand("copy") ? resolve() : reject(new Error("copy failed"));
+    } catch (error) {
+      reject(error);
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  });
+}
+
+/** باز کردن پنجره چاپ با خروجی رسمی و فارسی‌خوان (RTL) برای ذخیره PDF. */
+function printLegalDocument(title: string, body: string): void {
+  const win = window.open("", "_blank", "noopener,noreferrer,width=860,height=1000");
+  if (!win) return;
+  win.document.write(`<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(title)}</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Vazirmatn", "Tahoma", system-ui, sans-serif; color: #111827; line-height: 2; margin: 0; }
+  header { border-bottom: 2px solid #b45309; padding-bottom: 12px; margin-bottom: 20px; }
+  h1 { font-size: 18px; margin: 0 0 6px; color: #92400e; }
+  .meta { font-size: 11px; color: #6b7280; }
+  pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px; margin: 0; }
+  footer { margin-top: 28px; border-top: 1px solid #e5e7eb; padding-top: 10px; font-size: 10px; color: #6b7280; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>${escapeHtml(title)}</h1>
+    <div class="meta">سامانه قاضی هوشمند — ghazihoushmand.ir</div>
+  </header>
+  <pre>${escapeHtml(body)}</pre>
+  <footer>این سند توسط دستیار حقوقی هوشمند تولید شده است و جایگزین مشاوره رسمی وکیل نیست.</footer>
+</body>
+</html>`);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+function LegalExportActions({ result }: { result: ChatResult }) {
+  const payload = buildLegalText(result);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    if (!payload) return;
+    try {
+      await copyToClipboard(`${payload.title}\n\n${payload.body}`);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }, [payload]);
+
+  const handlePrint = useCallback(() => {
+    if (!payload) return;
+    printLegalDocument(payload.title, payload.body);
+  }, [payload]);
+
+  if (!payload) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-white/8 pt-3">
+      <button
+        type="button"
+        onClick={() => void handleCopy()}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-slate-300 transition-colors hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-100"
+      >
+        {copied ? <Check className="size-3.5 text-emerald-300" /> : <Copy className="size-3.5" />}
+        {copied ? "کپی شد" : "کپی متن لایحه"}
+      </button>
+      <button
+        type="button"
+        onClick={handlePrint}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-slate-300 transition-colors hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-100"
+      >
+        <Printer className="size-3.5" />
+        چاپ / خروجی رسمی
+      </button>
+    </div>
+  );
+}
 
 function Section({
   icon,
@@ -104,6 +233,8 @@ export function ChatResultView({ result }: { result: ChatResult }) {
             </div>
           </Section>
         )}
+
+        <LegalExportActions result={result} />
       </div>
     );
   }
@@ -168,6 +299,8 @@ export function ChatResultView({ result }: { result: ChatResult }) {
             </ul>
           </Section>
         )}
+
+        <LegalExportActions result={result} />
       </div>
     );
   }

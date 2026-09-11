@@ -602,13 +602,21 @@ export function ChatShell() {
               >
                 <History className="size-4" />
               </button>
-              <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/25 to-amber-600/10 ring-1 ring-amber-400/25">
-                <Scale className="size-5 text-amber-300" />
-              </span>
-              <div>
-                <div className="text-sm font-bold">قاضی هوشمند</div>
-                <div className="text-[10px] text-slate-400">دستیار حقوقی هوشمند</div>
-              </div>
+              <button
+                type="button"
+                onClick={handleNewConversation}
+                title="شروع گفتگوی جدید"
+                aria-label="شروع گفتگوی جدید"
+                className="group flex items-center gap-3 rounded-xl px-1 py-1 text-right transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
+              >
+                <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/25 to-amber-600/10 ring-1 ring-amber-400/25 transition-transform group-hover:scale-[1.03]">
+                  <Scale className="size-5 text-amber-300" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold">قاضی هوشمند</span>
+                  <span className="block text-[10px] text-slate-400">دستیار حقوقی هوشمند</span>
+                </span>
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">
