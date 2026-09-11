@@ -15,6 +15,9 @@ export const DAMAGES_RESOURCE_PATH = "enterprise-hub/damages";
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Smart Invoicing در NestJS */
 export const INVOICING_RESOURCE_PATH = "enterprise-hub/invoicing";
 
+/** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Accounting (دفتر کل دوطرفه) در NestJS */
+export const ACCOUNTING_RESOURCE_PATH = "enterprise-hub/accounting";
+
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Auth (احراز هویت پیامکی) در NestJS */
 export const AUTH_RESOURCE_PATH = "auth";
 

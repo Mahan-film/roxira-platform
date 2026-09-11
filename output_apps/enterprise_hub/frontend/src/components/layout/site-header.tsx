@@ -9,6 +9,7 @@ import { inferServiceDomain } from "@/lib/api/auth-client";
 const NAV_LINKS: { href: string; label: string; external?: boolean }[] = [
   { href: "/", label: "داشبورد" },
   { href: "/invoicing", label: "فاکتورها" },
+  { href: "/accounting", label: "حسابداری" },
   { href: "/damages", label: "محاسبه خسارت" },
   { href: "https://ghazihoushmand.ir", label: "قاضی هوشمند", external: true },
   { href: "/docs", label: "مستندات API" },
