@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { TaxComplianceModule } from './modules/tax_compliance/tax-compliance.module';
+import { HrModule } from './modules/hr/hr.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { TaxComplianceModule } from './modules/tax_compliance/tax-compliance.mod
     InventoryModule,
     CrmModule,
     TaxComplianceModule,
+    HrModule,
   ],
 })
 export class AppModule {}

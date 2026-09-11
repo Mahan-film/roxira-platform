@@ -30,6 +30,9 @@ export const AUTH_RESOURCE_PATH = "auth";
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Tax Compliance (سامانه مودیان) در NestJS */
 export const TAX_COMPLIANCE_RESOURCE_PATH = "enterprise-hub/tax-compliance";
 
+/** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر HR (منابع انسانی و حقوق و دستمزد) در NestJS */
+export const HR_RESOURCE_PATH = "enterprise-hub/hr";
+
 /** مسیر نسبی سمت مرورگر که توسط rewrite در next.config.ts پروکسی می‌شود */
 export const API_PROXY_BASE_PATH = "/api/backend";
 

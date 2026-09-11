@@ -12,6 +12,7 @@ const NAV_LINKS: { href: string; label: string; external?: boolean }[] = [
   { href: "/accounting", label: "حسابداری" },
   { href: "/inventory", label: "انبارداری" },
   { href: "/crm", label: "CRM" },
+  { href: "/hr", label: "منابع انسانی" },
   { href: "/damages", label: "محاسبه خسارت" },
   { href: "https://ghazihoushmand.ir", label: "قاضی هوشمند", external: true },
   { href: "/docs", label: "مستندات API" },
