@@ -44,13 +44,16 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 RUN addgroup -S nestjs && adduser -S nestjs -G nestjs \
-    && apk add --no-cache curl
+    && apk add --no-cache curl python3 git bash docker-cli
 
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY package.json ./package.json
 
-USER nestjs
+# اجرا با کاربر root: اندپوینت‌های رادار فناوری اسکریپت‌های پایتونی را روی
+# ریشه پروژه (bind mount شده) اجرا و فایل‌های گزارش را بازنویسی می‌کنند و
+# اسکریپت ازدحام به git و Docker CLI نیاز دارد. علاوه بر این سوکت Docker
+# نیز در همین کانتینر mount می‌شود.
 
 EXPOSE 3000
 

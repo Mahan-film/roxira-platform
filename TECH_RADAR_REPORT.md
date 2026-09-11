@@ -1,200 +1,194 @@
 # 🛰️ گزارش رادار فناوری ROXIRA
 
-- **موضوع پژوهش:** latest 2026 open-source AI agent frameworks and fast speech-to-text models
-- **حالت اجرا:** `deep`
-- **زمان تولید (UTC):** 2026-09-11T16:17:38+00:00
+- **موضوع پژوهش:** 2026 edge vector database performance benchmarks
+- **حالت اجرا:** `standard`
+- **زمان تولید (UTC):** 2026-09-11T17:31:21+00:00
 - **مدل سنتز:** `deepseek/deepseek-v4.1-flash`
-- **تعداد منابع تحلیل‌شده:** 10
+- **تعداد منابع تحلیل‌شده:** 5
 - **وضعیت:** `SUCCESS`
 
 ## خلاصه مدیریتی
-در سال ۲۰۲۶ اکوسیستم متن‌باز عوامل هوش مصنوعی و تشخیص گفتار به بلوغ تولیدی رسیده است؛ به‌طوری‌که چارچوب‌هایی مانند Pipecat، LiveKit Agents و TEN Framework با هزاران ستاره گیت‌هاب، معماری خط لوله STT→LLM→TTS را به یک استاندارد عملی تبدیل کرده‌اند. در سمت تشخیص گفتار، مدل‌های متن‌باز (Whisper، NVIDIA Canary، Parakeet، Moonshine) و سرویس‌های تجاری (Deepgram Nova-3 با WER حدود ۵.۲۶٪ و تأخیر زیر ۳۰۰ms) انتخاب را به تعادل دقت/تأخیر/هزینه گره زده‌اند. برای سنتز گفتار، Kokoro، Chatterbox-Turbo، Orpheus و Higgs Audio V2 با مجوزهای Apache 2.0/MIT جایگزین عملی APIهای تجاری شده‌اند. پروژه OpenClaw با عبور از ۲۱۰٬۰۰۰ ستاره به پدیده غالب مخازن متن‌باز ۲۰۲۶ تبدیل شده، هرچند نگرانی‌های امنیتی جدی درباره مجوزهای گسترده آن مطرح است. جمع‌بندی راهبردی: ترکیب چندمدلی (multi-model) و خودمیزبانی، مسیر پیشنهادی برای تیم‌های تولیدی در حوزه‌های تنظیم‌شده است.
+بر اساس داده‌های بنچمارک Q1 2026 (Salt Technologies AI) روی ۱ میلیون بردار با ۱۵۳۶ بُعد، Qdrant با تأخیر p50 برابر ۴ms و p99 برابر ۲۵ms سریع‌ترین گزینه است و Redis با p50=5ms و p99=20ms بهترین دنباله‌روی را دارد. Pinecone به‌عنوان گزینه managed با p50=8ms و مقیاس‌پذیری serverless برای تیم‌های بدون عملیات مناسب است، در حالی که Milvus با ۸ الگوریتم ایندکس (شامل GPU) و pgvector با پشتیبانی ACID و SQL کامل، تنوع معماری را نشان می‌دهند. منابع تحلیلی هشدار می‌دهند که بنچمارک‌های فروشنده‌محور، تأخیر دنباله (P95/P99)، بار همزمان و هزینه کل مالکیت را نادیده می‌گیرند و روند صنعت به سمت «vector as a feature» در پلتفرم‌های یکپارچه مانند PostgreSQL + pgvector حرکت می‌کند. برای بارهای edge و local-first، LanceDB به‌صراحت به‌عنوان گزینه بدون سرور معرفی شده است، هرچند داده عددی بنچمارک برای آن در منابع موجود نیست.
 
 ## یافته‌های کلیدی
-- Pipecat با ۱۳٬۴۱۶ ستاره، مجوز BSD-2-Clause و رسیدن به نسخه پایدار v1.0 در آوریل ۲۰۲۶، قوی‌ترین گزینه متن‌باز عمومی برای ساخت عامل صوتی تولیدی معرفی می‌شود؛ LiveKit Agents با ۱۱٬۳۵۶ ستاره و پشتیبانی بومی SIP برای مقیاس و TEN Framework با ۱۰٬۸۹۸ ستاره برای ارکستراسیون گراف چندوجهی برجسته‌اند.
-- در تشخیص گفتار، Deepgram Nova-3 با WER میانه ۵.۲۶٪ در حالت streaming و تأخیر زیر ۳۰۰ms، AssemblyAI Universal-3 Pro با WER میانگین ۵.۶٪ (میانه ۴.۹٪) و ElevenLabs Scribe v2 با حدود ۱۵۰ms نخستین partial، سه سرگروه دقت/تأخیر هستند.
-- دقت STT شدیداً وابسته به شرایط صوتی است: یک تحلیل Deepgram نشان می‌دهد همان API روی هدست تمیز ۹۲٪ دقت دارد اما در اتاق کنفرانس به ۷۸٪ و در تماس موبایل پرنویز به ۶۵٪ سقوط می‌کند؛ WER برای لهجه‌های شدید می‌تواند به ۳۰–۵۰٪ برسد.
-- بازار TTS متن‌باز با مدل‌هایی مانند Kokoro (۸۲ میلیون پارامتر، Apache 2.0)، Chatterbox-Turbo (MIT)، Orpheus (Apache 2.0) و Higgs Audio V2 (حدود ۵.۸ میلیارد پارامتر، Apache 2.0) شکاف با APIهای تجاری را به‌سرعت پر کرده و برای صنایع تنظیم‌شده (HIPAA/GDPR) خودمیزبانی را ممکن می‌سازد.
-- OpenClaw به‌عنوان سریع‌ترین پروژه در حال رشد تاریخ گیت‌هاب شناخته می‌شود که از ۹٬۰۰۰ به بیش از ۲۱۰٬۰۰۰ ستاره جهش کرده؛ اما محققان امنیتی درباره مجوزهای گسترده و نبود بررسی دقیق مخزن مهارت‌ها (skills) هشدار داده‌اند.
+- Qdrant با p50=4ms و p99=25ms سریع‌ترین تأخیر پرس‌وجو را در بنچمارک ۱M بردار / ۱۵۳۶ بُعد دارد و هم به‌صورت OSS (Apache 2.0) و هم managed (Qdrant Cloud) عرضه می‌شود.
+- Redis با p50=5ms و p99=20ms بهترین تأخیر دنباله (tail latency) را دارد و بالاترین throughput (۱۵٬۰۰۰ تا ۴۰٬۰۰۰) را در جدول ثبت کرده، اما به دلیل RAM-bound بودن به ۱۰ تا ۱۰۰ میلیون بردار محدود است.
+- Milvus با ۸ الگوریتم ایندکس (شامل GPU)، p50=6ms و پشتیبانی از میلیاردها بردار، بیشترین تنوع ایندکس را دارد؛ اما نیازمند منابع مهندسی است.
+- pgvector به‌عنوان افزونه PostgreSQL رایگان، ACID و تراکنش‌های SQL کامل را با p50=18ms ارائه می‌دهد و برای بارهای زیر ۱۰۰ میلیون بردار (طبق Firecrawl) مناسب است.
+- منابع تحلیلی (Actian و Firecrawl) تأکید می‌کنند که بنچمارک‌های فروشنده‌محور شرایط تولید مانند همزمانی، فیلترینگ و ingestion پیوسته را منعکس نمی‌کنند و باید با تست واقعی و مدل‌سازی هزینه بلندمدت جایگزین شوند.
 
 ## فناوری‌های نوظهور و روندها
-### Pipecat — `growing`
-- **دسته:** framework — voice agent
-- **توضیح:** چارچوب پایتونی که مکالمه را به‌صورت خط لوله (audio in → STT → LLM → TTS → audio out) مدل می‌کند و نسخه پایدار v1.0 را در آوریل ۲۰۲۶ منتشر کرده است.
-- **اهمیت:** کتابخانه یکپارچه‌سازی گسترده (Deepgram، AssemblyAI، OpenAI، Gemini، Cartesia، ElevenLabs) تعویض فروشنده را به تغییر یک خط کد تبدیل می‌کند.
-- **شاهد پذیرش:** ۱۳٬۴۱۶ ستاره گیت‌هاب در ۱۴ جولای ۲۰۲۶ و توسعه تقریباً روزانه
+### Qdrant — `mainstream`
+- **دسته:** Vector Database (OSS + Managed)
+- **توضیح:** پایگاه داده برداری با مجوز Apache 2.0 که هم به‌صورت self-hosted و هم Qdrant Cloud ارائه می‌شود؛ در بنچمارک Q1 2026 سریع‌ترین p50 (۴ms) را ثبت کرده است.
+- **اهمیت:** ترکیب کمترین تأخیر p50 و پشتیبانی از sparse (SPLADE, miniCOIL) و ColBERT multi-vector آن را برای RAG و جست‌وجوی ترکیبی در edge جذاب می‌کند.
+- **شاهد پذیرش:** حضور در جدول بنچمارک Salt Technologies AI با p50=4ms و p99=25ms و معرفی به‌عنوان گزینه budget-conscious در راهنمای Firecrawl.
 
-### LiveKit Agents — `growing`
-- **دسته:** framework — realtime voice
-- **توضیح:** چارچوب چندزبانه (Python/Node) با مجوز Apache-2.0 و پشتیبانی بومی از SIP و شماره تلفن واقعی.
-- **اهمیت:** برای بارهای همزمان بالا (نمونه واقعی جهش از ۲۰ به ۴۰۰ تماس همزمان) انتخاب ترجیحی است.
-- **شاهد پذیرش:** ۱۱٬۳۵۶ ستاره گیت‌هاب در جولای ۲۰۲۶ و کاربری در پروژه‌های مقیاس‌پذیر
+### Pinecone — `mainstream`
+- **دسته:** Managed Vector Database
+- **توضیح:** پایگاه داده برداری managed با معماری serverless و pod-based، p50=8ms و p99=45ms، با قابلیت inference داخلی (embeddings + reranking) و hybrid search.
+- **اهمیت:** برای تیم‌هایی که zero-ops و مقیاس‌پذیری تا میلیاردها بردار می‌خواهند، گزینه‌ای بدون نیاز به مدیریت زیرساخت است.
+- **شاهد پذیرش:** در بنچمارک Q1 2026 با p50=8ms و در راهنمای Firecrawl به‌عنوان zero-ops managed search در هر مقیاس معرفی شده است.
 
-### TEN Framework — `growing`
-- **دسته:** framework — multimodal graph
-- **توضیح:** چارچوب چندزبانه (C/Go/Python/JS) با مجوز Apache-2.0 ترکیبی و اتصال از طریق Agora RTC، مبتنی بر ارکستراسیون گراف چندوجهی.
-- **اهمیت:** برای سناریوهای multimodal و edge که به ارکستراسیون پیچیده نیاز دارند مناسب است.
-- **شاهد پذیرش:** ۱۰٬۸۹۸ ستاره گیت‌هاب در جولای ۲۰۲۶
+### Milvus / Zilliz Cloud — `mainstream`
+- **دسته:** Distributed Vector Database
+- **توضیح:** پایگاه داده برداری توزیع‌شده با مجوز Apache 2.0 و نسخه managed Zilliz Cloud؛ دارای ۸ الگوریتم ایندکس شامل GPU، p50=6ms و پشتیبانی از میلیاردها بردار.
+- **اهمیت:** برای بارهای بسیار بزرگ با هزینه کمتر نسبت به گزینه‌های managed، اما نیازمند منابع مهندسی است.
+- **شاهد پذیرش:** در بنچمارک Q1 2026 با p50=6ms و p99=35ms و در راهنمای Firecrawl به‌عنوان گزینه میلیاردی کم‌هزینه معرفی شده است.
 
-### OpenClaw — `emerging`
-- **دسته:** agent — self-hosted personal assistant
-- **توضیح:** دستیار هوش مصنوعی شخصی که کاملاً روی دستگاه کاربر اجرا می‌شود، به بیش از ۵۰ یکپارچه‌سازی (WhatsApp، Telegram، Slack، Discord، Signal، iMessage) متصل است و می‌تواند مهارت جدید خودش را بنویسد.
-- **اهمیت:** داده کاربر از دستگاه خارج نمی‌شود و مدل «خودمیزبان + خودافزا» را به سطح محصول شخصی برده است.
-- **شاهد پذیرش:** جهش از ۹٬۰۰۰ به بیش از ۲۱۰٬۰۰۰ ستاره؛ اعلام انتقال به یک بنیاد متن‌باز در ۱۴ فوریه ۲۰۲۶
+### pgvector + pgvectorscale — `growing`
+- **دسته:** PostgreSQL Extension
+- **توضیح:** افزونه رایگان PostgreSQL برای ذخیره و جست‌وجوی بردار با پشتیبانی ACID و SQL کامل؛ p50=18ms و p99=90ms و محدودیت ۱۰ تا ۵۰ میلیون بردار در تک‌نود.
+- **اهمیت:** روند «vector as a feature» را نمایندگی می‌کند و برای تیم‌هایی که از قبل PostgreSQL دارند، هزینه و پیچیدگی زیرساخت را کاهش می‌دهد.
+- **شاهد پذیرش:** در بنچمارک Q1 2026 با p50=18ms و در راهنمای Firecrawl برای کاربران PostgreSQL زیر ۱۰۰ میلیون بردار توصیه شده است.
 
-### Deepgram Nova-3 — `mainstream`
-- **دسته:** speech-to-text
-- **توضیح:** مدل STT با WER ۵.۲۶٪ در حالت streaming و تأخیر زیر ۳۰۰ میلی‌ثانیه، با پشتیبانی از Flux برای تشخیص نوبت گفتگو.
-- **اهمیت:** برای تماس‌های با حجم بالا که تأخیر پایین حیاتی است، مرجع صنعتی محسوب می‌شود.
-- **شاهد پذیرش:** استناد مکرر به‌عنوان گزینه کم‌تأخیر در مقایسه‌های مستقل ۲۰۲۶ (Retell، NextLevel.AI)
+### Weaviate — `mainstream`
+- **دسته:** Vector Database (OSS + Managed)
+- **توضیح:** پایگاه داده برداری با مجوز BSD 3-Clause و نسخه Weaviate Cloud؛ p50=12ms و p99=65ms با hybrid search (vector + BM25 + metadata filters) و modular embeddings.
+- **اهمیت:** ترکیب جست‌وجوی ترکیبی و مستندات قوی آن را برای تیم‌هایی که به فیلترینگ متادیتا نیاز دارند مناسب می‌کند.
+- **شاهد پذیرش:** در بنچمارک Q1 2026 با p50=12ms و در راهنمای Firecrawl به‌عنوان گزینه hybrid search با مستندات قوی معرفی شده است.
 
-### Kokoro — `growing`
-- **دسته:** text-to-speech
-- **توضیح:** مدل TTS متن‌باز با ۸۲ میلیون پارامتر و مجوز Apache 2.0 که برای استقرار سبک و کم‌هزینه طراحی شده است.
-- **اهمیت:** گزینه‌ای عملی برای edge و سناریوهای مقید به هزینه با مجوز آزاد تجاری.
-- **شاهد پذیرش:** معرفی به‌عنوان بهترین گزینه edge/low-cost در رتبه‌بندی ۲۰۲۶ Dograh
+### ChromaDB — `growing`
+- **دسته:** Embedded / In-process Vector Database
+- **توضیح:** پایگاه داده برداری open source با حالت in-process یا client-server؛ p50=12ms و p99=70ms، محدود به کمتر از ۱ میلیون بردار در تک‌نود، با backend object-storage و collection forking.
+- **اهمیت:** برای prototyping و MVP و بارهای سبک edge که به راه‌اندازی ساده نیاز دارند مناسب است.
+- **شاهد پذیرش:** در بنچمارک Q1 2026 با p50=12ms و در راهنمای Firecrawl برای prototyping و MVP معرفی شده است.
 
-### Higgs Audio V2 — `emerging`
-- **دسته:** text-to-speech
-- **توضیح:** مدل TTS حدود ۵.۸ میلیارد پارامتری با مجوز Apache 2.0 که در رتبه‌بندی ۲۰۲۶ بالاترین طبیعی‌بودن را کسب کرده است.
-- **اهمیت:** کیفیت گفتار نزدیک به APIهای تجاری را با خودمیزبانی و بدون هزینه هر کاراکتر ارائه می‌دهد.
-- **شاهد پذیرش:** انتخاب‌شده به‌عنوان «بهترین طبیعی‌بودن کلی» در تحلیل Dograh 2026
+### LanceDB — `emerging`
+- **دسته:** Edge / Local-first Vector Database
+- **توضیح:** پایگاه داده برداری edge و local-first بدون نیاز به سرور، مناسب برای data science و بارهای روی دستگاه.
+- **اهمیت:** برای سناریوهای edge که تأخیر شبکه و وابستگی به سرور مرکزی غیرقابل قبول است، معماری بدون سرور ارائه می‌دهد.
+- **شاهد پذیرش:** در راهنمای Firecrawl به‌صراحت به‌عنوان گزینه edge، local-first و data science بدون سرور معرفی شده است.
 
-### Whisper / NVIDIA Canary / Parakeet / Moonshine — `growing`
-- **دسته:** speech-to-text — open source
-- **توضیح:** خانواده مدل‌های متن‌باز STT برای کاربردهای صوتی؛ NVIDIA هر فصل مدل جدید عرضه می‌کند و موجی از مدل‌های کوچک برای گوشی و میکروکنترلر شکل گرفته است.
-- **اهمیت:** گزینه‌های خودمیزبان با کنترل کامل داده را فراهم می‌کنند و انتخاب را از «Whisper یا Vosk» به مجموعه‌ای متنوع گسترش داده‌اند.
-- **شاهد پذیرش:** پوشش گسترده در راهنمای AssemblyAI (اوت ۲۰۲۶) درباره بهترین گزینه‌های STT متن‌باز
+### Vespa — `growing`
+- **دسته:** Hybrid Search Platform
+- **توضیح:** پلتفرم جست‌وجوی ترکیبی در مقیاس میلیاردی با عملیات tensor بومی و learned ranking.
+- **اهمیت:** برای بارهای پیچیده hybrid search با رتبه‌بندی یادگیری‌شده در مقیاس بزرگ مناسب است.
+- **شاهد پذیرش:** در راهنمای Firecrawl به‌عنوان گزینه billion-scale hybrid search با tensor operations بومی معرفی شده است.
 
 ## ریپازیتوری‌های برتر گیت‌هاب
 
 | مخزن | ستاره | زبان | چرا مهم است |
 | --- | --- | --- | --- |
-| [pipecat-ai/pipecat](https://github.com/pipecat-ai/pipecat) | ~13,416 | Python | هم‌راستا با موضوع «فریمورک‌های عامل متن‌باز» و پوشش کامل خط لوله STT→LLM→TTS. |
-| [livekit/agents](https://github.com/livekit/agents) | ~11,356 | Python, Node | نماینده مسیر مقیاس‌پذیر برای تماس همزمان بالا در دسته عوامل صوتی متن‌باز. |
-| [TEN-Framework/TEN-Agent](https://github.com/TEN-Framework/TEN-Agent) | ~10,898 | C, Go, Python, JS | گزینه‌ای برای سناریوهای multimodal و edge که با خط لوله ساده پوشش داده نمی‌شوند. |
-| [bolna-ai/bolna](https://github.com/bolna-ai/bolna) | ~695 | Python | مناسب تیم‌هایی که به دنبال راه‌اندازی سریع یک عامل تلفنی در یک بعدازظهر هستند. |
-| [gradio-app/fastrtc](https://github.com/gradio-app/fastrtc) | ~4,618 | Python | ورودی سریع برای ساخت prototype و demo در مسیر عامل صوتی. |
-| [vocodedev/vocode-core](https://github.com/vocodedev/vocode-core) | ~3,773 | Python | نمونه‌ای بالغ و مستند برای معماری عامل صوتی با تلفنی. |
+| [qdrant/qdrant](https://github.com/qdrant/qdrant) | بیش از ۲۰٬۰۰۰ (تقریبی) | Rust | مرجع اصلی برای بازتولید بنچمارک edge و پیاده‌سازی جست‌وجوی برداری کم‌تأخیر. |
+| [milvus-io/milvus](https://github.com/milvus-io/milvus) | بیش از ۳۰٬۰۰۰ (تقریبی) | Go / C++ | برای بنچمارک مقیاس‌پذیری و مقایسه الگوریتم‌های ایندکس در بارهای بزرگ. |
+| [pgvector/pgvector](https://github.com/pgvector/pgvector) | بیش از ۱۰٬۰۰۰ (تقریبی) | C | گزینه edge-friendly برای تیم‌هایی که می‌خواهند بردار را به پایگاه داده رابطه‌ای موجود اضافه کنند. |
+| [weaviate/weaviate](https://github.com/weaviate/weaviate) | بیش از ۱۰٬۰۰۰ (تقریبی) | Go | برای بنچمارک جست‌وجوی ترکیبی و فیلترینگ متادیتا در سناریوهای RAG. |
+| [chroma-core/chroma](https://github.com/chroma-core/chroma) | بیش از ۱۵٬۰۰۰ (تقریبی) | Python / Rust | برای بنچمارک سریع و سبک روی دستگاه‌های edge و محیط‌های توسعه. |
+| [lancedb/lancedb](https://github.com/lancedb/lancedb) | بیش از ۵٬۰۰۰ (تقریبی) | Rust / Python | مرجع اصلی برای بنچمارک بارهای edge و local-first که در منابع به‌صراحت معرفی شده است. |
 
 ## مزایا، معایب و موارد کاربرد
-### Pipecat
+### Qdrant
 **مزایا:**
-- کتابخانه یکپارچه‌سازی گسترده و تعویض فروشنده تک‌خطی
-- نسخه پایدار v1.0 با توسعه تقریباً روزانه
-- پشتیبانی از Twilio، Daily و Telnyx
+- سریع‌ترین p50 (۴ms) و p99 (۲۵ms) در بنچمارک Q1 2026
+- مجوز Apache 2.0 و گزینه managed (Qdrant Cloud)
+- پشتیبانی از sparse (SPLADE, miniCOIL) و ColBERT multi-vector
 
 **معایب:**
-- برای بارهای همزمان بسیار بالا ممکن است به بازمهندسی نیاز داشته باشد
-- مجوز BSD-2-Clause در برخی سازمان‌ها نیازمند بررسی حقوقی است
+- برای بارهای بسیار بزرگ نیازمند تخصص عملیاتی است
+- داده بنچمارک فقط روی ۱M بردار / ۱۵۳۶ بُعد است و مقیاس‌های بالاتر را پوشش نمی‌دهد
 
-**مناسب برای:** اکثر پروژه‌های تولیدی چندمنظوره صوتی
+**مناسب برای:** تیم‌های budget-conscious و بارهای edge با نیاز به کمترین تأخیر
 
-### LiveKit Agents
+### Pinecone
 **مزایا:**
-- پشتیبانی بومی SIP و شماره تلفن واقعی
-- تأییدشده در جهش از ۲۰ به ۴۰۰ تماس همزمان
-- مجوز Apache-2.0 و پشتیبانی Python و Node
+- zero-ops و serverless scaling
+- inference داخلی (embeddings + reranking) و hybrid search
+- پشتیبانی از میلیاردها بردار
 
 **معایب:**
-- وابستگی به زیرساخت WebRTC و تنظیمات شبکه پیچیده‌تر
-- نیازمند تیم مهندسی قوی‌تر برای بهره‌برداری کامل
+- managed-only و بدون گزینه self-hosted
+- p50=8ms که از Qdrant و Redis کندتر است
 
-**مناسب برای:** مقیاس بالا و سناریوهای realtime و telephony
+**مناسب برای:** تیم‌هایی که می‌خواهند بدون مدیریت زیرساخت در هر مقیاسی کار کنند
 
-### TTS متن‌باز (Kokoro، Chatterbox-Turbo، Orpheus، Higgs Audio V2)
+### Milvus / Zilliz Cloud
 **مزایا:**
-- بدون هزینه هر کاراکتر و بدون افشای داده به API ثالث
-- مجوزهای Apache 2.0/MIT برای استفاده تجاری
-- امکان انطباق با HIPAA و GDPR
+- ۸ الگوریتم ایندکس شامل GPU
+- پشتیبانی از میلیاردها بردار با هزینه کمتر
+- مجوز Apache 2.0 و گزینه managed
 
 **معایب:**
-- برخی مدل‌ها (مثل Fish Audio S2 Pro) نیازمند مجوز تجاری پولی هستند
-- تک‌لایه TTS بدون STT و LLM عامل صوتی نمی‌سازد
+- نیازمند منابع مهندسی قابل توجه
+- p50=6ms که از Qdrant و Redis کندتر است
 
-**مناسب برای:** صنایع تنظیم‌شده و تیم‌های حساس به هزینه در مقیاس
+**مناسب برای:** بارهای بسیار بزرگ با تیم مهندسی اختصاصی
 
-### تشخیص گفتار تجاری (Deepgram Nova-3، AssemblyAI Universal-3 Pro، OpenAI gpt-4o-transcribe، ElevenLabs Scribe v2)
+### pgvector
 **مزایا:**
-- Nova-3 با WER ۵.۲۶٪ و تأخیر زیر ۳۰۰ms
-- Universal-3 Pro با WER میانگین ۵.۶٪ روی صدای واقعی دشوار
-- Scribe v2 با حدود ۱۵۰ms نخستین partial و پوشش ۹۰+ زبان
+- رایگان و افزونه PostgreSQL
+- پشتیبانی ACID و SQL کامل
+- بدون نیاز به زیرساخت جدید برای کاربران PostgreSQL
 
 **معایب:**
-- افت دقت شدید در نویز: از ۹۲٪ هدست تمیز به ۶۵٪ موبایل پرنویز
-- WER ۳۰–۵۰٪ برای لهجه‌های شدید
-- وابستگی فروشنده و هزینه به‌ازای دقیقه
+- p50=18ms و p99=90ms که کندتر از گزینه‌های اختصاصی است
+- محدودیت ۱۰ تا ۵۰ میلیون بردار در تک‌نود
 
-**مناسب برای:** تماس‌های تجاری با نیاز به دقت و تأخیر پایین
+**مناسب برای:** کاربران PostgreSQL با کمتر از ۱۰۰ میلیون بردار
 
-### OpenClaw
+### Redis
 **مزایا:**
-- اجرای کاملاً محلی و عدم خروج داده از دستگاه
-- بیش از ۵۰ یکپارچه‌سازی بومی
-- قابلیت نوشتن مهارت‌های جدید به‌صورت خودکار
+- بهترین p99 (۲۰ms) و p50=5ms
+- بالاترین throughput (۱۵٬۰۰۰ تا ۴۰٬۰۰۰)
+- گزینه managed (Redis Cloud) و self-hosted (Redis Stack)
 
 **معایب:**
-- نگرانی‌های امنیتی درباره مجوزهای گسترده عامل
-- مخزن مهارت‌ها فاقد بررسی دقیق در برابر ارسال‌های مخرب است
+- RAM-bound و محدود به ۱۰ تا ۱۰۰ میلیون بردار
+- مجوز RSAL/SSPL که برای برخی تیم‌ها محدودیت ایجاد می‌کند
 
-**مناسب برای:** دستیار شخصی و خودکارسازی گردش‌کار توسعه‌دهنده با پذیرش ریسک امنیتی
+**مناسب برای:** بارهای با نیاز به throughput بالا و تأخیر دنباله پایین
 
 ## دستورات اجرایی پیشنهادی
-**نصب و راه‌اندازی Pipecat برای ساخت خط لوله عامل صوتی**
+**راه‌اندازی Qdrant به‌صورت محلی با Docker برای بنچمارک edge**
 ```bash
-pip install pipecat-ai
+docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 ```
 
-**کلون و نصب محیط توسعه Pipecat از مخزن رسمی**
+**نصب pgvector روی PostgreSQL برای تست جست‌وجوی برداری**
 ```bash
-git clone https://github.com/pipecat-ai/pipecat && cd pipecat && pip install -e .
+git clone https://github.com/pgvector/pgvector.git && cd pgvector && make && make install
 ```
 
-**نصب LiveKit Agents همراه با یکپارچه‌سازی‌های STT/LLM/TTS**
+**نصب LanceDB برای بارهای edge و local-first**
 ```bash
-pip install "livekit-agents[openai,silero,deepgram,cartesia]"
+pip install lancedb
 ```
 
-**نصب FastRTC برای ساخت نمونه اولیه بلادرنگ WebRTC**
+**نصب ChromaDB برای prototyping سریع**
 ```bash
-pip install fastrtc
+pip install chromadb
 ```
 
-**نصب Vocode برای سناریوهای تلفنی Twilio/Vonage**
+**اجرای Milvus به‌صورت standalone با Docker Compose**
 ```bash
-pip install vocode
+wget https://github.com/milvus-io/milvus/releases/download/v2.4.0/milvus-standalone-docker-compose.yml -O docker-compose.yml && docker compose up -d
 ```
 
-**نصب موتور استنتاج سریع Whisper برای STT خودمیزبان**
+**اجرای VectorDBBench برای بازتولید بنچمارک‌های مستقل**
 ```bash
-pip install faster-whisper
+pip install vectordb-bench && vectordb-bench
 ```
 
 ## ریسک‌ها و هشدارها
-- دقت STT به‌شدت وابسته به شرایط صوتی است؛ افت از ۹۲٪ روی هدست تمیز به ۶۵٪ روی تماس موبایل پرنویز می‌تواند صحت تراکنش‌های تجاری را تهدید کند.
-- WER برای لهجه‌های شدید می‌تواند به ۳۰–۵۰٪ برسد، در حالی که برای گویشوران بومی در بازه ۲–۸٪ است.
-- همه مدل‌های «متن‌باز» TTS مجوز تجاری آزاد ندارند؛ نمونه‌ای همچون Fish Audio S2 Pro نیازمند قرارداد تجاری پولی است و Coqui Public Model License محدودیت‌های کاربردی دارد.
-- OpenClaw با وجود رشد سریع ستاره‌ها، مجوزهای گسترده و نبود بررسی دقیق مهارت‌های ارسالی، سطح حمله امنیتی قابل‌توجهی ایجاد می‌کند.
-- بخشی از داده‌های مقایسه‌ای از منابع فروشنده (NextLevel.AI، Retell، AssemblyAI، Dograh) می‌آید و ممکن است سوگیری تبلیغاتی داشته باشد؛ در برخی موارد منابع با یکدیگر اختلاف معنادار دارند.
+- بنچمارک‌های فروشنده‌محور شرایط تولید مانند همزمانی، فیلترینگ و ingestion پیوسته را منعکس نمی‌کنند (Actian).
+- تأخیر دنباله (P95/P99) و افت عملکرد در طول زمان و افزایش هزینه کل مالکیت در مقیاس، ریسک‌های اصلی تولید هستند (Actian).
+- داده‌های عددی بنچمارک Q1 2026 فقط روی ۱ میلیون بردار با ۱۵۳۶ بُعد اندازه‌گیری شده و به مقیاس‌های edge یا میلیاردی تعمیم‌پذیر نیست.
+- برای LanceDB و Vespa در منابع انتخابی داده عددی بنچمارک ارائه نشده و ارزیابی عملکردی آن‌ها نیازمند تست مستقل است.
+- محدودیت‌های مجوز (مانند RSAL/SSPL برای Redis و SSPL برای Elasticsearch) می‌تواند برای استقرار edge یا تجاری محدودیت ایجاد کند.
 
 ## توصیه‌های راهبردی
-- برای پروژه‌های عمومی عامل صوتی، Pipecat را به‌عنوان پیش‌فرض در نظر بگیرید و در صورت نیاز به مقیاس یا SIP بومی، LiveKit Agents را ارزیابی موازی کنید.
-- استراتژی چندمدلی اتخاذ کنید: ترکیب یک مدل STT کم‌تأخیر (Nova-3) با یک مدل دقت‌بالا (Universal-3 Pro) و مسیریابی بر اساس شرایط صوتی، به‌جای اتکا به یک مدل واحد.
-- برای صنایع تنظیم‌شده، مسیر خودمیزبانی با Kokoro یا Higgs Audio V2 برای TTS و Whisper/Parakeet برای STT را با بررسی حقوقی مجوز پیش از استقرار نهایی انتخاب کنید.
-- پیش از هر انتخاب، ارزیابی را روی مجموعه داده صوتی واقعی خودتان (نه demo تمیز) با WER و latency سنجیده انجام دهید، چون اختلاف منابع در همین شرایط بروز می‌کند.
-- اگر OpenClaw را در محیط سازمانی به‌کار می‌گیرید، محدودسازی مجوزهای عامل و بازبینی امنیتی مهارت‌ها را پیش از استقرار اجباری کنید.
+- برای بارهای edge با کمترین تأخیر، Qdrant را با استقرار self-hosted (Apache 2.0) ارزیابی کنید و p99 را در بار همزمان واقعی بسنجید.
+- برای تیم‌های بدون عملیات، Pinecone را به‌عنوان گزینه managed با zero-ops در نظر بگیرید، اما هزینه بلندمدت را مدل‌سازی کنید.
+- اگر از قبل PostgreSQL دارید و بار زیر ۱۰۰ میلیون بردار است، pgvector را به‌عنوان گزینه «vector as a feature» با کمترین پیچیدگی زیرساخت انتخاب کنید.
+- برای بارهای local-first و بدون سرور روی دستگاه‌های edge، LanceDB را با تست مستقل عملکرد ارزیابی کنید، زیرا داده بنچمارک عددی برای آن در منابع موجود نیست.
+- بنچمارک‌های فروشنده‌محور را با تست واقعی شامل همزمانی، فیلترینگ و ingestion پیوسته جایگزین کنید و معیارهای P95/P99 و هزینه کل مالکیت را در تصمیم لحاظ کنید.
 
 ## منابع
-- [Best Open-Source AI Voice Generators in 2026](https://www.dograh.com/feeds/blog/open-source-ai-voice-generator) (relevance=0.90598983, engine=firecrawl)
-- [5 Best Speech-to-Text Models in 2026, Tested and Ranked](https://www.retellai.com/blog/best-speech-to-text-models) (relevance=0.88563144, engine=jina)
-- [6 Best Open-Source Voice Agent Frameworks (2026) | TECHSY](https://techsy.io/en/blog/best-open-source-voice-agent-frameworks) (relevance=0.86522406, engine=firecrawl)
-- [8 Best Open-Source AI Agent Frameworks: OpenClaw & More](https://www.ayautomate.com/blog/best-open-source-ai-agent-frameworks) (relevance=0.83973396, engine=firecrawl)
-- [Best Speech to Text Models 2026: STT Comparison Guide — NextLevel.AI](https://nextlevel.ai/best-speech-to-text-models) (relevance=0.8198933, engine=firecrawl)
-- [The Best AI Agents in 2026: Tools and Frameworks ...](https://www.datacamp.com/blog/best-ai-agents) (relevance=0.8198933, engine=jina)
-- [Best Open Source Speech-to-Text Models in 2026](https://www.assemblyai.com/blog/top-open-source-stt-options-for-voice-applications) (relevance=0.81047887, engine=firecrawl)
-- [Agentic AI Frameworks 2026: Production Comparison | Uvik Software](https://uvik.net/blog/agentic-ai-frameworks) (relevance=0.76489162, engine=firecrawl)
-- [Top AI GitHub Repositories in 2026 - ByteByteGo Newsletter](https://blog.bytebytego.com/p/top-ai-github-repositories-in-2026) (relevance=0.71859437, engine=jina)
-- [Top 10 AI Agent Frameworks in 2026 (RANKED!)](https://www.youtube.com/watch?v=fzBESYvyHvk) (relevance=0.69925439, engine=jina)
+- [Vector Database Benchmark 2026 | Top 10 Compared](https://www.salttechno.ai/datasets/vector-database-performance-benchmark-2026) (relevance=0.92192179, engine=firecrawl)
+- [Best Vector Databases in 2026: A Complete Comparison Guide](https://www.firecrawl.dev/blog/best-vector-databases) (relevance=0.715424, engine=firecrawl)
+- [Vector Database Benchmarks are Misleading: What Matters](https://www.actian.com/blog/databases/how-to-evaluate-vector-databases-in-2026) (relevance=0.64063591, engine=firecrawl)
+- [Fastest Vector Database 2026: 6 Benchmarks Compared](https://ranksquire.com/2026/02/24/fastest-vector-database-2026) (relevance=0.63973606, engine=firecrawl)
+- [Top 10 Vector Databases in 2026: Ultimate Comparison, Benchmarks & Use Cases | by Karthikeyan Rathinam | Medium](https://karthikeyanrathinam.medium.com/top-10-vector-databases-in-2026-ultimate-comparison-benchmarks-use-cases-6b0e878256b5) (relevance=0.5917232, engine=firecrawl)
 
 ---
 *این گزارش به‌صورت خودکار توسط TechRadarAgent (ROXIRA Autonomous Engineering Platform) تولید شده است.*

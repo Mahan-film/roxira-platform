@@ -14,6 +14,7 @@ const NAV_LINKS: { href: string; label: string; external?: boolean }[] = [
   { href: "/crm", label: "CRM" },
   { href: "/hr", label: "منابع انسانی" },
   { href: "/damages", label: "محاسبه خسارت" },
+  { href: "/radar", label: "رادار فناوری" },
   { href: "https://ghazihoushmand.ir", label: "قاضی هوشمند", external: true },
   { href: "/docs", label: "مستندات API" },
 ];

@@ -137,6 +137,8 @@ services:
       dockerfile: Dockerfile
     container_name: roxira_enterprise_backend
     restart: always
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -158,9 +160,16 @@ services:
       - WEBAUTHN_ORIGINS=${WEBAUTHN_ORIGINS:-https://roxira.net,https://www.roxira.net,http://localhost:3001}
       # System Health — دسترسی read-only به Docker Engine برای پایش کانتینرها
       - DOCKER_SOCKET_PATH=/var/run/docker.sock
+      # Tech Radar — ریشه پروژه برای اجرای زنده اسکریپت‌های پایتونی و خواندن گزارش‌ها
+      - RADAR_PROJECT_ROOT=/opt/roxira_platform
+      - PYTHON_BIN=python3
+      - PYTHONPATH=/opt/roxira_platform
     volumes:
       # سوکت Docker به‌صورت read-only برای اندپوینت GET /health/system
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # ریشه پروژه جهت اجرای زنده tech_radar.py و parallel_swarm_runner.py و
+      # دسترسی به TECH_RADAR_REPORT.md/.json (اندپوینت‌های رادار فناوری)
+      - ./:/opt/roxira_platform
     group_add:
       # گروه سوکت Docker روی میزبان (getent group docker)
       - "${DOCKER_GID:-988}"

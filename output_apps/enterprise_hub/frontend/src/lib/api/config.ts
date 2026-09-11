@@ -33,6 +33,9 @@ export const TAX_COMPLIANCE_RESOURCE_PATH = "enterprise-hub/tax-compliance";
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر HR (منابع انسانی و حقوق و دستمزد) در NestJS */
 export const HR_RESOURCE_PATH = "enterprise-hub/hr";
 
+/** مسیر پایه‌ی کنترلر Radar (رادار فناوری و ازدحام ایجنت‌ها) در NestJS */
+export const RADAR_RESOURCE_PATH = "enterprise-hub/radar";
+
 /** مسیر نسبی سمت مرورگر که توسط rewrite در next.config.ts پروکسی می‌شود */
 export const API_PROXY_BASE_PATH = "/api/backend";
 

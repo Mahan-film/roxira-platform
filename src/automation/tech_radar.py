@@ -1,32 +1,20 @@
-import os
-import sys
-import pathlib
-
-# افزودن خودکار ریشه پروژه به sys.path جهت اجرای مستقل درون Worktreeها
-_CURRENT_DIR = pathlib.Path(__file__).resolve().parent
-_REPO_ROOT = _CURRENT_DIR.parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-import os
-import sys
-import pathlib
-
-# افزودن خودکار ریشه مخزن به sys.path جهت اجرای مستقل و ایمن
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
 from __future__ import annotations
 
 import argparse
 import concurrent.futures
 import json
 import logging
+import os
 import pathlib
+import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+# افزودن خودکار ریشه مخزن به sys.path جهت اجرای مستقل و ایمن درون Worktreeها
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from src.automation.provider_base import OpenAICompatibleClient, get_env_var
 from src.automation.web_intelligence import WebIntelligence

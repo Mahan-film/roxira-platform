@@ -13,6 +13,7 @@ import { TaxComplianceModule } from './modules/tax_compliance/tax-compliance.mod
 import { HrModule } from './modules/hr/hr.module';
 import { CurrencyModule } from './modules/currency/currency.module';
 import { HealthModule } from './modules/health/health.module';
+import { RadarModule } from './modules/radar/radar.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { HealthModule } from './modules/health/health.module';
     HrModule,
     CurrencyModule,
     HealthModule,
+    RadarModule,
   ],
 })
 export class AppModule {}
