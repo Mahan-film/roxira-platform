@@ -194,3 +194,12 @@ class OpenAICompatibleClient:
             "elapsed_ms": result.get("elapsed_ms"),
             "content": content,
         }
+
+
+# نگاشت سلسله‌مراتبی مدل‌های هوش مصنوعی (سپتامبر ۲۰۲۶)
+FRONTIER_MODELS = {
+    "architect_tier": ["anthropic/claude-opus-5", "anthropic/claude-sonnet-5", "anthropic/claude-fable-5"],
+    "balanced_tier": ["anthropic/claude-sonnet-5", "zhipu/glm-5.2", "qwen/qwen3.8-max"],
+    "swarm_worker_tier": ["deepseek/deepseek-v4.1-flash", "anthropic/claude-haiku-4.5"],
+    "contract_tier": ["qwen/qwen3-coder", "deepseek/deepseek-v4.1-flash"]
+}
