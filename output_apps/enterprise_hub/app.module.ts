@@ -7,6 +7,7 @@ import { DamagesModule } from './modules/damages/damages.module';
 import { InvoicingModule } from './modules/invoicing/invoicing.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AuthModule } from './modules/auth/auth.module';
     InvoicingModule,
     AccountingModule,
     AuthModule,
+    InventoryModule,
   ],
 })
 export class AppModule {}

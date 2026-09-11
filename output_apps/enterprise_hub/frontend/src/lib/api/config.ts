@@ -18,6 +18,9 @@ export const INVOICING_RESOURCE_PATH = "enterprise-hub/invoicing";
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Accounting (دفتر کل دوطرفه) در NestJS */
 export const ACCOUNTING_RESOURCE_PATH = "enterprise-hub/accounting";
 
+/** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Inventory (انبارداری و FIFO) در NestJS */
+export const INVENTORY_RESOURCE_PATH = "enterprise-hub/inventory";
+
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Auth (احراز هویت پیامکی) در NestJS */
 export const AUTH_RESOURCE_PATH = "auth";
 
