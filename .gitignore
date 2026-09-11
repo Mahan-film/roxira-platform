@@ -25,6 +25,9 @@ uploads/
 *.webm
 *.ogg
 
+# Tech Radar append-only research history (root report is tracked)
+data/tech_radar/
+
 # Factory isolated worktrees (never interfere with active server source)
 .factory_worktrees/
 

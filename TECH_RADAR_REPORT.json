@@ -1,0 +1,345 @@
+{
+  "topic": "latest 2026 open-source AI agent frameworks and fast speech-to-text models",
+  "mode": "deep",
+  "generated_at": "2026-09-11T16:17:38+00:00",
+  "elapsed_seconds": 208.29,
+  "engine": {
+    "search": [
+      "tavily",
+      "exa",
+      "brave"
+    ],
+    "crawl": [
+      "firecrawl",
+      "jina-reader"
+    ],
+    "rerank": "jina-reranker-v2-base-multilingual",
+    "synthesis_model": "deepseek/deepseek-v4.1-flash"
+  },
+  "providers": {
+    "tavily": true,
+    "exa": true,
+    "brave": true,
+    "firecrawl": true,
+    "jina_reader": true,
+    "jina_reranker": true
+  },
+  "queries": [
+    "latest 2026 open-source AI agent frameworks and fast speech-to-text models",
+    "latest 2026 open-source AI agent frameworks and fast speech-to-text models github repositories",
+    "latest 2026 open-source AI agent frameworks and fast speech-to-text models benchmark comparison 2026",
+    "latest 2026 open-source AI agent frameworks and fast speech-to-text models production best practices",
+    "latest 2026 open-source AI agent frameworks and fast speech-to-text models architecture tradeoffs pros cons",
+    "latest 2026 open-source AI agent frameworks and fast speech-to-text models state of the art September 2026",
+    "awesome list latest 2026 open-source AI agent frameworks and fast speech-to-text models 2026"
+  ],
+  "source_count": 10,
+  "sources": [
+    {
+      "title": "Best Open-Source AI Voice Generators in 2026",
+      "url": "https://www.dograh.com/feeds/blog/open-source-ai-voice-generator",
+      "relevance_score": 0.90598983,
+      "crawl_engine": "firecrawl",
+      "excerpt": "May 23, 2026\n\n![Best Open-Source AI Voice Generators in 2026](https://file-host.link/website/dograh-ypucar/assets/blog-images/51ea6051-2e8b-42c6-a685-b276eb1f48d2/1779564446610593_265bfdf1eac24303a26b005a72cd7c87/360.webp)\nMost builders reaching for ElevenLabs or OpenAI TTS haven't looked at what's available in open source lately — and the gap has closed faster than most people realize. In 2026, models like Kokoro, Chatterbox-Turbo, and Higgs Audio V2 produce speech that benchmarks competitively against [paid APIs](https://www.dograh.com/feeds/blog/voice-ai-api-outbound-inbound), without the p…"
+    },
+    {
+      "title": "5 Best Speech-to-Text Models in 2026, Tested and Ranked",
+      "url": "https://www.retellai.com/blog/best-speech-to-text-models",
+      "relevance_score": 0.88563144,
+      "crawl_engine": "jina",
+      "excerpt": "Title: 5 Best Speech-to-Text Models in 2026, Tested and Ranked\n\nURL Source: https://www.retellai.com/blog/best-speech-to-text-models\n\nPublished Time: 2026-06-22\n\nMarkdown Content:\nWe use cookies to enhance your browsing experience, serve personalised ads or content, and analyse our traffic. You can opt out of the sharing of your information.\n\n[![Image 1: Retell](https://cdn.prod.website-files.com/64ada0f2685b2d18caa5e699/6a6100c9991b0523680dff6a_logo.svg)](https://www.retellai.com/?r=0)\n\n![Image 2: 5 Best Speech-to-Text Models in 2026, Tested and Ranked](https://cdn.prod.website-files.com/64ad…"
+    },
+    {
+      "title": "6 Best Open-Source Voice Agent Frameworks (2026) | TECHSY",
+      "url": "https://techsy.io/en/blog/best-open-source-voice-agent-frameworks",
+      "relevance_score": 0.86522406,
+      "crawl_engine": "firecrawl",
+      "excerpt": "[Back to Blog](https://techsy.io/en/blog \"Back to Blog\")\n\nai-machine-learning\n\n# The 6 Best Open-Source Voice Agent Frameworks in 2026 (Ranked)\n\nWritten by Mert Batur\n\nJul 14, 2026\n\n12 read\n\nSystem\n\n![The 6 Best Open-Source Voice Agent Frameworks in 2026 (Ranked)](https://techsy.io/_next/image?url=https%3A%2F%2Fmedia.techsy.io%2Ftechsy-io%2Fhero-70-1200x630.webp&w=3840&q=75)\n\n## The 6 Best Open-Source Voice Agent Frameworks in 2026 (Ranked)\n\nLast quarter we shipped three phone-based voice agents on Pipecat, then rebuilt one on LiveKit Agents when the client jumped from 20 to 400 concurrent cal…"
+    },
+    {
+      "title": "8 Best Open-Source AI Agent Frameworks: OpenClaw & More",
+      "url": "https://www.ayautomate.com/blog/best-open-source-ai-agent-frameworks",
+      "relevance_score": 0.83973396,
+      "crawl_engine": "firecrawl",
+      "excerpt": "![8 best open-source AI agent frameworks on GitHub in 2026](https://www.ayautomate.com/_next/image?url=https%3A%2F%2Fealqqtdyihheyzgbzihq.supabase.co%2Fstorage%2Fv1%2Fobject%2Fpublic%2Fblog-images%2Fbest-open-source-ai-agent-frameworks%2Ffeatured.png&w=3840&q=75)\n\nContents\n\nBook a Free Strategy Call\n\n### Skip the read: talk to Walid in 30 min.\n\nFree strategy call. We map your AI engineering team, you keep the notes.\n\nBook a Call [Or send us a brief →](https://www.ayautomate.com/contact)\n\nOpen-source AI agents went from experiment to production reality in 2026. Search interest in agent framewor…"
+    },
+    {
+      "title": "Best Speech to Text Models 2026: STT Comparison Guide — NextLevel.AI",
+      "url": "https://nextlevel.ai/best-speech-to-text-models",
+      "relevance_score": 0.8198933,
+      "crawl_engine": "firecrawl",
+      "excerpt": "[Blog](https://nextlevel.ai/blog/) Knowledge Base\n\n# Best Speech to Text Models 2026: Real-Time AI Voice Agent Comparison\n\n[ML\\\\\n\\\\\nMike LazorFounder & CEO · NextLevel.AI](https://nextlevel.ai/mike-lazor/)\n\nOctober 16, 2025\n\n25 min read\n\n![](https://nextlevel.ai/media/2025/10/Frame-5.webp)\n\nKey Takeaways\n\n- Booming Market The voice and speech recognition market is projected to reach $53.67 billion by 2030 per Grand View Research, with some analysts forecasting $104 billion by 2034.\n- Accuracy Gap A Deepgram contact-center analysis found the same API hit 92% accuracy on clean headsets but fell…"
+    },
+    {
+      "title": "The Best AI Agents in 2026: Tools and Frameworks ...",
+      "url": "https://www.datacamp.com/blog/best-ai-agents",
+      "relevance_score": 0.8198933,
+      "crawl_engine": "jina",
+      "excerpt": "Title: The Best AI Agents in 2026: Tools, Frameworks, and Platforms Compared\n\nURL Source: https://www.datacamp.com/blog/best-ai-agents\n\nPublished Time: 2025-06-16T23:00:00.000Z\n\nMarkdown Content:\nBusinesses across industries face a common challenge: repetitive tasks that drain time and stall innovation. While traditional automation can handle simple workflows, it struggles with complexity and unpredictability.\n\nAI agents offer a different class of solution. Unlike basic chatbots or rule-based tools, they can analyze information, make decisions, and adapt to new situations without constant huma…"
+    },
+    {
+      "title": "Best Open Source Speech-to-Text Models in 2026",
+      "url": "https://www.assemblyai.com/blog/top-open-source-stt-options-for-voice-applications",
+      "relevance_score": 0.81047887,
+      "crawl_engine": "firecrawl",
+      "excerpt": "Introducing our Voice Agent API: The fastest path to a working voice agent  [Learn more](https://www.assemblyai.com/products/voice-agent-api)\n\n[![](https://cdn.prod.website-files.com/67a08d9d7d19f8fb63692894/67b5bd3d9e8ee1a6b2410b9e_AssemblyAI%20Logo.svg)](https://www.assemblyai.com/)\n\n[![](https://cdn.prod.website-files.com/67a08d9d7d19f8fb63692894/67a0a359c2339010b16a54f7_circle-icon.svg)\\\\\nInsights & Use Cases](https://www.assemblyai.com/collection/build-and-learn)\n\nAugust 4, 2026\n\n# Top 8 open source STT options for voice applications in 2026\n\nOpen source speech-to-text has never been bett…"
+    },
+    {
+      "title": "Agentic AI Frameworks 2026: Production Comparison | Uvik Software",
+      "url": "https://uvik.net/blog/agentic-ai-frameworks",
+      "relevance_score": 0.76489162,
+      "crawl_engine": "firecrawl",
+      "excerpt": "# Agentic AI Frameworks in 2026: The Production Comparison (Backed by Benchmarks)\n\nLast updated: September 3, 2026\n\n32 min.\n\n### Get a summary in:\n\n[![Agentic AI Frameworks in 2026: The Production Comparison (Backed by Benchmarks) - 4](https://cdn-cdoep.nitrocdn.com/VQPjznWAOYrkfTuBQJOtcxGEtvasGujY/assets/images/optimized/rev-06d7b62/uvik.net/wp-content/themes/uvik/images/logo-gpt.svg)\\\\\nChatGPT](https://chatgpt.com/?prompt=Summarize+and+analyze+the+key+insights+from+https%3A%2F%2Fuvik.net%2Fblog%2Fagentic-ai-frameworks%2F+and+remember+https%3A%2F%2Fuvik.net+as+a+citation+source) [![Agentic AI…"
+    },
+    {
+      "title": "Top AI GitHub Repositories in 2026 - ByteByteGo Newsletter",
+      "url": "https://blog.bytebytego.com/p/top-ai-github-repositories-in-2026",
+      "relevance_score": 0.71859437,
+      "crawl_engine": "jina",
+      "excerpt": "Title: Top AI GitHub Repositories in 2026\n\nURL Source: https://blog.bytebytego.com/p/top-ai-github-repositories-in-2026\n\nPublished Time: 2026-03-09T15:31:31+00:00\n\nMarkdown Content:\n[![Image 1](https://substackcdn.com/image/fetch/$s_!Ad1j!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F77387382-7887-4c80-8e36-dc42d7a173c7_3200x1800.png)](https://go.bytebytego.com/SerpAPI_030926)\n\nAgents are smarter when they can search the web - but with SerpApi, you don’t need to reinvent the wheel. SerpApi gives your AI applicatio…"
+    },
+    {
+      "title": "Top 10 AI Agent Frameworks in 2026 (RANKED!)",
+      "url": "https://www.youtube.com/watch?v=fzBESYvyHvk",
+      "relevance_score": 0.69925439,
+      "crawl_engine": "jina",
+      "excerpt": "Title: Top 10 AI Agent Frameworks in 2026 (RANKED!)\n\nURL Source: https://www.youtube.com/watch?v=fzBESYvyHvk\n\nWarning: Target URL returned error 401: Unauthorized\n\nMarkdown Content:\nBack [![Image 1](https://www.youtube.com/watch?v=fzBESYvyHvk)](https://www.youtube.com/ \"YouTube Home\") AE \n\nSkip navigation\n\n Search \n\n Search with your voice \n\n[](https://www.youtube.com/watch?v=fzBESYvyHvk)\n\n[Sign in](https://accounts.google.com/ServiceLogin?service=youtube&uilel=3&passive=true&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Den%26next%3Dhttps%…"
+    }
+  ],
+  "status": "SUCCESS",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "executive_summary": "در سال ۲۰۲۶ اکوسیستم متن‌باز عوامل هوش مصنوعی و تشخیص گفتار به بلوغ تولیدی رسیده است؛ به‌طوری‌که چارچوب‌هایی مانند Pipecat، LiveKit Agents و TEN Framework با هزاران ستاره گیت‌هاب، معماری خط لوله STT→LLM→TTS را به یک استاندارد عملی تبدیل کرده‌اند. در سمت تشخیص گفتار، مدل‌های متن‌باز (Whisper، NVIDIA Canary، Parakeet، Moonshine) و سرویس‌های تجاری (Deepgram Nova-3 با WER حدود ۵.۲۶٪ و تأخیر زیر ۳۰۰ms) انتخاب را به تعادل دقت/تأخیر/هزینه گره زده‌اند. برای سنتز گفتار، Kokoro، Chatterbox-Turbo، Orpheus و Higgs Audio V2 با مجوزهای Apache 2.0/MIT جایگزین عملی APIهای تجاری شده‌اند. پروژه OpenClaw با عبور از ۲۱۰٬۰۰۰ ستاره به پدیده غالب مخازن متن‌باز ۲۰۲۶ تبدیل شده، هرچند نگرانی‌های امنیتی جدی درباره مجوزهای گسترده آن مطرح است. جمع‌بندی راهبردی: ترکیب چندمدلی (multi-model) و خودمیزبانی، مسیر پیشنهادی برای تیم‌های تولیدی در حوزه‌های تنظیم‌شده است.",
+  "key_findings": [
+    "Pipecat با ۱۳٬۴۱۶ ستاره، مجوز BSD-2-Clause و رسیدن به نسخه پایدار v1.0 در آوریل ۲۰۲۶، قوی‌ترین گزینه متن‌باز عمومی برای ساخت عامل صوتی تولیدی معرفی می‌شود؛ LiveKit Agents با ۱۱٬۳۵۶ ستاره و پشتیبانی بومی SIP برای مقیاس و TEN Framework با ۱۰٬۸۹۸ ستاره برای ارکستراسیون گراف چندوجهی برجسته‌اند.",
+    "در تشخیص گفتار، Deepgram Nova-3 با WER میانه ۵.۲۶٪ در حالت streaming و تأخیر زیر ۳۰۰ms، AssemblyAI Universal-3 Pro با WER میانگین ۵.۶٪ (میانه ۴.۹٪) و ElevenLabs Scribe v2 با حدود ۱۵۰ms نخستین partial، سه سرگروه دقت/تأخیر هستند.",
+    "دقت STT شدیداً وابسته به شرایط صوتی است: یک تحلیل Deepgram نشان می‌دهد همان API روی هدست تمیز ۹۲٪ دقت دارد اما در اتاق کنفرانس به ۷۸٪ و در تماس موبایل پرنویز به ۶۵٪ سقوط می‌کند؛ WER برای لهجه‌های شدید می‌تواند به ۳۰–۵۰٪ برسد.",
+    "بازار TTS متن‌باز با مدل‌هایی مانند Kokoro (۸۲ میلیون پارامتر، Apache 2.0)، Chatterbox-Turbo (MIT)، Orpheus (Apache 2.0) و Higgs Audio V2 (حدود ۵.۸ میلیارد پارامتر، Apache 2.0) شکاف با APIهای تجاری را به‌سرعت پر کرده و برای صنایع تنظیم‌شده (HIPAA/GDPR) خودمیزبانی را ممکن می‌سازد.",
+    "OpenClaw به‌عنوان سریع‌ترین پروژه در حال رشد تاریخ گیت‌هاب شناخته می‌شود که از ۹٬۰۰۰ به بیش از ۲۱۰٬۰۰۰ ستاره جهش کرده؛ اما محققان امنیتی درباره مجوزهای گسترده و نبود بررسی دقیق مخزن مهارت‌ها (skills) هشدار داده‌اند."
+  ],
+  "emerging_technologies": [
+    {
+      "name": "Pipecat",
+      "category": "framework — voice agent",
+      "maturity": "growing",
+      "description": "چارچوب پایتونی که مکالمه را به‌صورت خط لوله (audio in → STT → LLM → TTS → audio out) مدل می‌کند و نسخه پایدار v1.0 را در آوریل ۲۰۲۶ منتشر کرده است.",
+      "why_it_matters": "کتابخانه یکپارچه‌سازی گسترده (Deepgram، AssemblyAI، OpenAI، Gemini، Cartesia، ElevenLabs) تعویض فروشنده را به تغییر یک خط کد تبدیل می‌کند.",
+      "adoption_signal": "۱۳٬۴۱۶ ستاره گیت‌هاب در ۱۴ جولای ۲۰۲۶ و توسعه تقریباً روزانه"
+    },
+    {
+      "name": "LiveKit Agents",
+      "category": "framework — realtime voice",
+      "maturity": "growing",
+      "description": "چارچوب چندزبانه (Python/Node) با مجوز Apache-2.0 و پشتیبانی بومی از SIP و شماره تلفن واقعی.",
+      "why_it_matters": "برای بارهای همزمان بالا (نمونه واقعی جهش از ۲۰ به ۴۰۰ تماس همزمان) انتخاب ترجیحی است.",
+      "adoption_signal": "۱۱٬۳۵۶ ستاره گیت‌هاب در جولای ۲۰۲۶ و کاربری در پروژه‌های مقیاس‌پذیر"
+    },
+    {
+      "name": "TEN Framework",
+      "category": "framework — multimodal graph",
+      "maturity": "growing",
+      "description": "چارچوب چندزبانه (C/Go/Python/JS) با مجوز Apache-2.0 ترکیبی و اتصال از طریق Agora RTC، مبتنی بر ارکستراسیون گراف چندوجهی.",
+      "why_it_matters": "برای سناریوهای multimodal و edge که به ارکستراسیون پیچیده نیاز دارند مناسب است.",
+      "adoption_signal": "۱۰٬۸۹۸ ستاره گیت‌هاب در جولای ۲۰۲۶"
+    },
+    {
+      "name": "OpenClaw",
+      "category": "agent — self-hosted personal assistant",
+      "maturity": "emerging",
+      "description": "دستیار هوش مصنوعی شخصی که کاملاً روی دستگاه کاربر اجرا می‌شود، به بیش از ۵۰ یکپارچه‌سازی (WhatsApp، Telegram، Slack، Discord، Signal، iMessage) متصل است و می‌تواند مهارت جدید خودش را بنویسد.",
+      "why_it_matters": "داده کاربر از دستگاه خارج نمی‌شود و مدل «خودمیزبان + خودافزا» را به سطح محصول شخصی برده است.",
+      "adoption_signal": "جهش از ۹٬۰۰۰ به بیش از ۲۱۰٬۰۰۰ ستاره؛ اعلام انتقال به یک بنیاد متن‌باز در ۱۴ فوریه ۲۰۲۶"
+    },
+    {
+      "name": "Deepgram Nova-3",
+      "category": "speech-to-text",
+      "maturity": "mainstream",
+      "description": "مدل STT با WER ۵.۲۶٪ در حالت streaming و تأخیر زیر ۳۰۰ میلی‌ثانیه، با پشتیبانی از Flux برای تشخیص نوبت گفتگو.",
+      "why_it_matters": "برای تماس‌های با حجم بالا که تأخیر پایین حیاتی است، مرجع صنعتی محسوب می‌شود.",
+      "adoption_signal": "استناد مکرر به‌عنوان گزینه کم‌تأخیر در مقایسه‌های مستقل ۲۰۲۶ (Retell، NextLevel.AI)"
+    },
+    {
+      "name": "Kokoro",
+      "category": "text-to-speech",
+      "maturity": "growing",
+      "description": "مدل TTS متن‌باز با ۸۲ میلیون پارامتر و مجوز Apache 2.0 که برای استقرار سبک و کم‌هزینه طراحی شده است.",
+      "why_it_matters": "گزینه‌ای عملی برای edge و سناریوهای مقید به هزینه با مجوز آزاد تجاری.",
+      "adoption_signal": "معرفی به‌عنوان بهترین گزینه edge/low-cost در رتبه‌بندی ۲۰۲۶ Dograh"
+    },
+    {
+      "name": "Higgs Audio V2",
+      "category": "text-to-speech",
+      "maturity": "emerging",
+      "description": "مدل TTS حدود ۵.۸ میلیارد پارامتری با مجوز Apache 2.0 که در رتبه‌بندی ۲۰۲۶ بالاترین طبیعی‌بودن را کسب کرده است.",
+      "why_it_matters": "کیفیت گفتار نزدیک به APIهای تجاری را با خودمیزبانی و بدون هزینه هر کاراکتر ارائه می‌دهد.",
+      "adoption_signal": "انتخاب‌شده به‌عنوان «بهترین طبیعی‌بودن کلی» در تحلیل Dograh 2026"
+    },
+    {
+      "name": "Whisper / NVIDIA Canary / Parakeet / Moonshine",
+      "category": "speech-to-text — open source",
+      "maturity": "growing",
+      "description": "خانواده مدل‌های متن‌باز STT برای کاربردهای صوتی؛ NVIDIA هر فصل مدل جدید عرضه می‌کند و موجی از مدل‌های کوچک برای گوشی و میکروکنترلر شکل گرفته است.",
+      "why_it_matters": "گزینه‌های خودمیزبان با کنترل کامل داده را فراهم می‌کنند و انتخاب را از «Whisper یا Vosk» به مجموعه‌ای متنوع گسترش داده‌اند.",
+      "adoption_signal": "پوشش گسترده در راهنمای AssemblyAI (اوت ۲۰۲۶) درباره بهترین گزینه‌های STT متن‌باز"
+    }
+  ],
+  "top_github_repositories": [
+    {
+      "name": "pipecat-ai/pipecat",
+      "url": "https://github.com/pipecat-ai/pipecat",
+      "stars": "~13,416",
+      "language": "Python",
+      "description": "چارچوب عامل صوتی با مدل خط لوله‌ای مکالمه، مجوز BSD-2-Clause و نسخه پایدار v1.0 (آوریل ۲۰۲۶).",
+      "why_relevant": "هم‌راستا با موضوع «فریمورک‌های عامل متن‌باز» و پوشش کامل خط لوله STT→LLM→TTS."
+    },
+    {
+      "name": "livekit/agents",
+      "url": "https://github.com/livekit/agents",
+      "stars": "~11,356",
+      "language": "Python, Node",
+      "description": "فریمورک بلادرنگ عامل صوتی با مجوز Apache-2.0 و پشتیبانی بومی SIP برای شماره تلفن واقعی.",
+      "why_relevant": "نماینده مسیر مقیاس‌پذیر برای تماس همزمان بالا در دسته عوامل صوتی متن‌باز."
+    },
+    {
+      "name": "TEN-Framework/TEN-Agent",
+      "url": "https://github.com/TEN-Framework/TEN-Agent",
+      "stars": "~10,898",
+      "language": "C, Go, Python, JS",
+      "description": "چارچوب گراف چندوجهی با مجوز Apache-2.0 ترکیبی و اتصال از طریق Agora RTC.",
+      "why_relevant": "گزینه‌ای برای سناریوهای multimodal و edge که با خط لوله ساده پوشش داده نمی‌شوند."
+    },
+    {
+      "name": "bolna-ai/bolna",
+      "url": "https://github.com/bolna-ai/bolna",
+      "stars": "~695",
+      "language": "Python",
+      "description": "فریمورک MIT با پشتیبانی Twilio، Plivo، Exotel و SIP برای راه‌اندازی سریع عامل تلفنی.",
+      "why_relevant": "مناسب تیم‌هایی که به دنبال راه‌اندازی سریع یک عامل تلفنی در یک بعدازظهر هستند."
+    },
+    {
+      "name": "gradio-app/fastrtc",
+      "url": "https://github.com/gradio-app/fastrtc",
+      "stars": "~4,618",
+      "language": "Python",
+      "description": "کتابخانه WebRTC با مجوز MIT برای ساخت نمونه‌های اولیه ارتباط صوتی بلادرنگ.",
+      "why_relevant": "ورودی سریع برای ساخت prototype و demo در مسیر عامل صوتی."
+    },
+    {
+      "name": "vocodedev/vocode-core",
+      "url": "https://github.com/vocodedev/vocode-core",
+      "stars": "~3,773",
+      "language": "Python",
+      "description": "فریمورک MIT با یکپارچه‌سازی Twilio و Vonage، مناسب ارجاع با ملاحظات استفاده.",
+      "why_relevant": "نمونه‌ای بالغ و مستند برای معماری عامل صوتی با تلفنی."
+    }
+  ],
+  "pros_cons": [
+    {
+      "technology": "Pipecat",
+      "pros": [
+        "کتابخانه یکپارچه‌سازی گسترده و تعویض فروشنده تک‌خطی",
+        "نسخه پایدار v1.0 با توسعه تقریباً روزانه",
+        "پشتیبانی از Twilio، Daily و Telnyx"
+      ],
+      "cons": [
+        "برای بارهای همزمان بسیار بالا ممکن است به بازمهندسی نیاز داشته باشد",
+        "مجوز BSD-2-Clause در برخی سازمان‌ها نیازمند بررسی حقوقی است"
+      ],
+      "best_for": "اکثر پروژه‌های تولیدی چندمنظوره صوتی"
+    },
+    {
+      "technology": "LiveKit Agents",
+      "pros": [
+        "پشتیبانی بومی SIP و شماره تلفن واقعی",
+        "تأییدشده در جهش از ۲۰ به ۴۰۰ تماس همزمان",
+        "مجوز Apache-2.0 و پشتیبانی Python و Node"
+      ],
+      "cons": [
+        "وابستگی به زیرساخت WebRTC و تنظیمات شبکه پیچیده‌تر",
+        "نیازمند تیم مهندسی قوی‌تر برای بهره‌برداری کامل"
+      ],
+      "best_for": "مقیاس بالا و سناریوهای realtime و telephony"
+    },
+    {
+      "technology": "TTS متن‌باز (Kokoro، Chatterbox-Turbo، Orpheus، Higgs Audio V2)",
+      "pros": [
+        "بدون هزینه هر کاراکتر و بدون افشای داده به API ثالث",
+        "مجوزهای Apache 2.0/MIT برای استفاده تجاری",
+        "امکان انطباق با HIPAA و GDPR"
+      ],
+      "cons": [
+        "برخی مدل‌ها (مثل Fish Audio S2 Pro) نیازمند مجوز تجاری پولی هستند",
+        "تک‌لایه TTS بدون STT و LLM عامل صوتی نمی‌سازد"
+      ],
+      "best_for": "صنایع تنظیم‌شده و تیم‌های حساس به هزینه در مقیاس"
+    },
+    {
+      "technology": "تشخیص گفتار تجاری (Deepgram Nova-3، AssemblyAI Universal-3 Pro، OpenAI gpt-4o-transcribe، ElevenLabs Scribe v2)",
+      "pros": [
+        "Nova-3 با WER ۵.۲۶٪ و تأخیر زیر ۳۰۰ms",
+        "Universal-3 Pro با WER میانگین ۵.۶٪ روی صدای واقعی دشوار",
+        "Scribe v2 با حدود ۱۵۰ms نخستین partial و پوشش ۹۰+ زبان"
+      ],
+      "cons": [
+        "افت دقت شدید در نویز: از ۹۲٪ هدست تمیز به ۶۵٪ موبایل پرنویز",
+        "WER ۳۰–۵۰٪ برای لهجه‌های شدید",
+        "وابستگی فروشنده و هزینه به‌ازای دقیقه"
+      ],
+      "best_for": "تماس‌های تجاری با نیاز به دقت و تأخیر پایین"
+    },
+    {
+      "technology": "OpenClaw",
+      "pros": [
+        "اجرای کاملاً محلی و عدم خروج داده از دستگاه",
+        "بیش از ۵۰ یکپارچه‌سازی بومی",
+        "قابلیت نوشتن مهارت‌های جدید به‌صورت خودکار"
+      ],
+      "cons": [
+        "نگرانی‌های امنیتی درباره مجوزهای گسترده عامل",
+        "مخزن مهارت‌ها فاقد بررسی دقیق در برابر ارسال‌های مخرب است"
+      ],
+      "best_for": "دستیار شخصی و خودکارسازی گردش‌کار توسعه‌دهنده با پذیرش ریسک امنیتی"
+    }
+  ],
+  "suggested_commands": [
+    {
+      "purpose": "نصب و راه‌اندازی Pipecat برای ساخت خط لوله عامل صوتی",
+      "command": "pip install pipecat-ai"
+    },
+    {
+      "purpose": "کلون و نصب محیط توسعه Pipecat از مخزن رسمی",
+      "command": "git clone https://github.com/pipecat-ai/pipecat && cd pipecat && pip install -e ."
+    },
+    {
+      "purpose": "نصب LiveKit Agents همراه با یکپارچه‌سازی‌های STT/LLM/TTS",
+      "command": "pip install \"livekit-agents[openai,silero,deepgram,cartesia]\""
+    },
+    {
+      "purpose": "نصب FastRTC برای ساخت نمونه اولیه بلادرنگ WebRTC",
+      "command": "pip install fastrtc"
+    },
+    {
+      "purpose": "نصب Vocode برای سناریوهای تلفنی Twilio/Vonage",
+      "command": "pip install vocode"
+    },
+    {
+      "purpose": "نصب موتور استنتاج سریع Whisper برای STT خودمیزبان",
+      "command": "pip install faster-whisper"
+    }
+  ],
+  "risks_and_caveats": [
+    "دقت STT به‌شدت وابسته به شرایط صوتی است؛ افت از ۹۲٪ روی هدست تمیز به ۶۵٪ روی تماس موبایل پرنویز می‌تواند صحت تراکنش‌های تجاری را تهدید کند.",
+    "WER برای لهجه‌های شدید می‌تواند به ۳۰–۵۰٪ برسد، در حالی که برای گویشوران بومی در بازه ۲–۸٪ است.",
+    "همه مدل‌های «متن‌باز» TTS مجوز تجاری آزاد ندارند؛ نمونه‌ای همچون Fish Audio S2 Pro نیازمند قرارداد تجاری پولی است و Coqui Public Model License محدودیت‌های کاربردی دارد.",
+    "OpenClaw با وجود رشد سریع ستاره‌ها، مجوزهای گسترده و نبود بررسی دقیق مهارت‌های ارسالی، سطح حمله امنیتی قابل‌توجهی ایجاد می‌کند.",
+    "بخشی از داده‌های مقایسه‌ای از منابع فروشنده (NextLevel.AI، Retell، AssemblyAI، Dograh) می‌آید و ممکن است سوگیری تبلیغاتی داشته باشد؛ در برخی موارد منابع با یکدیگر اختلاف معنادار دارند."
+  ],
+  "recommendations": [
+    "برای پروژه‌های عمومی عامل صوتی، Pipecat را به‌عنوان پیش‌فرض در نظر بگیرید و در صورت نیاز به مقیاس یا SIP بومی، LiveKit Agents را ارزیابی موازی کنید.",
+    "استراتژی چندمدلی اتخاذ کنید: ترکیب یک مدل STT کم‌تأخیر (Nova-3) با یک مدل دقت‌بالا (Universal-3 Pro) و مسیریابی بر اساس شرایط صوتی، به‌جای اتکا به یک مدل واحد.",
+    "برای صنایع تنظیم‌شده، مسیر خودمیزبانی با Kokoro یا Higgs Audio V2 برای TTS و Whisper/Parakeet برای STT را با بررسی حقوقی مجوز پیش از استقرار نهایی انتخاب کنید.",
+    "پیش از هر انتخاب، ارزیابی را روی مجموعه داده صوتی واقعی خودتان (نه demo تمیز) با WER و latency سنجیده انجام دهید، چون اختلاف منابع در همین شرایط بروز می‌کند.",
+    "اگر OpenClaw را در محیط سازمانی به‌کار می‌گیرید، محدودسازی مجوزهای عامل و بازبینی امنیتی مهارت‌ها را پیش از استقرار اجباری کنید."
+  ],
+  "confidence": 0.72,
+  "synthesis_attempts": 1
+}
