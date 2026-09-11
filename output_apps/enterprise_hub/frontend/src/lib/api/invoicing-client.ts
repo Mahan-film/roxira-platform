@@ -42,6 +42,7 @@ export async function listInvoices(
       limit: params.limit,
       status: params.status,
       taxInvoiceNumber: params.taxInvoiceNumber,
+      currency: params.currency,
     },
     signal,
   });

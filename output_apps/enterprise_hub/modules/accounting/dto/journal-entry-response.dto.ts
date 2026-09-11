@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Currency } from '../../currency/enums/currency.enum';
 import { JournalEntryStatus } from '../enums/accounting.enum';
 
 /**
@@ -17,10 +18,13 @@ export class JournalEntryLineResponseDto {
   @ApiProperty({ description: 'نام حساب' })
   accountName: string;
 
-  @ApiProperty({ description: 'مبلغ بدهکار (ریال)' })
+  @ApiProperty({ enum: Currency, description: 'ارز حساب' })
+  currency: Currency;
+
+  @ApiProperty({ description: 'مبلغ بدهکار (به ارز حساب)' })
   debit: number;
 
-  @ApiProperty({ description: 'مبلغ بستانکار (ریال)' })
+  @ApiProperty({ description: 'مبلغ بستانکار (به ارز حساب)' })
   credit: number;
 
   @ApiProperty({ description: 'شرح سطر', nullable: true })
@@ -46,11 +50,23 @@ export class JournalEntryResponseDto {
   @ApiProperty({ enum: JournalEntryStatus, description: 'وضعیت سند' })
   status: JournalEntryStatus;
 
-  @ApiProperty({ description: 'جمع بدهکار سند (ریال)' })
+  @ApiProperty({ enum: Currency, description: 'ارز سند (مشترک تمام سطرها)' })
+  currency: Currency;
+
+  @ApiProperty({ description: 'جمع بدهکار سند (به ارز سند)' })
   totalDebit: number;
 
-  @ApiProperty({ description: 'جمع بستانکار سند (ریال)' })
+  @ApiProperty({ description: 'جمع بستانکار سند (به ارز سند)' })
   totalCredit: number;
+
+  @ApiProperty({ enum: Currency, description: 'ارز پایه تجمیع' })
+  baseCurrency: Currency;
+
+  @ApiProperty({ description: 'جمع بدهکار سند معادل ارز پایه' })
+  baseTotalDebit: number;
+
+  @ApiProperty({ description: 'جمع بستانکار سند معادل ارز پایه' })
+  baseTotalCredit: number;
 
   @ApiProperty({ type: [JournalEntryLineResponseDto], description: 'سطرهای سند' })
   lines: JournalEntryLineResponseDto[];

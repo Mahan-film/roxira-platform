@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Currency } from '../../currency/enums/currency.enum';
 import { AccountType } from '../enums/accounting.enum';
 
 /**
@@ -17,8 +18,8 @@ export class AccountResponseDto {
   @ApiProperty({ enum: AccountType, description: 'ماهیت حساب' })
   accountType: AccountType;
 
-  @ApiProperty({ description: 'واحد پول' })
-  currency: string;
+  @ApiProperty({ enum: Currency, description: 'واحد پول' })
+  currency: Currency;
 
   @ApiProperty({ description: 'مانده حساب با علامت بدهکار-مثبت' })
   balance: number;

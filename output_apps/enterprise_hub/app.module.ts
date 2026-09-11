@@ -11,6 +11,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { TaxComplianceModule } from './modules/tax_compliance/tax-compliance.module';
 import { HrModule } from './modules/hr/hr.module';
+import { CurrencyModule } from './modules/currency/currency.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { HrModule } from './modules/hr/hr.module';
     CrmModule,
     TaxComplianceModule,
     HrModule,
+    CurrencyModule,
   ],
 })
 export class AppModule {}

@@ -14,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { MAX_INVOICE_ITEMS } from '../constants/invoicing.constants';
+import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -137,4 +138,14 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsEnum(InvoiceStatus)
   status?: InvoiceStatus;
+
+  @ApiPropertyOptional({
+    description:
+      'ارز صورتحساب (پیش‌فرض IRR)؛ برای تسویه بین‌المللی USD/EUR/AED پشتیبانی می‌شود.',
+    enum: Currency,
+    default: Currency.IRR,
+  })
+  @IsOptional()
+  @IsEnum(Currency)
+  currency?: Currency;
 }

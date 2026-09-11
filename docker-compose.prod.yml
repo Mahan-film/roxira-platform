@@ -152,6 +152,10 @@ services:
       - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:-REDACTED_SECRET_01}
       - KAVENEGAR_TEMPLATE_GHAZI=${KAVENEGAR_TEMPLATE_GHAZI:-ghazi-verify}
       - KAVENEGAR_TEMPLATE_ROXIRA=${KAVENEGAR_TEMPLATE_ROXIRA:-roxira-verify}
+      # WebAuthn / Passkey — ورود بیومتریک و سخت‌افزاری
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-roxira.net}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Roxira International}
+      - WEBAUTHN_ORIGINS=${WEBAUTHN_ORIGINS:-https://roxira.net,https://www.roxira.net,http://localhost:3001}
     ports:
       - "3000:3000"
     depends_on:

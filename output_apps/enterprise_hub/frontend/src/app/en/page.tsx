@@ -4,12 +4,10 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
-  Banknote,
   BookOpen,
   Boxes,
   BrainCircuit,
   Calculator,
-  Coins,
   Database,
   Globe2,
   Landmark,
@@ -21,6 +19,8 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { PasskeyLoginButton } from "@/components/en/passkey-login-button";
+import { EnSettlementPanel } from "@/components/en/en-settlement-panel";
 
 const MODULES: {
   icon: LucideIcon;
@@ -80,8 +80,6 @@ const MODULES: {
     external: true,
   },
 ];
-
-const CURRENCIES = ["USD", "EUR", "GBP", "AED", "CNY", "JPY", "IRR"];
 
 const TRUST = [
   {
@@ -147,6 +145,7 @@ export default function InternationalPortal() {
             >
               فارسی
             </a>
+            <PasskeyLoginButton />
             <Link
               href="/docs"
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
@@ -356,64 +355,22 @@ curl -X POST \\
           id="fx"
           className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-16 sm:px-6"
         >
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-center">
-            <div className="order-2 flex flex-col gap-4 lg:order-1">
-              <span className="inline-flex w-fit items-center gap-1.5 text-xs font-bold text-emerald-300">
-                <Coins className="size-4" />
-                FX & settlement
-              </span>
-              <h2 className="text-2xl font-black tracking-tight sm:text-3xl">
-                Multi-currency connection for global trade
-              </h2>
-              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-                Issue invoices and post ledger entries in the settlement currency
-                of your choice. The platform normalizes amounts through a central
-                exchange-rate service so consolidated reporting stays accurate.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {CURRENCIES.map((code) => (
-                  <span
-                    key={code}
-                    className="rounded-lg border border-border bg-card px-2.5 py-1 font-mono text-[11px] text-emerald-300"
-                  >
-                    {code}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="order-1 rounded-2xl border border-border bg-card p-6 lg:order-2">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <Banknote className="size-4 text-emerald-300" />
-                  Settlement preview
-                </span>
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  FX-2026-0001
-                </span>
-              </div>
-              <ul className="divide-y divide-border text-sm">
-                {[
-                  { label: "Invoice amount", value: "€ 12,500.00" },
-                  { label: "Base currency", value: "EUR" },
-                  { label: "Settlement currency", value: "USD" },
-                  { label: "Applied rate source", value: "Central FX feed" },
-                ].map((row) => (
-                  <li
-                    key={row.label}
-                    className="flex items-center justify-between py-2.5"
-                  >
-                    <span className="text-muted-foreground">{row.label}</span>
-                    <span className="font-mono">{row.value}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 flex items-center justify-between rounded-lg bg-emerald-500/10 px-3 py-2 text-sm font-bold">
-                <span>Settlement amount</span>
-                <span className="font-mono text-emerald-300">$ 13,610.00</span>
-              </div>
-            </div>
+          <div className="mb-8 flex flex-col gap-2">
+            <span className="inline-flex w-fit items-center gap-1.5 text-xs font-bold text-emerald-300">
+              <Sparkles className="size-4" />
+              Live multi-currency settlement
+            </span>
+            <h2 className="text-2xl font-black tracking-tight sm:text-3xl">
+              Multi-currency connection for global trade
+            </h2>
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Switch the settlement currency and preview live conversions for
+              USD, EUR, AED and IRR. The same reference rates power invoice and
+              general-ledger calculations across the platform.
+            </p>
           </div>
+
+          <EnSettlementPanel />
         </section>
 
         <section className="border-t border-border bg-card/40">

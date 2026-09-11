@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CurrencyModule } from '../currency/currency.module';
 import { AccountingController } from './controllers/accounting.controller';
 import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
@@ -26,6 +27,7 @@ import { AccountingService } from './services/accounting.service';
       JournalEntryEntity,
       JournalEntryLineEntity,
     ]),
+    CurrencyModule,
   ],
   controllers: [AccountingController],
   providers: [AccountingService, AccountingRepository],

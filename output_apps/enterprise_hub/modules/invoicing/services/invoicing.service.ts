@@ -4,6 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FindOptionsWhere, ILike } from 'typeorm';
+import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
+import { Currency } from '../../currency/enums/currency.enum';
+import { CurrencyService } from '../../currency/services/currency.service';
 import { MONEY_SCALE, VAT_RATE } from '../constants/invoicing.constants';
 import { CreateInvoiceDto, InvoiceItemDto } from '../dto/create-invoice.dto';
 import { InvoiceResponseDto } from '../dto/invoice-response.dto';
@@ -21,7 +24,10 @@ import { InvoicingRepository } from '../repositories/invoicing.repository';
  */
 @Injectable()
 export class InvoicingService {
-  constructor(private readonly invoicingRepository: InvoicingRepository) {}
+  constructor(
+    private readonly invoicingRepository: InvoicingRepository,
+    private readonly currencyService: CurrencyService,
+  ) {}
 
   /** گرد کردن مبالغ ریالی تا ۲ رقم اعشار. */
   private round(value: number): number {
@@ -62,10 +68,16 @@ export class InvoicingService {
       sellerInfo: entity.sellerInfo,
       buyerInfo: entity.buyerInfo,
       items: entity.items,
+      currency: entity.currency,
+      exchangeRate: Number(entity.exchangeRate),
+      baseCurrency: entity.baseCurrency,
       totalAmount: Number(entity.totalAmount),
       totalDiscount: Number(entity.totalDiscount),
       totalTax: Number(entity.totalTax),
       finalPayable: Number(entity.finalPayable),
+      baseTotalAmount: Number(entity.baseTotalAmount),
+      baseTotalTax: Number(entity.baseTotalTax),
+      baseFinalPayable: Number(entity.baseFinalPayable),
       status: entity.status,
       createdAt: entity.createdAt,
     };
@@ -88,6 +100,9 @@ export class InvoicingService {
 
     const items = this.normalizeItems(dto.items);
 
+    const currency = dto.currency ?? Currency.IRR;
+    const exchangeRate = this.currencyService.getRate(currency, BASE_CURRENCY);
+
     let totalAmount = 0;
     let totalDiscount = 0;
     let totalTax = 0;
@@ -100,15 +115,34 @@ export class InvoicingService {
       finalPayable += item.total;
     }
 
+    const roundedTotalAmount = this.round(totalAmount);
+    const roundedTotalTax = this.round(totalTax);
+    const roundedFinalPayable = this.round(finalPayable);
+
     const saved = await this.invoicingRepository.create({
       taxInvoiceNumber: dto.taxInvoiceNumber,
       sellerInfo: dto.sellerInfo,
       buyerInfo: dto.buyerInfo,
       items,
-      totalAmount: this.round(totalAmount),
+      currency,
+      exchangeRate,
+      baseCurrency: BASE_CURRENCY,
+      totalAmount: roundedTotalAmount,
       totalDiscount: this.round(totalDiscount),
-      totalTax: this.round(totalTax),
-      finalPayable: this.round(finalPayable),
+      totalTax: roundedTotalTax,
+      finalPayable: roundedFinalPayable,
+      baseTotalAmount: this.currencyService.round(
+        roundedTotalAmount * exchangeRate,
+        BASE_CURRENCY,
+      ),
+      baseTotalTax: this.currencyService.round(
+        roundedTotalTax * exchangeRate,
+        BASE_CURRENCY,
+      ),
+      baseFinalPayable: this.currencyService.round(
+        roundedFinalPayable * exchangeRate,
+        BASE_CURRENCY,
+      ),
       status: dto.status ?? InvoiceStatus.DRAFT,
     });
 
@@ -121,7 +155,7 @@ export class InvoicingService {
     page: number;
     limit: number;
   }> {
-    const { page, limit, status, taxInvoiceNumber } = query;
+    const { page, limit, status, taxInvoiceNumber, currency } = query;
 
     const where: FindOptionsWhere<InvoiceEntity> = {};
     if (status) {
@@ -129,6 +163,9 @@ export class InvoicingService {
     }
     if (taxInvoiceNumber) {
       where.taxInvoiceNumber = ILike(`%${taxInvoiceNumber}%`);
+    }
+    if (currency) {
+      where.currency = currency;
     }
 
     const [entities, total] = await this.invoicingRepository.findAndCount({

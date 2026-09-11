@@ -7,11 +7,14 @@ import {
 } from './constants/auth.constants';
 import { AuthController } from './controllers/auth.controller';
 import { UserEntity } from './entities/user.entity';
+import { PasskeyCredentialEntity } from './entities/passkey-credential.entity';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { redisClientProvider } from './providers/redis.provider';
 import { AuthRepository } from './repositories/auth.repository';
+import { PasskeyRepository } from './repositories/passkey.repository';
 import { AuthService } from './services/auth.service';
 import { KavenegarService } from './services/kavenegar.service';
+import { WebAuthnService } from './services/webauthn.service';
 
 /**
  * ماژول احراز هویت پیامکی (Auth & Kavenegar OTP).
@@ -30,7 +33,7 @@ import { KavenegarService } from './services/kavenegar.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity]),
+    TypeOrmModule.forFeature([UserEntity, PasskeyCredentialEntity]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -51,11 +54,13 @@ import { KavenegarService } from './services/kavenegar.service';
   controllers: [AuthController],
   providers: [
     AuthService,
+    WebAuthnService,
     AuthRepository,
+    PasskeyRepository,
     KavenegarService,
     JwtAuthGuard,
     redisClientProvider,
   ],
-  exports: [AuthService],
+  exports: [AuthService, WebAuthnService],
 })
 export class AuthModule {}

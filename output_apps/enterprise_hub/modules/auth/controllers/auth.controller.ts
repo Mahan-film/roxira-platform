@@ -18,10 +18,23 @@ import {
 import { SendOtpDto } from '../dto/send-otp.dto';
 import { VerifyOtpDto } from '../dto/verify-otp.dto';
 import {
+  WebAuthnAuthenticationOptionsRequestDto,
+  WebAuthnAuthenticationOptionsResponseDto,
+  WebAuthnAuthenticationVerifyRequestDto,
+  WebAuthnRegistrationOptionsRequestDto,
+  WebAuthnRegistrationOptionsResponseDto,
+  WebAuthnRegistrationVerifyRequestDto,
+  WebAuthnRegistrationVerifyResponseDto,
+} from '../dto/webauthn.dto';
+import {
   AuthenticatedRequest,
   JwtAuthGuard,
 } from '../guards/jwt-auth.guard';
 import { AuthService } from '../services/auth.service';
+import {
+  PasskeySummary,
+  WebAuthnService,
+} from '../services/webauthn.service';
 
 /**
  * کنترلر احراز هویت پیامکی (Auth & Kavenegar OTP).
@@ -37,7 +50,10 @@ import { AuthService } from '../services/auth.service';
 @ApiTags('Auth - احراز هویت پیامکی')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly webAuthnService: WebAuthnService,
+  ) {}
 
   @Post('send-otp')
   @HttpCode(HttpStatus.OK)
@@ -78,5 +94,84 @@ export class AuthController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'توکن نامعتبر' })
   async me(@Req() request: AuthenticatedRequest): Promise<AuthUserDto> {
     return this.authService.getProfile(request.user?.sub ?? '');
+  }
+
+  @Post('webauthn/registration/options')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'تولید گزینه‌های ثبت Passkey (WebAuthn)',
+    description:
+      'تولید چالش تصادفی امن CSPRNG به‌همراه پارامترهای کلید عمومی (ES256/RS256) برای ثبت Passkey بیومتریک یا سخت‌افزاری. چالش ۹۰ ثانیه در Redis معتبر است.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: WebAuthnRegistrationOptionsResponseDto,
+  })
+  async webauthnRegistrationOptions(
+    @Body() dto: WebAuthnRegistrationOptionsRequestDto,
+    @Headers('host') host?: string,
+  ): Promise<WebAuthnRegistrationOptionsResponseDto> {
+    const domain = this.authService.resolveServiceDomain(undefined, host);
+    return this.webAuthnService.generateRegistrationOptions(dto, domain);
+  }
+
+  @Post('webauthn/registration/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'تأیید و ذخیره Passkey جدید',
+    description:
+      'بررسی چالش/مبدأ، تجزیه Attestation و ذخیره کلید عمومی COSE جهت ورودهای بعدی.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: WebAuthnRegistrationVerifyResponseDto,
+  })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'چالش نامعتبر' })
+  async webauthnRegistrationVerify(
+    @Body() dto: WebAuthnRegistrationVerifyRequestDto,
+  ): Promise<WebAuthnRegistrationVerifyResponseDto> {
+    return this.webAuthnService.verifyRegistration(dto);
+  }
+
+  @Post('webauthn/authentication/options')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'تولید چالش احراز هویت Passkey',
+    description:
+      'تولید چالش و فهرست اعتبارنامه‌های مجاز برای ورود بیومتریک/سخت‌افزاری. ارسال شماره همراه اختیاری است (پشتیبانی از Passkeyهای Discoverable).',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: WebAuthnAuthenticationOptionsResponseDto,
+  })
+  async webauthnAuthenticationOptions(
+    @Body() dto: WebAuthnAuthenticationOptionsRequestDto,
+  ): Promise<WebAuthnAuthenticationOptionsResponseDto> {
+    return this.webAuthnService.generateAuthenticationOptions(dto);
+  }
+
+  @Post('webauthn/authentication/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'احراز هویت با Passkey و صدور توکن JWT',
+    description:
+      'بررسی امضای Assertion با کلید عمومی COSE، کنترل rpIdHash و شمارنده امضا، سپس صدور سشن کاربری.',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: AuthSessionDto })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Passkey نامعتبر' })
+  async webauthnAuthenticationVerify(
+    @Body() dto: WebAuthnAuthenticationVerifyRequestDto,
+  ): Promise<AuthSessionDto> {
+    return this.webAuthnService.verifyAuthentication(dto);
+  }
+
+  @Get('webauthn/credentials')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'فهرست Passkeyهای ثبت‌شده کاربر جاری' })
+  async webauthnCredentials(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PasskeySummary[]> {
+    const phone = request.user?.phone ?? '';
+    return this.webAuthnService.listCredentials(phone);
   }
 }

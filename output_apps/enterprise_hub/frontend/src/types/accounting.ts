@@ -4,6 +4,8 @@
  * `modules/accounting/dto` هستند (Contract-First Synchronization — Rule #4).
  */
 
+import { Currency } from "@/types/currency";
+
 export enum AccountType {
   ASSET = "ASSET",
   LIABILITY = "LIABILITY",
@@ -37,7 +39,7 @@ export interface ChartOfAccount {
   code: string;
   name: string;
   accountType: AccountType;
-  currency: string;
+  currency: Currency;
   balance: number;
 }
 
@@ -45,7 +47,7 @@ export interface CreateAccountDto {
   code: string;
   name: string;
   accountType: AccountType;
-  currency?: string;
+  currency?: Currency;
 }
 
 export interface JournalEntryLine {
@@ -53,6 +55,7 @@ export interface JournalEntryLine {
   accountId: number;
   accountCode: string;
   accountName: string;
+  currency: Currency;
   debit: number;
   credit: number;
   description: string | null;
@@ -64,8 +67,12 @@ export interface JournalEntryResponse {
   date: string;
   description: string;
   status: JournalEntryStatus;
+  currency: Currency;
   totalDebit: number;
   totalCredit: number;
+  baseCurrency: Currency;
+  baseTotalDebit: number;
+  baseTotalCredit: number;
   lines: JournalEntryLine[];
 }
 
@@ -101,6 +108,7 @@ export interface TrialBalanceRow {
   code: string;
   name: string;
   accountType: AccountType;
+  currency: Currency;
   totalDebit: number;
   totalCredit: number;
   balance: number;
@@ -111,6 +119,10 @@ export interface TrialBalanceResponse {
   totalDebit: number;
   totalCredit: number;
   balanced: boolean;
+  baseCurrency: Currency;
+  baseTotalDebit: number;
+  baseTotalCredit: number;
+  baseBalanced: boolean;
 }
 
 export interface AccountLedgerLine {
@@ -130,6 +142,8 @@ export interface AccountLedgerResponse {
   totalDebit: number;
   totalCredit: number;
   closingBalance: number;
+  baseCurrency: Currency;
+  baseClosingBalance: number;
   entries: AccountLedgerLine[];
 }
 

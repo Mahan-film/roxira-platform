@@ -5,6 +5,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -57,6 +58,19 @@ export class InvoiceEntity {
   @Column({ type: 'jsonb' })
   items: InvoiceItem[];
 
+  /** ارز اصلی صورتحساب (IRR, USD, EUR, AED). */
+  @Index()
+  @Column({ type: 'varchar', length: 3, default: 'IRR' })
+  currency: Currency;
+
+  /** نرخ تبدیل ارز اصلی به ارز پایه (واحد ارز پایه به‌ازای ۱ واحد ارز فاکتور). */
+  @Column({ type: 'decimal', precision: 18, scale: 8, default: 1 })
+  exchangeRate: number;
+
+  /** ارز پایه مورد استفاده در تجمیع گزارش‌های بین‌المللی (USD). */
+  @Column({ type: 'varchar', length: 3, default: 'USD' })
+  baseCurrency: Currency;
+
   @Column({ type: 'decimal', precision: 18, scale: 2 })
   totalAmount: number;
 
@@ -68,6 +82,18 @@ export class InvoiceEntity {
 
   @Column({ type: 'decimal', precision: 18, scale: 2 })
   finalPayable: number;
+
+  /** جمع ناخالص معادل ارز پایه. */
+  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  baseTotalAmount: number;
+
+  /** جمع مالیات معادل ارز پایه. */
+  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  baseTotalTax: number;
+
+  /** مبلغ نهایی قابل پرداخت معادل ارز پایه. */
+  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  baseFinalPayable: number;
 
   @Index()
   @Column({ type: 'enum', enum: InvoiceStatus, default: InvoiceStatus.DRAFT })

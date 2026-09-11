@@ -22,6 +22,7 @@ import {
 } from '../dto/auth-session.dto';
 import { SendOtpDto } from '../dto/send-otp.dto';
 import { VerifyOtpDto } from '../dto/verify-otp.dto';
+import { UserEntity } from '../entities/user.entity';
 import { AuthServiceDomain } from '../enums/auth-service.enum';
 import { RedisClient } from '../providers/redis.provider';
 import { AuthRepository } from '../repositories/auth.repository';
@@ -186,6 +187,19 @@ export class AuthService {
       record.domain ?? domain,
     );
 
+    const session = await this.issueSessionForUser(user);
+
+    this.logger.log(`[AUTH] ورود موفق | phone=${phone} | userId=${user.id}`);
+
+    return session;
+  }
+
+  /**
+   * صدور سشن JWT برای کاربر (مشترک میان ورود پیامکی و ورود Passkey/WebAuthn).
+   * منطق توکن فقط در یک نقطه متمرکز می‌ماند تا از تکرار و انحراف قرارداد
+   * جلوگیری شود (Rule #3 — AGENTS.md).
+   */
+  async issueSessionForUser(user: UserEntity): Promise<AuthSessionDto> {
     const payload: JwtPayload = {
       sub: user.id,
       phone: user.phone,
@@ -194,8 +208,6 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(payload);
-
-    this.logger.log(`[AUTH] ورود موفق | phone=${phone} | userId=${user.id}`);
 
     return {
       tokenType: 'Bearer',

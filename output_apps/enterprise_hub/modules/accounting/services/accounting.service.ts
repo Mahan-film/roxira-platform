@@ -5,6 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FindOptionsWhere, ILike } from 'typeorm';
+import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
+import { Currency } from '../../currency/enums/currency.enum';
+import { CurrencyService } from '../../currency/services/currency.service';
 import { BALANCE_TOLERANCE, MONEY_SCALE } from '../constants/accounting.constants';
 import { AccountLedgerResponseDto } from '../dto/account-ledger-response.dto';
 import { AccountResponseDto } from '../dto/account-response.dto';
@@ -44,7 +47,10 @@ import {
  */
 @Injectable()
 export class AccountingService {
-  constructor(private readonly accountingRepository: AccountingRepository) {}
+  constructor(
+    private readonly accountingRepository: AccountingRepository,
+    private readonly currencyService: CurrencyService,
+  ) {}
 
   private round(value: number): number {
     const factor = 10 ** MONEY_SCALE;
@@ -57,7 +63,7 @@ export class AccountingService {
       code: entity.code,
       name: entity.name,
       accountType: entity.accountType,
-      currency: entity.currency,
+      currency: entity.currency as Currency,
       balance: this.round(Number(entity.balance)),
     };
   }
@@ -68,6 +74,7 @@ export class AccountingService {
       accountId: line.accountId,
       accountCode: line.account?.code ?? '',
       accountName: line.account?.name ?? '',
+      currency: (line.account?.currency as Currency) ?? Currency.IRR,
       debit: this.round(Number(line.debit)),
       credit: this.round(Number(line.credit)),
       description: line.description,
@@ -87,14 +94,29 @@ export class AccountingService {
       lines.reduce((sum, line) => sum + line.credit, 0),
     );
 
+    const entryCurrency =
+      lines.length > 0 ? lines[0].currency : Currency.IRR;
+
     return {
       id: entity.id,
       entryNumber: entity.entryNumber,
       date: entity.date,
       description: entity.description,
       status: entity.status,
+      currency: entryCurrency,
       totalDebit,
       totalCredit,
+      baseCurrency: BASE_CURRENCY,
+      baseTotalDebit: this.currencyService.convert(
+        totalDebit,
+        entryCurrency,
+        BASE_CURRENCY,
+      ),
+      baseTotalCredit: this.currencyService.convert(
+        totalCredit,
+        entryCurrency,
+        BASE_CURRENCY,
+      ),
       lines,
     };
   }
@@ -153,7 +175,7 @@ export class AccountingService {
       code: dto.code,
       name: dto.name,
       accountType: dto.accountType,
-      currency: dto.currency ?? 'IRR',
+      currency: dto.currency ?? Currency.IRR,
       balance: 0,
     });
 
@@ -207,6 +229,17 @@ export class AccountingService {
     if (missingCodes.length > 0) {
       throw new BadRequestException(
         `کد(های) حساب یافت نشد: ${missingCodes.join(', ')}`,
+      );
+    }
+
+    const entryCurrencies = new Set(
+      uniqueCodes.map((code) => accountByCode.get(code)!.currency),
+    );
+    if (entryCurrencies.size > 1) {
+      throw new BadRequestException(
+        `تمام حساب‌های یک سند باید هم‌ارز باشند؛ ارزهای یافت‌شده: ${Array.from(
+          entryCurrencies,
+        ).join(', ')}`,
       );
     }
 
@@ -297,6 +330,7 @@ export class AccountingService {
         code: account.code,
         name: account.name,
         accountType: account.accountType,
+        currency: account.currency as Currency,
         totalDebit: totals.totalDebit,
         totalCredit: totals.totalCredit,
         balance: this.round(totals.totalDebit - totals.totalCredit),
@@ -310,11 +344,44 @@ export class AccountingService {
       rows.reduce((sum, row) => sum + row.totalCredit, 0),
     );
 
+    // تجمیع بین‌المللی: تبدیل بدهکار/بستانکار هر حساب به ارز پایه (USD).
+    const baseTotalDebit = this.currencyService.round(
+      rows.reduce(
+        (sum, row) =>
+          sum +
+          this.currencyService.convert(
+            row.totalDebit,
+            row.currency,
+            BASE_CURRENCY,
+          ),
+        0,
+      ),
+      BASE_CURRENCY,
+    );
+    const baseTotalCredit = this.currencyService.round(
+      rows.reduce(
+        (sum, row) =>
+          sum +
+          this.currencyService.convert(
+            row.totalCredit,
+            row.currency,
+            BASE_CURRENCY,
+          ),
+        0,
+      ),
+      BASE_CURRENCY,
+    );
+
     return {
       rows,
       totalDebit,
       totalCredit,
       balanced: Math.abs(totalDebit - totalCredit) < BALANCE_TOLERANCE,
+      baseCurrency: BASE_CURRENCY,
+      baseTotalDebit,
+      baseTotalCredit,
+      baseBalanced:
+        Math.abs(baseTotalDebit - baseTotalCredit) < BALANCE_TOLERANCE,
     };
   }
 
@@ -386,6 +453,12 @@ export class AccountingService {
         limited.reduce((sum, row) => sum + row.credit, 0),
       ),
       closingBalance,
+      baseCurrency: BASE_CURRENCY,
+      baseClosingBalance: this.currencyService.convert(
+        closingBalance,
+        account.currency as Currency,
+        BASE_CURRENCY,
+      ),
       entries: limited,
     };
   }

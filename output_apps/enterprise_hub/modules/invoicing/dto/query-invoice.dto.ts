@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -32,4 +33,9 @@ export class QueryInvoiceDto {
   @IsString()
   @MaxLength(64)
   taxInvoiceNumber?: string;
+
+  @ApiPropertyOptional({ description: 'فیلتر بر اساس ارز صورتحساب', enum: Currency })
+  @IsOptional()
+  @IsEnum(Currency)
+  currency?: Currency;
 }

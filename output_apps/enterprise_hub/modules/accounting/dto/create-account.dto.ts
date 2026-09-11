@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Currency } from '../../currency/enums/currency.enum';
 import { AccountType } from '../enums/accounting.enum';
 
 /**
@@ -23,9 +24,13 @@ export class CreateAccountDto {
   @IsEnum(AccountType)
   accountType: AccountType;
 
-  @ApiPropertyOptional({ description: 'واحد پول حساب', example: 'IRR', default: 'IRR' })
+  @ApiPropertyOptional({
+    description:
+      'واحد پول حساب (پیش‌فرض IRR)؛ ارزهای بین‌المللی USD/EUR/AED پشتیبانی می‌شوند.',
+    enum: Currency,
+    default: Currency.IRR,
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(3)
-  currency?: string;
+  @IsEnum(Currency)
+  currency?: Currency;
 }

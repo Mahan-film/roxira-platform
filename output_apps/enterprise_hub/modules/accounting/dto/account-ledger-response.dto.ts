@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Currency } from '../../currency/enums/currency.enum';
 import { AccountResponseDto } from './account-response.dto';
 
 /**
@@ -48,6 +49,12 @@ export class AccountLedgerResponseDto {
 
   @ApiProperty({ description: 'مانده اختتام بازه' })
   closingBalance: number;
+
+  @ApiProperty({ enum: Currency, description: 'ارز پایه تجمیع بین‌المللی' })
+  baseCurrency: Currency;
+
+  @ApiProperty({ description: 'مانده اختتام بازه معادل ارز پایه' })
+  baseClosingBalance: number;
 
   @ApiProperty({ type: [AccountLedgerLineDto], description: 'ردیف‌های گردش حساب' })
   entries: AccountLedgerLineDto[];

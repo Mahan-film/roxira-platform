@@ -1,3 +1,5 @@
+import { Currency } from "@/types/currency";
+
 export enum InvoiceStatus {
   DRAFT = "DRAFT",
   ISSUED = "ISSUED",
@@ -45,6 +47,7 @@ export interface CreateInvoiceDto {
   buyerInfo: InvoicePartyInfo;
   items: CreateInvoiceItemDto[];
   status?: InvoiceStatus;
+  currency?: Currency;
 }
 
 export type CreateInvoiceRequest = CreateInvoiceDto;
@@ -55,10 +58,16 @@ export interface InvoiceResponseDto {
   sellerInfo: InvoicePartyInfo;
   buyerInfo: InvoicePartyInfo;
   items: InvoiceItem[];
+  currency: Currency;
+  exchangeRate: number;
+  baseCurrency: Currency;
   totalAmount: number;
   totalDiscount: number;
   totalTax: number;
   finalPayable: number;
+  baseTotalAmount: number;
+  baseTotalTax: number;
+  baseFinalPayable: number;
   status: InvoiceStatus;
   createdAt: string;
 }
@@ -70,6 +79,7 @@ export interface QueryInvoiceDto {
   limit?: number;
   status?: InvoiceStatus;
   taxInvoiceNumber?: string;
+  currency?: Currency;
 }
 
 export type QueryInvoiceParams = QueryInvoiceDto;
