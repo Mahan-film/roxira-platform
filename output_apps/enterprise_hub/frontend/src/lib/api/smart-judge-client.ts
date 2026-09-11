@@ -161,7 +161,7 @@ const JUDGE_ENDPOINT = JUDGE_API_PROXY_BASE_PATH;
  */
 async function judgeRequest<TResponse>(
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown; signal?: AbortSignal } = {},
+  options: { method?: "GET" | "POST" | "DELETE"; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<TResponse> {
   const response = await fetch(`${JUDGE_ENDPOINT}${path}`, {
     method: options.method ?? "GET",
@@ -314,4 +314,176 @@ export async function transcribeAudio(
 
   const data = (await response.json()) as { transcript?: string };
   return (data.transcript ?? "").trim();
+}
+
+/** یک پیام ذخیره‌شده در تاریخچه گفتگو (نقش + محتوا). */
+export interface ConversationMessage {
+  role: string;
+  content: string;
+}
+
+/** یک گفتگوی ذخیره‌شده در جدول chat_conversations (enterprise_db). */
+export interface ChatConversation {
+  id: string;
+  user_phone: string;
+  title: string;
+  messages: ConversationMessage[];
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** ورودی ایجاد/به‌روزرسانی گفتگو (`POST /conversations`). */
+export interface SaveConversationRequest {
+  user_phone: string;
+  conversation_id?: string | null;
+  title?: string;
+  messages: ConversationMessage[];
+}
+
+/** ورودی استریم زنده پاسخ (`POST /chat-stream`). */
+export interface StreamChatRequest {
+  messages: ConversationMessage[];
+  user_phone?: string | null;
+  engine_tier?: JudgeEngineTier;
+  conversation_id?: string | null;
+}
+
+/** رخدادهای استریم SSE پاسخ قاضی هوشمند. */
+export interface ChatStreamHandlers {
+  onMeta?: (meta: { model: string; conversation_id: string | null }) => void;
+  onDelta: (chunk: string) => void;
+  onDone?: (info: { model: string }) => void;
+  onError?: (message: string) => void;
+}
+
+/**
+ * دریافت لیست تاریخچه گفتگوهای کاربر بر اساس شماره همراه.
+ * منطبق با `GET /api/v1/apps/judge/conversations`.
+ */
+export async function listConversations(
+  userPhone: string,
+  signal?: AbortSignal,
+): Promise<ChatConversation[]> {
+  const data = await judgeRequest<{ conversations: ChatConversation[] }>(
+    `/conversations?user_phone=${encodeURIComponent(userPhone)}`,
+    { method: "GET", signal },
+  );
+  return data.conversations ?? [];
+}
+
+/**
+ * ایجاد گفتگو یا به‌روزرسانی پیام‌ها و عنوان نشست جاری.
+ * منطبق با `POST /api/v1/apps/judge/conversations`.
+ */
+export async function saveConversation(
+  payload: SaveConversationRequest,
+  signal?: AbortSignal,
+): Promise<ChatConversation> {
+  const data = await judgeRequest<{ conversation: ChatConversation }>("/conversations", {
+    method: "POST",
+    body: {
+      user_phone: payload.user_phone,
+      conversation_id: payload.conversation_id ?? null,
+      title: payload.title ?? "",
+      messages: payload.messages,
+    },
+    signal,
+  });
+  return data.conversation;
+}
+
+/**
+ * حذف یک گفتگو از تاریخچه کاربر.
+ * منطبق با `DELETE /api/v1/apps/judge/conversations/{id}`.
+ */
+export async function deleteConversation(
+  conversationId: string,
+  userPhone: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await judgeRequest<{ status: string }>(
+    `/conversations/${encodeURIComponent(conversationId)}?user_phone=${encodeURIComponent(userPhone)}`,
+    { method: "DELETE", signal },
+  );
+}
+
+/**
+ * استریم زنده پاسخ (Server-Sent Events) و تحویل تکه‌های متن به‌صورت
+ * کاراکتربه‌کاراکتر از طریق callbackهای تایپ‌سیف.
+ * منطبق با `POST /api/v1/apps/judge/chat-stream`.
+ */
+export async function streamChat(
+  payload: StreamChatRequest,
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${JUDGE_ENDPOINT}/chat-stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify({
+      messages: payload.messages,
+      user_phone: payload.user_phone ?? null,
+      engine_tier: payload.engine_tier ?? "tier2",
+      conversation_id: payload.conversation_id ?? null,
+    }),
+    signal,
+    cache: "no-store",
+  });
+
+  if (!response.ok || !response.body) {
+    let detail: unknown = response.statusText;
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      detail = body.detail ?? response.statusText;
+    } catch {
+      detail = response.statusText;
+    }
+    throw new SmartJudgeError(response.status, detail);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const dispatch = (frame: string) => {
+    let event = "message";
+    let raw = "";
+    for (const line of frame.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) raw += line.slice(5).trim();
+    }
+    if (!raw) return;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    if (event === "meta") {
+      handlers.onMeta?.({
+        model: String(parsed.model ?? ""),
+        conversation_id: (parsed.conversation_id as string | null) ?? null,
+      });
+    } else if (event === "delta") {
+      handlers.onDelta(String(parsed.content ?? ""));
+    } else if (event === "done") {
+      handlers.onDone?.({ model: String(parsed.model ?? "") });
+    } else if (event === "error") {
+      handlers.onError?.(String(parsed.message ?? "خطای استریم پاسخ"));
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary !== -1) {
+      const frame = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      if (frame.trim()) dispatch(frame);
+      boundary = buffer.indexOf("\n\n");
+    }
+  }
+  if (buffer.trim()) dispatch(buffer);
 }

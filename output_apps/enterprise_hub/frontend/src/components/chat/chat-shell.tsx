@@ -5,6 +5,7 @@ import {
   Calculator,
   FileText,
   Gavel,
+  History,
   Loader2,
   LogIn,
   LogOut,
@@ -17,15 +18,21 @@ import {
 } from "lucide-react";
 
 import {
-  analyzeCase,
   calculateDelayDamages,
+  deleteConversation,
   getJudgeEngineHealth,
+  listConversations,
   retrialEvaluate,
+  saveConversation,
+  streamChat,
   transcribeAudio,
+  type ChatConversation,
+  type ConversationMessage,
   type RetrialType,
 } from "@/lib/api/smart-judge-client";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ChatResultView } from "@/components/chat/chat-result";
+import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { SiteFooter } from "@/components/chat/site-footer";
 import type { ChatFlow, ChatMessage } from "@/components/chat/types";
 import { Button } from "@/components/ui/button";
@@ -51,6 +58,14 @@ let messageCounter = 0;
 function nextId(): string {
   messageCounter += 1;
   return `msg-${messageCounter}`;
+}
+
+function toChatMessage(message: ConversationMessage): ChatMessage {
+  return {
+    id: nextId(),
+    role: message.role === "user" ? "user" : "assistant",
+    content: message.content,
+  };
 }
 
 const QUICK_ACTIONS = [
@@ -89,12 +104,18 @@ export function ChatShell() {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [flow, setFlow] = useState<ChatFlow>({ kind: "none" });
   const [damagesOpen, setDamagesOpen] = useState(false);
   const [online, setOnline] = useState<boolean | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [principal, setPrincipal] = useState("");
   const [startYear, setStartYear] = useState("1400");
@@ -105,6 +126,13 @@ export function ChatShell() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  const activeConversationRef = useRef<string | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const push = useCallback((message: Omit<ChatMessage, "id">) => {
     setMessages((prev) => [...prev, { ...message, id: nextId() }]);
@@ -131,27 +159,178 @@ export function ChatShell() {
     };
   }, []);
 
-  const runAnalysis = useCallback(
-    async (text: string) => {
-      setBusy(true);
+  // ── تاریخچه گفتگوها ─────────────────────────────────────────────────────────
+  const loadConversations = useCallback(async () => {
+    if (!user?.phone) {
+      setConversations([]);
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      setConversations(await listConversations(user.phone));
+    } catch {
+      // سایدبار در نبود پایگاه داده خالی می‌ماند؛ استریم زنده مختل نمی‌شود.
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [user?.phone]);
+
+  useEffect(() => {
+    void loadConversations();
+  }, [loadConversations]);
+
+  const persistConversation = useCallback(
+    async (msgs: ChatMessage[]) => {
+      if (!user?.phone) return;
+      const payloadMessages = msgs
+        .filter((m) => m.id !== "welcome" && !m.error && m.content.trim())
+        .map<ConversationMessage>((m) => ({ role: m.role, content: m.content }));
+      if (!payloadMessages.length) return;
+      const firstUser = payloadMessages.find((m) => m.role === "user");
+      const title = (firstUser?.content ?? "گفتگوی جدید").slice(0, 70);
       try {
-        const data = await analyzeCase({ case_text: text, engine_tier: "tier2" });
-        push({
-          role: "assistant",
-          content: "تحلیل پرونده آماده شد:",
-          result: { kind: "analysis", data },
+        const saved = await saveConversation({
+          user_phone: user.phone,
+          conversation_id: activeConversationRef.current,
+          title,
+          messages: payloadMessages,
         });
+        activeConversationRef.current = saved.id;
+        setActiveConversationId(saved.id);
+        setConversations((prev) => [saved, ...prev.filter((c) => c.id !== saved.id)]);
       } catch (error) {
-        push({
-          role: "assistant",
-          content: error instanceof Error ? error.message : "تحلیل پرونده ناموفق بود.",
-          error: true,
-        });
-      } finally {
-        setBusy(false);
+        setNotice(error instanceof Error ? error.message : "ذخیره تاریخچه گفتگو ناموفق بود.");
       }
     },
-    [push],
+    [user?.phone],
+  );
+
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      const conversation = conversations.find((c) => c.id === id);
+      if (!conversation) return;
+      streamAbortRef.current?.abort();
+      activeConversationRef.current = conversation.id;
+      setActiveConversationId(conversation.id);
+      setFlow({ kind: "none" });
+      setDamagesOpen(false);
+      setMessages(
+        conversation.messages.length ? conversation.messages.map(toChatMessage) : [WELCOME_MESSAGE],
+      );
+      setSidebarOpen(false);
+    },
+    [conversations],
+  );
+
+  const handleNewConversation = useCallback(() => {
+    streamAbortRef.current?.abort();
+    activeConversationRef.current = null;
+    setActiveConversationId(null);
+    setMessages([WELCOME_MESSAGE]);
+    setFlow({ kind: "none" });
+    setDamagesOpen(false);
+    setInput("");
+    setNotice(null);
+    setSidebarOpen(false);
+    inputRef.current?.focus();
+  }, []);
+
+  const handleDeleteConversation = useCallback(
+    async (id: string) => {
+      if (!user?.phone) return;
+      try {
+        await deleteConversation(id, user.phone);
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+        if (activeConversationRef.current === id) {
+          activeConversationRef.current = null;
+          setActiveConversationId(null);
+          setMessages([WELCOME_MESSAGE]);
+          setFlow({ kind: "none" });
+          setDamagesOpen(false);
+        }
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "حذف گفتگو ناموفق بود.");
+      }
+    },
+    [user?.phone],
+  );
+
+  // ── استریم زنده پاسخ (تایپ کاراکتربه‌کاراکتر) ────────────────────────────────
+  const runStreamChat = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || busy) return;
+
+      const userMessage: ChatMessage = { id: nextId(), role: "user", content: trimmed };
+      const assistantId = nextId();
+      const baseMessages = [...messagesRef.current, userMessage];
+      setMessages([...baseMessages, { id: assistantId, role: "assistant", content: "" }]);
+      setInput("");
+      setBusy(true);
+      setStreaming(true);
+
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
+      let streamed = "";
+      let failed = false;
+
+      try {
+        const apiMessages = baseMessages
+          .filter((m) => m.id !== "welcome" && !m.error && m.content.trim())
+          .map<ConversationMessage>((m) => ({ role: m.role, content: m.content }));
+
+        await streamChat(
+          {
+            messages: apiMessages,
+            user_phone: user?.phone ?? null,
+            engine_tier: "tier2",
+            conversation_id: activeConversationRef.current,
+          },
+          {
+            onDelta: (chunk) => {
+              streamed += chunk;
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m)),
+              );
+            },
+            onError: (message) => {
+              failed = true;
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, content: message, error: true } : m)),
+              );
+            },
+          },
+          controller.signal,
+        );
+
+        if (!failed) {
+          await persistConversation([
+            ...baseMessages,
+            { id: assistantId, role: "assistant", content: streamed },
+          ]);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content:
+                      error instanceof Error ? error.message : "استریم پاسخ ناموفق بود.",
+                    error: true,
+                  }
+                : m,
+            ),
+          );
+        }
+      } finally {
+        setStreaming(false);
+        setBusy(false);
+        streamAbortRef.current = null;
+      }
+    },
+    [busy, persistConversation, user?.phone],
   );
 
   const runDamages = useCallback(
@@ -234,10 +413,10 @@ export function ChatShell() {
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || busy) return;
-    push({ role: "user", content: text });
-    setInput("");
 
     if (flow.kind === "retrial-description") {
+      push({ role: "user", content: text });
+      setInput("");
       if (isAuthenticated && user) {
         setFlow({
           kind: "retrial-confirm",
@@ -262,6 +441,8 @@ export function ChatShell() {
     }
 
     if (flow.kind === "retrial-identity") {
+      push({ role: "user", content: text });
+      setInput("");
       setFlow({
         kind: "retrial-confirm",
         retrialType: flow.retrialType,
@@ -276,8 +457,8 @@ export function ChatShell() {
       return;
     }
 
-    await runAnalysis(text);
-  }, [busy, flow, input, push, runAnalysis]);
+    await runStreamChat(text);
+  }, [busy, flow, input, push, runStreamChat, isAuthenticated, user]);
 
   const handleQuickAction = useCallback(
     (action: "analysis" | "retrial" | "damages") => {
@@ -393,298 +574,327 @@ export function ChatShell() {
   const statusTone =
     online === null ? "bg-slate-500" : online ? "bg-emerald-400" : "bg-rose-400";
 
+  const streamingMessage = streaming ? messages[messages.length - 1] : undefined;
+  const showTypingDots = busy && (!streaming || !streamingMessage?.content);
+
   return (
-    <div className="dark flex h-dvh flex-col bg-[#070B14] text-slate-100">
-      <header className="relative z-20 border-b border-white/5 bg-[#0A0F1C]/85 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/25 to-amber-600/10 ring-1 ring-amber-400/25">
-              <Scale className="size-5 text-amber-300" />
-            </span>
-            <div>
-              <div className="text-sm font-bold">قاضی هوشمند</div>
-              <div className="text-[10px] text-slate-400">دستیار حقوقی هوشمند</div>
+    <div className="dark flex h-dvh w-full overflow-hidden bg-[#070B14] text-slate-100">
+      <ChatSidebar
+        conversations={conversations}
+        activeId={activeConversationId}
+        open={sidebarOpen}
+        loading={historyLoading}
+        onClose={() => setSidebarOpen(false)}
+        onNew={handleNewConversation}
+        onSelect={handleSelectConversation}
+        onDelete={(id) => void handleDeleteConversation(id)}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="relative z-20 border-b border-white/5 bg-[#0A0F1C]/85 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="نمایش تاریخچه گفتگوها"
+                className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition-colors hover:text-amber-300 lg:hidden"
+              >
+                <History className="size-4" />
+              </button>
+              <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/25 to-amber-600/10 ring-1 ring-amber-400/25">
+                <Scale className="size-5 text-amber-300" />
+              </span>
+              <div>
+                <div className="text-sm font-bold">قاضی هوشمند</div>
+                <div className="text-[10px] text-slate-400">دستیار حقوقی هوشمند</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">
+                <span className={cn("size-2 rounded-full", statusTone)} />
+                {statusLabel}
+              </div>
+              {isAuthenticated && user ? (
+                <button
+                  type="button"
+                  onClick={logout}
+                  title={`خروج از حساب ${user.phone}`}
+                  className="flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-200"
+                >
+                  <LogOut className="size-3" />
+                  <span dir="ltr" className="font-mono">
+                    {user.phone}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    openLogin({
+                      serviceDomain: "GHAZI",
+                      title: "ورود به قاضی هوشمند",
+                      description:
+                        "برای اعاده دادرسی و ذخیره نتایج، هویت خود را با کد پیامکی تأیید کنید.",
+                    })
+                  }
+                  className="flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-400/20"
+                >
+                  <LogIn className="size-3" />
+                  ورود
+                </button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">
-              <span className={cn("size-2 rounded-full", statusTone)} />
-              {statusLabel}
-            </div>
-            {isAuthenticated && user ? (
-              <button
-                type="button"
-                onClick={logout}
-                title={`خروج از حساب ${user.phone}`}
-                className="flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-200"
+        </header>
+
+        <main ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(60%_100%_at_50%_0%,rgba(201,162,75,0.10),transparent_70%)]"
+          />
+          <div className="relative mx-auto w-full max-w-3xl space-y-5 px-4 py-8">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}
               >
-                <LogOut className="size-3" />
-                <span dir="ltr" className="font-mono">
-                  {user.phone}
-                </span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  openLogin({
-                    serviceDomain: "GHAZI",
-                    title: "ورود به قاضی هوشمند",
-                    description:
-                      "برای اعاده دادرسی و ذخیره نتایج، هویت خود را با کد پیامکی تأیید کنید.",
-                  })
-                }
-                className="flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-400/20"
-              >
-                <LogIn className="size-3" />
-                ورود
-              </button>
+                <div
+                  className={cn(
+                    "max-w-[92%] rounded-2xl border px-4 py-3 sm:max-w-[85%]",
+                    message.role === "user"
+                      ? "rounded-bl-md border-amber-400/25 bg-gradient-to-br from-amber-400/15 to-amber-600/5 text-amber-50"
+                      : "rounded-br-md border-white/8 bg-[#0E1626] text-slate-100",
+                    message.error && "border-rose-400/30 bg-rose-500/10 text-rose-200",
+                  )}
+                >
+                  {message.role === "assistant" && (
+                    <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold text-amber-300/80">
+                      <Scale className="size-3" />
+                      قاضی هوشمند
+                    </div>
+                  )}
+                  {message.content && (
+                    <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
+                      {message.content}
+                      {streaming &&
+                        message.id === streamingMessage?.id &&
+                        message.content && (
+                          <span className="ms-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-amber-300/80 align-middle" />
+                        )}
+                    </p>
+                  )}
+                  {message.result && (
+                    <div className="mt-3">
+                      <ChatResultView result={message.result} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {showTypingDots && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 rounded-2xl rounded-br-md border border-white/8 bg-[#0E1626] px-4 py-3">
+                  <span className="flex gap-1">
+                    <span className="size-1.5 animate-bounce rounded-full bg-amber-300 [animation-delay:-0.3s]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-amber-300 [animation-delay:-0.15s]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-amber-300" />
+                  </span>
+                  <span className="text-[11px] text-slate-400">در حال تحلیل...</span>
+                </div>
+              </div>
+            )}
+
+            {flow.kind === "retrial-confirm" && (
+              <div className="flex justify-start">
+                <div className="w-full max-w-md rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] p-4">
+                  <div className="flex items-center gap-2 text-[13px] font-bold text-amber-200">
+                    <ShieldCheck className="size-4" />
+                    تأیید هویت و سنجش اعاده دادرسی
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
+                    شناسه ثبت‌شده:{" "}
+                    <span dir="ltr" className="font-mono text-slate-100">
+                      {flow.identifier}
+                    </span>
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      onClick={confirmRetrial}
+                      disabled={busy}
+                      className="bg-amber-400 text-slate-950 hover:bg-amber-300"
+                    >
+                      {busy ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-4" />
+                      )}
+                      تأیید و دریافت تحلیل
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setFlow({ kind: "none" })}
+                      disabled={busy}
+                    >
+                      انصراف
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {damagesOpen && (
+              <div className="flex justify-start">
+                <form
+                  onSubmit={submitDamages}
+                  className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#0E1626] p-4"
+                >
+                  <div className="flex items-center gap-2 text-[13px] font-bold text-amber-200">
+                    <Calculator className="size-4" />
+                    محاسبه خسارت تاخیر تادیه
+                  </div>
+                  <label className="block space-y-1.5">
+                    <span className="text-[11px] text-slate-400">مبلغ اصل (ریال)</span>
+                    <Input
+                      value={principal}
+                      onChange={(event) => setPrincipal(event.target.value)}
+                      placeholder="2000000000"
+                      dir="ltr"
+                      className="border-white/10 bg-black/30 text-slate-100 placeholder:text-slate-600"
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block space-y-1.5">
+                      <span className="text-[11px] text-slate-400">سال شروع</span>
+                      <Input
+                        value={startYear}
+                        onChange={(event) => setStartYear(event.target.value)}
+                        dir="ltr"
+                        className="border-white/10 bg-black/30 text-slate-100"
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-[11px] text-slate-400">سال پایان</span>
+                      <Input
+                        value={endYear}
+                        onChange={(event) => setEndYear(event.target.value)}
+                        dir="ltr"
+                        className="border-white/10 bg-black/30 text-slate-100"
+                      />
+                    </label>
+                  </div>
+                  {formError && <p className="text-[11px] text-rose-300">{formError}</p>}
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      disabled={busy}
+                      className="bg-amber-400 text-slate-950 hover:bg-amber-300"
+                    >
+                      محاسبه
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setDamagesOpen(false)}
+                    >
+                      بستن
+                    </Button>
+                  </div>
+                </form>
+              </div>
             )}
           </div>
-        </div>
-      </header>
 
-      <main ref={scrollRef} className="relative flex-1 overflow-y-auto">
+          {!isAuthenticated && <SiteFooter />}
+        </main>
+
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(60%_100%_at_50%_0%,rgba(201,162,75,0.10),transparent_70%)]"
-        />
-        <div className="relative mx-auto w-full max-w-3xl space-y-5 px-4 py-8">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}
-            >
-              <div
-                className={cn(
-                  "max-w-[92%] rounded-2xl border px-4 py-3 sm:max-w-[85%]",
-                  message.role === "user"
-                    ? "rounded-bl-md border-amber-400/25 bg-gradient-to-br from-amber-400/15 to-amber-600/5 text-amber-50"
-                    : "rounded-br-md border-white/8 bg-[#0E1626] text-slate-100",
-                  message.error && "border-rose-400/30 bg-rose-500/10 text-rose-200",
-                )}
-              >
-                {message.role === "assistant" && (
-                  <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold text-amber-300/80">
-                    <Scale className="size-3" />
-                    قاضی هوشمند
-                  </div>
-                )}
-                {message.content && (
-                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
-                    {message.content}
-                  </p>
-                )}
-                {message.result && (
-                  <div className="mt-3">
-                    <ChatResultView result={message.result} />
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {busy && (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl rounded-br-md border border-white/8 bg-[#0E1626] px-4 py-3">
-                <span className="flex gap-1">
-                  <span className="size-1.5 animate-bounce rounded-full bg-amber-300 [animation-delay:-0.3s]" />
-                  <span className="size-1.5 animate-bounce rounded-full bg-amber-300 [animation-delay:-0.15s]" />
-                  <span className="size-1.5 animate-bounce rounded-full bg-amber-300" />
-                </span>
-                <span className="text-[11px] text-slate-400">در حال تحلیل...</span>
-              </div>
-            </div>
+          className={cn(
+            "relative z-20 border-t border-white/5 bg-[#0A0F1C]/85 px-4 py-3 backdrop-blur",
+            isAuthenticated && "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
           )}
+        >
+          <div className="mx-auto w-full max-w-3xl space-y-3">
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {QUICK_ACTIONS.map(({ label, icon: Icon, action }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => handleQuickAction(action)}
+                  disabled={busy}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-[12px] text-slate-300 transition-all hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-100 disabled:opacity-50"
+                >
+                  <Icon className="size-3.5 text-amber-300" />
+                  {label}
+                </button>
+              ))}
+            </div>
 
-          {flow.kind === "retrial-confirm" && (
-            <div className="flex justify-start">
-              <div className="w-full max-w-md rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] p-4">
-                <div className="flex items-center gap-2 text-[13px] font-bold text-amber-200">
-                  <ShieldCheck className="size-4" />
-                  تأیید هویت و سنجش اعاده دادرسی
-                </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
-                  شناسه ثبت‌شده:{" "}
-                  <span dir="ltr" className="font-mono text-slate-100">
-                    {flow.identifier}
-                  </span>
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    onClick={confirmRetrial}
-                    disabled={busy}
-                    className="bg-amber-400 text-slate-950 hover:bg-amber-300"
-                  >
-                    {busy ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="size-4" />
-                    )}
-                    تأیید و دریافت تحلیل
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setFlow({ kind: "none" })}
-                    disabled={busy}
-                  >
-                    انصراف
-                  </Button>
-                </div>
+            {recording && (
+              <p className="flex items-center gap-1.5 text-[11px] text-rose-300">
+                <span className="size-2 animate-pulse rounded-full bg-rose-400" />
+                در حال ضبط صدا… برای پایان، دکمه توقف را بزنید.
+              </p>
+            )}
+
+            {transcribing && (
+              <p className="flex items-center gap-1.5 text-[11px] text-amber-200/90">
+                <Loader2 className="size-3 animate-spin" />
+                در حال تبدیل صوت به متن…
+              </p>
+            )}
+
+            {notice && <p className="text-[11px] text-amber-200/80">{notice}</p>}
+
+            {flow.kind !== "retrial-confirm" && (
+              <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-[#0B111F] p-2 transition-colors focus-within:border-amber-400/40">
+                <Textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void handleSend();
+                    }
+                  }}
+                  rows={1}
+                  placeholder="شرح پرونده، پرسش حقوقی یا ابطال‌خواهی خود را بنویسید..."
+                  className="max-h-32 min-h-10 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[13px] text-slate-100 shadow-none placeholder:text-slate-500 focus-visible:ring-0 dark:bg-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={() => void toggleRecording()}
+                  disabled={transcribing || busy}
+                  aria-label="ضبط صدا"
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-xl border transition-all disabled:opacity-50",
+                    recording
+                      ? "border-rose-400/40 bg-rose-500/15 text-rose-300"
+                      : "border-white/10 bg-white/5 text-slate-300 hover:text-amber-300",
+                  )}
+                >
+                  {transcribing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : recording ? (
+                    <Square className="size-4" />
+                  ) : (
+                    <Mic className="size-4" />
+                  )}
+                </button>
+                <Button
+                  type="button"
+                  onClick={() => void handleSend()}
+                  disabled={busy || !input.trim()}
+                  aria-label="ارسال پیام"
+                  className="size-9 shrink-0 rounded-xl bg-amber-400 p-0 text-slate-950 hover:bg-amber-300"
+                >
+                  <Send className="size-4" />
+                </Button>
               </div>
-            </div>
-          )}
-
-          {damagesOpen && (
-            <div className="flex justify-start">
-              <form
-                onSubmit={submitDamages}
-                className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#0E1626] p-4"
-              >
-                <div className="flex items-center gap-2 text-[13px] font-bold text-amber-200">
-                  <Calculator className="size-4" />
-                  محاسبه خسارت تاخیر تادیه
-                </div>
-                <label className="block space-y-1.5">
-                  <span className="text-[11px] text-slate-400">مبلغ اصل (ریال)</span>
-                  <Input
-                    value={principal}
-                    onChange={(event) => setPrincipal(event.target.value)}
-                    placeholder="2000000000"
-                    dir="ltr"
-                    className="border-white/10 bg-black/30 text-slate-100 placeholder:text-slate-600"
-                  />
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block space-y-1.5">
-                    <span className="text-[11px] text-slate-400">سال شروع</span>
-                    <Input
-                      value={startYear}
-                      onChange={(event) => setStartYear(event.target.value)}
-                      dir="ltr"
-                      className="border-white/10 bg-black/30 text-slate-100"
-                    />
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-[11px] text-slate-400">سال پایان</span>
-                    <Input
-                      value={endYear}
-                      onChange={(event) => setEndYear(event.target.value)}
-                      dir="ltr"
-                      className="border-white/10 bg-black/30 text-slate-100"
-                    />
-                  </label>
-                </div>
-                {formError && <p className="text-[11px] text-rose-300">{formError}</p>}
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    disabled={busy}
-                    className="bg-amber-400 text-slate-950 hover:bg-amber-300"
-                  >
-                    محاسبه
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setDamagesOpen(false)}
-                  >
-                    بستن
-                  </Button>
-                </div>
-              </form>
-            </div>
-          )}
-        </div>
-
-        {!isAuthenticated && <SiteFooter />}
-      </main>
-
-      <div
-        className={cn(
-          "relative z-20 mt-auto border-t border-white/5 bg-[#0A0F1C]/85 px-4 py-3 backdrop-blur",
-          isAuthenticated && "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
-        )}
-      >
-        <div className="mx-auto w-full max-w-3xl space-y-3">
-          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {QUICK_ACTIONS.map(({ label, icon: Icon, action }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => handleQuickAction(action)}
-                disabled={busy}
-                className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-[12px] text-slate-300 transition-all hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-100 disabled:opacity-50"
-              >
-                <Icon className="size-3.5 text-amber-300" />
-                {label}
-              </button>
-            ))}
+            )}
           </div>
-
-          {recording && (
-            <p className="flex items-center gap-1.5 text-[11px] text-rose-300">
-              <span className="size-2 animate-pulse rounded-full bg-rose-400" />
-              در حال ضبط صدا… برای پایان، دکمه توقف را بزنید.
-            </p>
-          )}
-
-          {transcribing && (
-            <p className="flex items-center gap-1.5 text-[11px] text-amber-200/90">
-              <Loader2 className="size-3 animate-spin" />
-              در حال تبدیل صوت به متن…
-            </p>
-          )}
-
-          {notice && <p className="text-[11px] text-amber-200/80">{notice}</p>}
-
-          {flow.kind !== "retrial-confirm" && (
-            <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-[#0B111F] p-2 transition-colors focus-within:border-amber-400/40">
-              <Textarea
-                ref={inputRef}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void handleSend();
-                  }
-                }}
-                rows={1}
-                placeholder="شرح پرونده، پرسش حقوقی یا ابطال‌خواهی خود را بنویسید..."
-                className="max-h-32 min-h-10 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[13px] text-slate-100 shadow-none placeholder:text-slate-500 focus-visible:ring-0 dark:bg-transparent"
-              />
-              <button
-                type="button"
-                onClick={() => void toggleRecording()}
-                disabled={transcribing || busy}
-                aria-label="ضبط صدا"
-                className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-xl border transition-all disabled:opacity-50",
-                  recording
-                    ? "border-rose-400/40 bg-rose-500/15 text-rose-300"
-                    : "border-white/10 bg-white/5 text-slate-300 hover:text-amber-300",
-                )}
-              >
-                {transcribing ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : recording ? (
-                  <Square className="size-4" />
-                ) : (
-                  <Mic className="size-4" />
-                )}
-              </button>
-              <Button
-                type="button"
-                onClick={() => void handleSend()}
-                disabled={busy || !input.trim()}
-                aria-label="ارسال پیام"
-                className="size-9 shrink-0 rounded-xl bg-amber-400 p-0 text-slate-950 hover:bg-amber-300"
-              >
-                <Send className="size-4" />
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     </div>

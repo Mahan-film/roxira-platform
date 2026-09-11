@@ -30,10 +30,12 @@ import pathlib
 import re
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+import uuid
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger("roxira.smartjudge")
@@ -85,6 +87,17 @@ OPENROUTER_KEY = _read_env_key("OPENROUTER_API_KEY") or _read_env_key("LLM_API_K
 OPENAI_API_KEY = _read_env_key("OPENAI_API_KEY")
 GROQ_API_KEY = _read_env_key("GROQ_API_KEY")
 GROQ_STT_MODEL = _read_env_key("GROQ_STT_MODEL") or "whisper-large-v3-turbo"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# استریم زنده پاسخ (SSE) و رنکر هوشمند Jina
+#   • SMARTJUDGE_STREAM_MODEL : مدل پیش‌فرض استریم گفتگوی زنده
+#   • JINA_RERANKER           : رتبه‌بندی ۳ ماده قانونی برتر از نتایج Qdrant
+# ─────────────────────────────────────────────────────────────────────────────
+STREAM_MODEL = _read_env_key("SMARTJUDGE_STREAM_MODEL") or "deepseek/deepseek-v4.1-flash"
+JINA_API_KEY = _read_env_key("JINA_API_KEY")
+JINA_RERANK_MODEL = _read_env_key("JINA_RERANK_MODEL") or "jina-reranker-v2-base-multilingual"
+JINA_RERANK_BASE = (_read_env_key("JINA_RERANK_BASE_URL") or "https://api.jina.ai").rstrip("/")
+JINA_RERANK_TOP_N = 3
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AssemblyAI — استخر چندکلیدی گفتاربه‌متن (ASSEMBLYAI_API_KEYS با جداکننده کاما)
@@ -422,6 +435,67 @@ async def _chat_completion(messages: List[Dict[str, str]], models: List[str],
     raise RuntimeError("تمام موتورهای LLM ناموفق بودند | " + " | ".join(errors[-6:]))
 
 
+async def _openrouter_stream(
+    messages: List[Dict[str, str]],
+    model: str,
+    max_tokens: int = 3500,
+    temperature: float = 0.3,
+    timeout: float = 120.0,
+) -> AsyncIterator[str]:
+    """استریم زنده توکن‌های OpenRouter (SSE) — خروجی: قطعات متن به‌ترتیب."""
+    if not OPENROUTER_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY تنظیم نشده است.")
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream(
+            "POST",
+            f"{OPENROUTER_BASE}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://ghazihoushmand.ir",
+                "X-Title": "Roxira SmartJudge Stream",
+            },
+            json={
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": True,
+            },
+        ) as response:
+            if response.status_code != 200:
+                body = await response.aread()
+                raise RuntimeError(f"{model}: HTTP {response.status_code} {body[:180]!r}")
+            async for raw_line in response.aiter_lines():
+                line = (raw_line or "").strip()
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(payload)
+                except Exception:
+                    continue
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                piece = delta.get("content") or delta.get("reasoning_content") or ""
+                if piece:
+                    yield str(piece)
+
+
+def _sse(event: str, data: Dict[str, Any]) -> str:
+    """قالب‌بندی یک رخداد Server-Sent Events."""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _chunk_text(text: str, size: int = 24) -> List[str]:
+    """تکه‌تکه‌کردن متن برای شبیه‌سازی تایپ کاراکتر‌به‌کاراکتر در مسیر پشتیبان."""
+    return [text[i:i + size] for i in range(0, len(text), size)]
+
+
 def _extract_json_block(text: str) -> Optional[Dict[str, Any]]:
     """استخراج JSON از خروجی LLM (حتی داخل code fence)."""
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
@@ -585,6 +659,28 @@ class RetrialEvalRequest(BaseModel):
     is_verified: bool = False             # خروجی OTP پیامک/ایمیل
 
 
+class ConversationMessage(BaseModel):
+    """یک پیام درون گفتگوی ذخیره‌شده (نقش + محتوا)."""
+    role: str
+    content: str
+
+
+class ConversationSaveRequest(BaseModel):
+    """ایجاد یا به‌روزرسانی یک گفتگو برای شماره همراه کاربر."""
+    user_phone: str
+    conversation_id: Optional[str] = None
+    title: str = ""
+    messages: List[Dict[str, Any]] = []
+
+
+class ChatStreamRequest(BaseModel):
+    """درخواست استریم زنده پاسخ استنتاجی (SSE / text-event-stream)."""
+    messages: List[ConversationMessage]
+    user_phone: Optional[str] = None
+    engine_tier: str = "tier2"
+    conversation_id: Optional[str] = None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # RAG: بازیابی داده واقعی از Qdrant + رتبه‌بندی واژگانی فارسی
 # ─────────────────────────────────────────────────────────────────────────────
@@ -658,6 +754,75 @@ async def _scroll_collection(client: httpx.AsyncClient, collection: str, pool: i
 # از توکن‌های پرسش حذف می‌شوند تا هیچ‌گاه امتیاز ساختگی تولید نکنند.
 _RELEVANCE_THRESHOLD = 1.0
 
+
+def _jina_configured() -> bool:
+    """آیا رنکر هوشمند Jina (JINA_API_KEY) فعال است."""
+    return bool(JINA_API_KEY)
+
+
+async def _rank_legal_documents(
+    query: str,
+    candidates: List[Dict[str, Any]],
+    top_n: int = JINA_RERANK_TOP_N,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """رتبه‌بندی معنایی اسناد قانونی با Jina Reranker و انتخاب `top_n` ماده برتر.
+
+    خروجی: (اسناد رتبه‌بندی‌شده, فراداده رنکر). در نبود کلید یا بروز خطا در
+    سرویس Jina، ترتیب واژگانی موجود حفظ می‌شود تا پاسخ هرگز مسدود نشود.
+    """
+    if not candidates:
+        return [], {"provider": "jina-reranker", "status": "EMPTY", "applied": False}
+
+    pool = candidates[: max(top_n, min(len(candidates), 12))]
+    if not _jina_configured():
+        return pool[:top_n], {"provider": "jina-reranker", "status": "DISABLED", "applied": False}
+
+    documents = [
+        f"{_payload_title(p)}\n{_payload_meta(p)}\n{_payload_text(p, 1200)}".strip()
+        for p in pool
+    ]
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.post(
+                f"{JINA_RERANK_BASE}/v1/rerank",
+                headers={
+                    "Authorization": f"Bearer {JINA_API_KEY}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                json={
+                    "model": JINA_RERANK_MODEL,
+                    "query": query,
+                    "documents": documents,
+                    "top_n": top_n,
+                    "return_documents": False,
+                },
+            )
+        if r.status_code != 200:
+            logger.warning("[SMARTJUDGE] Jina rerank HTTP %s: %s", r.status_code, r.text[:180])
+            return pool[:top_n], {"provider": "jina-reranker", "status": f"HTTP_{r.status_code}", "applied": False}
+
+        results = (r.json() or {}).get("results") or []
+        ranked: List[Dict[str, Any]] = []
+        for item in results:
+            idx = item.get("index")
+            if isinstance(idx, int) and 0 <= idx < len(pool):
+                doc = dict(pool[idx])
+                doc["_rerank_score"] = item.get("relevance_score")
+                ranked.append(doc)
+        if not ranked:
+            return pool[:top_n], {"provider": "jina-reranker", "status": "NO_RESULTS", "applied": False}
+        return ranked[:top_n], {
+            "provider": "jina-reranker",
+            "status": "OK",
+            "applied": True,
+            "model": JINA_RERANK_MODEL,
+            "top_n": len(ranked[:top_n]),
+        }
+    except Exception as exc:
+        logger.warning("[SMARTJUDGE] Jina rerank failed: %s", exc)
+        return pool[:top_n], {"provider": "jina-reranker", "status": "ERROR", "applied": False, "error": str(exc)[:160]}
+
 # واژگان محاوره‌ای/پرسشی — هرگز در امتیازدهی ارتباط لحاظ نمی‌شوند
 _QUERY_STOPWORDS = frozenset({
     "سلام", "علیکم", "خوبید", "خوبی", "ممنون", "مرسی", "سپاس", "تشکر", "خب",
@@ -693,14 +858,18 @@ async def _rag_retrieve(query: str, per_collection: int = 5, pool: int = 1400) -
             diagnostics["max_score"] = max(diagnostics["max_score"], scored[0][0])
         return [it for s, it in scored if s >= _RELEVANCE_THRESHOLD][:per_collection]
 
+    # رنکر هوشمند Jina: ۳ ماده قانونی برتر از میان نتایج Qdrant انتخاب می‌شود.
+    laws_ranked, rerank_meta = await _rank_legal_documents(query, ranked(laws), JINA_RERANK_TOP_N)
+
     return {
-        "laws": ranked(laws),
+        "laws": laws_ranked,
         "precedents": ranked(precedents),
         "circulars": ranked(circulars),
         "advisories": ranked(advisories),
         "retrieval": {
-            "mode": "qdrant+lexical-rerank",
+            "mode": "qdrant+lexical-rerank+jina",
             "relevance_threshold": _RELEVANCE_THRESHOLD,
+            "reranker": rerank_meta,
             **diagnostics,
         },
     }
@@ -916,6 +1085,140 @@ def _graph_stats_sync() -> Dict[str, Any]:
             cur.execute("SELECT COUNT(*) FROM graph_edges")
             edges = cur.fetchone()[0]
     return {"graph_nodes": nodes, "graph_edges": edges, "host": _db_dsn().split("@")[-1].split("/")[0]}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# تاریخچه گفتگوها — جدول chat_conversations در پایگاه enterprise_db
+# ساختار: id (UUID) | user_phone | title | messages (JSONB) | created_at | updated_at
+# ─────────────────────────────────────────────────────────────────────────────
+_chat_schema_lock = threading.Lock()
+_chat_schema_ready = False
+
+
+def _coerce_uuid(value: Optional[str]) -> Optional[str]:
+    """اعتبارسنجی و نرمال‌سازی شناسه UUID؛ مقدار نامعتبر → None."""
+    if not value:
+        return None
+    try:
+        return str(uuid.UUID(str(value).strip()))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _ensure_chat_schema_sync() -> None:
+    """ایجاد idempotent جدول و ایندکس‌های chat_conversations."""
+    global _chat_schema_ready
+    if _chat_schema_ready:
+        return
+    with _chat_schema_lock:
+        if _chat_schema_ready:
+            return
+        import psycopg
+
+        with psycopg.connect(_probe_db_dsn(), connect_timeout=5, options="-c statement_timeout=10000") as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS chat_conversations (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        user_phone VARCHAR(32) NOT NULL,
+                        title TEXT NOT NULL DEFAULT '',
+                        messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_updated "
+                    "ON chat_conversations (user_phone, updated_at DESC)"
+                )
+            conn.commit()
+        _chat_schema_ready = True
+        logger.info("[SMARTJUDGE] chat_conversations schema ensured on enterprise_db")
+
+
+def _row_to_conversation(row: Any) -> Dict[str, Any]:
+    return {
+        "id": row[0],
+        "user_phone": row[1],
+        "title": row[2] or "",
+        "messages": row[3] if isinstance(row[3], list) else [],
+        "created_at": row[4].isoformat() if row[4] else None,
+        "updated_at": row[5].isoformat() if row[5] else None,
+    }
+
+
+def _conversations_list_sync(user_phone: str) -> List[Dict[str, Any]]:
+    """فهرست گفتگوهای کاربر (جدیدترین بر اساس updated_at)."""
+    import psycopg
+
+    _ensure_chat_schema_sync()
+    with psycopg.connect(_probe_db_dsn(), connect_timeout=5, options="-c statement_timeout=8000") as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id::text, user_phone, title, messages, created_at, updated_at "
+                "FROM chat_conversations WHERE user_phone = %s "
+                "ORDER BY updated_at DESC LIMIT 100",
+                (user_phone,),
+            )
+            rows = cur.fetchall()
+    return [_row_to_conversation(r) for r in rows]
+
+
+def _conversation_upsert_sync(
+    user_phone: str,
+    conversation_id: Optional[str],
+    title: str,
+    messages: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """ایجاد گفتگو یا به‌روزرسانی عنوان/پیام‌های نشست جاری."""
+    import psycopg
+    from psycopg.types.json import Jsonb
+
+    _ensure_chat_schema_sync()
+    safe_messages = messages if isinstance(messages, list) else []
+    safe_title = (title or "").strip()[:180]
+    cid = _coerce_uuid(conversation_id)
+    row: Any = None
+    with psycopg.connect(_probe_db_dsn(), connect_timeout=5, options="-c statement_timeout=10000") as conn:
+        with conn.cursor() as cur:
+            if cid:
+                cur.execute(
+                    "UPDATE chat_conversations SET title = %s, messages = %s, updated_at = NOW() "
+                    "WHERE id = %s AND user_phone = %s "
+                    "RETURNING id::text, user_phone, title, messages, created_at, updated_at",
+                    (safe_title, Jsonb(safe_messages), cid, user_phone),
+                )
+                row = cur.fetchone()
+            if row is None:
+                cur.execute(
+                    "INSERT INTO chat_conversations (user_phone, title, messages) VALUES (%s, %s, %s) "
+                    "RETURNING id::text, user_phone, title, messages, created_at, updated_at",
+                    (user_phone, safe_title, Jsonb(safe_messages)),
+                )
+                row = cur.fetchone()
+        conn.commit()
+    return _row_to_conversation(row)
+
+
+def _conversation_delete_sync(user_phone: str, conversation_id: Optional[str]) -> bool:
+    """حذف یک گفتگوی متعلق به کاربر جاری."""
+    import psycopg
+
+    _ensure_chat_schema_sync()
+    cid = _coerce_uuid(conversation_id)
+    if not cid:
+        return False
+    with psycopg.connect(_probe_db_dsn(), connect_timeout=5, options="-c statement_timeout=8000") as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM chat_conversations WHERE id = %s AND user_phone = %s",
+                (cid, user_phone),
+            )
+            deleted = cur.rowcount
+        conn.commit()
+    return bool(deleted)
 
 
 # پرامپت مرجع قضایی (Task 1.4) — تلفیق دو لایه بازیابی در پرامپت سیستم
@@ -1301,6 +1604,125 @@ async def analyze_case(req: AnalyzeCaseRequest):
 async def infer_advisory(req: InferAdvisoryRequest):
     """Alias تحلیل یکپارچه — برای سازگاری با فراخوانی‌های قدیمی."""
     return await analyze_case(AnalyzeCaseRequest(case_text=req.query, engine_tier="tier2"))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# تاریخچه گفتگوها (REST) + استریم زنده پاسخ (SSE)
+# ─────────────────────────────────────────────────────────────────────────────
+@router.get("/conversations")
+async def list_conversations(user_phone: str = ""):
+    """لیست تاریخچه گفتگوهای کاربر جاری بر اساس شماره همراه."""
+    phone = (user_phone or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="شماره همراه کاربر الزامی است.")
+    try:
+        items = await asyncio.to_thread(_conversations_list_sync, phone)
+    except Exception as exc:
+        logger.warning("[SMARTJUDGE] list conversations failed: %s", exc)
+        raise HTTPException(status_code=503, detail=f"پایگاه داده گفتگوها در دسترس نیست: {str(exc)[:200]}")
+    return {"status": "OK", "conversations": items}
+
+
+@router.post("/conversations")
+async def save_conversation(req: ConversationSaveRequest):
+    """ایجاد گفتگو یا به‌روزرسانی پیام‌ها و عنوان نشست جاری."""
+    phone = (req.user_phone or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="شماره همراه کاربر الزامی است.")
+    try:
+        item = await asyncio.to_thread(
+            _conversation_upsert_sync, phone, req.conversation_id, req.title, req.messages
+        )
+    except Exception as exc:
+        logger.warning("[SMARTJUDGE] save conversation failed: %s", exc)
+        raise HTTPException(status_code=503, detail=f"ذخیره گفتگو ناموفق بود: {str(exc)[:200]}")
+    return {"status": "OK", "conversation": item}
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str, user_phone: str = ""):
+    """حذف یک گفتگو از تاریخچه کاربر."""
+    phone = (user_phone or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="شماره همراه کاربر الزامی است.")
+    try:
+        deleted = await asyncio.to_thread(_conversation_delete_sync, phone, conversation_id)
+    except Exception as exc:
+        logger.warning("[SMARTJUDGE] delete conversation failed: %s", exc)
+        raise HTTPException(status_code=503, detail=f"حذف گفتگو ناموفق بود: {str(exc)[:200]}")
+    if not deleted:
+        raise HTTPException(status_code=404, detail="گفتگویی با این شناسه یافت نشد.")
+    return {"status": "OK", "deleted": conversation_id}
+
+
+@router.post("/chat-stream")
+async def chat_stream(req: ChatStreamRequest):
+    """استریم زنده پاسخ استنتاجی (text/event-stream) روی زمینه RAG دو لایه."""
+    history: List[Dict[str, str]] = [
+        {"role": m.role, "content": m.content}
+        for m in req.messages
+        if (m.content or "").strip()
+    ]
+    if not history:
+        raise HTTPException(status_code=400, detail="دست‌کم یک پیام برای استریم لازم است.")
+
+    user_turns = [m for m in history if m["role"] == "user"]
+    query = user_turns[-1]["content"] if user_turns else history[-1]["content"]
+    tier = _tier_map(req.engine_tier)
+
+    async def event_generator() -> AsyncIterator[str]:
+        yield _sse("meta", {"model": STREAM_MODEL, "conversation_id": req.conversation_id})
+        try:
+            rag, graph = await asyncio.gather(_rag_retrieve(query), _graph_retrieve(query))
+            # پرامپت اختصاصی استریم: متن فارسی روان و پیوسته (بدون JSON یا اسکیمای ساختاریافته)
+            stream_rules = (
+                "\n【حالت گفتگوی زنده】\n"
+                "- پاسخ را به‌صورت متن فارسی روان، پیوسته و محاوره‌ای/رسمی بنویس؛ «هیچ» خروجی JSON، کدبلوک یا براکت تولید نکن.\n"
+                "- فقط به مواد/آرای موجود در زمینه دو لایه زیر استناد کن؛ هرگز شماره یا ماده ساختگی نساز.\n"
+                "- اگر زمینه کافی نیست، صریح اعلام کن و اطلاعات تکمیلی لازم را بپرس.\n"
+            )
+            system_prompt = (
+                _JUDICIAL_CORE_SYSTEM_PROMPT
+                + stream_rules
+                + "\n"
+                + "\n".join(_vector_context_block(rag))
+                + "\n"
+                + "\n".join(_graph_context_block(graph))
+            )
+            messages = [{"role": "system", "content": system_prompt}] + history[-12:]
+            used_model = STREAM_MODEL
+            try:
+                async for piece in _openrouter_stream(
+                    messages, STREAM_MODEL, max_tokens=TIER_MAX_TOKENS.get(tier, 3500)
+                ):
+                    yield _sse("delta", {"content": piece})
+            except Exception as stream_exc:
+                logger.warning("[SMARTJUDGE] stream fallback triggered: %s", stream_exc)
+                content, used_model = await _chat_completion(
+                    messages=messages,
+                    models=_model_chain(tier),
+                    max_tokens=TIER_MAX_TOKENS.get(tier, 3500),
+                    temperature=0.3,
+                    prefer_kira=(tier == "tier3"),
+                )
+                for piece in _chunk_text(content):
+                    yield _sse("delta", {"content": piece})
+                    await asyncio.sleep(0.01)
+            yield _sse("done", {"model": used_model})
+        except Exception as exc:
+            logger.error("[SMARTJUDGE] chat-stream failed: %s", exc)
+            yield _sse("error", {"message": str(exc)[:400]})
+        yield "event: end\ndata: {}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 4 — ماژول اعاده دادرسی (ماده ۴۷۴/۴۲۶/۴۷۷) و دادگاه‌های انتظامی/نظامی
 # ─────────────────────────────────────────────────────────────────────────────
