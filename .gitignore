@@ -25,6 +25,9 @@ uploads/
 *.webm
 *.ogg
 
+# Factory isolated worktrees (never interfere with active server source)
+.factory_worktrees/
+
 # System & Logs
 *.log
 .DS_Store

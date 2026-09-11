@@ -1,9 +1,25 @@
 import os
 import ast
+import sys
 import json
+import time
 import pathlib
 import urllib.request
 import urllib.error
+
+REPO_ROOT = pathlib.Path("/opt/roxira_platform")
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    from src.automation.cerebras_client import CerebrasClient
+    from src.automation.sambanova_client import SambaNovaClient
+    from src.automation.git_worktree_manager import GitWorktreeManager
+    FACTORY_ENGINES_AVAILABLE = True
+    FACTORY_ENGINES_ERROR = ""
+except Exception as _engine_exc:
+    FACTORY_ENGINES_AVAILABLE = False
+    FACTORY_ENGINES_ERROR = str(_engine_exc)
 
 base_dir = pathlib.Path("/opt/roxira_platform/output_apps/generated_modules")
 base_dir.mkdir(parents=True, exist_ok=True)
@@ -19,6 +35,10 @@ if env_file.exists():
 
 openrouter_key = os.getenv("OPENROUTER_API_KEY") or env_vars.get("OPENROUTER_API_KEY", "")
 deepseek_key = os.getenv("DEEPSEEK_API_KEY") or env_vars.get("DEEPSEEK_API_KEY", "")
+
+cerebras = CerebrasClient() if FACTORY_ENGINES_AVAILABLE else None
+sambanova = SambaNovaClient() if FACTORY_ENGINES_AVAILABLE else None
+worktrees = GitWorktreeManager() if FACTORY_ENGINES_AVAILABLE else None
 
 MODULES = {
     "warehouseinventory": {
@@ -218,23 +238,112 @@ def request_ai_code(name, cat, features):
 
 print("🚀 آغاز فرآیند خط تولید ماژول‌های Roxira OS...\n")
 
+RUN_ID = f"factory-run-{int(time.time())}"
+worktree_session = None
+if worktrees is not None and worktrees.is_git_repo():
+    try:
+        created = worktrees.create(RUN_ID)
+        if created.get("status") in ("CREATED", "EXISTS"):
+            worktree_session = created
+            print(f"🌿 Worktree ایزوله فعال شد: {created['path']}")
+    except Exception as exc:
+        print(f"⚠️ ایجاد Worktree ناموفق بود: {exc}")
+
+def isolated_validate(module_key, code):
+    if not worktree_session:
+        try:
+            ast.parse(code)
+            return {"isolated": False, "valid": True}
+        except SyntaxError:
+            return {"isolated": False, "valid": False}
+    rel = f"output_apps/generated_modules/{module_key}/{module_key}_module.py"
+    write = worktrees.write_file(RUN_ID, rel, code)
+    if write.get("status") != "WRITTEN":
+        return {"isolated": True, "valid": False, "error": write.get("error")}
+    check = worktrees.validate_python(RUN_ID, rel)
+    return {"isolated": True, "valid": check.get("status") == "SUCCESS", "detail": check}
+
+def save_contracts(target_dir, module_key, contract, dto):
+    contract_dir = target_dir / "contracts"
+    contract_dir.mkdir(parents=True, exist_ok=True)
+    saved = []
+    if contract and contract.get("status") == "SUCCESS":
+        path = contract_dir / f"{module_key}_openapi.json"
+        payload = json.dumps(contract["content"], ensure_ascii=False, indent=2)
+        path.write_text(payload, encoding="utf-8")
+        saved.append(str(path))
+    if dto and dto.get("status") == "SUCCESS":
+        path = contract_dir / f"{module_key}_dto_schema.json"
+        payload = json.dumps(dto["content"], ensure_ascii=False, indent=2)
+        path.write_text(payload, encoding="utf-8")
+        saved.append(str(path))
+    return saved
+
 for mod_key, data in MODULES.items():
     print(f"⚙️ در حال تولید و استقرار ماژول [{data['name']}]...")
     code = request_ai_code(data["name"], data["category"], data["features"])
     if not code:
         code = data["fallback_code"]
-    
-    # اعتبارسنجی سینتکس AST
-    try:
-        ast.parse(code)
-    except SyntaxError:
+
+    if cerebras is not None:
+        verdict = cerebras.check_syntax(code)
+        if (
+            not verdict["valid"]
+            and verdict.get("ai")
+            and verdict["ai"].get("status") == "SUCCESS"
+        ):
+            repair = cerebras.repair_code(code, verdict["issues"])
+            repaired_ok = (
+                repair.get("status") == "SUCCESS"
+                and cerebras.local_syntax_check(repair["content"])["valid"]
+            )
+            if repaired_ok:
+                code = repair["content"]
+                verdict = cerebras.check_syntax(code)
+        print(f"   🧠 Cerebras LSP: {verdict['status']} (valid={verdict['valid']})")
+    else:
+        try:
+            ast.parse(code)
+        except SyntaxError:
+            code = data["fallback_code"]
+
+    staged = isolated_validate(mod_key, code)
+    if not staged["valid"]:
         code = data["fallback_code"]
+        staged = isolated_validate(mod_key, code)
+    if staged.get("isolated"):
+        print(f"   🌿 Worktree isolation: {'PASS' if staged['valid'] else 'FALLBACK'}")
 
     target_dir = base_dir / mod_key
     target_dir.mkdir(parents=True, exist_ok=True)
     out_file = target_dir / f"{mod_key}_module.py"
     out_file.write_text(code, encoding="utf-8")
+
+    contract = (
+        sambanova.generate_openapi_contract(
+            data["name"], data["category"], data["features"], source_code=code
+        )
+        if sambanova
+        else None
+    )
+    dto = (
+        sambanova.generate_dto_schema(
+            data["name"], data["category"], data["features"], source_code=code
+        )
+        if sambanova
+        else None
+    )
+    saved = save_contracts(target_dir, mod_key, contract, dto)
+    if saved:
+        print(f"   📐 SambaNova contracts: {len(saved)} file(s) saved")
+    elif sambanova is not None:
+        print(f"   📐 SambaNova contracts: unavailable (http {(contract or {}).get('http_code')})")
+
     print(f"✅ با موفقیت ذخیره شد: {out_file}\n")
+
+if worktree_session and worktrees is not None:
+    worktrees.remove(RUN_ID, delete_branch=True)
+    print(f"🧹 Worktree ایزوله {RUN_ID} پاک‌سازی شد.")
 
 # اتصال خودکار روترها به سرور یکپارچه
 server_file = pathlib.Path("/opt/roxira_platform/run_unified_server.py")

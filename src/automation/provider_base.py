@@ -1,0 +1,196 @@
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import ssl
+import time
+import urllib.error
+import urllib.request
+from typing import Any, Dict, List, Optional
+
+ENV_CANDIDATES = [
+    pathlib.Path.cwd() / ".env",
+    pathlib.Path("/opt/roxira_platform/.env"),
+    pathlib.Path("/app/.env"),
+]
+
+_ENV_CACHE: Dict[str, str] = {}
+_ENV_LOADED = False
+
+
+def _load_env_file() -> None:
+    global _ENV_LOADED
+    if _ENV_LOADED:
+        return
+    _ENV_LOADED = True
+    for env_file in ENV_CANDIDATES:
+        if not env_file.is_file():
+            continue
+        try:
+            for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                _ENV_CACHE.setdefault(key.strip(), value.strip().strip("'\""))
+        except OSError:
+            continue
+
+
+def get_env_var(name: str, default: str = "") -> str:
+    if os.environ.get(name):
+        return os.environ[name]
+    _load_env_file()
+    return _ENV_CACHE.get(name, default)
+
+
+class OpenAICompatibleClient:
+    BASE_URL = ""
+    API_KEY_ENV = ""
+    DEFAULT_MODEL = ""
+    HEALTH_PATH = "/models"
+    CHAT_PATH = "/chat/completions"
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        default_model: Optional[str] = None,
+        timeout: float = 30.0,
+    ) -> None:
+        self.api_key = api_key or get_env_var(self.API_KEY_ENV)
+        self.base_url = (base_url or self.BASE_URL).rstrip("/")
+        self.default_model = default_model or self.DEFAULT_MODEL
+        self.timeout = timeout
+        self._ssl_ctx = ssl.create_default_context()
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_key)
+
+    def _url(self, path: str) -> str:
+        return f"{self.base_url}{path}"
+
+    def _headers(self) -> Dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "RoxiraFactoryEngine/1.0 (+https://roxira.net)",
+        }
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        payload: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        if not self.configured:
+            return {"status": "ERROR", "error": f"{self.API_KEY_ENV} is missing", "http_code": 0}
+
+        data = json.dumps(payload).encode("utf-8") if payload is not None else None
+        req = urllib.request.Request(
+            self._url(path), data=data, headers=self._headers(), method=method
+        )
+        started = time.perf_counter()
+        try:
+            with urllib.request.urlopen(
+                req, timeout=timeout or self.timeout, context=self._ssl_ctx
+            ) as resp:
+                body = resp.read().decode("utf-8")
+                elapsed_ms = (time.perf_counter() - started) * 1000.0
+                return {
+                    "status": "SUCCESS",
+                    "http_code": resp.status,
+                    "elapsed_ms": round(elapsed_ms, 2),
+                    "data": json.loads(body) if body else {},
+                }
+        except urllib.error.HTTPError as exc:
+            elapsed_ms = (time.perf_counter() - started) * 1000.0
+            raw = exc.read().decode("utf-8", errors="replace")
+            try:
+                parsed = json.loads(raw)
+            except Exception:
+                parsed = {"raw": raw[:500]}
+            return {
+                "status": "ERROR",
+                "http_code": exc.code,
+                "elapsed_ms": round(elapsed_ms, 2),
+                "error": parsed,
+            }
+        except Exception as exc:
+            elapsed_ms = (time.perf_counter() - started) * 1000.0
+            return {
+                "status": "ERROR",
+                "http_code": 0,
+                "elapsed_ms": round(elapsed_ms, 2),
+                "error": str(exc),
+            }
+
+    def health(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+        return self._request("GET", self.HEALTH_PATH, timeout=timeout)
+
+    def list_models(self) -> List[str]:
+        result = self.health()
+        if result.get("status") != "SUCCESS":
+            return []
+        return [m.get("id", "") for m in result.get("data", {}).get("data", []) if m.get("id")]
+
+    def measure_latency(self, samples: int = 3, budget_ms: float = 200.0) -> Dict[str, Any]:
+        timings: List[float] = []
+        codes: List[int] = []
+        for _ in range(max(1, samples)):
+            result = self.health()
+            codes.append(int(result.get("http_code", 0)))
+            if result.get("elapsed_ms") is not None:
+                timings.append(float(result["elapsed_ms"]))
+        if not timings:
+            return {"samples_ms": [], "min_ms": None, "avg_ms": None,
+                    "within_budget": False, "budget_ms": budget_ms, "http_codes": codes}
+        return {
+            "samples_ms": timings,
+            "min_ms": round(min(timings), 2),
+            "avg_ms": round(sum(timings) / len(timings), 2),
+            "within_budget": max(timings) <= budget_ms,
+            "budget_ms": budget_ms,
+            "http_codes": codes,
+        }
+
+    def chat(
+        self,
+        prompt: str,
+        system_prompt: str = "You are an expert software engineer.",
+        model: Optional[str] = None,
+        temperature: float = 0.2,
+        max_tokens: int = 1024,
+        json_mode: bool = False,
+        timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "model": model or self.default_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        result = self._request("POST", self.CHAT_PATH, payload=payload, timeout=timeout)
+        if result.get("status") != "SUCCESS":
+            return result
+
+        try:
+            content = result["data"]["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            return {"status": "ERROR", "error": f"malformed response: {exc}"}
+        return {
+            "status": "SUCCESS",
+            "model": payload["model"],
+            "elapsed_ms": result.get("elapsed_ms"),
+            "content": content,
+        }
