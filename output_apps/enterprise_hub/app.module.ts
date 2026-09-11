@@ -12,6 +12,7 @@ import { CrmModule } from './modules/crm/crm.module';
 import { TaxComplianceModule } from './modules/tax_compliance/tax-compliance.module';
 import { HrModule } from './modules/hr/hr.module';
 import { CurrencyModule } from './modules/currency/currency.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { CurrencyModule } from './modules/currency/currency.module';
     TaxComplianceModule,
     HrModule,
     CurrencyModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

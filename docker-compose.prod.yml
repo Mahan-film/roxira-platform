@@ -156,6 +156,14 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-roxira.net}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Roxira International}
       - WEBAUTHN_ORIGINS=${WEBAUTHN_ORIGINS:-https://roxira.net,https://www.roxira.net,http://localhost:3001}
+      # System Health — دسترسی read-only به Docker Engine برای پایش کانتینرها
+      - DOCKER_SOCKET_PATH=/var/run/docker.sock
+    volumes:
+      # سوکت Docker به‌صورت read-only برای اندپوینت GET /health/system
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    group_add:
+      # گروه سوکت Docker روی میزبان (getent group docker)
+      - "${DOCKER_GID:-988}"
     ports:
       - "3000:3000"
     depends_on:
