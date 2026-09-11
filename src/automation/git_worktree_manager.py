@@ -104,12 +104,15 @@ class GitWorktreeManager:
         if not path.is_dir():
             return {"ok": False, "stderr": f"Worktree یافت نشد: {path}"}
         try:
+            env = os.environ.copy()
+            env["PYTHONPATH"] = f"{path}:{self.repo_path}:{env.get('PYTHONPATH', '')}"
             proc = subprocess.run(
                 command,
                 cwd=str(path),
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env=env,
             )
             return {
                 "ok": proc.returncode == 0,

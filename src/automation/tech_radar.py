@@ -2,6 +2,16 @@ import os
 import sys
 import pathlib
 
+# افزودن خودکار ریشه پروژه به sys.path جهت اجرای مستقل درون Worktreeها
+_CURRENT_DIR = pathlib.Path(__file__).resolve().parent
+_REPO_ROOT = _CURRENT_DIR.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+import os
+import sys
+import pathlib
+
 # افزودن خودکار ریشه مخزن به sys.path جهت اجرای مستقل و ایمن
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
