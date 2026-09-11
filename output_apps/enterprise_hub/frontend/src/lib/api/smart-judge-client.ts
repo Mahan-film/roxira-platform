@@ -239,6 +239,99 @@ export async function getJudgeEngineHealth(
   return judgeRequest<JudgeEngineHealth>("/health", { method: "GET", signal });
 }
 
+/** فراداده یک سند تبدیل‌شده در موتور استراتژی (Word/PDF/عکس → Markdown). */
+export interface ParsedDocumentMeta {
+  filename: string;
+  format: string;
+  method: string;
+  markdown: string;
+  char_count: number;
+  ocr_used: boolean;
+  warnings: string[];
+}
+
+/** یک ماده قانونی استنادی در استراتژی چهارگانه. */
+export interface StrategyStatutoryBasis {
+  title: string;
+  category: string;
+  text: string;
+  relevance: string;
+}
+
+/** یک رأی وحدت رویه حاکم در استراتژی چهارگانه. */
+export interface StrategyPrecedent {
+  title: string;
+  summary: string;
+  binding_effect: string;
+}
+
+/** خروجی موتور تدوین استراتژی حقوقی چهارگانه (`_build_case_strategy_engine`). */
+export interface CaseStrategyResponse {
+  status: string;
+  tier: string;
+  tier_label: string;
+  model_used: string;
+  evidence_analysis: string;
+  success_probability: string;
+  statutory_basis: StrategyStatutoryBasis[];
+  unified_precedents: StrategyPrecedent[];
+  defense_draft: string;
+  source_documents: ParsedDocumentMeta[];
+  retrieval: {
+    mode: string;
+    vector: unknown;
+    graph: {
+      status: string;
+      nodes_matched: number;
+      relations_matched: number;
+    };
+  };
+  graph_relations: GraphRelation[];
+}
+
+/** ورودی ساخت استراتژی — متن پرونده و/یا فایل‌های پیوست (Word/PDF/عکس). */
+export interface BuildCaseStrategyRequest {
+  case_text?: string;
+  engine_tier?: JudgeEngineTier;
+  files?: File[];
+}
+
+/**
+ * تدوین استراتژی چهارگانه حقوقی از فایل پیوست (Word/PDF/عکس) یا متن طولانی پرونده.
+ * منطبق با `POST /api/v1/apps/judge/build-case-strategy` (multipart/form-data).
+ */
+export async function buildCaseStrategy(
+  payload: BuildCaseStrategyRequest,
+  signal?: AbortSignal,
+): Promise<CaseStrategyResponse> {
+  const form = new FormData();
+  form.append("case_text", payload.case_text ?? "");
+  form.append("engine_tier", payload.engine_tier ?? "tier3");
+  for (const file of payload.files ?? []) {
+    form.append("files", file, file.name);
+  }
+
+  const response = await fetch(`${JUDGE_ENDPOINT}/build-case-strategy`, {
+    method: "POST",
+    body: form,
+    signal,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail: unknown = response.statusText;
+    try {
+      const body = (await response.json()) as { detail?: unknown; message?: unknown };
+      detail = body.detail ?? body.message ?? response.statusText;
+    } catch {
+      detail = response.statusText;
+    }
+    throw new SmartJudgeError(response.status, detail);
+  }
+
+  return (await response.json()) as CaseStrategyResponse;
+}
+
 /** ورودی محاسبه خسارت تاخیر تادیه (`InflationCalcRequest`) */
 export interface DelayDamagesRequest {
   principal_amount_irr: number;

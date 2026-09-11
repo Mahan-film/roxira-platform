@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Calculator,
+  FileSearch,
   FileText,
   Gavel,
   History,
@@ -10,14 +11,17 @@ import {
   LogIn,
   LogOut,
   Mic,
+  Paperclip,
   Scale,
   Send,
   ShieldCheck,
   Sparkles,
   Square,
+  X,
 } from "lucide-react";
 
 import {
+  buildCaseStrategy,
   calculateDelayDamages,
   deleteConversation,
   getJudgeEngineHealth,
@@ -70,6 +74,11 @@ function toChatMessage(message: ConversationMessage): ChatMessage {
 
 const QUICK_ACTIONS = [
   {
+    label: "استراتژی پرونده (سند/متن)",
+    icon: FileSearch,
+    action: "strategy" as const,
+  },
+  {
     label: "تنظیم لایحه اعاده دادرسی ۴۷۴",
     icon: Gavel,
     action: "retrial" as const,
@@ -77,6 +86,14 @@ const QUICK_ACTIONS = [
   { label: "تحلیل دادخواست", icon: FileText, action: "analysis" as const },
   { label: "محاسبه تاخیر تادیه", icon: Calculator, action: "damages" as const },
 ];
+
+/**
+ * فرمت‌های مجاز پیوست اسناد پرونده — Word، PDF متنی/اسکن‌شده، متن و تصاویر.
+ * تبدیل به Markdown در موتور `build-case-strategy` (لایه AI Core) انجام می‌شود.
+ */
+const ACCEPTED_DOCUMENT_TYPES =
+  ".docx,.doc,.pdf,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp,.bmp,.tiff";
+const MAX_ATTACHED_FILES = 6;
 
 /**
  * فرمت‌های صوتی استاندارد و به‌ترتیب اولویت برای ضبط دیکته.
@@ -121,11 +138,13 @@ export function ChatShell() {
   const [startYear, setStartYear] = useState("1400");
   const [endYear, setEndYear] = useState("1404");
   const [formError, setFormError] = useState<string | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<ChatMessage[]>(messages);
   const activeConversationRef = useRef<string | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
@@ -333,6 +352,81 @@ export function ChatShell() {
     [busy, persistConversation, user?.phone],
   );
 
+  // ── پیوست اسناد پرونده (Word/PDF/عکس) ──────────────────────────────────────
+  const handleFilesSelected = useCallback((files: FileList | null) => {
+    if (!files || !files.length) return;
+    setAttachedFiles((prev) => {
+      const merged = [...prev];
+      for (const file of Array.from(files)) {
+        if (merged.length >= MAX_ATTACHED_FILES) break;
+        if (!merged.some((m) => m.name === file.name && m.size === file.size)) {
+          merged.push(file);
+        }
+      }
+      return merged;
+    });
+    setNotice(null);
+  }, []);
+
+  const removeAttachedFile = useCallback((index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // ── استراتژی چهارگانه پرونده (فایل پیوست و/یا متن) ────────────────────────
+  const runBuildStrategy = useCallback(
+    async (text: string, files: File[]) => {
+      const trimmed = text.trim();
+      if ((!trimmed && !files.length) || busy) return;
+
+      const summary = files.length
+        ? `ساخت استراتژی حقوقی از ${files.length} سند پیوست${trimmed ? " و متن پرونده" : ""}`
+        : trimmed;
+      push({ role: "user", content: summary });
+      const assistantId = nextId();
+      setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
+      setInput("");
+      setAttachedFiles([]);
+      setFlow({ kind: "none" });
+      setBusy(true);
+      setStreaming(false);
+
+      try {
+        const data = await buildCaseStrategy({
+          case_text: trimmed || undefined,
+          engine_tier: "tier3",
+          files,
+        });
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  content: "استراتژی حقوقی و پیش‌نویس لایحه دفاعیه آماده شد:",
+                  result: { kind: "strategy", data },
+                }
+              : m,
+          ),
+        );
+      } catch (error) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  content:
+                    error instanceof Error ? error.message : "تدوین استراتژی پرونده ناموفق بود.",
+                  error: true,
+                }
+              : m,
+          ),
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, push],
+  );
+
   const runDamages = useCallback(
     async (payload: { principal_amount_irr: number; start_year: number; end_year: number }) => {
       setBusy(true);
@@ -412,7 +506,16 @@ export function ChatShell() {
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (busy) return;
+
+    // مسیر استراتژی چهارگانه: با پیوست سند و/یا متن پرونده فعال می‌شود
+    if (flow.kind === "strategy" || attachedFiles.length > 0) {
+      if (!text && !attachedFiles.length) return;
+      await runBuildStrategy(text, attachedFiles);
+      return;
+    }
+
+    if (!text) return;
 
     if (flow.kind === "retrial-description") {
       push({ role: "user", content: text });
@@ -458,13 +561,21 @@ export function ChatShell() {
     }
 
     await runStreamChat(text);
-  }, [busy, flow, input, push, runStreamChat, isAuthenticated, user]);
+  }, [busy, flow, input, push, runStreamChat, isAuthenticated, user, attachedFiles, runBuildStrategy]);
 
   const handleQuickAction = useCallback(
-    (action: "analysis" | "retrial" | "damages") => {
+    (action: "analysis" | "retrial" | "damages" | "strategy") => {
       if (busy) return;
       setNotice(null);
-      if (action === "analysis") {
+      if (action === "strategy") {
+        setFlow({ kind: "strategy" });
+        setDamagesOpen(false);
+        push({
+          role: "assistant",
+          content:
+            "استراتژی چهارگانه پرونده انتخاب شد. فایل Word/PDF/عکس را با دکمه پیوست بارگذاری کنید یا متن پرونده را بنویسید تا ۱) تبیین ادله و شانس موفقیت، ۲) مواد قانونی استنادی، ۳) آرای وحدت رویه حاکم و ۴) پیش‌نویس لایحه دفاعیه تهیه شود.",
+        });
+      } else if (action === "analysis") {
         setFlow({ kind: "none" });
         setDamagesOpen(false);
         push({
@@ -839,6 +950,30 @@ export function ChatShell() {
               ))}
             </div>
 
+            {attachedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {attachedFiles.map((file, index) => (
+                  <span
+                    key={`${file.name}-${index}`}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-100"
+                  >
+                    <Paperclip className="size-3" />
+                    <span className="max-w-[180px] truncate" dir="auto">
+                      {file.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachedFile(index)}
+                      aria-label={`حذف ${file.name}`}
+                      className="text-amber-200/70 transition-colors hover:text-rose-300"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             {recording && (
               <p className="flex items-center gap-1.5 text-[11px] text-rose-300">
                 <span className="size-2 animate-pulse rounded-full bg-rose-400" />
@@ -868,9 +1003,30 @@ export function ChatShell() {
                     }
                   }}
                   rows={1}
-                  placeholder="شرح پرونده، پرسش حقوقی یا ابطال‌خواهی خود را بنویسید..."
+                  placeholder="شرح پرونده را بنویسید یا سند Word/PDF/عکس را پیوست کنید..."
                   className="max-h-32 min-h-10 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[13px] text-slate-100 shadow-none placeholder:text-slate-500 focus-visible:ring-0 dark:bg-transparent"
                 />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept={ACCEPTED_DOCUMENT_TYPES}
+                  className="hidden"
+                  onChange={(event) => {
+                    handleFilesSelected(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={busy || attachedFiles.length >= MAX_ATTACHED_FILES}
+                  aria-label="پیوست سند Word، PDF یا تصویر"
+                  title="پیوست سند Word، PDF یا تصویر اسکن‌شده"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition-all hover:text-amber-300 disabled:opacity-50"
+                >
+                  <Paperclip className="size-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => void toggleRecording()}
@@ -894,7 +1050,7 @@ export function ChatShell() {
                 <Button
                   type="button"
                   onClick={() => void handleSend()}
-                  disabled={busy || !input.trim()}
+                  disabled={busy || (!input.trim() && attachedFiles.length === 0)}
                   aria-label="ارسال پیام"
                   className="size-9 shrink-0 rounded-xl bg-amber-400 p-0 text-slate-950 hover:bg-amber-300"
                 >

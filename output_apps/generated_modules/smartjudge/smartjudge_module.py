@@ -34,9 +34,24 @@ import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import httpx
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+# ─────────────────────────────────────────────────────────────────────────────
+# موتور جامع تبدیل اسناد (Word/PDF/OCR) با عقب‌نشینی ایمن
+#   در صورت در دسترس نبودن ماژول/وابستگی‌ها، روتر قاضی هوشمند همچنان بارگذاری
+#   می‌شود و اندپوینت استراتژی خطای صادقانه (503) برمی‌گرداند.
+# ─────────────────────────────────────────────────────────────────────────────
+try:
+    from src.legal_intelligence.document_parser import parse_document_to_markdown
+
+    DOCUMENT_PARSER_AVAILABLE = True
+    DOCUMENT_PARSER_ERROR = ""
+except Exception as _parser_exc:  # pragma: no cover - وابستگی محیطی
+    parse_document_to_markdown = None  # type: ignore[assignment]
+    DOCUMENT_PARSER_AVAILABLE = False
+    DOCUMENT_PARSER_ERROR = str(_parser_exc)[:200]
 
 logger = logging.getLogger("roxira.smartjudge")
 
@@ -1604,6 +1619,336 @@ async def analyze_case(req: AnalyzeCaseRequest):
 async def infer_advisory(req: InferAdvisoryRequest):
     """Alias تحلیل یکپارچه — برای سازگاری با فراخوانی‌های قدیمی."""
     return await analyze_case(AnalyzeCaseRequest(case_text=req.query, engine_tier="tier2"))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task جدید — موتور تدوین استراتژی حقوقی چهارگانه (Multi-hop Case Strategy)
+#   ۱) تبیین ادله و شانس موفقیت
+#   ۲) مواد قانونی استنادی (Qdrant: iran_laws_bge_m3)
+#   ۳) آرای وحدت رویه حاکم
+#   ۴) پیش‌نویس لایحه دفاعیه
+# ورودی: فایل پیوست (Word/PDF/عکس) تبدیل‌شده به Markdown + متن پرونده
+# خروجی: استراتژی ساختاریافته مبتنی بر Dual-Level LightRAG (Vector + Postgres Graph)
+# ─────────────────────────────────────────────────────────────────────────────
+STRATEGY_MAX_INPUT_CHARS = 18000
+STRATEGY_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+STRATEGY_MAX_FILES = 6
+
+_STRATEGY_JSON_HINT = (
+    'قالب دقیق JSON: {"evidence_analysis": "تبیین تفصیلی ادله، نقاط قوت/ضعف و … (بند ۱)", '
+    '"success_probability": "درصد یا بازه برآوردی شانس موفقیت + دلیل مستند (بند ۱)", '
+    '"statutory_basis": [{"title": "مواد قانونی استنادی فقط از زمینه", "category": "قانون/ماده", '
+    '"text": "متن یا چکیده ماده", "relevance": "ارتباط با پرونده"}], '
+    '"unified_precedents": [{"title": "شماره و تاریخ رأی وحدت رویه فقط از زمینه", '
+    '"summary": "چکیده اثر", "binding_effect": "اثر الزام‌آور بر پرونده"}], '
+    '"defense_draft": "پیش‌نویس کامل و رسمی لایحه دفاعیه (مرجع، موضوع، خواسته، دلایل، امضا)"}'
+)
+
+_STRATEGY_SYSTEM_PROMPT = (
+    "شما استراتژیست ارشد حقوقی و دادرسی مجهز به تحلیل ادله، آرای وحدت رویه هیئت عمومی دیوان عالی کشور، "
+    "نظریات مشورتی اداره کل حقوقی قوه قضاییه و قوانین جمهوری اسلامی ایران هستید.\n"
+    "مأموریت شما تدوین «استراتژی چهارگانه پرونده» دقیقاً بر پایه اسناد واقعی بازیابی‌شده در دو لایه "
+    "(برداری از Qdrant و گراف دانش PostgreSQL) است:\n"
+    "۱) تبیین ادله و شانس موفقیت: واکاوی مستندات، انطباق با قوانین حاکم، نقاط قوت و ضعف و ارزیابی درصد موفقیت.\n"
+    "۲) مواد قانونی استنادی: فهرست دقیق مواد قانونی مرتبط با متن/چکیده و دلیل استناد.\n"
+    "۳) آرای وحدت رویه حاکم: فقط آرای موجود در زمینه؛ در نبود آن صریح اعلام کن.\n"
+    "۴) پیش‌نویس لایحه دفاعیه: متن رسمی و ساختارمند (مرجع، موضوع، خواسته، دلایل مستند به زمینه، امضا).\n"
+)
+
+_STRATEGY_DRAFT_ONLY_PROMPT = (
+    "شما کارشناس انشای لوایح قضایی هستید. فقط یک JSON با کلید «defense_draft» برگردانید که پیش‌نویس "
+    "کامل و رسمی لایحه دفاعیه (مرجع، موضوع، خواسته، دلایل مستند به زمینه بازیابی‌شده، امضا) را شامل شود؛ "
+    "بدون هیچ کلید اضافه و بدون استناد ساختگی خارج از زمینه."
+)
+
+
+def _build_strategy_system_prompt(tier: str, rag: Dict[str, Any], graph: Dict[str, Any]) -> str:
+    """پرامپت کَش‌محور تدوین استراتژی — بلوک ایستا در ابتدا، زمینه پویا در ادامه."""
+    static_prefix = (
+        _STRATEGY_SYSTEM_PROMPT
+        + _MANDATORY_RULES
+        + "\n" + _STRATEGY_JSON_HINT
+        + "\n" + _TIER_INSTRUCTIONS.get(tier, _TIER_INSTRUCTIONS["tier3"])
+    )
+    dynamic_context = (
+        "\n\n" + "\n".join(_vector_context_block(rag))
+        + "\n\n" + "\n".join(_graph_context_block(graph))
+    )
+    return static_prefix + dynamic_context
+
+
+def _strategy_laws_from_rag(rag: Dict[str, Any]) -> List[Dict[str, str]]:
+    return [
+        {
+            "title": _payload_title(p),
+            "category": str(p.get("category") or "قانون"),
+            "text": _payload_text(p, 400),
+            "relevance": "بازیابی‌شده از کالکشن iran_laws_bge_m3",
+        }
+        for p in (rag.get("laws") or [])[:8]
+    ]
+
+
+def _strategy_precedents_from_rag(rag: Dict[str, Any]) -> List[Dict[str, str]]:
+    return [
+        {
+            "title": _payload_title(p),
+            "summary": _payload_text(p, 300),
+            "binding_effect": "رویه قضایی بازیابی‌شده از پایگاه برداری",
+        }
+        for p in (rag.get("precedents") or [])[:6]
+    ]
+
+
+def _coerce_strategy_statutory_basis(raw: Any) -> List[Dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, str]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            title = str(item.get("title") or item.get("law") or item.get("article") or item.get("name") or "").strip()
+            text = str(item.get("text") or item.get("content") or item.get("summary") or "").strip()
+            category = str(item.get("category") or item.get("type") or "قانون").strip()
+            relevance = str(item.get("relevance") or item.get("reason") or "").strip()
+        elif isinstance(item, str) and item.strip():
+            title, text, category, relevance = item.strip(), "", "قانون", ""
+        else:
+            continue
+        if title or text:
+            out.append({"title": title or "ماده قانونی", "category": category or "قانون", "text": text, "relevance": relevance})
+    return out
+
+
+def _coerce_strategy_precedents(raw: Any) -> List[Dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, str]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            title = str(item.get("title") or item.get("number") or item.get("precedent") or item.get("name") or "").strip()
+            summary = str(item.get("summary") or item.get("text") or item.get("content") or "").strip()
+            effect = str(item.get("binding_effect") or item.get("effect") or item.get("relevance") or "").strip()
+        elif isinstance(item, str) and item.strip():
+            title, summary, effect = item.strip(), "", ""
+        else:
+            continue
+        if title or summary:
+            out.append({"title": title or "رأی وحدت رویه", "summary": summary, "binding_effect": effect})
+    return out
+
+
+async def _build_case_strategy_engine(
+    case_text: str,
+    engine_tier: str,
+    parsed_documents: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """خط لوله کامل تدوین استراتژی چهارگانه — Dual-Level RAG + استنتاج زنده LLM."""
+    tier = _tier_map(engine_tier or "tier3")
+    query = (case_text or "").strip()[:STRATEGY_MAX_INPUT_CHARS]
+    rag, graph = await asyncio.gather(_rag_retrieve(query), _graph_retrieve(query))
+    system_prompt = _build_strategy_system_prompt(tier, rag, graph)
+    user_prompt = (
+        "متن پرونده و اسناد پیوست تبدیل‌شده:\n"
+        f"{query}\n\n"
+        "اکنون استراتژی چهارگانه را دقیقاً طبق قالب JSON اعلام‌شده و فقط با استناد به زمینه دو لایه تولید کن."
+    )
+
+    try:
+        content, model_used = await _chat_completion(
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            models=_model_chain(tier),
+            max_tokens=TIER_MAX_TOKENS.get(tier, 4500),
+            temperature=0.2,
+            prefer_kira=(tier == "tier3"),
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "status": "LLM_UNAVAILABLE",
+                "message": "موتور هوش مصنوعی در دسترس نیست؛ لطفاً بعداً تلاش کنید.",
+                "error": str(exc)[:400],
+                "real_context": {
+                    "laws": [{"title": _payload_title(p), "text": _payload_text(p, 240)} for p in rag.get("laws", [])[:5]],
+                    "precedents": [_payload_title(p) for p in rag.get("precedents", [])[:5]],
+                    "graph_relations": [
+                        f"{r.get('source_title')} —[{r.get('relation')}]→ {r.get('target_title')}"
+                        for r in (graph.get("relations") or [])[:6]
+                    ],
+                },
+            },
+        )
+
+    parsed = _deep_json_parse(content) or {}
+
+    evidence = str(parsed.get("evidence_analysis") or "").strip()
+    if not evidence:
+        evidence = _salvage_string_field(content, "evidence_analysis")
+    if not evidence:
+        text_vals = [str(v).strip() for v in parsed.values() if isinstance(v, str) and len(str(v).strip()) > 60]
+        if text_vals:
+            evidence = max(text_vals, key=len)
+
+    success_probability = str(parsed.get("success_probability") or "").strip() \
+        or _salvage_string_field(content, "success_probability")
+
+    statutory_basis = _coerce_strategy_statutory_basis(parsed.get("statutory_basis"))
+    if not statutory_basis:
+        statutory_basis = _strategy_laws_from_rag(rag)
+
+    unified_precedents = _coerce_strategy_precedents(parsed.get("unified_precedents"))
+    if not unified_precedents:
+        unified_precedents = _strategy_precedents_from_rag(rag)
+
+    defense_draft = str(parsed.get("defense_draft") or "").strip() \
+        or _salvage_string_field(content, "defense_draft")
+
+    # نجات لایحه — در صورت حذف کلید توسط مدل، یک فراخوانی متمرکز انشا انجام می‌شود
+    if not defense_draft:
+        try:
+            draft_system = (
+                _STRATEGY_DRAFT_ONLY_PROMPT
+                + "\n\n" + "\n".join(_vector_context_block(rag))
+                + "\n\n" + "\n".join(_graph_context_block(graph))
+            )
+            draft_content, _ = await _chat_completion(
+                messages=[
+                    {"role": "system", "content": draft_system},
+                    {"role": "user", "content": user_prompt},
+                ],
+                models=_model_chain(tier),
+                max_tokens=TIER_MAX_TOKENS.get(tier, 4500),
+                temperature=0.2,
+                prefer_kira=(tier == "tier3"),
+            )
+            draft_parsed = _deep_json_parse(draft_content) or {}
+            defense_draft = str(draft_parsed.get("defense_draft") or "").strip() \
+                or _salvage_string_field(draft_content, "defense_draft") or ""
+        except Exception as exc:
+            logger.warning("[SMARTJUDGE] strategy draft-only fallback failed: %s", exc)
+
+    # حفاظ نهایی: هرگز JSON خام در رابط کاربری نشت نکند
+    if evidence.lstrip().startswith("{"):
+        evidence = "تحلیل ادله تولید شد اما ساختار خروجی مدل ناقص بود؛ لطفاً پرونده را دقیق‌تر ثبت کنید."
+
+    return {
+        "status": "SUCCESS",
+        "tier": tier,
+        "tier_label": TIER_LABELS.get(tier, tier),
+        "model_used": model_used,
+        "evidence_analysis": evidence,
+        "success_probability": success_probability,
+        "statutory_basis": statutory_basis,
+        "unified_precedents": unified_precedents,
+        "defense_draft": defense_draft,
+        "source_documents": parsed_documents or [],
+        "retrieval": {
+            "mode": "dual-level-lightrag",
+            "vector": rag.get("retrieval"),
+            "graph": {
+                "status": graph.get("status"),
+                "nodes_matched": len(graph.get("nodes") or []),
+                "relations_matched": len(graph.get("relations") or []),
+            },
+        },
+        "graph_relations": [
+            {
+                "source": r.get("source_title"),
+                "relation": r.get("relation"),
+                "target": r.get("target_title"),
+                "description": r.get("description"),
+            }
+            for r in (graph.get("relations") or [])[:12]
+        ],
+    }
+
+
+async def _collect_strategy_inputs(request: Request) -> Tuple[str, str, List[Dict[str, Any]]]:
+    """استخراج ورودی استراتژی از JSON یا multipart (متن + فایل‌های Word/PDF/عکس)."""
+    content_type = (request.headers.get("content-type") or "").lower()
+    case_text = ""
+    engine_tier = "tier3"
+    parsed_documents: List[Dict[str, Any]] = []
+    attached_markdown: List[str] = []
+
+    if content_type.startswith("application/json"):
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="بدنه درخواست باید یک شیء JSON باشد.")
+        case_text = str(payload.get("case_text") or "")
+        engine_tier = str(payload.get("engine_tier") or "tier3")
+        return case_text, engine_tier, parsed_documents
+
+    form = await request.form()
+    case_text = str(form.get("case_text") or "")
+    engine_tier = str(form.get("engine_tier") or "tier3")
+
+    raw_files: List[Any] = []
+    raw_files.extend(form.getlist("file"))
+    raw_files.extend(form.getlist("files"))
+    upload_files = [
+        item for item in raw_files
+        if isinstance(item, UploadFile) or (hasattr(item, "filename") and hasattr(item, "read"))
+    ]
+    if len(upload_files) > STRATEGY_MAX_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"حداکثر {STRATEGY_MAX_FILES} فایل پیوست در هر درخواست مجاز است.",
+        )
+
+    for item in upload_files:
+        filename = (getattr(item, "filename", "") or "").strip()
+        if not filename:
+            continue
+        raw = await item.read()
+        if not raw:
+            continue
+        if len(raw) > STRATEGY_MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"حجم فایل «{filename}» بیش از حد مجاز ({STRATEGY_MAX_UPLOAD_BYTES // (1024 * 1024)} مگابایت) است.",
+            )
+        result = await asyncio.to_thread(
+            parse_document_to_markdown,
+            raw,
+            filename,
+            getattr(item, "content_type", None),
+        )
+        doc_dict = result.as_dict() if hasattr(result, "as_dict") else dict(result)
+        parsed_documents.append(doc_dict)
+        if doc_dict.get("markdown"):
+            attached_markdown.append(f"\n\n===== سند پیوست: {filename} =====\n{doc_dict['markdown']}")
+
+    if attached_markdown:
+        case_text = (case_text + "".join(attached_markdown)).strip()
+    return case_text, engine_tier, parsed_documents
+
+
+@router.post("/build-case-strategy")
+async def build_case_strategy(request: Request):
+    """تدوین استراتژی چهارگانه حقوقی از فایل پیوست (Word/PDF/عکس) یا متن پرونده.
+
+    ورودی: multipart/form-data با فیلدهای `case_text` (متن طولانی) و `file` (چند فایل) —
+    یا بدنه JSON با کلیدهای `case_text` و `engine_tier`.
+    خروجی: تبیین ادله و شانس موفقیت، مواد قانونی استنادی، آرای وحدت رویه حاکم و پیش‌نویس لایحه دفاعیه.
+    """
+    if not DOCUMENT_PARSER_AVAILABLE or parse_document_to_markdown is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "PARSER_UNAVAILABLE",
+                "message": "موتور تبدیل اسناد در دسترس نیست.",
+                "error": DOCUMENT_PARSER_ERROR,
+            },
+        )
+    case_text, engine_tier, parsed_documents = await _collect_strategy_inputs(request)
+    if not (case_text or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="متن پرونده یا حداقل یک فایل پیوست قابل تبدیل الزامی است.",
+        )
+    return await _build_case_strategy_engine(case_text, engine_tier, parsed_documents)
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
