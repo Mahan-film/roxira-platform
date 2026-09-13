@@ -16,34 +16,16 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { AuthServiceDomain, AuthSession } from "@/lib/api/auth-client";
 import {
-  AuthServiceDomain,
-  AuthSession,
-  sendOtp,
-  verifyOtp,
-} from "@/lib/api/auth-client";
-import { ApiClientError } from "@/lib/api/http-client";
+  JudgeAuthError,
+  isValidIranianMobile,
+  normalizeOtpCode,
+  normalizePhone,
+  sendJudgeOtp,
+  verifyJudgeOtp,
+} from "@/lib/api/judge-auth-client";
 import { cn } from "@/lib/utils";
-
-const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
-const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
-
-function normalizePhone(raw: string): string {
-  return raw
-    .split("")
-    .map((char) => {
-      const fa = PERSIAN_DIGITS.indexOf(char);
-      if (fa > -1) return String(fa);
-      const ar = ARABIC_DIGITS.indexOf(char);
-      if (ar > -1) return String(ar);
-      return char;
-    })
-    .join("")
-    .replace(/[\s\-()._]/g, "")
-    .replace(/^\+/, "")
-    .replace(/^0098/, "0")
-    .replace(/^98(?=\d{10}$)/, "0");
-}
 
 interface LoginModalProps {
   open: boolean;
@@ -55,13 +37,17 @@ interface LoginModalProps {
 }
 
 /**
- * مودال لاگین مدرن پیامکی.
+ * مودال ورود پیامکی سامانه قاضی هوشمند.
  *
- * جریان دو مرحله‌ای:
+ * جریان دو مرحله‌ای (PHONE → OTP):
  *   ۱) ورود شماره همراه ایران (09xxxxxxxxx) و ارسال کد ۵ رقمی
  *   ۲) ورود کد و صدور سشن JWT
  *
- * شمارش معکوس ارسال مجدد دقیقاً بر مبنای `expiresIn` سرور (۱۲۰ ثانیه) است.
+ * نکتهٔ حیاتی: فراخوانی‌ها مستقیماً و «فقط» از طریق
+ * `judge-auth-client` به مسیر `/api/v1/apps/judge/auth/send-otp` انجام
+ * می‌شود؛ شماره همراه پیش از ارسال نرمال‌سازی می‌گردد (ارقام فارسی/عربی →
+ * ASCII) و پس از دریافت پاسخ موفق، مرحلهٔ رابط به‌صورت خودکار به ورود کد
+ * منتقل می‌شود.
  */
 export function LoginModal({
   open,
@@ -77,6 +63,7 @@ export function LoginModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
   const [smsDelivered, setSmsDelivered] = useState<boolean | null>(null);
 
@@ -86,6 +73,7 @@ export function LoginModal({
     setCode("");
     setError(null);
     setNotice(null);
+    setDevCode(null);
     setResendIn(0);
     setSmsDelivered(null);
   }, [open]);
@@ -112,46 +100,46 @@ export function LoginModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleClose, open]);
 
-  const requestCode = useCallback(
-    async (targetPhone: string) => {
-      setLoading(true);
-      setError(null);
-      setNotice(null);
-      try {
-        const response = await sendOtp({
-          phone: targetPhone,
-          serviceDomain,
-        });
-        setPhone(targetPhone);
-        setStep("code");
-        setResendIn(response.expiresIn || 120);
-        setSmsDelivered(response.smsDelivered);
-        setNotice(
-          response.smsDelivered
-            ? "کد تأیید ارسال شد. تا ۲ دقیقه اعتبار دارد."
-            : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، دوباره تلاش کنید.",
-        );
-      } catch (err) {
-        if (err instanceof ApiClientError) {
-          setError(err.details);
-        } else {
-          setError(["ارتباط با سرور برقرار نشد. لطفاً دوباره تلاش کنید."]);
-        }
-      } finally {
-        setLoading(false);
+  const requestCode = useCallback(async (targetPhone: string) => {
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    setDevCode(null);
+    try {
+      const response = await sendJudgeOtp(targetPhone);
+
+      // پاسخ موفق → انتقال قطعی رابط به حالت ورود کد تأیید
+      setPhone(targetPhone);
+      setStep("code");
+      setCode("");
+      setResendIn(response.expiresIn || 120);
+      setSmsDelivered(response.deliveryConfirmed);
+      setDevCode(response.devCode);
+      setNotice(
+        response.deliveryConfirmed
+          ? "کد تأیید ارسال شد. تا ۲ دقیقه اعتبار دارد."
+          : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، چند لحظه بعد دوباره درخواست کنید.",
+      );
+    } catch (err) {
+      if (err instanceof JudgeAuthError) {
+        setError(err.details);
+      } else {
+        setError(["ارتباط با سرور برقرار نشد. لطفاً دوباره تلاش کنید."]);
       }
-    },
-    [serviceDomain],
-  );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const handleSend = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
       const normalized = normalizePhone(phone);
-      if (!/^09\d{9}$/.test(normalized)) {
+      if (!isValidIranianMobile(normalized)) {
         setError(["شماره همراه باید با فرمت 09xxxxxxxxx و ۱۱ رقم باشد."]);
         return;
       }
+      setPhone(normalized);
       await requestCode(normalized);
     },
     [phone, requestCode],
@@ -160,22 +148,32 @@ export function LoginModal({
   const handleVerify = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
-      if (!/^\d{5}$/.test(code.trim())) {
+      const cleanCode = normalizeOtpCode(code);
+      if (cleanCode.length < 4) {
         setError(["کد تأیید باید ۵ رقم باشد."]);
         return;
       }
       setLoading(true);
       setError(null);
       try {
-        const session = await verifyOtp({
-          phone,
-          code: code.trim(),
-          serviceDomain,
+        const session = await verifyJudgeOtp(phone, cleanCode);
+        onAuthenticated({
+          tokenType: session.tokenType,
+          accessToken: session.accessToken,
+          expiresIn: session.expiresIn,
+          user: {
+            id: session.user.id,
+            phone: session.user.phone,
+            displayName: session.user.displayName,
+            email: session.user.email,
+            role: "USER",
+            serviceDomain: serviceDomain ?? "GHAZI",
+            createdAt: new Date().toISOString(),
+          },
         });
-        onAuthenticated(session);
         onClose();
       } catch (err) {
-        if (err instanceof ApiClientError) {
+        if (err instanceof JudgeAuthError) {
           setError(err.details);
         } else {
           setError(["تأیید کد ناموفق بود. لطفاً دوباره تلاش کنید."]);
@@ -213,7 +211,7 @@ export function LoginModal({
             <div>
               <h2 className="text-sm font-bold text-white">{title}</h2>
               <p className="text-[10px] text-slate-400">
-                {serviceDomain === "GHAZI" ? "قاضی هوشمند" : "پورتال سازمانی روکسیرا"}
+                {serviceDomain === "ROXIRA" ? "پورتال سازمانی روکسیرا" : "قاضی هوشمند"}
               </p>
             </div>
           </div>
@@ -250,6 +248,9 @@ export function LoginModal({
                     className="h-11 border-white/10 bg-black/30 pr-10 text-left text-slate-100 placeholder:text-slate-600"
                   />
                 </div>
+                <p className="text-[10px] text-slate-500">
+                  ارقام فارسی و عربی نیز پذیرفته می‌شوند (نمونه: ۰۹۱۲۹۳۶۷۷۹۶).
+                </p>
               </div>
 
               {error && <ErrorBox errors={error} />}
@@ -281,6 +282,7 @@ export function LoginModal({
                   setCode("");
                   setError(null);
                   setNotice(null);
+                  setDevCode(null);
                 }}
                 className="inline-flex items-center gap-1 text-[11px] text-slate-400 transition-colors hover:text-white"
               >
@@ -296,7 +298,7 @@ export function LoginModal({
                   id="auth-code"
                   value={code}
                   onChange={(event) =>
-                    setCode(event.target.value.replace(/\D/g, "").slice(0, 5))
+                    setCode(normalizeOtpCode(event.target.value).slice(0, 5))
                   }
                   placeholder="- - - - -"
                   inputMode="numeric"
@@ -314,7 +316,7 @@ export function LoginModal({
                   <button
                     type="button"
                     disabled={resendIn > 0 || loading}
-                    onClick={() => void requestCode(phone)}
+                    onClick={() => void requestCode(normalizePhone(phone))}
                     className="font-semibold text-indigo-300 transition-colors hover:text-indigo-200 disabled:cursor-not-allowed disabled:text-slate-600"
                   >
                     ارسال مجدد کد
@@ -333,6 +335,12 @@ export function LoginModal({
                 <p className="text-[11px] text-amber-300/90">
                   ارسال پیامک از درگاه تأیید نشد؛ در صورت امکان چند لحظه بعد دوباره
                   درخواست کنید.
+                </p>
+              )}
+
+              {devCode && (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center font-mono text-sm text-amber-200">
+                  کد آزمایشی: {devCode}
                 </p>
               )}
 
@@ -360,7 +368,7 @@ export function LoginModal({
 
           <p className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
             <ShieldCheck className="size-3" />
-            احراز هویت امن با کد یک‌بارمصرف 
+            احراز هویت امن با کد یک‌بارمصرف
           </p>
         </div>
       </div>

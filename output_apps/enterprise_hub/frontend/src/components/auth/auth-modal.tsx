@@ -3,22 +3,29 @@
 import React, { useState } from "react";
 import { ShieldCheck, Phone, KeyRound, Loader2, X, CheckCircle2 } from "lucide-react";
 
+import {
+  JudgeAuthError,
+  isValidIranianMobile,
+  normalizeOtpCode,
+  normalizePhone,
+  sendJudgeOtp,
+  verifyJudgeOtp,
+} from "@/lib/api/judge-auth-client";
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (user: any) => void;
+  onSuccess?: (user: unknown) => void;
 }
 
-const normalizeDigits = (str: string) => {
-  const p = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
-  const a = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-  let res = str || "";
-  for (let i = 0; i < 10; i++) {
-    res = res.replaceAll(p[i], String(i)).replaceAll(a[i], String(i));
-  }
-  return res.replace(/[^0-9]/g, "");
-};
-
+/**
+ * مودال ورود پیامکی قاضی هوشمند (نسخهٔ سبک).
+ *
+ * تمام فراخوانی‌ها از `judge-auth-client` عبور می‌کنند تا مسیر ارسال کد
+ * همواره و به‌صورت قطعی `/api/v1/apps/judge/auth/send-otp` باشد؛ شماره
+ * همراه نرمال‌سازی می‌شود و پس از پاسخ موفق، مرحلهٔ رابط به‌طور خودکار به
+ * ورودی کد تأیید منتقل می‌گردد.
+ */
 export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [step, setStep] = useState<"PHONE" | "OTP">("PHONE");
   const [phone, setPhone] = useState("");
@@ -26,6 +33,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [devCode, setDevCode] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -33,30 +41,34 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
+    setDevCode(null);
 
-    const cleanPhone = normalizeDigits(phone);
-    if (!cleanPhone.startsWith("09") || cleanPhone.length !== 11) {
+    const cleanPhone = normalizePhone(phone);
+    if (!isValidIranianMobile(cleanPhone)) {
       setErrorMsg("لطفاً یک شماره همراه معتبر ۱۱ رقمی (مثال: ۰۹۱۲۹۳۶۷۷۹۶) وارد کنید.");
       return;
     }
 
+    setPhone(cleanPhone);
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/apps/judge/auth/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: cleanPhone }),
-      });
-      const data = await res.json();
+      const result = await sendJudgeOtp(cleanPhone);
 
-      if (res.ok && (data.status === "success" || data.delivery_confirmed || data.expires_in)) {
-        setStep("OTP");
-        setSuccessMsg("کد تأیید ۵ رقمی به شماره همراه شما ارسال شد.");
-      } else {
-        setErrorMsg(data.message || "خطا در برقراری ارتباط با سرویس پیامک.");
-      }
+      // پاسخ موفق → انتقال قطعی به حالت ورود کد تأیید
+      setStep("OTP");
+      setOtpCode("");
+      setDevCode(result.devCode);
+      setSuccessMsg(
+        result.deliveryConfirmed
+          ? "کد تأیید ۵ رقمی به شماره همراه شما ارسال شد."
+          : "کد تأیید صادر شد. در صورت عدم دریافت پیامک، دوباره تلاش کنید.",
+      );
     } catch (err) {
-      setErrorMsg("خطا در ارسال درخواست به سرور. لطفاً اتصال اینترنت را بررسی فرمایید.");
+      setErrorMsg(
+        err instanceof JudgeAuthError
+          ? err.details.join(" | ")
+          : "خطا در برقراری ارتباط با سرویس احراز هویت.",
+      );
     } finally {
       setLoading(false);
     }
@@ -65,7 +77,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    const cleanCode = normalizeDigits(otpCode);
+    const cleanCode = normalizeOtpCode(otpCode);
 
     if (cleanCode.length < 4) {
       setErrorMsg("لطفاً کد تأیید دریافتی را کامل وارد فرمایید.");
@@ -74,25 +86,20 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/apps/judge/auth/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: normalizeDigits(phone), code: cleanCode }),
-      });
-      const data = await res.json();
+      const session = await verifyJudgeOtp(phone, cleanCode);
 
-      if (res.ok && data.status === "success") {
-        if (typeof window !== "undefined") {
-          localStorage.setItem("ghazi_auth_token", data.token);
-          localStorage.setItem("ghazi_user_phone", data.user?.phone || normalizeDigits(phone));
-        }
-        if (onSuccess) onSuccess(data.user);
-        onClose();
-      } else {
-        setErrorMsg(data.message || "کد تأیید وارد شده نادرست یا منقضی شده است.");
+      if (typeof window !== "undefined") {
+        localStorage.setItem("ghazi_auth_token", session.accessToken);
+        localStorage.setItem("ghazi_user_phone", session.user.phone);
       }
+      if (onSuccess) onSuccess(session.user);
+      onClose();
     } catch (err) {
-      setErrorMsg("خطا در اعتبارسنجی کد تأیید.");
+      setErrorMsg(
+        err instanceof JudgeAuthError
+          ? err.details.join(" | ")
+          : "خطا در اعتبارسنجی کد تأیید.",
+      );
     } finally {
       setLoading(false);
     }
@@ -103,6 +110,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
       <div className="relative w-full max-w-md rounded-3xl border border-slate-800 bg-[#0F172A] p-6 shadow-2xl">
         <button
           onClick={onClose}
+          aria-label="بستن"
           className="absolute left-4 top-4 rounded-xl p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
         >
           <X className="size-5" />
@@ -131,6 +139,12 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             <CheckCircle2 className="size-4" />
             <span>{successMsg}</span>
           </div>
+        )}
+
+        {devCode && (
+          <p className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center font-mono text-sm text-amber-200">
+            کد آزمایشی: {devCode}
+          </p>
         )}
 
         {step === "PHONE" ? (
@@ -170,7 +184,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                   maxLength={5}
                   placeholder="• • • • •"
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
+                  onChange={(e) => setOtpCode(normalizeOtpCode(e.target.value).slice(0, 5))}
                   className="w-full rounded-2xl border border-slate-700 bg-slate-900/90 px-4 py-3 text-center font-mono text-xl tracking-widest text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   autoFocus
                 />
@@ -180,7 +194,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || otpCode.length !== 5}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-emerald-500 disabled:opacity-50"
             >
               {loading ? <Loader2 className="size-5 animate-spin" /> : "تأیید و ورود به سامانه"}
@@ -192,6 +206,8 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 setStep("PHONE");
                 setOtpCode("");
                 setErrorMsg("");
+                setSuccessMsg("");
+                setDevCode(null);
               }}
               className="w-full text-center text-xs text-slate-400 hover:text-white"
             >

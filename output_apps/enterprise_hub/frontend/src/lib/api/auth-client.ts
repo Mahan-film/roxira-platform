@@ -70,7 +70,14 @@ export function inferServiceDomain(): AuthServiceDomain {
   return host.includes("ghazi") || host.includes("smartjudge") ? "GHAZI" : "ROXIRA";
 }
 
-/** ارسال کد یک‌بارمصرف به شماره همراه ایران. */
+/**
+ * ارسال کد یک‌بارمصرف به شماره همراه ایران.
+ *
+ * @deprecated مسیر قدیمی NestJS (`/api/backend/auth/send-otp`) برای سامانه
+ * قاضی هوشمند معتبر نیست و روی دامنهٔ ghazihoushmand.ir به خطای ۵۰۰ منجر
+ * می‌شود. از `sendJudgeOtp` در `@/lib/api/judge-auth-client` استفاده کنید
+ * که مسیر قطعی `/api/v1/apps/judge/auth/send-otp` را فراخوانی می‌کند.
+ */
 export async function sendOtp(
   payload: SendOtpPayload,
   signal?: AbortSignal,
@@ -85,7 +92,13 @@ export async function sendOtp(
   });
 }
 
-/** تأیید کد یک‌بارمصرف و دریافت توکن JWT + سشن کاربری. */
+/**
+ * تأیید کد یک‌بارمصرف و دریافت توکن JWT + سشن کاربری.
+ *
+ * @deprecated برای سامانه قاضی هوشمند از `verifyJudgeOtp` در
+ * `@/lib/api/judge-auth-client` استفاده کنید تا مسیر قطعی
+ * `/api/v1/apps/judge/auth/verify-otp` فراخوانی شود.
+ */
 export async function verifyOtp(
   payload: VerifyOtpPayload,
   signal?: AbortSignal,

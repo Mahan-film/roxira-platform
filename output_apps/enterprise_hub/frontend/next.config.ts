@@ -51,6 +51,16 @@ const nextConfig: NextConfig = {
         source: "/api/judge/:path*",
         destination: `${JUDGE_API_ORIGIN}/api/v1/apps/judge/:path*`,
       },
+      {
+        // شبکهٔ اطمینان (safety net): در استقرار پروداکشن، nginx مسیر
+        // `/api/v1/apps/judge/` را مستقیماً به `roxira_app_prod:8000`
+        // پروکسی می‌کند و این rewrite هرگز اجرا نمی‌شود. اما اگر اپلیکیشن
+        // Next.js مستقیم (بدون nginx) سرو شود، این قاعده تضمین می‌کند
+        // مسیر قطعی `/api/v1/apps/judge/auth/send-otp` همچنان کار کند.
+        // نکته: URL سمت مرورگر تغییر نمی‌کند و دقیقاً همان مسیر قطعی است.
+        source: "/api/v1/apps/judge/:path*",
+        destination: `${JUDGE_API_ORIGIN}/api/v1/apps/judge/:path*`,
+      },
     ];
   },
 };
