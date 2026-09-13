@@ -6,6 +6,7 @@ import uuid
 import hmac
 import hashlib
 import base64
+import asyncio
 from typing import Optional, List
 from fastapi import APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -631,6 +632,95 @@ async def interactive_consult(payload: dict = Body(...)):
         "latency_ms": round((time.time() - t0) * 1000, 2)
     }
 
+VOICE_TRANSCRIBE_MODEL = os.environ.get(
+    "SMARTJUDGE_TRANSCRIBE_MODEL", OPENROUTER_TIERS["VIP"]["primary_model"]
+)
+_VOICE_AUDIO_FORMATS = {"wav", "mp3", "ogg", "webm", "flac", "m4a", "aac", "opus", "oga"}
+
+
+def _looks_like_text_payload(data: bytes) -> str:
+    """اگر بار باینری در واقع متن UTF-8 باشد، آن را برمی‌گرداند (وگرنه رشتهٔ خالی)."""
+    if not data:
+        return ""
+    try:
+        decoded = data.decode("utf-8").strip()
+    except UnicodeDecodeError:
+        return ""
+    if not decoded:
+        return ""
+    if all(char.isprintable() or char.isspace() for char in decoded):
+        return decoded
+    return ""
+
+
+def _normalize_audio_format(audio_format: str) -> str:
+    """یکسان‌سازی قالب صوتی برای ارسال به مدل پیاده‌سازی گفتار."""
+    fmt = str(audio_format or "").lower().split(";")[0].strip()
+    if "/" in fmt:
+        fmt = fmt.split("/")[-1]
+    fmt = fmt.replace("x-", "").replace("mpeg", "mp3").strip()
+    if fmt in ("oga", "opus"):
+        fmt = "ogg" if fmt == "oga" else "opus"
+    return fmt if fmt in _VOICE_AUDIO_FORMATS else "webm"
+
+
+async def _voice_transcribe_bytes(audio_bytes: bytes, audio_format: str) -> str:
+    """تبدیل بار صوتی باینری به متن؛ هرگز استثنا پرتاب نمی‌کند.
+
+    دو حالت پشتیبانی می‌شود:
+      ۱) بستهٔ «متن باینری» (UTF-8 معتبر) → مستقیماً به‌عنوان پرسش استفاده می‌شود.
+      ۲) بستهٔ صوتی واقعی → پیاده‌سازی گفتار با مدل چندوجهی OpenRouter.
+    """
+    if not audio_bytes:
+        return ""
+
+    textual = _looks_like_text_payload(audio_bytes)
+    if textual:
+        return textual
+
+    if not OPENROUTER_API_KEY:
+        print("[SMARTJUDGE][VOICE-TRANSCRIBE-SKIP] no OPENROUTER_API_KEY", file=sys.stderr)
+        return ""
+
+    try:
+        encoded = base64.b64encode(audio_bytes).decode("ascii")
+        transcript = await _openrouter_transcribe(
+            VOICE_TRANSCRIBE_MODEL, encoded, _normalize_audio_format(audio_format)
+        )
+        return (transcript or "").strip()
+    except Exception as exc:  # پیاده‌سازی گفتار هرگز نباید سوکت را ببندد
+        print(f"[SMARTJUDGE][VOICE-TRANSCRIBE-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+        return ""
+
+
+def _voice_build_answer(query_text: str, laws: list, precedents: list) -> str:
+    """ساخت پاسخ صوتی مبتنی بر استنادات بازیابی‌شده از LightRAG (نه متن قالبی)."""
+    segments = [f"پرسش شما درباره «{query_text[:80]}» بررسی شد."]
+
+    titles = [
+        str(item.get("title") or item.get("category") or "").strip()
+        for item in (laws or [])[:3]
+        if isinstance(item, dict)
+    ]
+    titles = [title for title in titles if title]
+    if titles:
+        segments.append("مبنای قانونی: " + "؛ ".join(titles) + ".")
+
+    heads = [
+        str(item.get("title") or item.get("subject") or "").strip()
+        for item in (precedents or [])[:2]
+        if isinstance(item, dict)
+    ]
+    heads = [head for head in heads if head]
+    if heads:
+        segments.append("رویه‌های لازم‌الاتباع: " + "؛ ".join(heads) + ".")
+
+    if not titles and not heads:
+        segments.append("برای این پرسش مستند قانونی بازیابی نشد؛ لطفاً پرسش را دقیق‌تر مطرح کنید.")
+
+    return " ".join(segments)
+
+
 @router.websocket("/live-voice")
 async def live_voice_websocket(websocket: WebSocket):
     await websocket.accept()
@@ -646,21 +736,96 @@ async def live_voice_websocket(websocket: WebSocket):
             await websocket.close(code=4403)
         return
 
+    audio_format = "webm"
+
     try:
         while True:
-            data = await websocket.receive_text()
-            req = json.loads(data)
-            user_msg = req.get("text", "")
-            reply_text = f"موضوع شما درباره «{user_msg[:30]}» بررسی شد. در خدمت شما هستم."
+            message = await websocket.receive()
+
+            if message.get("type") == "websocket.disconnect":
+                break
+
+            query_text = ""
+            input_mode = "text"
+
+            # ---------- ۱) بستهٔ باینری (صدای خام یا متن باینری) ----------
+            if message.get("bytes") is not None:
+                input_mode = "audio_binary"
+                query_text = await _voice_transcribe_bytes(message["bytes"], audio_format)
+
+            # ---------- ۲) بستهٔ متنی (JSON یا متن خام) ----------
+            elif message.get("text") is not None:
+                raw_text = message["text"]
+                try:
+                    parsed = json.loads(raw_text)
+                except Exception:
+                    parsed = {"text": raw_text}
+                if not isinstance(parsed, dict):
+                    parsed = {"text": raw_text}
+
+                # اعلام قالب صوتی برای بسته‌های باینری بعدی
+                declared = parsed.get("format") or parsed.get("mime_type")
+                if declared:
+                    audio_format = str(declared)
+
+                audio_payload = parsed.get("audio") or parsed.get("audio_base64")
+                if audio_payload:
+                    input_mode = "audio_base64"
+                    try:
+                        b64 = str(audio_payload)
+                        if b64.startswith("data:"):
+                            b64 = b64.partition(",")[2]
+                        audio_bytes = base64.b64decode(b64)
+                    except Exception:
+                        await websocket.send_json({
+                            "type": "VOICE_ERROR",
+                            "message": "دادهٔ صوتی Base64 نامعتبر است.",
+                        })
+                        continue
+                    query_text = await _voice_transcribe_bytes(audio_bytes, audio_format)
+                else:
+                    query_text = str(parsed.get("text") or "").strip()
+
+            if not query_text:
+                await websocket.send_json({
+                    "type": "VOICE_ERROR",
+                    "message": "پیام ورودی خالی یا غیرقابل‌خواندن بود.",
+                })
+                continue
+
+            # ---------- ۳) تغذیهٔ مستقیم به لایهٔ بازیابی LightRAG ----------
+            t_start = time.time()
+            try:
+                laws, precedents = await asyncio.to_thread(query_knowledge_graph, query_text, 3)
+            except Exception as exc:
+                print(f"[SMARTJUDGE][VOICE-RETRIEVAL-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+                laws, precedents = [], []
+            latency_ms = round((time.time() - t_start) * 1000.0, 2)
+
             await websocket.send_json({
                 "type": "VOICE_RESPONSE",
                 "model": OPENROUTER_TIERS["VIP"]["primary_model"],
-                "text": reply_text
+                "input_mode": input_mode,
+                "transcript": query_text,
+                "text": _voice_build_answer(query_text, laws, precedents),
+                "statutory_basis": laws,
+                "unified_precedents": precedents,
+                "retrieval": {
+                    "engine": "LightRAG-dual",
+                    "low_level": "exact_article / precedent_number / active_citation",
+                    "high_level": "doctrine / ACTIVE_precedent",
+                },
+                "latency_ms": latency_ms,
             })
+
     except WebSocketDisconnect:
         pass
-    except Exception:
-        await websocket.close()
+    except Exception as exc:  # pragma: no cover - دفاعی
+        print(f"[SMARTJUDGE][VOICE-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 # افزودن به انتهای روت‌های قاضی هوشمند
 @router.post("/payments/create-invoice")
 async def create_payment_invoice(payload: dict = Body(...)):
@@ -1236,13 +1401,32 @@ async def _openrouter_stream(model: str, messages: List[dict], usage_out: Option
 _CACHE_PRIME_STATE = {
     "status": "NOT_PRIMED",
     "model": None,
+    "requested_model": None,
     "prompt_tokens": 0,
     "cached_tokens": 0,
     "cache_write_tokens": 0,
+    "outcome": None,
     "last_prime_ts": 0.0,
     "last_error": None,
 }
-_CACHE_PRIME_INTERVAL = int(os.environ.get("SMARTJUDGE_CACHE_PRIME_INTERVAL", "240"))
+
+# وضعیت تفکیکی هر مدل + شمارنده‌های سلامت کش.
+# نکته: حالت تجمیعی بالا فقط بر پایهٔ «مدل اصلی VIP» به‌روزرسانی می‌شود تا
+# مدل پشتیبان (fallback) هرگز آمار کش سشن‌های زنده را مخدوش نکند.
+_CACHE_PRIME_MODELS = {}
+_CACHE_PRIME_METRICS = {
+    "primes": 0,
+    "cache_hits": 0,
+    "primary_cache_hits": 0,
+    "cold_writes": 0,
+    "evictions": 0,
+    "primary_evictions": 0,
+    "unknown": 0,
+    "consecutive_hits": 0,
+    "max_consecutive_hits": 0,
+    "last_eviction_ts": 0.0,
+}
+_CACHE_PRIME_INTERVAL = int(os.environ.get("SMARTJUDGE_CACHE_PRIME_INTERVAL", "180"))
 _CACHE_PRIME_ENABLED = os.environ.get("SMARTJUDGE_CACHE_PRIME", "1") != "0"
 
 
@@ -1288,37 +1472,123 @@ async def _prime_model_cache(model: str) -> dict:
 
 
 async def prime_prompt_cache(models: Optional[List[str]] = None) -> dict:
-    """Prime the VIP primary model (and fallback), updating observable state."""
+    """Prime the VIP primary model (and fallback) and classify cache health.
+
+    برای هر مدل، نتیجه در یکی از سه دستهٔ زیر طبقه‌بندی می‌شود:
+
+      • ``CACHE_HIT``  → پیشوند از کش خوانده شد و هیچ بایتی بازنویسی نشد.
+      • ``COLD_WRITE`` → نخستین نوشتن کش (پس از ری‌استارت یا اجرای سرد).
+      • ``EVICTION``   → کش پیش‌تر گرم بود اما این بار بازنویسی شد (تخلیه).
+
+    حالت تجمیعی ``_CACHE_PRIME_STATE`` تنها بر پایهٔ مدل اصلی VIP به‌روزرسانی
+    می‌شود؛ بنابراین آمار مدل پشتیبان، وضعیت سشن‌های زنده را مخدوش نمی‌کند.
+    """
     models = models or [OPENROUTER_TIERS["VIP"]["primary_model"]]
+    primary_model = OPENROUTER_TIERS["VIP"]["primary_model"]
     results = []
+
     for model in models:
         result = await _prime_model_cache(model)
         results.append(result)
-        if result.get("status") == "PRIMED":
-            _CACHE_PRIME_STATE.update({
-                "status": "PRIMED",
-                "model": result["model"],
-                "prompt_tokens": result["prompt_tokens"],
-                "cached_tokens": result["cached_tokens"],
-                "cache_write_tokens": result["cache_write_tokens"],
-                "last_prime_ts": time.time(),
-                "last_error": None,
-            })
-        else:
+
+        if result.get("status") != "PRIMED":
             _CACHE_PRIME_STATE.update({
                 "status": result.get("status", "FAILED"),
                 "last_error": result.get("reason"),
             })
-    return {"results": results, "state": dict(_CACHE_PRIME_STATE)}
+            continue
+
+        resolved = result.get("model") or model
+        prompt_tokens = int(result.get("prompt_tokens") or 0)
+        cached = int(result.get("cached_tokens") or 0)
+        written = int(result.get("cache_write_tokens") or 0)
+
+        previous = _CACHE_PRIME_MODELS.get(resolved) or {}
+        was_warm = bool(previous.get("cached_tokens"))
+        is_primary = (model == primary_model)
+
+        if cached > 0 and written == 0:
+            outcome = "CACHE_HIT"
+            _CACHE_PRIME_METRICS["cache_hits"] += 1
+            if is_primary:
+                _CACHE_PRIME_METRICS["primary_cache_hits"] += 1
+                _CACHE_PRIME_METRICS["consecutive_hits"] += 1
+                _CACHE_PRIME_METRICS["max_consecutive_hits"] = max(
+                    _CACHE_PRIME_METRICS["max_consecutive_hits"],
+                    _CACHE_PRIME_METRICS["consecutive_hits"],
+                )
+        elif was_warm:
+            outcome = "EVICTION"
+            _CACHE_PRIME_METRICS["evictions"] += 1
+            _CACHE_PRIME_METRICS["last_eviction_ts"] = time.time()
+            if is_primary:
+                _CACHE_PRIME_METRICS["primary_evictions"] += 1
+                _CACHE_PRIME_METRICS["consecutive_hits"] = 0
+            print(
+                f"[SMARTJUDGE][CACHE-EVICTION] model={resolved} primary={is_primary} "
+                f"cached={cached} rewrite={written} prompt_tokens={prompt_tokens}",
+                file=sys.stderr,
+            )
+        else:
+            outcome = "COLD_WRITE"
+            _CACHE_PRIME_METRICS["cold_writes"] += 1
+            if is_primary:
+                _CACHE_PRIME_METRICS["consecutive_hits"] = 0
+
+        _CACHE_PRIME_MODELS[resolved] = {
+            "model": resolved,
+            "requested_model": model,
+            "prompt_tokens": prompt_tokens,
+            "cached_tokens": cached,
+            "cache_write_tokens": written,
+            "outcome": outcome,
+            "primes": int(previous.get("primes") or 0) + 1,
+            "evictions": int(previous.get("evictions") or 0) + (1 if outcome == "EVICTION" else 0),
+            "cache_hit_ratio": round(cached / prompt_tokens, 4) if prompt_tokens else 0.0,
+            "last_prime_ts": time.time(),
+        }
+        _CACHE_PRIME_METRICS["primes"] += 1
+
+    # حالت تجمیعی = مدل اصلی VIP (همان مدلی که سشن‌های زنده استفاده می‌کنند)
+    primary_record = next(
+        (rec for rec in _CACHE_PRIME_MODELS.values() if rec.get("requested_model") == primary_model),
+        None,
+    )
+    if primary_record:
+        _CACHE_PRIME_STATE.update({
+            "status": "PRIMED",
+            "model": primary_record["model"],
+            "requested_model": primary_model,
+            "prompt_tokens": primary_record["prompt_tokens"],
+            "cached_tokens": primary_record["cached_tokens"],
+            "cache_write_tokens": primary_record["cache_write_tokens"],
+            "outcome": primary_record["outcome"],
+            "last_prime_ts": primary_record["last_prime_ts"],
+            "last_error": None,
+        })
+
+    return {
+        "results": results,
+        "state": dict(_CACHE_PRIME_STATE),
+        "metrics": dict(_CACHE_PRIME_METRICS),
+        "models": {key: dict(value) for key, value in _CACHE_PRIME_MODELS.items()},
+    }
 
 
 async def _cache_prime_loop() -> None:
-    """Keep the prefix warm while the process is alive."""
-    import asyncio
+    """Keep the prefix warm while the process is alive (and heal evictions fast)."""
     primary = OPENROUTER_TIERS["VIP"]["primary_model"]
     while True:
         try:
-            await prime_prompt_cache([primary])
+            outcome = await prime_prompt_cache([primary])
+            if (outcome.get("state") or {}).get("outcome") == "EVICTION":
+                # تخلیهٔ کش → بازپُرسازی فوری تا سشن‌های زنده هزینهٔ کامل نپردازند
+                healed = await prime_prompt_cache([primary])
+                print(
+                    "[SMARTJUDGE][CACHE-REPRIME] primary prefix re-warmed "
+                    f"outcome={(healed.get('state') or {}).get('outcome')}",
+                    file=sys.stderr,
+                )
         except Exception as exc:  # pragma: no cover - defensive
             print(f"[SMARTJUDGE][CACHE-PRIME-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
         await asyncio.sleep(max(60, _CACHE_PRIME_INTERVAL))
@@ -1340,18 +1610,42 @@ async def _start_cache_priming() -> None:
 
 @router.get("/system/prime-cache")
 async def trigger_cache_priming(force: bool = Query(default=True)):
-    """Prime (or re-prime) the prompt cache on demand and report cache metrics."""
+    """Prime (or re-prime) the prompt cache on demand and report cache health.
+
+    شاخص‌های کلیدی برای پایش «صفر تخلیهٔ کش»:
+
+      • ``evictions``             → تعداد بازنویسی کش پس از گرم‌بودن (باید صفر بماند)
+      • ``consecutive_cache_hits``→ تعداد پیاپی برخورد کامل به کش
+      • ``max_consecutive_hits``  → بیشترین زنجیرهٔ برخورد در طول عمر پروسه
+      • ``primary_cache_hit_ratio`` → نسبت توکن‌های کش‌شده به کل پیشوند
+    """
     models = [OPENROUTER_TIERS["VIP"]["primary_model"]] if force \
         else [OPENROUTER_TIERS["VIP"]["primary_model"], OPENROUTER_TIERS["VIP"]["fallback_model"]]
     outcome = await prime_prompt_cache(models)
     state = outcome["state"]
+    metrics = outcome["metrics"]
     return {
         "status": state["status"],
         "cache_primed": state["status"] == "PRIMED" and bool(state["last_prime_ts"]),
+        "zero_evictions": metrics["primary_evictions"] == 0,
         "system_prefix_chars": len(_system_prefix_text()),
         "digest_lines": _SYSTEM_PREFIX_STATE["digest_lines"],
         "prime_interval_seconds": _CACHE_PRIME_INTERVAL,
+        "primary_model": OPENROUTER_TIERS["VIP"]["primary_model"],
+        "primary_cache_hit_ratio": (
+            round(state["cached_tokens"] / state["prompt_tokens"], 4)
+            if state.get("prompt_tokens") else 0.0
+        ),
+        "evictions": metrics["evictions"],
+        "primary_evictions": metrics["primary_evictions"],
+        "cache_hits": metrics["cache_hits"],
+        "primary_cache_hits": metrics["primary_cache_hits"],
+        "cold_writes": metrics["cold_writes"],
+        "consecutive_cache_hits": metrics["consecutive_hits"],
+        "max_consecutive_cache_hits": metrics["max_consecutive_hits"],
+        "last_eviction_ts": metrics["last_eviction_ts"],
         "state": state,
+        "models": outcome["models"],
         "results": outcome["results"],
     }
 
