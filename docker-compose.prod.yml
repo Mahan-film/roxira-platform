@@ -5,6 +5,10 @@ services:
       dockerfile: Dockerfile.prod
     container_name: roxira_app_prod
     restart: always
+    # FastAPI AI Core (پورت ۸۰۰۰) فقط روی loopback هاست منتشر می‌شود تا
+    # پایش سلامت هاست/کرون کار کند؛ دسترسی عمومی از طریق nginx انجام می‌شود.
+    ports:
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     volumes:

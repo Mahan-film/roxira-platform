@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Allow: /laws/
+Allow: /precedents/
+Allow: /llms.txt
+Disallow: /api/
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://ghazihoushmand.ir/sitemap.xml

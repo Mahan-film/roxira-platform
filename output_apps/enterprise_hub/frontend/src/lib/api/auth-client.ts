@@ -1,5 +1,5 @@
 /**
- * کلاینت احراز هویت پیامکی (Auth & Kavenegar OTP).
+ * کلاینت احراز هویت پیامکی (Auth & .
  *
  * منطبق بر قرارداد Swagger کنترلر NestJS `auth`:
  *   • POST /api/backend/auth/send-otp   → SendOtpResponse
@@ -13,7 +13,7 @@
 import { ApiClientError, apiRequest } from "@/lib/api/http-client";
 import { API_PROXY_BASE_PATH, AUTH_RESOURCE_PATH } from "@/lib/api/config";
 
-/** دامنه سرویس — تعیین‌کننده قالب پیامک کاوه‌نگار. */
+/** دامنه سرویس — تعیین‌کننده قالب پیامک . */
 export type AuthServiceDomain = "ROXIRA" | "GHAZI";
 
 /** نقش کاربر در توکن JWT. */

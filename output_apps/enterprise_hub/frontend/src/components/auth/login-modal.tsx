@@ -360,7 +360,7 @@ export function LoginModal({
 
           <p className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
             <ShieldCheck className="size-3" />
-            احراز هویت امن با کد یک‌بارمصرف (Kavenegar OTP)
+            احراز هویت امن با کد یک‌بارمصرف 
           </p>
         </div>
       </div>
