@@ -108,15 +108,15 @@ export function RoxiraFooter() {
             <a
               referrerPolicy="origin"
               target="_blank"
-              href="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp"
+              href="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 referrerPolicy="origin"
-                src="https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp"
+                src="https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
                 alt="نماد اعتماد الکترونیکی رکسایرا"
                 className="h-auto w-24 cursor-pointer"
-                id="y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp"
+                id="y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
                 style={{ cursor: "pointer" }}
               />
             </a>

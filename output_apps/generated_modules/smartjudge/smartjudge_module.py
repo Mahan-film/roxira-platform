@@ -204,14 +204,15 @@ OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
 OPENROUTER_TIERS = {
     "VIP": {
-        "primary_model": "~google/gemini-flash-latest",
-        "fallback_model": "~anthropic/claude-sonnet-latest",
-        "label": "Gemini Flash (Always-Latest) / Claude Sonnet"
+        "primary_model": "google/gemini-3.8-flash",
+        "fallback_model": "anthropic/claude-5-sonnet",
+        "deep_reasoning_model": "deepseek/deepseek-v4.1-flash",
+        "label": "Gemini 3.8 Flash (Reasoning) / Claude Sonnet / DeepSeek V4.1 Flash"
     },
     "FREE": {
         "primary_model": "deepseek/deepseek-v4.1-flash",
-        "fallback_model": "google/gemini-3.5-flash-lite",
-        "label": "DeepSeek V4.1 Flash / Gemini Lite"
+        "fallback_model": "openrouter/free",
+        "label": "DeepSeek V4.1 Flash / Free Router"
     }
 }
 
@@ -864,6 +865,12 @@ async def live_voice_websocket(websocket: WebSocket):
             await websocket.close()
         except Exception:
             pass
+
+# Alias endpoint for streaming WebSocket (same functionality)
+@router.websocket("/live-voice-stream")
+async def live_voice_stream_websocket(websocket: WebSocket):
+    """Alias endpoint for live voice with streaming capabilities"""
+    await live_voice_websocket(websocket)
 # افزودن به انتهای روت‌های قاضی هوشمند
 @router.post("/payments/create-invoice")
 async def create_payment_invoice(payload: dict = Body(...)):
