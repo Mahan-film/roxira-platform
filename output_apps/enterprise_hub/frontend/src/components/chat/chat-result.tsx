@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import type { ChatResult } from "@/components/chat/types";
+import { LegalReferenceHighlight } from "@/components/chat/legal-reference-highlight";
 import { formatRial } from "@/lib/format";
 
 function escapeHtml(value: string): string {
@@ -245,9 +246,14 @@ export function ChatResultView({ result }: { result: ChatResult }) {
 
         {data.draft_text && (
           <Section icon={<ScrollText className="size-4" />} title="پیش‌نویس لایحه">
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl border border-white/8 bg-black/30 p-3 text-[12px] leading-relaxed text-slate-200">
-              {data.draft_text}
-            </pre>
+            <div className="max-h-72 overflow-auto rounded-xl border border-white/8 bg-black/30 p-3">
+              <LegalReferenceHighlight
+                text={data.draft_text}
+                laws={data.matched_laws}
+                precedents={data.cited_precedents.map(title => ({ title }))}
+                className="text-[12px] leading-relaxed text-slate-200"
+              />
+            </div>
           </Section>
         )}
 
@@ -405,9 +411,14 @@ export function ChatResultView({ result }: { result: ChatResult }) {
 
         {data.defense_draft && (
           <Section icon={<ScrollText className="size-4" />} title="پیش‌نویس لایحه دفاعیه">
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-xl border border-white/8 bg-black/30 p-3 text-[12px] leading-relaxed text-slate-200">
-              {data.defense_draft}
-            </pre>
+            <div className="max-h-80 overflow-auto rounded-xl border border-white/8 bg-black/30 p-3">
+              <LegalReferenceHighlight
+                text={data.defense_draft}
+                laws={data.statutory_basis}
+                precedents={data.unified_precedents}
+                className="text-[12px] leading-relaxed text-slate-200"
+              />
+            </div>
           </Section>
         )}
 

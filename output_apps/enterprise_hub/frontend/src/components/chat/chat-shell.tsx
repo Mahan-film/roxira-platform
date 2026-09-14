@@ -38,6 +38,8 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { ChatResultView } from "@/components/chat/chat-result";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { SiteFooter } from "@/components/chat/site-footer";
+import { LegalStreamingText } from "@/components/chat/legal-streaming-text";
+import { LegalOnboarding } from "@/components/onboarding/legal-onboarding";
 import type { ChatFlow, ChatMessage } from "@/components/chat/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -794,17 +796,14 @@ export function ChatShell() {
                     </div>
                   )}
                   {message.content && (
-                    <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
-                      {message.content}
-                      {streaming &&
-                        message.id === streamingMessage?.id &&
-                        message.content && (
-                          <span className="ms-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-amber-300/80 align-middle" />
-                        )}
-                    </p>
+                    <LegalStreamingText
+                      content={message.content}
+                      isStreaming={streaming && message.id === streamingMessage?.id}
+                      className="text-[13px]"
+                    />
                   )}
                   {message.result && (
-                    <div className="mt-3">
+                    <div className="mt-3 legal-output">
                       <ChatResultView result={message.result} />
                     </div>
                   )}
@@ -935,7 +934,7 @@ export function ChatShell() {
           )}
         >
           <div className="mx-auto w-full max-w-3xl space-y-3">
-            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden quick-actions">
               {QUICK_ACTIONS.map(({ label, icon: Icon, action }) => (
                 <button
                   key={label}
@@ -991,7 +990,7 @@ export function ChatShell() {
             {notice && <p className="text-[11px] text-amber-200/80">{notice}</p>}
 
             {flow.kind !== "retrial-confirm" && (
-              <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-[#0B111F] p-2 transition-colors focus-within:border-amber-400/40">
+              <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-[#0B111F] p-2 transition-colors focus-within:border-amber-400/40 case-input">
                 <Textarea
                   ref={inputRef}
                   value={input}
@@ -1033,7 +1032,7 @@ export function ChatShell() {
                   disabled={transcribing || busy}
                   aria-label="ضبط صدا"
                   className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-xl border transition-all disabled:opacity-50",
+                    "flex size-9 shrink-0 items-center justify-center rounded-xl border transition-all disabled:opacity-50 voice-input",
                     recording
                       ? "border-rose-400/40 bg-rose-500/15 text-rose-300"
                       : "border-white/10 bg-white/5 text-slate-300 hover:text-amber-300",
@@ -1061,6 +1060,9 @@ export function ChatShell() {
           </div>
         </div>
       </div>
+      
+      {/* Progressive onboarding system */}
+      <LegalOnboarding />
     </div>
   );
 }
