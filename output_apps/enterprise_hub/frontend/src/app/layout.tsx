@@ -1,3 +1,4 @@
+import { EnamadFooter } from "@/components/layout/enamad-footer";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Vazirmatn } from "next/font/google";
@@ -42,7 +43,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${vazirmatn.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-[family-name:var(--font-vazirmatn)]">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>{children}
+        <EnamadFooter /></AuthProvider>
       </body>
     </html>
   );
