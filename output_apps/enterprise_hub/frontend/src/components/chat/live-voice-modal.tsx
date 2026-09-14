@@ -105,7 +105,20 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md" dir="rtl">
+    <>
+      <style>{`
+        @keyframes waveform {
+          0%, 100% {
+            transform: scaleY(0.4);
+            opacity: 0.6;
+          }
+          50% {
+            transform: scaleY(1.3);
+            opacity: 1;
+          }
+        }
+      `}</style>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md" dir="rtl">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative text-center text-slate-100">
         <button
           onClick={onClose}
@@ -126,6 +139,27 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
             {isCalling && (
               <div className="absolute w-36 h-36 rounded-full bg-amber-500/20 animate-ping pointer-events-none" />
             )}
+            
+            {/* Audio Waveform Visualizer */}
+            {isCalling && (callStatus === "listening" || callStatus === "speaking") && (
+              <div className="absolute inset-0 flex items-center justify-center gap-1 pointer-events-none">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-1 rounded-full ${
+                      callStatus === "listening"
+                        ? "bg-emerald-400 animate-[waveform_0.6s_ease-in-out_infinite]"
+                        : "bg-amber-400 animate-[waveform_0.8s_ease-in-out_infinite]"
+                    }`}
+                    style={{
+                      height: `${20 + Math.sin(i * 0.8) * 12}px`,
+                      animationDelay: `${i * 0.08}s`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            
             <button
               onClick={isCalling ? handleEndCall : handleStartCall}
               className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center text-3xl shadow-2xl transition-all ${
@@ -161,6 +195,7 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
         </div>
       </div>
     </div>
+    </>
   );
 }
 
