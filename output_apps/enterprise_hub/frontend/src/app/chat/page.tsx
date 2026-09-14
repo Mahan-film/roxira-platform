@@ -1,20 +1,17 @@
-import type { Metadata } from "next";
+"use client";
+import React from "react";
 import { ChatShell } from "@/components/chat/chat-shell";
 import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
 
-export const metadata: Metadata = {
-  title: "قاضی هوشمند | دستیار حقوقی هوشمند و انشای لوایح",
-  description:
-    "دستیار حقوقی هوشمند برای تحلیل دادخواست، تنظیم لایحه اعاده دادرسی و استعلام آرای وحدت رویه دیوان عالی کشور.",
-};
-
 export default function ChatPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 font-sans" dir="rtl">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden" dir="rtl">
       <GhaziHeader userPhone="09129367796" isVip={true} />
-      <ChatShell />
-      <EnamadFooter />
+      <main className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+        <ChatShell />
+      </main>
+      <EnamadFooter compact={true} />
     </div>
   );
 }

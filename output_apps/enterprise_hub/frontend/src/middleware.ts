@@ -101,5 +101,7 @@ export const config = {
     "/terms",
     "/privacy",
     "/services",
+    "/technology",
+    "/contact",
   ],
 };
