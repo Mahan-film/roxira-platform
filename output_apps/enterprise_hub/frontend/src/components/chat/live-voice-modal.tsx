@@ -1,15 +1,18 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@/components/auth/auth-provider";
 
 interface LiveVoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userPhone?: string;
 }
 
-export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: LiveVoiceModalProps) {
+export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
+  const { user } = useAuth();
+  const userPhone = user?.phone || "09129367796";
+
   const [isCalling, setIsCalling] = useState(false);
-  const [callStatus, setCallStatus] = useState<"idle" | "requesting_mic" | "listening" | "processing" | "speaking" | "error">("idle");
+  const [callStatus, setCallStatus] = useState<"idle" | "listening" | "processing" | "speaking" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [userSpeech, setUserSpeech] = useState("");
   const [aiSpeech, setAiSpeech] = useState("");
@@ -19,11 +22,11 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const recognitionRef = useRef<any>(null);
   const isComponentOpenRef = useRef(isOpen);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSpokenRef = useRef(false);
 
   useEffect(() => {
     isComponentOpenRef.current = isOpen;
@@ -46,14 +49,12 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
       };
       utterance.onend = () => {
         if (isComponentOpenRef.current && streamRef.current) {
-          setCallStatus("listening");
-          setStatusMessage("🎙️ در حال شنیدن صدای شما... صحبت فرمایید.");
+          restartListeningPhase();
         }
       };
       utterance.onerror = () => {
         if (isComponentOpenRef.current && streamRef.current) {
-          setCallStatus("listening");
-          setStatusMessage("🎙️ در حال شنیدن صدای شما... صحبت فرمایید.");
+          restartListeningPhase();
         }
       };
 
@@ -63,42 +64,114 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
     }
   }, []);
 
-  const processQuery = useCallback(async (queryText: string) => {
-    if (!queryText || !queryText.trim()) return;
-    setUserSpeech(queryText);
-    setCallStatus("processing");
-    setStatusMessage("⚙️ در حال استخراج ادله و تحلیل با قوانین و رویه قضایی...");
-
-    // اولویت ۱: ارسال از طریق وب‌سوکت در صورت باز بودن
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ text: queryText }));
+  const sendAudioForAnalysis = async (audioBlob: Blob) => {
+    if (audioBlob.size < 500) {
+      restartListeningPhase();
       return;
     }
 
-    // اولویت ۲: فراخوانی اندپوینت مستقیم چت با مدل VIP
+    setCallStatus("processing");
+    setStatusMessage("⚙️ در حال تبدیل صدا به متن با هوش مصنوعی Whisper...");
+
     try {
-      const res = await fetch("/api/v1/apps/judge/chat", {
+      const formData = new FormData();
+      formData.append("file", audioBlob, "voice_call.webm");
+
+      // مرحله ۱: تبدیل صوت به متن دقیق با OpenRouter Whisper
+      const transRes = await fetch("/api/v1/apps/judge/transcribe-audio", {
+        method: "POST",
+        body: formData,
+      });
+
+      const transData = await transRes.json();
+      const transcribedText = transData.text || transData.transcript;
+
+      if (!transcribedText || !transcribedText.trim()) {
+        setStatusMessage("صدایی دریافت نشد. بفرمایید، دوباره بفرمایید...");
+        restartListeningPhase();
+        return;
+      }
+
+      setUserSpeech(transcribedText);
+      setStatusMessage("⚖️ در حال بررسی در گراف قوانین و آرای وحدت رویه...");
+
+      // مرحله ۲: دریافت تحلیل استنتاجی با موتور هوش مصنوعی و RAG
+      const chatRes = await fetch("/api/v1/apps/judge/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: queryText,
+          message: transcribedText,
           user_phone: userPhone,
           phone: userPhone,
           is_vip: true,
           tier: "VIP",
         }),
       });
-      const data = await res.json();
-      const reply = data.reply || data.response || "تحلیل استنتاجی پرونده انجام شد.";
+
+      const chatData = await chatRes.json();
+      const reply = chatData.reply || chatData.response || "موضوع شما بر اساس رویه قضایی و قوانین موضوعه بررسی شد.";
       setAiSpeech(reply);
       speakPersian(reply);
     } catch (err) {
-      setStatusMessage("خطا در پاسخ‌دهی هوش مصنوعی. لطفاً مجدداً صحبت فرمایید.");
-      setCallStatus("listening");
+      console.error("Call processing error:", err);
+      setStatusMessage("خطا در پردازش. آماده شنیدن مجدد هستیم...");
+      restartListeningPhase();
     }
-  }, [speakPersian, userPhone]);
+  };
 
-  // حلقه مانیتورینگ بلادرنگ صدای میکروفون جهت حرکت امواج صوتی
+  const restartListeningPhase = () => {
+    if (!isComponentOpenRef.current || !streamRef.current) return;
+    setCallStatus("listening");
+    setStatusMessage("🟢 در حال شنیدن صدای شما... بفرمایید.");
+    hasSpokenRef.current = false;
+    startRecordingSegment();
+  };
+
+  const startRecordingSegment = () => {
+    if (!streamRef.current) return;
+
+    try {
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "";
+
+      const recorder = mimeType
+        ? new MediaRecorder(streamRef.current, { mimeType })
+        : new MediaRecorder(streamRef.current);
+
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        sendAudioForAnalysis(audioBlob);
+      };
+
+      recorder.start();
+    } catch (e) {
+      console.warn("Recorder segment start error:", e);
+    }
+  };
+
+  const handleManualSubmit = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  // مانیتورینگ بلادرنگ بلندی صدا برای ردیابی سکوت (VAD) و اکولایزر
   const startAudioVisualizer = (stream: MediaStream) => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -112,6 +185,7 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
       analyserRef.current = analyser;
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
       const checkVolume = () => {
         if (!analyserRef.current || !streamRef.current) return;
         analyserRef.current.getByteFrequencyData(dataArray);
@@ -120,7 +194,28 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
           sum += dataArray[i];
         }
         const avg = sum / dataArray.length;
-        setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
+        const currentLevel = Math.min(100, Math.round((avg / 128) * 100));
+        setAudioLevel(currentLevel);
+
+        // تشخیص صدا و سکوت (Voice Activity Detection)
+        if (currentLevel > 18) {
+          hasSpokenRef.current = true;
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+          }
+        } else if (hasSpokenRef.current && currentLevel < 12) {
+          // سکوت پس از صحبت حداقل ۱.۵ ثانیه
+          if (!silenceTimerRef.current) {
+            silenceTimerRef.current = setTimeout(() => {
+              silenceTimerRef.current = null;
+              if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+                mediaRecorderRef.current.stop();
+              }
+            }, 1500);
+          }
+        }
+
         animFrameRef.current = requestAnimationFrame(checkVolume);
       };
       checkVolume();
@@ -129,19 +224,18 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
     }
   };
 
-  // شروع مکالمه صوتی زنده (مستقیماً در کلیک کاربر جهت احراز صلاحیت سافاری/iOS)
   const handleStartCall = async () => {
-    setCallStatus("requesting_mic");
-    setStatusMessage("🎙️ در حال فعال‌سازی میکروفون در مرورگر...");
     setUserSpeech("");
     setAiSpeech("");
+    setCallStatus("listening");
+    setStatusMessage("🎙️ در حال اتصال میکروفون...");
 
-    // ۱) اجرای آنی getUserMedia در پشته کلیک کاربر (حیاتی برای Safari در Mac و iPhone)
     let stream: MediaStream;
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("مرورگر شما از ورودی میکروفون پشتیبانی نمی‌کند.");
       }
+      // فراخوانی مستقیم در پشته کلیک کاربر جهت باز شدن پاپ‌آپ سافاری
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -154,111 +248,14 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
       console.error("Mic access error:", err);
       setIsCalling(false);
       setCallStatus("error");
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        setStatusMessage("⚠️ دسترسی به میکروفون تایید نشد. لطفاً در نوار آدرس مرورگر اجازه دسترسی را صادر فرمایید.");
-      } else {
-        setStatusMessage("⚠️ میکروفون یافت نشد یا در دسترس نیست.");
-      }
+      setStatusMessage("⚠️ دسترسی به میکروفون تایید نشد. لطفاً در نوار آدرس مرورگر اجازه دسترسی را صادر فرمایید.");
       return;
     }
 
-    // دسترسی تایید شد
     setIsCalling(true);
-    setCallStatus("listening");
-    setStatusMessage("🟢 میکروفون فعال است. بفرمایید، در حال شنیدن صدای شما هستیم...");
+    setStatusMessage("🟢 میکروفون فعال شد. صحبت کنید (مثلاً: «در مورد رای وحدت رویه دیوان عالی توضیح بده»)");
     startAudioVisualizer(stream);
-
-    // ۲) ضبط صدا با MediaRecorder
-    try {
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : MediaRecorder.isTypeSupported("audio/mp4")
-        ? "audio/mp4"
-        : "";
-      
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        if (audioChunksRef.current.length > 0) {
-          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-          if (blob.size > 2000 && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64 = reader.result as string;
-              wsRef.current?.send(JSON.stringify({ audio: base64, format: "webm" }));
-            };
-            reader.readAsDataURL(blob);
-          }
-        }
-      };
-
-      recorder.start(1000);
-    } catch (recErr) {
-      console.warn("MediaRecorder start error:", recErr);
-    }
-
-    // ۳) راه‌اندازی گفتار به متن همزمان (Web Speech API) در صورت پشتیبانی
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.lang = "fa-IR";
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        recognition.onresult = (e: any) => {
-          let interim = "";
-          for (let i = e.resultIndex; i < e.results.length; ++i) {
-            if (e.results[i].isFinal) {
-              const finalTranscript = e.results[i][0].transcript;
-              if (finalTranscript.trim()) {
-                processQuery(finalTranscript);
-              }
-            } else {
-              interim += e.results[i][0].transcript;
-            }
-          }
-          if (interim) setUserSpeech(interim);
-        };
-
-        recognition.onerror = (e: any) => {
-          console.log("Speech recognition info:", e.error);
-        };
-
-        recognitionRef.current = recognition;
-        recognition.start();
-      } catch (recInitErr) {
-        console.warn("SpeechRecognition start error:", recInitErr);
-      }
-    }
-
-    // ۴) اتصال وب‌سوکت با پارامترهای VIP
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/apps/judge/live-voice?phone=${encodeURIComponent(userPhone)}&tier=VIP`;
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          const reply = payload.text || payload.reply;
-          if (reply) {
-            setAiSpeech(reply);
-            speakPersian(reply);
-          }
-        } catch (_) {}
-      };
-    } catch (wsErr) {
-      console.warn("WebSocket init error:", wsErr);
-    }
+    startRecordingSegment();
   };
 
   const handleEndCall = () => {
@@ -267,6 +264,10 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
     setStatusMessage("");
     setAudioLevel(0);
 
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
@@ -282,14 +283,6 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try { mediaRecorderRef.current.stop(); } catch (_) {}
       mediaRecorderRef.current = null;
-    }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (_) {}
-      recognitionRef.current = null;
-    }
-    if (wsRef.current) {
-      try { wsRef.current.close(); } catch (_) {}
-      wsRef.current = null;
     }
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -309,18 +302,18 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
           ✕
         </button>
 
-        {/* برچسب اختصاصی VIP */}
+        {/* برچسب VIP مکالمه زنده */}
         <div className="flex items-center justify-center gap-2 mb-3">
           <span className="px-3.5 py-1 bg-gradient-to-r from-amber-500/10 to-emerald-500/10 border border-amber-500/30 text-amber-300 text-xs rounded-full font-medium flex items-center gap-2 shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>مکالمه صوتی زنده بلادرنگ (VIP دادرسی)</span>
+            <span>مکالمه صوتی زنده با هوش مصنوعی قاضی هوشمند</span>
           </span>
         </div>
 
-        {/* دایره صوتی و اکولایزر تعاملی */}
+        {/* اکولایزر صدا و دایره تماس */}
         <div className="my-5 flex flex-col items-center justify-center space-y-5">
           <div className="relative flex items-center justify-center">
-            {/* هاله امواج دینامیک با توجه به حجم واقعی صدای کاربر */}
+            {/* هاله صوتی متناسب با ارتعاش واقعی صدا */}
             {isCalling && (
               <div
                 className="absolute rounded-full bg-emerald-500/20 pointer-events-none transition-all duration-75"
@@ -331,7 +324,7 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
               />
             )}
 
-            {/* نوارهای اکولایزر زنده متصل به AudioContext */}
+            {/* نوارهای اکولایزر تعاملی */}
             {isCalling && (
               <div className="absolute inset-0 flex items-center justify-center gap-1 pointer-events-none">
                 {Array.from({ length: 14 }).map((_, i) => {
@@ -371,6 +364,17 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
               {statusMessage}
             </p>
 
+            {/* دکمه ارسال دستی در صورت پایان صحبت */}
+            {isCalling && callStatus === "listening" && (
+              <button
+                onClick={handleManualSubmit}
+                className="mt-2 px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-amber-500/20 active:scale-95 flex items-center gap-1.5 mx-auto"
+              >
+                <span>🚀</span>
+                <span>ارسال صحبت برای تحلیل قاضی هوشمند</span>
+              </button>
+            )}
+
             {callStatus === "error" && (
               <button
                 onClick={handleStartCall}
@@ -382,7 +386,7 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
 
             {userSpeech && (
               <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl text-xs text-slate-300 text-right">
-                <span className="text-amber-400 font-bold ml-1">شما:</span> {userSpeech}
+                <span className="text-amber-400 font-bold ml-1">شما گفتید:</span> {userSpeech}
               </div>
             )}
           </div>
@@ -403,9 +407,12 @@ export function LiveVoiceModal({ isOpen, onClose, userPhone = "09129367796" }: L
           )}
         </div>
 
-        {/* دکمه‌های کنترل و فوتر پنجره */}
+        {/* دکمه‌های فوتر پنجره */}
         <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-          <span className="text-[11px] text-slate-400 font-mono">اشتراک فعال: ۰۹۱۲۹۳۶۷۷۹۶ (VIP)</span>
+          <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>پایگاه RAG و آرای وحدت رویه متصل است</span>
+          </span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"

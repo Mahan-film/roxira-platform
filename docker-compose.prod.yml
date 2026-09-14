@@ -33,6 +33,8 @@ services:
       - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:-REDACTED_SECRET_01}
       - KAVENEGAR_TEMPLATE_GHAZI=${KAVENEGAR_TEMPLATE_GHAZI:-ghazi-verify}
       - KAVENEGAR_TEMPLATE_ROXIRA=${KAVENEGAR_TEMPLATE_ROXIRA:-roxira-verify}
+      # OpenRouter API Key — موتور دادرسی، استنتاج هوش مصنوعی و پیاده‌سازی صوت
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-REDACTED_SECRET_02}
       # Kira AI — موتور استدلال سنگین قضایی و Fallback Engine بدون هزینه
       - KIRA_BASE_URL=${KIRA_BASE_URL:-https://kiraai.vn/api/v1}
       - KIRA_API_KEY=${KIRA_API_KEY:-REDACTED_SECRET_07}

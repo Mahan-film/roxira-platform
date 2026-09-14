@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 font-sans" dir="rtl">
-      <GhaziHeader userPhone="09129367796" isVip={true} />
+      <GhaziHeader />
 
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-10">
         {/* هدر بخش تماس با ما */}

@@ -11,10 +11,14 @@ export function ChatShell() {
   ]);
   const [inputPrompt, setInputPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isVoiceTyping, setIsVoiceTyping] = useState(false);
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState("");
   const [isLiveAudioOpen, setIsLiveAudioOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -24,36 +28,107 @@ export function ChatShell() {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  const handleVoiceTyping = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("قابلیت گفتار به متن در این مرورگر پشتیبانی نمی‌شود. لطفاً از دکمه سبز تماس زنده (📞) استفاده فرمایید.");
-      return;
-    }
-
-    if (isVoiceTyping) {
-      setIsVoiceTyping(false);
+  // تبدیل صوت به متن (STT) با پشتیبانی ۱۰۰٪ از سافاری و ارسال به هوش مصنوعی
+  const toggleVoiceRecording = async () => {
+    if (isVoiceRecording) {
+      // توقف ضبط و ارسال به سرور جهت تبدیل به متن با Whisper
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        setRecordingStatus("در حال تبدیل صدا به متن با هوش مصنوعی...");
+        mediaRecorderRef.current.stop();
+      }
       return;
     }
 
     try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = "fa-IR";
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("مرورگر شما از ورودی میکروفون پشتیبانی نمی‌کند.");
+        return;
+      }
 
-      recognition.onstart = () => setIsVoiceTyping(true);
-      recognition.onresult = (e: any) => {
-        const text = e.results[0][0].transcript;
-        setInputPrompt((prev) => (prev ? prev + " " + text : text));
-        setIsVoiceTyping(false);
+      // فراخوانی مستقیم در پشته کلیک کاربر جهت احراز صلاحیت سافاری در مک و آیفون
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true }
+      });
+      streamRef.current = stream;
+
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "";
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-      recognition.onerror = () => setIsVoiceTyping(false);
-      recognition.onend = () => setIsVoiceTyping(false);
 
-      recognition.start();
-    } catch (e) {
-      setIsVoiceTyping(false);
+      recorder.onstop = async () => {
+        setIsVoiceRecording(false);
+        setRecordingStatus("در حال پیاده‌سازی متن...");
+
+        // متوقف کردن قطعی ترک‌های میکروفون
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        if (audioBlob.size < 500) {
+          setRecordingStatus("");
+          return;
+        }
+
+        try {
+          const formData = new FormData();
+          formData.append("file", audioBlob, "recording.webm");
+
+          const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await res.json();
+          const transcript = data.text || data.transcript;
+          if (transcript && transcript.trim()) {
+            setInputPrompt((prev) => (prev ? prev + " " + transcript : transcript));
+          } else {
+            alert("صدایی تشخیص داده نشد یا متن نامفهوم بود. لطفاً دوباره امتحان کنید.");
+          }
+        } catch (err) {
+          console.error("STT network error:", err);
+          alert("خطا در ارسال صوت به سرور. اتصال را بررسی فرمایید.");
+        } finally {
+          setRecordingStatus("");
+        }
+      };
+
+      recorder.start();
+      setIsVoiceRecording(true);
+      setRecordingStatus("در حال شنیدن صدای شما... (برای اتمام، دوباره کلیک کنید)");
+
+      // فالبک برای مرورگرهایی که Web Speech API دارند برای نمایش پیش‌نمایش فوری
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.lang = "fa-IR";
+          recognition.continuous = false;
+          recognition.interimResults = true;
+          recognition.onresult = (event: any) => {
+            const current = event.results[0][0].transcript;
+            if (current) setRecordingStatus(`شنیده شد: «${current}»`);
+          };
+          recognition.start();
+        } catch (_) {}
+      }
+    } catch (err: any) {
+      console.error("Mic error:", err);
+      setIsVoiceRecording(false);
+      setRecordingStatus("");
+      alert("دسترسی به میکروفون تایید نشد. لطفاً در نوار آدرس مرورگر دسترسی را مجاز بفرمایید.");
     }
   };
 
@@ -73,8 +148,6 @@ export function ChatShell() {
         body: JSON.stringify({
           messages: newMsgs,
           message: textToSend,
-          user_phone: "09129367796",
-          phone: "09129367796",
           is_vip: true,
           tier: "VIP"
         })
@@ -107,7 +180,7 @@ export function ChatShell() {
     { title: "استراتژی پرونده (سند/متن)", prompt: "استراتژی دفاعی پرونده با تکیه بر ادله اثبات دعوی چیست؟" },
     { title: "تنظیم لایحه اعاده دادرسی ۴۷۴", prompt: "لایحه اعاده دادرسی کیفری بر اساس بندهای ماده ۴۷۴ تنظیم کن." },
     { title: "صلاحیت دادگاه صلح ۱۴۰۲", prompt: "صلاحیت دادگاه‌های صلح مصوب ۱۴۰۲ در خصوص دعاوی مالی و تخلیه را تشریح کن." },
-    { title: "تحلیل دادخواست و ایرادات شکلی", prompt: "دادخواست را بر اساس قواعد ماهوی و شکلی آیین دادرسی مدنی بررسی فرما." }
+    { title: "تحلیل آرای وحدت رویه دیوان عالی", prompt: "جدیدترین آرای وحدت رویه هیأت عمومی دیوان عالی کشور در خصوص مسئولیت مدنی و خسارت را توضیح بده." }
   ];
 
   return (
@@ -156,7 +229,7 @@ export function ChatShell() {
           <div className="flex justify-start">
             <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl rounded-bl-none text-xs text-amber-400 flex items-center gap-2 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              <span>دستیار در حال تحلیل مستندات قانونی و آراء دیوان عالی...</span>
+              <span>دستیار در حال استخراج ادله از پایگاه قوانین و آراء وحدت رویه...</span>
             </div>
           </div>
         )}
@@ -164,7 +237,7 @@ export function ChatShell() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ناحیه ورودی ثابت انتهای چت (داک‌شده بدون تداخل با فوتر) */}
+      {/* ناحیه ورودی داک‌شده در پایین بدون تداخل */}
       <div className="bg-slate-950/95 border-t border-slate-800/90 p-2.5 sm:p-4 backdrop-blur-xl shrink-0 space-y-2">
         {/* نوار سوالات متداول و سریع */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
@@ -180,6 +253,14 @@ export function ChatShell() {
           ))}
         </div>
 
+        {/* وضعیت زنده ضبط صدا */}
+        {recordingStatus && (
+          <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl flex items-center gap-2 animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+            <span>{recordingStatus}</span>
+          </div>
+        )}
+
         {/* جعبه ارسال پیام و دکمه‌های صوتی */}
         <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-2 flex items-center gap-2 shadow-xl">
           <input
@@ -191,24 +272,24 @@ export function ChatShell() {
             className="flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm text-white focus:outline-none placeholder:text-slate-500"
           />
 
-          {/* دکمه تایپ صوتی (STT) */}
+          {/* دکمه تبدیل گفتار به متن (Voice STT) */}
           <button
-            onClick={handleVoiceTyping}
+            onClick={toggleVoiceRecording}
             className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm transition-all shadow-sm ${
-              isVoiceTyping
-                ? "bg-rose-500 text-white animate-pulse shadow-rose-500/30"
+              isVoiceRecording
+                ? "bg-rose-500 text-white animate-pulse shadow-rose-500/40 scale-105"
                 : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
             }`}
-            title="تایپ صوتی (گفتار به متن)"
+            title={isVoiceRecording ? "اتمام ضبط و تبدیل به متن" : "تبدیل گفتار به متن با هوش مصنوعی (STT)"}
           >
-            🎙️
+            {isVoiceRecording ? "⏹️" : "🎙️"}
           </button>
 
-          {/* دکمه تماس زنده صوتی (Live Call) */}
+          {/* دکمه تماس زنده صوتی (Live Call VIP) */}
           <button
             onClick={() => setIsLiveAudioOpen(true)}
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-sm transition-all shadow-sm"
-            title="مکالمه زنده صوتی (Live Call VIP)"
+            title="مکالمه صوتی زنده (Live Voice VIP)"
           >
             📞
           </button>
@@ -224,11 +305,10 @@ export function ChatShell() {
         </div>
       </div>
 
-      {/* مدال تماس صوتی زنده */}
+      {/* مدال مکالمه صوتی زنده */}
       <LiveVoiceModal
         isOpen={isLiveAudioOpen}
         onClose={() => setIsLiveAudioOpen(false)}
-        userPhone="09129367796"
       />
     </div>
   );
