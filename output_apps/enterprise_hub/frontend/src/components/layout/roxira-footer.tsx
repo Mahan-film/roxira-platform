@@ -20,6 +20,7 @@ const MODULES = [
  *
  * شامل نماد اعتماد الکترونیکی اختصاصی روکسیرا (اینماد کد ۷۴۸۰۵۵۹)، اطلاعات
  * تماس رسمی، پیوندهای دسترسی سریع به ماژول‌ها و حقوق مالکیت معنوی شرکت.
+ * توجه: طبق اعلام رسمی سامانه اینماد، صفت rel="noopener noreferrer" نباید در تگ <a> وجود داشته باشد تا اعتبارسنجی ارجاع‌دهنده کار کند.
  */
 export function RoxiraFooter() {
   return (
@@ -107,7 +108,6 @@ export function RoxiraFooter() {
             <a
               referrerPolicy="origin"
               target="_blank"
-              rel="noopener noreferrer"
               href="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -117,6 +117,7 @@ export function RoxiraFooter() {
                 alt="نماد اعتماد الکترونیکی رکسایرا"
                 className="h-auto w-24 cursor-pointer"
                 id="y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp"
+                style={{ cursor: "pointer" }}
               />
             </a>
           </div>
