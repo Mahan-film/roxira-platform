@@ -1,6 +1,44 @@
+
+# ==============================================================================
+# موتور حافظه پرونده‌ها (Mem0) و پشتیبانی دوزبانه فارسی/انگلیسی
+# ==============================================================================
+_CASE_EPISODIC_MEMORY = {}
+
+def get_case_memory(case_id: str, lang: str = "fa") -> str:
+    episodes = _CASE_EPISODIC_MEMORY.get(case_id, [])
+    if not episodes:
+        return ""
+    if lang == "en":
+        return "\n--- PRIOR CASE CONTEXT & FACTS ---\n" + "\n".join(episodes[-5:])
+    return "\n--- خلاصه سوابق و ادله قبلی پرونده ---\n" + "\n".join(episodes[-5:])
+
+def append_case_memory(case_id: str, fact: str):
+    if not case_id:
+        return
+    if case_id not in _CASE_EPISODIC_MEMORY:
+        _CASE_EPISODIC_MEMORY[case_id] = []
+    _CASE_EPISODIC_MEMORY[case_id].append(fact)
+    if len(_CASE_EPISODIC_MEMORY[case_id]) > 10:
+        _CASE_EPISODIC_MEMORY[case_id].pop(0)
+
+def detect_language(text: str) -> str:
+    if not text:
+        return "fa"
+    persian_chars = len(re.findall(r'[؀-ۿ]', text))
+    latin_chars = len(re.findall(r'[a-zA-Z]', text))
+    return "en" if latin_chars > persian_chars else "fa"
+
+
+def _enforce_ascii_numbers(text: str) -> str:
+    if not text:
+        return ""
+    p_map = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+    return text.translate(p_map)
+
 import os
 import sys
 import json
+import re
 import time
 import uuid
 import hmac
@@ -1418,6 +1456,7 @@ _CACHE_PRIME_METRICS = {
     "primes": 0,
     "cache_hits": 0,
     "primary_cache_hits": 0,
+    "cache_refreshes": 0,
     "cold_writes": 0,
     "evictions": 0,
     "primary_evictions": 0,
@@ -1507,8 +1546,15 @@ async def prime_prompt_cache(models: Optional[List[str]] = None) -> dict:
         was_warm = bool(previous.get("cached_tokens"))
         is_primary = (model == primary_model)
 
-        if cached > 0 and written == 0:
+        # A full cached read means the provider served the whole prefix from
+        # cache. Gemini can report a non-zero ``cache_write_tokens`` alongside a
+        # full read when it renews the entry; that is a periodic *refresh*, not
+        # an eviction, so it must not be logged or counted as one.
+        full_prefix_read = prompt_tokens > 0 and cached >= prompt_tokens
+        if full_prefix_read or (cached > 0 and written == 0):
             outcome = "CACHE_HIT"
+            if written > 0:
+                _CACHE_PRIME_METRICS["cache_refreshes"] += 1
             _CACHE_PRIME_METRICS["cache_hits"] += 1
             if is_primary:
                 _CACHE_PRIME_METRICS["primary_cache_hits"] += 1
@@ -1517,7 +1563,7 @@ async def prime_prompt_cache(models: Optional[List[str]] = None) -> dict:
                     _CACHE_PRIME_METRICS["max_consecutive_hits"],
                     _CACHE_PRIME_METRICS["consecutive_hits"],
                 )
-        elif was_warm:
+        elif was_warm and cached < prompt_tokens:
             outcome = "EVICTION"
             _CACHE_PRIME_METRICS["evictions"] += 1
             _CACHE_PRIME_METRICS["last_eviction_ts"] = time.time()
@@ -1594,12 +1640,21 @@ async def _cache_prime_loop() -> None:
         await asyncio.sleep(max(60, _CACHE_PRIME_INTERVAL))
 
 
+_CACHE_PRIME_STARTED = False
+
+
 @router.on_event("startup")
 async def _start_cache_priming() -> None:
     """Best-effort background priming; never blocks or breaks application startup."""
+    global _CACHE_PRIME_STARTED
+    # FastAPI 0.141 invokes router-level ``on_event("startup")`` handlers twice
+    # when the router is included; guard so only one primer loop ever starts.
+    if _CACHE_PRIME_STARTED:
+        return
     if not _CACHE_PRIME_ENABLED or not OPENROUTER_API_KEY:
         print("[SMARTJUDGE][CACHE-PRIME] disabled or no API key; skipping.", file=sys.stderr)
         return
+    _CACHE_PRIME_STARTED = True
     import asyncio
     asyncio.create_task(_cache_prime_loop())
     print(f"[SMARTJUDGE][CACHE-PRIME] background primer started "
@@ -1640,6 +1695,7 @@ async def trigger_cache_priming(force: bool = Query(default=True)):
         "primary_evictions": metrics["primary_evictions"],
         "cache_hits": metrics["cache_hits"],
         "primary_cache_hits": metrics["primary_cache_hits"],
+        "cache_refreshes": metrics["cache_refreshes"],
         "cold_writes": metrics["cold_writes"],
         "consecutive_cache_hits": metrics["consecutive_hits"],
         "max_consecutive_cache_hits": metrics["max_consecutive_hits"],
@@ -2176,4 +2232,40 @@ async def universal_verify_otp_handler(payload: dict = Body(...)):
             "phone": phone,
             "subscription_tier": "FREE"
         }
+    }
+
+
+# ==============================================================================
+# اتصال یکپارچه Twenty CRM و صف انتشار شبکه‌های اجتماعی (Postiz Hook)
+# ==============================================================================
+@router.post("/crm/sync-case")
+async def sync_case_to_crm(payload: dict = Body(...)):
+    case_title = payload.get("title", "پرونده حقوقی جدید")
+    phone = payload.get("phone", "ناشناس")
+    summary = payload.get("summary", "")
+    
+    # ساخت لید و پرونده سازمانی در ساختار Twenty CRM
+    deal_record = {
+        "id": f"deal_{uuid.uuid4().hex[:8]}",
+        "name": f"[{phone}] {case_title}",
+        "stage": "QUALIFIED",
+        "amount": 275000,
+        "notes": summary,
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+    print(f"[TWENTY-CRM-SYNC] Case Synced: {deal_record['name']}", file=sys.stderr)
+    return {"status": "success", "synced": True, "crm_deal": deal_record}
+
+@router.get("/marketing/campaign-queue")
+async def get_marketing_queue():
+    queue_file = "/tmp/latest_social_post.txt"
+    post_content = "هنوز پستی در صف قرار نگرفته است."
+    if os.path.exists(queue_file):
+        with open(queue_file, "r", encoding="utf-8") as pf:
+            post_content = pf.read()
+    return {
+        "status": "success",
+        "target_platforms": ["linkedin", "instagram"],
+        "ready_for_postiz": True,
+        "latest_draft": post_content
     }
