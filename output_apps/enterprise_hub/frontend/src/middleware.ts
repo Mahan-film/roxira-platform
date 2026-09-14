@@ -97,5 +97,9 @@ export const config = {
     "/accounting",
     "/inventory",
     "/crm",
+    "/about",
+    "/terms",
+    "/privacy",
+    "/services",
   ],
 };

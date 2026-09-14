@@ -671,6 +671,17 @@ async def interactive_consult(payload: dict = Body(...)):
         "latency_ms": round((time.time() - t0) * 1000, 2)
     }
 
+
+@router.post("/chat")
+async def judge_chat_alias(payload: dict = Body(...)):
+    """پشتیبانی از مسیر استاندارد /chat و سازگاری با آرایه messages"""
+    if "messages" in payload and not payload.get("message"):
+        msgs = payload.get("messages", [])
+        if msgs and isinstance(msgs, list):
+            payload["message"] = msgs[-1].get("content", "")
+    return await interactive_consult(payload)
+
+
 VOICE_TRANSCRIBE_MODEL = os.environ.get(
     "SMARTJUDGE_TRANSCRIBE_MODEL", OPENROUTER_TIERS["VIP"]["primary_model"]
 )

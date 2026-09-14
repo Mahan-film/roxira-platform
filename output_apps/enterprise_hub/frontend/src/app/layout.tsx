@@ -1,4 +1,3 @@
-import { EnamadFooter } from "@/components/layout/enamad-footer";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Vazirmatn } from "next/font/google";
@@ -10,15 +9,27 @@ const vazirmatn = Vazirmatn({
   subsets: ["arabic", "latin"],
 });
 
-/** تشخیص دامنه بین‌المللی انگلیسی (roxira.net) از دامنه فارسی (roxira.ir). */
-async function isEnglishRequest(): Promise<boolean> {
+/** تفکیک دامنه‌های سه‌گانه جهت سئو و استخراج متادیتا */
+async function getHostInfo(): Promise<{ isEnglish: boolean; isGhazi: boolean }> {
   const headerList = await headers();
   const host = (headerList.get("host") ?? "").toLowerCase();
-  return host.includes("roxira.net");
+  const isEnglish = host.includes("roxira.net");
+  const isGhazi = host.includes("ghazihoushmand") || host.includes("smartjudge") || host.startsWith("ghazi");
+  return { isEnglish, isGhazi };
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  if (await isEnglishRequest()) {
+  const { isEnglish, isGhazi } = await getHostInfo();
+
+  if (isGhazi) {
+    return {
+      title: "قاضی هوشمند | دستیار تخصصی حقوقی و قضایی مبتنی بر هوش مصنوعی",
+      description:
+        "سامانه هوشمند تحلیل دعاوی، استخراج ادله اثبات دعوا، تنظیم لایحه اعاده دادرسی و استعلام آرای وحدت رویه دیوان عالی کشور.",
+    };
+  }
+
+  if (isEnglish) {
     return {
       title: "Roxira International B2B Hub",
       description:
@@ -34,7 +45,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const isEnglish = await isEnglishRequest();
+  const { isEnglish } = await getHostInfo();
 
   return (
     <html
@@ -43,8 +54,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${vazirmatn.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-[family-name:var(--font-vazirmatn)]">
-        <AuthProvider>{children}
-        <EnamadFooter /></AuthProvider>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
