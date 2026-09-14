@@ -695,7 +695,7 @@ async def judge_chat_alias(payload: dict = Body(...)):
 VOICE_TRANSCRIBE_MODEL = os.environ.get(
     "SMARTJUDGE_TRANSCRIBE_MODEL", OPENROUTER_TIERS["VIP"]["primary_model"]
 )
-_VOICE_AUDIO_FORMATS = {"wav", "mp3", "ogg", "webm", "flac", "m4a", "aac", "opus", "oga"}
+_VOICE_AUDIO_FORMATS = {"wav", "mp3", "ogg", "webm", "flac", "m4a", "aac", "opus", "oga", "mp4"}
 
 
 def _looks_like_text_payload(data: bytes) -> str:
@@ -714,13 +714,15 @@ def _looks_like_text_payload(data: bytes) -> str:
 
 
 def _normalize_audio_format(audio_format: str) -> str:
-    """یکسان‌سازی قالب صوتی برای ارسال به مدل پیاده‌سازی گفتار."""
+    """یکسان‌سازی قالب صوتی برای ارسال به مدل پیاده‌سازی گفتار (WAV, M4A, WebM, MP3)."""
     fmt = str(audio_format or "").lower().split(";")[0].strip()
     if "/" in fmt:
         fmt = fmt.split("/")[-1]
     fmt = fmt.replace("x-", "").replace("mpeg", "mp3").strip()
     if fmt in ("oga", "opus"):
         fmt = "ogg" if fmt == "oga" else "opus"
+    if fmt == "mp4":
+        fmt = "m4a"
     return fmt if fmt in _VOICE_AUDIO_FORMATS else "webm"
 
 
@@ -1264,11 +1266,14 @@ def _extract_openrouter_text(data: dict) -> str:
 
 
 async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str) -> str:
-    """تبدیل صدای فارسی به متن با بالاترین دقت از طریق Whisper Large V3 و فالبک چندوجهی در OpenRouter."""
+    """تبدیل صدای فارسی به متن با بالاترین دقت از طریق Whisper Large V3 و فالبک‌های موازی در OpenRouter."""
     if not OPENROUTER_API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY پیکربندی نشده است")
 
     ext = _normalize_audio_format(audio_format)
+    if ext == "mp4":
+        ext = "m4a"
+
     if isinstance(audio_data, str):
         raw_b64 = audio_data.partition(",")[2] if audio_data.startswith("data:") else audio_data
         try:
@@ -1280,36 +1285,65 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
         raw_bytes = audio_data
         audio_b64 = base64.b64encode(raw_bytes).decode("ascii")
 
-    # گام ۱: فراخوانی اندپوینت تخصصی Whisper Large V3 در OpenRouter
+    headers_json = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://ghazihoushmand.ir",
+        "X-Title": "Roxira SmartJudge",
+    }
+
+    # گام ۱: فراخوانی مستقیم و استاندارد اندپوینت STT در OpenRouter با بدنهٔ JSON (توصیه رسمی OpenRouter)
+    stt_models = [
+        "openai/whisper-large-v3",
+        "openai/whisper-large-v3-turbo",
+        "openai/whisper-1",
+    ]
+    for stt_model in stt_models:
+        try:
+            payload = {
+                "model": stt_model,
+                "input_audio": {
+                    "data": audio_b64,
+                    "format": ext,
+                },
+                "language": "fa",
+                "temperature": 0.0,
+            }
+            timeout = httpx.Timeout(30.0, connect=8.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post("https://openrouter.ai/api/v1/audio/transcriptions", json=payload, headers=headers_json)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    res_text = str(data.get("text") or "").strip()
+                    if res_text:
+                        return res_text
+                else:
+                    print(f"[SMARTJUDGE][STT-JSON-ERR] model={stt_model} status={resp.status_code} body={resp.text[:200]}", file=sys.stderr)
+        except Exception as exc:
+            print(f"[SMARTJUDGE][STT-JSON-FAIL] model={stt_model} {type(exc).__name__}: {exc}", file=sys.stderr)
+
+    # گام ۲: فالبک به Multipart Form-Data استاندارد با تفکیک فیلدهای data و files
     try:
-        files = {
-            "file": (f"audio.{ext}", raw_bytes, f"audio/{ext}"),
-            "model": (None, "openai/whisper-large-v3"),
-            "language": (None, "fa"),
-        }
-        headers = {
+        files = {"file": (f"audio.{ext}", raw_bytes, f"audio/{ext}")}
+        form_data = {"model": "openai/whisper-large-v3", "language": "fa"}
+        headers_multi = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "HTTP-Referer": "https://ghazihoushmand.ir",
             "X-Title": "Roxira SmartJudge",
         }
-        timeout = httpx.Timeout(45.0, connect=10.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post("https://openrouter.ai/api/v1/audio/transcriptions", files=files, headers=headers)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=8.0)) as client:
+            resp = await client.post("https://openrouter.ai/api/v1/audio/transcriptions", files=files, data=form_data, headers=headers_multi)
             if resp.status_code == 200:
-                data = resp.json()
-                res_text = str(data.get("text") or "").strip()
+                data_res = resp.json()
+                res_text = str(data_res.get("text") or "").strip()
                 if res_text:
                     return res_text
-            else:
-                print(f"[SMARTJUDGE][WHISPER-ERR] status={resp.status_code} body={resp.text[:200]}", file=sys.stderr)
     except Exception as exc:
-        print(f"[SMARTJUDGE][WHISPER-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"[SMARTJUDGE][STT-MULTIPART-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
 
-    # گام ۲: فالبک به مدل‌های چندوجهی در OpenRouter
-    candidate_models = ["google/gemini-2.5-flash", model, "openai/gpt-4o-audio-preview"]
-    for c_model in candidate_models:
-        if not c_model:
-            continue
+    # گام ۳: فالبک به مدل‌های گفتاری OpenAI با ساختار input_audio در /chat/completions
+    candidate_chat_models = ["openai/gpt-4o-mini-audio-preview", "openai/gpt-4o-audio-preview"]
+    for c_model in candidate_chat_models:
         try:
             body = {
                 "model": c_model,
@@ -1317,21 +1351,15 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": "این فایل صوتی فارسی را کلمه به کلمه به متن پیاده کن. فقط خود متن را بنویس بدون هیچ توضیح اضافه:"},
+                            {"type": "text", "text": "لطفاً این فایل صوتی فارسی را کلمه به کلمه به متن پیاده کن. فقط خود متن را بنویس بدون هیچ توضیح اضافه:"},
                             {"type": "input_audio", "input_audio": {"data": audio_b64, "format": ext}},
                         ],
                     }
                 ],
                 "temperature": 0.0,
             }
-            headers = {
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://ghazihoushmand.ir",
-                "X-Title": "Roxira SmartJudge",
-            }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=10.0)) as client:
-                resp = await client.post(OPENROUTER_CHAT_URL, json=body, headers=headers)
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=8.0)) as client:
+                resp = await client.post(OPENROUTER_CHAT_URL, json=body, headers=headers_json)
                 if resp.status_code == 200:
                     data = resp.json()
                     res_text = _extract_openrouter_text(data)

@@ -27,6 +27,13 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
   const isComponentOpenRef = useRef(isOpen);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSpokenRef = useRef(false);
+  const recognitionRef = useRef<any>(null);
+  const liveTranscriptRef = useRef<string>("");
+  const callStatusRef = useRef(callStatus);
+
+  useEffect(() => {
+    callStatusRef.current = callStatus;
+  }, [callStatus]);
 
   useEffect(() => {
     isComponentOpenRef.current = isOpen;
@@ -36,7 +43,11 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
   }, [isOpen]);
 
   const speakPersian = useCallback((text: string) => {
-    if (!("speechSynthesis" in window)) return;
+    if (!("speechSynthesis" in window)) {
+      setCallStatus("listening");
+      setStatusMessage("🟢 پاسخ آماده است. برای ادامه صحبت بفرمایید...");
+      return;
+    }
     try {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -61,46 +72,29 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn("Speech synthesis error:", e);
+      if (isComponentOpenRef.current && streamRef.current) {
+        restartListeningPhase();
+      }
     }
   }, []);
 
-  const sendAudioForAnalysis = async (audioBlob: Blob) => {
-    if (audioBlob.size < 500) {
+  const sendQueryToJudge = async (textToSend: string) => {
+    if (!textToSend || !textToSend.trim()) {
+      setStatusMessage("صدایی دریافت نشد. بفرمایید، در حال شنیدن هستیم...");
       restartListeningPhase();
       return;
     }
 
     setCallStatus("processing");
-    setStatusMessage("⚙️ در حال تبدیل صدا به متن با هوش مصنوعی Whisper...");
+    setStatusMessage("⚖️ در حال بررسی در پایگاه RAG و تطبیق با آرای وحدت رویه...");
+    setUserSpeech(textToSend);
 
     try {
-      const formData = new FormData();
-      formData.append("file", audioBlob, "voice_call.webm");
-
-      // مرحله ۱: تبدیل صوت به متن دقیق با OpenRouter Whisper
-      const transRes = await fetch("/api/v1/apps/judge/transcribe-audio", {
-        method: "POST",
-        body: formData,
-      });
-
-      const transData = await transRes.json();
-      const transcribedText = transData.text || transData.transcript;
-
-      if (!transcribedText || !transcribedText.trim()) {
-        setStatusMessage("صدایی دریافت نشد. بفرمایید، دوباره بفرمایید...");
-        restartListeningPhase();
-        return;
-      }
-
-      setUserSpeech(transcribedText);
-      setStatusMessage("⚖️ در حال بررسی در گراف قوانین و آرای وحدت رویه...");
-
-      // مرحله ۲: دریافت تحلیل استنتاجی با موتور هوش مصنوعی و RAG
       const chatRes = await fetch("/api/v1/apps/judge/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: transcribedText,
+          message: textToSend,
           user_phone: userPhone,
           phone: userPhone,
           is_vip: true,
@@ -109,12 +103,56 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       });
 
       const chatData = await chatRes.json();
-      const reply = chatData.reply || chatData.response || "موضوع شما بر اساس رویه قضایی و قوانین موضوعه بررسی شد.";
+      const reply = chatData.reply || chatData.response || "موضوع شما بر اساس رویه قضایی دیوان عالی کشور بررسی شد.";
       setAiSpeech(reply);
       speakPersian(reply);
     } catch (err) {
       console.error("Call processing error:", err);
-      setStatusMessage("خطا در پردازش. آماده شنیدن مجدد هستیم...");
+      setStatusMessage("خطا در برقراری ارتباط با موتور قاضی. آماده شنیدن مجدد هستیم...");
+      restartListeningPhase();
+    }
+  };
+
+  const sendAudioForAnalysis = async (audioBlob: Blob) => {
+    // اگر از قبل متن از طریق گفتار مرورگر استخراج شده، فوراً ارسال می‌شود
+    const currentSpoken = liveTranscriptRef.current.trim();
+    if (currentSpoken) {
+      await sendQueryToJudge(currentSpoken);
+      return;
+    }
+
+    if (audioBlob.size < 400) {
+      restartListeningPhase();
+      return;
+    }
+
+    setCallStatus("processing");
+    setStatusMessage("⚙️ در حال استخراج و تحلیل صوت با هوش مصنوعی Whisper...");
+
+    try {
+      const ext = (mediaRecorderRef.current?.mimeType || "").includes("mp4") ? "m4a" : "webm";
+      const formData = new FormData();
+      formData.append("file", audioBlob, `voice_call.${ext}`);
+
+      const transRes = await fetch("/api/v1/apps/judge/transcribe-audio", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (transRes.ok) {
+        const transData = await transRes.json();
+        const transcribedText = (transData.text || transData.transcript || "").trim();
+        if (transcribedText) {
+          await sendQueryToJudge(transcribedText);
+          return;
+        }
+      }
+
+      setStatusMessage("صدایی دریافت نشد. لطفاً شفاف‌تر در میکروفون صحبت بفرمایید...");
+      restartListeningPhase();
+    } catch (err) {
+      console.error("Call audio transcription error:", err);
+      setStatusMessage("خطا در پردازش صدا. آماده شنیدن مجدد هستیم...");
       restartListeningPhase();
     }
   };
@@ -124,14 +162,63 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
     setCallStatus("listening");
     setStatusMessage("🟢 در حال شنیدن صدای شما... بفرمایید.");
     hasSpokenRef.current = false;
+    liveTranscriptRef.current = "";
     startRecordingSegment();
+    startBrowserSpeechRecognition();
+  };
+
+  const startBrowserSpeechRecognition = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    try {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (_) {}
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = "fa-IR";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognitionRef.current = recognition;
+
+      recognition.onresult = (event: any) => {
+        let full = "";
+        for (let i = 0; i < event.results.length; ++i) {
+          full += event.results[i][0].transcript;
+        }
+        const trimmed = full.trim();
+        if (trimmed) {
+          liveTranscriptRef.current = trimmed;
+          setUserSpeech(trimmed);
+          hasSpokenRef.current = true;
+          setStatusMessage(`در حال شنیدن: «${trimmed}»`);
+
+          // ریست تایمر سکوت پس از تشخیص کلمات
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+          }
+        }
+      };
+
+      recognition.onerror = (e: any) => {
+        console.warn("Live recognition notice:", e);
+      };
+
+      recognition.start();
+    } catch (e) {
+      console.warn("SpeechRecognition start error:", e);
+    }
   };
 
   const startRecordingSegment = () => {
     if (!streamRef.current) return;
 
     try {
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
         ? "audio/webm"
         : MediaRecorder.isTypeSupported("audio/mp4")
         ? "audio/mp4"
@@ -155,13 +242,26 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
         sendAudioForAnalysis(audioBlob);
       };
 
-      recorder.start();
+      recorder.start(250);
     } catch (e) {
       console.warn("Recorder segment start error:", e);
     }
   };
 
   const handleManualSubmit = () => {
+    // اگر متنی هم‌اکنون به صورت زنده تشخیص داده شده، فوراً ارسال شود
+    const currentSpoken = liveTranscriptRef.current.trim() || userSpeech.trim();
+    if (currentSpoken) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (_) {}
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        try { mediaRecorderRef.current.stop(); } catch (_) {}
+      }
+      sendQueryToJudge(currentSpoken);
+      return;
+    }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -204,15 +304,15 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
             clearTimeout(silenceTimerRef.current);
             silenceTimerRef.current = null;
           }
-        } else if (hasSpokenRef.current && currentLevel < 12) {
-          // سکوت پس از صحبت حداقل ۱.۵ ثانیه
+        } else if (hasSpokenRef.current && currentLevel < 12 && callStatusRef.current === "listening") {
+          // سکوت پس از صحبت حداقل ۲ ثانیه
           if (!silenceTimerRef.current) {
             silenceTimerRef.current = setTimeout(() => {
               silenceTimerRef.current = null;
-              if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-                mediaRecorderRef.current.stop();
+              if (callStatusRef.current === "listening") {
+                handleManualSubmit();
               }
-            }, 1500);
+            }, 2000);
           }
         }
 
@@ -235,7 +335,6 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("مرورگر شما از ورودی میکروفون پشتیبانی نمی‌کند.");
       }
-      // فراخوانی مستقیم در پشته کلیک کاربر جهت باز شدن پاپ‌آپ سافاری
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -256,6 +355,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
     setStatusMessage("🟢 میکروفون فعال شد. صحبت کنید (مثلاً: «در مورد رای وحدت رویه دیوان عالی توضیح بده»)");
     startAudioVisualizer(stream);
     startRecordingSegment();
+    startBrowserSpeechRecognition();
   };
 
   const handleEndCall = () => {
@@ -263,6 +363,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
     setCallStatus("idle");
     setStatusMessage("");
     setAudioLevel(0);
+    liveTranscriptRef.current = "";
 
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -271,6 +372,10 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (_) {}
+      recognitionRef.current = null;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -358,7 +463,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
             </button>
           </div>
 
-          <div className="space-y-2 max-w-md mx-auto">
+          <div className="space-y-2 max-w-md mx-auto w-full">
             <p className="text-xs sm:text-sm font-bold text-slate-200">
               {!isCalling && callStatus !== "error" && "برای شروع گفتگوی زنده روی دکمه سبز ضربه بزنید"}
               {statusMessage}
@@ -368,7 +473,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
             {isCalling && callStatus === "listening" && (
               <button
                 onClick={handleManualSubmit}
-                className="mt-2 px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-amber-500/20 active:scale-95 flex items-center gap-1.5 mx-auto"
+                className="mt-2 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md shadow-amber-500/20 active:scale-95 flex items-center gap-1.5 mx-auto"
               >
                 <span>🚀</span>
                 <span>ارسال صحبت برای تحلیل قاضی هوشمند</span>
@@ -385,14 +490,14 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
             )}
 
             {userSpeech && (
-              <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl text-xs text-slate-300 text-right">
+              <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl text-xs text-slate-300 text-right animate-in fade-in">
                 <span className="text-amber-400 font-bold ml-1">شما گفتید:</span> {userSpeech}
               </div>
             )}
           </div>
 
           {aiSpeech && (
-            <div className="w-full bg-slate-950/90 border border-slate-800 p-4 rounded-2xl text-right text-xs text-slate-200 max-h-44 overflow-y-auto leading-relaxed border-r-2 border-r-amber-400 shadow-inner">
+            <div className="w-full bg-slate-950/90 border border-slate-800 p-4 rounded-2xl text-right text-xs text-slate-200 max-h-44 overflow-y-auto leading-relaxed border-r-2 border-r-amber-400 shadow-inner animate-in fade-in">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-amber-400 font-bold text-xs">⚖️ پاسخ استنتاجی قاضی هوشمند:</span>
                 <button
@@ -403,6 +508,25 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
                 </button>
               </div>
               <p className="whitespace-pre-line leading-relaxed">{aiSpeech}</p>
+            </div>
+          )}
+
+          {/* پرسش‌های سریع آماده در حین تماس */}
+          {isCalling && (
+            <div className="flex flex-wrap justify-center gap-1.5 pt-2">
+              {[
+                "ماده ۴۷۴ آیین دادرسی کیفری",
+                "مطالبه مهریه از اجرای ثبت",
+                "صلاحیت دادگاه صلح مصوب ۱۴۰۲"
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => sendQueryToJudge(chip)}
+                  className="px-2.5 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-[10px] text-slate-400 hover:text-amber-300 rounded-lg transition-colors"
+                >
+                  ⚡ {chip}
+                </button>
+              ))}
             </div>
           )}
         </div>

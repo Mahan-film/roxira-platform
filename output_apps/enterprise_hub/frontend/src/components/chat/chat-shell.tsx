@@ -19,6 +19,8 @@ export function ChatShell() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const localLiveTranscriptRef = useRef<string>("");
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -28,12 +30,15 @@ export function ChatShell() {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // تبدیل صوت به متن (STT) با پشتیبانی ۱۰۰٪ از سافاری و ارسال به هوش مصنوعی
+  // تبدیل صوت به متن (STT) دوگانه: تایپ زنده بلادرنگ در مرورگر + پالایش حقوقی با Whisper Large V3
   const toggleVoiceRecording = async () => {
     if (isVoiceRecording) {
-      // توقف ضبط و ارسال به سرور جهت تبدیل به متن با Whisper
+      // توقف ضبط صوت و ارسال
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (_) {}
+      }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        setRecordingStatus("در حال تبدیل صدا به متن با هوش مصنوعی...");
+        setRecordingStatus("در حال نهایی‌سازی متن با هوش مصنوعی Whisper...");
         mediaRecorderRef.current.stop();
       }
       return;
@@ -45,13 +50,14 @@ export function ChatShell() {
         return;
       }
 
-      // فراخوانی مستقیم در پشته کلیک کاربر جهت احراز صلاحیت سافاری در مک و آیفون
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true }
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       streamRef.current = stream;
 
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
         ? "audio/webm"
         : MediaRecorder.isTypeSupported("audio/mp4")
         ? "audio/mp4"
@@ -60,6 +66,7 @@ export function ChatShell() {
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
+      localLiveTranscriptRef.current = "";
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -67,63 +74,79 @@ export function ChatShell() {
 
       recorder.onstop = async () => {
         setIsVoiceRecording(false);
-        setRecordingStatus("در حال پیاده‌سازی متن...");
 
-        // متوقف کردن قطعی ترک‌های میکروفون
+        // توقف ترک‌های سخت‌افزاری میکروفون
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
         }
 
         const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        if (audioBlob.size < 500) {
-          setRecordingStatus("");
-          return;
-        }
+        const localSpoken = localLiveTranscriptRef.current.trim();
 
-        try {
-          const formData = new FormData();
-          formData.append("file", audioBlob, "recording.webm");
+        // پالایش و تطبیق اصطلاحات قانونی با Whisper Large V3 در بک‌اند
+        if (audioBlob.size >= 300) {
+          try {
+            setRecordingStatus("در حال تطبیق با واژگان حقوقی Whisper...");
+            const ext = (recorder.mimeType || "").includes("mp4") ? "m4a" : "webm";
+            const formData = new FormData();
+            formData.append("file", audioBlob, `speech.${ext}`);
 
-          const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
-            method: "POST",
-            body: formData,
-          });
+            const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
+              method: "POST",
+              body: formData,
+            });
 
-          const data = await res.json();
-          const transcript = data.text || data.transcript;
-          if (transcript && transcript.trim()) {
-            setInputPrompt((prev) => (prev ? prev + " " + transcript : transcript));
-          } else {
-            alert("صدایی تشخیص داده نشد یا متن نامفهوم بود. لطفاً دوباره امتحان کنید.");
+            if (res.ok) {
+              const data = await res.json();
+              const transcript = (data.text || data.transcript || "").trim();
+              if (transcript) {
+                setInputPrompt(transcript);
+              }
+            }
+          } catch (err) {
+            console.warn("Server STT fallback to browser recognition:", err);
+          } finally {
+            setRecordingStatus("");
           }
-        } catch (err) {
-          console.error("STT network error:", err);
-          alert("خطا در ارسال صوت به سرور. اتصال را بررسی فرمایید.");
-        } finally {
+        } else {
           setRecordingStatus("");
         }
       };
 
-      recorder.start();
-      setIsVoiceRecording(true);
-      setRecordingStatus("در حال شنیدن صدای شما... (برای اتمام، دوباره کلیک کنید)");
-
-      // فالبک برای مرورگرهایی که Web Speech API دارند برای نمایش پیش‌نمایش فوری
+      // ۱. راه‌اندازی موتور بلادرنگ در مرورگر (Web Speech API) برای فیدبک آنی در باکس ورودی
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         try {
           const recognition = new SpeechRecognition();
           recognition.lang = "fa-IR";
-          recognition.continuous = false;
+          recognition.continuous = true;
           recognition.interimResults = true;
+          recognitionRef.current = recognition;
+
           recognition.onresult = (event: any) => {
-            const current = event.results[0][0].transcript;
-            if (current) setRecordingStatus(`شنیده شد: «${current}»`);
+            let fullText = "";
+            for (let i = 0; i < event.results.length; ++i) {
+              fullText += event.results[i][0].transcript;
+            }
+            if (fullText.trim()) {
+              localLiveTranscriptRef.current = fullText.trim();
+              setInputPrompt(fullText.trim());
+              setRecordingStatus(`شنیده شد: «${fullText.trim()}»`);
+            }
+          };
+          recognition.onerror = (e: any) => {
+            console.warn("Live recognition notice:", e);
           };
           recognition.start();
-        } catch (_) {}
+        } catch (e) {
+          console.warn("SpeechRecognition init error:", e);
+        }
       }
+
+      recorder.start(250);
+      setIsVoiceRecording(true);
+      setRecordingStatus("در حال شنیدن صدای شما... صحبت کنید (برای پایان دوباره بزنید)");
     } catch (err: any) {
       console.error("Mic error:", err);
       setIsVoiceRecording(false);
