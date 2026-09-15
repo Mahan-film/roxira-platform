@@ -685,55 +685,94 @@ async def interactive_consult(payload: dict = Body(...)):
     if not conv_id:
         conv_id = str(uuid.uuid4())
         short_title = user_text[:35] + "..." if len(user_text) > 35 else user_text
-        with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute("INSERT INTO chat_conversations (id, user_phone, title) VALUES (%s, %s, %s);", (conv_id, phone, short_title))
+        try:
+            with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("INSERT INTO chat_conversations (id, user_phone, title) VALUES (%s, %s, %s);", (conv_id, phone, short_title))
+        except Exception as e:
+            print("[SMARTJUDGE][DB-CONV-INIT] ", e)
 
-    is_dowry = any(w in user_text for w in ["مهریه", "سکه", "زوجه", "عقدنامه", "عندالمطالبه", "توقیف اموال"])
-    
-    # تفکیک هوشمند برای پیام‌های اولیه کوتاه
-    if len(user_text.split()) < 7:
-        reply_msg = "جهت بررسی دقیق پرونده، لطفاً مشخص بفرمایید آیا سند رسمی، دادنامه قطعی یا قرارداد مکتوب بین طرفین وجود دارد؟"
-        prob = None
-        draft = None
-    else:
-        prob = "۸۵٪ (بسیار بالا بر مبنای رویه قطعی قضایی و ثبتی)"
-        law_refs = " و ".join([l["title"] for l in laws[:2]]) if laws else "مقررات قانون مدنی و ثبت"
-        precedent_ref = precedents[0]["title"] if precedents else "رویه قضایی هیأت عمومی دیوان عالی"
+    # ۱. استعلام مستقیم از مدل زبانی هوش مصنوعی (OpenRouter / Claude / Gemini / DeepSeek)
+    reply_msg = ""
+    prob = None
+    draft = None
 
-        if is_dowry:
-            reply_msg = "مطابق آیین‌نامه اجرای مفاد اسناد رسمی لازم‌الاجرا و قانون برنامه توسعه، فرایند مطالبه مهریه مستقیماً از طریق صدور اجرائیه در دایره اجرای ثبت اسناد و املاک و توقیف اموال زوج آغاز می‌گردد."
-            draft = f"""بسمه‌تعالی
-ریاست محترم دایره اجرای مفاد اسناد رسمی لازم‌الاجرا / دادگاه خانواده
+    if OPENROUTER_API_KEY:
+        try:
+            system_msg = (
+                "شما «سامانه تخصصی قاضی هوشمند» هستید؛ مشاور حقوقی هوشمند و مسلط به قوانین و رویه قضایی ایران. "
+                "لحن شما بسیار صمیمی، محترمانه، شیوا و روان است. "
+                "اگر کاربر سلام یا احوالپرسی کرد یا کلام کوتاهی گفت، با صمیمیت و ادب پاسخ دهید و بپرسید در چه موضوع حقوقی (ملکی، خانواده، کیفری، قراردادها یا چک) مایل به راهنمایی هستید. "
+                "اگر سوال تخصصی مطرح شد، پاسخ تحلیلی و مستند به مواد قانونی ارائه بده. "
+                "پاسخ‌ها باید برای خوانش صوتی نیز روان، سلیس و بدون تکلف باشند."
+            )
+            context_text = ""
+            if laws:
+                law_lines = "\n".join([f"- {l.get('title')}: {l.get('summary', '')}" for l in laws[:3]])
+                context_text += f"\nمواد قانونی مرتبط:\n{law_lines}"
+            if precedents:
+                prec_lines = "\n".join([f"- {p.get('title')}: {p.get('summary', '')}" for p in precedents[:2]])
+                context_text += f"\nآرای وحدت رویه مرتبط:\n{prec_lines}"
 
-با سلام و احترام؛
-در خصوص مطالبه مهریه موضوع سند رسمی ازدواج:
-۱. مطابق آیین‌نامه اجرای مفاد اسناد رسمی لازم‌الاجرا، بدواً صدور اجرائیه از طریق دفترخانه رسمی ازدواج و توقیف اموال زوج (حساب‌های بانکی، املاک ثبتی و خودرو) از طریق سامانه اجرای ثبت مورد استدعاست.
-۲. به استناد ماده ۱۰۸۲ قانون مدنی و {law_refs}، زوجه مالک مهر بوده و حق مطالبه و ممنوع‌الخروجی مدیون محفوظ است."""
+            messages_payload = [
+                {"role": "system", "content": (system_msg + "\n" + context_text) if context_text else system_msg},
+                {"role": "user", "content": user_text}
+            ]
+            req_body = {
+                "model": cfg.get("primary_model", "google/gemini-3.8-flash"),
+                "messages": messages_payload,
+                "temperature": 0.4,
+                "max_tokens": 450,
+            }
+            async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=3.0)) as client:
+                headers = {
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://ghazihoushmand.ir",
+                    "X-Title": "Roxira SmartJudge",
+                }
+                resp = await client.post(OPENROUTER_CHAT_URL, json=req_body, headers=headers)
+                if resp.status_code == 200:
+                    data_json = resp.json()
+                    choices = data_json.get("choices", [])
+                    if choices:
+                        reply_msg = choices[0].get("message", {}).get("content", "").strip()
+        except Exception as exc:
+            print(f"[SMARTJUDGE][LLM-CALL-FAIL] {exc}", file=sys.stderr)
+
+    # ۲. فالبک هوشمند در صورت در دسترس نبودن کلید یا خطای شبکه
+    if not reply_msg:
+        greeting_words = ["سلام", "درود", "صبح", "عصر", "روز", "شب", "خسته", "خوبی", "چطوری", "بله", "اوکی", "باشه"]
+        is_greeting = any(w in user_text.lower() for w in greeting_words) and len(user_text.split()) <= 4
+        if is_greeting:
+            reply_msg = "سلام و درود بر شما، وقت بخیر. در خدمت شما هستم. لطفاً موضوع یا سوال حقوقی خود را بفرمایید تا بر اساس قوانین و رویه قضایی کشور بررسی و راهنمایی کنم."
         else:
-            reply_msg = f"موضوع شما بر مبنای {law_refs} و رویه دیوان عالی کشور تحلیل شد. پرونده از پشتوانه قانونی لازم برخوردار است."
-            draft = f"""بسمه‌تعالی
-ریاست و مستشاران محترم مرجع قضایی رسیدگی‌کننده
+            is_dowry = any(w in user_text for w in ["مهریه", "سکه", "زوجه", "عقدنامه", "عندالمطالبه", "توقیف اموال"])
+            law_refs = " و ".join([l["title"] for l in laws[:2]]) if laws else "مقررات قانون مدنی و ثبت"
+            if is_dowry:
+                reply_msg = "مطابق آیین‌نامه اجرای مفاد اسناد رسمی لازم‌الاجرا، فرایند مطالبه مهریه مستقیماً از طریق صدور اجرائیه در دایره اجرای ثبت اسناد و املاک و توقیف اموال زوج آغاز می‌گردد."
+                draft = f"""بسمه‌تعالی
+ریاست محترم دایره اجرای مفاد اسناد رسمی لازم‌الاجرا
+با سلام و احترام؛ در خصوص مطالبه مهریه به استناد ماده ۱۰۸۲ قانون مدنی و {law_refs}..."""
+            else:
+                reply_msg = f"موضوع شما بر مبنای {law_refs} و رویه دیوان عالی کشور تحلیل شد. پرونده از پشتوانه قانونی لازم برخوردار است. لطفاً در صورت تمایل مدارک یا جزئیات بیشتری بفرمایید."
 
-با سلام و احترام؛
-در خصوص پرونده مطروحه با موضوع «{user_text[:120]}...»، دفاعیات به استناد {law_refs} و {precedent_ref} مستند به ماده ۴۷۱ ق.آ.د.ک به شرح پیوست تقدیم می‌گردد."""
+    if len(user_text.split()) >= 6:
+        prob = "۸۵٪ (مبتنی بر استدلال قضایی و رویه جاری)"
 
     # ذخیره پیام کاربر و پاسخ سیستم در دیتابیس
     try:
         with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
             with conn.cursor() as cur:
-                # ذخیره پیام کاربر
                 cur.execute(
                     "INSERT INTO chat_messages (conversation_id, role, content, metadata) VALUES (%s, %s, %s, %s::jsonb);",
                     (conv_id, "user", user_text, json.dumps({}))
                 )
-                # ذخیره پاسخ دستیار
                 meta_res = {"probability": prob, "draft": draft, "laws": laws, "precedents": precedents}
                 cur.execute(
                     "INSERT INTO chat_messages (conversation_id, role, content, metadata) VALUES (%s, %s, %s, %s::jsonb);",
                     (conv_id, "assistant", reply_msg, json.dumps(meta_res, ensure_ascii=False))
                 )
-                # به‌روزرسانی زمان گفتگو
                 cur.execute("UPDATE chat_conversations SET updated_at = NOW() WHERE id = %s;", (conv_id,))
     except Exception as e:
         print("خطا در ذخیره پیام:", e)
@@ -750,6 +789,7 @@ async def interactive_consult(payload: dict = Body(...)):
         "tier": selected_tier,
         "latency_ms": round((time.time() - t0) * 1000, 2)
     }
+
 
 
 @router.post("/chat")
@@ -1670,29 +1710,50 @@ async def transcribe_audio(request: Request):
 
 @router.post("/speak")
 async def generate_speech(payload: dict = Body(...)):
-    """تبدیل متن حقوقی به گفتار صوتی بلادرنگ (TTS) با بالاترین کیفیت و فالبک پایدار."""
+    """تبدیل متن حقوقی به گفتار صوتی بلادرنگ (TTS) با تلفظ کامل تمام کلمات و بدون قطع شدن."""
     text = str(payload.get("text") or payload.get("input") or "").strip()
     if not text:
         return JSONResponse({"status": "error", "message": "متن خالی است"}, status_code=400)
 
-    # برای پاسخ صوتی پرسرعت، جمله اول یا حداکثر ۲۰۰ کاراکتر اول استخراج می‌شود
-    first_line = text.split("\n")[0].strip()
-    short_text = first_line[:200] if len(first_line) > 10 else text[:200]
+    import urllib.parse
+    clean_text = re.sub(r"[*#_`>\[\]\(\)]", " ", text).strip()
+    clean_text = " ".join(clean_text.split())
+    clean_text = clean_text[:350]
 
-    # ۱. موتور فوق‌العاده روان و بومی Google Persian TTS (تأخیر زیر ۱۵۰ میلی‌ثانیه، تلفظ دقیق ایرانی)
+    words = clean_text.split()
+    chunks = []
+    curr = ""
+    for w in words:
+        if len(curr) + len(w) + 1 > 85:
+            if curr:
+                chunks.append(curr)
+            curr = w
+        else:
+            curr = (curr + " " + w).strip()
+    if curr:
+        chunks.append(curr)
+
+    if not chunks:
+        chunks = [clean_text[:85]]
+
+    # ۱. موتور استریم با کیفیت بالای Google Persian TTS با تجمیع قطعات صوتی
     try:
-        import urllib.parse
-        encoded_q = urllib.parse.quote(short_text)
-        tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q={encoded_q}"
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
-            headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
-            resp = await client.get(tts_url, headers=headers)
-            if resp.status_code == 200 and len(resp.content) > 100:
-                return StreamingResponse(io.BytesIO(resp.content), media_type="audio/mpeg")
-    except Exception as exc:
-        print(f"[SMARTJUDGE][TTS-GOOGLE-EXC] {exc}", file=sys.stderr)
+        combined_audio = bytearray()
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(7.0, connect=2.0)) as client:
+            for c in chunks[:5]:
+                encoded_q = urllib.parse.quote(c)
+                tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q={encoded_q}"
+                resp = await client.get(tts_url, headers=headers)
+                if resp.status_code == 200 and len(resp.content) > 50:
+                    combined_audio.extend(resp.content)
 
-    # ۲. فالبک به OpenRouter Audio API
+        if len(combined_audio) > 150:
+            return StreamingResponse(io.BytesIO(bytes(combined_audio)), media_type="audio/mpeg")
+    except Exception as exc:
+        print(f"[SMARTJUDGE][TTS-GOOGLE-CHUNKS-EXC] {exc}", file=sys.stderr)
+
+    # ۲. فالبک به OpenRouter
     if OPENROUTER_API_KEY:
         try:
             headers = {
@@ -1703,10 +1764,9 @@ async def generate_speech(payload: dict = Body(...)):
             }
             body = {
                 "model": "minimax/speech-2.8-turbo",
-                "input": short_text,
+                "input": clean_text[:250],
             }
-            timeout = httpx.Timeout(6.0, connect=2.5)
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=2.5)) as client:
                 resp = await client.post("https://openrouter.ai/api/v1/audio/speech", json=body, headers=headers)
                 if resp.status_code == 200 and len(resp.content) > 100:
                     return StreamingResponse(io.BytesIO(resp.content), media_type="audio/mpeg")

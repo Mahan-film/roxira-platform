@@ -543,18 +543,11 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
                 if (voiceStateRef.current === "listening" && accumulatedSpeechRef.current.trim().length >= 2) {
                   submitSpokenTurn();
                 }
-              }, 1200);
+              }, 2200);
             }
           };
 
-          rec.onspeechend = () => {
-            if (voiceStateRef.current === "listening" && accumulatedSpeechRef.current.trim().length >= 2) {
-              if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
-              autoSubmitTimerRef.current = setTimeout(() => {
-                submitSpokenTurn();
-              }, 700);
-            }
-          };
+// مکث طبیعی: اجازه صحبت پیوسته به کاربر بدون قطع کردن کلام
 
           rec.onerror = (err: any) => console.warn("SpeechRec notice:", err);
           rec.onend = () => {
