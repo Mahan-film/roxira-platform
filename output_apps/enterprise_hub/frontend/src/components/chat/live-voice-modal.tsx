@@ -50,6 +50,24 @@ if (typeof window !== "undefined") {
   window.addEventListener("keydown", unlockAudioOnce, unlockOpts);
 }
 
+// تابع ترمیم آوایی کلمات قضایی در فرانت‌اند
+const repairPhoneticsClient = (raw: string): string => {
+  if (!raw) return "";
+  let t = raw;
+  t = t.replace(/(?:آخرت|آخرین|اخرین)\s*(?:آرائه|ارائه|ارای|آرای)?\s*(?:وقت\s*ویدیو|وقتت\s*رویه|وقتترابی|وقت\s*رویه)/gi, "آخرین رأی وحدت رویه");
+  t = t.replace(/از\s*ملورا\s*ملورا\s*دی/gi, "آخرین رأی وحدت رویه دیوان");
+  t = t.replace(/ملورا\s*دی/gi, "وحدت رویه دیوان");
+  t = t.replace(/وقت\s*ویدیو/gi, "وحدت رویه");
+  t = t.replace(/وقتت\s*رویه/gi, "وحدت رویه");
+  t = t.replace(/وقتترابی/gi, "وحدت رویه");
+  t = t.replace(/رئیم\s*باحتت/gi, "رأی وحدت رویه");
+  t = t.replace(/دادگاه\s*صلحا/gi, "دادگاه صلح");
+  t = t.replace(/قوبه\s*قضایی/gi, "قوه قضاییه");
+  t = t.replace(/اعاده\s*داد\s*رسی/gi, "اعاده دادرسی");
+  t = t.replace(/تاخیر\s*تادیه/gi, "تأخیر تأدیه");
+  return t;
+};
+
 export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
   const { user } = useAuth();
   const userPhone = user?.phone || "09129367796";
@@ -198,13 +216,11 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       }
     }
 
-    // اگر موتور هوشمند سرور متن باکیفیت ارائه داد، از آن استفاده کن تا اصطلاحات حقوقی (مثل وحدت رویه) مخدوش نشوند
     if (serverText && serverText.length >= 2) {
-      return serverText;
+      return repairPhoneticsClient(serverText);
     }
 
-    // فالبک به متن شناسایی‌شده مرورگر در صورت عدم دسترسی به سرور
-    return accumulatedSpeechRef.current.trim();
+    return repairPhoneticsClient(accumulatedSpeechRef.current.trim());
   }, []);
 
   // بازگشت خودکار به وضعیت شنیدن برای نوبت بعدی مکالمه بدون دخالت کاربر
@@ -567,8 +583,9 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
             }
             fullTranscript = fullTranscript.trim();
             if (fullTranscript) {
-              accumulatedSpeechRef.current = fullTranscript;
-              setCurrentUserSpeech(fullTranscript);
+              const cleaned = repairPhoneticsClient(fullTranscript);
+              accumulatedSpeechRef.current = cleaned;
+              setCurrentUserSpeech(cleaned);
               hasSpokenInThisTurnRef.current = true;
 
               // تشخیص پایان طبیعی کلام: پس از ۱.۲ ثانیه مکث، پاسخ به صورت خودکار ارسال می‌شود

@@ -670,6 +670,11 @@ async def get_conversation_messages(conv_id: str):
 async def interactive_consult(payload: dict = Body(...)):
     t0 = time.time()
     user_text = payload.get("message", "").strip()
+    try:
+        from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
+        user_text = repair_legal_phonetics(user_text)
+    except Exception:
+        pass
     phone = payload.get("phone", "09129367796")
     conv_id = payload.get("conversation_id")
     tier = payload.get("tier", "VIP").upper()
@@ -1796,7 +1801,11 @@ async def transcribe_audio(request: Request):
         try:
             transcribed = await _openrouter_transcribe(model, audio_b64, audio_format)
             if transcribed:
-                # `text` طبق قرارداد و `transcript` برای سازگاری با کلاینت فعلی
+                try:
+                    from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
+                    transcribed = repair_legal_phonetics(transcribed)
+                except Exception:
+                    pass
                 return {"status": "success", "text": transcribed, "transcript": transcribed}
             last_error = "پاسخ خالی از مدل STT"
         except Exception as exc:
