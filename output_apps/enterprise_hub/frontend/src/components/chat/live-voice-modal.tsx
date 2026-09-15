@@ -2,9 +2,13 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 
-interface LiveVoiceModalProps {
+export interface LiveVoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
+  userPhone?: string;
+  conversationId?: string;
+  onConversationIdChange?: (id: string) => void;
+  onNewMessage?: (userText: string, aiText: string, draft?: string, probability?: string) => void;
 }
 
 // ── آنلاک سیاست پخش خودکار Safari و Chrome ──────────────────────────────────────────
@@ -68,7 +72,14 @@ const repairPhoneticsClient = (raw: string): string => {
   return t;
 };
 
-export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
+export function LiveVoiceModal({
+  isOpen,
+  onClose,
+  userPhone: externalPhone,
+  conversationId: externalConvId = "",
+  onConversationIdChange,
+  onNewMessage,
+}: LiveVoiceModalProps) {
   const { user } = useAuth();
   const userPhone = user?.phone || "09129367796";
 
@@ -407,9 +418,15 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
         const data = await res.json();
         if (data.conversation_id) {
           activeConversationIdRef.current = data.conversation_id;
+          if (onConversationIdChange) onConversationIdChange(data.conversation_id);
         }
         const reply = data.reply || data.response || "موضوع شما بر مبنای قوانین و رویه قضایی جاری بررسی شد.";
         setLastAiResponse(reply);
+
+        // همگام‌سازی بی‌درنگ گفتگو با صفحه اصلی چت (تنظیم لایحه و مشاهده متنی)
+        if (onNewMessage) {
+          onNewMessage(text, reply, data.defense_draft, data.success_probability);
+        }
         await playAiVoice(reply);
       } else {
         setStatusText("خطا در دریافت پاسخ؛ لطفاً دوباره تلاش کنید.");
@@ -502,14 +519,8 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
         const level = Math.min(100, Math.round((sum / dataArray.length / 128) * 100));
         setAudioLevel(level);
 
-        // قطع لحظه‌ای صحبت هوش مصنوعی در صورت مداخله کاربر (Barge-in)
-        if (voiceStateRef.current === "speaking" && level > 24) {
-          interruptAiSpeech();
-          setVoiceState("listening");
-          setStatusText("در حال شنیدن...");
-          accumulatedSpeechRef.current = "";
-          hasSpokenInThisTurnRef.current = true;
-        }
+        // مانیتورینگ بصری شدت صدا (بدون قطع خودکار وسط کلام قاضی هوشمند تا از اکوی اسپیکر جلوگیری شود)
+        // کاربر در صورت تمایل به قطع کلام می‌تواند دکمه ✋ قطع صحبت را فشار دهد.
 
         // فالبک سکوت برای ارسال خودکار صوتی (VAD)
         if (voiceStateRef.current === "listening") {

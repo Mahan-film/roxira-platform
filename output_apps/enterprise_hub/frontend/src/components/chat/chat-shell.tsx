@@ -311,10 +311,24 @@ export function ChatShell() {
         </div>
       </div>
 
-      {/* مدال مکالمه صوتی زنده */}
+      {/* مدال مکالمه صوتی زنده با همگام‌سازی کامل به صفحه چت */}
       <LiveVoiceModal
         isOpen={isLiveAudioOpen}
         onClose={() => setIsLiveAudioOpen(false)}
+        conversationId={conversationId}
+        onConversationIdChange={(id) => setConversationId(id)}
+        onNewMessage={(userText, aiReply, draft, prob) => {
+          setMessages((prev) => [
+            ...prev,
+            { role: "user", content: userText },
+            {
+              role: "assistant",
+              content: aiReply,
+              draft: draft,
+              probability: prob,
+            },
+          ]);
+        }}
       />
     </div>
   );
