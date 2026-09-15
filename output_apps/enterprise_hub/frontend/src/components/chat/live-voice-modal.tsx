@@ -254,10 +254,18 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
 
     interruptAiSpeech();
     setVoiceState("speaking");
-    setStatusText("در حال پاسخ...");
+    setStatusText("پاسخ قاضی هوشمند (در حال پخش...)");
     unlockAudio();
 
     let played = false;
+
+    // زمان‌سنج نجات اضطراری: در صورت عدم اتمام صوت به هر دلیل، سشن شنیدن قطع نمی‌شود
+    const safetyWatchdog = setTimeout(() => {
+      if (voiceStateRef.current === "speaking") {
+        console.warn("Safety auto-resume to listening after playback timeout");
+        resumeListening();
+      }
+    }, 14000);
 
     const playAudioStream = async (url: string): Promise<boolean> => {
       try {
@@ -265,29 +273,32 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
         audio.preload = "auto";
         currentAudioElementRef.current = audio;
 
-        // به محض اتمام صحبت، سیستم خودکار و بی‌درنگ به حالت شنیدن بازمی‌گردد
         audio.onended = () => {
+          clearTimeout(safetyWatchdog);
           if (currentAudioElementRef.current === audio) currentAudioElementRef.current = null;
           resumeListening();
         };
 
-        await Promise.race([
-          audio.play(),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("audio play timeout")), 3500)),
-        ]);
+        audio.onerror = () => {
+          clearTimeout(safetyWatchdog);
+          if (currentAudioElementRef.current === audio) currentAudioElementRef.current = null;
+          resumeListening();
+        };
+
+        await audio.play();
         return true;
       } catch (e) {
-        console.warn("Audio stream notice:", e);
+        console.warn("Audio stream play notice:", e);
         return false;
       }
     };
 
-    // استراتژی ۱: اندپوینت استریم TTS فارسی سرور
+    // استراتژی ۱: اندپوینت استریم TTS فارسی اختصاصی سرور (Microsoft Neural Farid/Dilara)
     try {
       const response = await fetch("/api/v1/apps/judge/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.slice(0, 250) }),
+        body: JSON.stringify({ text: text.slice(0, 350) }),
       });
 
       const isAudio =
@@ -296,7 +307,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
 
       if (isAudio) {
         const audioBlob = await response.blob();
-        if (audioBlob.size > 100) {
+        if (audioBlob.size > 200) {
           const blobUrl = URL.createObjectURL(audioBlob);
           const ok = await playAudioStream(blobUrl);
           if (ok) {
@@ -309,33 +320,27 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       console.warn("Server TTS fetch error:", e);
     }
 
-    // استراتژی ۲: استریم صوتی فارسی مستقیم گوگل ترنسلیت (بومی، روان و با کیفیت عالی روی تمام سیستم‌ها)
-    if (!played) {
-      try {
-        const cleanText = text.replace(/[*#_`>]/g, "").split("\n")[0].trim().slice(0, 160);
-        if (cleanText) {
-          const directUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
-          const ok = await playAudioStream(directUrl);
-          if (ok) {
-            played = true;
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn("Direct TTS notice:", e);
-      }
-    }
-
-    // استراتژی ۳: مرورگر
+    // استراتژی ۲: فالبک مرورگر
     if (!played) {
       fallbackBrowserTts(text);
+      // تایمر جهت بازگشت به نوبت شنیدن پس از مطالعه پیام
+      setTimeout(() => {
+        clearTimeout(safetyWatchdog);
+        if (voiceStateRef.current === "speaking") {
+          resumeListening();
+        }
+      }, 4000);
     }
   }, [interruptAiSpeech, resumeListening, unlockAudio, fallbackBrowserTts]);
 
   // ارسال پرسش به هوش مصنوعی و دریافت پاسخ استدلالی
   const processUserSpeechTurn = async (queryText: string) => {
     const text = (queryText || accumulatedSpeechRef.current).trim();
-    if (!text || text.length < 2) {
+    
+    // فیلتر هوشمند صداهای پس‌زمینه، تنفس و نویزهای کوتاه تصادفی میکروفون (آه، اوه، پف، هوم...)
+    const fillerSet = new Set(["آه", "او", "ام", "اِ", "پف", "هوم", "اه", "خب", "ها", "ای", "عه", "اوه", "هم", "umm", "uh", "ah"]);
+    if (!text || text.length < 3 || fillerSet.has(text.toLowerCase())) {
+      console.log("Ignored background filler sound:", text);
       resumeListening();
       return;
     }

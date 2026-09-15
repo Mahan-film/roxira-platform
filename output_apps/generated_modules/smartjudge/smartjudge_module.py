@@ -1710,70 +1710,32 @@ async def transcribe_audio(request: Request):
 
 @router.post("/speak")
 async def generate_speech(payload: dict = Body(...)):
-    """تبدیل متن حقوقی به گفتار صوتی بلادرنگ (TTS) با تلفظ کامل تمام کلمات و بدون قطع شدن."""
+    """تبدیل متن حقوقی به گفتار صوتی بلادرنگ با کیفیت استودیویی و صدای بومی فارسی (Microsoft Neural TTS)."""
     text = str(payload.get("text") or payload.get("input") or "").strip()
     if not text:
         return JSONResponse({"status": "error", "message": "متن خالی است"}, status_code=400)
 
-    import urllib.parse
-    clean_text = re.sub(r"[*#_`>\[\]\(\)]", " ", text).strip()
-    clean_text = " ".join(clean_text.split())
-    clean_text = clean_text[:350]
+    import re
+    # تمیزسازی متن از کاراکترهای مارک‌داون
+    clean_text = re.sub(r"[*#_`>\[\]\(\)\n]", " ", text).strip()
+    clean_text = " ".join(clean_text.split())[:350]
 
-    words = clean_text.split()
-    chunks = []
-    curr = ""
-    for w in words:
-        if len(curr) + len(w) + 1 > 85:
-            if curr:
-                chunks.append(curr)
-            curr = w
-        else:
-            curr = (curr + " " + w).strip()
-    if curr:
-        chunks.append(curr)
-
-    if not chunks:
-        chunks = [clean_text[:85]]
-
-    # ۱. موتور استریم با کیفیت بالای Google Persian TTS با تجمیع قطعات صوتی
+    # ۱. موتور پرچمدار و فوق‌العاده باکیفیت Microsoft Neural TTS (صدای رسمی و شیوای فرید/دیلارام)
     try:
-        combined_audio = bytearray()
-        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
-        async with httpx.AsyncClient(timeout=httpx.Timeout(7.0, connect=2.0)) as client:
-            for c in chunks[:5]:
-                encoded_q = urllib.parse.quote(c)
-                tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q={encoded_q}"
-                resp = await client.get(tts_url, headers=headers)
-                if resp.status_code == 200 and len(resp.content) > 50:
-                    combined_audio.extend(resp.content)
-
-        if len(combined_audio) > 150:
-            return StreamingResponse(io.BytesIO(bytes(combined_audio)), media_type="audio/mpeg")
+        import edge_tts
+        voice = "fa-IR-FaridNeural"
+        communicate = edge_tts.Communicate(clean_text, voice)
+        audio_buffer = bytearray()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_buffer.extend(chunk["data"])
+        if len(audio_buffer) > 200:
+            return StreamingResponse(io.BytesIO(bytes(audio_buffer)), media_type="audio/mpeg")
     except Exception as exc:
-        print(f"[SMARTJUDGE][TTS-GOOGLE-CHUNKS-EXC] {exc}", file=sys.stderr)
-
-    # ۲. فالبک به OpenRouter
-    if OPENROUTER_API_KEY:
-        try:
-            headers = {
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://ghazihoushmand.ir",
-                "X-Title": "Roxira SmartJudge",
-            }
-            body = {
-                "model": "minimax/speech-2.8-turbo",
-                "input": clean_text[:250],
-            }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=2.5)) as client:
-                resp = await client.post("https://openrouter.ai/api/v1/audio/speech", json=body, headers=headers)
-                if resp.status_code == 200 and len(resp.content) > 100:
-                    return StreamingResponse(io.BytesIO(resp.content), media_type="audio/mpeg")
-        except Exception as exc:
-            print(f"[SMARTJUDGE][TTS-OPENROUTER-EXC] {exc}", file=sys.stderr)
+        print(f"[SMARTJUDGE][EDGE-TTS-EXC] {exc}", file=sys.stderr)
 
     return JSONResponse({"status": "error", "message": "سرویس صوت در دسترس نیست"}, status_code=502)
+
 
 
 def _sse_frame(event: str, payload: dict) -> str:
