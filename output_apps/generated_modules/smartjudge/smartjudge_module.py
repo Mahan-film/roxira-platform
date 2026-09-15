@@ -263,15 +263,15 @@ OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
 OPENROUTER_TIERS = {
     "VIP": {
-        "primary_model": "google/gemini-flash-latest",
-        "fallback_model": "google/gemini-2.0-flash-001",
+        "primary_model": "~google/gemini-flash-latest",
+        "fallback_model": "google/gemini-3.8-flash",
         "deep_reasoning_model": "anthropic/claude-3.7-sonnet",
-        "label": "Google Gemini Flash (Latest) / Gemini 2.0 Flash / Claude 3.7 Sonnet"
+        "label": "Google Gemini Flash (Latest) / Gemini 3.8 Flash / Claude 3.7 Sonnet"
     },
     "FREE": {
-        "primary_model": "google/gemini-flash-latest",
-        "fallback_model": "deepseek/deepseek-chat",
-        "label": "Google Gemini Flash (Latest) / DeepSeek"
+        "primary_model": "~google/gemini-flash-latest",
+        "fallback_model": "google/gemini-3.8-flash",
+        "label": "Google Gemini Flash (Latest)"
     }
 }
 
@@ -745,7 +745,7 @@ async def interactive_consult(payload: dict = Body(...)):
             messages_payload.append({"role": "user", "content": user_text})
 
             req_body = {
-                "model": cfg.get("primary_model", "google/gemini-flash-latest"),
+                "model": cfg.get("primary_model", "~google/gemini-flash-latest"),
                 "messages": messages_payload,
                 "temperature": 0.4,
                 "max_tokens": 1800,  # ارتقای سقف پاسخ برای ارائه متن کامل قوانین و توضیحات مبسوط

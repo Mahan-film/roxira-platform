@@ -446,13 +446,17 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
         try { recognitionRef.current.stop(); } catch (_) {}
       }
 
-      setStatusText("در حال پیاده‌سازی دقیق گفتار با هوش مصنوعی...");
-      // اولویت مطلق با بازشناسی دقیق هوش مصنوعی سرور (Faster-Whisper / Gemini Flash Latest) از روی صدای ضبط‌شده
-      let transcript = await transcribeCurrentSegment();
-      
-      // اگر سرور به دلیل خطای اتصال پاسخی نداد، از متن محلی مرورگر به عنوان فالبک استفاده کن
+      // استخراج و ترمیم فوری کلام گفته‌شده با اعمال فیلتر آوایی حقوقی
+      let rawText = accumulatedSpeechRef.current.trim();
+      let transcript = repairPhoneticsClient(rawText);
+
+      // در صورتی که متن مرورگر خالی باشد، بلافاصله از موتور صوتی سرور واکشی کن
       if (!transcript || transcript.length < 2) {
-        transcript = accumulatedSpeechRef.current.trim();
+        setStatusText("در حال استخراج صوتی با هوش مصنوعی...");
+        const serverTrans = await transcribeCurrentSegment();
+        if (serverTrans) {
+          transcript = repairPhoneticsClient(serverTrans);
+        }
       }
 
       if (transcript && transcript.length >= 2) {
@@ -801,6 +805,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
           {/* موضوعات سریع */}
           <div className="flex flex-wrap justify-center gap-1.5 pt-2">
             {[
+              "آخرین رأی وحدت رویه دیوان عالی",
               "لایحه اعاده دادرسی ماده ۴۷۴",
               "مطالبه مهریه از اجرای ثبت",
               "صلاحیت دادگاه صلح ۱۴۰۲"
