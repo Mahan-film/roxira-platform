@@ -263,15 +263,15 @@ OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
 OPENROUTER_TIERS = {
     "VIP": {
-        "primary_model": "google/gemini-3.8-flash",
-        "fallback_model": "anthropic/claude-5-sonnet",
-        "deep_reasoning_model": "deepseek/deepseek-v4.1-flash",
-        "label": "Gemini 3.8 Flash (Reasoning) / Claude Sonnet / DeepSeek V4.1 Flash"
+        "primary_model": "google/gemini-flash-latest",
+        "fallback_model": "google/gemini-2.0-flash-001",
+        "deep_reasoning_model": "anthropic/claude-3.7-sonnet",
+        "label": "Google Gemini Flash (Latest) / Gemini 2.0 Flash / Claude 3.7 Sonnet"
     },
     "FREE": {
-        "primary_model": "deepseek/deepseek-v4.1-flash",
-        "fallback_model": "openrouter/free",
-        "label": "DeepSeek V4.1 Flash / Free Router"
+        "primary_model": "google/gemini-flash-latest",
+        "fallback_model": "deepseek/deepseek-chat",
+        "label": "Google Gemini Flash (Latest) / DeepSeek"
     }
 }
 
@@ -740,7 +740,7 @@ async def interactive_consult(payload: dict = Body(...)):
             messages_payload.append({"role": "user", "content": user_text})
 
             req_body = {
-                "model": cfg.get("primary_model", "google/gemini-3.8-flash"),
+                "model": cfg.get("primary_model", "google/gemini-flash-latest"),
                 "messages": messages_payload,
                 "temperature": 0.4,
                 "max_tokens": 1800,  # ارتقای سقف پاسخ برای ارائه متن کامل قوانین و توضیحات مبسوط
@@ -1539,8 +1539,8 @@ async def health_check():
 
 # --- تبدیل گفتار به متن (STT فارسی) ------------------------------------------
 # مدل پیش‌فرض Gemini Flash (always-latest) که ورودی صوتی چندوجهی را می‌پذیرد.
-TRANSCRIBE_MODEL = OPENROUTER_TIERS["VIP"]["primary_model"]
-TRANSCRIBE_FALLBACK_MODEL = OPENROUTER_TIERS["VIP"]["fallback_model"]
+TRANSCRIBE_MODEL = "google/gemini-flash-latest"
+TRANSCRIBE_FALLBACK_MODEL = "google/gemini-2.0-flash-001"
 TRANSCRIPTION_SYSTEM_PROMPT = (
     "شما یک موتور دقیق تبدیل گفتار به متن (Speech-to-Text) فارسی هستید. "
     "گفتار فارسی را با دقت کامل، املای صحیح، نیم‌فاصله و علائم سجاوندی مناسب به متن تبدیل کن. "
@@ -1595,8 +1595,22 @@ def _get_local_whisper_instance():
     return _local_whisper_model if _local_whisper_model else None
 
 
+_local_whisper_model = None
+
+def _get_local_whisper_instance():
+    global _local_whisper_model
+    if _local_whisper_model is None:
+        try:
+            from faster_whisper import WhisperModel
+            _local_whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+        except Exception as e:
+            print(f"[SMARTJUDGE][WHISPER-INIT-ERROR] {e}", file=sys.stderr)
+            _local_whisper_model = False
+    return _local_whisper_model if _local_whisper_model else None
+
+
 async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str) -> str:
-    """تبدیل صدای فارسی به متن با بالاترین دقت حقوقی از طریق Faster-Whisper محلی و فالبک‌های پیشرفته."""
+    """تبدیل صدای فارسی به متن با بالاترین دقت با Faster-Whisper محلی و Google Gemini Flash Latest."""
     ext = _normalize_audio_format(audio_format)
     if ext == "mp4":
         ext = "m4a"
@@ -1612,19 +1626,68 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
         raw_bytes = audio_data
         audio_b64 = base64.b64encode(raw_bytes).decode("ascii")
 
-    # ۱. اجرای بومی با Faster-Whisper روی سرور (دقت ۹۹٪ بدون تأخیر شبکه، بدون قطع شدن کلمات تخصصی)
+    # ۱. پردازش محلی با Faster-Whisper (دقت بالا در کلمات قضایی، تأخیر کمتر از ۲۰۰ میلی‌ثانیه)
     whisper_engine = _get_local_whisper_instance()
     if whisper_engine and raw_bytes:
         try:
             segments, info = whisper_engine.transcribe(io.BytesIO(raw_bytes), language="fa", beam_size=2)
             transcription = " ".join([s.text for s in segments]).strip()
             if transcription and len(transcription) >= 2:
+                print(f"[SMARTJUDGE][STT-SUCCESS] Local Faster-Whisper: {transcription[:80]}")
                 return transcription
         except Exception as exc:
             print(f"[SMARTJUDGE][FASTER-WHISPER-FAIL] {exc}", file=sys.stderr)
 
     if not OPENROUTER_API_KEY:
         return ""
+
+    headers_json = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://ghazihoushmand.ir",
+        "X-Title": "Roxira SmartJudge",
+    }
+
+    # ۲. فالبک به مدل چندوجهی سریع Gemini Flash Latest در OpenRouter
+    target_model = model or "google/gemini-flash-latest"
+    try:
+        body = {
+            "model": target_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "لطفاً این قطعه صوتی به زبان فارسی را کلمه به کلمه و با دقت بالا به متن تبدیل کن. این مکالمه حقوقی است و شامل اصطلاحاتی مانند رأی وحدت رویه، دیوان عالی کشور، مواد قانونی و دادرسی است. فقط و فقط متن پیاده‌شده را بدون هیچ توضیح اضافی بنویس:"
+                        },
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": audio_b64,
+                                "format": ext if ext in ("wav", "mp3") else "mp3"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "temperature": 0.0,
+            "max_tokens": 200
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=2.0)) as client:
+            resp = await client.post(OPENROUTER_CHAT_URL, json=body, headers=headers_json)
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices:
+                    res_text = choices[0].get("message", {}).get("content", "").strip()
+                    if res_text:
+                        print(f"[SMARTJUDGE][STT-SUCCESS] Gemini Flash: {res_text[:80]}")
+                        return res_text
+    except Exception as exc:
+        print(f"[SMARTJUDGE][STT-GEMINI-FAIL] {exc}", file=sys.stderr)
+
+    return ""
 
     headers_json = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",

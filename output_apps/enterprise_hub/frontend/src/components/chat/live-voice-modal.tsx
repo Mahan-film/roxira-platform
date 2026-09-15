@@ -152,11 +152,19 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
     if (recorder && recorder.state !== "inactive") {
       try {
         const blob = await new Promise<Blob>((resolve) => {
+          const timeoutId = setTimeout(() => {
+            const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/mp4";
+            resolve(new Blob(audioChunksRef.current, { type }));
+          }, 600);
           recorder.onstop = () => {
-            const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/webm";
+            clearTimeout(timeoutId);
+            const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/mp4";
             resolve(new Blob(audioChunksRef.current, { type }));
           };
-          try { recorder.stop(); } catch (_) { resolve(new Blob([], { type: "audio/webm" })); }
+          try { recorder.stop(); } catch (_) {
+            clearTimeout(timeoutId);
+            resolve(new Blob([], { type: "audio/mp4" }));
+          }
         });
         audioChunksRef.current = [];
         mediaRecorderRef.current = null;
@@ -421,12 +429,18 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (_) {}
       }
-      let transcript = accumulatedSpeechRef.current.trim();
-      if (!transcript) {
-        transcript = await transcribeCurrentSegment();
+
+      setStatusText("در حال پیاده‌سازی دقیق گفتار با هوش مصنوعی...");
+      // اولویت مطلق با بازشناسی دقیق هوش مصنوعی سرور (Faster-Whisper / Gemini Flash Latest) از روی صدای ضبط‌شده
+      let transcript = await transcribeCurrentSegment();
+      
+      // اگر سرور به دلیل خطای اتصال پاسخی نداد، از متن محلی مرورگر به عنوان فالبک استفاده کن
+      if (!transcript || transcript.length < 2) {
+        transcript = accumulatedSpeechRef.current.trim();
       }
 
       if (transcript && transcript.length >= 2) {
+        setCurrentUserSpeech(transcript);
         await processUserSpeechTurn(transcript);
       } else {
         setStatusText("صدایی تشخیص داده نشد؛ بفرمایید صحبت کنید...");
@@ -563,7 +577,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
                 if (voiceStateRef.current === "listening" && accumulatedSpeechRef.current.trim().length >= 2) {
                   submitSpokenTurn();
                 }
-              }, 1100);
+              }, 1000);
             }
           };
 
