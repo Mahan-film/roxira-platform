@@ -144,52 +144,59 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
     }
   }, []);
 
-  // تبدیل صوت به متن با فالبک سرور
+  // تبدیل صوت به متن با اولویت موتورهای با دقت بالای سرور (Faster-Whisper / Gemini Flash Multimodal)
   const transcribeCurrentSegment = useCallback(async (): Promise<string> => {
-    const localText = accumulatedSpeechRef.current.trim();
-    if (localText && localText.length >= 2) {
-      return localText;
-    }
-
     const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state === "inactive") return "";
+    let serverText = "";
 
-    const blob = await new Promise<Blob>((resolve) => {
-      recorder.onstop = () => {
-        const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/webm";
-        resolve(new Blob(audioChunksRef.current, { type }));
-      };
-      try { recorder.stop(); } catch (_) { resolve(new Blob([], { type: "audio/webm" })); }
-    });
-    audioChunksRef.current = [];
-    mediaRecorderRef.current = null;
-    if (blob.size === 0) return "";
+    if (recorder && recorder.state !== "inactive") {
+      try {
+        const blob = await new Promise<Blob>((resolve) => {
+          recorder.onstop = () => {
+            const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/webm";
+            resolve(new Blob(audioChunksRef.current, { type }));
+          };
+          try { recorder.stop(); } catch (_) { resolve(new Blob([], { type: "audio/webm" })); }
+        });
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
 
-    try {
-      const ext = /mp4|m4a|aac/i.test(blob.type)
-        ? "m4a"
-        : /ogg/i.test(blob.type)
-        ? "ogg"
-        : /wav/i.test(blob.type)
-        ? "wav"
-        : "webm";
-      const formData = new FormData();
-      formData.append("file", blob, `speech.${ext}`);
+        if (blob && blob.size > 400) {
+          const ext = /mp4|m4a|aac/i.test(blob.type)
+            ? "m4a"
+            : /ogg/i.test(blob.type)
+            ? "ogg"
+            : /wav/i.test(blob.type)
+            ? "wav"
+            : "webm";
+          const formData = new FormData();
+          formData.append("file", blob, `speech.${ext}`);
 
-      const controller = new AbortController();
-      const tId = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
-      }).finally(() => clearTimeout(tId));
+          const controller = new AbortController();
+          const tId = setTimeout(() => controller.abort(), 4500);
+          const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
+            method: "POST",
+            body: formData,
+            signal: controller.signal,
+          }).finally(() => clearTimeout(tId));
 
-      const data = res.ok ? await res.json().catch(() => null) : null;
-      return (data?.text || data?.transcript || "").trim();
-    } catch (e) {
-      console.warn("STT segment notice:", e);
-      return "";
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            serverText = (data?.text || data?.transcript || "").trim();
+          }
+        }
+      } catch (e) {
+        console.warn("Server STT error, falling back to local:", e);
+      }
     }
+
+    // اگر موتور هوشمند سرور متن باکیفیت ارائه داد، از آن استفاده کن تا اصطلاحات حقوقی (مثل وحدت رویه) مخدوش نشوند
+    if (serverText && serverText.length >= 2) {
+      return serverText;
+    }
+
+    // فالبک به متن شناسایی‌شده مرورگر در صورت عدم دسترسی به سرور
+    return accumulatedSpeechRef.current.trim();
   }, []);
 
   // بازگشت خودکار به وضعیت شنیدن برای نوبت بعدی مکالمه بدون دخالت کاربر
@@ -556,7 +563,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
                 if (voiceStateRef.current === "listening" && accumulatedSpeechRef.current.trim().length >= 2) {
                   submitSpokenTurn();
                 }
-              }, 2200);
+              }, 1100);
             }
           };
 
