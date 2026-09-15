@@ -11,11 +11,15 @@ interface PaymentModalProps {
 export default function PaymentCheckoutModal({ isOpen, onClose, phone }: PaymentModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<"SINGLE_DRAFT" | "VIP_MONTHLY">("SINGLE_DRAFT");
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
 
   if (!isOpen) return null;
 
   const handlePayment = async () => {
     setLoading(true);
+    setNotice("");
+    setError("");
     try {
       const res = await fetch("/api/v1/apps/judge/payments/create-invoice", {
         method: "POST",
@@ -24,12 +28,15 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
       });
       const data = await res.json();
       if (data.payment_url) {
-        alert(`فاکتور ${data.invoice_id} با موفقیت صادر شد. انتقال به درگاه بانکی شاپرک...`);
+        setNotice(`فاکتور ${data.invoice_id} صادر شد. انتقال به درگاه بانکی...`);
         window.open(data.payment_url, "_blank");
         onClose();
+      } else {
+        setError("صدور فاکتور انجام نشد. لطفاً دوباره تلاش کنید.");
       }
     } catch (e) {
-      alert("خطا در ایجاد تراکنش پرداخت.");
+      console.warn("Payment invoice error:", e);
+      setError("خطا در ایجاد تراکنش پرداخت.");
     } finally {
       setLoading(false);
     }
@@ -75,6 +82,13 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
           <div className="flex justify-between"><span>شماره سفارش‌دهنده:</span><span className="font-mono text-zinc-200">{phone}</span></div>
           <div className="flex justify-between"><span>درگاه پرداخت:</span><span className="text-emerald-400 font-bold">زرین‌پال / متصل به شبکه شتاب</span></div>
         </div>
+
+        {notice && (
+          <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-xl text-xs text-emerald-300">{notice}</div>
+        )}
+        {error && (
+          <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-xl text-xs text-rose-300">{error}</div>
+        )}
 
         <button
           onClick={handlePayment}

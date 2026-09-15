@@ -46,11 +46,59 @@ import hmac
 import hashlib
 import base64
 import asyncio
-from typing import Optional, List
-from fastapi import APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query
+from typing import Optional, List, Any
+from fastapi import APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 import psycopg
 import httpx
+
+# ------------------------------------------------------------------------------
+# پکیج پردازشی اسناد (Docling → استخراج بومی → OCR بینایی)
+# نصب موتور اصلی:  pip install docling
+# ------------------------------------------------------------------------------
+try:
+    from .documents import (
+        DOCLING_AVAILABLE as _DOC_DOCLING_AVAILABLE,
+        DocumentProcessingError as _DocumentProcessingError,
+        combine_markdown as _combine_documents_markdown,
+        convert_documents as _convert_documents,
+        provider_health as _documents_provider_health,
+    )
+except Exception as _doc_import_exc:  # noqa: BLE001 - هرگز نباید بوت سرور را متوقف کند
+    print(f"[SMARTJUDGE][DOC] document package unavailable: {_doc_import_exc}", file=sys.stderr)
+    _DOC_DOCLING_AVAILABLE = False
+    _convert_documents = None
+    _combine_documents_markdown = None
+    _documents_provider_health = None
+
+    class _DocumentProcessingError(Exception):
+        def __init__(self, message: str, status_code: int = 400) -> None:
+            super().__init__(message)
+            self.message = message
+            self.status_code = status_code
+
+# ------------------------------------------------------------------------------
+# موتور گراف دانش حقوقی (LightRAG) — نصب:  pip install lightrag-hku
+# نبود آن باعث خطا نمی‌شود؛ بازیابی به لایهٔ SQL بومی تنزل می‌کند.
+# ------------------------------------------------------------------------------
+try:
+    from .legal_graph import (
+        LIGHTRAG_AVAILABLE as _LIGHTRAG_AVAILABLE,
+        is_ready as _lightrag_is_ready,
+        lightrag_health as _lightrag_health,
+        rag_query as _lightrag_rag_query,
+    )
+except Exception as _lr_import_exc:  # noqa: BLE001
+    print(f"[SMARTJUDGE][LIGHTRAG] engine unavailable: {_lr_import_exc}", file=sys.stderr)
+    _LIGHTRAG_AVAILABLE = False
+    _lightrag_rag_query = None
+
+    def _lightrag_is_ready() -> bool:  # type: ignore[misc]
+        return False
+
+    def _lightrag_health() -> dict:  # type: ignore[misc]
+        return {"engine": "lightrag-hku", "available": False, "install_hint": "pip install lightrag-hku"}
+
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudge Complete Engine"])
 
@@ -519,6 +567,27 @@ def query_knowledge_graph(query_text: str, limit: int = 3):
     سطح بالا: دکترین‌های حاکم و رویه‌های لازم‌الاتباع با وضعیت ACTIVE.
     """
     t_start = time.time()
+    # لایهٔ ۱ — LightRAG (گراف موجودیت/رابطه + برداری):  pip install lightrag-hku
+    if _lightrag_rag_query is not None and _lightrag_is_ready():
+        try:
+            rag_answer = _lightrag_rag_query(query_text, top_k=max(limit, 4))
+            if rag_answer:
+                # استنادات گرافی به‌عنوان پیش‌زمینهٔ دکترین تزریق می‌شوند
+                doctrines = [
+                    {
+                        "title": "تحلیل گراف دانش حقوقی (LightRAG)",
+                        "category": "DOCTRINE",
+                        "summary": rag_answer[:1200],
+                        "binding_effect": "تحلیلی",
+                    }
+                ]
+                if _dual_retrieve is not None:
+                    laws, precedents = _dual_retrieve(query_text, limit, POSTGRES_DSN)
+                    return laws or [], (precedents or []) + doctrines
+                return [], doctrines
+        except Exception as exc:  # noqa: BLE001 - تنزل به لایهٔ SQL
+            print(f"[SMARTJUDGE][LIGHTRAG-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+
     if _dual_retrieve is not None:
         try:
             laws, precedents = _dual_retrieve(query_text, limit, POSTGRES_DSN)
@@ -987,16 +1056,169 @@ async def export_defense_document(payload: dict = Body(...)):
     }
 
 # ------------------------------------------------------------------------------
+# پکیج پردازشی اسناد: دریافت فایل خام (PDF/Word/تصویر) و تبدیل به Markdown
+# نصب موتور اصلی:  pip install docling
+# ------------------------------------------------------------------------------
+def _is_upload(value: Any) -> bool:
+    """
+    تشخیص فایل در multipart بدون اتکا به هویت کلاس.
+
+    نکته: در FastAPI ≥ 0.116 کلاس `fastapi.UploadFile` دیگر زیرکلاس
+    `starlette.datastructures.UploadFile` نیست؛ بنابراین isinstance روی آیتم‌های
+    `request.form()` همیشه False می‌شود و باید از duck-typing استفاده کرد.
+    """
+    return hasattr(value, "read") and hasattr(value, "filename")
+
+
+async def _resolve_case_text(request: Request) -> tuple:
+    """
+    استخراج متن پرونده از درخواست؛ پشتیبانی هم‌زمان از:
+      • JSON کلاسیک: {extracted_text|text_content|case_text, doc_type}
+      • multipart/form-data با پیوست فایل (PDF/Word/تصویر)
+    بازگشت: (متن ادغام‌شده، doc_type، فهرست فرادادهٔ اسناد، خطا)
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        doc_type = str(form.get("doc_type") or "RULING")
+        inline_text = str(
+            form.get("extracted_text") or form.get("text_content") or form.get("case_text") or ""
+        ).strip()
+        uploaded = []
+        for key in ("files", "file", "document", "documents"):
+            for value in form.getlist(key):
+                if _is_upload(value):
+                    uploaded.append((getattr(value, "filename", None) or "unnamed", await value.read()))
+
+        if not uploaded:
+            return inline_text, doc_type, [], None
+        if _convert_documents is None:
+            return inline_text, doc_type, [], JSONResponse(
+                {"status": "ERROR", "message": "پکیج پردازشی اسناد در دسترس نیست."}, status_code=503
+            )
+        try:
+            documents = await _convert_documents(uploaded)
+        except _DocumentProcessingError as exc:
+            return inline_text, doc_type, [], JSONResponse(
+                {"status": "ERROR", "message": exc.message}, status_code=exc.status_code
+            )
+
+        parsed_meta = [document.to_meta() for document in documents]
+        extracted = _combine_documents_markdown(documents) if _combine_documents_markdown else ""
+        merged = "\n\n".join(part for part in (inline_text, extracted) if part).strip()
+        return merged, doc_type, parsed_meta, None
+
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    text = str(
+        payload.get("extracted_text") or payload.get("text_content") or payload.get("case_text") or ""
+    ).strip()
+    return text, str(payload.get("doc_type") or "RULING"), [], None
+
+
+@router.post("/documents/convert")
+async def convert_documents_endpoint(files: List[UploadFile] = File(...)):
+    """
+    تبدیل اسناد پیوست (PDF، Word، تصویر دادنامه/چک، متنی) به Markdown ساختاریافته.
+
+    خروجی منطبق بر قرارداد فرانت‌اند (`ParsedDocumentMeta`):
+      filename, format, method, markdown, char_count, ocr_used, warnings
+
+    معماری سه‌لایه: Docling (pip install docling) → استخراج بومی → OCR بینایی OpenRouter.
+    """
+    if _convert_documents is None:
+        return JSONResponse(
+            {"status": "ERROR", "message": "پکیج پردازشی اسناد بارگذاری نشده است."}, status_code=503
+        )
+
+    payloads = []
+    for upload in files or []:
+        payloads.append((upload.filename or "unnamed", await upload.read()))
+
+    try:
+        documents = await _convert_documents(payloads)
+    except _DocumentProcessingError as exc:
+        return JSONResponse({"status": "ERROR", "message": exc.message}, status_code=exc.status_code)
+
+    metas = [document.to_meta() for document in documents]
+    return {
+        "status": "SUCCESS",
+        "document_count": len(metas),
+        "total_chars": sum(meta["char_count"] for meta in metas),
+        "ocr_documents": sum(1 for meta in metas if meta["ocr_used"]),
+        "docling_available": _DOC_DOCLING_AVAILABLE,
+        "engine": "docling" if _DOC_DOCLING_AVAILABLE else "native-fallback",
+        "install_hint": "pip install docling",
+        "source_documents": metas,
+        "combined_markdown": _combine_documents_markdown(documents) if _combine_documents_markdown else "",
+    }
+
+
+@router.get("/legal-graph/health")
+async def legal_graph_health():
+    """وضعیت موتور گراف دانش حقوقی (LightRAG) — نصب: pip install lightrag-hku"""
+    return {"status": "OK", **_lightrag_health()}
+
+
+@router.post("/legal-graph/ingest")
+async def legal_graph_ingest(payload: dict = Body(...)):
+    """
+    درج مواد قانونی/آرای وحدت رویه/دکترین در گراف دانش LightRAG.
+    ورودی: {"texts": ["...", "..."]}
+    """
+    if not _LIGHTRAG_AVAILABLE:
+        return JSONResponse(
+            {"status": "UNAVAILABLE", "message": "موتور LightRAG نصب نیست.", "install_hint": "pip install lightrag-hku"},
+            status_code=503,
+        )
+    texts = [str(t) for t in (payload.get("texts") or []) if str(t).strip()]
+    if not texts:
+        return JSONResponse({"status": "ERROR", "message": "فهرست متون برای درج الزامی است."}, status_code=400)
+    from .legal_graph import ingest_texts as _ingest
+    result = await asyncio.to_thread(_ingest, texts)
+    return {"status": result.get("status"), "inserted": result.get("inserted"), "error": result.get("error")}
+
+
+@router.get("/documents/processor-health")
+async def documents_processor_health():
+    """وضعیت پکیج پردازشی اسناد (نصب Docling، مدل OCR بینایی، محدودیت‌ها)."""
+    if _documents_provider_health is None:
+        return {
+            "status": "UNAVAILABLE",
+            "docling_available": False,
+            "install_hint": "pip install docling",
+        }
+    return {"status": "OK", **_documents_provider_health()}
+
+
+# ------------------------------------------------------------------------------
 # ماژول تحلیل و استخراج ادله از اسناد و تصاویر دادنامه‌ها (Vision OCR Processor)
 # ------------------------------------------------------------------------------
 @router.post("/analyze-document-text")
-async def analyze_document_text(payload: dict = Body(...)):
-    """استخراج و انطباق متون اسناد بارگذاری‌شده (قرارداد، دادنامه بدوی، چک) با پایگاه قوانین"""
-    extracted_text = payload.get("extracted_text", "").strip()
-    doc_type = payload.get("doc_type", "RULING") # RULING (دادنامه), CONTRACT (قرارداد), DRAFT (چک/سند)
-    
+async def analyze_document_text(request: Request):
+    """
+    استخراج و انطباق متون اسناد (قرارداد، دادنامه بدوی، چک) با پایگاه قوانین.
+
+    ورودی: JSON `{extracted_text|case_text, doc_type}` یا multipart/form-data با پیوست فایل.
+    """
+    extracted_text, doc_type, source_documents, error = await _resolve_case_text(request)
+    if error is not None:
+        return error
+    extracted_text = (extracted_text or "").strip()
+
     if not extracted_text:
-        return JSONResponse({"status": "ERROR", "message": "متن سند استخراج‌شده الزامی است."}, status_code=400)
+        return JSONResponse(
+            {
+                "status": "ERROR",
+                "message": "متن سند یا حداقل یک فایل پیوست (PDF/Word/تصویر) الزامی است.",
+            },
+            status_code=400,
+        )
 
     # انطباق سریع با مواد مرتبط در گراف قوانین
     matched_laws, matched_precedents = query_knowledge_graph(extracted_text, limit=4)
@@ -1013,7 +1235,13 @@ async def analyze_document_text(payload: dict = Body(...)):
         ],
         "statutory_basis": matched_laws,
         "unified_precedents": matched_precedents,
-        "suggested_action": "تنظیم فوری لایحه تجدیدنظرخواهی بر مبنای آرای وحدت رویه استخراج‌شده."
+        "suggested_action": "تنظیم فوری لایحه تجدیدنظرخواهی بر مبنای آرای وحدت رویه استخراج‌شده.",
+        "source_documents": source_documents,
+        "extracted_text": extracted_text[:2000],
+        "processing": {
+            "docling_available": _DOC_DOCLING_AVAILABLE,
+            "documents_parsed": len(source_documents),
+        },
     }
     return analysis_result
 # ------------------------------------------------------------------------------
@@ -1164,16 +1392,28 @@ async def create_zibal_invoice(payload: dict = Body(...)):
 # پردازش مستقیم متن استخراج‌شده از اسناد و دادنامه‌ها (Vision OCR Ingest)
 # ------------------------------------------------------------------------------
 @router.post("/documents/analyze-ocr")
-async def analyze_ocr_document(payload: dict = Body(...)):
-    """تحلیل ساختاریافته دادنامه، قرارداد یا چک و استخراج ادله دفاعی"""
-    text_content = payload.get("text_content", "").strip()
-    doc_type = payload.get("doc_type", "RULING")
-    
+async def analyze_ocr_document(request: Request):
+    """
+    تحلیل ساختاریافته دادنامه، قرارداد یا چک و استخراج ادله دفاعی.
+
+    ورودی: JSON `{text_content|case_text, doc_type}` یا multipart/form-data با پیوست فایل.
+    """
+    text_content, doc_type, source_documents, error = await _resolve_case_text(request)
+    if error is not None:
+        return error
+    text_content = (text_content or "").strip()
+
     if not text_content:
-        return JSONResponse({"status": "ERROR", "message": "محتوای متنی سند الزامی است."}, status_code=400)
+        return JSONResponse(
+            {
+                "status": "ERROR",
+                "message": "محتوای متنی سند یا حداقل یک فایل پیوست الزامی است.",
+            },
+            status_code=400,
+        )
 
     laws, precedents = query_knowledge_graph(text_content, limit=4)
-    
+
     return {
         "status": "SUCCESS",
         "doc_type": doc_type,
@@ -1181,7 +1421,10 @@ async def analyze_ocr_document(payload: dict = Body(...)):
         "statutory_basis": laws,
         "unified_precedents": precedents,
         "recommended_defense": "استناد به آرای هیأت عمومی استخراج‌شده و ثبت دادخواست تجدیدنظر / فرجام‌خواهی",
-        "model_assigned": OPENROUTER_TIERS["VIP"]["primary_model"]
+        "model_assigned": OPENROUTER_TIERS["VIP"]["primary_model"],
+        "source_documents": source_documents,
+        "ocr_used": any(meta.get("ocr_used") for meta in source_documents),
+        "docling_available": _DOC_DOCLING_AVAILABLE,
     }
 
 # ------------------------------------------------------------------------------
@@ -1220,7 +1463,18 @@ async def run_simulation_qa():
 
 @router.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "smartjudge", "version": "4.5.0", "connected": True}
+    return {
+        "status": "ok",
+        "service": "smartjudge",
+        "version": "4.5.0",
+        "connected": True,
+        "documents_processor": {
+            "docling_available": _DOC_DOCLING_AVAILABLE,
+            "endpoint": "/api/v1/apps/judge/documents/convert",
+            "install_hint": "pip install docling",
+        },
+        "legal_graph": _lightrag_health(),
+    }
 
 # --- تبدیل گفتار به متن (STT فارسی) ------------------------------------------
 # مدل پیش‌فرض Gemini Flash (always-latest) که ورودی صوتی چندوجهی را می‌پذیرد.
@@ -1293,37 +1547,7 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
         "X-Title": "Roxira SmartJudge",
     }
 
-    # گام ۱: فراخوانی مستقیم و استاندارد اندپوینت STT در OpenRouter با بدنهٔ JSON (توصیه رسمی OpenRouter)
-    stt_models = [
-        "openai/whisper-large-v3",
-        "openai/whisper-large-v3-turbo",
-        "openai/whisper-1",
-    ]
-    for stt_model in stt_models:
-        try:
-            payload = {
-                "model": stt_model,
-                "input_audio": {
-                    "data": audio_b64,
-                    "format": ext,
-                },
-                "language": "fa",
-                "temperature": 0.0,
-            }
-            timeout = httpx.Timeout(30.0, connect=8.0)
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post("https://openrouter.ai/api/v1/audio/transcriptions", json=payload, headers=headers_json)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    res_text = str(data.get("text") or "").strip()
-                    if res_text:
-                        return res_text
-                else:
-                    print(f"[SMARTJUDGE][STT-JSON-ERR] model={stt_model} status={resp.status_code} body={resp.text[:200]}", file=sys.stderr)
-        except Exception as exc:
-            print(f"[SMARTJUDGE][STT-JSON-FAIL] model={stt_model} {type(exc).__name__}: {exc}", file=sys.stderr)
-
-    # گام ۲: فالبک به Multipart Form-Data استاندارد با تفکیک فیلدهای data و files
+    # گام ۱: ارسال Multipart مستقیم به اندپوینت رسمی /audio/transcriptions در OpenRouter
     try:
         files = {"file": (f"audio.{ext}", raw_bytes, f"audio/{ext}")}
         form_data = {"model": "openai/whisper-large-v3", "language": "fa"}
@@ -1332,7 +1556,7 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
             "HTTP-Referer": "https://ghazihoushmand.ir",
             "X-Title": "Roxira SmartJudge",
         }
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=8.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=2.5)) as client:
             resp = await client.post("https://openrouter.ai/api/v1/audio/transcriptions", files=files, data=form_data, headers=headers_multi)
             if resp.status_code == 200:
                 data_res = resp.json()
@@ -1340,34 +1564,33 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
                 if res_text:
                     return res_text
     except Exception as exc:
-        print(f"[SMARTJUDGE][STT-MULTIPART-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"[SMARTJUDGE][STT-WHISPER-FAIL] {exc}", file=sys.stderr)
 
-    # گام ۳: فالبک به مدل‌های گفتاری OpenAI با ساختار input_audio در /chat/completions
-    candidate_chat_models = ["openai/gpt-4o-mini-audio-preview", "openai/gpt-4o-audio-preview"]
-    for c_model in candidate_chat_models:
-        try:
-            body = {
-                "model": c_model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "لطفاً این فایل صوتی فارسی را کلمه به کلمه به متن پیاده کن. فقط خود متن را بنویس بدون هیچ توضیح اضافه:"},
-                            {"type": "input_audio", "input_audio": {"data": audio_b64, "format": ext}},
-                        ],
-                    }
-                ],
-                "temperature": 0.0,
-            }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=8.0)) as client:
-                resp = await client.post(OPENROUTER_CHAT_URL, json=body, headers=headers_json)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    res_text = _extract_openrouter_text(data)
-                    if res_text:
-                        return res_text
-        except Exception as exc:
-            print(f"[SMARTJUDGE][MULTIMODAL-STT-FAIL] {c_model}: {exc}", file=sys.stderr)
+    # گام ۲: فالبک به مدل چندوجهی سریع Gemini 2.5 Flash در OpenRouter
+    try:
+        data_uri = f"data:audio/{ext};base64,{audio_b64}"
+        body = {
+            "model": "google/gemini-2.5-flash",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "لطفاً این صوت فارسی را دقیقاً به متن پیاده‌سازی کن. فقط خود متن پیاده‌شده را بنویس بدون هیچ مقدمه یا موخره:"},
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                    ],
+                }
+            ],
+            "temperature": 0.0,
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
+            resp = await client.post(OPENROUTER_CHAT_URL, json=body, headers=headers_json)
+            if resp.status_code == 200:
+                data = resp.json()
+                res_text = _extract_openrouter_text(data)
+                if res_text:
+                    return res_text
+    except Exception as exc:
+        print(f"[SMARTJUDGE][STT-GEMINI-FAIL] {exc}", file=sys.stderr)
 
     return ""
 
@@ -1447,39 +1670,50 @@ async def transcribe_audio(request: Request):
 
 @router.post("/speak")
 async def generate_speech(payload: dict = Body(...)):
-    """تبدیل متن حقوقی به گفتار صوتی بلادرنگ (TTS) با بالاترین کیفیت از طریق OpenRouter."""
+    """تبدیل متن حقوقی به گفتار صوتی بلادرنگ (TTS) با بالاترین کیفیت و فالبک پایدار."""
     text = str(payload.get("text") or payload.get("input") or "").strip()
     if not text:
         return JSONResponse({"status": "error", "message": "متن خالی است"}, status_code=400)
 
-    short_text = text[:350]
-    voice = payload.get("voice", "alloy")
+    # برای پاسخ صوتی پرسرعت، جمله اول یا حداکثر ۲۰۰ کاراکتر اول استخراج می‌شود
+    first_line = text.split("\n")[0].strip()
+    short_text = first_line[:200] if len(first_line) > 10 else text[:200]
 
-    if not OPENROUTER_API_KEY:
-        return JSONResponse({"status": "error", "message": "کلید API موجود نیست"}, status_code=500)
-
+    # ۱. موتور فوق‌العاده روان و بومی Google Persian TTS (تأخیر زیر ۱۵۰ میلی‌ثانیه، تلفظ دقیق ایرانی)
     try:
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://ghazihoushmand.ir",            "X-Title": "Roxira SmartJudge",
-        }
-        body = {
-            "model": "openai/tts-1",
-            "input": short_text,
-            "voice": voice,
-        }
-        timeout = httpx.Timeout(15.0, connect=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post("https://openrouter.ai/api/v1/audio/speech", json=body, headers=headers)
-            if resp.status_code == 200:
+        import urllib.parse
+        encoded_q = urllib.parse.quote(short_text)
+        tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q={encoded_q}"
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
+            headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+            resp = await client.get(tts_url, headers=headers)
+            if resp.status_code == 200 and len(resp.content) > 100:
                 return StreamingResponse(io.BytesIO(resp.content), media_type="audio/mpeg")
-            else:
-                print(f"[SMARTJUDGE][TTS-FAIL] status={resp.status_code} body={resp.text[:200]}", file=sys.stderr)
-                return JSONResponse({"status": "error", "message": "خطای سرویس صوت"}, status_code=502)
     except Exception as exc:
-        print(f"[SMARTJUDGE][TTS-EXC] {exc}", file=sys.stderr)
-        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+        print(f"[SMARTJUDGE][TTS-GOOGLE-EXC] {exc}", file=sys.stderr)
+
+    # ۲. فالبک به OpenRouter Audio API
+    if OPENROUTER_API_KEY:
+        try:
+            headers = {
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://ghazihoushmand.ir",
+                "X-Title": "Roxira SmartJudge",
+            }
+            body = {
+                "model": "minimax/speech-2.8-turbo",
+                "input": short_text,
+            }
+            timeout = httpx.Timeout(6.0, connect=2.5)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post("https://openrouter.ai/api/v1/audio/speech", json=body, headers=headers)
+                if resp.status_code == 200 and len(resp.content) > 100:
+                    return StreamingResponse(io.BytesIO(resp.content), media_type="audio/mpeg")
+        except Exception as exc:
+            print(f"[SMARTJUDGE][TTS-OPENROUTER-EXC] {exc}", file=sys.stderr)
+
+    return JSONResponse({"status": "error", "message": "سرویس صوت در دسترس نیست"}, status_code=502)
 
 
 def _sse_frame(event: str, payload: dict) -> str:

@@ -17,6 +17,7 @@ export default function LegalChatConsole() {
   const [response, setResponse] = useState<LegalResponse | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [micError, setMicError] = useState("");
 
   // ارسال متن جهت تدوین استراتژی و لایحه
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -62,7 +63,8 @@ export default function LegalChatConsole() {
         mediaRecorder.start();
         setIsRecording(true);
       } catch (err) {
-        alert("دسترسی به میکروفون امکان‌پذیر نیست.");
+        console.warn("Microphone access failed:", err);
+        setMicError("دسترسی به میکروفون امکان‌پذیر نیست.");
       }
     }
   };
@@ -124,6 +126,10 @@ export default function LegalChatConsole() {
               {loading ? "در حال تحلیل قضایی..." : "تحلیل و تدوین استراتژی ⚡"}
             </button>
           </div>
+
+          {micError && (
+            <p className="text-xs text-rose-500">{micError}</p>
+          )}
         </form>
       </div>
 

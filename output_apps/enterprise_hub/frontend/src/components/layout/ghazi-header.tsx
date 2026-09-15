@@ -7,13 +7,11 @@ import { useAuth } from "@/components/auth/auth-provider";
 export function GhaziHeader() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, isAuthenticated, openLogin, logout } = useAuth();
-
-  // اشتراک کاربر فقط پس از ورود پیامکی ارزیابی می‌شود
-  const isVipUser = user?.phone === "09129367796" || (user as any)?.subscriptionTier === "VIP";
+  const { isAuthenticated, openLogin, logout } = useAuth();
 
   const navLinks = [
     { href: "/chat", label: "گفتگوی حقوقی", icon: "💬" },
+    { href: "/damages", label: "محاسبه‌گر قضایی و خسارت", icon: "🧮" },
     { href: "/services", label: "محصولات و اشتراک", icon: "⚡" },
     { href: "/technology", label: "تکنولوژی و معماری", icon: "🔬" },
     { href: "/about", label: "درباره سامانه", icon: "🏛️" },
@@ -26,7 +24,7 @@ export function GhaziHeader() {
     openLogin({
       serviceDomain: "GHAZI",
       title: "ورود به سامانه قاضی هوشمند",
-      description: "شماره همراه خود را وارد کنید؛ کد تأیید ۵ رقمی از طریق پیامک کاوه‌نگار ارسال می‌شود.",
+      description: "شماره همراه خود را وارد کنید؛ کد تأیید پیامکی ارسال می‌شود.",
     });
   };
 
@@ -41,13 +39,8 @@ export function GhaziHeader() {
               ⚖️
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm sm:text-base text-amber-400 tracking-tight">قاضی هوشمند</span>
-                <span className="inline-block text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono">
-                  AI RAG v2.6
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 hidden sm:block">دستیار تخصصی حقوقی و قضایی مبتنی بر هوش مصنوعی</p>
+              <span className="font-bold text-sm sm:text-base text-slate-100 tracking-tight">قاضی هوشمند</span>
+              <p className="text-[10px] text-slate-500 hidden sm:block">دستیار حقوقی</p>
             </div>
           </Link>
         </div>
@@ -73,37 +66,16 @@ export function GhaziHeader() {
           })}
         </nav>
 
-        {/* بخش وضعیت اشتراک و دکمه‌های کاربری */}
+        {/* بخش وضعیت کاربر */}
         <div className="flex items-center gap-2 sm:gap-3">
           {isAuthenticated ? (
-            <div className="flex items-center gap-2">
-              {isVipUser ? (
-                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs flex items-center gap-1.5 font-medium shadow-sm border bg-emerald-500/15 border-emerald-500/40 text-emerald-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>دارای اشتراک ویژه (VIP)</span>
-                </span>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2.5 py-1 rounded-full text-[11px] bg-slate-900 border border-slate-800 text-slate-300">
-                    کاربر عادی (طرح پایه)
-                  </span>
-                  <Link
-                    href="/services"
-                    className="px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] rounded-full transition-colors font-medium"
-                  >
-                    ⭐ ارتقا به VIP
-                  </Link>
-                </div>
-              )}
-
-              <button
-                onClick={logout}
-                className="text-[11px] text-slate-400 hover:text-rose-400 px-2 py-1 bg-slate-900/80 hover:bg-slate-800 rounded-lg border border-slate-800 transition-colors"
-                title="خروج از حساب کاربری"
-              >
-                خروج
-              </button>
-            </div>
+            <button
+              onClick={logout}
+              className="text-[11px] text-slate-400 hover:text-rose-400 px-2 py-1 bg-slate-900/80 hover:bg-slate-800 rounded-lg border border-slate-800 transition-colors"
+              title="خروج از حساب کاربری"
+            >
+              خروج
+            </button>
           ) : (
             <button
               onClick={handleOpenAuth}

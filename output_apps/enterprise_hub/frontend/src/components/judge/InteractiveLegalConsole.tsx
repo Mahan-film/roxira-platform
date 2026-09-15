@@ -37,6 +37,7 @@ export default function InteractiveLegalConsole() {
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [activeTab, setActiveTab] = useState<"DRAFT" | "LAWS" | "PRECEDENTS">("DRAFT");
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -174,7 +175,8 @@ export default function InteractiveLegalConsole() {
         URL.revokeObjectURL(url);
       }
     } catch (e) {
-      alert("خطا در ایجاد فایل لایحه.");
+      console.warn("Export defense document failed:", e);
+      setExportError("خطا در ایجاد فایل لایحه.");
     } finally {
       setExportLoading(false);
     }
@@ -366,6 +368,10 @@ export default function InteractiveLegalConsole() {
                   </button>
                 )}
               </div>
+
+              {exportError && (
+                <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-xl text-xs text-rose-300">{exportError}</div>
+              )}
 
               {latestAssistant?.draft ? (
                 <div className="p-4 bg-zinc-950/90 border border-zinc-800 rounded-2xl text-xs font-mono text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-[calc(100vh-280px)] overflow-y-auto">

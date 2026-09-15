@@ -18,11 +18,13 @@ export default function LawyersPilotPage() {
   const [licenseNo, setLicenseNo] = useState("");
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<any>(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/v1/apps/judge/lawyers/pilot-onboarding", {
         method: "POST",
@@ -32,7 +34,7 @@ export default function LawyersPilotPage() {
       const data = await res.json();
       setStatus(data);
     } catch (e) {
-      alert("خطا در ثبت اطلاعات.");
+      setError("خطا در ثبت اطلاعات. لطفاً دوباره تلاش کنید.");
     } finally {
       setLoading(false);
     }
@@ -59,6 +61,11 @@ export default function LawyersPilotPage() {
 
           {!status ? (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-xl text-xs text-rose-300">
+                  {error}
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5">نام و نام خانوادگی وکیل:</label>
                 <input

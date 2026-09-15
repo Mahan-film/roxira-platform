@@ -6,7 +6,7 @@ export function ChatShell() {
   const [messages, setMessages] = useState<Array<{role: string, content: string, draft?: string, probability?: string}>>([
     {
       role: "assistant",
-      content: "سلام؛ من دستیار حقوقی هوشمند شما هستم. شرح پرونده، دادخواست یا ادله خود را بنویسید یا با دکمه‌های صوتی مطرح کنید تا استخراج ادله، تحلیل مواد قانونی و لایحه مستند را برای شما آماده کنم."
+      content: "سلام؛ شرح پرونده یا پرسش حقوقی خود را بنویسید یا با میکروفون بگویید."
     }
   ]);
   const [inputPrompt, setInputPrompt] = useState("");
@@ -19,8 +19,6 @@ export function ChatShell() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const localLiveTranscriptRef = useRef<string>("");
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -30,15 +28,13 @@ export function ChatShell() {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // تبدیل صوت به متن (STT) دوگانه: تایپ زنده بلادرنگ در مرورگر + پالایش حقوقی با Whisper Large V3
+  // تبدیل گفتار به متن (STT): ضبط مستقیم صدا و ارسال آن به موتور سرور.
+  // هیچ وابستگی‌ای به Web Speech API مرورگر وجود ندارد (سازگار با Safari فارسی).
   const toggleVoiceRecording = async () => {
     if (isVoiceRecording) {
-      // توقف ضبط صوت و ارسال
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
-      }
+      // توقف ضبط صوت و ارسال فایل به سرور
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        setRecordingStatus("در حال نهایی‌سازی متن با هوش مصنوعی Whisper...");
+        setRecordingStatus("در حال پردازش صدا...");
         mediaRecorderRef.current.stop();
       }
       return;
@@ -46,7 +42,8 @@ export function ChatShell() {
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("مرورگر شما از ورودی میکروفون پشتیبانی نمی‌کند.");
+        // بدون alert مسدودکننده: پیام وضعیت درون‌خطی
+        setRecordingStatus("مرورگر شما از ورودی میکروفون پشتیبانی نمی‌کند.");
         return;
       }
 
@@ -66,7 +63,6 @@ export function ChatShell() {
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
-      localLiveTranscriptRef.current = "";
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -81,77 +77,60 @@ export function ChatShell() {
           streamRef.current = null;
         }
 
-        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        const localSpoken = localLiveTranscriptRef.current.trim();
+        // نکتهٔ Safari: آخرین قطعه هنگام stop() در ondataavailable تحویل داده می‌شود
+        // (که پیش از onstop اجرا می‌شود)؛ پس تا اینجا همهٔ قطعه‌ها جمع شده‌اند.
+        const blobType =
+          recorder.mimeType ||
+          audioChunksRef.current[0]?.type ||
+          "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+        audioChunksRef.current = [];
 
-        // پالایش و تطبیق اصطلاحات قانونی با Whisper Large V3 در بک‌اند
-        if (audioBlob.size >= 300) {
-          try {
-            setRecordingStatus("در حال تطبیق با واژگان حقوقی Whisper...");
-            const ext = (recorder.mimeType || "").includes("mp4") ? "m4a" : "webm";
-            const formData = new FormData();
-            formData.append("file", audioBlob, `speech.${ext}`);
+        if (audioBlob.size === 0) {
+          setRecordingStatus("");
+          return;
+        }
 
-            const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
-              method: "POST",
-              body: formData,
-            });
+        // صوت ضبط‌شده همیشه مستقیماً به‌صورت multipart/form-data به موتور STT فرستاده می‌شود
+        try {
+          setRecordingStatus("در حال تبدیل گفتار به متن...");
+          const ext = /mp4|m4a|aac/i.test(blobType)
+            ? "m4a"
+            : /ogg/i.test(blobType)
+            ? "ogg"
+            : /wav/i.test(blobType)
+            ? "wav"
+            : "webm";
+          const formData = new FormData();
+          formData.append("file", audioBlob, `speech.${ext}`);
 
-            if (res.ok) {
-              const data = await res.json();
-              const transcript = (data.text || data.transcript || "").trim();
-              if (transcript) {
-                setInputPrompt(transcript);
-              }
-            }
-          } catch (err) {
-            console.warn("Server STT fallback to browser recognition:", err);
-          } finally {
-            setRecordingStatus("");
-          }
-        } else {
+          const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = res.ok ? await res.json().catch(() => null) : null;
+          const transcript = (data?.text || data?.transcript || "").trim();
+          if (transcript) setInputPrompt(transcript);
+        } catch (err) {
+          console.warn("Transcribe-audio request failed:", err);
+        } finally {
           setRecordingStatus("");
         }
       };
 
-      // ۱. راه‌اندازی موتور بلادرنگ در مرورگر (Web Speech API) برای فیدبک آنی در باکس ورودی
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        try {
-          const recognition = new SpeechRecognition();
-          recognition.lang = "fa-IR";
-          recognition.continuous = true;
-          recognition.interimResults = true;
-          recognitionRef.current = recognition;
-
-          recognition.onresult = (event: any) => {
-            let fullText = "";
-            for (let i = 0; i < event.results.length; ++i) {
-              fullText += event.results[i][0].transcript;
-            }
-            if (fullText.trim()) {
-              localLiveTranscriptRef.current = fullText.trim();
-              setInputPrompt(fullText.trim());
-              setRecordingStatus(`شنیده شد: «${fullText.trim()}»`);
-            }
-          };
-          recognition.onerror = (e: any) => {
-            console.warn("Live recognition notice:", e);
-          };
-          recognition.start();
-        } catch (e) {
-          console.warn("SpeechRecognition init error:", e);
-        }
+      // Safari در برابر timeslice مقاوم نیست؛ در صورت خطا بدون بازهٔ زمانی شروع می‌کنیم
+      try {
+        recorder.start(250);
+      } catch (_) {
+        recorder.start();
       }
-
-      recorder.start(250);
       setIsVoiceRecording(true);
-      setRecordingStatus("در حال شنیدن صدای شما... صحبت کنید (برای پایان دوباره بزنید)");
+      setRecordingStatus("در حال ضبط...");
     } catch (err: any) {
-      console.error("Mic error:", err);
+      console.warn("Mic error:", err);
       setIsVoiceRecording(false);
-      setRecordingStatus("");
-      alert("دسترسی به میکروفون تایید نشد. لطفاً در نوار آدرس مرورگر دسترسی را مجاز بفرمایید.");
+      setRecordingStatus("دسترسی به میکروفون تایید نشد. لطفاً در نوار آدرس مرورگر دسترسی را مجاز بفرمایید.");
     }
   };
 
@@ -191,7 +170,7 @@ export function ChatShell() {
         ...newMsgs,
         {
           role: "assistant",
-          content: "خطا در اتصال به موتور دادرسی قاضی هوشمند. لطفاً چند لحظه بعد مجدداً تلاش فرمایید."
+          content: "خطا در ارتباط با سرور. لطفاً چند لحظه بعد دوباره تلاش کنید."
         }
       ]);
     } finally {
@@ -200,10 +179,10 @@ export function ChatShell() {
   };
 
   const quickPrompts = [
-    { title: "استراتژی پرونده (سند/متن)", prompt: "استراتژی دفاعی پرونده با تکیه بر ادله اثبات دعوی چیست؟" },
-    { title: "تنظیم لایحه اعاده دادرسی ۴۷۴", prompt: "لایحه اعاده دادرسی کیفری بر اساس بندهای ماده ۴۷۴ تنظیم کن." },
+    { title: "استراتژی پرونده", prompt: "استراتژی دفاعی پرونده با تکیه بر ادله اثبات دعوی چیست؟" },
+    { title: "لایحه اعاده دادرسی", prompt: "لایحه اعاده دادرسی کیفری بر اساس بندهای ماده ۴۷۴ تنظیم کن." },
     { title: "صلاحیت دادگاه صلح ۱۴۰۲", prompt: "صلاحیت دادگاه‌های صلح مصوب ۱۴۰۲ در خصوص دعاوی مالی و تخلیه را تشریح کن." },
-    { title: "تحلیل آرای وحدت رویه دیوان عالی", prompt: "جدیدترین آرای وحدت رویه هیأت عمومی دیوان عالی کشور در خصوص مسئولیت مدنی و خسارت را توضیح بده." }
+    { title: "آرای وحدت رویه", prompt: "جدیدترین آرای وحدت رویه هیأت عمومی دیوان عالی کشور در خصوص مسئولیت مدنی و خسارت را توضیح بده." }
   ];
 
   return (
@@ -218,10 +197,10 @@ export function ChatShell() {
                 : "bg-slate-900/95 border border-slate-800 text-slate-200 rounded-bl-none shadow-md"
             }`}>
               {msg.role === "assistant" && (
-                <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-slate-800/80 text-[11px] text-amber-400 font-bold">
-                  <span>⚖️ دستیار قاضی هوشمند</span>
+                <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-slate-800/80 text-[11px] text-slate-400 font-medium">
+                  <span>دستیار</span>
                   {msg.probability && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-normal mr-auto">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-normal mr-auto">
                       احتمال موفقیت: {msg.probability}
                     </span>
                   )}
@@ -252,7 +231,7 @@ export function ChatShell() {
           <div className="flex justify-start">
             <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl rounded-bl-none text-xs text-amber-400 flex items-center gap-2 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              <span>دستیار در حال استخراج ادله از پایگاه قوانین و آراء وحدت رویه...</span>
+              <span>در حال تحلیل پرونده...</span>
             </div>
           </div>
         )}
@@ -268,18 +247,17 @@ export function ChatShell() {
             <button
               key={idx}
               onClick={() => handleSendMessage(item.prompt)}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-[11px] sm:text-xs rounded-xl whitespace-nowrap transition-colors flex items-center gap-1.5 shadow-sm"
+              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-[11px] sm:text-xs rounded-xl whitespace-nowrap transition-colors shadow-sm"
             >
-              <span>⚡</span>
-              <span>{item.title}</span>
+              {item.title}
             </button>
           ))}
         </div>
 
         {/* وضعیت زنده ضبط صدا */}
         {recordingStatus && (
-          <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl flex items-center gap-2 animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+          <div className="text-xs text-slate-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
             <span>{recordingStatus}</span>
           </div>
         )}
@@ -288,7 +266,7 @@ export function ChatShell() {
         <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-2 flex items-center gap-2 shadow-xl">
           <input
             type="text"
-            placeholder="شرح پرونده را بنویسید یا با میکروفون بگویید..."
+            placeholder="پیام خود را بنویسید..."
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
@@ -303,16 +281,16 @@ export function ChatShell() {
                 ? "bg-rose-500 text-white animate-pulse shadow-rose-500/40 scale-105"
                 : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
             }`}
-            title={isVoiceRecording ? "اتمام ضبط و تبدیل به متن" : "تبدیل گفتار به متن با هوش مصنوعی (STT)"}
+            title={isVoiceRecording ? "اتمام ضبط" : "تبدیل گفتار به متن"}
           >
             {isVoiceRecording ? "⏹️" : "🎙️"}
           </button>
 
-          {/* دکمه تماس زنده صوتی (Live Call VIP) */}
+          {/* دکمه تماس صوتی زنده */}
           <button
             onClick={() => setIsLiveAudioOpen(true)}
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-sm transition-all shadow-sm"
-            title="مکالمه صوتی زنده (Live Voice VIP)"
+            title="مکالمه صوتی زنده"
           >
             📞
           </button>

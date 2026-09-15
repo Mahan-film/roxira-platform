@@ -14,6 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml .
 RUN pip install --no-cache-dir psycopg fastapi uvicorn pydantic python-docx pymupdf redis httpx langgraph sentence-transformers sqlalchemy python-multipart "pydantic[email]" faster-whisper
+# موتور پردازش اسناد (Docs/PDF/تصویر → Markdown): چیدمان، جدول و OCR چندزبانه
+RUN pip install --no-cache-dir docling
+# موتور گراف دانش حقوقی (LightRAG): موجودیت/رابطه + بازیابی برداری ترکیبی
+RUN pip install --no-cache-dir lightrag-hku
 
 COPY output_apps /app/output_apps
 COPY src /app/src
