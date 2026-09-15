@@ -198,7 +198,7 @@ export function LiveVoiceModal({
         audioChunksRef.current = [];
         mediaRecorderRef.current = null;
 
-        if (blob && blob.size > 400) {
+        if (blob && blob.size > 50) {
           const ext = /mp4|m4a|aac/i.test(blob.type)
             ? "m4a"
             : /ogg/i.test(blob.type)
