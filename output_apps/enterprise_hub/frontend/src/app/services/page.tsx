@@ -123,7 +123,7 @@ export default function ServicesPage() {
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>
-                  <span><strong>موتورهای استدلال عمیق:</strong> اتصال به برترین مدل‌های هوش مصنوعی (Gemini 3.8 Flash, Claude Sonnet, DeepSeek R1)</span>
+                  <span><strong>موتورهای استدلال عمیق:</strong> اتصال به پیشرفته‌ترین مدل‌های نسل جدید هوش مصنوعی (Claude 5 Sonnet, DeepSeek V4.1 Reasoning, Gemini 3.8 Flash)</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>

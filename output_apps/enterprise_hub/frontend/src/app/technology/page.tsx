@@ -6,7 +6,7 @@ import { EnamadFooter } from "@/components/layout/enamad-footer";
 export const metadata: Metadata = {
   title: "معماری و تکنولوژی هوش مصنوعی | سامانه هوشمند قاضی هوشمند",
   description:
-    "آشنایی با زیرساخت فنی، معماری Dual-Level GraphRAG، پایگاه داده برداری Qdrant و گراف دانش ۵٬۱۸۴ گره حقوقی سامانه قاضی هوشمند.",
+    "آشنایی با زیرساخت فنی، معماری Dual-Level GraphRAG (LightRAG)، پایگاه داده برداری Qdrant و گراف دانش ۵٬۱۸۴ گره حقوقی سامانه قاضی هوشمند.",
 };
 
 export default function TechnologyPage() {
@@ -14,12 +14,12 @@ export default function TechnologyPage() {
     {
       icon: "🧠",
       title: "معماری Dual-Level GraphRAG",
-      desc: "ترکیب استخراج برداری متراکم (Dense Vector Retrieval) با گراف دانش روابط علّی و سلسه‌مراتبی قوانین ایران جهت استخراج دقیق ادله اثبات دعوی و تفکیک مواد منسوخ از مواد حاکم.",
+      desc: "ترکیب استخراج برداری متراکم با گراف دانش پویای موجودیت‌ها و روابط حقوقی ایران بر پایه LightRAG و موتور پردازش اسناد Docling جهت استخراج دقیق ادله اثبات دعوی و تفکیک مواد حاکم از منسوخ.",
     },
     {
       icon: "⚡",
       title: "موتور استدلال چندمدلی (Multi-Model AI)",
-      desc: "بهره‌گیری هماهنگ از قوی‌ترین مدل‌های استنتاج عمیق (DeepSeek R1/V4.1 و Claude 3.5 Sonnet) برای نگارش پیش‌نویس لوایح اعاده دادرسی دیوان عالی و دادخواست‌های بدوی.",
+      desc: "بهره‌گیری هماهنگ از قوی‌ترین مدل‌های استنتاج عمیق نسل جدید (Claude 5 Sonnet، DeepSeek V4.1 Reasoning و Gemini 3.8 Flash) برای نگارش پیش‌نویس لوایح اعاده دادرسی دیوان عالی و دادخواست‌های بدوی.",
     },
     {
       icon: "🗄️",
