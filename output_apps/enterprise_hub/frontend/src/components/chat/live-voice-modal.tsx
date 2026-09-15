@@ -11,43 +11,124 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
   const { user } = useAuth();
   const userPhone = user?.phone || "09129367796";
 
-  const [isCalling, setIsCalling] = useState(false);
-  const [callStatus, setCallStatus] = useState<"idle" | "listening" | "processing" | "speaking" | "error">("idle");
-  const [statusMessage, setStatusMessage] = useState("");
-  const [userSpeech, setUserSpeech] = useState("");
-  const [aiSpeech, setAiSpeech] = useState("");
+  // حالت‌های گفتگوی صوتی زنده (مشابه ChatGPT Advanced Voice Mode)
+  // idle: خاموش | listening: در حال شنیدن صدای کاربر | thinking: تحلیل ادله و آماده‌سازی پاسخ | speaking: هوش مصنوعی در حال صحبت
+  const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
+  const [statusText, setStatusText] = useState("برای شروع گفتگوی زنده صوتی، روی دکمه تماس بزنید.");
+  const [currentUserSpeech, setCurrentUserSpeech] = useState("");
+  const [lastAiResponse, setLastAiResponse] = useState("");
   const [audioLevel, setAudioLevel] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
 
+  // مراجع سراسری برای چرخه Full-Duplex و قطع لحظه‌ای (Barge-in)
+  const voiceStateRef = useRef(voiceState);
+  const isMutedRef = useRef(isMuted);
+  const isComponentOpenRef = useRef(isOpen);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const isComponentOpenRef = useRef(isOpen);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const hasSpokenRef = useRef(false);
-  const recognitionRef = useRef<any>(null);
-  const liveTranscriptRef = useRef<string>("");
-  const callStatusRef = useRef(callStatus);
+  const currentAudioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  // بافرهای مدیریت نوبت و سکوت (Turn-Taking VAD)
+  const accumulatedSpeechRef = useRef<string>("");
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSpokenInThisTurnRef = useRef<boolean>(false);
 
   useEffect(() => {
-    callStatusRef.current = callStatus;
-  }, [callStatus]);
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
 
   useEffect(() => {
     isComponentOpenRef.current = isOpen;
     if (!isOpen) {
       handleEndCall();
+    } else {
+      // باز شدن مدال: راه‌اندازی فوری مکالمه بدون معطلی
+      handleStartCall();
     }
   }, [isOpen]);
 
-  const speakPersian = useCallback((text: string) => {
+  // متوقف کردن بلادرنگ صدای هوش مصنوعی در صورت مداخله کاربر (Barge-in)
+  const interruptAiSpeech = useCallback(() => {
+    if (currentAudioElementRef.current) {
+      try {
+        currentAudioElementRef.current.pause();
+        currentAudioElementRef.current.currentTime = 0;
+      } catch (_) {}
+      currentAudioElementRef.current = null;
+    }
+    if ("speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
+  }, []);
+
+  // پخش صدای هوش مصنوعی با اولویت TTS سرور و فالبک آنی مرورگر
+  const playAiVoice = useCallback(async (text: string) => {
+    if (!isComponentOpenRef.current) return;
+
+    interruptAiSpeech();
+    setVoiceState("speaking");
+    setStatusText("🔊 قاضی هوشمند در حال پاسخگویی صوتی...");
+
+    let playedViaServer = false;
+
+    // استراتژی ۱: استفاده از اندپوینت تخصصی OpenRouter TTS (/api/v1/apps/judge/speak)
+    try {
+      const response = await fetch("/api/v1/apps/judge/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text.slice(0, 350), voice: "alloy" }),
+      });
+
+      if (response.ok && response.headers.get("content-type")?.includes("audio")) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        currentAudioElementRef.current = audio;
+
+        audio.onended = () => {
+          if (isComponentOpenRef.current) {
+            setVoiceState("listening");
+            setStatusText("🟢 گوش می‌دهم؛ بفرمایید...");
+            accumulatedSpeechRef.current = "";
+            hasSpokenInThisTurnRef.current = false;
+          }
+        };
+        audio.onerror = () => {
+          // در صورت بروز هر خطایی در پخش صوت سرور، فوراً به سینت سایزر مرورگر فالبک کن
+          fallbackBrowserTts(text);
+        };
+
+        await audio.play();
+        playedViaServer = true;
+      }
+    } catch (e) {
+      console.warn("Server TTS skipped, using browser speech synthesis:", e);
+    }
+
+    // استراتژی ۲: فالبک به Web Speech Synthesis فارسی
+    if (!playedViaServer) {
+      fallbackBrowserTts(text);
+    }
+  }, [interruptAiSpeech]);
+
+  const fallbackBrowserTts = (text: string) => {
     if (!("speechSynthesis" in window)) {
-      setCallStatus("listening");
-      setStatusMessage("🟢 پاسخ آماده است. برای ادامه صحبت بفرمایید...");
+      setVoiceState("listening");
+      setStatusText("🟢 گوش می‌دهم؛ بفرمایید...");
       return;
     }
+
     try {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -55,46 +136,56 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       utterance.rate = 1.05;
 
       utterance.onstart = () => {
-        setCallStatus("speaking");
-        setStatusMessage("🔊 قاضی هوشمند در حال پاسخگویی صوتی...");
+        setVoiceState("speaking");
+        setStatusText("🔊 قاضی هوشمند در حال ارائه راهکار حقوقی...");
       };
       utterance.onend = () => {
-        if (isComponentOpenRef.current && streamRef.current) {
-          restartListeningPhase();
+        if (isComponentOpenRef.current) {
+          setVoiceState("listening");
+          setStatusText("🟢 گوش می‌دهم؛ بفرمایید...");
+          accumulatedSpeechRef.current = "";
+          hasSpokenInThisTurnRef.current = false;
         }
       };
       utterance.onerror = () => {
-        if (isComponentOpenRef.current && streamRef.current) {
-          restartListeningPhase();
+        if (isComponentOpenRef.current) {
+          setVoiceState("listening");
+          setStatusText("🟢 گوش می‌دهم؛ بفرمایید...");
+          accumulatedSpeechRef.current = "";
+          hasSpokenInThisTurnRef.current = false;
         }
       };
 
       window.speechSynthesis.speak(utterance);
     } catch (e) {
-      console.warn("Speech synthesis error:", e);
-      if (isComponentOpenRef.current && streamRef.current) {
-        restartListeningPhase();
-      }
+      setVoiceState("listening");
+      setStatusText("🟢 گوش می‌دهم؛ بفرمایید...");
     }
-  }, []);
+  };
 
-  const sendQueryToJudge = async (textToSend: string) => {
-    if (!textToSend || !textToSend.trim()) {
-      setStatusMessage("صدایی دریافت نشد. بفرمایید، در حال شنیدن هستیم...");
-      restartListeningPhase();
+  // ارسال خودکار کلام کاربر به موتور حقوقی RAG
+  const processUserSpeechTurn = async (queryText: string) => {
+    const text = (queryText || accumulatedSpeechRef.current).trim();
+    if (!text || text.length < 2) {
+      setVoiceState("listening");
+      setStatusText("🟢 صدایی دریافت نشد؛ بفرمایید...");
+      hasSpokenInThisTurnRef.current = false;
       return;
     }
 
-    setCallStatus("processing");
-    setStatusMessage("⚖️ در حال بررسی در پایگاه RAG و تطبیق با آرای وحدت رویه...");
-    setUserSpeech(textToSend);
+    // تغییر وضعیت به پردازش و تفکر هوش مصنوعی
+    setVoiceState("thinking");
+    setStatusText("⚖️ قاضی هوشمند در حال تحلیل ادله و بررسی قوانین و آرا...");
+    setCurrentUserSpeech(text);
+    accumulatedSpeechRef.current = "";
+    hasSpokenInThisTurnRef.current = false;
 
     try {
-      const chatRes = await fetch("/api/v1/apps/judge/chat", {
+      const res = await fetch("/api/v1/apps/judge/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: textToSend,
+          message: text,
           user_phone: userPhone,
           phone: userPhone,
           is_vip: true,
@@ -102,72 +193,90 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
         }),
       });
 
-      const chatData = await chatRes.json();
-      const reply = chatData.reply || chatData.response || "موضوع شما بر اساس رویه قضایی دیوان عالی کشور بررسی شد.";
-      setAiSpeech(reply);
-      speakPersian(reply);
-    } catch (err) {
-      console.error("Call processing error:", err);
-      setStatusMessage("خطا در برقراری ارتباط با موتور قاضی. آماده شنیدن مجدد هستیم...");
-      restartListeningPhase();
-    }
-  };
-
-  const sendAudioForAnalysis = async (audioBlob: Blob) => {
-    // اگر از قبل متن از طریق گفتار مرورگر استخراج شده، فوراً ارسال می‌شود
-    const currentSpoken = liveTranscriptRef.current.trim();
-    if (currentSpoken) {
-      await sendQueryToJudge(currentSpoken);
-      return;
-    }
-
-    if (audioBlob.size < 400) {
-      restartListeningPhase();
-      return;
-    }
-
-    setCallStatus("processing");
-    setStatusMessage("⚙️ در حال استخراج و تحلیل صوت با هوش مصنوعی Whisper...");
-
-    try {
-      const ext = (mediaRecorderRef.current?.mimeType || "").includes("mp4") ? "m4a" : "webm";
-      const formData = new FormData();
-      formData.append("file", audioBlob, `voice_call.${ext}`);
-
-      const transRes = await fetch("/api/v1/apps/judge/transcribe-audio", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (transRes.ok) {
-        const transData = await transRes.json();
-        const transcribedText = (transData.text || transData.transcript || "").trim();
-        if (transcribedText) {
-          await sendQueryToJudge(transcribedText);
-          return;
-        }
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.reply || data.response || "موضوع شما بر اساس رویه قضایی و قوانین لازم‌الاجرا بررسی شد.";
+        setLastAiResponse(reply);
+        await playAiVoice(reply);
+      } else {
+        setStatusText("خطا در برقراری ارتباط با موتور قاضی. لطفاً دوباره بفرمایید...");
+        setVoiceState("listening");
       }
-
-      setStatusMessage("صدایی دریافت نشد. لطفاً شفاف‌تر در میکروفون صحبت بفرمایید...");
-      restartListeningPhase();
     } catch (err) {
-      console.error("Call audio transcription error:", err);
-      setStatusMessage("خطا در پردازش صدا. آماده شنیدن مجدد هستیم...");
-      restartListeningPhase();
+      console.error("AI consult error:", err);
+      setStatusText("خطای ارتباط. لطفاً مجدداً مطرح فرمایید...");
+      setVoiceState("listening");
     }
   };
 
-  const restartListeningPhase = () => {
-    if (!isComponentOpenRef.current || !streamRef.current) return;
-    setCallStatus("listening");
-    setStatusMessage("🟢 در حال شنیدن صدای شما... بفرمایید.");
-    hasSpokenRef.current = false;
-    liveTranscriptRef.current = "";
-    startRecordingSegment();
-    startBrowserSpeechRecognition();
+  // مانیتورینگ صوتی و استخراج شدت صدا جهت انیمیشن گوی تعاملی و VAD
+  const initAudioVisualizer = (stream: MediaStream) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      audioContextRef.current = audioCtx;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      analyser.smoothingTimeConstant = 0.5;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const loop = () => {
+        if (!analyserRef.current || !streamRef.current || !isComponentOpenRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const level = Math.min(100, Math.round((sum / dataArray.length / 128) * 100));
+        setAudioLevel(level);
+
+        // قطع لحظه‌ای (Barge-in): اگر کاربر در حین صحبت هوش مصنوعی شروع به صحبت کند
+        if (voiceStateRef.current === "speaking" && level > 24) {
+          interruptAiSpeech();
+          setVoiceState("listening");
+          setStatusText("🟢 در حال شنیدن کلام جدید شما...");
+          accumulatedSpeechRef.current = "";
+          hasSpokenInThisTurnRef.current = true;
+        }
+
+        // ردیابی سکوت هوشمند (Voice Activity Detection)
+        if (voiceStateRef.current === "listening") {
+          if (level > 16) {
+            hasSpokenInThisTurnRef.current = true;
+            if (silenceTimeoutRef.current) {
+              clearTimeout(silenceTimeoutRef.current);
+              silenceTimeoutRef.current = null;
+            }
+          } else if (hasSpokenInThisTurnRef.current && level < 10) {
+            // کاربر بعد از صحبت، حدود ۱.۱ ثانیه سکوت کرده -> پایان خودکار نوبت
+            if (!silenceTimeoutRef.current && accumulatedSpeechRef.current.trim().length > 3) {
+              silenceTimeoutRef.current = setTimeout(() => {
+                silenceTimeoutRef.current = null;
+                if (voiceStateRef.current === "listening" && accumulatedSpeechRef.current.trim()) {
+                  processUserSpeechTurn(accumulatedSpeechRef.current);
+                }
+              }, 1100);
+            }
+          }
+        }
+
+        animFrameRef.current = requestAnimationFrame(loop);
+      };
+
+      loop();
+    } catch (e) {
+      console.warn("Audio visualizer init error:", e);
+    }
   };
 
-  const startBrowserSpeechRecognition = () => {
+  // راه‌اندازی گفتار به متن بلادرنگ مرورگر (Web Speech API) با پشتیبانی سافاری مک/آیفون و کروم
+  const initSpeechRecognition = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
@@ -183,159 +292,81 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       recognitionRef.current = recognition;
 
       recognition.onresult = (event: any) => {
-        let full = "";
-        for (let i = 0; i < event.results.length; ++i) {
-          full += event.results[i][0].transcript;
-        }
-        const trimmed = full.trim();
-        if (trimmed) {
-          liveTranscriptRef.current = trimmed;
-          setUserSpeech(trimmed);
-          hasSpokenRef.current = true;
-          setStatusMessage(`در حال شنیدن: «${trimmed}»`);
+        if (isMutedRef.current) return;
 
-          // ریست تایمر سکوت پس از تشخیص کلمات
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
+        // در صورت صحبت حین پاسخ هوش مصنوعی، فوراً صدای هوش مصنوعی را قطع کن (Barge-in)
+        if (voiceStateRef.current === "speaking") {
+          interruptAiSpeech();
+          setVoiceState("listening");
+        }
+
+        let interim = "";
+        let final = "";
+        for (let i = 0; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            final += event.results[i][0].transcript;
+          } else {
+            interim += event.results[i][0].transcript;
           }
+        }
+
+        const fullSpoken = (final + " " + interim).trim();
+        if (fullSpoken) {
+          accumulatedSpeechRef.current = fullSpoken;
+          setCurrentUserSpeech(fullSpoken);
+          hasSpokenInThisTurnRef.current = true;
+          setStatusText(`در حال شنیدن: «${fullSpoken}»`);
+
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+
+          // سکوت اتوماتیک پس از پایان جمله
+          silenceTimeoutRef.current = setTimeout(() => {
+            silenceTimeoutRef.current = null;
+            if (voiceStateRef.current === "listening" && accumulatedSpeechRef.current.trim()) {
+              processUserSpeechTurn(accumulatedSpeechRef.current);
+            }
+          }, 1100);
         }
       };
 
       recognition.onerror = (e: any) => {
-        console.warn("Live recognition notice:", e);
+        console.warn("Speech recognition notice:", e);
+      };
+
+      recognition.onend = () => {
+        // بازراه‌اندازی خودکار تا زمان باز بودن مدال
+        if (isComponentOpenRef.current && voiceStateRef.current !== "idle") {
+          try {
+            recognition.start();
+          } catch (_) {}
+        }
       };
 
       recognition.start();
     } catch (e) {
-      console.warn("SpeechRecognition start error:", e);
+      console.warn("SpeechRecognition start notice:", e);
     }
   };
 
-  const startRecordingSegment = () => {
-    if (!streamRef.current) return;
-
-    try {
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : MediaRecorder.isTypeSupported("audio/mp4")
-        ? "audio/mp4"
-        : "";
-
-      const recorder = mimeType
-        ? new MediaRecorder(streamRef.current, { mimeType })
-        : new MediaRecorder(streamRef.current);
-
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
-        sendAudioForAnalysis(audioBlob);
-      };
-
-      recorder.start(250);
-    } catch (e) {
-      console.warn("Recorder segment start error:", e);
-    }
-  };
-
-  const handleManualSubmit = () => {
-    // اگر متنی هم‌اکنون به صورت زنده تشخیص داده شده، فوراً ارسال شود
-    const currentSpoken = liveTranscriptRef.current.trim() || userSpeech.trim();
-    if (currentSpoken) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        try { mediaRecorderRef.current.stop(); } catch (_) {}
-      }
-      sendQueryToJudge(currentSpoken);
-      return;
-    }
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
-      mediaRecorderRef.current.stop();
-    }
-  };
-
-  // مانیتورینگ بلادرنگ بلندی صدا برای ردیابی سکوت (VAD) و اکولایزر
-  const startAudioVisualizer = (stream: MediaStream) => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioCtx();
-      audioContextRef.current = audioCtx;
-
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      const checkVolume = () => {
-        if (!analyserRef.current || !streamRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
-        const avg = sum / dataArray.length;
-        const currentLevel = Math.min(100, Math.round((avg / 128) * 100));
-        setAudioLevel(currentLevel);
-
-        // تشخیص صدا و سکوت (Voice Activity Detection)
-        if (currentLevel > 18) {
-          hasSpokenRef.current = true;
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-          }
-        } else if (hasSpokenRef.current && currentLevel < 12 && callStatusRef.current === "listening") {
-          // سکوت پس از صحبت حداقل ۲ ثانیه
-          if (!silenceTimerRef.current) {
-            silenceTimerRef.current = setTimeout(() => {
-              silenceTimerRef.current = null;
-              if (callStatusRef.current === "listening") {
-                handleManualSubmit();
-              }
-            }, 2000);
-          }
-        }
-
-        animFrameRef.current = requestAnimationFrame(checkVolume);
-      };
-      checkVolume();
-    } catch (e) {
-      console.warn("AudioContext visualizer error:", e);
-    }
-  };
-
+  // آغاز مکالمه بدون تأخیر
   const handleStartCall = async () => {
-    setUserSpeech("");
-    setAiSpeech("");
-    setCallStatus("listening");
-    setStatusMessage("🎙️ در حال اتصال میکروفون...");
+    interruptAiSpeech();
+    setCurrentUserSpeech("");
+    setLastAiResponse("");
+    accumulatedSpeechRef.current = "";
+    hasSpokenInThisTurnRef.current = false;
+    setVoiceState("listening");
+    setStatusText("🎙️ در حال اتصال میکروفون با امنیت کامل...");
 
-    let stream: MediaStream;
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("مرورگر شما از ورودی میکروفون پشتیبانی نمی‌کند.");
       }
-      stream = await navigator.mediaDevices.getUserMedia({
+
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -343,31 +374,28 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
         },
       });
       streamRef.current = stream;
-    } catch (err: any) {
-      console.error("Mic access error:", err);
-      setIsCalling(false);
-      setCallStatus("error");
-      setStatusMessage("⚠️ دسترسی به میکروفون تایید نشد. لطفاً در نوار آدرس مرورگر اجازه دسترسی را صادر فرمایید.");
-      return;
-    }
 
-    setIsCalling(true);
-    setStatusMessage("🟢 میکروفون فعال شد. صحبت کنید (مثلاً: «در مورد رای وحدت رویه دیوان عالی توضیح بده»)");
-    startAudioVisualizer(stream);
-    startRecordingSegment();
-    startBrowserSpeechRecognition();
+      initAudioVisualizer(stream);
+      initSpeechRecognition();
+      setStatusText("🟢 آماده صحبت؛ بفرمایید (مثلاً: «در مورد ماده ۴۷۴ توضیح بده»)");
+    } catch (err: any) {
+      console.error("Microphone access error:", err);
+      setVoiceState("idle");
+      setStatusText("⚠️ دسترسی به میکروفون داده نشد. لطفاً در نوار آدرس مرورگر تایید فرمایید.");
+    }
   };
 
+  // پایان مکالمه
   const handleEndCall = () => {
-    setIsCalling(false);
-    setCallStatus("idle");
-    setStatusMessage("");
+    interruptAiSpeech();
+    setVoiceState("idle");
+    setStatusText("مکالمه پایان یافت.");
     setAudioLevel(0);
-    liveTranscriptRef.current = "";
+    accumulatedSpeechRef.current = "";
 
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
     }
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
@@ -385,164 +413,187 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       try { audioContextRef.current.close(); } catch (_) {}
       audioContextRef.current = null;
     }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
-      mediaRecorderRef.current = null;
-    }
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
+  };
+
+  // قطع و وصل میکروفون (Mute)
+  const toggleMute = () => {
+    if (!streamRef.current) return;
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    streamRef.current.getAudioTracks().forEach((track) => {
+      track.enabled = !newMuted;
+    });
+    if (newMuted) {
+      setStatusText("🔇 میکروفون قطع شد.");
+    } else {
+      setStatusText("🟢 میکروفون وصل شد؛ بفرمایید...");
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200" dir="rtl">
-      <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative text-center text-slate-100 flex flex-col justify-between max-h-[92vh] overflow-y-auto ring-1 ring-amber-500/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-2xl animate-in fade-in duration-300" dir="rtl">
+      <div className="bg-gradient-to-b from-slate-900 via-slate-950 to-black border border-slate-800/80 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative text-center text-slate-100 flex flex-col justify-between max-h-[92vh] overflow-y-auto ring-1 ring-cyan-500/20">
+        
+        {/* دکمه بستن در گوشه بالا */}
         <button
           onClick={onClose}
           className="absolute top-4 left-4 text-slate-400 hover:text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-800 transition-colors"
-          title="بستن پنجره"
+          title="بستن مکالمه"
         >
           ✕
         </button>
 
-        {/* برچسب VIP مکالمه زنده */}
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <span className="px-3.5 py-1 bg-gradient-to-r from-amber-500/10 to-emerald-500/10 border border-amber-500/30 text-amber-300 text-xs rounded-full font-medium flex items-center gap-2 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>مکالمه صوتی زنده با هوش مصنوعی قاضی هوشمند</span>
+        {/* برچسب فوق‌پیشرفته نسل جدید Real-Time Voice */}
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <span className="px-4 py-1.5 bg-gradient-to-r from-cyan-500/10 via-emerald-500/10 to-purple-500/10 border border-cyan-500/30 text-cyan-300 text-xs rounded-full font-medium flex items-center gap-2 shadow-sm">
+            <span className={`w-2 h-2 rounded-full ${
+              voiceState === "speaking" ? "bg-purple-400 animate-ping" :
+              voiceState === "thinking" ? "bg-amber-400 animate-spin" :
+              voiceState === "listening" ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
+            }`} />
+            <span>مکالمه زنده ریل‌تایم با قاضی هوشمند (Full-Duplex AI)</span>
           </span>
         </div>
 
-        {/* اکولایزر صدا و دایره تماس */}
-        <div className="my-5 flex flex-col items-center justify-center space-y-5">
-          <div className="relative flex items-center justify-center">
-            {/* هاله صوتی متناسب با ارتعاش واقعی صدا */}
-            {isCalling && (
-              <div
-                className="absolute rounded-full bg-emerald-500/20 pointer-events-none transition-all duration-75"
-                style={{
-                  width: `${110 + audioLevel * 1.5}px`,
-                  height: `${110 + audioLevel * 1.5}px`,
-                }}
-              />
-            )}
-
-            {/* نوارهای اکولایزر تعاملی */}
-            {isCalling && (
-              <div className="absolute inset-0 flex items-center justify-center gap-1 pointer-events-none">
-                {Array.from({ length: 14 }).map((_, i) => {
-                  const barHeight = Math.max(6, (audioLevel * (1 + Math.sin(i))) / 2 + 10);
-                  return (
-                    <div
-                      key={i}
-                      className={`w-1 rounded-full transition-all duration-75 ${
-                        callStatus === "speaking" ? "bg-amber-400" : "bg-emerald-400"
-                      }`}
-                      style={{
-                        height: `${barHeight}px`,
-                        opacity: isCalling ? 0.9 : 0.3,
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            )}
-
-            <button
-              onClick={isCalling ? handleEndCall : handleStartCall}
-              className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center text-3xl shadow-2xl transition-all active:scale-95 ${
-                isCalling
-                  ? "bg-rose-500 hover:bg-rose-600 text-white scale-105 shadow-rose-500/50"
-                  : "bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-emerald-500/40 hover:scale-105"
+        {/* گوی شناور تعاملی و سیال هوش مصنوعی (مشابه ChatGPT Advanced Voice Mode) */}
+        <div className="my-8 flex flex-col items-center justify-center space-y-6">
+          <div className="relative flex items-center justify-center w-48 h-48 sm:w-56 sm:h-56">
+            
+            {/* هاله امواج صوتی خارجی (پالس بر اساس شدت صدای واقعی) */}
+            <div
+              className={`absolute rounded-full transition-all duration-100 blur-xl pointer-events-none ${
+                voiceState === "speaking"
+                  ? "bg-purple-600/35"
+                  : voiceState === "thinking"
+                  ? "bg-amber-500/30"
+                  : "bg-emerald-500/25"
               }`}
-              title={isCalling ? "پایان مکالمه" : "آغاز مکالمه صوتی"}
+              style={{
+                width: `${140 + audioLevel * 1.6}px`,
+                height: `${140 + audioLevel * 1.6}px`,
+              }}
+            />
+
+            {/* حلقه تنفس نورانی و چندوجهی */}
+            <div
+              className={`absolute rounded-full border-2 transition-all duration-150 pointer-events-none ${
+                voiceState === "speaking"
+                  ? "border-purple-400/60 shadow-[0_0_50px_rgba(168,85,247,0.5)] animate-pulse"
+                  : voiceState === "thinking"
+                  ? "border-amber-400/60 shadow-[0_0_50px_rgba(251,191,36,0.5)] animate-spin"
+                  : "border-emerald-400/50 shadow-[0_0_40px_rgba(52,211,153,0.4)]"
+              }`}
+              style={{
+                width: `${120 + audioLevel * 1.2}px`,
+                height: `${120 + audioLevel * 1.2}px`,
+              }}
+            />
+
+            {/* گوی اصلی هوش مصنوعی با گرادیان پویا */}
+            <div
+              className={`relative z-10 w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center shadow-2xl transition-transform duration-100 ${
+                voiceState === "speaking"
+                  ? "bg-gradient-to-tr from-purple-600 via-indigo-500 to-pink-500 scale-105 shadow-purple-500/50"
+                  : voiceState === "thinking"
+                  ? "bg-gradient-to-tr from-amber-500 via-yellow-500 to-orange-500 scale-95 animate-pulse shadow-amber-500/50"
+                  : voiceState === "listening"
+                  ? "bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 scale-100 shadow-emerald-500/40"
+                  : "bg-slate-800"
+              }`}
+              style={{
+                transform: `scale(${1 + (audioLevel / 200)})`,
+              }}
             >
-              {isCalling ? "🔴" : "📞"}
-            </button>
+              <span className="text-3xl sm:text-4xl filter drop-shadow">
+                {voiceState === "speaking" ? "🔊" :
+                 voiceState === "thinking" ? "⚖️" :
+                 voiceState === "listening" ? "🎙️" : "📞"}
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-2 max-w-md mx-auto w-full">
-            <p className="text-xs sm:text-sm font-bold text-slate-200">
-              {!isCalling && callStatus !== "error" && "برای شروع گفتگوی زنده روی دکمه سبز ضربه بزنید"}
-              {statusMessage}
+          {/* وضعیت لحظه‌ای سیستم */}
+          <div className="space-y-3 max-w-md mx-auto w-full px-2">
+            <p className="text-xs sm:text-sm font-semibold text-slate-200 min-h-[24px]">
+              {statusText}
             </p>
 
-            {/* دکمه ارسال دستی در صورت پایان صحبت */}
-            {isCalling && callStatus === "listening" && (
-              <button
-                onClick={handleManualSubmit}
-                className="mt-2 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md shadow-amber-500/20 active:scale-95 flex items-center gap-1.5 mx-auto"
-              >
-                <span>🚀</span>
-                <span>ارسال صحبت برای تحلیل قاضی هوشمند</span>
-              </button>
+            {/* زیرنویس زنده کلام کاربر */}
+            {currentUserSpeech && (
+              <div className="bg-slate-950/80 border border-slate-800/90 p-3 rounded-2xl text-xs text-slate-300 text-right shadow-inner animate-in fade-in">
+                <span className="text-cyan-400 font-bold ml-1.5">شما:</span>
+                <span>{currentUserSpeech}</span>
+              </div>
             )}
 
-            {callStatus === "error" && (
-              <button
-                onClick={handleStartCall}
-                className="mt-2 px-4 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-semibold transition-colors"
-              >
-                🔄 تلاش مجدد برای دسترسی میکروفون
-              </button>
-            )}
-
-            {userSpeech && (
-              <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl text-xs text-slate-300 text-right animate-in fade-in">
-                <span className="text-amber-400 font-bold ml-1">شما گفتید:</span> {userSpeech}
+            {/* پاسخ استنتاجی و مستند هوش مصنوعی */}
+            {lastAiResponse && (
+              <div className="bg-slate-950/90 border border-slate-800 p-4 rounded-2xl text-right text-xs text-slate-200 max-h-40 overflow-y-auto leading-relaxed border-r-2 border-r-purple-400 shadow-inner animate-in fade-in">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-purple-400 font-bold text-xs">⚖️ پاسخ قاضی هوشمند:</span>
+                  <button
+                    onClick={() => playAiVoice(lastAiResponse)}
+                    className="text-[10px] text-slate-400 hover:text-purple-300 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 transition-colors"
+                  >
+                    🔊 بازپخش صوتی
+                  </button>
+                </div>
+                <p className="whitespace-pre-line leading-relaxed">{lastAiResponse}</p>
               </div>
             )}
           </div>
 
-          {aiSpeech && (
-            <div className="w-full bg-slate-950/90 border border-slate-800 p-4 rounded-2xl text-right text-xs text-slate-200 max-h-44 overflow-y-auto leading-relaxed border-r-2 border-r-amber-400 shadow-inner animate-in fade-in">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-amber-400 font-bold text-xs">⚖️ پاسخ استنتاجی قاضی هوشمند:</span>
-                <button
-                  onClick={() => speakPersian(aiSpeech)}
-                  className="text-[10px] text-slate-400 hover:text-amber-300 px-2 py-0.5 rounded bg-slate-900 border border-slate-800"
-                >
-                  🔊 بازپخش صوتی
-                </button>
-              </div>
-              <p className="whitespace-pre-line leading-relaxed">{aiSpeech}</p>
-            </div>
-          )}
-
-          {/* پرسش‌های سریع آماده در حین تماس */}
-          {isCalling && (
-            <div className="flex flex-wrap justify-center gap-1.5 pt-2">
-              {[
-                "ماده ۴۷۴ آیین دادرسی کیفری",
-                "مطالبه مهریه از اجرای ثبت",
-                "صلاحیت دادگاه صلح مصوب ۱۴۰۲"
-              ].map((chip, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => sendQueryToJudge(chip)}
-                  className="px-2.5 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-[10px] text-slate-400 hover:text-amber-300 rounded-lg transition-colors"
-                >
-                  ⚡ {chip}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* موضوعات سریع پیشنهادی (یک‌کلیک بدون نیاز به تایپ) */}
+          <div className="flex flex-wrap justify-center gap-1.5 pt-2">
+            {[
+              "لایحه اعاده دادرسی ماده ۴۷۴",
+              "مطالبه مهریه از اجرای ثبت",
+              "صلاحیت دادگاه صلح ۱۴۰۲"
+            ].map((topic, idx) => (
+              <button
+                key={idx}
+                onClick={() => processUserSpeechTurn(topic)}
+                className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-400 hover:text-cyan-300 rounded-xl transition-all shadow-sm"
+              >
+                ⚡ {topic}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* دکمه‌های فوتر پنجره */}
-        <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-          <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>پایگاه RAG و آرای وحدت رویه متصل است</span>
-          </span>
+        {/* دکمه‌های کنترلی تماس (Mute / پایان تماس / صحبت دستی) */}
+        <div className="pt-4 border-t border-slate-800/80 flex items-center justify-center gap-4">
           <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+            onClick={toggleMute}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg border transition-all ${
+              isMuted
+                ? "bg-rose-500/20 border-rose-500 text-rose-400"
+                : "bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white"
+            }`}
+            title={isMuted ? "وصل کردن میکروفون" : "بی‌صدا کردن میکروفون"}
           >
-            بستن
+            {isMuted ? "🔇" : "🎙️"}
           </button>
+
+          <button
+            onClick={handleEndCall}
+            className="w-14 h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center text-2xl shadow-lg shadow-rose-600/30 transition-transform active:scale-95"
+            title="پایان مکالمه"
+          >
+            🔴
+          </button>
+
+          {voiceState === "speaking" && (
+            <button
+              onClick={interruptAiSpeech}
+              className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-2xl text-xs text-amber-400 font-semibold transition-colors"
+              title="قطع صحبت و سوال جدید"
+            >
+              ✋ قطع صحبت
+            </button>
+          )}
         </div>
       </div>
     </div>

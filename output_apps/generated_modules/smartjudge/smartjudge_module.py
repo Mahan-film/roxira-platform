@@ -36,6 +36,7 @@ def _enforce_ascii_numbers(text: str) -> str:
     return text.translate(p_map)
 
 import os
+import io
 import sys
 import json
 import re
@@ -1442,6 +1443,43 @@ async def transcribe_audio(request: Request):
         {"status": "error", "message": f"تبدیل گفتار ناموفق بود: {last_error}"},
         status_code=502,
     )
+
+
+@router.post("/speak")
+async def generate_speech(payload: dict = Body(...)):
+    """تبدیل متن حقوقی به گفتار صوتی بلادرنگ (TTS) با بالاترین کیفیت از طریق OpenRouter."""
+    text = str(payload.get("text") or payload.get("input") or "").strip()
+    if not text:
+        return JSONResponse({"status": "error", "message": "متن خالی است"}, status_code=400)
+
+    short_text = text[:350]
+    voice = payload.get("voice", "alloy")
+
+    if not OPENROUTER_API_KEY:
+        return JSONResponse({"status": "error", "message": "کلید API موجود نیست"}, status_code=500)
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://ghazihoushmand.ir",            "X-Title": "Roxira SmartJudge",
+        }
+        body = {
+            "model": "openai/tts-1",
+            "input": short_text,
+            "voice": voice,
+        }
+        timeout = httpx.Timeout(15.0, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post("https://openrouter.ai/api/v1/audio/speech", json=body, headers=headers)
+            if resp.status_code == 200:
+                return StreamingResponse(io.BytesIO(resp.content), media_type="audio/mpeg")
+            else:
+                print(f"[SMARTJUDGE][TTS-FAIL] status={resp.status_code} body={resp.text[:200]}", file=sys.stderr)
+                return JSONResponse({"status": "error", "message": "خطای سرویس صوت"}, status_code=502)
+    except Exception as exc:
+        print(f"[SMARTJUDGE][TTS-EXC] {exc}", file=sys.stderr)
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
 
 
 def _sse_frame(event: str, payload: dict) -> str:

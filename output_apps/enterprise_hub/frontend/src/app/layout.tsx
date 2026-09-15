@@ -1,13 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Vazirmatn } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-provider";
-
-const vazirmatn = Vazirmatn({
-  variable: "--font-vazirmatn",
-  subsets: ["arabic", "latin"],
-});
 
 /** تفکیک دامنه‌های سه‌گانه جهت سئو و استخراج متادیتا */
 async function getHostInfo(): Promise<{ isEnglish: boolean; isGhazi: boolean }> {
@@ -51,9 +45,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={isEnglish ? "en" : "fa"}
       dir={isEnglish ? "ltr" : "rtl"}
-      className={`${vazirmatn.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col font-[family-name:var(--font-vazirmatn)]">
+      <body className="min-h-full flex flex-col font-sans">
         <AuthProvider>
           {children}
         </AuthProvider>
