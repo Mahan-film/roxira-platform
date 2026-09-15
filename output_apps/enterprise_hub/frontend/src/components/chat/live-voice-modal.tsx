@@ -75,6 +75,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
   const currentAudioElementRef = useRef<HTMLAudioElement | null>(null);
   const isSubmittingTurnRef = useRef<boolean>(false);
   const recognitionRef = useRef<any>(null);
+  const activeConversationIdRef = useRef<string>("");
   const autoSubmitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // متغیرهای مدیریت سکوت و تشخیص کلام
@@ -363,6 +364,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
+          conversation_id: activeConversationIdRef.current || undefined,
           user_phone: userPhone,
           phone: userPhone,
           is_vip: true,
@@ -372,6 +374,9 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
 
       if (res.ok) {
         const data = await res.json();
+        if (data.conversation_id) {
+          activeConversationIdRef.current = data.conversation_id;
+        }
         const reply = data.reply || data.response || "موضوع شما بر مبنای قوانین و رویه قضایی جاری بررسی شد.";
         setLastAiResponse(reply);
         await playAiVoice(reply);
@@ -406,6 +411,9 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
       setVoiceState("thinking");
       setStatusText("در حال پردازش گفتار شما...");
 
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (_) {}
+      }
       let transcript = accumulatedSpeechRef.current.trim();
       if (!transcript) {
         transcript = await transcribeCurrentSegment();
@@ -737,7 +745,7 @@ export function LiveVoiceModal({ isOpen, onClose }: LiveVoiceModalProps) {
 
             {/* پاسخ تحلیلی قاضی هوشمند */}
             {lastAiResponse && (
-              <div className="bg-slate-950/90 border border-slate-800 p-4 rounded-2xl text-right text-xs text-slate-200 max-h-40 overflow-y-auto leading-relaxed border-r-2 border-r-purple-400 shadow-inner animate-in fade-in">
+              <div className="bg-slate-950/95 border border-purple-500/20 p-4 rounded-2xl text-right text-xs text-slate-100 max-h-60 overflow-y-auto leading-relaxed border-r-4 border-r-purple-500 shadow-2xl shadow-purple-950/30 animate-in fade-in transition-all scrollbar-thin scrollbar-thumb-purple-900/50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-purple-400 font-bold text-xs">⚖️ پاسخ قاضی هوشمند:</span>
                   <button

@@ -102,10 +102,14 @@ def extract_precedent_numbers(text: str) -> List[str]:
     return seen
 
 
-def extract_doctrine_keywords(text: str, max_keywords: int = 4) -> List[str]:
+def extract_doctrine_keywords(text: str, max_keywords: int = 6) -> List[str]:
     """Extract salient doctrine keywords (longest first) from the query."""
-    words = _WORD_RE.findall(normalize_digits(text))
+    normalized = normalize_digits(text)
     unique: List[str] = []
+    if any(w in normalized for w in ["وحدت رویه", "دیوان عالی", "دیوان", "رأی وحدت"]):
+        unique.append("وحدت رویه")
+        unique.append("دیوان عالی")
+    words = _WORD_RE.findall(normalized)
     for word in words:
         if word in _STOPWORDS or word in unique:
             continue
@@ -114,7 +118,7 @@ def extract_doctrine_keywords(text: str, max_keywords: int = 4) -> List[str]:
     return unique[:max_keywords]
 
 
-def _clean(text: Optional[str], size: int = 160) -> str:
+def _clean(text: Optional[str], size: int = 1200) -> str:
     """Collapse whitespace and truncate a snippet for the response payload."""
     if not text:
         return ""
@@ -169,7 +173,7 @@ low_prec AS (
          OR node_id = ANY(%(prec_ids)s)
          OR title ILIKE ANY(%(prec_pats)s)
       )
-    ORDER BY (metadata->>'precedent_id' = ANY(%(prec_nums)s)) DESC, node_id DESC
+    ORDER BY (metadata->>'precedent_id' = ANY(%(prec_nums)s)) DESC, COALESCE(NULLIF(regexp_replace(node_id, '\D', '', 'g'), '')::int, 0) DESC
     LIMIT %(prec_cap)s
 ),
 high_prec_kw AS (
@@ -179,7 +183,7 @@ high_prec_kw AS (
     WHERE node_type = 'PRECEDENT'
       AND {_ACTIVE_PREDICATE}
       AND (title ILIKE ANY(%(kw_pats)s) OR category ILIKE ANY(%(kw_pats)s))
-    ORDER BY (category ILIKE ANY(%(kw_pats)s)) DESC, node_id DESC
+    ORDER BY (category ILIKE ANY(%(kw_pats)s)) DESC, COALESCE(NULLIF(regexp_replace(node_id, '\D', '', 'g'), '')::int, 0) DESC
     LIMIT %(prec_cap)s
 ),
 high_prec AS (
@@ -192,7 +196,7 @@ high_prec AS (
         FROM graph_nodes
         WHERE node_type = 'PRECEDENT'
           AND {_ACTIVE_PREDICATE}
-        ORDER BY node_id DESC
+        ORDER BY COALESCE(NULLIF(regexp_replace(node_id, '\D', '', 'g'), '')::int, 0) DESC
         LIMIT %(prec_cap)s
     ) general_active
     WHERE NOT EXISTS (SELECT 1 FROM high_prec_kw)
@@ -204,7 +208,7 @@ FROM (
     UNION ALL SELECT * FROM low_prec
     UNION ALL SELECT * FROM high_prec
 ) fused
-ORDER BY kind, rank, node_id;
+ORDER BY kind, rank, COALESCE(NULLIF(regexp_replace(node_id, '\D', '', 'g'), '')::int, 0) DESC, node_id ASC;
 """
 
 

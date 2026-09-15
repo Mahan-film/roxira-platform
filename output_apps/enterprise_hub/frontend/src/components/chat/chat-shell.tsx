@@ -11,6 +11,7 @@ export function ChatShell() {
   ]);
   const [inputPrompt, setInputPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string>("");
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState("");
   const [isLiveAudioOpen, setIsLiveAudioOpen] = useState(false);
@@ -150,11 +151,15 @@ export function ChatShell() {
         body: JSON.stringify({
           messages: newMsgs,
           message: textToSend,
+          conversation_id: conversationId || undefined,
           is_vip: true,
           tier: "VIP"
         })
       });
       const data = await res.json();
+      if (data.conversation_id && !conversationId) {
+        setConversationId(data.conversation_id);
+      }
       const reply = data.reply || data.response || "تحلیل ادله و بررسی مواد قانونی با موفقیت انجام شد.";
       setMessages([
         ...newMsgs,

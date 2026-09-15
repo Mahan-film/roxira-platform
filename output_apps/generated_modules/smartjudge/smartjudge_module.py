@@ -679,7 +679,9 @@ async def interactive_consult(payload: dict = Body(...)):
 
     selected_tier = "VIP" if tier == "VIP" else "FREE"
     cfg = OPENROUTER_TIERS[selected_tier]
-    laws, precedents = query_knowledge_graph(user_text)
+    
+    # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
+    laws, precedents = query_knowledge_graph(user_text, limit=5)
 
     # اگر سشن وجود ندارد یک گفتگوی جدید باز شود
     if not conv_id:
@@ -692,7 +694,23 @@ async def interactive_consult(payload: dict = Body(...)):
         except Exception as e:
             print("[SMARTJUDGE][DB-CONV-INIT] ", e)
 
-    # ۱. استعلام مستقیم از مدل زبانی هوش مصنوعی (OpenRouter / Claude / Gemini / DeepSeek)
+    # بازیابی تاریخچه مکالمه برای ایجاد حافظه بلندمدت چندمرحله‌ای (Memory Expansion)
+    history_messages = []
+    if conv_id:
+        try:
+            with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT role, content FROM chat_messages WHERE conversation_id = %s ORDER BY created_at ASC LIMIT 10;",
+                        (conv_id,)
+                    )
+                    for r in cur.fetchall():
+                        if r[0] in ("user", "assistant") and r[1]:
+                            history_messages.append({"role": r[0], "content": r[1]})
+        except Exception as e:
+            print("[SMARTJUDGE][HISTORY-FETCH-ERROR]", e)
+
+    # ۱. استعلام مستقیم از مدل زبانی هوش مصنوعی با تزریق دانش عمیق حقوقی و حافظه تاریخی
     reply_msg = ""
     prob = None
     draft = None
@@ -700,31 +718,34 @@ async def interactive_consult(payload: dict = Body(...)):
     if OPENROUTER_API_KEY:
         try:
             system_msg = (
-                "شما «سامانه تخصصی قاضی هوشمند» هستید؛ مشاور حقوقی هوشمند و مسلط به قوانین و رویه قضایی ایران. "
-                "لحن شما بسیار صمیمی، محترمانه، شیوا و روان است. "
-                "اگر کاربر سلام یا احوالپرسی کرد یا کلام کوتاهی گفت، با صمیمیت و ادب پاسخ دهید و بپرسید در چه موضوع حقوقی (ملکی، خانواده، کیفری، قراردادها یا چک) مایل به راهنمایی هستید. "
-                "اگر سوال تخصصی مطرح شد، پاسخ تحلیلی و مستند به مواد قانونی ارائه بده. "
-                "پاسخ‌ها باید برای خوانش صوتی نیز روان، سلیس و بدون تکلف باشند."
+                "شما «سامانه تخصصی قاضی هوشمند» هستید؛ مشاور عالی حقوقی و وکیل تراز اول مسلط به قوانین، مقررات، دکترین قضایی و آرای وحدت رویه هیأت عمومی دیوان عالی کشور. "
+                "لحن شما بسیار صمیمی، محترمانه، شیوا، سلیس و دارای استدلال نیرومند حقوقی است. "
+                "قواعد محوری پاسخ‌دهی: "
+                "۱. اگر کاربر سلام کرد، با گرمی و ادب پاسخ بده و بپرس در چه موضوع حقوقی مایل به راهنمایی هستید. "
+                "۲. اگر کاربر سوال تخصصی یا استعلام آرای وحدت رویه دیوان عالی را مطرح کرد، بر مبنای مستندات قانونی و آرای استخراج‌شده از پایگاه دانش پاسخ بده و شماره رأی، موضوع و استدلال دیوان عالی را با جزئیات کامل و مستند تشریح کن. "
+                "۳. پاسخ‌ها باید جامع، ساختارمند، غنی و مستند به مواد قانونی باشند و برای خوانش صوتی نیز روان و گیرا باشند."
             )
             context_text = ""
             if laws:
-                law_lines = "\n".join([f"- {l.get('title')}: {l.get('summary', '')}" for l in laws[:3]])
-                context_text += f"\nمواد قانونی مرتبط:\n{law_lines}"
+                law_lines = "\n".join([f"- {l.get('title')}: {l.get('summary', '')}" for l in laws[:5]])
+                context_text += f"\nمواد قانونی استخراج‌شده از پایگاه دانش:\n{law_lines}"
             if precedents:
-                prec_lines = "\n".join([f"- {p.get('title')}: {p.get('summary', '')}" for p in precedents[:2]])
-                context_text += f"\nآرای وحدت رویه مرتبط:\n{prec_lines}"
+                prec_lines = "\n".join([f"- {p.get('title')}: {p.get('summary', '')}" for p in precedents[:5]])
+                context_text += f"\nآرای وحدت رویه و رویه قضایی دیوان عالی کشور:\n{prec_lines}"
+            
+            prompt_system_content = (system_msg + "\n" + context_text) if context_text else system_msg
+            messages_payload = [{"role": "system", "content": prompt_system_content}]
+            if history_messages:
+                messages_payload.extend(history_messages[-8:])
+            messages_payload.append({"role": "user", "content": user_text})
 
-            messages_payload = [
-                {"role": "system", "content": (system_msg + "\n" + context_text) if context_text else system_msg},
-                {"role": "user", "content": user_text}
-            ]
             req_body = {
                 "model": cfg.get("primary_model", "google/gemini-3.8-flash"),
                 "messages": messages_payload,
                 "temperature": 0.4,
-                "max_tokens": 450,
+                "max_tokens": 1800,  # ارتقای سقف پاسخ برای ارائه متن کامل قوانین و توضیحات مبسوط
             }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=3.0)) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(16.0, connect=3.0)) as client:
                 headers = {
                     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                     "Content-Type": "application/json",
@@ -1718,7 +1739,7 @@ async def generate_speech(payload: dict = Body(...)):
     import re
     # تمیزسازی متن از کاراکترهای مارک‌داون
     clean_text = re.sub(r"[*#_`>\[\]\(\)\n]", " ", text).strip()
-    clean_text = " ".join(clean_text.split())[:350]
+    clean_text = " ".join(clean_text.split())[:1200]
 
     # ۱. موتور پرچمدار و فوق‌العاده باکیفیت Microsoft Neural TTS (صدای رسمی و شیوای فرید/دیلارام)
     try:
