@@ -328,6 +328,7 @@ export function LiveVoiceModal({
           resumeListening();
         };
 
+        audio.playbackRate = 1.15;
         await audio.play();
         return true;
       } catch (e) {

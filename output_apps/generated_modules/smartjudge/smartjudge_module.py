@@ -263,13 +263,13 @@ OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
 OPENROUTER_TIERS = {
     "VIP": {
-        "primary_model": "~google/gemini-flash-latest",
+        "primary_model": "google/gemini-3.8-flash",
         "fallback_model": "google/gemini-3.8-flash",
         "deep_reasoning_model": "anthropic/claude-3.7-sonnet",
         "label": "Google Gemini Flash (Latest) / Gemini 3.8 Flash / Claude 3.7 Sonnet"
     },
     "FREE": {
-        "primary_model": "~google/gemini-flash-latest",
+        "primary_model": "google/gemini-3.8-flash",
         "fallback_model": "google/gemini-3.8-flash",
         "label": "Google Gemini Flash (Latest)"
     }
@@ -723,12 +723,12 @@ async def interactive_consult(payload: dict = Body(...)):
     if OPENROUTER_API_KEY:
         try:
             system_msg = (
-                "شما «سامانه تخصصی قاضی هوشمند» هستید؛ مشاور عالی حقوقی و وکیل تراز اول مسلط به قوانین، مقررات، دکترین قضایی و آرای وحدت رویه هیأت عمومی دیوان عالی کشور. "
-                "لحن شما بسیار صمیمی، محترمانه، شیوا، سلیس و دارای استدلال نیرومند حقوقی است. "
-                "قواعد محوری پاسخ‌دهی: "
-                "۱. اگر کاربر سلام کرد، با گرمی و ادب پاسخ بده و بپرس در چه موضوع حقوقی مایل به راهنمایی هستید. "
-                "۲. اگر کاربر سوال تخصصی یا استعلام آرای وحدت رویه دیوان عالی را مطرح کرد، بر مبنای مستندات قانونی و آرای استخراج‌شده از پایگاه دانش پاسخ بده و شماره رأی، موضوع و استدلال دیوان عالی را با جزئیات کامل و مستند تشریح کن. "
-                "۳. پاسخ‌ها باید جامع، ساختارمند، غنی و مستند به مواد قانونی باشند و برای خوانش صوتی نیز روان و گیرا باشند."
+                "شما «دستیار صوتی و حقوقی قاضی هوشمند» هستید؛ مشاور رسمی، سریع و مسلط به قوانین و آرای دیوان عالی کشور. "
+                "دستورالعمل حیاتی مکالمه صوتی: "
+                "۱. ایجاز و اختصار مطلق: این یک مکالمه صوتی زنده است؛ پاسخ شما باید بسیار خلاصه، رسا، دقیق و حداکثر در ۲ یا ۳ جمله بیان شود (زیر ۵۰ کلمه). از هرگونه مقدمه‌چینی، احوالپرسی طولانی و توضیحات اضافی به شدت پرهیز کن. "
+                "۲. اگر کاربر سوال حقوقی یا استعلام رأی وحدت رویه پرسید، بلافاصله شماره رأی و پیام اصلی قانونی آن را صریح بگو. "
+                "۳. اگر کاربر سلام کرد یا کلامش کوتاه بود، فقط در یک جمله کوتاه بگو: سلام و درود، در خدمت شما هستم؛ بفرمایید موضوع یا سوال حقوقی شما چیست؟ "
+                "۴. اگر کاربر به خطای پیام قبلی اشاره کرد، فقط بگو: متوجه شدم؛ بفرمایید موضوع حقوقی یا سوال مورد نظرتان چیست تا فوراً بررسی کنم."
             )
             context_text = ""
             if laws:
@@ -748,7 +748,7 @@ async def interactive_consult(payload: dict = Body(...)):
                 "model": cfg.get("primary_model", "~google/gemini-flash-latest"),
                 "messages": messages_payload,
                 "temperature": 0.4,
-                "max_tokens": 1800,  # ارتقای سقف پاسخ برای ارائه متن کامل قوانین و توضیحات مبسوط
+                "max_tokens": 150,  # ایجاز صوتی جهت پاسخ‌دهی زیر نیم‌ثانیه
             }
             async with httpx.AsyncClient(timeout=httpx.Timeout(16.0, connect=3.0)) as client:
                 headers = {
@@ -1544,7 +1544,7 @@ async def health_check():
 
 # --- تبدیل گفتار به متن (STT فارسی) ------------------------------------------
 # مدل پیش‌فرض Gemini Flash (always-latest) که ورودی صوتی چندوجهی را می‌پذیرد.
-TRANSCRIBE_MODEL = "google/gemini-flash-latest"
+TRANSCRIBE_MODEL = "google/gemini-3.8-flash"
 TRANSCRIBE_FALLBACK_MODEL = "google/gemini-2.0-flash-001"
 TRANSCRIPTION_SYSTEM_PROMPT = (
     "شما یک موتور دقیق تبدیل گفتار به متن (Speech-to-Text) فارسی هستید. "
@@ -1834,7 +1834,7 @@ async def generate_speech(payload: dict = Body(...)):
     try:
         import edge_tts
         voice = "fa-IR-FaridNeural"
-        communicate = edge_tts.Communicate(clean_text, voice)
+        communicate = edge_tts.Communicate(clean_text, voice, rate="+22%")
         audio_buffer = bytearray()
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
