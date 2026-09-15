@@ -1542,10 +1542,22 @@ async def health_check():
         "legal_graph": _lightrag_health(),
     }
 
-# --- تبدیل گفتار به متن (STT فارسی) ------------------------------------------
-# مدل پیش‌فرض Gemini Flash (always-latest) که ورودی صوتی چندوجهی را می‌پذیرد.
-TRANSCRIBE_MODEL = "google/gemini-3.8-flash"
-TRANSCRIBE_FALLBACK_MODEL = "google/gemini-2.0-flash-001"
+# --- تبدیل گفتار به متن (STT فوق‌سریع و دقیق با OpenAI Whisper Large V3 / Google Chirp-3) ---
+OPENROUTER_TRANSCRIPTION_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
+
+# فهرست اولویت‌بندی‌شده قوی‌ترین مدل‌های پیاده‌سازی گفتار فارسی در جهان
+PRIMARY_STT_MODELS = [
+    "openai/whisper-large-v3",
+    "openai/whisper-large-v3-turbo",
+    "google/chirp-3",
+    "deepgram/nova-3",
+    "openai/gpt-4o-transcribe",
+    "openai/whisper-1",
+]
+
+TRANSCRIBE_MODEL = "openai/whisper-large-v3"
+TRANSCRIBE_FALLBACK_MODEL = "openai/whisper-large-v3-turbo"
+
 TRANSCRIPTION_SYSTEM_PROMPT = (
     "شما یک موتور دقیق تبدیل گفتار به متن (Speech-to-Text) فارسی هستید. "
     "گفتار فارسی را با دقت کامل، املای صحیح، نیم‌فاصله و علائم سجاوندی مناسب به متن تبدیل کن. "
@@ -1560,29 +1572,35 @@ def _detect_audio_format(mime_type: str) -> str:
     if "ogg" in m or "opus" in m:
         return "ogg"
     if "mp4" in m or "m4a" in m or "aac" in m:
-        return "mp4"
+        return "m4a"
     if "wav" in m or "wave" in m or "pcm" in m:
         return "wav"
     if "mpeg" in m or "mp3" in m:
         return "mp3"
-    # WebM/Opus خروجی پیش‌فرض ضبط مرورگر است.
+    if "flac" in m:
+        return "flac"
     return "webm"
 
 
 def _extract_openrouter_text(data: dict) -> str:
-    """استخراج متن از پاسخ استاندارد chat/completions (رشته یا لیست بخش‌ها)."""
-    choices = data.get("choices") or []
-    if not choices:
+    """استخراج متن از پاسخ استاندارد STT یا chat/completions."""
+    if not isinstance(data, dict):
         return ""
-    content = (choices[0].get("message") or {}).get("content")
-    if isinstance(content, str):
-        return content.strip()
-    if isinstance(content, list):
-        return "".join(
-            (part.get("text") or "")
-            for part in content
-            if isinstance(part, dict) and part.get("type") in (None, "text")
-        ).strip()
+    # ۱. پاسخ استاندارد /api/v1/audio/transcriptions
+    if "text" in data and isinstance(data["text"], str):
+        return data["text"].strip()
+    # ۲. پاسخ استاندارد chat/completions
+    choices = data.get("choices") or []
+    if choices:
+        content = (choices[0].get("message") or {}).get("content")
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            return "".join(
+                (part.get("text") or "")
+                for part in content
+                if isinstance(part, dict) and part.get("type") in (None, "text")
+            ).strip()
     return ""
 
 
@@ -1595,27 +1613,12 @@ def _get_local_whisper_instance():
             from faster_whisper import WhisperModel
             _local_whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
         except Exception as e:
-            print(f"[SMARTJUDGE][WHISPER-INIT-ERROR] {e}", file=sys.stderr)
-            _local_whisper_model = False
-    return _local_whisper_model if _local_whisper_model else None
-
-
-_local_whisper_model = None
-
-def _get_local_whisper_instance():
-    global _local_whisper_model
-    if _local_whisper_model is None:
-        try:
-            from faster_whisper import WhisperModel
-            _local_whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
-        except Exception as e:
-            print(f"[SMARTJUDGE][WHISPER-INIT-ERROR] {e}", file=sys.stderr)
             _local_whisper_model = False
     return _local_whisper_model if _local_whisper_model else None
 
 
 async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str) -> str:
-    """تبدیل صدای فارسی به متن با بالاترین دقت با Faster-Whisper محلی و Google Gemini Flash Latest."""
+    """تبدیل صدای فارسی به متن با بالاترین دقت جهانی از طریق OpenRouter STT و Whisper Large V3."""
     ext = _normalize_audio_format(audio_format)
     if ext == "mp4":
         ext = "m4a"
@@ -1631,7 +1634,7 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
         raw_bytes = audio_data
         audio_b64 = base64.b64encode(raw_bytes).decode("ascii")
 
-    # ۱. پردازش محلی با Faster-Whisper (دقت بالا در کلمات قضایی، تأخیر کمتر از ۲۰۰ میلی‌ثانیه)
+    # ۱. پردازش محلی با Faster-Whisper در صورت در دسترس بودن
     whisper_engine = _get_local_whisper_instance()
     if whisper_engine and raw_bytes:
         try:
@@ -1644,99 +1647,102 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
             print(f"[SMARTJUDGE][FASTER-WHISPER-FAIL] {exc}", file=sys.stderr)
 
     if not OPENROUTER_API_KEY:
+        print("[SMARTJUDGE][STT-SKIP] No OPENROUTER_API_KEY", file=sys.stderr)
         return ""
 
-    headers_json = {
+    headers_auth = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
         "HTTP-Referer": "https://ghazihoushmand.ir",
         "X-Title": "Roxira SmartJudge",
     }
 
-    # ۲. فالبک به مدل چندوجهی سریع Gemini Flash Latest در OpenRouter
-    target_model = model or "google/gemini-flash-latest"
-    try:
-        body = {
-            "model": target_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "لطفاً این قطعه صوتی به زبان فارسی را کلمه به کلمه و با دقت بالا به متن تبدیل کن. این مکالمه حقوقی است و شامل اصطلاحاتی مانند رأی وحدت رویه، دیوان عالی کشور، مواد قانونی و دادرسی است. فقط و فقط متن پیاده‌شده را بدون هیچ توضیح اضافی بنویس:"
-                        },
-                        {
-                            "type": "input_audio",
-                            "input_audio": {
-                                "data": audio_b64,
-                                "format": ext if ext in ("wav", "mp3") else "mp3"
-                            }
-                        }
-                    ]
+    # ۲. ارسال به اندپوینت اختصاصی و پرچمدار /api/v1/audio/transcriptions
+    models_to_try = [model] if model else []
+    for m in PRIMARY_STT_MODELS:
+        if m not in models_to_try:
+            models_to_try.append(m)
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0)) as client:
+        # روش اول: استانداردهای نوین OpenRouter با input_audio بصورت JSON
+        for target_model in models_to_try[:3]:
+            try:
+                body_json = {
+                    "model": target_model,
+                    "input_audio": {
+                        "data": audio_b64,
+                        "format": ext
+                    },
+                    "language": "fa"
                 }
-            ],
-            "temperature": 0.0,
-            "max_tokens": 200
+                headers_json = {**headers_auth, "Content-Type": "application/json"}
+                resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, json=body_json, headers=headers_json)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    trans = _extract_openrouter_text(data)
+                    if trans:
+                        print(f"[SMARTJUDGE][STT-SUCCESS] {target_model} (JSON): {trans[:80]}")
+                        return trans
+            except Exception as exc:
+                print(f"[SMARTJUDGE][STT-ERR] {target_model} JSON: {exc}", file=sys.stderr)
+
+        # روش دوم: فالبک به Multipart Form-Data (سازگار با Whisper V3 و Safari M4A)
+        mime_map = {
+            "m4a": "audio/mp4",
+            "webm": "audio/webm",
+            "wav": "audio/wav",
+            "mp3": "audio/mpeg",
+            "ogg": "audio/ogg",
+            "aac": "audio/aac",
+            "flac": "audio/flac"
         }
-        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=2.0)) as client:
-            resp = await client.post(OPENROUTER_CHAT_URL, json=body, headers=headers_json)
-            if resp.status_code == 200:
-                data = resp.json()
-                choices = data.get("choices", [])
-                if choices:
-                    res_text = choices[0].get("message", {}).get("content", "").strip()
-                    if res_text:
-                        print(f"[SMARTJUDGE][STT-SUCCESS] Gemini Flash: {res_text[:80]}")
-                        return res_text
-    except Exception as exc:
-        print(f"[SMARTJUDGE][STT-GEMINI-FAIL] {exc}", file=sys.stderr)
+        upload_mime = mime_map.get(ext, "audio/mp4")
+        for target_model in models_to_try[:2]:
+            try:
+                files = {"file": (f"speech.{ext}", raw_bytes, upload_mime)}
+                data_form = {"model": target_model, "language": "fa"}
+                resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, data=data_form, files=files, headers=headers_auth)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    trans = _extract_openrouter_text(data)
+                    if trans:
+                        print(f"[SMARTJUDGE][STT-SUCCESS] {target_model} (Multipart): {trans[:80]}")
+                        return trans
+            except Exception as exc:
+                print(f"[SMARTJUDGE][STT-ERR] {target_model} Multipart: {exc}", file=sys.stderr)
 
-    return ""
-
-    headers_json = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://ghazihoushmand.ir",
-        "X-Title": "Roxira SmartJudge",
-    }
-
-    # ۲. فالبک به مدل چندوجهی سریع Gemini Flash در OpenRouter
-    try:
-        body = {
-            "model": "google/gemini-2.0-flash-001",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "متن گفتار فارسی را دقیق، کلمه به کلمه و بدون هیچ توضیح اضافی بنویس. این گفتگوی حقوقی شامل مواردی چون آرای وحدت رویه دیوان عالی کشور، مواد قانونی، دادگاه و اسناد است:"
-                        },
-                        {
-                            "type": "input_audio",
-                            "input_audio": {
-                                "data": audio_b64,
-                                "format": ext if ext in ("wav", "mp3") else "mp3"
+        # روش سوم: فالبک نهایی به چت چندوجهی Gemini Flash
+        try:
+            body_chat = {
+                "model": "google/gemini-2.5-flash",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "متن گفتار فارسی این فایل صوتی را کلمه به کلمه و بدون هیچ توضیح بنویس:"
+                            },
+                            {
+                                "type": "input_audio",
+                                "input_audio": {
+                                    "data": audio_b64,
+                                    "format": ext if ext in ("wav", "mp3", "m4a", "aac", "ogg") else "wav"
+                                }
                             }
-                        }
-                    ]
-                }
-            ],
-            "temperature": 0.0,
-            "max_tokens": 80
-        }
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
-            resp = await client.post(OPENROUTER_CHAT_URL, json=body, headers=headers_json)
+                        ]
+                    }
+                ],
+                "temperature": 0.0,
+                "max_tokens": 150
+            }
+            resp = await client.post(OPENROUTER_CHAT_URL, json=body_chat, headers={**headers_auth, "Content-Type": "application/json"})
             if resp.status_code == 200:
-                data = resp.json()
-                choices = data.get("choices", [])
-                if choices:
-                    res_text = choices[0].get("message", {}).get("content", "").strip()
-                    if res_text:
-                        return res_text
-    except Exception as exc:
-        print(f"[SMARTJUDGE][STT-GEMINI-FAIL] {exc}", file=sys.stderr)
+                trans = _extract_openrouter_text(resp.json())
+                if trans:
+                    print(f"[SMARTJUDGE][STT-SUCCESS] Gemini Chat Multimodal: {trans[:80]}")
+                    return trans
+        except Exception as exc:
+            print(f"[SMARTJUDGE][STT-CHAT-FAIL] {exc}", file=sys.stderr)
 
     return ""
 
@@ -1780,13 +1786,8 @@ async def _read_audio_from_request(request: Request):
 
 @router.post("/transcribe-audio")
 async def transcribe_audio(request: Request):
-    """تبدیل گفتار فارسی به متن (STT) با مدل چندوجهی Gemini Flash روی OpenRouter.
-
-    دو حالت ورودی پشتیبانی می‌شود:
-      • multipart/form-data با کلید `file` (یا `audio`) شامل فایل صوتی؛
-      • application/json با کلید `audio_base64` (یا `audio`) شامل Base64
-        (با یا بدون پیشوند data URL) و کلید اختیاری `mime_type`/`format`.
-    خروجی: ``{"status": "success", "text": <transcribed_text>}``.
+    """تبدیل گفتار فارسی به متن (STT) با مدل‌های جهانی Whisper Large V3 و Google Chirp-3 روی OpenRouter.
+    خروجی: ``{"status": "success", "text": <transcribed_text>, "transcript": <transcribed_text>}``.
     """
     try:
         audio_bytes, mime_type = await _read_audio_from_request(request)
@@ -1797,9 +1798,9 @@ async def transcribe_audio(request: Request):
     audio_format = _detect_audio_format(mime_type)
 
     last_error = None
-    for model in (TRANSCRIBE_MODEL, TRANSCRIBE_FALLBACK_MODEL):
+    for model in PRIMARY_STT_MODELS[:2]:
         try:
-            transcribed = await _openrouter_transcribe(model, audio_b64, audio_format)
+            transcribed = await _openrouter_transcribe(model, audio_bytes, audio_format)
             if transcribed:
                 try:
                     from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
@@ -1807,7 +1808,7 @@ async def transcribe_audio(request: Request):
                 except Exception:
                     pass
                 return {"status": "success", "text": transcribed, "transcript": transcribed}
-            last_error = "پاسخ خالی از مدل STT"
+            last_error = "پاسخ خالی از مدل‌های STT"
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {exc}"
             print(f"[SMARTJUDGE][STT-FAIL] model={model}: {last_error}", file=sys.stderr)
@@ -1816,8 +1817,6 @@ async def transcribe_audio(request: Request):
         {"status": "error", "message": f"تبدیل گفتار ناموفق بود: {last_error}"},
         status_code=502,
     )
-
-
 @router.post("/speak")
 async def generate_speech(payload: dict = Body(...)):
     """تبدیل متن حقوقی به گفتار صوتی بلادرنگ با کیفیت استودیویی و صدای بومی فارسی (Microsoft Neural TTS)."""

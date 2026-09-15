@@ -9,6 +9,39 @@ export interface LiveVoiceModalProps {
   conversationId?: string;
   onConversationIdChange?: (id: string) => void;
   onNewMessage?: (userText: string, aiText: string, draft?: string, probability?: string) => void;
+  onTriggerLegalDraft?: (type: "bill" | "petition" | "complaint" | "statement", title: string, prompt: string) => void;
+}
+
+// ── تبدیل مستقیم PCM به فرمت جهانی WAV (سازگار ۱۰۰٪ با Safari, iOS و Chrome) ────────────────
+function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, 1, true); // Mono channel
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true); // Block align
+  view.setUint16(34, 16, true); // 16-bit
+  writeString(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
 }
 
 // ── آنلاک سیاست پخش خودکار Safari و Chrome ──────────────────────────────────────────
@@ -79,7 +112,10 @@ export function LiveVoiceModal({
   conversationId: externalConvId = "",
   onConversationIdChange,
   onNewMessage,
+  onTriggerLegalDraft,
 }: LiveVoiceModalProps) {
+  const pcmChunksRef = useRef<Float32Array[]>([]);
+  const pcmProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const { user } = useAuth();
   const userPhone = user?.phone || "09129367796";
 
@@ -173,57 +209,96 @@ export function LiveVoiceModal({
     }
   }, []);
 
-  // تبدیل صوت به متن با اولویت موتورهای با دقت بالای سرور (Faster-Whisper / Gemini Flash Multimodal)
+  // تبدیل صوت به متن با اولویت موتورهای با دقت بالای سرور (Whisper Large V3 / Google Chirp-3)
   const transcribeCurrentSegment = useCallback(async (): Promise<string> => {
-    const recorder = mediaRecorderRef.current;
     let serverText = "";
 
-    if (recorder && recorder.state !== "inactive") {
+    // استراتژی ۱: استخراج مستقیم از PCM فشرده‌نشده به WAV استاندارد (تضمین کارکرد کامل در Safari و iOS)
+    if (pcmChunksRef.current.length > 0 && audioContextRef.current) {
       try {
-        const blob = await new Promise<Blob>((resolve) => {
-          const timeoutId = setTimeout(() => {
-            const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/mp4";
-            resolve(new Blob(audioChunksRef.current, { type }));
-          }, 600);
-          recorder.onstop = () => {
-            clearTimeout(timeoutId);
-            const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/mp4";
-            resolve(new Blob(audioChunksRef.current, { type }));
-          };
-          try { recorder.stop(); } catch (_) {
-            clearTimeout(timeoutId);
-            resolve(new Blob([], { type: "audio/mp4" }));
+        const totalLen = pcmChunksRef.current.reduce((acc, c) => acc + c.length, 0);
+        if (totalLen > 300) {
+          const merged = new Float32Array(totalLen);
+          let offset = 0;
+          for (const chunk of pcmChunksRef.current) {
+            merged.set(chunk, offset);
+            offset += chunk.length;
           }
-        });
-        audioChunksRef.current = [];
-        mediaRecorderRef.current = null;
+          const wavBlob = encodeWAV(merged, audioContextRef.current.sampleRate || 16000);
+          if (wavBlob.size > 100) {
+            const formData = new FormData();
+            formData.append("file", wavBlob, "speech.wav");
 
-        if (blob && blob.size > 50) {
-          const ext = /mp4|m4a|aac/i.test(blob.type)
-            ? "m4a"
-            : /ogg/i.test(blob.type)
-            ? "ogg"
-            : /wav/i.test(blob.type)
-            ? "wav"
-            : "webm";
-          const formData = new FormData();
-          formData.append("file", blob, `speech.${ext}`);
+            const controller = new AbortController();
+            const tId = setTimeout(() => controller.abort(), 5000);
+            const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
+              method: "POST",
+              body: formData,
+              signal: controller.signal,
+            }).finally(() => clearTimeout(tId));
 
-          const controller = new AbortController();
-          const tId = setTimeout(() => controller.abort(), 4500);
-          const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
-            method: "POST",
-            body: formData,
-            signal: controller.signal,
-          }).finally(() => clearTimeout(tId));
-
-          if (res.ok) {
-            const data = await res.json().catch(() => null);
-            serverText = (data?.text || data?.transcript || "").trim();
+            if (res.ok) {
+              const data = await res.json().catch(() => null);
+              serverText = (data?.text || data?.transcript || "").trim();
+            }
           }
         }
-      } catch (e) {
-        console.warn("Server STT error, falling back to local:", e);
+      } catch (err) {
+        console.warn("PCM WAV STT notice:", err);
+      }
+    }
+    pcmChunksRef.current = [];
+
+    // استراتژی ۲: فالبک به MediaRecorder
+    if (!serverText) {
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        try {
+          const blob = await new Promise<Blob>((resolve) => {
+            const timeoutId = setTimeout(() => {
+              const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/mp4";
+              resolve(new Blob(audioChunksRef.current, { type }));
+            }, 600);
+            recorder.onstop = () => {
+              clearTimeout(timeoutId);
+              const type = recorder.mimeType || audioChunksRef.current[0]?.type || "audio/mp4";
+              resolve(new Blob(audioChunksRef.current, { type }));
+            };
+            try { recorder.stop(); } catch (_) {
+              clearTimeout(timeoutId);
+              resolve(new Blob([], { type: "audio/mp4" }));
+            }
+          });
+          audioChunksRef.current = [];
+          mediaRecorderRef.current = null;
+
+          if (blob && blob.size > 50) {
+            const ext = /mp4|m4a|aac/i.test(blob.type)
+              ? "m4a"
+              : /ogg/i.test(blob.type)
+              ? "ogg"
+              : /wav/i.test(blob.type)
+              ? "wav"
+              : "webm";
+            const formData = new FormData();
+            formData.append("file", blob, `speech.${ext}`);
+
+            const controller = new AbortController();
+            const tId = setTimeout(() => controller.abort(), 5000);
+            const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
+              method: "POST",
+              body: formData,
+              signal: controller.signal,
+            }).finally(() => clearTimeout(tId));
+
+            if (res.ok) {
+              const data = await res.json().catch(() => null);
+              serverText = (data?.text || data?.transcript || "").trim();
+            }
+          }
+        } catch (e) {
+          console.warn("Server STT error, falling back to local:", e);
+        }
       }
     }
 
@@ -507,6 +582,23 @@ export function LiveVoiceModal({
       source.connect(analyser);
       analyserRef.current = analyser;
 
+      // اتصال پردازنده PCM برای ضبط زنده گفتار بدون وابستگی به فرمت‌های وب‌ام سافاری
+      try {
+        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+        pcmProcessorRef.current = processor;
+        pcmChunksRef.current = [];
+        processor.onaudioprocess = (e) => {
+          if (voiceStateRef.current === "listening") {
+            const inputData = e.inputBuffer.getChannelData(0);
+            pcmChunksRef.current.push(new Float32Array(inputData));
+          }
+        };
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+      } catch (e) {
+        console.warn("ScriptProcessor audio recorder notice:", e);
+      }
+
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       const loop = () => {
@@ -668,6 +760,11 @@ export function LiveVoiceModal({
     }
     mediaRecorderRef.current = null;
     audioChunksRef.current = [];
+    if (pcmProcessorRef.current) {
+      try { pcmProcessorRef.current.disconnect(); } catch (_) {}
+      pcmProcessorRef.current = null;
+    }
+    pcmChunksRef.current = [];
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -689,6 +786,35 @@ export function LiveVoiceModal({
       setStatusText("میکروفون قطع شد.");
     } else {
       setStatusText("میکروفون وصل شد؛ بفرمایید...");
+    }
+  };
+
+  // هدایت فرآیند صوتی به صدور رسمی لایحه، دادخواست یا شکواییه در چت اصلی
+  const triggerLegalAction = (actionType: "bill" | "petition" | "complaint" | "statement") => {
+    interruptAiSpeech();
+    handleEndCall();
+    onClose();
+
+    const topicContext = currentUserSpeech || lastAiResponse || "";
+    let prompt = "";
+    let title = "";
+
+    if (actionType === "bill") {
+      title = "تنظیم لایحه دفاعیه قانونی";
+      prompt = `با توجه به مذاکرات و موضوعات مطرح‌شده در مکالمه: «${topicContext.slice(0, 250)}»، یک لایحه دفاعیه جامع، مستند و مستدل به مواد قانونی، قواعد فقهی و رویه قضایی جهت ارائه به دادگاه تنظیم کن.`;
+    } else if (actionType === "petition") {
+      title = "تنظیم دادخواست حقوقی";
+      prompt = `بر اساس شرح پرونده و خواسته مطروحه: «${topicContext.slice(0, 250)}»، دادخواست حقوقی کامل با تعیین مشخصات خواهان و خوانده، تعیین خواسته و بهای آن، دلایل و منضمات قانونی و شرح دادخواست را تدوین نما.`;
+    } else if (actionType === "complaint") {
+      title = "تنظیم شکواییه کیفری";
+      prompt = `با توجه به وقایع و جرایم اعلام‌شده: «${topicContext.slice(0, 250)}»، یک شکواییه کیفری رسمی مشتمل بر عنوان اتهام، مشخصات شاکی و مشتکی‌عنه، تاریخ و محل وقوع جرم و ادله اثباتی را تدوین کن.`;
+    } else {
+      title = "تنظیم اظهارنامه رسمی";
+      prompt = `با توجه به موضوع پرونده: «${topicContext.slice(0, 250)}»، یک اظهارنامه رسمی موضوع ماده ۱۵۶ قانون آیین دادرسی مدنی با اخطار قانونی و مهلت مشخص تدوین فرما.`;
+    }
+
+    if (onTriggerLegalDraft) {
+      onTriggerLegalDraft(actionType, title, prompt);
     }
   };
 
@@ -814,8 +940,61 @@ export function LiveVoiceModal({
             )}
           </div>
 
+          {/* اقدامات حقوقی و فرآیند صدور لایحه / دادخواست / شکواییه */}
+          <div className="w-full pt-3 border-t border-slate-800/80 space-y-2 text-right">
+            <div className="flex items-center justify-between text-xs px-1">
+              <span className="text-amber-400 font-bold flex items-center gap-1.5">
+                <span>📋</span>
+                <span>صدور خودکار اوراق قضایی پرونده:</span>
+              </span>
+              <span className="text-[10px] text-slate-400">اتصال مستقیم به صفحه چت اصلی</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <button
+                onClick={() => triggerLegalAction("bill")}
+                className="p-2 bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 border border-amber-500/40 hover:border-amber-400 text-xs text-amber-200 rounded-xl transition-all font-semibold flex items-center justify-center gap-1 shadow-sm"
+              >
+                <span>📄</span>
+                <span>تنظیم لایحه</span>
+              </button>
+              <button
+                onClick={() => triggerLegalAction("petition")}
+                className="p-2 bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 border border-cyan-500/40 hover:border-cyan-400 text-xs text-cyan-200 rounded-xl transition-all font-semibold flex items-center justify-center gap-1 shadow-sm"
+              >
+                <span>⚖️</span>
+                <span>تنظیم دادخواست</span>
+              </button>
+              <button
+                onClick={() => triggerLegalAction("complaint")}
+                className="p-2 bg-gradient-to-r from-rose-500/15 to-red-500/15 hover:from-rose-500/25 hover:to-red-500/25 border border-rose-500/40 hover:border-rose-400 text-xs text-rose-200 rounded-xl transition-all font-semibold flex items-center justify-center gap-1 shadow-sm"
+              >
+                <span>🚨</span>
+                <span>تنظیم شکواییه</span>
+              </button>
+              <button
+                onClick={() => triggerLegalAction("statement")}
+                className="p-2 bg-gradient-to-r from-emerald-500/15 to-teal-500/15 hover:from-emerald-500/25 hover:to-teal-500/25 border border-emerald-500/40 hover:border-emerald-400 text-xs text-emerald-200 rounded-xl transition-all font-semibold flex items-center justify-center gap-1 shadow-sm"
+              >
+                <span>📑</span>
+                <span>اظهارنامه رسمی</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                handleEndCall();
+                onClose();
+              }}
+              className="w-full py-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-xs text-slate-300 hover:text-white rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <span>💬</span>
+              <span>انتقال مکالمه به صفحه اصلی چت و مشاهده کامل پرونده</span>
+            </button>
+          </div>
+
           {/* موضوعات سریع */}
-          <div className="flex flex-wrap justify-center gap-1.5 pt-2">
+          <div className="flex flex-wrap justify-center gap-1.5 pt-1">
             {[
               "آخرین رأی وحدت رویه دیوان عالی",
               "لایحه اعاده دادرسی ماده ۴۷۴",
