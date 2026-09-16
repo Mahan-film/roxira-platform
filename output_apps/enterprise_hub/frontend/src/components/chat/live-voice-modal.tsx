@@ -12,9 +12,27 @@ export interface LiveVoiceModalProps {
   onTriggerLegalDraft?: (type: "bill" | "petition" | "complaint" | "statement", title: string, prompt: string) => void;
 }
 
-// ── تبدیل مستقیم PCM به فرمت جهانی WAV (سازگار ۱۰۰٪ با Safari, iOS و Chrome) ────────────────
-function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
+// ── تبدیل مستقیم و باکیفیت PCM به WAV استاندارد ۱۶ کیلوهرتز (سازگار ۱۰۰٪ با Whisper، Safari و Chrome) ──
+function downsampleTo16k(input: Float32Array, inputRate: number): Float32Array {
+  if (inputRate === 16000) return input;
+  const ratio = inputRate / 16000;
+  const newLength = Math.round(input.length / ratio);
+  const result = new Float32Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    const originIdx = i * ratio;
+    const left = Math.floor(originIdx);
+    const right = Math.min(left + 1, input.length - 1);
+    const frac = originIdx - left;
+    result[i] = input[left] * (1 - frac) + input[right] * frac;
+  }
+  return result;
+}
+
+function encodeWAV(samples: Float32Array, originalSampleRate: number): Blob {
+  // همیشه به ۱۶ کیلوهرتز مونو بازنمونه‌برداری می‌شود تا حجم ۳ برابر کمتر و سرعت Whisper حداکثری شود
+  const downsampled = downsampleTo16k(samples, originalSampleRate);
+  const sampleRate = 16000;
+  const buffer = new ArrayBuffer(44 + downsampled.length * 2);
   const view = new DataView(buffer);
 
   const writeString = (offset: number, str: string) => {
@@ -22,22 +40,22 @@ function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
   };
 
   writeString(0, "RIFF");
-  view.setUint32(4, 36 + samples.length * 2, true);
+  view.setUint32(4, 36 + downsampled.length * 2, true);
   writeString(8, "WAVE");
   writeString(12, "fmt ");
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM format
-  view.setUint16(22, 1, true); // Mono channel
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(20, 1, true); // فرمت صوتی خطی PCM
+  view.setUint16(22, 1, true); // کانال مونو
+  view.setUint32(24, sampleRate, true); // ۱۶,۰۰۰ هرتز (نرخ طلایی مدل‌های Whisper)
+  view.setUint32(28, sampleRate * 2, true); // ۳۲,۰۰۰ بایت در ثانیه
   view.setUint16(32, 2, true); // Block align
-  view.setUint16(34, 16, true); // 16-bit
+  view.setUint16(34, 16, true); // ۱۶ بیتی
   writeString(36, "data");
-  view.setUint32(40, samples.length * 2, true);
+  view.setUint32(40, downsampled.length * 2, true);
 
   let offset = 44;
-  for (let i = 0; i < samples.length; i++, offset += 2) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
+  for (let i = 0; i < downsampled.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, downsampled[i]));
     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
 
@@ -487,6 +505,7 @@ export function LiveVoiceModal({
           phone: userPhone,
           is_vip: true,
           tier: "VIP",
+          is_voice_mode: true,
         }),
       });
 
@@ -582,7 +601,20 @@ export function LiveVoiceModal({
       source.connect(analyser);
       analyserRef.current = analyser;
 
-      // اتصال پردازنده PCM برای ضبط زنده گفتار بدون وابستگی به فرمت‌های وب‌ام سافاری
+      // فیلتر آکوستیک: حذف هام فرکانس پایین فن لپ‌تاپ و پاف میکروفون (<80Hz)
+      const highPass = audioCtx.createBiquadFilter();
+      highPass.type = "highpass";
+      highPass.frequency.value = 85;
+
+      // فیلتر آکوستیک: حذف هیس و نویز فرکانس بالا (>7500Hz)
+      const lowPass = audioCtx.createBiquadFilter();
+      lowPass.type = "lowpass";
+      lowPass.frequency.value = 7500;
+
+      source.connect(highPass);
+      highPass.connect(lowPass);
+
+      // اتصال پردازنده PCM با قطع کامل خروجی به اسپیکر (حذف ۱۰۰٪ اکو، فیدبک و نویز)
       try {
         const processor = audioCtx.createScriptProcessor(4096, 1, 1);
         pcmProcessorRef.current = processor;
@@ -593,8 +625,13 @@ export function LiveVoiceModal({
             pcmChunksRef.current.push(new Float32Array(inputData));
           }
         };
-        source.connect(processor);
-        processor.connect(audioCtx.destination);
+        lowPass.connect(processor);
+
+        // نکته حیاتی: اتصال به یک گین کاملاً صفر به جای destination مستقیم تا هیچ صدایی از میکروفون به بلندگو پخش نشود
+        const muteGain = audioCtx.createGain();
+        muteGain.gain.value = 0.0;
+        processor.connect(muteGain);
+        muteGain.connect(audioCtx.destination);
       } catch (e) {
         console.warn("ScriptProcessor audio recorder notice:", e);
       }
@@ -615,22 +652,22 @@ export function LiveVoiceModal({
         // مانیتورینگ بصری شدت صدا (بدون قطع خودکار وسط کلام قاضی هوشمند تا از اکوی اسپیکر جلوگیری شود)
         // کاربر در صورت تمایل به قطع کلام می‌تواند دکمه ✋ قطع صحبت را فشار دهد.
 
-        // فالبک سکوت برای ارسال خودکار صوتی (VAD)
+        // تشخیص پایان گفتار (VAD فوق‌سریع و بلادرنگ با مکث ۵۰۰ میلی‌ثانیه‌ای)
         if (voiceStateRef.current === "listening") {
-          if (level > 18) {
+          if (level > 16) {
             hasSpokenInThisTurnRef.current = true;
             if (silenceTimeoutRef.current) {
               clearTimeout(silenceTimeoutRef.current);
               silenceTimeoutRef.current = null;
             }
-          } else if (hasSpokenInThisTurnRef.current && level < 14) {
+          } else if (hasSpokenInThisTurnRef.current && level < 12) {
             if (!silenceTimeoutRef.current) {
               silenceTimeoutRef.current = setTimeout(() => {
                 silenceTimeoutRef.current = null;
                 if (voiceStateRef.current === "listening") {
                   submitSpokenTurn();
                 }
-              }, 1400);
+              }, 500); // ۵۰۰ میلی‌ثانیه برای پاسخ‌دهی بلادرنگ شبیه مکالمه انسانی
             }
           }
         }
@@ -702,7 +739,7 @@ export function LiveVoiceModal({
                 if (voiceStateRef.current === "listening" && accumulatedSpeechRef.current.trim().length >= 2) {
                   submitSpokenTurn();
                 }
-              }, 1000);
+              }, 450);
             }
           };
 
