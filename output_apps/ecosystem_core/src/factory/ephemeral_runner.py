@@ -41,6 +41,21 @@ try:  # templates live alongside this module
 except ImportError:  # pragma: no cover - direct script execution
     from templates import SandboxTemplate, select_template  # type: ignore[no-redef]
 
+try:  # hierarchical multi-agent generator (tier AUTONOMOUS_SWARM)
+    from .swarm_orchestrator import (
+        AUTONOMOUS_SWARM_TIER,
+        SwarmResult,
+        is_swarm_tier,
+        run_swarm_blueprint,
+    )
+except ImportError:  # pragma: no cover - direct script execution
+    from swarm_orchestrator import (  # type: ignore[no-redef]
+        AUTONOMOUS_SWARM_TIER,
+        SwarmResult,
+        is_swarm_tier,
+        run_swarm_blueprint,
+    )
+
 __all__ = [
     "BuildRequest",
     "BuildResult",
@@ -253,6 +268,8 @@ class BuildStatus:
     nginx_conf: Optional[str] = None
     #: Unix timestamp of the last successful route registration.
     route_registered_at: Optional[float] = None
+    #: Full report of the hierarchical swarm run (tier AUTONOMOUS_SWARM).
+    swarm: Optional[dict[str, Any]] = None
     error: Optional[str] = None
     repair_attempts: int = 0
     repairs: list[str] = field(default_factory=list)
@@ -448,6 +465,8 @@ def sandbox_summary(status: BuildStatus, health: Optional[str] = None) -> dict[s
         "upstream": status.upstream,
         "nginx_conf": status.nginx_conf,
         "route_registered_at": status.route_registered_at,
+        "swarm_status": (status.swarm or {}).get("status"),
+        "swarm_qa_score": ((status.swarm or {}).get("qa") or {}).get("score"),
         "container_id": status.container_id,
         "container_state": status.container_state,
         "port_bound": status.port_bound,
@@ -2163,8 +2182,15 @@ class EphemeralRunner:
             )
             generated = await asyncio.to_thread(self._generator.generate, request, host_port)
             project_dir = generated.project_dir
+            # Tier AUTONOMOUS_SWARM: the hierarchical agent pipeline rewrites the
+            # scaffold from an OpenAPI contract before the image is built.
+            swarm = await self._run_swarm(request, project_dir, status)
             await self._status.save(
-                status.advance(BuildStage.PROJECT_GENERATED, project_dir=str(project_dir))
+                status.advance(
+                    BuildStage.PROJECT_GENERATED,
+                    project_dir=str(project_dir),
+                    swarm=swarm.to_dict() if swarm else None,
+                )
             )
 
             try:
@@ -2238,6 +2264,46 @@ class EphemeralRunner:
             )
         finally:
             self._allocator.release(request.app_id, host_port)
+
+    async def _run_swarm(
+        self, request: BuildRequest, project_dir: Path, status: BuildStatus
+    ) -> Optional[SwarmResult]:
+        """Run the hierarchical swarm pipeline for tier ``AUTONOMOUS_SWARM``.
+
+        Returns ``None`` for every other tier (the scaffold is used as-is).  For
+        the swarm tier the architect researches the prompt into an OpenAPI
+        contract and the backend/frontend workers rewrite the scaffold from that
+        contract; a hard pipeline failure raises so the build is marked FAILED,
+        while a QA report with issues still deploys (the report is persisted in
+        ``.swarm/report.json`` and on the status record).
+        """
+        if not is_swarm_tier(request.tier):
+            return None
+        prompt = (request.prompt or request.app_name or request.app_id).strip()
+        print(
+            "[factory] tier %s -> swarm pipeline for %s" % (request.tier, request.app_id),
+            file=sys.stderr,
+        )
+        result = await run_swarm_blueprint(
+            prompt, project_dir, app_id=request.app_id, tier=request.tier
+        )
+        if result.status == "failed":
+            raise EphemeralRunnerError(
+                "swarm pipeline failed at %s: %s"
+                % (result.stage, "; ".join(result.errors) or "unknown error")
+            )
+        qa = result.qa
+        print(
+            "[factory] swarm %s: %d artifacts, qa=%s score=%s"
+            % (
+                result.status,
+                len(result.artifacts),
+                qa.passed if qa else "n/a",
+                qa.score if qa else "n/a",
+            ),
+            file=sys.stderr,
+        )
+        return result
 
     async def _verify_container_started(
         self, container_name: str, host_port: int

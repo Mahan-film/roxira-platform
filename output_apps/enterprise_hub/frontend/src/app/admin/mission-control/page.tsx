@@ -17,6 +17,7 @@ import {
   Server,
   Terminal,
   Trash2,
+  Users,
   XCircle,
 } from "lucide-react";
 
@@ -64,6 +65,7 @@ interface FactoryBuildStatus {
   container_name?: string | null;
   error?: string | null;
   stages?: FactoryBuildStage[];
+  swarm?: SwarmMetadata | null;
   updated_at?: number;
 }
 
@@ -79,6 +81,67 @@ const PIPELINE_STAGES: { key: string; label: string }[] = [
 
 const TERMINAL_STAGES = new Set(["RUNNING", "FAILED", "REJECTED"]);
 
+type BuildTier = "FRONTIER" | "AUTONOMOUS_SWARM";
+
+const BUILD_TIERS: { id: BuildTier; name: string; hint: string }[] = [
+  { id: "FRONTIER", name: "Frontier Sandbox", hint: "Single container · fast path" },
+  { id: "AUTONOMOUS_SWARM", name: "Autonomous Agent Swarm", hint: "30-Min Zero-Touch team pipeline" },
+];
+
+type SwarmTeamState = "pending" | "active" | "done" | "failed";
+
+interface SwarmTeam {
+  stage: string;
+  icon: string;
+  name: string;
+  role: string;
+}
+
+const SWARM_TEAMS: SwarmTeam[] = [
+  { stage: "ARCHITECT_RESEARCH", icon: "🏛️", name: "Chief Architect", role: "OpenAPI & Blueprint" },
+  { stage: "SCHEMA_DESIGN", icon: "🗄️", name: "Database Squad", role: "PostgreSQL & TableSpec" },
+  { stage: "BACKEND_GENERATION", icon: "⚡", name: "Backend Squad", role: "FastAPI Contract Endpoints" },
+  { stage: "FRONTEND_GENERATION", icon: "🎨", name: "Frontend Squad", role: "Next.js 16 Accounting Views" },
+  { stage: "QA_EVALUATION", icon: "🧪", name: "QA Evaluator", role: "Contract Conformance & Type Safety" },
+];
+
+const SWARM_STAGE_ORDER = SWARM_TEAMS.map((team) => team.stage);
+
+const SWARM_STATE_STYLES: Record<SwarmTeamState, { dot: string; text: string; label: string }> = {
+  pending: { dot: "bg-slate-600", text: "text-slate-500", label: "PENDING" },
+  active: { dot: "bg-amber-400", text: "text-amber-300", label: "ACTIVE" },
+  done: { dot: "bg-emerald-400", text: "text-emerald-300", label: "DONE" },
+  failed: { dot: "bg-rose-500", text: "text-rose-300", label: "FAILED" },
+};
+
+function isSwarmTier(tier?: string | null): boolean {
+  const key = (tier ?? "").trim().toUpperCase();
+  return key === "AUTONOMOUS_SWARM" || key === "SWARM" || key === "AUTONOMOUS";
+}
+
+function swarmTeamState(team: SwarmTeam, swarmStatus?: string | null): SwarmTeamState {
+  const status = (swarmStatus ?? "").trim().toUpperCase();
+  if (status === "FAILED") return "failed";
+  if (status === "DONE" || status === "SUCCESS" || status === "COMPLETED") return "done";
+  const current = SWARM_STAGE_ORDER.indexOf(status);
+  const target = SWARM_STAGE_ORDER.indexOf(team.stage);
+  if (current < 0) return "pending";
+  if (current > target) return "done";
+  if (current === target) return "active";
+  return "pending";
+}
+
+function qaPercent(score?: number | null): number | null {
+  if (typeof score !== "number" || Number.isNaN(score)) return null;
+  return Math.round(score <= 1 ? score * 100 : score);
+}
+
+interface SwarmMetadata {
+  status?: string | null;
+  stage?: string | null;
+  qa?: { score?: number | null } | null;
+}
+
 interface SandboxHistoryEntry {
   app_id: string;
   stage: string;
@@ -89,6 +152,9 @@ interface SandboxHistoryEntry {
   updated_at: number;
   health?: string | null;
   container_id?: string | null;
+  tier?: string | null;
+  swarm_status?: string | null;
+  swarm_qa_score?: number | null;
 }
 
 const HISTORY_KEY = "roxira.foundry.sandboxes";
@@ -106,6 +172,10 @@ interface SandboxSummary {
   container_id?: string | null;
   deployed?: boolean;
   health?: string | null;
+  tier?: string | null;
+  swarm_status?: string | null;
+  swarm_qa_score?: number | null;
+  swarm?: SwarmMetadata | null;
   created_at?: number;
   updated_at?: number;
 }
@@ -189,6 +259,9 @@ function toHistoryEntry(source: SandboxSummary): SandboxHistoryEntry {
     updated_at: source.updated_at ?? source.created_at ?? Date.now() / 1000,
     health: source.health ?? classifyFromStage(stage),
     container_id: source.container_id ?? null,
+    tier: source.tier ?? null,
+    swarm_status: source.swarm_status ?? source.swarm?.status ?? source.swarm?.stage ?? null,
+    swarm_qa_score: source.swarm_qa_score ?? source.swarm?.qa?.score ?? null,
   };
 }
 
@@ -387,6 +460,7 @@ export default function MissionControlPage() {
 
   const [prompt, setPrompt] = useState("");
   const [framework, setFramework] = useState("FastAPI");
+  const [buildTier, setBuildTier] = useState<BuildTier>("FRONTIER");
   const [submitting, setSubmitting] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
   const [consoleError, setConsoleError] = useState<string | null>(null);
@@ -458,7 +532,7 @@ export default function MissionControlPage() {
       const res = await fetch(FACTORY_SYNTHESIZE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: trimmed, target_framework: framework }),
+        body: JSON.stringify({ prompt: trimmed, target_framework: framework, tier: buildTier }),
       });
       const text = await res.text();
       let parsed: unknown = text;
@@ -490,7 +564,7 @@ export default function MissionControlPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [prompt, framework, submitting]);
+  }, [prompt, framework, buildTier, submitting]);
 
   useEffect(() => {
     if (!activeAppId) return;
@@ -829,6 +903,39 @@ export default function MissionControlPage() {
                 </select>
               </div>
 
+              <div>
+                <span className="font-mono text-[10px] text-slate-500">BUILD TIER</span>
+                <div className="mt-2 grid grid-cols-1 gap-2">
+                  {BUILD_TIERS.map((tier) => {
+                    const active = buildTier === tier.id;
+                    return (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => setBuildTier(tier.id)}
+                        aria-pressed={active}
+                        className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                          active
+                            ? "border-amber-400/50 bg-amber-400/10"
+                            : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
+                        }`}
+                      >
+                        <span
+                          className={`block font-mono text-[11px] font-bold ${
+                            active ? "text-amber-200" : "text-slate-300"
+                          }`}
+                        >
+                          {tier.name}
+                        </span>
+                        <span className="mt-0.5 block font-mono text-[9px] text-slate-500">
+                          {tier.hint}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={() => void synthesize()}
@@ -1001,8 +1108,13 @@ export default function MissionControlPage() {
                 const isActive = Boolean(entry.container_id) || entry.stage === "RUNNING";
                 const copied = copiedId === entry.app_id;
                 const isRebuilding = Boolean(rebuilding[entry.app_id]);
+                const swarmStatus = entry.swarm_status ?? null;
+                const isSwarm =
+                  isSwarmTier(entry.tier) || Boolean(swarmStatus) || entry.swarm_qa_score != null;
+                const qa = qaPercent(entry.swarm_qa_score);
                 return (
-                  <li key={entry.app_id} className="flex flex-wrap items-center gap-3 py-3">
+                  <li key={entry.app_id} className="py-3">
+                    <div className="flex flex-wrap items-center gap-3">
                     <span className="font-mono text-xs font-semibold text-slate-100">
                       {entry.app_id}
                     </span>
@@ -1099,6 +1211,82 @@ export default function MissionControlPage() {
                         </button>
                       )}
                     </span>
+                    </div>
+
+                    {isSwarm && (
+                      <div className="mt-3 rounded-2xl border border-violet-400/25 bg-violet-500/[0.04] p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Users className="size-4 text-violet-300" />
+                            <h3 className="font-mono text-[11px] font-bold tracking-wider text-violet-200">
+                              AUTONOMOUS SWARM BREAKDOWN
+                            </h3>
+                          </div>
+                          <span
+                            className="rounded-md border border-violet-400/25 bg-violet-400/10 px-2 py-0.5 font-mono text-[9px] font-bold text-violet-200"
+                            dir="ltr"
+                          >
+                            {swarmStatus ?? "PENDING"}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center">
+                          <ol className="flex-1 space-y-2">
+                            {SWARM_TEAMS.map((team) => {
+                              const state = swarmTeamState(team, swarmStatus);
+                              const tone = SWARM_STATE_STYLES[state];
+                              return (
+                                <li
+                                  key={team.stage}
+                                  className="flex items-center gap-3 rounded-xl border border-slate-800/70 bg-slate-950/50 px-3 py-2.5"
+                                >
+                                  <span className="text-base leading-none" aria-hidden="true">
+                                    {team.icon}
+                                  </span>
+                                  <span className="flex min-w-0 flex-col">
+                                    <span className="truncate font-mono text-[11px] font-semibold text-slate-200">
+                                      {team.name}
+                                    </span>
+                                    <span className="truncate font-mono text-[9px] text-slate-500">
+                                      {team.role}
+                                    </span>
+                                  </span>
+                                  <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px]">
+                                    {state === "active" ? (
+                                      <Loader2 className="size-3 animate-spin text-amber-300" />
+                                    ) : (
+                                      <span className={`size-1.5 rounded-full ${tone.dot}`} />
+                                    )}
+                                    <span className={tone.text}>{tone.label}</span>
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ol>
+
+                          {qa !== null && (
+                            <div className="flex shrink-0 flex-col items-center gap-2 self-center">
+                              <div
+                                className="relative flex size-24 items-center justify-center rounded-full"
+                                style={{
+                                  background: `conic-gradient(#34d399 ${qa * 3.6}deg, rgba(148,163,184,0.15) 0deg)`,
+                                }}
+                              >
+                                <div className="flex size-[76px] flex-col items-center justify-center rounded-full bg-slate-950">
+                                  <span className="font-mono text-lg font-black text-emerald-300">
+                                    {qa}%
+                                  </span>
+                                  <span className="font-mono text-[8px] text-slate-500">
+                                    CONFORMANCE
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="font-mono text-[10px] text-slate-500">QA Score</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </li>
                 );
               })}
