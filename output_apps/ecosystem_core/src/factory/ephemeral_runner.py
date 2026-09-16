@@ -58,6 +58,8 @@ __all__ = [
     "InMemoryBuildQueue",
     "RedisStreamBuildQueue",
     "make_build_queue",
+    "redis_configured",
+    "requires_in_process_advancement",
     "FileBuildStatusStore",
     "RedisBuildStatusStore",
     "make_status_store",
@@ -834,6 +836,24 @@ async def make_build_queue() -> BuildQueue:
     return InMemoryBuildQueue()
 
 
+def redis_configured() -> bool:
+    """True when a Redis Streams transport is actually usable in this process."""
+    return bool(os.getenv("REDIS_URL", "").strip()) and AsyncRedis is not None
+
+
+def requires_in_process_advancement(queue: BuildQueue) -> bool:
+    """True when no external worker can drain the queue, so the API must run it.
+
+    Without ``REDIS_URL`` (or when Redis is unreachable / the client library is
+    missing) ``make_build_queue`` falls back to a process-local
+    :class:`InMemoryBuildQueue`.  An external worker process has its *own*
+    queue instance, so nothing would ever dequeue the request and the build
+    would sit in ``QUEUED`` forever.  In that topology the API process has to
+    advance the build itself.
+    """
+    return isinstance(queue, InMemoryBuildQueue) or not redis_configured()
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -972,6 +992,29 @@ class EphemeralRunner:
         finally:
             self._allocator.release(request.app_id, host_port)
 
+    async def advance_build(self, request: BuildRequest) -> BuildResult:
+        """Run the full pipeline for ``request`` immediately, in-process.
+
+        This is the fallback used by the FastAPI layer when no external queue
+        daemon is running (no ``REDIS_URL``): the request is advanced through
+        ``PORT_ALLOCATED`` → ``PROJECT_GENERATED`` → ``BUILDING`` →
+        ``CONTAINER_STARTED`` → ``ROUTE_REGISTERED`` → ``RUNNING`` without a
+        consumer process.  The same concurrency semaphore as the queue worker
+        is honoured, so in-process builds can't starve the host.
+
+        Never raises: failures are persisted as ``FAILED`` build status.
+        """
+        async with self._semaphore:
+            try:
+                return await self.handle(request)
+            except Exception as exc:  # pragma: no cover - defensive
+                status = BuildStatus.from_request(request)
+                with contextlib.suppress(Exception):
+                    await self._status.save(
+                        status.advance(BuildStage.FAILED, status="FAILED", error=str(exc))
+                    )
+                return BuildResult(app_id=request.app_id, status="failed", error=str(exc))
+
     async def _process(self, message: QueuedBuild) -> None:
         async with self._semaphore:
             try:
@@ -1004,6 +1047,15 @@ try:  # optional — only required when the FastAPI router is mounted
 except Exception:  # pragma: no cover - optional dependency
     _PydanticBaseModel = None  # type: ignore[assignment]
 
+try:  # optional — used as a route parameter annotation, so it must live here.
+    # NOTE: ``from __future__ import annotations`` turns route annotations into
+    # strings that FastAPI resolves against *module* globals; a function-local
+    # import would be invisible and the parameter would be misread as a query
+    # param. Hence the module-level (optional) import.
+    from fastapi import BackgroundTasks as BackgroundTasks  # noqa: PLC0414
+except Exception:  # pragma: no cover - optional dependency
+    BackgroundTasks = None  # type: ignore[assignment, misc]
+
 
 if _PydanticBaseModel is not None:
 
@@ -1035,6 +1087,18 @@ def create_factory_router(
 
     The queue and status store are resolved lazily on first request, so the
     router can be mounted without blocking import (Redis is optional).
+
+    Transport selection:
+
+      * ``REDIS_URL`` configured → the request is pushed onto Redis Streams and
+        drained by the standalone worker process (``python -m
+        ephemeral_runner``); the API stays stateless.
+      * No ``REDIS_URL`` → ``make_build_queue`` yields a process-local
+        ``InMemoryBuildQueue`` that no external daemon can ever see.  In that
+        topology the API advances the build itself through
+        ``EphemeralRunner.advance_build`` as a FastAPI ``BackgroundTask``,
+        so the job progresses PORT_ALLOCATED → … → RUNNING without a queue
+        daemon.  The response is still ``202`` and returns immediately.
     """
     from fastapi import APIRouter, HTTPException, status
 
@@ -1044,6 +1108,8 @@ def create_factory_router(
     router = APIRouter(prefix="/api/v1/factory", tags=["Roxira Software Foundry"])
     resolved_queue: Optional[BuildQueue] = queue
     resolved_store: Optional[BuildStatusStore] = status_store
+    in_process_runner: Optional[EphemeralRunner] = None
+    runner_lock = asyncio.Lock()
 
     async def _get_queue() -> BuildQueue:
         nonlocal resolved_queue
@@ -1057,7 +1123,20 @@ def create_factory_router(
             resolved_store = await make_status_store()
         return resolved_store
 
-    async def _enqueue(payload: "SynthesizeAppRequest") -> dict[str, Any]:
+    async def _get_in_process_runner() -> EphemeralRunner:
+        """Lazily build the single in-process orchestrator for this router."""
+        nonlocal in_process_runner
+        if in_process_runner is None:
+            async with runner_lock:
+                if in_process_runner is None:
+                    in_process_runner = EphemeralRunner.from_env(
+                        await _get_queue(), await _get_store()
+                    )
+        return in_process_runner
+
+    async def _enqueue(
+        payload: "SynthesizeAppRequest", background_tasks: BackgroundTasks
+    ) -> dict[str, Any]:
         request = BuildRequest.from_dict(payload.model_dump())
         if not request.prompt:
             raise HTTPException(status_code=422, detail="specification is required")
@@ -1065,21 +1144,36 @@ def create_factory_router(
         await store.save(BuildStatus.from_request(request).advance(BuildStage.QUEUED))
         build_queue = await _get_queue()
         await build_queue.enqueue(request)
+
+        # No external worker can drain a process-local queue — run it here.
+        if requires_in_process_advancement(build_queue):
+            runner = await _get_in_process_runner()
+            background_tasks.add_task(runner.advance_build, request)
+
         return {
             "status": "QUEUED",
             "stage": BuildStage.QUEUED.value,
             "app_id": request.app_id,
             "app_name": request.app_name,
             "poll": f"/api/v1/factory/synthesize-app/{request.app_id}",
+            "execution": (
+                "in-process"
+                if requires_in_process_advancement(build_queue)
+                else "redis-streams"
+            ),
         }
 
     @router.post("/synthesize-app", status_code=status.HTTP_202_ACCEPTED)
-    async def synthesize_app(payload: SynthesizeAppRequest) -> dict[str, Any]:
-        return await _enqueue(payload)
+    async def synthesize_app(
+        payload: SynthesizeAppRequest, background_tasks: BackgroundTasks
+    ) -> dict[str, Any]:
+        return await _enqueue(payload, background_tasks)
 
     @router.post("/synthesize", status_code=status.HTTP_202_ACCEPTED)
-    async def synthesize(payload: SynthesizeAppRequest) -> dict[str, Any]:
-        return await _enqueue(payload)
+    async def synthesize(
+        payload: SynthesizeAppRequest, background_tasks: BackgroundTasks
+    ) -> dict[str, Any]:
+        return await _enqueue(payload, background_tasks)
 
     @router.get("/synthesize-app/{app_id}")
     async def synthesize_status(app_id: str) -> dict[str, Any]:

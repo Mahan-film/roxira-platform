@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Building2, CheckCircle2, Cpu, FileCheck2, Loader2, Send } from "lucide-react";
 
 type TierId = "starter" | "business" | "foundry";
+type SubmitStatus = "idle" | "submitting" | "success" | "error";
 
 interface TierOption {
   id: TierId;
@@ -18,7 +19,8 @@ const TIERS: TierOption[] = [
   { id: "foundry", name: "Foundry Developer", tagline: "کارخانه نرم‌افزار خودمختار", icon: Cpu },
 ];
 
-const INQUIRY_ENDPOINT = process.env.NEXT_PUBLIC_SALES_INQUIRY_ENDPOINT ?? "";
+const INQUIRY_ENDPOINT =
+  process.env.NEXT_PUBLIC_SALES_INQUIRY_ENDPOINT ?? "/api/v1/enterprise/inquiry";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const PHONE_RE = /^[0-9+\-\s]{7,20}$/;
@@ -45,18 +47,22 @@ function validate(form: FormState): FormErrors {
   return errors;
 }
 
+const EMPTY_FORM: FormState = {
+  company: "",
+  phone: "",
+  email: "",
+  tier: "starter",
+  notes: "",
+};
+
 export function EnterpriseSalesForm() {
-  const [form, setForm] = useState<FormState>({
-    company: "",
-    phone: "",
-    email: "",
-    tier: "starter",
-    notes: "",
-  });
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<SubmitStatus>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
+
+  const submitting = status === "submitting";
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -64,42 +70,46 @@ export function EnterpriseSalesForm() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (submitting) return;
+
     const nextErrors = validate(form);
     setErrors(nextErrors);
     setSubmitError(null);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      setStatus("error");
+      return;
+    }
 
-    setSubmitting(true);
+    setStatus("submitting");
     try {
-      let nextReference = `RQ-${Date.now().toString(36).toUpperCase()}`;
-      if (INQUIRY_ENDPOINT) {
-        const res = await fetch(INQUIRY_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, source: "enterprise-demo" }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json().catch(() => null)) as { reference?: string } | null;
-        if (data?.reference) nextReference = data.reference;
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 600));
+      const res = await fetch(INQUIRY_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, source: "enterprise-demo" }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { reference?: string; error?: string }
+        | null;
+      if (!res.ok) {
+        throw new Error(data?.error ?? `HTTP ${res.status}`);
       }
-      setReference(nextReference);
+      setReference(data?.reference ?? `RQ-${Date.now().toString(36).toUpperCase()}`);
+      setStatus("success");
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "ارسال درخواست ناموفق بود.");
-    } finally {
-      setSubmitting(false);
+      setStatus("error");
     }
   };
 
   const reset = () => {
-    setReference(null);
-    setSubmitError(null);
+    setForm(EMPTY_FORM);
     setErrors({});
-    setForm({ company: "", phone: "", email: "", tier: "starter", notes: "" });
+    setSubmitError(null);
+    setReference(null);
+    setStatus("idle");
   };
 
-  if (reference) {
+  if (status === "success" && reference) {
     return (
       <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/[0.06] p-8 text-center">
         <span className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-300">
@@ -131,7 +141,7 @@ export function EnterpriseSalesForm() {
       noValidate
       className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:p-8"
     >
-      <fieldset>
+      <fieldset disabled={submitting}>
         <legend className="text-xs font-bold text-slate-300">طرح مورد نظر</legend>
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {TIERS.map((tier) => {
@@ -143,7 +153,7 @@ export function EnterpriseSalesForm() {
                 type="button"
                 onClick={() => update("tier", tier.id)}
                 aria-pressed={active}
-                className={`flex flex-col items-start gap-2 rounded-2xl border p-4 text-right transition-colors ${
+                className={`flex flex-col items-start gap-2 rounded-2xl border p-4 text-right transition-colors disabled:opacity-60 ${
                   active
                     ? "border-indigo-400/50 bg-indigo-500/10"
                     : "border-white/10 bg-slate-950/40 hover:border-white/20"
@@ -177,9 +187,10 @@ export function EnterpriseSalesForm() {
             id="company"
             type="text"
             value={form.company}
+            disabled={submitting}
             onChange={(event) => update("company", event.target.value)}
             placeholder="مثال: شرکت داده‌پردازان نوین"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60"
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
           />
           {errors.company && <p className="mt-1.5 text-[11px] text-rose-400">{errors.company}</p>}
         </div>
@@ -193,9 +204,10 @@ export function EnterpriseSalesForm() {
             type="tel"
             dir="ltr"
             value={form.phone}
+            disabled={submitting}
             onChange={(event) => update("phone", event.target.value)}
             placeholder="0912 000 0000"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 font-mono text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60"
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 font-mono text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
           />
           {errors.phone && <p className="mt-1.5 text-[11px] text-rose-400">{errors.phone}</p>}
         </div>
@@ -209,9 +221,10 @@ export function EnterpriseSalesForm() {
             type="email"
             dir="ltr"
             value={form.email}
+            disabled={submitting}
             onChange={(event) => update("email", event.target.value)}
             placeholder="name@company.com"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 font-mono text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60"
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 font-mono text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
           />
           {errors.email && <p className="mt-1.5 text-[11px] text-rose-400">{errors.email}</p>}
         </div>
@@ -224,14 +237,15 @@ export function EnterpriseSalesForm() {
             id="notes"
             rows={3}
             value={form.notes}
+            disabled={submitting}
             onChange={(event) => update("notes", event.target.value)}
             placeholder="اندازه سازمان، ماژول‌های مورد نیاز و بازه زمانی مدنظر"
-            className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60"
+            className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
           />
         </div>
       </div>
 
-      {submitError && (
+      {status === "error" && submitError && (
         <p className="mt-4 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-[11px] text-rose-200">
           {submitError}
         </p>
@@ -240,7 +254,8 @@ export function EnterpriseSalesForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+        aria-busy={submitting}
+        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
       >
         {submitting ? (
           <>
