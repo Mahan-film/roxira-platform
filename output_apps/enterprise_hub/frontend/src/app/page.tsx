@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   Boxes,
   Building2,
+  Check,
+  Coins,
   Cpu,
   FileCheck2,
   Layers,
@@ -21,6 +23,92 @@ const MODULES = [
   { href: "/crm", label: "مدیریت مشتریان", hint: "سرنخ‌ها و پایپ‌لاین فروش", icon: Users },
   { href: "/hr", label: "منابع انسانی", hint: "کارکنان و دستمزد", icon: Building2 },
   { href: "/radar", label: "رادار فناوری", hint: "پایش فناوری و ایجنت‌ها", icon: Radar },
+];
+
+interface PricingTier {
+  id: string;
+  name: string;
+  tagline: string;
+  price: string;
+  unit: string;
+  highlight: boolean;
+  icon: typeof FileCheck2;
+  features: string[];
+  cta: { href: string; label: string };
+  cardClass: string;
+  iconClass: string;
+  checkClass: string;
+  ctaClass: string;
+}
+
+const PRICING_TIERS: PricingTier[] = [
+  {
+    id: "starter",
+    name: "Starter",
+    tagline: "انطباق مالیاتی (سامانه مودیان)",
+    price: "۲٬۹۰۰٬۰۰۰",
+    unit: "تومان / ماه",
+    highlight: false,
+    icon: FileCheck2,
+    features: [
+      "صدور صورتحساب الکترونیکی و امضای دیجیتال",
+      "تولید بسته مالیاتی و ثبت شماره مرجع در سامانه مودیان",
+      "اتصال امن به وب‌سرویس‌های سازمانی",
+      "۱ کاربر سازمانی",
+      "پشتیبانی ایمیلی",
+    ],
+    cta: { href: "/invoicing", label: "شروع انطباق مالیاتی" },
+    cardClass: "border-white/10 bg-white/[0.03]",
+    iconClass: "border-emerald-400/25 bg-emerald-400/10 text-emerald-300",
+    checkClass: "text-emerald-400",
+    ctaClass:
+      "border border-white/15 bg-white/5 text-slate-100 hover:border-emerald-400/40 hover:text-white",
+  },
+  {
+    id: "business",
+    name: "Business",
+    tagline: "ERP و حسابداری یکپارچه",
+    price: "۷٬۹۰۰٬۰۰۰",
+    unit: "تومان / ماه",
+    highlight: true,
+    icon: Building2,
+    features: [
+      "همه امکانات طرح Starter",
+      "حسابداری دوطرفه و دفتر کل",
+      "انبارداری و بهای تمام‌شده کالا",
+      "مدیریت مشتریان (CRM) و منابع انسانی",
+      "دسترسی به وب‌سرویس‌های نسخه‌بندی‌شده",
+      "پشتیبانی اولویت‌دار",
+    ],
+    cta: { href: "/accounting", label: "مشاهده ERP و حسابداری" },
+    cardClass: "border-indigo-400/40 bg-indigo-500/[0.06] shadow-2xl shadow-indigo-900/30",
+    iconClass: "border-indigo-400/30 bg-indigo-400/10 text-indigo-300",
+    checkClass: "text-indigo-300",
+    ctaClass:
+      "bg-gradient-to-l from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/30",
+  },
+  {
+    id: "foundry",
+    name: "Foundry Developer",
+    tagline: "کارخانه نرم‌افزار خودمختار",
+    price: "۱۴٬۹۰۰٬۰۰۰",
+    unit: "تومان / ماه",
+    highlight: false,
+    icon: Cpu,
+    features: [
+      "دسترسی کامل به کارخانه نرم‌افزار خودمختار",
+      "کانتینر ایزوله و زیردامنه اختصاصی برای هر اپ",
+      "اعتبار سندباکس پویا (Dynamic Sandbox Credits)",
+      "بیلد و استقرار خودکار روی Docker",
+      "دسترسی API و میز کنترل",
+    ],
+    cta: { href: "/admin/mission-control", label: "ورود به میز کنترل" },
+    cardClass: "border-white/10 bg-white/[0.03]",
+    iconClass: "border-violet-400/25 bg-violet-400/10 text-violet-300",
+    checkClass: "text-violet-300",
+    ctaClass:
+      "border border-white/15 bg-white/5 text-slate-100 hover:border-violet-400/40 hover:text-white",
+  },
 ];
 
 export default function HomePage() {
@@ -194,6 +282,78 @@ export default function HomePage() {
                 );
               })}
             </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="border-t border-white/10 bg-white/[0.015]">
+          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+            <div className="mx-auto max-w-2xl text-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 font-mono text-[11px] font-semibold text-indigo-300">
+                <Coins className="size-3.5" />
+                B2B PRICING
+              </span>
+              <h2 className="mt-5 text-2xl font-black text-white sm:text-3xl">
+                طرح‌های سازمانی رکسایرا
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-slate-400">
+                از انطباق مالیاتی تا ERP یکپارچه و کارخانه نرم‌افزار خودمختار — متناسب با مقیاس
+                سازمان شما.
+              </p>
+            </div>
+
+            <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-3">
+              {PRICING_TIERS.map((tier) => {
+                const Icon = tier.icon;
+                return (
+                  <article
+                    key={tier.id}
+                    className={`relative flex flex-col rounded-3xl border p-7 ${tier.cardClass}`}
+                  >
+                    {tier.highlight && (
+                      <span className="absolute -top-3 right-6 rounded-full bg-gradient-to-l from-indigo-500 to-violet-600 px-3 py-1 text-[10px] font-bold text-white shadow-lg shadow-indigo-600/30">
+                        پیشنهاد ویژه
+                      </span>
+                    )}
+
+                    <span
+                      className={`flex size-11 items-center justify-center rounded-2xl border ${tier.iconClass}`}
+                    >
+                      <Icon className="size-5" />
+                    </span>
+
+                    <h3 className="mt-5 text-lg font-black text-white">{tier.name}</h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-300">{tier.tagline}</p>
+
+                    <div className="mt-6 flex items-end gap-1.5">
+                      <span className="font-mono text-2xl font-black text-white">{tier.price}</span>
+                      <span className="pb-1 text-[11px] text-slate-500">{tier.unit}</span>
+                    </div>
+
+                    <ul className="mt-6 flex-1 space-y-3">
+                      {tier.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2 text-xs text-slate-300">
+                          <Check className={`mt-0.5 size-3.5 shrink-0 ${tier.checkClass}`} />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Link
+                      href={tier.cta.href}
+                      className={`mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold transition-all hover:-translate-y-0.5 ${tier.ctaClass}`}
+                    >
+                      {tier.cta.label}
+                      <ArrowLeft className="size-3.5" />
+                    </Link>
+                  </article>
+                );
+              })}
+            </div>
+
+            <p className="mt-8 text-center text-[11px] text-slate-500">
+              اعتبار سندباکس در طرح Foundry Developer پویاست و بر اساس زمان ساخت و اجرای هر اپ در
+              محیط ایزوله محاسبه می‌شود.
+            </p>
           </div>
         </section>
       </main>
