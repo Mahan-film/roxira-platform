@@ -107,6 +107,7 @@ const SANDBOX_BADGE: Record<string, string> = {
   QUEUED: "border-slate-500/40 bg-slate-500/10 text-slate-300",
   FAILED: "border-rose-400/30 bg-rose-500/10 text-rose-300",
   REJECTED: "border-rose-400/30 bg-rose-500/10 text-rose-300",
+  DESTROYED: "border-slate-600/50 bg-slate-700/20 text-slate-400",
 };
 const SANDBOX_BADGE_DEFAULT = "border-amber-400/30 bg-amber-400/10 text-amber-300";
 
@@ -146,8 +147,8 @@ function toHistoryEntry(source: SandboxSummary): SandboxHistoryEntry {
   };
 }
 
-function upsertHistory(prev: SandboxHistoryEntry[], status: FactoryBuildStatus): SandboxHistoryEntry[] {
-  const next = toHistoryEntry(status);
+function upsertHistory(prev: SandboxHistoryEntry[], source: SandboxSummary): SandboxHistoryEntry[] {
+  const next = toHistoryEntry(source);
   const index = prev.findIndex((entry) => entry.app_id === next.app_id);
   if (index === -1) return [next, ...prev].slice(0, HISTORY_LIMIT);
 
@@ -350,6 +351,8 @@ export default function MissionControlPage() {
   const [history, setHistory] = useState<SandboxHistoryEntry[]>([]);
   const [historyReady, setHistoryReady] = useState(false);
   const [historySource, setHistorySource] = useState<"remote" | "local">("local");
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const [teardownError, setTeardownError] = useState<string | null>(null);
 
   const checkAll = useCallback(async () => {
     abortRef.current?.abort();
@@ -530,6 +533,44 @@ export default function MissionControlPage() {
   const clearHistory = useCallback(() => {
     setHistory([]);
   }, []);
+
+  const teardown = useCallback(
+    async (appId: string) => {
+      setDeleting((prev) => ({ ...prev, [appId]: true }));
+      setTeardownError(null);
+      try {
+        const res = await fetch(`${FACTORY_BASE}/sandboxes/${encodeURIComponent(appId)}`, {
+          method: "DELETE",
+          cache: "no-store",
+        });
+        if (res.status === 404) {
+          setHistory((prev) => prev.filter((entry) => entry.app_id !== appId));
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = (await res.json().catch(() => null)) as SandboxSummary | null;
+        if (data && typeof data.app_id === "string") {
+          setHistory((prev) => upsertHistory(prev, data));
+        } else {
+          setHistory((prev) => prev.filter((entry) => entry.app_id !== appId));
+        }
+        if (activeAppId === appId) {
+          setActiveAppId(null);
+          setBuildStatus(null);
+        }
+      } catch (error) {
+        setTeardownError(error instanceof Error ? error.message : "request failed");
+      } finally {
+        setDeleting((prev) => {
+          const copy = { ...prev };
+          delete copy[appId];
+          return copy;
+        });
+      }
+    },
+    [activeAppId],
+  );
 
   return (
     <div dir="ltr" className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -771,6 +812,12 @@ export default function MissionControlPage() {
             )}
           </div>
 
+          {teardownError && (
+            <p className="mt-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 font-mono text-[10px] text-rose-200">
+              teardown failed — {teardownError}
+            </p>
+          )}
+
           {history.length === 0 ? (
             <p className="mt-4 font-mono text-[11px] text-slate-600">
               No sandboxes yet — run a synthesis above to populate this list.
@@ -780,6 +827,7 @@ export default function MissionControlPage() {
               {history.map((entry) => {
                 const badgeClass = SANDBOX_BADGE[entry.stage] ?? SANDBOX_BADGE_DEFAULT;
                 const link = entry.url ?? (entry.subdomain ? `http://${entry.subdomain}` : null);
+                const isDeleting = Boolean(deleting[entry.app_id]);
                 return (
                   <li key={entry.app_id} className="flex flex-wrap items-center gap-3 py-3">
                     <span className="font-mono text-xs font-semibold text-slate-100">
@@ -793,7 +841,7 @@ export default function MissionControlPage() {
                     <span className="font-mono text-[11px] text-slate-500">
                       {entry.host_port === null ? "port —" : `port ${entry.host_port}`}
                     </span>
-                    <span className="ml-auto">
+                    <span className="ml-auto flex items-center gap-2">
                       {link ? (
                         <a
                           href={link}
@@ -808,6 +856,24 @@ export default function MissionControlPage() {
                         <span className="font-mono text-[10px] text-slate-600">
                           no subdomain yet
                         </span>
+                      )}
+
+                      {entry.stage !== "DESTROYED" && (
+                        <button
+                          type="button"
+                          onClick={() => void teardown(entry.app_id)}
+                          disabled={isDeleting}
+                          aria-busy={isDeleting}
+                          title="Teardown sandbox"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 px-2.5 py-1 font-mono text-[10px] text-slate-400 transition-colors hover:border-rose-400/40 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3" />
+                          )}
+                          {isDeleting ? "TEARDOWN…" : "TEARDOWN"}
+                        </button>
                       )}
                     </span>
                   </li>

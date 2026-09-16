@@ -64,6 +64,12 @@ __all__ = [
     "redis_configured",
     "requires_in_process_advancement",
     "DEPLOYED_STAGES",
+    "HEALTH_HEALTHY",
+    "HEALTH_STARTING",
+    "HEALTH_UNHEALTHY",
+    "classify_health",
+    "probe_sandbox_http",
+    "sandbox_health",
     "sandbox_summary",
     "FileBuildStatusStore",
     "RedisBuildStatusStore",
@@ -254,7 +260,113 @@ DEPLOYED_STAGES: frozenset[str] = frozenset(
 )
 
 
-def sandbox_summary(status: BuildStatus) -> dict[str, Any]:
+# ---------------------------------------------------------------------------
+# Sandbox liveness
+# ---------------------------------------------------------------------------
+
+HEALTH_HEALTHY = "HEALTHY"
+HEALTH_UNHEALTHY = "UNHEALTHY"
+HEALTH_STARTING = "STARTING"
+
+#: HTTP probe budget for a single sandbox (seconds).
+HEALTH_PROBE_TIMEOUT = float(os.getenv("ROXIRA_HEALTH_TIMEOUT", "1.5"))
+#: A sandbox that reached RUNNING less than this long ago is still booting.
+SANDBOX_STARTUP_GRACE_SECONDS = float(os.getenv("ROXIRA_SANDBOX_STARTUP_GRACE", "30"))
+#: Cap on concurrent probes so listing can't stampede the host.
+HEALTH_PROBE_CONCURRENCY = int(os.getenv("ROXIRA_HEALTH_CONCURRENCY", "8"))
+
+_HEALTH_REQUEST = (
+    "GET / HTTP/1.1\r\n"
+    "Host: 127.0.0.1:{port}\r\n"
+    "User-Agent: roxira-health/1.0\r\n"
+    "Accept: */*\r\n"
+    "Connection: close\r\n\r\n"
+)
+
+
+async def probe_sandbox_http(port: Optional[int], timeout: float = HEALTH_PROBE_TIMEOUT) -> str:
+    """HTTP-liveness probe of a sandbox on ``127.0.0.1:{port}/``.
+
+    Returns ``HEALTHY`` when the sandbox answers with an HTTP status below 500,
+    ``UNHEALTHY`` otherwise (connection refused/reset, timeout, no HTTP status
+    line, or a 5xx — i.e. listening but broken).
+
+    Uses raw asyncio streams so no HTTP client dependency is required.  The
+    probe assumes the API process shares the host network namespace with the
+    published container port; from a network-isolated API container this
+    degrades to ``UNHEALTHY`` rather than raising.
+    """
+    if not port:
+        return HEALTH_UNHEALTHY
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection("127.0.0.1", int(port)), timeout=timeout
+        )
+    except (OSError, asyncio.TimeoutError, ValueError):
+        return HEALTH_UNHEALTHY
+
+    status_line = b""
+    try:
+        writer.write(_HEALTH_REQUEST.format(port=int(port)).encode("ascii"))
+        await writer.drain()
+        status_line = await asyncio.wait_for(reader.readline(), timeout=timeout)
+    except (OSError, asyncio.TimeoutError):
+        return HEALTH_UNHEALTHY
+    finally:
+        with contextlib.suppress(Exception):
+            writer.close()
+            await writer.wait_closed()
+
+    if not status_line.startswith(b"HTTP/"):
+        return HEALTH_UNHEALTHY  # socket open, but not speaking HTTP
+    parts = status_line.split()
+    if len(parts) < 2:
+        return HEALTH_UNHEALTHY
+    try:
+        code = int(parts[1])
+    except ValueError:
+        return HEALTH_UNHEALTHY
+    return HEALTH_HEALTHY if code < 500 else HEALTH_UNHEALTHY
+
+
+def classify_health(status: BuildStatus, probe: Optional[str] = None) -> str:
+    """Combine build state with a probe result into the public health value.
+
+    ``STARTING`` covers everything that isn't expected to serve traffic yet:
+    builds still in the pipeline, and a sandbox that reached ``RUNNING`` within
+    :data:`SANDBOX_STARTUP_GRACE_SECONDS` (the app process boots after the
+    container starts, so the first probes legitimately fail).  Terminal states
+    and failed probes past the grace window are ``UNHEALTHY``.
+    """
+    if probe == HEALTH_HEALTHY:
+        return HEALTH_HEALTHY
+
+    if status.stage in DEPLOYED_STAGES:
+        age = time.time() - (status.updated_at or status.created_at or 0.0)
+        if age < SANDBOX_STARTUP_GRACE_SECONDS:
+            return HEALTH_STARTING
+        return HEALTH_UNHEALTHY
+
+    if status.stage in (
+        BuildStage.FAILED.value,
+        BuildStage.REJECTED.value,
+        BuildStage.DESTROYED.value,
+    ):
+        return HEALTH_UNHEALTHY
+    return HEALTH_STARTING  # QUEUED / PORT_ALLOCATED / PROJECT_GENERATED / BUILDING
+
+
+async def sandbox_health(status: BuildStatus) -> str:
+    """Health for one sandbox, probing only when a probe makes sense."""
+    # Only a deployed sandbox has a live container on its port.  Probing a
+    # QUEUED/FAILED/DESTROYED record could hit a *different* sandbox that has
+    # since been allocated the same port, reporting a false HEALTHY.
+    if status.stage in DEPLOYED_STAGES and status.host_port:
+        return classify_health(status, await probe_sandbox_http(status.host_port))
+    return classify_health(status)
+
+
+def sandbox_summary(status: BuildStatus, health: Optional[str] = None) -> dict[str, Any]:
     """Flatten a :class:`BuildStatus` into the sandbox-listing row shape."""
     return {
         "app_id": status.app_id,
@@ -266,6 +378,7 @@ def sandbox_summary(status: BuildStatus) -> dict[str, Any]:
         "url": status.url,
         "container_id": status.container_id,
         "deployed": status.stage in DEPLOYED_STAGES,
+        "health": health or classify_health(status),
         "created_at": status.created_at,
         "updated_at": status.updated_at,
     }
@@ -1402,6 +1515,8 @@ class EphemeralRunner:
             "status": BuildStage.DESTROYED.value,
             "stage": BuildStage.DESTROYED.value,
             "deployed": False,
+            # a destroyed sandbox has no listener by definition
+            "health": HEALTH_UNHEALTHY,
             "port": released_port,
             "released_port": released_port,
             "container_name": container_name,
@@ -1587,7 +1702,12 @@ def create_factory_router(
 
     @router.get("/sandboxes")
     async def list_sandboxes() -> list[dict[str, Any]]:
-        """List every known sandbox/build: app_id, status, port, subdomain, timestamps.
+        """List every known sandbox/build with live health.
+
+        Each row carries app_id, status, port, subdomain, timestamps and a
+        ``health`` of ``HEALTHY``/``UNHEALTHY``/``STARTING``, determined by an
+        HTTP probe of ``http://127.0.0.1:{port}/`` (1.5s budget).  Probes run
+        concurrently, so a listing costs ~one timeout rather than one per row.
 
         Reads straight from the status store (filesystem or Redis), so it works
         identically for in-process and externally-drained builds.  Newest first.
@@ -1602,7 +1722,15 @@ def create_factory_router(
             )
             return []
         statuses = await lister()
-        return [sandbox_summary(s) for s in statuses]
+        probes = asyncio.Semaphore(HEALTH_PROBE_CONCURRENCY)
+
+        async def row(status: BuildStatus) -> dict[str, Any]:
+            async with probes:
+                health = await sandbox_health(status)
+            return sandbox_summary(status, health=health)
+
+        # gather preserves the store's newest-first order
+        return list(await asyncio.gather(*(row(s) for s in statuses)))
 
     @router.delete("/sandboxes/{app_id}")
     async def destroy_sandbox(app_id: str) -> dict[str, Any]:
