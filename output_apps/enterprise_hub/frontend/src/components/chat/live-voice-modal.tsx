@@ -61,6 +61,7 @@ export function LiveVoiceModal({
   const currentAudioElementRef = useRef<HTMLAudioElement | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasSpokenInThisTurnRef = useRef<boolean>(false);
+  const speechStartTimeRef = useRef<number>(0);
   const isSubmittingTurnRef = useRef<boolean>(false);
   const activeConversationIdRef = useRef<string>(externalConvId);
 
@@ -114,7 +115,7 @@ export function LiveVoiceModal({
         }
       };
       mediaRecorderRef.current = recorder;
-      recorder.start(150); // دریافت برش‌های صوتی هر ۱۵۰ میلی‌ثانیه
+      recorder.start(150); // دریافت قطعات صوتی هر ۱۵۰ میلی‌ثانیه
     } catch (err) {
       console.warn("MediaRecorder start notice:", err);
     }
@@ -130,7 +131,7 @@ export function LiveVoiceModal({
         try { recorder.requestData(); } catch (_) {}
       }
       // مکث کوتاه جهت تحویل آخرین قطعه به ondataavailable
-      await new Promise((r) => setTimeout(r, 80));
+      await new Promise((r) => setTimeout(r, 100));
 
       if (audioChunksRef.current.length === 0) return "";
 
@@ -151,8 +152,9 @@ export function LiveVoiceModal({
       const formData = new FormData();
       formData.append("file", audioBlob, `speech.${ext}`);
 
+      // مهلت زمان‌بندی منطقی ۲۵ ثانیه‌ای جهت پردازش کامل صدا
       const controller = new AbortController();
-      const tId = setTimeout(() => controller.abort(), 6000);
+      const tId = setTimeout(() => controller.abort(), 25000);
 
       const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
         method: "POST",
@@ -179,8 +181,9 @@ export function LiveVoiceModal({
     }
     isSubmittingTurnRef.current = false;
     hasSpokenInThisTurnRef.current = false;
+    speechStartTimeRef.current = 0;
     setVoiceState("listening");
-    setStatusText("بفرمایید، شنونده صحبت شما هستم...");
+    setStatusText("شنونده صحبت شما هستم؛ بفرمایید...");
     setCurrentUserSpeech("");
 
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") {
@@ -202,7 +205,7 @@ export function LiveVoiceModal({
       if (voiceStateRef.current === "speaking") {
         resumeListening();
       }
-    }, 14000);
+    }, 18000);
 
     const playAudioStream = async (url: string): Promise<boolean> => {
       try {
@@ -245,7 +248,7 @@ export function LiveVoiceModal({
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         try {
           window.speechSynthesis.cancel();
-          const cleanText = text.replace(/[*#_`>]/g, " ").trim().slice(0, 150);
+          const cleanText = text.replace(/[*#_`>]/g, " ").trim().slice(0, 160);
           const utterance = new SpeechSynthesisUtterance(cleanText);
           utterance.lang = "fa-IR";
           utterance.onend = () => resumeListening();
@@ -270,7 +273,7 @@ export function LiveVoiceModal({
 
     voiceStateRef.current = "thinking";
     setVoiceState("thinking");
-    setStatusText("در حال پردازش پاسخ...");
+    setStatusText("در حال تحلیل و بررسی حقوقی...");
     setCurrentUserSpeech(text);
 
     try {
@@ -325,7 +328,7 @@ export function LiveVoiceModal({
 
       voiceStateRef.current = "thinking";
       setVoiceState("thinking");
-      setStatusText("در حال پیاده‌سازی صدا...");
+      setStatusText("در حال پیاده‌سازی و پردازش صدا...");
 
       const transcript = await transcribeCurrentSegment();
 
@@ -333,11 +336,12 @@ export function LiveVoiceModal({
         setCurrentUserSpeech(transcript);
         await processUserSpeechTurn(transcript);
       } else {
-        setStatusText("صدایی تشخیص داده نشد؛ بفرمایید صحبت کنید...");
+        setStatusText("صدایی با وضوح کافی دریافت نشد؛ لطفاً بفرمایید...");
         setTimeout(() => resumeListening(), 1200);
       }
     } finally {
       isSubmittingTurnRef.current = false;
+      speechStartTimeRef.current = 0;
     }
   }, [transcribeCurrentSegment, resumeListening]);
 
@@ -371,22 +375,27 @@ export function LiveVoiceModal({
         const level = Math.min(100, Math.round((sum / dataArray.length / 128) * 100));
         setAudioLevel(level);
 
-        // تشخیص سکوت (VAD) پس از صحبت کاربر
+        // تشخیص سکوت (VAD هوشمند با آستانه ۱۸۰۰ میلی‌ثانیه پس از حداقل ۱ ثانیه کلام)
         if (voiceStateRef.current === "listening") {
-          if (level > 16) {
+          if (level > 18) {
             hasSpokenInThisTurnRef.current = true;
+            if (!speechStartTimeRef.current) {
+              speechStartTimeRef.current = Date.now();
+            }
             if (silenceTimeoutRef.current) {
               clearTimeout(silenceTimeoutRef.current);
               silenceTimeoutRef.current = null;
             }
-          } else if (hasSpokenInThisTurnRef.current && level < 12) {
-            if (!silenceTimeoutRef.current) {
+          } else if (hasSpokenInThisTurnRef.current && level < 10) {
+            const speechDuration = Date.now() - (speechStartTimeRef.current || 0);
+            // فقط در صورتی که کاربر حداقل ۱.۰ ثانیه صحبت کرده باشد
+            if (speechDuration >= 1000 && !silenceTimeoutRef.current) {
               silenceTimeoutRef.current = setTimeout(() => {
                 silenceTimeoutRef.current = null;
                 if (voiceStateRef.current === "listening") {
                   submitSpokenTurn();
                 }
-              }, 550);
+              }, 1800); // مکث طبیعی ۱.۸ ثانیه برای راحتی صحبت بدون قطع ناگهانی
             }
           }
         }
@@ -407,8 +416,9 @@ export function LiveVoiceModal({
     setCurrentUserSpeech("");
     setLastAiResponse("");
     hasSpokenInThisTurnRef.current = false;
+    speechStartTimeRef.current = 0;
     setVoiceState("listening");
-    setStatusText("در حال برقراری ارتباط با میکروفون...");
+    setStatusText("در حال اتصال به میکروفون...");
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -426,7 +436,7 @@ export function LiveVoiceModal({
 
       initAudioVisualizer(stream);
       startRecording();
-      setStatusText("بفرمایید، شنونده صحبت شما هستم...");
+      setStatusText("شنونده صحبت شما هستم؛ بفرمایید...");
     } catch (err) {
       console.error("Mic error:", err);
       setVoiceState("idle");
@@ -440,6 +450,7 @@ export function LiveVoiceModal({
     setVoiceState("idle");
     setStatusText("مکالمه به پایان رسید.");
     setAudioLevel(0);
+    speechStartTimeRef.current = 0;
 
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
@@ -480,10 +491,10 @@ export function LiveVoiceModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200" dir="rtl">
-      <div className="bg-slate-950 border border-slate-800/90 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl relative text-center text-slate-100 flex flex-col justify-between max-h-[88vh] overflow-y-auto ring-1 ring-white/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-2xl animate-in fade-in duration-200" dir="rtl">
+      <div className="bg-slate-950/95 border border-slate-800/90 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl relative text-center text-slate-100 flex flex-col justify-between max-h-[88vh] overflow-y-auto ring-1 ring-white/10">
         
-        {/* هدر مینیمال و پاکیزه بدون هیچ نام مدل یا برچسب اضافی */}
+        {/* هدر مینیمال و پاکیزه */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
           <div className="flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${
@@ -502,7 +513,7 @@ export function LiveVoiceModal({
           </button>
         </div>
 
-        {/* گوی تعاملی و مدرن هوش مصنوعی */}
+        {/* گوی تعاملی و مدرن */}
         <div className="my-6 flex flex-col items-center justify-center space-y-4">
           <div className="relative flex items-center justify-center w-40 h-40 sm:w-48 sm:h-48">
             {/* هاله امواج صوتی */}
@@ -554,7 +565,7 @@ export function LiveVoiceModal({
             </button>
           </div>
 
-          {/* اکولایزر امواج صوتی فرکانسی مینیمال */}
+          {/* اکولایزر فرکانسی مینیمال */}
           <div className="flex items-center justify-center gap-1.5 h-6 w-full max-w-[200px] mx-auto">
             {[0.4, 0.8, 1.3, 1.8, 1.4, 0.9, 1.5, 0.7, 1.1, 0.5].map((factor, idx) => {
               const barHeight = voiceState === "listening"
@@ -584,7 +595,7 @@ export function LiveVoiceModal({
               {statusText}
             </p>
 
-            {/* دکمه مینیمال و صریح برای پایان صحبت و ارسال */}
+            {/* دکمه ارسال نوبت کلام با خیال راحت */}
             {voiceState === "listening" && (
               <button
                 onClick={() => {

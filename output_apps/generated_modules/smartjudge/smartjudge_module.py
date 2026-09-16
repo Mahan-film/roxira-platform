@@ -257,7 +257,23 @@ def _resolve_subscription_tier(payload: Optional[dict] = None,
 # NOTE: OpenRouter floating "latest" aliases MUST be prefixed with `~`
 # (e.g. `~google/gemini-flash-latest`). Without the tilde OpenRouter replies
 # HTTP 400 "is not a valid model ID" and the request is never routed.
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+def _load_env_var(key: str, default: str = "") -> str:
+    val = os.environ.get(key, "").strip()
+    if val:
+        return val
+    for p in [".env", "/opt/roxira_platform/.env", "/app/.env"]:
+        if os.path.isfile(p):
+            try:
+                with open(p, "r", encoding="utf-8") as ef:
+                    for line in ef:
+                        line = line.strip()
+                        if line.startswith(f"{key}="):
+                            return line.split("=", 1)[1].strip().strip("\"'")
+            except Exception:
+                pass
+    return default
+
+OPENROUTER_API_KEY = _load_env_var("OPENROUTER_API_KEY", "REDACTED_SECRET_02")
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
 OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
@@ -831,7 +847,11 @@ async def interactive_consult(payload: dict = Body(...)):
 ریاست محترم دایره اجرای مفاد اسناد رسمی لازم‌الاجرا
 با سلام و احترام؛ در خصوص مطالبه مهریه به استناد ماده ۱۰۸۲ قانون مدنی و {law_refs}..."""
             else:
-                reply_msg = f"موضوع شما بر مبنای {law_refs} و رویه دیوان عالی کشور تحلیل شد. پرونده از پشتوانه قانونی لازم برخوردار است. لطفاً در صورت تمایل مدارک یا جزئیات بیشتری بفرمایید."
+                is_legal_topic = any(w in user_text for w in ["دادگاه", "قانون", "شکایت", "پرونده", "رای", "رأی", "وحدت رویه", "طلاق", "مهریه", "نفقه", "چک", "قرارداد", "ملک", "سند", "وکیل", "صلح"])
+            if is_legal_topic:
+                reply_msg = f"موضوع حقوقی شما بر مبنای {law_refs} و رویه دیوان عالی کشور بررسی شد. جهت تنظیم دقیق لایحه یا دادخواست، لطفاً جزئیات و ادله پرونده را بفرمایید."
+            else:
+                reply_msg = "درود بر شما، در خدمت شما هستم. لطفاً شرح پرونده، سوال حقوقی یا خواسته مد نظر خود را بفرمایید تا مستندات قانونی و رویه قضایی آن را بررسی کنم."
 
     if len(user_text.split()) >= 6:
         prob = "۸۵٪ (مبتنی بر استدلال قضایی و رویه جاری)"
@@ -1668,9 +1688,127 @@ def _get_local_whisper_instance():
 
 
 async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: str) -> str:
-    """تبدیل دقیق گفتار فارسی به متن با Deepgram Nova-3 و Whisper Large V3 Turbo روی OpenRouter."""
-    if not OPENROUTER_API_KEY or not audio_bytes:
+    """تبدیل دقیق گفتار فارسی به متن با پشتیبانی چندلایه: OpenRouter STT -> AssemblyAI Pool -> faster-whisper."""
+    if not audio_bytes:
         return ""
+
+    ext = _normalize_audio_format(audio_format)
+    mime_map = {
+        "wav": "audio/wav",
+        "m4a": "audio/mp4",
+        "mp4": "audio/mp4",
+        "webm": "audio/webm",
+        "mp3": "audio/mpeg",
+        "ogg": "audio/ogg",
+        "aac": "audio/aac",
+    }
+    upload_mime = mime_map.get(ext, "audio/mp4")
+
+    # ۱. لایه نخست: سرویس OpenRouter STT با مدل‌های پایدار Whisper Large V3 و Whisper-1
+    if OPENROUTER_API_KEY:
+        headers_auth = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "HTTP-Referer": "https://ghazihoushmand.ir",
+            "X-Title": "Roxira SmartJudge",
+        }
+        b64_audio = base64.b64encode(audio_bytes).decode("ascii")
+        candidate_models = ["openai/whisper-large-v3", "openai/whisper-1", "microsoft/mai-transcribe-2"]
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0)) as client:
+            # روش ۱-الف: درخواست استاندارد JSON Base64
+            for target_model in candidate_models:
+                try:
+                    payload_json = {
+                        "model": target_model,
+                        "input_audio": {
+                            "data": b64_audio,
+                            "format": ext
+                        },
+                        "language": "fa"
+                    }
+                    resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, json=payload_json, headers=headers_auth)
+                    if resp.status_code == 200:
+                        text_out = _extract_openrouter_text(resp.json())
+                        if text_out and len(text_out.strip()) >= 1:
+                            print(f"[SMARTJUDGE][STT-SUCCESS-JSON] {target_model}: {text_out[:60]}")
+                            return text_out.strip()
+                except Exception as exc:
+                    print(f"[SMARTJUDGE][STT-FAIL-JSON] {target_model}: {exc}", file=sys.stderr)
+
+            # روش ۱-ب: درخواست چندبخشی Multipart/Form-Data
+            for target_model in candidate_models:
+                try:
+                    files = {"file": (f"speech.{ext}", audio_bytes, upload_mime)}
+                    data_form = {"model": target_model, "language": "fa"}
+                    resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, data=data_form, files=files, headers=headers_auth)
+                    if resp.status_code == 200:
+                        text_out = _extract_openrouter_text(resp.json())
+                        if text_out and len(text_out.strip()) >= 1:
+                            print(f"[SMARTJUDGE][STT-SUCCESS-MULTIPART] {target_model}: {text_out[:60]}")
+                            return text_out.strip()
+                except Exception as exc:
+                    print(f"[SMARTJUDGE][STT-FAIL-MULTIPART] {target_model}: {exc}", file=sys.stderr)
+
+    # ۲. لایه دوم: استخر چندکلیدی AssemblyAI فارسی
+    assembly_keys = [k.strip() for k in _load_env_var("ASSEMBLYAI_API_KEYS", "REDACTED_SECRET_22,REDACTED_SECRET_23,REDACTED_SECRET_12").split(",") if k.strip()]
+    if assembly_keys:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0)) as client:
+            for a_key in assembly_keys:
+                try:
+                    up_resp = await client.post(
+                        "https://api.assemblyai.com/v2/upload",
+                        content=audio_bytes,
+                        headers={"authorization": a_key}
+                    )
+                    if up_resp.status_code == 200:
+                        up_url = up_resp.json().get("upload_url")
+                        if up_url:
+                            trans_resp = await client.post(
+                                "https://api.assemblyai.com/v2/transcript",
+                                json={"audio_url": up_url, "language_code": "fa"},
+                                headers={"authorization": a_key}
+                            )
+                            if trans_resp.status_code == 200:
+                                tid = trans_resp.json().get("id")
+                                for _ in range(12):
+                                    await asyncio.sleep(0.8)
+                                    poll_resp = await client.get(
+                                        f"https://api.assemblyai.com/v2/transcript/{tid}",
+                                        headers={"authorization": a_key}
+                                    )
+                                    if poll_resp.status_code == 200:
+                                        pdata = poll_resp.json()
+                                        if pdata.get("status") == "completed":
+                                            atxt = (pdata.get("text") or "").strip()
+                                            if atxt:
+                                                print(f"[SMARTJUDGE][STT-ASSEMBLY-SUCCESS] {atxt[:60]}")
+                                                return atxt
+                                        elif pdata.get("status") == "error":
+                                            break
+                except Exception as exc:
+                    print(f"[SMARTJUDGE][STT-ASSEMBLY-FAIL] {exc}", file=sys.stderr)
+
+    # ۳. لایه سوم: مدل آفلاین محلی faster-whisper در صورت وجود
+    whisper_local = _get_local_whisper_instance()
+    if whisper_local:
+        try:
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as tmp:
+                tmp.write(audio_bytes)
+                tmp_path = tmp.name
+            segments, _ = whisper_local.transcribe(tmp_path, language="fa", beam_size=2)
+            transcribed_local = " ".join([s.text for s in segments]).strip()
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+            if transcribed_local:
+                print(f"[SMARTJUDGE][STT-LOCAL-SUCCESS] {transcribed_local[:60]}")
+                return transcribed_local
+        except Exception as exc:
+            print(f"[SMARTJUDGE][STT-LOCAL-FAIL] {exc}", file=sys.stderr)
+
+    return ""
 
     ext = _normalize_audio_format(audio_format)
     mime_map = {

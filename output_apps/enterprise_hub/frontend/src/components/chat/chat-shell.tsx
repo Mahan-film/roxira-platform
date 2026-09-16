@@ -248,33 +248,33 @@ export function ChatShell() {
       <div className="bg-slate-950/95 border-t border-slate-800/90 p-2.5 sm:p-4 backdrop-blur-xl shrink-0 space-y-2">
         {/* نوار ابزار اقدامات حقوقی پرونده (لایحه، دادخواست، شکواییه، اظهارنامه) */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 pb-1 border-b border-slate-800/60">
-          <span className="text-[11px] text-amber-400 font-bold whitespace-nowrap pl-1">اقدامات قضایی پرونده:</span>
+          <span className="text-[11px] text-slate-400 font-semibold whitespace-nowrap pl-1">اقدامات حقوقی:</span>
           <button
             onClick={() => handleSendMessage("بر اساس آخرین مکالمه و ادله پرونده، لایحه دفاعیه مستدل با استناد به مواد قانونی مرتبط، رویه قضایی و آرای وحدت رویه تنظیم کن.")}
-            className="px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-[11px] text-amber-200 rounded-xl whitespace-nowrap transition-colors flex items-center gap-1 shadow-sm"
+            className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-[11px] text-slate-200 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
           >
-            <span>📄</span>
+            <span className="text-amber-400">📄</span>
             <span>صدور لایحه دفاعیه</span>
           </button>
           <button
             onClick={() => handleSendMessage("بر اساس شرح پرونده و مطالبات، دادخواست حقوقی کامل شامل خواسته، دلایل و منضمات و شرح دادخواست تدوین کن.")}
-            className="px-2.5 py-1 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-[11px] text-cyan-200 rounded-xl whitespace-nowrap transition-colors flex items-center gap-1 shadow-sm"
+            className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-[11px] text-slate-200 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
           >
-            <span>⚖️</span>
+            <span className="text-cyan-400">⚖️</span>
             <span>صدور دادخواست حقوقی</span>
           </button>
           <button
             onClick={() => handleSendMessage("با توجه به موضوع پرونده و ادله، شکواییه کیفری رسمی با ذکر عنوان اتهامی، ادله و درخواست تعقیب متهم تدوین کن.")}
-            className="px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-[11px] text-rose-200 rounded-xl whitespace-nowrap transition-colors flex items-center gap-1 shadow-sm"
+            className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-[11px] text-slate-200 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
           >
-            <span>🚨</span>
+            <span className="text-rose-400">🚨</span>
             <span>صدور شکواییه کیفری</span>
           </button>
           <button
             onClick={() => handleSendMessage("یک اظهارنامه رسمی موضوع ماده ۱۵۶ قانون آیین دادرسی مدنی با اخطار و مهلت قانونی برای موضوع پرونده تدوین کن.")}
-            className="px-2.5 py-1 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-[11px] text-emerald-200 rounded-xl whitespace-nowrap transition-colors flex items-center gap-1 shadow-sm"
+            className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-[11px] text-slate-200 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
           >
-            <span>📑</span>
+            <span className="text-emerald-400">📑</span>
             <span>صدور اظهارنامه رسمی</span>
           </button>
         </div>
@@ -336,7 +336,7 @@ export function ChatShell() {
           {/* دکمه ارسال پیام */}
           <button
             onClick={() => handleSendMessage()}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-colors flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95"
+            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/25 active:scale-95"
           >
             <span>ارسال</span>
             <span>➤</span>
