@@ -6,8 +6,8 @@ import { Gavel, Scale } from "lucide-react";
 import { CaseAnalysisPanel } from "@/components/judge/case-analysis-panel";
 import { JudgeEngineStatus } from "@/components/judge/judge-engine-status";
 import { RetrialPanel } from "@/components/judge/retrial-panel";
-import { SiteHeader } from "@/components/layout/site-header";
-import { RoxiraFooter } from "@/components/layout/roxira-footer";
+import { GhaziHeader } from "@/components/layout/ghazi-header";
+import { EnamadFooter } from "@/components/layout/enamad-footer";
 
 type JudgeTab = "analysis" | "retrial";
 
@@ -29,7 +29,7 @@ export default function JudgePage() {
 
   return (
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
-      <SiteHeader />
+      <GhaziHeader />
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight">میز کار قاضی هوشمند</h1>
@@ -63,7 +63,7 @@ export default function JudgePage() {
 
         {tab === "analysis" ? <CaseAnalysisPanel /> : <RetrialPanel />}
       </main>
-      <RoxiraFooter />
+      <EnamadFooter />
     </div>
   );
 }

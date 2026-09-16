@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   CheckCircle2,
+  Circle,
   Cpu,
   Database,
+  ExternalLink,
   Loader2,
   RefreshCw,
   Send,
@@ -34,8 +36,41 @@ interface ProbeResult {
   message: string;
 }
 
-const FACTORY_ENDPOINT =
-  process.env.NEXT_PUBLIC_FACTORY_SYNTHESIZE_URL ?? "/api/v1/factory/synthesize-app";
+const FACTORY_BASE = process.env.NEXT_PUBLIC_FACTORY_API_BASE ?? "/api/v1/factory";
+const FACTORY_SYNTHESIZE_ENDPOINT =
+  process.env.NEXT_PUBLIC_FACTORY_SYNTHESIZE_URL ?? `${FACTORY_BASE}/synthesize-app`;
+
+interface FactoryBuildStage {
+  stage: string;
+  at: number;
+}
+
+interface FactoryBuildStatus {
+  app_id: string;
+  stage: string;
+  status: string;
+  app_name?: string | null;
+  host_port?: number | null;
+  subdomain?: string | null;
+  url?: string | null;
+  container_id?: string | null;
+  container_name?: string | null;
+  error?: string | null;
+  stages?: FactoryBuildStage[];
+  updated_at?: number;
+}
+
+const PIPELINE_STAGES: { key: string; label: string }[] = [
+  { key: "QUEUED", label: "در صف ساخت" },
+  { key: "PORT_ALLOCATED", label: "تخصیص پورت" },
+  { key: "PROJECT_GENERATED", label: "تولید پروژه" },
+  { key: "BUILDING", label: "بیلد ایمیج" },
+  { key: "CONTAINER_STARTED", label: "اجرای کانتینر" },
+  { key: "ROUTE_REGISTERED", label: "ثبت مسیر Nginx" },
+  { key: "RUNNING", label: "در حال اجرا" },
+];
+
+const TERMINAL_STAGES = new Set(["RUNNING", "FAILED", "REJECTED"]);
 
 const TARGETS: ProbeTarget[] = [
   {
@@ -135,6 +170,75 @@ async function probe(target: ProbeTarget, parentSignal: AbortSignal): Promise<Pr
   }
 }
 
+function BuildProgress({ status }: { status: FactoryBuildStatus }) {
+  const currentIndex = PIPELINE_STAGES.findIndex((entry) => entry.key === status.stage);
+  const failed = status.stage === "FAILED" || status.stage === "REJECTED";
+  const deployedUrl = status.url ?? (status.subdomain ? `http://${status.subdomain}` : null);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+        <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-slate-300">
+          app_id: <span className="text-white">{status.app_id}</span>
+        </span>
+        {typeof status.host_port === "number" && (
+          <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-slate-300">
+            port: <span className="text-white">{status.host_port}</span>
+          </span>
+        )}
+        {status.container_id && (
+          <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-slate-400">
+            container: {status.container_id.slice(0, 12)}
+          </span>
+        )}
+        {deployedUrl && (
+          <a
+            href={deployedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-semibold text-emerald-200 transition-colors hover:bg-emerald-400/20"
+          >
+            <ExternalLink className="size-3" />
+            {status.subdomain ?? deployedUrl}
+          </a>
+        )}
+      </div>
+
+      <ol className="space-y-2">
+        {PIPELINE_STAGES.map((entry, index) => {
+          const done = !failed && currentIndex >= index;
+          const active = !failed && currentIndex === index;
+          return (
+            <li key={entry.key} className="flex items-center gap-3">
+              {active ? (
+                <Loader2 className="size-4 animate-spin text-amber-300" />
+              ) : done ? (
+                <CheckCircle2 className="size-4 text-emerald-400" />
+              ) : (
+                <Circle className="size-4 text-slate-700" />
+              )}
+              <span
+                className={`font-mono text-[11px] ${
+                  active ? "text-amber-200" : done ? "text-slate-200" : "text-slate-600"
+                }`}
+              >
+                {entry.key}
+              </span>
+              <span className="text-[11px] text-slate-500">{entry.label}</span>
+            </li>
+          );
+        })}
+      </ol>
+
+      {failed && status.error && (
+        <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 font-mono text-[11px] text-rose-200">
+          {status.error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function MissionControlPage() {
   const [results, setResults] = useState<Record<string, ProbeResult>>(INITIAL_RESULTS);
   const [refreshing, setRefreshing] = useState(false);
@@ -147,6 +251,8 @@ export default function MissionControlPage() {
   const [output, setOutput] = useState<string | null>(null);
   const [consoleError, setConsoleError] = useState<string | null>(null);
   const [lastRunAt, setLastRunAt] = useState<number | null>(null);
+  const [activeAppId, setActiveAppId] = useState<string | null>(null);
+  const [buildStatus, setBuildStatus] = useState<FactoryBuildStatus | null>(null);
 
   const checkAll = useCallback(async () => {
     abortRef.current?.abort();
@@ -196,8 +302,10 @@ export default function MissionControlPage() {
     setSubmitting(true);
     setConsoleError(null);
     setOutput(null);
+    setBuildStatus(null);
+    setActiveAppId(null);
     try {
-      const res = await fetch(FACTORY_ENDPOINT, {
+      const res = await fetch(FACTORY_SYNTHESIZE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: trimmed, target_framework: framework }),
@@ -213,7 +321,19 @@ export default function MissionControlPage() {
         setConsoleError(`HTTP ${res.status} — ${formatUnknown(parsed)}`);
         return;
       }
-      setOutput(formatUnknown(parsed));
+      const record = (parsed ?? {}) as Partial<FactoryBuildStatus>;
+      if (typeof record.app_id === "string" && record.app_id) {
+        setBuildStatus({
+          app_id: record.app_id,
+          stage: typeof record.stage === "string" ? record.stage : "QUEUED",
+          status: typeof record.status === "string" ? record.status : "QUEUED",
+          app_name: record.app_name ?? null,
+          stages: [],
+        });
+        setActiveAppId(record.app_id);
+      } else {
+        setOutput(formatUnknown(parsed));
+      }
       setLastRunAt(Date.now());
     } catch (error) {
       setConsoleError(error instanceof Error ? error.message : "Network error");
@@ -221,6 +341,44 @@ export default function MissionControlPage() {
       setSubmitting(false);
     }
   }, [prompt, framework, submitting]);
+
+  useEffect(() => {
+    if (!activeAppId) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    const tick = async () => {
+      try {
+        const res = await fetch(
+          `${FACTORY_BASE}/synthesize-app/${encodeURIComponent(activeAppId)}`,
+          { signal: controller.signal, cache: "no-store" },
+        );
+        if (!res.ok) {
+          if (res.status === 404 || res.status === 410) stop();
+          return;
+        }
+        const data = (await res.json()) as FactoryBuildStatus;
+        setBuildStatus(data);
+        if (TERMINAL_STAGES.has(data.stage)) {
+          stop();
+          controller.abort();
+        }
+      } catch {
+        // transient network error — keep polling until a terminal stage
+      }
+    };
+    void tick();
+    timer = setInterval(() => void tick(), 1500);
+    return () => {
+      stop();
+      controller.abort();
+    };
+  }, [activeAppId]);
 
   return (
     <div dir="ltr" className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -317,7 +475,7 @@ export default function MissionControlPage() {
               </h2>
             </div>
             <span className="font-mono text-[10px] text-slate-500">
-              POST {FACTORY_ENDPOINT}
+              POST {FACTORY_SYNTHESIZE_ENDPOINT}
             </span>
           </div>
 
@@ -386,10 +544,21 @@ export default function MissionControlPage() {
             </div>
           </div>
 
-          {(output || consoleError || submitting) && (
+          {(buildStatus || output || consoleError || submitting) && (
             <div className="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/80 p-4">
               <div className="mb-2 flex items-center gap-2 font-mono text-[10px]">
-                {consoleError ? (
+                {buildStatus ? (
+                  <>
+                    {buildStatus.stage === "FAILED" || buildStatus.stage === "REJECTED" ? (
+                      <XCircle className="size-3.5 text-rose-400" />
+                    ) : buildStatus.stage === "RUNNING" ? (
+                      <CheckCircle2 className="size-3.5 text-emerald-400" />
+                    ) : (
+                      <Loader2 className="size-3.5 animate-spin text-amber-300" />
+                    )}
+                    <span className="text-slate-300">BUILD {buildStatus.stage}</span>
+                  </>
+                ) : consoleError ? (
                   <>
                     <XCircle className="size-3.5 text-rose-400" />
                     <span className="text-rose-400">SYNTHESIS FAILED</span>
@@ -406,9 +575,13 @@ export default function MissionControlPage() {
                   </>
                 )}
               </div>
-              <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-300">
-                {consoleError ?? output ?? "…"}
-              </pre>
+              {buildStatus ? (
+                <BuildProgress status={buildStatus} />
+              ) : (
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-300">
+                  {consoleError ?? output ?? "…"}
+                </pre>
+              )}
             </div>
           )}
         </section>
