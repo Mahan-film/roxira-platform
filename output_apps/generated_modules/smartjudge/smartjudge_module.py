@@ -3110,6 +3110,353 @@ async def generate_official_document(payload: dict = Body(...)):
     return {"status": "success", "document": formatted_doc}
 
 # ------------------------------------------------------------------------------
+# الگوهای استاندارد اوراق قضایی (دادخواست / شکواییه / لایحه دفاعیه)
+# ------------------------------------------------------------------------------
+DRAFT_TEMPLATE_TYPES = ("DADKHAST", "SHEKAYAT", "LAYEHE_DEFEE")
+
+DRAFT_TEMPLATE_ALIASES = {
+    "DADKHAST": "DADKHAST",
+    "دادخواست": "DADKHAST",
+    "دادخواست حقوقی": "DADKHAST",
+    "PETITION": "DADKHAST",
+    "CLAIM": "DADKHAST",
+    "LAWSUIT": "DADKHAST",
+    "SHEKAYAT": "SHEKAYAT",
+    "شکواییه": "SHEKAYAT",
+    "شکایت": "SHEKAYAT",
+    "شکواییه کیفری": "SHEKAYAT",
+    "COMPLAINT": "SHEKAYAT",
+    "CRIMINAL_COMPLAINT": "SHEKAYAT",
+    "LAYEHE_DEFEE": "LAYEHE_DEFEE",
+    "لایحه دفاعیه": "LAYEHE_DEFEE",
+    "لایحه": "LAYEHE_DEFEE",
+    "DEFENSE": "LAYEHE_DEFEE",
+    "DEFENCE": "LAYEHE_DEFEE",
+    "BRIEF": "LAYEHE_DEFEE",
+}
+
+# ورودی‌های انگلیسی/فارسی که به کلیدهای استاندارد هر بخش نگاشت می‌شوند.
+DRAFT_FIELD_ALIASES = {
+    "plaintiff": "khahan",
+    "claimant": "khahan",
+    "خواهان": "khahan",
+    "plaintiff_agent": "khahan_vakil",
+    "وکیل_خواهان": "khahan_vakil",
+    "defendant": "khankhah",
+    "خوانده": "khankhah",
+    "subject": "khastah",
+    "claims": "khastah",
+    "خواسته": "khastah",
+    "demand": "khastah",
+    "evidence": "dalayel",
+    "attachments": "dalayel",
+    "دلایل": "dalayel",
+    "منضمات": "dalayel",
+    "دلایل_و_منضمات": "dalayel",
+    "complainant": "shaki",
+    "شاکی": "shaki",
+    "accused": "moshtaki_alaih",
+    "suspect": "moshtaki_alaih",
+    "مشتکی_عنه": "moshtaki_alaih",
+    "offense": "mozoo_jaram",
+    "crime": "mozoo_jaram",
+    "موضوع_جرم": "mozoo_jaram",
+    "location": "mahal_voghoo",
+    "محل_وقوع": "mahal_voghoo",
+    "date": "tarikh",
+    "تاریخ": "tarikh",
+    "introduction": "moghaddame",
+    "مقدمه": "moghaddame",
+    "procedural_defense": "defa_shakli",
+    "دفاع_شکلی": "defa_shakli",
+    "substantive_defense": "defa_mahavi",
+    "دفاع_ماهوی": "defa_mahavi",
+    "request": "taghaza_rad",
+    "تقاضا": "taghaza_rad",
+    "تقاضای_رد_دعوی": "taghaza_rad",
+}
+
+# ساختار استاندارد مراجع قضایی ایران. هر بخش: کلید، عنوان، اجباری بودن و راهنما.
+DRAFT_TEMPLATES = {
+    "DADKHAST": {
+        "title": "دادخواست حقوقی",
+        "authority": "ریاست محترم دادگاه عمومی حقوقی",
+        "statutory_basis": [
+            "ماده ۵۱ قانون آیین دادرسی مدنی (شرایط دادخواست)",
+            "ماده ۵۵ قانون آیین دادرسی مدنی (منضمات دادخواست)",
+            "ماده ۵۶ قانون آیین دادرسی مدنی (ابطال دادخواست)",
+        ],
+        "sections": [
+            {
+                "key": "khahan",
+                "label": "خواهان",
+                "required": True,
+                "hint": "نام و نام خانوادگی، نام پدر، کد ملی/شناسه ملی، نشانی کامل و شماره تماس خواهان.",
+            },
+            {
+                "key": "khahan_vakil",
+                "label": "وکیل یا نماینده خواهان",
+                "required": False,
+                "hint": "نام وکیل، شماره پروانه وکالت و نشانی دفتر (در صورت وجود).",
+            },
+            {
+                "key": "khankhah",
+                "label": "خوانده",
+                "required": True,
+                "hint": "نام و نام خانوادگی، کد ملی/شناسه ملی و نشانی کامل خوانده.",
+            },
+            {
+                "key": "khastah",
+                "label": "خواسته",
+                "required": True,
+                "hint": "تعیین خواسته به‌صورت صریح و روشن، همراه با بهای خواسته و تصریح به تقویم آن.",
+            },
+            {
+                "key": "dalayel",
+                "label": "دلایل و منضمات",
+                "required": True,
+                "hint": "اسناد، مدارک، شهادت شهود، نظریه کارشناسی، اقرار و فهرست منضمات پیوست دادخواست.",
+            },
+            {
+                "key": "emza",
+                "label": "امضا و تاریخ",
+                "required": True,
+                "hint": "نام و امضای خواهان یا وکیل او و تاریخ تنظیم دادخواست.",
+            },
+        ],
+        "filing_checklist": [
+            "دادخواست در دو نسخه تنظیم و امضا شود.",
+            "برگه‌های پیوست به‌ترتیب در فهرست منضمات درج و شماره‌گذاری شود.",
+            "هزینه دادرسی بر اساس بهای خواسته محاسبه و پرداخت شود.",
+            "نشانی دقیق خوانده و خواهان درج شود؛ در غیر این صورت ابلاغ ممکن نیست.",
+        ],
+    },
+    "SHEKAYAT": {
+        "title": "شکواییه کیفری",
+        "authority": "ریاست محترم دادسرای عمومی و انقلاب",
+        "statutory_basis": [
+            "ماده ۶۸ قانون آیین دادرسی کیفری (شکواییه و شرایط آن)",
+            "ماده ۶۹ قانون آیین دادرسی کیفری (شکواییه شفاهی)",
+            "ماده ۱۰۰ قانون آیین دادرسی کیفری (تحقیقات مقدماتی)",
+        ],
+        "sections": [
+            {
+                "key": "shaki",
+                "label": "شاکی",
+                "required": True,
+                "hint": "نام و نام خانوادگی، نام پدر، کد ملی، نشانی و شماره تماس شاکی (یا نماینده قانونی او).",
+            },
+            {
+                "key": "moshtaki_alaih",
+                "label": "مشتکی‌عنه",
+                "required": True,
+                "hint": "نام و نشانه‌های هویتی مشتکی‌عنه؛ در صورت ناشناس بودن، اوصاف و مشخصات ظاهری درج شود.",
+            },
+            {
+                "key": "mozoo_jaram",
+                "label": "موضوع جرم",
+                "required": True,
+                "hint": "عنوان دقیق جرم، شرح عمل ارتکابی، تاریخ و ساعت وقوع و میزان خسارت وارده.",
+            },
+            {
+                "key": "mahal_voghoo",
+                "label": "محل وقوع",
+                "required": True,
+                "hint": "نشانی کامل محل وقوع جرم (تعیین‌کننده صلاحیت محلی دادسرا).",
+            },
+            {
+                "key": "dalayel",
+                "label": "دلایل و منضمات",
+                "required": True,
+                "hint": "گواهان، اسناد، گزارش ضابطان، فیلم و تصویر دوربین‌ها و سایر ادله.",
+            },
+            {
+                "key": "emza",
+                "label": "امضا و تاریخ",
+                "required": True,
+                "hint": "امضای شاکی یا وکیل او و تاریخ تنظیم شکواییه.",
+            },
+        ],
+        "filing_checklist": [
+            "شکواییه به دادسرای محل وقوع جرم تقدیم شود (صلاحیت محلی).",
+            "نام و نشانی گواهان با ذکر موضوع شهادت درج شود.",
+            "در جرایم قابل گذشت، تصریح به عدم گذشت تا زمان شکایت.",
+            "ادله الکترونیکی به‌همراه نسخه پشتیبان تحویل داده شود.",
+        ],
+    },
+    "LAYEHE_DEFEE": {
+        "title": "لایحه دفاعیه",
+        "authority": "ریاست محترم شعبه رسیدگی‌کننده",
+        "statutory_basis": [
+            "ماده ۹۲ قانون آیین دادرسی مدنی (تقدیم لایحه)",
+            "ماده ۱۹۸ قانون آیین دادرسی مدنی (جهات دفاع)",
+            "ماده ۱۴۶ قانون آیین دادرسی کیفری (دفاع وکیل)",
+        ],
+        "sections": [
+            {
+                "key": "moghaddame",
+                "label": "مقدمه",
+                "required": True,
+                "hint": "معرفی موکل، شماره پرونده/کلاسه، شناخت موضوع دعوا و خلاصه سابقه رسیدگی.",
+            },
+            {
+                "key": "defa_shakli",
+                "label": "دفاع شکلی",
+                "required": True,
+                "hint": "ایرادات شکلی: عدم صلاحیت، فقدان سمت، نقص دادخواست، مرور زمان، عدم رعایت تشریفات قانونی.",
+            },
+            {
+                "key": "defa_mahavi",
+                "label": "دفاع ماهوی",
+                "required": True,
+                "hint": "دفاع در ماهیت: عدم استحقاق خواهان، ایفای تعهد، فقدان دلیل، رد ادله خواهان و مستندات قانونی.",
+            },
+            {
+                "key": "taghaza_rad",
+                "label": "تقاضای رد دعوی",
+                "required": True,
+                "hint": "تقاضای صریح رد دعوی یا بطلان ادعا، همراه با استناد به مواد قانونی مورد استناد.",
+            },
+            {
+                "key": "emza",
+                "label": "امضا و تاریخ",
+                "required": True,
+                "hint": "نام و امضای وکیل یا موکل و تاریخ تقدیم لایحه.",
+            },
+        ],
+        "filing_checklist": [
+            "شماره و تاریخ لایحه با کلاسه پرونده مطابقت داده شود.",
+            "هر ایراد شکلی با مستند قانونی مستقل تقویم شود.",
+            "پیوست‌ها در فهرست منضمات با شماره به لایحه ارجاع داده شود.",
+            "نسخه‌ای از لایحه برای طرف مقابل و تصویر ثبت‌شده در دفتر شعبه نگه داشته شود.",
+        ],
+    },
+}
+
+
+def _normalize_draft_template_type(raw_type) -> Optional[str]:
+    """نگاشت نام الگو (فارسی/انگلیسی) به کلید استاندارد."""
+    key = str(raw_type or "").strip()
+    if not key:
+        return None
+    upper = key.upper().replace("-", "_").replace(" ", "_")
+    if upper in DRAFT_TEMPLATES:
+        return upper
+    if key in DRAFT_TEMPLATE_ALIASES:
+        return DRAFT_TEMPLATE_ALIASES[key]
+    if upper in DRAFT_TEMPLATE_ALIASES:
+        return DRAFT_TEMPLATE_ALIASES[upper]
+    return None
+
+
+def _collect_draft_values(payload: dict) -> dict:
+    """جمع‌آوری مقادیر بخش‌ها از payload (کلیدهای استاندارد، بومی و تودرتو)."""
+    values: dict = {}
+    for source_key in ("data", "fields", "values", "details"):
+        nested = payload.get(source_key)
+        if isinstance(nested, dict):
+            for raw_key, raw_value in nested.items():
+                if raw_value not in (None, ""):
+                    values[str(raw_key).strip()] = raw_value
+    for raw_key, raw_value in payload.items():
+        if raw_key in ("data", "fields", "values", "details", "template_type", "type", "template"):
+            continue
+        if raw_value not in (None, ""):
+            values.setdefault(str(raw_key).strip(), raw_value)
+
+    resolved: dict = {}
+    for raw_key, raw_value in values.items():
+        canonical = DRAFT_FIELD_ALIASES.get(raw_key)
+        if canonical is None:
+            lowered = raw_key.lower().replace("-", "_").replace(" ", "_")
+            canonical = DRAFT_FIELD_ALIASES.get(lowered, lowered)
+        resolved[canonical] = raw_value
+    return resolved
+
+
+def _render_draft_text(sections: list, authority: str) -> str:
+    """تولید متن آماده چاپ بر اساس ساختار استاندارد."""
+    salutation = authority.strip()
+    if not salutation.startswith("ریاست محترم"):
+        salutation = f"ریاست محترم {salutation}"
+    lines = ["بسمه تعالی", salutation, ""]
+    for index, section in enumerate(sections, start=1):
+        value = section.get("value")
+        shown = str(value) if value not in (None, "") else "«تکمیل شود»"
+        lines.append(f"{index}. {section['label']}: {shown}")
+        if not section.get("filled") and section.get("hint"):
+            lines.append(f"   راهنمای تکمیل: {section['hint']}")
+    lines.append("")
+    lines.append("با تشکر و تجدید احترام")
+    return "\n".join(lines)
+
+
+@router.post("/drafts/template")
+async def draft_template(payload: dict = Body(...)):
+    """الگوهای استاندارد اوراق قضایی: دادخواست، شکواییه و لایحه دفاعیه."""
+    raw_type = (
+        payload.get("template_type")
+        or payload.get("type")
+        or payload.get("template")
+        or payload.get("document_type")
+    )
+    template_type = _normalize_draft_template_type(raw_type)
+    if template_type is None:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "نوع الگو نامعتبر است؛ یکی از مقادیر DADKHAST، SHEKAYAT یا LAYEHE_DEFEE را ارسال کنید.",
+                "supported_types": list(DRAFT_TEMPLATE_TYPES),
+                "aliases": {"DADKHAST": "دادخواست حقوقی", "SHEKAYAT": "شکواییه کیفری", "LAYEHE_DEFEE": "لایحه دفاعیه"},
+            },
+            status_code=400,
+        )
+
+    template = DRAFT_TEMPLATES[template_type]
+    values = _collect_draft_values(payload)
+    authority = str(payload.get("authority") or template["authority"])
+    court_branch = payload.get("court_branch") or payload.get("شعبه") or payload.get("branch")
+    case_number = payload.get("case_number") or payload.get("شماره_پرونده") or payload.get("file_number")
+
+    sections = []
+    missing_required = []
+    for spec in template["sections"]:
+        value = values.get(spec["key"])
+        section = {
+            "key": spec["key"],
+            "label": spec["label"],
+            "required": bool(spec["required"]),
+            "hint": spec["hint"],
+            "value": value if value not in (None, "") else None,
+            "filled": value not in (None, ""),
+        }
+        if not section["filled"] and section["required"]:
+            missing_required.append(spec["key"])
+        sections.append(section)
+
+    rendered = _render_draft_text(sections, authority)
+    return {
+        "status": "ok",
+        "template_type": template_type,
+        "title": template["title"],
+        "authority": authority,
+        "court_branch": court_branch,
+        "case_number": case_number,
+        "statutory_basis": list(template["statutory_basis"]),
+        "sections": sections,
+        "required_fields": [s["key"] for s in sections if s["required"]],
+        "missing_required_fields": missing_required,
+        "ready_to_file": not missing_required,
+        "filing_checklist": list(template["filing_checklist"]),
+        "rendered_text": rendered,
+        "warnings": (
+            ["برخی فیلدهای اجباری تکمیل نشده است: " + "، ".join(missing_required)]
+            if missing_required
+            else []
+        ),
+    }
+
+# ------------------------------------------------------------------------------
 # آماده‌باش سوئیچ پرداخت شتابی (زرین‌پال / سداد / نوینو)
 # ------------------------------------------------------------------------------
 @router.post("/payment/initiate")

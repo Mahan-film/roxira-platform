@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
+import { UserQuotaBadge } from "@/components/judge/subscription/user-quota-badge";
 
 export function GhaziHeader() {
   const pathname = usePathname();
@@ -69,13 +70,16 @@ export function GhaziHeader() {
         {/* بخش وضعیت کاربر */}
         <div className="flex items-center gap-2 sm:gap-3">
           {isAuthenticated ? (
-            <button
-              onClick={logout}
-              className="text-[11px] text-slate-400 hover:text-rose-400 px-2 py-1 bg-slate-900/80 hover:bg-slate-800 rounded-lg border border-slate-800 transition-colors"
-              title="خروج از حساب کاربری"
-            >
-              خروج
-            </button>
+            <>
+              <UserQuotaBadge />
+              <button
+                onClick={logout}
+                className="text-[11px] text-slate-400 hover:text-rose-400 px-2 py-1 bg-slate-900/80 hover:bg-slate-800 rounded-lg border border-slate-800 transition-colors"
+                title="خروج از حساب کاربری"
+              >
+                خروج
+              </button>
+            </>
           ) : (
             <button
               onClick={handleOpenAuth}

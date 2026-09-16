@@ -172,7 +172,12 @@ async def rate_limit_and_token_quota(request: Request, call_next):
     try:
         remaining_after = _quota_service.consume(identity, cost)
         _quota_service.stats["allowed"] += 1
+        # Hedged Toman value of this request (0 when no FX source / free path).
+        toman_cost = _quota_service.price_tokens(cost, tier)
+        if toman_cost:
+            _quota_service.stats["toman_charged"] += int(toman_cost)
         response.headers["X-Token-Cost"] = str(cost)
+        response.headers["X-Token-Cost-Toman"] = str(toman_cost)
         response.headers["X-Token-Quota-Remaining"] = str(remaining_after)
         response.headers["X-RateLimit-Tier"] = tier
         response.headers["X-RateLimit-Limit"] = str(_tier_limits(tier)["rpm"])
@@ -185,11 +190,31 @@ async def rate_limit_and_token_quota(request: Request, call_next):
     return response
 
 
+# ---- wallet endpoints (/api/v1/auth/wallet) ------------------------------
+# Mounted from the auth module so the quota cache and the wallet share one
+# process-wide source of truth: a top-up is visible to the middleware instantly.
+try:
+    if _QUOTA_AVAILABLE:
+        from output_apps.ecosystem_core.src.factory.user_auth_models import wallet_router as _wallet_router
+
+        app.include_router(_wallet_router)
+        print("[ROXIRA] wallet endpoints mounted: /api/v1/auth/wallet/{balance,top-up}", file=sys.stderr)
+    else:
+        print("[ROXIRA][WALLET-WARN] wallet endpoints disabled (auth module unavailable)", file=sys.stderr)
+except Exception as _wallet_exc:  # pragma: no cover - additive feature
+    print("[ROXIRA][WALLET-WARN] wallet mount failed: %s" % _wallet_exc, file=sys.stderr)
+
+
 @app.get("/system/auth-quota")
-async def auth_quota_snapshot():
-    """Operational snapshot of the rate limiter / token quota layer."""
+async def auth_quota_snapshot(refresh: int = 0):
+    """Operational snapshot of the rate limiter / token quota layer.
+
+    ``?refresh=1`` forces a live Tether -> Toman refresh (network call, opt-in).
+    """
     if not _QUOTA_AVAILABLE:
         return JSONResponse({"status": "disabled", "reason": "module unavailable"}, status_code=200)
+    if refresh:
+        _quota_service.refresh_fx_rate(force=True)
     return {"status": "ok", "enabled": bool(_AUTH_ENABLED), **_quota_service.snapshot()}
 
 

@@ -39,6 +39,7 @@ __all__ = [
     "AUTH_ENABLED",
     "ANONYMOUS_IDENTITY",
     "Base",
+    "CURRENCY_HEDGING_AVAILABLE",
     "DEFAULT_PLAN_TIER",
     "PLAN_LIMITS",
     "PATH_COST_PROFILES",
@@ -47,7 +48,16 @@ __all__ = [
     "User",
     "AuthQuotaService",
     "auth_quota_service",
+    "build_currency_pricer",
+    "calculate_token_toman_price",
+    "TOPUP_PACKAGES",
+    "amount_for_tokens",
+    "close_auth_db",
     "estimate_token_cost",
+    "package_offer",
+    "resolve_topup_package",
+    "tokens_for_amount",
+    "wallet_router",
     "hash_password",
     "init_auth_db",
     "is_subscription_active",
@@ -125,6 +135,58 @@ def _apply_env_limit_overrides() -> None:
 
 
 _apply_env_limit_overrides()
+
+
+# ---------------------------------------------------------------------------
+# Currency hedging (USD/Tether cost -> Toman price)
+# ---------------------------------------------------------------------------
+# Optional at runtime: if the hedging module cannot be imported the platform keeps
+# enforcing token quotas, it just cannot convert them into a Toman amount.
+try:  # normal package import
+    from .currency_hedging import (
+        DynamicCurrencyPricer as _DynamicCurrencyPricer,
+        calculate_token_toman_price as _calculate_token_toman_price,
+        currency_pricer as _currency_pricer,
+    )
+
+    CURRENCY_HEDGING_AVAILABLE = True
+except Exception:  # noqa: BLE001 - fall back to a path-based import (script mode)
+    try:
+        import os as _os
+        import sys as _sys
+
+        _here = _os.path.dirname(_os.path.abspath(__file__))
+        if _here not in _sys.path:
+            _sys.path.insert(0, _here)
+        from currency_hedging import (  # type: ignore[no-redef]
+            DynamicCurrencyPricer as _DynamicCurrencyPricer,
+            calculate_token_toman_price as _calculate_token_toman_price,
+            currency_pricer as _currency_pricer,
+        )
+
+        CURRENCY_HEDGING_AVAILABLE = True
+    except Exception as _hedging_exc:  # noqa: BLE001 - pricing is an enhancement
+        print(f"[ROXIRA][FX-WARN] currency hedging disabled: {_hedging_exc}", flush=True)
+        _DynamicCurrencyPricer = None  # type: ignore[assignment]
+        _currency_pricer = None  # type: ignore[assignment]
+
+        def _calculate_token_toman_price(tokens: int, tier: Optional[str] = None) -> int:  # type: ignore[misc]
+            """Degraded mode: no FX source -> no Toman conversion available."""
+            return 0
+
+        CURRENCY_HEDGING_AVAILABLE = False
+
+
+def calculate_token_toman_price(tokens: int, tier: Optional[str] = None) -> int:
+    """Public re-export: hedged Toman price of ``tokens`` at ``tier`` (0 if no FX)."""
+    return _calculate_token_toman_price(tokens, tier)
+
+
+def build_currency_pricer(**kwargs: Any) -> Any:
+    """Build an isolated pricer (tests/tools); ``None`` when hedging is unavailable."""
+    if _DynamicCurrencyPricer is None:
+        return None
+    return _DynamicCurrencyPricer(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +403,24 @@ async def init_auth_db() -> bool:
         return False
 
 
+async def close_auth_db() -> bool:
+    """Dispose the async engine and drop the pooled connections (shutdown/tests)."""
+    global _engine, _sessionmaker
+    engine = _engine
+    if engine is None:
+        return False
+    try:
+        await engine.dispose()
+        return True
+    except Exception as exc:  # noqa: BLE001 - shutdown must not raise
+        print(f"[ROXIRA][AUTH-DB-WARN] engine dispose failed: {exc}", flush=True)
+        return False
+    finally:
+        with _db_lock:
+            _engine = None
+            _sessionmaker = None
+
+
 # ---------------------------------------------------------------------------
 # Quota + rate-limit service
 # ---------------------------------------------------------------------------
@@ -396,6 +476,125 @@ class AuthQuotaService:
             "rate_limited": 0,
             "quota_rejected": 0,
             "deducted_tokens": 0,
+            "toman_charged": 0,
+            "tokens_topped_up": 0,
+            "toman_topped_up": 0,
+        }
+
+    # ---- currency hedging (USD/Tether cost -> Toman price) ----------------
+    def price_tokens(self, tokens: int, tier: Optional[str] = None) -> int:
+        """Toman price of ``tokens`` at ``tier`` (0 when FX is unavailable)."""
+        if _currency_pricer is None:
+            return 0
+        try:
+            return int(
+                _currency_pricer.calculate_token_toman_price(
+                    tokens, normalize_tier(tier or DEFAULT_PLAN_TIER)
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - pricing must never break enforcement
+            print(f"[ROXIRA][FX-WARN] token pricing failed: {exc}", flush=True)
+            return 0
+
+    def price_quote(self, tokens: int, tier: Optional[str] = None, *, refresh: bool = False) -> Dict[str, Any]:
+        """Full hedged pricing breakdown (rate, margin, buffer, Toman amount)."""
+        if _currency_pricer is None:
+            return {
+                "tokens": max(0, int(tokens or 0)),
+                "tier": normalize_tier(tier or DEFAULT_PLAN_TIER),
+                "toman_amount": 0,
+                "currency_hedging_available": False,
+            }
+        try:
+            quote = dict(
+                _currency_pricer.quote(int(tokens or 0), normalize_tier(tier or DEFAULT_PLAN_TIER), refresh=refresh)
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[ROXIRA][FX-WARN] quote failed: {exc}", flush=True)
+            return {"tokens": max(0, int(tokens or 0)), "toman_amount": 0, "error": str(exc)}
+        quote["currency_hedging_available"] = True
+        return quote
+
+    def pricing_table(self, tiers: Optional[Tuple[str, ...]] = None) -> Dict[str, Dict[str, Any]]:
+        """Toman price of 1k tokens per tier (pricing pages, invoices, ops)."""
+        if _currency_pricer is None:
+            return {}
+        try:
+            return _currency_pricer.pricing_table(list(tiers) if tiers else list(PLAN_LIMITS))
+        except Exception as exc:  # noqa: BLE001
+            print(f"[ROXIRA][FX-WARN] pricing table failed: {exc}", flush=True)
+            return {}
+
+    def fx_snapshot(self) -> Dict[str, Any]:
+        """Live Tether -> Toman rate block (safe to publish on a health route)."""
+        if _currency_pricer is None:
+            return {"available": False}
+        try:
+            payload = dict(_currency_pricer.snapshot())
+            payload["available"] = True
+            return payload
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "error": str(exc)}
+
+    def refresh_fx_rate(self, force: bool = False) -> Dict[str, Any]:
+        """Refresh the hedged rate on demand (network call, use off the hot path)."""
+        if _currency_pricer is None:
+            return {"available": False}
+        try:
+            return dict(_currency_pricer.refresh(force=force))
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "error": str(exc)}
+
+    async def _debit_wallet(self, identity: str, toman: int) -> bool:
+        """Best-effort debit of the pre-paid Toman balance; never raises."""
+        if _db_failed or toman <= 0 or not str(identity).isdigit():
+            return False
+        try:
+            session_factory = get_sessionmaker()
+            async with session_factory() as session:
+                result = await session.execute(
+                    select(TokenWallet).where(TokenWallet.user_id == int(identity)).limit(1)
+                )
+                wallet = result.scalar_one_or_none()
+                if wallet is None:
+                    return False
+                wallet.balance_toman = max(0, int(wallet.balance_toman or 0) - int(toman))
+                wallet.updated_at = _utcnow()
+                await session.commit()
+            return True
+        except Exception as exc:  # noqa: BLE001 - accounting must never break a response
+            _mark_db_failed()
+            print(f"[ROXIRA][AUTH-DB-WARN] wallet debit failed: {exc}", flush=True)
+            return False
+
+    async def charge_tokens(
+        self, identity: str, cost: int, tier: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Deduct tokens *and* return the hedged Toman value of the request.
+
+        This is the money-facing counterpart of :meth:`consume`: the token quota
+        is enforced in-process (immediately) while the Toman accounting is
+        best-effort, so a slow database can never stall an LLM response.
+        """
+        key = str(identity or ANONYMOUS_IDENTITY)
+        resolved_tier = normalize_tier(tier) if tier else (self._tier.get(key) or self.internal_tier(key))
+        tokens = max(0, int(cost or 0))
+        remaining = self.consume(key, tokens)
+        toman = self.price_tokens(tokens, resolved_tier)
+        if toman:
+            with self._lock:
+                self.stats["toman_charged"] += int(toman)
+        debited = await self._debit_wallet(key, toman)
+        return {
+            "identity": key,
+            "tier": resolved_tier,
+            "tokens": tokens,
+            "remaining_tokens": remaining,
+            "toman_charged": toman,
+            "wallet_debited": debited,
+            "exchange_rate_toman": (
+                _currency_pricer.effective_rate_toman if _currency_pricer is not None else None
+            ),
         }
 
     # ---- identity helpers -------------------------------------------------
@@ -536,6 +735,105 @@ class AuthQuotaService:
             print(f"[ROXIRA][AUTH-DB-WARN] quota persist failed: {exc}", flush=True)
             return False
 
+    # ---- wallet credit (top-up) -------------------------------------------
+    async def wallet_state(self, identity: str) -> Dict[str, Any]:
+        """Live wallet view for an identity (DB first, in-memory fallback)."""
+        key = str(identity or ANONYMOUS_IDENTITY)
+        tier, remaining = await self.resolve(key)
+        balance = 0
+        has_row = False
+        if not _db_failed and key.isdigit():
+            try:
+                session_factory = get_sessionmaker()
+                async with session_factory() as session:
+                    result = await session.execute(
+                        select(TokenWallet).where(TokenWallet.user_id == int(key)).limit(1)
+                    )
+                    wallet = result.scalar_one_or_none()
+                    if wallet is not None:
+                        balance = int(wallet.balance_toman or 0)
+                        remaining = int(wallet.token_quota_remaining)
+                        has_row = True
+                        with self._lock:
+                            self._quota[key] = remaining
+                            self._loaded_at[key] = time.monotonic()
+            except Exception as exc:  # noqa: BLE001 - read-only view, degrade to memory
+                _mark_db_failed()
+                print(f"[ROXIRA][AUTH-DB-WARN] wallet read failed: {exc}", flush=True)
+        return {
+            "identity": key,
+            "tier": tier,
+            "balance_toman": balance,
+            "token_quota_remaining": int(remaining),
+            "tokens_per_1k_toman": self.price_tokens(1_000, tier),
+            "db_backed": has_row,
+        }
+
+    async def credit_wallet(
+        self, identity: str, tokens: int, amount_toman: int = 0, tier: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Top up a wallet and reflect it in the live quota **immediately**.
+
+        The in-process quota cache is the enforcement source of truth, so a
+        successful top-up primes it right away - no restart and no cache TTL wait.
+        """
+        key = str(identity or ANONYMOUS_IDENTITY)
+        tokens = max(0, int(tokens or 0))
+        amount_toman = max(0, int(amount_toman or 0))
+        resolved_tier = normalize_tier(tier) if tier else (self._tier.get(key) or self.internal_tier(key))
+        current = self.remaining(key)
+        if current is None:
+            _, current = await self.resolve(key, resolved_tier)
+        new_remaining = int(current) + tokens
+        new_balance = amount_toman
+        persisted = False
+
+        if not _db_failed and key.isdigit():
+            try:
+                session_factory = get_sessionmaker()
+                async with session_factory() as session:
+                    result = await session.execute(
+                        select(TokenWallet).where(TokenWallet.user_id == int(key)).limit(1)
+                    )
+                    wallet = result.scalar_one_or_none()
+                    if wallet is None:
+                        wallet = TokenWallet(
+                            user_id=int(key),
+                            balance_toman=amount_toman,
+                            token_quota_remaining=tokens,
+                        )
+                        session.add(wallet)
+                        new_balance = amount_toman
+                        new_remaining = tokens
+                    else:
+                        wallet.balance_toman = int(wallet.balance_toman or 0) + amount_toman
+                        wallet.token_quota_remaining = int(wallet.token_quota_remaining or 0) + tokens
+                        wallet.updated_at = _utcnow()
+                        new_balance = int(wallet.balance_toman)
+                        new_remaining = int(wallet.token_quota_remaining)
+                    await session.commit()
+                    persisted = True
+            except Exception as exc:  # noqa: BLE001 - credit the in-memory ledger at least
+                _mark_db_failed()
+                print(f"[ROXIRA][AUTH-DB-WARN] wallet top-up failed: {exc}", flush=True)
+
+        # Instant reflection: prime tier + quota in the live cache.
+        self.seed(key, new_remaining, tier=resolved_tier)
+        with self._lock:
+            if amount_toman:
+                self.stats["toman_topped_up"] = self.stats.get("toman_topped_up", 0) + amount_toman
+            self.stats["tokens_topped_up"] = self.stats.get("tokens_topped_up", 0) + tokens
+        return {
+            "identity": key,
+            "tier": resolved_tier,
+            "tokens_credited": tokens,
+            "amount_toman": amount_toman,
+            "balance_toman": new_balance,
+            "token_quota_remaining": new_remaining,
+            "persisted": persisted,
+            "effective_immediately": True,
+        }
+
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
             return {
@@ -544,8 +842,269 @@ class AuthQuotaService:
                 "tracked_identities": len(self._quota),
                 "global_rpm": len(self._hits),
                 **self.stats,
+                "currency_hedging": CURRENCY_HEDGING_AVAILABLE,
+                "fx": self.fx_snapshot(),
             }
 
 
 # Process-wide instance shared by the middleware and the health endpoint.
 auth_quota_service = AuthQuotaService()
+
+
+# ---------------------------------------------------------------------------
+# Wallet top-up catalogue + token/amount conversion
+# ---------------------------------------------------------------------------
+# Pre-paid packages sold on the pricing page (tokens per package).
+TOPUP_PACKAGES: Dict[str, Dict[str, Any]] = {
+    "100k": {"package_id": "100k", "tokens": 100_000, "label": "بسته پایه ۱۰۰ هزار توکن"},
+    "500k": {"package_id": "500k", "tokens": 500_000, "label": "بسته حرفه‌ای ۵۰۰ هزار توکن"},
+    "2M": {"package_id": "2M", "tokens": 2_000_000, "label": "بسته VIP دو میلیون توکن"},
+}
+
+TOPUP_PACKAGE_ALIASES: Dict[str, str] = {
+    "100000": "100k",
+    "100K": "100k",
+    "TOKENS_100K": "100k",
+    "BASIC": "100k",
+    "500000": "500k",
+    "500K": "500k",
+    "TOKENS_500K": "500k",
+    "PRO": "500k",
+    "2000000": "2M",
+    "2000K": "2M",
+    "2M_TOKENS": "2M",
+    "2MIL": "2M",
+    "TOKENS_2M": "2M",
+    "VIP": "2M",
+}
+
+
+def resolve_topup_package(package_id: Any) -> Optional[Dict[str, Any]]:
+    """Resolve a package id/alias to its catalogue entry (``None`` if unknown)."""
+    key = str(package_id or "").strip()
+    if not key:
+        return None
+    resolved = TOPUP_PACKAGE_ALIASES.get(key) or TOPUP_PACKAGE_ALIASES.get(key.upper())
+    if resolved is None:
+        resolved = key if key in TOPUP_PACKAGES else key.upper()
+    return TOPUP_PACKAGES.get(resolved)
+
+
+def tokens_for_amount(amount_toman: int, tier: Optional[str] = None) -> int:
+    """How many tokens a Toman amount buys at the current hedged rate."""
+    if _currency_pricer is None:
+        return 0
+    try:
+        amount = max(0, int(amount_toman or 0))
+        if amount <= 0:
+            return 0
+        usd = _currency_pricer.toman_to_usd(amount)
+        per_1k = _currency_pricer.base_cost_usd_per_1k(tier)
+        if per_1k <= 0:
+            return 0
+        return int((usd / per_1k) * 1000.0)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[ROXIRA][FX-WARN] token conversion failed: {exc}", flush=True)
+        return 0
+
+
+def amount_for_tokens(tokens: int, tier: Optional[str] = None) -> int:
+    """Hedged Toman price of a token amount (inverse of :func:`tokens_for_amount`)."""
+    return calculate_token_toman_price(tokens, tier)
+
+
+def package_offer(package_id: Any, tier: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Price a package at the current hedged rate."""
+    package = resolve_topup_package(package_id)
+    if package is None:
+        return None
+    tokens = int(package["tokens"])
+    return {
+        **package,
+        "amount_toman": amount_for_tokens(tokens, tier),
+        "tokens": tokens,
+        "tier": normalize_tier(tier or DEFAULT_PLAN_TIER),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Wallet HTTP endpoints (mounted by the unified server)
+# ---------------------------------------------------------------------------
+try:  # FastAPI is optional: the models/service stay importable without it.
+    from fastapi import APIRouter, Body, Request
+    from fastapi.responses import JSONResponse
+
+    _FASTAPI_AVAILABLE = True
+except Exception:  # noqa: BLE001
+    _FASTAPI_AVAILABLE = False
+
+
+def _decode_bearer_subject(authorization: Optional[str]) -> Optional[str]:
+    """Extract the subject from a Bearer JWT **without** verifying the signature.
+
+    Verification stays in the SmartJudge auth layer; here the claim is only used
+    to pick the wallet owner, and a numeric id is still required by the caller.
+    """
+    import base64
+    import json as _json
+
+    token = str(authorization or "")
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    if token.count(".") < 2:
+        return None
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        claims = _json.loads(base64.urlsafe_b64decode(payload).decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        return None
+    for field in ("sub", "user_id", "phone", "id"):
+        value = claims.get(field)
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
+def resolve_wallet_identity(request: Any = None, authorization: Optional[str] = None,
+                            x_user_id: Optional[str] = None) -> Optional[str]:
+    """Wallet owner: Bearer subject -> X-User-Id header. ``None`` when absent."""
+    candidate = _decode_bearer_subject(authorization) or (str(x_user_id) if x_user_id else None)
+    if candidate is None and request is not None:
+        candidate = request.headers.get("x-user-id") or None
+    if candidate is None:
+        return None
+    candidate = candidate.strip()
+    return candidate if candidate.isdigit() else None
+
+
+if _FASTAPI_AVAILABLE:
+    wallet_router = APIRouter(prefix="/api/v1/auth/wallet", tags=["wallet"])
+
+    def _wallet_unauthenticated() -> JSONResponse:
+        return JSONResponse(
+            {
+                "status": "error",
+                "code": "AUTH_REQUIRED",
+                "message": "برای دسترسی به کیف پول باید با حساب کاربری خود وارد شوید.",
+            },
+            status_code=401,
+        )
+
+    @wallet_router.get("/balance")
+    async def wallet_balance(request: Request):
+        """Return ``balance_toman`` and ``token_quota_remaining`` of the caller."""
+        identity = resolve_wallet_identity(
+            request, request.headers.get("authorization"), request.headers.get("x-user-id")
+        )
+        if identity is None:
+            return _wallet_unauthenticated()
+        state = await auth_quota_service.wallet_state(identity)
+        return {
+            "status": "ok",
+            "user_id": int(identity),
+            "balance_toman": state["balance_toman"],
+            "token_quota_remaining": state["token_quota_remaining"],
+            "tier": state["tier"],
+            "tokens_per_1k_toman": state["tokens_per_1k_toman"],
+            "db_backed": state["db_backed"],
+            "currency_hedging": CURRENCY_HEDGING_AVAILABLE,
+            "packages": {pid: package_offer(pid, state["tier"]) for pid in TOPUP_PACKAGES},
+        }
+
+    @wallet_router.post("/top-up")
+    async def wallet_top_up(request: Request, payload: Dict[str, Any] = Body(...)):
+        """Credit a wallet from either ``amount_toman`` or a ``package_id``."""
+        body = payload if isinstance(payload, dict) else {}
+        identity = resolve_wallet_identity(
+            request,
+            (request.headers.get("authorization") if request is not None else None),
+            (request.headers.get("x-user-id") if request is not None else None),
+        ) or (str(body.get("user_id")).strip() if str(body.get("user_id") or "").strip().isdigit() else None)
+        if identity is None:
+            return _wallet_unauthenticated()
+
+        tier = body.get("tier")
+        package_id = body.get("package_id") or body.get("package")
+        amount_toman = body.get("amount_toman") or body.get("amount")
+        tokens = body.get("tokens")
+
+        resolved_package = None
+        if package_id not in (None, ""):
+            resolved_package = resolve_topup_package(package_id)
+            if resolved_package is None:
+                return JSONResponse(
+                    {
+                        "status": "error",
+                        "code": "UNKNOWN_PACKAGE",
+                        "message": "بسته انتخابی نامعتبر است.",
+                        "supported_packages": list(TOPUP_PACKAGES),
+                    },
+                    status_code=400,
+                )
+            tokens = int(resolved_package["tokens"])
+
+        if tokens in (None, "") and amount_toman not in (None, ""):
+            if not CURRENCY_HEDGING_AVAILABLE:
+                return JSONResponse(
+                    {
+                        "status": "error",
+                        "code": "PRICING_UNAVAILABLE",
+                        "message": "سرویس نرخ ارز در دسترس نیست؛ از بسته‌های آماده استفاده کنید.",
+                    },
+                    status_code=503,
+                )
+            tokens = tokens_for_amount(int(amount_toman), tier)
+            if tokens <= 0:
+                return JSONResponse(
+                    {
+                        "status": "error",
+                        "code": "INVALID_AMOUNT",
+                        "message": "مبلغ وارد‌شده برای شارژ کیف پول کافی نیست.",
+                    },
+                    status_code=400,
+                )
+
+        if tokens in (None, ""):
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "code": "MISSING_TOPUP_INPUT",
+                    "message": "یکی از پارامترهای amount_toman یا package_id الزامی است.",
+                    "supported_packages": list(TOPUP_PACKAGES),
+                },
+                status_code=400,
+            )
+        tokens = int(tokens)
+        if tokens <= 0:
+            return JSONResponse(
+                {"status": "error", "code": "INVALID_TOKENS", "message": "تعداد توکن باید مثبت باشد."},
+                status_code=400,
+            )
+
+        if amount_toman in (None, ""):
+            amount_toman = amount_for_tokens(tokens, tier)
+        amount_toman = max(0, int(amount_toman))
+
+        result = await auth_quota_service.credit_wallet(identity, tokens, amount_toman, tier)
+        # Prove the credit is live for the very next request (no restart / no TTL wait).
+        live_tier, live_remaining = await auth_quota_service.resolve(identity)
+        return {
+            "status": "ok",
+            "user_id": int(identity),
+            "package_id": resolved_package["package_id"] if resolved_package else None,
+            "tokens_credited": result["tokens_credited"],
+            "amount_toman": result["amount_toman"],
+            "balance_toman": result["balance_toman"],
+            "token_quota_remaining": result["token_quota_remaining"],
+            "live_quota_remaining": int(live_remaining),
+            "tier": result["tier"],
+            "effective_immediately": True,
+            "persisted": result["persisted"],
+            "currency_hedging": CURRENCY_HEDGING_AVAILABLE,
+            "exchange_rate_toman": (
+                _currency_pricer.effective_rate_toman if _currency_pricer is not None else None
+            ),
+            "packages": list(TOPUP_PACKAGES),
+        }
+
