@@ -56,6 +56,25 @@ except ImportError:  # pragma: no cover - direct script execution
         run_swarm_blueprint,
     )
 
+try:  # docker execution transport: local daemon or remote worker nodes
+    from .remote_dispatcher import (
+        DEFAULT_LOCAL_HOST_ID,
+        DISPATCH_MODE_LOCAL,
+        HostNode,
+        RemoteHostDispatcher,
+        DispatchError as RemoteDispatchError,
+        UnknownHostError,
+    )
+except ImportError:  # pragma: no cover - direct script execution
+    from remote_dispatcher import (  # type: ignore[no-redef]
+        DEFAULT_LOCAL_HOST_ID,
+        DISPATCH_MODE_LOCAL,
+        HostNode,
+        RemoteHostDispatcher,
+        DispatchError as RemoteDispatchError,
+        UnknownHostError,
+    )
+
 __all__ = [
     "BuildRequest",
     "BuildResult",
@@ -98,6 +117,9 @@ __all__ = [
     "slugify_app_id",
     "EphemeralRunner",
     "create_factory_router",
+    "HostNode",
+    "RemoteHostDispatcher",
+    "remote_dispatch_summary",
 ]
 
 APP_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,60}$")
@@ -169,6 +191,7 @@ class BuildRequest:
     app_name: Optional[str] = None
     target_framework: str = "FastAPI"
     tier: str = "STANDARD"
+    target_host: Optional[str] = None
     requested_by: Optional[str] = None
     created_at: float = field(default_factory=time.time)
 
@@ -187,6 +210,7 @@ class BuildRequest:
             app_name=str(app_name) if app_name else None,
             target_framework=str(payload.get("target_framework") or "FastAPI"),
             tier=str(payload.get("tier") or payload.get("engine_tier") or "STANDARD"),
+            target_host=(str(payload["target_host"]) if payload.get("target_host") else None),
             requested_by=(str(payload["requested_by"]) if payload.get("requested_by") else None),
             created_at=float(payload.get("created_at") or time.time()),
         )
@@ -204,6 +228,10 @@ class SandboxRecord:
     subdomain: str
     project_dir: str
     status: str
+    #: Node the sandbox was dispatched to ("local" for this host) — teardown
+    #: must reach the same daemon the container was created on.
+    node_id: str = DEFAULT_LOCAL_HOST_ID
+    node_ip: str = "127.0.0.1"
     created_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict[str, Any]:
@@ -249,6 +277,14 @@ class BuildStatus:
     prompt: Optional[str] = None
     target_framework: Optional[str] = None
     tier: Optional[str] = None
+    #: Deployment target host chosen at synth time (primary node / remote worker).
+    target_host: Optional[str] = None
+    #: Resolved node id the build actually ran on ("local" for this host).
+    node_id: Optional[str] = None
+    #: Address of the resolved node (an IP for remote worker nodes).
+    node_ip: Optional[str] = None
+    #: Transport used to reach the node: local | ssh | context.
+    dispatch_mode: Optional[str] = None
     host_port: Optional[int] = None
     subdomain: Optional[str] = None
     url: Optional[str] = None
@@ -285,6 +321,7 @@ class BuildStatus:
             prompt=request.prompt,
             target_framework=request.target_framework,
             tier=request.tier,
+            target_host=request.target_host,
             created_at=request.created_at,
         )
 
@@ -459,6 +496,10 @@ def sandbox_summary(status: BuildStatus, health: Optional[str] = None) -> dict[s
         "status": status.status,
         "stage": status.stage,
         "port": status.host_port,
+        "target_host": status.target_host,
+        "node_id": status.node_id,
+        "node_ip": status.node_ip,
+        "dispatch_mode": status.dispatch_mode,
         "subdomain": status.subdomain,
         "url": status.url,
         "route_status": status.route_status,
@@ -476,6 +517,19 @@ def sandbox_summary(status: BuildStatus, health: Optional[str] = None) -> dict[s
         "repairs": status.repairs,
         "created_at": status.created_at,
         "updated_at": status.updated_at,
+    }
+
+
+def remote_dispatch_summary(node: HostNode, mode: Optional[str] = None) -> dict[str, Any]:
+    """Observability view of a dispatch target (node + transport)."""
+    return {
+        "host_id": node.host_id,
+        "host_ip": node.host_ip,
+        "is_local": node.is_local,
+        "is_remote": node.is_remote,
+        "ssh_target": node.ssh_target,
+        "work_root": node.work_root,
+        "dispatch_mode": mode,
     }
 
 
@@ -653,11 +707,17 @@ class PortAllocator:
         start: int = PORT_RANGE_START,
         end: int = PORT_RANGE_END,
         docker: Optional[HostPortInspector] = None,
+        remote: bool = False,
     ) -> None:
         self._sandbox_root = sandbox_root
         self._start = start
         self._end = end
         self._docker = docker
+        #: Ports belong to a *remote* node's daemon: layers 2 (records) and 4
+        #: (lock files) still apply because the sandbox root is shared with the
+        #: node, but layer 3 (a local socket probe) is meaningless — a port
+        #: free on the worker says nothing about this host and vice versa.
+        self._remote = remote
         self._lock = asyncio.Lock()
         self._in_flight: set[int] = set()
 
@@ -731,6 +791,17 @@ class PortAllocator:
             except OSError:
                 return False
 
+    async def _port_free(self, port: int) -> bool:
+        """Layer-3 check, skipped for ports that live on a remote node.
+
+        A worker node's published ports are invisible to a local ``bind()``, so
+        for remote allocations the daemon query (layer 1, against *that* node)
+        plus the shared on-disk records are the authoritative evidence.
+        """
+        if self._remote:
+            return True
+        return await asyncio.to_thread(self._is_bindable, port)
+
     # -- layer 4: cross-process atomic reservation ------------------------
 
     def _lock_port(self, port: int) -> bool:
@@ -769,7 +840,7 @@ class PortAllocator:
             return False
         if port in await self._host_reserved_ports():
             return False
-        return await asyncio.to_thread(self._is_bindable, port)
+        return await self._port_free(port)
 
     async def allocate(self, app_id: str, preferred: Optional[int] = None) -> int:
         async with self._lock:
@@ -784,7 +855,7 @@ class PortAllocator:
                 if port in blocked:
                     continue
                 # Cheap local probe first, then the atomic cross-process lock.
-                if not await asyncio.to_thread(self._is_bindable, port):
+                if not await self._port_free(port):
                     blocked.add(port)
                     continue
                 if not await asyncio.to_thread(self._lock_port, port):
@@ -837,18 +908,59 @@ def parse_published_ports(raw: str) -> set[int]:
 
 
 class DockerEngine:
-    """Thin async wrapper around the docker CLI bound to the host socket."""
+    """Thin async wrapper around the docker CLI bound to a target host.
+
+    Every command is executed through a :class:`RemoteHostDispatcher`, so the
+    *same* engine API drives the local Docker daemon (default), a remote worker
+    node over SSH, or a named Docker context.  The engine carries the
+    :class:`HostNode` it is bound to, so a build can simply be handed an engine
+    for its ``target_host``.
+    """
 
     def __init__(
         self,
         socket_path: str = DEFAULT_DOCKER_SOCKET,
         compose_bin: Optional[str] = None,
         command_timeout: float = 900.0,
+        dispatcher: Optional[RemoteHostDispatcher] = None,
+        node: Optional[HostNode] = None,
     ) -> None:
         self._socket_path = socket_path
         self._command_timeout = command_timeout
         self._compose = compose_bin or os.getenv("ROXIRA_COMPOSE_BIN", "docker compose")
+        #: Local-daemon env; dropped by the dispatcher for remote transports.
         self._env = {**os.environ, "DOCKER_HOST": f"unix://{socket_path}"}
+        self._dispatcher = dispatcher or RemoteHostDispatcher()
+        self._node = node or self._dispatcher.local_node
+
+    # -- node binding ------------------------------------------------------
+
+    @property
+    def dispatcher(self) -> RemoteHostDispatcher:
+        return self._dispatcher
+
+    @property
+    def node(self) -> HostNode:
+        """The node this engine executes against."""
+        return self._node
+
+    @property
+    def mode(self) -> str:
+        return self._dispatcher.mode(self._node)
+
+    @property
+    def is_local(self) -> bool:
+        return self._node.is_local
+
+    def with_node(self, node: HostNode) -> "DockerEngine":
+        """A clone of this engine bound to ``node`` (shares the dispatcher)."""
+        return DockerEngine(
+            socket_path=self._socket_path,
+            compose_bin=self._compose,
+            command_timeout=self._command_timeout,
+            dispatcher=self._dispatcher,
+            node=node,
+        )
 
     async def _run(
         self,
@@ -856,33 +968,26 @@ class DockerEngine:
         cwd: Optional[Path] = None,
         timeout: Optional[float] = None,
     ) -> str:
-        proc = await asyncio.create_subprocess_exec(
-            *args,
-            cwd=str(cwd) if cwd else None,
-            env=self._env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout or self._command_timeout
+            return await self._dispatcher.run(
+                self._node,
+                args,
+                cwd=cwd,
+                timeout=timeout or self._command_timeout,
+                env=self._env,
             )
-        except asyncio.TimeoutError as exc:
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
-            await proc.wait()
-            raise DockerCommandError(" ".join(args), -1, f"timed out: {exc}") from exc
-
-        if proc.returncode != 0:
-            raise DockerCommandError(" ".join(args), proc.returncode or 1, stderr.decode())
-        return stdout.decode()
+        except RemoteDispatchError as exc:
+            # Preserve the pre-dispatcher error contract (DockerCommandError
+            # carries command/returncode/stderr) so every caller — most
+            # importantly the self-healing parser — is unaffected.
+            raise DockerCommandError(exc.command, exc.returncode, exc.stderr) from exc
 
     def _compose_cmd(self, project_dir: Path, project_name: str, *tail: str) -> list[str]:
         parts = self._compose.split()
         return [
             *parts,
             "-f",
-            str(project_dir / "docker-compose.yml"),
+            str(self._dispatcher.translate_cwd(self._node, project_dir / "docker-compose.yml")),
             "-p",
             project_name,
             *tail,
@@ -896,7 +1001,17 @@ class DockerEngine:
             return False
 
     async def socket_available(self) -> bool:
-        """True when the Docker socket exists and the daemon answers."""
+        """True when the target daemon answers.
+
+        For a remote node there is no local socket to stat — reachability is
+        proven by the (dispatched) ``docker version`` ping; for the local node
+        the socket file must exist *and* the daemon must answer.
+        """
+        if not self._node.is_local:
+            try:
+                return await self.ping()
+            except Exception:
+                return False
         if not os.path.exists(self._socket_path):
             return False
         try:
@@ -1811,6 +1926,27 @@ class NginxRouteRegistrar:
         """The ``host:port`` Nginx proxies to for a sandbox host port."""
         return f"{self._upstream_host}:{int(host_port)}"
 
+    def for_upstream_host(self, upstream_host: str) -> "NginxRouteRegistrar":
+        """A registrar that proxies through ``upstream_host`` instead.
+
+        Used when a sandbox runs on an external worker node: the port is
+        published on *that* machine, so the gateway must reach it at the node's
+        address rather than ``127.0.0.1``.
+        """
+        if not upstream_host or upstream_host == self._upstream_host:
+            return self
+        return NginxRouteRegistrar(
+            conf_dir=self._conf_dir,
+            container=self._container,
+            base_domain=self._base_domain,
+            docker=self._docker,
+            upstream_host=upstream_host,
+        )
+
+    @property
+    def upstream_host(self) -> str:
+        return self._upstream_host
+
     def conf_path(self, app_id: str) -> Path:
         """Absolute path of a sandbox's vhost file."""
         return self._conf_path(app_id)
@@ -2109,6 +2245,7 @@ class EphemeralRunner:
         status_store: BuildStatusStore,
         max_concurrency: int = 2,
         poll_timeout: float = 1.0,
+        dispatcher: Optional[RemoteHostDispatcher] = None,
     ) -> None:
         self._queue = queue
         self._docker = docker
@@ -2118,16 +2255,95 @@ class EphemeralRunner:
         self._sandbox_root = sandbox_root
         self._status = status_store
         self._poll_timeout = poll_timeout
+        #: Transport resolver shared by every node-scoped engine/allocator.
+        self._dispatcher = dispatcher or getattr(docker, "dispatcher", None)
+        if self._dispatcher is None:
+            self._dispatcher = RemoteHostDispatcher()
+        #: Node the injected engine is bound to (fakes need not declare one).
+        base_node = getattr(docker, "node", None) or self._dispatcher.local_node
+        #: Per-node caches — a build dispatched to a worker node gets its own
+        #: engine (that node's daemon) and its own allocator (that node's ports).
+        self._engines: dict[str, DockerEngine] = {base_node.host_id: docker}
+        self._allocators: dict[str, PortAllocator] = {base_node.host_id: allocator}
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._tasks: set[asyncio.Task[None]] = set()
+
+    # -- node scoping ------------------------------------------------------
+
+    @property
+    def dispatcher(self) -> RemoteHostDispatcher:
+        return self._dispatcher
+
+    def resolve_node(self, target_host: Optional[str]) -> HostNode:
+        """Resolve a payload's ``target_host`` to a registered node.
+
+        An unknown *explicit* target raises :class:`UnknownHostError` so a build
+        never silently lands on the wrong machine; an absent target is the
+        local node, preserving the pre-dispatcher behaviour exactly.
+        """
+        node = self._dispatcher.resolve_or_raise(target_host)
+        self._dispatcher.mode(node)  # fail fast on an undispatchable node
+        return node
+
+    def engine_for(self, node: HostNode) -> DockerEngine:
+        """The :class:`DockerEngine` bound to ``node`` (cached per node)."""
+        engine = self._engines.get(node.host_id)
+        if engine is None:
+            engine = self._docker.with_node(node)
+            self._engines[node.host_id] = engine
+        return engine
+
+    def allocator_for(self, node: HostNode) -> PortAllocator:
+        """A :class:`PortAllocator` whose port truth comes from ``node``.
+
+        The allocator shares this runner's sandbox root, so the on-disk
+        reservation records and cross-process port locks stay authoritative
+        across nodes even though the in-flight set is per-instance.
+        """
+        allocator = self._allocators.get(node.host_id)
+        if allocator is None:
+            allocator = PortAllocator(
+                self._sandbox_root,
+                start=self._allocator.range[0],
+                end=self._allocator.range[1],
+                docker=self.engine_for(node),
+                remote=not node.is_local,
+            )
+            self._allocators[node.host_id] = allocator
+        return allocator
+
+    def nginx_for(self, node: HostNode) -> NginxRouteRegistrar:
+        """Registrar that publishes a sandbox running on ``node``.
+
+        A remote sandbox's port is bound on the worker machine, so the vhost
+        upstream must be the node's address; local builds keep the configured
+        upstream host untouched.
+        """
+        if node.is_local:
+            return self._nginx
+        return self._nginx.for_upstream_host(node.host_ip)
+
+    def node_summary(self) -> list[dict[str, Any]]:
+        """Inventory of every node builds can be dispatched to."""
+        summary = []
+        for node in self._dispatcher.hosts:
+            info = self._dispatcher.describe(node)
+            info["has_engine"] = node.host_id in self._engines
+            summary.append(info)
+        return summary
 
     @classmethod
     def from_env(cls, queue: BuildQueue, status_store: BuildStatusStore) -> "EphemeralRunner":
         sandbox_root = Path(os.getenv("ROXIRA_SANDBOX_ROOT", str(DEFAULT_SANDBOX_ROOT)))
         nginx_dir = Path(os.getenv("ROXIRA_NGINX_SANDBOX_DIR", str(DEFAULT_NGINX_SANDBOX_DIR)))
+        # Node inventory: ROXIRA_FACTORY_HOSTS (+ROXIRA_LOCAL_HOST_ID). Empty by
+        # default, in which case only the local node exists and every build is
+        # dispatched exactly as before.
+        dispatcher = RemoteHostDispatcher.from_env(local_sandbox_root=sandbox_root)
         docker = DockerEngine(
             socket_path=os.getenv("ROXIRA_DOCKER_SOCKET", DEFAULT_DOCKER_SOCKET),
             compose_bin=os.getenv("ROXIRA_COMPOSE_BIN") or None,
+            dispatcher=dispatcher,
         )
         network = os.getenv("ROXIRA_SANDBOX_NETWORK", "roxira_net")
         attach = os.getenv("ROXIRA_SANDBOX_ATTACH_NETWORK", "1") != "0"
@@ -2151,6 +2367,7 @@ class EphemeralRunner:
             sandbox_root=sandbox_root,
             status_store=status_store,
             max_concurrency=int(os.getenv("ROXIRA_BUILD_CONCURRENCY", "2")),
+            dispatcher=dispatcher,
         )
 
     def _write_record(self, record: SandboxRecord) -> None:
@@ -2168,7 +2385,24 @@ class EphemeralRunner:
             await self._status.save(status.advance(BuildStage.REJECTED, error="empty prompt"))
             return BuildResult(app_id=request.app_id, status="rejected", error="empty prompt")
 
-        host_port = await self._allocator.allocate(request.app_id)
+        # Resolve the deployment target *before* anything is allocated: an
+        # unknown explicit target_host is a hard error, not a silent fallback.
+        try:
+            node = self.resolve_node(request.target_host)
+        except (UnknownHostError, RemoteDispatchError) as exc:
+            await self._status.save(
+                status.advance(BuildStage.REJECTED, status="REJECTED", error=str(exc))
+            )
+            return BuildResult(app_id=request.app_id, status="rejected", error=str(exc))
+
+        # Every host-touching component is scoped to the resolved node: the
+        # engine talks to that node's daemon, the allocator avoids that node's
+        # published ports, and the vhost upstream points at that node.
+        engine = self.engine_for(node)
+        allocator = self.allocator_for(node)
+        nginx = self.nginx_for(node)
+
+        host_port = await allocator.allocate(request.app_id)
         project_name = f"roxira-sandbox-{request.app_id}"
         container_name = f"roxira_sandbox_{request.app_id}"
 
@@ -2178,6 +2412,9 @@ class EphemeralRunner:
                     BuildStage.PORT_ALLOCATED,
                     host_port=host_port,
                     container_name=container_name,
+                    node_id=node.host_id,
+                    node_ip=node.host_ip,
+                    dispatch_mode=self._dispatcher.mode(node),
                 )
             )
             generated = await asyncio.to_thread(self._generator.generate, request, host_port)
@@ -2195,14 +2432,16 @@ class EphemeralRunner:
 
             try:
                 if self._generator.attach_network:
-                    await self._docker.ensure_network(self._generator.network)
+                    await engine.ensure_network(self._generator.network)
                 await self._status.save(status.advance(BuildStage.BUILDING))
                 container_id = await self._build_self_healing(
-                    request, project_dir, project_name, status
+                    request, project_dir, project_name, status, engine=engine
                 )
                 # A successful `up -d` only means "created": re-inspect the
                 # container state and its published port before declaring it up.
-                proof = await self._verify_container_started(container_name, host_port)
+                proof = await self._verify_container_started(
+                    container_name, host_port, engine=engine
+                )
                 await self._status.save(
                     status.advance(
                         BuildStage.CONTAINER_STARTED,
@@ -2211,9 +2450,9 @@ class EphemeralRunner:
                         port_bound=proof.get("port_bound"),
                     )
                 )
-                # Publish the route: {app_id}.{base_domain} -> 127.0.0.1:{host_port}
-                upstream = self._nginx.endpoint(host_port)
-                subdomain = await self._nginx.register(request.app_id, upstream)
+                # Publish the route: {app_id}.{base_domain} -> {node}:{host_port}
+                upstream = nginx.endpoint(host_port)
+                subdomain = await nginx.register(request.app_id, upstream)
                 await self._status.save(
                     status.advance(
                         BuildStage.ROUTE_REGISTERED,
@@ -2221,20 +2460,20 @@ class EphemeralRunner:
                         url=f"http://{subdomain}",
                         route_status=ROUTE_STATUS_REGISTERED,
                         upstream=upstream,
-                        nginx_conf=str(self._nginx.conf_path(request.app_id)),
+                        nginx_conf=str(nginx.conf_path(request.app_id)),
                         route_registered_at=time.time(),
                     )
                 )
             except Exception as exc:
-                await self._docker.down(project_dir, project_name)
-                await self._nginx.unregister(request.app_id)
+                await engine.down(project_dir, project_name)
+                await nginx.unregister(request.app_id)
                 route_fields: dict[str, Any] = {}
                 if isinstance(exc, NginxReloadError):
                     # the container is up but unreachable from the gateway
                     route_fields = {
                         "route_status": ROUTE_STATUS_FAILED,
-                        "upstream": self._nginx.endpoint(host_port),
-                        "nginx_conf": str(self._nginx.conf_path(request.app_id)),
+                        "upstream": nginx.endpoint(host_port),
+                        "nginx_conf": str(nginx.conf_path(request.app_id)),
                     }
                 await self._status.save(
                     status.advance(
@@ -2251,6 +2490,8 @@ class EphemeralRunner:
                     container_name=container_name,
                     subdomain=subdomain,
                     project_dir=str(project_dir),
+                    node_id=node.host_id,
+                    node_ip=node.host_ip,
                     status="running",
                 )
             )
@@ -2263,7 +2504,7 @@ class EphemeralRunner:
                 container_id=container_id,
             )
         finally:
-            self._allocator.release(request.app_id, host_port)
+            allocator.release(request.app_id, host_port)
 
     async def _run_swarm(
         self, request: BuildRequest, project_dir: Path, status: BuildStatus
@@ -2306,7 +2547,10 @@ class EphemeralRunner:
         return result
 
     async def _verify_container_started(
-        self, container_name: str, host_port: int
+        self,
+        container_name: str,
+        host_port: int,
+        engine: Optional[DockerEngine] = None,
     ) -> dict[str, Any]:
         """Prove the sandbox container is running with its port bound.
 
@@ -2316,13 +2560,17 @@ class EphemeralRunner:
         they never hold, so a dead sandbox is recorded as FAILED instead of
         being advertised as CONTAINER_STARTED.
 
+        ``engine`` is the node-scoped engine the container was created with
+        (defaults to this host's daemon, preserving the previous behaviour).
+
         Degrades gracefully when the daemon itself is unreachable (no Docker on
         the host): verification is skipped with a warning rather than failing
         every build.
         """
         if not CONTAINER_VERIFY_ENABLED:
             return {"verified": True, "skipped": True, "reason": "verification disabled"}
-        if not await self._docker.socket_available():
+        engine = engine or self._docker
+        if not await engine.socket_available():
             print(
                 "[factory] WARN docker daemon unreachable; skipping container "
                 "verification for %s" % container_name,
@@ -2330,7 +2578,7 @@ class EphemeralRunner:
             )
             return {"verified": True, "skipped": True, "reason": "docker unreachable"}
 
-        proof = await self._docker.verify_running(container_name, host_port)
+        proof = await engine.verify_running(container_name, host_port)
         if not proof.get("verified"):
             raise ContainerStartError(
                 "container %s did not start cleanly: %s (state=%s, published=%s)"
@@ -2518,7 +2766,12 @@ class EphemeralRunner:
         return self._allocator
 
     async def _build_self_healing(
-        self, request: BuildRequest, project_dir: Path, project_name: str, status: BuildStatus
+        self,
+        request: BuildRequest,
+        project_dir: Path,
+        project_name: str,
+        status: BuildStatus,
+        engine: Optional[DockerEngine] = None,
     ) -> Optional[str]:
         """Build the sandbox, repairing the project and retrying once on failure.
 
@@ -2527,16 +2780,18 @@ class EphemeralRunner:
         versions, missing packages, build toolchain), then the build is retried
         **once**.  If the retry also fails it is re-raised annotated with what
         was attempted, plus the original error, so the runner records FAILED
-        with full context.
+        with full context.  ``engine`` is the node-scoped engine the build must
+        run on (defaults to this host's daemon).
         """
+        engine = engine or self._docker
         try:
-            await self._docker.compose_build(project_dir, project_name)
+            await engine.compose_build(project_dir, project_name)
         except DockerCommandError as exc:
             if not SELF_HEAL_ENABLED:
                 raise
             first_error = exc
         else:
-            return await self._docker.up(project_dir, project_name)
+            return await engine.up(project_dir, project_name)
 
         print(
             "[factory] build failed for %s; attempting self-heal. build log tail:\n%s"
@@ -2565,7 +2820,7 @@ class EphemeralRunner:
             await self._status.save(status)
 
         try:
-            await self._docker.compose_build(project_dir, project_name)
+            await engine.compose_build(project_dir, project_name)
         except DockerCommandError as retry_error:
             # Rebuild the error (not a mutation of .stderr) so str(exc) — and
             # therefore the persisted FAILED reason — carries the annotation.
@@ -2578,7 +2833,7 @@ class EphemeralRunner:
                 + "\n--- original build error:\n"
                 + (first_error.stderr or ""),
             ) from first_error
-        return await self._docker.up(project_dir, project_name)
+        return await engine.up(project_dir, project_name)
 
     async def advance_build(self, request: BuildRequest) -> BuildResult:
         """Run the full pipeline for ``request`` immediately, in-process.
@@ -2645,15 +2900,27 @@ class EphemeralRunner:
         )
         project_name = record.get("project_name") or f"roxira-sandbox-{app_id}"
 
+        # Reach the daemon the container was actually created on: a sandbox
+        # dispatched to a worker node must be torn down through that node.
+        node_ref = (status.node_id if status else None) or record.get("node_id")
+        node = getattr(self._docker, "node", None) or self._dispatcher.local_node
+        if node_ref and node_ref != node.host_id:
+            try:
+                node = self.resolve_node(node_ref)
+            except Exception as exc:
+                warnings.append("could not resolve node %r: %s" % (node_ref, exc))
+        engine = self.engine_for(node)
+        allocator = self.allocator_for(node)
+
         # 1. stop + remove the isolated container
         if project_dir:
             try:
-                await self._docker.down(Path(str(project_dir)), project_name)
+                await engine.down(Path(str(project_dir)), project_name)
             except Exception as exc:
                 warnings.append("compose down failed: %s" % exc)
         container_removed = False
         try:
-            container_removed = await self._docker.remove_container(container_name)
+            container_removed = await engine.remove_container(container_name)
         except Exception as exc:
             warnings.append("docker rm -f %s failed: %s" % (container_name, exc))
 
@@ -2663,7 +2930,7 @@ class EphemeralRunner:
             with contextlib.suppress(Exception):
                 released_port = int(port)
             if released_port:
-                self._allocator.release(app_id, released_port)
+                allocator.release(app_id, released_port)
 
         # 3. remove the nginx sandbox vhost
         conf_path = self._nginx.conf_path(app_id)
@@ -2712,6 +2979,8 @@ class EphemeralRunner:
             "health": HEALTH_UNHEALTHY,
             "port": released_port,
             "released_port": released_port,
+            "node_id": node.host_id,
+            "node_ip": node.host_ip,
             "container_name": container_name,
             "container_removed": container_removed,
             "nginx_conf": str(conf_path),
@@ -2794,6 +3063,7 @@ if _PydanticBaseModel is not None:
         prompt: Optional[str] = None
         target_framework: str = "FastAPI"
         tier: str = "STANDARD"
+        target_host: Optional[str] = None
         requested_by: Optional[str] = None
 
 else:  # pragma: no cover - worker-only environments
@@ -2810,6 +3080,7 @@ def create_factory_router(
       * ``POST /synthesize-app``           — enqueue a build, ``202``
       * ``POST /synthesize``               — alias of the above
       * ``GET  /synthesize-app/{app_id}``  — read live runner state
+      * ``GET  /nodes``                    — dispatchable worker nodes
       * ``GET  /sandboxes``                — list sandboxes with live health
       * ``DELETE /sandboxes/{app_id}``     — tear a sandbox down
       * ``GET  /metrics``                  — foundry counters (capacity/health)
@@ -2936,6 +3207,7 @@ def create_factory_router(
             "stage": BuildStage.QUEUED.value,
             "app_id": request.app_id,
             "app_name": request.app_name,
+            "target_host": request.target_host,
             "poll": f"/api/v1/factory/synthesize-app/{request.app_id}",
             "execution": (
                 "in-process"
@@ -2963,6 +3235,18 @@ def create_factory_router(
         if build_status is None:
             raise HTTPException(status_code=404, detail=f"unknown app_id: {app_id}")
         return build_status.to_dict()
+
+    @router.get("/nodes")
+    async def list_nodes() -> list[dict[str, Any]]:
+        """Worker-node inventory a build can be dispatched to.
+
+        Returns the resolved transport for each node (``local`` / ``ssh`` /
+        ``context``), so an operator can see where ``payload.target_host`` will
+        actually send a build.  Populated from ``ROXIRA_FACTORY_HOSTS`` plus the
+        implicit local node.
+        """
+        runner = await _get_runner()
+        return runner.node_summary()
 
     @router.get("/sandboxes")
     async def list_sandboxes() -> list[dict[str, Any]]:
@@ -3043,6 +3327,17 @@ def create_factory_router(
                 if s.host_port and s.stage in DEPLOYED_STAGES
             }
 
+        # Node inventory + how many sandboxes currently live on each node.
+        try:
+            self_nodes = (await _get_runner()).node_summary()
+        except Exception as exc:
+            print("[factory] WARN /metrics node query failed: %s" % exc, file=sys.stderr)
+            self_nodes = []
+        by_node: dict[str, int] = {}
+        for status in statuses:
+            key = status.node_id or DEFAULT_LOCAL_HOST_ID
+            by_node[key] = by_node.get(key, 0) + 1
+
         return {
             "total_sandboxes": len(statuses),
             "active_containers": sum(1 for s in statuses if s.stage in DEPLOYED_STAGES),
@@ -3050,6 +3345,9 @@ def create_factory_router(
             "allocated_ports": len(allocated),
             "ports": sorted(allocated),
             "port_range": [PORT_RANGE_START, PORT_RANGE_END],
+            "nodes": len(self_nodes),
+            "remote_nodes": sum(1 for n in self_nodes if not n["is_local"]),
+            "by_node": by_node,
             "by_stage": by_stage,
             "by_health": by_health,
             "generated_at": time.time(),

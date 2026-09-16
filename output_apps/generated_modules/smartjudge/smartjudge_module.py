@@ -45,6 +45,7 @@ import uuid
 import hmac
 import hashlib
 import base64
+import struct
 import asyncio
 from typing import Optional, List, Any
 from fastapi import APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile
@@ -84,20 +85,40 @@ except Exception as _doc_import_exc:  # noqa: BLE001 - هرگز نباید بو�
 try:
     from .legal_graph import (
         LIGHTRAG_AVAILABLE as _LIGHTRAG_AVAILABLE,
-        is_ready as _lightrag_is_ready,
+        graph_entity_count as _lightrag_graph_entity_count,
         lightrag_health as _lightrag_health,
-        rag_query as _lightrag_rag_query,
+        qdrant_retrieve as _lightrag_qdrant_retrieve,
+        rag_retrieve as _lightrag_retrieve,
+        run_coro_blocking as _run_coro_blocking,
     )
 except Exception as _lr_import_exc:  # noqa: BLE001
     print(f"[SMARTJUDGE][LIGHTRAG] engine unavailable: {_lr_import_exc}", file=sys.stderr)
     _LIGHTRAG_AVAILABLE = False
-    _lightrag_rag_query = None
-
-    def _lightrag_is_ready() -> bool:  # type: ignore[misc]
-        return False
 
     def _lightrag_health() -> dict:  # type: ignore[misc]
         return {"engine": "lightrag-hku", "available": False, "install_hint": "pip install lightrag-hku"}
+
+    def _lightrag_graph_entity_count() -> int:  # type: ignore[misc]
+        return 0
+
+    async def _lightrag_retrieve(query: str, limit: int = 5, mode: str | None = None) -> dict:  # type: ignore[misc]
+        return {"source": "unavailable", "answer": None, "laws": [], "entities": 0, "collection": None}
+
+    async def _lightrag_qdrant_retrieve(query: str, limit: int = 5) -> dict:  # type: ignore[misc]
+        return {"source": "unavailable", "answer": None, "laws": [], "collection": None}
+
+    def _run_coro_blocking(coro, timeout: float | None = None):  # type: ignore[misc]
+        """پل همگام جایگزین — بدون asyncio.run تودرتو در حلقهٔ فعال."""
+        if not asyncio.iscoroutine(coro):
+            return coro
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+        import concurrent.futures as _cf
+
+        with _cf.ThreadPoolExecutor(max_workers=1, thread_name_prefix="smartjudge-sync") as pool:
+            return pool.submit(asyncio.run, coro).result(timeout=timeout)
 
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudge Complete Engine"])
@@ -582,46 +603,438 @@ def _fallback_knowledge_graph(limit: int = 3):
 
 
 def query_knowledge_graph(query_text: str, limit: int = 3):
-    """بازیابی دوسطحی از گراف دانش حقوقی و بازگرداندن (laws, precedents).
+    """نسخهٔ همگام بازیابی (سازگاری عقب‌گرد).
+
+    ⚠️ مسیرهای FastAPI باید ``await aquery_knowledge_graph(...)`` را صدا بزنند؛
+    این تابع فقط برای فراخوانی‌های قدیمی/غیرasync نگه داشته شده و از پل
+    ``_run_coro_blocking`` استفاده می‌کند تا در حلقهٔ رویداد در حال اجرا خطای
+    asyncio.run رخ ندهد.
+    """
+    return _run_coro_blocking(aquery_knowledge_graph(query_text, limit=limit))
+
+
+async def aquery_knowledge_graph(query_text: str, limit: int = 3, meta_out: Optional[dict] = None):
+    """بازیابی دوسطحی async از گراف دانش حقوقی و بازگرداندن (laws, precedents).
+
+    ترتیب لایه‌ها (هر لایه در نبود لایهٔ قبلی):
+      ۱) LightRAG (گراف موجودیت/رابطه + برداری) مستقیماً await می‌شود.
+      ۲) Qdrant (``iran_laws_bge_m3``) وقتی گراف محلی خالی/نصب‌نشده است.
+      ۳) دو بازیابی SQL بومی (`src.legal_intelligence.dual_retrieval`).
+      ۴) پاسخ قالبی امن (`_fallback_knowledge_graph`).
 
     سطح پایین: ماده‌های دقیق، شمارهٔ آرای وحدت رویه و استنادات قانونی فعال.
     سطح بالا: دکترین‌های حاکم و رویه‌های لازم‌الاتباع با وضعیت ACTIVE.
     """
     t_start = time.time()
-    # لایهٔ ۱ — LightRAG (گراف موجودیت/رابطه + برداری):  pip install lightrag-hku
-    if _lightrag_rag_query is not None and _lightrag_is_ready():
-        try:
-            rag_answer = _lightrag_rag_query(query_text, top_k=max(limit, 4))
-            if rag_answer:
-                # استنادات گرافی به‌عنوان پیش‌زمینهٔ دکترین تزریق می‌شوند
-                doctrines = [
-                    {
-                        "title": "تحلیل گراف دانش حقوقی (LightRAG)",
-                        "category": "DOCTRINE",
-                        "summary": rag_answer[:1200],
-                        "binding_effect": "تحلیلی",
-                    }
-                ]
-                if _dual_retrieve is not None:
-                    laws, precedents = _dual_retrieve(query_text, limit, POSTGRES_DSN)
-                    return laws or [], (precedents or []) + doctrines
-                return [], doctrines
-        except Exception as exc:  # noqa: BLE001 - تنزل به لایهٔ SQL
-            print(f"[SMARTJUDGE][LIGHTRAG-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+    laws: list = []
+    precedents: list = []
 
+    # لایهٔ ۱ — LightRAG (await مستقیم؛ هرگز asyncio.run از داخل رویداد async)
+    try:
+        retrieval = await _lightrag_retrieve(query_text, limit=max(limit, 4))
+    except Exception as exc:  # noqa: BLE001 - تنزل به لایهٔ SQL
+        print(f"[SMARTJUDGE][LIGHTRAG-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+        retrieval = {}
+
+    retrieval = retrieval or {}
+    rag_answer = retrieval.get("answer")
+    qdrant_laws = retrieval.get("laws") or []
+    rag_source = str(retrieval.get("source") or "unknown")
+
+    if qdrant_laws:
+        # بازیابی برداری جایگزین (گراف محلی صفر موجودیت داشته است)
+        print(
+            f"[SMARTJUDGE][QDRANT-FALLBACK] source={rag_source} "
+            f"collection={retrieval.get('collection')} rows={len(qdrant_laws)} "
+            f"graph_entities={_lightrag_graph_entity_count()}",
+            file=sys.stderr,
+        )
+        laws.extend(qdrant_laws)
+
+    if rag_answer:
+        # استنادات گرافی به‌عنوان پیش‌زمینهٔ دکترین تزریق می‌شوند
+        precedents.append(
+            {
+                "title": "تحلیل گراف دانش حقوقی (LightRAG)",
+                "category": "DOCTRINE",
+                "summary": str(rag_answer)[:1200],
+                "binding_effect": "تحلیلی",
+                "match_level": "LIGHTRAG" if rag_source == "lightrag-graph" else "QDRANT_FALLBACK",
+            }
+        )
+
+    # لایهٔ ۲/۳ — دو بازیابی SQL بومی (همگام؛ در نخ جدا اجرا می‌شود)
     if _dual_retrieve is not None:
         try:
-            laws, precedents = _dual_retrieve(query_text, limit, POSTGRES_DSN)
+            sql_laws, sql_precedents = await asyncio.to_thread(
+                _dual_retrieve, query_text, limit, POSTGRES_DSN
+            )
+            if sql_laws:
+                laws = list(sql_laws) + laws
+            if sql_precedents:
+                precedents = list(sql_precedents) + precedents
             latency_ms = (time.time() - t_start) * 1000.0
             if latency_ms > 60.0:
                 print(
                     f"[SMARTJUDGE][RETRIEVAL-SLOW] {latency_ms:.1f}ms query={query_text[:40]!r}",
                     file=sys.stderr,
                 )
-            return laws, precedents
         except Exception as exc:  # pragma: no cover - دفاعی
             print(f"[SMARTJUDGE][RETRIEVAL-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+
+    if meta_out is not None:
+        meta_out.update(
+            {
+                "source": rag_source,
+                "collection": retrieval.get("collection"),
+                "graph_entities": _lightrag_graph_entity_count(),
+                "lightrag_error": retrieval.get("import_error"),
+            }
+        )
+
+    if laws or precedents:
+        return laws, precedents
+    if meta_out is not None:
+        meta_out.setdefault("source", "fallback")
     return _fallback_knowledge_graph(limit)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/apps/judge/query
+# ---------------------------------------------------------------------------
+def _compose_legal_answer(query_text: str, laws: list, precedents: list) -> str:
+    """ترکیب پاسخ حقوقی از دکترین گرافی و مواد بازیابی‌شده."""
+    doctrine = ""
+    for item in precedents or []:
+        if isinstance(item, dict) and str(item.get("category") or "") == "DOCTRINE":
+            doctrine = str(item.get("summary") or "").strip()
+            if doctrine:
+                break
+    if doctrine:
+        return doctrine
+    titles = [
+        str(item.get("title") or item.get("category") or "").strip()
+        for item in (laws or [])
+        if isinstance(item, dict)
+    ]
+    titles = [t for t in titles if t]
+    if titles:
+        return "مبنای قانونی بازیابی‌شده: " + "؛ ".join(titles[:5]) + "."
+    return "برای این پرسش مستند قانونی بازیابی نشد؛ لطفاً پرسش را دقیق‌تر مطرح کنید."
+
+
+def _query_sources(laws: list, precedents: list) -> list:
+    """فهرست یکنواخت منابع (مواد و رویه‌ها) برای پاسخ /query."""
+    sources: list = []
+    for item in laws or []:
+        if not isinstance(item, dict):
+            continue
+        sources.append(
+            {
+                "kind": "law",
+                "title": item.get("title") or item.get("category") or "سند قانونی",
+                "category": item.get("category"),
+                "match_level": item.get("match_level"),
+                "score": item.get("score"),
+            }
+        )
+    for item in precedents or []:
+        if not isinstance(item, dict):
+            continue
+        sources.append(
+            {
+                "kind": "precedent",
+                "title": item.get("title") or item.get("subject") or "رویهٔ قضایی",
+                "summary": str(item.get("summary") or "")[:300],
+                "match_level": item.get("match_level"),
+            }
+        )
+    return sources
+
+
+@router.post("/query")
+async def judge_query(payload: dict = Body(...)):
+    """پرس‌وجوی مستقیم گراف دانش حقوقی — رفع خطای 404 روی /api/v1/apps/judge/query.
+
+    ورودی: ``{"query" | "question" | "text": str, "limit": int = 5}``.
+    این مسیر مستقیماً ``await aquery_knowledge_graph(...)`` را صدا می‌زند و در
+    نبود نتیجه، پایگاه برداری Qdrant (``iran_laws_bge_m3``) را مستقیم استعلام
+    می‌کند. خروجی شامل ``answer``، ``sources`` و ``latency_ms`` است.
+    """
+    query_text = str(
+        payload.get("query") or payload.get("question") or payload.get("text") or ""
+    ).strip()
+    if not query_text:
+        return JSONResponse(
+            {"status": "error", "message": "پارامتر «query» الزامی است."}, status_code=400
+        )
+    try:
+        limit = int(payload.get("limit") or 5)
+    except Exception:
+        limit = 5
+    limit = max(1, min(limit, 12))
+
+    t_start = time.time()
+    meta: dict = {}
+    try:
+        laws, precedents = await aquery_knowledge_graph(query_text, limit=limit, meta_out=meta)
+    except Exception as exc:  # pragma: no cover - دفاعی
+        print(f"[SMARTJUDGE][QUERY-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "بازیابی دانش حقوقی ناموفق بود.",
+                "latency_ms": round((time.time() - t_start) * 1000.0, 2),
+            },
+            status_code=502,
+        )
+
+    # در نبود هیچ سند، استعلام مستقیم برداری از Qdrant (بدون واسطهٔ گراف).
+    if not laws:
+        try:
+            qd = await _lightrag_qdrant_retrieve(query_text, limit=limit)
+            if qd.get("laws"):
+                laws = list(qd["laws"])
+                meta["source"] = qd.get("source")
+                meta["collection"] = qd.get("collection")
+        except Exception as exc:  # pragma: no cover - دفاعی
+            print(f"[SMARTJUDGE][QUERY-QDRANT-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+
+    latency_ms = round((time.time() - t_start) * 1000.0, 2)
+    return {
+        "status": "ok",
+        "query": query_text,
+        "answer": _compose_legal_answer(query_text, laws, precedents),
+        "sources": _query_sources(laws, precedents),
+        "statutory_basis": laws,
+        "unified_precedents": precedents,
+        "retrieval": {
+            "engine": "LightRAG-dual",
+            "source": meta.get("source"),
+            "collection": meta.get("collection"),
+            "graph_entities": meta.get("graph_entities"),
+        },
+        "latency_ms": latency_ms,
+    }
+
+
+# ===========================================================================
+# POST /api/v1/apps/judge/retrial-evaluation — ارزیاب اعاده دادرسی
+# ===========================================================================
+# جدول جهات قانونی و نگاشت کلیدواژه‌های ورودی (فارسی/انگلیسی) به جهات.
+RETRIAL_GROUND_ALIASES = {
+    "forged_document": {"forged_document", "forgery", "fake_document", "سند_جعلی", "جعلی", "سند جعلی", "اسناد مجعول"},
+    "new_evidence": {"new_evidence", "new_evidence_discovered", "دلیل جدید", "دلایل جدید", "مدرک جدید", "مدارک جدید", "کشف دلیل"},
+    "conflicting_judgments": {"conflicting_judgments", "conflicting_judgment", "conflict", "تعارض احکام", "احکام متعارض", "تعارض رأی"},
+    "hidden_documents": {"hidden_documents", "concealed_documents", "اسناد مکتوم", "مدارک مکتوم", "مکتوم"},
+    "new_circumstances": {"new_circumstances", "new_amarat", "قرائن جدید", "امارات جدید", "قرینه جدید"},
+    "subject_matter": {"subject_matter", "موضوع حکم", "مورد تعهد", "اسقاط تعهد"},
+    "judge_misconduct": {"judge_misconduct", "تخلف قاضی", "اشتباه قاضی", "خطای قاضی"},
+    "procedural_defect": {"procedural_defect", "نقص تشریفات", "عدم رعایت تشریفات", "نقص دادرسی"},
+}
+
+RETRIAL_TRACKS = {
+    "CIVIL": {
+        "article": "ماده ۴۲۶ قانون آیین دادرسی مدنی",
+        "code_prefix": "CPC-426",
+        "clauses": [
+            {"code": "CPC-426-1", "ground": "subject_matter", "weight": 0.60, "clause": "بند ۱ ماده ۴۲۶ ق.آ.د.م — موضوع حکم یا مورد تعهد و اسقاط آن"},
+            {"code": "CPC-426-2", "ground": "hidden_documents", "weight": 0.80, "clause": "بند ۲ ماده ۴۲۶ ق.آ.د.م — کشف اسناد و مدارک مکتوم"},
+            {"code": "CPC-426-3", "ground": "forged_document", "weight": 0.95, "clause": "بند ۳ ماده ۴۲۶ ق.آ.د.م — مجعول بودن اسناد مبنای حکم"},
+            {"code": "CPC-426-4", "ground": "new_circumstances", "weight": 0.70, "clause": "بند ۴ ماده ۴۲۶ ق.آ.د.م — کشف قرائن و امارات جدید"},
+            {"code": "CPC-426-5", "ground": "conflicting_judgments", "weight": 0.75, "clause": "بند ۵ ماده ۴۲۶ ق.آ.د.م — تعارض با رأی قطعی دیگر"},
+            {"code": "CPC-426-6", "ground": "procedural_defect", "weight": 0.50, "clause": "بند ۶ ماده ۴۲۶ ق.آ.د.م — عدم رعایت تشریفات مؤثر در حکم"},
+        ],
+    },
+    "CRIMINAL": {
+        "article": "ماده ۴۷۴ قانون آیین دادرسی کیفری",
+        "code_prefix": "CPC-474",
+        "clauses": [
+            {"code": "CPC-474-1", "ground": "new_evidence", "weight": 0.95, "clause": "بند ۱ ماده ۴۷۴ ق.آ.د.ک — کشف دلایل و مدارک جدید"},
+            {"code": "CPC-474-2", "ground": "forged_document", "weight": 0.90, "clause": "بند ۲ ماده ۴۷۴ ق.آ.د.ک — مجعول بودن سند مبنای رأی"},
+            {"code": "CPC-474-3", "ground": "conflicting_judgments", "weight": 0.80, "clause": "بند ۳ ماده ۴۷۴ ق.آ.د.ک — تعارض با رأی قطعی دیگر"},
+            {"code": "CPC-474-4", "ground": "judge_misconduct", "weight": 0.70, "clause": "بند ۴ ماده ۴۷۴ ق.آ.د.ک — تخلف یا اشتباه قاضی"},
+            {"code": "CPC-474-5", "ground": "new_circumstances", "weight": 0.60, "clause": "بند ۵ ماده ۴۷۴ ق.آ.د.ک — کشف قرائن جدید"},
+            {"code": "CPC-474-6", "ground": "procedural_defect", "weight": 0.55, "clause": "بند ۶ ماده ۴۷۴ ق.آ.د.ک — نقص دادرسی مؤثر در رأی"},
+        ],
+    },
+    "ARTICLE_477": {
+        "article": "ماده ۴۷۷ قانون آیین دادرسی کیفری",
+        "code_prefix": "CPC-477",
+        "clauses": [
+            {"code": "CPC-477-1", "ground": "referral_discretion", "weight": 0.50, "clause": "ماده ۴۷۷ ق.آ.د.ک — ارجاع استثنایی پرونده توسط رئیس قوه قضائیه"},
+            {"code": "CPC-474-1", "ground": "new_evidence", "weight": 0.90, "clause": "با وصف ماده ۴۷۴ ق.آ.د.ک — کشف دلایل و مدارک جدید"},
+            {"code": "CPC-474-2", "ground": "forged_document", "weight": 0.85, "clause": "با وصف ماده ۴۷۴ ق.آ.د.ک — مجعول بودن سند مبنای رأی"},
+            {"code": "CPC-474-3", "ground": "conflicting_judgments", "weight": 0.80, "clause": "با وصف ماده ۴۷۴ ق.آ.د.ک — تعارض با رأی قطعی دیگر"},
+            {"code": "CPC-474-4", "ground": "judge_misconduct", "weight": 0.70, "clause": "با وصف ماده ۴۷۴ ق.آ.د.ک — تخلف یا اشتباه قاضی"},
+        ],
+    },
+}
+
+RETRIAL_EVIDENCE_KEYWORDS = (
+    "سند", "مدرک", "کارشناسی", "اقرار", "شهادت", "تصویر", "گزارش", "رأی",
+    "حکم", "شعبه", "پرونده", "امضا", "طلا", "گواهی", "رسمی", "آزمایش",
+)
+
+
+def _normalize_retrial_grounds(grounds: Any) -> set:
+    """نگاشت مبانی ورودی (رشته/فهرست، فارسی یا انگلیسی) به جهات استاندارد."""
+    if isinstance(grounds, str):
+        items = [grounds]
+    elif isinstance(grounds, (list, tuple, set)):
+        items = list(grounds)
+    else:
+        items = []
+
+    lookup: dict = {}
+    for canonical, aliases in RETRIAL_GROUND_ALIASES.items():
+        lookup[canonical.lower()] = canonical
+        for alias in aliases:
+            lookup[str(alias).strip().lower()] = canonical
+
+    normalized: set = set()
+    for raw in items:
+        token = str(raw or "").strip().lower()
+        if not token:
+            continue
+        if token in lookup:
+            normalized.add(lookup[token])
+            continue
+        # تطبیق نرم: وجود نشانه در متن آزاد
+        for alias, canonical in lookup.items():
+            if alias and alias in token:
+                normalized.add(canonical)
+    return normalized
+
+
+def _retrial_evidence_strength(evidence_description: str) -> float:
+    """برآورد کیفیت/مستندی بودن شرح ادله در بازهٔ [0, 1]."""
+    text = str(evidence_description or "").strip()
+    if not text:
+        return 0.0
+    length_score = min(1.0, len(text) / 400.0)
+    hits = sum(1 for kw in RETRIAL_EVIDENCE_KEYWORDS if kw in text)
+    keyword_score = min(hits, 4) / 4.0
+    return round(min(1.0, length_score * 0.6 + keyword_score * 0.4), 3)
+
+
+def _retrial_rejection_risks(verdict_type: str, matched_codes: set, grounds: set, evidence_strength: float) -> list:
+    risks: list = []
+    if verdict_type == "ARTICLE_477":
+        risks.append("ماده ۴۷۷ استثنایی است و اعمال آن کاملاً صلاحدیدی و در اختیار رئیس قوه قضائیه است؛ احتمال رد ساختاری بالاست.")
+    if verdict_type in ("CIVIL", "CRIMINAL"):
+        risks.append("مهلت قانونی اعاده دادرسی (۲۰ روز از ابلاغ برای محکوم‌علیه حاضر و ۲ ماه در احکام غیابی) باید رعایت شود.")
+    if not matched_codes:
+        risks.append("هیچ‌یک از جهات احصاشده در مادهٔ قانونی با مبانی اعلامی مطابقت ندارد.")
+    if "forged_document" in grounds or any(c.endswith("-3") for c in matched_codes):
+        risks.append("طبق بند ۳ مواد ۴۲۶/۴۷۴، جعلی بودن سند باید با حکم قطعی دادگاه اثبات شده باشد؛ بدون حکم قطعی پذیرش دشوار است.")
+    if "conflicting_judgments" in grounds:
+        risks.append("تعارض باید با رأی قطعی لازم‌الاجرا و با اتحاد موضوع، طرفین و سبب دعوا باشد.")
+    if "new_evidence" in grounds and evidence_strength < 0.35:
+        risks.append("دلایل جدید باید مستند و قابل ارائه به دادگاه باشد؛ ابهام در شرح ادله ریسک رد را افزایش می‌دهد.")
+    if verdict_type == "CIVIL":
+        risks.append("در دعاوی مالی، تأدیه محکوم‌به یا ارائهٔ تأمین در برخی جهات الزامی است.")
+    if verdict_type == "CRIMINAL":
+        risks.append("اجرای حکم در فرآیند اعاده دادرسی متوقف نمی‌شود مگر با صدور قرار قبولی و تأمین.")
+    return risks
+
+
+def _retrial_statutory_advice(verdict_type: str, grounds: set) -> list:
+    advice = [
+        "شرح مبانی و ادله را با شمارهٔ صفحه/سند و گواهی‌های رسمی مستندسازی کنید.",
+    ]
+    if verdict_type == "CIVIL":
+        advice.append("درخواست اعاده دادرسی به دادگاه صادرکنندهٔ حکم قطعی تقدیم می‌شود (ماده ۴۲۷ ق.آ.د.م).")
+    elif verdict_type == "CRIMINAL":
+        advice.append("درخواست به دادگاه صادرکنندهٔ رأی قطعی یا دادگاه هم‌عرض تقدیم می‌شود (ماده ۴۷۵ ق.آ.د.ک).")
+    elif verdict_type == "ARTICLE_477":
+        advice.append("پرونده جهت بررسی استثنایی باید به دفتر رئیس قوه قضائیه ارسال شود (ماده ۴۷۷ ق.آ.د.ک).")
+    if "forged_document" in grounds:
+        advice.append("برای جهت «جعلی بودن سند»، ابتدا حکم قطعی اثبات جعل را از دادگاه صالح دریافت کنید.")
+    if "new_evidence" in grounds:
+        advice.append("ادلهٔ جدید را با گواهی رسمی و گزارش کارشناسی ضمیمه و فهرست کنید.")
+    if "conflicting_judgments" in grounds:
+        advice.append("گواهی قطعیت و تصویر مصدق رأی متعارض را پیوست کنید.")
+    advice.append("خسارت احتمالی رد درخواست را با مشاورهٔ وکیل سنجیده و از طرح درخواست بی‌پشتوانه پرهیز کنید.")
+    return advice
+
+
+@router.post("/retrial-evaluation")
+async def retrial_evaluation(payload: dict = Body(...)):
+    """ارزیابی احتمال پذیرش اعاده دادرسی با رویکرد محافظه‌کارانه.
+
+    ورودی: ``verdict_type`` (CIVIL | CRIMINAL | ARTICLE_477)، ``grounds``
+    (فهرست یا رشته؛ مثلاً forged_document / new_evidence / conflicting_judgments)،
+    ``court_branch`` و ``evidence_description``.
+
+    خروجی: ``eligible_clauses``، ``raw_score``، ``conservative_score``
+    (= ``raw_score * 0.75``)، ``rejection_risks`` و ``statutory_advice``.
+    """
+    verdict_type = str(payload.get("verdict_type") or "").strip().upper()
+    if verdict_type not in RETRIAL_TRACKS:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "verdict_type نامعتبر است؛ مقادیر مجاز: CIVIL | CRIMINAL | ARTICLE_477.",
+            },
+            status_code=400,
+        )
+
+    court_branch = str(payload.get("court_branch") or "").strip()
+    evidence_description = str(payload.get("evidence_description") or "").strip()
+    normalized_grounds = _normalize_retrial_grounds(payload.get("grounds"))
+
+    track = RETRIAL_TRACKS[verdict_type]
+    clauses = track["clauses"]
+    total_weight = sum(float(c["weight"]) for c in clauses) or 1.0
+
+    eligible_clauses: list = []
+    matched_codes: set = set()
+    matched_weight = 0.0
+    top_weight = 0.0
+    for clause in clauses:
+        matched = clause["ground"] in normalized_grounds
+        if matched:
+            matched_codes.add(str(clause["code"]))
+            matched_weight += float(clause["weight"])
+            top_weight = max(top_weight, float(clause["weight"]))
+        eligible_clauses.append(
+            {
+                "code": clause["code"],
+                "clause": clause["clause"],
+                "ground": clause["ground"],
+                "weight": clause["weight"],
+                "matched": matched,
+            }
+        )
+
+    evidence_strength = _retrial_evidence_strength(evidence_description)
+    if matched_codes:
+        coverage = matched_weight / total_weight
+        raw_score = 0.10 + 0.55 * top_weight + 0.25 * coverage + 0.10 * evidence_strength
+        raw_score = round(min(raw_score, 0.95), 4)
+    else:
+        raw_score = 0.0
+
+    conservative_score = round(raw_score * 0.75, 4)
+
+    return {
+        "status": "ok",
+        "verdict_type": verdict_type,
+        "court_branch": court_branch or None,
+        "statutory_reference": track["article"],
+        "grounds": sorted(normalized_grounds),
+        "eligible_clauses": eligible_clauses,
+        "matched_clauses": sorted(matched_codes),
+        "evidence_strength": evidence_strength,
+        "raw_score": raw_score,
+        "conservative_score": conservative_score,
+        "discount_applied": 0.25,
+        "rejection_risks": _retrial_rejection_risks(
+            verdict_type, matched_codes, normalized_grounds, evidence_strength
+        ),
+        "statutory_advice": _retrial_statutory_advice(verdict_type, normalized_grounds),
+    }
 
 # دریافت لیست مکالمات کاربر بر اساس شماره تماس
 @router.get("/conversations")
@@ -748,7 +1161,7 @@ async def interactive_consult(payload: dict = Body(...)):
         }
     
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
-    laws, precedents = query_knowledge_graph(user_text, limit=5)
+    laws, precedents = await aquery_knowledge_graph(user_text, limit=5)
 
     # اگر سشن وجود ندارد یک گفتگوی جدید باز شود
     if not conv_id:
@@ -988,8 +1401,185 @@ def _voice_build_answer(query_text: str, laws: list, precedents: list) -> str:
     return " ".join(segments)
 
 
+# ---------------------------------------------------------------------------
+# استانداردسازی صدای جریانی: PCM خطی ۱۶ کیلوهرتز (Int16) + پشتیبانی قطع کاربر
+# ---------------------------------------------------------------------------
+# سیاست: هیچ «بوق/نوسان‌ساز» مصنوعی مجاز نیست. در نبود موتور TTS فقط یک فریم
+# ساختاریافتهٔ خطا ارسال می‌شود و هرگز تُن مصنوعی (beep/oscillator) تولید نمی‌گردد.
+VOICE_SYNTHETIC_TONES_ENABLED = False
+VOICE_SAMPLE_RATE = 16000
+VOICE_SAMPLE_WIDTH = 2          # Int16 little-endian
+VOICE_CHANNELS = 1              # mono
+VOICE_PCM_FORMAT = "pcm_s16le"
+VOICE_PCM_MIME = "audio/L16;rate=16000;channels=1"
+VOICE_FRAMES_PER_CHUNK = 1024   # ~64ms در 16kHz
+VOICE_BARGE_IN_TYPES = {
+    "barge_in", "barge-in", "interrupt", "interruption",
+    "stop", "cancel", "stop_generation",
+}
+VOICE_BARGE_IN_TEXT = {"__barge_in__", "__interrupt__", "barge_in", "interrupt", "stop"}
+
+
+def _pcm16_wav_header(
+    num_frames: int,
+    sample_rate: int = VOICE_SAMPLE_RATE,
+    channels: int = VOICE_CHANNELS,
+    sample_width: int = VOICE_SAMPLE_WIDTH,
+) -> bytes:
+    """هدر RIFF/WAVE استاندارد برای آرایهٔ خطی Int16."""
+    byte_rate = sample_rate * channels * sample_width
+    block_align = channels * sample_width
+    data_size = int(num_frames) * sample_width * channels
+    return struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF", 36 + data_size, b"WAVE", b"fmt ", 16, 1, channels,
+        sample_rate, byte_rate, block_align, sample_width * 8, b"data", data_size,
+    )
+
+
+def _wrap_pcm16_wav(pcm_bytes: bytes) -> bytes:
+    """بسته‌بندی PCM خطی خام در قالب WAV (برای پاسخ‌های کامل غیرجریانی)."""
+    frames = len(pcm_bytes) // (VOICE_SAMPLE_WIDTH * VOICE_CHANNELS)
+    return _pcm16_wav_header(frames) + pcm_bytes
+
+
+def _chunk_pcm16(pcm_bytes: bytes, frames_per_chunk: int = VOICE_FRAMES_PER_CHUNK):
+    """تقسیم جریان PCM خطی به فریم‌های Int16 هم‌اندازه (بدون هدر)."""
+    step = max(1, int(frames_per_chunk)) * VOICE_SAMPLE_WIDTH * VOICE_CHANNELS
+    for offset in range(0, len(pcm_bytes), step):
+        yield pcm_bytes[offset:offset + step]
+
+
+def _tts_mp3_to_pcm16(data: bytes) -> bytes:
+    """تبدیل خروجی TTS به PCM خطی ۱۶ کیلوهرتز مونو با ffmpeg (در نبود ffmpeg تهی)."""
+    if not data:
+        return b""
+    import shutil
+    import subprocess
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return b""
+    try:
+        proc = subprocess.run(
+            [
+                ffmpeg, "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
+                "-f", "s16le", "-ac", "1", "-ar", str(VOICE_SAMPLE_RATE), "pipe:1",
+            ],
+            input=data,
+            capture_output=True,
+            timeout=25,
+        )
+        return proc.stdout if proc.returncode == 0 else b""
+    except Exception:
+        return b""
+
+
+async def _voice_synthesize_pcm16(text: str) -> bytes:
+    """TTS → PCM خطی ۱۶ کیلوهرتز مونو. در نبود سرویس، بایت تهی برمی‌گرداند.
+
+    هرگز تُن مصنوعی تولید نمی‌کند؛ سیاست ``VOICE_SYNTHETIC_TONES_ENABLED=False``
+    تضمین می‌کند هرگونه fallback بوق‌مانند حذف شده باشد.
+    """
+    if not text:
+        return b""
+    if VOICE_SYNTHETIC_TONES_ENABLED:  # pragma: no cover - سیاست: همیشه غیرفعال
+        raise RuntimeError("تولید تُن مصنوعی طبق سیاست غیرفعال است")
+    try:
+        import edge_tts
+    except Exception:
+        return b""
+    try:
+        communicate = edge_tts.Communicate(text[:1200], "fa-IR-FaridNeural", rate="+22%")
+        buffer = bytearray()
+        async for chunk in communicate.stream():
+            if chunk.get("type") == "audio":
+                buffer.extend(chunk["data"])
+    except Exception as exc:
+        print(f"[SMARTJUDGE][VOICE-TTS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+        return b""
+    if not buffer:
+        return b""
+    return await asyncio.to_thread(_tts_mp3_to_pcm16, bytes(buffer))
+
+
+def _is_barge_in_text(raw_text: str) -> bool:
+    """آیا فریم متنی یک فرمان قطع (barge-in) است؟ (JSON یا متن خام)"""
+    token = str(raw_text or "").strip().lower()
+    if not token:
+        return False
+    if token in VOICE_BARGE_IN_TEXT:
+        return True
+    try:
+        parsed = json.loads(token)
+    except Exception:
+        return False
+    if not isinstance(parsed, dict):
+        return False
+    return str(parsed.get("type") or "").strip().lower() in VOICE_BARGE_IN_TYPES
+
+
+async def _stream_pcm16_frames(websocket: WebSocket, pcm_bytes: bytes, state: dict) -> int:
+    """ارسال جریانی PCM خطی ۱۶ کیلوهرتز به‌صورت فریم‌های خام Int16.
+
+    شروع/پایان با فریم JSON اعلام و بدنه با فریم‌های باینری خام Int16 ارسال
+    می‌شود (``wav_header=False``). با فعال شدن barge-in جریان فوراً متوقف می‌شود.
+    """
+    total_frames = len(pcm_bytes) // (VOICE_SAMPLE_WIDTH * VOICE_CHANNELS)
+    seq = 0
+    await websocket.send_json({
+        "type": "VOICE_AUDIO_BEGIN",
+        "format": VOICE_PCM_FORMAT,
+        "mime": VOICE_PCM_MIME,
+        "sample_rate": VOICE_SAMPLE_RATE,
+        "channels": VOICE_CHANNELS,
+        "sample_width": VOICE_SAMPLE_WIDTH,
+        "wav_header": False,
+        "total_frames": total_frames,
+    })
+    for frame in _chunk_pcm16(pcm_bytes):
+        if state.get("interrupted"):
+            break
+        try:
+            await websocket.send_bytes(frame)
+        except Exception:
+            break
+        seq += 1
+        await asyncio.sleep(0)
+    try:
+        await websocket.send_json({
+            "type": "VOICE_AUDIO_END",
+            "frames_sent": seq,
+            "interrupted": bool(state.get("interrupted")),
+        })
+    except Exception:
+        pass
+    return seq
+
+
+async def _cancel_active_voice_task(state: dict) -> bool:
+    """لغو تولید پاسخ در جریان برای پشتیبانی از قطع کاربر (barge-in)."""
+    task = state.get("task")
+    if task is None or task.done():
+        state["task"] = None
+        return False
+    state["interrupted"] = True
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        pass
+    state["task"] = None
+    return True
+
+
+# نام قراردادی اندپوینت مکالمهٔ صوتی زنده (canonical). gateway صوتی و supervisor
+# پلتفرم این نام را resolve می‌کنند؛ نبودش باعث WS-ALIAS-WARN در زمان راه‌اندازی
+# می‌شد. نام قدیمی `live_voice_websocket` به‌عنوان alias حفظ شده است.
 @router.websocket("/live-voice")
-async def live_voice_websocket(websocket: WebSocket):
+async def live_voice_endpoint(websocket: WebSocket):
     await websocket.accept()
 
     # ---- VIP access gate -------------------------------------------------
@@ -1004,6 +1594,63 @@ async def live_voice_websocket(websocket: WebSocket):
         return
 
     audio_format = "webm"
+    state: dict = {"task": None, "interrupted": False}
+
+    async def _handle_voice_query(query_text: str, input_mode: str) -> None:
+        """تولید و ارسال پاسخ صوتی؛ در جریان barge-in لغو می‌شود."""
+        t_start = time.time()
+        try:
+            laws, precedents = await aquery_knowledge_graph(query_text, limit=3)
+        except Exception as exc:
+            print(f"[SMARTJUDGE][VOICE-RETRIEVAL-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+            laws, precedents = [], []
+        latency_ms = round((time.time() - t_start) * 1000.0, 2)
+        answer = _voice_build_answer(query_text, laws, precedents)
+
+        try:
+            await websocket.send_json({
+                "type": "VOICE_RESPONSE",
+                "model": OPENROUTER_TIERS["VIP"]["primary_model"],
+                "input_mode": input_mode,
+                "transcript": query_text,
+                "text": answer,
+                "statutory_basis": laws,
+                "unified_precedents": precedents,
+                "retrieval": {
+                    "engine": "LightRAG-dual",
+                    "low_level": "exact_article / precedent_number / active_citation",
+                    "high_level": "doctrine / ACTIVE_precedent",
+                },
+                "audio": {
+                    "format": VOICE_PCM_FORMAT,
+                    "mime": VOICE_PCM_MIME,
+                    "sample_rate": VOICE_SAMPLE_RATE,
+                    "channels": VOICE_CHANNELS,
+                    "streaming": True,
+                },
+                "latency_ms": latency_ms,
+            })
+        except Exception:
+            return
+
+        if state.get("interrupted"):
+            return
+
+        # ---- خروجی صوتی: PCM خطی ۱۶ کیلوهرتز (هرگز تُن مصنوعی) ----
+        pcm = await _voice_synthesize_pcm16(answer)
+        if state.get("interrupted"):
+            return
+        if pcm:
+            await _stream_pcm16_frames(websocket, pcm, state)
+        else:
+            try:
+                await websocket.send_json({
+                    "type": "VOICE_AUDIO_UNAVAILABLE",
+                    "reason": "tts_unavailable",
+                    "message": "سرویس گفتار در دسترس نیست؛ تُن مصنوعی تولید نمی‌شود.",
+                })
+            except Exception:
+                pass
 
     try:
         while True:
@@ -1011,6 +1658,25 @@ async def live_voice_websocket(websocket: WebSocket):
 
             if message.get("type") == "websocket.disconnect":
                 break
+
+            # ---- قطع کاربر (barge-in): فرمان صریح قطعِ تولید جاری ----
+            raw_text = message.get("text")
+            if raw_text is not None and _is_barge_in_text(raw_text):
+                had_active = await _cancel_active_voice_task(state)
+                state["interrupted"] = False
+                try:
+                    await websocket.send_json({
+                        "type": "VOICE_INTERRUPTED",
+                        "reason": "client_barge_in",
+                        "had_active_generation": had_active,
+                    })
+                except Exception:
+                    pass
+                continue
+
+            # هر ورودی جدید نیز تولید در جریان را قطع می‌کند (barge-in طبیعی).
+            await _cancel_active_voice_task(state)
+            state["interrupted"] = False
 
             query_text = ""
             input_mode = "text"
@@ -1060,45 +1726,58 @@ async def live_voice_websocket(websocket: WebSocket):
                 })
                 continue
 
-            # ---------- ۳) تغذیهٔ مستقیم به لایهٔ بازیابی LightRAG ----------
-            t_start = time.time()
-            try:
-                laws, precedents = await asyncio.to_thread(query_knowledge_graph, query_text, 3)
-            except Exception as exc:
-                print(f"[SMARTJUDGE][VOICE-RETRIEVAL-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
-                laws, precedents = [], []
-            latency_ms = round((time.time() - t_start) * 1000.0, 2)
-
-            await websocket.send_json({
-                "type": "VOICE_RESPONSE",
-                "model": OPENROUTER_TIERS["VIP"]["primary_model"],
-                "input_mode": input_mode,
-                "transcript": query_text,
-                "text": _voice_build_answer(query_text, laws, precedents),
-                "statutory_basis": laws,
-                "unified_precedents": precedents,
-                "retrieval": {
-                    "engine": "LightRAG-dual",
-                    "low_level": "exact_article / precedent_number / active_citation",
-                    "high_level": "doctrine / ACTIVE_precedent",
-                },
-                "latency_ms": latency_ms,
-            })
+            # ---------- ۳) تولید پاسخ در وظیفهٔ پس‌زمینه (قابل قطع با barge-in) ----------
+            state["task"] = asyncio.create_task(_handle_voice_query(query_text, input_mode))
 
     except WebSocketDisconnect:
-        pass
+        await _cancel_active_voice_task(state)
     except Exception as exc:  # pragma: no cover - دفاعی
         print(f"[SMARTJUDGE][VOICE-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
         try:
             await websocket.close()
         except Exception:
             pass
+    finally:
+        await _cancel_active_voice_task(state)
 
-# Alias endpoint for streaming WebSocket (same functionality)
+# Alias endpoints for the streaming WebSocket (same functionality)
 @router.websocket("/live-voice-stream")
-async def live_voice_stream_websocket(websocket: WebSocket):
+async def live_voice_stream_endpoint(websocket: WebSocket):
     """Alias endpoint for live voice with streaming capabilities"""
-    await live_voice_websocket(websocket)
+    await live_voice_endpoint(websocket)
+
+
+# ==============================================================================
+# صادرات صریح اندپوینت‌های WebSocket (قرارداد نام‌گذاری برای gateway/supervisor)
+# ==============================================================================
+# نام‌های قدیمی (live_voice_websocket / live_voice_stream_websocket) دقیقاً همان
+# تابع کانونیک را ارجاع می‌دهند تا هیچ مصرف‌کنندهٔ قدیمی نشکند و WS-ALIAS-WARN
+# (هشدار نبود نام) دیگر در زمان راه‌اندازی صادر نشود.
+live_voice_websocket = live_voice_endpoint
+live_voice_stream_websocket = live_voice_stream_endpoint
+
+WS_ENDPOINT_ALIASES: dict = {
+    "live_voice_endpoint": live_voice_endpoint,
+    "live_voice_websocket": live_voice_websocket,
+    "live_voice_stream_endpoint": live_voice_stream_endpoint,
+    "live_voice_stream_websocket": live_voice_stream_websocket,
+}
+WS_ENDPOINT_ROUTES: dict = {
+    "live_voice_endpoint": f"{router.prefix}/live-voice",
+    "live_voice_stream_endpoint": f"{router.prefix}/live-voice-stream",
+}
+
+
+def resolve_websocket_endpoint(name: str):
+    """Resolve a WebSocket endpoint by canonical or legacy alias name."""
+    return WS_ENDPOINT_ALIASES.get(str(name or "").strip())
+
+
+print(
+    "[SMARTJUDGE][WS-ALIAS] live_voice_endpoint -> %s (aliases: %s)"
+    % (WS_ENDPOINT_ROUTES["live_voice_endpoint"], ", ".join(sorted(WS_ENDPOINT_ALIASES))),
+    file=sys.stderr,
+)
 # افزودن به انتهای روت‌های قاضی هوشمند
 @router.post("/payments/create-invoice")
 async def create_payment_invoice(payload: dict = Body(...)):
@@ -1357,7 +2036,7 @@ async def analyze_document_text(request: Request):
         )
 
     # انطباق سریع با مواد مرتبط در گراف قوانین
-    matched_laws, matched_precedents = query_knowledge_graph(extracted_text, limit=4)
+    matched_laws, matched_precedents = await aquery_knowledge_graph(extracted_text, limit=4)
     
     # شناسایی مهلت‌های تجدیدنظرخواهی یا فرجام‌خواهی
     has_deadline_alert = any(w in extracted_text for w in ["۲۰ روز", "بیست روز", "ابلاغ واقعی", "مهلت تجدیدنظر"])
@@ -1548,7 +2227,7 @@ async def analyze_ocr_document(request: Request):
             status_code=400,
         )
 
-    laws, precedents = query_knowledge_graph(text_content, limit=4)
+    laws, precedents = await aquery_knowledge_graph(text_content, limit=4)
 
     return {
         "status": "SUCCESS",
@@ -1578,7 +2257,7 @@ async def run_simulation_qa():
     results = []
     for q in sample_queries:
         t_sub = time.time()
-        laws, precs = query_knowledge_graph(q, limit=2)
+        laws, precs = await aquery_knowledge_graph(q, limit=2)
         lat = round((time.time() - t_sub) * 1000, 2)
         results.append({
             "query": q,

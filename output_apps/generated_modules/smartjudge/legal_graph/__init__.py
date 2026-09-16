@@ -1,18 +1,38 @@
 """موتور گراف دانش حقوقی SmartJudge بر پایهٔ LightRAG (pip install lightrag-hku)."""
 from .lightrag_engine import (  # noqa: F401
     LIGHTRAG_AVAILABLE,
+    QDRANT_FALLBACK_COLLECTION,
     get_rag,
+    graph_entity_count,
+    graph_is_empty,
     ingest_texts,
+    ingest_texts_async,
     is_ready,
     lightrag_health,
+    qdrant_fallback_laws,
+    qdrant_fallback_state,
+    qdrant_retrieve,
     rag_query,
+    rag_query_sync,
+    rag_retrieve,
+    run_coro_blocking,
 )
 
 __all__ = [
     "LIGHTRAG_AVAILABLE",
+    "QDRANT_FALLBACK_COLLECTION",
     "get_rag",
+    "graph_entity_count",
+    "graph_is_empty",
     "ingest_texts",
+    "ingest_texts_async",
     "is_ready",
     "lightrag_health",
+    "qdrant_fallback_laws",
+    "qdrant_fallback_state",
+    "qdrant_retrieve",
     "rag_query",
+    "rag_query_sync",
+    "rag_retrieve",
+    "run_coro_blocking",
 ]
