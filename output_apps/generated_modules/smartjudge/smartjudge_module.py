@@ -263,21 +263,21 @@ OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
 OPENROUTER_TIERS = {
     "VIP": {
-        "primary_model": "anthropic/claude-3.7-sonnet",
-        "fallback_model": "google/gemini-3.8-flash",
-        "voice_model": "google/gemini-3.8-flash",
-        "deep_reasoning_model": "anthropic/claude-3.7-sonnet",
+        "primary_model": "deepseek/deepseek-v4.1-flash",
+        "fallback_model": "deepseek/deepseek-chat",
+        "voice_model": "deepseek/deepseek-v4.1-flash",
+        "deep_reasoning_model": "deepseek/deepseek-r1",
         "stt_primary": "deepgram/nova-3",
-        "stt_secondary": "openai/gpt-4o-transcribe",
-        "label": "Deepgram Nova-3 • OpenAI GPT-4o Transcribe • Anthropic Claude 3.7 Sonnet"
+        "stt_secondary": "openai/whisper-large-v3-turbo",
+        "label": "Deepgram Nova-3 • DeepSeek 4.1 Flash (Roxira OS 2026)"
     },
     "FREE": {
-        "primary_model": "google/gemini-3.8-flash",
-        "fallback_model": "google/gemini-3.8-flash",
-        "voice_model": "google/gemini-3.8-flash",
+        "primary_model": "deepseek/deepseek-v4.1-flash",
+        "fallback_model": "deepseek/deepseek-chat",
+        "voice_model": "deepseek/deepseek-v4.1-flash",
         "stt_primary": "deepgram/nova-3",
-        "stt_secondary": "openai/gpt-4o-transcribe",
-        "label": "Deepgram Nova-3 • Google Gemini 3.8 Flash"
+        "stt_secondary": "openai/whisper-large-v3-turbo",
+        "label": "DeepSeek 4.1 Flash • Deepgram Nova-3"
     }
 }
 
@@ -690,6 +690,47 @@ async def interactive_consult(payload: dict = Body(...)):
 
     selected_tier = "VIP" if tier == "VIP" else "FREE"
     cfg = OPENROUTER_TIERS[selected_tier]
+
+    # تشخیص هوشمند تست میکروفون و احوالپرسی (پاسخ بلادرنگ بدون فراخوانی بی‌مورد مواد قانونی)
+    mic_test_patterns = [
+        "صدای منو میشنوی", "صدام میاد", "صدای من میاد", "میشنوی صدامو", "میشنوی",
+        "صدا داری", "الو", "سلام صدام میاد", "تست صدا", "صدام میرسه", "میشنوید",
+        "هستی", "سلام هستی", "صدامو داری", "سلام صدای من", "سلام الو", "صحبت کنی", "سو بات کنی"
+    ]
+    is_mic_check = any(p in user_text for p in mic_test_patterns) or (
+        any(w in user_text for w in ["میشنوی", "صدام", "صدا میاد", "الو"]) and len(user_text.split()) <= 7
+    )
+    greeting_words = ["سلام", "درود", "صبح بخیر", "عصر بخیر", "روز بخیر", "شب بخیر", "خسته نباشید", "خوبی", "چطوری", "احوال شما"]
+    is_greeting_only = any(w in user_text for w in greeting_words) and len(user_text.split()) <= 4 and not any(w in user_text for w in ["قانون", "دادگاه", "شکایت", "طلاق", "مهریه", "چک", "قرارداد", "لایحه", "دادخواست", "سکه", "نفقه"])
+
+    if is_mic_check:
+        reply_fast = "سلام! بله، صدای شما رو کاملاً شفاف، واضح و رسا می‌شنوم. در خدمت شما هستم؛ بفرمایید چه موضوع یا پرونده‌ای رو می‌خواهید بررسی کنیم؟"
+        return {
+            "status": "SUCCESS",
+            "conversation_id": conv_id or str(uuid.uuid4()),
+            "reply": reply_fast,
+            "success_probability": None,
+            "defense_draft": None,
+            "statutory_basis": [],
+            "unified_precedents": [],
+            "model_assigned": cfg["primary_model"],
+            "tier": selected_tier,
+            "latency_ms": round((time.time() - t0) * 1000, 2)
+        }
+    elif is_greeting_only:
+        reply_fast = "سلام و درود بر شما، وقت بخیر. در خدمت شما هستم؛ لطفاً شرح پرونده یا پرسش حقوقی خود را بفرمایید تا بررسی و راهنمایی کنم."
+        return {
+            "status": "SUCCESS",
+            "conversation_id": conv_id or str(uuid.uuid4()),
+            "reply": reply_fast,
+            "success_probability": None,
+            "defense_draft": None,
+            "statutory_basis": [],
+            "unified_precedents": [],
+            "model_assigned": cfg["primary_model"],
+            "tier": selected_tier,
+            "latency_ms": round((time.time() - t0) * 1000, 2)
+        }
     
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     laws, precedents = query_knowledge_graph(user_text, limit=5)
@@ -751,13 +792,13 @@ async def interactive_consult(payload: dict = Body(...)):
             messages_payload.append({"role": "user", "content": user_text})
 
             is_voice = bool(payload.get("is_voice_mode"))
-            chosen_model = cfg.get("voice_model", "google/gemini-2.5-flash") if is_voice else cfg.get("primary_model", "anthropic/claude-3.7-sonnet")
+            chosen_model = cfg.get("voice_model", "deepseek/deepseek-v4.1-flash") if is_voice else cfg.get("primary_model", "deepseek/deepseek-v4.1-flash")
             chosen_max_tokens = 70 if is_voice else 1800
 
             req_body = {
                 "model": chosen_model,
                 "messages": messages_payload,
-                "temperature": 0.2 if is_voice else 0.4,
+                "temperature": 0.2 if is_voice else 0.3,
                 "max_tokens": chosen_max_tokens,
             }
             async with httpx.AsyncClient(timeout=httpx.Timeout(16.0, connect=3.0)) as client:
@@ -1674,10 +1715,9 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
     }
     upload_mime = mime_map.get(ext, "audio/wav")
 
-    # استراتژی پیشرفته ۲۰۲۶: استفاده از برترین مدل‌های صوتی Deepgram Nova-3 و OpenAI GPT-4o
+    # استراتژی پیشرفته ۲۰۲۶: استفاده از برترین مدل‌های صوتی Deepgram Nova-3 و Whisper Large V3 Turbo
     fast_stt_models = [
         "deepgram/nova-3",                 # سریع‌ترین و جدیدترین مدل تبدیل صوت جهان (تأخیر زیر ۱۵۰ میلی‌ثانیه)
-        "openai/gpt-4o-transcribe",       # مدل چندوجهی پرچمدار و نسل جدید ۲۰۲۶ اوپن‌ای‌آی
         "openai/whisper-large-v3-turbo",  # مدل توربوی پرسرعت ویسپر
         "microsoft/mai-transcribe-2",      # مدل سازمانی مایکروسافت
         "google/chirp-3",                 # مدل چندزبانه پیشرفته گوگل

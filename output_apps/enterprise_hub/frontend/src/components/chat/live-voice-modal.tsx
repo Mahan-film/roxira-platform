@@ -558,18 +558,10 @@ export function LiveVoiceModal({
         try { recognitionRef.current.stop(); } catch (_) {}
       }
 
-      // استخراج و ترمیم فوری کلام گفته‌شده با اعمال فیلتر آوایی حقوقی
-      let rawText = accumulatedSpeechRef.current.trim();
-      let transcript = repairPhoneticsClient(rawText);
-
-      // در صورتی که متن مرورگر خالی باشد، بلافاصله از موتور صوتی سرور واکشی کن
-      if (!transcript || transcript.length < 2) {
-        setStatusText("در حال استخراج صوتی با هوش مصنوعی...");
-        const serverTrans = await transcribeCurrentSegment();
-        if (serverTrans) {
-          transcript = repairPhoneticsClient(serverTrans);
-        }
-      }
+      // استخراج مستقیم و صددرصدی صوت از موتور سرور (Deepgram Nova-3 / Whisper Turbo)
+      setStatusText("در حال پیاده‌سازی صدا با هوش مصنوعی (Deepgram Nova-3)...");
+      const serverTrans = await transcribeCurrentSegment();
+      let transcript = repairPhoneticsClient(serverTrans || accumulatedSpeechRef.current.trim());
 
       if (transcript && transcript.length >= 2) {
         setCurrentUserSpeech(transcript);
@@ -711,53 +703,8 @@ export function LiveVoiceModal({
       initAudioVisualizer(stream);
       startRecordingSegment();
 
-      // اتصال موتور تشخیص گفتار پیشرفته فارسی (Web Speech Recognition)
-      try {
-        const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRec) {
-          const rec = new SpeechRec();
-          rec.lang = "fa-IR";
-          rec.continuous = true;
-          rec.interimResults = true;
-          rec.maxAlternatives = 1;
-
-          rec.onresult = (event: any) => {
-            let fullTranscript = "";
-            for (let i = 0; i < event.results.length; ++i) {
-              fullTranscript += event.results[i][0].transcript + " ";
-            }
-            fullTranscript = fullTranscript.trim();
-            if (fullTranscript) {
-              const cleaned = repairPhoneticsClient(fullTranscript);
-              accumulatedSpeechRef.current = cleaned;
-              setCurrentUserSpeech(cleaned);
-              hasSpokenInThisTurnRef.current = true;
-
-              // تشخیص پایان طبیعی کلام: پس از ۱.۲ ثانیه مکث، پاسخ به صورت خودکار ارسال می‌شود
-              if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
-              autoSubmitTimerRef.current = setTimeout(() => {
-                if (voiceStateRef.current === "listening" && accumulatedSpeechRef.current.trim().length >= 2) {
-                  submitSpokenTurn();
-                }
-              }, 450);
-            }
-          };
-
-// مکث طبیعی: اجازه صحبت پیوسته به کاربر بدون قطع کردن کلام
-
-          rec.onerror = (err: any) => console.warn("SpeechRec notice:", err);
-          rec.onend = () => {
-            if (voiceStateRef.current === "listening" && isComponentOpenRef.current) {
-              try { rec.start(); } catch (_) {}
-            }
-          };
-
-          rec.start();
-          recognitionRef.current = rec;
-        }
-      } catch (err) {
-        console.warn("Web Speech API init notice:", err);
-      }
+      // ضبط مستقیم با Web Audio API بدون مداخله Web Speech مرورگر (جلوگیری ۱۰۰٪ از تبدیل اشتباه فارسی در سافاری)
+      accumulatedSpeechRef.current = "";
 
       setStatusText("بفرمایید، شنونده صحبت شما هستم...");
     } catch (err: any) {
@@ -883,7 +830,7 @@ export function LiveVoiceModal({
             </span>
           </div>
           <span className="text-[10px] text-slate-400 font-medium tracking-wide">
-            ⚡ موتور پردازش: Deepgram Nova-3 • GPT-4o Transcribe • Claude 3.7 Sonnet
+            ⚡ موتور پردازش: Deepgram Nova-3 • DeepSeek 4.1 Flash (Roxira OS 2026)
           </span>
         </div>
 
