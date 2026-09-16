@@ -43,6 +43,26 @@ modules_dir = BASE_DIR / "output_apps" / "generated_modules"
 SKIP_MODULES = {"enterprisedashboard_module"}  # روت‌های / و /dashboard توسط dispatcher اصلی سرو می‌شوند
 loaded_routers = 0
 failed_imports = []
+loaded_rel_paths = set()
+
+
+def _load_router_module(rel: str) -> bool:
+    """Import `rel` and mount its `router`; True when a router was registered."""
+    global loaded_routers
+    try:
+        m = importlib.import_module(rel)
+    except Exception as exc:
+        failed_imports.append(rel)
+        print("[ROXIRA][LOAD-FAIL] %s: %s" % (rel, exc), file=sys.stderr)
+        return False
+    loaded_rel_paths.add(rel)
+    if hasattr(m, "router"):
+        app.include_router(m.router)
+        loaded_routers += 1
+        return True
+    return False
+
+
 if modules_dir.exists():
     for root, _, files in os.walk(modules_dir):
         for f in sorted(files):
@@ -53,16 +73,21 @@ if modules_dir.exists():
                 continue
             mod_path = os.path.join(root, f)
             rel = os.path.relpath(mod_path, BASE_DIR).replace(os.sep, ".")[:-3]
-            try:
-                m = importlib.import_module(rel)
-                if hasattr(m, "router"):
-                    app.include_router(m.router)
-                    loaded_routers += 1
-            except Exception as exc:
-                failed_imports.append(rel)
-                print("[ROXIRA][LOAD-FAIL] %s: %s" % (rel, exc), file=sys.stderr)
+            _load_router_module(rel)
 else:
     print("[ROXIRA][FATAL] modules dir not found: %s" % modules_dir, file=sys.stderr)
+# ============ Guaranteed routers (revenue / contract critical) ============
+# These are also picked up by the walk above, but they are asserted explicitly so
+# a change to the discovery logic or SKIP_MODULES can never silently drop them.
+# `loaded_rel_paths` prevents a double include_router() (duplicate routes/docs).
+GUARANTEED_ROUTERS = [
+    "output_apps.generated_modules.enterprise.inquiry_module",  # POST /api/v1/enterprise/inquiry
+]
+for rel in GUARANTEED_ROUTERS:
+    if rel in loaded_rel_paths:
+        continue
+    if not _load_router_module(rel):
+        print("[ROXIRA][FATAL] guaranteed router missing: %s" % rel, file=sys.stderr)
 
 print("[ROXIRA] routers loaded: %d | failed: %s" % (loaded_routers, failed_imports), file=sys.stderr)
 

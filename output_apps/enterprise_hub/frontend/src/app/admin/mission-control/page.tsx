@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
+  Boxes,
   CheckCircle2,
   Circle,
   Cpu,
@@ -13,6 +14,7 @@ import {
   Send,
   Server,
   Terminal,
+  Trash2,
   XCircle,
 } from "lucide-react";
 
@@ -71,6 +73,73 @@ const PIPELINE_STAGES: { key: string; label: string }[] = [
 ];
 
 const TERMINAL_STAGES = new Set(["RUNNING", "FAILED", "REJECTED"]);
+
+interface SandboxHistoryEntry {
+  app_id: string;
+  stage: string;
+  status: string;
+  host_port: number | null;
+  subdomain: string | null;
+  url: string | null;
+  updated_at: number;
+}
+
+const HISTORY_KEY = "roxira.foundry.sandboxes";
+const HISTORY_LIMIT = 12;
+
+const SANDBOX_BADGE: Record<string, string> = {
+  RUNNING: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
+  QUEUED: "border-slate-500/40 bg-slate-500/10 text-slate-300",
+  FAILED: "border-rose-400/30 bg-rose-500/10 text-rose-300",
+  REJECTED: "border-rose-400/30 bg-rose-500/10 text-rose-300",
+};
+const SANDBOX_BADGE_DEFAULT = "border-amber-400/30 bg-amber-400/10 text-amber-300";
+
+function loadHistory(): SandboxHistoryEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (entry): entry is SandboxHistoryEntry =>
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as { app_id?: unknown }).app_id === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function upsertHistory(prev: SandboxHistoryEntry[], status: FactoryBuildStatus): SandboxHistoryEntry[] {
+  const next: SandboxHistoryEntry = {
+    app_id: status.app_id,
+    stage: status.stage,
+    status: status.status,
+    host_port: typeof status.host_port === "number" ? status.host_port : null,
+    subdomain: status.subdomain ?? null,
+    url: status.url ?? null,
+    updated_at: status.updated_at ?? Date.now() / 1000,
+  };
+  const index = prev.findIndex((entry) => entry.app_id === next.app_id);
+  if (index === -1) return [next, ...prev].slice(0, HISTORY_LIMIT);
+
+  const existing = prev[index];
+  if (
+    existing.stage === next.stage &&
+    existing.status === next.status &&
+    existing.host_port === next.host_port &&
+    existing.subdomain === next.subdomain &&
+    existing.url === next.url
+  ) {
+    return prev;
+  }
+  const copy = [...prev];
+  copy[index] = next;
+  return copy;
+}
 
 const TARGETS: ProbeTarget[] = [
   {
@@ -253,6 +322,8 @@ export default function MissionControlPage() {
   const [lastRunAt, setLastRunAt] = useState<number | null>(null);
   const [activeAppId, setActiveAppId] = useState<string | null>(null);
   const [buildStatus, setBuildStatus] = useState<FactoryBuildStatus | null>(null);
+  const [history, setHistory] = useState<SandboxHistoryEntry[]>([]);
+  const [historyReady, setHistoryReady] = useState(false);
 
   const checkAll = useCallback(async () => {
     abortRef.current?.abort();
@@ -379,6 +450,35 @@ export default function MissionControlPage() {
       controller.abort();
     };
   }, [activeAppId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setHistory(loadHistory());
+      setHistoryReady(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!historyReady) return;
+    try {
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch {
+      // storage unavailable (private mode / quota) — history stays in memory
+    }
+  }, [history, historyReady]);
+
+  useEffect(() => {
+    if (!historyReady || !buildStatus) return;
+    const timer = setTimeout(() => {
+      setHistory((prev) => upsertHistory(prev, buildStatus));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [buildStatus, historyReady]);
+
+  const clearHistory = useCallback(() => {
+    setHistory([]);
+  }, []);
 
   return (
     <div dir="ltr" className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -583,6 +683,72 @@ export default function MissionControlPage() {
                 </pre>
               )}
             </div>
+          )}
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-6 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/70 pb-4">
+            <div className="flex items-center gap-2.5">
+              <Boxes className="size-4 text-amber-300" />
+              <h2 className="font-mono text-sm font-bold tracking-wider text-slate-100">
+                RECENT SYNTHESIZED SANDBOXES
+              </h2>
+            </div>
+            {history.length > 0 && (
+              <button
+                type="button"
+                onClick={clearHistory}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 px-2.5 py-1.5 font-mono text-[10px] text-slate-400 transition-colors hover:border-rose-400/40 hover:text-rose-300"
+              >
+                <Trash2 className="size-3" />
+                CLEAR
+              </button>
+            )}
+          </div>
+
+          {history.length === 0 ? (
+            <p className="mt-4 font-mono text-[11px] text-slate-600">
+              No sandboxes yet — run a synthesis above to populate this list.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-slate-800/70">
+              {history.map((entry) => {
+                const badgeClass = SANDBOX_BADGE[entry.stage] ?? SANDBOX_BADGE_DEFAULT;
+                const link = entry.url ?? (entry.subdomain ? `http://${entry.subdomain}` : null);
+                return (
+                  <li key={entry.app_id} className="flex flex-wrap items-center gap-3 py-3">
+                    <span className="font-mono text-xs font-semibold text-slate-100">
+                      {entry.app_id}
+                    </span>
+                    <span
+                      className={`rounded-lg border px-2 py-0.5 font-mono text-[10px] ${badgeClass}`}
+                    >
+                      {entry.stage}
+                    </span>
+                    <span className="font-mono text-[11px] text-slate-500">
+                      {entry.host_port === null ? "port —" : `port ${entry.host_port}`}
+                    </span>
+                    <span className="ml-auto">
+                      {link ? (
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-emerald-200 transition-colors hover:bg-emerald-400/20"
+                        >
+                          <ExternalLink className="size-3" />
+                          {entry.subdomain ?? link}
+                        </a>
+                      ) : (
+                        <span className="font-mono text-[10px] text-slate-600">
+                          no subdomain yet
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </section>
       </div>
