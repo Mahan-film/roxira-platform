@@ -58,6 +58,7 @@ interface FactoryBuildStatus {
   prompt?: string | null;
   target_framework?: string | null;
   tier?: string | null;
+  target_host?: string | null;
   host_port?: number | null;
   subdomain?: string | null;
   url?: string | null;
@@ -87,6 +88,31 @@ const BUILD_TIERS: { id: BuildTier; name: string; hint: string }[] = [
   { id: "FRONTIER", name: "Frontier Sandbox", hint: "Single container · fast path" },
   { id: "AUTONOMOUS_SWARM", name: "Autonomous Agent Swarm", hint: "30-Min Zero-Touch team pipeline" },
 ];
+
+interface DeploymentTarget {
+  id: string;
+  name: string;
+  detail: string;
+  host: string;
+}
+
+const DEPLOYMENT_TARGETS: DeploymentTarget[] = [
+  { id: "primary", name: "Primary Node", detail: "Hetzner Core: 5.75.200.67", host: "5.75.200.67" },
+  { id: "fleet", name: "Auto-Scale Remote Worker", detail: "Ephemeral Fleet", host: "ephemeral-fleet" },
+];
+
+const DEFAULT_TARGET_HOST = DEPLOYMENT_TARGETS[0].host;
+
+function hostChip(host?: string | null): { label: string; host: string } {
+  const value = (host ?? "").trim();
+  if (!value || value === DEPLOYMENT_TARGETS[0].host) {
+    return { label: "Primary Node", host: DEPLOYMENT_TARGETS[0].host };
+  }
+  if (value === DEPLOYMENT_TARGETS[1].host || value.toLowerCase().includes("fleet")) {
+    return { label: "Remote Worker", host: "Ephemeral Fleet" };
+  }
+  return { label: "Node", host: value };
+}
 
 type SwarmTeamState = "pending" | "active" | "done" | "failed";
 
@@ -303,6 +329,7 @@ interface SandboxHistoryEntry {
   health?: string | null;
   container_id?: string | null;
   tier?: string | null;
+  target_host?: string | null;
   swarm_status?: string | null;
   swarm_qa_score?: number | null;
 }
@@ -323,6 +350,7 @@ interface SandboxSummary {
   deployed?: boolean;
   health?: string | null;
   tier?: string | null;
+  target_host?: string | null;
   swarm_status?: string | null;
   swarm_qa_score?: number | null;
   swarm?: SwarmMetadata | null;
@@ -418,6 +446,7 @@ function toHistoryEntry(source: SandboxSummary): SandboxHistoryEntry {
     health: source.health ?? classifyFromStage(stage),
     container_id: source.container_id ?? null,
     tier: source.tier ?? null,
+    target_host: source.target_host ?? null,
     swarm_status: source.swarm_status ?? source.swarm?.status ?? source.swarm?.stage ?? null,
     swarm_qa_score: source.swarm_qa_score ?? source.swarm?.qa?.score ?? null,
   };
@@ -429,12 +458,16 @@ function upsertHistory(prev: SandboxHistoryEntry[], source: SandboxSummary): San
   if (index === -1) return [next, ...prev].slice(0, HISTORY_LIMIT);
 
   const existing = prev[index];
+  if (!next.target_host && existing.target_host) {
+    next.target_host = existing.target_host;
+  }
   if (
     existing.stage === next.stage &&
     existing.status === next.status &&
     existing.host_port === next.host_port &&
     existing.subdomain === next.subdomain &&
-    existing.url === next.url
+    existing.url === next.url &&
+    existing.target_host === next.target_host
   ) {
     return prev;
   }
@@ -619,6 +652,7 @@ export default function MissionControlPage() {
   const [prompt, setPrompt] = useState("");
   const [framework, setFramework] = useState("FastAPI");
   const [buildTier, setBuildTier] = useState<BuildTier>("FRONTIER");
+  const [targetHost, setTargetHost] = useState<string>(DEPLOYMENT_TARGETS[0].id);
   const [submitting, setSubmitting] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
   const [consoleError, setConsoleError] = useState<string | null>(null);
@@ -639,6 +673,9 @@ export default function MissionControlPage() {
   const [reportData, setReportData] = useState<SwarmMetadata | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+
+  const selectedHost =
+    DEPLOYMENT_TARGETS.find((target) => target.id === targetHost)?.host ?? DEFAULT_TARGET_HOST;
 
   const checkAll = useCallback(async () => {
     abortRef.current?.abort();
@@ -694,7 +731,12 @@ export default function MissionControlPage() {
       const res = await fetch(FACTORY_SYNTHESIZE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: trimmed, target_framework: framework, tier: buildTier }),
+        body: JSON.stringify({
+          prompt: trimmed,
+          target_framework: framework,
+          tier: buildTier,
+          target_host: selectedHost,
+        }),
       });
       const text = await res.text();
       let parsed: unknown = text;
@@ -714,9 +756,19 @@ export default function MissionControlPage() {
           stage: typeof record.stage === "string" ? record.stage : "QUEUED",
           status: typeof record.status === "string" ? record.status : "QUEUED",
           app_name: record.app_name ?? null,
+          target_host: selectedHost,
           stages: [],
         });
         setActiveAppId(record.app_id);
+        const queuedStage = typeof record.stage === "string" ? record.stage : "QUEUED";
+        setHistory((prev) =>
+          upsertHistory(prev, {
+            app_id: record.app_id as string,
+            stage: queuedStage,
+            status: typeof record.status === "string" ? record.status : "QUEUED",
+            target_host: selectedHost,
+          }),
+        );
       } else {
         setOutput(formatUnknown(parsed));
       }
@@ -726,7 +778,7 @@ export default function MissionControlPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [prompt, framework, buildTier, submitting]);
+  }, [prompt, framework, buildTier, selectedHost, submitting]);
 
   useEffect(() => {
     if (!activeAppId) return;
@@ -889,6 +941,7 @@ export default function MissionControlPage() {
       const detail = (await detailRes.json()) as FactoryBuildStatus;
       const specification = (detail.prompt ?? "").trim();
       if (!specification) throw new Error("previous prompt unavailable");
+      const requestHost = detail.target_host ?? selectedHost;
 
       const submitRes = await fetch(FACTORY_SYNTHESIZE_ENDPOINT, {
         method: "POST",
@@ -899,6 +952,7 @@ export default function MissionControlPage() {
           specification,
           target_framework: detail.target_framework ?? "FastAPI",
           tier: detail.tier ?? "STANDARD",
+          target_host: requestHost,
         }),
       });
       if (!submitRes.ok) throw new Error(`HTTP ${submitRes.status}`);
@@ -912,9 +966,18 @@ export default function MissionControlPage() {
         stage: data?.stage ?? "QUEUED",
         status: data?.status ?? "QUEUED",
         app_name: detail.app_name ?? null,
+        target_host: requestHost,
         stages: [],
       });
       setActiveAppId(nextId);
+      setHistory((prev) =>
+        upsertHistory(prev, {
+          app_id: nextId,
+          stage: data?.stage ?? "QUEUED",
+          status: data?.status ?? "QUEUED",
+          target_host: requestHost,
+        }),
+      );
     } catch (error) {
       setRebuildError(error instanceof Error ? error.message : "rebuild failed");
     } finally {
@@ -924,7 +987,7 @@ export default function MissionControlPage() {
         return copy;
       });
     }
-  }, []);
+  }, [selectedHost]);
 
   const teardown = useCallback(
     async (appId: string) => {
@@ -1136,6 +1199,27 @@ export default function MissionControlPage() {
                 </div>
               </div>
 
+              <div>
+                <label htmlFor="foundry-target" className="font-mono text-[10px] text-slate-500">
+                  DEPLOYMENT TARGET
+                </label>
+                <select
+                  id="foundry-target"
+                  value={targetHost}
+                  onChange={(event) => setTargetHost(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2.5 font-mono text-xs text-slate-200 outline-none focus:border-amber-400/50"
+                >
+                  {DEPLOYMENT_TARGETS.map((target) => (
+                    <option key={target.id} value={target.id}>
+                      {target.name} — {target.detail}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block font-mono text-[9px] text-slate-600" dir="ltr">
+                  target_host: {selectedHost}
+                </span>
+              </div>
+
               <button
                 type="button"
                 onClick={() => void synthesize()}
@@ -1317,6 +1401,7 @@ export default function MissionControlPage() {
                 const isSwarm =
                   isSwarmTier(entry.tier) || Boolean(swarmStatus) || entry.swarm_qa_score != null;
                 const qa = qaPercent(entry.swarm_qa_score);
+                const chip = hostChip(entry.target_host);
                 return (
                   <li key={entry.app_id} className="py-3">
                     <div className="flex flex-wrap items-center gap-3">
@@ -1346,6 +1431,13 @@ export default function MissionControlPage() {
                     </span>
                     <span className="font-mono text-[11px] text-slate-500">
                       {entry.host_port === null ? "port —" : `port ${entry.host_port}`}
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/20 bg-indigo-400/[0.07] px-2 py-0.5 font-mono text-[10px] text-indigo-200"
+                      title="Deployment target node / host"
+                    >
+                      <Server className="size-3" />
+                      {chip.label} · {chip.host}
                     </span>
                     <span className="ml-auto flex items-center gap-2">
                       {link ? (
