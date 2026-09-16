@@ -23,6 +23,7 @@ import re
 import shutil
 import signal
 import socket
+import sys
 import time
 import uuid
 from dataclasses import asdict, dataclass, field, fields
@@ -51,6 +52,8 @@ __all__ = [
     "PortAllocationError",
     "NginxReloadError",
     "DockerEngine",
+    "HostPortInspector",
+    "parse_published_ports",
     "PortAllocator",
     "ComposeProjectGenerator",
     "GeneratedProject",
@@ -322,22 +325,85 @@ async def make_status_store() -> BuildStatusStore:
 # ---------------------------------------------------------------------------
 
 
+class HostPortInspector(Protocol):
+    """Anything able to report which host ports Docker has already published.
+
+    Structural type satisfied by :class:`DockerEngine`; kept as a Protocol so
+    the allocator stays testable with a lightweight fake.
+    """
+
+    async def published_host_ports(self, timeout: float = ...) -> set[int]: ...
+
+
 class PortAllocator:
     """Allocates a free TCP port within [start, end] while avoiding collisions.
 
-    Reservations are persisted as ``{app_id}/.reservation`` so that multiple
-    worker processes sharing the sandbox root don't hand out the same port.
+    Four independent layers of defence are applied before a port is handed out,
+    because a duplicate host port makes ``docker compose up`` fail *after* the
+    expensive image build:
+
+    1. **Docker daemon truth** — :meth:`_host_reserved_ports` asks the host
+       Docker daemon (``docker ps --all``) for every already-published port.
+       This catches containers whose sandbox directory was deleted, containers
+       belonging to other services, and ports published without a userland
+       proxy listener (``userland-proxy=false`` + nftables DNAT), which a plain
+       ``bind()`` probe cannot see.
+    2. **Filesystem records** — ``{app_id}/sandbox.json`` and
+       ``{app_id}/.reservation`` from previous/parallel generations.
+    3. **Socket availability** — :meth:`_is_bindable` binds ``0.0.0.0:{port}``
+       so anything listening on the host (Docker proxy, another service) blocks
+       the allocation even if the daemon is unreachable.
+    4. **Cross-process port locks** — an ``O_EXCL`` lock file per port under
+       ``{sandbox_root}/.portlocks/`` makes the reserve decision atomic between
+       independent worker processes sharing the sandbox root; two processes can
+       no longer both observe a port as free and both claim it.
+
+    All four must agree before a port is returned; the port is then recorded in
+    ``{app_id}/.reservation`` for observability by out-of-band tooling.
     """
 
-    def __init__(self, sandbox_root: Path, start: int = PORT_RANGE_START, end: int = PORT_RANGE_END) -> None:
+    def __init__(
+        self,
+        sandbox_root: Path,
+        start: int = PORT_RANGE_START,
+        end: int = PORT_RANGE_END,
+        docker: Optional[HostPortInspector] = None,
+    ) -> None:
         self._sandbox_root = sandbox_root
         self._start = start
         self._end = end
+        self._docker = docker
         self._lock = asyncio.Lock()
         self._in_flight: set[int] = set()
 
     def _reservation_path(self, app_id: str) -> Path:
         return self._sandbox_root / app_id / ".reservation"
+
+    def _port_lock_path(self, port: int) -> Path:
+        return self._sandbox_root / ".portlocks" / f"{port}.lock"
+
+    @property
+    def range(self) -> tuple[int, int]:
+        return (self._start, self._end)
+
+    # -- layer 1: docker daemon -------------------------------------------
+
+    async def _host_reserved_ports(self) -> set[int]:
+        """Host ports published by the Docker daemon (empty if unreachable)."""
+        if self._docker is None:
+            return set()
+        try:
+            ports = await self._docker.published_host_ports()
+        except Exception as exc:  # daemon down / CLI missing -> degrade gracefully
+            print(
+                "[PortAllocator] WARN docker port query failed (%s); "
+                "falling back to socket probing only" % exc,
+                file=sys.stderr,
+            )
+            return set()
+        return {p for p in ports if self._start <= p <= self._end}
+
+    # -- layer 2: filesystem records --------------------------------------
 
     def reserved_ports(self) -> set[int]:
         reserved: set[int] = set()
@@ -354,7 +420,12 @@ class PortAllocator:
         for reservation in self._sandbox_root.glob("*/.reservation"):
             with contextlib.suppress(ValueError, OSError):
                 reserved.add(int(reservation.read_text(encoding="utf-8").strip()))
+        for lock in (self._sandbox_root / ".portlocks").glob("*.lock"):
+            with contextlib.suppress(ValueError, OSError):
+                reserved.add(int(lock.stem))
         return reserved
+
+    # -- layer 3: socket availability -------------------------------------
 
     @staticmethod
     def _is_bindable(port: int) -> bool:
@@ -366,27 +437,77 @@ class PortAllocator:
             except OSError:
                 return False
 
+    # -- layer 4: cross-process atomic reservation ------------------------
+
+    def _lock_port(self, port: int) -> bool:
+        """Atomically claim ``port`` via an ``O_EXCL`` lock file."""
+        path = self._port_lock_path(port)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            return False  # another worker holds it
+        except OSError as exc:
+            # Read-only sandbox root: proceed on the remaining three layers
+            # rather than refusing to allocate at all.
+            print(
+                "[PortAllocator] WARN cannot create port lock for %d (%s)" % (port, exc),
+                file=sys.stderr,
+            )
+            return True
+        try:
+            os.write(fd, str(os.getpid()).encode("utf-8"))
+        finally:
+            os.close(fd)
+        return True
+
+    def _unlock_port(self, port: int) -> None:
+        with contextlib.suppress(FileNotFoundError, OSError):
+            self._port_lock_path(port).unlink()
+
+    # -- public API --------------------------------------------------------
+
+    async def verify_available(self, port: int) -> bool:
+        """True only if ``port`` is free according to every check layer."""
+        if not (self._start <= port <= self._end):
+            return False
+        if port in self._in_flight or port in self.reserved_ports():
+            return False
+        if port in await self._host_reserved_ports():
+            return False
+        return await asyncio.to_thread(self._is_bindable, port)
+
     async def allocate(self, app_id: str, preferred: Optional[int] = None) -> int:
         async with self._lock:
-            reserved = self.reserved_ports() | self._in_flight
+            blocked = self.reserved_ports() | self._in_flight
+            blocked |= await self._host_reserved_ports()
             candidates = (
-                [preferred] if preferred and self._start <= preferred <= self._end else []
+                [preferred]
+                if preferred and self._start <= preferred <= self._end and preferred not in blocked
+                else []
             ) + list(range(self._start, self._end + 1))
             for port in candidates:
-                if port in reserved:
+                if port in blocked:
                     continue
-                if await asyncio.to_thread(self._is_bindable, port):
-                    self._in_flight.add(port)
-                    reservation = self._reservation_path(app_id)
-                    await asyncio.to_thread(reservation.parent.mkdir, parents=True, exist_ok=True)
-                    await asyncio.to_thread(reservation.write_text, str(port), "utf-8")
-                    return port
+                # Cheap local probe first, then the atomic cross-process lock.
+                if not await asyncio.to_thread(self._is_bindable, port):
+                    blocked.add(port)
+                    continue
+                if not await asyncio.to_thread(self._lock_port, port):
+                    blocked.add(port)
+                    continue
+                self._in_flight.add(port)
+                reservation = self._reservation_path(app_id)
+                await asyncio.to_thread(reservation.parent.mkdir, parents=True, exist_ok=True)
+                await asyncio.to_thread(reservation.write_text, str(port), "utf-8")
+                return port
             raise PortAllocationError(
                 f"no free port available in range {self._start}-{self._end}"
             )
 
     def release(self, app_id: str, port: int) -> None:
         self._in_flight.discard(port)
+        self._unlock_port(port)
         with contextlib.suppress(FileNotFoundError, OSError):
             self._reservation_path(app_id).unlink()
 
@@ -394,6 +515,31 @@ class PortAllocator:
 # ---------------------------------------------------------------------------
 # Docker engine (host daemon over the unix socket)
 # ---------------------------------------------------------------------------
+
+
+_PUBLISHED_PORT_RE = re.compile(r"(\d+)(?:-(\d+))?->\d+(?:-\d+)?/(?:tcp|udp)")
+
+
+def parse_published_ports(raw: str) -> set[int]:
+    """Extract host ports from ``docker ps`` ``{{.Ports}}`` output.
+
+    Handles the shapes Docker emits::
+
+        "0.0.0.0:4000->80/tcp, [::]:4000->80/tcp"   -> {4000}
+        "0.0.0.0:4000-4005->80-85/tcp"              -> {4000..4005}
+        "80/tcp"  (published to nothing)             -> {}
+        "127.0.0.1:5432->5432/tcp"                   -> {5432}
+    """
+    used: set[int] = set()
+    for start, end in _PUBLISHED_PORT_RE.findall(raw or ""):
+        first = int(start)
+        last = int(end) if end else first
+        if last < first:
+            first, last = last, first
+        if last - first > PORT_RANGE_END - PORT_RANGE_START:  # malformed range guard
+            last = first
+        used.update(range(first, last + 1))
+    return used
 
 
 class DockerEngine:
@@ -454,6 +600,40 @@ class DockerEngine:
             return True
         except (DockerCommandError, FileNotFoundError):
             return False
+
+    async def socket_available(self) -> bool:
+        """True when the Docker socket exists and the daemon answers."""
+        if not os.path.exists(self._socket_path):
+            return False
+        try:
+            return await self.ping()
+        except Exception:
+            return False
+
+    async def published_host_ports(self, timeout: float = 30.0) -> set[int]:
+        """Every host port published by *any* container (running or stopped).
+
+        ``--all`` is deliberate: a stopped container with
+        ``restart: unless-stopped`` (which :meth:`ComposeProjectGenerator`
+        emits) can resurrect and re-grab its port at any moment, so its binding
+        must be treated as reserved.
+
+        Returns an empty set when the daemon is unreachable, so callers can
+        degrade to socket probing instead of failing outright.
+        """
+        if not await self.socket_available():
+            return set()
+        try:
+            output = await self._run(
+                ["docker", "ps", "--all", "--no-trunc", "--format", "{{.Ports}}"],
+                timeout=timeout,
+            )
+        except (DockerCommandError, FileNotFoundError):
+            return set()
+        ports: set[int] = set()
+        for line in output.splitlines():
+            ports |= parse_published_ports(line)
+        return ports
 
     async def ensure_network(self, network: str) -> None:
         try:
@@ -898,7 +1078,8 @@ class EphemeralRunner:
         return cls(
             queue=queue,
             docker=docker,
-            allocator=PortAllocator(sandbox_root),
+            # docker-aware: the allocator asks the daemon which ports are taken
+            allocator=PortAllocator(sandbox_root, docker=docker),
             generator=ComposeProjectGenerator(sandbox_root, network=network, attach_network=attach),
             nginx=NginxRouteRegistrar(
                 conf_dir=nginx_dir,
