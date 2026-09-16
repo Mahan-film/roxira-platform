@@ -217,6 +217,8 @@ class BuildStatus:
     container_name: Optional[str] = None
     project_dir: Optional[str] = None
     error: Optional[str] = None
+    repair_attempts: int = 0
+    repairs: list[str] = field(default_factory=list)
     stages: list[dict[str, Any]] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -379,6 +381,8 @@ def sandbox_summary(status: BuildStatus, health: Optional[str] = None) -> dict[s
         "container_id": status.container_id,
         "deployed": status.stage in DEPLOYED_STAGES,
         "health": health or classify_health(status),
+        "self_healed": status.repair_attempts > 0,
+        "repairs": status.repairs,
         "created_at": status.created_at,
         "updated_at": status.updated_at,
     }
@@ -833,6 +837,28 @@ class DockerEngine:
             pass
         await self._run(["docker", "network", "create", network], timeout=60)
 
+    async def compose_build(
+        self, project_dir: Path, project_name: str, timeout: Optional[float] = None
+    ) -> str:
+        """Run ``docker compose build`` on its own.
+
+        Split from ``up`` so a build failure surfaces as a
+        :class:`DockerCommandError` carrying the full stderr — that log is the
+        input to the self-healing repair pass.
+        """
+        return await self._run(
+            self._compose_cmd(project_dir, project_name, "build"),
+            timeout=timeout or self._command_timeout,
+        )
+
+    async def up(self, project_dir: Path, project_name: str) -> Optional[str]:
+        """Start the already-built compose project and return the container id."""
+        await self._run(
+            self._compose_cmd(project_dir, project_name, "up", "-d"),
+            timeout=300,
+        )
+        return await self.container_id(project_dir, project_name)
+
     async def build_and_up(self, project_dir: Path, project_name: str) -> Optional[str]:
         await self._run(self._compose_cmd(project_dir, project_name, "up", "-d", "--build"))
         return await self.container_id(project_dir, project_name)
@@ -898,6 +924,223 @@ class GeneratedProject:
             "container_port": self.container_port,
             "template_id": self.template_id,
         }
+
+
+# ---------------------------------------------------------------------------
+# Build self-healing
+# ---------------------------------------------------------------------------
+
+#: Toggle the build-failure repair pass (set ROXIRA_SELF_HEAL_BUILD=0 to disable).
+SELF_HEAL_ENABLED = os.getenv("ROXIRA_SELF_HEAL_BUILD", "1") != "0"
+#: Most repairs applied per failure, so a pathological log can't patch forever.
+MAX_BUILD_REPAIRS = 5
+
+#: Python import name → PyPI distribution for obvious mismatches.
+PIP_DISTRIBUTION_ALIASES: dict[str, str] = {
+    "yaml": "PyYAML",
+    "cv2": "opencv-python-headless",
+    "PIL": "Pillow",
+    "sklearn": "scikit-learn",
+    "bs4": "beautifulsoup4",
+    "dotenv": "python-dotenv",
+    "jwt": "PyJWT",
+    "jose": "python-jose",
+    "dateutil": "python-dateutil",
+    "decouple": "python-decouple",
+    "multipart": "python-multipart",
+    "docx": "python-docx",
+    "pptx": "python-pptx",
+    "fitz": "PyMuPDF",
+    "attr": "attrs",
+    "nacl": "PyNaCl",
+    "Crypto": "pycryptodome",
+    "magic": "python-magic",
+    "psycopg2": "psycopg2-binary",
+    "MySQLdb": "mysqlclient",
+}
+
+#: Compiler/header hint in the log → Debian package to install in the image.
+SYSTEM_PACKAGE_HINTS: tuple[tuple[str, str], ...] = (
+    ("pg_config", "libpq-dev"),
+    ("Python.h", "python3-dev"),
+    ("ffi.h", "libffi-dev"),
+    ("gcc: not found", "build-essential"),
+    ("cc1: not found", "build-essential"),
+    ("make: not found", "build-essential"),
+    ("not found: make", "build-essential"),
+    ("libjpeg", "libjpeg-dev"),
+    ("libpng", "libpng-dev"),
+    ("cairo", "libcairo2-dev"),
+)
+
+_NPM_ERESOLVE_RE = re.compile(
+    r"npm ERR! code ERESOLVE|ERESOLVE unable to resolve dependency tree"
+    r"|Could not resolve dependency:|--legacy-peer-deps",
+    re.IGNORECASE,
+)
+_NPM_TARGET_RE = re.compile(r"No matching version found for ([@\w./\-]+)@", re.IGNORECASE)
+_URL_RE = re.compile(r"https?://[^\s'\")]+")
+
+
+_NPM_NOT_IN_REGISTRY_RE = re.compile(
+    r"'([@\w./\-]+)@[^']*'\s+is not in (?:this|the npm) registry", re.IGNORECASE
+)
+
+
+def _npm_404_packages(log: str) -> list[str]:
+    """Package names npm reported as missing from the registry.
+
+    Handles both npm 404 shapes: the URL form (parsed by path, since a regex
+    over the whole line would capture the registry host or a tarball filename)
+    and ``npm ERR! 404 'foo@*' is not in this registry.`` which carries the name
+    without any URL.
+    """
+    packages: list[str] = []
+    for line in log.splitlines():
+        if "404" not in line:
+            continue
+        packages.extend(_NPM_NOT_IN_REGISTRY_RE.findall(line))
+        for url in _URL_RE.findall(line):
+            path = url.split("//", 1)[-1]
+            segments = [seg for seg in path.split("/")[1:] if seg]
+            if not segments:
+                continue
+            if segments[0].startswith("@"):
+                package = "/".join(segments[:2]) if len(segments) > 1 else segments[0]
+            else:
+                package = segments[0]
+            package = re.sub(r"\.tgz$", "", package.split("?")[0].strip(".,"))
+            if package and package not in ("@",):
+                packages.append(package)
+    return packages
+_NPM_MISSING_RE = re.compile(r"Cannot find module '([^']+)'|Can't resolve '([^']+)'")
+_PIP_PIN_RE = re.compile(
+    r"(?:Could not find a version that satisfies the requirement|No matching distribution found for)"
+    r"\s+([A-Za-z0-9_.\-]+)(?:\[[^\]]*\])?==([^\s,)'\"]+)",
+    re.IGNORECASE,
+)
+_PIP_MODULE_RE = re.compile(r"(?:ModuleNotFoundError|ImportError): No module named '([A-Za-z0-9_.]+)'")
+_SYSTEM_HINT_RE = re.compile(
+    "|".join(re.escape(hint) for hint, _ in SYSTEM_PACKAGE_HINTS), re.IGNORECASE
+)
+
+
+@dataclass(slots=True)
+class BuildRepair:
+    """One automated fix derived from ``docker compose build`` stderr."""
+
+    kind: str
+    detail: str
+    payload: dict[str, Any] = field(default_factory=dict)
+
+
+def analyse_build_failure(stderr: str) -> list[BuildRepair]:
+    """Derive repair actions from build stderr (pure — no filesystem access).
+
+    Recognises the failure modes worth automating: npm peer-dependency
+    conflicts, unsatisfiable/removed npm versions, missing node modules,
+    unsatisfiable Python pins, missing Python distributions and missing
+    compiler/header packages.  When nothing specific matches, falls back to a
+    generic dependency relaxation so the single retry still has a chance.
+    """
+    log = stderr or ""
+    repairs: list[BuildRepair] = []
+
+    if _NPM_ERESOLVE_RE.search(log):
+        repairs.append(
+            BuildRepair(
+                kind="npm_relax_peers",
+                detail="enabled legacy peer-dependency resolution for npm",
+                payload={},
+            )
+        )
+
+    for package in dict.fromkeys(_NPM_TARGET_RE.findall(log)):
+        repairs.append(
+            BuildRepair(
+                kind="npm_relax_version",
+                detail=f"relaxed npm version constraint for {package}",
+                payload={"package": package},
+            )
+        )
+
+    for package in dict.fromkeys(_npm_404_packages(log)):
+        repairs.append(
+            BuildRepair(
+                kind="npm_drop_missing",
+                detail=f"dropped unavailable npm package {package}",
+                payload={"package": package},
+            )
+        )
+
+    for first, second in _NPM_MISSING_RE.findall(log):
+        module = (first or second).strip()
+        # Skip local/aliased paths ('./x', '@/lib/x') — not installable packages.
+        if not module or module.startswith((".", "/", "@/")):
+            continue
+        if "/" in module and not module.startswith("@"):
+            continue
+        repairs.append(
+            BuildRepair(
+                kind="npm_add_missing",
+                detail=f"added missing npm package {module}",
+                payload={"package": module},
+            )
+        )
+
+    for package, pin in dict.fromkeys(_PIP_PIN_RE.findall(log)):
+        repairs.append(
+            BuildRepair(
+                kind="pip_relax_pin",
+                detail=f"relaxed pinned Python requirement {package}=={pin}",
+                payload={"package": package},
+            )
+        )
+
+    for module in dict.fromkeys(_PIP_MODULE_RE.findall(log)):
+        root = module.split(".")[0]
+        repairs.append(
+            BuildRepair(
+                kind="pip_add_missing",
+                detail=f"added missing Python distribution for {root}",
+                payload={"module": root},
+            )
+        )
+
+    if _SYSTEM_HINT_RE.search(log):
+        packages = list(
+            dict.fromkeys(
+                debian for hint, debian in SYSTEM_PACKAGE_HINTS if hint.lower() in log.lower()
+            )
+        )
+        if packages:
+            repairs.append(
+                BuildRepair(
+                    kind="apt_system_deps",
+                    detail="installed build toolchain/packages: " + ", ".join(packages),
+                    payload={"packages": packages},
+                )
+            )
+
+    if not repairs:
+        repairs.append(
+            BuildRepair(
+                kind="generic_relax",
+                detail="applied generic dependency relaxation (unpinned versions)",
+                payload={},
+            )
+        )
+
+    # De-duplicate by kind+payload, preserving detection order.
+    seen: set[tuple[str, str]] = set()
+    unique: list[BuildRepair] = []
+    for repair in repairs:
+        key = (repair.kind, json.dumps(repair.payload, sort_keys=True))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(repair)
+    return unique[:MAX_BUILD_REPAIRS]
 
 
 class ComposeProjectGenerator:
@@ -1000,6 +1243,253 @@ class ComposeProjectGenerator:
                 stale.unlink()
             elif stale.is_dir():
                 shutil.rmtree(stale, ignore_errors=True)
+
+    # -- self-healing --------------------------------------------------------
+
+    def repair_build_failure(
+        self, request: BuildRequest, project_dir: Path, stderr: str
+    ) -> list[str]:
+        """Patch a generated project in place from build stderr.
+
+        Returns notes describing what was actually applied — an empty list
+        means nothing could be changed (no matching manifest), so the caller
+        should not waste a retry.
+        """
+        applied: list[str] = []
+        for repair in analyse_build_failure(stderr):
+            try:
+                note = self._apply_repair(repair, project_dir)
+            except Exception as exc:  # a bad patch must not mask the build error
+                print(
+                    "[factory] WARN could not apply repair %s: %s" % (repair.kind, exc),
+                    file=sys.stderr,
+                )
+                continue
+            if note:
+                applied.append(note)
+        print(
+            "[factory] self-heal for %s: %s" % (request.app_id, "; ".join(applied) or "no change"),
+            file=sys.stderr,
+        )
+        return applied
+
+    def _apply_repair(self, repair: BuildRepair, project_dir: Path) -> Optional[str]:
+        payload = repair.payload
+        if repair.kind == "npm_relax_peers":
+            return self._npm_legacy_peers(project_dir)
+        if repair.kind == "npm_relax_version":
+            return self._relax_npm_version(project_dir, str(payload["package"]))
+        if repair.kind == "npm_drop_missing":
+            return self._drop_npm_package(project_dir, str(payload["package"]))
+        if repair.kind == "npm_add_missing":
+            return self._add_npm_package(project_dir, str(payload["package"]))
+        if repair.kind == "pip_relax_pin":
+            return self._relax_pip_pin(project_dir, str(payload["package"]))
+        if repair.kind == "pip_add_missing":
+            return self._add_pip_distribution(project_dir, str(payload["module"]))
+        if repair.kind == "apt_system_deps":
+            return self._inject_system_packages(project_dir, list(payload["packages"]))
+        if repair.kind == "generic_relax":
+            return self._generic_relax(project_dir)
+        return None
+
+    @staticmethod
+    def _read_text(path: Path) -> Optional[str]:
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+
+    # ---- npm ----
+
+    def _npm_legacy_peers(self, project_dir: Path) -> Optional[str]:
+        package_json = project_dir / "package.json"
+        if not package_json.exists():
+            return None
+        changed = False
+
+        npmrc = project_dir / ".npmrc"
+        desired = {
+            "legacy-peer-deps=true",
+            "strict-peer-dependencies=false",
+            "fund=false",
+            "audit=false",
+        }
+        current = set((self._read_text(npmrc) or "").split())
+        if not desired <= current:
+            npmrc.write_text("\n".join(sorted(current | desired)) + "\n", encoding="utf-8")
+            changed = True
+
+        dockerfile = project_dir / "Dockerfile"
+        text = self._read_text(dockerfile)
+        if text:
+            # The flag is the reliable fix; the COPY is needed for npm run build
+            # stages that read .npmrc.
+            patched = re.sub(
+                r"RUN npm (ci|install)(?! --legacy-peer-deps)",
+                r"RUN npm \1 --legacy-peer-deps",
+                text,
+            )
+            patched = re.sub(r"COPY package\.json \./", "COPY package.json .npmrc ./", patched)
+            if patched != text:
+                dockerfile.write_text(patched, encoding="utf-8")
+                changed = True
+        return "enabled legacy peer-dependency resolution for npm" if changed else None
+
+    def _patch_package_json(self, project_dir: Path, mutate) -> Optional[str]:
+        package_json = project_dir / "package.json"
+        text = self._read_text(package_json)
+        if text is None:
+            return None
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        return mutate(data, package_json)
+
+    def _relax_npm_version(self, project_dir: Path, package: str) -> Optional[str]:
+        def mutate(data: dict, path: Path) -> Optional[str]:
+            for section in ("dependencies", "devDependencies"):
+                deps = data.get(section)
+                if isinstance(deps, dict) and package in deps:
+                    deps[package] = "*"
+                    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+                    return f"relaxed npm version constraint for {package}"
+            return None
+
+        return self._patch_package_json(project_dir, mutate)
+
+    def _drop_npm_package(self, project_dir: Path, package: str) -> Optional[str]:
+        def mutate(data: dict, path: Path) -> Optional[str]:
+            removed = False
+            for section in ("dependencies", "devDependencies"):
+                deps = data.get(section)
+                if isinstance(deps, dict) and deps.pop(package, None) is not None:
+                    removed = True
+            if not removed:
+                return None
+            path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            return f"dropped unavailable npm package {package}"
+
+        return self._patch_package_json(project_dir, mutate)
+
+    def _add_npm_package(self, project_dir: Path, package: str) -> Optional[str]:
+        def mutate(data: dict, path: Path) -> Optional[str]:
+            deps = data.setdefault("dependencies", {})
+            if not isinstance(deps, dict):
+                return None
+            if package in deps:
+                return None
+            deps[package] = "*"
+            path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            return f"added missing npm package {package}"
+
+        return self._patch_package_json(project_dir, mutate)
+
+    # ---- pip / apt ----
+
+    def _rewrite_requirements(self, project_dir: Path, mutate) -> Optional[str]:
+        requirements = project_dir / "requirements.txt"
+        text = self._read_text(requirements)
+        if text is None:
+            return None
+        updated = mutate(text)
+        if updated is None or updated == text:
+            return None
+        requirements.write_text(updated, encoding="utf-8")
+        return True  # type: ignore[return-value]
+
+    def _relax_pip_pin(self, project_dir: Path, package: str) -> Optional[str]:
+        def mutate(text: str) -> Optional[str]:
+            # keep extras (uvicorn[standard]) but drop the pin
+            pattern = re.compile(
+                r"^(\s*)" + re.escape(package) + r"(\[[^\]]*\])?==[^\s;]+",
+                re.IGNORECASE | re.MULTILINE,
+            )
+            if not pattern.search(text):
+                return None
+            return pattern.sub(r"\1" + package + r"\2", text)
+
+        changed = self._rewrite_requirements(project_dir, mutate)
+        return f"relaxed pinned Python requirement {package}" if changed else None
+
+    def _add_pip_distribution(self, project_dir: Path, module: str) -> Optional[str]:
+        distribution = PIP_DISTRIBUTION_ALIASES.get(module, module)
+        normalize = lambda name: re.sub(r"[-_.]+", "-", name).lower()  # noqa: E731
+
+        def mutate(text: str) -> Optional[str]:
+            for line in text.splitlines():
+                name = re.split(r"[<>=!~\[;]", line.strip(), maxsplit=1)[0].strip()
+                if name and normalize(name) == normalize(distribution):
+                    return None
+            return text.rstrip("\n") + f"\n{distribution}\n"
+
+        changed = self._rewrite_requirements(project_dir, mutate)
+        return f"added Python distribution {distribution}" if changed else None
+
+    _APK_ALIASES = {
+        "build-essential": "build-base",
+        "libpq-dev": "postgresql-dev",
+        "python3-dev": "python3-dev",
+    }
+
+    def _inject_system_packages(self, project_dir: Path, packages: list[str]) -> Optional[str]:
+        dockerfile = project_dir / "Dockerfile"
+        text = self._read_text(dockerfile)
+        if text is None:
+            return None
+        first_from = re.search(r"^FROM\s+(\S+)", text, re.MULTILINE)
+        if not first_from:
+            return None
+        base = first_from.group(1).lower()
+        requested = list(dict.fromkeys(packages))
+        if "python" in base:
+            effective = requested
+            anchor = "COPY requirements.txt ."
+        elif "node" in base or "alpine" in base:
+            # Alpine needs its own package names (build-essential → build-base)
+            effective = [self._APK_ALIASES.get(p, p) for p in requested]
+            anchor = "COPY package.json"
+        else:
+            return None
+
+        # Idempotency must be judged on the *effective* names, otherwise an
+        # Alpine image would get a duplicate apk line on every repair pass.
+        installed = [p for p in effective if p not in text]
+        if not installed:
+            return None
+        if "python" in base:
+            install = (
+                "RUN apt-get update && apt-get install -y --no-install-recommends "
+                + " ".join(installed)
+                + " && rm -rf /var/lib/apt/lists/*\n"
+            )
+        else:
+            install = "RUN apk add --no-cache " + " ".join(installed) + "\n"
+
+        if anchor in text:
+            text = text.replace(anchor, install + anchor, 1)
+        else:
+            insert_at = first_from.end() + 1
+            text = text[:insert_at] + install + text[insert_at:]
+        dockerfile.write_text(text, encoding="utf-8")
+        # report the names actually installed (Debian vs Alpine differ)
+        return "installed build packages: " + ", ".join(installed)
+
+    def _generic_relax(self, project_dir: Path) -> Optional[str]:
+        """Last-resort relaxation when the log matched nothing specific."""
+        notes: list[str] = []
+        relaxed_pins = self._rewrite_requirements(
+            project_dir,
+            lambda text: re.sub(r"^(\s*[A-Za-z0-9_.\-]+)==[^\s;]+", r"\1", text, flags=re.MULTILINE),
+        )
+        if relaxed_pins:
+            notes.append("unpinned Python requirements")
+        if self._npm_legacy_peers(project_dir):
+            notes.append("enabled legacy peer-dependency resolution for npm")
+        return "generic relaxation: " + ", ".join(notes) if notes else None
 
     def _render_compose(
         self,
@@ -1349,7 +1839,9 @@ class EphemeralRunner:
                 if self._generator.attach_network:
                     await self._docker.ensure_network(self._generator.network)
                 await self._status.save(status.advance(BuildStage.BUILDING))
-                container_id = await self._docker.build_and_up(project_dir, project_name)
+                container_id = await self._build_self_healing(
+                    request, project_dir, project_name, status
+                )
                 await self._status.save(
                     status.advance(BuildStage.CONTAINER_STARTED, container_id=container_id)
                 )
@@ -1392,6 +1884,69 @@ class EphemeralRunner:
             )
         finally:
             self._allocator.release(request.app_id, host_port)
+
+    async def _build_self_healing(
+        self, request: BuildRequest, project_dir: Path, project_name: str, status: BuildStatus
+    ) -> Optional[str]:
+        """Build the sandbox, repairing the project and retrying once on failure.
+
+        On ``docker compose build`` failure the captured stderr is analysed and
+        the generated project is patched in place (npm peer deps, npm/pip
+        versions, missing packages, build toolchain), then the build is retried
+        **once**.  If the retry also fails it is re-raised annotated with what
+        was attempted, plus the original error, so the runner records FAILED
+        with full context.
+        """
+        try:
+            await self._docker.compose_build(project_dir, project_name)
+        except DockerCommandError as exc:
+            if not SELF_HEAL_ENABLED:
+                raise
+            first_error = exc
+        else:
+            return await self._docker.up(project_dir, project_name)
+
+        print(
+            "[factory] build failed for %s; attempting self-heal. build log tail:\n%s"
+            % (request.app_id, (first_error.stderr or "").strip()[-2000:]),
+            file=sys.stderr,
+        )
+        applied = await asyncio.to_thread(
+            self._generator.repair_build_failure,
+            request,
+            project_dir,
+            first_error.stderr or "",
+        )
+        if not applied:
+            # Nothing patchable (unrecognised failure, no manifest to edit):
+            # a blind retry would just burn another build.
+            print(
+                "[factory] self-heal for %s found no applicable repair; failing without retry"
+                % request.app_id,
+                file=sys.stderr,
+            )
+            raise first_error
+
+        status.repair_attempts = 1
+        status.repairs = list(applied)
+        with contextlib.suppress(Exception):
+            await self._status.save(status)
+
+        try:
+            await self._docker.compose_build(project_dir, project_name)
+        except DockerCommandError as retry_error:
+            # Rebuild the error (not a mutation of .stderr) so str(exc) — and
+            # therefore the persisted FAILED reason — carries the annotation.
+            raise DockerCommandError(
+                retry_error.command,
+                retry_error.returncode,
+                (retry_error.stderr or "")
+                + "\n--- roxira self-heal attempted: "
+                + "; ".join(applied)
+                + "\n--- original build error:\n"
+                + (first_error.stderr or ""),
+            ) from first_error
+        return await self._docker.up(project_dir, project_name)
 
     async def advance_build(self, request: BuildRequest) -> BuildResult:
         """Run the full pipeline for ``request`` immediately, in-process.
