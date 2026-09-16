@@ -1,0 +1,26 @@
+{
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "removeComments": false,
+    "removeEmptyLines": true,
+    "topFilesLength": 10
+  },
+  "include": [
+    "output_apps/enterprise_hub/frontend/src/**/*",
+    "output_apps/generated_modules/smartjudge/**/*",
+    "output_apps/nginx_config/nginx.conf",
+    "docker-compose.prod.yml"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/__pycache__/**",
+      "**/*.pyc",
+      "repomix-output.xml"
+    ]
+  }
+}
