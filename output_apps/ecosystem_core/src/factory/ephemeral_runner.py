@@ -20,6 +20,7 @@ import contextlib
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import time
@@ -34,6 +35,11 @@ try:  # optional — enables the Redis Streams transport
 except Exception:  # pragma: no cover - optional dependency
     AsyncRedis = None  # type: ignore[assignment]
 
+try:  # templates live alongside this module
+    from .templates import SandboxTemplate, select_template
+except ImportError:  # pragma: no cover - direct script execution
+    from templates import SandboxTemplate, select_template  # type: ignore[no-redef]
+
 __all__ = [
     "BuildRequest",
     "BuildResult",
@@ -47,6 +53,7 @@ __all__ = [
     "DockerEngine",
     "PortAllocator",
     "ComposeProjectGenerator",
+    "GeneratedProject",
     "NginxRouteRegistrar",
     "InMemoryBuildQueue",
     "RedisStreamBuildQueue",
@@ -489,8 +496,28 @@ class DockerEngine:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(slots=True)
+class GeneratedProject:
+    project_dir: Path
+    container_port: int
+    template_id: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "project_dir": str(self.project_dir),
+            "container_port": self.container_port,
+            "template_id": self.template_id,
+        }
+
+
 class ComposeProjectGenerator:
-    """Renders an isolated docker-compose project for a single sandbox."""
+    """Renders an isolated docker-compose project for a single sandbox.
+
+    The application source is provided by the scaffold templates in
+    ``templates.py`` (``nextjs-tailwind-landing`` / ``fastapi-microservice``);
+    this class selects the right template, substitutes context, and layers the
+    compose file, environment metadata and network wiring on top.
+    """
 
     def __init__(self, sandbox_root: Path, network: str = "roxira_net", attach_network: bool = True) -> None:
         self._sandbox_root = sandbox_root
@@ -508,41 +535,95 @@ class ComposeProjectGenerator:
     def attach_network(self) -> bool:
         return self._attach_network
 
-    def generate(self, request: BuildRequest, host_port: int) -> Path:
+    def generate(self, request: BuildRequest, host_port: int) -> GeneratedProject:
+        template: SandboxTemplate = select_template(request.target_framework)
         project_dir = self.project_dir(request.app_id)
-        (project_dir / "app").mkdir(parents=True, exist_ok=True)
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        generated_files = template.render(
+            {
+                "app_id": request.app_id,
+                "app_name": request.app_name or request.app_id,
+                "app_name_escaped": json.dumps(request.app_name or request.app_id)[1:-1],
+                "prompt": request.prompt,
+                "prompt_escaped": json.dumps(request.prompt)[1:-1],
+                "target_framework": request.target_framework,
+                "tier": request.tier,
+                "template_id": template.template_id,
+                "container_port": str(template.container_port),
+            }
+        )
+
+        self._clean_previous(project_dir)
+
+        for relative_path, content in generated_files.items():
+            target = project_dir / relative_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
 
         container_name = f"roxira_sandbox_{request.app_id}"
         image = f"roxira-sandbox-{request.app_id}:latest"
-
         (project_dir / "docker-compose.yml").write_text(
-            self._render_compose(request, host_port, container_name, image),
+            self._render_compose(
+                request, host_port, container_name, image, template.container_port, template.template_id
+            ),
             encoding="utf-8",
-        )
-        (project_dir / "Dockerfile").write_text(self._render_dockerfile(), encoding="utf-8")
-        (project_dir / "app" / "__init__.py").write_text("", encoding="utf-8")
-        (project_dir / "app" / "main.py").write_text(
-            self._render_app_main(request), encoding="utf-8"
         )
         (project_dir / ".roxira.env").write_text(
             "\n".join(
                 [
                     f"APP_ID={request.app_id}",
                     f"TARGET_FRAMEWORK={request.target_framework}",
+                    f"TEMPLATE={template.template_id}",
                     f"HOST_PORT={host_port}",
+                    f"CONTAINER_PORT={template.container_port}",
                 ]
             )
             + "\n",
             encoding="utf-8",
         )
-        return project_dir
+
+        manifest = sorted([*generated_files.keys(), "docker-compose.yml", ".roxira.env"])
+        (project_dir / ".roxira.manifest").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        return GeneratedProject(
+            project_dir=project_dir,
+            container_port=template.container_port,
+            template_id=template.template_id,
+        )
+
+    @staticmethod
+    def _clean_previous(project_dir: Path) -> None:
+        """Remove files from a prior generation (keeps ``.reservation``/``sandbox.json``)."""
+        manifest_path = project_dir / ".roxira.manifest"
+        if not manifest_path.exists():
+            return
+        try:
+            previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except Exception:
+            previous = []
+        for relative_path in previous:
+            stale = project_dir / str(relative_path)
+            if stale.is_file():
+                stale.unlink()
+            elif stale.is_dir():
+                shutil.rmtree(stale, ignore_errors=True)
 
     def _render_compose(
-        self, request: BuildRequest, host_port: int, container_name: str, image: str
+        self,
+        request: BuildRequest,
+        host_port: int,
+        container_name: str,
+        image: str,
+        container_port: int,
+        template_id: str,
     ) -> str:
         app_id = json.dumps(request.app_id)
         prompt = json.dumps(request.prompt)
         framework = json.dumps(request.target_framework)
+        template = json.dumps(template_id)
         network_block = ""
         if self._attach_network:
             network_block = (
@@ -563,54 +644,18 @@ class ComposeProjectGenerator:
             f"    container_name: {container_name}\n"
             "    restart: unless-stopped\n"
             "    ports:\n"
-            f'      - "{host_port}:8000"\n'
+            f'      - "{host_port}:{container_port}"\n'
             "    environment:\n"
             f"      APP_ID: {app_id}\n"
             f"      BUILD_PROMPT: {prompt}\n"
             f"      TARGET_FRAMEWORK: {framework}\n"
+            f"      ROXIRA_TEMPLATE: {template}\n"
             "    labels:\n"
             '      roxira.sandbox: "true"\n'
             f"      roxira.app_id: {app_id}\n"
+            f"      roxira.template: {template}\n"
             f'      roxira.host_port: "{host_port}"\n'
             f"{network_block}"
-        )
-
-    @staticmethod
-    def _render_dockerfile() -> str:
-        return (
-            "FROM python:3.12-slim\n"
-            "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1\n"
-            "WORKDIR /srv\n"
-            "RUN pip install --no-cache-dir fastapi==0.115.0 'uvicorn[standard]==0.30.6'\n"
-            "COPY app ./app\n"
-            "EXPOSE 8000\n"
-            'CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]\n'
-        )
-
-    @staticmethod
-    def _render_app_main(request: BuildRequest) -> str:
-        app_id = json.dumps(request.app_id)
-        prompt = json.dumps(request.prompt)
-        framework = json.dumps(request.target_framework)
-        return (
-            '"""Generated ephemeral sandbox application."""\n'
-            "from __future__ import annotations\n\n"
-            "from fastapi import FastAPI\n\n"
-            f"APP_ID = {app_id}\n"
-            f"BUILD_PROMPT = {prompt}\n"
-            f"TARGET_FRAMEWORK = {framework}\n\n"
-            f'app = FastAPI(title=f"Roxira Sandbox {{APP_ID}}")\n\n\n'
-            '@app.get("/health")\n'
-            "def health() -> dict[str, str]:\n"
-            '    return {"status": "healthy", "app_id": APP_ID}\n\n\n'
-            '@app.get("/")\n'
-            "def root() -> dict[str, str]:\n"
-            "    return {\n"
-            '        "status": "ok",\n'
-            '        "app_id": APP_ID,\n'
-            '        "target_framework": TARGET_FRAMEWORK,\n'
-            '        "prompt": BUILD_PROMPT,\n'
-            "    }\n"
         )
 
 
@@ -873,7 +918,8 @@ class EphemeralRunner:
                     container_name=container_name,
                 )
             )
-            project_dir = await asyncio.to_thread(self._generator.generate, request, host_port)
+            generated = await asyncio.to_thread(self._generator.generate, request, host_port)
+            project_dir = generated.project_dir
             await self._status.save(
                 status.advance(BuildStage.PROJECT_GENERATED, project_dir=str(project_dir))
             )
@@ -886,7 +932,9 @@ class EphemeralRunner:
                 await self._status.save(
                     status.advance(BuildStage.CONTAINER_STARTED, container_id=container_id)
                 )
-                subdomain = await self._nginx.register(request.app_id, f"{container_name}:8000")
+                subdomain = await self._nginx.register(
+                    request.app_id, f"{container_name}:{generated.container_port}"
+                )
                 await self._status.save(
                     status.advance(
                         BuildStage.ROUTE_REGISTERED,
