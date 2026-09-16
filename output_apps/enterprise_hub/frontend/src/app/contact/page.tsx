@@ -1,104 +1,123 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { GhaziHeader } from "@/components/layout/ghazi-header";
-import { EnamadFooter } from "@/components/layout/enamad-footer";
+import {
+  Building2,
+  Clock,
+  Cpu,
+  FileCheck2,
+  Mail,
+  MapPin,
+  Phone,
+  ServerCog,
+} from "lucide-react";
+
+import { SiteHeader } from "@/components/layout/site-header";
+import { RoxiraFooter } from "@/components/layout/roxira-footer";
+import { EnterpriseSalesForm } from "@/components/contact/enterprise-sales-form";
 
 export const metadata: Metadata = {
-  title: "تماس با ما و پشتیبانی | سامانه هوشمند قاضی هوشمند",
+  title: "دموی سازمانی و فروش | Roxira Enterprise OS",
   description:
-    "راه‌های ارتباط مستقیم با واحد پشتیبانی حقوقی و فنی سامانه قاضی هوشمند، شماره پشتیبانی ۲۴ ساعته و اطلاعات رسمی اینماد.",
+    "درخواست دموی سازمانی و استعلام فروش رکسایرا برای انطباق مالیاتی (سامانه مودیان)، ERP و حسابداری یکپارچه و کارخانه نرم‌افزار خودمختار.",
 };
+
+const COVERAGE = [
+  { icon: FileCheck2, label: "انطباق مالیاتی (سامانه مودیان)" },
+  { icon: Building2, label: "ERP و حسابداری یکپارچه" },
+  { icon: Cpu, label: "کارخانه نرم‌افزار خودمختار" },
+];
 
 export default function ContactPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 font-sans" dir="rtl">
-      <GhaziHeader />
+    <div dir="rtl" className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
+      <SiteHeader />
 
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-10">
-        {/* هدر بخش تماس با ما */}
-        <section className="text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-            <span>📞</span>
-            <span>مرکز ارتباط با کاربران و پشتیبانی حقوقی</span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-            تماس با ما و پشتیبانی سامانه قاضی هوشمند
-          </h1>
-          <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            تیم کارشناسان حقوقی و پشتیبانی فنی قاضی هوشمند در کلیه ساعات شبانه‌روز آماده پاسخگویی به سوالات، راهنمایی در تنظیم لوایح و بررسی بازخوردهای شما هستند.
-          </p>
-        </section>
-
-        {/* کانال‌های ارتباطی */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-900/70 border border-slate-800 p-6 rounded-2xl text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-2xl mx-auto text-amber-400">
-              📞
-            </div>
-            <h3 className="font-bold text-white text-base">تماس مستقیم ۲۴/۷</h3>
-            <p className="text-xs text-slate-400">پاسخگویی مستقیم تلفنی برای کاربران عادی و مشترکین VIP</p>
-            <a
-              href="tel:09129367796"
-              className="inline-block text-amber-400 font-mono font-bold text-base hover:underline"
-            >
-              09129367796
-            </a>
-          </div>
-
-          <div className="bg-slate-900/70 border border-slate-800 p-6 rounded-2xl text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-2xl mx-auto text-emerald-400">
-              💬
-            </div>
-            <h3 className="font-bold text-white text-base">مشاوره آنلاین هوشمند</h3>
-            <p className="text-xs text-slate-400">پاسخ فوری به سوالات پرونده به صورت متنی و صوتی در سامانه</p>
-            <Link
-              href="/chat"
-              className="inline-block px-4 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold hover:bg-emerald-500/30 transition-colors"
-            >
-              شروع گفتگوی حقوقی
-            </Link>
-          </div>
-
-          <div className="bg-slate-900/70 border border-slate-800 p-6 rounded-2xl text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-2xl mx-auto text-indigo-400">
-              🛡️
-            </div>
-            <h3 className="font-bold text-white text-base">اعتبار رسمی اینماد</h3>
-            <p className="text-xs text-slate-400">دارای نماد اعتماد الکترونیکی رسمی وزارت صمت</p>
-            <span className="inline-block font-mono text-xs text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-lg border border-indigo-500/20">
-              شناسه کسب‌وکار: ۷۴۹۱۴۳۹
+      <main className="flex-1">
+        <section className="relative overflow-hidden border-b border-white/10">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_45%_at_50%_0%,rgba(99,102,241,0.14),transparent_70%)]" />
+          <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 font-mono text-[11px] font-semibold text-indigo-300">
+              <ServerCog className="size-3.5" />
+              ENTERPRISE DEMO &amp; SALES
             </span>
+            <h1 className="mt-6 max-w-2xl text-3xl font-black leading-tight text-white sm:text-4xl">
+              درخواست دموی سازمانی و استعلام فروش
+            </h1>
+            <p className="mt-5 max-w-2xl text-sm leading-relaxed text-slate-400">
+              طرح مورد نظر خود را انتخاب کنید و اطلاعات شرکت را ثبت نمایید؛ کارشناس فروش سازمانی
+              رکسایرا برای هماهنگی دموی اختصاصی و ارائه پیشنهاد با شما تماس می‌گیرد.
+            </p>
           </div>
         </section>
 
-        {/* مشخصات قانونی و مالکیت سامانه */}
-        <section className="bg-slate-900/60 border border-slate-800 p-6 sm:p-8 rounded-3xl space-y-4">
-          <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-            <span>🏛️</span>
-            <span>اطلاعات هویتی و ثبت حقوقی سامانه</span>
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-slate-300">
-            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-              <span className="text-slate-500 block mb-1">نام سامانه:</span>
-              <span className="font-semibold text-white">سامانه هوشمند قاضی هوشمند (Ghazihoushmand)</span>
+        <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <EnterpriseSalesForm />
             </div>
-            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-              <span className="text-slate-500 block mb-1">مدیریت سامانه:</span>
-              <span className="font-semibold text-white">آقای ماهان محمدی</span>
-            </div>
-            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-              <span className="text-slate-500 block mb-1">حوزه فعالیت:</span>
-              <span>ارائه خدمات پردازش و استخراج هوشمند قوانین و لوایح دادرسی</span>
-            </div>
-            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-              <span className="text-slate-500 block mb-1">نحوه ارتباط فوری:</span>
-              <span className="font-mono text-amber-400">09129367796 (پاسخگویی مستقیم)</span>
-            </div>
+
+            <aside className="space-y-6">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+                <h2 className="text-sm font-bold text-white">پوشش طرح‌ها</h2>
+                <ul className="mt-4 space-y-3">
+                  {COVERAGE.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <li key={item.label} className="flex items-start gap-2.5 text-xs text-slate-300">
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-300">
+                          <Icon className="size-3.5" />
+                        </span>
+                        <span className="leading-relaxed">{item.label}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+                <h2 className="text-sm font-bold text-white">تماس مستقیم</h2>
+                <ul className="mt-4 space-y-3 text-xs">
+                  <li className="flex items-center gap-2.5">
+                    <Phone className="size-3.5 shrink-0 text-indigo-300" />
+                    <a
+                      href="tel:09129367796"
+                      dir="ltr"
+                      className="font-mono font-semibold text-slate-200 transition-colors hover:text-indigo-300"
+                    >
+                      0912 936 7796
+                    </a>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Mail className="size-3.5 shrink-0 text-indigo-300" />
+                    <a
+                      href="mailto:sales@roxira.ir"
+                      dir="ltr"
+                      className="font-mono text-slate-200 transition-colors hover:text-indigo-300"
+                    >
+                      sales@roxira.ir
+                    </a>
+                  </li>
+                  <li className="flex items-start gap-2.5 leading-relaxed text-slate-300">
+                    <MapPin className="mt-0.5 size-3.5 shrink-0 text-indigo-300" />
+                    <span>تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/[0.05] p-6">
+                <span className="flex items-center gap-2 text-xs font-bold text-emerald-300">
+                  <Clock className="size-4" />
+                  زمان پاسخ‌گویی
+                </span>
+                <p className="mt-2 text-xs leading-relaxed text-slate-300">
+                  درخواست‌های سازمانی معمولاً در کمتر از یک روز کاری بررسی و پاسخ داده می‌شوند.
+                </p>
+              </div>
+            </aside>
           </div>
         </section>
       </main>
 
-      <EnamadFooter />
+      <RoxiraFooter />
     </div>
   );
 }
