@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   Boxes,
+  Check,
   CheckCircle2,
   Circle,
+  Copy,
   Cpu,
   Database,
   ExternalLink,
@@ -52,6 +54,9 @@ interface FactoryBuildStatus {
   stage: string;
   status: string;
   app_name?: string | null;
+  prompt?: string | null;
+  target_framework?: string | null;
+  tier?: string | null;
   host_port?: number | null;
   subdomain?: string | null;
   url?: string | null;
@@ -82,6 +87,8 @@ interface SandboxHistoryEntry {
   subdomain: string | null;
   url: string | null;
   updated_at: number;
+  health?: string | null;
+  container_id?: string | null;
 }
 
 const HISTORY_KEY = "roxira.foundry.sandboxes";
@@ -98,6 +105,7 @@ interface SandboxSummary {
   url?: string | null;
   container_id?: string | null;
   deployed?: boolean;
+  health?: string | null;
   created_at?: number;
   updated_at?: number;
 }
@@ -110,6 +118,40 @@ const SANDBOX_BADGE: Record<string, string> = {
   DESTROYED: "border-slate-600/50 bg-slate-700/20 text-slate-400",
 };
 const SANDBOX_BADGE_DEFAULT = "border-amber-400/30 bg-amber-400/10 text-amber-300";
+
+const HEALTH_STYLES: Record<string, { dot: string; text: string; label: string }> = {
+  HEALTHY: { dot: "bg-emerald-400", text: "text-emerald-300", label: "HEALTHY" },
+  STARTING: { dot: "bg-amber-400", text: "text-amber-300", label: "STARTING" },
+  UNHEALTHY: { dot: "bg-rose-500", text: "text-rose-300", label: "UNHEALTHY" },
+};
+
+function classifyFromStage(stage: string): string {
+  if (stage === "RUNNING") return "HEALTHY";
+  if (stage === "FAILED" || stage === "REJECTED" || stage === "DESTROYED") return "UNHEALTHY";
+  return "STARTING";
+}
+
+type SandboxFilter = "all" | "running" | "failed" | "destroyed";
+
+const SANDBOX_FILTERS: { id: SandboxFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "running", label: "Running" },
+  { id: "failed", label: "Failed" },
+  { id: "destroyed", label: "Destroyed" },
+];
+
+function matchesFilter(entry: SandboxHistoryEntry, filter: SandboxFilter): boolean {
+  switch (filter) {
+    case "running":
+      return entry.stage === "RUNNING";
+    case "failed":
+      return entry.stage === "FAILED" || entry.stage === "REJECTED";
+    case "destroyed":
+      return entry.stage === "DESTROYED";
+    default:
+      return true;
+  }
+}
 
 function loadHistory(): SandboxHistoryEntry[] {
   if (typeof window === "undefined") return [];
@@ -136,14 +178,17 @@ function toHistoryEntry(source: SandboxSummary): SandboxHistoryEntry {
       : typeof source.port === "number"
         ? source.port
         : null;
+  const stage = source.stage ?? source.status ?? "UNKNOWN";
   return {
     app_id: source.app_id,
-    stage: source.stage ?? source.status ?? "UNKNOWN",
-    status: source.status ?? source.stage ?? "UNKNOWN",
+    stage,
+    status: source.status ?? stage,
     host_port: port,
     subdomain: source.subdomain ?? null,
     url: source.url ?? null,
     updated_at: source.updated_at ?? source.created_at ?? Date.now() / 1000,
+    health: source.health ?? classifyFromStage(stage),
+    container_id: source.container_id ?? null,
   };
 }
 
@@ -169,11 +214,11 @@ function upsertHistory(prev: SandboxHistoryEntry[], source: SandboxSummary): San
 
 const TARGETS: ProbeTarget[] = [
   {
-    id: "ghazi",
-    name: "Ghazihoushmand AI",
+    id: "engine",
+    name: "Roxira Factory Engine",
     port: ":8000",
-    description: "FastAPI · Dual-Level GraphRAG",
-    url: process.env.NEXT_PUBLIC_JUDGE_HEALTH_URL ?? "/api/v1/apps/judge/health",
+    description: "FastAPI · Synthesize & Sandbox Orchestration",
+    url: process.env.NEXT_PUBLIC_ENGINE_HEALTH_URL ?? "/health",
     mode: "cors",
     icon: Cpu,
     accent: "text-amber-300",
@@ -353,6 +398,11 @@ export default function MissionControlPage() {
   const [historySource, setHistorySource] = useState<"remote" | "local">("local");
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
   const [teardownError, setTeardownError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [filter, setFilter] = useState<SandboxFilter>("all");
+  const [rebuilding, setRebuilding] = useState<Record<string, boolean>>({});
+  const [rebuildError, setRebuildError] = useState<string | null>(null);
 
   const checkAll = useCallback(async () => {
     abortRef.current?.abort();
@@ -480,38 +530,45 @@ export default function MissionControlPage() {
     };
   }, [activeAppId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      let remote: SandboxHistoryEntry[] | null = null;
-      try {
-        const res = await fetch(`${FACTORY_BASE}/sandboxes`, { cache: "no-store" });
-        if (res.ok) {
-          const data = (await res.json()) as unknown;
-          const rows = Array.isArray(data) ? (data as SandboxSummary[]) : [];
-          remote = rows
-            .filter((row) => row !== null && typeof row === "object" && typeof row.app_id === "string")
-            .map(toHistoryEntry)
-            .slice(0, HISTORY_LIMIT);
-        }
-      } catch {
-        remote = null;
+  const refreshSandboxes = useCallback(async () => {
+    let remote: SandboxHistoryEntry[] | null = null;
+    try {
+      const res = await fetch(`${FACTORY_BASE}/sandboxes`, { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as unknown;
+        const rows = Array.isArray(data) ? (data as SandboxSummary[]) : [];
+        remote = rows
+          .filter((row) => row !== null && typeof row === "object" && typeof row.app_id === "string")
+          .map(toHistoryEntry)
+          .slice(0, HISTORY_LIMIT);
       }
-      if (cancelled) return;
-      if (remote && remote.length > 0) {
-        setHistory(remote);
-        setHistorySource("remote");
-      } else {
-        setHistory(loadHistory());
-        setHistorySource("local");
-      }
-      setHistoryReady(true);
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
+    } catch {
+      remote = null;
+    }
+    if (remote && remote.length > 0) {
+      setHistory(remote);
+      setHistorySource("remote");
+    } else {
+      setHistory(loadHistory());
+      setHistorySource("local");
+    }
+    setHistoryReady(true);
   }, []);
+
+  useEffect(() => {
+    const kickoff = setTimeout(() => {
+      void refreshSandboxes();
+    }, 0);
+    return () => clearTimeout(kickoff);
+  }, [refreshSandboxes]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      void refreshSandboxes();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, refreshSandboxes]);
 
   useEffect(() => {
     if (!historyReady) return;
@@ -532,6 +589,67 @@ export default function MissionControlPage() {
 
   const clearHistory = useCallback(() => {
     setHistory([]);
+  }, []);
+
+  const copySubdomain = useCallback(async (appId: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedId(appId);
+      window.setTimeout(() => {
+        setCopiedId((current) => (current === appId ? null : current));
+      }, 1500);
+    } catch {
+      setCopiedId(null);
+    }
+  }, []);
+
+  const rebuild = useCallback(async (appId: string) => {
+    setRebuilding((prev) => ({ ...prev, [appId]: true }));
+    setRebuildError(null);
+    try {
+      const detailRes = await fetch(
+        `${FACTORY_BASE}/synthesize-app/${encodeURIComponent(appId)}`,
+        { cache: "no-store" },
+      );
+      if (!detailRes.ok) throw new Error(`detail HTTP ${detailRes.status}`);
+      const detail = (await detailRes.json()) as FactoryBuildStatus;
+      const specification = (detail.prompt ?? "").trim();
+      if (!specification) throw new Error("previous prompt unavailable");
+
+      const submitRes = await fetch(FACTORY_SYNTHESIZE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          app_id: detail.app_id,
+          app_name: detail.app_name ?? detail.app_id,
+          specification,
+          target_framework: detail.target_framework ?? "FastAPI",
+          tier: detail.tier ?? "STANDARD",
+        }),
+      });
+      if (!submitRes.ok) throw new Error(`HTTP ${submitRes.status}`);
+
+      const data = (await submitRes.json().catch(() => null)) as
+        | { app_id?: string; stage?: string; status?: string }
+        | null;
+      const nextId = data?.app_id ?? appId;
+      setBuildStatus({
+        app_id: nextId,
+        stage: data?.stage ?? "QUEUED",
+        status: data?.status ?? "QUEUED",
+        app_name: detail.app_name ?? null,
+        stages: [],
+      });
+      setActiveAppId(nextId);
+    } catch (error) {
+      setRebuildError(error instanceof Error ? error.message : "rebuild failed");
+    } finally {
+      setRebuilding((prev) => {
+        const copy = { ...prev };
+        delete copy[appId];
+        return copy;
+      });
+    }
   }, []);
 
   const teardown = useCallback(
@@ -571,6 +689,8 @@ export default function MissionControlPage() {
     },
     [activeAppId],
   );
+
+  const visibleHistory = history.filter((entry) => matchesFilter(entry, filter));
 
   return (
     <div dir="ltr" className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -800,16 +920,56 @@ export default function MissionControlPage() {
                 {historySource === "remote" ? "LIVE" : "LOCAL"}
               </span>
             </div>
-            {history.length > 0 && (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={clearHistory}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 px-2.5 py-1.5 font-mono text-[10px] text-slate-400 transition-colors hover:border-rose-400/40 hover:text-rose-300"
+                onClick={() => setAutoRefresh((prev) => !prev)}
+                aria-pressed={autoRefresh}
+                title={autoRefresh ? "Auto-refresh every 5s is on" : "Turn on auto-refresh (5s)"}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] transition-colors ${
+                  autoRefresh
+                    ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
+                    : "border-slate-800 text-slate-400 hover:text-white"
+                }`}
               >
-                <Trash2 className="size-3" />
-                CLEAR
+                <RefreshCw className={`size-3 ${autoRefresh ? "animate-spin" : ""}`} />
+                AUTO 5s
               </button>
-            )}
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearHistory}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 px-2.5 py-1.5 font-mono text-[10px] text-slate-400 transition-colors hover:border-rose-400/40 hover:text-rose-300"
+                >
+                  <Trash2 className="size-3" />
+                  CLEAR
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {SANDBOX_FILTERS.map((option) => {
+              const count =
+                option.id === "all"
+                  ? history.length
+                  : history.filter((entry) => matchesFilter(entry, option.id)).length;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setFilter(option.id)}
+                  aria-pressed={filter === option.id}
+                  className={`rounded-lg border px-3 py-1.5 font-mono text-[10px] transition-colors ${
+                    filter === option.id
+                      ? "border-indigo-400/40 bg-indigo-400/10 text-indigo-200"
+                      : "border-slate-800 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {option.label} ({count})
+                </button>
+              );
+            })}
           </div>
 
           {teardownError && (
@@ -818,21 +978,50 @@ export default function MissionControlPage() {
             </p>
           )}
 
-          {history.length === 0 ? (
+          {rebuildError && (
+            <p className="mt-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 font-mono text-[10px] text-rose-200">
+              rebuild failed — {rebuildError}
+            </p>
+          )}
+
+          {visibleHistory.length === 0 ? (
             <p className="mt-4 font-mono text-[11px] text-slate-600">
-              No sandboxes yet — run a synthesis above to populate this list.
+              {history.length === 0
+                ? "No sandboxes yet — run a synthesis above to populate this list."
+                : "No sandboxes match this filter."}
             </p>
           ) : (
             <ul className="mt-4 divide-y divide-slate-800/70">
-              {history.map((entry) => {
+              {visibleHistory.map((entry) => {
                 const badgeClass = SANDBOX_BADGE[entry.stage] ?? SANDBOX_BADGE_DEFAULT;
                 const link = entry.url ?? (entry.subdomain ? `http://${entry.subdomain}` : null);
                 const isDeleting = Boolean(deleting[entry.app_id]);
+                const healthKey = (entry.health ?? classifyFromStage(entry.stage)).toUpperCase();
+                const healthTone = HEALTH_STYLES[healthKey] ?? HEALTH_STYLES.STARTING;
+                const isActive = Boolean(entry.container_id) || entry.stage === "RUNNING";
+                const copied = copiedId === entry.app_id;
+                const isRebuilding = Boolean(rebuilding[entry.app_id]);
                 return (
                   <li key={entry.app_id} className="flex flex-wrap items-center gap-3 py-3">
                     <span className="font-mono text-xs font-semibold text-slate-100">
                       {entry.app_id}
                     </span>
+
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px]"
+                      title={isActive ? "Live container telemetry" : "Build telemetry"}
+                    >
+                      <span className="relative flex size-1.5">
+                        <span
+                          className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                            isActive ? "animate-ping" : ""
+                          } ${healthTone.dot}`}
+                        />
+                        <span className={`relative inline-flex size-1.5 rounded-full ${healthTone.dot}`} />
+                      </span>
+                      <span className={healthTone.text}>{healthTone.label}</span>
+                    </span>
+
                     <span
                       className={`rounded-lg border px-2 py-0.5 font-mono text-[10px] ${badgeClass}`}
                     >
@@ -843,19 +1032,53 @@ export default function MissionControlPage() {
                     </span>
                     <span className="ml-auto flex items-center gap-2">
                       {link ? (
-                        <a
-                          href={link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-emerald-200 transition-colors hover:bg-emerald-400/20"
-                        >
-                          <ExternalLink className="size-3" />
-                          {entry.subdomain ?? link}
-                        </a>
+                        <>
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-emerald-200 transition-colors hover:bg-emerald-400/20"
+                          >
+                            <ExternalLink className="size-3" />
+                            {entry.subdomain ?? link}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => void copySubdomain(entry.app_id, entry.subdomain ?? link)}
+                            title="Copy subdomain"
+                            aria-label="Copy subdomain"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 px-2 py-1 font-mono text-[10px] text-slate-400 transition-colors hover:border-slate-700 hover:text-white"
+                          >
+                            {copied ? (
+                              <Check className="size-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="size-3" />
+                            )}
+                            {copied ? "COPIED" : "COPY"}
+                          </button>
+                        </>
                       ) : (
                         <span className="font-mono text-[10px] text-slate-600">
                           no subdomain yet
                         </span>
+                      )}
+
+                      {(entry.stage === "FAILED" || entry.stage === "REJECTED") && (
+                        <button
+                          type="button"
+                          onClick={() => void rebuild(entry.app_id)}
+                          disabled={isRebuilding}
+                          aria-busy={isRebuilding}
+                          title="Rebuild with the previous prompt"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-amber-200 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isRebuilding ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-3" />
+                          )}
+                          {isRebuilding ? "REBUILDING…" : "REBUILD"}
+                        </button>
                       )}
 
                       {entry.stage !== "DESTROYED" && (

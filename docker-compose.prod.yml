@@ -219,8 +219,18 @@ services:
       - "443:443"
     volumes:
       - ./output_apps/nginx_config/nginx.conf:/etc/nginx/nginx.conf:ro
+      # vhostهای سندباکسهای خودکار (Software Foundry) — ephemeral_runner.py
+      # فایلها را روی هاست در /opt/roxira_platform/nginx/sandboxes میسازد و
+      # این مانت آنها را در دسترس nginx -t / nginx -s reload قرار میدهد.
+      - /opt/roxira_platform/nginx/sandboxes:/opt/roxira_platform/nginx/sandboxes:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - certbot_web:/var/www/certbot
+    # مسیر رسیدن nginx به پورت منتشرشدهٔ سندباکسها در حالت bridge:
+    # با تنظیم ROXIRA_NGINX_UPSTREAM_HOST=host.docker.internal این نام
+    # به IP میزبان گره میخورد. 127.0.0.1 (پیشفرض) فقط وقتی درست است که
+    # nginx روی network_mode: host اجرا شود.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - enterprise_app
       - roxira_enterprise_backend

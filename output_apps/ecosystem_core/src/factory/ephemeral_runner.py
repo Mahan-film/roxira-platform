@@ -51,6 +51,12 @@ __all__ = [
     "EphemeralRunnerError",
     "PortAllocationError",
     "NginxReloadError",
+    "ContainerStartError",
+    "GARBAGE_COLLECT_ENABLED",
+    "GC_STAGES",
+    "SANDBOX_RETENTION_SECONDS",
+    "GC_INTERVAL_SECONDS",
+    "CONTAINER_VERIFY_ENABLED",
     "DockerEngine",
     "HostPortInspector",
     "parse_published_ports",
@@ -84,6 +90,20 @@ DEFAULT_SANDBOX_ROOT = Path("/opt/roxira_platform/data/sandboxes")
 DEFAULT_NGINX_SANDBOX_DIR = Path("/opt/roxira_platform/nginx/sandboxes")
 DEFAULT_DOCKER_SOCKET = "/var/run/docker.sock"
 DEFAULT_NGINX_CONTAINER = "roxira_nginx_prod"
+#: Base domain every sandbox is published under ({app_id}.<base>).
+DEFAULT_SANDBOX_BASE_DOMAIN = "roxira.net"
+#: Host the Nginx gateway reaches a sandbox's published port on.  `127.0.0.1`
+#: is correct when the gateway shares the host network namespace (or when the
+#: sandbox container is published on the host).  In a bridge-only gateway use
+#: the host gateway ("host.docker.internal") or the sandbox service name.
+DEFAULT_NGINX_UPSTREAM_HOST = "127.0.0.1"
+#: Marker comment stamped into every managed vhost — used to prove the file is
+#: actually loaded by the running Nginx.
+NGINX_VHOST_MARKER = "# roxira sandbox vhost"
+#: Values recorded in :attr:`BuildStatus.route_status`.
+ROUTE_STATUS_REGISTERED = "REGISTERED"
+ROUTE_STATUS_REMOVED = "REMOVED"
+ROUTE_STATUS_FAILED = "FAILED"
 PORT_RANGE_START = 4000
 PORT_RANGE_END = 4999
 STREAM_KEY = "factory:build:requests"
@@ -116,6 +136,10 @@ class PortAllocationError(EphemeralRunnerError):
 
 class NginxReloadError(EphemeralRunnerError):
     """Raised when the Nginx configuration test or reload fails."""
+
+
+class ContainerStartError(EphemeralRunnerError):
+    """Raised when a sandbox container is not running / has not bound its port."""
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +239,20 @@ class BuildStatus:
     url: Optional[str] = None
     container_id: Optional[str] = None
     container_name: Optional[str] = None
+    #: Live docker state at CONTAINER_STARTED ("running", "exited", …).
+    container_state: Optional[str] = None
+    #: Whether the allocated host port was confirmed bound by the container.
+    port_bound: Optional[bool] = None
     project_dir: Optional[str] = None
+    # -- nginx route bookkeeping ------------------------------------------
+    #: REGISTERED / REMOVED / FAILED — the state of the sandbox vhost.
+    route_status: Optional[str] = None
+    #: Upstream Nginx proxies to, e.g. ``127.0.0.1:4211``.
+    upstream: Optional[str] = None
+    #: Absolute path of the managed vhost file.
+    nginx_conf: Optional[str] = None
+    #: Unix timestamp of the last successful route registration.
+    route_registered_at: Optional[float] = None
     error: Optional[str] = None
     repair_attempts: int = 0
     repairs: list[str] = field(default_factory=list)
@@ -276,6 +313,35 @@ HEALTH_PROBE_TIMEOUT = float(os.getenv("ROXIRA_HEALTH_TIMEOUT", "1.5"))
 SANDBOX_STARTUP_GRACE_SECONDS = float(os.getenv("ROXIRA_SANDBOX_STARTUP_GRACE", "30"))
 #: Cap on concurrent probes so listing can't stampede the host.
 HEALTH_PROBE_CONCURRENCY = int(os.getenv("ROXIRA_HEALTH_CONCURRENCY", "8"))
+
+# ---------------------------------------------------------------------------
+# Container start verification
+# ---------------------------------------------------------------------------
+
+#: Verify the container is running *and* its port is bound before CONTAINER_STARTED.
+CONTAINER_VERIFY_ENABLED = os.getenv("ROXIRA_CONTAINER_VERIFY", "1") != "0"
+#: How many times to re-inspect a container that isn't up/published yet.
+CONTAINER_VERIFY_ATTEMPTS = int(os.getenv("ROXIRA_CONTAINER_VERIFY_ATTEMPTS", "5"))
+#: Delay between verification attempts (seconds).
+CONTAINER_VERIFY_DELAY = float(os.getenv("ROXIRA_CONTAINER_VERIFY_DELAY", "1.0"))
+
+# ---------------------------------------------------------------------------
+# Garbage collection
+# ---------------------------------------------------------------------------
+
+#: Background reaper for finished sandboxes.
+GARBAGE_COLLECT_ENABLED = os.getenv("ROXIRA_GC_ENABLED", "1") != "0"
+#: A DESTROYED/FAILED sandbox is kept this long (for audit/status reads) before
+#: its directory is deleted. Default: 24 hours.
+SANDBOX_RETENTION_SECONDS = float(
+    os.getenv("ROXIRA_SANDBOX_RETENTION_SECONDS", str(24 * 3600))
+)
+#: How often the reaper runs.
+GC_INTERVAL_SECONDS = float(os.getenv("ROXIRA_GC_INTERVAL_SECONDS", "3600"))
+#: Terminal stages whose directories are eligible for reclamation.
+GC_STAGES: frozenset[str] = frozenset(
+    {BuildStage.DESTROYED.value, BuildStage.FAILED.value}
+)
 
 _HEALTH_REQUEST = (
     "GET / HTTP/1.1\r\n"
@@ -378,7 +444,13 @@ def sandbox_summary(status: BuildStatus, health: Optional[str] = None) -> dict[s
         "port": status.host_port,
         "subdomain": status.subdomain,
         "url": status.url,
+        "route_status": status.route_status,
+        "upstream": status.upstream,
+        "nginx_conf": status.nginx_conf,
+        "route_registered_at": status.route_registered_at,
         "container_id": status.container_id,
+        "container_state": status.container_state,
+        "port_bound": status.port_bound,
         "deployed": status.stage in DEPLOYED_STAGES,
         "health": health or classify_health(status),
         "self_healed": status.repair_attempts > 0,
@@ -619,6 +691,15 @@ class PortAllocator:
                 reserved.add(int(lock.stem))
         return reserved
 
+    def allocated_ports(self) -> set[int]:
+        """Every port currently held: on-disk reservations plus in-flight ones.
+
+        Backs the ``allocated_ports`` metric — a port is "allocated" from the
+        moment :meth:`allocate` hands it out until :meth:`release` is called
+        (including ports held by other worker processes sharing the root).
+        """
+        return self.reserved_ports() | set(self._in_flight)
+
     # -- layer 3: socket availability -------------------------------------
 
     @staticmethod
@@ -836,6 +917,128 @@ class DockerEngine:
         except DockerCommandError:
             pass
         await self._run(["docker", "network", "create", network], timeout=60)
+
+    # -- resilient container / port inspection -----------------------------
+
+    async def container_state(self, name: str, timeout: float = 30.0) -> Optional[str]:
+        """``docker inspect`` state of ``name`` (``running``, ``exited``, …).
+
+        Returns ``None`` when the container does not exist or the daemon cannot
+        be reached, so callers can distinguish "absent" from "broken".
+        """
+        try:
+            out = await self._run(
+                ["docker", "inspect", "--format", "{{.State.Status}}", name],
+                timeout=timeout,
+            )
+        except (DockerCommandError, FileNotFoundError, OSError):
+            return None
+        state = out.strip().splitlines()[0].strip() if out.strip() else ""
+        return state or None
+
+    async def container_exists(self, name: str, timeout: float = 30.0) -> bool:
+        """True when a container with exactly this name exists (any state)."""
+        try:
+            out = await self._run(
+                [
+                    "docker",
+                    "ps",
+                    "--all",
+                    "--filter",
+                    f"name=^{name}$",
+                    "--format",
+                    "{{.Names}}",
+                ],
+                timeout=timeout,
+            )
+        except (DockerCommandError, FileNotFoundError, OSError):
+            return False
+        return name in {line.strip() for line in out.splitlines()}
+
+    async def published_ports_for(self, name: str, timeout: float = 30.0) -> set[int]:
+        """Host ports actually bound by ``name``, straight from ``docker inspect``.
+
+        Reads ``NetworkSettings.Ports`` (e.g. ``{"80/tcp": [{"HostPort":
+        "4211"}]}``) rather than ``docker ps`` text, so it reflects the live
+        binding of *this* container only.
+        """
+        try:
+            raw = await self._run(
+                ["docker", "inspect", "--format", "{{json .NetworkSettings.Ports}}", name],
+                timeout=timeout,
+            )
+        except (DockerCommandError, FileNotFoundError, OSError):
+            return set()
+        try:
+            mapping = json.loads(raw.strip() or "{}")
+        except (ValueError, TypeError):
+            return set()
+        ports: set[int] = set()
+        if isinstance(mapping, dict):
+            for bindings in mapping.values():
+                for binding in bindings or []:
+                    if not isinstance(binding, dict):
+                        continue
+                    try:
+                        ports.add(int(binding.get("HostPort")))
+                    except (TypeError, ValueError):
+                        continue
+        return ports
+
+    async def verify_running(
+        self,
+        name: str,
+        host_port: Optional[int] = None,
+        attempts: int = CONTAINER_VERIFY_ATTEMPTS,
+        delay: float = CONTAINER_VERIFY_DELAY,
+    ) -> dict[str, Any]:
+        """Confirm a container is *running* and has *bound* its host port.
+
+        ``docker compose up -d`` returning success only means the container was
+        created — it may have exited immediately (bad CMD, missing env) or still
+        be publishing its port.  Both facts are re-inspected here, retrying
+        ``attempts`` times with ``delay`` between tries, so a sandbox is never
+        advertised as CONTAINER_STARTED while it is dead or unreachable.
+        """
+        last_state: Optional[str] = None
+        last_ports: set[int] = set()
+        tries = max(1, int(attempts))
+        for attempt in range(1, tries + 1):
+            last_state = await self.container_state(name)
+            last_ports = await self.published_ports_for(name)
+            running = last_state == "running"
+            bound = host_port is None or int(host_port) in last_ports
+            if running and bound:
+                return {
+                    "verified": True,
+                    "running": True,
+                    "state": last_state,
+                    "published_ports": sorted(last_ports),
+                    "port_bound": bound,
+                    "attempts": attempt,
+                    "reason": "running and port bound",
+                }
+            if attempt < tries:
+                await asyncio.sleep(delay)
+
+        if last_state is None:
+            reason = "container not found (or docker unreachable)"
+        elif last_state != "running":
+            reason = f"container state is {last_state!r}, not 'running'"
+        else:
+            reason = (
+                "port %s is not published (bound: %s)"
+                % (host_port, sorted(last_ports) or "none")
+            )
+        return {
+            "verified": False,
+            "running": last_state == "running",
+            "state": last_state,
+            "published_ports": sorted(last_ports),
+            "port_bound": bool(host_port is not None and int(host_port) in last_ports),
+            "attempts": tries,
+            "reason": reason,
+        }
 
     async def compose_build(
         self, project_dir: Path, project_name: str, timeout: Optional[float] = None
@@ -1545,55 +1748,146 @@ class ComposeProjectGenerator:
 
 
 class NginxRouteRegistrar:
-    """Writes per-sandbox vhosts and gracefully reloads Nginx."""
+    """Autonomous Nginx registrar for ephemeral sandboxes.
+
+    For every sandbox it writes a self-contained vhost into
+    ``/opt/roxira_platform/nginx/sandboxes/{app_id}.conf`` containing
+
+    * an ``upstream`` block pointing at the sandbox's published host port
+      (``127.0.0.1:{host_port}`` by default), and
+    * a ``server`` block mapping ``{app_id}.{base_domain}`` onto that upstream.
+
+    The config is validated with ``nginx -t`` and applied with a graceful
+    ``nginx -s reload`` (both via ``docker exec roxira_nginx_prod``), so running
+    traffic keeps being served by the workers still holding the old config.  A
+    vhost that fails validation is rolled back so a broken file can never
+    poison subsequent reloads.
+    """
 
     def __init__(
         self,
         conf_dir: Path = DEFAULT_NGINX_SANDBOX_DIR,
         container: str = DEFAULT_NGINX_CONTAINER,
-        base_domain: str = "roxira.app",
+        base_domain: str = DEFAULT_SANDBOX_BASE_DOMAIN,
         docker: Optional[DockerEngine] = None,
+        upstream_host: str = DEFAULT_NGINX_UPSTREAM_HOST,
     ) -> None:
         self._conf_dir = conf_dir
         self._container = container
         self._base_domain = base_domain
+        self._upstream_host = upstream_host
         self._docker = docker or DockerEngine()
 
+    # -- naming ------------------------------------------------------------
+
     def subdomain(self, app_id: str) -> str:
+        """Public hostname of a sandbox, e.g. ``my-app.roxira.net``."""
         return f"{app_id}.{self._base_domain}"
 
-    def _conf_path(self, app_id: str) -> Path:
-        return self._conf_dir / f"{app_id}.conf"
+    def upstream_name(self, app_id: str) -> str:
+        """Name of the generated Nginx upstream block."""
+        return "roxira_" + re.sub(r"[^a-zA-Z0-9_]", "_", app_id)
+
+    def endpoint(self, host_port: int) -> str:
+        """The ``host:port`` Nginx proxies to for a sandbox host port."""
+        return f"{self._upstream_host}:{int(host_port)}"
 
     def conf_path(self, app_id: str) -> Path:
         """Absolute path of a sandbox's vhost file."""
         return self._conf_path(app_id)
 
+    def _conf_path(self, app_id: str) -> Path:
+        return self._conf_dir / f"{app_id}.conf"
+
+    # -- rendering ---------------------------------------------------------
+
     def _render(self, app_id: str, upstream: str) -> str:
+        """Render the upstream + server block pair for one sandbox."""
+        name = self.upstream_name(app_id)
         return (
-            f"# roxira sandbox vhost — {app_id}\n"
+            f"{NGINX_VHOST_MARKER} — {app_id}\n"
             f"# managed by ephemeral_runner.py; do not edit manually\n"
+            f"# route: {self.subdomain(app_id)} -> http://{upstream}\n"
+            "\n"
+            f"upstream {name} {{\n"
+            f"    server {upstream} max_fails=3 fail_timeout=15s;\n"
+            "    keepalive 16;\n"
+            "}\n"
+            "\n"
             "server {\n"
             "    listen 80;\n"
-            f"    server_name {self.subdomain(app_id)};\n\n"
+            "    listen [::]:80;\n"
+            f"    server_name {self.subdomain(app_id)};\n"
+            "\n"
             "    location / {\n"
-            f"        proxy_pass http://{upstream};\n"
+            f"        proxy_pass http://{name};\n"
             "        proxy_http_version 1.1;\n"
             '        proxy_set_header Host $host;\n'
             '        proxy_set_header X-Real-IP $remote_addr;\n'
             '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n'
             '        proxy_set_header X-Forwarded-Proto $scheme;\n'
+            '        proxy_set_header X-Forwarded-Host $host;\n'
+            '        proxy_set_header Upgrade $http_upgrade;\n'
+            '        proxy_set_header Connection $http_connection;\n'
+            "        proxy_connect_timeout 10s;\n"
+            "        proxy_send_timeout 300s;\n"
+            "        proxy_read_timeout 300s;\n"
+            "        proxy_buffering off;\n"
             "    }\n"
             "}\n"
         )
 
+    # -- lifecycle ---------------------------------------------------------
+
     async def register(self, app_id: str, upstream: str) -> str:
+        """Publish ``{app_id}.{base_domain}`` -> ``upstream``.
+
+        Writes the vhost atomically, validates + reloads Nginx, and returns the
+        public subdomain.  If Nginx rejects the new config the previous vhost
+        (or its absence) is restored and :class:`NginxReloadError` is raised, so
+        the caller can mark the route — and the build — as FAILED.
+        """
         await asyncio.to_thread(self._conf_dir.mkdir, parents=True, exist_ok=True)
         target = self._conf_path(app_id)
-        tmp = target.with_suffix(".conf.tmp")
+        # Unique tmp name that cannot match an ``include *.conf`` glob.
+        tmp = target.with_name(f".{target.name}.{uuid.uuid4().hex[:8]}.tmp")
+        previous = await asyncio.to_thread(self._read_or_none, target)
+
         await asyncio.to_thread(tmp.write_text, self._render(app_id, upstream), "utf-8")
         await asyncio.to_thread(os.replace, tmp, target)
-        await self.reload()
+
+        try:
+            await self.reload()
+        except NginxReloadError as exc:
+            detail = (
+                "restored previous config"
+                if previous is not None
+                else "removed rejected vhost"
+            )
+            if await self._rollback(target, previous):
+                try:
+                    await self.reload()  # converge the gateway back to a good state
+                    note = "rollback %s and nginx re-validated" % detail
+                except NginxReloadError as again:
+                    note = "rollback %s but nginx still rejects the config (%s)" % (detail, again)
+            else:
+                note = "rollback FAILED to restore %s" % target
+            raise NginxReloadError(
+                "vhost %s rejected by nginx (%s); %s" % (target, exc, note)
+            ) from exc
+
+        # Best-effort: prove the running Nginx actually loaded the new vhost.
+        try:
+            if not await self.verify_loaded(app_id):
+                print(
+                    "[nginx] WARN vhost %s reloaded but not present in `nginx -T`: "
+                    "mount %s into %s and include *.conf from the http block"
+                    % (target, self._conf_dir, self._container),
+                    file=sys.stderr,
+                )
+        except Exception as exc:  # verification must never fail a build
+            print("[nginx] WARN could not verify vhost %s: %s" % (target, exc), file=sys.stderr)
+
         return self.subdomain(app_id)
 
     async def unregister(self, app_id: str, reload: bool = True) -> bool:
@@ -1611,11 +1905,44 @@ class NginxRouteRegistrar:
         return True
 
     async def reload(self) -> None:
+        """``nginx -t`` then a graceful ``nginx -s reload`` in the gateway."""
         try:
             await self._docker.exec_in_container(self._container, ["nginx", "-t"])
             await self._docker.exec_in_container(self._container, ["nginx", "-s", "reload"])
-        except DockerCommandError as exc:
+        except NginxReloadError:
+            raise
+        except (DockerCommandError, FileNotFoundError, OSError) as exc:
             raise NginxReloadError(str(exc)) from exc
+
+    async def verify_loaded(self, app_id: str) -> bool:
+        """True when ``nginx -T`` (effective config) contains this sandbox vhost.
+
+        Guards against the silent failure mode where the config validates and
+        reloads but ``sandboxes/*.conf`` is never included — or the directory is
+        not mounted into the gateway container.
+        """
+        dump = await self._docker.exec_in_container(self._container, ["nginx", "-T"], timeout=60.0)
+        marker = f"{NGINX_VHOST_MARKER} — {app_id}"
+        return marker in dump and f"server_name {self.subdomain(app_id)};" in dump
+
+    @staticmethod
+    def _read_or_none(path: Path) -> Optional[str]:
+        try:
+            return path.read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError):
+            return None
+
+    async def _rollback(self, target: Path, previous: Optional[str]) -> bool:
+        """Restore the pre-registration vhost state; True when the file is back."""
+        try:
+            if previous is None:
+                with contextlib.suppress(FileNotFoundError, OSError):
+                    await asyncio.to_thread(target.unlink)
+            else:
+                await asyncio.to_thread(target.write_text, previous, "utf-8")
+            return True
+        except Exception:
+            return False
 
 
 # ---------------------------------------------------------------------------
@@ -1794,7 +2121,12 @@ class EphemeralRunner:
             nginx=NginxRouteRegistrar(
                 conf_dir=nginx_dir,
                 container=os.getenv("ROXIRA_NGINX_CONTAINER", DEFAULT_NGINX_CONTAINER),
-                base_domain=os.getenv("ROXIRA_SANDBOX_BASE_DOMAIN", "roxira.app"),
+                base_domain=os.getenv(
+                    "ROXIRA_SANDBOX_BASE_DOMAIN", DEFAULT_SANDBOX_BASE_DOMAIN
+                ),
+                upstream_host=os.getenv(
+                    "ROXIRA_NGINX_UPSTREAM_HOST", DEFAULT_NGINX_UPSTREAM_HOST
+                ),
                 docker=docker,
             ),
             sandbox_root=sandbox_root,
@@ -1842,24 +2174,46 @@ class EphemeralRunner:
                 container_id = await self._build_self_healing(
                     request, project_dir, project_name, status
                 )
+                # A successful `up -d` only means "created": re-inspect the
+                # container state and its published port before declaring it up.
+                proof = await self._verify_container_started(container_name, host_port)
                 await self._status.save(
-                    status.advance(BuildStage.CONTAINER_STARTED, container_id=container_id)
+                    status.advance(
+                        BuildStage.CONTAINER_STARTED,
+                        container_id=container_id,
+                        container_state=proof.get("state"),
+                        port_bound=proof.get("port_bound"),
+                    )
                 )
-                subdomain = await self._nginx.register(
-                    request.app_id, f"{container_name}:{generated.container_port}"
-                )
+                # Publish the route: {app_id}.{base_domain} -> 127.0.0.1:{host_port}
+                upstream = self._nginx.endpoint(host_port)
+                subdomain = await self._nginx.register(request.app_id, upstream)
                 await self._status.save(
                     status.advance(
                         BuildStage.ROUTE_REGISTERED,
                         subdomain=subdomain,
                         url=f"http://{subdomain}",
+                        route_status=ROUTE_STATUS_REGISTERED,
+                        upstream=upstream,
+                        nginx_conf=str(self._nginx.conf_path(request.app_id)),
+                        route_registered_at=time.time(),
                     )
                 )
             except Exception as exc:
                 await self._docker.down(project_dir, project_name)
                 await self._nginx.unregister(request.app_id)
+                route_fields: dict[str, Any] = {}
+                if isinstance(exc, NginxReloadError):
+                    # the container is up but unreachable from the gateway
+                    route_fields = {
+                        "route_status": ROUTE_STATUS_FAILED,
+                        "upstream": self._nginx.endpoint(host_port),
+                        "nginx_conf": str(self._nginx.conf_path(request.app_id)),
+                    }
                 await self._status.save(
-                    status.advance(BuildStage.FAILED, status="FAILED", error=str(exc))
+                    status.advance(
+                        BuildStage.FAILED, status="FAILED", error=str(exc), **route_fields
+                    )
                 )
                 return BuildResult(app_id=request.app_id, status="failed", error=str(exc))
 
@@ -1884,6 +2238,218 @@ class EphemeralRunner:
             )
         finally:
             self._allocator.release(request.app_id, host_port)
+
+    async def _verify_container_started(
+        self, container_name: str, host_port: int
+    ) -> dict[str, Any]:
+        """Prove the sandbox container is running with its port bound.
+
+        ``docker compose up -d`` succeeds as soon as the container is *created*;
+        the process may then exit immediately or still be publishing its port.
+        This re-inspects both facts and raises :class:`ContainerStartError` when
+        they never hold, so a dead sandbox is recorded as FAILED instead of
+        being advertised as CONTAINER_STARTED.
+
+        Degrades gracefully when the daemon itself is unreachable (no Docker on
+        the host): verification is skipped with a warning rather than failing
+        every build.
+        """
+        if not CONTAINER_VERIFY_ENABLED:
+            return {"verified": True, "skipped": True, "reason": "verification disabled"}
+        if not await self._docker.socket_available():
+            print(
+                "[factory] WARN docker daemon unreachable; skipping container "
+                "verification for %s" % container_name,
+                file=sys.stderr,
+            )
+            return {"verified": True, "skipped": True, "reason": "docker unreachable"}
+
+        proof = await self._docker.verify_running(container_name, host_port)
+        if not proof.get("verified"):
+            raise ContainerStartError(
+                "container %s did not start cleanly: %s (state=%s, published=%s)"
+                % (
+                    container_name,
+                    proof.get("reason"),
+                    proof.get("state"),
+                    proof.get("published_ports"),
+                )
+            )
+        return proof
+
+    # -- garbage collection ------------------------------------------------
+
+    def _safe_sandbox_dir(self, app_id: str) -> Optional[Path]:
+        """Resolve ``{sandbox_root}/{app_id}``, refusing anything outside it."""
+        base = self._sandbox_root.resolve()
+        candidate = (self._sandbox_root / app_id).resolve()
+        if candidate == base or base not in candidate.parents:
+            return None
+        if APP_ID_RE.match(app_id) is None:
+            return None
+        return candidate
+
+    async def collect_garbage(
+        self,
+        retention_seconds: Optional[float] = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Reclaim the directories of finished sandboxes.
+
+        A sandbox is eligible when its recorded stage is ``DESTROYED`` or
+        ``FAILED`` **and** it has not been touched for ``retention_seconds``
+        (default 24h, :data:`SANDBOX_RETENTION_SECONDS`).  Directories with no
+        status record at all ("orphans": a crashed worker, a manual ``rm`` of
+        the status file) are eligible once their mtime is older than the same
+        cutoff.
+
+        Safety rails: the path must live strictly inside the sandbox root, the
+        app_id must be a valid slug, and a container that still exists under the
+        sandbox's name is never deleted from under.  The nginx vhost is removed
+        too (with a single reload) so a reclaimed sandbox leaves no route
+        behind.  Never raises: a per-sandbox failure is reported in ``errors``.
+        """
+        retention = float(
+            SANDBOX_RETENTION_SECONDS if retention_seconds is None else retention_seconds
+        )
+        cutoff = time.time() - retention
+        result: dict[str, Any] = {
+            "scanned": 0,
+            "eligible": 0,
+            "removed": [],
+            "skipped": [],
+            "orphan_dirs_removed": [],
+            "freed_bytes": 0,
+            "errors": [],
+            "retention_seconds": retention,
+            "cutoff": cutoff,
+            "dry_run": dry_run,
+        }
+        if not self._sandbox_root.exists():
+            return result
+
+        lister = getattr(self._status, "list_all", None)
+        statuses: list[BuildStatus] = []
+        if lister is not None:
+            try:
+                statuses = await lister()
+            except Exception as exc:
+                result["errors"].append("status listing failed: %s" % exc)
+        result["scanned"] = len(statuses)
+
+        known: set[str] = set()
+        candidates: list[tuple[str, str]] = []  # (app_id, reason)
+        for status in statuses:
+            known.add(status.app_id)
+            if status.stage not in GC_STAGES:
+                continue
+            if status.updated_at > cutoff:
+                result["skipped"].append(
+                    {"app_id": status.app_id, "reason": "within retention window"}
+                )
+                continue
+            candidates.append((status.app_id, "stage %s older than retention" % status.stage))
+
+        # Orphaned directories: no status record, old by mtime.
+        try:
+            entries = [p for p in self._sandbox_root.iterdir() if p.is_dir()]
+        except OSError as exc:
+            result["errors"].append("cannot scan sandbox root: %s" % exc)
+            entries = []
+        for entry in entries:
+            if entry.name.startswith(".") or entry.name in known:
+                continue
+            if (entry / "status.json").exists():
+                continue
+            try:
+                if entry.stat().st_mtime > cutoff:
+                    continue
+            except OSError:
+                continue
+            candidates.append((entry.name, "orphaned directory (no status record)"))
+
+        result["eligible"] = len(candidates)
+        vhosts_removed = 0
+        for app_id, reason in candidates:
+            target = self._safe_sandbox_dir(app_id)
+            if target is None:
+                result["skipped"].append({"app_id": app_id, "reason": "unsafe path"})
+                continue
+            if not target.exists():
+                result["skipped"].append({"app_id": app_id, "reason": "directory already gone"})
+                continue
+            container_name = f"roxira_sandbox_{app_id}"
+            try:
+                if await self._docker.container_exists(container_name):
+                    result["skipped"].append(
+                        {"app_id": app_id, "reason": "container %s still exists" % container_name}
+                    )
+                    continue
+            except Exception as exc:  # never let a probe abort the sweep
+                result["errors"].append("container probe failed for %s: %s" % (app_id, exc))
+
+            if dry_run:
+                result["removed"].append(app_id)
+                continue
+            try:
+                freed = await asyncio.to_thread(self._dir_size, target)
+                with contextlib.suppress(Exception):
+                    if await self._nginx.unregister(app_id, reload=False):
+                        vhosts_removed += 1
+                await asyncio.to_thread(shutil.rmtree, target)
+            except Exception as exc:
+                result["errors"].append("could not remove %s: %s" % (app_id, exc))
+                continue
+            result["freed_bytes"] += freed
+            if reason.startswith("orphaned"):
+                result["orphan_dirs_removed"].append(app_id)
+            result["removed"].append(app_id)
+
+        if vhosts_removed and not dry_run:
+            try:
+                await self._nginx.reload()
+            except Exception as exc:
+                result["errors"].append("nginx reload after GC failed: %s" % exc)
+        result["vhosts_removed"] = vhosts_removed
+        return result
+
+    @staticmethod
+    def _dir_size(path: Path) -> int:
+        total = 0
+        for item in path.rglob("*"):
+            try:
+                if item.is_file() and not item.is_symlink():
+                    total += item.stat().st_size
+            except OSError:
+                continue
+        return total
+
+    async def gc_loop(
+        self, stop: Optional[asyncio.Event] = None, interval: Optional[float] = None
+    ) -> None:
+        """Periodically :meth:`collect_garbage` until ``stop`` is set."""
+        period = float(GC_INTERVAL_SECONDS if interval is None else interval)
+        while stop is None or not stop.is_set():
+            try:
+                report = await self.collect_garbage()
+                if report["removed"] or report["errors"]:
+                    print(
+                        "[factory][gc] removed=%d freed=%dB errors=%s"
+                        % (len(report["removed"]), report["freed_bytes"], report["errors"]),
+                        file=sys.stderr,
+                    )
+            except Exception as exc:  # a reaper must never die
+                print("[factory][gc] sweep failed: %s" % exc, file=sys.stderr)
+            if stop is None:
+                await asyncio.sleep(period)
+                continue
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(stop.wait(), timeout=period)
+
+    @property
+    def allocator(self) -> PortAllocator:
+        """The port allocator backing this runner (used by ``/metrics``)."""
+        return self._allocator
 
     async def _build_self_healing(
         self, request: BuildRequest, project_dir: Path, project_name: str, status: BuildStatus
@@ -2053,7 +2619,13 @@ class EphemeralRunner:
         # 5. mark DESTROYED
         if status is not None:
             try:
-                await self._status.save(status.advance(BuildStage.DESTROYED, status="DESTROYED"))
+                await self._status.save(
+                    status.advance(
+                        BuildStage.DESTROYED,
+                        status="DESTROYED",
+                        route_status=ROUTE_STATUS_REMOVED,
+                    )
+                )
             except Exception as exc:
                 warnings.append("could not persist DESTROYED status: %s" % exc)
 
@@ -2079,6 +2651,7 @@ class EphemeralRunner:
             "nginx_conf": str(conf_path),
             "nginx_conf_removed": conf_removed,
             "nginx_reloaded": nginx_reloaded,
+            "route_status": ROUTE_STATUS_REMOVED,
             "record_removed": record_removed,
             "warnings": warnings,
         }
@@ -2092,14 +2665,33 @@ class EphemeralRunner:
             finally:
                 await self._queue.ack(message)
 
-    async def run_forever(self, stop: Optional[asyncio.Event] = None) -> None:
-        while stop is None or not stop.is_set():
-            message = await self._queue.dequeue(timeout=self._poll_timeout)
-            if message is None:
-                continue
-            task = asyncio.create_task(self._process(message))
-            self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
+    async def run_forever(
+        self, stop: Optional[asyncio.Event] = None, gc: bool = GARBAGE_COLLECT_ENABLED
+    ) -> None:
+        """Drain the build queue, optionally reaping finished sandboxes.
+
+        When ``gc`` is true a background :meth:`gc_loop` task runs alongside the
+        queue loop so the worker process also owns reclamation of expired
+        sandbox directories.
+        """
+        gc_task: Optional[asyncio.Task[None]] = None
+        if gc:
+            gc_task = asyncio.create_task(self.gc_loop(stop))
+            self._tasks.add(gc_task)
+            gc_task.add_done_callback(self._tasks.discard)
+        try:
+            while stop is None or not stop.is_set():
+                message = await self._queue.dequeue(timeout=self._poll_timeout)
+                if message is None:
+                    continue
+                task = asyncio.create_task(self._process(message))
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
+        finally:
+            if gc_task is not None and not gc_task.done():
+                gc_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await gc_task
 
     async def shutdown(self) -> None:
         if self._tasks:
@@ -2152,6 +2744,10 @@ def create_factory_router(
       * ``POST /synthesize-app``           — enqueue a build, ``202``
       * ``POST /synthesize``               — alias of the above
       * ``GET  /synthesize-app/{app_id}``  — read live runner state
+      * ``GET  /sandboxes``                — list sandboxes with live health
+      * ``DELETE /sandboxes/{app_id}``     — tear a sandbox down
+      * ``GET  /metrics``                  — foundry counters (capacity/health)
+      * ``POST /gc``                       — run a garbage-collection sweep now
 
     The queue and status store are resolved lazily on first request, so the
     router can be mounted without blocking import (Redis is optional).
@@ -2205,6 +2801,53 @@ def create_factory_router(
                         await _get_queue(), await _get_store()
                     )
         return in_process_runner
+
+    # -- autonomous garbage collection ------------------------------------
+
+    gc_state: dict[str, Any] = {"last_run": 0.0, "task": None}
+
+    async def _maybe_sweep() -> None:
+        """Reap expired sandboxes at most once per ``GC_INTERVAL_SECONDS``.
+
+        The worker process runs :meth:`EphemeralRunner.gc_loop` itself, but in
+        the in-process topology (no ``REDIS_URL``) there is no worker daemon at
+        all — so the API opportunistically triggers a sweep on traffic, keeping
+        reclamation autonomous without a scheduler.
+        """
+        if not GARBAGE_COLLECT_ENABLED:
+            return
+        now = time.time()
+        if now - float(gc_state["last_run"]) < GC_INTERVAL_SECONDS:
+            return
+        running = gc_state.get("task")
+        if running is not None and not running.done():
+            return
+        gc_state["last_run"] = now
+        try:
+            runner = await _get_runner()
+        except Exception as exc:
+            print("[factory][gc] runner unavailable: %s" % exc, file=sys.stderr)
+            return
+        # Fire and forget: a sweep must never slow down a request. The task is
+        # kept referenced so it cannot be garbage-collected mid-flight.
+        gc_state["task"] = asyncio.create_task(runner.collect_garbage())
+
+    @router.post("/gc")
+    async def run_gc(
+        retention_seconds: Optional[float] = None, dry_run: bool = False
+    ) -> dict[str, Any]:
+        """Run a garbage-collection sweep now and return the report.
+
+        Removes sandbox directories that are ``DESTROYED``/``FAILED`` and older
+        than ``retention_seconds`` (default 24h), plus orphaned directories with
+        no status record.  ``dry_run=true`` reports without deleting.
+        """
+        runner = await _get_runner()
+        report = await runner.collect_garbage(
+            retention_seconds=retention_seconds, dry_run=dry_run
+        )
+        gc_state["last_run"] = time.time()
+        return report
 
     async def _enqueue(
         payload: "SynthesizeAppRequest", background_tasks: BackgroundTasks
@@ -2286,6 +2929,65 @@ def create_factory_router(
 
         # gather preserves the store's newest-first order
         return list(await asyncio.gather(*(row(s) for s in statuses)))
+
+    @router.get("/metrics")
+    async def factory_metrics() -> dict[str, Any]:
+        """Aggregate health/capacity counters for the Software Foundry.
+
+        * ``total_sandboxes``   — every sandbox the status store knows about.
+        * ``active_containers`` — sandboxes in a deployed stage (container up).
+        * ``healthy_sandboxes`` — deployed sandboxes answering HTTP right now.
+        * ``allocated_ports``   — host ports currently reserved (this process
+          and any other worker sharing the sandbox root).
+        """
+        store = await _get_store()
+        lister = getattr(store, "list_all", None)
+        statuses: list[BuildStatus] = []
+        if lister is not None:
+            try:
+                statuses = await lister()
+            except Exception as exc:
+                print("[factory] WARN /metrics listing failed: %s" % exc, file=sys.stderr)
+
+        await _maybe_sweep()  # keep reclamation running without a worker daemon
+
+        probes = asyncio.Semaphore(HEALTH_PROBE_CONCURRENCY)
+
+        async def health_of(status: BuildStatus) -> str:
+            async with probes:
+                return await sandbox_health(status)
+
+        healths = list(await asyncio.gather(*(health_of(s) for s in statuses)))
+        by_health: dict[str, int] = {}
+        for value in healths:
+            by_health[value] = by_health.get(value, 0) + 1
+        by_stage: dict[str, int] = {}
+        for status in statuses:
+            by_stage[status.stage] = by_stage.get(status.stage, 0) + 1
+
+        allocated: set[int] = set()
+        try:
+            runner = await _get_runner()
+            allocated = runner.allocator.allocated_ports()
+        except Exception as exc:
+            print("[factory] WARN /metrics port query failed: %s" % exc, file=sys.stderr)
+            allocated = {
+                int(s.host_port)
+                for s in statuses
+                if s.host_port and s.stage in DEPLOYED_STAGES
+            }
+
+        return {
+            "total_sandboxes": len(statuses),
+            "active_containers": sum(1 for s in statuses if s.stage in DEPLOYED_STAGES),
+            "healthy_sandboxes": by_health.get(HEALTH_HEALTHY, 0),
+            "allocated_ports": len(allocated),
+            "ports": sorted(allocated),
+            "port_range": [PORT_RANGE_START, PORT_RANGE_END],
+            "by_stage": by_stage,
+            "by_health": by_health,
+            "generated_at": time.time(),
+        }
 
     @router.delete("/sandboxes/{app_id}")
     async def destroy_sandbox(app_id: str) -> dict[str, Any]:
