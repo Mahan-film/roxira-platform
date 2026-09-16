@@ -263,13 +263,12 @@ OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
 OPENROUTER_TIERS = {
     "VIP": {
-        "primary_model": "deepseek/deepseek-v4.1-flash",
-        "fallback_model": "deepseek/deepseek-chat",
-        "voice_model": "deepseek/deepseek-v4.1-flash",
-        "deep_reasoning_model": "deepseek/deepseek-r1",
+        "primary_model": "google/gemini-3.8-flash",
+        "fallback_model": "google/gemini-3.8-flash",
+        "voice_model": "google/gemini-3.8-flash",
         "stt_primary": "deepgram/nova-3",
         "stt_secondary": "openai/whisper-large-v3-turbo",
-        "label": "Deepgram Nova-3 • DeepSeek 4.1 Flash (Roxira OS 2026)"
+        "label": "سامانه قاضی هوشمند (نسخه پیشرفته سازمانی)"
     },
     "FREE": {
         "primary_model": "deepseek/deepseek-v4.1-flash",
@@ -277,7 +276,7 @@ OPENROUTER_TIERS = {
         "voice_model": "deepseek/deepseek-v4.1-flash",
         "stt_primary": "deepgram/nova-3",
         "stt_secondary": "openai/whisper-large-v3-turbo",
-        "label": "DeepSeek 4.1 Flash • Deepgram Nova-3"
+        "label": "سامانه قاضی هوشمند (نسخه استاندارد)"
     }
 }
 
@@ -793,7 +792,7 @@ async def interactive_consult(payload: dict = Body(...)):
 
             is_voice = bool(payload.get("is_voice_mode"))
             chosen_model = cfg.get("voice_model", "deepseek/deepseek-v4.1-flash") if is_voice else cfg.get("primary_model", "deepseek/deepseek-v4.1-flash")
-            chosen_max_tokens = 70 if is_voice else 1800
+            chosen_max_tokens = 60 if is_voice else 1500
 
             req_body = {
                 "model": chosen_model,
@@ -1668,36 +1667,22 @@ def _get_local_whisper_instance():
     return _local_whisper_model if _local_whisper_model else None
 
 
-async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str) -> str:
-    """تبدیل فوق‌سریع و بلادرنگ صدای فارسی به متن با Whisper Large V3 Turbo روی OpenRouter (زیر ۳۰۰ میلی‌ثانیه)."""
-    ext = _normalize_audio_format(audio_format)
-    if ext == "mp4":
-        ext = "m4a"
-
-    if isinstance(audio_data, str):
-        raw_b64 = audio_data.partition(",")[2] if audio_data.startswith("data:") else audio_data
-        try:
-            raw_bytes = base64.b64decode(raw_b64)
-        except Exception:
-            raw_bytes = audio_data.encode("utf-8")
-        audio_b64 = raw_b64
-    else:
-        raw_bytes = audio_data
-        audio_b64 = base64.b64encode(raw_bytes).decode("ascii")
-
-    # ۱. پردازش محلی با Faster-Whisper در صورت نصب بودن در کانتینر
-    whisper_engine = _get_local_whisper_instance()
-    if whisper_engine and raw_bytes:
-        try:
-            segments, info = whisper_engine.transcribe(io.BytesIO(raw_bytes), language="fa", beam_size=1)
-            transcription = " ".join([s.text for s in segments]).strip()
-            if transcription and len(transcription) >= 2:
-                return transcription
-        except Exception:
-            pass
-
-    if not OPENROUTER_API_KEY:
+async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: str) -> str:
+    """تبدیل دقیق گفتار فارسی به متن با Deepgram Nova-3 و Whisper Large V3 Turbo روی OpenRouter."""
+    if not OPENROUTER_API_KEY or not audio_bytes:
         return ""
+
+    ext = _normalize_audio_format(audio_format)
+    mime_map = {
+        "wav": "audio/wav",
+        "m4a": "audio/mp4",
+        "mp4": "audio/mp4",
+        "webm": "audio/webm",
+        "mp3": "audio/mpeg",
+        "ogg": "audio/ogg",
+        "aac": "audio/aac",
+    }
+    upload_mime = mime_map.get(ext, "audio/mp4")
 
     headers_auth = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -1705,61 +1690,25 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
         "X-Title": "Roxira SmartJudge",
     }
 
-    mime_map = {
-        "wav": "audio/wav",
-        "m4a": "audio/mp4",
-        "webm": "audio/webm",
-        "mp3": "audio/mpeg",
-        "ogg": "audio/ogg",
-        "aac": "audio/aac",
-    }
-    upload_mime = mime_map.get(ext, "audio/wav")
+    # نام مدل‌های معتبر جهت تبدیل گفتار
+    stt_models = [model] if model else []
+    for m in ["deepgram/nova-3", "openai/whisper-large-v3-turbo", "google/chirp-3"]:
+        if m not in stt_models:
+            stt_models.append(m)
 
-    # استراتژی پیشرفته ۲۰۲۶: استفاده از برترین مدل‌های صوتی Deepgram Nova-3 و Whisper Large V3 Turbo
-    fast_stt_models = [
-        "deepgram/nova-3",                 # سریع‌ترین و جدیدترین مدل تبدیل صوت جهان (تأخیر زیر ۱۵۰ میلی‌ثانیه)
-        "openai/whisper-large-v3-turbo",  # مدل توربوی پرسرعت ویسپر
-        "microsoft/mai-transcribe-2",      # مدل سازمانی مایکروسافت
-        "google/chirp-3",                 # مدل چندزبانه پیشرفته گوگل
-    ]
-
-    async with httpx.AsyncClient(timeout=httpx.Timeout(4.5, connect=1.5)) as client:
-        for target_model in fast_stt_models:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(4.0, connect=1.5)) as client:
+        for target_model in stt_models:
             try:
-                files = {"file": (f"speech.{ext}", raw_bytes, upload_mime)}
-                data_form = {"model": target_model, "language": "fa", "temperature": "0"}
+                files = {"file": (f"speech.{ext}", audio_bytes, upload_mime)}
+                data_form = {"model": target_model, "language": "fa"}
                 resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, data=data_form, files=files, headers=headers_auth)
                 if resp.status_code == 200:
                     text_out = _extract_openrouter_text(resp.json())
-                    if text_out:
-                        print(f"[SMARTJUDGE][STT-FAST] {target_model}: {text_out[:60]}")
-                        return text_out
+                    if text_out and len(text_out.strip()) >= 1:
+                        print(f"[SMARTJUDGE][STT-SUCCESS] {target_model}: {text_out[:60]}")
+                        return text_out.strip()
             except Exception as exc:
-                print(f"[SMARTJUDGE][STT-ERR] {target_model}: {exc}", file=sys.stderr)
-
-        # فالبک سریع با ورودی صوتی چندوجهی Gemini Flash
-        try:
-            body_chat = {
-                "model": "google/gemini-2.5-flash",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "متن گفتار فارسی این صوت را فقط کلمه به کلمه بنویس:"},
-                            {"type": "input_audio", "input_audio": {"data": audio_b64, "format": ext if ext in ("wav", "mp3") else "wav"}}
-                        ]
-                    }
-                ],
-                "temperature": 0.0,
-                "max_tokens": 60
-            }
-            resp = await client.post(OPENROUTER_CHAT_URL, json=body_chat, headers={**headers_auth, "Content-Type": "application/json"})
-            if resp.status_code == 200:
-                text_out = _extract_openrouter_text(resp.json())
-                if text_out:
-                    return text_out
-        except Exception:
-            pass
+                print(f"[SMARTJUDGE][STT-FAIL] {target_model}: {exc}", file=sys.stderr)
 
     return ""
 
@@ -1803,7 +1752,7 @@ async def _read_audio_from_request(request: Request):
 
 @router.post("/transcribe-audio")
 async def transcribe_audio(request: Request):
-    """تبدیل دقیق و بی‌درنگ گفتار فارسی به متن با قوی‌ترین مدل‌های OpenAI Whisper Large V3 / Turbo."""
+    """تبدیل دقیق گفتار فارسی به متن با موتورهای پیشرفته صوتی."""
     try:
         audio_bytes, mime_type = await _read_audio_from_request(request)
     except ValueError as exc:
@@ -1811,26 +1760,17 @@ async def transcribe_audio(request: Request):
 
     audio_format = _detect_audio_format(mime_type)
 
-    # تست زنجیره‌ای مدل‌های ۲۰۲۶: Deepgram Nova-3 و OpenAI GPT-4o-Transcribe
-    stt_candidate_models = [
-        "deepgram/nova-3",
-        "openai/gpt-4o-transcribe",
-        "openai/whisper-large-v3-turbo",
-        "microsoft/mai-transcribe-2",
-        "google/chirp-3",
-    ]
-    for model_name in stt_candidate_models:
-        try:
-            transcribed = await _openrouter_transcribe(model_name, audio_bytes, audio_format)
-            if transcribed and len(transcribed.strip()) >= 1:
-                try:
-                    from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
-                    transcribed = repair_legal_phonetics(transcribed)
-                except Exception:
-                    pass
-                return {"status": "success", "text": transcribed, "transcript": transcribed, "model": model_name}
-        except Exception as exc:
-            print(f"[SMARTJUDGE][STT-FAIL] {model_name}: {exc}", file=sys.stderr)
+    try:
+        transcribed = await _openrouter_transcribe("deepgram/nova-3", audio_bytes, audio_format)
+        if transcribed and len(transcribed.strip()) >= 1:
+            try:
+                from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
+                transcribed = repair_legal_phonetics(transcribed)
+            except Exception:
+                pass
+            return {"status": "success", "text": transcribed, "transcript": transcribed}
+    except Exception as exc:
+        print(f"[SMARTJUDGE][STT-FAIL] {exc}", file=sys.stderr)
 
     return JSONResponse(
         {"status": "error", "message": "تبدیل گفتار ناموفق بود."},
