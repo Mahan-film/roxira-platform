@@ -91,6 +91,26 @@ for rel in GUARANTEED_ROUTERS:
 
 print("[ROXIRA] routers loaded: %d | failed: %s" % (loaded_routers, failed_imports), file=sys.stderr)
 
+# ============ MCP Tool Server (mounted under /mcp) ============
+# Exposes the Software Foundry + legal vector retrieval to MCP clients:
+#     GET  /mcp/sse        -> SSE transport (endpoint event + keepalive)
+#     POST /mcp/messages   -> SSE session inbox (?session_id=...)
+#     GET  /mcp/tools      -> tool catalogue (convenience, non-protocol)
+#     POST /mcp            -> stateless JSON-RPC 2.0 (also via stdio entrypoint)
+# Mounted by default; the router uses its own /mcp prefix so the generated_modules
+# discovery and every existing route above keep their exact paths.  Any import or
+# mount failure is isolated here so it can never take down the unified server.
+# Set ROXIRA_MCP_MOUNT=0 to skip the mount entirely.
+if os.getenv("ROXIRA_MCP_MOUNT", "1") != "0":
+    try:
+        from output_apps.ecosystem_core.src.factory.mcp_server import create_mcp_router
+        app.include_router(create_mcp_router())
+        print("[ROXIRA] MCP tool server mounted at /mcp (sse=/mcp/sse, messages=/mcp/messages, tools=/mcp/tools)", file=sys.stderr)
+    except Exception as exc:
+        print("[ROXIRA][MCP-FAIL] %s" % exc, file=sys.stderr)
+else:
+    print("[ROXIRA] MCP tool server disabled (ROXIRA_MCP_MOUNT=0)", file=sys.stderr)
+
 # ============ Landing pages loaded from static/ (single source of truth) ============
 _FALLBACK_ROXIRA = """<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><title>رکسایرا</title><style>body{background:#020617;color:#f8fafc;font-family:sans-serif;text-align:center;padding:80px}</style></head><body><h1>رکسایرا — سامانه جامع ERP</h1><p>صفحه در حال بارگذاری از فایل استاتیک...</p></body></html>"""
 

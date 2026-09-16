@@ -6,6 +6,7 @@ import {
   Boxes,
   Check,
   CheckCircle2,
+  ChevronDown,
   Circle,
   Copy,
   Cpu,
@@ -112,6 +113,27 @@ function hostChip(host?: string | null): { label: string; host: string } {
     return { label: "Remote Worker", host: "Ephemeral Fleet" };
   }
   return { label: "Node", host: value };
+}
+
+interface FleetNode {
+  host_id: string;
+  host_ip: string;
+  mode?: string | null;
+  is_local?: boolean;
+  ssh_target?: string | null;
+  docker_context?: string | null;
+  work_root?: string | null;
+  has_engine?: boolean;
+}
+
+function nodeStatus(node: FleetNode): { label: string; dot: string; text: string } {
+  if (node.has_engine === false) {
+    return { label: "STANDBY", dot: "bg-amber-400", text: "text-amber-300" };
+  }
+  if (node.is_local) {
+    return { label: "PRIMARY · READY", dot: "bg-emerald-400", text: "text-emerald-300" };
+  }
+  return { label: "REMOTE · READY", dot: "bg-emerald-400", text: "text-emerald-300" };
 }
 
 type SwarmTeamState = "pending" | "active" | "done" | "failed";
@@ -673,6 +695,10 @@ export default function MissionControlPage() {
   const [reportData, setReportData] = useState<SwarmMetadata | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [nodes, setNodes] = useState<FleetNode[]>([]);
+  const [nodesLoading, setNodesLoading] = useState(false);
+  const [nodesError, setNodesError] = useState<string | null>(null);
+  const [fleetOpen, setFleetOpen] = useState(true);
 
   const selectedHost =
     DEPLOYMENT_TARGETS.find((target) => target.id === targetHost)?.host ?? DEFAULT_TARGET_HOST;
@@ -857,6 +883,29 @@ export default function MissionControlPage() {
     }, 5000);
     return () => clearInterval(interval);
   }, [autoRefresh, refreshSandboxes]);
+
+  const fetchNodes = useCallback(async () => {
+    setNodesLoading(true);
+    setNodesError(null);
+    try {
+      const res = await fetch(`${FACTORY_BASE}/nodes`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as unknown;
+      const rows = Array.isArray(data) ? (data as FleetNode[]) : [];
+      setNodes(rows.filter((node) => node !== null && typeof node.host_id === "string"));
+    } catch (error) {
+      setNodesError(error instanceof Error ? error.message : "failed to load nodes");
+    } finally {
+      setNodesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const kickoff = setTimeout(() => {
+      void fetchNodes();
+    }, 0);
+    return () => clearTimeout(kickoff);
+  }, [fetchNodes]);
 
   useEffect(() => {
     if (!historyReady) return;
@@ -1113,6 +1162,113 @@ export default function MissionControlPage() {
               </article>
             );
           })}
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-slate-800/80 bg-slate-900/60 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/70 px-6 py-4">
+            <button
+              type="button"
+              onClick={() => setFleetOpen((open) => !open)}
+              aria-expanded={fleetOpen}
+              className="flex items-center gap-2.5 text-left"
+            >
+              <Server className="size-4 text-cyan-300" />
+              <h2 className="font-mono text-sm font-bold tracking-wider text-slate-100">
+                ACTIVE FLEET NODES
+              </h2>
+              <span className="rounded-md border border-cyan-400/25 bg-cyan-400/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-cyan-300">
+                {nodes.length}
+              </span>
+              <ChevronDown
+                className={`size-4 text-slate-500 transition-transform ${fleetOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void fetchNodes()}
+              disabled={nodesLoading}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 px-2.5 py-1.5 font-mono text-[10px] text-slate-400 transition-colors hover:border-slate-700 hover:text-white disabled:opacity-50"
+            >
+              <RefreshCw className={`size-3 ${nodesLoading ? "animate-spin" : ""}`} />
+              REFRESH
+            </button>
+          </div>
+
+          {fleetOpen && (
+            <div className="px-6 py-5">
+              {nodesLoading && nodes.length === 0 && (
+                <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
+                  <Loader2 className="size-3.5 animate-spin text-cyan-300" />
+                  loading fleet nodes…
+                </div>
+              )}
+
+              {nodesError && (
+                <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 font-mono text-[10px] text-rose-200">
+                  fleet nodes unavailable — {nodesError}
+                </p>
+              )}
+
+              {!nodesLoading && !nodesError && nodes.length === 0 && (
+                <p className="font-mono text-[11px] text-slate-600">No fleet nodes reported.</p>
+              )}
+
+              {nodes.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {nodes.map((node) => {
+                    const status = nodeStatus(node);
+                    return (
+                      <article
+                        key={node.host_id}
+                        className="rounded-2xl border border-slate-800/80 bg-slate-950/50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Server className="size-4 text-cyan-300" />
+                            <span className="font-mono text-xs font-semibold text-slate-100">
+                              {node.host_id}
+                            </span>
+                          </div>
+                          <span
+                            className={`rounded-md border px-1.5 py-0.5 font-mono text-[9px] font-bold ${
+                              node.is_local
+                                ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                                : "border-indigo-400/30 bg-indigo-400/10 text-indigo-300"
+                            }`}
+                          >
+                            {node.is_local ? "LOCAL" : "REMOTE"}
+                          </span>
+                        </div>
+
+                        <dl className="mt-3 space-y-1.5 font-mono text-[10px]">
+                          <div className="flex items-center justify-between gap-2">
+                            <dt className="text-slate-600">host_ip</dt>
+                            <dd className="text-slate-300" dir="ltr">
+                              {node.host_ip}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <dt className="text-slate-600">mode</dt>
+                            <dd className="text-slate-300" dir="ltr">
+                              {node.mode ?? "local"}
+                            </dd>
+                          </div>
+                        </dl>
+
+                        <div className="mt-3 flex items-center gap-1.5 border-t border-slate-800/70 pt-3">
+                          <span className={`size-1.5 rounded-full ${status.dot}`} />
+                          <span className={`font-mono text-[10px] ${status.text}`}>
+                            {status.label}
+                          </span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="mt-8 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-6 backdrop-blur">
