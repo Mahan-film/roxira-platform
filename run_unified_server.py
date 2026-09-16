@@ -1,4 +1,4 @@
-import os, sys, importlib, uvicorn, pathlib
+import os, sys, importlib, asyncio, uvicorn, pathlib
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +37,176 @@ async def add_security_and_cache_headers(request: Request, call_next):
     if request.url.path.startswith("/static/"):
         response.headers["Cache-Control"] = "public, max-age=86400"
     return response
+
+# ============ Dynamic rate limiter + token quota middleware ============
+# Deducts an estimated token cost per request against the caller's TokenWallet and
+# rejects with HTTP 402 (Payment Required) once the quota is exhausted; a per-tier
+# token bucket answers HTTP 429 (Too Many Requests) in the meantime.
+# The module is imported defensively so a missing driver can never take the unified
+# server down: on any failure this middleware becomes a pass-through.
+try:
+    from output_apps.ecosystem_core.src.factory.user_auth_models import (
+        AUTH_ENABLED as _AUTH_ENABLED,
+        auth_quota_service as _quota_service,
+        estimate_token_cost as _estimate_token_cost,
+        tier_limits as _tier_limits,
+    )
+    _QUOTA_AVAILABLE = True
+except Exception as _quota_import_exc:  # pragma: no cover - defensive
+    print("[ROXIRA][QUOTA-WARN] middleware disabled: %s" % _quota_import_exc, file=sys.stderr)
+    _QUOTA_AVAILABLE = False
+    _AUTH_ENABLED = False
+    _quota_service = None
+    _estimate_token_cost = None
+    _tier_limits = None
+
+# Paths that are never rate limited or billed (assets, probes, docs).
+_QUOTA_EXEMPT_PREFIXES = (
+    "/static/", "/health", "/robots.txt", "/sitemap.xml", "/docs", "/openapi.json", "/redoc",
+)
+# Strong references to the fire-and-forget persistence tasks.
+_QUOTA_PERSIST_TASKS = set()
+
+
+def _decode_jwt_claims_unverified(token: str):
+    """Best-effort claim extraction (tier hint only; never an authorisation check)."""
+    try:
+        import base64 as _b64, json as _json
+        parts = str(token).split(".")
+        if len(parts) != 3:
+            return None
+        padded = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = _json.loads(_b64.urlsafe_b64decode(padded))
+        return claims if isinstance(claims, dict) else None
+    except Exception:
+        return None
+
+
+def _quota_identity(request: Request):
+    """Resolve (identity, tier_hint) from the bearer token, headers or client IP."""
+    identity = None
+    tier_hint = None
+    authorization = request.headers.get("authorization") or ""
+    if authorization.lower().startswith("bearer "):
+        claims = _decode_jwt_claims_unverified(authorization.split(" ", 1)[1].strip())
+        if claims:
+            subject = claims.get("sub") or claims.get("phone") or claims.get("user_id")
+            if subject:
+                identity = str(subject)
+            tier_hint = claims.get("subscription_tier") or claims.get("tier") or claims.get("plan")
+    if identity is None:
+        identity = request.headers.get("x-user-id") or request.headers.get("x-user-phone")
+    if identity is None:
+        client_host = request.client.host if request.client else "unknown"
+        identity = "anon:%s" % (client_host or "unknown")
+    return str(identity), tier_hint
+
+
+def _quota_rejection(status_code: int, payload: dict, extra_headers: dict = None) -> JSONResponse:
+    """Rejection response that still carries CORS headers (this layer is outermost)."""
+    headers = {"Access-Control-Allow-Origin": "*", "Vary": "Origin"}
+    if extra_headers:
+        headers.update(extra_headers)
+    return JSONResponse(status_code=status_code, content=payload, headers=headers)
+
+
+@app.middleware("http")
+async def rate_limit_and_token_quota(request: Request, call_next):
+    if not (_QUOTA_AVAILABLE and _AUTH_ENABLED):
+        return await call_next(request)
+
+    path = request.url.path or "/"
+    if path.startswith(_QUOTA_EXEMPT_PREFIXES):
+        return await call_next(request)
+
+    try:
+        identity, tier_hint = _quota_identity(request)
+        tier, remaining = await _quota_service.resolve(identity, tier_hint)
+
+        # ---- dynamic rate limiting (per-tier token bucket) ----
+        retry_after = _quota_service.check_rate(identity, tier)
+        if retry_after is not None:
+            _quota_service.stats["rate_limited"] += 1
+            return _quota_rejection(
+                429,
+                {
+                    "status": "error",
+                    "code": "RATE_LIMITED",
+                    "message": "تعداد درخواست‌های شما بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.",
+                    "tier": tier,
+                    "retry_after_seconds": retry_after,
+                },
+                {"Retry-After": str(max(1, int(retry_after) + 1))},
+            )
+
+        # ---- dynamic token cost estimate for this request ----
+        try:
+            content_length = int(request.headers.get("content-length") or 0)
+        except Exception:
+            content_length = 0
+        cost = _estimate_token_cost(content_length, tier, path)
+
+        # ---- quota gate: HTTP 402 once the wallet is exhausted ----
+        if cost > 0 and remaining <= 0:
+            _quota_service.stats["quota_rejected"] += 1
+            return _quota_rejection(
+                402,
+                {
+                    "status": "error",
+                    "code": "TOKEN_QUOTA_EXHAUSTED",
+                    "message": "اعتبار توکن شما به پایان رسیده است؛ برای ادامه کیف پول را شارژ کنید.",
+                    "tier": tier,
+                    "remaining_tokens": 0,
+                    "estimated_cost": cost,
+                    "top_up_url": "/pricing/plans",
+                },
+                {"X-Token-Quota-Remaining": "0"},
+            )
+    except Exception as exc:  # pragma: no cover - never break the request path
+        print("[ROXIRA][QUOTA-WARN] bypassing request: %s" % exc, file=sys.stderr)
+        return await call_next(request)
+
+    response = await call_next(request)
+
+    # ---- deduct the estimated cost and publish the remaining quota ----
+    try:
+        remaining_after = _quota_service.consume(identity, cost)
+        _quota_service.stats["allowed"] += 1
+        response.headers["X-Token-Cost"] = str(cost)
+        response.headers["X-Token-Quota-Remaining"] = str(remaining_after)
+        response.headers["X-RateLimit-Tier"] = tier
+        response.headers["X-RateLimit-Limit"] = str(_tier_limits(tier)["rpm"])
+        if cost > 0:
+            task = asyncio.create_task(_quota_service.persist(identity, remaining_after))
+            _QUOTA_PERSIST_TASKS.add(task)
+            task.add_done_callback(_QUOTA_PERSIST_TASKS.discard)
+    except Exception as exc:  # pragma: no cover - accounting must never fail a response
+        print("[ROXIRA][QUOTA-WARN] accounting skipped: %s" % exc, file=sys.stderr)
+    return response
+
+
+@app.get("/system/auth-quota")
+async def auth_quota_snapshot():
+    """Operational snapshot of the rate limiter / token quota layer."""
+    if not _QUOTA_AVAILABLE:
+        return JSONResponse({"status": "disabled", "reason": "module unavailable"}, status_code=200)
+    return {"status": "ok", "enabled": bool(_AUTH_ENABLED), **_quota_service.snapshot()}
+
+
+async def _init_auth_schema() -> None:
+    """Create the account/subscription/wallet tables on startup (best effort)."""
+    if not _QUOTA_AVAILABLE or os.getenv("ROXIRA_AUTH_INIT_DB", "1") == "0":
+        return
+    try:
+        from output_apps.ecosystem_core.src.factory.user_auth_models import init_auth_db
+        ready = await init_auth_db()
+        print("[ROXIRA] auth schema ready: %s" % ready, file=sys.stderr)
+    except Exception as exc:  # pragma: no cover - must never block startup
+        print("[ROXIRA][AUTH-DB-WARN] %s" % exc, file=sys.stderr)
+
+
+# Registered on the low-level startup list (no deprecated on_event decorator).
+app.router.on_startup.append(_init_auth_schema)
 
 # اتصال خودکار تمامی روترهای فعال پلتفرم (با لاگ کامل خطاها - بدون شکست بی‌صدا)
 modules_dir = BASE_DIR / "output_apps" / "generated_modules"
