@@ -1,26 +1,30 @@
 import Link from "next/link";
-import { Mail, MapPin, Phone, ShieldCheck } from "lucide-react";
+import { Boxes, Cpu, FileCheck2, Layers, Mail, MapPin, Phone, ShieldCheck } from "lucide-react";
 
-const QUICK_LINKS = [
-  { href: "/invoicing", label: "سامانه فاکتور الکترونیک" },
-  { href: "/damages", label: "محاسبه‌گر خسارت تاخیر تادیه" },
-  { href: "/judge", label: "دستیار حقوقی سازمانی" },
+const PLATFORM_LINKS = [
+  { href: "/accounting", label: "حسابداری دوطرفه" },
+  { href: "/invoicing", label: "انطباق مالیاتی (سامانه مودیان)" },
+  { href: "/inventory", label: "انبارداری و ERP" },
+  { href: "/crm", label: "مدیریت مشتریان (CRM)" },
+  { href: "/admin/mission-control", label: "کارخانه نرم‌افزار خودمختار" },
+  { href: "/admin/mission-control", label: "میز کنترل (Mission Control)" },
   { href: "/docs", label: "مستندات وب‌سرویس و API" },
 ];
 
 const MODULES = [
-  { href: "/invoicing", label: "صدور صورتحساب" },
-  { href: "/damages", label: "محاسبات رسمی" },
-  { href: "/judge", label: "پایگاه دانش" },
-  { href: "/docs", label: "درگاه توسعه‌دهندگان" },
+  { href: "/accounting", label: "دفتر کل و گزارش‌های مالی", icon: Layers },
+  { href: "/invoicing", label: "صورتحساب و امضای الکترونیک", icon: FileCheck2 },
+  { href: "/inventory", label: "موجودی و بهای تمام‌شده", icon: Boxes },
+  { href: "/admin/mission-control", label: "ساخت و استقرار ماژول", icon: Cpu },
 ];
 
 /**
  * فوتر رسمی پورتال سازمانی روکسیرا (roxira.ir).
  *
  * شامل نماد اعتماد الکترونیکی اختصاصی روکسیرا (اینماد کد ۷۴۸۰۵۵۹)، اطلاعات
- * تماس رسمی، پیوندهای دسترسی سریع به ماژول‌ها و حقوق مالکیت معنوی شرکت.
- * توجه: طبق اعلام رسمی سامانه اینماد، صفت rel="noopener noreferrer" نباید در تگ <a> وجود داشته باشد تا اعتبارسنجی ارجاع‌دهنده کار کند.
+ * تماس رسمی و پیوندهای دسترسی سریع به ماژول‌های سازمانی، انطباق مالیاتی و
+ * کارخانه نرم‌افزار خودمختار. توجه: طبق اعلام رسمی سامانه اینماد، صفت
+ * rel="noopener noreferrer" نباید در تگ <a> نماد اعتماد وجود داشته باشد.
  */
 export function RoxiraFooter() {
   return (
@@ -39,20 +43,17 @@ export function RoxiraFooter() {
             </div>
           </div>
           <p className="text-xs leading-relaxed">
-            زیرساخت ابری یکپارچه سازمانی؛ از مدیریت اسناد مالیاتی و محاسبات رسمی تا
-            اتصال امن به زیرساخت هوش مصنوعی و پایگاه دانش سازمانی.
+            زیرساخت ابری یکپارچه سازمانی؛ از حسابداری و انبارداری و انطباق مالیاتی تا کارخانه
+            نرم‌افزار خودمختار و اتصال امن به وب‌سرویس‌های سازمانی.
           </p>
         </div>
 
         <div className="space-y-3">
           <h4 className="text-sm font-bold text-white">دسترسی سریع</h4>
           <ul className="space-y-2 text-xs">
-            {QUICK_LINKS.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="transition-colors hover:text-indigo-300"
-                >
+            {PLATFORM_LINKS.map((link) => (
+              <li key={link.label}>
+                <Link href={link.href} className="transition-colors hover:text-indigo-300">
                   {link.label}
                 </Link>
               </li>
@@ -90,57 +91,59 @@ export function RoxiraFooter() {
               </span>
             </li>
           </ul>
-          <nav className="flex flex-wrap gap-x-4 gap-y-2 pt-1 text-xs">
-            {MODULES.map((module) => (
-              <Link
-                key={module.href}
-                href={module.href}
-                className="transition-colors hover:text-indigo-300"
-              >
-                {module.label}
-              </Link>
-            ))}
-          </nav>
         </div>
 
-        <div className="flex flex-col items-center justify-center gap-2 md:items-end">
-          <div className="inline-block rounded-2xl border border-white/10 bg-white p-2.5 shadow-lg">
-            <a
-              referrerPolicy="origin"
-              target="_blank"
-              href="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+        <div className="space-y-3">
+          <h4 className="text-sm font-bold text-white">ماژول‌های سازمانی</h4>
+          <ul className="space-y-2.5 text-xs">
+            {MODULES.map((module) => {
+              const Icon = module.icon;
+              return (
+                <li key={module.label}>
+                  <Link
+                    href={module.href}
+                    className="flex items-center gap-2 transition-colors hover:text-indigo-300"
+                  >
+                    <Icon className="size-3.5 shrink-0 text-indigo-300" />
+                    {module.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="pt-2">
+            <div className="inline-block rounded-2xl border border-white/10 bg-white p-2.5 shadow-lg">
+              <a
                 referrerPolicy="origin"
-                src="https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-                alt="نماد اعتماد الکترونیکی رکسایرا"
-                className="h-auto w-24 cursor-pointer"
-                id="y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-                style={{ cursor: "pointer" }}
-              />
-            </a>
+                target="_blank"
+                href="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  referrerPolicy="origin"
+                  src="https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
+                  alt="نماد اعتماد الکترونیکی رکسایرا"
+                  className="h-auto w-20 cursor-pointer"
+                  id="y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
+                  style={{ cursor: "pointer" }}
+                />
+              </a>
+            </div>
+            <span className="mt-2 flex items-center gap-1 text-[10px] font-bold text-slate-500">
+              <ShieldCheck className="size-3 text-emerald-400" />
+              نماد اعتماد الکترونیکی رسمی روکسیرا — کد ۷۴۸۰۵۵۹
+            </span>
           </div>
-          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
-            <ShieldCheck className="size-3 text-emerald-400" />
-            نماد اعتماد الکترونیکی رسمی روکسیرا — کد ۷۴۸۰۵۵۹
-          </span>
         </div>
       </div>
 
       <div className="border-t border-white/10">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-4 text-center text-[11px] text-slate-500 sm:flex-row sm:px-6 sm:text-right">
-          <span>© ۱۴۰۵ رکسایرا — تمامی حقوق مادی و معنوی محفوظ است.</span>
-          <span className="flex items-center gap-3 font-mono" dir="ltr">
+          <span>© ۱۴۰۵ رکسایرا — تمامی امتیازات مادی و معنوی محفوظ است.</span>
+          <span className="font-mono" dir="ltr">
             <a href="https://roxira.ir" className="transition-colors hover:text-indigo-300">
               roxira.ir
-            </a>
-            <span className="text-slate-700">·</span>
-            <a
-              href="https://ghazihoushmand.ir"
-              className="transition-colors hover:text-indigo-300"
-            >
-              ghazihoushmand.ir
             </a>
           </span>
         </div>

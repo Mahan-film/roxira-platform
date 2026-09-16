@@ -6,16 +6,12 @@ import { LogIn, LogOut, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 
-const NAV_LINKS: { href: string; label: string; external?: boolean }[] = [
-  { href: "/", label: "داشبورد" },
-  { href: "/invoicing", label: "فاکتورها" },
+const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/accounting", label: "حسابداری" },
-  { href: "/inventory", label: "انبارداری" },
+  { href: "/invoicing", label: "انطباق مالیاتی" },
+  { href: "/inventory", label: "انبار و ERP" },
   { href: "/crm", label: "CRM" },
-  { href: "/hr", label: "منابع انسانی" },
-  { href: "/damages", label: "محاسبه خسارت" },
-  { href: "/radar", label: "رادار فناوری" },
-  { href: "https://ghazihoushmand.ir", label: "قاضی هوشمند", external: true },
+  { href: "/admin/mission-control", label: "کارخانه و میز کنترل" },
   { href: "/docs", label: "مستندات API" },
 ];
 
@@ -25,9 +21,9 @@ export function SiteHeader() {
   const handleLogin = () => {
     openLogin({
       serviceDomain: inferServiceDomain(),
-      title: "ورود به پورتال سازمانی",
+      title: "ورود به پورتال سازمانی روکسیرا",
       description:
-        "برای دسترسی به فاکتورها، محاسبه خسارت و ابزارهای سازمانی، شماره همراه خود را وارد کنید.",
+        "برای دسترسی به ماژول‌های مالی، انطباق مالیاتی و ابزارهای سازمانی، شماره همراه خود را وارد کنید.",
     });
   };
 
@@ -41,33 +37,21 @@ export function SiteHeader() {
           <span className="flex flex-col leading-tight">
             <span className="text-sm font-bold text-white">پورتال سازمانی روکسیرا</span>
             <span className="font-mono text-[10px] text-slate-500" dir="ltr">
-              roxira.ir
+              Roxira Enterprise OS
             </span>
           </span>
         </Link>
 
         <nav className="hidden items-center gap-1 text-sm md:flex">
-          {NAV_LINKS.map((link) =>
-            link.external ? (
-              <a
-                key={link.href}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                {link.label}
-              </a>
-            ) : (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                {link.label}
-              </Link>
-            ),
-          )}
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
 
         {!isLoading && isAuthenticated && user ? (
