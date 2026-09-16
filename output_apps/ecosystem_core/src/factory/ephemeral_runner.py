@@ -63,6 +63,8 @@ __all__ = [
     "make_build_queue",
     "redis_configured",
     "requires_in_process_advancement",
+    "DEPLOYED_STAGES",
+    "sandbox_summary",
     "FileBuildStatusStore",
     "RedisBuildStatusStore",
     "make_status_store",
@@ -188,6 +190,7 @@ class BuildStage(str, Enum):
     RUNNING = "RUNNING"
     FAILED = "FAILED"
     REJECTED = "REJECTED"
+    DESTROYED = "DESTROYED"
 
 
 @dataclass(slots=True)
@@ -242,10 +245,38 @@ class BuildStatus:
         return cls(**{k: v for k, v in data.items() if k in allowed})
 
 
+DEPLOYED_STAGES: frozenset[str] = frozenset(
+    {
+        BuildStage.CONTAINER_STARTED.value,
+        BuildStage.ROUTE_REGISTERED.value,
+        BuildStage.RUNNING.value,
+    }
+)
+
+
+def sandbox_summary(status: BuildStatus) -> dict[str, Any]:
+    """Flatten a :class:`BuildStatus` into the sandbox-listing row shape."""
+    return {
+        "app_id": status.app_id,
+        "app_name": status.app_name,
+        "status": status.status,
+        "stage": status.stage,
+        "port": status.host_port,
+        "subdomain": status.subdomain,
+        "url": status.url,
+        "container_id": status.container_id,
+        "deployed": status.stage in DEPLOYED_STAGES,
+        "created_at": status.created_at,
+        "updated_at": status.updated_at,
+    }
+
+
 class BuildStatusStore(Protocol):
     async def save(self, status: BuildStatus) -> None: ...
 
     async def get(self, app_id: str) -> Optional[BuildStatus]: ...
+
+    async def list_all(self) -> list[BuildStatus]: ...
 
 
 class FileBuildStatusStore:
@@ -278,6 +309,24 @@ class FileBuildStatusStore:
         except Exception:
             return None
 
+    async def list_all(self) -> list[BuildStatus]:
+        """Every persisted build status, newest first.
+
+        A corrupted/half-written ``status.json`` is skipped rather than failing
+        the whole listing; ``save`` writes atomically so this should be rare.
+        """
+        if not self._sandbox_root.exists():
+            return []
+        statuses: list[BuildStatus] = []
+        for path in await asyncio.to_thread(lambda: sorted(self._sandbox_root.glob("*/status.json"))):
+            try:
+                raw = await asyncio.to_thread(path.read_text, "utf-8")
+                statuses.append(BuildStatus.from_dict(json.loads(raw)))
+            except Exception:
+                continue
+        statuses.sort(key=lambda s: s.created_at, reverse=True)
+        return statuses
+
 
 class RedisBuildStatusStore:
     """Redis-backed status store — preferred when multiple replicas are live."""
@@ -304,6 +353,34 @@ class RedisBuildStatusStore:
             return BuildStatus.from_dict(json.loads(raw))
         except Exception:
             return None
+
+    async def list_all(self) -> list[BuildStatus]:
+        """Every live build status via a non-blocking SCAN (never ``KEYS``)."""
+        prefix = "factory:build:status:"
+        keys: list[str] = []
+        try:
+            async for key in self._client.scan_iter(match=f"{prefix}*", count=200):
+                keys.append(key if isinstance(key, str) else key.decode("utf-8"))
+        except Exception:
+            return []
+        if not keys:
+            return []
+        try:
+            raws = await self._client.mget(keys)
+        except Exception:
+            return []
+        statuses: list[BuildStatus] = []
+        for raw in raws:
+            if not raw:
+                continue
+            try:
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8")
+                statuses.append(BuildStatus.from_dict(json.loads(raw)))
+            except Exception:
+                continue
+        statuses.sort(key=lambda s: s.created_at, reverse=True)
+        return statuses
 
 
 async def make_status_store() -> BuildStatusStore:
@@ -667,6 +744,24 @@ class DockerEngine:
         except DockerCommandError:
             return
 
+    async def remove_container(self, name: str, timeout: float = 120.0) -> bool:
+        """Force-stop and remove a container by name.
+
+        Used as the belt-and-braces teardown path: ``compose down`` needs the
+        project directory to still exist, so a sandbox whose directory was
+        already cleaned up would otherwise leave an orphan running.
+
+        Returns ``True`` when a container was removed, ``False`` when none
+        matched (already gone — not an error for teardown).
+        """
+        try:
+            await self._run(["docker", "rm", "-f", name], timeout=timeout)
+            return True
+        except DockerCommandError as exc:
+            if "no such container" in (exc.stderr or "").lower():
+                return False
+            raise
+
     async def exec_in_container(
         self, container: str, args: list[str], timeout: Optional[float] = 60.0
     ) -> str:
@@ -867,6 +962,10 @@ class NginxRouteRegistrar:
     def _conf_path(self, app_id: str) -> Path:
         return self._conf_dir / f"{app_id}.conf"
 
+    def conf_path(self, app_id: str) -> Path:
+        """Absolute path of a sandbox's vhost file."""
+        return self._conf_path(app_id)
+
     def _render(self, app_id: str, upstream: str) -> str:
         return (
             f"# roxira sandbox vhost — {app_id}\n"
@@ -894,11 +993,19 @@ class NginxRouteRegistrar:
         await self.reload()
         return self.subdomain(app_id)
 
-    async def unregister(self, app_id: str) -> None:
+    async def unregister(self, app_id: str, reload: bool = True) -> bool:
+        """Delete a sandbox vhost; returns True when a file was removed.
+
+        Pass ``reload=False`` when the caller will reload once for several
+        changes (teardown deletes the file *and* re-checks the config).
+        """
         target = self._conf_path(app_id)
-        if target.exists():
-            await asyncio.to_thread(target.unlink)
+        if not target.exists():
+            return False
+        await asyncio.to_thread(target.unlink)
+        if reload:
             await self.reload()
+        return True
 
     async def reload(self) -> None:
         try:
@@ -1196,6 +1303,116 @@ class EphemeralRunner:
                     )
                 return BuildResult(app_id=request.app_id, status="failed", error=str(exc))
 
+    def _record_path(self, app_id: str) -> Path:
+        return self._sandbox_root / app_id / "sandbox.json"
+
+    def _read_record(self, app_id: str) -> dict[str, Any]:
+        try:
+            return json.loads(self._record_path(app_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    async def destroy(
+        self, app_id: str, status: Optional[BuildStatus] = None
+    ) -> dict[str, Any]:
+        """Tear a sandbox down: container, port, vhost, status. Idempotent.
+
+        Steps, in order:
+
+        1. ``docker compose down -v`` (when the project dir still exists) plus a
+           ``docker rm -f`` by container name, so an orphan survives neither a
+           deleted project directory nor a broken compose file.
+        2. Release the port reservation (``.reservation`` + cross-process lock).
+        3. Delete the nginx vhost ``{nginx_dir}/{app_id}.conf``.
+        4. Mark the build ``DESTROYED``.
+        5. Graceful nginx reload.
+
+        Never raises for a partially-reachable host: individual failures are
+        collected in ``warnings`` and reported, because a leftover nginx reload
+        problem must not prevent the port from being reclaimed.  Every step is
+        safe to repeat.
+        """
+        status = status or await self._status.get(app_id)
+        record = self._read_record(app_id)
+        warnings: list[str] = []
+
+        port = (status.host_port if status else None) or record.get("host_port")
+        project_dir = (status.project_dir if status else None) or record.get("project_dir")
+        container_name = (
+            (status.container_name if status else None)
+            or record.get("container_name")
+            or f"roxira_sandbox_{app_id}"
+        )
+        project_name = record.get("project_name") or f"roxira-sandbox-{app_id}"
+
+        # 1. stop + remove the isolated container
+        if project_dir:
+            try:
+                await self._docker.down(Path(str(project_dir)), project_name)
+            except Exception as exc:
+                warnings.append("compose down failed: %s" % exc)
+        container_removed = False
+        try:
+            container_removed = await self._docker.remove_container(container_name)
+        except Exception as exc:
+            warnings.append("docker rm -f %s failed: %s" % (container_name, exc))
+
+        # 2. release the port reservation (unlinks lock + .reservation)
+        released_port: Optional[int] = None
+        if port:
+            with contextlib.suppress(Exception):
+                released_port = int(port)
+            if released_port:
+                self._allocator.release(app_id, released_port)
+
+        # 3. remove the nginx sandbox vhost
+        conf_path = self._nginx.conf_path(app_id)
+        conf_removed = False
+        try:
+            conf_removed = await self._nginx.unregister(app_id, reload=False)
+        except Exception as exc:
+            warnings.append("nginx vhost removal failed: %s" % exc)
+
+        # 4. drop the sandbox.json record so layer-2 reservation frees the port
+        record_removed = False
+        try:
+            if self._record_path(app_id).exists():
+                await asyncio.to_thread(self._record_path(app_id).unlink)
+                record_removed = True
+        except OSError as exc:
+            warnings.append("could not remove sandbox record: %s" % exc)
+
+        # 5. mark DESTROYED
+        if status is not None:
+            try:
+                await self._status.save(status.advance(BuildStage.DESTROYED, status="DESTROYED"))
+            except Exception as exc:
+                warnings.append("could not persist DESTROYED status: %s" % exc)
+
+        # 6. single graceful reload after the vhost is gone
+        nginx_reloaded = False
+        try:
+            await self._nginx.reload()
+            nginx_reloaded = True
+        except Exception as exc:
+            warnings.append("nginx reload failed: %s" % exc)
+
+        return {
+            "app_id": app_id,
+            "status": BuildStage.DESTROYED.value,
+            "stage": BuildStage.DESTROYED.value,
+            "deployed": False,
+            "port": released_port,
+            "released_port": released_port,
+            "container_name": container_name,
+            "container_removed": container_removed,
+            "nginx_conf": str(conf_path),
+            "nginx_conf_removed": conf_removed,
+            "nginx_reloaded": nginx_reloaded,
+            "record_removed": record_removed,
+            "warnings": warnings,
+        }
+
     async def _process(self, message: QueuedBuild) -> None:
         async with self._semaphore:
             try:
@@ -1304,8 +1521,12 @@ def create_factory_router(
             resolved_store = await make_status_store()
         return resolved_store
 
-    async def _get_in_process_runner() -> EphemeralRunner:
-        """Lazily build the single in-process orchestrator for this router."""
+    async def _get_runner() -> EphemeralRunner:
+        """Lazily build the single orchestrator shared by this router.
+
+        Used for in-process build advancement *and* for sandbox teardown, which
+        is always local to the API process regardless of queue topology.
+        """
         nonlocal in_process_runner
         if in_process_runner is None:
             async with runner_lock:
@@ -1328,7 +1549,7 @@ def create_factory_router(
 
         # No external worker can drain a process-local queue — run it here.
         if requires_in_process_advancement(build_queue):
-            runner = await _get_in_process_runner()
+            runner = await _get_runner()
             background_tasks.add_task(runner.advance_build, request)
 
         return {
@@ -1363,6 +1584,46 @@ def create_factory_router(
         if build_status is None:
             raise HTTPException(status_code=404, detail=f"unknown app_id: {app_id}")
         return build_status.to_dict()
+
+    @router.get("/sandboxes")
+    async def list_sandboxes() -> list[dict[str, Any]]:
+        """List every known sandbox/build: app_id, status, port, subdomain, timestamps.
+
+        Reads straight from the status store (filesystem or Redis), so it works
+        identically for in-process and externally-drained builds.  Newest first.
+        """
+        store = await _get_store()
+        lister = getattr(store, "list_all", None)
+        if lister is None:  # custom/injected store without listing support
+            print(
+                "[factory] WARN status store %s has no list_all(); "
+                "/sandboxes returning []" % type(store).__name__,
+                file=sys.stderr,
+            )
+            return []
+        statuses = await lister()
+        return [sandbox_summary(s) for s in statuses]
+
+    @router.delete("/sandboxes/{app_id}")
+    async def destroy_sandbox(app_id: str) -> dict[str, Any]:
+        """Stop and remove a sandbox and release everything it holds.
+
+        Removes the container, the port reservation, the nginx vhost
+        (``/opt/roxira_platform/nginx/sandboxes/{app_id}.conf``), marks the
+        build ``DESTROYED`` and reloads nginx.  Repeat calls are a no-op.
+        """
+        store = await _get_store()
+        build_status = await store.get(app_id)
+        if build_status is None:
+            raise HTTPException(status_code=404, detail=f"unknown app_id: {app_id}")
+        if build_status.stage == BuildStage.DESTROYED.value:
+            return {
+                **sandbox_summary(build_status),
+                "already_destroyed": True,
+                "warnings": [],
+            }
+        runner = await _get_runner()
+        return await runner.destroy(app_id, build_status)
 
     return router
 

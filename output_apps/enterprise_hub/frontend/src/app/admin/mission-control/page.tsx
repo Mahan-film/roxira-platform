@@ -87,6 +87,21 @@ interface SandboxHistoryEntry {
 const HISTORY_KEY = "roxira.foundry.sandboxes";
 const HISTORY_LIMIT = 12;
 
+interface SandboxSummary {
+  app_id: string;
+  app_name?: string | null;
+  status?: string;
+  stage?: string;
+  port?: number | null;
+  host_port?: number | null;
+  subdomain?: string | null;
+  url?: string | null;
+  container_id?: string | null;
+  deployed?: boolean;
+  created_at?: number;
+  updated_at?: number;
+}
+
 const SANDBOX_BADGE: Record<string, string> = {
   RUNNING: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
   QUEUED: "border-slate-500/40 bg-slate-500/10 text-slate-300",
@@ -113,16 +128,26 @@ function loadHistory(): SandboxHistoryEntry[] {
   }
 }
 
-function upsertHistory(prev: SandboxHistoryEntry[], status: FactoryBuildStatus): SandboxHistoryEntry[] {
-  const next: SandboxHistoryEntry = {
-    app_id: status.app_id,
-    stage: status.stage,
-    status: status.status,
-    host_port: typeof status.host_port === "number" ? status.host_port : null,
-    subdomain: status.subdomain ?? null,
-    url: status.url ?? null,
-    updated_at: status.updated_at ?? Date.now() / 1000,
+function toHistoryEntry(source: SandboxSummary): SandboxHistoryEntry {
+  const port =
+    typeof source.host_port === "number"
+      ? source.host_port
+      : typeof source.port === "number"
+        ? source.port
+        : null;
+  return {
+    app_id: source.app_id,
+    stage: source.stage ?? source.status ?? "UNKNOWN",
+    status: source.status ?? source.stage ?? "UNKNOWN",
+    host_port: port,
+    subdomain: source.subdomain ?? null,
+    url: source.url ?? null,
+    updated_at: source.updated_at ?? source.created_at ?? Date.now() / 1000,
   };
+}
+
+function upsertHistory(prev: SandboxHistoryEntry[], status: FactoryBuildStatus): SandboxHistoryEntry[] {
+  const next = toHistoryEntry(status);
   const index = prev.findIndex((entry) => entry.app_id === next.app_id);
   if (index === -1) return [next, ...prev].slice(0, HISTORY_LIMIT);
 
@@ -324,6 +349,7 @@ export default function MissionControlPage() {
   const [buildStatus, setBuildStatus] = useState<FactoryBuildStatus | null>(null);
   const [history, setHistory] = useState<SandboxHistoryEntry[]>([]);
   const [historyReady, setHistoryReady] = useState(false);
+  const [historySource, setHistorySource] = useState<"remote" | "local">("local");
 
   const checkAll = useCallback(async () => {
     abortRef.current?.abort();
@@ -452,11 +478,36 @@ export default function MissionControlPage() {
   }, [activeAppId]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setHistory(loadHistory());
+    let cancelled = false;
+    const load = async () => {
+      let remote: SandboxHistoryEntry[] | null = null;
+      try {
+        const res = await fetch(`${FACTORY_BASE}/sandboxes`, { cache: "no-store" });
+        if (res.ok) {
+          const data = (await res.json()) as unknown;
+          const rows = Array.isArray(data) ? (data as SandboxSummary[]) : [];
+          remote = rows
+            .filter((row) => row !== null && typeof row === "object" && typeof row.app_id === "string")
+            .map(toHistoryEntry)
+            .slice(0, HISTORY_LIMIT);
+        }
+      } catch {
+        remote = null;
+      }
+      if (cancelled) return;
+      if (remote && remote.length > 0) {
+        setHistory(remote);
+        setHistorySource("remote");
+      } else {
+        setHistory(loadHistory());
+        setHistorySource("local");
+      }
       setHistoryReady(true);
-    }, 0);
-    return () => clearTimeout(timer);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -693,6 +744,20 @@ export default function MissionControlPage() {
               <h2 className="font-mono text-sm font-bold tracking-wider text-slate-100">
                 RECENT SYNTHESIZED SANDBOXES
               </h2>
+              <span
+                className={`rounded-md border px-1.5 py-0.5 font-mono text-[9px] font-bold ${
+                  historySource === "remote"
+                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                    : "border-slate-700 bg-slate-800/50 text-slate-400"
+                }`}
+                title={
+                  historySource === "remote"
+                    ? "Live deployments from the factory API"
+                    : "Cached locally — factory API unavailable"
+                }
+              >
+                {historySource === "remote" ? "LIVE" : "LOCAL"}
+              </span>
             </div>
             {history.length > 0 && (
               <button
