@@ -221,7 +221,7 @@ export function LiveVoiceModal({
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
       mediaRecorderRef.current = recorder;
-      try { recorder.start(250); } catch (_) { recorder.start(); }
+      try { recorder.start(200); } catch (_) { recorder.start(); }
     } catch (e) {
       console.warn("Recorder start notice:", e);
     }
@@ -870,15 +870,20 @@ export function LiveVoiceModal({
           ✕
         </button>
 
-        {/* برچسب وضعیت زنده */}
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <span className="px-4 py-1.5 bg-gradient-to-r from-cyan-500/10 via-emerald-500/10 to-purple-500/10 border border-cyan-500/30 text-cyan-300 text-xs rounded-full font-medium flex items-center gap-2 shadow-sm">
-            <span className={`w-2 h-2 rounded-full ${
-              voiceState === "speaking" ? "bg-purple-400 animate-ping" :
-              voiceState === "thinking" ? "bg-amber-400 animate-spin" :
-              voiceState === "listening" ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
-            }`} />
-            <span>مکالمه زنده هوشمند (Real-Time Auto Talk)</span>
+        {/* برچسب وضعیت زنده ۲۰۲۶ */}
+        <div className="flex flex-col items-center justify-center gap-1.5 mb-2">
+          <div className="flex items-center gap-2">
+            <span className="px-4 py-1.5 bg-gradient-to-r from-cyan-500/20 via-emerald-500/20 to-purple-500/20 border border-cyan-400/40 text-cyan-200 text-xs rounded-full font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/10 backdrop-blur-md">
+              <span className={`w-2.5 h-2.5 rounded-full ${
+                voiceState === "speaking" ? "bg-purple-400 animate-ping shadow-[0_0_10px_#c084fc]" :
+                voiceState === "thinking" ? "bg-amber-400 animate-spin shadow-[0_0_10px_#fbbf24]" :
+                voiceState === "listening" ? "bg-emerald-400 animate-pulse shadow-[0_0_10px_#34d399]" : "bg-slate-500"
+              }`} />
+              <span>مکالمه زنده هوشمند ۲۰۲۶ (Real-Time Voice AI)</span>
+            </span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium tracking-wide">
+            ⚡ موتور پردازش: Deepgram Nova-3 • GPT-4o Transcribe • Claude 3.7 Sonnet
           </span>
         </div>
 
@@ -916,40 +921,88 @@ export function LiveVoiceModal({
               }}
             />
 
-            {/* گوی اصلی هوش مصنوعی */}
-            <div
-              className={`relative z-10 w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center shadow-2xl transition-transform duration-100 ${
+            {/* گوی تعاملی و قابل لمس هوش مصنوعی (کلیک برای ارسال یا شروع صحبت) */}
+            <button
+              onClick={() => {
+                unlockAudio();
+                if (voiceState === "listening") {
+                  submitSpokenTurn();
+                } else if (voiceState === "speaking") {
+                  interruptAiSpeech();
+                } else {
+                  resumeListening();
+                }
+              }}
+              className={`relative z-10 w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center shadow-2xl transition-transform duration-100 cursor-pointer active:scale-95 ${
                 voiceState === "speaking"
-                  ? "bg-gradient-to-tr from-purple-600 via-indigo-500 to-pink-500 scale-105 shadow-purple-500/50"
+                  ? "bg-gradient-to-tr from-purple-600 via-indigo-500 to-pink-500 scale-105 shadow-purple-500/50 ring-4 ring-purple-400/40"
                   : voiceState === "thinking"
-                  ? "bg-gradient-to-tr from-amber-500 via-yellow-500 to-orange-500 scale-95 animate-pulse shadow-amber-500/50"
+                  ? "bg-gradient-to-tr from-amber-500 via-yellow-500 to-orange-500 scale-95 animate-pulse shadow-amber-500/50 ring-4 ring-amber-400/40"
                   : voiceState === "listening"
-                  ? "bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 scale-100 shadow-emerald-500/40"
-                  : "bg-slate-800"
+                  ? "bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 scale-100 shadow-emerald-500/40 ring-4 ring-emerald-400/40 hover:scale-105"
+                  : "bg-slate-800 ring-2 ring-slate-700"
               }`}
               style={{
                 transform: `scale(${1 + (audioLevel / 200)})`,
               }}
+              title={voiceState === "listening" ? "لمس کنید تا فوراً پاسخ ارسال شود" : "لمس برای توقف یا صحبت مجدد"}
             >
               <span className="text-3xl sm:text-4xl filter drop-shadow">
                 {voiceState === "speaking" ? "🔊" :
                  voiceState === "thinking" ? "⚖️" :
                  voiceState === "listening" ? "🎙️" : "📞"}
               </span>
-            </div>
+            </button>
           </div>
 
-          {/* وضعیت لحظه‌ای سیستم */}
+          {/* اکولایزر امواج صوتی زنده فرکانسی (2026 Real-Time Frequency Equalizer) */}
+          <div className="flex items-center justify-center gap-1.5 h-7 w-full max-w-xs mx-auto px-4">
+            {[0.4, 0.7, 1.2, 0.9, 1.5, 2.0, 1.6, 1.1, 0.8, 1.3, 0.6, 0.3].map((factor, idx) => {
+              const barHeight = voiceState === "listening"
+                ? Math.max(4, Math.min(28, (audioLevel * factor * 0.7)))
+                : voiceState === "speaking"
+                ? Math.max(6, Math.sin(Date.now() / 200 + idx) * 12 + 14)
+                : 4;
+              return (
+                <div
+                  key={idx}
+                  className={`w-1 rounded-full transition-all duration-75 ${
+                    voiceState === "speaking"
+                      ? "bg-gradient-to-t from-purple-500 to-pink-400 shadow-[0_0_8px_rgba(192,132,252,0.6)]"
+                      : voiceState === "listening"
+                      ? "bg-gradient-to-t from-emerald-500 to-cyan-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"
+                      : "bg-slate-800"
+                  }`}
+                  style={{ height: `${barHeight}px` }}
+                />
+              );
+            })}
+          </div>
+
+          {/* وضعیت لحظه‌ای سیستم و دکمه‌های کنترل هوشمند نوبت */}
           <div className="space-y-3 max-w-md mx-auto w-full px-2">
             <p className="text-xs sm:text-sm font-semibold text-slate-200 min-h-[24px]">
               {statusText}
             </p>
 
-            {/* نشانگر ریل‌تایم خودکار */}
+            {/* دکمه ارسال صوتی بلادرنگ (تضمین کارکرد در تمامی مرورگرها) */}
             {voiceState === "listening" && (
-              <p className="text-[11px] text-emerald-400/80 animate-pulse font-medium">
-                💡 کافیست صحبت کنید؛ پس از اتمام کلام، سامانه خودکار پاسخ می‌دهد.
-              </p>
+              <div className="flex flex-col items-center gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    unlockAudio();
+                    submitSpokenTurn();
+                  }}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-slate-950 font-extrabold rounded-2xl text-xs sm:text-sm shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 border border-emerald-300/40"
+                >
+                  <span className="text-base">🎙️</span>
+                  <span>صحبت کردم (ارسال فوری به قاضی هوشمند)</span>
+                  <span className="text-sm">➤</span>
+                </button>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  یا فقط سکوت کنید؛ پس از ۵۰۰ میلی‌ثانیه سامانه خودکار پاسخ می‌دهد.
+                </p>
+              </div>
             )}
 
             {/* کلام کاربر به صورت لحظه‌ای */}

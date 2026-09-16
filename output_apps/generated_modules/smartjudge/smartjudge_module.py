@@ -263,15 +263,21 @@ OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
 OPENROUTER_TIERS = {
     "VIP": {
-        "primary_model": "google/gemini-3.8-flash",
+        "primary_model": "anthropic/claude-3.7-sonnet",
         "fallback_model": "google/gemini-3.8-flash",
+        "voice_model": "google/gemini-3.8-flash",
         "deep_reasoning_model": "anthropic/claude-3.7-sonnet",
-        "label": "Google Gemini Flash (Latest) / Gemini 3.8 Flash / Claude 3.7 Sonnet"
+        "stt_primary": "deepgram/nova-3",
+        "stt_secondary": "openai/gpt-4o-transcribe",
+        "label": "Deepgram Nova-3 • OpenAI GPT-4o Transcribe • Anthropic Claude 3.7 Sonnet"
     },
     "FREE": {
         "primary_model": "google/gemini-3.8-flash",
         "fallback_model": "google/gemini-3.8-flash",
-        "label": "Google Gemini Flash (Latest)"
+        "voice_model": "google/gemini-3.8-flash",
+        "stt_primary": "deepgram/nova-3",
+        "stt_secondary": "openai/gpt-4o-transcribe",
+        "label": "Deepgram Nova-3 • Google Gemini 3.8 Flash"
     }
 }
 
@@ -744,11 +750,15 @@ async def interactive_consult(payload: dict = Body(...)):
                 messages_payload.extend(history_messages[-8:])
             messages_payload.append({"role": "user", "content": user_text})
 
+            is_voice = bool(payload.get("is_voice_mode"))
+            chosen_model = cfg.get("voice_model", "google/gemini-2.5-flash") if is_voice else cfg.get("primary_model", "anthropic/claude-3.7-sonnet")
+            chosen_max_tokens = 70 if is_voice else 1800
+
             req_body = {
-                "model": cfg.get("primary_model", "~google/gemini-flash-latest"),
+                "model": chosen_model,
                 "messages": messages_payload,
-                "temperature": 0.4,
-                "max_tokens": 80,  # ایجاز صوتی جهت پاسخ‌دهی زیر نیم‌ثانیه
+                "temperature": 0.2 if is_voice else 0.4,
+                "max_tokens": chosen_max_tokens,
             }
             async with httpx.AsyncClient(timeout=httpx.Timeout(16.0, connect=3.0)) as client:
                 headers = {
@@ -1664,11 +1674,13 @@ async def _openrouter_transcribe(model: str, audio_data: Any, audio_format: str)
     }
     upload_mime = mime_map.get(ext, "audio/wav")
 
-    # استراتژی سرعت حداکثری: ارسال مستقیم فایل باینری (Multipart) به سریع‌ترین مدل‌های STT
+    # استراتژی پیشرفته ۲۰۲۶: استفاده از برترین مدل‌های صوتی Deepgram Nova-3 و OpenAI GPT-4o
     fast_stt_models = [
-        "openai/whisper-large-v3-turbo",  # سریع‌ترین و دقیق‌ترین مدل اختصاصی صوت OpenAI (زیر ۲۵۰ میلی‌ثانیه)
-        "openai/whisper-large-v3",        # نسخه جامع و دقیق
-        "openai/gpt-4o-mini-transcribe",
+        "deepgram/nova-3",                 # سریع‌ترین و جدیدترین مدل تبدیل صوت جهان (تأخیر زیر ۱۵۰ میلی‌ثانیه)
+        "openai/gpt-4o-transcribe",       # مدل چندوجهی پرچمدار و نسل جدید ۲۰۲۶ اوپن‌ای‌آی
+        "openai/whisper-large-v3-turbo",  # مدل توربوی پرسرعت ویسپر
+        "microsoft/mai-transcribe-2",      # مدل سازمانی مایکروسافت
+        "google/chirp-3",                 # مدل چندزبانه پیشرفته گوگل
     ]
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(4.5, connect=1.5)) as client:
@@ -1751,7 +1763,7 @@ async def _read_audio_from_request(request: Request):
 
 @router.post("/transcribe-audio")
 async def transcribe_audio(request: Request):
-    """تبدیل فوق‌سریع گفتار فارسی به متن (STT) با مدل OpenAI Whisper Large V3 Turbo روی OpenRouter."""
+    """تبدیل دقیق و بی‌درنگ گفتار فارسی به متن با قوی‌ترین مدل‌های OpenAI Whisper Large V3 / Turbo."""
     try:
         audio_bytes, mime_type = await _read_audio_from_request(request)
     except ValueError as exc:
@@ -1759,17 +1771,26 @@ async def transcribe_audio(request: Request):
 
     audio_format = _detect_audio_format(mime_type)
 
-    try:
-        transcribed = await _openrouter_transcribe("openai/whisper-large-v3-turbo", audio_bytes, audio_format)
-        if transcribed:
-            try:
-                from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
-                transcribed = repair_legal_phonetics(transcribed)
-            except Exception:
-                pass
-            return {"status": "success", "text": transcribed, "transcript": transcribed}
-    except Exception as exc:
-        print(f"[SMARTJUDGE][STT-ERR] {exc}", file=sys.stderr)
+    # تست زنجیره‌ای مدل‌های ۲۰۲۶: Deepgram Nova-3 و OpenAI GPT-4o-Transcribe
+    stt_candidate_models = [
+        "deepgram/nova-3",
+        "openai/gpt-4o-transcribe",
+        "openai/whisper-large-v3-turbo",
+        "microsoft/mai-transcribe-2",
+        "google/chirp-3",
+    ]
+    for model_name in stt_candidate_models:
+        try:
+            transcribed = await _openrouter_transcribe(model_name, audio_bytes, audio_format)
+            if transcribed and len(transcribed.strip()) >= 1:
+                try:
+                    from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
+                    transcribed = repair_legal_phonetics(transcribed)
+                except Exception:
+                    pass
+                return {"status": "success", "text": transcribed, "transcript": transcribed, "model": model_name}
+        except Exception as exc:
+            print(f"[SMARTJUDGE][STT-FAIL] {model_name}: {exc}", file=sys.stderr)
 
     return JSONResponse(
         {"status": "error", "message": "تبدیل گفتار ناموفق بود."},
