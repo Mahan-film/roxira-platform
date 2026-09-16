@@ -128,6 +128,7 @@ class SwarmBlueprint:
     folders: list[str] = field(default_factory=list)
     resources: list[str] = field(default_factory=list)
     source: str = "fallback"  # "llm" | "fallback"
+    domain: str = "generic"  # "generic" | "financial"
     model: Optional[str] = None
     notes: Optional[str] = None
 
@@ -294,9 +295,10 @@ _ARCHITECT_SYSTEM = (
 def _fallback_openapi(prompt: str, title: str) -> dict[str, Any]:
     """Deterministic domain blueprint used when no LLM is available."""
     lowered = prompt.lower()
-    if any(word in lowered for word in ("account", "ledger", "invoice", "erp", "financ")):
-        resources = ["accounts", "invoices", "payments"]
-    elif any(word in lowered for word in ("shop", "store", "commerce", "product")):
+    if is_financial_prompt(prompt):
+        # Accounting / ERP prompts get the canonical double-entry contract.
+        return _financial_openapi(title, prompt)
+    if any(word in lowered for word in ("shop", "store", "commerce", "product")):
         resources = ["products", "orders", "customers"]
     elif any(word in lowered for word in ("clinic", "patient", "health", "medical")):
         resources = ["patients", "appointments", "prescriptions"]
@@ -454,6 +456,8 @@ class ArchitectAgent:
 
     async def research(self, prompt: str, app_id: str) -> SwarmBlueprint:
         title = _title_from_prompt(prompt)
+        financial = is_financial_prompt(prompt)
+        domain = FINANCIAL_DOMAIN if financial else "generic"
         if self.client.configured:
             try:
                 reply = await self.client.complete_json(
@@ -463,6 +467,9 @@ class ArchitectAgent:
                 )
                 openapi = reply.get("openapi") or {}
                 if _valid_openapi(openapi):
+                    # Accounting products must expose the double-entry entities
+                    # even when the LLM forgets them.
+                    enforced = enforce_financial_entities(openapi) if financial else []
                     return SwarmBlueprint(
                         title=str(reply.get("title") or title),
                         prompt=prompt,
@@ -470,7 +477,13 @@ class ArchitectAgent:
                         folders=[str(f) for f in reply.get("folders") or []],
                         resources=sorted(resources_from_openapi(openapi)),
                         source="llm",
+                        domain=domain,
                         model=self.client.model,
+                        notes=(
+                            "enforced double-entry entities: " + ", ".join(enforced)
+                            if enforced
+                            else None
+                        ),
                     )
                 print(
                     "[swarm][architect] LLM reply lacked a usable OpenAPI document; "
@@ -483,6 +496,8 @@ class ArchitectAgent:
                     file=sys.stderr,
                 )
         openapi = _fallback_openapi(prompt, title)
+        if financial:
+            enforce_financial_entities(openapi)
         return SwarmBlueprint(
             title=title,
             prompt=prompt,
@@ -490,7 +505,12 @@ class ArchitectAgent:
             folders=default_folders(),
             resources=sorted(resources_from_openapi(openapi)),
             source="fallback",
-            notes="deterministic blueprint (no LLM)",
+            domain=domain,
+            notes=(
+                "deterministic double-entry blueprint (accounting domain)"
+                if financial
+                else "deterministic blueprint (no LLM)"
+            ),
         )
 
 
@@ -532,6 +552,307 @@ def default_folders() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Financial / ERP domain synthesis (double-entry bookkeeping)
+# ---------------------------------------------------------------------------
+
+FINANCIAL_DOMAIN = "financial"
+
+#: Words that mark a prompt as an accounting / ERP product.
+FINANCIAL_PROMPT_KEYWORDS = (
+    "account",
+    "accounting",
+    "accountancy",
+    "bookkeep",
+    "ledger",
+    "erp",
+    "financ",
+    "invoice",
+    "double-entry",
+    "double entry",
+    "trial balance",
+    "voucher",
+    "حسابداری",  # accounting
+    "مالی",  # financial
+    "دفتر",  # ledger
+    "تراز",  # balance
+    "سند",  # voucher / journal
+)
+
+#: Canonical double-entry entities every accounting contract must expose.
+FINANCIAL_ENTITIES: dict[str, dict[str, Any]] = {
+    "Account": {
+        "type": "object",
+        "description": "Chart-of-accounts node (double-entry ledger account).",
+        "required": ["code", "title", "type"],
+        "properties": {
+            "id": {"type": "integer", "format": "int64"},
+            "code": {"type": "string", "maxLength": 20},
+            "title": {"type": "string", "maxLength": 200},
+            "type": {
+                "type": "string",
+                "enum": ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"],
+            },
+            "balance": {"type": "number", "format": "double"},
+            "created_at": {"type": "string", "format": "date-time"},
+        },
+    },
+    "JournalEntry": {
+        "type": "object",
+        "description": "A double-entry voucher header.",
+        "required": ["entry_number", "date", "status"],
+        "properties": {
+            "id": {"type": "integer", "format": "int64"},
+            "entry_number": {"type": "string", "maxLength": 40},
+            "date": {"type": "string", "format": "date"},
+            "description": {"type": "string", "maxLength": 400},
+            "status": {"type": "string", "enum": ["DRAFT", "POSTED"]},
+            "created_at": {"type": "string", "format": "date-time"},
+        },
+    },
+    "JournalItem": {
+        "type": "object",
+        "description": "One debit or credit line of a journal entry.",
+        "required": ["entry_id", "account_id"],
+        "properties": {
+            "id": {"type": "integer", "format": "int64"},
+            "entry_id": {"type": "integer", "format": "int64"},
+            "account_id": {"type": "integer", "format": "int64"},
+            "debit": {"type": "number", "format": "double"},
+            "credit": {"type": "number", "format": "double"},
+        },
+    },
+    "Invoice": {
+        "type": "object",
+        "description": "Sales / purchase invoice.",
+        "required": ["number", "total_amount"],
+        "properties": {
+            "id": {"type": "integer", "format": "int64"},
+            "number": {"type": "string", "maxLength": 40},
+            "party_name": {"type": "string", "maxLength": 200},
+            "total_amount": {"type": "number", "format": "double"},
+            "tax_amount": {"type": "number", "format": "double"},
+            "status": {"type": "string", "enum": ["DRAFT", "ISSUED", "PAID", "CANCELLED"]},
+            "created_at": {"type": "string", "format": "date-time"},
+        },
+    },
+}
+
+#: Ledger resource slug -> canonical schema that each one serves.
+FINANCIAL_RESOURCES: dict[str, str] = {
+    "accounts": "Account",
+    "journal_entries": "JournalEntry",
+    "journal_items": "JournalItem",
+    "invoices": "Invoice",
+}
+
+#: Columns the portal relies on, injected when the contract omitted them.
+FINANCIAL_REQUIRED_COLUMNS: dict[str, list[tuple[str, str, bool]]] = {
+    "account": [
+        ("code", "String", True),
+        ("title", "String", True),
+        ("type", "String", True),
+        ("balance", "Float", False),
+    ],
+    "journalentry": [
+        ("entry_number", "String", True),
+        ("date", "String", True),
+        ("status", "String", True),
+        ("description", "String", False),
+    ],
+    "journalitem": [
+        ("entry_id", "Integer", True),
+        ("account_id", "Integer", True),
+        ("debit", "Float", False),
+        ("credit", "Float", False),
+    ],
+    "invoice": [
+        ("number", "String", True),
+        ("party_name", "String", False),
+        ("total_amount", "Float", False),
+        ("tax_amount", "Float", False),
+        ("status", "String", False),
+    ],
+}
+
+
+def is_financial_prompt(prompt: str) -> bool:
+    """True when a product prompt asks for accounting / ERP functionality."""
+    lowered = (prompt or "").lower()
+    return any(keyword in lowered for keyword in FINANCIAL_PROMPT_KEYWORDS)
+
+
+def _clone(value: Any) -> Any:
+    """Deep copy of a JSON-shaped contract fragment."""
+    return json.loads(json.dumps(value))
+
+
+def _singular(resource: str) -> str:
+    if resource.endswith("ies"):
+        return resource[:-3] + "y"
+    if resource.endswith("s"):
+        return resource[:-1]
+    return resource
+
+
+def _financial_operations(resource: str, model: str, singular: str) -> dict[str, Any]:
+    """Full CRUD operations for one double-entry resource."""
+    ref = {"$ref": f"#/components/schemas/{model}"}
+    item_param = {
+        "name": "item_id",
+        "in": "path",
+        "required": True,
+        "schema": {"type": "integer"},
+    }
+    return {
+        f"/{resource}": {
+            "get": {
+                "summary": f"List {resource}",
+                "operationId": f"list_{resource}",
+                "tags": [resource],
+                "responses": {
+                    "200": {
+                        "description": f"{resource} list",
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "array", "items": ref}
+                            }
+                        },
+                    }
+                },
+            },
+            "post": {
+                "summary": f"Create {singular}",
+                "operationId": f"create_{singular}",
+                "tags": [resource],
+                "requestBody": {
+                    "required": True,
+                    "content": {"application/json": {"schema": ref}},
+                },
+                "responses": {
+                    "201": {
+                        "description": f"Created {singular}",
+                        "content": {"application/json": {"schema": ref}},
+                    }
+                },
+            },
+        },
+        f"/{resource}/{{item_id}}": {
+            "get": {
+                "summary": f"Read one {singular}",
+                "operationId": f"get_{singular}",
+                "tags": [resource],
+                "parameters": [item_param],
+                "responses": {
+                    "200": {
+                        "description": singular,
+                        "content": {"application/json": {"schema": ref}},
+                    },
+                    "404": {"description": "Not found"},
+                },
+            },
+            "put": {
+                "summary": f"Update {singular}",
+                "operationId": f"update_{singular}",
+                "tags": [resource],
+                "parameters": [item_param],
+                "requestBody": {
+                    "required": True,
+                    "content": {"application/json": {"schema": ref}},
+                },
+                "responses": {
+                    "200": {
+                        "description": f"Updated {singular}",
+                        "content": {"application/json": {"schema": ref}},
+                    },
+                    "404": {"description": "Not found"},
+                },
+            },
+            "delete": {
+                "summary": f"Delete {singular}",
+                "operationId": f"delete_{singular}",
+                "tags": [resource],
+                "parameters": [item_param],
+                "responses": {
+                    "200": {"description": f"Deleted {singular}"},
+                    "404": {"description": "Not found"},
+                },
+            },
+        },
+    }
+
+
+def _financial_openapi(title: str, prompt: str) -> dict[str, Any]:
+    """Deterministic double-entry contract for accounting / ERP prompts."""
+    paths: dict[str, Any] = {}
+    for resource, model in FINANCIAL_RESOURCES.items():
+        paths.update(_financial_operations(resource, model, _singular(resource)))
+    return {
+        "openapi": "3.1.0",
+        "info": {
+            "title": title,
+            "version": "1.0.0",
+            "description": (prompt or "")[:400],
+            "x-domain": FINANCIAL_DOMAIN,
+        },
+        "paths": paths,
+        "components": {
+            "schemas": {name: _clone(schema) for name, schema in FINANCIAL_ENTITIES.items()}
+        },
+    }
+
+
+def enforce_financial_entities(openapi: dict[str, Any]) -> list[str]:
+    """Inject the canonical double-entry entities into a contract, in place.
+
+    Works on both LLM replies and fallbacks: mandatory columns and CRUD paths
+    are added, while anything extra the architect produced is preserved.  The
+    returned list names the fragments that were missing and had to be added.
+    """
+    if not isinstance(openapi, dict):
+        return []
+    components = openapi.setdefault("components", {})
+    if not isinstance(components, dict):
+        return []
+    schemas = components.setdefault("schemas", {})
+    paths = openapi.setdefault("paths", {})
+    if not isinstance(schemas, dict) or not isinstance(paths, dict):
+        return []
+
+    added: list[str] = []
+    for model, canonical in FINANCIAL_ENTITIES.items():
+        existing = schemas.get(model)
+        if not isinstance(existing, dict):
+            schemas[model] = _clone(canonical)
+            added.append(model)
+            continue
+        properties = existing.setdefault("properties", {})
+        if not isinstance(properties, dict):
+            existing["properties"] = properties = {}
+        for column, spec in canonical["properties"].items():
+            properties.setdefault(column, _clone(spec))
+        required = existing.setdefault("required", [])
+        if not isinstance(required, list):
+            existing["required"] = required = []
+        for column in canonical["required"]:
+            if column not in required:
+                required.append(column)
+    for resource, model in FINANCIAL_RESOURCES.items():
+        expected = _financial_operations(resource, model, _singular(resource))
+        for endpoint, operations in expected.items():
+            bucket = paths.get(endpoint)
+            if not isinstance(bucket, dict):
+                paths[endpoint] = operations
+                added.append(endpoint)
+                continue
+            for method, operation in operations.items():
+                bucket.setdefault(method, operation)
+    info = openapi.setdefault("info", {})
+    if isinstance(info, dict):
+        info.setdefault("x-domain", FINANCIAL_DOMAIN)
+    return added
+
+
+# ---------------------------------------------------------------------------
 # Stage 2 — schema design
 # ---------------------------------------------------------------------------
 
@@ -568,6 +889,26 @@ def pluralize(name: str) -> str:
 
 def snake_case(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).replace("-", "_").lower()
+
+
+def _enforce_financial_columns(table: TableSpec, schema_name: str) -> TableSpec:
+    """Deep schema synthesis: guarantee the double-entry columns exist."""
+    canonical = FINANCIAL_REQUIRED_COLUMNS.get(schema_name.lower().replace("_", ""))
+    if not canonical:
+        return table
+    present = {column for column, _, _ in table.columns}
+    missing = [
+        (column, sa_type, required)
+        for column, sa_type, required in canonical
+        if column not in present
+    ]
+    if not missing:
+        return table
+    return TableSpec(
+        name=table.name,
+        model=table.model,
+        columns=list(table.columns) + missing,
+    )
 
 
 def _table_for_resource(resource: str, tables: list[TableSpec]) -> Optional[TableSpec]:
@@ -641,13 +982,14 @@ class SchemaDesigner:
                 )
             if not columns:
                 continue
-            tables.append(
-                TableSpec(
-                    name=pluralize(snake_case(str(raw_name))),
-                    model=str(raw_name),
-                    columns=columns,
-                )
+            table = TableSpec(
+                name=pluralize(snake_case(str(raw_name))),
+                model=str(raw_name),
+                columns=columns,
             )
+            if blueprint.domain == FINANCIAL_DOMAIN:
+                table = _enforce_financial_columns(table, str(raw_name))
+            tables.append(table)
         return tables
 
 
@@ -703,6 +1045,11 @@ class BackendWorker(_Worker):
                 _render_router(resource, blueprint, tables),
                 "router",
             )
+        # Accounting portals boot with the Iranian chart of accounts.
+        if blueprint.domain == FINANCIAL_DOMAIN:
+            account_table = _table_for_resource("accounts", tables)
+            if account_table is not None:
+                self.write("app/seed.py", _render_seed(account_table), "seed")
         self.write("app/main.py", _render_main(blueprint), "router")
         # sqlalchemy + aiosqlite must be installed by the generated image.
         self.write("requirements.txt", _render_requirements(self.output_dir), "requirements")
@@ -810,6 +1157,23 @@ class QaEvaluator:
             "init_models" in main_body or "create_all" in main_body
         )
         check("tables_created_on_startup", tables_ready, "Base.metadata.create_all via lifespan")
+
+        # Accounting portals must ship the double-entry entities plus the
+        # Iranian chart-of-accounts seed; other domains are not judged here.
+        if blueprint.domain == FINANCIAL_DOMAIN:
+            missing_entities = [name for name in FINANCIAL_ENTITIES if name not in schemas]
+            seed_file = output_dir / "app" / "seed.py"
+            seeded = seed_file.exists() and "IRANIAN_CHART_OF_ACCOUNTS" in seed_file.read_text(
+                encoding="utf-8"
+            )
+            check(
+                "financial_entities",
+                not missing_entities and seeded,
+                ", ".join(missing_entities)
+                or ("app/seed.py chart of accounts" if seeded else "seed module missing"),
+            )
+        else:
+            check("financial_entities", True, "n/a (generic domain)")
 
         total = len(checks) or 1
         passed = sum(1 for c in checks if c["passed"])
@@ -934,6 +1298,80 @@ def _render_router_registry(blueprint: SwarmBlueprint) -> str:
         "from __future__ import annotations\n\n"
         f"{imports}\n\n"
         f"ROUTERS = [{entries}]\n"
+    )
+
+
+#: Iranian standard chart of accounts (کدینگ استاندارد حسابداری) —
+#: (code, title, type, opening balance).  Group codes: 1 assets, 2 liabilities,
+#: 3 equity, 4 income, 5 expenses.
+IRANIAN_CHART_OF_ACCOUNTS: tuple[tuple[str, str, str, float], ...] = (
+    ("1101", "موجودی نقد و صندوق", "ASSET", 0.0),
+    ("1102", "بانک‌ها", "ASSET", 0.0),
+    ("1103", "تنخواه‌گردان", "ASSET", 0.0),
+    ("1104", "حساب‌های دریافتنی تجاری", "ASSET", 0.0),
+    ("1105", "موجودی مواد و کالا", "ASSET", 0.0),
+    ("1106", "پیش‌پرداخت‌ها", "ASSET", 0.0),
+    ("1201", "دارایی‌های ثابت مشهود", "ASSET", 0.0),
+    ("1202", "استهلاک انباشته دارایی‌های ثابت", "ASSET", 0.0),
+    ("2101", "حساب‌های پرداختنی تجاری", "LIABILITY", 0.0),
+    ("2102", "مالیات پرداختنی", "LIABILITY", 0.0),
+    ("2103", "بیمه پرداختنی", "LIABILITY", 0.0),
+    ("2104", "حقوق و دستمزد پرداختنی", "LIABILITY", 0.0),
+    ("2201", "وام‌های بلندمدت", "LIABILITY", 0.0),
+    ("3101", "سرمایه", "EQUITY", 0.0),
+    ("3102", "سود و زیان انباشته", "EQUITY", 0.0),
+    ("4101", "درآمد فروش کالا", "INCOME", 0.0),
+    ("4102", "درآمد ارائه خدمات", "INCOME", 0.0),
+    ("4103", "برگشت از فروش", "INCOME", 0.0),
+    ("5101", "بهای تمام‌شده کالای فروش رفته", "EXPENSE", 0.0),
+    ("5102", "هزینه حقوق و دستمزد", "EXPENSE", 0.0),
+    ("5103", "هزینه اجاره", "EXPENSE", 0.0),
+    ("5104", "هزینه استهلاک", "EXPENSE", 0.0),
+    ("5105", "هزینه آب، برق و گاز", "EXPENSE", 0.0),
+    ("5106", "سایر هزینه‌های عمومی و اداری", "EXPENSE", 0.0),
+)
+
+
+def _render_seed(account_table: TableSpec) -> str:
+    """Startup seeding of the Iranian standard chart of accounts."""
+    rows = "\n".join(
+        "    (%r, %r, %r, %r)," % (code, title, entry_type, balance)
+        for code, title, entry_type, balance in IRANIAN_CHART_OF_ACCOUNTS
+    )
+    model = account_table.model
+    return (
+        '"""Iranian standard chart of accounts seed (کدینگ استاندارد حسابداری)."""\n\n'
+        "from __future__ import annotations\n\n"
+        "import sys\n\n"
+        "from sqlalchemy import func, select\n\n"
+        "from app.db import SessionLocal\n"
+        f"from app.models.{account_table.name} import {model}\n\n"
+        "#: (code, title, type, balance) — Iranian accounting standard coding.\n"
+        "IRANIAN_CHART_OF_ACCOUNTS: tuple[tuple[str, str, str, float], ...] = (\n"
+        f"{rows}\n"
+        ")\n\n\n"
+        "async def seed_chart_of_accounts() -> int:\n"
+        '    """Insert the standard chart once; a populated ledger is left alone."""\n'
+        "    async with SessionLocal() as session:\n"
+        f"        existing = await session.scalar(select(func.count()).select_from({model}))\n"
+        "        if existing:\n"
+        "            return 0\n"
+        "        session.add_all(\n"
+        "            [\n"
+        f"                {model}(code=code, title=title, type=entry_type, balance=balance)\n"
+        "                for code, title, entry_type, balance in IRANIAN_CHART_OF_ACCOUNTS\n"
+        "            ]\n"
+        "        )\n"
+        "        await session.commit()\n"
+        "        return len(IRANIAN_CHART_OF_ACCOUNTS)\n\n\n"
+        "async def seed_database() -> int:\n"
+        '    """Best-effort startup seed: never block the portal from booting."""\n'
+        "    try:\n"
+        "        return await seed_chart_of_accounts()\n"
+        "    except Exception as exc:  # pragma: no cover - defensive\n"
+        '        print(f"[seed] chart of accounts skipped: {type(exc).__name__}: {exc}",'
+        " file=sys.stderr)\n"
+        "        return 0\n"
     )
 
 
@@ -1121,6 +1559,14 @@ def _render_router(resource: str, blueprint: SwarmBlueprint, tables: list[TableS
 
 
 def _render_main(blueprint: SwarmBlueprint) -> str:
+    financial = blueprint.domain == FINANCIAL_DOMAIN
+    seed_import = "import sys\n\nfrom app.seed import seed_database\n" if financial else ""
+    seed_call = (
+        "    seeded = await seed_database()\n"
+        '    print(f"[startup] chart of accounts seeded: {seeded} rows", file=sys.stderr)\n'
+        if financial
+        else ""
+    )
     return (
         '"""FastAPI entrypoint generated by the Roxira swarm orchestrator."""\n\n'
         "from __future__ import annotations\n\n"
@@ -1130,12 +1576,14 @@ def _render_main(blueprint: SwarmBlueprint) -> str:
         "from fastapi import Depends, FastAPI\n"
         "from sqlalchemy import text\n"
         "from sqlalchemy.ext.asyncio import AsyncSession\n\n"
+        f"{seed_import}"
         "from app.db import DATABASE_URL, dispose_engine, get_session, init_models\n"
         "from app.routers import ROUTERS\n\n\n"
         "@asynccontextmanager\n"
         "async def lifespan(app: FastAPI) -> AsyncIterator[None]:\n"
-        '    """Create the schema before serving, release the pool on shutdown."""\n'
+        '    """Create the schema, seed the ledger, release the pool at shutdown."""\n'
         "    await init_models()\n"
+        f"{seed_call}"
         "    yield\n"
         "    await dispose_engine()\n\n\n"
         f'app = FastAPI(title={blueprint.title!r}, version="1.0.0", lifespan=lifespan)\n\n'
@@ -1322,6 +1770,7 @@ class SwarmOrchestrator:
                         "folders": blueprint.folders,
                         "resources": blueprint.resources,
                         "source": blueprint.source,
+                        "domain": blueprint.domain,
                     },
                     indent=2,
                 ),

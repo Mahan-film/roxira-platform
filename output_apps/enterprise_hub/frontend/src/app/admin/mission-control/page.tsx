@@ -136,10 +136,160 @@ function qaPercent(score?: number | null): number | null {
   return Math.round(score <= 1 ? score * 100 : score);
 }
 
+function swarmStatusOf(swarm?: SwarmMetadata | null): string | null {
+  return swarm?.status ?? swarm?.stage ?? null;
+}
+
+function swarmEndpoints(swarm?: SwarmMetadata | null): { method: string; path: string }[] {
+  const paths = swarm?.blueprint?.openapi?.paths;
+  if (!paths || typeof paths !== "object") return [];
+  const methods = new Set(["get", "post", "put", "patch", "delete", "options", "head"]);
+  const endpoints: { method: string; path: string }[] = [];
+  for (const [path, operations] of Object.entries(paths)) {
+    if (!operations || typeof operations !== "object") continue;
+    for (const method of Object.keys(operations)) {
+      if (methods.has(method.toLowerCase())) {
+        endpoints.push({ method: method.toUpperCase(), path });
+      }
+    }
+  }
+  return endpoints;
+}
+
+function conformanceTone(score: number): string {
+  if (score >= 90) return "border-emerald-400/30 bg-emerald-400/10 text-emerald-300";
+  if (score >= 70) return "border-amber-400/30 bg-amber-400/10 text-amber-300";
+  return "border-rose-400/30 bg-rose-500/10 text-rose-300";
+}
+
+function ConformanceBadge({ score }: { score: number | null }) {
+  if (score === null) return null;
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 font-mono text-[10px] font-bold ${conformanceTone(score)}`}
+    >
+      <CheckCircle2 className="size-3" />
+      {score}% CONFORMANCE
+    </span>
+  );
+}
+
+function SwarmPipeline({ swarm }: { swarm?: SwarmMetadata | null }) {
+  const status = swarmStatusOf(swarm);
+  const score = qaPercent(swarm?.qa?.score);
+  const doneCount = SWARM_TEAMS.filter((team) => swarmTeamState(team, status) === "done").length;
+  const progressPct = Math.round((doneCount / SWARM_TEAMS.length) * 100);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-violet-400/25 bg-violet-500/[0.04] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Users className="size-4 text-violet-300" />
+          <h3 className="font-mono text-[11px] font-bold tracking-wider text-violet-200">
+            SWARM PIPELINE
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className="rounded-md border border-violet-400/25 bg-violet-400/10 px-2 py-0.5 font-mono text-[9px] font-bold text-violet-200"
+            dir="ltr"
+          >
+            {status ?? "PENDING"}
+          </span>
+          <ConformanceBadge score={score} />
+        </div>
+      </div>
+
+      <div className="relative mt-6">
+        <div className="absolute left-4 right-4 top-4 h-0.5 bg-slate-800" />
+        <div
+          className="absolute left-4 top-4 h-0.5 rounded-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-700"
+          style={{ width: `calc((100% - 2rem) * ${progressPct / 100})` }}
+        />
+        <ol className="relative flex items-start justify-between gap-1">
+          {SWARM_TEAMS.map((team) => {
+            const state = swarmTeamState(team, status);
+            const tone = SWARM_STATE_STYLES[state];
+            const ring =
+              state === "done"
+                ? "border-emerald-400/50"
+                : state === "active"
+                  ? "border-amber-400/60"
+                  : state === "failed"
+                    ? "border-rose-400/50"
+                    : "border-slate-700";
+            return (
+              <li key={team.stage} className="flex flex-1 flex-col items-center gap-2 text-center">
+                <span
+                  className={`relative z-10 flex size-8 items-center justify-center rounded-full border bg-slate-950 text-sm ${ring}`}
+                >
+                  {state === "active" ? (
+                    <>
+                      <span className="absolute inset-0 animate-ping rounded-full border border-amber-400/50" />
+                      <Loader2 className="size-3.5 animate-spin text-amber-300" />
+                    </>
+                  ) : (
+                    <span aria-hidden="true">{team.icon}</span>
+                  )}
+                </span>
+                <span className="font-mono text-[9px] font-semibold text-slate-300">
+                  {team.name}
+                </span>
+                <span className={`font-mono text-[8px] ${tone.text}`}>{tone.label}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+interface SwarmQaReport {
+  passed?: boolean;
+  score?: number | null;
+  checks?: unknown[];
+  issues?: string[];
+}
+
+interface SwarmArtifact {
+  path?: string;
+  kind?: string;
+  bytes?: number;
+  stage?: string;
+}
+
+interface SwarmStageTrace {
+  stage?: string;
+  status?: string;
+  at?: number;
+  duration_seconds?: number;
+}
+
+interface SwarmBlueprint {
+  title?: string;
+  prompt?: string;
+  openapi?: { paths?: Record<string, Record<string, unknown>> } | null;
+  folders?: string[];
+  resources?: string[];
+  source?: string;
+  model?: string | null;
+  notes?: string | null;
+}
+
 interface SwarmMetadata {
+  app_id?: string;
+  prompt?: string;
+  tier?: string;
+  output_dir?: string;
   status?: string | null;
   stage?: string | null;
-  qa?: { score?: number | null } | null;
+  qa?: SwarmQaReport | null;
+  blueprint?: SwarmBlueprint | null;
+  artifacts?: SwarmArtifact[];
+  stages?: SwarmStageTrace[];
+  errors?: string[];
+  duration_seconds?: number;
 }
 
 interface SandboxHistoryEntry {
@@ -188,6 +338,14 @@ const SANDBOX_BADGE: Record<string, string> = {
   DESTROYED: "border-slate-600/50 bg-slate-700/20 text-slate-400",
 };
 const SANDBOX_BADGE_DEFAULT = "border-amber-400/30 bg-amber-400/10 text-amber-300";
+
+const METHOD_TONE: Record<string, string> = {
+  GET: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
+  POST: "border-indigo-400/30 bg-indigo-400/10 text-indigo-300",
+  PUT: "border-cyan-400/30 bg-cyan-400/10 text-cyan-300",
+  PATCH: "border-amber-400/30 bg-amber-400/10 text-amber-300",
+  DELETE: "border-rose-400/30 bg-rose-500/10 text-rose-300",
+};
 
 const HEALTH_STYLES: Record<string, { dot: string; text: string; label: string }> = {
   HEALTHY: { dot: "bg-emerald-400", text: "text-emerald-300", label: "HEALTHY" },
@@ -477,6 +635,10 @@ export default function MissionControlPage() {
   const [filter, setFilter] = useState<SandboxFilter>("all");
   const [rebuilding, setRebuilding] = useState<Record<string, boolean>>({});
   const [rebuildError, setRebuildError] = useState<string | null>(null);
+  const [reportAppId, setReportAppId] = useState<string | null>(null);
+  const [reportData, setReportData] = useState<SwarmMetadata | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const checkAll = useCallback(async () => {
     abortRef.current?.abort();
@@ -664,6 +826,44 @@ export default function MissionControlPage() {
   const clearHistory = useCallback(() => {
     setHistory([]);
   }, []);
+
+  const openSwarmReport = useCallback(async (appId: string) => {
+    setReportAppId(appId);
+    setReportData(null);
+    setReportError(null);
+    setReportLoading(true);
+    try {
+      const res = await fetch(`${FACTORY_BASE}/synthesize-app/${encodeURIComponent(appId)}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const detail = (await res.json()) as FactoryBuildStatus;
+      if (!detail.swarm) {
+        setReportError("No swarm report is available for this sandbox.");
+      } else {
+        setReportData(detail.swarm);
+      }
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "failed to load report");
+    } finally {
+      setReportLoading(false);
+    }
+  }, []);
+
+  const closeSwarmReport = useCallback(() => {
+    setReportAppId(null);
+    setReportData(null);
+    setReportError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!reportAppId) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSwarmReport();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reportAppId, closeSwarmReport]);
 
   const copySubdomain = useCallback(async (appId: string, value: string) => {
     try {
@@ -995,7 +1195,12 @@ export default function MissionControlPage() {
                 )}
               </div>
               {buildStatus ? (
-                <BuildProgress status={buildStatus} />
+                <>
+                  <BuildProgress status={buildStatus} />
+                  {(isSwarmTier(buildStatus.tier) || buildStatus.swarm) && (
+                    <SwarmPipeline swarm={buildStatus.swarm} />
+                  )}
+                </>
               ) : (
                 <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-300">
                   {consoleError ?? output ?? "…"}
@@ -1175,6 +1380,18 @@ export default function MissionControlPage() {
                         </span>
                       )}
 
+                      {isSwarm && (
+                        <button
+                          type="button"
+                          onClick={() => void openSwarmReport(entry.app_id)}
+                          title="Open swarm report"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-400/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-violet-200 transition-colors hover:bg-violet-400/20"
+                        >
+                          <Terminal className="size-3" />
+                          SWARM REPORT
+                        </button>
+                      )}
+
                       {(entry.stage === "FAILED" || entry.stage === "REJECTED") && (
                         <button
                           type="button"
@@ -1294,6 +1511,186 @@ export default function MissionControlPage() {
           )}
         </section>
       </div>
+
+      {reportAppId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Swarm report"
+          onClick={closeSwarmReport}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <Terminal className="size-4 text-violet-300" />
+                <h3 className="font-mono text-sm font-bold tracking-wider text-slate-100">
+                  SWARM REPORT
+                </h3>
+                <span className="font-mono text-[10px] text-slate-500" dir="ltr">
+                  .swarm/report.json · {reportAppId}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={closeSwarmReport}
+                className="rounded-lg border border-slate-800 px-2.5 py-1 font-mono text-[10px] text-slate-400 transition-colors hover:border-slate-700 hover:text-white"
+              >
+                CLOSE
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              {reportLoading && (
+                <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
+                  <Loader2 className="size-3.5 animate-spin text-amber-300" />
+                  loading report…
+                </div>
+              )}
+
+              {reportError && (
+                <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 font-mono text-[11px] text-rose-200">
+                  {reportError}
+                </p>
+              )}
+
+              {reportData && (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ConformanceBadge score={qaPercent(reportData.qa?.score)} />
+                    {typeof reportData.qa?.passed === "boolean" && (
+                      <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] text-slate-300">
+                        QA {reportData.qa.passed ? "PASSED" : "ISSUES"}
+                      </span>
+                    )}
+                    {typeof reportData.duration_seconds === "number" && (
+                      <span className="font-mono text-[10px] text-slate-500">
+                        {reportData.duration_seconds.toFixed(1)}s
+                      </span>
+                    )}
+                  </div>
+
+                  {reportData.blueprint && (
+                    <div>
+                      <h4 className="font-mono text-[10px] font-bold tracking-wider text-slate-400">
+                        BLUEPRINT
+                      </h4>
+                      <p className="mt-2 text-xs text-slate-300">
+                        {reportData.blueprint.title ?? reportData.prompt}
+                      </p>
+                      <p className="mt-1 font-mono text-[10px] text-slate-500">
+                        source: {reportData.blueprint.source ?? "unknown"}
+                        {reportData.blueprint.model ? ` · model: ${reportData.blueprint.model}` : ""}
+                      </p>
+                    </div>
+                  )}
+
+                  {(() => {
+                    const endpoints = swarmEndpoints(reportData);
+                    return (
+                      <div>
+                        <h4 className="font-mono text-[10px] font-bold tracking-wider text-slate-400">
+                          GENERATED ENDPOINTS ({endpoints.length})
+                        </h4>
+                        {endpoints.length === 0 ? (
+                          <p className="mt-2 font-mono text-[10px] text-slate-600">
+                            No endpoints recorded in the report.
+                          </p>
+                        ) : (
+                          <ul className="mt-2 space-y-1.5">
+                            {endpoints.map((endpoint) => (
+                              <li
+                                key={`${endpoint.method}-${endpoint.path}`}
+                                className="flex items-center gap-2 font-mono text-[11px]"
+                              >
+                                <span
+                                  className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${
+                                    METHOD_TONE[endpoint.method] ?? "border-slate-700 text-slate-300"
+                                  }`}
+                                >
+                                  {endpoint.method}
+                                </span>
+                                <span className="text-slate-300" dir="ltr">
+                                  {endpoint.path}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {reportData.artifacts && reportData.artifacts.length > 0 && (
+                    <div>
+                      <h4 className="font-mono text-[10px] font-bold tracking-wider text-slate-400">
+                        ARTIFACTS ({reportData.artifacts.length})
+                      </h4>
+                      <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                        {reportData.artifacts.map((artifact, index) => (
+                          <li
+                            key={`${artifact.path ?? "artifact"}-${index}`}
+                            className="truncate font-mono text-[10px] text-slate-400"
+                            dir="ltr"
+                          >
+                            {artifact.path ?? "(unknown)"}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {reportData.stages && reportData.stages.length > 0 && (
+                    <div>
+                      <h4 className="font-mono text-[10px] font-bold tracking-wider text-slate-400">
+                        STAGE TRACE
+                      </h4>
+                      <ul className="mt-2 space-y-1">
+                        {reportData.stages.map((trace, index) => (
+                          <li
+                            key={`${trace.stage ?? "stage"}-${index}`}
+                            className="flex items-center gap-2 font-mono text-[10px] text-slate-400"
+                          >
+                            <CheckCircle2 className="size-3 text-emerald-400" />
+                            <span dir="ltr">{trace.stage ?? trace.status ?? "stage"}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {reportData.errors && reportData.errors.length > 0 && (
+                    <div>
+                      <h4 className="font-mono text-[10px] font-bold tracking-wider text-rose-300">
+                        ERRORS
+                      </h4>
+                      <ul className="mt-2 space-y-1">
+                        {reportData.errors.map((message, index) => (
+                          <li key={`${index}-${message}`} className="font-mono text-[10px] text-rose-200">
+                            {message}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="font-mono text-[10px] font-bold tracking-wider text-slate-400">
+                      RAW REPORT
+                    </h4>
+                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-slate-800 bg-slate-950/80 p-3 font-mono text-[10px] leading-relaxed text-slate-300">
+                      {JSON.stringify(reportData, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
