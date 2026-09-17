@@ -3174,6 +3174,15 @@ DRAFT_FIELD_ALIASES = {
     "request": "taghaza_rad",
     "تقاضا": "taghaza_rad",
     "تقاضای_رد_دعوی": "taghaza_rad",
+    "facts": "facts",
+    "facts_summary": "facts",
+    "summary": "facts",
+    "شرح_واقعه": "facts",
+    "گردش_کار": "facts",
+    "خلاصه_وقایع": "facts",
+    "requested_verdict": "requested_verdict",
+    "verdict": "requested_verdict",
+    "خواسته_نهایی": "requested_verdict",
 }
 
 # ساختار استاندارد مراجع قضایی ایران. هر بخش: کلید، عنوان، اجباری بودن و راهنما.
@@ -3185,6 +3194,9 @@ DRAFT_TEMPLATES = {
             "ماده ۵۱ قانون آیین دادرسی مدنی (شرایط دادخواست)",
             "ماده ۵۵ قانون آیین دادرسی مدنی (منضمات دادخواست)",
             "ماده ۵۶ قانون آیین دادرسی مدنی (ابطال دادخواست)",
+        ],
+        "precedents": [
+            "رأی وحدت رویه شماره ۷۹۴ هیئت عمومی دیوان عالی کشور (تشخیص صلاحیت و شرایط شکلی دادخواست)",
         ],
         "sections": [
             {
@@ -3239,6 +3251,9 @@ DRAFT_TEMPLATES = {
             "ماده ۶۹ قانون آیین دادرسی کیفری (شکواییه شفاهی)",
             "ماده ۱۰۰ قانون آیین دادرسی کیفری (تحقیقات مقدماتی)",
         ],
+        "precedents": [
+            "رأی وحدت رویه شماره ۷۳۳ هیئت عمومی دیوان عالی کشور (صلاحیت محلی در تحقیقات مقدماتی)",
+        ],
         "sections": [
             {
                 "key": "shaki",
@@ -3291,6 +3306,9 @@ DRAFT_TEMPLATES = {
             "ماده ۹۲ قانون آیین دادرسی مدنی (تقدیم لایحه)",
             "ماده ۱۹۸ قانون آیین دادرسی مدنی (جهات دفاع)",
             "ماده ۱۴۶ قانون آیین دادرسی کیفری (دفاع وکیل)",
+        ],
+        "precedents": [
+            "رأی وحدت رویه شماره ۶۷۱ هیئت عمومی دیوان عالی کشور (اثر دفاع شکلی بر جریان دادرسی)",
         ],
         "sections": [
             {
@@ -3391,8 +3409,287 @@ def _render_draft_text(sections: list, authority: str) -> str:
     return "\n".join(lines)
 
 
+# ------------------------------------------------------------------------------
+# قالب فشردهٔ یک‌صفحه‌ای A4 (حداکثر ۴۰۰ واژه)
+# ------------------------------------------------------------------------------
+CONCISE_MAX_WORDS = 380            # < ۴۰۰ واژه با حاشیهٔ اطمینان
+CONCISE_MAX_CHARS = 2600           # سقف تقریبی کاراکتر برای جا شدن در یک صفحه A4
+CONCISE_MAX_FACTS_SENTENCES = 5    # خلاصه وقایع: حداکثر ۵ جمله
+CONCISE_MIN_STATUTORY_POINTS = 2   # حداقل ۲ نکتهٔ قانونی
+CONCISE_MAX_STATUTORY_POINTS = 3   # حداکثر ۳ نکتهٔ قانونی
+CONCISE_PRAYER_LINES = 2           # خواسته نهایی: دقیقاً ۲ سطر
+CONCISE_HEADER_LINES = 3           # سرصفحه: شعبه، کلاسه پرونده، اصحاب دعوی
+CONCISE_MIN_FACTS_WORDS = 5        # کف واژگان خلاصه در هنگام پیرایش
+
+# منابع تشکیل‌دهندهٔ «خلاصه وقایع» برای هر الگو.
+CONCISE_FACTS_SOURCES = {
+    "DADKHAST": ("khastah", "dalayel"),
+    "SHEKAYAT": ("mozoo_jaram", "mahal_voghoo", "dalayel"),
+    "LAYEHE_DEFEE": ("moghaddame", "defa_shakli", "defa_mahavi"),
+}
+CONCISE_FACTS_PREFIX = {
+    "DADKHAST": {"khastah": "خواسته خواهان: ", "dalayel": "دلایل ابرازی: "},
+    "SHEKAYAT": {"mozoo_jaram": "موضوع جرم: ", "mahal_voghoo": "محل وقوع: ", "dalayel": "دلایل: "},
+    "LAYEHE_DEFEE": {"moghaddame": "مقدمه: ", "defa_shakli": "دفاع شکلی: ", "defa_mahavi": "دفاع ماهوی: "},
+}
+# اصحاب دعوی در سرصفحه (سطر سوم).
+CONCISE_PARTY_SOURCES = {
+    "DADKHAST": (("خواهان", "khahan"), ("خوانده", "khankhah")),
+    "SHEKAYAT": (("شاکی", "shaki"), ("مشتکی‌عنه", "moshtaki_alaih")),
+    "LAYEHE_DEFEE": (("خواهان", "khahan"), ("خوانده", "khankhah")),
+}
+# خواسته نهایی: دقیقاً ۲ سطر برای هر الگو.
+CONCISE_PRAYER = {
+    "DADKHAST": (
+        "با عنایت به مراتب فوق و مستندات پیوست، صدور حکم بر احراز و استقرار خواسته و محکومیت خوانده "
+        "به ایفای تعهد و پرداخت خسارات دادرسی مورد استدعاست.",
+        "بنابراین تأیید خواسته؛ یعنی صدور حکم له خواهان و الزام خوانده به اجرای تعهد، تقاضای اینجانب است.",
+    ),
+    "SHEKAYAT": (
+        "با توجه به مراتب فوق و ادلهٔ ابرازی، تعقیب کیفری مشتکی‌عنه و صدور کیفرخواست مورد استدعاست.",
+        "لذا صدور قرار جلب به دادرسی و محکومیت مرتکب به مجازات قانونی، تقاضای اینجانب است.",
+    ),
+    "LAYEHE_DEFEE": (
+        "با عنایت به دفاعیات شکلی و ماهوی فوق، رد دعوی خواهان و بطلان ادعای او مورد استدعاست.",
+        "بنابراین صدور حکم بر رد دعوی به دلیل فقدان دلیل اثباتی، تقاضای اینجانب است.",
+    ),
+}
+# عبارات احساسی/غیرفاکت‌محور که از خلاصهٔ وقایع حذف می‌شوند.
+CONCISE_EMOTIONAL_FILLER = (
+    "متأسفانه", "با کمال تأسف", "با کمال تاسف", "به شدت", "به‌شدت",
+    "کاملاً ظالمانه", "کاملا ظالمانه", "ظالمانه", "ناجوانمردانه", "بی‌رحمانه",
+    "بی رحمانه", "فجیع", "دلخراش", "غم‌انگیز", "غم انگیز", "خیانت", "شرم‌آور",
+    "شرم آور", "مطلقاً", "به هیچ وجه", "قطعاً", "حیله‌گرانه", "حیله گرانه",
+    "unfortunately", "extremely", "outrageously", "brutally", "terribly", "shockingly",
+)
+
+_DIGIT_TRANS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+_CONCISE_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!؟?؛;])\s+|\n+")
+_CONCISE_JALALI_DATE_RE = re.compile(r"(1[34]\d{2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{1,2})")
+_MISSING_DRAFT_VALUE = "«تکمیل شود»"
+
+
+def _normalize_digits(text) -> str:
+    """تبدیل ارقام فارسی/عربی به لاتین برای مقایسه و تحلیل."""
+    return str(text or "").translate(_DIGIT_TRANS)
+
+
+def _as_bool(value, default: bool = True) -> bool:
+    """تفسیر مقادیر متنی/عددی به‌عنوان پرچم بولی."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on", "بله", "درست", "فعال")
+
+
+def _count_words(text) -> int:
+    """شمارش واژگان متن (معیار < ۴۰۰ واژه)."""
+    return len(str(text or "").split())
+
+
+def _concise_display(value) -> str:
+    """نمایش مقدار یا نشانگر جای خالی در قالب فشرده."""
+    if value in (None, ""):
+        return _MISSING_DRAFT_VALUE
+    return " ".join(str(value).split())
+
+
+def _strip_emotional_filler(text) -> str:
+    """حذف عبارات احساسی تا خلاصهٔ وقایع فاکت‌محور و بی‌طرف بماند."""
+    cleaned = str(text or "")
+    for filler in CONCISE_EMOTIONAL_FILLER:
+        cleaned = cleaned.replace(filler, " ")
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\s+([،,.!؟?؛;:])", r"\1", cleaned)
+    cleaned = re.sub(r"([،,؛;])\s*(?:[،,؛;]\s*)+", r"\1 ", cleaned)
+    return cleaned.strip(" ،,؛;")
+
+
+def _split_sentences(text) -> list:
+    """تقسیم متن به جمله‌های مستقل."""
+    sentences = []
+    for raw_part in _CONCISE_SENTENCE_SPLIT_RE.split(str(text or "")):
+        cleaned = " ".join(str(raw_part).split())
+        if not cleaned:
+            continue
+        if cleaned[-1] not in ".!؟?؛;:":
+            cleaned = f"{cleaned}."
+        sentences.append(cleaned)
+    return sentences
+
+
+def _chronological_sentences(sentences: list) -> list:
+    """بهترین‌تلاش برای مرتب‌سازی زمانی جمله‌های دارای تاریخ جلالی."""
+    dated = []
+    for index, sentence in enumerate(sentences):
+        match = _CONCISE_JALALI_DATE_RE.search(_normalize_digits(sentence))
+        if match:
+            dated.append((tuple(int(group) for group in match.groups()), index, sentence))
+    if len(dated) < 2:
+        return list(sentences)
+    ordered = [item[2] for item in sorted(dated, key=lambda item: (item[0], item[1]))]
+    cursor = 0
+    result = []
+    for sentence in sentences:
+        if sentence in ordered:
+            result.append(ordered[cursor])
+            cursor += 1
+        else:
+            result.append(sentence)
+    return result
+
+
+def _build_concise_facts(template_type: str, values: dict) -> list:
+    """خلاصهٔ وقایع: یک پاراگراف فاکت‌محور و زمانی از حداکثر ۵ جمله."""
+    pieces = []
+    explicit = values.get("facts")
+    if explicit not in (None, ""):
+        pieces.append(str(explicit))
+    else:
+        prefixes = CONCISE_FACTS_PREFIX.get(template_type, {})
+        for key in CONCISE_FACTS_SOURCES.get(template_type, ()):
+            value = values.get(key)
+            if value not in (None, ""):
+                pieces.append(f"{prefixes.get(key, '')}{value}")
+
+    sentences = []
+    for piece in pieces:
+        sentences.extend(_split_sentences(_strip_emotional_filler(piece)))
+    sentences = [s for s in sentences if s.strip(" .،؛;")]
+    sentences = _chronological_sentences(sentences)
+    return sentences[:CONCISE_MAX_FACTS_SENTENCES]
+
+
+def _build_concise_statutory_points(template: dict) -> list:
+    """نکات قانونی: دقیقاً ۲ تا ۳ گلوله با ارجاع به مواد قانونی و رویهٔ دیوان عالی."""
+    basis = [str(item) for item in template.get("statutory_basis", [])]
+    precedents = [str(item) for item in template.get("precedents", [])]
+    points = list(basis[:2])
+    if precedents:
+        points.append("رویهٔ دیوان عالی کشور: " + precedents[0])
+    for article in basis[2:]:
+        if len(points) >= CONCISE_MAX_STATUTORY_POINTS:
+            break
+        points.append(article)
+    if len(points) < CONCISE_MIN_STATUTORY_POINTS:
+        points.extend(precedents[:1] if not precedents else [])
+    return points[:CONCISE_MAX_STATUTORY_POINTS]
+
+
+def _build_concise_prayer(template_type: str, values: dict) -> list:
+    """خواسته نهایی: دقیقاً ۲ سطر با تصریح به رأی درخواستی."""
+    override = values.get("requested_verdict")
+    if override not in (None, ""):
+        sentences = _split_sentences(str(override))
+        lines = sentences[:CONCISE_PRAYER_LINES]
+        fallback = list(CONCISE_PRAYER.get(template_type, ()))
+        while len(lines) < CONCISE_PRAYER_LINES and len(fallback) >= len(lines) + 1:
+            lines.append(fallback[len(lines)])
+        return lines
+    return list(CONCISE_PRAYER.get(template_type, ()))
+
+
+def _compose_concise_document(title: str, authority: str, header_lines: list,
+                              facts_sentences: list, statutory_points: list,
+                              prayer_lines: list, tail_lines: list) -> str:
+    """مونتاژ سند فشردهٔ یک‌صفحه‌ای بر اساس ساختار الزامی."""
+    salutation = authority.strip()
+    if not salutation.startswith("ریاست محترم"):
+        salutation = f"ریاست محترم {salutation}"
+    facts_text = " ".join(facts_sentences).strip() or _MISSING_DRAFT_VALUE
+    lines = ["بسمه تعالی", f"{title} — {salutation}"]
+    lines.extend(header_lines)
+    lines.append("")
+    lines.append("خلاصه وقایع (به ترتیب زمانی):")
+    lines.append(facts_text)
+    lines.append("")
+    lines.append("نکات و مستندات قانونی:")
+    for point in statutory_points:
+        lines.append(f"• {point}")
+    lines.append("")
+    lines.append("خواسته نهایی (تقاضا):")
+    lines.extend(prayer_lines)
+    lines.append("")
+    lines.extend(tail_lines)
+    return "\n".join(lines)
+
+
+def _render_concise_draft_text(template_type: str, title: str, authority: str,
+                               court_branch, case_number, values: dict) -> tuple:
+    """ساخت سند فشرده و پیرایش خودکار آن تا جا شدن دقیق در یک صفحه A4."""
+    party_bits = []
+    for label, key in CONCISE_PARTY_SOURCES.get(template_type, ()):
+        value = values.get(key)
+        if value not in (None, ""):
+            party_bits.append(f"{label}: {_concise_display(value)}")
+    parties_line = " | ".join(party_bits) if party_bits else _MISSING_DRAFT_VALUE
+
+    header_lines = [
+        f"شعبه: {_concise_display(court_branch)}",
+        f"کلاسه پرونده: {_concise_display(case_number)}",
+        f"اصحاب دعوی: {parties_line}",
+    ]
+    facts_sentences = _build_concise_facts(template_type, values)
+    statutory_points = _build_concise_statutory_points(DRAFT_TEMPLATES[template_type])
+    prayer_lines = _build_concise_prayer(template_type, values)[:CONCISE_PRAYER_LINES]
+    tail_lines = ["با تشکر و تجدید احترام", f"امضا: {_concise_display(values.get('emza'))}"]
+
+    def compose():
+        return _compose_concise_document(
+            title, authority, header_lines, facts_sentences, statutory_points, prayer_lines, tail_lines
+        )
+
+    pruned = False
+    text = compose()
+    overflow = lambda blob: _count_words(blob) > CONCISE_MAX_WORDS or len(blob) > CONCISE_MAX_CHARS
+
+    # ۱) پیرایش جمله‌های خلاصهٔ وقایع از انتها (حداقل یک جمله حفظ می‌شود).
+    while overflow(text) and len(facts_sentences) > 1:
+        facts_sentences.pop()
+        pruned = True
+        text = compose()
+
+    # ۲) کاهش نکات قانونی تا حداقل ۲ نکته.
+    while overflow(text) and len(statutory_points) > CONCISE_MIN_STATUTORY_POINTS:
+        statutory_points.pop()
+        pruned = True
+        text = compose()
+
+    # ۳) پیرایش واژه‌به‌واژهٔ خلاصه در صورت لزوم.
+    while overflow(text) and _count_words(" ".join(facts_sentences)) > CONCISE_MIN_FACTS_WORDS:
+        trimmed = " ".join(facts_sentences).split()[:-1]
+        facts_sentences = [" ".join(trimmed)]
+        pruned = True
+        text = compose()
+
+    meta = {
+        "max_words": CONCISE_MAX_WORDS,
+        "max_chars": CONCISE_MAX_CHARS,
+        "word_count": _count_words(text),
+        "char_count": len(text),
+        "line_count": len(text.splitlines()),
+        "header_lines": len(header_lines),
+        "facts_paragraphs": 1,
+        "facts_sentences": len(facts_sentences),
+        "statutory_points": len(statutory_points),
+        "prayer_lines": len(prayer_lines),
+        "pruned": pruned,
+        "fits_a4_page": not overflow(text),
+    }
+    return text, meta
+
+
 @router.post("/drafts/template")
-async def draft_template(payload: dict = Body(...)):
+async def draft_template(
+    payload: dict = Body(...),
+    concise: bool = Query(
+        True,
+        description="خروجی فشردهٔ یک‌صفحه‌ای (< ۴۰۰ واژه). برای متن کامل ساختاریافته concise=false را ارسال کنید.",
+    ),
+):
     """الگوهای استاندارد اوراق قضایی: دادخواست، شکواییه و لایحه دفاعیه."""
     raw_type = (
         payload.get("template_type")
@@ -3434,7 +3731,25 @@ async def draft_template(payload: dict = Body(...)):
             missing_required.append(spec["key"])
         sections.append(section)
 
-    rendered = _render_draft_text(sections, authority)
+    # پارامتر کوئری ?concise=... (پیش‌فرض true)؛ کلید بدنهٔ درخواست در صورت وجود اولویت دارد.
+    concise_flag = _as_bool(payload.get("concise"), concise) if payload.get("concise") is not None else bool(concise)
+
+    if concise_flag:
+        rendered, concise_meta = _render_concise_draft_text(
+            template_type=template_type,
+            title=template["title"],
+            authority=authority,
+            court_branch=court_branch,
+            case_number=case_number,
+            values=values,
+        )
+    else:
+        rendered = _render_draft_text(sections, authority)
+        concise_meta = None
+
+    word_count = _count_words(rendered)
+    fits_a4_page = word_count <= CONCISE_MAX_WORDS and len(rendered) <= CONCISE_MAX_CHARS
+
     return {
         "status": "ok",
         "template_type": template_type,
@@ -3443,11 +3758,16 @@ async def draft_template(payload: dict = Body(...)):
         "court_branch": court_branch,
         "case_number": case_number,
         "statutory_basis": list(template["statutory_basis"]),
+        "precedents": list(template.get("precedents", [])),
         "sections": sections,
         "required_fields": [s["key"] for s in sections if s["required"]],
         "missing_required_fields": missing_required,
         "ready_to_file": not missing_required,
         "filing_checklist": list(template["filing_checklist"]),
+        "concise": bool(concise_flag),
+        "word_count": word_count,
+        "fits_a4_page": fits_a4_page,
+        "concise_meta": concise_meta,
         "rendered_text": rendered,
         "warnings": (
             ["برخی فیلدهای اجباری تکمیل نشده است: " + "، ".join(missing_required)]

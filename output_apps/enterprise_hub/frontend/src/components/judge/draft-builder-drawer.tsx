@@ -93,15 +93,55 @@ function printDraft(title: string, body: string): void {
 <meta charset="utf-8" />
 <title>${escapeHtml(title)}</title>
 <style>
-  @page { size: A4; margin: 18mm; }
-  body { font-family: "Vazirmatn", "Tahoma", system-ui, sans-serif; line-height: 2; color: #111827; margin: 0; }
-  h1 { font-size: 18px; margin: 0 0 12px; }
-  pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px; margin: 0; }
+  /* Official single-page A4 layout — Iran judiciary document styling. */
+  @page { size: A4 portrait; margin: 2cm; }
+  html, body { margin: 0; padding: 0; }
+  * { box-sizing: border-box; page-break-inside: avoid; break-inside: avoid; }
+  body {
+    font-family: "B Nazanin", "Nazanin", "IRANSans", "IranYekan", "Vazirmatn", "Tahoma", serif;
+    color: #000;
+    font-size: 12.5pt;
+    line-height: 1.95;
+    text-align: justify;
+    text-justify: inter-word;
+    direction: rtl;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .doc {
+    width: 100%;
+    max-height: 257mm;
+    overflow: hidden;
+  }
+  .doc h1 {
+    font-size: 15pt;
+    font-weight: 700;
+    text-align: center;
+    margin: 0 0 6mm;
+    padding-bottom: 2mm;
+    border-bottom: 1px solid #000;
+  }
+  .doc pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: inherit;
+    font-size: 12.5pt;
+    line-height: 1.95;
+    margin: 0;
+    overflow: hidden;
+  }
+  @media print {
+    html, body { width: 210mm; height: 297mm; }
+    .doc { max-height: 257mm; overflow: hidden; }
+    .doc, .doc pre { page-break-inside: avoid; break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
-  <h1>${escapeHtml(title)}</h1>
-  <pre>${escapeHtml(body)}</pre>
+  <div class="doc">
+    <h1>${escapeHtml(title)}</h1>
+    <pre>${escapeHtml(body)}</pre>
+  </div>
 </body>
 </html>`);
   win.document.close();
@@ -305,7 +345,12 @@ export function DraftBuilderDrawer({ isOpen, onClose }: DraftBuilderDrawerProps)
 
           <div className="flex flex-col overflow-hidden">
             <div className="flex items-center justify-between gap-2 border-b border-slate-800 px-5 py-3">
-              <span className="text-xs font-bold text-slate-200">پیش‌نمایش آماده چاپ</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-slate-200">پیش‌نمایش آماده چاپ</span>
+                <span className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                  فرمت استاندارد قضایی: ۱ صفحه A4 (خلاصه و موثر)
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
