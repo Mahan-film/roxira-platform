@@ -71,6 +71,49 @@ const FALLBACK_TITLES: Record<DraftTemplateType, string> = {
   LAYEHE_DEFEE: "لایحه دفاعیه",
 };
 
+interface DraftPreset {
+  id: string;
+  label: string;
+  templateType: DraftTemplateType;
+  subject: string;
+  facts: string;
+  requestedVerdict: string;
+}
+
+/** Quick-fill presets for common disputes (populate facts + requested_verdict). */
+const DRAFT_PRESETS: DraftPreset[] = [
+  {
+    id: "sayad-cheque",
+    label: "مطالبه وجه چک صیادی (ماده ۲۳)",
+    templateType: "DADKHAST",
+    subject: "مطالبه وجه چک صیادی",
+    facts:
+      "این جانب دارنده چک صیادی شماره ....... مورخ ....... به مبلغ ....... ریال هستم که در سامانه صیاد ثبت شده و توسط خوانده صادر گردیده است. پس از مراجعه به بانک، گواهی عدم پرداخت به دلیل کسری موجودی صادر شد و خوانده با وجود مطالبات مکرر از پرداخت وجه امتناع کرده است.",
+    requestedVerdict:
+      "صدور اجراییه برای وصول وجه چک صیادی به همراه خسارت تأخیر تأدیه از تاریخ سررسید تا زمان اجرای کامل حکم، مطابق ماده ۲۳ قانون صدور چک.",
+  },
+  {
+    id: "official-deed",
+    label: "الزام به تنظیم سند رسمی ملک (ماده ۲۲ و ۴۸ ثبت)",
+    templateType: "DADKHAST",
+    subject: "الزام به تنظیم سند رسمی انتقال",
+    facts:
+      "به موجب مبایعه‌نامه شماره ....... مورخ .......، ملک موضوع پلاک ثبتی ....... واقع در ....... به این جانب فروخته شد و ثمن معامله به‌طور کامل پرداخت گردید؛ اما خوانده از حضور در دفتر اسناد رسمی برای تنظیم و امضای سند رسمی انتقال خودداری می‌کند.",
+    requestedVerdict:
+      "الزام خوانده به تنظیم سند رسمی انتقال پلاک ثبتی ....... به نام این جانب و در صورت امتناع، تنظیم سند از طریق دفتر اسناد رسمی با استناد به مواد ۲۲ و ۴۸ قانون ثبت اسناد و املاک.",
+  },
+  {
+    id: "lease-eviction",
+    label: "تخلیه ید به دلیل انقضای مدت اجاره (قانون روابط موجر و مستاجر ۱۳۷۶)",
+    templateType: "DADKHAST",
+    subject: "تخلیه ید و تحویل عین مستأجره",
+    facts:
+      "ملک مورد اجاره به موجب قرارداد شماره ....... مورخ ....... برای مدت ....... به خوانده واگذار گردید. مدت اجاره منقضی شده و علی‌رغم اخطار کتبی، خوانده از تخلیه و تحویل ملک خودداری می‌کند.",
+    requestedVerdict:
+      "صدور حکم بر تخلیه ید و تحویل عین مستأجره و مطالبه اجرت‌المثل ایام تصرف، به استناد قانون روابط موجر و مستاجر مصوب ۱۳۷۶.",
+  },
+];
+
 export interface DraftBuilderDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -84,7 +127,14 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function printDraft(title: string, body: string): void {
+interface DraftPrintMeta {
+  caseNumber: string;
+  courtBranch: string;
+  plaintiff: string;
+  defendant: string;
+}
+
+function printDraft(title: string, body: string, meta: DraftPrintMeta): void {
   const win = window.open("", "_blank", "noopener,noreferrer,width=860,height=1000");
   if (!win) return;
   win.document.write(`<!doctype html>
@@ -93,31 +143,37 @@ function printDraft(title: string, body: string): void {
 <meta charset="utf-8" />
 <title>${escapeHtml(title)}</title>
 <style>
-  /* Official single-page A4 layout — Iran judiciary document styling. */
+  /* Official single-page A4 layout — Iran judiciary document typography. */
   @page { size: A4 portrait; margin: 2cm; }
   html, body { margin: 0; padding: 0; }
   * { box-sizing: border-box; page-break-inside: avoid; break-inside: avoid; }
   body {
-    font-family: "B Nazanin", "Nazanin", "IRANSans", "IranYekan", "Vazirmatn", "Tahoma", serif;
+    font-family: "Vazirmatn", "Shabnam", "B Nazanin", "Tahoma", sans-serif;
     color: #000;
-    font-size: 12.5pt;
-    line-height: 1.95;
+    font-size: 13pt;
+    line-height: 1.6;
     text-align: justify;
     text-justify: inter-word;
     direction: rtl;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .doc {
-    width: 100%;
-    max-height: 257mm;
-    overflow: hidden;
+  .doc { width: 100%; max-height: 257mm; overflow: hidden; }
+  /* Distinct bordered metadata box for case number, branch and parties. */
+  .meta {
+    border: 1.5px solid #000;
+    border-radius: 0;
+    padding: 3mm;
+    margin: 0 0 5mm;
   }
+  .meta table { width: 100%; border-collapse: collapse; font-size: 11pt; line-height: 1.6; }
+  .meta th, .meta td { border: 1px solid #000; padding: 1.5mm 2.5mm; vertical-align: top; }
+  .meta th { background: #f1f5f9; font-weight: 700; width: 22%; text-align: right; }
   .doc h1 {
     font-size: 15pt;
     font-weight: 700;
     text-align: center;
-    margin: 0 0 6mm;
+    margin: 0 0 4mm;
     padding-bottom: 2mm;
     border-bottom: 1px solid #000;
   }
@@ -125,20 +181,36 @@ function printDraft(title: string, body: string): void {
     white-space: pre-wrap;
     word-break: break-word;
     font-family: inherit;
-    font-size: 12.5pt;
-    line-height: 1.95;
+    font-size: 13pt;
+    line-height: 1.6;
     margin: 0;
     overflow: hidden;
   }
   @media print {
     html, body { width: 210mm; height: 297mm; }
     .doc { max-height: 257mm; overflow: hidden; }
-    .doc, .doc pre { page-break-inside: avoid; break-inside: avoid; }
+    .doc, .doc pre, .meta { page-break-inside: avoid; break-inside: avoid; }
   }
 </style>
 </head>
 <body>
   <div class="doc">
+    <div class="meta">
+      <table>
+        <tr>
+          <th>شماره پرونده</th>
+          <td>${escapeHtml(meta.caseNumber || "—")}</td>
+          <th>شعبه</th>
+          <td>${escapeHtml(meta.courtBranch || "—")}</td>
+        </tr>
+        <tr>
+          <th>خواهان / شاکی</th>
+          <td>${escapeHtml(meta.plaintiff || "—")}</td>
+          <th>خوانده / مشتکی‌عنه</th>
+          <td>${escapeHtml(meta.defendant || "—")}</td>
+        </tr>
+      </table>
+    </div>
     <h1>${escapeHtml(title)}</h1>
     <pre>${escapeHtml(body)}</pre>
   </div>
@@ -152,6 +224,8 @@ function printDraft(title: string, body: string): void {
 export function DraftBuilderDrawer({ isOpen, onClose }: DraftBuilderDrawerProps) {
   const [templateType, setTemplateType] = useState<DraftTemplateType>("DADKHAST");
   const [values, setValues] = useState<Record<string, string>>({});
+  const [caseNumber, setCaseNumber] = useState("");
+  const [courtBranch, setCourtBranch] = useState("");
   const [sections, setSections] = useState<DraftSection[]>([]);
   const [response, setResponse] = useState<DraftTemplateResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -177,7 +251,12 @@ export function DraftBuilderDrawer({ isOpen, onClose }: DraftBuilderDrawerProps)
         const res = await fetch(DRAFTS_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ template_type: templateType, data: values }),
+          body: JSON.stringify({
+            template_type: templateType,
+            data: values,
+            court_branch: courtBranch || null,
+            case_number: caseNumber || null,
+          }),
           signal: controller.signal,
         });
         const data = (await res.json()) as DraftTemplateResponse;
@@ -217,6 +296,16 @@ export function DraftBuilderDrawer({ isOpen, onClose }: DraftBuilderDrawerProps)
     setResponse(null);
   };
 
+  const applyPreset = (preset: DraftPreset) => {
+    setTemplateType(preset.templateType);
+    setValues((prev) => ({
+      ...prev,
+      khastah: preset.subject,
+      facts: preset.facts,
+      requested_verdict: preset.requestedVerdict,
+    }));
+  };
+
   const update = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
   };
@@ -229,7 +318,19 @@ export function DraftBuilderDrawer({ isOpen, onClose }: DraftBuilderDrawerProps)
     return `${title}\n\n${body}`;
   };
 
-  const previewText = response?.rendered_text?.trim() || fallbackPreview();
+  const factsText = values.facts?.trim() ?? "";
+  const verdictText = values.requested_verdict?.trim() ?? "";
+  const baseText = response?.rendered_text?.trim() ?? "";
+  const previewText =
+    [
+      baseText,
+      factsText ? `شرح واقعه:\n${factsText}` : "",
+      verdictText ? `خواسته نهایی:\n${verdictText}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n") || fallbackPreview();
+  const plaintiff = (values.khahan ?? values.shaki ?? "").trim();
+  const defendant = (values.khankhah ?? values.moshtaki_alaih ?? "").trim();
 
   const copyPreview = async () => {
     try {
@@ -297,6 +398,22 @@ export function DraftBuilderDrawer({ isOpen, onClose }: DraftBuilderDrawerProps)
               );
             })}
           </div>
+
+          <div className="mt-3">
+            <span className="text-[10px] font-semibold text-slate-500">پیش‌فرض‌های آماده</span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {DRAFT_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyPreset(preset)}
+                  className="rounded-lg border border-slate-800 bg-slate-900/50 px-2.5 py-1.5 text-[10px] text-slate-300 transition-colors hover:border-amber-400/40 hover:text-white"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
@@ -341,6 +458,62 @@ export function DraftBuilderDrawer({ isOpen, onClose }: DraftBuilderDrawerProps)
                 <p className="text-[11px] text-slate-500">در حال آماده‌سازی فرم…</p>
               )}
             </div>
+
+            <div className="mt-6 space-y-4 border-t border-slate-800 pt-4">
+              <span className="text-xs font-bold text-slate-200">شرح واقعه و خواسته</span>
+              <div>
+                <label htmlFor="draft-facts" className="text-xs font-semibold text-slate-300">
+                  شرح واقعه
+                </label>
+                <textarea
+                  id="draft-facts"
+                  rows={4}
+                  value={values.facts ?? ""}
+                  onChange={(event) => update("facts", event.target.value)}
+                  className="mt-1.5 w-full resize-none rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-amber-400/50"
+                  placeholder="شرح واقعه"
+                />
+              </div>
+              <div>
+                <label htmlFor="draft-verdict" className="text-xs font-semibold text-slate-300">
+                  خواسته نهایی
+                </label>
+                <textarea
+                  id="draft-verdict"
+                  rows={3}
+                  value={values.requested_verdict ?? ""}
+                  onChange={(event) => update("requested_verdict", event.target.value)}
+                  className="mt-1.5 w-full resize-none rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-amber-400/50"
+                  placeholder="خواسته نهایی"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="draft-case-number" className="text-xs font-semibold text-slate-300">
+                    شماره پرونده
+                  </label>
+                  <input
+                    id="draft-case-number"
+                    value={caseNumber}
+                    onChange={(event) => setCaseNumber(event.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-amber-400/50"
+                    placeholder="شماره پرونده"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="draft-court-branch" className="text-xs font-semibold text-slate-300">
+                    شعبه
+                  </label>
+                  <input
+                    id="draft-court-branch"
+                    value={courtBranch}
+                    onChange={(event) => setCourtBranch(event.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-amber-400/50"
+                    placeholder="شعبه"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col overflow-hidden">
@@ -362,7 +535,14 @@ export function DraftBuilderDrawer({ isOpen, onClose }: DraftBuilderDrawerProps)
                 </button>
                 <button
                   type="button"
-                  onClick={() => printDraft(response?.title ?? FALLBACK_TITLES[templateType], previewText)}
+                  onClick={() =>
+                    printDraft(response?.title ?? FALLBACK_TITLES[templateType], previewText, {
+                      caseNumber,
+                      courtBranch,
+                      plaintiff,
+                      defendant,
+                    })
+                  }
                   className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-amber-300 transition-colors hover:bg-amber-500/20"
                 >
                   <Printer className="size-3" />
