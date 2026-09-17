@@ -75,6 +75,29 @@ except ImportError:  # pragma: no cover - direct script execution
         UnknownHostError,
     )
 
+try:  # resilient docker CLI/socket/SDK resolution (shared helper module)
+    from .docker_engine import (
+        DockerDiagnostics,
+        resolve_compose_binary,
+        resolve_docker_binary,
+        resolve_docker_socket,
+        sdk_available,
+        sdk_network_exists,
+        sdk_ping,
+        socket_reachable,
+    )
+except ImportError:  # pragma: no cover - direct script execution
+    from docker_engine import (  # type: ignore[no-redef]
+        DockerDiagnostics,
+        resolve_compose_binary,
+        resolve_docker_binary,
+        resolve_docker_socket,
+        sdk_available,
+        sdk_network_exists,
+        sdk_ping,
+        socket_reachable,
+    )
+
 __all__ = [
     "BuildRequest",
     "BuildResult",
@@ -925,13 +948,17 @@ class DockerEngine:
         dispatcher: Optional[RemoteHostDispatcher] = None,
         node: Optional[HostNode] = None,
     ) -> None:
-        self._socket_path = socket_path
+        self._socket_path = resolve_docker_socket(socket_path)
         self._command_timeout = command_timeout
-        self._compose = compose_bin or os.getenv("ROXIRA_COMPOSE_BIN", "docker compose")
+        self._docker_bin = resolve_docker_binary()
+        self._compose = resolve_compose_binary(compose_bin)
         #: Local-daemon env; dropped by the dispatcher for remote transports.
-        self._env = {**os.environ, "DOCKER_HOST": f"unix://{socket_path}"}
+        self._env = {**os.environ, "DOCKER_HOST": f"unix://{self._socket_path}"}
         self._dispatcher = dispatcher or RemoteHostDispatcher()
         self._node = node or self._dispatcher.local_node
+        #: Structured capture of the most recent docker failure (auto-healing).
+        self.last_error: Optional[str] = None
+        self.diagnostics: list[DockerDiagnostics] = []
 
     # -- node binding ------------------------------------------------------
 
@@ -968,6 +995,10 @@ class DockerEngine:
         cwd: Optional[Path] = None,
         timeout: Optional[float] = None,
     ) -> str:
+        # Resolve the docker binary for local dispatch so hosts with differing
+        # install layouts (snap/homebrew/custom prefix) still work.
+        if args and args[0] == "docker" and self._node.is_local and self._docker_bin != "docker":
+            args = [self._docker_bin, *args[1:]]
         try:
             return await self._dispatcher.run(
                 self._node,
@@ -998,6 +1029,12 @@ class DockerEngine:
             await self._run(["docker", "version", "--format", "{{.Server.Version}}"], timeout=20)
             return True
         except (DockerCommandError, FileNotFoundError):
+            # Fallback: the CLI binary may be missing/mispathed — probe the
+            # daemon socket and the optional python-docker SDK instead.
+            if self._node.is_local and socket_reachable(self._socket_path):
+                return True
+            if sdk_available():
+                return await asyncio.to_thread(sdk_ping, self._socket_path)
             return False
 
     async def socket_available(self) -> bool:
@@ -1050,7 +1087,26 @@ class DockerEngine:
             return
         except DockerCommandError:
             pass
-        await self._run(["docker", "network", "create", network], timeout=60)
+        try:
+            await self._run(["docker", "network", "create", network], timeout=60)
+            return
+        except DockerCommandError as exc:
+            # Auto-heal: another worker may have created the bridge between the
+            # inspect and create calls — verify via the SDK before failing.
+            recovered = await asyncio.to_thread(sdk_network_exists, network, self._socket_path)
+            self.diagnostics.append(
+                DockerDiagnostics(
+                    command=f"docker network create {network}",
+                    returncode=exc.returncode,
+                    stderr=exc.stderr,
+                    fallback="python-docker SDK",
+                    recovered=recovered,
+                )
+            )
+            if recovered:
+                return
+            self.last_error = f"ensure_network({network}) failed: {exc}"
+            raise
 
     # -- resilient container / port inspection -----------------------------
 
@@ -1188,17 +1244,85 @@ class DockerEngine:
             timeout=timeout or self._command_timeout,
         )
 
-    async def up(self, project_dir: Path, project_name: str) -> Optional[str]:
-        """Start the already-built compose project and return the container id."""
-        await self._run(
-            self._compose_cmd(project_dir, project_name, "up", "-d"),
-            timeout=300,
-        )
-        return await self.container_id(project_dir, project_name)
+    async def up(
+        self, project_dir: Path, project_name: str, network: Optional[str] = None
+    ) -> Optional[str]:
+        """Start the already-built compose project and return the container id.
 
-    async def build_and_up(self, project_dir: Path, project_name: str) -> Optional[str]:
-        await self._run(self._compose_cmd(project_dir, project_name, "up", "-d", "--build"))
-        return await self.container_id(project_dir, project_name)
+        Hardened: a transient failure (busy daemon / bridge race) is retried once
+        after re-ensuring the shared network, and every failure is captured in
+        ``self.diagnostics`` / ``self.last_error``.
+        """
+        last_exc: Optional[DockerCommandError] = None
+        for attempt in (1, 2):
+            try:
+                await self._run(
+                    self._compose_cmd(project_dir, project_name, "up", "-d"),
+                    timeout=300,
+                )
+                return await self.container_id(project_dir, project_name)
+            except DockerCommandError as exc:
+                last_exc = exc
+                self.last_error = str(exc)
+                self.diagnostics.append(
+                    DockerDiagnostics(
+                        command=f"compose up -d ({project_name})",
+                        returncode=exc.returncode,
+                        stderr=exc.stderr,
+                        notes=[f"attempt {attempt}"],
+                    )
+                )
+                if attempt == 1:
+                    if network:
+                        try:
+                            await self.ensure_network(network)
+                        except Exception:
+                            pass
+                    await asyncio.sleep(1.0)
+                    continue
+                break
+        if last_exc is not None:
+            raise last_exc
+        return None
+
+    async def build_and_up(
+        self, project_dir: Path, project_name: str, network: Optional[str] = None
+    ) -> Optional[str]:
+        """Build and start the compose project, hardened with one auto-heal retry.
+
+        Transient daemon/network races (a shared bridge created concurrently, a
+        momentarily busy daemon) are retried once; every failure is captured in
+        ``self.diagnostics`` / ``self.last_error`` so the deployment phase never
+        fails silently after QA passes.
+        """
+        last_exc: Optional[DockerCommandError] = None
+        for attempt in (1, 2):
+            try:
+                await self._run(self._compose_cmd(project_dir, project_name, "up", "-d", "--build"))
+                return await self.container_id(project_dir, project_name)
+            except DockerCommandError as exc:
+                last_exc = exc
+                self.last_error = str(exc)
+                self.diagnostics.append(
+                    DockerDiagnostics(
+                        command=f"compose up -d --build ({project_name})",
+                        returncode=exc.returncode,
+                        stderr=exc.stderr,
+                        notes=[f"attempt {attempt}"],
+                    )
+                )
+                if attempt == 1:
+                    if network:
+                        try:
+                            await self.ensure_network(network)
+                        except Exception:
+                            pass
+                    await asyncio.sleep(1.0)
+                    continue
+                break
+        if last_exc is not None:
+            raise last_exc
+        return None
 
     async def container_id(self, project_dir: Path, project_name: str) -> Optional[str]:
         try:
@@ -2435,7 +2559,12 @@ class EphemeralRunner:
                     await engine.ensure_network(self._generator.network)
                 await self._status.save(status.advance(BuildStage.BUILDING))
                 container_id = await self._build_self_healing(
-                    request, project_dir, project_name, status, engine=engine
+                    request,
+                    project_dir,
+                    project_name,
+                    status,
+                    engine=engine,
+                    network=self._generator.network if self._generator.attach_network else None,
                 )
                 # A successful `up -d` only means "created": re-inspect the
                 # container state and its published port before declaring it up.
@@ -2772,6 +2901,7 @@ class EphemeralRunner:
         project_name: str,
         status: BuildStatus,
         engine: Optional[DockerEngine] = None,
+        network: Optional[str] = None,
     ) -> Optional[str]:
         """Build the sandbox, repairing the project and retrying once on failure.
 
@@ -2791,7 +2921,7 @@ class EphemeralRunner:
                 raise
             first_error = exc
         else:
-            return await engine.up(project_dir, project_name)
+            return await engine.up(project_dir, project_name, network=network)
 
         print(
             "[factory] build failed for %s; attempting self-heal. build log tail:\n%s"
@@ -2833,7 +2963,7 @@ class EphemeralRunner:
                 + "\n--- original build error:\n"
                 + (first_error.stderr or ""),
             ) from first_error
-        return await engine.up(project_dir, project_name)
+        return await engine.up(project_dir, project_name, network=network)
 
     async def advance_build(self, request: BuildRequest) -> BuildResult:
         """Run the full pipeline for ``request`` immediately, in-process.

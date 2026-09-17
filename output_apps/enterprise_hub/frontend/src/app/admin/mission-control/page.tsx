@@ -12,6 +12,7 @@ import {
   Cpu,
   Database,
   ExternalLink,
+  Layers,
   Loader2,
   RefreshCw,
   Send,
@@ -45,6 +46,18 @@ interface ProbeResult {
 const FACTORY_BASE = process.env.NEXT_PUBLIC_FACTORY_API_BASE ?? "/api/v1/factory";
 const FACTORY_SYNTHESIZE_ENDPOINT =
   process.env.NEXT_PUBLIC_FACTORY_SYNTHESIZE_URL ?? `${FACTORY_BASE}/synthesize-app`;
+
+/** Qdrant semantic-index collection used by the retrieval engine. */
+const VECTOR_COLLECTION_URL =
+  process.env.NEXT_PUBLIC_QDRANT_COLLECTION_URL ??
+  "http://localhost:6333/collections/iran_laws_bge_m3";
+
+interface VectorIndexTelemetry {
+  points: number | null;
+  vectors: number | null;
+  indexed: number | null;
+  status: string | null;
+}
 
 interface FactoryBuildStage {
   stage: string;
@@ -699,6 +712,9 @@ export default function MissionControlPage() {
   const [nodesLoading, setNodesLoading] = useState(false);
   const [nodesError, setNodesError] = useState<string | null>(null);
   const [fleetOpen, setFleetOpen] = useState(true);
+  const [vector, setVector] = useState<VectorIndexTelemetry | null>(null);
+  const [vectorLoading, setVectorLoading] = useState(false);
+  const [vectorError, setVectorError] = useState<string | null>(null);
 
   const selectedHost =
     DEPLOYMENT_TARGETS.find((target) => target.id === targetHost)?.host ?? DEFAULT_TARGET_HOST;
@@ -906,6 +922,47 @@ export default function MissionControlPage() {
     }, 0);
     return () => clearTimeout(kickoff);
   }, [fetchNodes]);
+
+  const fetchVectorIndex = useCallback(async () => {
+    setVectorLoading(true);
+    setVectorError(null);
+    try {
+      const res = await fetch(VECTOR_COLLECTION_URL, { cache: "no-store", mode: "cors" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as {
+        result?: {
+          points_count?: number;
+          vectors_count?: number;
+          indexed_vectors_count?: number;
+          status?: string;
+        };
+      };
+      const result = data.result ?? {};
+      setVector({
+        points: typeof result.points_count === "number" ? result.points_count : null,
+        vectors: typeof result.vectors_count === "number" ? result.vectors_count : null,
+        indexed:
+          typeof result.indexed_vectors_count === "number"
+            ? result.indexed_vectors_count
+            : typeof result.vectors_count === "number"
+              ? result.vectors_count
+              : null,
+        status: result.status ?? null,
+      });
+    } catch (error) {
+      setVectorError(error instanceof Error ? error.message : "vector store unavailable");
+      setVector(null);
+    } finally {
+      setVectorLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const kickoff = setTimeout(() => {
+      void fetchVectorIndex();
+    }, 0);
+    return () => clearTimeout(kickoff);
+  }, [fetchVectorIndex]);
 
   useEffect(() => {
     if (!historyReady) return;
@@ -1115,7 +1172,7 @@ export default function MissionControlPage() {
           </div>
         </header>
 
-        <section className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {TARGETS.map((target) => {
             const Icon = target.icon;
             const result = results[target.id] ?? INITIAL_RESULTS[target.id];
@@ -1162,6 +1219,79 @@ export default function MissionControlPage() {
               </article>
             );
           })}
+
+          <article className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur transition-colors hover:border-slate-700">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2.5">
+                <Layers className="size-4 text-violet-300" />
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-100">
+                    Semantic Index &amp; Vector Store
+                  </h2>
+                  <p className="font-mono text-[10px] text-slate-500">BGE-M3 · Qdrant</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void fetchVectorIndex()}
+                disabled={vectorLoading}
+                aria-label="Refresh semantic index telemetry"
+                className="rounded-lg border border-slate-800 px-1.5 py-1 text-slate-400 transition-colors hover:border-slate-700 hover:text-white disabled:opacity-50"
+              >
+                <RefreshCw className={`size-3 ${vectorLoading ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-800/70 pt-3 font-mono text-[11px]">
+              <div>
+                <div className="text-slate-600">VECTOR STORE POINTS</div>
+                <div className="text-slate-100">
+                  {vector?.points == null ? "—" : vector.points.toLocaleString("en-US")}
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-600">SEMANTIC INDEX VECTORS</div>
+                <div className="text-slate-100">
+                  {vector?.vectors == null ? "—" : vector.vectors.toLocaleString("en-US")}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-1.5 border-t border-slate-800/70 pt-3 font-mono text-[10px]">
+              <span
+                className={`size-2 rounded-full ${
+                  vectorError
+                    ? "bg-rose-500"
+                    : vectorLoading
+                      ? "bg-amber-400 animate-pulse"
+                      : vector && (vector.status === "green" || (vector.points ?? 0) > 0)
+                        ? "bg-emerald-400"
+                        : "bg-slate-500"
+                }`}
+              />
+              <span
+                className={
+                  vectorError
+                    ? "text-rose-300"
+                    : vectorLoading
+                      ? "text-amber-300"
+                      : "text-emerald-300"
+                }
+              >
+                {vectorError
+                  ? "BGE-M3 Embeddings: Offline"
+                  : vectorLoading
+                    ? "BGE-M3 Embeddings: Checking…"
+                    : "BGE-M3 Embeddings: Synced & Active"}
+              </span>
+            </div>
+
+            {vector?.indexed != null && (
+              <p className="mt-2 font-mono text-[10px] text-slate-600">
+                indexed: {vector.indexed.toLocaleString("en-US")}
+              </p>
+            )}
+          </article>
         </section>
 
         <section className="mt-8 rounded-2xl border border-slate-800/80 bg-slate-900/60 backdrop-blur">

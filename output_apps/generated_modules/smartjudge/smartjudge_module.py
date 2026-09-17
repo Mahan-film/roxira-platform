@@ -2103,6 +2103,328 @@ async def calculate_delay_damages(payload: dict = Body(...)):
     }
 
 # ------------------------------------------------------------------------------
+# ماشین‌حساب خسارت تأخیر تأدیه (ماده ۵۲۲ ق.آ.د.م) + هزینه دادرسی و تمبر مالیاتی
+# ------------------------------------------------------------------------------
+_DAMAGES_ARTICLE = "ماده ۵۲۲ قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"
+_DAMAGES_INDEX_BASE_YEAR = 1395
+# شاخص بهای کالاها و خدمات مصرفی بانک مرکزی (پایه ۱۳۹۵ = ۱۰۰) در ابتدای هر سال
+_DAMAGES_CBI_INDEX_START = {
+    1395: 100.0, 1396: 109.6, 1397: 143.0, 1398: 202.0, 1399: 275.0,
+    1400: 385.0, 1401: 560.0, 1402: 820.0, 1403: 1150.0, 1404: 1580.0,
+    1405: 2150.0, 1406: 2900.0,
+}
+_DAMAGES_INDEX_LAST_GROWTH = 0.35
+# تعرفه پلکانی هزینه دادرسی بر مبنای بهای خواسته (تومان) — پلکان حاشیه‌ای
+_DAMAGES_FILING_FEE_TIERS = (
+    (10_000_000, 0.025),
+    (100_000_000, 0.020),
+    (500_000_000, 0.015),
+    (1_000_000_000, 0.010),
+    (None, 0.005),
+)
+_DAMAGES_STAGE_MULTIPLIER = {"BADAWI": 1.0, "TAJDID_NAZAR": 1.5}
+_DAMAGES_STAGE_LABELS = {"BADAWI": "بدوی", "TAJDID_NAZAR": "تجدیدنظر"}
+_DAMAGES_LAWYER_STAMP_RATE = 0.03
+_DAMAGES_LAWYER_STAMP_MIN = 200_000
+_DAMAGES_JUDICIAL_STAMP_FIXED = 50_000
+_DAMAGES_STAGE_ALIASES = {
+    "badawi": "BADAWI", "ebtedai": "BADAWI", "ebtedaei": "BADAWI", "first": "BADAWI",
+    "first_instance": "BADAWI", "بدوی": "BADAWI",
+    "tajdid_nazar": "TAJDID_NAZAR", "tajdidnazar": "TAJDID_NAZAR", "tajdid": "TAJDID_NAZAR",
+    "appeal": "TAJDID_NAZAR", "تجدیدنظر": "TAJDID_NAZAR", "تجدید_نظر": "TAJDID_NAZAR",
+}
+_DAMAGES_YM_RE = re.compile(r"^\s*(1[34]\d{2})\s*[/\-.]\s*(\d{1,2})\s*$")
+#: Jurisdiction → filing-fee tariff selection.
+_DAMAGES_JURISDICTIONS = {
+    "PEACE_COURT": "PEACE_COURT", "PEACE": "PEACE_COURT", "SOLH": "PEACE_COURT",
+    "دادگاه_صلح": "PEACE_COURT", "صلح": "PEACE_COURT",
+    "GENERAL_COURT": "GENERAL_COURT", "GENERAL": "GENERAL_COURT", "BADAWI": "GENERAL_COURT",
+    "دادگاه_عمومی": "GENERAL_COURT", "عمومی": "GENERAL_COURT",
+    "APPEALS": "APPEALS", "APPEAL": "APPEALS", "TAJDID_NAZAR": "APPEALS",
+    "دادگاه_تجدیدنظر": "APPEALS", "تجدیدنظر": "APPEALS",
+    "SUPREME_COURT": "SUPREME_COURT", "DIVAN": "SUPREME_COURT", "دیوان_عالی": "SUPREME_COURT",
+}
+_DAMAGES_JURISDICTION_LABELS = {
+    "PEACE_COURT": "دادگاه صلح",
+    "GENERAL_COURT": "دادگاه عمومی حقوقی",
+    "APPEALS": "دادگاه تجدیدنظر",
+    "SUPREME_COURT": "دیوان عالی کشور",
+}
+#: Peace-court financial jurisdiction ceiling (1,000,000,000 Rial = 100M Toman).
+_PEACE_COURT_CLAIM_CEILING = 100_000_000
+_PEACE_COURT_FEE_RATE = 0.02
+_PEACE_COURT_FEE_MIN = 100_000
+
+
+
+def _parse_damages_amount(value, field: str = "principal_amount"):
+    """تفسیر مبلغ ورودی (پشتیبانی ارقام فارسی/عربی و جداکننده هزارگان)."""
+    if value is None or value == "":
+        raise ValueError(f"پارامتر «{field}» الزامی است.")
+    if isinstance(value, bool):
+        raise ValueError(f"مقدار «{field}» نامعتبر است.")
+    if isinstance(value, (int, float)):
+        amount = float(value)
+    else:
+        text = _normalize_digits(value).strip()
+        for sep in (",", "٬", "،", " ", "\u00a0", "_"):
+            text = text.replace(sep, "")
+        if not re.fullmatch(r"\d+(?:\.\d+)?", text):
+            raise ValueError(f"مقدار «{field}» نامعتبر است: {value!r}")
+        amount = float(text)
+    if amount <= 0:
+        raise ValueError(f"مقدار «{field}» باید بزرگ‌تر از صفر باشد.")
+    return amount
+
+
+def _parse_jalali_year_month(value, field: str = "تاریخ"):
+    """تفسیر تاریخ جلالی با قالب YYYY/MM."""
+    if value is None or value == "":
+        raise ValueError(f"پارامتر «{field}» الزامی است (قالب YYYY/MM).")
+    text = _normalize_digits(value).strip()
+    match = _DAMAGES_YM_RE.match(text)
+    if not match:
+        raise ValueError(f"پارامتر «{field}» نامعتبر است؛ قالب صحیح YYYY/MM مانند ۱۴۰۲/۰۵ است.")
+    year, month = int(match.group(1)), int(match.group(2))
+    if not 1390 <= year <= 1420:
+        raise ValueError(f"سال {year} در «{field}» خارج از بازه پشتیبانی (۱۳۹۰ تا ۱۴۲۰) است.")
+    if not 1 <= month <= 12:
+        raise ValueError(f"ماه {month} در «{field}» نامعتبر است.")
+    return year, month
+
+
+def _damages_cbi_index(year: int, month: int) -> float:
+    """شاخص تورم بانک مرکزی برای سال/ماه جلالی با درون‌یابی خطی میان سال‌ها."""
+    years = sorted(_DAMAGES_CBI_INDEX_START)
+    if year < years[0] or year > years[-1]:
+        raise ValueError(
+            f"سال {year} برای شاخص بانک مرکزی پشتیبانی نمی‌شود ({years[0]} تا {years[-1]})."
+        )
+    start = _DAMAGES_CBI_INDEX_START[year]
+    nxt = _DAMAGES_CBI_INDEX_START.get(year + 1, start * (1.0 + _DAMAGES_INDEX_LAST_GROWTH))
+    return start + (nxt - start) * (month - 1) / 12.0
+
+
+def _damages_filing_fee(claim_value) -> tuple:
+    """هزینه دادرسی پلکانی بر مبنای بهای خواسته؛ بازگشت (مبلغ پایه، ریز اقلام)."""
+    bands = []
+    lower = 0
+    total = 0.0
+    remaining = max(0.0, float(claim_value))
+    for upper, rate in _DAMAGES_FILING_FEE_TIERS:
+        if remaining <= 0:
+            break
+        taxable = remaining if upper is None else min(remaining, float(upper) - lower)
+        if taxable <= 0:
+            if upper is not None:
+                lower = upper
+            continue
+        amount = taxable * rate
+        total += amount
+        bands.append({
+            "from_toman": int(lower),
+            "to_toman": int(upper) if upper is not None else None,
+            "rate": rate,
+            "rate_percent": round(rate * 100, 3),
+            "taxable_toman": int(round(taxable)),
+            "fee_toman": int(round(amount)),
+        })
+        remaining -= taxable
+        if upper is not None:
+            lower = upper
+    return total, bands
+
+
+def _parse_damages_jurisdiction(value) -> str:
+    """Map a jurisdiction label/alias to a canonical filing-fee tariff key."""
+    key = _normalize_digits(value).strip().upper().replace("-", "_").replace(" ", "_")
+    return _DAMAGES_JURISDICTIONS.get(key, "GENERAL_COURT")
+
+
+@router.post("/calculators/damages")
+async def calculate_damages(payload: dict = Body(...)):
+    """محاسبه خسارت تأخیر تأدیه (ماده ۵۲۲ ق.آ.د.م) با شاخص بانک مرکزی،
+    همراه با هزینه دادرسی دقیق (بر مبنای بهای خواسته) و تمبر مالیاتی وکالت."""
+    try:
+        principal = _parse_damages_amount(
+            payload.get("principal_amount", payload.get("principal")), "principal_amount"
+        )
+        due = _parse_jalali_year_month(payload.get("due_date", payload.get("due")), "due_date")
+        payment = _parse_jalali_year_month(
+            payload.get("payment_date", payload.get("payment")), "payment_date"
+        )
+    except ValueError as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=400)
+
+    stage_raw = payload.get("court_stage", payload.get("stage", "BADAWI"))
+    stage_key = str(stage_raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+    stage = _DAMAGES_STAGE_ALIASES.get(stage_key)
+    if stage is None:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "مرحله دادرسی «court_stage» نامعتبر است.",
+                "supported_court_stages": ["BADAWI", "TAJDID_NAZAR"],
+            },
+            status_code=400,
+        )
+
+    warnings = []
+    try:
+        idx_due_override = payload.get("index_due")
+        idx_pay_override = payload.get("index_payment")
+        idx_due = (
+            float(idx_due_override)
+            if idx_due_override not in (None, "")
+            else _damages_cbi_index(*due)
+        )
+        idx_pay = (
+            float(idx_pay_override)
+            if idx_pay_override not in (None, "")
+            else _damages_cbi_index(*payment)
+        )
+    except (TypeError, ValueError) as exc:
+        return JSONResponse({"status": "error", "message": f"شاخص تورم نامعتبر است: {exc}"}, status_code=400)
+    if idx_due <= 0 or idx_pay <= 0:
+        return JSONResponse(
+            {"status": "error", "message": "شاخص تورم باید بزرگ‌تر از صفر باشد."}, status_code=400
+        )
+
+    if (payment[0], payment[1]) <= (due[0], due[1]):
+        damages = 0
+        growth = 0.0
+        warnings.append("تاریخ پرداخت پیش از سررسید یا برابر آن است؛ خسارت تأخیر تأدیه تعلق نمی‌گیرد.")
+    else:
+        growth = (idx_pay - idx_due) / idx_due
+        damages = int(round(principal * growth))
+    if idx_due_override not in (None, "") or idx_pay_override not in (None, ""):
+        warnings.append("شاخص تورم از ورودی درخواست جایگزین شده است (حالت فرضی).")
+
+    principal_int = int(round(principal))
+    claim_value = principal_int + damages
+    jurisdiction = _parse_damages_jurisdiction(payload.get("jurisdiction", payload.get("court")))
+    if jurisdiction == "PEACE_COURT" and claim_value <= _PEACE_COURT_CLAIM_CEILING:
+        fee_base = max(claim_value * _PEACE_COURT_FEE_RATE, _PEACE_COURT_FEE_MIN)
+        bands = [
+            {
+                "tariff": "PEACE_COURT_FLAT",
+                "from_toman": 0,
+                "to_toman": _PEACE_COURT_CLAIM_CEILING,
+                "rate": _PEACE_COURT_FEE_RATE,
+                "rate_percent": round(_PEACE_COURT_FEE_RATE * 100, 3),
+                "taxable_toman": claim_value,
+                "fee_toman": int(round(fee_base)),
+            }
+        ]
+        filing_tariff = "تعرفه دادگاه صلح (تا سقف ۱۰۰ میلیون تومان)"
+    else:
+        fee_base, bands = _damages_filing_fee(claim_value)
+        filing_tariff = "تعرفه پلکانی هزینه دادرسی دادگاه عمومی حقوقی"
+    stage_mult = _DAMAGES_STAGE_MULTIPLIER[stage]
+    filing_fee = int(round(fee_base * stage_mult))
+
+    stamp_base = max(
+        int(round(claim_value * _DAMAGES_LAWYER_STAMP_RATE)), _DAMAGES_LAWYER_STAMP_MIN
+    )
+    lawyer_stamp_fee = stamp_base + _DAMAGES_JUDICIAL_STAMP_FIXED
+    total_fees = filing_fee + lawyer_stamp_fee
+    total_payable = damages + total_fees
+
+    due_label = f"{due[0]:04d}/{due[1]:02d}"
+    payment_label = f"{payment[0]:04d}/{payment[1]:02d}"
+    stage_label = _DAMAGES_STAGE_LABELS[stage]
+
+    statement = (
+        f"خسارت تأخیر تأدیه بر مبنای ماده ۵۲۲ ق.آ.د.م برای اصل مبلغ "
+        f"{_to_persian_digits(f'{principal_int:,}')} تومان از سررسید {_to_persian_digits(due_label)} "
+        f"تا تاریخ پرداخت {_to_persian_digits(payment_label)} معادل "
+        f"{_to_persian_digits(f'{damages:,}')} تومان محاسبه شد؛ جمع هزینه‌های دادرسی و تمبر مالیاتی "
+        f"{_to_persian_digits(f'{total_fees:,}')} تومان و جمع قابل پرداخت "
+        f"{_to_persian_digits(f'{total_payable:,}')} تومان در مرحله {stage_label} است."
+    )
+
+    return {
+        "status": "ok",
+        "legal_basis": _DAMAGES_ARTICLE,
+        "jurisdiction": jurisdiction,
+        "jurisdiction_label": _DAMAGES_JURISDICTION_LABELS[jurisdiction],
+        "principal": principal_int,
+        "inflation_damages": damages,
+        "total_claim": claim_value,
+        "filing_fees": filing_fee,
+        "lawyer_stamp_duty": lawyer_stamp_fee,
+        "statutory_articles": [
+            _DAMAGES_ARTICLE,
+            "ماده ۵۰۲ قانون آیین دادرسی مدنی (محاسبه هزینه دادرسی)",
+            "ماده ۱۰۳ قانون آیین دادرسی مدنی (حق تمبر وکالت)",
+        ],
+        "principal_amount": principal_int,
+        "principal_amount_toman": principal_int,
+        "due_date": due_label,
+        "payment_date": payment_label,
+        "court_stage": stage,
+        "court_stage_label": stage_label,
+        "damages": damages,
+        "damages_toman": damages,
+        "claim_value": claim_value,
+        "filing_fee": filing_fee,
+        "filing_fee_toman": filing_fee,
+        "lawyer_stamp_fee": lawyer_stamp_fee,
+        "lawyer_stamp_fee_toman": lawyer_stamp_fee,
+        "total_fees": total_fees,
+        "total_payable": total_payable,
+        "index": {
+            "base_year": _DAMAGES_INDEX_BASE_YEAR,
+            "due": round(idx_due, 4),
+            "payment": round(idx_pay, 4),
+            "growth_factor": round(1.0 + growth, 6),
+            "increase_percent": round(growth * 100.0, 4),
+            "source": "شاخص بهای کالاها و خدمات مصرفی بانک مرکزی جمهوری اسلامی ایران",
+        },
+        "formula": "Damages = Principal × ((Index_Payment − Index_Due) ÷ Index_Due)",
+        "breakdown": {
+            "damages": {
+                "principal_amount": principal_int,
+                "index_due": round(idx_due, 4),
+                "index_payment": round(idx_pay, 4),
+                "growth_factor": round(growth, 6),
+                "growth_percent": round(growth * 100.0, 4),
+                "damages": damages,
+            },
+            "filing_fee": {
+                "claim_value": claim_value,
+                "court_stage": stage,
+                "court_stage_label": stage_label,
+                "stage_multiplier": stage_mult,
+                "base_fee": int(round(fee_base)),
+                "total": filing_fee,
+                "tariff": filing_tariff,
+                "jurisdiction": jurisdiction,
+                "bands": bands,
+            },
+            "lawyer_stamp_fee": {
+                "claim_value": claim_value,
+                "rate": _DAMAGES_LAWYER_STAMP_RATE,
+                "rate_percent": round(_DAMAGES_LAWYER_STAMP_RATE * 100, 3),
+                "percent_part": stamp_base,
+                "minimum_toman": _DAMAGES_LAWYER_STAMP_MIN,
+                "judicial_stamp_toman": _DAMAGES_JUDICIAL_STAMP_FIXED,
+                "total": lawyer_stamp_fee,
+                "label": "تمبر مالیاتی وکالت و حق تمبر قضایی",
+            },
+            "totals": {
+                "damages": damages,
+                "filing_fee": filing_fee,
+                "lawyer_stamp_fee": lawyer_stamp_fee,
+                "total_fees": total_fees,
+                "total_payable": total_payable,
+            },
+        },
+        "statement": statement,
+        "warnings": warnings,
+    }
+
+# ------------------------------------------------------------------------------
 # پورتال اختصاصی ثبت‌نام وکلای پایلوت و کانون وکلا
 # ------------------------------------------------------------------------------
 @router.post("/lawyers/pilot-onboarding")
