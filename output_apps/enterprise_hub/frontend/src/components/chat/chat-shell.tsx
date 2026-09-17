@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { LiveVoiceModal } from "./live-voice-modal";
+import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 
 export function ChatShell() {
   const [messages, setMessages] = useState<Array<{role: string, content: string, draft?: string, probability?: string}>>([
@@ -128,7 +128,7 @@ export function ChatShell() {
       }
       setIsVoiceRecording(true);
       setRecordingStatus("در حال ضبط...");
-    } catch (err: any) {
+    } catch (err) {
       console.warn("Mic error:", err);
       setIsVoiceRecording(false);
       setRecordingStatus("دسترسی به میکروفون تایید نشد. لطفاً در نوار آدرس مرورگر دسترسی را مجاز بفرمایید.");
@@ -326,7 +326,12 @@ export function ChatShell() {
 
           {/* دکمه تماس صوتی زنده */}
           <button
-            onClick={() => setIsLiveAudioOpen(true)}
+            onClick={() => {
+              // Safari: unlock audio inside the real user gesture, so the whole
+              // voice session (every later TTS turn) is allowed to make sound.
+              unlockSafariAudio();
+              setIsLiveAudioOpen(true);
+            }}
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-sm transition-all shadow-sm"
             title="مکالمه صوتی زنده"
           >

@@ -20,18 +20,76 @@ function getAudioContextCtor(): AudioContextCtor | null {
   return window.AudioContext ?? legacyWindow.webkitAudioContext ?? null;
 }
 
+/**
+ * The AudioContext that was created + resumed inside a real user gesture.
+ * Safari only grants that context permission to make sound, so it is cached and
+ * reused for TTS playback instead of being thrown away.
+ */
+let primedAudioContextInstance: AudioContext | null = null;
+
+/**
+ * Safari silently blocks every AudioContext until one has been created *and*
+ * resumed inside a genuine user gesture — and once blocked, every later turn is
+ * poisoned too (TTS chunks start life "suspended" and are simply never heard).
+ *
+ * Running this exact sequence in the click handler that opens the voice modal /
+ * starts the call permanently removes that block for the whole page:
+ *
+ *   const unlockCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+ *   unlockCtx.resume();
+ *   const buffer = unlockCtx.createBuffer(1, 1, 22050);
+ *   const source = unlockCtx.createBufferSource();
+ *   source.buffer = buffer;
+ *   source.connect(unlockCtx.destination);
+ *   source.start(0);
+ *
+ * The one-frame silent buffer is what actually flips Safari's internal
+ * "has the user allowed audio?" flag; the `resume()` alone does not.
+ */
+export function unlockSafariAudio(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+
+  const cached = primedAudioContextInstance;
+  if (cached && cached.state !== "closed") {
+    if (cached.state === "suspended") cached.resume().catch(() => {});
+    return cached;
+  }
+
+  try {
+    // `window.AudioContext || window.webkitAudioContext` (the `any` of the
+    // canonical snippet, expressed with a precise type instead).
+    const legacyWindow = window as Window & { webkitAudioContext?: AudioContextCtor };
+    const UnlockCtor = window.AudioContext || legacyWindow.webkitAudioContext || null;
+    if (!UnlockCtor) return null;
+
+    const unlockCtx = new UnlockCtor();
+    unlockCtx.resume().catch(() => {});
+    const buffer = unlockCtx.createBuffer(1, 1, 22050);
+    const source = unlockCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(unlockCtx.destination);
+    source.start(0);
+
+    primedAudioContextInstance = unlockCtx;
+    return unlockCtx;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** The gesture-primed context, when it is still usable (reused for playback). */
+export function primedAudioContext(): AudioContext | null {
+  const ctx = primedAudioContextInstance;
+  return ctx && ctx.state !== "closed" ? ctx : null;
+}
+
 let audioUnlocked = false;
 function unlockAudioOnce() {
   if (audioUnlocked || typeof window === "undefined") return;
   audioUnlocked = true;
-  try {
-    const AudioCtx = getAudioContextCtor();
-    if (AudioCtx) {
-      const ctx = new AudioCtx();
-      ctx.resume().catch(() => {});
-      setTimeout(() => { try { ctx.close(); } catch (_) {} }, 200);
-    }
-  } catch (_) {}
+  // Plays the 1-frame silent buffer inside the gesture; the context is kept
+  // alive (not closed) so the playback path can inherit its permission.
+  unlockSafariAudio();
 }
 
 if (typeof window !== "undefined") {
@@ -41,15 +99,60 @@ if (typeof window !== "undefined") {
   window.addEventListener("keydown", unlockAudioOnce, opts);
 }
 
+/**
+ * The transcription engine (Whisper / faster-whisper) is trained on 16 kHz mono
+ * PCM16. Feeding it Safari's native 44.1/48 kHz stereo stream forces the server
+ * to resample (or, worse, to interpret the wrong rate) which smears phonemes and
+ * wrecks Persian accuracy. Everything we upload is therefore normalised here to
+ * exactly 16 kHz / mono / PCM16 — see `resampleToTarget` + `float32ToWav`.
+ */
+const TARGET_SAMPLE_RATE = 16000;
+
 /** Client-side VAD tuning (energy is a 0-100 normalised FFT level). */
 const VAD_SPEECH_LEVEL = 18;
 const VAD_SILENCE_LEVEL = 10;
-const VAD_SILENCE_MS = 300;
+/**
+ * Silence that ends the user's turn. Persian words fade out on unstressed,
+ * low-energy syllables ("...می‌شود"، "...است") and a short window chopped the
+ * tail of the sentence, so the turn now only closes after 950 ms of *continuous*
+ * silence (the timer is re-armed the moment speech resumes).
+ */
+const VAD_SILENCE_MS = 950;
 const VAD_MIN_SPEECH_MS = 250;
-const VAD_BARGE_IN_LEVEL = 28;
+/**
+ * Self-interruption / acoustic-echo floor. While the AI is speaking the Mac
+ * speakers feed our own TTS straight back into the microphone, and that bleed
+ * used to look like a barge-in: playback was aborted and the turn ended with
+ * "صدایی با وضوح کافی دریافت نشد". Anything at or below 0.25 of full scale
+ * (25 on this 0-100 normalised level) is therefore treated as echo, ignored for
+ * barge-in, and kept out of the transcription buffer entirely.
+ */
+const VAD_SELF_INTERRUPTION_FLOOR = 25;
+/** A genuine interruption must stay above the floor this long (echo rejection). */
+const VAD_BARGE_IN_HOLD_MS = 260;
+/** Hard barge-in level: above the 0.25 echo floor and above speaker bleed. */
+const VAD_BARGE_IN_LEVEL = 30;
+
+/**
+ * Trailing audio kept before the utterance is cut. The silence decision and the
+ * last ScriptProcessor block race each other, so we wait this long (capture
+ * still running) *and* append the same amount of silence to the PCM tail — the
+ * final Persian syllable is then never clipped by the encoder or the STT trim.
+ */
+const VAD_TRAILING_PAD_MS = 100;
+
+/** Delay before we start listening again after a failed/empty turn. */
+const RESUME_LISTENING_DELAY_MS = 400;
+
+/** Raw capture (16 kHz mono PCM) buffers the mic stream for transcription. */
+const PCM_CAPTURE_BUFFER_SIZE = 4096;
+const PCM_MAX_CAPTURED_SAMPLES = TARGET_SAMPLE_RATE * 30; // hard 30 s ceiling
+const PCM_MIN_TURN_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.12); // < 120 ms = noise
+const TTS_CHUNK_FETCH_TIMEOUT_MS = 20000;
+const TTS_CHUNK_MAX_CHARS = 180;
 
 /** Encode mono Float32 PCM (-1..1) into a 16-bit PCM WAV blob. */
-function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
+export function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
   const bytesPerSample = 2;
   const dataSize = samples.length * bytesPerSample;
   const buffer = new ArrayBuffer(44 + dataSize);
@@ -78,6 +181,178 @@ function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
   return new Blob([view], { type: "audio/wav" });
 }
 
+export interface NormalizedAudioContext {
+  ctx: AudioContext;
+  /** Rate the context actually runs at (may differ from the requested one). */
+  sampleRate: number;
+  /** True when the browser honoured the preferred 16 kHz rate itself. */
+  nativeTargetRate: boolean;
+}
+
+/**
+ * Build an AudioContext already running at the preferred rate.
+ *
+ * Chrome/Firefox honour `{ sampleRate: 16000 }`, so no resampling is needed at
+ * all. Safari (and any engine that ignores or rejects the option) falls back to
+ * its native 44.1/48 kHz rate — `resampleToTarget` then does the conversion.
+ */
+export function createAudioContext(
+  preferredSampleRate: number = TARGET_SAMPLE_RATE,
+): NormalizedAudioContext | null {
+  const AudioCtx = getAudioContextCtor();
+  if (!AudioCtx) return null;
+
+  try {
+    const ctx = new AudioCtx({ sampleRate: preferredSampleRate });
+    if (Math.abs(ctx.sampleRate - preferredSampleRate) < 1) {
+      return { ctx, sampleRate: ctx.sampleRate, nativeTargetRate: true };
+    }
+    // Browser silently ignored the request — rebuild at the native rate.
+    try { ctx.close(); } catch (_) {}
+  } catch (_) {
+    /* NotSupportedError on older Safari — fall through to the default ctor. */
+  }
+
+  try {
+    const ctx = new AudioCtx();
+    return {
+      ctx,
+      sampleRate: ctx.sampleRate,
+      nativeTargetRate: Math.abs(ctx.sampleRate - preferredSampleRate) < 1,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Linear-interpolation resampler: converts a mono Float32 buffer recorded at
+ * `inputRate` (44.1/48 kHz on Safari) into 16 kHz mono Float32.
+ *
+ * A one-pole low-pass is applied first only when decimating hard (ratio > 1.5)
+ * to suppress the aliasing that would otherwise fold high frequencies back into
+ * the speech band as a metallic "distortion" the transcriber hates.
+ */
+export function resampleToTarget(
+  input: Float32Array,
+  inputRate: number,
+  targetRate: number = TARGET_SAMPLE_RATE,
+): Float32Array {
+  if (!input.length || inputRate <= 0) return new Float32Array(0);
+  if (Math.abs(inputRate - targetRate) < 1) return input;
+
+  const ratio = inputRate / targetRate;
+  let source = input;
+
+  if (ratio > 1.5) {
+    // Two-pole (cascaded one-pole) anti-alias low-pass with the cutoff at
+    // 0.45 × target rate (≈ 7.2 kHz for 16 kHz out). Without it, 9-24 kHz
+    // content folds straight into the speech band as metallic aliasing; with a
+    // steeper filter than this, Persian consonants start sounding muffled.
+    const cutoff = targetRate * 0.45;
+    const alpha = 1 - Math.exp((-2 * Math.PI * cutoff) / inputRate);
+    const filtered = new Float32Array(input.length);
+    for (let pass = 0; pass < 2; pass++) {
+      let acc = pass === 0 ? input[0] ?? 0 : filtered[0] ?? 0;
+      for (let i = 0; i < input.length; i++) {
+        const sample = pass === 0 ? input[i] ?? 0 : filtered[i];
+        acc += alpha * (sample - acc);
+        filtered[i] = acc;
+      }
+    }
+    source = filtered;
+  }
+
+  const outLength = Math.max(1, Math.floor(source.length / ratio));
+  const output = new Float32Array(outLength);
+  const lastIndex = source.length - 1;
+
+  for (let i = 0; i < outLength; i++) {
+    const position = i * ratio;
+    const index = Math.floor(position);
+    const fraction = position - index;
+    const a = source[index] ?? 0;
+    const b = index >= lastIndex ? a : source[index + 1] ?? a;
+    output[i] = a + (b - a) * fraction;
+  }
+
+  return output;
+}
+
+/**
+ * Append `ms` of silence to a mono PCM tail so the final syllable of an
+ * utterance survives both the encoder and the transcription engine's own
+ * leading/trailing trim (see VAD_TRAILING_PAD_MS).
+ */
+export function padTrailingSilence(
+  samples: Float32Array,
+  sampleRate: number,
+  ms: number = VAD_TRAILING_PAD_MS,
+): Float32Array {
+  const padLength = Math.max(0, Math.round((sampleRate * ms) / 1000));
+  if (padLength === 0) return samples;
+  const padded = new Float32Array(samples.length + padLength);
+  padded.set(samples, 0);
+  return padded;
+}
+
+/**
+ * True when a VAD spike seen while the AI is speaking is loud enough to be a
+ * real barge-in rather than the bot's own voice coming back out of the Mac
+ * speakers. Spikes at or below the 0.25 floor are ignored (acoustic echo).
+ */
+export function isSelfInterruption(
+  level: number,
+  bargeInLevel: number = VAD_BARGE_IN_LEVEL,
+): boolean {
+  return level > Math.max(bargeInLevel, VAD_SELF_INTERRUPTION_FLOOR);
+}
+
+/**
+ * Split a reply into speech chunks so playback can start on the FIRST sentence
+ * instead of waiting for the whole synthesis job. Breaks on sentence enders
+ * (`. ! ? … ؟ ؛ ;`) and on Persian commas (`,` / `،`) once a chunk is long
+ * enough to sound natural, and never merges more than `TTS_CHUNK_MAX_CHARS`.
+ */
+export function splitIntoSpeechChunks(
+  text: string,
+  maxChars: number = TTS_CHUNK_MAX_CHARS,
+): string[] {
+  const cleaned = text.replace(/[*#_`>|]/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) return [];
+
+  const HARD_BREAKS = ".!?؟…؛;\n";
+  const SOFT_BREAKS = "،,";
+  const MIN_HARD_CHUNK = 8;
+  const MIN_SOFT_CHUNK = 55;
+  const MIN_EARLY_CHUNK = 40; // first chunk: start speaking ASAP
+
+  const chunks: string[] = [];
+  let buffer = "";
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    buffer += char;
+    const trimmedLength = buffer.trim().length;
+
+    const hardBreak = HARD_BREAKS.includes(char) && trimmedLength >= MIN_HARD_CHUNK;
+    const softBreak = SOFT_BREAKS.includes(char) && trimmedLength >= MIN_SOFT_CHUNK;
+    const earlyBreak =
+      chunks.length === 0 && trimmedLength >= MIN_EARLY_CHUNK && char === " ";
+
+    if (hardBreak || softBreak || earlyBreak || buffer.length >= maxChars) {
+      const piece = buffer.trim();
+      if (piece) chunks.push(piece);
+      buffer = "";
+    }
+  }
+
+  const tail = buffer.trim();
+  if (tail) chunks.push(tail);
+
+  return chunks;
+}
+
 export function LiveVoiceModal({
   isOpen,
   onClose,
@@ -103,6 +378,16 @@ export function LiveVoiceModal({
   const audioChunksRef = useRef<Blob[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  /** Captured 16 kHz-ready mono PCM for the current turn (see initAudioVisualizer). */
+  const pcmChunksRef = useRef<Float32Array[]>([]);
+  const pcmSampleCountRef = useRef<number>(0);
+  const captureSampleRateRef = useRef<number>(TARGET_SAMPLE_RATE);
+  const captureNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const captureSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const captureSinkRef = useRef<GainNode | null>(null);
+  /** Invalidates in-flight TTS chunks when the user barges in or the modal closes. */
+  const speechGenerationRef = useRef<number>(0);
+  const chunkResolveRef = useRef<((played: boolean) => void) | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const playbackContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -110,6 +395,8 @@ export function LiveVoiceModal({
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasSpokenInThisTurnRef = useRef<boolean>(false);
   const speechStartTimeRef = useRef<number>(0);
+  /** Start of a sustained above-floor spike while the AI speaks (echo guard). */
+  const bargeInStartTimeRef = useRef<number>(0);
   const isSubmittingTurnRef = useRef<boolean>(false);
   const activeConversationIdRef = useRef<string>(externalConvId);
 
@@ -118,18 +405,25 @@ export function LiveVoiceModal({
     if (!isOpen) {
       handleEndCall();
     } else {
+      // Safari: prime audio as early as possible on the open gesture.
+      unlockSafariAudio();
       handleStartCall();
     }
   }, [isOpen]);
 
   const unlockAudio = useCallback(() => {
+    // Runs the Safari silent-buffer unlock and reuses the primed context, so
+    // every later TTS turn inherits the permission granted by the user gesture.
+    unlockSafariAudio();
     unlockAudioOnce();
-    if (audioContextRef.current && audioContextRef.current.state === "suspended") {
-      audioContextRef.current.resume().catch(() => {});
+    const ctx = playbackContextRef.current ?? audioContextRef.current;
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
     }
   }, []);
 
-  const interruptAiSpeech = useCallback(() => {
+  /** Stop whatever is audibly playing, without invalidating the TTS queue. */
+  const stopCurrentSource = useCallback(() => {
     const source = audioSourceRef.current;
     if (source) {
       try {
@@ -141,10 +435,21 @@ export function LiveVoiceModal({
       } catch (_) {}
       audioSourceRef.current = null;
     }
+  }, []);
+
+  const interruptAiSpeech = useCallback(() => {
+    // Bumping the generation invalidates every queued/streaming TTS chunk so a
+    // barge-in can never be followed by a stale sentence being spoken.
+    speechGenerationRef.current += 1;
+    const resolveChunk = chunkResolveRef.current;
+    chunkResolveRef.current = null;
+    if (resolveChunk) resolveChunk(false);
+    stopCurrentSource();
+    bargeInStartTimeRef.current = 0;
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try { window.speechSynthesis.cancel(); } catch (_) {}
     }
-  }, []);
+  }, [stopCurrentSource]);
 
   // شروع ضبط قطعات صوتی
   const startRecording = useCallback(() => {
@@ -173,33 +478,73 @@ export function LiveVoiceModal({
     }
   }, []);
 
+  /** Drain the PCM captured for the current turn and reset the buffer. */
+  const takeCapturedPcm = useCallback((): Float32Array => {
+    const chunks = pcmChunksRef.current;
+    pcmChunksRef.current = [];
+    pcmSampleCountRef.current = 0;
+    if (!chunks.length) return new Float32Array(0);
+
+    let total = 0;
+    for (const chunk of chunks) total += chunk.length;
+    const merged = new Float32Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return merged;
+  }, []);
+
   // استخراج صوت ضبط‌شده و ارسال به سرور
   const transcribeCurrentSegment = useCallback(async (): Promise<string> => {
     const recorder = mediaRecorderRef.current;
-    if (!recorder) return "";
 
     try {
-      if (recorder.state === "recording") {
-        try { recorder.requestData(); } catch (_) {}
+      // ── Preferred path: raw PCM captured at (or resampled to) 16 kHz mono,
+      //    uploaded as a 16 kHz PCM16 WAV. No 100 ms flush delay needed.
+      const captured = takeCapturedPcm();
+      let audioBlob: Blob | null = null;
+      let ext = "wav";
+
+      if (captured.length >= PCM_MIN_TURN_SAMPLES) {
+        // ۱۰۰ میلی‌ثانیه صدای دنباله پیش از برش: هجای پایانی کلمه فارسی حفظ می‌شود.
+        const padded = padTrailingSilence(
+          captured,
+          captureSampleRateRef.current,
+          VAD_TRAILING_PAD_MS,
+        );
+        const normalized = resampleToTarget(
+          padded,
+          captureSampleRateRef.current,
+          TARGET_SAMPLE_RATE,
+        );
+        audioBlob = float32ToWav(normalized, TARGET_SAMPLE_RATE);
+      } else if (recorder) {
+        // ── Fallback: MediaRecorder (opaque AAC/Opus container).
+        if (recorder.state === "recording") {
+          try { recorder.requestData(); } catch (_) {}
+        }
+        // مکث کوتاه جهت تحویل آخرین قطعه به ondataavailable
+        await new Promise((r) => setTimeout(r, 100));
+
+        if (audioChunksRef.current.length > 0) {
+          const mimeType = recorder.mimeType || "audio/mp4";
+          audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          ext = /mp4|m4a|aac/i.test(mimeType)
+            ? "m4a"
+            : /ogg/i.test(mimeType)
+            ? "ogg"
+            : /wav/i.test(mimeType)
+            ? "wav"
+            : "webm";
+        }
       }
-      // مکث کوتاه جهت تحویل آخرین قطعه به ondataavailable
-      await new Promise((r) => setTimeout(r, 100));
 
-      if (audioChunksRef.current.length === 0) return "";
+      // آماده‌سازی نوبت بعدی در هر دو مسیر
+      audioChunksRef.current = [];
 
-      const mimeType = recorder.mimeType || "audio/mp4";
-      const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-      audioChunksRef.current = []; // آماده‌سازی نوبت بعدی
-
-      if (audioBlob.size < 40) return "";
-
-      const ext = /mp4|m4a|aac/i.test(mimeType)
-        ? "m4a"
-        : /ogg/i.test(mimeType)
-        ? "ogg"
-        : /wav/i.test(mimeType)
-        ? "wav"
-        : "webm";
+      if (!audioBlob || audioBlob.size < 40) return "";
 
       const formData = new FormData();
       formData.append("file", audioBlob, `speech.${ext}`);
@@ -222,7 +567,7 @@ export function LiveVoiceModal({
       console.warn("Transcribe error:", err);
     }
     return "";
-  }, []);
+  }, [takeCapturedPcm]);
 
   // بازگشت خودکار به نوبت شنیدن
   const resumeListening = useCallback(() => {
@@ -234,6 +579,10 @@ export function LiveVoiceModal({
     isSubmittingTurnRef.current = false;
     hasSpokenInThisTurnRef.current = false;
     speechStartTimeRef.current = 0;
+    bargeInStartTimeRef.current = 0;
+    // شروع نوبت تازه: بافر PCM نوبت قبل دور ریخته می‌شود
+    pcmChunksRef.current = [];
+    pcmSampleCountRef.current = 0;
     setVoiceState("listening");
     setStatusText("شنونده صحبت شما هستم؛ بفرمایید...");
     setCurrentUserSpeech("");
@@ -243,46 +592,24 @@ export function LiveVoiceModal({
     }
   }, [startRecording]);
 
-  // پخش صدای هوش مصنوعی — Web Audio streaming buffer (بدون عنصر <audio>)
-  const playAiVoice = useCallback(async (text: string) => {
-    if (!isComponentOpenRef.current) return;
+  // ── Streaming TTS: synthesise + play one sentence chunk at a time so the
+  //    first words are audible long before the full answer is generated.
+  const fetchTtsBlob = useCallback(async (chunk: string): Promise<Blob | null> => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TTS_CHUNK_FETCH_TIMEOUT_MS);
+      const res = await fetch("/api/v1/apps/judge/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: chunk }),
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+      if (!res.ok) return null;
 
-    interruptAiSpeech();
-    setVoiceState("speaking");
-    setStatusText("در حال پاسخ صوتی...");
-    unlockAudio();
+      const contentType = res.headers.get("content-type") ?? "audio/mpeg";
+      if (!res.body) return res.blob();
 
-    const safetyWatchdog = setTimeout(() => {
-      if (voiceStateRef.current === "speaking") {
-        resumeListening();
-      }
-    }, 18000);
-
-    const ensurePlaybackContext = (): AudioContext | null => {
-      if (typeof window === "undefined") return null;
-      let ctx = playbackContextRef.current;
-      if (!ctx || ctx.state === "closed") {
-        const AudioCtx = getAudioContextCtor();
-        if (!AudioCtx) return null;
-        ctx = new AudioCtx();
-        const gain = ctx.createGain();
-        gain.gain.value = 1;
-        gain.connect(ctx.destination);
-        playbackContextRef.current = ctx;
-        audioGainRef.current = gain;
-      }
-      if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
-      }
-      return ctx;
-    };
-
-    // Fetch the TTS response as a streaming buffer (prevents partial-frame
-    // decode stutter) and normalise raw PCM streams to a WAV blob.
-    const readStreamToBlob = async (response: Response): Promise<Blob> => {
-      const contentType = response.headers.get("content-type") ?? "audio/mpeg";
-      if (!response.body) return response.blob();
-      const reader = response.body.getReader();
+      const reader = res.body.getReader();
       const chunks: Uint8Array[] = [];
       let total = 0;
       for (;;) {
@@ -295,78 +622,189 @@ export function LiveVoiceModal({
       }
       const merged = new Uint8Array(total);
       let offset = 0;
-      for (const chunk of chunks) {
-        merged.set(chunk, offset);
-        offset += chunk.length;
+      for (const part of chunks) {
+        merged.set(part, offset);
+        offset += part.length;
       }
+
       if (/pcm|l16/i.test(contentType)) {
+        // Raw PCM from the TTS engine is 16 kHz mono — wrap it as a WAV so the
+        // decoder never has to guess the rate.
         const frameCount = Math.floor(merged.byteLength / 2);
         const pcm = new Int16Array(merged.buffer, merged.byteOffset, frameCount);
         const floats = new Float32Array(frameCount);
         for (let i = 0; i < frameCount; i++) floats[i] = pcm[i] / 0x8000;
-        return float32ToWav(floats, 16000);
+        return float32ToWav(floats, TARGET_SAMPLE_RATE);
       }
       return new Blob([merged], { type: contentType });
-    };
+    } catch (_) {
+      return null;
+    }
+  }, []);
 
-    const playBlob = async (blob: Blob): Promise<boolean> => {
-      if (blob.size < 200) return false;
-      const ctx = ensurePlaybackContext();
-      if (!ctx) return false;
-      try {
-        const arrayBuffer = await blob.arrayBuffer();
-        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
-        if (!audioBuffer.length) return false;
+  const playAiVoice = useCallback(async (text: string) => {
+    if (!isComponentOpenRef.current) return;
 
-        // Replace any in-flight source so playback never overlaps (no beeps).
-        interruptAiSpeech();
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioGainRef.current ?? ctx.destination);
-        audioSourceRef.current = source;
-        source.onended = () => {
-          if (audioSourceRef.current === source) audioSourceRef.current = null;
-          clearTimeout(safetyWatchdog);
+    interruptAiSpeech();
+    const generation = speechGenerationRef.current;
+    setVoiceState("speaking");
+    setStatusText("در حال پاسخ صوتی...");
+    unlockAudio();
+
+    const chunks = splitIntoSpeechChunks(text);
+    if (!chunks.length) {
+      resumeListening();
+      return;
+    }
+
+    const isCurrent = () => speechGenerationRef.current === generation;
+
+    // Watchdog is re-armed for every chunk, so a long multi-sentence answer is
+    // never cut off while a single stuck chunk (silent TTS failure) still is.
+    let safetyWatchdog: ReturnType<typeof setTimeout> | null = null;
+    const armWatchdog = () => {
+      if (safetyWatchdog) clearTimeout(safetyWatchdog);
+      safetyWatchdog = setTimeout(() => {
+        if (isCurrent() && voiceStateRef.current === "speaking") {
           resumeListening();
-        };
-        source.start(0);
-        return true;
-      } catch (_) {
-        return false;
+        }
+      }, 18000);
+    };
+    const clearWatchdog = () => {
+      if (safetyWatchdog) clearTimeout(safetyWatchdog);
+      safetyWatchdog = null;
+    };
+    armWatchdog();
+
+    const ensurePlaybackContext = (): AudioContext | null => {
+      if (typeof window === "undefined") return null;
+      let ctx = playbackContextRef.current;
+      if (!ctx || ctx.state === "closed") {
+        // Prefer the context that was already resumed inside the user gesture:
+        // on Safari that is the only one with permission to make any sound.
+        ctx = primedAudioContext();
+        if (!ctx) {
+          const AudioCtx = getAudioContextCtor();
+          if (!AudioCtx) return null;
+          ctx = new AudioCtx();
+        }
+        const gain = ctx.createGain();
+        gain.gain.value = 1;
+        gain.connect(ctx.destination);
+        playbackContextRef.current = ctx;
+        audioGainRef.current = gain;
       }
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+      return ctx;
     };
 
-    let played = false;
-    try {
-      const res = await fetch("/api/v1/apps/judge/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (res.ok) {
-        const blob = await readStreamToBlob(res);
-        played = await playBlob(blob);
-      }
-    } catch (_) {}
+    /** Play one decoded buffer and resolve when it finishes (or is cut off). */
+    const playBlob = (blob: Blob): Promise<boolean> =>
+      new Promise<boolean>((resolve) => {
+        if (blob.size < 200) {
+          resolve(false);
+          return;
+        }
+        const ctx = ensurePlaybackContext();
+        if (!ctx) {
+          resolve(false);
+          return;
+        }
+        const finish = (played: boolean) => {
+          if (chunkResolveRef.current === finish) chunkResolveRef.current = null;
+          resolve(played);
+        };
+        chunkResolveRef.current = finish;
 
-    if (!played) {
+        blob
+          .arrayBuffer()
+          .then((arrayBuffer) => ctx.decodeAudioData(arrayBuffer.slice(0)))
+          .then((audioBuffer) => {
+            if (!audioBuffer.length || !isCurrent()) {
+              finish(false);
+              return;
+            }
+            stopCurrentSource();
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioGainRef.current ?? ctx.destination);
+            audioSourceRef.current = source;
+            source.onended = () => {
+              if (audioSourceRef.current === source) audioSourceRef.current = null;
+              finish(true);
+            };
+            source.start(0);
+          })
+          .catch(() => finish(false));
+      });
+
+    const speakWithSpeechSynthesis = (fallbackText: string) => {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         try {
           window.speechSynthesis.cancel();
-          const cleanText = text.replace(/[*#_`>]/g, " ").trim().slice(0, 160);
+          const cleanText = fallbackText.replace(/[*#_`>]/g, " ").trim().slice(0, 160);
           const utterance = new SpeechSynthesisUtterance(cleanText);
           utterance.lang = "fa-IR";
           utterance.onend = () => resumeListening();
           utterance.onerror = () => resumeListening();
           window.speechSynthesis.speak(utterance);
-        } catch (_) {
-          resumeListening();
-        }
-      } else {
-        resumeListening();
+          return;
+        } catch (_) {}
       }
+      resumeListening();
+    };
+
+    // Prefetch chunk 1 while chunk 0 is still being synthesised/played.
+    let pending: Promise<Blob | null> | null = fetchTtsBlob(chunks[0]);
+    let playedAny = false;
+    let firstChunk = true;
+
+    for (let i = 0; i < chunks.length; i++) {
+      const blob = await pending;
+      if (!isCurrent()) {
+        clearWatchdog();
+        return;
+      }
+      if (i + 1 < chunks.length) pending = fetchTtsBlob(chunks[i + 1]);
+
+      if (!blob) {
+        // A failed chunk must not kill the rest of the answer.
+        if (firstChunk) break;
+        continue;
+      }
+
+      if (firstChunk) {
+        setStatusText("پاسخ صوتی در جریان است...");
+      }
+      armWatchdog();
+      const played = await playBlob(blob);
+      firstChunk = false;
+
+      if (!isCurrent()) {
+        clearWatchdog();
+        return;
+      }
+      if (played) playedAny = true;
+      else if (!playedAny) break; // Web Audio unusable → browser fallback
     }
-  }, [interruptAiSpeech, resumeListening, unlockAudio]);
+
+    clearWatchdog();
+    if (!isCurrent()) return;
+
+    if (!playedAny) {
+      speakWithSpeechSynthesis(text);
+      return;
+    }
+    resumeListening();
+  }, [
+    fetchTtsBlob,
+    interruptAiSpeech,
+    resumeListening,
+    stopCurrentSource,
+    unlockAudio,
+  ]);
 
   // پردازش کلام کاربر با هوش مصنوعی
   const processUserSpeechTurn = async (queryText: string) => {
@@ -411,11 +849,11 @@ export function LiveVoiceModal({
         await playAiVoice(reply);
       } else {
         setStatusText("خطا در برقراری ارتباط؛ مجدداً بفرمایید.");
-        setTimeout(() => resumeListening(), 1500);
+        setTimeout(() => resumeListening(), RESUME_LISTENING_DELAY_MS);
       }
     } catch (err) {
       setStatusText("ارتباط با سرور برقرار نشد.");
-      setTimeout(() => resumeListening(), 1500);
+      setTimeout(() => resumeListening(), RESUME_LISTENING_DELAY_MS);
     }
   };
 
@@ -435,6 +873,10 @@ export function LiveVoiceModal({
       setVoiceState("thinking");
       setStatusText("در حال پیاده‌سازی و پردازش صدا...");
 
+      // ۱۰۰ میلی‌ثانیه صبر می‌کنیم تا آخرین بلاک ضبط (که همچنان در جریان است)
+      // برسد و صدای دنباله از دست نرود؛ سپس خودِ دنباله هم به PCM اضافه می‌شود.
+      await new Promise((resolve) => setTimeout(resolve, VAD_TRAILING_PAD_MS));
+
       const transcript = await transcribeCurrentSegment();
 
       if (transcript && transcript.length >= 2) {
@@ -442,7 +884,7 @@ export function LiveVoiceModal({
         await processUserSpeechTurn(transcript);
       } else {
         setStatusText("صدایی با وضوح کافی دریافت نشد؛ لطفاً بفرمایید...");
-        setTimeout(() => resumeListening(), 1200);
+        setTimeout(() => resumeListening(), RESUME_LISTENING_DELAY_MS);
       }
     } finally {
       isSubmittingTurnRef.current = false;
@@ -453,20 +895,54 @@ export function LiveVoiceModal({
   // راه‌اندازی سنسور و اکولایزر بدون نشت صدا به اسپیکر
   const initAudioVisualizer = (stream: MediaStream) => {
     try {
-      const AudioCtx = getAudioContextCtor();
-      if (!AudioCtx) return;
-      const audioCtx = new AudioCtx();
+      const normalized = createAudioContext(TARGET_SAMPLE_RATE);
+      if (!normalized) return;
+      const audioCtx = normalized.ctx;
       audioContextRef.current = audioCtx;
+      captureSampleRateRef.current = normalized.sampleRate;
       if (audioCtx.state === "suspended") {
         audioCtx.resume().catch(() => {});
       }
 
       const source = audioCtx.createMediaStreamSource(stream);
+      captureSourceRef.current = source;
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 64;
       analyser.smoothingTimeConstant = 0.4;
       source.connect(analyser); // فقط به آنالایزر متصل است، هرگز به destination وصل نمی‌شود تا اکو رخ ندهد
       analyserRef.current = analyser;
+
+      // ── Raw 16 kHz mono PCM16 capture ────────────────────────────────────
+      // MediaRecorder hands back an opaque AAC/Opus container at the device's
+      // native rate (44.1/48 kHz on Safari). Tapping the graph instead gives us
+      // Float32 PCM at `normalized.sampleRate`, which the transcribe path
+      // resamples to exactly 16 kHz and wraps as PCM16 WAV.
+      // (ScriptProcessorNode is deprecated but is the only capture node Safari
+      // supports without an AudioWorklet module download; the whole path is
+      // fail-open and MediaRecorder stays as the fallback.)
+      try {
+        const processor = audioCtx.createScriptProcessor(PCM_CAPTURE_BUFFER_SIZE, 1, 1);
+        // A ScriptProcessor only runs while connected to the destination, so we
+        // route it through a muted gain — silence in, no echo out.
+        const sink = audioCtx.createGain();
+        sink.gain.value = 0;
+        processor.connect(sink);
+        sink.connect(audioCtx.destination);
+        processor.onaudioprocess = (event) => {
+          if (!isComponentOpenRef.current) return;
+          if (pcmSampleCountRef.current >= PCM_MAX_CAPTURED_SAMPLES) return;
+          const input = event.inputBuffer.getChannelData(0);
+          const copy = new Float32Array(input.length);
+          copy.set(input);
+          pcmChunksRef.current.push(copy);
+          pcmSampleCountRef.current += copy.length;
+        };
+        source.connect(processor);
+        captureNodeRef.current = processor;
+        captureSinkRef.current = sink;
+      } catch (captureErr) {
+        console.warn("PCM capture unavailable, falling back to MediaRecorder:", captureErr);
+      }
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
@@ -481,7 +957,7 @@ export function LiveVoiceModal({
         const level = Math.min(100, Math.round((sum / dataArray.length / 128) * 100));
         setAudioLevel(level);
 
-        // VAD: تشخیص سکوت ۳۰۰ میلی‌ثانیه‌ای + قطع فوری هنگام صحبت کاربر (barge-in)
+        // VAD: پایان نوبت پس از ۹۵۰ میلی‌ثانیه سکوت + قطع فوری هنگام صحبت کاربر (barge-in)
         if (voiceStateRef.current === "listening") {
           if (level > VAD_SPEECH_LEVEL) {
             hasSpokenInThisTurnRef.current = true;
@@ -503,12 +979,30 @@ export function LiveVoiceModal({
               }, VAD_SILENCE_MS);
             }
           }
-        } else if (voiceStateRef.current === "speaking" && level > VAD_BARGE_IN_LEVEL) {
-          // کاربر صحبت را قطع می‌کند: پخش پاسخ بلافاصله متوقف و به حالت شنیدن برمی‌گردیم.
-          interruptAiSpeech();
-          hasSpokenInThisTurnRef.current = true;
-          speechStartTimeRef.current = Date.now();
-          resumeListening();
+        } else if (voiceStateRef.current === "speaking") {
+          // ── محافظ پژواک آکوستیک (جلوگیری از خودوقفه‌ای) ────────────────────
+          // اسپیکرهای مک، صدای خودِ دستیار را به میکروفون برمی‌گردانند. هر جهش
+          // انرژی در محدوده ۰.۲۵ و پایین‌تر (۲۵ از ۱۰۰) پژواک است: نه به‌عنوان
+          // وقفه کاربر پذیرفته می‌شود و نه اجازه دارد به موتور تبدیل گفتار برسد
+          // (همان مسیری که با «صدایی با وضوح کافی دریافت نشد» پخش را قطع می‌کرد).
+          if (isSelfInterruption(level)) {
+            if (!bargeInStartTimeRef.current) {
+              bargeInStartTimeRef.current = Date.now();
+            }
+            if (Date.now() - bargeInStartTimeRef.current >= VAD_BARGE_IN_HOLD_MS) {
+              // کاربر صحبت را قطع می‌کند: پخش پاسخ بلافاصله متوقف و به حالت شنیدن برمی‌گردیم.
+              bargeInStartTimeRef.current = 0;
+              interruptAiSpeech();
+              hasSpokenInThisTurnRef.current = true;
+              speechStartTimeRef.current = Date.now();
+              resumeListening();
+            }
+          } else {
+            // زیر آستانه: فقط صدای خودمان در میکروفون است؛ بافر تبدیل گفتار دور ریخته می‌شود.
+            bargeInStartTimeRef.current = 0;
+            pcmChunksRef.current = [];
+            pcmSampleCountRef.current = 0;
+          }
         }
 
         animFrameRef.current = requestAnimationFrame(loop);
@@ -538,13 +1032,21 @@ export function LiveVoiceModal({
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          // سه خواسته سخت و غیرقابل‌مذاکره: بدون آن‌ها صدای اسپیکر به میکروفون
+          // برمی‌گردد و دستیار پاسخ خودش را قطع می‌کند.
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          // Best-effort request for 16 kHz mono from the device itself; engines
+          // that ignore it are handled by createAudioContext + resampleToTarget.
+          sampleRate: { ideal: TARGET_SAMPLE_RATE },
+          channelCount: { ideal: 1 },
         },
       });
       streamRef.current = stream;
 
+      pcmChunksRef.current = [];
+      pcmSampleCountRef.current = 0;
       initAudioVisualizer(stream);
       startRecording();
       setStatusText("شنونده صحبت شما هستم؛ بفرمایید...");
@@ -562,6 +1064,7 @@ export function LiveVoiceModal({
     setStatusText("مکالمه به پایان رسید.");
     setAudioLevel(0);
     speechStartTimeRef.current = 0;
+    bargeInStartTimeRef.current = 0;
 
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
@@ -587,6 +1090,21 @@ export function LiveVoiceModal({
       try { audioContextRef.current.close(); } catch (_) {}
       audioContextRef.current = null;
     }
+    if (captureNodeRef.current) {
+      try { captureNodeRef.current.onaudioprocess = null; captureNodeRef.current.disconnect(); } catch (_) {}
+      captureNodeRef.current = null;
+    }
+    if (captureSinkRef.current) {
+      try { captureSinkRef.current.disconnect(); } catch (_) {}
+      captureSinkRef.current = null;
+    }
+    if (captureSourceRef.current) {
+      try { captureSourceRef.current.disconnect(); } catch (_) {}
+      captureSourceRef.current = null;
+    }
+    pcmChunksRef.current = [];
+    pcmSampleCountRef.current = 0;
+    analyserRef.current = null;
     if (audioSourceRef.current) {
       try { audioSourceRef.current.onended = null; audioSourceRef.current.stop(0); } catch (_) {}
       audioSourceRef.current = null;
