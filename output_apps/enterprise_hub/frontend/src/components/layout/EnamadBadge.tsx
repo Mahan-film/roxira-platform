@@ -1,3 +1,6 @@
+"use client";
+
+import { useCallback, useId, useState } from "react";
 import type { CSSProperties } from "react";
 
 /**
@@ -81,6 +84,101 @@ export function enamadSealId(domain?: EnamadDomain): string {
   return enamadCredentials(domain).code;
 }
 
+/**
+ * Official eNamad brand palette. The remote `logo.aspx` render takes up to 24h
+ * to propagate for newly issued seals (per eNamad's own notice), so we mirror
+ * the official look locally in an inline SVG instead of ever leaving the
+ * footer empty. These are the canonical seal colours — do not recolour.
+ */
+export const ENAMAD_BRAND = {
+  /** Primary seal green. */
+  green: "#00963f",
+  /** Deep green used for the shield edge/gradient end. */
+  greenDark: "#00602a",
+  /** Warm accent used for the certification star. */
+  accent: "#f5b400",
+} as const;
+
+/**
+ * Elegant inline SVG shield shown ONLY when the remote seal image fails to
+ * load. It is a decorative stand-in — the anchor still points at the official
+ * eNamad trust page, and (like the real seal) it carries no `rel` and no
+ * `target`, so the browser keeps sending the referrer.
+ */
+export function EnamadShieldFallback({
+  width = 96,
+  height = 96,
+  alt = ENAMAD_ALT,
+  className = "",
+  style,
+}: {
+  width?: number;
+  height?: number;
+  alt?: string;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  // Unique gradient ids so multiple seals on one page never collide.
+  const uid = useId().replace(/:/g, "");
+  const fillId = `enamad-shield-fill-${uid}`;
+  const ringId = `enamad-shield-ring-${uid}`;
+
+  return (
+    <svg
+      role="img"
+      aria-label={alt}
+      viewBox="0 0 120 120"
+      width={width}
+      height={height}
+      className={className}
+      style={{ cursor: "pointer", ...style }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <title>{alt}</title>
+      <defs>
+        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={ENAMAD_BRAND.green} />
+          <stop offset="100%" stopColor={ENAMAD_BRAND.greenDark} />
+        </linearGradient>
+        <linearGradient id={ringId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.55" />
+        </linearGradient>
+      </defs>
+
+      {/* Shield body */}
+      <path
+        d="M60 6 L104 20 V58 C104 84 84 104 60 114 C36 104 16 84 16 58 V20 Z"
+        fill={`url(#${fillId})`}
+        stroke={ENAMAD_BRAND.greenDark}
+        strokeWidth="2"
+      />
+      {/* Inner ring */}
+      <path
+        d="M60 14 L96 25.5 V57.5 C96 79.5 79.6 96.4 60 105 C40.4 96.4 24 79.5 24 57.5 V25.5 Z"
+        fill="none"
+        stroke={`url(#${ringId})`}
+        strokeWidth="1.6"
+        strokeDasharray="3 3"
+      />
+      {/* Certification check */}
+      <path
+        d="M40 59 L53 72 L81 43"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Certification star */}
+      <path
+        d="M60 84 l3.2 6.6 7.2 1 -5.2 5.1 1.2 7.2 -6.4 -3.4 -6.4 3.4 1.2 -7.2 -5.2 -5.1 7.2 -1 z"
+        fill={ENAMAD_BRAND.accent}
+      />
+    </svg>
+  );
+}
+
 export interface EnamadBadgeProps {
   /** Which seal to render. Defaults to `roxira`. */
   domain?: EnamadDomain;
@@ -119,6 +217,13 @@ export function EnamadBadge({
   const href = enamadTrustUrl(domain);
   const src = enamadLogoUrl(domain);
 
+  // Remote `logo.aspx` can 404/blank for up to 24h after a seal is issued
+  // (official eNamad propagation notice) or when trustseal.enamad.ir is
+  // unreachable. When that happens we swap in the local SVG shield so the
+  // footer is NEVER empty — the anchor keeps pointing at the official page.
+  const [logoFailed, setLogoFailed] = useState(false);
+  const handleLogoError = useCallback(() => setLogoFailed(true), []);
+
   return (
     /* Plain <a>: NO rel, NO target (target would imply rel=noopener). */
     <a
@@ -127,18 +232,31 @@ export function EnamadBadge({
       id={`enamad-${credentials.id}`}
       className={className ? `${ANCHOR_CLASSES} ${className}` : ANCHOR_CLASSES}
       style={{ cursor: "pointer", ...style }}
+      aria-label={alt}
     >
-      {/* Native <img> — never next/image; same referrerpolicy, still no rel. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        {...ENAMAD_REFERRER_ATTRIBUTE}
-        src={src}
-        alt={alt}
-        width={width}
-        height={height}
-        className="block h-auto w-full select-none"
-        style={{ cursor: "pointer", ...style }}
-      />
+      {logoFailed ? (
+        /* Local SVG shield fallback — still a plain child, still no rel/target. */
+        <EnamadShieldFallback
+          width={width}
+          height={height}
+          alt={alt}
+          className="block h-auto w-full select-none"
+          style={style}
+        />
+      ) : (
+        /* Native <img> — never next/image; same referrerpolicy, still no rel. */
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          {...ENAMAD_REFERRER_ATTRIBUTE}
+          src={src}
+          alt={alt}
+          width={width}
+          height={height}
+          className="block h-auto w-full select-none"
+          style={{ cursor: "pointer", ...style }}
+          onError={handleLogoError}
+        />
+      )}
     </a>
   );
 }

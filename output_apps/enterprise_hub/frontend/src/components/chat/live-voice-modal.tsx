@@ -353,6 +353,250 @@ export function splitIntoSpeechChunks(
   return chunks;
 }
 
+// ==============================================================================
+// ① CONTINUOUS CONVERSATION MEMORY
+//    The voice session owns a persistent UUID plus the full legal dialogue so
+//    every turn reaches the engine with the complete context — the AI never
+//    hears a turn in isolation (and never loses the case facts between turns).
+// ==============================================================================
+
+export interface VoiceConversationTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** localStorage keys holding the persistent voice-session identity + memory. */
+export const VOICE_SESSION_STORAGE_KEY = "roxira.voice.sessionId";
+export const VOICE_HISTORY_STORAGE_KEY = "roxira.voice.history";
+
+/** Upper bound on replayed context (last N turns) sent to the engine. */
+export const VOICE_HISTORY_MAX_TURNS = 40;
+
+/** RFC-4122 v4 UUID, with a fallback for non-secure contexts/older Safari. */
+export function createVoiceUuid(): string {
+  const cryptoObj = typeof crypto !== "undefined" ? crypto : undefined;
+  if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
+    return cryptoObj.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (cryptoObj && typeof cryptoObj.getRandomValues === "function") {
+    cryptoObj.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** Read-or-create the persistent voice sessionId (kept across modal turns). */
+export function ensureVoiceSessionId(): string {
+  if (typeof window === "undefined") return createVoiceUuid();
+  try {
+    const existing = window.localStorage.getItem(VOICE_SESSION_STORAGE_KEY);
+    if (existing) return existing;
+    const created = createVoiceUuid();
+    window.localStorage.setItem(VOICE_SESSION_STORAGE_KEY, created);
+    return created;
+  } catch (_) {
+    return createVoiceUuid();
+  }
+}
+
+/** Restore the persisted legal dialogue (survives modal close / page reload). */
+export function loadVoiceHistory(): VoiceConversationTurn[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(VOICE_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (turn): turn is VoiceConversationTurn =>
+          !!turn &&
+          typeof turn === "object" &&
+          ((turn as VoiceConversationTurn).role === "user" ||
+            (turn as VoiceConversationTurn).role === "assistant") &&
+          typeof (turn as VoiceConversationTurn).content === "string",
+      )
+      .slice(-VOICE_HISTORY_MAX_TURNS);
+  } catch (_) {
+    return [];
+  }
+}
+
+/** Trim + persist the dialogue and return the trimmed array actually stored. */
+export function persistVoiceHistory(
+  history: VoiceConversationTurn[],
+): VoiceConversationTurn[] {
+  const trimmed = history
+    .filter((turn) => turn.content.trim().length > 0)
+    .slice(-VOICE_HISTORY_MAX_TURNS);
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(VOICE_HISTORY_STORAGE_KEY, JSON.stringify(trimmed));
+    } catch (_) {}
+  }
+  return trimmed;
+}
+
+// ==============================================================================
+// ② WEB SPEECH API (webkitSpeechRecognition, lang="fa-IR")
+//    When the browser exposes on-device Persian recognition we use it for
+//    instant, zero-latency transcription and keep the server Whisper path only
+//    as a fallback. The DOM typings do not ship these interfaces, so they are
+//    declared precisely here (no `any`).
+// ==============================================================================
+
+interface VoiceSpeechAlternative {
+  readonly transcript: string;
+}
+
+interface VoiceSpeechResult {
+  readonly isFinal: boolean;
+  readonly length: number;
+  readonly [index: number]: VoiceSpeechAlternative;
+}
+
+interface VoiceSpeechResultList {
+  readonly length: number;
+  readonly [index: number]: VoiceSpeechResult;
+}
+
+interface VoiceSpeechEvent {
+  readonly resultIndex: number;
+  readonly results: VoiceSpeechResultList;
+}
+
+interface VoiceSpeechErrorEvent {
+  readonly error: string;
+}
+
+export interface VoiceSpeechRecognition {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: VoiceSpeechEvent) => void) | null;
+  onerror: ((event: VoiceSpeechErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  onstart: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+export type VoiceSpeechRecognitionCtor = new () => VoiceSpeechRecognition;
+
+/**
+ * Resolve `SpeechRecognition || webkitSpeechRecognition` with a precise type.
+ * Returns `null` on the server and on browsers without the API.
+ */
+export function getVoiceSpeechRecognitionCtor(): VoiceSpeechRecognitionCtor | null {
+  if (typeof window === "undefined") return null;
+  const speechWindow = window as Window & {
+    SpeechRecognition?: VoiceSpeechRecognitionCtor;
+    webkitSpeechRecognition?: VoiceSpeechRecognitionCtor;
+  };
+  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
+}
+
+// ==============================================================================
+// ③ LIVE-VOICE TURN CONTRACT
+//    Every turn replays the entire conversation history to the live-voice
+//    endpoint. If that contract is not reachable (e.g. the route only exists as
+//    a WebSocket in a given deployment) we degrade to the /chat endpoint with
+//    the exact same payload so the call keeps working.
+// ==============================================================================
+
+export const LIVE_VOICE_ENDPOINT = "/api/v1/apps/judge/live-voice";
+export const LIVE_VOICE_FALLBACK_ENDPOINT = "/api/v1/apps/judge/chat";
+
+export interface VoiceTurnRequest {
+  message: string;
+  /** Dialogue BEFORE the current turn (the current turn is appended here). */
+  history: VoiceConversationTurn[];
+  sessionId: string;
+  conversationId?: string;
+  phone?: string;
+}
+
+export interface VoiceTurnResult {
+  reply: string;
+  conversationId?: string;
+  defenseDraft?: string;
+  successProbability?: string;
+  /** Endpoint that actually answered (live-voice or the /chat fallback). */
+  endpoint: string;
+}
+
+function readOptionalString(source: Record<string, unknown>, key: string): string | undefined {
+  const value = source[key];
+  if (typeof value === "string" && value.trim()) return value;
+  return undefined;
+}
+
+/**
+ * POST one voice turn with the FULL history to `/api/v1/apps/judge/live-voice`,
+ * falling back to `/api/v1/apps/judge/chat` only when the former is unavailable.
+ * Returns `null` when neither endpoint produced a Persian reply.
+ */
+export async function postVoiceTurn(request: VoiceTurnRequest): Promise<VoiceTurnResult | null> {
+  const fullHistory: VoiceConversationTurn[] = [
+    ...request.history,
+    { role: "user", content: request.message },
+  ];
+  const payload = {
+    message: request.message,
+    text: request.message,
+    query: request.message,
+    // Sent under every key the engine/gateway has historically accepted, so the
+    // complete legal context survives any version skew.
+    conversation_history: fullHistory,
+    history: fullHistory,
+    messages: fullHistory.map((turn) => ({ role: turn.role, content: turn.content })),
+    session_id: request.sessionId,
+    conversation_id: request.conversationId || request.sessionId,
+    user_phone: request.phone,
+    phone: request.phone,
+    is_vip: true,
+    tier: "VIP",
+    is_voice_mode: true,
+    input_mode: "voice",
+  };
+
+  for (const endpoint of [LIVE_VOICE_ENDPOINT, LIVE_VOICE_FALLBACK_ENDPOINT]) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) continue;
+
+      const data: unknown = await res.json().catch(() => null);
+      if (!data || typeof data !== "object") continue;
+      const record = data as Record<string, unknown>;
+
+      const reply = String(record.reply ?? record.response ?? record.text ?? "").trim();
+      if (!reply) continue;
+
+      return {
+        reply,
+        conversationId: readOptionalString(record, "conversation_id"),
+        defenseDraft: readOptionalString(record, "defense_draft"),
+        successProbability: readOptionalString(record, "success_probability"),
+        endpoint,
+      };
+    } catch (_) {
+      // Network error on this endpoint — try the next one.
+    }
+  }
+  return null;
+}
+
 export function LiveVoiceModal({
   isOpen,
   onClose,
@@ -400,6 +644,23 @@ export function LiveVoiceModal({
   const isSubmittingTurnRef = useRef<boolean>(false);
   const activeConversationIdRef = useRef<string>(externalConvId);
 
+  // ── Persistent voice-session memory (sessionId + rolling legal dialogue) ──
+  const sessionIdRef = useRef<string>("");
+  const conversationHistoryRef = useRef<VoiceConversationTurn[]>([]);
+  // ── Native Persian speech recognition (Web Speech API) ──
+  const recognitionRef = useRef<VoiceSpeechRecognition | null>(null);
+  const nativeRecognitionDisabledRef = useRef<boolean>(false);
+  const finalTranscriptRef = useRef<string>("");
+  const interimTranscriptRef = useRef<string>("");
+  const recognitionRestartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Restore the persistent sessionId + dialogue as early as possible (and keep
+  // them across modal open/close, matching how /chat preserves conversations).
+  useEffect(() => {
+    sessionIdRef.current = ensureVoiceSessionId();
+    conversationHistoryRef.current = loadVoiceHistory();
+  }, []);
+
   useEffect(() => {
     isComponentOpenRef.current = isOpen;
     if (!isOpen) {
@@ -446,10 +707,123 @@ export function LiveVoiceModal({
     if (resolveChunk) resolveChunk(false);
     stopCurrentSource();
     bargeInStartTimeRef.current = 0;
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      try { window.speechSynthesis.cancel(); } catch (_) {}
-    }
+    // NOTE: no `window.speechSynthesis` here — the system TTS fallback was
+    // removed entirely so a Persian reply can never be spoken by an English
+    // OS voice. Interruption only silences our own server-side audio stream.
   }, [stopCurrentSource]);
+
+  // ── Web Speech API: instant Persian (fa-IR) transcription ────────────────
+  // Runs on-device in Chrome/Edge/Safari (webkitSpeechRecognition) and hands us
+  // the Persian paragraph with no server round-trip, so the reply starts almost
+  // immediately. Server-side STT remains the fallback when it is unavailable.
+
+  const resetNativeTranscript = useCallback(() => {
+    finalTranscriptRef.current = "";
+    interimTranscriptRef.current = "";
+  }, []);
+
+  /** Drain the recognised Persian text (final + live interim) for this turn. */
+  const takeNativeTranscript = useCallback((): string => {
+    const combined = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`
+      .replace(/\s+/g, " ")
+      .trim();
+    finalTranscriptRef.current = "";
+    interimTranscriptRef.current = "";
+    return combined;
+  }, []);
+
+  const stopNativeRecognition = useCallback((abort = true) => {
+    if (recognitionRestartRef.current) {
+      clearTimeout(recognitionRestartRef.current);
+      recognitionRestartRef.current = null;
+    }
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!recognition) return;
+    recognition.onresult = null;
+    recognition.onerror = null;
+    recognition.onend = null;
+    recognition.onstart = null;
+    try {
+      if (abort) recognition.abort();
+      else recognition.stop();
+    } catch (_) {}
+  }, []);
+
+  const startNativeRecognition = useCallback(() => {
+    if (nativeRecognitionDisabledRef.current) return;
+    if (recognitionRef.current) return;
+    if (!isComponentOpenRef.current) return;
+
+    const SpeechCtor = getVoiceSpeechRecognitionCtor();
+    if (!SpeechCtor) {
+      // No on-device Persian recognition — server STT carries the call.
+      nativeRecognitionDisabledRef.current = true;
+      return;
+    }
+
+    try {
+      const recognition = new SpeechCtor();
+      recognition.lang = "fa-IR"; // Persian, matching the whole product.
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        let finalText = "";
+        let interimText = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (!result) continue;
+          const alternative = result[0];
+          if (!alternative) continue;
+          if (result.isFinal) finalText += alternative.transcript;
+          else interimText += alternative.transcript;
+        }
+        if (finalText) {
+          finalTranscriptRef.current = `${finalTranscriptRef.current} ${finalText}`.trim();
+          interimTranscriptRef.current = "";
+        } else {
+          interimTranscriptRef.current = interimText.trim();
+        }
+      };
+
+      recognition.onerror = (event) => {
+        // Permission/service failures are permanent for this session: hand the
+        // turn over to the server transcriber instead of looping on errors.
+        if (
+          event.error === "not-allowed" ||
+          event.error === "service-not-allowed" ||
+          event.error === "audio-capture"
+        ) {
+          nativeRecognitionDisabledRef.current = true;
+          stopNativeRecognition();
+        }
+      };
+
+      recognition.onend = () => {
+        recognitionRef.current = null;
+        if (nativeRecognitionDisabledRef.current) return;
+        if (!isComponentOpenRef.current) return;
+        if (voiceStateRef.current !== "listening") return;
+        if (recognitionRestartRef.current) return;
+        // Engines end a `continuous` session on silence; re-arm seamlessly.
+        recognitionRestartRef.current = setTimeout(() => {
+          recognitionRestartRef.current = null;
+          if (isComponentOpenRef.current && voiceStateRef.current === "listening") {
+            startNativeRecognition();
+          }
+        }, 250);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (_) {
+      // Constructor/start failure: fall back to server STT for the whole call.
+      nativeRecognitionDisabledRef.current = true;
+      recognitionRef.current = null;
+    }
+  }, [stopNativeRecognition]);
 
   // شروع ضبط قطعات صوتی
   const startRecording = useCallback(() => {
@@ -499,6 +873,13 @@ export function LiveVoiceModal({
   // استخراج صوت ضبط‌شده و ارسال به سرور
   const transcribeCurrentSegment = useCallback(async (): Promise<string> => {
     const recorder = mediaRecorderRef.current;
+
+    // ── Path 0 (fastest): on-device Web Speech API in Persian. Zero latency,
+    //    no upload — used whenever the browser exposes fa-IR recognition.
+    const nativeTranscript = takeNativeTranscript();
+    if (nativeTranscript.length >= 2) {
+      return nativeTranscript;
+    }
 
     try {
       // ── Preferred path: raw PCM captured at (or resampled to) 16 kHz mono,
@@ -567,7 +948,7 @@ export function LiveVoiceModal({
       console.warn("Transcribe error:", err);
     }
     return "";
-  }, [takeCapturedPcm]);
+  }, [takeCapturedPcm, takeNativeTranscript]);
 
   // بازگشت خودکار به نوبت شنیدن
   const resumeListening = useCallback(() => {
@@ -583,14 +964,17 @@ export function LiveVoiceModal({
     // شروع نوبت تازه: بافر PCM نوبت قبل دور ریخته می‌شود
     pcmChunksRef.current = [];
     pcmSampleCountRef.current = 0;
+    resetNativeTranscript();
     setVoiceState("listening");
     setStatusText("شنونده صحبت شما هستم؛ بفرمایید...");
     setCurrentUserSpeech("");
+    // Re-arm on-device Persian recognition for the new turn.
+    startNativeRecognition();
 
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") {
       startRecording();
     }
-  }, [startRecording]);
+  }, [resetNativeTranscript, startNativeRecognition, startRecording]);
 
   // ── Streaming TTS: synthesise + play one sentence chunk at a time so the
   //    first words are audible long before the full answer is generated.
@@ -647,6 +1031,9 @@ export function LiveVoiceModal({
 
     interruptAiSpeech();
     const generation = speechGenerationRef.current;
+    // Mute the recogniser while the assistant speaks so the reply audio is
+    // never captured back as a user turn.
+    stopNativeRecognition();
     setVoiceState("speaking");
     setStatusText("در حال پاسخ صوتی...");
     unlockAudio();
@@ -740,22 +1127,6 @@ export function LiveVoiceModal({
           .catch(() => finish(false));
       });
 
-    const speakWithSpeechSynthesis = (fallbackText: string) => {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        try {
-          window.speechSynthesis.cancel();
-          const cleanText = fallbackText.replace(/[*#_`>]/g, " ").trim().slice(0, 160);
-          const utterance = new SpeechSynthesisUtterance(cleanText);
-          utterance.lang = "fa-IR";
-          utterance.onend = () => resumeListening();
-          utterance.onerror = () => resumeListening();
-          window.speechSynthesis.speak(utterance);
-          return;
-        } catch (_) {}
-      }
-      resumeListening();
-    };
-
     // Prefetch chunk 1 while chunk 0 is still being synthesised/played.
     let pending: Promise<Blob | null> | null = fetchTtsBlob(chunks[0]);
     let playedAny = false;
@@ -794,7 +1165,12 @@ export function LiveVoiceModal({
     if (!isCurrent()) return;
 
     if (!playedAny) {
-      speakWithSpeechSynthesis(text);
+      // Server audio is unavailable / still loading. The Persian answer stays
+      // visible in the transcript panel (lastAiResponse) and the user can hit
+      // «پخش مجدد» — we NEVER hand the text to window.speechSynthesis, because
+      // an OS voice would read Persian with an English/robotic accent.
+      setStatusText("متن پاسخ روی صفحه است؛ پخش صوتی سرور در دسترس نیست.");
+      resumeListening();
       return;
     }
     resumeListening();
@@ -803,6 +1179,7 @@ export function LiveVoiceModal({
     interruptAiSpeech,
     resumeListening,
     stopCurrentSource,
+    stopNativeRecognition,
     unlockAudio,
   ]);
 
@@ -819,38 +1196,50 @@ export function LiveVoiceModal({
     setStatusText("در حال تحلیل و بررسی حقوقی...");
     setCurrentUserSpeech(text);
 
+    // ── Continuous memory ────────────────────────────────────────────────
+    // Keep a stable UUID for the whole voice session and record the user's turn
+    // before the request, so nothing is lost if the network drops.
+    const sessionId = sessionIdRef.current || ensureVoiceSessionId();
+    sessionIdRef.current = sessionId;
+    const priorHistory = conversationHistoryRef.current;
+    conversationHistoryRef.current = persistVoiceHistory([
+      ...priorHistory,
+      { role: "user", content: text },
+    ]);
+
     try {
-      const res = await fetch("/api/v1/apps/judge/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          conversation_id: activeConversationIdRef.current || undefined,
-          user_phone: externalPhone,
-          phone: externalPhone,
-          is_vip: true,
-          tier: "VIP",
-          is_voice_mode: true,
-        }),
+      // The entire history travels with every turn → the model keeps the full
+      // legal context (parties, facts, prior advice) across the conversation.
+      const result = await postVoiceTurn({
+        message: text,
+        history: priorHistory,
+        sessionId,
+        conversationId: activeConversationIdRef.current || undefined,
+        phone: externalPhone,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.conversation_id) {
-          activeConversationIdRef.current = data.conversation_id;
-          if (onConversationIdChange) onConversationIdChange(data.conversation_id);
-        }
-        const reply = data.reply || data.response || "در خدمت شما هستم؛ بفرمایید چه موضوعی را بررسی کنیم؟";
-        setLastAiResponse(reply);
-
-        if (onNewMessage) {
-          onNewMessage(text, reply, data.defense_draft, data.success_probability);
-        }
-        await playAiVoice(reply);
-      } else {
+      if (!result) {
         setStatusText("خطا در برقراری ارتباط؛ مجدداً بفرمایید.");
         setTimeout(() => resumeListening(), RESUME_LISTENING_DELAY_MS);
+        return;
       }
+
+      if (result.conversationId) {
+        activeConversationIdRef.current = result.conversationId;
+        if (onConversationIdChange) onConversationIdChange(result.conversationId);
+      }
+
+      const reply = result.reply;
+      setLastAiResponse(reply);
+      conversationHistoryRef.current = persistVoiceHistory([
+        ...conversationHistoryRef.current,
+        { role: "assistant", content: reply },
+      ]);
+
+      if (onNewMessage) {
+        onNewMessage(text, reply, result.defenseDraft, result.successProbability);
+      }
+      await playAiVoice(reply);
     } catch (err) {
       setStatusText("ارتباط با سرور برقرار نشد.");
       setTimeout(() => resumeListening(), RESUME_LISTENING_DELAY_MS);
@@ -872,6 +1261,8 @@ export function LiveVoiceModal({
       voiceStateRef.current = "thinking";
       setVoiceState("thinking");
       setStatusText("در حال پیاده‌سازی و پردازش صدا...");
+      // Freeze the recogniser so its transcript is final before we drain it.
+      stopNativeRecognition();
 
       // ۱۰۰ میلی‌ثانیه صبر می‌کنیم تا آخرین بلاک ضبط (که همچنان در جریان است)
       // برسد و صدای دنباله از دست نرود؛ سپس خودِ دنباله هم به PCM اضافه می‌شود.
@@ -890,7 +1281,7 @@ export function LiveVoiceModal({
       isSubmittingTurnRef.current = false;
       speechStartTimeRef.current = 0;
     }
-  }, [transcribeCurrentSegment, resumeListening]);
+  }, [stopNativeRecognition, transcribeCurrentSegment, resumeListening]);
 
   // راه‌اندازی سنسور و اکولایزر بدون نشت صدا به اسپیکر
   const initAudioVisualizer = (stream: MediaStream) => {
@@ -1022,6 +1413,7 @@ export function LiveVoiceModal({
     setLastAiResponse("");
     hasSpokenInThisTurnRef.current = false;
     speechStartTimeRef.current = 0;
+    resetNativeTranscript();
     setVoiceState("listening");
     setStatusText("در حال اتصال به میکروفون...");
 
@@ -1049,6 +1441,8 @@ export function LiveVoiceModal({
       pcmSampleCountRef.current = 0;
       initAudioVisualizer(stream);
       startRecording();
+      // Instant fa-IR transcription via Web Speech API (server STT fallback).
+      startNativeRecognition();
       setStatusText("شنونده صحبت شما هستم؛ بفرمایید...");
     } catch (err) {
       console.error("Mic error:", err);
@@ -1060,6 +1454,7 @@ export function LiveVoiceModal({
   // اتمام مکالمه
   const handleEndCall = () => {
     interruptAiSpeech();
+    stopNativeRecognition();
     setVoiceState("idle");
     setStatusText("مکالمه به پایان رسید.");
     setAudioLevel(0);
