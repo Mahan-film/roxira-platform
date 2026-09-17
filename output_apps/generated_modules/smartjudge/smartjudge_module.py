@@ -85,6 +85,8 @@ except Exception as _doc_import_exc:  # noqa: BLE001 - هرگز نباید بو�
 try:
     from .legal_graph import (
         LIGHTRAG_AVAILABLE as _LIGHTRAG_AVAILABLE,
+        QDRANT_ACTIVE_ONLY as _LIGHTRAG_QDRANT_ACTIVE_ONLY,
+        active_point_filter as _lightrag_active_point_filter,
         graph_entity_count as _lightrag_graph_entity_count,
         lightrag_health as _lightrag_health,
         qdrant_retrieve as _lightrag_qdrant_retrieve,
@@ -94,6 +96,23 @@ try:
 except Exception as _lr_import_exc:  # noqa: BLE001
     print(f"[SMARTJUDGE][LIGHTRAG] engine unavailable: {_lr_import_exc}", file=sys.stderr)
     _LIGHTRAG_AVAILABLE = False
+    _LIGHTRAG_QDRANT_ACTIVE_ONLY = True
+
+    def _lightrag_active_point_filter(active_only=None):  # type: ignore[misc]
+        """پالایهٔ جایگزین قوانین منسوخ در نبود موتور گراف."""
+        enabled = True if active_only is None else bool(active_only)
+        if not enabled:
+            return None
+        return {
+            "must": [
+                {
+                    "should": [
+                        {"key": "is_active", "match": {"value": True}},
+                        {"is_empty": {"key": "is_active"}},
+                    ]
+                }
+            ]
+        }
 
     def _lightrag_health() -> dict:  # type: ignore[misc]
         return {"engine": "lightrag-hku", "available": False, "install_hint": "pip install lightrag-hku"}
@@ -104,7 +123,7 @@ except Exception as _lr_import_exc:  # noqa: BLE001
     async def _lightrag_retrieve(query: str, limit: int = 5, mode: str | None = None) -> dict:  # type: ignore[misc]
         return {"source": "unavailable", "answer": None, "laws": [], "entities": 0, "collection": None}
 
-    async def _lightrag_qdrant_retrieve(query: str, limit: int = 5) -> dict:  # type: ignore[misc]
+    async def _lightrag_qdrant_retrieve(query: str, limit: int = 5, active_only: bool | None = None) -> dict:  # type: ignore[misc]
         return {"source": "unavailable", "answer": None, "laws": [], "collection": None}
 
     def _run_coro_blocking(coro, timeout: float | None = None):  # type: ignore[misc]
@@ -792,7 +811,9 @@ async def judge_query(payload: dict = Body(...)):
     # در نبود هیچ سند، استعلام مستقیم برداری از Qdrant (بدون واسطهٔ گراف).
     if not laws:
         try:
-            qd = await _lightrag_qdrant_retrieve(query_text, limit=limit)
+            qd = await _lightrag_qdrant_retrieve(
+                query_text, limit=limit, active_only=CITATION_QDRANT_ACTIVE_ONLY
+            )
             if qd.get("laws"):
                 laws = list(qd["laws"])
                 meta["source"] = qd.get("source")
@@ -4132,6 +4153,9 @@ CITATION_QDRANT_COLLECTION = "iran_laws_bge_m3"
 CITATION_MISMATCH_FLAG = "[فاقد تطابق رسمی]"
 CITATION_GUARD_QDRANT_ENABLED = os.environ.get("ROXIRA_CITATION_GUARD_QDRANT", "1") != "0"
 CITATION_QDRANT_TIMEOUT = float(os.environ.get("ROXIRA_CITATION_QDRANT_TIMEOUT", "1.5"))
+# پالایش قوانین منسوخ: هنگام پرس‌وجو از iran_laws_bge_m3 پالایهٔ {"is_active": True}
+# به‌صورت پیشفرض اعمال می‌شود تا هرگز مادهٔ منسوخ در تولید پیش‌نویس استناد نشود.
+CITATION_QDRANT_ACTIVE_ONLY = os.environ.get("ROXIRA_CITATION_QDRANT_ACTIVE_ONLY", "1") != "0"
 CITATION_MIN_SCOPE_TOKENS = 3  # کمینهٔ واژگان فراتر از خود استناد برای آزمون دامنه
 CITATION_MIN_SUBSTITUTE_SCORE = 2  # کمینهٔ هم‌پوشانی واژگانی برای جانشینی خودکار ماده
 
@@ -4653,6 +4677,7 @@ class CitationHallucinationGuard:
                 "qdrant_collection": CITATION_QDRANT_COLLECTION,
                 "qdrant_enabled": bool(qdrant_state.get("enabled")),
                 "qdrant_checked": bool(qdrant_state.get("checked")),
+                "qdrant_active_only": bool(CITATION_QDRANT_ACTIVE_ONLY),
             },
         }
 
@@ -4698,16 +4723,24 @@ def _citation_report_public(report: dict) -> dict:
     return {key: value for key, value in (report or {}).items() if key != "text"}
 
 
-async def _qdrant_citation_lookup(query: str, limit: int = 5) -> list:
-    """جست‌وجوی برداری در ``iran_laws_bge_m3`` برای تأیید استنادهای ناشناخته."""
+async def _qdrant_citation_lookup(query: str, limit: int = 5, active_only: bool | None = None) -> list:
+    """جستوجوی برداری در ``iran_laws_bge_m3`` برای تأیید استنادهای ناشناخته.
+
+    پالایهٔ ``is_active == True`` به‌طور پیش‌فرض اعمال می‌شود تا قانون منسوخ
+    هرگز نتواند استناد جعلی/کهنه را «تأیید» کند.
+    """
+    if active_only is None:
+        active_only = CITATION_QDRANT_ACTIVE_ONLY
     try:
         result = await asyncio.wait_for(
-            _lightrag_qdrant_retrieve(query, limit=limit), timeout=CITATION_QDRANT_TIMEOUT
+            _lightrag_qdrant_retrieve(query, limit=limit, active_only=active_only),
+            timeout=CITATION_QDRANT_TIMEOUT,
         )
     except Exception as exc:  # noqa: BLE001
         print(f"[SMARTJUDGE][CITATION-QDRANT] {type(exc).__name__}: {exc}", file=sys.stderr)
         return []
-    return list((result or {}).get("laws") or [])
+    rows = list((result or {}).get("laws") or [])
+    return [row for row in rows if row.get("is_active") is not False]
 
 
 citation_guard = CitationHallucinationGuard(qdrant_lookup=_qdrant_citation_lookup)
@@ -4746,6 +4779,7 @@ async def _guard_citations(text: str, *, use_qdrant: bool = True) -> dict:
                 "qdrant_collection": CITATION_QDRANT_COLLECTION,
                 "qdrant_enabled": bool(use_qdrant),
                 "qdrant_checked": False,
+                "qdrant_active_only": bool(CITATION_QDRANT_ACTIVE_ONLY),
             },
         }
 
