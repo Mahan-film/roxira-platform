@@ -34,6 +34,17 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+
+  // دامنه‌های تصویر مجاز (نماد اعتماد الکترونیکی). در عمل از <img> ساده
+  // استفاده می‌شود، اما این تنظیم مانع بلاک‌شدن دامنه توسط next/image است.
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "trustseal.enamad.ir",
+      },
+    ],
+  },
   async rewrites() {
     return [
       {

@@ -1,14 +1,13 @@
 "use client";
-import React, { useState } from "react";
 import Link from "next/link";
+
+import { EnamadBadge } from "@/components/layout/EnamadBadge";
 
 interface EnamadFooterProps {
   compact?: boolean;
 }
 
 export function EnamadFooter({ compact = false }: EnamadFooterProps) {
-  const [imgError, setImgError] = useState(false);
-
   return (
     <footer className="w-full border-t border-slate-800/80 bg-slate-950 text-slate-400 text-xs mt-auto select-none" dir="rtl">
       {compact ? (
@@ -84,31 +83,18 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
                 <li><Link href="/privacy" className="hover:text-amber-400 transition-colors">🛡️ حفظ محرمانگی اسناد و پرونده</Link></li>
               </ul>
 
-              {/* نشان تایید اینماد با فالبک هوشمند بدون خرابی تصویر */}
+              {/* نشان تایید اینماد — کامپوننت مشترک EnamadBadge */}
               <div className="pt-1">
-                <a
-                  href="https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 transition-colors group"
-                >
-                  {!imgError ? (
-                    <img
-                      src="https://trustseal.enamad.ir/logo.aspx?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
-                      alt="نماد اعتماد الکترونیکی قاضی هوشمند"
-                      className="w-8 h-8 object-contain bg-white rounded-lg p-0.5"
-                      onError={() => setImgError(true)}
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
-                      ✓
-                    </div>
-                  )}
-                  <div className="text-[10px] text-right">
-                    <span className="block font-bold text-slate-200 group-hover:text-emerald-400 transition-colors">نماد اعتماد الکترونیکی</span>
-                    <span className="text-slate-500 font-mono">شناسه: ۷۴۹۱۴۳۹</span>
-                  </div>
-                </a>
+                <EnamadBadge
+                  trustUrl="https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
+                  logoUrl="https://trustseal.enamad.ir/logo.aspx?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
+                  sealId="yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
+                  alt="نماد اعتماد الکترونیکی قاضی هوشمند"
+                />
+                <div className="mt-2 text-right text-[10px]">
+                  <span className="block font-bold text-slate-200">نماد اعتماد الکترونیکی</span>
+                  <span className="font-mono text-slate-500">شناسه: ۷۴۹۱۴۳۹</span>
+                </div>
               </div>
             </div>
           </div>

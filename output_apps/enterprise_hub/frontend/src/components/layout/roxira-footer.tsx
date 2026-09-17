@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Boxes, Cpu, FileCheck2, Layers, Mail, MapPin, Phone, ShieldCheck } from "lucide-react";
 
+import { EnamadBadge } from "@/components/layout/EnamadBadge";
+
 const PLATFORM_LINKS = [
   { href: "/accounting", label: "حسابداری دوطرفه" },
   { href: "/invoicing", label: "انطباق مالیاتی (سامانه مودیان)" },
@@ -113,23 +115,12 @@ export function RoxiraFooter() {
           </ul>
 
           <div className="pt-2">
-            <div className="inline-block rounded-2xl border border-white/10 bg-white p-2.5 shadow-lg">
-              <a
-                referrerPolicy="origin"
-                target="_blank"
-                href="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  referrerPolicy="origin"
-                  src="https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-                  alt="نماد اعتماد الکترونیکی رکسایرا"
-                  className="h-auto w-20 cursor-pointer"
-                  id="y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-                  style={{ cursor: "pointer" }}
-                />
-              </a>
-            </div>
+            <EnamadBadge
+              trustUrl="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
+              logoUrl="https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
+              sealId="y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
+              alt="نماد اعتماد الکترونیکی رکسایرا"
+            />
             <span className="mt-2 flex items-center gap-1 text-[10px] font-bold text-slate-500">
               <ShieldCheck className="size-3 text-emerald-400" />
               نماد اعتماد الکترونیکی رسمی روکسیرا — کد ۷۴۸۰۵۵۹
