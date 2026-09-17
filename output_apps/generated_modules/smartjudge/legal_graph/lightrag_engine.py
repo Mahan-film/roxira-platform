@@ -83,6 +83,13 @@ QDRANT_FALLBACK_TIMEOUT = float(os.environ.get("LIGHTRAG_QDRANT_TIMEOUT", "4"))
 # کش منفی کوتاه: اگر همهٔ میزبان‌های Qdrant پاسخ ندادند، تا این مدت دوباره کاوش
 # نمی‌کنیم تا مسیر پرس‌وجوی صوتی/بلادرنگ به‌خاطر سرویس خواب‌رفته کند نشود.
 QDRANT_RETRY_COOLDOWN = float(os.environ.get("LIGHTRAG_QDRANT_RETRY_COOLDOWN", "30"))
+# پالایش قوانین منسوخ: به‌صورت پیشفرض فقط نقاطی برگردانده می‌شوند که
+# ``is_active == True`` هستند تا هرگز به قانون ملغی استناد نشود. نقاط قدیمی که
+# این فیلد را ندارند با ``is_empty`` تحمل می‌شوند تا بازیابی دچار رگرسیون نشود.
+QDRANT_ACTIVE_ONLY = os.environ.get("LIGHTRAG_QDRANT_ACTIVE_ONLY", "1") != "0"
+QDRANT_TOLERATE_MISSING_ACTIVE = (
+    os.environ.get("LIGHTRAG_QDRANT_TOLERATE_MISSING_ACTIVE", "1") != "0"
+)
 GRAPH_FILE_NAME = "graph_chunk_entity_relation.graphml"
 LIGHTRAG_SYNC_TIMEOUT = float(os.environ.get("LIGHTRAG_SYNC_TIMEOUT", "120"))
 _QDRANT_HOST_CANDIDATES: Tuple[str, ...] = tuple(
@@ -302,6 +309,8 @@ def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -
     for index, payload in enumerate(payloads):
         if not isinstance(payload, dict):
             continue
+        if payload.get("is_active") is False:  # قانون منسوخ هرگز بازیابی نمی‌شود
+            continue
         text = _payload_text(payload)
         overlap = len(tokens & _tokens(text)) if tokens else 0
         scored.append((overlap, -index, payload, text))
@@ -329,11 +338,44 @@ def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -
     return rows
 
 
-def _scroll_body(limit: int) -> Dict[str, Any]:
-    return {"limit": max(limit * 4, 20), "with_payload": True, "with_vector": False}
+def _scroll_body(limit: int, active_only: Optional[bool] = None) -> Dict[str, Any]:
+    body: Dict[str, Any] = {"limit": max(limit * 4, 20), "with_payload": True, "with_vector": False}
+    point_filter = active_point_filter(active_only)
+    if point_filter:
+        body["filter"] = point_filter
+    return body
+
+
+def active_point_filter(active_only: Optional[bool] = None) -> Optional[Dict[str, Any]]:
+    """Qdrant filter that hides repealed law (``is_active != true``).
+
+    Returns ``None`` when the caller explicitly opts out. Legacy points ingested
+    before the ``is_active`` field existed are tolerated via ``is_empty`` unless
+    ``LIGHTRAG_QDRANT_TOLERATE_MISSING_ACTIVE=0`` forces a strict match.
+    """
+    enabled = QDRANT_ACTIVE_ONLY if active_only is None else bool(active_only)
+    if not enabled:
+        return None
+    if QDRANT_TOLERATE_MISSING_ACTIVE:
+        condition: Dict[str, Any] = {
+            "should": [
+                {"key": "is_active", "match": {"value": True}},
+                {"is_empty": {"key": "is_active"}},
+            ]
+        }
+    else:
+        condition = {"key": "is_active", "match": {"value": True}}
+    return {"must": [condition]}
+
+
+def _only_active(payloads: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Defence-in-depth: drop repealed rows even if the server ignored the filter."""
+    return [row for row in payloads if isinstance(row, dict) and row.get("is_active") is not False]
 
 
 _qdrant_failed_at: float = 0.0
+#: آیا آخرین کاوش، پاسخ HTTP از Qdrant دریافت کرد؟ (تمایز «خالی» از «خاموش»)
+_qdrant_last_reachable: bool = False
 
 
 def _qdrant_probe_suppressed() -> bool:
@@ -372,30 +414,34 @@ def _extract_points(response: Any) -> List[Dict[str, Any]]:
     return rows
 
 
-async def _qdrant_scroll_httpx(query: str, limit: int) -> List[Dict[str, Any]]:
+async def _qdrant_scroll_httpx(query: str, limit: int, active_only: Optional[bool] = None) -> List[Dict[str, Any]]:
     import httpx  # وابستگی اختیاری؛ در نبود آن مسیر urllib فعال می‌شود
 
+    global _qdrant_last_reachable
+    body = _scroll_body(limit, active_only)
     async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
         for host in _QDRANT_HOST_CANDIDATES:
             url = f"http://{host}:{QDRANT_PORT}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
             try:
-                response = await client.post(url, json=_scroll_body(limit))
+                response = await client.post(url, json=body)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant host %s unreachable: %s", host, exc)
                 continue
+            _qdrant_last_reachable = True
             rows = _extract_points(response)
             if rows:
                 logger.info("Qdrant fallback hit %s (%d points)", url, len(rows))
-                return rows
+            return rows
     return []
 
 
-def _qdrant_scroll_urllib(query: str, limit: int) -> List[Dict[str, Any]]:
+def _qdrant_scroll_urllib(query: str, limit: int, active_only: Optional[bool] = None) -> List[Dict[str, Any]]:
     """مسیر بدون httpx (فقط stdlib) برای محیط‌های حداقلی."""
     import urllib.error
     import urllib.request
 
-    body = json.dumps(_scroll_body(limit)).encode("utf-8")
+    global _qdrant_last_reachable
+    body = json.dumps(_scroll_body(limit, active_only)).encode("utf-8")
     for host in _QDRANT_HOST_CANDIDATES:
         url = f"http://{host}:{QDRANT_PORT}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
         request = urllib.request.Request(
@@ -407,20 +453,25 @@ def _qdrant_scroll_urllib(query: str, limit: int) -> List[Dict[str, Any]]:
         except Exception as exc:  # noqa: BLE001
             logger.debug("qdrant (urllib) host %s unreachable: %s", host, exc)
             continue
+        _qdrant_last_reachable = True
         points = ((payload or {}).get("result") or {}).get("points") or []
         rows = [p.get("payload") for p in points if isinstance(p.get("payload"), dict)]
-        if rows:
-            return rows
+        return rows
     return []
 
 
-async def qdrant_fallback_laws(query: str, limit: int = 5) -> List[Dict[str, Any]]:
+async def qdrant_fallback_laws(
+    query: str, limit: int = 5, active_only: Optional[bool] = None
+) -> List[Dict[str, Any]]:
     """
     بازیابی مواد قانونی از Qdrant (پیش‌فرض ``iran_laws_bge_m3``) وقتی گراف محلی
     خالی است. هرگز استثنا پرتاب نمی‌کند؛ در نبود سرویس، فهرست خالی برمی‌گرداند.
     در نبود سرویس یک کش منفی کوتاه فعال می‌شود تا تأخیر پرس‌وجوهای بعدی صفر بماند.
+
+    ``active_only`` به‌صورت پیش‌فرض فعال است: پالایهٔ ``is_active == True`` روی
+    Qdrant اعمال می‌شود تا هرگز به قانون منسوخ استناد نشود.
     """
-    global _qdrant_failed_at
+    global _qdrant_failed_at, _qdrant_last_reachable
     text = (query or "").strip()
     if not text:
         return []
@@ -429,15 +480,21 @@ async def qdrant_fallback_laws(query: str, limit: int = 5) -> List[Dict[str, Any
         return []
 
     desired = max(1, int(limit))
+    _qdrant_last_reachable = False
     try:
-        payloads = await _qdrant_scroll_httpx(text, desired)
+        payloads = await _qdrant_scroll_httpx(text, desired, active_only)
     except ImportError:
-        payloads = await asyncio.to_thread(_qdrant_scroll_urllib, text, desired)
+        payloads = await asyncio.to_thread(_qdrant_scroll_urllib, text, desired, active_only)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Qdrant fallback failed: %s", exc)
         payloads = []
 
     if not payloads:
+        if _qdrant_last_reachable:
+            # سرویس پاسخ داد ولی نتیجه‌ای نبود (مثلاً همه مواد منسوخ/پالایش‌شده) —
+            # این «خطا» نیست و نباید کش منفی را فعال کند.
+            _qdrant_failed_at = 0.0
+            return []
         _qdrant_failed_at = time.monotonic()
         logger.warning(
             "Qdrant fallback unavailable on %s -> negative cache %ss",
@@ -447,7 +504,7 @@ async def qdrant_fallback_laws(query: str, limit: int = 5) -> List[Dict[str, Any
         return []
 
     _qdrant_failed_at = 0.0
-    return _rank_payloads(payloads, text, desired)
+    return _rank_payloads(_only_active(payloads), text, desired)
 
 
 def _format_qdrant_answer(laws: Sequence[Dict[str, Any]]) -> Optional[str]:
@@ -461,22 +518,26 @@ def _format_qdrant_answer(laws: Sequence[Dict[str, Any]]) -> Optional[str]:
     return "\n".join(parts).strip() or None
 
 
-async def qdrant_retrieve(query: str, limit: int = 5) -> Dict[str, Any]:
+async def qdrant_retrieve(
+    query: str, limit: int = 5, active_only: Optional[bool] = None
+) -> Dict[str, Any]:
     """
     بازیابی مستقیم برداری از Qdrant (``iran_laws_bge_m3``) — بدون دخالت گراف.
 
     برای اندپوینت ``POST /api/v1/apps/judge/query`` که می‌خواهد مستقل از وضعیت
     گراف محلی، صرفاً از پایگاه برداری بپرسد. هرگز استثنا پرتاب نمی‌کند.
+    ``active_only`` (پیش‌فرض روشن) قوانین منسوخ را از نتیجه حذف می‌کند.
     """
     text = (query or "").strip()
     if not text:
         return {"source": "empty", "answer": None, "laws": [], "collection": None}
-    laws = await qdrant_fallback_laws(text, limit=max(1, int(limit)))
+    laws = await qdrant_fallback_laws(text, limit=max(1, int(limit)), active_only=active_only)
     return {
         "source": "qdrant-fallback" if laws else "unavailable",
         "answer": _format_qdrant_answer(laws),
         "laws": laws,
         "collection": QDRANT_FALLBACK_COLLECTION if laws else None,
+        "active_only": QDRANT_ACTIVE_ONLY if active_only is None else bool(active_only),
     }
 
 
@@ -485,6 +546,7 @@ async def rag_query(
     mode: Optional[str] = None,
     top_k: int = 6,
     allow_qdrant_fallback: bool = True,
+    active_only: Optional[bool] = None,
 ) -> Optional[str]:
     """
     پرس‌وجوی متنی از گراف دانش (async — مستقیماً await می‌شود).
@@ -530,12 +592,14 @@ async def rag_query(
         )
 
     if allow_qdrant_fallback:
-        laws = await qdrant_fallback_laws(text, limit=max(1, min(top_k, 5)))
+        laws = await qdrant_fallback_laws(text, limit=max(1, min(top_k, 5)), active_only=active_only)
         return _format_qdrant_answer(laws)
     return None
 
 
-async def rag_retrieve(query_text: str, limit: int = 5, mode: Optional[str] = None) -> Dict[str, Any]:
+async def rag_retrieve(
+    query_text: str, limit: int = 5, mode: Optional[str] = None, active_only: Optional[bool] = None
+) -> Dict[str, Any]:
     """
     بازیابی یک‌پارچه با برچسب منبع — برای لایه‌بندی شفاف در SmartJudge.
 
@@ -558,7 +622,7 @@ async def rag_retrieve(query_text: str, limit: int = 5, mode: Optional[str] = No
                 "entities": entities,
                 "collection": None,
             }
-        laws = await qdrant_fallback_laws(text, limit=limit)
+        laws = await qdrant_fallback_laws(text, limit=limit, active_only=active_only)
         return {
             "source": "lightrag-empty-answer" if laws else "graph-empty",
             "answer": _format_qdrant_answer(laws),
@@ -567,7 +631,7 @@ async def rag_retrieve(query_text: str, limit: int = 5, mode: Optional[str] = No
             "collection": QDRANT_FALLBACK_COLLECTION if laws else None,
         }
 
-    laws = await qdrant_fallback_laws(text, limit=limit)
+    laws = await qdrant_fallback_laws(text, limit=limit, active_only=active_only)
     return {
         "source": "qdrant-fallback" if laws else ("graph-empty" if rag is not None else "unavailable"),
         "answer": _format_qdrant_answer(laws),

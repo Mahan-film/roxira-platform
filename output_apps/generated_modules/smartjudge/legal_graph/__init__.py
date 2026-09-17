@@ -1,7 +1,9 @@
 """موتور گراف دانش حقوقی SmartJudge بر پایهٔ LightRAG (pip install lightrag-hku)."""
 from .lightrag_engine import (  # noqa: F401
     LIGHTRAG_AVAILABLE,
+    QDRANT_ACTIVE_ONLY,
     QDRANT_FALLBACK_COLLECTION,
+    active_point_filter,
     get_rag,
     graph_entity_count,
     graph_is_empty,
@@ -20,7 +22,9 @@ from .lightrag_engine import (  # noqa: F401
 
 __all__ = [
     "LIGHTRAG_AVAILABLE",
+    "QDRANT_ACTIVE_ONLY",
     "QDRANT_FALLBACK_COLLECTION",
+    "active_point_filter",
     "get_rag",
     "graph_entity_count",
     "graph_is_empty",
