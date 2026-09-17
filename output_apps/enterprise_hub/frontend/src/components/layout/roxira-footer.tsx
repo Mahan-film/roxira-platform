@@ -115,12 +115,7 @@ export function RoxiraFooter() {
           </ul>
 
           <div className="pt-2">
-            <EnamadBadge
-              trustUrl="https://trustseal.enamad.ir/?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-              logoUrl="https://trustseal.enamad.ir/logo.aspx?id=7480559&Code=y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-              sealId="y8CR7ElrUfh4ZL897SvEy6SCJPlf5bBp"
-              alt="نماد اعتماد الکترونیکی رکسایرا"
-            />
+            <EnamadBadge domain="roxira" />
             <span className="mt-2 flex items-center gap-1 text-[10px] font-bold text-slate-500">
               <ShieldCheck className="size-3 text-emerald-400" />
               نماد اعتماد الکترونیکی رسمی روکسیرا — کد ۷۴۸۰۵۵۹

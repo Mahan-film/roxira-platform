@@ -1,7 +1,11 @@
 "use client";
 import Link from "next/link";
 
-import { EnamadBadge } from "@/components/layout/EnamadBadge";
+import {
+  ENAMAD_REFERRER_ATTRIBUTE,
+  EnamadBadge,
+  enamadTrustUrl,
+} from "@/components/layout/EnamadBadge";
 
 interface EnamadFooterProps {
   compact?: boolean;
@@ -31,11 +35,11 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
             <span>•</span>
             <Link href="/privacy" className="hover:text-amber-400 transition-colors">حریم خصوصی</Link>
             <span>•</span>
+            {/* نماد اینماد: بدون rel و بدون target تا مرورگر ارجاع (referrer) را حذف نکند */}
             <a
-              href="https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1 font-medium"
+              {...ENAMAD_REFERRER_ATTRIBUTE}
+              href={enamadTrustUrl("ghazi")}
+              className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1 font-medium cursor-pointer"
             >
               <span>🛡️</span>
               <span>اینماد ۷۴۹۱۴۳۹</span>
@@ -83,14 +87,9 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
                 <li><Link href="/privacy" className="hover:text-amber-400 transition-colors">🛡️ حفظ محرمانگی اسناد و پرونده</Link></li>
               </ul>
 
-              {/* نشان تایید اینماد — کامپوننت مشترک EnamadBadge */}
+              {/* نشان تایید اینماد — کامپوننت مشترک EnamadBadge (اینماد قاضی هوشمند، شناسه ۷۴۹۱۴۳۹) */}
               <div className="pt-1">
-                <EnamadBadge
-                  trustUrl="https://trustseal.enamad.ir/?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
-                  logoUrl="https://trustseal.enamad.ir/logo.aspx?id=7491439&Code=yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
-                  sealId="yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa"
-                  alt="نماد اعتماد الکترونیکی قاضی هوشمند"
-                />
+                <EnamadBadge domain="ghazi" />
                 <div className="mt-2 text-right text-[10px]">
                   <span className="block font-bold text-slate-200">نماد اعتماد الکترونیکی</span>
                   <span className="font-mono text-slate-500">شناسه: ۷۴۹۱۴۳۹</span>
