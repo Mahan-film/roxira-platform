@@ -7,6 +7,15 @@
       "status": "SUCCESS",
       "completed_at": "2026-09-18 15:33:48 UTC",
       "exit_code": 0
+    },
+    {
+      "id": "PROJ-102",
+      "prompt": "پیاده‌سازی ماژول ارسال خودکار فاکتورهای الکترونیکی به سامانه مودیان مالیاتی با امضای دیجیتال",
+      "status": "SUCCESS",
+      "auto_generated": true,
+      "created_at": "2026-09-18 15:38:27 UTC",
+      "completed_at": "2026-09-18 15:38:30 UTC",
+      "exit_code": 0
     }
   ]
 }
