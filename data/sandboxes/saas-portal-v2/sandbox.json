@@ -1,0 +1,10 @@
+{
+  "app_id": "saas-portal-v2",
+  "host_port": 4000,
+  "project_name": "roxira-sandbox-saas-portal-v2",
+  "container_name": "roxira_sandbox_saas-portal-v2",
+  "subdomain": "saas-portal-v2.roxira.app",
+  "project_dir": "/opt/roxira_platform/data/sandboxes/saas-portal-v2",
+  "status": "running",
+  "created_at": 1789577387.3393784
+}
