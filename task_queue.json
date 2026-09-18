@@ -79,6 +79,15 @@
       "created_at": "2026-09-18 15:52:06 UTC",
       "completed_at": "2026-09-18 15:52:07 UTC",
       "exit_code": 0
+    },
+    {
+      "id": "USER-1789747637",
+      "prompt": "طراحی موتور اعتبارسنجی صورتحساب الکترونیکی با کلید خصوصی مودیان مالیاتی",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 16:07:17 UTC",
+      "completed_at": "2026-09-18 16:07:17 UTC",
+      "exit_code": 0
     }
   ]
 }
