@@ -109,3 +109,41 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def send_radar_email_digest(report_data: dict, target_email: str = "admin@roxira.ir"):
+    """ارسال خلاصه ارزیابی معماری و اخبار به ایمیل مدیر سیستم"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    subject = f"🚀 [Roxira Tech-Radar] گزارش راهبردی سیستم - {report_data.get('timestamp')}"
+    
+    html_content = f"""
+    <div dir="rtl" style="font-family: Tahoma, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px; border-radius: 12px;">
+        <h2 style="color: #10b981;">رادار فناوری و ارزیابی معماری روکسیرا</h2>
+        <p><strong>وضعیت منابع سرور:</strong> {report_data.get('system_ram_status')}</p>
+        <p><strong>ارزیابی آرشیتکت:</strong> {report_data.get('architect_verdict')}</p>
+        <hr style="border: 1px solid #334155;">
+        <h3>پیشنهادات ارتقا و تکنولوژی‌های شناسایی‌شده:</h3>
+        <ul>
+    """
+    for p in report_data.get("upgrade_proposals", []):
+        html_content += f"""
+        <li style="margin-bottom: 12px;">
+            <strong style="color: #38bdf8;">[{p.get('category')}] {p.get('candidate')}</strong><br>
+            <span>دستاورد: {p.get('benefit')}</span><br>
+            <span style="color: #94a3b8;">سازگاری: {p.get('compatibility_score')}% | ریسک: {p.get('risk_level')}</span>
+        </li>
+        """
+    html_content += """
+        </ul>
+        <hr style="border: 1px solid #334155;">
+        <p style="font-size: 11px; color: #64748b;">این ایمیل به‌صورت خودکار توسط نگهبان رادار سرور هتزنر تولید شده است.</p>
+    </div>
+    """
+    
+    # ثبت خروجی ایمیل در لاگ‌های آماده ارسال (Spool)
+    with open("/opt/roxira_platform/last_email_digest.html", "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print("  📧 قالب ایمیل استاندارد آماده شد و در مسیر /opt/roxira_platform/last_email_digest.html ذخیره گردید.")
+
