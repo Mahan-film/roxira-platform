@@ -1,14 +1,37 @@
 #!/usr/bin/env python3
-import http.server, json, os, signal, subprocess, time
+import http.server
+import json
+import os
+import signal
+import subprocess
+import time
 
 signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 QUEUE_FILE = "/opt/roxira_platform/task_queue.json"
 MODULES_DIR = "/opt/roxira_platform/output_apps/generated_modules"
+HTML_FILE = "/opt/roxira_platform/output_apps/enterprise_hub/frontend/public/factory/index.html"
 
 class DispatchHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        # دریافت اطلاعات سورس‌کد ماژول خاص
+        # ۱. سرویس‌دهی مستقیم صفحه وب مرکز فرماندهی
+        if self.path in ["/factory", "/factory/", "/factory/index.html"]:
+            if os.path.exists(HTML_FILE):
+                with open(HTML_FILE, "r", encoding="utf-8") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+                return
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"Dashboard HTML file not found on disk.")
+                return
+
+        # ۲. سرویس‌دهی سورس‌کدها در پنجره پیش‌نمایش
         if self.path.startswith("/api/v1/factory/code/"):
             parts = self.path.strip("/").split("/")
             if len(parts) >= 6:
@@ -16,21 +39,23 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
                 file_path = os.path.join(MODULES_DIR, task_id, filename)
                 if os.path.exists(file_path):
                     with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
+                        code_content = f.read()
                     self.send_response(200)
-                    self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
                     self.end_headers()
-                    self.wfile.write(content.encode('utf-8'))
+                    self.wfile.write(code_content.encode("utf-8"))
                     return
 
-        # داشبورد وضعیت
+        # ۳. اندپوینت وضعیت زنده ماژول‌ها و صف
         if self.path in ["/api/v1/factory/status", "/api/v1/factory/status/"]:
             data = {"pending": [], "completed": []}
             if os.path.exists(QUEUE_FILE):
                 try:
-                    with open(QUEUE_FILE, "r", encoding="utf-8") as f: data = json.load(f)
-                except Exception: pass
-            
+                    with open(QUEUE_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception:
+                    pass
+
             generated = []
             if os.path.exists(MODULES_DIR):
                 for folder in sorted(os.listdir(MODULES_DIR), reverse=True)[:15]:
@@ -39,7 +64,8 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
                         try:
                             with open(m_path, "r", encoding="utf-8") as mf:
                                 generated.append(json.load(mf))
-                        except Exception: pass
+                        except Exception:
+                            pass
 
             res = {
                 "server_time": time.strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -50,20 +76,21 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
                 "recent_generated_artifacts": generated
             }
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
-            self.wfile.write(json.dumps(res, ensure_ascii=False).encode('utf-8'))
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b'{"detail": "Not Found"}')
+            self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+            return
+
+        self.send_response(404)
+        self.end_headers()
+        self.wfile.write(b'{"detail": "Not Found"}')
 
     def do_POST(self):
         if self.path == "/api/v1/factory/dispatch":
-            content_length = int(self.headers.get('Content-Length', 0))
+            content_length = int(self.headers.get("Content-Length", 0))
             post_data = self.rfile.read(content_length)
             try:
-                payload = json.loads(post_data.decode('utf-8'))
+                payload = json.loads(post_data.decode("utf-8"))
                 prompt = payload.get("prompt", "").strip()
                 if not prompt:
                     self.send_response(400)
@@ -73,38 +100,44 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
 
                 task_id = f"USER-{int(time.time())}"
                 new_task = {
-                    "id": task_id, "prompt": prompt, "status": "QUEUED",
-                    "priority": "IMMEDIATE", "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC")
+                    "id": task_id,
+                    "prompt": prompt,
+                    "status": "QUEUED",
+                    "priority": "IMMEDIATE",
+                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC")
                 }
 
                 data = {"pending": [], "completed": []}
                 if os.path.exists(QUEUE_FILE):
-                    with open(QUEUE_FILE, "r", encoding="utf-8") as f: data = json.load(f)
+                    with open(QUEUE_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
 
                 data.setdefault("pending", []).insert(0, new_task)
                 with open(QUEUE_FILE, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
 
-                # آغاز آنی پردازش تسک در ثانیه صفر
                 subprocess.Popen(["python3", "/opt/roxira_platform/output_apps/ecosystem_core/src/factory/task_worker.py"])
 
                 self.send_response(200)
-                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(json.dumps({
-                    "status": "QUEUED_AND_TRIGGERED", "task_id": task_id,
-                    "prompt": prompt, "message": "پروژه در ثانیه صفر آغاز شد."
-                }, ensure_ascii=False).encode('utf-8'))
+                    "status": "QUEUED_AND_TRIGGERED",
+                    "task_id": task_id,
+                    "prompt": prompt,
+                    "message": "پروژه با موفقیت در صف کارخانه قرار گرفت."
+                }, ensure_ascii=False).encode("utf-8"))
             except Exception as e:
                 self.send_response(500)
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+                self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
         else:
             self.send_response(404)
             self.end_headers()
             self.wfile.write(b'{"detail": "Not Found"}')
 
-    def log_message(self, format, *args): pass
+    def log_message(self, format, *args):
+        pass
 
 if __name__ == "__main__":
     server = http.server.ThreadingHTTPServer(("0.0.0.0", 8005), DispatchHandler)
