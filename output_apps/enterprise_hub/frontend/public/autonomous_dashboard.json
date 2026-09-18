@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-18 09:21:55 UTC",
+  "timestamp": "2026-09-18 09:47:48 UTC",
   "platform_health_score": "100%",
   "active_mesh_network": "roxira_mesh",
   "infrastructure_containers": {
@@ -16,7 +16,7 @@
   "subsystem_diagnostics": {
     "legal_core_fastapi": {
       "status": "HEALTHY",
-      "latency_ms": 39.75
+      "latency_ms": 37.72
     },
     "statutory_damages_article_522": {
       "status": "PASSED",
@@ -30,8 +30,8 @@
       "status": "OPERATIONAL"
     },
     "twenty_crm_cluster": {
-      "status": "INITIALIZING_OR_PORT_BLOCKED",
-      "detail": "[Errno 104] Connection reset by peer"
+      "status": "ONLINE",
+      "code": 200
     }
   },
   "latest_tech_radar": [
