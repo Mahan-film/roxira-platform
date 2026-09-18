@@ -1,9 +1,9 @@
 # گزارش فنی و راهبردی ماژول: USER-1789763464
 
 **موضوع:** crm erp agentic accounting  
-**تاریخ استقرار:** 2026-09-18 20:31:50 UTC  
+**تاریخ استقرار:** 2026-09-18  
 **وضعیت اعتبارسنجی:** `ALL_GREEN`  
-**موتور هوش مصنوعی:** DeepSeek (OpenRouter Agentic)  
+**موتور هوش مصنوعی:** DeepSeek Coder / Agentic  
 
 ---
 
