@@ -16,6 +16,15 @@
       "created_at": "2026-09-18 15:38:27 UTC",
       "completed_at": "2026-09-18 15:38:30 UTC",
       "exit_code": 0
+    },
+    {
+      "id": "PROJ-103",
+      "prompt": "طراحی موتور هوشمند تطبیق قراردادها با ماده ۱۰ قانون مدنی و قوانین تجارت الکترونیک",
+      "status": "SUCCESS",
+      "auto_generated": true,
+      "created_at": "2026-09-18 15:38:46 UTC",
+      "completed_at": "2026-09-18 15:38:49 UTC",
+      "exit_code": 0
     }
   ]
 }
