@@ -3,94 +3,86 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roxira Mission Control | مرکز فرماندهی کارخانه نرم‌افزاری خودمختار</title>
+  <title>Roxira Mission Control | کارخانه نرم‌افزاری خودمختار</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;900&display=swap" rel="stylesheet">
-  <style> body { font-family: 'Vazirmatn', sans-serif; } </style>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Vazirmatn', sans-serif; letter-spacing: normal !important; }
+    * { letter-spacing: normal !important; }
+  </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
   <div class="max-w-6xl mx-auto space-y-6">
-    
-    <!-- هدر متمرکز -->
     <header class="flex flex-col md:flex-row items-start md:items-center justify-between bg-slate-900/80 p-6 rounded-3xl border border-slate-800 shadow-2xl backdrop-blur">
       <div>
-        <h1 class="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">
+        <h1 class="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
           مرکز فرماندهی کارخانه نرم‌افزاری خودگردان روکسیرا
         </h1>
-        <p class="text-slate-400 text-sm mt-1">توسعه، کامپایل، تست و استقرار پیوسته بر پایه سیستم‌های چندعاملی (Production 2026)</p>
+        <p class="text-slate-400 text-sm mt-1">توسعه، کامپایل، تست و استقرار خودکار بر پایه سیستم‌های چندعاملی (Production 2026)</p>
       </div>
-      <div class="mt-4 md:mt-0 flex items-center gap-3">
+      <div class="mt-4 md:mt-0 flex items-center gap-2">
         <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          چرخه ایجنتی زنده
+          ورکر آنلاین
         </span>
       </div>
     </header>
 
-    <!-- پنل ورودی تعاملی بدون نیاز به ترمینال -->
     <section class="bg-gradient-to-b from-slate-900 to-slate-900/60 p-6 rounded-3xl border border-slate-800 shadow-xl">
       <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
         ارسال ایده / پروژه جدید به کارخانه ایجنت‌ها
       </h2>
-      <p class="text-xs text-slate-400 mb-4">عنوان یا نیازمندی مدنظر خود را بنویسید؛ عامل‌ها در ثانیه صفر فازهای کاوش، معماری، کدنویسی و تست را آغاز می‌کنند.</p>
       <div class="flex flex-col sm:flex-row gap-3">
         <input 
           id="promptInput" 
           type="text" 
-          placeholder="مثال: طراحی ماژول امضای دیجیتال و گواهی الکترونیک اسناد تجاری" 
-          class="flex-1 bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+          placeholder="مثال: طراحی ماژول انطباق قراردادها با قانون کار و مودیان مالیاتی" 
+          class="flex-1 bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
         >
         <button 
           id="submitBtn" 
           onclick="submitTask()" 
-          class="px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2"
+          class="px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-sm rounded-2xl transition-all"
         >
-          <span>تولید خودکار ماژول</span>
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          تولید خودکار ماژول
         </button>
       </div>
       <div id="dispatchFeedback" class="mt-3 text-xs hidden"></div>
     </section>
 
-    <!-- کارت‌های آمار وضعیت -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
-        <div class="text-xs text-slate-400">پروژه‌های در صف پردازش</div>
+        <div class="text-xs text-slate-400">پروژه‌های در صف</div>
         <div id="pendingCount" class="text-3xl font-extrabold text-cyan-400 mt-2">--</div>
       </div>
       <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
-        <div class="text-xs text-slate-400">ماژول‌های تکمیل و دیپلوی‌شده</div>
+        <div class="text-xs text-slate-400">ماژول‌های تکمیل‌شده</div>
         <div id="completedCount" class="text-3xl font-extrabold text-emerald-400 mt-2">--</div>
       </div>
       <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
-        <div class="text-xs text-slate-400">آخرین پایش خودکار سرور</div>
+        <div class="text-xs text-slate-400">آخرین پایش سرور</div>
         <div id="lastSync" class="text-xs font-mono text-slate-300 mt-3">--</div>
       </div>
     </div>
 
-    <!-- جدول ماژول‌های کامپایل‌شده فیزیکی -->
     <section class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
       <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
         ماژول‌های مستقر در محیط عملیاتی
       </h2>
-      <div id="artifactsContainer" class="space-y-3">
-        <div class="text-sm text-slate-500 py-4 text-center">در حال دریافت وضعیت از سرور...</div>
-      </div>
+      <div id="artifactsContainer" class="space-y-3"></div>
     </section>
 
-    <!-- مدال پیش‌نمایش سورس‌کد -->
     <div id="codeModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
       <div class="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-3xl p-6 shadow-2xl flex flex-col max-h-[85vh]">
         <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-          <h3 id="modalTitle" class="font-bold text-emerald-400 text-sm font-mono">سورس‌کد ماژول</h3>
-          <button onclick="closeModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+          <h3 id="modalTitle" class="font-bold text-emerald-400 text-sm font-mono">سورس‌کد / تست</h3>
+          <button onclick="closeModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
         </div>
         <pre id="modalContent" class="flex-1 overflow-auto bg-slate-950 p-4 rounded-xl text-xs font-mono text-slate-300 leading-relaxed"></pre>
       </div>
     </div>
-
   </div>
 
   <script>
@@ -105,19 +97,22 @@
         const container = document.getElementById('artifactsContainer');
         if (data.recent_generated_artifacts && data.recent_generated_artifacts.length > 0) {
           container.innerHTML = data.recent_generated_artifacts.map(a => `
-            <div class="p-4 bg-slate-950/80 border border-slate-800/80 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3 hover:border-slate-700 transition-colors">
+            <div class="p-4 bg-slate-950/80 border border-slate-800/80 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
               <div>
-                <div class="font-bold text-slate-200 text-sm">${a.prompt}</div>
+                <div class="font-bold text-slate-100 text-sm">${a.prompt}</div>
                 <div class="text-xs text-slate-500 mt-1 font-mono">${a.task_id} | ${a.created_at}</div>
               </div>
               <div class="flex items-center gap-2">
+                <button onclick="testModule('${a.task_id}')" class="px-3 py-1.5 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-lg font-semibold transition-colors">
+                  تست زنده API
+                </button>
                 <button onclick="viewCode('${a.task_id}', 'router.py')" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg font-mono transition-colors">
                   Backend API
                 </button>
                 <button onclick="viewCode('${a.task_id}', 'Component.tsx')" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-lg font-mono transition-colors">
                   Frontend UI
                 </button>
-                <span class="px-3 py-1 text-xs rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-bold">
+                <span class="px-3 py-1 text-xs rounded-lg ${a.verification_status === 'ALL_GREEN' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'} border font-mono font-bold">
                   ${a.verification_status}
                 </span>
               </div>
@@ -129,15 +124,25 @@
       }
     }
 
+    async function testModule(taskId) {
+      document.getElementById('modalTitle').innerText = `تست اجرای زنده ماژول: ${taskId}`;
+      document.getElementById('modalContent').innerText = 'در حال ارسال درخواست به محیط پروداکشن...';
+      document.getElementById('codeModal').classList.remove('hidden');
+      try {
+        const res = await fetch(`/api/v1/factory/test-runner/${taskId}`, { method: 'POST' });
+        const data = await res.json();
+        document.getElementById('modalContent').innerText = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById('modalContent').innerText = 'خطا در ارتباط با تست‌رانر.';
+      }
+    }
+
     async function submitTask() {
       const input = document.getElementById('promptInput');
-      const btn = document.getElementById('submitBtn');
-      const feedback = document.getElementById('dispatchFeedback');
       const val = input.value.trim();
       if (!val) return;
 
-      btn.disabled = true;
-      btn.classList.add('opacity-50');
+      const feedback = document.getElementById('dispatchFeedback');
       feedback.classList.remove('hidden');
       feedback.innerHTML = '<span class="text-cyan-400">در حال ارسال پروژه به کارخانه...</span>';
 
@@ -152,10 +157,7 @@
         input.value = '';
         setTimeout(updateDashboard, 1500);
       } catch (err) {
-        feedback.innerHTML = '<span class="text-rose-400">خطا در ارسال پروژه به سرور</span>';
-      } finally {
-        btn.disabled = false;
-        btn.classList.remove('opacity-50');
+        feedback.innerHTML = '<span class="text-rose-400">خطا در ارسال</span>';
       }
     }
 
@@ -168,14 +170,11 @@
         const code = await res.text();
         document.getElementById('modalContent').innerText = code;
       } catch (e) {
-        document.getElementById('modalContent').innerText = 'خطا در بارگذاری فایل.';
+        document.getElementById('modalContent').innerText = 'خطا در خواندن فایل.';
       }
     }
 
-    function closeModal() {
-      document.getElementById('codeModal').classList.add('hidden');
-    }
-
+    function closeModal() { document.getElementById('codeModal').classList.add('hidden'); }
     updateDashboard();
     setInterval(updateDashboard, 4000);
   </script>
