@@ -1,57 +1,30 @@
 #!/usr/bin/env python3
 """
-Roxira Auto-Backlog Feeder
-موتور خودکار تولید اهداف مهندسی و تکمیل نقشه راه سازمانی در نبود دستور کاربر
+Roxira Strategic Roadmap Pipeline (2026/1405 Production)
+تولید خودکار ماژول‌های منطبق بر الزامات نوین اداری، بانکی و قضایی
 """
-import json
-import os
-import time
+import json, os, time
 
 QUEUE_FILE = "/opt/roxira_platform/task_queue.json"
 
 ROADMAP_PIPELINE = [
-    {
-        "id": "PROJ-102",
-        "prompt": "پیاده‌سازی ماژول ارسال خودکار فاکتورهای الکترونیکی به سامانه مودیان مالیاتی با امضای دیجیتال کلید خصوصی",
-        "priority": "HIGH"
-    },
-    {
-        "id": "PROJ-103",
-        "prompt": "طراحی موتور هوشمند تطبیق قراردادها با ماده ۱۰ قانون مدنی و قوانین بالادستی تجارت الکترونیک",
-        "priority": "HIGH"
-    },
-    {
-        "id": "PROJ-104",
-        "prompt": "پیاده‌سازی هسته تسعیر خودکار چندارزی بر پایه استاندارد ISO 4217 با بافر ایمن هجینگ تتر",
-        "priority": "MEDIUM"
-    },
-    {
-        "id": "PROJ-105",
-        "prompt": "طراحی ماژول چندسکویی ارزیابی ادله اثبات دعوی در دادگاه‌های صلح مبتنی بر Tauri 2.0",
-        "priority": "MEDIUM"
-    }
+    {"id": "PROJ-106", "prompt": "پیاده‌سازی ماژول ارسال الکترونیکی دفاتر تجاری و پلمپ هوشمند سامانه ثبت شرکت‌ها سال ۱۴۰۵"},
+    {"id": "PROJ-107", "prompt": "طراحی درگاه یکپارچه تسویه خودکار ریالی-تتری با انطباق نرخ‌های کارمزد شاپرک"},
+    {"id": "PROJ-108", "prompt": "موتور استعلام برخط اعتبار معاملاتی اشخاص حقوقی از طریق بردار قوانین Qdrant"},
+    {"id": "PROJ-109", "prompt": "طراحی دستیار هوشمند داوری و صلح دعاوی کارگری-کارفرمایی مطابق آخرین بخشنامه‌های قانون کار"}
 ]
 
 def ensure_backlog_stocked():
-    if not os.path.exists(QUEUE_FILE):
-        return
-    with open(QUEUE_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
+    if not os.path.exists(QUEUE_FILE): return
+    with open(QUEUE_FILE, "r", encoding="utf-8") as f: data = json.load(f)
     pending = data.get("pending", [])
     completed_ids = [t.get("id") for t in data.get("completed", [])]
-
     if not pending:
-        for candidate in ROADMAP_PIPELINE:
-            if candidate["id"] not in completed_ids:
-                print(f"🎯 [Backlog Feeder] تولید خودکار تسک راهبردی بعدی: {candidate['id']}")
-                print(f"   شرح تسک: {candidate['prompt']}")
-                data["pending"].append({
-                    "id": candidate["id"],
-                    "prompt": candidate["prompt"],
-                    "status": "QUEUED",
-                    "auto_generated": True,
-                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC")
+        for c in ROADMAP_PIPELINE:
+            if c["id"] not in completed_ids:
+                data.setdefault("pending", []).append({
+                    "id": c["id"], "prompt": c["prompt"], "status": "QUEUED",
+                    "auto_generated": True, "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC")
                 })
                 break
         with open(QUEUE_FILE, "w", encoding="utf-8") as f:

@@ -59,7 +59,7 @@ async def process_record(data: {task_id.replace("-", "")}Payload):
 
         # ۳. تولید کامپوننت فرانت‌اند (Next.js 16 + Tailwind CSS v4)
         frontend_code = f'''// Auto-generated UI Component for {task_id}
-import React, {{"useState"}} from 'react';
+import React, { useState } from 'react';
 
 export default function {task_id.replace("-", "")}View() {{
   const [status, setStatus] = useState('آماده پردازش');
