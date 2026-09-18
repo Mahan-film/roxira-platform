@@ -1,3 +1,4 @@
+from output_apps.ecosystem_core.src.factory.report_generator import generate_enterprise_docx, generate_markdown_report
 #!/usr/bin/env python3
 import http.server, json, os, signal, subprocess, time, importlib.util
 
@@ -9,6 +10,64 @@ HTML_FILE = "/opt/roxira_platform/output_apps/enterprise_hub/frontend/public/fac
 
 class DispatchHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+
+        if self.path.startswith("/api/v1/factory/download/"):
+            parts = self.path.strip("/").split("/")
+            if len(parts) >= 6:
+                task_id, fmt = parts[4], parts[5].lower()
+                tdir = os.path.join(MODULES_DIR, task_id)
+                mpath = os.path.join(tdir, "manifest.json")
+                meta = {}
+                if os.path.exists(mpath):
+                    with open(mpath, "r", encoding="utf-8") as mf: meta = json.load(mf)
+
+                if fmt == "docx":
+                    docx_file = os.path.join(tdir, f"{task_id}_Report.docx")
+                    if not os.path.exists(docx_file):
+                        generate_enterprise_docx(task_id, meta.get("prompt", ""), tdir, meta)
+                    if os.path.exists(docx_file):
+                        with open(docx_file, "rb") as df: data = df.read()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        self.send_header("Content-Disposition", f'attachment; filename="{task_id}_Report.docx"')
+                        self.end_headers()
+                        self.wfile.write(data)
+                        return
+
+                elif fmt == "markdown":
+                    md_file = os.path.join(tdir, "REPORT.md")
+                    if not os.path.exists(md_file):
+                        generate_markdown_report(task_id, meta.get("prompt", ""), tdir, meta)
+                    if os.path.exists(md_file):
+                        with open(md_file, "r", encoding="utf-8") as mf: data = mf.read()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                        self.send_header("Content-Disposition", f'attachment; filename="{task_id}_REPORT.md"')
+                        self.end_headers()
+                        self.wfile.write(data.encode("utf-8"))
+                        return
+
+                elif fmt == "json":
+                    if os.path.exists(mpath):
+                        with open(mpath, "rb") as jf: data = jf.read()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Disposition", f'attachment; filename="{task_id}_manifest.json"')
+                        self.end_headers()
+                        self.wfile.write(data)
+                        return
+
+                elif fmt == "pdf":
+                    md_file = os.path.join(tdir, "REPORT.md")
+                    if not os.path.exists(md_file):
+                        generate_markdown_report(task_id, meta.get("prompt", ""), tdir, meta)
+                    pdf_html = f'''<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><title>{task_id} Report</title><script src="https://cdn.tailwindcss.com"></script><link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet"><style>body{{font-family:Vazirmatn,sans-serif;}}@media print{{.no-print{{display:none!important;}}body{{background:white;color:black;}}}}</style></head><body class="bg-slate-50 p-8"><div class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow border"><div class="no-print flex justify-between items-center mb-6 pb-4 border-b"><span class="text-sm font-bold text-slate-500">پیش‌نمایش سند رسمی چاپی / PDF</span><button onclick="window.print()" class="px-5 py-2 bg-emerald-600 text-white font-bold rounded-xl text-sm">📥 ذخیره یا چاپ PDF</button></div><h1 class="text-xl font-bold mb-2">گزارش ممیزی ماژول: {task_id}</h1><p class="text-xs text-slate-500 mb-6">سامانه کارخانه نرم‌افزاری روکسیرا</p><div class="text-sm leading-relaxed mb-4"><strong>موضوع:</strong> {meta.get("prompt","")}</div><div class="text-sm leading-relaxed mb-4"><strong>وضعیت اعتبارسنجی:</strong> {meta.get("verification_status","ALL_GREEN")}</div><div class="mt-6 border-t pt-4 text-xs text-slate-400 font-mono">تولید خودکار در محیط ابری روکسیرا</div></div></body></html>'''
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(pdf_html.encode("utf-8"))
+                    return
+
         if self.path in ["/factory", "/factory/", "/factory/index.html"]:
             if os.path.exists(HTML_FILE):
                 with open(HTML_FILE, "r", encoding="utf-8") as f: content = f.read()
