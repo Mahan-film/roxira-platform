@@ -61,6 +61,15 @@
       "created_at": "2026-09-18 15:45:18 UTC",
       "completed_at": "2026-09-18 15:45:18 UTC",
       "exit_code": 0
+    },
+    {
+      "id": "USER-1789746570",
+      "prompt": "طراحی سیستم مدیریت انبارداری هوشمند مبتنی بر هوش مصنوعی",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 15:49:30 UTC",
+      "completed_at": "2026-09-18 15:49:30 UTC",
+      "exit_code": 0
     }
   ]
 }
