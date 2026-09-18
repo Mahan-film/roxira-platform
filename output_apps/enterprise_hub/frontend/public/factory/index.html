@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roxira Autonomous Mission Control | مرکز فرماندهی کارخانه هوشمند</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800&display=swap" rel="stylesheet">
+  <style> body { font-family: 'Vazirmatn', sans-serif; } </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6">
+  <div class="max-w-6xl mx-auto space-y-6">
+    <header class="flex flex-col md:flex-row items-start md:items-center justify-between bg-slate-900/80 p-6 rounded-3xl border border-slate-800 backdrop-blur">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+          مرکز فرماندهی کارخانه نرم‌افزاری خودمختار روکسیرا
+        </h1>
+        <p class="text-slate-400 text-sm mt-1">سامانه پیوسته توسعه، تست و استقرار بدون دخالت انسان (Production 2026)</p>
+      </div>
+      <div class="mt-4 md:mt-0 flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          ورکر خودران فعال
+        </span>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
+        <div class="text-sm text-slate-400">پروژه‌های در صف پردازش</div>
+        <div id="pendingCount" class="text-3xl font-extrabold text-cyan-400 mt-2">--</div>
+      </div>
+      <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
+        <div class="text-sm text-slate-400">پروژه‌های تکمیل و دیپلوی‌شده</div>
+        <div id="completedCount" class="text-3xl font-extrabold text-emerald-400 mt-2">--</div>
+      </div>
+      <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
+        <div class="text-sm text-slate-400">آخرین همگام‌سازی سرور</div>
+        <div id="lastSync" class="text-sm font-medium text-slate-300 mt-3 font-mono">--</div>
+      </div>
+    </div>
+
+    <section class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
+      <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+        ماژول‌های فیزیکی ساخته‌شده توسط ایجنت‌ها
+      </h2>
+      <div id="artifactsContainer" class="space-y-3">
+        <div class="text-sm text-slate-500">در حال دریافت داده‌های زنده سرور...</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    async function updateDashboard() {
+      try {
+        const res = await fetch('/api/v1/factory/status');
+        const data = await res.json();
+        document.getElementById('pendingCount').innerText = data.pending_tasks;
+        document.getElementById('completedCount').innerText = data.completed_tasks;
+        document.getElementById('lastSync').innerText = data.server_time;
+
+        const container = document.getElementById('artifactsContainer');
+        if (data.recent_generated_artifacts && data.recent_generated_artifacts.length > 0) {
+          container.innerHTML = data.recent_generated_artifacts.map(a => `
+            <div class="p-4 bg-slate-950/80 border border-slate-800/80 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+              <div>
+                <div class="font-semibold text-slate-200">${a.prompt}</div>
+                <div class="text-xs text-slate-500 mt-1 font-mono">${a.task_id} | ${a.created_at}</div>
+              </div>
+              <span class="px-2.5 py-1 text-xs rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                ${a.verification_status}
+              </span>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        console.error("Dashboard poll failed", e);
+      }
+    }
+    updateDashboard();
+    setInterval(updateDashboard, 5000);
+  </script>
+</body>
+</html>
