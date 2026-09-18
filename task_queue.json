@@ -34,6 +34,15 @@
       "created_at": "2026-09-18 15:42:27 UTC",
       "completed_at": "2026-09-18 15:42:29 UTC",
       "exit_code": 0
+    },
+    {
+      "id": "PROJ-104",
+      "prompt": "پیاده‌سازی هسته تسعیر خودکار چندارزی بر پایه استاندارد ISO 4217 با بافر هجینگ تتر",
+      "status": "SUCCESS",
+      "auto_generated": true,
+      "created_at": "2026-09-18 15:43:51 UTC",
+      "completed_at": "2026-09-18 15:43:54 UTC",
+      "exit_code": 0
     }
   ]
 }
