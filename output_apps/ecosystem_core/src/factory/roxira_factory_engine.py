@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-import os
-import sys
-import json
-import time
-import subprocess
-from output_apps.ecosystem_core.src.factory.llm_client import call_deepseek
+import sys, os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = "/opt/roxira_platform"
+for p in [current_dir, project_root]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+try:
+    from llm_client import call_deepseek
+except ImportError:
+    try:
+        from output_apps.ecosystem_core.src.factory.llm_client import call_deepseek
+    except ImportError:
+        def call_deepseek(p, s=""): return ""
 
 MODULES_DIR = "/opt/roxira_platform/output_apps/generated_modules"
 
