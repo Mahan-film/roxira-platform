@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-import sys, os
+import sys, os, json, time, subprocess
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = "/opt/roxira_platform"
-for p in [current_dir, project_root]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
+for path in [current_dir, project_root]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 try:
     from llm_client import call_deepseek
