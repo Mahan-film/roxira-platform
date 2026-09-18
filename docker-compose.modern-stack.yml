@@ -38,7 +38,7 @@ services:
       - APP_SECRET=REDACTED_SECRET_05
       - SIGN_IN_PREFILLED=true
     ports:
-      - "127.0.0.1:3002:3002"
+      - "127.0.0.1:3002:3000"
     volumes:
       - /opt/roxira_platform/twenty_data/server:/app/packages/twenty-server/storage
     networks:
