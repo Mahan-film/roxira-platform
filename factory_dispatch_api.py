@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Roxira Dedicated Factory Dispatcher API (Port 8005)
-دریافت تسک‌ها و ایده‌های جدید از وب و تزریق مستقیم به صف خودکار
-"""
 import http.server
 import json
 import os
@@ -16,7 +12,6 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/api/v1/factory/dispatch":
             content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length)
-            
             try:
                 payload = json.loads(post_data.decode('utf-8'))
                 prompt = payload.get("prompt", "").strip()
@@ -26,7 +21,6 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(b'{"error": "Prompt is required"}')
                     return
 
-                # ایجاد شناسه و درج در صف
                 task_id = f"USER-{int(time.time())}"
                 new_task = {
                     "id": task_id,
@@ -41,26 +35,23 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
                     with open(QUEUE_FILE, "r", encoding="utf-8") as f:
                         data = json.load(f)
 
-                # تزریق با بالاترین اولویت در ابتدای صف
                 data.setdefault("pending", []).insert(0, new_task)
 
                 with open(QUEUE_FILE, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
 
-                # تریگر ناهمگام ورکر بدون معطل کردن پاسخ وب
                 subprocess.Popen(["python3", "/opt/roxira_platform/output_apps/ecosystem_core/src/factory/task_worker.py"])
 
                 response = {
                     "status": "QUEUED_AND_TRIGGERED",
                     "task_id": task_id,
                     "prompt": prompt,
-                    "message": "پروژه در صف عامل‌های هوشمند قرار گرفت و بیلد آغاز شد."
+                    "message": "پروژه با موفقیت در صف کارخانه قرار گرفت."
                 }
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
                 self.end_headers()
                 self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
-
             except Exception as e:
                 self.send_response(500)
                 self.end_headers()
@@ -74,5 +65,5 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 if __name__ == "__main__":
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 8005), DispatchHandler)
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", 8005), DispatchHandler)
     server.serve_forever()
