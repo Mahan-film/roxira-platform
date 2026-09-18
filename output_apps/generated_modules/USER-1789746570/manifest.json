@@ -2,11 +2,11 @@
   "task_id": "USER-1789746570",
   "prompt": "طراحی سیستم مدیریت انبارداری هوشمند مبتنی بر هوش مصنوعی",
   "created_at": "2026-09-18 15:49:30 UTC",
+  "verification_status": "ALL_GREEN",
   "backend_syntax_pass": true,
   "frontend_ready": true,
   "artifacts": [
     "router.py",
     "Component.tsx"
-  ],
-  "verification_status": "ALL_GREEN"
+  ]
 }
