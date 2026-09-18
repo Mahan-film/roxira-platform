@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""
-Roxira Production Factory API Gateway (Status + Live Dispatch)
-"""
 import http.server
 import json
 import os
+import signal
 import subprocess
 import time
+
+# جلوگیری خودکار از تولید پروسه‌های زامبی در سیستم‌عامل
+signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 QUEUE_FILE = "/opt/roxira_platform/task_queue.json"
 MODULES_DIR = "/opt/roxira_platform/output_apps/generated_modules"
@@ -22,14 +23,16 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
                 except Exception:
                     pass
             
-            # فهرست ماژول‌های تولیدشده واقعی
             generated = []
             if os.path.exists(MODULES_DIR):
                 for folder in sorted(os.listdir(MODULES_DIR), reverse=True)[:10]:
                     m_path = os.path.join(MODULES_DIR, folder, "manifest.json")
                     if os.path.exists(m_path):
-                        with open(m_path, "r", encoding="utf-8") as mf:
-                            generated.append(json.load(mf))
+                        try:
+                            with open(m_path, "r", encoding="utf-8") as mf:
+                                generated.append(json.load(mf))
+                        except Exception:
+                            pass
 
             response = {
                 "server_time": time.strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -39,7 +42,6 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
                 "recent_completed": data.get("completed", [])[-5:],
                 "recent_generated_artifacts": generated
             }
-
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
             self.end_headers()
@@ -80,14 +82,13 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
                 with open(QUEUE_FILE, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
 
-                # تریگر فوری در ثانیه صفر
                 subprocess.Popen(["python3", "/opt/roxira_platform/output_apps/ecosystem_core/src/factory/task_worker.py"])
 
                 response = {
                     "status": "QUEUED_AND_TRIGGERED",
                     "task_id": task_id,
                     "prompt": prompt,
-                    "message": "پروژه در ثانیه صفر آغاز شد."
+                    "message": "پروژه در صف قرار گرفت و بیلد آغاز شد."
                 }
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
