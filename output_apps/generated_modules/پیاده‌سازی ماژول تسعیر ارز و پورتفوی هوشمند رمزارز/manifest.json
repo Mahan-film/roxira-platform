@@ -1,0 +1,12 @@
+{
+  "task_id": "پیاده‌سازی ماژول تسعیر ارز و پورتفوی هوشمند رمزارز",
+  "prompt": "توسعه زیرسیستم هوشمند",
+  "created_at": "2026-09-18 15:45:18 UTC",
+  "backend_syntax_pass": false,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx"
+  ],
+  "verification_status": "FAILED_SYNTAX"
+}

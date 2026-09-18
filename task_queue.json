@@ -52,6 +52,15 @@
       "created_at": "2026-09-18 15:44:27 UTC",
       "completed_at": "2026-09-18 15:44:27 UTC",
       "exit_code": 0
+    },
+    {
+      "id": "USER-1789746318",
+      "prompt": "پیاده‌سازی ماژول تسعیر ارز و پورتفوی هوشمند رمزارز",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 15:45:18 UTC",
+      "completed_at": "2026-09-18 15:45:18 UTC",
+      "exit_code": 0
     }
   ]
 }
