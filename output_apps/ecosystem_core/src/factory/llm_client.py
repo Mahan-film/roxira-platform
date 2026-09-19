@@ -14,7 +14,17 @@ def get_config():
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     k, v = line.split("=", 1)
-                    config[k.strip()] = v.strip().strip('"').strip("'")
+                    val = v.strip().strip('"').strip("'")
+                    key_name = k.strip()
+                    config[key_name] = val
+                    if key_name in ["OPENROUTER_API_KEY", "OPENAI_API_KEY"]:
+                        config["api_key"] = val
+                    if key_name in ["DEFAULT_LLM_MODEL", "LLM_MODEL"]:
+                        config["model"] = val
+
+    if not config.get("api_key") and "OPENROUTER_API_KEY" in config:
+        config["api_key"] = config["OPENROUTER_API_KEY"]
+
     return config
 
 def ask_deepseek(prompt: str, system_prompt: str = "") -> str:
@@ -34,7 +44,12 @@ def ask_deepseek(prompt: str, system_prompt: str = "") -> str:
     if system_prompt: messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    req = urllib.request.Request(url, data=json.dumps({"model": model, "messages": messages, "temperature": 0.2}).encode("utf-8"), headers=headers, method="POST")
+    req = urllib.request.Request(
+        url,
+        data=json.dumps({"model": model, "messages": messages, "temperature": 0.2}).encode("utf-8"),
+        headers=headers,
+        method="POST"
+    )
     try:
         with urllib.request.urlopen(req, timeout=45) as resp:
             data = json.loads(resp.read().decode("utf-8"))
