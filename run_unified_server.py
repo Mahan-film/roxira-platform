@@ -1,4 +1,7 @@
 
+from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_router
+app.include_router(zibal_router)
+
 from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_root_payment
 import os, sys, importlib, asyncio, uvicorn, pathlib
 from fastapi import FastAPI, Request
