@@ -1,0 +1,125 @@
+{
+  "task_id": "USER-1789798144",
+  "prompt": "agent factory ai autonomies app and web app and database factory",
+  "created_at": "2026-09-19 06:09:04 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "ai_engine": "DeepSeek V4.1 Flash + Roxira Deep Architect",
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "USER-1789798144_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "executive_summary": "سیستم جامع سازمانی agent factory ai autonomies app and web app and database factory طراحی‌شده جهت حذف چرخه‌های دستی و مدیریت یکپارچه داده‌های مشتریان و تراکنش‌ها با اتصال به الگوهای مدرن سازمانی.",
+    "domain_entities": [
+      {
+        "name": "OrganizationAccount",
+        "table_name": "accounts",
+        "description": "حساب‌های تجاری و شرکت‌های طرف قرارداد (مشابه ساختار Twenty CRM)",
+        "fields": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "legal_name",
+            "type": "String(255)",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "national_id",
+            "type": "String(11)",
+            "constraints": "UNIQUE, INDEX"
+          },
+          {
+            "name": "created_at",
+            "type": "DateTime",
+            "constraints": "DEFAULT NOW()"
+          }
+        ]
+      },
+      {
+        "name": "JournalEntry",
+        "table_name": "gl_entries",
+        "description": "دفتر کل و ثبت تراکنش‌های دوبل حسابداری (مشابه ساختار ERPNext)",
+        "fields": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "account_id",
+            "type": "UUID",
+            "constraints": "FOREIGN KEY -> accounts.id"
+          },
+          {
+            "name": "debit",
+            "type": "Decimal(18,2)",
+            "constraints": "DEFAULT 0.0"
+          },
+          {
+            "name": "credit",
+            "type": "Decimal(18,2)",
+            "constraints": "DEFAULT 0.0"
+          },
+          {
+            "name": "posted_at",
+            "type": "DateTime",
+            "constraints": "NOT NULL, INDEX"
+          }
+        ]
+      }
+    ],
+    "decision_matrix": [
+      {
+        "layer": "معماری داده و سفارشی‌سازی اشیاء",
+        "chosen_solution": "Twenty-like Dynamic Object Schema + PostgreSQL RLS",
+        "rejected_alternatives": "مدل‌های EAV سنتی یا جداول ثابت غیرقابل انعطاف",
+        "technical_justification": "جداسازی منطقی داده‌ها در سطح سطر (RLS) بدون سربار جوین‌های تو در تو"
+      },
+      {
+        "layer": "انطباق مالی و ثبتی",
+        "chosen_solution": "الگوریتم دفاتر دوطرفه ERPNext + امضای نامتقارن مودیان",
+        "rejected_alternatives": "حسابداری تک‌طرفه ساده نقدی",
+        "technical_justification": "تضمین توازن دائمی ترازنامه و صدور صورتحساب بدون مغایرت بانکی"
+      },
+      {
+        "layer": "جریان کاری و ارکستراسیون",
+        "chosen_solution": "LangGraph StateGraph + Temporal Automation",
+        "rejected_alternatives": "کرون‌جاب‌های ساده و تسک‌های متنی صلب",
+        "technical_justification": "قابلیت بازیابی وضعیت در صورت قطعی شبکه و رهگیری گام‌به‌گام اقدامات ایجنت"
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/user_1789798144/accounts",
+        "description": "ایجاد پرونده حقوقی جدید",
+        "payload_sample": "{\"legal_name\": \"شرکت نمونه\", \"national_id\": \"1400...\"}"
+      },
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/user_1789798144/journal-entries",
+        "description": "ثبت سند دوبل حسابداری",
+        "payload_sample": "{\"debit\": 15000000, \"credit\": 0}"
+      }
+    ],
+    "agentic_state_machine": [
+      {
+        "state": "LEAD_CAPTURED",
+        "event": "غنی‌سازی خودکار هوش مصنوعی",
+        "next_state": "QUALIFIED_PROSPECT"
+      },
+      {
+        "state": "DEAL_WON",
+        "event": "صدور سند حسابداری و فاکتور",
+        "next_state": "INVOICED_MADIAN_SYNCED"
+      }
+    ]
+  }
+}
