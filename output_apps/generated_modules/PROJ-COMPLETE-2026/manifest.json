@@ -1,9 +1,9 @@
 {
   "task_id": "PROJ-COMPLETE-2026",
   "prompt": "طراحی کارخانه تولید نرم‌افزار خودگردان با معماری وب‌آرتی‌سی، حافظه برداری و سندباکس کانتینری",
-  "created_at": "2026-09-19 08:56:42 UTC",
-  "verification_status": "SANDBOX_WARNING",
-  "sandbox_verified": false,
+  "created_at": "2026-09-19 08:58:48 UTC",
+  "verification_status": "ALL_GREEN",
+  "sandbox_verified": true,
   "frontend_ready": true,
   "artifacts": [
     "router.py",
@@ -12,77 +12,77 @@
     "REPORT.md"
   ],
   "arch_data": {
-    "domain_detected": "معماری سیستم‌های توزیع‌شده و تولید نرم‌افزار خودگردان",
-    "expert_opinion": "طراحی کارخانه تولید نرم‌افزار خودگردان با معماری وب‌آرتی‌سی، حافظه برداری و سندباکس کانتینری نیازمند یک رویکرد جامع و چندلایه است. این معماری باید قابلیت‌های خودگردانی، امنیت، مقیاس‌پذیری و انعطاف‌پذیری را به‌طور همزمان فراهم کند. استفاده از وب‌آرتی‌سی برای ارتباطات بلادرنگ، حافظه برداری برای ذخیره‌سازی موقت داده‌ها و سندباکس کانتینری برای ایزوله‌سازی و اجرای ایمن کدها، از جمله اجزای کلیدی این معماری هستند. این رویکرد به‌طور قابل‌توجهی زمان توسعه و استقرار نرم‌افزار را کاهش داده و قابلیت‌های خودگردانی را افزایش می‌دهد.",
+    "domain_detected": "سیستم‌های توزیع‌شده و تولید نرم‌افزار خودگردان",
+    "expert_opinion": "طراحی کارخانه تولید نرم‌افزار خودگردان با معماری وب‌آرتی‌سی، حافظه برداری و سندباکس کانتینری نیازمند یک رویکرد جامع و چندلایه است. این معماری باید قابلیت‌های خودگردانی، امنیت، مقیاس‌پذیری و انعطاف‌پذیری را به‌طور همزمان فراهم کند. استفاده از وب‌آرتی‌سی برای ارتباطات بلادرنگ، حافظه برداری برای ذخیره‌سازی داده‌ها و سندباکس کانتینری برای ایزوله‌سازی و امنیت، از جمله عناصر کلیدی این طراحی هستند. این معماری باید بتواند به‌طور خودکار فرآیندهای توسعه، تست و استقرار نرم‌افزار را مدیریت کند و در عین حال، امنیت و مقیاس‌پذیری را تضمین نماید.",
     "implementation_prerequisites": [
-      "زیرساخت ابری قابل‌اطمینان",
+      "زیرساخت ابری قابل اعتماد و مقیاس‌پذیر",
       "ابزارهای مدیریت کانتینر مانند Docker و Kubernetes",
       "پلتفرم‌های ارتباطات بلادرنگ مانند WebRTC",
-      "سیستم‌های ذخیره‌سازی موقت مانند Redis یا Memcached",
-      "ابزارهای نظارت و مدیریت امنیتی"
+      "سیستم‌های ذخیره‌سازی توزیع‌شده مانند Redis یا Memcached",
+      "ابزارهای نظارت و مدیریت امنیتی مانند Prometheus و Grafana"
     ],
     "decision_matrix": [
       {
         "layer": "ارتباطات بلادرنگ",
-        "chosen_solution": "WebRTC",
+        "chosen_solution": "WebRTC به دلیل پشتیبانی گسترده و قابلیت‌های بلادرنگ",
         "rejected_alternatives": "WebSocket و HTTP/2",
-        "technical_justification": "WebRTC به‌طور ذاتی از ارتباطات بلادرنگ پشتیبانی می‌کند و نیاز به واسطه‌های اضافی ندارد، در حالی که WebSocket و HTTP/2 نیاز به تنظیمات بیشتری دارند و ممکن است تاخیر بیشتری ایجاد کنند."
+        "technical_justification": "WebRTC از نظر تاخیر و پشتیبانی از ارتباطات مستقیم بین کلاینت‌ها برتر است و نیازی به سرور واسط ندارد."
       },
       {
-        "layer": "ذخیره‌سازی موقت",
-        "chosen_solution": "Redis",
-        "rejected_alternatives": "Memcached و Apache Cassandra",
-        "technical_justification": "Redis از ساختار داده‌های متنوعی پشتیبانی می‌کند و عملکرد بهتری در مقایسه با Memcached دارد. Apache Cassandra نیز برای ذخیره‌سازی موقت بیش‌ازحد پیچیده است."
+        "layer": "ذخیره‌سازی داده‌ها",
+        "chosen_solution": "Redis به دلیل سرعت بالا و پشتیبانی از ساختارهای داده متنوع",
+        "rejected_alternatives": "Memcached و MongoDB",
+        "technical_justification": "Redis از نظر سرعت و قابلیت‌های پیشرفته‌تر مانند پشتیبانی از داده‌های ساختاریافته و قابلیت‌های Pub/Sub برتر است."
       },
       {
-        "layer": "ایزوله‌سازی و اجرای ایمن",
-        "chosen_solution": "Docker",
-        "rejected_alternatives": "LXC و VM",
-        "technical_justification": "Docker به‌طور گسترده‌ای استفاده می‌شود و جامعه‌ی فعالی دارد. LXC و VM نیز به‌دلیل پیچیدگی بیشتر و نیاز به منابع اضافی، کمتر مناسب هستند."
+        "layer": "ایزوله‌سازی و امنیت",
+        "chosen_solution": "Docker به دلیل پشتیبانی گسترده و قابلیت‌های ایزوله‌سازی",
+        "rejected_alternatives": "LXC و Virtual Machines",
+        "technical_justification": "Docker از نظر سبک‌وزنی و قابلیت‌های مدیریت کانتینر برتر است و به‌راحتی با Kubernetes ادغام می‌شود."
       }
     ],
     "domain_entities": [
       {
-        "name": "کانتینر اجرایی",
-        "table_name": "execution_container",
-        "description": "کانتینرهایی که کدهای نرم‌افزاری را در محیط ایزوله اجرا می‌کنند.",
+        "name": "کانتینر نرم‌افزار",
+        "table_name": "software_container",
+        "description": "مؤلفه‌ای که نرم‌افزار را در یک محیط ایزوله اجرا می‌کند",
         "fields": [
           {
             "name": "container_id",
-            "type": "string",
-            "constraints": "primary key"
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
           },
           {
             "name": "image_name",
-            "type": "string",
-            "constraints": "not null"
+            "type": "STRING",
+            "constraints": "NOT NULL"
           },
           {
             "name": "status",
-            "type": "string",
-            "constraints": "not null"
+            "type": "ENUM",
+            "constraints": "NOT NULL"
           }
         ]
       },
       {
         "name": "حافظه برداری",
-        "table_name": "cache_memory",
-        "description": "ذخیره‌سازی موقت داده‌ها برای دسترسی سریع.",
+        "table_name": "cache_store",
+        "description": "مؤلفه‌ای که داده‌ها را به‌طور موقت ذخیره می‌کند",
         "fields": [
           {
             "name": "cache_key",
-            "type": "string",
-            "constraints": "primary key"
+            "type": "STRING",
+            "constraints": "PRIMARY KEY"
           },
           {
             "name": "cache_value",
-            "type": "string",
-            "constraints": "not null"
+            "type": "BLOB",
+            "constraints": "NOT NULL"
           },
           {
-            "name": "expiration_time",
-            "type": "timestamp",
-            "constraints": "not null"
+            "name": "expiry_time",
+            "type": "TIMESTAMP",
+            "constraints": "NOT NULL"
           }
         ]
       }
@@ -91,28 +91,28 @@
       {
         "method": "POST",
         "endpoint": "/api/v1/containers",
-        "description": "ایجاد یک کانتینر جدید برای اجرای کد."
+        "description": "ایجاد یک کانتینر جدید"
       },
       {
         "method": "GET",
         "endpoint": "/api/v1/containers/{container_id}",
-        "description": "دریافت وضعیت یک کانتینر."
+        "description": "دریافت اطلاعات یک کانتینر"
       },
       {
         "method": "PUT",
         "endpoint": "/api/v1/cache/{cache_key}",
-        "description": "به‌روزرسانی مقدار ذخیره‌شده در حافظه برداری."
+        "description": "ذخیره داده در حافظه برداری"
       },
       {
-        "method": "DELETE",
+        "method": "GET",
         "endpoint": "/api/v1/cache/{cache_key}",
-        "description": "حذف یک مقدار از حافظه برداری."
+        "description": "دریافت داده از حافظه برداری"
       }
     ],
     "recommended_sota_repositories": [
-      "https://github.com/Krishguptaaa/FASEROH-SYMBOLIC-LEARNING",
-      "https://github.com/Ramprasad273/systems",
-      "https://github.com/langchain-ai/open_deep_research"
+      "https://github.com/webrtc/webrtc",
+      "https://github.com/redis/redis",
+      "https://github.com/docker/docker-ce"
     ]
   }
 }

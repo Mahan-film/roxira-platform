@@ -22,7 +22,7 @@ def auto_heal_with_goose(file_path: str, error_msg: str):
             "/usr/bin/goose", "run", "--text",
             f"فایل {file_path} با خطای زیر در سندباکس مواجه شده است: {error_msg}. فایل را بازنویسی و اصلاح کن تا خطایی رخ ندهد."
         ]
-        subprocess.run(cmd, timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(cmd, timeout=60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print(f"  ✨ [Goose Self-Healing] عامل خودترمیم فایل {file_path} را اصلاح کرد.")
     except Exception as e:
         print(f"  ⚠️ خطا در اجرای خودترمیم Goose: {e}")
