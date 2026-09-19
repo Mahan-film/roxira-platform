@@ -1,9 +1,9 @@
 {
   "task_id": "USER-1789802544",
-  "prompt": "متالوژی ها و روش های  search for research برای محققین در سال ۲۰۲۶ به چه صورت و به چه شکل هستش  و اینکه آیا این هدفش...  حقیقاتی برای این روش سرچ فاریسرچ برای محققین  از در مدیریتی از در سایر روش ها  به هینه تا این حالت ممکنه هستش  افکتیف و افیشنت هست",
-  "created_at": "2026-09-19 07:22:52 UTC",
-  "verification_status": "SYNTAX_WARNING",
-  "backend_syntax_pass": false,
+  "prompt": "متدولوژی‌ها و روش‌های search for research برای محققین در سال ۲۰۲۶",
+  "created_at": "2026-09-19 07:36:08 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
   "frontend_ready": true,
   "artifacts": [
     "router.py",
@@ -12,69 +12,73 @@
     "REPORT.md"
   ],
   "arch_data": {
-    "domain_detected": "متالوژی‌های تحقیق و روش‌های جستجوی پیشرفته برای محققین",
-    "expert_opinion": "در سال ۲۰۲۶، متالوژی‌های تحقیق و روش‌های جستجوی پیشرفته برای محققین به‌طور قابل‌توجهی تحت تأثیر فناوری‌های هوش مصنوعی و یادگیری ماشین قرار گرفته‌اند. ابزارهایی مانند Paperguide به‌عنوان بهترین ابزارهای هوش مصنوعی برای مرور ادبیات و تحقیقات علمی شناخته شده‌اند. این ابزارها به محققین کمک می‌کنند تا مطالعات موجود را تحلیل کنند، شکاف‌های تحقیقاتی را شناسایی کنند و مناسب‌ترین رویکرد روش‌شناختی را با اطمینان انتخاب کنند. علاوه بر این، چارچوب‌هایی مانند RACE و FACT برای ارزیابی کیفیت گزارش‌های تحقیقاتی عمیق استفاده می‌شوند. این چارچوب‌ها به محققین اجازه می‌دهند تا به‌صورت سیستماتیک و دقیق‌تر به تحلیل داده‌ها بپردازند.",
+    "domain_detected": "روش‌ها و ابزارهای جستجوی پژوهشی برای محققین در سال ۲۰۲۶",
+    "expert_opinion": "در سال ۲۰۲۶، روش‌ها و ابزارهای جستجوی پژوهشی به‌طور چشمگیری تحت تأثیر پیشرفت‌های هوش مصنوعی قرار گرفته‌اند. ابزارهایی مانند Google Scholar، Semantic Scholar و Paperguide به‌عنوان موتورهای جستجوی پیشرفته در دسترس هستند. Google Scholar همچنان برای کشف گسترده مفید است، در حالی که Semantic Scholar با ارائه خلاصه‌های هوش مصنوعی و گراف‌های استنادی، کشف مقالات را تسهیل می‌کند. Paperguide نیز با ترکیب جستجو، درک مقالات، پشتیبانی از مرور ادبیات و کمک به نوشتن، به‌عنوان یک ابزار جامع در سال ۲۰۲۶ شناخته می‌شود. متدولوژی‌هایی مانند زنجیره‌سازی استناد (Citation Chaining) و تنظیم هشدارهای پژوهشی نیز به محققین کمک می‌کنند تا به‌طور مؤثرتری در جریان تحقیقات قرار گیرند.",
     "implementation_prerequisites": [
-      "دسترسی به ابزارهای هوش مصنوعی پیشرفته مانند Paperguide",
-      "آشنایی با چارچوب‌های ارزیابی RACE و FACT",
-      "دسترسی به پایگاه‌های داده جامع و به‌روز",
-      "زیرساخت‌های محاسباتی قدرتمند برای پردازش داده‌های بزرگ"
+      "دسترسی به اینترنت پرسرعت",
+      "عضویت در پایگاه‌های داده پژوهشی مانند PubMed، IEEE Xplore، arXiv، ERIC و PsycINFO",
+      "استفاده از ابزارهای هوش مصنوعی مانند Semantic Scholar و Paperguide"
     ],
     "decision_matrix": [
       {
-        "layer": "انتخاب ابزار مرور ادبیات",
-        "chosen_solution": "Paperguide با قابلیت‌های پیشرفته تحلیل داده‌ها و شناسایی شکاف‌های تحقیقاتی",
-        "rejected_alternatives": "روش‌های سنتی مرور دستی ادبیات",
-        "technical_justification": "Paperguide سرعت و دقت بالاتری در تحلیل داده‌ها ارائه می‌دهد و هزینه‌های زمانی را به‌طور قابل‌توجهی کاهش می‌دهد."
+        "layer": "کشف مقالات پژوهشی",
+        "chosen_solution": "Semantic Scholar با ارائه خلاصه‌های هوش مصنوعی و گراف‌های استنادی",
+        "rejected_alternatives": "Google Scholar به دلیل عدم فیلتر قابل اعتماد برای مقالات مرور شده توسط همتا",
+        "technical_justification": "Semantic Scholar با استفاده از هوش مصنوعی، سرعت و دقت کشف مقالات را افزایش می‌دهد و هزینه‌های زمانی محققین را کاهش می‌دهد."
       },
       {
-        "layer": "ارزیابی کیفیت گزارش‌های تحقیقاتی",
-        "chosen_solution": "چارچوب RACE و FACT برای ارزیابی سیستماتیک و دقیق",
-        "rejected_alternatives": "روش‌های ارزیابی سنتی مبتنی بر نظر شخصی",
-        "technical_justification": "چارچوب‌های RACE و FACT قابلیت‌های ارزیابی جامع‌تر و عینی‌تری را ارائه می‌دهند و نتایج قابل‌اطمینان‌تری تولید می‌کنند."
+        "layer": "پشتیبانی از مرور ادبیات و نوشتن",
+        "chosen_solution": "Paperguide با ترکیب جستجو، درک مقالات، پشتیبانی از مرور ادبیات و کمک به نوشتن",
+        "rejected_alternatives": "ابزارهای سنتی مانند EndNote و Zotero",
+        "technical_justification": "Paperguide با ارائه یک پلتفرم جامع، کارایی محققین را در مرور ادبیات و نوشتن مقالات افزایش می‌دهد و نیاز به استفاده از چندین ابزار مختلف را کاهش می‌دهد."
       }
     ],
     "domain_entities": [
       {
-        "name": "ابزار مرور ادبیات",
-        "table_name": "literature_review_tools",
-        "description": "ابزارهای هوش مصنوعی برای تحلیل و مرور ادبیات تحقیقاتی",
+        "name": "مقاله پژوهشی",
+        "table_name": "research_paper",
+        "description": "مقالات پژوهشی که توسط محققین منتشر شده‌اند",
         "fields": [
           {
-            "name": "tool_name",
+            "name": "title",
             "type": "string",
-            "constraints": "unique"
-          },
-          {
-            "name": "capabilities",
-            "type": "text",
             "constraints": "not null"
           },
           {
-            "name": "cost",
-            "type": "float",
-            "constraints": "nullable"
+            "name": "authors",
+            "type": "array",
+            "constraints": "not null"
+          },
+          {
+            "name": "publication_date",
+            "type": "date",
+            "constraints": "not null"
+          },
+          {
+            "name": "abstract",
+            "type": "text",
+            "constraints": "not null"
           }
         ]
       },
       {
-        "name": "چارچوب ارزیابی",
-        "table_name": "evaluation_frameworks",
-        "description": "چارچوب‌های سیستماتیک برای ارزیابی کیفیت گزارش‌های تحقیقاتی",
+        "name": "استناد",
+        "table_name": "citation",
+        "description": "استنادهای بین مقالات پژوهشی",
         "fields": [
           {
-            "name": "framework_name",
-            "type": "string",
-            "constraints": "unique"
-          },
-          {
-            "name": "description",
-            "type": "text",
+            "name": "source_paper_id",
+            "type": "integer",
             "constraints": "not null"
           },
           {
-            "name": "applicability",
-            "type": "text",
+            "name": "target_paper_id",
+            "type": "integer",
+            "constraints": "not null"
+          },
+          {
+            "name": "citation_date",
+            "type": "date",
             "constraints": "not null"
           }
         ]
@@ -83,19 +87,19 @@
     "api_contracts": [
       {
         "method": "GET",
-        "endpoint": "/api/v1/literature_review",
-        "description": "دریافت اطلاعات مربوط به مرور ادبیات"
+        "endpoint": "/api/v1/research_papers",
+        "description": "دریافت لیست مقالات پژوهشی بر اساس فیلترهای مختلف"
       },
       {
         "method": "POST",
-        "endpoint": "/api/v1/evaluation",
-        "description": "ارسال گزارش تحقیقاتی برای ارزیابی"
+        "endpoint": "/api/v1/citations",
+        "description": "افزودن استناد جدید بین مقالات پژوهشی"
       }
     ],
     "recommended_sota_repositories": [
-      "https://github.com/Paperguide/Paperguide-AI",
-      "https://github.com/RACE-FACT-Framework/RACE",
-      "https://github.com/DeepResearchBench/DeepResearchBench"
+      "https://github.com/allenai/semantic-scholar",
+      "https://github.com/paperguide/paperguide",
+      "https://github.com/google/scholar"
     ]
   }
 }

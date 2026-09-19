@@ -1,9 +1,9 @@
 {
   "task_id": "PROJ-SOTA-2026",
   "prompt": "طراحی کارخانه تولید نرم‌افزار خودگردان با تیم عامل‌های هوش مصنوعی و خزش وب با فایرکراول",
-  "created_at": "2026-09-19 07:18:46 UTC",
-  "verification_status": "SYNTAX_WARNING",
-  "backend_syntax_pass": false,
+  "created_at": "2026-09-19 07:35:47 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
   "frontend_ready": true,
   "artifacts": [
     "router.py",
@@ -13,59 +13,70 @@
   ],
   "arch_data": {
     "domain_detected": "طراحی کارخانه تولید نرم‌افزار خودگردان با استفاده از عامل‌های هوش مصنوعی و خزش وب",
-    "expert_opinion": "طراحی یک کارخانه تولید نرم‌افزار خودگردان با استفاده از عامل‌های هوش مصنوعی و ابزارهای خزش وب مانند فایرکراول، نیازمند یک رویکرد سیستماتیک و جامع است. فایرکراول به عنوان یک ابزار پیشرفته در حوزه خزش وب، با ارائه APIهای قدرتمند و قابلیت‌های خودکارسازی، می‌تواند به عنوان هسته اصلی این سیستم عمل کند. این ابزار با توانایی جستجو، استخراج و فرمت‌دهی داده‌ها برای هوش مصنوعی، امکان ایجاد یک خط تولید نرم‌افزار کاملاً خودکار را فراهم می‌کند. انتخاب فایرکراول به دلیل عملکرد برتر در بنچمارک‌های اخیر و قابلیت‌های منحصر به فرد آن در مقایسه با ابزارهای مشابه مانند Parallel و Mintlify، منطقی است.",
+    "expert_opinion": "در سال ۲۰۲۶، طراحی کارخانه تولید نرم‌افزار خودگردان نیازمند ادغام چندین فناوری پیشرفته از جمله عامل‌های هوش مصنوعی، سیستم‌های حافظه‌ای پیشرفته و ابزارهای خزش وب مانند فایرکراول است. این سیستم‌ها باید قادر به مدیریت حجم عظیمی از داده‌ها باشند و به‌صورت خودکار فرآیندهای توسعه نرم‌افزار را انجام دهند. استفاده از ابزارهایی مانند فایرکراول برای خزش وب و سیستم‌های حافظه‌ای مانند Pinecone و ChromaDB Cloud برای ذخیره و بازیابی داده‌ها ضروری است. این ابزارها به دلیل کارایی بالا و هزینه‌های بهینه، انتخاب‌های مناسبی برای چنین سیستمی هستند.",
     "implementation_prerequisites": [
-      "سرورهای قدرتمند با قابلیت پردازش موازی",
-      "API Key برای دسترسی به فایرکراول",
-      "زیرساخت‌های ابری برای ذخیره‌سازی و پردازش داده‌ها",
-      "ابزارهای مانیتورینگ و مدیریت خطا"
+      "سرورهای ابری با قابلیت مقیاس‌پذیری بالا",
+      "سیستم‌های حافظه‌ای پیشرفته مانند Pinecone یا ChromaDB Cloud",
+      "ابزارهای خزش وب مانند فایرکراول",
+      "پلتفرم‌های مدیریت فرآیندهای هوش مصنوعی مانند OpenAI",
+      "زیرساخت‌های امنیتی قوی برای محافظت از داده‌ها"
     ],
     "decision_matrix": [
       {
-        "layer": "ابزار خزش وب",
-        "chosen_solution": "فایرکراول با موفقیت ۶۳.۱٪ در بنچمارک Developer Retrieval Benchmark",
-        "rejected_alternatives": "Parallel (۵۷.۷٪), Mintlify (۵۴.۶٪), Exa (۵۳.۷٪)",
-        "technical_justification": "فایرکراول با ارائه قابلیت‌های پیشرفته در جستجو و استخراج داده‌ها، سرعت و دقت بالاتری را در مقایسه با سایر ابزارها ارائه می‌دهد. هزینه استفاده از فایرکراول نیز به دلیل ارائه حساب‌های رایگان و قابلیت‌های بدون نیاز به کلید API، مقرون به صرفه است."
+        "layer": "سیستم‌های حافظه‌ای",
+        "chosen_solution": "Pinecone به دلیل کارایی بالا و هزینه‌های بهینه",
+        "rejected_alternatives": "سیستم‌های حافظه‌ای سنتی مانند MySQL",
+        "technical_justification": "Pinecone قابلیت ذخیره و بازیابی داده‌ها با سرعت بالا و هزینه‌های کمتر را فراهم می‌کند، در حالی که سیستم‌های سنتی مانند MySQL برای حجم عظیم داده‌ها مناسب نیستند."
       },
       {
-        "layer": "پردازش داده‌ها",
-        "chosen_solution": "استفاده از مدل‌های زبانی بزرگ (LLM) مانند GPT-4",
-        "rejected_alternatives": "مدل‌های قدیمی‌تر مانند GPT-3",
-        "technical_justification": "GPT-4 با توانایی پردازش داده‌های پیچیده و تولید کدهای با کیفیت، بهترین گزینه برای پردازش داده‌های استخراج شده توسط فایرکراول است. این مدل با سرعت و دقت بالاتر، هزینه‌های عملیاتی را کاهش می‌دهد."
+        "layer": "ابزارهای خزش وب",
+        "chosen_solution": "فایرکراول به دلیل موفقیت بالا در بازیابی داده‌ها",
+        "rejected_alternatives": "ابزارهای سنتی مانند Scrapy",
+        "technical_justification": "فایرکراول موفقیت بالایی در بازیابی داده‌ها دارد و از نظر سرعت و دقت برتر از ابزارهای سنتی مانند Scrapy است."
       }
     ],
     "domain_entities": [
       {
-        "name": "خزش وب",
-        "table_name": "web_crawling",
-        "description": "فرآیند استخراج داده‌ها از وب‌سایت‌ها",
+        "name": "سیستم حافظه‌ای",
+        "table_name": "memory_system",
+        "description": "ذخیره و بازیابی داده‌ها برای عامل‌های هوش مصنوعی",
         "fields": [
           {
-            "name": "url",
-            "type": "string",
-            "constraints": "unique"
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
           },
           {
             "name": "data",
-            "type": "json",
-            "constraints": "nullable"
+            "type": "JSONB",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "timestamp",
+            "type": "TIMESTAMP",
+            "constraints": "NOT NULL"
           }
         ]
       },
       {
-        "name": "پردازش داده‌ها",
-        "table_name": "data_processing",
-        "description": "فرآیند تحلیل و تبدیل داده‌های استخراج شده",
+        "name": "ابزار خزش وب",
+        "table_name": "web_crawler",
+        "description": "جمع‌آوری داده‌ها از وب برای پردازش توسط عامل‌های هوش مصنوعی",
         "fields": [
           {
-            "name": "input_data",
-            "type": "json",
-            "constraints": "required"
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
           },
           {
-            "name": "output_data",
-            "type": "json",
-            "constraints": "nullable"
+            "name": "url",
+            "type": "TEXT",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "content",
+            "type": "JSONB",
+            "constraints": "NOT NULL"
           }
         ]
       }
@@ -74,17 +85,18 @@
       {
         "method": "POST",
         "endpoint": "/api/v1/crawl",
-        "description": "شروع فرآیند خزش وب برای یک URL مشخص"
+        "description": "درخواست خزش یک صفحه وب"
       },
       {
         "method": "GET",
-        "endpoint": "/api/v1/status",
-        "description": "بررسی وضعیت فرآیند خزش وب"
+        "endpoint": "/api/v1/memory",
+        "description": "بازیابی داده‌ها از سیستم حافظه‌ای"
       }
     ],
     "recommended_sota_repositories": [
       "https://github.com/firecrawl/benchmark-devdex",
-      "https://github.com/openai/gpt-4"
+      "https://github.com/pinecone-io/pinecone",
+      "https://github.com/chroma-core/chroma"
     ]
   }
 }
