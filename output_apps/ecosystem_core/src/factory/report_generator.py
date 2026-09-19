@@ -76,7 +76,8 @@ def generate_enterprise_docx(task_id: str, prompt: str, target_dir: str, metadat
     p_repo = doc.add_paragraph()
     p_repo.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     for repo in arch.get("recommended_sota_repositories", []):
-        p_repo.add_run(f" • مخزن مرجع: https://github.com/{repo}\n")
+        r_url = repo if repo.startswith("http") else f"https://github.com/{repo.strip('/')}"
+        p_repo.add_run(f" • مخزن مرجع: {r_url}\n")
 
     docx_path = os.path.join(target_dir, f"{task_id}_Report.docx")
     doc.save(docx_path)
@@ -100,7 +101,7 @@ def generate_markdown_report(task_id: str, prompt: str, target_dir: str, metadat
         for a in arch.get("api_contracts", [])
     )
 
-    repos_section = "\n".join(f"- [github.com/{r}](https://github.com/{r})" for r in arch.get("recommended_sota_repositories", []))
+    repos_section = "\n".join(f"" for r in arch.get("recommended_sota_repositories", []))
 
     md = f"""# سند رسمی معماری و تحلیل استراتژیک (IEEE 1016): {task_id}
 
