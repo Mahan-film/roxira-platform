@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-import os, sys, json, time, subprocess
+import sys, os
+sys.path.insert(0, "/opt/roxira_platform")
+
+import json, time, subprocess
 from output_apps.ecosystem_core.src.factory.architect_ai import analyze_and_architect_system
 from output_apps.ecosystem_core.src.factory.report_generator import generate_enterprise_docx, generate_markdown_report
 
@@ -15,7 +18,6 @@ class FactoryEngine:
         print(f"🧠 [Deep Research] تحلیل عمیق معماری دامنه برای '{prompt}'...")
         arch_data = analyze_and_architect_system(prompt, task_id)
 
-        # تولید کدهای بک‌اند بر اساس مدل‌های استخراج‌شده
         entities = arch_data.get("domain_entities", [])
         entity_classes = ""
         for ent in entities:
@@ -55,12 +57,9 @@ async def get_domain_schema():
         with open(os.path.join(target_dir, "router.py"), "w", encoding="utf-8") as f:
             f.write(backend_code)
 
-        # تولید فرانت‌اند Next.js تعاملی
         frontend_code = f'''import React, {{ useState }} from 'react';
 
 export default function {task_id.replace("-", "")}View() {{
-  const [activeTab, setActiveTab] = useState('entities');
-
   return (
     <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl text-white shadow-2xl">
       <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
@@ -89,7 +88,7 @@ export default function {task_id.replace("-", "")}View() {{
             "verification_status": "ALL_GREEN",
             "backend_syntax_pass": True,
             "frontend_ready": True,
-            "ai_engine": "DeepSeek Coder + Roxira Architect Agent",
+            "ai_engine": "DeepSeek V4.1 Flash + Roxira Deep Architect",
             "artifacts": ["router.py", "Component.tsx", f"{task_id}_Report.docx", "REPORT.md"],
             "arch_data": arch_data
         }
@@ -97,10 +96,9 @@ export default function {task_id.replace("-", "")}View() {{
         with open(os.path.join(target_dir, "manifest.json"), "w", encoding="utf-8") as mf:
             json.dump(metadata, mf, ensure_ascii=False, indent=2)
 
-        # تولید گزارش‌های Word و Markdown
         generate_enterprise_docx(task_id, prompt, target_dir, metadata, arch_data)
         generate_markdown_report(task_id, prompt, target_dir, metadata, arch_data)
-        print(f"✅ ماژول {task_id} با مستندات کامل IEEE 1016 با موفقیت بیلد شد.")
+        print(f"✅ ماژول {task_id} با موفقیت بیلد و مستند شد.")
         return metadata
 
 if __name__ == "__main__":
