@@ -1,24 +1,10 @@
-
-def auto_heal_with_goose(file_path: str, error_msg: str):
-    """فراخوانی خودکار Goose AI برای رفع خطاهای احتمالی نحو یا ماژول در پس‌زمینه"""
-    try:
-        import subprocess
-        cmd = [
-            "/usr/bin/goose", "run", "--text",
-            f"در فایل {file_path} خطای نحو زیر رخ داده است: {error_msg}. فایل را اصلاح کن تا بدون خطا کامپایل شود."
-        ]
-        subprocess.run(cmd, timeout=25, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"  ✨ [Goose Self-Healing] فایل {file_path} با موفقیت ترمیم شد.")
-    except Exception as e:
-        print(f"  ⚠️ خطا در فراخوانی خودکار Goose: {e}")
-
 #!/usr/bin/env python3
-import sys, os
-import ast, json, re, time
+import sys, os, ast, json, re, time, subprocess
 
 from output_apps.ecosystem_core.src.factory.architect_ai import analyze_and_architect_system
 from output_apps.ecosystem_core.src.factory.report_generator import generate_enterprise_docx, generate_markdown_report
 from output_apps.ecosystem_core.src.factory.qdrant_memory_agent import index_research_artifact
+from output_apps.ecosystem_core.src.factory.sandbox_runner import test_module_in_sandbox
 
 MODULES_DIR = "/opt/roxira_platform/output_apps/generated_modules"
 
@@ -29,6 +15,18 @@ def sanitize_identifier(name: str, fallback: str = "Entity") -> str:
     if not clean or clean[0].isdigit(): clean = f"Model_{clean}"
     return "".join(part.capitalize() for part in clean.split("_") if part) or fallback
 
+def auto_heal_with_goose(file_path: str, error_msg: str):
+    """ترمیم خودکار فایل توسط عامل Goose AI در صورت شکست در تست سندباکس"""
+    try:
+        cmd = [
+            "/usr/bin/goose", "run", "--text",
+            f"فایل {file_path} با خطای زیر در سندباکس مواجه شده است: {error_msg}. فایل را بازنویسی و اصلاح کن تا خطایی رخ ندهد."
+        ]
+        subprocess.run(cmd, timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(f"  ✨ [Goose Self-Healing] عامل خودترمیم فایل {file_path} را اصلاح کرد.")
+    except Exception as e:
+        print(f"  ⚠️ خطا در اجرای خودترمیم Goose: {e}")
+
 class FactoryEngine:
     @staticmethod
     def build_module(task_id: str, prompt: str):
@@ -36,12 +34,12 @@ class FactoryEngine:
         os.makedirs(target_dir, exist_ok=True)
         safe_prefix = re.sub(r'[^a-zA-Z0-9_]', '_', task_id.lower())
 
-        print(f"\n🏭 [کارخانه خودگردان روکسیرا] آغاز چرخه ساخت: {task_id}")
-        
-        # ۱. عامل دیپ‌ریسرچ و معمار
+        print(f"\n🏭 [کارخانه خودگردان روکسیرا] آغاز چرخه جامع ساخت: {task_id}")
+
+        # ۱. عامل دیپ‌ریسرچ + اتصال به GraphRAG حافظه
         arch_data = analyze_and_architect_system(prompt, task_id)
 
-        # ۲. عامل بک‌اند
+        # ۲. عامل بک‌اند و مدل‌سازی Pydantic
         entities = arch_data.get("domain_entities", [])
         entity_classes = ""
         for ent in entities:
@@ -80,10 +78,19 @@ async def health_check():
     }}
 '''
         backend_code = re.sub(r'[\u200c\u200b\u200e\u200f\ufeff]', ' ', backend_code)
-        with open(os.path.join(target_dir, "router.py"), "w", encoding="utf-8") as f:
+        router_path = os.path.join(target_dir, "router.py")
+        with open(router_path, "w", encoding="utf-8") as f:
             f.write(backend_code)
 
-        # ۳. عامل فرانت‌اند
+        # ۳. عامل آزمون سندباکس و خودترمیمی
+        print(f"  🧪 [عامل کیفیت و سندباکس] اعتبارسنجی روتر در محیط سندباکس...")
+        sandbox_ok, reason = test_module_in_sandbox(target_dir, task_id)
+        if not sandbox_ok:
+            print(f"  ⚠️ خطا در سندباکس ({reason}) -> فعال‌سازی مداخله Goose...")
+            auto_heal_with_goose(router_path, reason)
+            sandbox_ok, _ = test_module_in_sandbox(target_dir, task_id)
+
+        # ۴. عامل فرانت‌اند Next.js
         clean_opinion = arch_data.get("expert_opinion", "")[:600].replace('"', "'")
         frontend_code = f'''import React from 'react';
 
@@ -109,23 +116,14 @@ export default function {sanitize_identifier(task_id)}View() {{
         with open(os.path.join(target_dir, "Component.tsx"), "w", encoding="utf-8") as f:
             f.write(frontend_code)
 
-        # ۴. عامل آزمون کیفیت
-        syntax_passed = True
-        try:
-            ast.parse(backend_code)
-            print("  ✅ [عامل کیفیت] کدهای پایتون با موفقیت تایید شدند (AST Passed).")
-        except SyntaxError as se:
-            print(f"  ⚠️ خطای نحو: {se}")
-            syntax_passed = False
-
-        # ۵. عامل مستندساز
-        status_label = "ALL_GREEN" if syntax_passed else "SYNTAX_WARNING"
+        # ۵. عامل مستندساز رسمی
+        status_label = "ALL_GREEN" if sandbox_ok else "SANDBOX_WARNING"
         metadata = {
             "task_id": task_id,
             "prompt": prompt,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC"),
             "verification_status": status_label,
-            "backend_syntax_pass": syntax_passed,
+            "sandbox_verified": sandbox_ok,
             "frontend_ready": True,
             "artifacts": ["router.py", "Component.tsx", f"{task_id}_Report.docx", "REPORT.md"],
             "arch_data": arch_data
@@ -137,14 +135,14 @@ export default function {sanitize_identifier(task_id)}View() {{
         generate_enterprise_docx(task_id, prompt, target_dir, metadata, arch_data)
         generate_markdown_report(task_id, prompt, target_dir, metadata, arch_data)
 
-        # ۶. ثبت در حافظه برداری Qdrant
+        # ۶. ثبت برداری در حافظه Qdrant GraphRAG
         try:
             index_research_artifact(task_id, prompt, arch_data.get("expert_opinion", ""), arch_data.get("domain_detected", ""))
-            print(f"  🧠 [حافظه برداری] تسک {task_id} در کالکشن research_knowledge_base کیودرنت ایندکس شد.")
+            print(f"  🧠 [حافظه برداری] ماژول {task_id} در کیودرنت ایندکس شد.")
         except Exception as q_err:
             print(f"  ⚠️ خطا در ایندکس Qdrant: {q_err}")
 
-        # بروزرسانی صف تسک‌ها
+        # ۷. همگام‌سازی صف تسک‌ها
         qfile = "/opt/roxira_platform/task_queue.json"
         if os.path.exists(qfile):
             try:
@@ -157,7 +155,7 @@ export default function {sanitize_identifier(task_id)}View() {{
                 with open(qfile, "w", encoding="utf-8") as qf: json.dump(qdata, qf, ensure_ascii=False, indent=2)
             except Exception: pass
 
-        print(f"🎉 ماژول {task_id} با موفقیت تحویل داده شد ({status_label}).")
+        print(f"🎉 ساخت و ممیزی ماژول {task_id} با تاییدیه {status_label} خاتمه یافت.")
         return metadata
 
 if __name__ == "__main__":

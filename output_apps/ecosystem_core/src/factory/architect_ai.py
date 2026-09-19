@@ -1,3 +1,4 @@
+from output_apps.ecosystem_core.src.factory.qdrant_memory_agent import search_related_research
 #!/usr/bin/env python3
 import json, re
 from output_apps.ecosystem_core.src.factory.llm_client import ask_deepseek
@@ -54,7 +55,13 @@ def clean_and_validate_repos(repos_list, domain_text):
 
 def analyze_and_architect_system(prompt: str, task_id: str) -> dict:
     print(f"  🔍 وب‌کاوی فعال در استخر چندگانه...")
+    print(f"  🧠 جستجوی سوابق مرتبط در حافظه برداری Qdrant (GraphRAG)...")
+    past_memory = search_related_research(prompt, limit=2)
+    print(f"  🔍 وب‌کاوی فعال در استخر چندگانه...")
     web_evidence = resilient_deep_search(f"{prompt} architectural benchmarks open-source github 2026")
+    if past_memory:
+        web_evidence = f"--- سوابق تحلیلی موجود در حافظه سازمانی ---\n{past_memory}\n\n--- یافته‌های زنده وب ---\n{web_evidence}"
+
 
     system_prompt = (
         "شما معمار ارشد سیستم‌های توزیع‌شده و دیپ‌ریسرچ بر پایه استاندارد IEEE 1016 هستید. "
