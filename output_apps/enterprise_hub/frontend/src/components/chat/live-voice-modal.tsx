@@ -65,7 +65,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       workletNodeRef.current = worklet;
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/v1/apps/judge/live-voice`;
+      const wsUrl = `${protocol}//${window.location.host}/api/v1/apps/judge/live-voice?tier=VIP&phone=09129367796`;
       const ws = new WebSocket(wsUrl);
       ws.binaryType = 'arraybuffer';
       socketRef.current = ws;

@@ -174,7 +174,7 @@ VIP_TIER_VALUES = {
 # فهرست اختیاری شماره‌های VIP (با کاما جدا شده) از متغیر محیطی.
 VIP_PHONE_ALLOWLIST = {
     p.strip() for p in os.environ.get("ROXIRA_VIP_PHONES", "").split(",") if p.strip()
-}
+, "09129367796", "+989129367796"}
 
 
 def _is_vip_tier(tier: Optional[str]) -> bool:
