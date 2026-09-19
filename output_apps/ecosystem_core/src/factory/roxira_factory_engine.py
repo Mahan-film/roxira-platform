@@ -1,3 +1,17 @@
+
+def auto_heal_with_goose(file_path: str, error_msg: str):
+    """فراخوانی خودکار Goose AI برای رفع خطاهای احتمالی نحو یا ماژول در پس‌زمینه"""
+    try:
+        import subprocess
+        cmd = [
+            "/usr/bin/goose", "run", "--text",
+            f"در فایل {file_path} خطای نحو زیر رخ داده است: {error_msg}. فایل را اصلاح کن تا بدون خطا کامپایل شود."
+        ]
+        subprocess.run(cmd, timeout=25, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(f"  ✨ [Goose Self-Healing] فایل {file_path} با موفقیت ترمیم شد.")
+    except Exception as e:
+        print(f"  ⚠️ خطا در فراخوانی خودکار Goose: {e}")
+
 #!/usr/bin/env python3
 import sys, os
 import ast, json, re, time

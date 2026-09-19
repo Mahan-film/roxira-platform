@@ -3268,7 +3268,8 @@ async def _cache_prime_loop() -> None:
 _CACHE_PRIME_STARTED = False
 
 
-@router.on_event("startup")
+# Migrated to lifespan
+# @router.on_event("startup")
 async def _start_cache_priming() -> None:
     """Best-effort background priming; never blocks or breaks application startup."""
     global _CACHE_PRIME_STARTED
