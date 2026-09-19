@@ -13,15 +13,13 @@ router = APIRouter(prefix="/api/v1/user_1789799567", tags=["USER-1789799567"])
 
 class عامل خودکارModel(BaseModel):
     agent_id: str
-    agent_name: str
-    learning_model: str
-    interaction_capabilities: str
+    task: str
+    status: str
 
-class گردش کارModel(BaseModel):
-    workflow_id: str
-    workflow_name: str
-    optimization_model: str
-    execution_status: str
+class شبکه عصبیModel(BaseModel):
+    network_id: str
+    model: str
+    accuracy: str
 
 
 @router.get("/health")
@@ -29,10 +27,10 @@ async def health_check():
     return {
         "module": "USER-1789799567",
         "status": "ACTIVE_PRODUCTION",
-        "domain_entities": ['autonomous_agent', 'workflow'],
+        "domain_entities": ['autonomous_agent', 'neural_network'],
         "timestamp": datetime.datetime.now().isoformat()
     }
 
 @router.get("/schema")
 async def get_domain_schema():
-    return [{"name": "عامل خودکار", "table_name": "autonomous_agent", "description": "عامل‌های خودکار که قادر به یادگیری و تعامل با محیط‌های پیچیده هستند.", "fields": [{"name": "agent_id", "type": "UUID", "constraints": "PRIMARY KEY"}, {"name": "agent_name", "type": "VARCHAR(255)", "constraints": "NOT NULL"}, {"name": "learning_model", "type": "TEXT", "constraints": "NOT NULL"}, {"name": "interaction_capabilities", "type": "JSON", "constraints": "NOT NULL"}]}, {"name": "گردش کار", "table_name": "workflow", "description": "گردش کارهای مدیریت شده توسط پلتفرم‌های هوشمند.", "fields": [{"name": "workflow_id", "type": "UUID", "constraints": "PRIMARY KEY"}, {"name": "workflow_name", "type": "VARCHAR(255)", "constraints": "NOT NULL"}, {"name": "optimization_model", "type": "TEXT", "constraints": "NOT NULL"}, {"name": "execution_status", "type": "VARCHAR(50)", "constraints": "NOT NULL"}]}]
+    return [{"name": "عامل خودکار", "table_name": "autonomous_agent", "description": "این مؤلفه مسئول انجام وظایف محوله به صورت مستقل و تعامل با سایر عامل‌ها است.", "fields": [{"name": "agent_id", "type": "UUID", "constraints": "PRIMARY KEY"}, {"name": "task", "type": "TEXT", "constraints": "NOT NULL"}, {"name": "status", "type": "ENUM", "constraints": "NOT NULL"}]}, {"name": "شبکه عصبی", "table_name": "neural_network", "description": "این مؤلفه مسئول پردازش داده‌ها و یادگیری مداوم برای بهبود عملکرد سیستم است.", "fields": [{"name": "network_id", "type": "UUID", "constraints": "PRIMARY KEY"}, {"name": "model", "type": "TEXT", "constraints": "NOT NULL"}, {"name": "accuracy", "type": "FLOAT", "constraints": "NOT NULL"}]}]

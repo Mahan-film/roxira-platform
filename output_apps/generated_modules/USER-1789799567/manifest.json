@@ -1,7 +1,7 @@
 {
   "task_id": "USER-1789799567",
   "prompt": "بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار و تیم عامل‌های مصنوعی چیست؟",
-  "created_at": "2026-09-19 06:43:33 UTC",
+  "created_at": "2026-09-19 06:48:21 UTC",
   "verification_status": "ALL_GREEN",
   "backend_syntax_pass": true,
   "frontend_ready": true,
@@ -14,32 +14,32 @@
   ],
   "arch_data": {
     "domain_detected": "کارخانه ایجنت‌های خودکار و تیم عامل‌های مصنوعی",
-    "expert_opinion": "در سال ۲۰۲۶، بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار و تیم عامل‌های مصنوعی ترکیبی از معماری‌های مبتنی بر هوش مصنوعی پیشرفته و زیرساخت‌های ابری مقیاس‌پذیر است. استفاده از عامل‌های خودکار (Autonomous Agents) که قادر به یادگیری مستمر و تعامل با محیط‌های پیچیده هستند، به همراه پلتفرم‌های مدیریت گردش کار (Workflow Management Platforms) که از یادگیری ماشین برای بهینه‌سازی فرآیندها استفاده می‌کنند، ضروری است. این ترکیب نه تنها انعطاف‌پذیری و کارایی را افزایش می‌دهد، بلکه امکان ادغام با سیستم‌های موجود و مقیاس‌پذیری در آینده را نیز فراهم می‌کند.",
+    "expert_opinion": "در سال ۲۰۲۶، بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار و تیم عامل‌های مصنوعی، ترکیبی از معماری مبتنی بر عامل‌های خودکار (Autonomous Agents) و شبکه‌های عصبی پیشرفته است. این ترکیب به دلیل توانایی در مدیریت پیچیدگی‌های سیستم‌های بزرگ، انعطاف‌پذیری بالا و قابلیت یادگیری مداوم، بهینه‌ترین راهکار محسوب می‌شود. استفاده از پلتفرم‌های مبتنی بر هوش مصنوعی مانند MetaGPT و LangGraph به دلیل پشتیبانی از تعاملات پیچیده و قابلیت‌های یادگیری عمیق، به شدت توصیه می‌شود. این پلتفرم‌ها امکان ایجاد سیستم‌های خودکار با قابلیت‌های تصمیم‌گیری مستقل و همکاری بین عامل‌ها را فراهم می‌کنند.",
     "decision_matrix": [
       {
-        "layer": "معماری عامل‌های خودکار",
+        "layer": "معماری عامل‌ها",
+        "chosen_solution": "معماری مبتنی بر عامل‌های خودکار (Autonomous Agents)",
+        "rejected_alternatives": "معماری‌های مونولیتیک و میکروسرویس‌های سنتی",
+        "technical_justification": "معماری مبتنی بر عامل‌های خودکار به دلیل قابلیت‌های یادگیری مستقل و انعطاف‌پذیری بالا، در مقایسه با معماری‌های مونولیتیک و میکروسرویس‌های سنتی، عملکرد بهتری در مدیریت پیچیدگی‌های سیستم‌های بزرگ دارد. این معماری امکان تعاملات پیچیده و همکاری بین عامل‌ها را فراهم می‌کند."
+      },
+      {
+        "layer": "یادگیری ماشین",
+        "chosen_solution": "شبکه‌های عصبی پیشرفته (Advanced Neural Networks)",
+        "rejected_alternatives": "مدل‌های یادگیری ماشین سنتی",
+        "technical_justification": "شبکه‌های عصبی پیشرفته به دلیل توانایی در یادگیری عمیق و پردازش داده‌های پیچیده، در مقایسه با مدل‌های یادگیری ماشین سنتی، عملکرد بهتری در تحلیل و پیش‌بینی دارند. این مدل‌ها قابلیت یادگیری مداوم و تطبیق با شرایط جدید را فراهم می‌کنند."
+      },
+      {
+        "layer": "پلتفرم توسعه",
         "chosen_solution": "MetaGPT و LangGraph",
-        "rejected_alternatives": "روش‌های سنتی مبتنی بر قوانین ثابت",
-        "technical_justification": "MetaGPT و LangGraph از مدل‌های زبانی پیشرفته و گراف‌های تعاملی برای ایجاد عامل‌های خودکار استفاده می‌کنند که قادر به یادگیری و تطبیق با شرایط جدید هستند. این روش‌ها در مقایسه با روش‌های سنتی که مبتنی بر قوانین ثابت و غیرقابل انعطاف هستند، کارایی و انعطاف‌پذیری بیشتری دارند."
-      },
-      {
-        "layer": "زیرساخت ابری",
-        "chosen_solution": "Kubernetes و Istio",
-        "rejected_alternatives": "سرورهای فیزیکی و مجازی سنتی",
-        "technical_justification": "Kubernetes و Istio امکان مدیریت و مقیاس‌پذیری کارآمد سرویس‌های میکروسرویس را فراهم می‌کنند. این زیرساخت‌ها در مقایسه با سرورهای فیزیکی و مجازی سنتی، قابلیت‌های خودکارسازی و مدیریت بهتر منابع را ارائه می‌دهند."
-      },
-      {
-        "layer": "مدیریت گردش کار",
-        "chosen_solution": "Airflow و Prefect",
-        "rejected_alternatives": "گردش کار دستی و اسکریپت‌های سفارشی",
-        "technical_justification": "Airflow و Prefect از یادگیری ماشین برای بهینه‌سازی و مدیریت گردش کار استفاده می‌کنند. این پلتفرم‌ها در مقایسه با گردش کار دستی و اسکریپت‌های سفارشی، کارایی و قابلیت اطمینان بیشتری دارند."
+        "rejected_alternatives": "پلتفرم‌های توسعه سنتی",
+        "technical_justification": "MetaGPT و LangGraph به دلیل پشتیبانی از تعاملات پیچیده و قابلیت‌های یادگیری عمیق، در مقایسه با پلتفرم‌های توسعه سنتی، عملکرد بهتری در ایجاد سیستم‌های خودکار با قابلیت‌های تصمیم‌گیری مستقل و همکاری بین عامل‌ها دارند."
       }
     ],
     "domain_entities": [
       {
         "name": "عامل خودکار",
         "table_name": "autonomous_agent",
-        "description": "عامل‌های خودکار که قادر به یادگیری و تعامل با محیط‌های پیچیده هستند.",
+        "description": "این مؤلفه مسئول انجام وظایف محوله به صورت مستقل و تعامل با سایر عامل‌ها است.",
         "fields": [
           {
             "name": "agent_id",
@@ -47,45 +47,35 @@
             "constraints": "PRIMARY KEY"
           },
           {
-            "name": "agent_name",
-            "type": "VARCHAR(255)",
-            "constraints": "NOT NULL"
-          },
-          {
-            "name": "learning_model",
+            "name": "task",
             "type": "TEXT",
             "constraints": "NOT NULL"
           },
           {
-            "name": "interaction_capabilities",
-            "type": "JSON",
+            "name": "status",
+            "type": "ENUM",
             "constraints": "NOT NULL"
           }
         ]
       },
       {
-        "name": "گردش کار",
-        "table_name": "workflow",
-        "description": "گردش کارهای مدیریت شده توسط پلتفرم‌های هوشمند.",
+        "name": "شبکه عصبی",
+        "table_name": "neural_network",
+        "description": "این مؤلفه مسئول پردازش داده‌ها و یادگیری مداوم برای بهبود عملکرد سیستم است.",
         "fields": [
           {
-            "name": "workflow_id",
+            "name": "network_id",
             "type": "UUID",
             "constraints": "PRIMARY KEY"
           },
           {
-            "name": "workflow_name",
-            "type": "VARCHAR(255)",
-            "constraints": "NOT NULL"
-          },
-          {
-            "name": "optimization_model",
+            "name": "model",
             "type": "TEXT",
             "constraints": "NOT NULL"
           },
           {
-            "name": "execution_status",
-            "type": "VARCHAR(50)",
+            "name": "accuracy",
+            "type": "FLOAT",
             "constraints": "NOT NULL"
           }
         ]
@@ -94,18 +84,18 @@
     "api_contracts": [
       {
         "method": "POST",
-        "endpoint": "/api/v1/agents/create",
-        "description": "ایجاد یک عامل خودکار جدید"
+        "endpoint": "/api/v1/agents",
+        "description": "ایجاد یک عامل خودکار جدید در سیستم"
       },
       {
         "method": "GET",
-        "endpoint": "/api/v1/workflows/status",
-        "description": "دریافت وضعیت گردش کارها"
+        "endpoint": "/api/v1/agents/{agent_id}",
+        "description": "دریافت اطلاعات یک عامل خودکار خاص"
       },
       {
         "method": "PUT",
-        "endpoint": "/api/v1/agents/update",
-        "description": "به‌روزرسانی اطلاعات عامل خودکار"
+        "endpoint": "/api/v1/agents/{agent_id}",
+        "description": "به‌روزرسانی اطلاعات یک عامل خودکار خاص"
       }
     ],
     "recommended_sota_repositories": [
