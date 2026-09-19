@@ -1,3 +1,4 @@
+from output_apps.ecosystem_core.src.factory.stt_engine import transcribe_audio_blob
 #!/usr/bin/env python3
 import sys, os
 sys.path.insert(0, "/opt/roxira_platform")
@@ -142,6 +143,26 @@ class SafeDispatchHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             raw_path = urllib.parse.unquote(self.path)
+            
+            if raw_path == "/api/v1/factory/transcribe":
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                payload = json.loads(body.decode("utf-8"))
+                audio_b64 = payload.get("audio_base64", "")
+                mime_type = payload.get("mime_type", "audio/webm")
+                
+                if not audio_b64:
+                    self.send_safe_json(400, {"error": "داده صوتی دریافت نشد."})
+                    return
+
+                text = transcribe_audio_blob(audio_b64, mime_type)
+                self.send_safe_json(200, {
+                    "status": "SUCCESS",
+                    "text": text,
+                    "engine": "Roxira Bilingual Speech AI"
+                })
+                return
+
             if raw_path == "/api/v1/factory/dispatch":
                 length = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(length)

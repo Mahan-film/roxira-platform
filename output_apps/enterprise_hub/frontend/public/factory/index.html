@@ -16,7 +16,7 @@
         <h1 class="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
           مرکز فرماندهی کارخانه نرم‌افزاری خودگردان روکسیرا
         </h1>
-        <p class="text-slate-400 text-sm mt-1">توسعه پیوسته، تحلیل عمیق دامنه و کنترل کامل با کیبورد و صوت (Production 2026)</p>
+        <p class="text-slate-400 text-sm mt-1">توسعه خودکار نرم‌افزار، تحلیل دامنه IEEE 1016 و تبدیل صوت دوزبانه به متن (Production 2026)</p>
       </div>
       <div class="mt-4 md:mt-0 flex items-center gap-2">
         <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
@@ -32,7 +32,7 @@
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
           ارسال ایده / پروژه جدید به کارخانه
         </h2>
-        <span class="text-xs font-mono text-slate-400">کلید <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-emerald-400 font-bold">Enter / Return</kbd> برای ارسال فوری</span>
+        <span class="text-xs font-mono text-slate-400">کلید <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-emerald-400 font-bold">Return</kbd> برای ارسال فوری</span>
       </div>
       
       <form id="projectForm" onsubmit="event.preventDefault(); submitTask();" class="flex flex-col sm:flex-row gap-3">
@@ -42,14 +42,14 @@
             type="text" 
             required
             autocomplete="off"
-            placeholder="ایده را بنویسید و کلید Return/Enter را بزنید..." 
+            placeholder="ایده را بنویسید یا دکمه میکروفون را بزنید..." 
             class="w-full bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3.5 pl-12 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
           >
           <button 
             id="voiceBtn" 
             type="button"
-            onclick="toggleAudioCapture()" 
-            title="تبدیل گفتار به متن"
+            onclick="startAudioRecording()" 
+            title="شروع ضبط صدا"
             class="absolute left-3 top-2.5 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition-all cursor-pointer"
           >
             <svg id="micIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 02-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
@@ -64,8 +64,40 @@
         </button>
       </form>
 
-      <div id="voiceNotice" class="mt-2 text-xs font-mono text-cyan-400 hidden"></div>
+      <!-- پنل تعاملی کنترل ضبط و ارسال صوت به سرور -->
+      <div id="recordingPanel" class="mt-4 p-4 bg-slate-950 border border-emerald-500/40 rounded-2xl hidden flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <span class="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping"></span>
+          <div>
+            <div class="text-sm font-bold text-white flex items-center gap-2">
+              در حال ضبط صدا...
+              <span id="recordTimer" class="font-mono text-xs px-2 py-0.5 bg-slate-800 rounded text-emerald-400">00:00</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-0.5">پشتیبانی خودکار از گفتار فارسی، انگلیسی و اصطلاحات تخصصی ترکیبی</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            onclick="stopAndTranscribe()" 
+            class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <span>⏹️ اتمام صحبت و تبدیل به متن</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="cancelRecording()" 
+            class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs rounded-xl border border-slate-700 transition-all cursor-pointer"
+          >
+            <span>❌ لغو / بستن</span>
+          </button>
+        </div>
+      </div>
 
+      <!-- وضعیت ارسال و پردازش صوت -->
+      <div id="voiceStatusNotice" class="mt-3 text-xs font-mono text-cyan-400 hidden"></div>
+
+      <!-- خط لوله دیپ ریسرچ -->
       <div id="researchPipeline" class="mt-4 p-4 bg-slate-950/80 rounded-2xl border border-slate-800 hidden">
         <div class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
           <span>خط لوله دیپ ریسرچ و تحلیل دامنه:</span>
@@ -107,78 +139,100 @@
   </div>
 
   <script>
-    let recognition = null;
-    let isListening = false;
+    // سیستم ضبط صوت مستقیم MediaRecorder و ارسال به سرور
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordTimerInterval = null;
+    let recordSeconds = 0;
+    let currentStream = null;
 
-    async function toggleAudioCapture() {
-      const notice = document.getElementById('voiceNotice');
-      const btn = document.getElementById('voiceBtn');
-      notice.classList.remove('hidden');
-
-      if (isListening) {
-        if (recognition) recognition.stop();
-        isListening = false;
-        btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
-        notice.innerText = 'ضبط متوقف شد.';
-        return;
-      }
-
-      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRec) {
-        notice.innerText = 'مرورگر شما از Speech Recognition پشتیبانی نمی‌کند.';
-        return;
-      }
-
-      recognition = new SpeechRec();
-      // تنظیم زبان بر اساس زبان‌های نصب‌شده در سیستم (پیش‌فرض en-US با فالبک)
-      recognition.lang = 'en-US';
-      recognition.continuous = false;
-      recognition.interimResults = false;
-
-      recognition.onstart = () => {
-        isListening = true;
-        btn.classList.add('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
-        notice.innerText = '🎙️ میکروفون فعال است (English/Dictation)... صحبت کنید';
-      };
-
-      recognition.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        const inp = document.getElementById('promptInput');
-        inp.value = inp.value ? inp.value + ' ' + text : text;
-        notice.innerText = 'صوت دریافت شد. برای ارسال Enter بزنید.';
-      };
-
-      recognition.onerror = (e) => {
-        isListening = false;
-        btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
-        if (e.error === 'service-not-allowed' || e.error === 'not-allowed') {
-          notice.innerText = '⚠️ دسترسی Dictation به زبان انتخابی محدود است. می‌توانید با کلید میانبر مک (دو بار زدن Control) مستقیماً درون کادر دیکته کنید.';
-        } else {
-          notice.innerText = 'وضعیت: ' + e.error;
-        }
-      };
-
-      recognition.onend = () => {
-        isListening = false;
-        btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
-      };
+    async function startAudioRecording() {
+      const panel = document.getElementById('recordingPanel');
+      const notice = document.getElementById('voiceStatusNotice');
+      notice.classList.add('hidden');
 
       try {
-        recognition.start();
+        currentStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (err) {
-        notice.innerText = 'خطا در راه‌اندازی ضبط: ' + err.message;
+        notice.classList.remove('hidden');
+        notice.innerText = '⚠️ دسترسی به میکروفون صادر نشد. لطفاً در تنظیمات مرورگر دسترسی به میکروفون را مجاز کنید.';
+        return;
       }
-    } else {
-          notice.innerText = 'وضعیت صوت: ' + e.error;
-        }
+
+      audioChunks = [];
+      let mime = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
+        else if (MediaRecorder.isTypeSupported('audio/wav')) mime = 'audio/wav';
+      }
+
+      mediaRecorder = new MediaRecorder(currentStream, { mimeType: mime });
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data);
       };
 
-      recognition.onend = () => {
-        isListening = false;
-        btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
+      mediaRecorder.start(250);
+      panel.classList.remove('hidden');
+
+      recordSeconds = 0;
+      document.getElementById('recordTimer').innerText = '00:00';
+      clearInterval(recordTimerInterval);
+      recordTimerInterval = setInterval(() => {
+        recordSeconds++;
+        const mins = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+        const secs = String(recordSeconds % 60).padStart(2, '0');
+        document.getElementById('recordTimer').innerText = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function cancelRecording() {
+      clearInterval(recordTimerInterval);
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+      document.getElementById('recordingPanel').classList.add('hidden');
+      const notice = document.getElementById('voiceStatusNotice');
+      notice.classList.remove('hidden');
+      notice.innerText = 'ضبط صدا لغو شد.';
+    }
+
+    async function stopAndTranscribe() {
+      clearInterval(recordTimerInterval);
+      const notice = document.getElementById('voiceStatusNotice');
+      notice.classList.remove('hidden');
+      notice.innerHTML = '<span class="text-cyan-400">⏳ در حال ارسال فایل صوتی به سرور و پردازش با هوش مصنوعی...</span>';
+
+      mediaRecorder.onstop = async () => {
+        const mime = mediaRecorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunks, { type: mime });
+        if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+        document.getElementById('recordingPanel').classList.add('hidden');
+
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Data = reader.result.split(',')[1];
+          try {
+            const res = await fetch('/api/v1/factory/transcribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audio_base64: base64Data, mime_type: mime })
+            });
+            const data = await res.json();
+            if (data.status === 'SUCCESS' && data.text) {
+              const inp = document.getElementById('promptInput');
+              inp.value = inp.value ? inp.value + ' ' + data.text : data.text;
+              notice.innerHTML = '<span class="text-emerald-400 font-semibold">✅ متن با موفقیت استخراج شد. کلید Return را برای ارسال بزنید.</span>';
+              inp.focus();
+            } else {
+              notice.innerText = '⚠️ صدایی تشخیص داده نشد یا خطایی رخ داد.';
+            }
+          } catch (err) {
+            notice.innerText = 'خطا در برقراری ارتباط با سرویس پردازش صوت سرور.';
+          }
+        };
       };
 
-      recognition.start();
+      mediaRecorder.stop();
     }
 
     function animatePipeline() {
@@ -193,7 +247,7 @@
       setTimeout(() => {
         s1.className = "p-2.5 rounded-xl border border-emerald-500 bg-emerald-950/40 text-emerald-300";
         s2.className = "p-2.5 rounded-xl border border-cyan-500 bg-cyan-950/40 text-cyan-300 animate-pulse";
-        st.innerText = "فاز ۲: مدل‌سازی داده و DDL...";
+        st.innerText = "فاز ۲: مدل‌سازی Twenty/ERPNext...";
       }, 1500);
 
       setTimeout(() => {
