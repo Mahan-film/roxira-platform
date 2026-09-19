@@ -141,6 +141,9 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
   // پخش پایدار و قطعی بدون قطع شدن در سافاری
   const playUnbrokenAudio = (base64Audio: string) => {
+    window.__isSpeaking = true;
+    if (window.mediaRecorder && window.mediaRecorder.state === "recording") { try { window.mediaRecorder.pause(); } catch(e){} }
+
     try {
       setSessionState('SPEAKING');
 
@@ -162,6 +165,9 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       window.__smartJudgeAudioPlayer = audio;
 
       audio.onended = () => {
+    window.__isSpeaking = false;
+    setTimeout(() => { if (window.mediaRecorder && window.mediaRecorder.state === "paused") { try { window.mediaRecorder.resume(); } catch(e){} } }, 500);
+
         window.__smartJudgeAudioPlayer = null;
         setTimeout(() => {
           resumeListening();

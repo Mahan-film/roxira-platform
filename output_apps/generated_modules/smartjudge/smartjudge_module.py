@@ -5277,3 +5277,11 @@ async def export_chat_dataset(admin_key: str = ""):
 router.include_router(zibal_payment_router)
 
 router.include_router(live_voice_router)
+
+
+# Mount Zibal payment directly on root app to avoid 404
+from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_root_router
+try:
+    app.include_router(zibal_root_router)
+except Exception:
+    router.include_router(zibal_root_router)
