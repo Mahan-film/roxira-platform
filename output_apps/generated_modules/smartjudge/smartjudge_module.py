@@ -1,4 +1,8 @@
 
+from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router as live_voice_router
+
+from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_payment_router
+
 # ==============================================================================
 # موتور حافظه پرونده‌ها (Mem0) و پشتیبانی دوزبانه فارسی/انگلیسی
 # ==============================================================================
@@ -5269,3 +5273,7 @@ async def export_chat_dataset(admin_key: str = ""):
         media_type="application/x-jsonlines; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=ghazihoushmand_dataset.jsonl"}
     )
+
+router.include_router(zibal_payment_router)
+
+router.include_router(live_voice_router)
