@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Roxira Official Speech-to-Text Engine (OpenRouter / Whisper Large V3)
+"""
+import os
 import json
 import urllib.request
 from output_apps.ecosystem_core.src.factory.llm_client import get_config
@@ -7,59 +11,50 @@ def transcribe_audio_blob(audio_b64: str, mime_type: str = "audio/webm") -> str:
     cfg = get_config()
     api_key = cfg.get("api_key")
     if not api_key:
-        return "خطا: کلید دسترسی OpenRouter در سرور یافت نشد."
+        return "خطا: کلید دسترسی OpenRouter در فایل‌های پیکربندی سرور یافت نشد."
 
-    clean_mime = mime_type.split(";")[0].strip() or "audio/webm"
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    # استخراج فرمت فایل (مانند webm, mp4, wav)
+    fmt = "webm"
+    if "mp4" in mime_type: fmt = "mp4"
+    elif "wav" in mime_type: fmt = "wav"
+    elif "ogg" in mime_type: fmt = "ogg"
+
+    url = "https://openrouter.ai/api/v1/audio/transcriptions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://roxira.ir",
-        "X-Title": "Roxira Speech Recognition Engine"
+        "X-Title": "Roxira Speech Recognition"
     }
 
-    prompt = (
-        "Transcribe this audio verbatim. "
-        "The user might speak Persian (Farsi), English, or both mixed together. "
-        "Detect the language automatically. "
-        "Do NOT translate. Output ONLY the exact transcribed text without any quotes, conversational filler, or commentary."
-    )
+    # پی‌لود رسمی استاندارد OpenRouter STT
+    payload = json.dumps({
+        "model": "openai/whisper-large-v3",
+        "input_audio": {
+            "data": audio_b64,
+            "format": fmt
+        }
+    }).encode("utf-8")
 
-    models = [
-        "google/gemini-2.0-flash-001",
-        "google/gemini-flash-1.5",
-        "google/gemini-2.0-flash-exp:free"
-    ]
-
-    for model in models:
-        payload = json.dumps({
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{clean_mime};base64,{audio_b64}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "temperature": 0.0
-        }).encode("utf-8")
-
-        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=40) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("text", "").strip()
+    except urllib.error.HTTPError as e:
+        err_msg = e.read().decode("utf-8", errors="ignore")
+        print(f"⚠️ خطای OpenRouter STT: {err_msg}")
+        # فالبک به مدل whisper-1
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                text = data["choices"][0]["message"]["content"].strip()
-                if text:
-                    return text
-        except Exception as e:
-            print(f"⚠️ تلاش با مدل {model} با خطا مواجه شد: {e}")
-            continue
-
-    return ""
+            payload_fb = json.dumps({
+                "model": "openai/whisper-1",
+                "input_audio": {"data": audio_b64, "format": fmt}
+            }).encode("utf-8")
+            req_fb = urllib.request.Request(url, data=payload_fb, headers=headers, method="POST")
+            with urllib.request.urlopen(req_fb, timeout=40) as resp_fb:
+                data_fb = json.loads(resp_fb.read().decode("utf-8"))
+                return data_fb.get("text", "").strip()
+        except Exception as e_fb:
+            return f"خطای پردازش صوت در سرویس ابری: {e_fb}"
+    except Exception as e:
+        return f"خطای ارتباط با سرور: {e}"
