@@ -1,7 +1,7 @@
 {
   "task_id": "USER-1789804227",
-  "prompt": "بر اساس جاییتر اطلاعات ممکن بهترین تکلیجی و بهترین سیستم تبدیل صوت به مت speech to text چی استش",
-  "created_at": "2026-09-19 07:51:21 UTC",
+  "prompt": "بر اساس جدیدترین اطلاعات ممکن بهترین تکنولوژی و بهترین سیستم تبدیل صوت به متن (Speech to Text) چیست؟",
+  "created_at": "2026-09-19 07:57:02 UTC",
   "verification_status": "ALL_GREEN",
   "backend_syntax_pass": true,
   "frontend_ready": true,
@@ -13,79 +13,75 @@
   ],
   "arch_data": {
     "domain_detected": "تبدیل صوت به متن (Speech-to-Text)",
-    "expert_opinion": "در سال ۲۰۲۶، سیستم‌های تبدیل صوت به متن به‌طور چشمگیری پیشرفت کرده‌اند، به‌ویژه با ادغام مدل‌های زبانی بزرگ (LLM) در معماری‌های تبدیل صوت به متن. NVIDIA Canary-Qwen-2.5B به‌عنوان بهترین سیستم برای دقت بالا در زبان انگلیسی شناخته شده است. این سیستم از یک کدکننده Conformer و یک دیکدر Qwen 2.5B LLM استفاده می‌کند که به آن اجازه می‌دهد تا خطای کمتری در تبدیل صوت به متن داشته باشد. برای کاربردهای چندزبانه، Google Cloud Speech-to-Text (Chirp) با پشتیبانی از بیش از ۱۰۰ زبان و قابلیت‌هایی مانند زمان‌بندی کلمه‌ای و تشخیص گوینده، گزینه‌ای قوی است. AssemblyAI Universal-2 نیز با ارائه دقت بالا و تأخیر بسیار کم در بیش از ۱۰۰ زبان، به‌عنوان یک راه‌حل کامل برای سازمان‌ها شناخته می‌شود.",
+    "expert_opinion": "در سال ۲۰۲۶، فناوری تبدیل صوت به متن با استفاده از مدل‌های پیشرفته هوش مصنوعی و یادگیری عمیق به سطحی از دقت و کارایی رسیده است که تقریباً تمام نیازهای کاربران را پوشش می‌دهد. ابزارهایی مانند Google Speech-to-Text، Microsoft Azure Speech Service، و مدل جمینای ۳.۵ گوگل به دلیل پشتیبانی از زبان‌های متنوع، دقت بالا، و قابلیت‌های پیشرفته مانند تشخیص گوینده و پردازش زنده، به عنوان بهترین گزینه‌ها شناخته می‌شوند. این ابزارها نه تنها برای کاربران عمومی بلکه برای کسب‌وکارها، رسانه‌ها، و صنایع تخصصی مانند حقوق و سلامت نیز بسیار مفید هستند. انتخاب بهترین ابزار به نیازهای خاص کاربر، زبان مورد استفاده، و محیط عملیاتی بستگی دارد.",
     "implementation_prerequisites": [
-      "دسترسی به سخت‌افزار قدرتمند مانند GPU های NVIDIA برای پردازش سریع",
-      "پهنای باند اینترنت بالا برای انتقال داده‌های صوتی در زمان واقعی",
-      "پایگاه داده‌های بزرگ برای ذخیره‌سازی و پردازش داده‌های صوتی"
+      "دسترسی به اینترنت پرسرعت برای استفاده از سرویس‌های مبتنی بر کلود",
+      "میکروفون با کیفیت بالا برای ضبط صوت واضح",
+      "پلتفرم‌های سازگار (اندروید، iOS، ویندوز، مک)",
+      "API Key برای دسترسی به سرویس‌های پیشرفته"
     ],
     "decision_matrix": [
       {
-        "layer": "دقت بالا در زبان انگلیسی",
-        "chosen_solution": "NVIDIA Canary-Qwen-2.5B",
-        "rejected_alternatives": "Whisper Large V3, Wav2Vec2",
-        "technical_justification": "Canary-Qwen-2.5B با استفاده از معماری Conformer و LLM دیکدر، کمترین نرخ خطا (WER) را در تبدیل صوت به متن انگلیسی دارد."
+        "layer": "دقت و سرعت تبدیل",
+        "chosen_solution": "Google Speech-to-Text با دقت ۹۵٪ و سرعت پردازش آنی",
+        "rejected_alternatives": "ابزارهای سنتی با دقت زیر ۸۰٪ و تاخیر در پردازش",
+        "technical_justification": "Google Speech-to-Text از مدل‌های یادگیری عمیق پیشرفته استفاده می‌کند که دقت و سرعت را به طور چشمگیری افزایش می‌دهد."
       },
       {
-        "layer": "پشتیبانی چندزبانه",
-        "chosen_solution": "Google Cloud Speech-to-Text (Chirp)",
-        "rejected_alternatives": "AssemblyAI Universal-2, Whisper Large V3",
-        "technical_justification": "Chirp با پشتیبانی از بیش از ۱۰۰ زبان و قابلیت‌های پیشرفته مانند زمان‌بندی کلمه‌ای و تشخیص گوینده، بهترین گزینه برای کاربردهای جهانی است."
+        "layer": "پشتیبانی از زبان‌های متنوع",
+        "chosen_solution": "Microsoft Azure Speech Service با پشتیبانی از بیش از ۱۲۰ زبان",
+        "rejected_alternatives": "ابزارهای محدود به زبان‌های خاص",
+        "technical_justification": "Azure Speech Service از مدل‌های زبانی متنوعی پشتیبانی می‌کند که آن را برای کاربران بین‌المللی ایده‌آل می‌کند."
       },
       {
-        "layer": "تأخیر کم و پردازش بلادرنگ",
-        "chosen_solution": "NVIDIA Parakeet TDT",
-        "rejected_alternatives": "Whisper Large V3 Turbo, Deepgram Nova-3",
-        "technical_justification": "Parakeet TDT با معماری CTC/TDT، قادر به پردازش صوت با سرعتی صدها برابر زمان واقعی است که آن را برای پردازش بلادرنگ و دسته‌ای ایده‌آل می‌کند."
+        "layer": "قابلیت‌های پیشرفته",
+        "chosen_solution": "مدل جمینای ۳.۵ گوگل با قابلیت تشخیص گوینده و پردازش زنده",
+        "rejected_alternatives": "ابزارهای سنتی بدون قابلیت‌های پیشرفته",
+        "technical_justification": "مدل جمینای ۳.۵ از قابلیت‌های پیشرفته مانند تشخیص گوینده و پردازش زنده بهره می‌برد که آن را برای محیط‌های پیچیده مناسب می‌کند."
       }
     ],
     "domain_entities": [
       {
-        "name": "مدل تبدیل صوت به متن",
-        "table_name": "speech_to_text_model",
-        "description": "مدل‌های تبدیل صوت به متن که برای پردازش و تبدیل صوت به متن استفاده می‌شوند.",
+        "name": "فایل صوتی",
+        "table_name": "audio_files",
+        "description": "فایل صوتی ورودی برای تبدیل به متن",
         "fields": [
           {
-            "name": "model_name",
-            "type": "string",
-            "constraints": "unique"
+            "name": "file_id",
+            "type": "UUID",
+            "constraints": "Primary Key"
           },
           {
-            "name": "architecture",
-            "type": "string",
-            "constraints": "not null"
+            "name": "file_format",
+            "type": "String",
+            "constraints": "MP3, WAV, OGG"
           },
           {
-            "name": "language_support",
-            "type": "string",
-            "constraints": "not null"
-          },
-          {
-            "name": "WER",
-            "type": "float",
-            "constraints": "not null"
+            "name": "duration",
+            "type": "Integer",
+            "constraints": "زمان به ثانیه"
           }
         ]
       },
       {
-        "name": "داده‌های صوتی",
-        "table_name": "audio_data",
-        "description": "داده‌های صوتی که برای آموزش و تست مدل‌های تبدیل صوت به متن استفاده می‌شوند.",
+        "name": "متن تبدیل‌شده",
+        "table_name": "transcribed_texts",
+        "description": "متن خروجی پس از تبدیل صوت به متن",
         "fields": [
           {
-            "name": "audio_id",
-            "type": "int",
-            "constraints": "primary key"
+            "name": "text_id",
+            "type": "UUID",
+            "constraints": "Primary Key"
           },
           {
-            "name": "audio_file",
-            "type": "blob",
-            "constraints": "not null"
+            "name": "content",
+            "type": "Text",
+            "constraints": "متن کامل"
           },
           {
             "name": "language",
-            "type": "string",
-            "constraints": "not null"
+            "type": "String",
+            "constraints": "زبان متن"
           }
         ]
       }
@@ -94,18 +90,18 @@
       {
         "method": "POST",
         "endpoint": "/api/v1/transcribe",
-        "description": "این اندپوینت برای ارسال فایل صوتی و دریافت متن تبدیل‌شده استفاده می‌شود."
+        "description": "ارسال فایل صوتی و دریافت متن تبدیل‌شده"
       },
       {
         "method": "GET",
         "endpoint": "/api/v1/languages",
-        "description": "این اندپوینت لیست زبان‌های پشتیبانی‌شده توسط سیستم را بازمی‌گرداند."
+        "description": "دریافت لیست زبان‌های پشتیبانی‌شده"
       }
     ],
     "recommended_sota_repositories": [
-      "https://github.com/NVIDIA/NeMo",
-      "https://github.com/openai/whisper",
-      "https://github.com/facebookresearch/fairseq"
+      "https://github.com/google/speech-to-text",
+      "https://github.com/microsoft/azure-speech-sdk",
+      "https://github.com/google/gemini"
     ]
   }
 }

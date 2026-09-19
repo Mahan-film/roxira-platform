@@ -152,7 +152,15 @@
       notice.classList.add('hidden');
 
       try {
-        currentStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        currentStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000,
+          channelCount: 1
+        }
+      });
       } catch (err) {
         notice.classList.remove('hidden');
         notice.innerText = '⚠️ دسترسی به میکروفون صادر نشد. لطفاً در تنظیمات مرورگر دسترسی به میکروفون را مجاز کنید.';
