@@ -238,6 +238,15 @@
       "created_at": "2026-09-19 07:50:27 UTC",
       "completed_at": "2026-09-19 07:51:21 UTC",
       "exit_code": 0
+    },
+    {
+      "id": "USER-1789804764",
+      "prompt": "بهترین سیستم‌های هاست، سرچ و ریسرچ تحقیقاتی برای دستگاه‌های live research و live deep research به چه صورت است؟ سیستم‌های agentic deep research بهترین‌هایشان کدام‌ها هستند؟ آیا نگران نیستید که بدترین‌هایشان کدام‌ها هستند؟ با چه پلتفرمی و با چه زیرساختی؟",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:59:24 UTC",
+      "completed_at": "2026-09-19 08:00:13 UTC",
+      "exit_code": 0
     }
   ]
 }
