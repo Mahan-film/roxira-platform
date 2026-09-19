@@ -1,0 +1,111 @@
+{
+  "task_id": "USER-1789804227",
+  "prompt": "بر اساس جاییتر اطلاعات ممکن بهترین تکلیجی و بهترین سیستم تبدیل صوت به مت speech to text چی استش",
+  "created_at": "2026-09-19 07:51:21 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "USER-1789804227_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "تبدیل صوت به متن (Speech-to-Text)",
+    "expert_opinion": "در سال ۲۰۲۶، سیستم‌های تبدیل صوت به متن به‌طور چشمگیری پیشرفت کرده‌اند، به‌ویژه با ادغام مدل‌های زبانی بزرگ (LLM) در معماری‌های تبدیل صوت به متن. NVIDIA Canary-Qwen-2.5B به‌عنوان بهترین سیستم برای دقت بالا در زبان انگلیسی شناخته شده است. این سیستم از یک کدکننده Conformer و یک دیکدر Qwen 2.5B LLM استفاده می‌کند که به آن اجازه می‌دهد تا خطای کمتری در تبدیل صوت به متن داشته باشد. برای کاربردهای چندزبانه، Google Cloud Speech-to-Text (Chirp) با پشتیبانی از بیش از ۱۰۰ زبان و قابلیت‌هایی مانند زمان‌بندی کلمه‌ای و تشخیص گوینده، گزینه‌ای قوی است. AssemblyAI Universal-2 نیز با ارائه دقت بالا و تأخیر بسیار کم در بیش از ۱۰۰ زبان، به‌عنوان یک راه‌حل کامل برای سازمان‌ها شناخته می‌شود.",
+    "implementation_prerequisites": [
+      "دسترسی به سخت‌افزار قدرتمند مانند GPU های NVIDIA برای پردازش سریع",
+      "پهنای باند اینترنت بالا برای انتقال داده‌های صوتی در زمان واقعی",
+      "پایگاه داده‌های بزرگ برای ذخیره‌سازی و پردازش داده‌های صوتی"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "دقت بالا در زبان انگلیسی",
+        "chosen_solution": "NVIDIA Canary-Qwen-2.5B",
+        "rejected_alternatives": "Whisper Large V3, Wav2Vec2",
+        "technical_justification": "Canary-Qwen-2.5B با استفاده از معماری Conformer و LLM دیکدر، کمترین نرخ خطا (WER) را در تبدیل صوت به متن انگلیسی دارد."
+      },
+      {
+        "layer": "پشتیبانی چندزبانه",
+        "chosen_solution": "Google Cloud Speech-to-Text (Chirp)",
+        "rejected_alternatives": "AssemblyAI Universal-2, Whisper Large V3",
+        "technical_justification": "Chirp با پشتیبانی از بیش از ۱۰۰ زبان و قابلیت‌های پیشرفته مانند زمان‌بندی کلمه‌ای و تشخیص گوینده، بهترین گزینه برای کاربردهای جهانی است."
+      },
+      {
+        "layer": "تأخیر کم و پردازش بلادرنگ",
+        "chosen_solution": "NVIDIA Parakeet TDT",
+        "rejected_alternatives": "Whisper Large V3 Turbo, Deepgram Nova-3",
+        "technical_justification": "Parakeet TDT با معماری CTC/TDT، قادر به پردازش صوت با سرعتی صدها برابر زمان واقعی است که آن را برای پردازش بلادرنگ و دسته‌ای ایده‌آل می‌کند."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "مدل تبدیل صوت به متن",
+        "table_name": "speech_to_text_model",
+        "description": "مدل‌های تبدیل صوت به متن که برای پردازش و تبدیل صوت به متن استفاده می‌شوند.",
+        "fields": [
+          {
+            "name": "model_name",
+            "type": "string",
+            "constraints": "unique"
+          },
+          {
+            "name": "architecture",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "language_support",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "WER",
+            "type": "float",
+            "constraints": "not null"
+          }
+        ]
+      },
+      {
+        "name": "داده‌های صوتی",
+        "table_name": "audio_data",
+        "description": "داده‌های صوتی که برای آموزش و تست مدل‌های تبدیل صوت به متن استفاده می‌شوند.",
+        "fields": [
+          {
+            "name": "audio_id",
+            "type": "int",
+            "constraints": "primary key"
+          },
+          {
+            "name": "audio_file",
+            "type": "blob",
+            "constraints": "not null"
+          },
+          {
+            "name": "language",
+            "type": "string",
+            "constraints": "not null"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/transcribe",
+        "description": "این اندپوینت برای ارسال فایل صوتی و دریافت متن تبدیل‌شده استفاده می‌شود."
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/languages",
+        "description": "این اندپوینت لیست زبان‌های پشتیبانی‌شده توسط سیستم را بازمی‌گرداند."
+      }
+    ],
+    "recommended_sota_repositories": [
+      "https://github.com/NVIDIA/NeMo",
+      "https://github.com/openai/whisper",
+      "https://github.com/facebookresearch/fairseq"
+    ]
+  }
+}
