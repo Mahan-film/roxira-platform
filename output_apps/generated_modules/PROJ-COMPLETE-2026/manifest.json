@@ -1,0 +1,118 @@
+{
+  "task_id": "PROJ-COMPLETE-2026",
+  "prompt": "طراحی کارخانه تولید نرم‌افزار خودگردان با معماری وب‌آرتی‌سی، حافظه برداری و سندباکس کانتینری",
+  "created_at": "2026-09-19 08:56:42 UTC",
+  "verification_status": "SANDBOX_WARNING",
+  "sandbox_verified": false,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "PROJ-COMPLETE-2026_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "معماری سیستم‌های توزیع‌شده و تولید نرم‌افزار خودگردان",
+    "expert_opinion": "طراحی کارخانه تولید نرم‌افزار خودگردان با معماری وب‌آرتی‌سی، حافظه برداری و سندباکس کانتینری نیازمند یک رویکرد جامع و چندلایه است. این معماری باید قابلیت‌های خودگردانی، امنیت، مقیاس‌پذیری و انعطاف‌پذیری را به‌طور همزمان فراهم کند. استفاده از وب‌آرتی‌سی برای ارتباطات بلادرنگ، حافظه برداری برای ذخیره‌سازی موقت داده‌ها و سندباکس کانتینری برای ایزوله‌سازی و اجرای ایمن کدها، از جمله اجزای کلیدی این معماری هستند. این رویکرد به‌طور قابل‌توجهی زمان توسعه و استقرار نرم‌افزار را کاهش داده و قابلیت‌های خودگردانی را افزایش می‌دهد.",
+    "implementation_prerequisites": [
+      "زیرساخت ابری قابل‌اطمینان",
+      "ابزارهای مدیریت کانتینر مانند Docker و Kubernetes",
+      "پلتفرم‌های ارتباطات بلادرنگ مانند WebRTC",
+      "سیستم‌های ذخیره‌سازی موقت مانند Redis یا Memcached",
+      "ابزارهای نظارت و مدیریت امنیتی"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "ارتباطات بلادرنگ",
+        "chosen_solution": "WebRTC",
+        "rejected_alternatives": "WebSocket و HTTP/2",
+        "technical_justification": "WebRTC به‌طور ذاتی از ارتباطات بلادرنگ پشتیبانی می‌کند و نیاز به واسطه‌های اضافی ندارد، در حالی که WebSocket و HTTP/2 نیاز به تنظیمات بیشتری دارند و ممکن است تاخیر بیشتری ایجاد کنند."
+      },
+      {
+        "layer": "ذخیره‌سازی موقت",
+        "chosen_solution": "Redis",
+        "rejected_alternatives": "Memcached و Apache Cassandra",
+        "technical_justification": "Redis از ساختار داده‌های متنوعی پشتیبانی می‌کند و عملکرد بهتری در مقایسه با Memcached دارد. Apache Cassandra نیز برای ذخیره‌سازی موقت بیش‌ازحد پیچیده است."
+      },
+      {
+        "layer": "ایزوله‌سازی و اجرای ایمن",
+        "chosen_solution": "Docker",
+        "rejected_alternatives": "LXC و VM",
+        "technical_justification": "Docker به‌طور گسترده‌ای استفاده می‌شود و جامعه‌ی فعالی دارد. LXC و VM نیز به‌دلیل پیچیدگی بیشتر و نیاز به منابع اضافی، کمتر مناسب هستند."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "کانتینر اجرایی",
+        "table_name": "execution_container",
+        "description": "کانتینرهایی که کدهای نرم‌افزاری را در محیط ایزوله اجرا می‌کنند.",
+        "fields": [
+          {
+            "name": "container_id",
+            "type": "string",
+            "constraints": "primary key"
+          },
+          {
+            "name": "image_name",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "status",
+            "type": "string",
+            "constraints": "not null"
+          }
+        ]
+      },
+      {
+        "name": "حافظه برداری",
+        "table_name": "cache_memory",
+        "description": "ذخیره‌سازی موقت داده‌ها برای دسترسی سریع.",
+        "fields": [
+          {
+            "name": "cache_key",
+            "type": "string",
+            "constraints": "primary key"
+          },
+          {
+            "name": "cache_value",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "expiration_time",
+            "type": "timestamp",
+            "constraints": "not null"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/containers",
+        "description": "ایجاد یک کانتینر جدید برای اجرای کد."
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/containers/{container_id}",
+        "description": "دریافت وضعیت یک کانتینر."
+      },
+      {
+        "method": "PUT",
+        "endpoint": "/api/v1/cache/{cache_key}",
+        "description": "به‌روزرسانی مقدار ذخیره‌شده در حافظه برداری."
+      },
+      {
+        "method": "DELETE",
+        "endpoint": "/api/v1/cache/{cache_key}",
+        "description": "حذف یک مقدار از حافظه برداری."
+      }
+    ],
+    "recommended_sota_repositories": [
+      "https://github.com/Krishguptaaa/FASEROH-SYMBOLIC-LEARNING",
+      "https://github.com/Ramprasad273/systems",
+      "https://github.com/langchain-ai/open_deep_research"
+    ]
+  }
+}
