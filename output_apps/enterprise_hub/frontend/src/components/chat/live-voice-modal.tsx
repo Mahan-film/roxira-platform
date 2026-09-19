@@ -4,6 +4,10 @@ import { Phone, PhoneOff, Mic, Volume2, AlertCircle, RotateCcw } from 'lucide-re
 interface LiveVoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
+  conversationId?: string;
+  onConversationIdChange?: (id: any) => void;
+  onNewMessage?: (userText: any, aiReply: any, draft?: any, prob?: any) => void;
+  onTriggerLegalDraft?: (_type: any, _title: any, prompt: any) => void;
 }
 
 declare global {
