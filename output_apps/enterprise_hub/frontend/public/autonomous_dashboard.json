@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-09-19 14:29:53 UTC",
+  "timestamp": "2026-09-19 14:59:54 UTC",
   "platform_health_score": "100%",
   "active_mesh_network": "roxira_mesh",
   "infrastructure_containers": {
-    "roxira_app_prod": "running",
+    "roxira_app_prod": "restarting",
     "roxira_enterprise_frontend": "running",
     "roxira_nginx_prod": "running",
     "roxira_postgres_prod": "running",
@@ -16,11 +16,11 @@
   "subsystem_diagnostics": {
     "legal_core_fastapi": {
       "status": "UNHEALTHY",
-      "error": "<urlopen error [Errno 111] Connection refused>"
+      "error": "[Errno 104] Connection reset by peer"
     },
     "statutory_damages_article_522": {
       "status": "FAILED",
-      "error": "<urlopen error [Errno 111] Connection refused>"
+      "error": "[Errno 104] Connection reset by peer"
     },
     "qdrant_laws_memory": {
       "status": "CONNECTED",
