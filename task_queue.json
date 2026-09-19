@@ -151,6 +151,15 @@
       "created_at": "2026-09-19 06:09:04 UTC",
       "completed_at": "2026-09-19 06:09:04 UTC",
       "exit_code": 0
+    },
+    {
+      "id": "USER-1789798391",
+      "prompt": "تست نهایی یکپارچگی صوت و دیسپچر",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 06:13:11 UTC",
+      "completed_at": "2026-09-19 06:13:12 UTC",
+      "exit_code": 0
     }
   ]
 }
