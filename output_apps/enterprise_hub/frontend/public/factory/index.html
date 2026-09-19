@@ -119,51 +119,56 @@
         if (recognition) recognition.stop();
         isListening = false;
         btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
-        notice.innerText = 'ضبط صدا متوقف شد.';
+        notice.innerText = 'ضبط متوقف شد.';
         return;
       }
 
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRec) {
-        notice.innerText = 'مرورگر شما از Speech Recognition پشتیبانی نمی‌کند. در سافاری مک Dictation را بررسی کنید.';
-        return;
-      }
-
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
-      } catch (err) {
-        notice.innerText = '⚠️ دسترسی به میکروفون مسدود است. در Safari Settings > Websites > Microphone مجوز سایت را روی Allow بگذارید.';
+        notice.innerText = 'مرورگر شما از Speech Recognition پشتیبانی نمی‌کند.';
         return;
       }
 
       recognition = new SpeechRec();
-      recognition.lang = 'fa-IR';
+      // تنظیم زبان بر اساس زبان‌های نصب‌شده در سیستم (پیش‌فرض en-US با فالبک)
+      recognition.lang = 'en-US';
       recognition.continuous = false;
       recognition.interimResults = false;
 
       recognition.onstart = () => {
         isListening = true;
         btn.classList.add('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
-        notice.innerText = '🎙️ در حال گوش دادن... صحبت کنید';
+        notice.innerText = '🎙️ میکروفون فعال است (English/Dictation)... صحبت کنید';
       };
 
       recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         const inp = document.getElementById('promptInput');
         inp.value = inp.value ? inp.value + ' ' + text : text;
-        notice.innerText = 'صوت پیاده شد. کلید Return را برای ارسال بزنید.';
+        notice.innerText = 'صوت دریافت شد. برای ارسال Enter بزنید.';
       };
 
       recognition.onerror = (e) => {
         isListening = false;
         btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
-        if (e.error === 'language-not-supported') {
-          recognition.lang = 'en-US';
-          notice.innerText = 'زبان فارسی شناسایی نشد؛ سوئیچ به انگلیسی. صحبت کنید...';
-          recognition.start();
+        if (e.error === 'service-not-allowed' || e.error === 'not-allowed') {
+          notice.innerText = '⚠️ دسترسی Dictation به زبان انتخابی محدود است. می‌توانید با کلید میانبر مک (دو بار زدن Control) مستقیماً درون کادر دیکته کنید.';
         } else {
+          notice.innerText = 'وضعیت: ' + e.error;
+        }
+      };
+
+      recognition.onend = () => {
+        isListening = false;
+        btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
+      };
+
+      try {
+        recognition.start();
+      } catch (err) {
+        notice.innerText = 'خطا در راه‌اندازی ضبط: ' + err.message;
+      }
+    } else {
           notice.innerText = 'وضعیت صوت: ' + e.error;
         }
       };
