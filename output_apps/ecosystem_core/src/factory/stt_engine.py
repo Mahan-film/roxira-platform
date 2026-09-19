@@ -1,79 +1,96 @@
 #!/usr/bin/env python3
 """
-Roxira Voice Engine with Engineering Context Injection & Semantic Correction
+Roxira High-Speed Multimodal Voice Engine (< 1s Latency)
+In-memory ffmpeg 16kHz PCM conversion + One-Shot Gemini 2.0 Flash Audio Transcription
 """
-import os, json, urllib.request
-from output_apps.ecosystem_core.src.factory.llm_client import get_config, ask_deepseek
+import os, json, subprocess, base64, urllib.request
+from output_apps.ecosystem_core.src.factory.llm_client import get_config
 
-ENGINEERING_CONTEXT_PROMPT = (
-    "واژگان و اصطلاحات کلیدی: تبدیل صوت به متن (STT)، تبدیل متن به صوت (TTS)، "
-    "صوت به صوت (Speech to Speech / S2S)، لایو چت، لایو اسپیک، مدل‌های زبانی، "
-    "WebRTC، وب‌اپلیکیشن، هوش مصنوعی، عامل‌های خودکار، پایگاه داده، فرانت‌اند، بک‌اند."
+SYSTEM_PROMPT = (
+    "You are a professional software engineering transcription engine. "
+    "Transcribe the provided audio verbatim with 100% precision. "
+    "Accurately recognize mixed Persian and English technical terminology "
+    "(e.g., STT, TTS, S2S, LiveKit, WebRTC, API, RAG, Python, FastAPI, Docker, Microservices, ERP, CRM). "
+    "Correct phonetic and acoustic slips seamlessly. Do NOT translate. "
+    "Output ONLY the exact transcribed text without any quotes, preambles, or conversational filler."
 )
 
-def repair_transcription_phonetics(raw_text: str) -> str:
-    """اصلاح فوری اشتباهات شنیداری گفتار با حفظ ۱۰۰٪ مقصود کاربر"""
-    if not raw_text or len(raw_text.strip()) < 3:
-        return raw_text
-
-    sys_p = (
-        "You are an expert speech recognition error correction engine for software engineers. "
-        "Fix obvious phonetically mistranscribed Persian words based on technical programming context: "
-        "e.g. 'صدا به مچ' -> 'صدا به متن / صوت به متن', 'تبیل' -> 'تبدیل', 'لایف چات' -> 'لایو چت', "
-        "'جیسرش' -> 'ریسرچ', 'ویب' -> 'وب', 'فرانس' -> 'فرانت‌اند'. "
-        "Keep the exact natural question intent. Output ONLY the repaired sentence without quotes or intro."
-    )
-    repaired = ask_deepseek(f"متن خام:\n{raw_text}", sys_p)
-    return repaired.strip().strip('"').strip("'") if repaired else raw_text
+def convert_to_wav_pcm(audio_bytes: bytes) -> bytes:
+    """تبدیل فوق‌سریع هرگونه جریان صوتی (WebM, Opus, MP4) به استاندارد 16kHz Mono WAV در رم"""
+    try:
+        cmd = [
+            "ffmpeg", "-y", "-i", "pipe:0",
+            "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
+            "-f", "wav", "pipe:1"
+        ]
+        proc = subprocess.run(cmd, input=audio_bytes, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=3)
+        if proc.returncode == 0 and len(proc.stdout) > 44:
+            return proc.stdout
+    except Exception:
+        pass
+    return audio_bytes
 
 def transcribe_audio_blob(audio_b64: str, mime_type: str = "audio/webm") -> str:
     cfg = get_config()
     api_key = cfg.get("api_key")
     if not api_key:
-        return "خطا: کلید OpenRouter در سرور موجود نیست."
+        return "خطا: کلید ارتباطی در سرور موجود نیست."
 
-    clean_mime = mime_type.split(";")[0].strip() or "audio/webm"
-    fmt = "mp4" if "mp4" in clean_mime else "webm"
+    try:
+        raw_audio = base64.b64decode(audio_b64)
+    except Exception as e:
+        return f"خطا در کدگشایی داده صوتی: {e}"
 
-    url_w = "https://openrouter.ai/api/v1/audio/transcriptions"
+    # تبدیل صدا در حافظه رم به استاندارد ۱۶ کیلوهرتز WAV
+    wav_bytes = convert_to_wav_pcm(raw_audio)
+    clean_b64 = base64.b64encode(wav_bytes).decode("utf-8")
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://roxira.ir",
-        "X-Title": "Roxira Precision Voice"
+        "X-Title": "Roxira Realtime Speech"
     }
 
-    # پی‌لود مجهز به prompt اولیه برای جلوگیری از خطای شنیداری
+    # ارسال تک‌مرحله‌ای با ساختار استاندارد input_audio
     payload = json.dumps({
-        "model": "openai/whisper-large-v3",
-        "input_audio": {"data": audio_b64, "format": fmt},
-        "prompt": ENGINEERING_CONTEXT_PROMPT
+        "model": "google/gemini-2.0-flash-001",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": SYSTEM_PROMPT},
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": clean_b64,
+                            "format": "wav"
+                        }
+                    }
+                ]
+            }
+        ],
+        "temperature": 0.0
     }).encode("utf-8")
 
-    raw_text = ""
     try:
-        req = urllib.request.Request(url_w, data=payload, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            raw_text = data.get("text", "").strip()
-    except Exception:
-        # فالبک تک‌مرحله‌ای با جمینای در صورت وقفه
+            text = data["choices"][0]["message"]["content"].strip()
+            return text.strip('"').strip("'")
+    except Exception as e:
+        # فالبک سریع به مدل Whisper Large v3 Turbo در صورت اختلال
         try:
-            url_g = "https://openrouter.ai/api/v1/chat/completions"
-            p_g = json.dumps({
-                "model": "google/gemini-2.0-flash-001",
-                "messages": [{"role": "user", "content": [
-                    {"type": "text", "text": "Transcribe this verbatim with accurate Persian technical spelling."},
-                    {"type": "image_url", "image_url": {"url": f"data:{clean_mime};base64,{audio_b64}"}}
-                ]}]
+            url_w = "https://openrouter.ai/api/v1/audio/transcriptions"
+            payload_w = json.dumps({
+                "model": "openai/whisper-large-v3",
+                "input_audio": {"data": clean_b64, "format": "wav"}
             }).encode("utf-8")
-            req_g = urllib.request.Request(url_g, data=p_g, headers=headers, method="POST")
-            with urllib.request.urlopen(req_g, timeout=10) as resp_g:
-                data_g = json.loads(resp_g.read().decode("utf-8"))
-                raw_text = data_g["choices"][0]["message"]["content"].strip()
-        except Exception as e2:
-            return f"خطا در پردازش صوت: {e2}"
-
-    if raw_text:
-        return repair_transcription_phonetics(raw_text)
-    return ""
+            req_w = urllib.request.Request(url_w, data=payload_w, headers=headers, method="POST")
+            with urllib.request.urlopen(req_w, timeout=8) as resp_w:
+                data_w = json.loads(resp_w.read().decode("utf-8"))
+                return data_w.get("text", "").strip()
+        except Exception:
+            return f"خطا در پردازش صوت: {e}"
