@@ -9,12 +9,7 @@ import subprocess
 import time
 import urllib.parse
 
-try:
-    from output_apps.ecosystem_core.src.factory.report_generator import generate_enterprise_docx, generate_markdown_report
-except Exception as err:
-    print(f"⚠️ هشدار ایمپورت: {err}")
-    def generate_enterprise_docx(*args, **kwargs): pass
-    def generate_markdown_report(*args, **kwargs): pass
+from output_apps.ecosystem_core.src.factory.report_generator import generate_enterprise_docx, generate_markdown_report
 
 signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
@@ -34,7 +29,7 @@ class SafeDispatchHandler(http.server.BaseHTTPRequestHandler):
         try:
             raw_path = urllib.parse.unquote(self.path)
 
-            # ۱. سرویس‌دهی داشبورد وب
+            # ۱. داشبورد وب
             if raw_path in ["/factory", "/factory/", "/factory/index.html"]:
                 if os.path.exists(HTML_FILE):
                     with open(HTML_FILE, "r", encoding="utf-8") as f:
@@ -47,12 +42,13 @@ class SafeDispatchHandler(http.server.BaseHTTPRequestHandler):
                 self.send_safe_json(404, {"error": "Dashboard HTML missing"})
                 return
 
-            # ۲. دانلود مستقیم فایل‌ها
+            # ۲. دانلود اسناد و فایل‌ها
             if raw_path.startswith("/api/v1/factory/download/"):
                 parts = raw_path.strip("/").split("/")
                 if len(parts) >= 6:
                     tid, fmt = parts[4].strip(), parts[5].strip().lower()
                     tdir = os.path.join(MODULES_DIR, tid)
+                    os.makedirs(tdir, exist_ok=True)
                     mpath = os.path.join(tdir, "manifest.json")
                     meta = {"task_id": tid, "prompt": tid, "verification_status": "ALL_GREEN"}
                     if os.path.exists(mpath):
@@ -65,27 +61,25 @@ class SafeDispatchHandler(http.server.BaseHTTPRequestHandler):
                         doc_path = os.path.join(tdir, f"{tid}_Report.docx")
                         if not os.path.exists(doc_path):
                             generate_enterprise_docx(tid, meta.get("prompt", tid), tdir, meta)
-                        if os.path.exists(doc_path):
-                            with open(doc_path, "rb") as f: bytes_data = f.read()
-                            self.send_response(200)
-                            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                            self.send_header("Content-Disposition", f'attachment; filename="{tid}_Report.docx"')
-                            self.end_headers()
-                            self.wfile.write(bytes_data)
-                            return
+                        with open(doc_path, "rb") as f: bytes_data = f.read()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        self.send_header("Content-Disposition", f'attachment; filename="{tid}_Report.docx"')
+                        self.end_headers()
+                        self.wfile.write(bytes_data)
+                        return
 
                     elif fmt == "markdown":
                         md_path = os.path.join(tdir, "REPORT.md")
                         if not os.path.exists(md_path):
                             generate_markdown_report(tid, meta.get("prompt", tid), tdir, meta)
-                        if os.path.exists(md_path):
-                            with open(md_path, "r", encoding="utf-8") as f: md_data = f.read().encode("utf-8")
-                            self.send_response(200)
-                            self.send_header("Content-Type", "text/markdown; charset=utf-8")
-                            self.send_header("Content-Disposition", f'attachment; filename="{tid}_REPORT.md"')
-                            self.end_headers()
-                            self.wfile.write(md_data)
-                            return
+                        with open(md_path, "r", encoding="utf-8") as f: md_data = f.read().encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                        self.send_header("Content-Disposition", f'attachment; filename="{tid}_REPORT.md"')
+                        self.end_headers()
+                        self.wfile.write(md_data)
+                        return
 
                     elif fmt == "json":
                         self.send_safe_json(200, meta)
@@ -106,7 +100,7 @@ class SafeDispatchHandler(http.server.BaseHTTPRequestHandler):
                         self.wfile.write(pdf_html.encode("utf-8"))
                         return
 
-            # ۳. استعلام وضعیت زنده و ماژول‌ها
+            # ۳. وضعیت سرور و ماژول‌ها
             if raw_path in ["/api/v1/factory/status", "/api/v1/factory/status/"]:
                 qdata = {"pending": [], "completed": []}
                 if os.path.exists(QUEUE_FILE):
@@ -150,22 +144,38 @@ class SafeDispatchHandler(http.server.BaseHTTPRequestHandler):
             raw_path = urllib.parse.unquote(self.path)
             if raw_path == "/api/v1/factory/dispatch":
                 length = int(self.headers.get("Content-Length", 0))
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                body = self.rfile.read(length)
+                payload = json.loads(body.decode("utf-8"))
                 prompt = payload.get("prompt", "").strip()
                 if not prompt:
                     self.send_safe_json(400, {"error": "Prompt required"}); return
 
                 tid = f"USER-{int(time.time())}"
-                new_task = {"id": tid, "prompt": prompt, "status": "QUEUED", "priority": "IMMEDIATE", "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC")}
+                new_task = {
+                    "id": tid,
+                    "prompt": prompt,
+                    "status": "QUEUED",
+                    "priority": "IMMEDIATE",
+                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC")
+                }
 
                 data = {"pending": [], "completed": []}
                 if os.path.exists(QUEUE_FILE):
-                    with open(QUEUE_FILE, "r", encoding="utf-8") as f: data = json.load(f)
+                    try:
+                        with open(QUEUE_FILE, "r", encoding="utf-8") as f: data = json.load(f)
+                    except Exception: pass
+
                 data.setdefault("pending", []).insert(0, new_task)
-                with open(QUEUE_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=2)
+                with open(QUEUE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
 
                 subprocess.Popen(["python3", "/opt/roxira_platform/output_apps/ecosystem_core/src/factory/task_worker.py"])
-                self.send_safe_json(200, {"status": "QUEUED_AND_TRIGGERED", "task_id": tid, "prompt": prompt, "message": "پروژه در صف کارخانه قرار گرفت."})
+                self.send_safe_json(200, {
+                    "status": "QUEUED_AND_TRIGGERED",
+                    "task_id": tid,
+                    "prompt": prompt,
+                    "message": "پروژه در صف کارخانه قرار گرفت."
+                })
                 return
             self.send_safe_json(404, {"error": "Not Found"})
         except Exception as e:

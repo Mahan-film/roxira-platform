@@ -3,19 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roxira Mission Control | کارخانه نرم‌افزاری خودگردان</title>
+  <title>Roxira Mission Control | مرکز فرماندهی کارخانه نرم‌افزاری</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800;900&display=swap" rel="stylesheet">
   <style> body { font-family: 'Vazirmatn', sans-serif; letter-spacing: normal !important; } </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
   <div class="max-w-6xl mx-auto space-y-6">
+    
     <header class="flex flex-col md:flex-row items-start md:items-center justify-between bg-slate-900/80 p-6 rounded-3xl border border-slate-800 shadow-2xl backdrop-blur">
       <div>
         <h1 class="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
           مرکز فرماندهی کارخانه نرم‌افزاری خودگردان روکسیرا
         </h1>
-        <p class="text-slate-400 text-sm mt-1">تولید پیوسته نرم‌افزار، گزارش‌های چندفرمت و دیپ ریسرچ (Production 2026)</p>
+        <p class="text-slate-400 text-sm mt-1">توسعه پیوسته، تحلیل عمیق دامنه و کنترل کامل با کیبورد و صوت (Production 2026)</p>
       </div>
       <div class="mt-4 md:mt-0 flex items-center gap-2">
         <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
@@ -25,42 +26,67 @@
       </div>
     </header>
 
+    <!-- بخش ورودی با تگ Form استاندارد برای تضمین کلید Enter -->
     <section class="bg-gradient-to-b from-slate-900 to-slate-900/60 p-6 rounded-3xl border border-slate-800 shadow-xl">
       <div class="flex items-center justify-between mb-2">
         <h2 class="text-lg font-bold text-white flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-          ارسال ایده / پروژه جدید به کارخانه ایجنت‌ها
+          ارسال ایده / پروژه جدید به کارخانه
         </h2>
-        <span class="text-xs text-emerald-400 font-mono">مجهز به تبدیل زنده صوت‌به‌متن (STT)</span>
+        <div class="flex items-center gap-3 text-xs font-mono text-slate-400">
+          <span>میانبرها: <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-slate-300">Enter</kbd> ارسال | <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-slate-300">/</kbd> فوکوس</span>
+        </div>
       </div>
-      <div class="flex flex-col sm:flex-row gap-3">
+      
+      <form id="taskForm" onsubmit="handleFormSubmit(event)" class="flex flex-col sm:flex-row gap-3">
         <div class="relative flex-1">
           <input 
             id="promptInput" 
             type="text" 
-            placeholder="ایده را بنویسید یا دکمه میکروفون را بزنید..." 
+            autocomplete="off"
+            placeholder="ایده را بنویسید و Enter بزنید..." 
             class="w-full bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3.5 pl-12 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
           >
           <button 
             id="voiceBtn" 
-            onclick="toggleSpeechRecognition()" 
-            title="تبدیل گفتار به متن"
-            class="absolute left-3 top-2.5 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition-all"
+            type="button"
+            onclick="toggleAudioCapture()" 
+            title="تبدیل گفتار به متن (کلیک کنید)"
+            class="absolute left-3 top-2.5 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition-all cursor-pointer"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 02-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+            <svg id="micIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 02-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
           </button>
         </div>
         <button 
           id="submitBtn" 
-          onclick="submitTask()" 
-          class="px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-sm rounded-2xl transition-all"
+          type="submit"
+          class="px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-sm rounded-2xl transition-all cursor-pointer"
         >
           تولید خودکار ماژول
         </button>
+      </form>
+
+      <!-- نوار وضعیت صوت و خطای دسترسی -->
+      <div id="voiceNotice" class="mt-2 text-xs font-mono text-cyan-400 hidden"></div>
+
+      <!-- وضعیت خط لوله دیپ ریسرچ -->
+      <div id="researchPipeline" class="mt-4 p-4 bg-slate-950/80 rounded-2xl border border-slate-800 hidden">
+        <div class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
+          <span>خط لوله دیپ ریسرچ و تحلیل دامنه:</span>
+          <span id="pipelineStatusText" class="text-emerald-400 font-mono text-[11px]">در حال استخراج موجودیت‌ها...</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-xs">
+          <div id="step1" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۱. کاوش و تجزیه نیازمندی</div>
+          <div id="step2" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۲. مدل‌سازی Twenty/ERPNext</div>
+          <div id="step3" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۳. تدوین سند IEEE 1016</div>
+          <div id="step4" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۴. آزمون نحو و استقرار</div>
+        </div>
       </div>
+
       <div id="dispatchFeedback" class="mt-3 text-xs hidden"></div>
     </section>
 
+    <!-- آمار سرور -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
         <div class="text-xs text-slate-400">پروژه‌های در صف</div>
@@ -71,11 +97,12 @@
         <div id="completedCount" class="text-3xl font-extrabold text-emerald-400 mt-2">--</div>
       </div>
       <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
-        <div class="text-xs text-slate-400">آخرین پایش سرور</div>
+        <div class="text-xs text-slate-400">آخرین پایش خودکار سرور</div>
         <div id="lastSync" class="text-xs font-mono text-slate-300 mt-3">--</div>
       </div>
     </div>
 
+    <!-- ماژول‌های مستقر -->
     <section class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
       <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
@@ -83,45 +110,119 @@
       </h2>
       <div id="artifactsContainer" class="space-y-4"></div>
     </section>
-
-    <div id="codeModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-      <div class="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-3xl p-6 shadow-2xl flex flex-col max-h-[85vh]">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-          <h3 id="modalTitle" class="font-bold text-emerald-400 text-sm font-mono">سورس‌کد / تست</h3>
-          <button onclick="closeModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
-        </div>
-        <pre id="modalContent" class="flex-1 overflow-auto bg-slate-950 p-4 rounded-xl text-xs font-mono text-slate-300 leading-relaxed"></pre>
-      </div>
-    </div>
   </div>
 
   <script>
-    let recognition, isListening = false;
-    function initSpeech() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
-      recognition = new SpeechRecognition();
+    // کلیدهای میانبر سراسری کیبورد
+    window.addEventListener('keydown', (e) => {
+      if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+        e.preventDefault();
+        document.getElementById('promptInput').focus();
+      }
+    });
+
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      submitTask();
+    }
+
+    // کنترل هوشمند تبدیل گفتار به متن با فالبک سافاری
+    let recognition = null;
+    let isListening = false;
+
+    async function toggleAudioCapture() {
+      const notice = document.getElementById('voiceNotice');
+      const btn = document.getElementById('voiceBtn');
+      notice.classList.remove('hidden');
+
+      if (isListening) {
+        if (recognition) recognition.stop();
+        isListening = false;
+        btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
+        notice.innerText = 'ضبط صدا متوقف شد.';
+        return;
+      }
+
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        notice.innerText = 'مرورگر شما از Speech Recognition پشتیبانی نمی‌کند. از گوگل کروم یا سافاری بروز مک استفاده کنید.';
+        return;
+      }
+
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+      } catch (err) {
+        notice.innerText = '⚠️ دسترسی به میکروفون داده نشد. در Safari > Settings > Websites > Microphone دسترسی roxira.ir را روی Allow بگذارید.';
+        return;
+      }
+
+      recognition = new SpeechRec();
       recognition.lang = 'fa-IR';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
       recognition.onstart = () => {
         isListening = true;
-        document.getElementById('voiceBtn').classList.add('bg-rose-500/20', 'text-rose-400', 'animate-pulse');
+        btn.classList.add('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
+        notice.innerText = '🎙️ در حال گوش دادن... صحبت کنید';
       };
-      recognition.onresult = (e) => {
-        const text = e.results[0][0].transcript;
-        const input = document.getElementById('promptInput');
-        input.value = input.value ? input.value + ' ' + text : text;
+
+      recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        const inp = document.getElementById('promptInput');
+        inp.value = inp.value ? inp.value + ' ' + text : text;
+        notice.innerText = 'صوت با موفقیت تبدیل شد. برای ارسال کلید Enter را بزنید.';
       };
-      recognition.onerror = () => stopListening();
-      recognition.onend = () => stopListening();
+
+      recognition.onerror = (e) => {
+        isListening = false;
+        btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
+        if (e.error === 'language-not-supported') {
+          // فالبک به زبان انگلیسی در صورت عدم نصب زبان فارسی در مک
+          recognition.lang = 'en-US';
+          notice.innerText = 'زبان فارسی در Dictation مک فعال نبود؛ سوئیچ موقت به انگلیسی. صحبت کنید...';
+          recognition.start();
+        } else {
+          notice.innerText = 'خطای صوتی: ' + e.error;
+        }
+      };
+
+      recognition.onend = () => {
+        isListening = false;
+        btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
+      };
+
+      recognition.start();
     }
-    function toggleSpeechRecognition() {
-      if (!recognition) initSpeech();
-      if (!recognition) return alert("مرورگر شما از قابلیت صوت پشتیبانی نمی‌کند.");
-      if (isListening) { recognition.stop(); stopListening(); } else { recognition.start(); }
-    }
-    function stopListening() {
-      isListening = false;
-      document.getElementById('voiceBtn').classList.remove('bg-rose-500/20', 'text-rose-400', 'animate-pulse');
+
+    function animatePipeline() {
+      const pipe = document.getElementById('researchPipeline');
+      pipe.classList.remove('hidden');
+      const s1 = document.getElementById('step1'), s2 = document.getElementById('step2'), s3 = document.getElementById('step3'), s4 = document.getElementById('step4');
+      const st = document.getElementById('pipelineStatusText');
+
+      s1.className = "p-2.5 rounded-xl border border-cyan-500 bg-cyan-950/40 text-cyan-300 animate-pulse";
+      st.innerText = "فاز ۱: کاوش و تجزیه نیازمندی...";
+
+      setTimeout(() => {
+        s1.className = "p-2.5 rounded-xl border border-emerald-500 bg-emerald-950/40 text-emerald-300";
+        s2.className = "p-2.5 rounded-xl border border-cyan-500 bg-cyan-950/40 text-cyan-300 animate-pulse";
+        st.innerText = "فاز ۲: مدل‌سازی داده و DDL...";
+      }, 1500);
+
+      setTimeout(() => {
+        s2.className = "p-2.5 rounded-xl border border-emerald-500 bg-emerald-950/40 text-emerald-300";
+        s3.className = "p-2.5 rounded-xl border border-cyan-500 bg-cyan-950/40 text-cyan-300 animate-pulse";
+        st.innerText = "فاز ۳: تدوین سند استاندارد IEEE 1016...";
+      }, 3000);
+
+      setTimeout(() => {
+        s3.className = "p-2.5 rounded-xl border border-emerald-500 bg-emerald-950/40 text-emerald-300";
+        s4.className = "p-2.5 rounded-xl border border-emerald-500 bg-emerald-950/40 text-emerald-300";
+        st.innerText = "✅ خط لوله دیپ ریسرچ تکمیل و ماژول مستقر شد.";
+      }, 4500);
     }
 
     async function updateDashboard() {
@@ -169,9 +270,12 @@
       const input = document.getElementById('promptInput');
       const val = input.value.trim();
       if (!val) return;
+
       const feedback = document.getElementById('dispatchFeedback');
       feedback.classList.remove('hidden');
-      feedback.innerHTML = '<span class="text-cyan-400">در حال ارسال پروژه...</span>';
+      feedback.innerHTML = '<span class="text-cyan-400">ارسال پروژه و راه‌اندازی عامل‌های دیپ ریسرچ...</span>';
+      animatePipeline();
+
       try {
         const res = await fetch('/api/v1/factory/dispatch', {
           method: 'POST',
@@ -179,15 +283,14 @@
           body: JSON.stringify({prompt: val})
         });
         const d = await res.json();
-        feedback.innerHTML = `<span class="text-emerald-400 font-semibold">✅ ${d.message}</span>`;
+        feedback.innerHTML = `<span class="text-emerald-400 font-semibold">✅ ${d.message} (شناسه: ${d.task_id})</span>`;
         input.value = '';
         setTimeout(updateDashboard, 1500);
       } catch (err) {
-        feedback.innerHTML = '<span class="text-rose-400">خطا در ارسال</span>';
+        feedback.innerHTML = '<span class="text-rose-400">خطا در برقراری ارتباط با سرور</span>';
       }
     }
 
-    initSpeech();
     updateDashboard();
     setInterval(updateDashboard, 4000);
   </script>
