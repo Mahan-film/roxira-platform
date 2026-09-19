@@ -218,7 +218,16 @@
       "status": "SUCCESS",
       "priority": "IMMEDIATE",
       "created_at": "2026-09-19 07:28:11 UTC",
-      "completed_at": "2026-09-19 07:31:30 UTC",
+      "completed_at": "2026-09-19 07:30:37 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789803038",
+      "prompt": ". بهترین تکنولوژیه تبدیل معطب صوت و صوت به صوت یعنی تکست تو سپیچ چی ها هستش؟ همچنین لایف چات  که به صورت زندگی صحبت میکنند چی هستش؟",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:30:38 UTC",
+      "completed_at": "2026-09-19 07:33:13 UTC",
       "exit_code": 0
     }
   ]
