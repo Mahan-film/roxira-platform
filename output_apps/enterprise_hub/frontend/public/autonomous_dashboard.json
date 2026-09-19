@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-09-19 14:59:54 UTC",
+  "timestamp": "2026-09-19 15:30:28 UTC",
   "platform_health_score": "100%",
   "active_mesh_network": "roxira_mesh",
   "infrastructure_containers": {
-    "roxira_app_prod": "restarting",
+    "roxira_app_prod": "running",
     "roxira_enterprise_frontend": "running",
     "roxira_nginx_prod": "running",
     "roxira_postgres_prod": "running",
@@ -15,19 +15,19 @@
   },
   "subsystem_diagnostics": {
     "legal_core_fastapi": {
-      "status": "UNHEALTHY",
-      "error": "[Errno 104] Connection reset by peer"
+      "status": "HEALTHY",
+      "latency_ms": 39.78
     },
     "statutory_damages_article_522": {
-      "status": "FAILED",
-      "error": "[Errno 104] Connection reset by peer"
+      "status": "PASSED",
+      "damages_toman": 105357143
     },
     "qdrant_laws_memory": {
       "status": "CONNECTED",
       "vectors_count": 1308
     },
     "persian_voice_dilara_tts": {
-      "status": "ERROR"
+      "status": "OPERATIONAL"
     },
     "twenty_crm_cluster": {
       "status": "ONLINE",

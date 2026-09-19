@@ -382,21 +382,22 @@ async def sitemap_xml():
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{entries}</urlset>'
     return Response(content=xml, media_type="application/xml")
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
-app.include_router(zibal_root_payment)
-
-
-# Mount Zibal Payment Router at runtime
+# --- Integration of Live Voice & Payment Routers ---
 try:
-    except Exception as e:
-    pass
+    from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router as live_voice_router
+    app.include_router(live_voice_router)
+    print("  [ROXIRA] Live voice WebSocket mounted successfully.")
+except Exception as e:
+    print(f"  [ROXIRA-WARN] Live voice mount error: {e}")
 
-
-# Auto-mount Zibal payment router
 try:
     from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_payment_router
     app.include_router(zibal_payment_router)
+    print("  [ROXIRA] Zibal payment router mounted successfully.")
 except Exception as e:
-    pass
+    print(f"  [ROXIRA-WARN] Payment mount error: {e}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
