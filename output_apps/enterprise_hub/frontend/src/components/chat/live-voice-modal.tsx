@@ -9,8 +9,24 @@ interface LiveVoiceModalProps {
 declare global {
   interface Window {
     __smartJudgeAudioPlayer?: HTMLAudioElement | null;
+    __smartJudgeAudioContext?: AudioContext | null;
   }
 }
+
+// تابع صادراتی مورد نیاز chat-shell.tsx جهت فعال‌سازی پیش‌دستانه وب‌اودیو در سافاری
+export const unlockSafariAudio = () => {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!window.__smartJudgeAudioContext) {
+      window.__smartJudgeAudioContext = new AudioCtx();
+    }
+    if (window.__smartJudgeAudioContext.state === 'suspended') {
+      window.__smartJudgeAudioContext.resume();
+    }
+  } catch (e) {
+    console.warn('Audio unlock warning:', e);
+  }
+};
 
 export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose }) => {
   const [sessionState, setSessionState] = useState<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
@@ -22,7 +38,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   const socketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -38,13 +53,8 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     };
   }, [isOpen]);
 
-  const detectBestMimeType = (): string => {
-    const types = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/mp4',
-      'audio/aac'
-    ];
+  const detectSupportedMimeType = (): string => {
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac'];
     for (const t of types) {
       if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t)) {
         return t;
@@ -55,9 +65,10 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
   const startVisualizer = (stream: MediaStream) => {
     try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioCtx();
-      audioContextRef.current = ctx;
+      unlockSafariAudio();
+      const ctx = window.__smartJudgeAudioContext || new AudioContext();
+      window.__smartJudgeAudioContext = ctx;
+
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
@@ -71,9 +82,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
         if (analyserRef.current) {
           analyserRef.current.getByteFrequencyData(dataArray);
           let sum = 0;
-          for (let i = 0; i < bufferLength; i++) {
-            sum += dataArray[i];
-          }
+          for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
           const avg = sum / bufferLength;
           setAudioLevel(Math.min(100, Math.round(avg * 1.6)));
         }
@@ -81,7 +90,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       };
       updateMeter();
     } catch (e) {
-      console.warn('Audio visualizer initialization warning:', e);
+      console.warn('Visualizer warning:', e);
     }
   };
 
@@ -90,13 +99,10 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       setErrorMessage(null);
       setTranscription('');
       setAssistantReply('');
+      unlockSafariAudio();
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
       streamRef.current = stream;
       startVisualizer(stream);
@@ -107,7 +113,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       socketRef.current = ws;
 
       ws.onopen = () => {
-        startFreshRecorder();
+        startFreshRecording();
       };
 
       ws.onmessage = (event) => {
@@ -123,7 +129,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
             playAssistantSpeech(data.audio_data);
           } else if (data.event === 'error') {
             setErrorMessage(data.message);
-            resumeListeningState();
+            resumeListening();
           }
         } catch (err) {
           console.error('WS parse error:', err);
@@ -146,14 +152,12 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     }
   };
 
-  const startFreshRecorder = () => {
+  const startFreshRecording = () => {
     if (!streamRef.current) return;
-    
-    // فعال‌سازی ترک‌های صدا
     streamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
 
     audioChunksRef.current = [];
-    const mime = detectBestMimeType();
+    const mime = detectSupportedMimeType();
     activeMimeTypeRef.current = mime || 'audio/webm';
 
     try {
@@ -162,9 +166,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
       recorder.onstop = () => {
@@ -184,10 +186,10 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
         audioChunksRef.current = [];
       };
 
-      recorder.start(500); // ارسال چانک‌های ۵۰۰ میلی‌ثانیه‌ای به حافظه موقت
+      recorder.start(400);
       setSessionState('LISTENING');
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'خطای راه‌اندازی رکوردر';
+      const msg = e instanceof Error ? e.message : 'خطای رکوردر';
       setErrorMessage(msg);
     }
   };
@@ -198,7 +200,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         mediaRecorderRef.current.stop();
       }
-      // قطع موقت انتقال صوت حین فکر کردن و صحبت دستیار
       if (streamRef.current) {
         streamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
       }
@@ -217,27 +218,28 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
       window.__smartJudgeAudioPlayer = audio;
 
+      // تا پایان جمله میکروفون باز نمی‌شود
       audio.onended = () => {
         window.__smartJudgeAudioPlayer = null;
-        resumeListeningState();
+        resumeListening();
       };
 
       audio.onerror = () => {
         window.__smartJudgeAudioPlayer = null;
-        resumeListeningState();
+        resumeListening();
       };
 
       audio.play().catch(() => {
-        resumeListeningState();
+        resumeListening();
       });
     } catch (e) {
-      resumeListeningState();
+      resumeListening();
     }
   };
 
-  const resumeListeningState = () => {
+  const resumeListening = () => {
     setSessionState('LISTENING');
-    startFreshRecorder();
+    startFreshRecording();
   };
 
   const replaySpeech = () => {
@@ -250,10 +252,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
-    }
-    if (audioContextRef.current) {
-      try { audioContextRef.current.close(); } catch(e){}
-      audioContextRef.current = null;
     }
     if (window.__smartJudgeAudioPlayer) {
       window.__smartJudgeAudioPlayer.pause();
@@ -317,7 +315,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
             }`} />
           </div>
 
-          {/* اکولایزر زنده متحرک هنگام صحبت کاربر */}
           {sessionState === 'LISTENING' && (
             <div className="flex items-center gap-1.5 mt-3 h-5">
               {[0.4, 0.8, 1.2, 0.7, 1.4, 0.9, 0.5].map((factor, i) => (

@@ -1,6 +1,4 @@
-
 from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_router
-app.include_router(zibal_router)
 
 from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_root_payment
 import os, sys, importlib, asyncio, uvicorn, pathlib
@@ -389,3 +387,10 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 app.include_router(zibal_root_payment)
+
+
+# Mount Zibal Payment Router at runtime
+try:
+    app.include_router(zibal_router)
+except Exception as e:
+    pass
