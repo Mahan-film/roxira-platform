@@ -24,15 +24,14 @@ def generate_enterprise_docx(task_id: str, prompt: str, target_dir: str, metadat
     p2.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p2.add_run(arch.get("expert_opinion", "بررسی معماری سیستم با متدهای پیشرفته انجام شد."))
 
-    # ۲. ماتریس تصمیم‌گیری اختصاصی
-    
-    # ۱.۵. پیش‌نیازهای پیاده‌سازی
+    # ۲. پیش‌نیازهای پیاده‌سازی
     doc.add_heading("۲. پیش‌نیازهای زیرساختی و ابزارهای تسریع‌کننده پیاده‌سازی", level=1)
     p_pre = doc.add_paragraph()
     p_pre.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     for pre in arch.get("implementation_prerequisites", []):
         p_pre.add_run(f" • ابزار/پیش‌نیاز: {pre}\n")
 
+    # ۳. ماتریس تصمیم‌گیری اختصاصی
     doc.add_heading("۳. ماتریس ارزیابی و تصمیمات استراتژیک معماری (Domain Decision Matrix)", level=1)
     d_table = doc.add_table(rows=1, cols=4)
     d_table.style = 'Light Shading Accent 1'
@@ -49,8 +48,8 @@ def generate_enterprise_docx(task_id: str, prompt: str, target_dir: str, metadat
         r[2].text = dec.get("rejected_alternatives", "")
         r[3].text = dec.get("technical_justification", "")
 
-    # ۳. مدل داده و دیکشنری موجودیت‌ها
-    doc.add_heading("۳. مدل‌سازی داده و معماری اجزای سامانه (Component Architecture)", level=1)
+    # ۴. مدل داده و دیکشنری موجودیت‌ها
+    doc.add_heading("۴. مدل‌سازی داده و معماری اجزای سامانه (Component Architecture)", level=1)
     for ent in arch.get("domain_entities", []):
         doc.add_heading(f"بخش: {ent.get('table_name')} ({ent.get('name')})", level=2)
         p_desc = doc.add_paragraph()
@@ -71,13 +70,12 @@ def generate_enterprise_docx(task_id: str, prompt: str, target_dir: str, metadat
             fr[1].text = fld.get("type", "")
             fr[2].text = fld.get("constraints", "")
 
-    # ۴. مراجع پیشنهادی متن‌باز
-    doc.add_heading("۴. مخازن مرجع متن‌باز جهانی (Open-Source References)", level=1)
+    # ۵. مراجع پیشنهادی متن‌باز
+    doc.add_heading("۵. مخازن مرجع متن‌باز جهانی جهت الگوبرداری و پیاده‌سازی (SOTA Repositories)", level=1)
     p_repo = doc.add_paragraph()
     p_repo.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     for repo in arch.get("recommended_sota_repositories", []):
-        r_url = repo if repo.startswith("http") else f"https://github.com/{repo.strip('/')}"
-        p_repo.add_run(f" • مخزن مرجع: {r_url}\n")
+        p_repo.add_run(f" • مخزن مرجع: {repo}\n")
 
     docx_path = os.path.join(target_dir, f"{task_id}_Report.docx")
     doc.save(docx_path)
@@ -101,7 +99,7 @@ def generate_markdown_report(task_id: str, prompt: str, target_dir: str, metadat
         for a in arch.get("api_contracts", [])
     )
 
-    repos_section = "\n".join(f"" for r in arch.get("recommended_sota_repositories", []))
+    repos_section = "\n".join(f"- [{r}]({r})" for r in arch.get("recommended_sota_repositories", []))
 
     md = f"""# سند رسمی معماری و تحلیل استراتژیک (IEEE 1016): {task_id}
 
@@ -117,11 +115,11 @@ def generate_markdown_report(task_id: str, prompt: str, target_dir: str, metadat
 
 ---
 
-
 ## ۲. پیش‌نیازهای زیرساختی و ابزارهای تسریع‌کننده پیاده‌سازی
 {chr(10).join('- **ابزار کلیدی:** ' + p for p in arch.get('implementation_prerequisites', []))}
 
 ---
+
 ## ۳. ماتریس ارزیابی و تصمیم‌گیری تخصصی دامنه (Benchmark Matrix)
 
 | لایه ارزیابی | راهکار منتخب ۲۰۲۶ | گزینه‌های بررسی‌شده | استدلال فنی و ادله بنچمارک |
@@ -130,13 +128,8 @@ def generate_markdown_report(task_id: str, prompt: str, target_dir: str, metadat
 
 ---
 
-## ۳. مدل‌سازی داده و مؤلفه‌های معماری
+## ۴. مدل‌سازی داده و مؤلفه‌های معماری
 {entities_section}
-
----
-
-## ۴. قراردادهای رابط‌های برنامه‌نویسی (API Contracts)
-{apis_section}
 
 ---
 
@@ -145,7 +138,12 @@ def generate_markdown_report(task_id: str, prompt: str, target_dir: str, metadat
 
 ---
 
-## ۶. مصنوعات تولیدشده در مخزن
+## ۶. قراردادهای رابط‌های برنامه‌نویسی (API Contracts)
+{apis_section}
+
+---
+
+## ۷. مصنوعات تولیدشده در مخزن
 - `router.py`: سرویس تخصصی مبتنی بر موجودیت‌های استخراج‌شده
 - `Component.tsx`: کامپوننت رابط کاربری Next.js
 - `{task_id}_Report.docx`: سند رسمی و ویرایش‌پذیر Word
