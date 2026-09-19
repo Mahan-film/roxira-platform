@@ -1,14 +1,14 @@
 # سند رسمی معماری و تحلیل استراتژیک (IEEE 1016): USER-1789799567
 
-**موضوع کاوش:** بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار چیست؟  
-**حوزه تخصصی تشخیص‌داده‌شده:** `Software Factory`  
+**موضوع کاوش:** بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار و تیم عامل‌های مصنوعی چیست؟  
+**حوزه تخصصی تشخیص‌داده‌شده:** `کارخانه ایجنت‌های خودکار و تیم عامل‌های مصنوعی`  
 **محیط ارزیابی:** `Hetzner Production Cloud (ARM64)`  
 **تأییدیه نهایی:** `ALL_GREEN`  
 
 ---
 
 ## ۱. ارزیابی کارشناسی و استراتژی مهندسی (پاسخ به مسئله)
-The best technology for building a software factory in 2026 revolves around leveraging AI-driven development platforms, microservices architecture, and DevOps automation. AI Agents will play a pivotal role in automating code generation, testing, and deployment, while cloud-native technologies will ensure scalability and resilience. The integration of low-code/no-code platforms with AI capabilities will democratize software development, enabling faster time-to-market and reducing dependency on specialized skills.
+در سال ۲۰۲۶، بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار و تیم عامل‌های مصنوعی ترکیبی از معماری‌های مبتنی بر هوش مصنوعی پیشرفته و زیرساخت‌های ابری مقیاس‌پذیر است. استفاده از عامل‌های خودکار (Autonomous Agents) که قادر به یادگیری مستمر و تعامل با محیط‌های پیچیده هستند، به همراه پلتفرم‌های مدیریت گردش کار (Workflow Management Platforms) که از یادگیری ماشین برای بهینه‌سازی فرآیندها استفاده می‌کنند، ضروری است. این ترکیب نه تنها انعطاف‌پذیری و کارایی را افزایش می‌دهد، بلکه امکان ادغام با سیستم‌های موجود و مقیاس‌پذیری در آینده را نیز فراهم می‌کند.
 
 ---
 
@@ -16,41 +16,44 @@ The best technology for building a software factory in 2026 revolves around leve
 
 | لایه ارزیابی | راهکار منتخب ۲۰۲۶ | گزینه‌های بررسی‌شده | استدلال فنی و ادله بنچمارک |
 | :--- | :--- | :--- | :--- |
-| **Development Automation** | AI-Driven Code Generation Platforms (e.g., GitHub Copilot X, Amazon CodeWhisperer) | Manual Coding, Traditional IDEs | AI-driven platforms reduce development time by 40-60%, improve code quality through automated reviews, and adapt to evolving coding standards. Traditional methods are inefficient and prone to human error. |
-| **Infrastructure Management** | Kubernetes with GitOps (e.g., ArgoCD, Flux) | Manual Infrastructure Provisioning, Static Cloud Configurations | Kubernetes ensures scalability and resilience, while GitOps automates deployment pipelines, reducing downtime and improving consistency. Manual methods are error-prone and lack scalability. |
-| **Continuous Integration/Continuous Deployment (CI/CD)** | AI-Optimized CI/CD Pipelines (e.g., Jenkins AI, CircleCI with ML Insights) | Manual CI/CD Setup, Non-AI-Driven Pipelines | AI-optimized pipelines predict failures, optimize build times, and ensure faster deployments. Traditional pipelines lack predictive capabilities and are slower. |
+| **معماری عامل‌های خودکار** | MetaGPT و LangGraph | روش‌های سنتی مبتنی بر قوانین ثابت | MetaGPT و LangGraph از مدل‌های زبانی پیشرفته و گراف‌های تعاملی برای ایجاد عامل‌های خودکار استفاده می‌کنند که قادر به یادگیری و تطبیق با شرایط جدید هستند. این روش‌ها در مقایسه با روش‌های سنتی که مبتنی بر قوانین ثابت و غیرقابل انعطاف هستند، کارایی و انعطاف‌پذیری بیشتری دارند. |
+| **زیرساخت ابری** | Kubernetes و Istio | سرورهای فیزیکی و مجازی سنتی | Kubernetes و Istio امکان مدیریت و مقیاس‌پذیری کارآمد سرویس‌های میکروسرویس را فراهم می‌کنند. این زیرساخت‌ها در مقایسه با سرورهای فیزیکی و مجازی سنتی، قابلیت‌های خودکارسازی و مدیریت بهتر منابع را ارائه می‌دهند. |
+| **مدیریت گردش کار** | Airflow و Prefect | گردش کار دستی و اسکریپت‌های سفارشی | Airflow و Prefect از یادگیری ماشین برای بهینه‌سازی و مدیریت گردش کار استفاده می‌کنند. این پلتفرم‌ها در مقایسه با گردش کار دستی و اسکریپت‌های سفارشی، کارایی و قابلیت اطمینان بیشتری دارند. |
 
 ---
 
 ## ۳. مدل‌سازی داده و مؤلفه‌های معماری
-### موجودیت / جدول: `code_repos` (Code Repository)
-*Stores metadata and version control information for software projects.*
+### موجودیت / جدول: `autonomous_agent` (عامل خودکار)
+*عامل‌های خودکار که قادر به یادگیری و تعامل با محیط‌های پیچیده هستند.*
 
-- `repo_id` (UUID) - *Primary Key*
-- `project_name` (String) - *Not Null*
-- `last_commit` (Timestamp) - *Not Null*
+- `agent_id` (UUID) - *PRIMARY KEY*
+- `agent_name` (VARCHAR(255)) - *NOT NULL*
+- `learning_model` (TEXT) - *NOT NULL*
+- `interaction_capabilities` (JSON) - *NOT NULL*
 
-### موجودیت / جدول: `deployment_pipelines` (Deployment Pipeline)
-*Manages CI/CD pipeline configurations and execution logs.*
+### موجودیت / جدول: `workflow` (گردش کار)
+*گردش کارهای مدیریت شده توسط پلتفرم‌های هوشمند.*
 
-- `pipeline_id` (UUID) - *Primary Key*
-- `status` (String) - *Not Null*
-- `execution_time` (Timestamp) - *Not Null*
+- `workflow_id` (UUID) - *PRIMARY KEY*
+- `workflow_name` (VARCHAR(255)) - *NOT NULL*
+- `optimization_model` (TEXT) - *NOT NULL*
+- `execution_status` (VARCHAR(50)) - *NOT NULL*
 
 
 
 ---
 
 ## ۴. قراردادهای رابط‌های برنامه‌نویسی (API Contracts)
-- **`POST`** `/api/v1/code/generate`: Generates code snippets based on natural language input using AI models.
-- **`GET`** `/api/v1/pipelines/status`: Retrieves the current status of CI/CD pipelines.
+- **`POST`** `/api/v1/agents/create`: ایجاد یک عامل خودکار جدید
+- **`GET`** `/api/v1/workflows/status`: دریافت وضعیت گردش کارها
+- **`PUT`** `/api/v1/agents/update`: به‌روزرسانی اطلاعات عامل خودکار
 
 ---
 
 ## ۵. مخازن مرجع متن‌باز جهانی جهت الگوبرداری و پیاده‌سازی
+- [github.com/FoundationAgents/MetaGPT](https://github.com/FoundationAgents/MetaGPT)
 - [github.com/langchain-ai/langgraph](https://github.com/langchain-ai/langgraph)
-- [github.com/openhands](https://github.com/openhands)
-- [github.com/daytona](https://github.com/daytona)
+- [github.com/all-hands-ai/openhands](https://github.com/all-hands-ai/openhands)
 
 ---
 

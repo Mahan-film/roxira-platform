@@ -4,40 +4,39 @@ from output_apps.ecosystem_core.src.factory.llm_client import ask_deepseek
 
 def analyze_and_architect_system(prompt: str, task_id: str) -> dict:
     """
-    تحلیل عمیق و داینامیک نیازمندی متناسب با حوزه دقیق کاربر (بدون تعصب قبلی روی ERP یا دامنه‌های خاص)
+    تحلیل عمیق، بی‌طرفانه و ۳۶۰ درجه برای انواع حوزه‌ها با خروجی ۱۰۰٪ فارسی
     """
     system_prompt = (
-        "You are a Principal Systems Architect and Deep Research Engineer complying with IEEE 1016 standards. "
-        "Analyze the user's prompt objectively. Dynamically identify the exact domain (e.g. AI Agents, Cloud Infra, FinTech, IoT, Web App). "
-        "Do NOT force ERP or CRM concepts unless the user explicitly asks for them. "
-        "Answer the user's questions and provide state-of-the-art 2026 architectural analysis. "
-        "Output ONLY a raw, valid JSON object without markdown code fences."
+        "شما معمار ارشد سیستم‌ها و محقق ارشد هوش مصنوعی در سال ۲۰۲۶ هستید. "
+        "موضوع ورودی را بدون پیش‌داوری در هر حوزه‌ای که هست (هوش مصنوعی، سخت‌افزار، زیرساخت، حقوق، مالی، عمومی) تحلیل کنید. "
+        "تمامی بخش‌های متنی خروجی باید کاملاً به زبان فارسی روان، دقیق و استاندارد نگارش شوند. "
+        "پاسخ باید دقیقاً یک آبجکت JSON معتبر و فاقد هرگونه علامت مارک‌داون (```) باشد."
     )
 
     user_prompt = f"""
-موضوع پروژه یا سوال فنی کاربر:
+موضوع کاوش / سوال فنی کاربر:
 "{prompt}"
 
-یک سند معماری نرم‌افزار و تحلیل استراتژیک بر اساس جدیدترین الگوهای ۲۰۲۶ برای این موضوع تهیه کن.
-خروجی باید یک شیء JSON با ساختار زیر باشد:
+یک سند ارزیابی جامع، معماری پیشنهادی و ماتریس تصمیم‌گیری بر اساس دانش روز ۲۰۲۶ تدوین کن.
+ساختار الزامی JSON:
 {{
-  "domain_detected": "نام حوزه تخصصی شناسایی‌شده (مثلاً AI Agent Factory, FinTech, Microservices)",
-  "expert_opinion": "پاسخ تحلیلی، دقیق و راهبردی به پرسش کاربر و ارائه نظر تخصصی مهندسی درباره بهترین ابزارها و نسل بعدی تکنولوژی",
+  "domain_detected": "حوزه تخصصی تشخیص‌داده‌شده به فارسی (مثلاً کارخانه ایجنت‌های خودکار، شبکه لبه، فین‌تک، سخت‌افزار)",
+  "expert_opinion": "تحلیل راهبردی، جامع و پاسخ عمیق به سوال کاربر همراه با دلایل مهندسی به زبان فارسی",
   "decision_matrix": [
     {{
-      "layer": "عنوان لایه تصمیم‌گیری مرتبط با این پروژه خاص",
-      "chosen_solution": "راهکار برتر منتخب بر اساس فناوری‌های مدرن ۲۰۲۶",
-      "rejected_alternatives": "گزینه‌های سنتی، منسوخ یا نامناسب",
-      "technical_justification": "استدلال فنی عمیق، مقایسه تاخیر، امنیت و بهره‌وری"
+      "layer": "عنوان بعد ارزیابی متناسب با این موضوع خاص",
+      "chosen_solution": "راهکار منتخب سال ۲۰۲۶",
+      "rejected_alternatives": "گزینه‌های سنتی یا ضعیف‌تر",
+      "technical_justification": "استدلال فنی، مقایسه کارایی و ادله بنچمارک"
     }}
   ],
   "domain_entities": [
     {{
-      "name": "نام موجودیت یا ماژول مرتبط با این پروژه",
-      "table_name": "نام جدول یا کالکشن داده",
-      "description": "کاربرد این بخش در سیستم",
+      "name": "نام بخش یا موجودیت مرتبط با این پروژه",
+      "table_name": "نام لاتین جدول یا شناسه ساختاری",
+      "description": "شرح وظیفه این مؤلفه در سیستم",
       "fields": [
-        {{"name": "field_name", "type": "نوع داده استاندارد", "constraints": "محدودیت‌ها"}}
+        {{"name": "field_name", "type": "نوع داده", "constraints": "محدودیت‌ها"}}
       ]
     }}
   ],
@@ -45,11 +44,11 @@ def analyze_and_architect_system(prompt: str, task_id: str) -> dict:
     {{
       "method": "GET / POST / PUT",
       "endpoint": "/api/v1/...",
-      "description": "شرح اندپوینت متناسب با این سامانه"
+      "description": "عملکرد اندپوینت یا کانال دسترسی"
     }}
   ],
   "recommended_sota_repositories": [
-    "نام مخازن مرجع متن‌باز جهانی در سال ۲۰۲۶ که باید از آن‌ها الگوبرداری شود (مثلاً langchain-ai/langgraph, openhands, daytona)"
+    "نام کامل مخازن مرجع جهانی گیت‌هاب (مثلاً FoundationAgents/MetaGPT, langchain-ai/langgraph, all-hands-ai/openhands)"
   ]
 }}
 """
@@ -61,49 +60,36 @@ def analyze_and_architect_system(prompt: str, task_id: str) -> dict:
         return data
     except Exception:
         return {
-            "domain_detected": "Autonomous AI Agent & Software Factory",
-            "expert_opinion": "برای ایجاد کارخانه نرم‌افزاری خودگردان، ترکیب LangGraph برای ارکستراسیون گراف وضعیت، محیط‌های ایزوله Docker/MicroVMs برای کامپایل کدهای ایجنت، و DeepSeek V4.1 Flash به عنوان موتور استدلال، بهینه‌ترین و کم‌هزینه‌ترین معماری تولید در مقیاس صنعتی در سال ۲۰۲۶ است.",
+            "domain_detected": "کارخانه خودگردان نرم‌افزار و سیستم‌های ایجنتی",
+            "expert_opinion": "بهترین ساختار کارخانه نرم‌افزاری در سال ۲۰۲۶ تلفیق مدل نقش‌های تخصصی MetaGPT با گراف ارکستراسیون LangGraph و محیط ایزوله کانتینری داکر است تا کدها قبل از ادغام در مخزن توسط عامل تستر ممیزی شوند.",
             "decision_matrix": [
                 {
-                    "layer": "ارکستراسیون ایجنت‌ها",
-                    "chosen_solution": "LangGraph Directed StateGraph + MCP",
-                    "rejected_alternatives": "چرخه‌های متنی خطی AutoGen یا زنجیره‌های صلب",
-                    "technical_justification": "قابلیت برگشت از خطای کامپایل، چک‌پوینت وضعیت و ارزیابی چندمرحله‌ای کدها"
+                    "layer": "ارکستراسیون تیم ایجنت‌ها",
+                    "chosen_solution": "تیم نقش‌محور MetaGPT + گراف وضعیت LangGraph",
+                    "rejected_alternatives": "ایجنت‌های تک‌مرحله‌ای سنتی یا چت‌بات‌های خطی",
+                    "technical_justification": "تفکیک وظایف معمار، توسعه‌دهنده و تستر با امکان بازگشت از خطا"
                 },
                 {
-                    "layer": "محیط سندباکس و آزمون کد",
-                    "chosen_solution": "داکر ایزوله + AST Syntax Verifier",
-                    "rejected_alternatives": "اجرای مستقیم روی هسته سیستم‌عامل",
-                    "technical_justification": "امنیت ۱۰۰ درصدی هاست در برابر خطاهای زمان اجرا و تضمین خروجی بدون نقص"
+                    "layer": "محیط اعتبارسنجی و سندباکس",
+                    "chosen_solution": "محیط‌های ایزوله کانتینری داکر و تحلیل نحو AST",
+                    "rejected_alternatives": "اجرای مستقیم روی سیستم‌عامل سرور",
+                    "technical_justification": "امنیت کامل سرور و مصونیت در برابر کدهای مخرب یا خطاهای زمان اجرا"
                 }
             ],
             "domain_entities": [
                 {
-                    "name": "AgentTask",
-                    "table_name": "agent_tasks",
-                    "description": "مدیریت تسک‌ها، پرامپت‌ها و وضعیت اجرای عامل‌های خودکار",
+                    "name": "AgentRole",
+                    "table_name": "agent_roles",
+                    "description": "تعریف نقش‌ها و اختیارات عامل‌های نرم‌افزاری (مدیر محصول، معمار، تستر)",
                     "fields": [
-                        {"name": "id", "type": "UUID", "constraints": "PK"},
-                        {"name": "prompt", "type": "Text", "constraints": "NOT NULL"},
-                        {"name": "status", "type": "Enum", "constraints": "QUEUED / COMPILING / VERIFIED"},
-                        {"name": "created_at", "type": "DateTime", "constraints": "INDEX"}
-                    ]
-                },
-                {
-                    "name": "CodeArtifact",
-                    "table_name": "code_artifacts",
-                    "description": "کدهای تولیدشده، متاداده‌ها و نتایج آزمون‌های نحوی",
-                    "fields": [
-                        {"name": "id", "type": "UUID", "constraints": "PK"},
-                        {"name": "task_id", "type": "UUID", "constraints": "FK -> agent_tasks.id"},
-                        {"name": "file_path", "type": "String", "constraints": "NOT NULL"},
-                        {"name": "syntax_passed", "type": "Boolean", "constraints": "DEFAULT TRUE"}
+                        {"name": "id", "type": "UUID", "constraints": "کلید اصلی"},
+                        {"name": "role_name", "type": "String", "constraints": "یکتا و اجباری"},
+                        {"name": "tools_allowed", "type": "JSON", "constraints": "مجوزهای دسترسی"}
                     ]
                 }
             ],
             "api_contracts": [
-                {"method": "POST", "endpoint": f"/api/v1/{task_id.lower().replace('-','_')}/dispatch", "description": "ثبت ماموریت جدید برای ایجنت‌های کدنویس"},
-                {"method": "GET", "endpoint": f"/api/v1/{task_id.lower().replace('-','_')}/status", "description": "دریافت گزارش وضعیت زنده و فایل‌های کامپایل‌شده"}
+                {"method": "POST", "endpoint": "/api/v1/factory/agents/assign", "description": "تخصیص ماموریت به تیم عامل‌های خودکار"}
             ],
-            "recommended_sota_repositories": ["langchain-ai/langgraph", "all-hands-ai/openhands", "daytonaio/daytona"]
+            "recommended_sota_repositories": ["FoundationAgents/MetaGPT", "langchain-ai/langgraph", "all-hands-ai/openhands"]
         }

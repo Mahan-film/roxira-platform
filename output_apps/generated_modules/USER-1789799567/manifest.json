@@ -1,7 +1,7 @@
 {
   "task_id": "USER-1789799567",
-  "prompt": "بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار چیست؟",
-  "created_at": "2026-09-19 06:34:13 UTC",
+  "prompt": "بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار و تیم عامل‌های مصنوعی چیست؟",
+  "created_at": "2026-09-19 06:43:33 UTC",
   "verification_status": "ALL_GREEN",
   "backend_syntax_pass": true,
   "frontend_ready": true,
@@ -13,70 +13,80 @@
     "REPORT.md"
   ],
   "arch_data": {
-    "domain_detected": "Software Factory",
-    "expert_opinion": "The best technology for building a software factory in 2026 revolves around leveraging AI-driven development platforms, microservices architecture, and DevOps automation. AI Agents will play a pivotal role in automating code generation, testing, and deployment, while cloud-native technologies will ensure scalability and resilience. The integration of low-code/no-code platforms with AI capabilities will democratize software development, enabling faster time-to-market and reducing dependency on specialized skills.",
+    "domain_detected": "کارخانه ایجنت‌های خودکار و تیم عامل‌های مصنوعی",
+    "expert_opinion": "در سال ۲۰۲۶، بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار و تیم عامل‌های مصنوعی ترکیبی از معماری‌های مبتنی بر هوش مصنوعی پیشرفته و زیرساخت‌های ابری مقیاس‌پذیر است. استفاده از عامل‌های خودکار (Autonomous Agents) که قادر به یادگیری مستمر و تعامل با محیط‌های پیچیده هستند، به همراه پلتفرم‌های مدیریت گردش کار (Workflow Management Platforms) که از یادگیری ماشین برای بهینه‌سازی فرآیندها استفاده می‌کنند، ضروری است. این ترکیب نه تنها انعطاف‌پذیری و کارایی را افزایش می‌دهد، بلکه امکان ادغام با سیستم‌های موجود و مقیاس‌پذیری در آینده را نیز فراهم می‌کند.",
     "decision_matrix": [
       {
-        "layer": "Development Automation",
-        "chosen_solution": "AI-Driven Code Generation Platforms (e.g., GitHub Copilot X, Amazon CodeWhisperer)",
-        "rejected_alternatives": "Manual Coding, Traditional IDEs",
-        "technical_justification": "AI-driven platforms reduce development time by 40-60%, improve code quality through automated reviews, and adapt to evolving coding standards. Traditional methods are inefficient and prone to human error."
+        "layer": "معماری عامل‌های خودکار",
+        "chosen_solution": "MetaGPT و LangGraph",
+        "rejected_alternatives": "روش‌های سنتی مبتنی بر قوانین ثابت",
+        "technical_justification": "MetaGPT و LangGraph از مدل‌های زبانی پیشرفته و گراف‌های تعاملی برای ایجاد عامل‌های خودکار استفاده می‌کنند که قادر به یادگیری و تطبیق با شرایط جدید هستند. این روش‌ها در مقایسه با روش‌های سنتی که مبتنی بر قوانین ثابت و غیرقابل انعطاف هستند، کارایی و انعطاف‌پذیری بیشتری دارند."
       },
       {
-        "layer": "Infrastructure Management",
-        "chosen_solution": "Kubernetes with GitOps (e.g., ArgoCD, Flux)",
-        "rejected_alternatives": "Manual Infrastructure Provisioning, Static Cloud Configurations",
-        "technical_justification": "Kubernetes ensures scalability and resilience, while GitOps automates deployment pipelines, reducing downtime and improving consistency. Manual methods are error-prone and lack scalability."
+        "layer": "زیرساخت ابری",
+        "chosen_solution": "Kubernetes و Istio",
+        "rejected_alternatives": "سرورهای فیزیکی و مجازی سنتی",
+        "technical_justification": "Kubernetes و Istio امکان مدیریت و مقیاس‌پذیری کارآمد سرویس‌های میکروسرویس را فراهم می‌کنند. این زیرساخت‌ها در مقایسه با سرورهای فیزیکی و مجازی سنتی، قابلیت‌های خودکارسازی و مدیریت بهتر منابع را ارائه می‌دهند."
       },
       {
-        "layer": "Continuous Integration/Continuous Deployment (CI/CD)",
-        "chosen_solution": "AI-Optimized CI/CD Pipelines (e.g., Jenkins AI, CircleCI with ML Insights)",
-        "rejected_alternatives": "Manual CI/CD Setup, Non-AI-Driven Pipelines",
-        "technical_justification": "AI-optimized pipelines predict failures, optimize build times, and ensure faster deployments. Traditional pipelines lack predictive capabilities and are slower."
+        "layer": "مدیریت گردش کار",
+        "chosen_solution": "Airflow و Prefect",
+        "rejected_alternatives": "گردش کار دستی و اسکریپت‌های سفارشی",
+        "technical_justification": "Airflow و Prefect از یادگیری ماشین برای بهینه‌سازی و مدیریت گردش کار استفاده می‌کنند. این پلتفرم‌ها در مقایسه با گردش کار دستی و اسکریپت‌های سفارشی، کارایی و قابلیت اطمینان بیشتری دارند."
       }
     ],
     "domain_entities": [
       {
-        "name": "Code Repository",
-        "table_name": "code_repos",
-        "description": "Stores metadata and version control information for software projects.",
+        "name": "عامل خودکار",
+        "table_name": "autonomous_agent",
+        "description": "عامل‌های خودکار که قادر به یادگیری و تعامل با محیط‌های پیچیده هستند.",
         "fields": [
           {
-            "name": "repo_id",
+            "name": "agent_id",
             "type": "UUID",
-            "constraints": "Primary Key"
+            "constraints": "PRIMARY KEY"
           },
           {
-            "name": "project_name",
-            "type": "String",
-            "constraints": "Not Null"
+            "name": "agent_name",
+            "type": "VARCHAR(255)",
+            "constraints": "NOT NULL"
           },
           {
-            "name": "last_commit",
-            "type": "Timestamp",
-            "constraints": "Not Null"
+            "name": "learning_model",
+            "type": "TEXT",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "interaction_capabilities",
+            "type": "JSON",
+            "constraints": "NOT NULL"
           }
         ]
       },
       {
-        "name": "Deployment Pipeline",
-        "table_name": "deployment_pipelines",
-        "description": "Manages CI/CD pipeline configurations and execution logs.",
+        "name": "گردش کار",
+        "table_name": "workflow",
+        "description": "گردش کارهای مدیریت شده توسط پلتفرم‌های هوشمند.",
         "fields": [
           {
-            "name": "pipeline_id",
+            "name": "workflow_id",
             "type": "UUID",
-            "constraints": "Primary Key"
+            "constraints": "PRIMARY KEY"
           },
           {
-            "name": "status",
-            "type": "String",
-            "constraints": "Not Null"
+            "name": "workflow_name",
+            "type": "VARCHAR(255)",
+            "constraints": "NOT NULL"
           },
           {
-            "name": "execution_time",
-            "type": "Timestamp",
-            "constraints": "Not Null"
+            "name": "optimization_model",
+            "type": "TEXT",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "execution_status",
+            "type": "VARCHAR(50)",
+            "constraints": "NOT NULL"
           }
         ]
       }
@@ -84,19 +94,24 @@
     "api_contracts": [
       {
         "method": "POST",
-        "endpoint": "/api/v1/code/generate",
-        "description": "Generates code snippets based on natural language input using AI models."
+        "endpoint": "/api/v1/agents/create",
+        "description": "ایجاد یک عامل خودکار جدید"
       },
       {
         "method": "GET",
-        "endpoint": "/api/v1/pipelines/status",
-        "description": "Retrieves the current status of CI/CD pipelines."
+        "endpoint": "/api/v1/workflows/status",
+        "description": "دریافت وضعیت گردش کارها"
+      },
+      {
+        "method": "PUT",
+        "endpoint": "/api/v1/agents/update",
+        "description": "به‌روزرسانی اطلاعات عامل خودکار"
       }
     ],
     "recommended_sota_repositories": [
+      "FoundationAgents/MetaGPT",
       "langchain-ai/langgraph",
-      "openhands",
-      "daytona"
+      "all-hands-ai/openhands"
     ]
   }
 }
