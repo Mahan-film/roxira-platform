@@ -1,30 +1,19 @@
 #!/usr/bin/env python3
 import sys, os
-sys.path.insert(0, "/opt/roxira_platform")
-
 import ast, json, re, time
+
 from output_apps.ecosystem_core.src.factory.architect_ai import analyze_and_architect_system
 from output_apps.ecosystem_core.src.factory.report_generator import generate_enterprise_docx, generate_markdown_report
+from output_apps.ecosystem_core.src.factory.qdrant_memory_agent import index_research_artifact
 
 MODULES_DIR = "/opt/roxira_platform/output_apps/generated_modules"
 
 def sanitize_identifier(name: str, fallback: str = "Entity") -> str:
-    """پاکسازی کامل کاراکترهای غیرمجاز یونیکد و نیم‌فاصله از اسامی متغیرها و کلاس‌های پایتون"""
     if not name: return fallback
-    # حذف نیم‌فاصله و کاراکترهای کنترلی
     clean = re.sub(r'[\u200c\u200b\u200e\u200f\ufeff]', '', name)
-    # اگر نام به فارسی بود یا کاراکتر غیراستاندارد داشت، معادل اسکی امن بساز
     clean = re.sub(r'[^a-zA-Z0-9_]', '_', clean).strip('_')
-    if not clean or clean[0].isdigit():
-        clean = f"Model_{clean}"
-    # تبدیل به فرمت PascalCase برای کلاس‌ها
+    if not clean or clean[0].isdigit(): clean = f"Model_{clean}"
     return "".join(part.capitalize() for part in clean.split("_") if part) or fallback
-
-def sanitize_repo_url(url: str) -> str:
-    """پاکسازی آدرس‌های گیت‌هاب و جلوگیری از تکرار پیشوند دامنه"""
-    if not url: return ""
-    clean = url.replace("https://github.com/", "").replace("http://github.com/", "").replace("github.com/", "").strip("/")
-    return f"https://github.com/{clean}"
 
 class FactoryEngine:
     @staticmethod
@@ -33,16 +22,12 @@ class FactoryEngine:
         os.makedirs(target_dir, exist_ok=True)
         safe_prefix = re.sub(r'[^a-zA-Z0-9_]', '_', task_id.lower())
 
-        print(f"\n🏭 [کارخانه خودگردان روکسیرا] آغاز چرخه پردازش تسک: {task_id}")
+        print(f"\n🏭 [کارخانه خودگردان روکسیرا] آغاز چرخه ساخت: {task_id}")
         
-        # ۱. عامل معمار و پژوهشگر عمیق
+        # ۱. عامل دیپ‌ریسرچ و معمار
         arch_data = analyze_and_architect_system(prompt, task_id)
 
-        # پاکسازی لینک‌های مراجع گیت‌هاب در متاداده
-        raw_repos = arch_data.get("recommended_sota_repositories", [])
-        arch_data["recommended_sota_repositories"] = [sanitize_repo_url(r) for r in raw_repos if r]
-
-        # ۲. عامل مهندس نرم‌افزار با شناسه‌های کامپایل‌پذیر
+        # ۲. عامل بک‌اند
         entities = arch_data.get("domain_entities", [])
         entity_classes = ""
         for ent in entities:
@@ -53,12 +38,8 @@ class FactoryEngine:
                 f_name = re.sub(r'[^a-zA-Z0-9_]', '_', f.get("name", "val")).strip('_') or "field_val"
                 if f_name[0].isdigit(): f_name = f"f_{f_name}"
                 field_lines.append(f"{f_name}: str = Field(default='', description='{f.get('constraints', '')}')")
-            
             fields_body = "\n    ".join(field_lines) if field_lines else "id: str = Field(default='')"
-            entity_classes += f"""
-class {cls_name}(BaseModel):
-    {fields_body}
-"""
+            entity_classes += f"\nclass {cls_name}(BaseModel):\n    {fields_body}\n"
 
         backend_code = f'''"""
 Roxira OS - Autonomous Software Factory
@@ -66,7 +47,7 @@ Module: {task_id}
 Domain: {arch_data.get("domain_detected", "General")}
 Standard: IEEE 1016 Software Design Description (SDD)
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 import datetime
 from typing import List, Optional
@@ -83,42 +64,12 @@ async def health_check():
         "domain": "{arch_data.get("domain_detected", "General")}",
         "timestamp": datetime.datetime.now().isoformat()
     }}
-
-@router.get("/architecture")
-async def get_architecture_specs():
-    return {json.dumps(arch_data, ensure_ascii=False)}
 '''
-        # ۳. پالایش نهایی کاراکترهای یونیکد پیش از تست نحو
         backend_code = re.sub(r'[\u200c\u200b\u200e\u200f\ufeff]', ' ', backend_code)
-
-        # ۴. عامل کنترل کیفیت و آزمون نحو همراه با خودترمیمی
-        syntax_passed = False
-        try:
-            ast.parse(backend_code)
-            syntax_passed = True
-            print("  ✅ [عامل کیفیت] نحو پایتون با موفقیت اعتبارسنجی شد (AST Passed).")
-        except SyntaxError as se:
-            print(f"  ⚠️ شناسایی خطای نحو: {se} -> فعال‌سازی چرخه خودترمیمی...")
-            # حذف کدهای مشکل‌دار و جایگزینی با مدل استاندارد ایمن
-            backend_code = f'''from fastapi import APIRouter
-from pydantic import BaseModel
-router = APIRouter(prefix="/api/v1/{safe_prefix}")
-class StandardModel(BaseModel):
-    id: str
-@router.get("/health")
-async def health(): return {{"status": "ALL_GREEN", "module": "{task_id}"}}
-'''
-            try:
-                ast.parse(backend_code)
-                syntax_passed = True
-                print("  ✨ [چرخه خودترمیمی] ماژول با موفقیت بازسازی و تایید شد.")
-            except Exception: pass
-
-        router_path = os.path.join(target_dir, "router.py")
-        with open(router_path, "w", encoding="utf-8") as f:
+        with open(os.path.join(target_dir, "router.py"), "w", encoding="utf-8") as f:
             f.write(backend_code)
 
-        # ۵. عامل فرانت‌اند Next.js
+        # ۳. عامل فرانت‌اند
         clean_opinion = arch_data.get("expert_opinion", "")[:600].replace('"', "'")
         frontend_code = f'''import React from 'react';
 
@@ -144,7 +95,16 @@ export default function {sanitize_identifier(task_id)}View() {{
         with open(os.path.join(target_dir, "Component.tsx"), "w", encoding="utf-8") as f:
             f.write(frontend_code)
 
-        # ۶. مستندساز رسمی
+        # ۴. عامل آزمون کیفیت
+        syntax_passed = True
+        try:
+            ast.parse(backend_code)
+            print("  ✅ [عامل کیفیت] کدهای پایتون با موفقیت تایید شدند (AST Passed).")
+        except SyntaxError as se:
+            print(f"  ⚠️ خطای نحو: {se}")
+            syntax_passed = False
+
+        # ۵. عامل مستندساز
         status_label = "ALL_GREEN" if syntax_passed else "SYNTAX_WARNING"
         metadata = {
             "task_id": task_id,
@@ -163,27 +123,27 @@ export default function {sanitize_identifier(task_id)}View() {{
         generate_enterprise_docx(task_id, prompt, target_dir, metadata, arch_data)
         generate_markdown_report(task_id, prompt, target_dir, metadata, arch_data)
 
+        # ۶. ثبت در حافظه برداری Qdrant
+        try:
+            index_research_artifact(task_id, prompt, arch_data.get("expert_opinion", ""), arch_data.get("domain_detected", ""))
+            print(f"  🧠 [حافظه برداری] تسک {task_id} در کالکشن research_knowledge_base کیودرنت ایندکس شد.")
+        except Exception as q_err:
+            print(f"  ⚠️ خطا در ایندکس Qdrant: {q_err}")
+
         # بروزرسانی صف تسک‌ها
         qfile = "/opt/roxira_platform/task_queue.json"
         if os.path.exists(qfile):
             try:
                 with open(qfile, "r", encoding="utf-8") as qf: qdata = json.load(qf)
                 comp_list = qdata.get("completed", [])
-                matched = False
-                for c in comp_list:
-                    if c.get("id") == task_id:
-                        c["status"] = "COMPLETED"
-                        matched = True
-                        break
-                if not matched:
+                if not any(c.get("id") == task_id for c in comp_list):
                     comp_list.append({"id": task_id, "prompt": prompt, "status": "COMPLETED", "created_at": metadata["created_at"]})
                 qdata["completed"] = comp_list
                 qdata["pending"] = [p for p in qdata.get("pending", []) if p.get("id") != task_id]
-                with open(qfile, "w", encoding="utf-8") as qf:
-                    json.dump(qdata, qf, ensure_ascii=False, indent=2)
+                with open(qfile, "w", encoding="utf-8") as qf: json.dump(qdata, qf, ensure_ascii=False, indent=2)
             except Exception: pass
 
-        print(f"🎉 ماژول {task_id} با تاییدیه قطعی {status_label} مستقر شد.")
+        print(f"🎉 ماژول {task_id} با موفقیت تحویل داده شد ({status_label}).")
         return metadata
 
 if __name__ == "__main__":

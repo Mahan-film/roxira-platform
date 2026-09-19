@@ -1,7 +1,7 @@
 {
   "task_id": "USER-1789804764",
-  "prompt": "بهترین سیستم‌های هاست، سرچ و ریسرچ تحقیقاتی برای دستگاه‌های live research و live deep research به چه صورت است؟ سیستم‌های agentic deep research بهترین‌هایشان کدام‌ها هستند؟ آیا نگران نیستید که بدترین‌هایشان کدام‌ها هستند؟ با چه پلتفرمی و با چه زیرساختی؟",
-  "created_at": "2026-09-19 08:00:13 UTC",
+  "prompt": "بهترین سیستم‌های هاست، سرچ و ریسرچ تحقیقاتی برای دستگاه‌های live research و live deep research به چه صورت است؟ سیستم‌های agentic deep research بهترین‌هایشان کدام‌ها هستند؟ با چه پلتفرمی و با چه زیرساختی؟",
+  "created_at": "2026-09-19 08:05:22 UTC",
   "verification_status": "ALL_GREEN",
   "backend_syntax_pass": true,
   "frontend_ready": true,
@@ -12,81 +12,98 @@
     "REPORT.md"
   ],
   "arch_data": {
-    "domain_detected": "سیستم‌های تحقیقات عمیق و زنده مبتنی بر هوش مصنوعی",
-    "expert_opinion": "در سال ۲۰۲۶، سیستم‌های تحقیقات عمیق و زنده به‌طور قابل توجهی پیشرفت کرده‌اند. ابزارهایی مانند Gemini Deep Research، Perplexity Deep Research، Claude Research، و ChatGPT Deep Research به‌عنوان بهترین گزینه‌ها برای تحقیقات عمیق و زنده شناخته می‌شوند. این ابزارها از معماری‌های پیشرفته جستجو و تحلیل استفاده می‌کنند که به آنها امکان می‌دهد تا اطلاعات را از منابع متنوع استخراج کرده و به‌صورت مستند و قابل تأیید ارائه دهند. Gemini با پوشش گسترده‌ترین وب، Perplexity با سرعت بالا، OpenAI با سابقه قوی در استنادها، و Claude با ادغام محیط کار در تحقیقات، هر کدام مزایای منحصر به فردی دارند. برای تحقیقات آکادمیک، Elicit و Undermind بهترین گزینه‌ها هستند، در حالی که برای تحقیقات غیرآکادمیک، Agentic News با یکپارچه‌سازی MCP و نظارت بلادرنگ، انتخاب مناسبی است.",
+    "domain_detected": "سیستم‌های عامل‌محور برای تحقیقات عمیق و زنده",
+    "expert_opinion": "سیستم‌های عامل‌محور برای تحقیقات عمیق و زنده به‌طور فزاینده‌ای در حال تبدیل شدن به ابزارهای کلیدی برای انجام تحقیقات پیچیده و چندمرحله‌ای هستند. این سیستم‌ها با استفاده از معماری‌های چندعاملی و تک‌عاملی، توانایی‌های مختلفی را برای جستجو، استخراج و ترکیب اطلاعات از منابع متنوع ارائه می‌دهند. سیستم‌های چندعاملی به دلیل توانایی در تجزیه و تجمیع وظایف، عملکرد بهتری در کیفیت گزارش‌ها و قابلیت اطمینان دارند. پلتفرم‌هایی مانند MiroFlow، SciResearcher و DeerFlow با استفاده از مدل‌های پیشرفته مانند GPT-5، Claude 3.7 Sonnet و Qwen3-8B، قابلیت‌های تحقیقاتی را به سطح جدیدی ارتقا داده‌اند. این سیستم‌ها از روش‌های مختلفی مانند Prompting، REINFORCE، PPO و GRPO برای بهینه‌سازی عملکرد استفاده می‌کنند. زیرساخت‌های مورد نیاز شامل سرورهای محلی یا ابری، ابزارهای جستجوی وب و پایگاه‌های داده محلی است.",
     "implementation_prerequisites": [
-      "دسترسی به اینترنت پرسرعت",
-      "پلتفرم‌های ابری برای پردازش موازی",
-      "مجوزهای API برای ابزارهای تحقیقاتی",
-      "سیستم‌های ذخیره‌سازی داده‌های بزرگ",
-      "ابزارهای تحلیل داده‌های ساختاریافته"
+      "سرورهای محلی یا ابری با قدرت پردازش بالا",
+      "ابزارهای جستجوی وب پیشرفته",
+      "پایگاه‌های داده محلی برای ذخیره‌سازی و بازیابی اطلاعات",
+      "مدل‌های زبانی بزرگ مانند GPT-5، Claude 3.7 Sonnet و Qwen3-8B",
+      "چارچوب‌های توسعه‌یافته مانند MiroFlow، SciResearcher و DeerFlow"
     ],
     "decision_matrix": [
       {
-        "layer": "پوشش وب و منابع",
-        "chosen_solution": "Gemini Deep Research با پوشش گسترده‌ترین وب",
-        "rejected_alternatives": "ابزارهای سنتی با پوشش محدود",
-        "technical_justification": "Gemini از شاخص جستجوی گوگل استفاده می‌کند که بزرگترین و جامع‌ترین شاخص وب است."
+        "layer": "معماری سیستم",
+        "chosen_solution": "سیستم‌های چندعاملی مانند MiroFlow و SciResearcher",
+        "rejected_alternatives": "سیستم‌های تک‌عاملی",
+        "technical_justification": "سیستم‌های چندعاملی به دلیل توانایی در تجزیه و تجمیع وظایف، عملکرد بهتری در کیفیت گزارش‌ها و قابلیت اطمینان دارند. این سیستم‌ها می‌توانند وظایف پیچیده را به بخش‌های کوچکتر تقسیم کرده و به‌طور همزمان پردازش کنند."
       },
       {
-        "layer": "سرعت پاسخگویی",
-        "chosen_solution": "Perplexity Deep Research با سرعت ~3 دقیقه",
-        "rejected_alternatives": "ابزارهای کندتر با زمان پاسخگویی بیش از 10 دقیقه",
-        "technical_justification": "Perplexity از شاخص جستجوی خود استفاده می‌کند که بهینه‌سازی شده برای سرعت بالا است."
+        "layer": "بهینه‌سازی عملکرد",
+        "chosen_solution": "استفاده از روش‌های GRPO و PPO",
+        "rejected_alternatives": "روش‌های سنتی مانند SFT",
+        "technical_justification": "روش‌های GRPO و PPO به دلیل توانایی در بهینه‌سازی سیاست‌ها و پاداش‌ها، عملکرد بهتری در یادگیری و تطبیق با وظایف جدید دارند."
       },
       {
-        "layer": "قابلیت تأیید و استناد",
-        "chosen_solution": "Claude Research با کمترین URLهای شکسته و بررسی استناد",
-        "rejected_alternatives": "ابزارهایی با استنادهای نامعتبر",
-        "technical_justification": "Claude یک مرحله بررسی استناد اضافه می‌کند که دقت را افزایش می‌دهد."
+        "layer": "زیرساخت",
+        "chosen_solution": "سرورهای ابری با قدرت پردازش بالا",
+        "rejected_alternatives": "سرورهای محلی با قدرت پردازش محدود",
+        "technical_justification": "سرورهای ابری به دلیل مقیاس‌پذیری و قدرت پردازش بالا، قابلیت اجرای وظایف پیچیده و سنگین را دارند."
       }
     ],
     "domain_entities": [
       {
-        "name": "منابع جستجو",
-        "table_name": "search_sources",
-        "description": "لیست منابعی که ابزار تحقیقاتی از آنها اطلاعات استخراج می‌کند",
+        "name": "مدل زبانی",
+        "table_name": "language_model",
+        "description": "مدل‌های زبانی بزرگ برای پردازش و تولید متن",
         "fields": [
           {
-            "name": "source_id",
-            "type": "integer",
-            "constraints": "primary key"
+            "name": "model_name",
+            "type": "string",
+            "constraints": "unique"
           },
           {
-            "name": "source_name",
+            "name": "version",
             "type": "string",
             "constraints": "not null"
           },
           {
-            "name": "source_url",
-            "type": "string",
-            "constraints": "unique"
+            "name": "parameters",
+            "type": "integer",
+            "constraints": "not null"
           }
         ]
       },
       {
-        "name": "نتایج تحقیقات",
-        "table_name": "research_results",
-        "description": "نتایج استخراج شده از منابع مختلف",
+        "name": "ابزار جستجو",
+        "table_name": "search_tool",
+        "description": "ابزارهای جستجوی وب برای استخراج اطلاعات",
         "fields": [
           {
-            "name": "result_id",
-            "type": "integer",
-            "constraints": "primary key"
+            "name": "tool_name",
+            "type": "string",
+            "constraints": "unique"
           },
           {
-            "name": "source_id",
-            "type": "integer",
-            "constraints": "foreign key"
-          },
-          {
-            "name": "content",
-            "type": "text",
+            "name": "version",
+            "type": "string",
             "constraints": "not null"
           },
           {
-            "name": "citation",
+            "name": "api_endpoint",
             "type": "string",
+            "constraints": "not null"
+          }
+        ]
+      },
+      {
+        "name": "پایگاه داده",
+        "table_name": "database",
+        "description": "پایگاه‌های داده محلی برای ذخیره‌سازی و بازیابی اطلاعات",
+        "fields": [
+          {
+            "name": "db_name",
+            "type": "string",
+            "constraints": "unique"
+          },
+          {
+            "name": "version",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "size",
+            "type": "integer",
             "constraints": "not null"
           }
         ]
@@ -94,21 +111,25 @@
     ],
     "api_contracts": [
       {
-        "method": "GET",
+        "method": "POST",
         "endpoint": "/api/v1/search",
-        "description": "جستجو در منابع مختلف و بازگشت نتایج"
+        "description": "ارسال درخواست جستجو به سیستم عامل‌محور"
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/results",
+        "description": "دریافت نتایج جستجو از سیستم عامل‌محور"
       },
       {
         "method": "POST",
-        "endpoint": "/api/v1/verify",
-        "description": "بررسی و تأیید استنادهای نتایج"
+        "endpoint": "/api/v1/train",
+        "description": "ارسال درخواست آموزش مدل به سیستم عامل‌محور"
       }
     ],
     "recommended_sota_repositories": [
-      "https://github.com/openai/research-tools",
-      "https://github.com/google-research/gemini",
-      "https://github.com/perplexityai/deep-research",
-      "https://github.com/anthropic/claude-research"
+      "https://github.com/MiroFlow/MiroFlow",
+      "https://github.com/SciResearcher/SciResearcher",
+      "https://github.com/DeerFlow/DeerFlow"
     ]
   }
 }
