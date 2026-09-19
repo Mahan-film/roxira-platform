@@ -26,32 +26,30 @@
       </div>
     </header>
 
-    <!-- بخش ورودی با تگ Form استاندارد برای تضمین کلید Enter -->
     <section class="bg-gradient-to-b from-slate-900 to-slate-900/60 p-6 rounded-3xl border border-slate-800 shadow-xl">
       <div class="flex items-center justify-between mb-2">
         <h2 class="text-lg font-bold text-white flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
           ارسال ایده / پروژه جدید به کارخانه
         </h2>
-        <div class="flex items-center gap-3 text-xs font-mono text-slate-400">
-          <span>میانبرها: <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-slate-300">Enter</kbd> ارسال | <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-slate-300">/</kbd> فوکوس</span>
-        </div>
+        <span class="text-xs font-mono text-slate-400">کلید <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-emerald-400 font-bold">Enter / Return</kbd> برای ارسال فوری</span>
       </div>
       
-      <form id="taskForm" onsubmit="handleFormSubmit(event)" class="flex flex-col sm:flex-row gap-3">
+      <form id="projectForm" onsubmit="event.preventDefault(); submitTask();" class="flex flex-col sm:flex-row gap-3">
         <div class="relative flex-1">
           <input 
             id="promptInput" 
             type="text" 
+            required
             autocomplete="off"
-            placeholder="ایده را بنویسید و Enter بزنید..." 
+            placeholder="ایده را بنویسید و کلید Return/Enter را بزنید..." 
             class="w-full bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3.5 pl-12 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
           >
           <button 
             id="voiceBtn" 
             type="button"
             onclick="toggleAudioCapture()" 
-            title="تبدیل گفتار به متن (کلیک کنید)"
+            title="تبدیل گفتار به متن"
             class="absolute left-3 top-2.5 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition-all cursor-pointer"
           >
             <svg id="micIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 02-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
@@ -66,10 +64,8 @@
         </button>
       </form>
 
-      <!-- نوار وضعیت صوت و خطای دسترسی -->
       <div id="voiceNotice" class="mt-2 text-xs font-mono text-cyan-400 hidden"></div>
 
-      <!-- وضعیت خط لوله دیپ ریسرچ -->
       <div id="researchPipeline" class="mt-4 p-4 bg-slate-950/80 rounded-2xl border border-slate-800 hidden">
         <div class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
           <span>خط لوله دیپ ریسرچ و تحلیل دامنه:</span>
@@ -86,7 +82,6 @@
       <div id="dispatchFeedback" class="mt-3 text-xs hidden"></div>
     </section>
 
-    <!-- آمار سرور -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
         <div class="text-xs text-slate-400">پروژه‌های در صف</div>
@@ -102,7 +97,6 @@
       </div>
     </div>
 
-    <!-- ماژول‌های مستقر -->
     <section class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
       <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
@@ -113,20 +107,6 @@
   </div>
 
   <script>
-    // کلیدهای میانبر سراسری کیبورد
-    window.addEventListener('keydown', (e) => {
-      if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
-        e.preventDefault();
-        document.getElementById('promptInput').focus();
-      }
-    });
-
-    function handleFormSubmit(e) {
-      e.preventDefault();
-      submitTask();
-    }
-
-    // کنترل هوشمند تبدیل گفتار به متن با فالبک سافاری
     let recognition = null;
     let isListening = false;
 
@@ -145,7 +125,7 @@
 
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRec) {
-        notice.innerText = 'مرورگر شما از Speech Recognition پشتیبانی نمی‌کند. از گوگل کروم یا سافاری بروز مک استفاده کنید.';
+        notice.innerText = 'مرورگر شما از Speech Recognition پشتیبانی نمی‌کند. در سافاری مک Dictation را بررسی کنید.';
         return;
       }
 
@@ -154,7 +134,7 @@
           await navigator.mediaDevices.getUserMedia({ audio: true });
         }
       } catch (err) {
-        notice.innerText = '⚠️ دسترسی به میکروفون داده نشد. در Safari > Settings > Websites > Microphone دسترسی roxira.ir را روی Allow بگذارید.';
+        notice.innerText = '⚠️ دسترسی به میکروفون مسدود است. در Safari Settings > Websites > Microphone مجوز سایت را روی Allow بگذارید.';
         return;
       }
 
@@ -173,19 +153,18 @@
         const text = event.results[0][0].transcript;
         const inp = document.getElementById('promptInput');
         inp.value = inp.value ? inp.value + ' ' + text : text;
-        notice.innerText = 'صوت با موفقیت تبدیل شد. برای ارسال کلید Enter را بزنید.';
+        notice.innerText = 'صوت پیاده شد. کلید Return را برای ارسال بزنید.';
       };
 
       recognition.onerror = (e) => {
         isListening = false;
         btn.classList.remove('bg-rose-500/30', 'text-rose-400', 'animate-pulse');
         if (e.error === 'language-not-supported') {
-          // فالبک به زبان انگلیسی در صورت عدم نصب زبان فارسی در مک
           recognition.lang = 'en-US';
-          notice.innerText = 'زبان فارسی در Dictation مک فعال نبود؛ سوئیچ موقت به انگلیسی. صحبت کنید...';
+          notice.innerText = 'زبان فارسی شناسایی نشد؛ سوئیچ به انگلیسی. صحبت کنید...';
           recognition.start();
         } else {
-          notice.innerText = 'خطای صوتی: ' + e.error;
+          notice.innerText = 'وضعیت صوت: ' + e.error;
         }
       };
 
@@ -273,7 +252,7 @@
 
       const feedback = document.getElementById('dispatchFeedback');
       feedback.classList.remove('hidden');
-      feedback.innerHTML = '<span class="text-cyan-400">ارسال پروژه و راه‌اندازی عامل‌های دیپ ریسرچ...</span>';
+      feedback.innerHTML = '<span class="text-cyan-400">ارسال به صف کارخانه و آغاز دیپ ریسرچ...</span>';
       animatePipeline();
 
       try {
