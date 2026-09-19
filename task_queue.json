@@ -233,7 +233,7 @@
     {
       "id": "USER-1789804227",
       "prompt": "بر اساس جاییتر اطلاعات ممکن بهترین تکلیجی و بهترین سیستم تبدیل صوت به مت speech to text چی استش",
-      "status": "SUCCESS",
+      "status": "COMPLETED",
       "priority": "IMMEDIATE",
       "created_at": "2026-09-19 07:50:27 UTC",
       "completed_at": "2026-09-19 07:51:21 UTC",
