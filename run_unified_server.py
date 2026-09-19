@@ -1,4 +1,3 @@
-from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_router
 
 from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_root_payment
 import os, sys, importlib, asyncio, uvicorn, pathlib
@@ -391,6 +390,13 @@ app.include_router(zibal_root_payment)
 
 # Mount Zibal Payment Router at runtime
 try:
-    app.include_router(zibal_router)
+    except Exception as e:
+    pass
+
+
+# Auto-mount Zibal payment router
+try:
+    from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_payment_router
+    app.include_router(zibal_payment_router)
 except Exception as e:
     pass

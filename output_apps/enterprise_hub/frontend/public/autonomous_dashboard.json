@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-19 13:29:48 UTC",
+  "timestamp": "2026-09-19 13:59:53 UTC",
   "platform_health_score": "100%",
   "active_mesh_network": "roxira_mesh",
   "infrastructure_containers": {
@@ -15,19 +15,19 @@
   },
   "subsystem_diagnostics": {
     "legal_core_fastapi": {
-      "status": "HEALTHY",
-      "latency_ms": 37.31
+      "status": "UNHEALTHY",
+      "error": "<urlopen error [Errno 111] Connection refused>"
     },
     "statutory_damages_article_522": {
-      "status": "PASSED",
-      "damages_toman": 105357143
+      "status": "FAILED",
+      "error": "<urlopen error [Errno 111] Connection refused>"
     },
     "qdrant_laws_memory": {
       "status": "CONNECTED",
       "vectors_count": 1308
     },
     "persian_voice_dilara_tts": {
-      "status": "OPERATIONAL"
+      "status": "ERROR"
     },
     "twenty_crm_cluster": {
       "status": "ONLINE",
