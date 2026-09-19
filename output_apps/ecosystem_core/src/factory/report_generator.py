@@ -25,7 +25,15 @@ def generate_enterprise_docx(task_id: str, prompt: str, target_dir: str, metadat
     p2.add_run(arch.get("expert_opinion", "بررسی معماری سیستم با متدهای پیشرفته انجام شد."))
 
     # ۲. ماتریس تصمیم‌گیری اختصاصی
-    doc.add_heading("۲. ماتریس ارزیابی و تصمیمات استراتژیک معماری (Domain Decision Matrix)", level=1)
+    
+    # ۱.۵. پیش‌نیازهای پیاده‌سازی
+    doc.add_heading("۲. پیش‌نیازهای زیرساختی و ابزارهای تسریع‌کننده پیاده‌سازی", level=1)
+    p_pre = doc.add_paragraph()
+    p_pre.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    for pre in arch.get("implementation_prerequisites", []):
+        p_pre.add_run(f" • ابزار/پیش‌نیاز: {pre}\n")
+
+    doc.add_heading("۳. ماتریس ارزیابی و تصمیمات استراتژیک معماری (Domain Decision Matrix)", level=1)
     d_table = doc.add_table(rows=1, cols=4)
     d_table.style = 'Light Shading Accent 1'
     d_hdr = d_table.rows[0].cells
@@ -108,7 +116,12 @@ def generate_markdown_report(task_id: str, prompt: str, target_dir: str, metadat
 
 ---
 
-## ۲. ماتریس ارزیابی و تصمیم‌گیری تخصصی دامنه (Benchmark Matrix)
+
+## ۲. پیش‌نیازهای زیرساختی و ابزارهای تسریع‌کننده پیاده‌سازی
+{chr(10).join('- **ابزار کلیدی:** ' + p for p in arch.get('implementation_prerequisites', []))}
+
+---
+## ۳. ماتریس ارزیابی و تصمیم‌گیری تخصصی دامنه (Benchmark Matrix)
 
 | لایه ارزیابی | راهکار منتخب ۲۰۲۶ | گزینه‌های بررسی‌شده | استدلال فنی و ادله بنچمارک |
 | :--- | :--- | :--- | :--- |

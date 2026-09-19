@@ -104,10 +104,10 @@
           <span id="pipelineStatusText" class="text-emerald-400 font-mono text-[11px]">در حال استخراج موجودیت‌ها...</span>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-xs">
-          <div id="step1" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۱. کاوش و تجزیه نیازمندی</div>
-          <div id="step2" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۲. مدل‌سازی تخصصی دامنه</div>
-          <div id="step3" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۳. تدوین سند IEEE 1016</div>
-          <div id="step4" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۴. آزمون نحو و استقرار</div>
+          <div id="step1" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۱. وب‌کاوی و جستجوی شواهد</div>
+          <div id="step2" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۲. خلاصه‌سازی و فشرده‌سازی زمینه</div>
+          <div id="step3" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۳. تدوین سند معماری IEEE 1016</div>
+          <div id="step4" class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400">۴. کدنویسی، آزمون نحو و استقرار</div>
         </div>
       </div>
 
@@ -242,7 +242,7 @@
       const st = document.getElementById('pipelineStatusText');
 
       s1.className = "p-2.5 rounded-xl border border-cyan-500 bg-cyan-950/40 text-cyan-300 animate-pulse";
-      st.innerText = "فاز ۱: کاوش و تجزیه نیازمندی...";
+      st.innerText = "فاز ۱: وب‌کاوی، کاوش اسناد و شواهد زنده...";
 
       setTimeout(() => {
         s1.className = "p-2.5 rounded-xl border border-emerald-500 bg-emerald-950/40 text-emerald-300";
@@ -253,7 +253,7 @@
       setTimeout(() => {
         s2.className = "p-2.5 rounded-xl border border-emerald-500 bg-emerald-950/40 text-emerald-300";
         s3.className = "p-2.5 rounded-xl border border-cyan-500 bg-cyan-950/40 text-cyan-300 animate-pulse";
-        st.innerText = "فاز ۳: تدوین سند استاندارد IEEE 1016...";
+        st.innerText = "فاز ۳: تدوین ماتریس تصمیم‌گیری و سند IEEE 1016...";
       }, 3000);
 
       setTimeout(() => {
