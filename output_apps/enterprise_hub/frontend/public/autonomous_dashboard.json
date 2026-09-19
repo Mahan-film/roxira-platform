@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-09-19 16:30:38 UTC",
+  "timestamp": "2026-09-19 17:00:39 UTC",
   "platform_health_score": "100%",
   "active_mesh_network": "roxira_mesh",
   "infrastructure_containers": {
     "roxira_app_prod": "running",
-    "roxira_enterprise_frontend": "stopped",
-    "roxira_nginx_prod": "restarting",
+    "roxira_enterprise_frontend": "running",
+    "roxira_nginx_prod": "running",
     "roxira_postgres_prod": "running",
     "roxira_redis_prod": "running",
     "roxira_qdrant_prod": "running",
@@ -16,7 +16,7 @@
   "subsystem_diagnostics": {
     "legal_core_fastapi": {
       "status": "HEALTHY",
-      "latency_ms": 40.83
+      "latency_ms": 38.33
     },
     "statutory_damages_article_522": {
       "status": "PASSED",
