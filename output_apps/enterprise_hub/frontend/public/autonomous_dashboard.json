@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-19 11:59:19 UTC",
+  "timestamp": "2026-09-19 12:29:21 UTC",
   "platform_health_score": "100%",
   "active_mesh_network": "roxira_mesh",
   "infrastructure_containers": {
@@ -27,7 +27,7 @@
       "vectors_count": 1308
     },
     "persian_voice_dilara_tts": {
-      "status": "OPERATIONAL"
+      "status": "ERROR"
     },
     "twenty_crm_cluster": {
       "status": "ONLINE",
