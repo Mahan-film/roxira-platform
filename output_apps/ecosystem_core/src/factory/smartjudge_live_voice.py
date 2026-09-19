@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """
-SmartJudge Autonomous Speech-to-Speech Duplex Engine (Zero Interruption Build)
-Bridges Real-time STT, Qdrant Legal Intelligence, and Persian Neural TTS with Full Sentence Integrity.
+SmartJudge Robust Speech-to-Speech Engine with Continuous Learning Integration
+Guarantees unbroken audio delivery, strips markdown artifacts, and loops memory into Qdrant.
 """
-import os, sys, json, base64, asyncio, urllib.request, hashlib
+import os, sys, json, base64, asyncio, urllib.request, hashlib, re
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import edge_tts
 from output_apps.ecosystem_core.src.factory.stt_engine import transcribe_audio_blob
+from output_apps.ecosystem_core.src.learning.self_learning_agent import record_interaction, retrieve_past_experience
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeLiveVoice"])
 
 QDRANT_URL = "http://127.0.0.1:6333"
 VOICE_MODEL = "fa-IR-DilaraNeural"
+
+def clean_text_for_speech(text: str) -> str:
+    """حذف تمامی کاراکترهای مارک‌داون، ستاره‌ها و هشتگ‌ها برای خوانش روان صوتی"""
+    text = re.sub(r'[*#_`~>\[\]\(\)\{\}\\\/]', ' ', text)
+    text = re.sub(r'[\u200c\u200b\u200e\u200f\ufeff]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 def query_legal_qdrant(text: str, limit: int = 2) -> str:
     try:
@@ -28,35 +36,43 @@ def query_legal_qdrant(text: str, limit: int = 2) -> str:
             data = json.loads(resp.read().decode("utf-8"))
             hits = data.get("result", [])
             laws = [h.get("payload", {}).get("text", "")[:250] for h in hits if h.get("payload")]
-            return " | ".join(laws) if laws else "مقررات قانون مدنی و رویه جاری محاکم"
+            return " | ".join(laws) if laws else "مقررات عمومی قانون مدنی و رویه جاری محاکم"
     except Exception:
         return "اصول و موازین قضایی دادرسی"
 
 async def generate_legal_reply(user_query: str) -> str:
-    # پاسخ سریع به احوال‌پرسی‌های ساده
     clean_q = user_query.strip().lower()
     if any(w in clean_q for w in ["سلام", "درود", "خوبی", "اسمت چیه", "کی هستی", "معرفی"]):
-        return "سلام و درود بر شما. من دستیار تخصصی دادرسی و وکیل هوشمند سامانه هستم. لطفاً موضوع یا پرسش حقوقی خود را بفرمایید تا مستند به قوانین شما را راهنمایی کنم."
+        return "سلام و احترام بر شما. من دستیار تخصصی دادرسی و وکیل هوشمند سامانه هستم. کاملاً آماده‌ام تا مستند به قوانین و آرای قضایی به پرسش حقوقی شما پاسخ دهم. لطفاً بفرمایید."
 
+    # استعلام قوانین و تجارب پیشین آموخته‌شده
     legal_context = query_legal_qdrant(user_query)
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    past_learned = retrieve_past_experience(user_query)
     
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not openrouter_key:
-        return f"بر اساس مستندات مرتبط و {legal_context}، دعوای شما قابل پیگیری در مراجع قضایی است."
+        return f"بر اساس مستندات مرتبط و {legal_context}، دعوای شما قابل پیگیری در مراجع ذی‌صلاح دادگستری است."
+
+    context_prompt = f"مستندات قانونی معتبر: {legal_context}"
+    if past_learned:
+        context_prompt += f"\nتجارب آموخته‌شده از مشاوره‌های موفق قبلی: {past_learned[:300]}"
 
     prompt = (
         f"شما قاضی بازنشسته و وکیل ارشد سامانه قاضی هوشمند هستید. کاربر این سوال را مطرح کرده است:\n"
         f"«{user_query}»\n\n"
-        f"مستندات قانونی کشف‌شده: {legal_context}\n"
-        f"دستورالعمل: یک پاسخ حقوقی کامل، روان، رسا و محترمانه به زبان فارسی ارائه بده. حتماً مواد قانونی یا آرای وحدت رویه را ذکر کن و پاسخ را تا انتها کامل ادا کن."
+        f"{context_prompt}\n\n"
+        f"دستورالعمل حیاتی:\n"
+        f"۱. پاسخ کامل، دقیق، شیوا و رسا به زبان فارسی ارائه بده.\n"
+        f"۲. کلام را تا انتها کامل بگو و نصفه‌کاره رها نکن.\n"
+        f"۳. پاسخ را به صورت گفتاری روان بنویس و اصلاً از ستاره (*)، بولت‌پوینت، یا فرمت مارک‌داون استفاده نکن تا در صوت مشکلی پیش نیاید."
     )
 
     try:
         req_data = json.dumps({
             "model": "deepseek/deepseek-chat",
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 500,
-            "temperature": 0.2
+            "max_tokens": 600,
+            "temperature": 0.25
         }).encode("utf-8")
         req = urllib.request.Request(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -64,14 +80,22 @@ async def generate_legal_reply(user_query: str) -> str:
             headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
             method="POST"
         )
-        with urllib.request.urlopen(req, timeout=5.0) as resp:
+        with urllib.request.urlopen(req, timeout=7.0) as resp:
             res_json = json.loads(resp.read().decode("utf-8"))
-            return res_json["choices"][0]["message"]["content"].strip()
+            raw_reply = res_json["choices"][0]["message"]["content"].strip()
+            clean_reply = clean_text_for_speech(raw_reply)
+            
+            # ثبت در موتور خودبهبودی هوشمند
+            record_interaction(user_query, legal_context, clean_reply)
+            return clean_reply
     except Exception as e:
-        return f"با توجه به قوانین موضوعه و رویه قضایی، موضوع مطروحه شما نیازمند ارائه مستندات و ثبت اظهارنامه رسمی است."
+        fallback = clean_text_for_speech(f"با عنایت به قوانین موضوعه و اصول دادرسی، موضوع مطروحه شما نیازمند تنظیم اظهارنامه رسمی و طرح دعوا در شورای حل اختلاف یا دادگاه صالح است.")
+        record_interaction(user_query, legal_context, fallback)
+        return fallback
 
 async def synthesize_speech_base64(text: str) -> str:
-    communicate = edge_tts.Communicate(text, VOICE_MODEL, rate="+10%")
+    clean_text = clean_text_for_speech(text)
+    communicate = edge_tts.Communicate(clean_text, VOICE_MODEL, rate="+10%")
     audio_bytes = bytearray()
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
@@ -84,7 +108,7 @@ async def live_voice_duplex_websocket(websocket: WebSocket):
     await websocket.send_text(json.dumps({
         "event": "connected",
         "status": "READY",
-        "message": "ارتباط صوتی بدون تداخل برقرار شد."
+        "message": "سیستم صوتی پایدار متصل است."
     }))
 
     try:
