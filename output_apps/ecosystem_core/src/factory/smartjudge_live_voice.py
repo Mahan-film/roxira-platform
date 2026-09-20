@@ -1,92 +1,58 @@
-#!/usr/bin/env python3
-"""
-SmartJudge AudioWorklet Raw PCM16 Ingestion Core
-Accepts raw 16kHz PCM streams from Safari AudioWorklet, queries Qdrant, and synthesizes unbroken audio.
-"""
-import os, sys, json, base64, asyncio, urllib.request, re, hashlib, io, wave
+import os, sys, json, io, wave, base64, asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-import edge_tts
-from output_apps.ecosystem_core.src.factory.stt_engine import transcribe_audio_blob
 
-router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeLiveVoice"])
-VOICE_MODEL = "fa-IR-DilaraNeural"
-
-def clean_for_speech(text: str) -> str:
-    text = re.sub(r'[*#_`~>\[\]\(\)\{\}\\\/]', ' ', text)
-    text = re.sub(r'[\u200c\u200b\u200e\u200f\ufeff]', ' ', text)
-    return re.sub(r'\s+', ' ', text).strip()
-
-def direct_query_qdrant(text: str) -> str:
-    try:
-        seed = int(hashlib.sha256(text.encode('utf-8')).hexdigest()[:8], 16)
-        vec = [((i * 17 + seed) % 1000) / 1000.0 - 0.5 for i in range(1024)]
-        payload = json.dumps({"vector": vec, "limit": 2, "with_payload": True}).encode("utf-8")
-        req = urllib.request.Request(
-            "http://127.0.0.1:6333/collections/iran_laws_bge_m3/points/search",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            hits = json.loads(resp.read().decode("utf-8")).get("result", [])
-            laws = [h.get("payload", {}).get("text", "")[:200] for h in hits if h.get("payload")]
-            return " | ".join(laws) if laws else "مقررات قانون مدنی و رویه جاری"
-    except Exception:
-        return "موازین دادرسی حقوقی"
-
-async def generate_legal_reply(user_query: str) -> str:
-    clean_q = user_query.strip().lower()
-    if any(w in clean_q for w in ["سلام", "درود", "مشاوره", "کمک", "وکیل", "اسمت"]):
-        return "سلام و درود بر شما. من دستیار تخصصی دادرسی و وکیل هوشمند سامانه هستم. به طور کامل به پایگاه قوانین مدنی، کیفری و آرای وحدت رویه متصلم. لطفاً موضوع دعوا یا پرسش حقوقی خود را بفرمایید تا شما را راهنمایی کنم."
-
-    legal_ctx = direct_query_qdrant(user_query)
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-    
-    prompt = (
-        f"شما مشاور ارشد حقوقی در سامانه قاضی هوشمند هستید. کاربر به صورت صوتی پرسیده است:\n«{user_query}»\n"
-        f"مستندات قانونی: {legal_ctx}\n"
-        f"پاسخ را رسا، محترمانه، مستند به ماده قانونی، به زبان فارسی معیار و بدون هرگونه علامت مارک‌داون ارائه بده."
-    )
-
-    if not openrouter_key:
-        return f"با توجه به قوانین موضوعه و رویه قضایی، پیگیری این موضوع نیازمند ثبت اظهارنامه و دادخواست در مرجع صالح است."
-
-    try:
-        req_data = json.dumps({
-            "model": "deepseek/deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 400,
-            "temperature": 0.2
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            "https://openrouter.ai/api/v1/chat/completions",
-            data=req_data,
-            headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=6.0) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return clean_for_speech(data["choices"][0]["message"]["content"])
-    except Exception:
-        return "بر اساس قوانین موضوعه و اصول دادرسی، اقدام شما نیازمند تنظیم دادخواست مستدل در مراجع ذی‌صلاح قضایی است."
-
-async def synthesize_speech(text: str) -> str:
-    clean_text = clean_for_speech(text)
-    communicate = edge_tts.Communicate(clean_text, VOICE_MODEL, rate="+10%")
-    audio_bytes = bytearray()
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            audio_bytes.extend(chunk["data"])
-    return base64.b64encode(audio_bytes).decode("utf-8")
+router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeVoice"])
 
 def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
     wav_io = io.BytesIO()
-    with wave.open(wav_io, 'wb') as wav_file:
+    with wave.open(wav_io, "wb") as wav_file:
         wav_file.setnchannels(1)
-        wav_file.setsampwidth(2) # 16-bit
+        wav_file.setsampwidth(2)
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(pcm_data)
     return wav_io.getvalue()
+
+async def safe_transcribe(wav_bytes: bytes) -> str:
+    """تبدیل صوت به متن با اولویت Whisper محلی"""
+    try:
+        from output_apps.ecosystem_core.src.factory.stt_engine import transcribe_audio_blob
+        b64_audio = base64.b64encode(wav_bytes).decode("utf-8")
+        loop = asyncio.get_running_loop()
+        text = await loop.run_in_executor(None, transcribe_audio_blob, b64_audio, "audio/wav")
+        return str(text or "").strip()
+    except Exception as e:
+        print(f"[VOICE-STT-ERR] {e}", file=sys.stderr)
+        return ""
+
+async def fast_legal_reply(user_query: str) -> str:
+    """تولید سریع پاسخ حقوقی با استفاده از استدلال حقوقی"""
+    try:
+        from output_apps.generated_modules.smartjudge.smartjudge_module import _voice_build_answer, aquery_knowledge_graph
+        try:
+            # استعلام سریع با سقف زمانی ۲ ثانیه برای جلوگیری از فریز شدن مکالمه
+            laws, precedents = await asyncio.wait_for(aquery_knowledge_graph(user_query, limit=2), timeout=2.5)
+        except Exception:
+            laws, precedents = [], []
+        reply = _voice_build_answer(user_query, laws, precedents)
+        return reply.replace("*", "").replace("#", "")
+    except Exception as e:
+        print(f"[VOICE-LLM-ERR] {e}", file=sys.stderr)
+        return f"در خصوص پرسش شما پیرامون «{user_query}»، طبق اصول حقوقی و مقررات جاری موضوع نیازمند بررسی مدارک و انطباق با قوانین ماهوی است."
+
+async def fast_synthesize_speech(text: str) -> str:
+    """تبدیل متن به صوت با استفاده از edge-tts درون کانتینر"""
+    try:
+        import edge_tts
+        # انتخاب صدای فارسی پرسرعت و روان
+        comm = edge_tts.Communicate(text, "fa-IR-DilaraNeural", rate="+15%")
+        buf = bytearray()
+        async for chunk in comm.stream():
+            if chunk["type"] == "audio":
+                buf.extend(chunk["data"])
+        return base64.b64encode(buf).decode("utf-8")
+    except Exception as e:
+        print(f"[VOICE-TTS-ERR] {e}", file=sys.stderr)
+        return ""
 
 @router.websocket("/live-voice")
 async def live_voice_websocket(websocket: WebSocket):
@@ -94,49 +60,81 @@ async def live_voice_websocket(websocket: WebSocket):
     await websocket.send_text(json.dumps({"event": "connected", "message": "ارتباط AudioWorklet صوتی برقرار شد."}))
 
     pcm_accumulator = bytearray()
+    current_task = None
 
     try:
         while True:
             message = await websocket.receive()
             
-            # دریافت مستقیم فریم‌های خام باینری PCM16 از AudioWorklet
             if "bytes" in message and message["bytes"]:
                 pcm_accumulator.extend(message["bytes"])
                 continue
 
-            # دریافت پیام‌های کنترلی JSON (پایان کلام یا Ping)
             if "text" in message and message["text"]:
                 data = json.loads(message["text"])
-                event_type = data.get("type")
+                event_type = str(data.get("type", "")).lower()
 
-                if event_type == "commit" or event_type == "audio_input":
-                    if len(pcm_accumulator) < 3200: # کمتر از ۰.۱ ثانیه صوت
+                # دریافت وقفه جهت لغو پاسخ قبلی (Barge-in)
+                if event_type == "interrupt":
+                    if current_task and not current_task.done():
+                        current_task.cancel()
+                    pcm_accumulator.clear()
+                    await websocket.send_text(json.dumps({"type": "INTERRUPT_ACK"}))
+                    continue
+
+                if event_type in ("commit", "audio_input", "speech_end"):
+                    if len(pcm_accumulator) < 3200:
                         continue
 
-                    wav_bytes = pcm_to_wav(bytes(pcm_accumulator), 16000)
+                    raw_pcm = bytes(pcm_accumulator)
                     pcm_accumulator.clear()
 
-                    user_text = transcribe_audio_blob(base64.b64encode(wav_bytes).decode("utf-8"), "audio/wav")
-                    if not user_text or len(user_text.strip()) < 2:
-                        continue
+                    async def _process_turn(audio_data: bytes):
+                        wav_bytes = pcm_to_wav(audio_data, 16000)
+                        user_text = await safe_transcribe(wav_bytes)
+                        
+                        if not user_text or len(user_text) < 2:
+                            # در صورت نامفهوم بودن صدا
+                            await websocket.send_text(json.dumps({
+                                "event": "user_transcription",
+                                "text": "..."
+                            }))
+                            await websocket.send_text(json.dumps({
+                                "event": "agent_text_response",
+                                "text": "متوجه کلام شما نشدم، لطفاً مجدداً بفرمایید."
+                            }))
+                            audio_b64 = await fast_synthesize_speech("متوجه کلام شما نشدم، لطفاً مجدداً بفرمایید.")
+                            if audio_b64:
+                                await websocket.send_text(json.dumps({
+                                    "event": "agent_audio_stream",
+                                    "audio_data": audio_b64
+                                }))
+                            return
 
-                    await websocket.send_text(json.dumps({"event": "user_transcription", "text": user_text}))
-                    reply_text = await generate_legal_reply(user_text)
-                    await websocket.send_text(json.dumps({"event": "agent_text_response", "text": reply_text}))
+                        # ارسال بلافاصله متن کاربر به چت‌باکس
+                        await websocket.send_text(json.dumps({
+                            "event": "user_transcription",
+                            "text": user_text
+                        }))
 
-                    audio_payload = await synthesize_speech(reply_text)
-                    await websocket.send_text(json.dumps({
-                        "event": "agent_audio_stream",
-                        "audio_data": audio_payload,
-                        "mime": "audio/mp3"
-                    }))
+                        # تولید پاسخ حقوقی و ارسال هم‌زمان
+                        reply_text = await fast_legal_reply(user_text)
+                        await websocket.send_text(json.dumps({
+                            "event": "agent_text_response",
+                            "text": reply_text
+                        }))
 
-                elif event_type == "ping":
-                    await websocket.send_text(json.dumps({"event": "pong"}))
+                        # سنتز صوت و پخش فوری
+                        audio_b64 = await fast_synthesize_speech(reply_text)
+                        if audio_b64:
+                            await websocket.send_text(json.dumps({
+                                "event": "agent_audio_stream",
+                                "audio_data": audio_b64
+                            }))
+
+                    current_task = asyncio.create_task(_process_turn(raw_pcm))
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
-        try:
-            await websocket.send_text(json.dumps({"event": "error", "message": str(e)}))
-        except Exception: pass
+    except Exception as exc:
+        print(f"[VOICE-LOOP-ERR] {exc}", file=sys.stderr)

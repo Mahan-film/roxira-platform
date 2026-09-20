@@ -6,12 +6,12 @@ class PCMProcessor extends AudioWorkletProcessor {
     this.buffer = [];
     this.bufferSize = 2048;
 
-    // پارامترهای VAD برای تشخیص زنده کلام و سکوت
-    this.silenceThreshold = 0.015; // آستانه حساسیت انرژی صدا
+    // پارامترهای VAD بسیار حساس
+    this.silenceThreshold = 0.008; 
     this.silenceFramesCount = 0;
     this.speakingFramesCount = 0;
     this.isSpeaking = false;
-    this.silenceLimit = Math.floor((this.inputSampleRate / 128) * 0.9); // حدود ۹۰۰ میلی‌ثانیه سکوت
+    this.silenceLimit = Math.floor((this.inputSampleRate / 128) * 0.7); // ۰.۷ ثانیه سکوت
   }
 
   downsample(input) {
@@ -53,11 +53,10 @@ class PCMProcessor extends AudioWorkletProcessor {
     const channelData = input[0];
     const rms = this.calculateRMS(channelData);
 
-    // بررسی شروع یا پایان صحبت (VAD)
     if (rms > this.silenceThreshold) {
       this.speakingFramesCount++;
       this.silenceFramesCount = 0;
-      if (!this.isSpeaking && this.speakingFramesCount > 3) {
+      if (!this.isSpeaking && this.speakingFramesCount > 2) {
         this.isSpeaking = true;
         this.port.postMessage({ event: 'SPEECH_START' });
       }

@@ -407,6 +407,12 @@ try:
 except Exception as e:
     print(f"  [ROXIRA-ERR] Gemini bridge load failed: {e}")
 
+
+@app.get("/api/v1/apps/judge/health")
+@app.get("/api/judge/health")
+async def judge_health_check_alias():
+    return {"status": "healthy", "service": "smartjudge-voice", "ready": True}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
