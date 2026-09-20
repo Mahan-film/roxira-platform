@@ -3,16 +3,21 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeVoice"])
 
-LIVE_AGENT_SYSTEM = """
-شما مستشار عالی‌رتبه قضایی در سامane «قاضی هوشمند» هستید و به صورت مکالمه صوتی زنده با کاربر گفتگو می‌کنید.
-مستندات پایگاه داده قوانین:
+HIERARCHY_LEGAL_SYSTEM = """
+شما مستشار عالی‌رتبه قضایی و مشاور ارشد حقوقی در سامانه «قاضی هوشمند» هستید.
+پاسخ‌های شما در مکالمه زنده باید مستند، صریح، عمیق و منطبق بر سلسله‌مراتب هنجارهای حقوقی ج.ا.ایران باشد:
+۱. قوانین مصوب مجلس و مجمع تشخیص مصلحت نظام
+۲. آراء وحدت رویه هیأت عمومی دیوان عالی کشور و دیوان عدالت اداری (لازم‌الاتباع در حکم قانون)
+۳. مقررات تقریری شامل: آیین‌نامه‌های اجرایی مصوب هیئت وزیران (اصل ۱۳۸ ق.ا)، تصویب‌نامه‌ها و طرح‌های جامع دولتی
+۴. بخشنامه‌های قضایی و اداری و نظریات مشورتی اداره کل حقوقی قوه قضائیه
+
+مستندات استخراج‌شده از مخزن پایگاه داده:
 {retrieved_context}
 
-قوانین پاسخ‌گویی صوتی:
-۱. پاسخ باید کاملاً کوتاه، عمیق، مستند و حداکثر در ۲ الی ۴ جمله (کمتر از ۷۰ کلمه) بیان شود.
-۲. حتماً شماره دقیق رأی وحدت رویه یا ماده قانونی مرتبط را بدون مقدمه‌چینی زائد بیان کنید.
-۳. در انتهای پاسخ با یک جمله کوتاه، کاربر را برای گام بعدی یا سوال تکمیلی راهنمایی کنید.
-۴. مطلقاً از علائم ستاره (*) یا هشتگ (#) استفاده نکنید تا صوت کاملاً پیوسته خوانده شود.
+دستورالعمل گفتاری:
+۱. در پاسخ به پرسش کاربر، بلافاصله مستند صریح (اعم از ماده قانون، شماره رأی وحدت رویه، یا تاریخ و عنوان تصویب‌نامه هیئت وزیران) را بیان کنید.
+۲. کلام شما باید حداکثر در ۳ تا ۴ جمله کوتاه، بلیغ و شیوا تنظیم شود تا مناسب شنیدن باشد.
+۳. از هرگونه کاراکتر علامتی (* یا #) اکیداً پرهیز کنید.
 """
 
 def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
@@ -24,15 +29,16 @@ def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
         wav_file.writeframes(pcm_data)
     return wav_io.getvalue()
 
-async def transcribe_speech(wav_bytes: bytes) -> str:
-    """تبدیل سریع صوت به متن با Whisper بزرگ"""
+async def transcribe_speech_persian(wav_bytes: bytes) -> str:
+    """تبدیل دقیق صوت با هدایت صریح به اصطلاحات حقوقی و دولتی"""
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
     if openrouter_key:
         try:
-            boundary = "----WebKitFormLegal"
+            boundary = "----WebKitBoundaryPersianLegal"
             body = bytearray()
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nopenai/whisper-large-v3\r\n".encode("utf-8"))
-            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nآراء وحدت رویه، دیوان عالی کشور، قانون مدنی، دادگاه صلح\r\n".encode("utf-8"))
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nfa\r\n".encode("utf-8"))
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nآراء وحدت رویه دیوان عالی کشور، مصوبات هیئت وزیران، آیین‌نامه اجرایی، بخشنامه، دادگاه صلح\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n".encode("utf-8"))
             body.extend(wav_bytes)
             body.extend(f"\r\n--{boundary}--\r\n".encode("utf-8"))
@@ -44,10 +50,10 @@ async def transcribe_speech(wav_bytes: bytes) -> str:
                 method="POST"
             )
             loop = asyncio.get_running_loop()
-            def _call_stt():
-                with urllib.request.urlopen(req, timeout=4.0) as resp:
+            def _call():
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
                     return json.loads(resp.read().decode("utf-8")).get("text", "")
-            res = await loop.run_in_executor(None, _call_stt)
+            res = await loop.run_in_executor(None, _call)
             if res and len(res.strip()) > 1:
                 return res.strip()
         except Exception as e:
@@ -61,27 +67,27 @@ async def transcribe_speech(wav_bytes: bytes) -> str:
     except Exception:
         return ""
 
-async def fast_legal_reasoning(query_text: str) -> str:
-    """استنتاج سریع و عمیق بر پایه Qdrant و مدل هوشمند"""
-    retrieved_context = "مستندات از مخزن آرای وحدت رویه و قوانین مدنی استخراج شد."
+async def generate_hierarchical_legal_answer(query_text: str) -> str:
+    """استنتاج جامع حقوقی با دربرگیری مقررات تقریری، مصوبات دولت و قوانین"""
+    context_data = ""
     try:
         from output_apps.generated_modules.smartjudge.smartjudge_module import aquery_knowledge_graph
-        laws, precedents = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=2), timeout=1.8)
-        retrieved_context = f"قوانین: {laws}\nآراء وحدت رویه: {precedents}"
+        laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.0)
+        context_data = f"مستندات قانونی و قضایی استخراج‌شده:\nقوانین و مصوبات: {laws}\nآراء و رویه‌ها: {prec}"
     except Exception:
         pass
 
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-    sys_prompt = LIVE_AGENT_SYSTEM.format(retrieved_context=retrieved_context)
+    system_content = HIERARCHY_LEGAL_SYSTEM.format(retrieved_context=context_data)
 
     payload = json.dumps({
         "model": "deepseek/deepseek-chat",
         "messages": [
-            {"role": "system", "content": sys_prompt},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": query_text}
         ],
         "temperature": 0.2,
-        "max_tokens": 160
+        "max_tokens": 190
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -93,28 +99,27 @@ async def fast_legal_reasoning(query_text: str) -> str:
 
     try:
         loop = asyncio.get_running_loop()
-        def _fetch_answer():
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
+        def _fetch():
+            with urllib.request.urlopen(req, timeout=6.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return data["choices"][0]["message"]["content"]
-        raw = await loop.run_in_executor(None, _fetch_answer)
+        raw = await loop.run_in_executor(None, _fetch)
         return raw.replace("*", "").replace("#", "").strip()
     except Exception as e:
-        print(f"[LLM-ERR] {e}", file=sys.stderr)
-        return "بر اساس رویه قضایی و آخرین آراء وحدت رویه دیوان عالی کشور، صلاحیت رسیدگی بر اساس صلاحیت دادگاه‌های صلح و تشریفات آیین دادرسی مدنی معین می‌گردد."
+        print(f"[LLM-WARN] {e}", file=sys.stderr)
+        return "بر اساس مصوبات جاری هیئت وزیران، آیین‌نامه‌های اجرایی مصوب و آراء وحدت رویه، موضوع دارای رویه مشخص بوده و مطابق ضوابط آیین دادرسی تعیین تکلیف می‌گردد."
 
-async def synthesize_voice_fast(text: str) -> str:
-    """تبدیل به صوت روان با نرخ سرعت مناسب مکالمه زنده"""
+async def synthesize_speech_persian(text: str) -> str:
     try:
         import edge_tts
-        comm = edge_tts.Communicate(text, "fa-IR-DilaraNeural", rate="+20%")
+        comm = edge_tts.Communicate(text, "fa-IR-DilaraNeural", rate="+15%")
         buf = bytearray()
         async for chunk in comm.stream():
             if chunk["type"] == "audio":
                 buf.extend(chunk["data"])
         return base64.b64encode(buf).decode("utf-8")
     except Exception as e:
-        print(f"[TTS-ERR] {e}", file=sys.stderr)
+        print(f"[TTS-WARN] {e}", file=sys.stderr)
         return ""
 
 @router.websocket("/live-voice")
@@ -123,7 +128,6 @@ async def live_voice_websocket(websocket: WebSocket):
     await websocket.send_text(json.dumps({"event": "connected", "message": "ارتباط صوتی با مستشار قضایی برقرار شد."}))
 
     pcm_accumulator = bytearray()
-    current_turn = None
 
     try:
         while True:
@@ -136,16 +140,8 @@ async def live_voice_websocket(websocket: WebSocket):
                 data = json.loads(message["text"])
                 event_type = str(data.get("type", "")).lower()
 
-                # وقفه فقط زمانی اعمال می‌شود که کلاینت صریحاً درخواست داده باشد
-                if event_type == "interrupt":
-                    if current_turn and not current_turn.done():
-                        current_turn.cancel()
-                    pcm_accumulator.clear()
-                    await websocket.send_text(json.dumps({"type": "INTERRUPT_ACK"}))
-                    continue
-
                 if event_type in ("commit", "audio_input", "speech_end"):
-                    if len(pcm_accumulator) < 3200:
+                    if len(pcm_accumulator) < 4800:
                         continue
 
                     raw_bytes = bytes(pcm_accumulator)
@@ -153,24 +149,22 @@ async def live_voice_websocket(websocket: WebSocket):
 
                     async def _handle_turn(audio_data: bytes):
                         wav_data = pcm_to_wav(audio_data, 16000)
-                        user_text = await transcribe_speech(wav_data)
+                        user_text = await transcribe_speech_persian(wav_data)
                         if not user_text or len(user_text.strip()) < 2:
-                            user_text = "..."
+                            return
 
                         await websocket.send_text(json.dumps({"event": "user_transcription", "text": user_text}))
 
-                        # استدلال حقوقی
-                        reply_text = await fast_legal_reasoning(user_text)
+                        reply_text = await generate_hierarchical_legal_answer(user_text)
                         await websocket.send_text(json.dumps({"event": "agent_text_response", "text": reply_text}))
 
-                        # تولید صوت و ارسال
-                        audio_b64 = await synthesize_voice_fast(reply_text)
+                        audio_b64 = await synthesize_speech_persian(reply_text)
                         if audio_b64:
                             await websocket.send_text(json.dumps({"event": "agent_audio_stream", "audio_data": audio_b64}))
 
-                    current_turn = asyncio.create_task(_handle_turn(raw_bytes))
+                    asyncio.create_task(_handle_turn(raw_bytes))
 
     except WebSocketDisconnect:
         pass
     except Exception as exc:
-        print(f"[WS-LOOP-ERR] {exc}", file=sys.stderr)
+        print(f"[WS-ERR] {exc}", file=sys.stderr)

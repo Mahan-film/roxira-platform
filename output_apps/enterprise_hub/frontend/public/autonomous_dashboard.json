@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-20 18:43:31 UTC",
+  "timestamp": "2026-09-20 19:13:48 UTC",
   "platform_health_score": "100%",
   "active_mesh_network": "roxira_mesh",
   "infrastructure_containers": {
@@ -16,11 +16,11 @@
   "subsystem_diagnostics": {
     "legal_core_fastapi": {
       "status": "HEALTHY",
-      "latency_ms": 37.84
+      "latency_ms": 37.14
     },
     "statutory_damages_article_522": {
-      "status": "FAILED",
-      "error": "HTTP Error 404: Not Found"
+      "status": "PASSED",
+      "damages_toman": 105357143
     },
     "qdrant_laws_memory": {
       "status": "CONNECTED",
