@@ -25,18 +25,19 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const sessionStateRef = useRef<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
+
+  const updateState = (st: 'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING') => {
+    sessionStateRef.current = st;
+    setSessionState(st);
+  };
 
   useEffect(() => {
-    if (!isOpen) {
-      cleanupSession();
-    }
-    return () => {
-      cleanupSession();
-    };
+    if (!isOpen) cleanupSession();
+    return () => cleanupSession();
   }, [isOpen]);
 
-  // پخش صدا از طریق Web Audio API بدون بلاک شدن توسط سافاری
-  const playAudioThroughWebAudio = async (base64Audio: string) => {
+  const playAudio = async (base64Audio: string) => {
     try {
       const ctx = audioContextRef.current;
       if (!ctx) return;
@@ -66,24 +67,32 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       source.connect(ctx.destination);
       currentSourceRef.current = source;
 
-      setSessionState('SPEAKING');
+      updateState('SPEAKING');
 
       source.onended = () => {
         currentSourceRef.current = null;
-        setSessionState('LISTENING');
+        updateState('LISTENING');
       };
 
       source.start(0);
     } catch (err) {
-      console.error('Web Audio playback error:', err);
-      setSessionState('LISTENING');
+      console.error('Audio playback error:', err);
+      // فال‌بک با تگ HTML5 صوتی در صورت هرگونه محدودیت بافر
+      try {
+        const fallbackAudio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+        fallbackAudio.onended = () => updateState('LISTENING');
+        await fallbackAudio.play();
+        updateState('SPEAKING');
+      } catch (e) {
+        updateState('LISTENING');
+      }
     }
   };
 
   const triggerCommit = () => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: 'commit' }));
-      setSessionState('THINKING');
+      updateState('THINKING');
     }
   };
 
@@ -93,7 +102,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       setTranscription('');
       setAssistantReply('');
 
-      // ۱. راه‌اندازی و آنلاک AudioContext مستقیماً با کلیک معتبر کاربر
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const audioCtx = new AudioCtx();
       if (audioCtx.state === 'suspended') {
@@ -101,7 +109,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       }
       audioContextRef.current = audioCtx;
 
-      // ۲. دریافت بلادرنگ دسترسی میکروفون
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -112,8 +119,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       });
       streamRef.current = stream;
 
-      // ۳. بارگذاری ورک‌لت پردازشگر صوت
-      await audioCtx.audioWorklet.addModule('/worklets/pcm-processor.js');
+      await audioCtx.audioWorklet.addModule(`/worklets/pcm-processor.js?v=${Date.now()}`);
 
       const source = audioCtx.createMediaStreamSource(stream);
       const worklet = new AudioWorkletNode(audioCtx, 'pcm-processor', {
@@ -121,7 +127,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       });
       workletNodeRef.current = worklet;
 
-      // ۴. برقراری وب‌سوکت صوتی
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/api/v1/apps/judge/live-voice?tier=VIP&phone=09129367796`;
       const ws = new WebSocket(wsUrl);
@@ -131,27 +136,31 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
         const data = event.data;
         if (!data) return;
 
-        // قطع پخش صدای وکیل هنگام شروع سخن گفتن کاربر (Barge-in)
+        // قطع کلام (Barge-in) فقط و فقط در صورتی ارسال می‌شود که هوش مصنوعی در حال صحبت باشد
         if (data.event === 'SPEECH_START') {
-          if (currentSourceRef.current) {
-            try { currentSourceRef.current.stop(); } catch (e) {}
-            currentSourceRef.current = null;
+          if (sessionStateRef.current === 'SPEAKING') {
+            if (currentSourceRef.current) {
+              try { currentSourceRef.current.stop(); } catch (e) {}
+              currentSourceRef.current = null;
+            }
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'INTERRUPT' }));
+            }
+            updateState('LISTENING');
           }
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'INTERRUPT' }));
-          }
-          setSessionState('LISTENING');
         }
 
-        // تشخیص خودکار سکوت و ارسال درخواست پردازش (VAD هوشمند)
+        // پایان خودکار کلام بر اساس سکوت در حالت شنیدن
         else if (data.event === 'SPEECH_END') {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'commit' }));
-            setSessionState('THINKING');
+          if (sessionStateRef.current === 'LISTENING') {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'commit' }));
+              updateState('THINKING');
+            }
           }
         }
 
-        // ارسال فریم‌های خام صوتی به سرور
+        // ارسال فریم‌های صوتی
         else if (data.event === 'PCM_DATA' && data.buffer) {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(data.buffer);
@@ -162,7 +171,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       source.connect(worklet);
 
       ws.onopen = () => {
-        setSessionState('LISTENING');
+        updateState('LISTENING');
       };
 
       ws.onmessage = async (event) => {
@@ -171,16 +180,16 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
           
           if (res.event === 'user_transcription' || res.type === 'TRANSCRIPT') {
             setTranscription(res.text || '');
-            setSessionState('THINKING');
+            updateState('THINKING');
           } else if (res.event === 'agent_text_response' || res.type === 'ANSWER_TEXT') {
             setAssistantReply(res.text || '');
           } else if (res.event === 'agent_audio_stream' || res.type === 'AUDIO_STREAM') {
             const b64 = res.audio_data;
             if (b64) {
-              await playAudioThroughWebAudio(b64);
+              await playAudio(b64);
             }
           } else if (res.type === 'INTERRUPT_ACK') {
-            setSessionState('LISTENING');
+            updateState('LISTENING');
           }
         } catch (e) {
           console.error('Error parsing WS message:', e);
@@ -197,7 +206,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       };
 
     } catch (err: unknown) {
-      console.error('startSession error:', err);
       const msg = err instanceof Error ? err.message : 'دسترسی به میکروفون میسر نشد.';
       setErrorMessage(msg);
       cleanupSession();
@@ -225,7 +233,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       socketRef.current.close();
       socketRef.current = null;
     }
-    setSessionState('IDLE');
+    updateState('IDLE');
   };
 
   if (!isOpen) return null;
@@ -240,7 +248,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
             </div>
             <div>
               <h3 className="font-bold text-sm">مشاوره صوتی زنده (گفتگوی پیوسته)</h3>
-              <p className="text-[11px] text-slate-400">تشخیص هوشمند سکوت و پخش خودکار</p>
+              <p className="text-[11px] text-slate-400">متصل به پایگاه داده آرای وحدت رویه</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer">

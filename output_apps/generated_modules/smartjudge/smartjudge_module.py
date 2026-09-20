@@ -15,14 +15,14 @@ async def openrouter_transcribe_pcm(pcm_bytes: bytes, api_key: str) -> str:
 
     boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
     body = bytearray()
-    body.extend(f"--{boundary}
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))
 ".encode("utf-8"))
     body.extend(b'Content-Disposition: form-data; name="model"
 
 ')
     body.extend(b"openai/whisper-large-v3
 ")
-    body.extend(f"--{boundary}
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))
 ".encode("utf-8"))
     body.extend(b'Content-Disposition: form-data; name="file"; filename="audio.wav"
 ')
@@ -32,7 +32,7 @@ async def openrouter_transcribe_pcm(pcm_bytes: bytes, api_key: str) -> str:
     body.extend(wav_data)
     body.extend(b"
 ")
-    body.extend(f"--{boundary}--
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))--
 ".encode("utf-8"))
 
     req = urllib.request.Request(
