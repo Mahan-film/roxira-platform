@@ -2,9 +2,16 @@ class PCMProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
     this.targetSampleRate = (options && options.processorOptions && options.processorOptions.targetSampleRate) || 16000;
-    this.inputSampleRate = sampleRate; // فرکانس ورودی بومی سافاری (معمولاً ۴۴.۱ یا ۴۸ کیلوهرتز)
+    this.inputSampleRate = sampleRate;
     this.buffer = [];
     this.bufferSize = 2048;
+
+    // پارامترهای VAD برای تشخیص زنده کلام و سکوت
+    this.silenceThreshold = 0.015; // آستانه حساسیت انرژی صدا
+    this.silenceFramesCount = 0;
+    this.speakingFramesCount = 0;
+    this.isSpeaking = false;
+    this.silenceLimit = Math.floor((this.inputSampleRate / 128) * 0.9); // حدود ۹۰۰ میلی‌ثانیه سکوت
   }
 
   downsample(input) {
@@ -31,11 +38,41 @@ class PCMProcessor extends AudioWorkletProcessor {
     return out;
   }
 
+  calculateRMS(samples) {
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) {
+      sum += samples[i] * samples[i];
+    }
+    return Math.sqrt(sum / samples.length);
+  }
+
   process(inputs) {
     const input = inputs[0];
     if (!input || !input[0]) return true;
 
     const channelData = input[0];
+    const rms = this.calculateRMS(channelData);
+
+    // بررسی شروع یا پایان صحبت (VAD)
+    if (rms > this.silenceThreshold) {
+      this.speakingFramesCount++;
+      this.silenceFramesCount = 0;
+      if (!this.isSpeaking && this.speakingFramesCount > 3) {
+        this.isSpeaking = true;
+        this.port.postMessage({ event: 'SPEECH_START' });
+      }
+    } else {
+      if (this.isSpeaking) {
+        this.silenceFramesCount++;
+        if (this.silenceFramesCount > this.silenceLimit) {
+          this.isSpeaking = false;
+          this.speakingFramesCount = 0;
+          this.silenceFramesCount = 0;
+          this.port.postMessage({ event: 'SPEECH_END' });
+        }
+      }
+    }
+
     const downsampled = this.downsample(channelData);
     for (let i = 0; i < downsampled.length; i++) {
       this.buffer.push(downsampled[i]);
@@ -44,7 +81,7 @@ class PCMProcessor extends AudioWorkletProcessor {
     while (this.buffer.length >= this.bufferSize) {
       const chunk = this.buffer.splice(0, this.bufferSize);
       const pcm16 = this.floatTo16BitPCM(Float32Array.from(chunk));
-      this.port.postMessage(pcm16.buffer, [pcm16.buffer]);
+      this.port.postMessage({ event: 'PCM_DATA', buffer: pcm16.buffer }, [pcm16.buffer]);
     }
     return true;
   }

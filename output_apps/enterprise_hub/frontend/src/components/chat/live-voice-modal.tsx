@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, PhoneOff, Mic, Volume2, AlertCircle, RotateCcw } from 'lucide-react';
+import { Phone, PhoneOff, Mic, Volume2, AlertCircle } from 'lucide-react';
 
 interface LiveVoiceModalProps {
   isOpen: boolean;
@@ -8,12 +8,6 @@ interface LiveVoiceModalProps {
   onConversationIdChange?: (id: any) => void;
   onNewMessage?: (userText: any, aiReply: any, draft?: any, prob?: any) => void;
   onTriggerLegalDraft?: (_type: any, _title: any, prompt: any) => void;
-}
-
-declare global {
-  interface Window {
-    __smartJudgeAudioPlayer?: HTMLAudioElement | null;
-  }
 }
 
 export const unlockSafariAudio = () => {};
@@ -26,14 +20,53 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
   const socketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const currentSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const lastBase64AudioRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) cleanupSession();
     return () => cleanupSession();
   }, [isOpen]);
+
+  // پخش صدا از طریق AudioContext جهت عبور از سد Autoplay سافاری
+  const playAudioThroughContext = async (audioDataB64: string) => {
+    try {
+      if (!audioContextRef.current) return;
+      setSessionState('SPEAKING');
+
+      // توقف هرگونه صدای در حال پخش قبلی
+      if (currentSourceNodeRef.current) {
+        try { currentSourceNodeRef.current.stop(); } catch (e) {}
+        currentSourceNodeRef.current = null;
+      }
+
+      // تبدیل base64 به آرایه‌بایت
+      const binaryString = window.atob(audioDataB64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      // دیکود مستقیم و پخش در لایه سخت‌افزاری مرورگر
+      const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      currentSourceNodeRef.current = source;
+
+      source.onended = () => {
+        currentSourceNodeRef.current = null;
+        setSessionState('LISTENING');
+      };
+
+      source.start(0);
+    } catch (err) {
+      console.error('Audio play error:', err);
+      setSessionState('LISTENING');
+    }
+  };
 
   const startSession = async () => {
     try {
@@ -51,10 +84,19 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       });
       streamRef.current = stream;
 
-      // اجرای بومی بدون اجبار sampleRate در سافاری
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const audioCtx = new AudioCtx();
       audioContextRef.current = audioCtx;
+
+      // باز کردن قفل صوتی سافاری با پخش یک بافر کوتاه بی‌صدا
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+      const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
+      const silentSource = audioCtx.createBufferSource();
+      silentSource.buffer = silentBuffer;
+      silentSource.connect(audioCtx.destination);
+      silentSource.start(0);
 
       await audioCtx.audioWorklet.addModule('/worklets/pcm-processor.js');
 
@@ -67,24 +109,37 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/api/v1/apps/judge/live-voice?tier=VIP&phone=09129367796`;
       const ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer';
       socketRef.current = ws;
 
-      const MAX_BUFFERED = 1000000;
       worklet.port.onmessage = (event) => {
-        
-      // Barge-in Listener: اگر سیستم در حال پخش صدا باشد و کاربر صحبت کند، صدا بلافاصله قطع می‌شود
-      if (sessionState === 'SPEAKING' && ws.readyState === WebSocket.OPEN) {
-        if (window.__smartJudgeAudioPlayer) {
-          window.__smartJudgeAudioPlayer.pause();
-          window.__smartJudgeAudioPlayer = null;
-        }
-        ws.send(JSON.stringify({ type: 'INTERRUPT' }));
-        setSessionState('LISTENING');
-      }
+        const data = event.data;
+        if (!data) return;
 
-        if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < MAX_BUFFERED) {
-          ws.send(event.data);
+        // تشخیص شروع کلام کاربر -> قطع آنی صدای وکیل (Barge-in)
+        if (data.event === 'SPEECH_START') {
+          if (currentSourceNodeRef.current) {
+            try { currentSourceNodeRef.current.stop(); } catch (e) {}
+            currentSourceNodeRef.current = null;
+          }
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'INTERRUPT' }));
+          }
+          setSessionState('LISTENING');
+        }
+
+        // تشخیص پایان خودکار کلام کاربر بر اساس سکوت (Hands-Free Commit)
+        else if (data.event === 'SPEECH_END') {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'COMMIT' }));
+            setSessionState('THINKING');
+          }
+        }
+
+        // ارسال فریم‌های باینری صدا
+        else if (data.event === 'PCM_DATA' && data.buffer) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(data.buffer);
+          }
         }
       };
 
@@ -96,28 +151,25 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
       ws.onmessage = (event) => {
         try {
-          if (typeof event.data === 'string') {
-            const data = JSON.parse(event.data);
-            if (data.event === 'user_transcription') {
-              setTranscription(data.text);
-              setSessionState('THINKING');
-            } else if (data.event === 'agent_text_response') {
-              setAssistantReply(data.text);
-            } else if (data.event === 'agent_audio_stream' && data.audio_data) {
-              lastBase64AudioRef.current = data.audio_data;
-              playAssistantSpeech(data.audio_data);
-            } else if (data.event === 'error') {
-              setErrorMessage(data.message);
-              setSessionState('LISTENING');
+          const res = JSON.parse(event.data);
+          if (res.type === 'TRANSCRIPT' || res.event === 'user_transcription') {
+            setTranscription(res.text);
+            setSessionState('THINKING');
+          } else if (res.type === 'ANSWER_TEXT' || res.event === 'agent_text_response') {
+            setAssistantReply(res.text);
+          } else if (res.type === 'AUDIO_STREAM' || res.event === 'agent_audio_stream') {
+            const audioData = res.audio_data;
+            if (audioData) {
+              playAudioThroughContext(audioData);
             }
+          } else if (res.type === 'INTERRUPT_ACK') {
+            setSessionState('LISTENING');
           }
-        } catch (err) {
-          console.error('WS Error:', err);
-        }
+        } catch (e) {}
       };
 
       ws.onerror = () => {
-        setErrorMessage('خطای برقراری ارتباط زنده با سرور.');
+        setErrorMessage('خطای برقراری ارتباط وب‌سوکت.');
         cleanupSession();
       };
 
@@ -132,53 +184,10 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     }
   };
 
-  const handleCommitVoice = () => {
-    if (sessionState === 'LISTENING' && socketRef.current?.readyState === WebSocket.OPEN) {
-      setSessionState('THINKING');
-      socketRef.current.send(JSON.stringify({ type: 'commit' }));
-    }
-  };
-
-  const playAssistantSpeech = (base64Audio: string) => {
-    try {
-      setSessionState('SPEAKING');
-
-      if (window.__smartJudgeAudioPlayer) {
-        window.__smartJudgeAudioPlayer.pause();
-        window.__smartJudgeAudioPlayer = null;
-      }
-
-      const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-      window.__smartJudgeAudioPlayer = audio;
-
-      audio.onended = () => {
-        window.__smartJudgeAudioPlayer = null;
-        setSessionState('LISTENING');
-      };
-
-      audio.onerror = () => {
-        window.__smartJudgeAudioPlayer = null;
-        setSessionState('LISTENING');
-      };
-
-      audio.play().catch(() => {
-        setSessionState('LISTENING');
-      });
-    } catch (e) {
-      setSessionState('LISTENING');
-    }
-  };
-
-  const replaySpeech = () => {
-    if (lastBase64AudioRef.current) {
-      playAssistantSpeech(lastBase64AudioRef.current);
-    }
-  };
-
   const cleanupSession = () => {
-    if (window.__smartJudgeAudioPlayer) {
-      window.__smartJudgeAudioPlayer.pause();
-      window.__smartJudgeAudioPlayer = null;
+    if (currentSourceNodeRef.current) {
+      try { currentSourceNodeRef.current.stop(); } catch (e) {}
+      currentSourceNodeRef.current = null;
     }
     if (workletNodeRef.current) {
       workletNodeRef.current.disconnect();
@@ -210,8 +219,8 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
               {sessionState === 'SPEAKING' ? <Volume2 className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </div>
             <div>
-              <h3 className="font-bold text-sm">مشاوره صوتی زنده با وکیل هوشمند</h3>
-              <p className="text-[11px] text-slate-400">مبتنی بر خط لوله بلادرنگ AudioWorklet PCM16</p>
+              <h3 className="font-bold text-sm">مشاوره صوتی زنده (گفتگوی پیوسته)</h3>
+              <p className="text-[11px] text-slate-400">تشخیص هوشمند سکوت و پخش خودکار</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer">
@@ -226,11 +235,11 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
           </div>
         )}
 
-        <div className="flex flex-col items-center justify-center py-4">
-          <div className={`relative w-28 h-28 rounded-full flex items-center justify-center transition-all duration-150 ${
-            sessionState === 'SPEAKING' ? 'bg-amber-500/20 border-2 border-amber-400 shadow-xl shadow-amber-500/30' :
+        <div className="flex flex-col items-center justify-center py-6">
+          <div className={`relative w-28 h-28 rounded-full flex items-center justify-center transition-all duration-200 ${
+            sessionState === 'SPEAKING' ? 'bg-amber-500/20 border-2 border-amber-400 shadow-xl shadow-amber-500/40 animate-pulse' :
             sessionState === 'THINKING' ? 'bg-blue-500/20 border-2 border-blue-400 animate-pulse' :
-            sessionState === 'LISTENING' ? 'bg-emerald-500/20 border-2 border-emerald-400 ring-4 ring-emerald-500/20' :
+            sessionState === 'LISTENING' ? 'bg-emerald-500/20 border-2 border-emerald-400 ring-8 ring-emerald-500/10 scale-105' :
             'bg-slate-800 border border-slate-700'
           }`}>
             <Mic className={`w-10 h-10 ${
@@ -240,25 +249,15 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
             }`} />
           </div>
 
-          <div className="mt-3 text-xs font-bold tracking-wide text-center">
-            {sessionState === 'IDLE' && <span className="text-slate-400">جهت آغاز مکالمه کلیک فرمایید</span>}
-            {sessionState === 'LISTENING' && <span className="text-emerald-400">🟢 شنونده صحبت شما هستم؛ بفرمایید...</span>}
-            {sessionState === 'THINKING' && <span className="text-blue-400">🟡 در حال استخراج ادله از پایگاه قوانین...</span>}
-            {sessionState === 'SPEAKING' && <span className="text-amber-400">🔊 در حال پاسخ وکیل (لطفاً تا پایان کلام گوش دهید)</span>}
+          <div className="mt-4 text-xs font-bold tracking-wide text-center">
+            {sessionState === 'IDLE' && <span className="text-slate-400">جهت آغاز تماس صوتی کلیک فرمایید</span>}
+            {sessionState === 'LISTENING' && <span className="text-emerald-400">🟢 در حال شنیدن صدای شما (صحبت کنید و مکث فرمایید)...</span>}
+            {sessionState === 'THINKING' && <span className="text-blue-400">🟡 در حال استخراج قوانین و آماده‌سازی پاسخ...</span>}
+            {sessionState === 'SPEAKING' && <span className="text-amber-400">🔊 در حال صحبت وکیل (برای قطع صحبت، سخن بگویید)</span>}
           </div>
         </div>
 
-        {sessionState === 'LISTENING' && (
-          <button
-            onClick={handleCommitVoice}
-            className="w-full py-3.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
-          >
-            <span>پایان کلام و ارسال</span>
-            <span className="text-base">🎙️</span>
-          </button>
-        )}
-
-        <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800/80 max-h-40 overflow-y-auto space-y-2">
+        <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800/80 max-h-44 overflow-y-auto space-y-2">
           {transcription && (
             <div className="text-xs text-slate-300">
               <span className="font-bold text-slate-500">شما: </span>
@@ -266,39 +265,28 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
             </div>
           )}
           {assistantReply && (
-            <div className="text-xs text-amber-200 leading-relaxed border-t border-slate-900 pt-2 flex justify-between items-start gap-2">
-              <div>
-                <span className="font-bold text-amber-400">پاسخ وکیل: </span>
-                {assistantReply}
-              </div>
-              {sessionState !== 'SPEAKING' && lastBase64AudioRef.current && (
-                <button
-                  onClick={replaySpeech}
-                  className="shrink-0 p-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg text-[10px] flex items-center gap-1 cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  پخش مجدد
-                </button>
-              )}
+            <div className="text-xs text-amber-200 leading-relaxed border-t border-slate-900 pt-2">
+              <span className="font-bold text-amber-400">پاسخ وکیل: </span>
+              {assistantReply}
             </div>
           )}
         </div>
 
-        <div className="flex justify-center pt-1">
+        <div className="flex justify-center pt-2">
           {sessionState === 'IDLE' ? (
             <button
               onClick={startSession}
-              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg transition active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl shadow-lg transition active:scale-95 cursor-pointer"
             >
-              <Phone className="w-4 h-4" />
+              <Phone className="w-5 h-5" />
               شروع مکالمه زنده
             </button>
           ) : (
             <button
               onClick={cleanupSession}
-              className="flex items-center gap-2 px-6 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 font-bold rounded-xl transition active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-8 py-3 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 font-bold rounded-2xl transition active:scale-95 cursor-pointer"
             >
-              <PhoneOff className="w-4 h-4" />
+              <PhoneOff className="w-5 h-5" />
               پایان تماس
             </button>
           )}
