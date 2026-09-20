@@ -398,6 +398,15 @@ try:
 except Exception as e:
     print(f"  [ROXIRA-WARN] Payment mount error: {e}")
 
+
+# Mount Gemini Live Native Voice Bridge
+try:
+    from output_apps.ecosystem_core.src.factory.gemini_live_bridge import router as gemini_voice_router
+    app.include_router(gemini_voice_router)
+    print("  [ROXIRA] Gemini 3.8 Live API Bridge mounted successfully.")
+except Exception as e:
+    print(f"  [ROXIRA-ERR] Gemini bridge load failed: {e}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

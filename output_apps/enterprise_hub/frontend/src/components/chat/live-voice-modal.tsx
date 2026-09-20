@@ -72,6 +72,17 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
       const MAX_BUFFERED = 1000000;
       worklet.port.onmessage = (event) => {
+        
+      // Barge-in Listener: اگر سیستم در حال پخش صدا باشد و کاربر صحبت کند، صدا بلافاصله قطع می‌شود
+      if (sessionState === 'SPEAKING' && ws.readyState === WebSocket.OPEN) {
+        if (window.__smartJudgeAudioPlayer) {
+          window.__smartJudgeAudioPlayer.pause();
+          window.__smartJudgeAudioPlayer = null;
+        }
+        ws.send(JSON.stringify({ type: 'INTERRUPT' }));
+        setSessionState('LISTENING');
+      }
+
         if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < MAX_BUFFERED) {
           ws.send(event.data);
         }

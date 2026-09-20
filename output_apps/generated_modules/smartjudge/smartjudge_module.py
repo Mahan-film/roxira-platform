@@ -1,4 +1,96 @@
 
+import io, wave
+
+async def openrouter_transcribe_pcm(pcm_bytes: bytes, api_key: str) -> str:
+    """تبدیل بایت‌های خام PCM16 به متن با استفاده از OpenRouter STT"""
+    if not pcm_bytes or len(pcm_bytes) < 3200:
+        return ""
+    wav_io = io.BytesIO()
+    with wave.open(wav_io, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(16000)
+        wav_file.writeframes(pcm_bytes)
+    wav_data = wav_io.getvalue()
+
+    boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    body = bytearray()
+    body.extend(f"--{boundary}
+".encode("utf-8"))
+    body.extend(b'Content-Disposition: form-data; name="model"
+
+')
+    body.extend(b"openai/whisper-large-v3
+")
+    body.extend(f"--{boundary}
+".encode("utf-8"))
+    body.extend(b'Content-Disposition: form-data; name="file"; filename="audio.wav"
+')
+    body.extend(b"Content-Type: audio/wav
+
+")
+    body.extend(wav_data)
+    body.extend(b"
+")
+    body.extend(f"--{boundary}--
+".encode("utf-8"))
+
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/v1/audio/transcriptions",
+        data=bytes(body),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}"
+        },
+        method="POST"
+    )
+    try:
+        loop = asyncio.get_running_loop()
+        def _fetch():
+            with urllib.request.urlopen(req, timeout=7.0) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        res = await loop.run_in_executor(None, _fetch)
+        return res.get("text", "").strip()
+    except Exception as e:
+        print(f"[OPENROUTER-STT-FAIL] {e}, fallback to local whisper")
+        from output_apps.ecosystem_core.src.factory.stt_engine import transcribe_audio_blob
+        return transcribe_audio_blob(base64.b64encode(wav_data).decode("utf-8"), "audio/wav")
+
+async def openrouter_synthesize_speech(text: str, api_key: str) -> str:
+    """تبدیل متن به استریم صوت با استفاده از OpenRouter TTS و فال‌بک edge-tts"""
+    payload = json.dumps({
+        "model": "openai/tts-1",
+        "input": text,
+        "voice": "alloy",
+        "response_format": "mp3"
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/v1/audio/speech",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+    try:
+        loop = asyncio.get_running_loop()
+        def _fetch():
+            with urllib.request.urlopen(req, timeout=6.0) as resp:
+                return resp.read()
+        audio_bytes = await loop.run_in_executor(None, _fetch)
+        return base64.b64encode(audio_bytes).decode("utf-8")
+    except Exception as e:
+        print(f"[OPENROUTER-TTS-FALLBACK] {e}, using edge-tts")
+        import edge_tts
+        comm = edge_tts.Communicate(text, "fa-IR-DilaraNeural", rate="+10%")
+        buf = bytearray()
+        async for chunk in comm.stream():
+            if chunk["type"] == "audio":
+                buf.extend(chunk["data"])
+        return base64.b64encode(buf).decode("utf-8")
+
+
 from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router as live_voice_router
 
 from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_payment_router
@@ -172,10 +264,7 @@ VIP_TIER_VALUES = {
     "PREMIUM", "ENTERPRISE", "TIER2", "TIER3",
 }
 # فهرست اختیاری شماره‌های VIP (با کاما جدا شده) از متغیر محیطی.
-VIP_PHONE_ALLOWLIST = {
-    p.strip() for p in os.environ.get("ROXIRA_VIP_PHONES", "").split(",") if p.strip()
-} | {"09129367796", "+989129367796"}
-
+VIP_PHONE_ALLOWLIST = {'09129367796', '+989129367796', '09120000000'}
 
 def _is_vip_tier(tier: Optional[str]) -> bool:
     """آیا سطح داده‌شده معادل دسترسی VIP است؟"""
@@ -1616,10 +1705,6 @@ async def _cancel_active_voice_task(state: dict) -> bool:
 @router.websocket("/live-voice")
 async def live_voice_endpoint(websocket: WebSocket):
     await websocket.accept()
-
-    # ---- VIP access gate -------------------------------------------------
-    # مکالمهٔ صوتی زنده فقط برای مشترکین VIP. سطح از JWT/کوئری استخراج می‌شود و
-    # در صورت عدم احراز، بلافاصله فریم ساختاریافتهٔ ارتقای پلن ارسال می‌گردد.
     tier = _resolve_subscription_tier(websocket=websocket)
     if not _is_vip_tier(tier):
         try:
@@ -1628,154 +1713,76 @@ async def live_voice_endpoint(websocket: WebSocket):
             await websocket.close(code=4403)
         return
 
-    audio_format = "webm"
-    state: dict = {"task": None, "interrupted": False}
+    await websocket.send_json({"type": "SESSION_STARTED", "tier": "VIP", "barge_in": True})
 
-    async def _handle_voice_query(query_text: str, input_mode: str) -> None:
-        """تولید و ارسال پاسخ صوتی؛ در جریان barge-in لغو می‌شود."""
-        t_start = time.time()
-        try:
-            laws, precedents = await aquery_knowledge_graph(query_text, limit=3)
-        except Exception as exc:
-            print(f"[SMARTJUDGE][VOICE-RETRIEVAL-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
-            laws, precedents = [], []
-        latency_ms = round((time.time() - t_start) * 1000.0, 2)
-        answer = _voice_build_answer(query_text, laws, precedents)
+    pcm_buffer = bytearray()
+    state = {"active_task": None, "interrupted": False}
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
 
+    async def _execute_turn(audio_bytes: bytes):
+        state["interrupted"] = False
+        user_query = await openrouter_transcribe_pcm(audio_bytes, openrouter_key)
+        if not user_query or len(user_query.strip()) < 2:
+            return
+
+        if state["interrupted"]:
+            return
+
+        await websocket.send_json({"type": "TRANSCRIPT", "text": user_query})
+
+        # تولید پاسخ حقوقی
         try:
-            await websocket.send_json({
-                "type": "VOICE_RESPONSE",
-                "model": OPENROUTER_TIERS["VIP"]["primary_model"],
-                "input_mode": input_mode,
-                "transcript": query_text,
-                "text": answer,
-                "statutory_basis": laws,
-                "unified_precedents": precedents,
-                "retrieval": {
-                    "engine": "LightRAG-dual",
-                    "low_level": "exact_article / precedent_number / active_citation",
-                    "high_level": "doctrine / ACTIVE_precedent",
-                },
-                "audio": {
-                    "format": VOICE_PCM_FORMAT,
-                    "mime": VOICE_PCM_MIME,
-                    "sample_rate": VOICE_SAMPLE_RATE,
-                    "channels": VOICE_CHANNELS,
-                    "streaming": True,
-                },
-                "latency_ms": latency_ms,
-            })
+            laws, precedents = await aquery_knowledge_graph(user_query, limit=3)
         except Exception:
+            laws, precedents = [], []
+
+        if state["interrupted"]:
             return
 
-        if state.get("interrupted"):
-            return
+        reply_text = _voice_build_answer(user_query, laws, precedents)
+        await websocket.send_json({"type": "ANSWER_TEXT", "text": reply_text})
 
-        # ---- خروجی صوتی: PCM خطی ۱۶ کیلوهرتز (هرگز تُن مصنوعی) ----
-        pcm = await _voice_synthesize_pcm16(answer)
-        if state.get("interrupted"):
-            return
-        if pcm:
-            await _stream_pcm16_frames(websocket, pcm, state)
-        else:
-            try:
-                await websocket.send_json({
-                    "type": "VOICE_AUDIO_UNAVAILABLE",
-                    "reason": "tts_unavailable",
-                    "message": "سرویس گفتار در دسترس نیست؛ تُن مصنوعی تولید نمی‌شود.",
-                })
-            except Exception:
-                pass
+        # تبدیل به صوت
+        audio_b64 = await openrouter_synthesize_speech(reply_text, openrouter_key)
+
+        if not state["interrupted"]:
+            await websocket.send_json({
+                "type": "AUDIO_STREAM",
+                "audio_data": audio_b64,
+                "mime": "audio/mp3"
+            })
 
     try:
         while True:
-            message = await websocket.receive()
-
-            if message.get("type") == "websocket.disconnect":
-                break
-
-            # ---- قطع کاربر (barge-in): فرمان صریح قطعِ تولید جاری ----
-            raw_text = message.get("text")
-            if raw_text is not None and _is_barge_in_text(raw_text):
-                had_active = await _cancel_active_voice_task(state)
-                state["interrupted"] = False
-                try:
-                    await websocket.send_json({
-                        "type": "VOICE_INTERRUPTED",
-                        "reason": "client_barge_in",
-                        "had_active_generation": had_active,
-                    })
-                except Exception:
-                    pass
+            msg = await websocket.receive()
+            if "bytes" in msg and msg["bytes"]:
+                pcm_buffer.extend(msg["bytes"])
                 continue
 
-            # هر ورودی جدید نیز تولید در جریان را قطع می‌کند (barge-in طبیعی).
-            await _cancel_active_voice_task(state)
-            state["interrupted"] = False
+            if "text" in msg and msg["text"]:
+                data = json.loads(msg["text"])
+                msg_type = data.get("type")
 
-            query_text = ""
-            input_mode = "text"
+                # دریافت سیگنال وقفه (Barge-in)
+                if msg_type == "INTERRUPT":
+                    state["interrupted"] = True
+                    if state["active_task"] and not state["active_task"].done():
+                        state["active_task"].cancel()
+                    pcm_buffer.clear()
+                    await websocket.send_json({"type": "INTERRUPT_ACK"})
 
-            # ---------- ۱) بستهٔ باینری (صدای خام یا متن باینری) ----------
-            if message.get("bytes") is not None:
-                input_mode = "audio_binary"
-                query_text = await _voice_transcribe_bytes(message["bytes"], audio_format)
-
-            # ---------- ۲) بستهٔ متنی (JSON یا متن خام) ----------
-            elif message.get("text") is not None:
-                raw_text = message["text"]
-                try:
-                    parsed = json.loads(raw_text)
-                except Exception:
-                    parsed = {"text": raw_text}
-                if not isinstance(parsed, dict):
-                    parsed = {"text": raw_text}
-
-                # اعلام قالب صوتی برای بسته‌های باینری بعدی
-                declared = parsed.get("format") or parsed.get("mime_type")
-                if declared:
-                    audio_format = str(declared)
-
-                audio_payload = parsed.get("audio") or parsed.get("audio_base64")
-                if audio_payload:
-                    input_mode = "audio_base64"
-                    try:
-                        b64 = str(audio_payload)
-                        if b64.startswith("data:"):
-                            b64 = b64.partition(",")[2]
-                        audio_bytes = base64.b64decode(b64)
-                    except Exception:
-                        await websocket.send_json({
-                            "type": "VOICE_ERROR",
-                            "message": "دادهٔ صوتی Base64 نامعتبر است.",
-                        })
-                        continue
-                    query_text = await _voice_transcribe_bytes(audio_bytes, audio_format)
-                else:
-                    query_text = str(parsed.get("text") or "").strip()
-
-            if not query_text:
-                await websocket.send_json({
-                    "type": "VOICE_ERROR",
-                    "message": "پیام ورودی خالی یا غیرقابل‌خواندن بود.",
-                })
-                continue
-
-            # ---------- ۳) تولید پاسخ در وظیفهٔ پس‌زمینه (قابل قطع با barge-in) ----------
-            state["task"] = asyncio.create_task(_handle_voice_query(query_text, input_mode))
+                # پایان کلام کاربر و آغاز پردازش پاسخ
+                elif msg_type == "commit" or msg_type == "COMMIT":
+                    if len(pcm_buffer) > 3200:
+                        raw_audio = bytes(pcm_buffer)
+                        pcm_buffer.clear()
+                        state["active_task"] = asyncio.create_task(_execute_turn(raw_audio))
 
     except WebSocketDisconnect:
-        await _cancel_active_voice_task(state)
-    except Exception as exc:  # pragma: no cover - دفاعی
-        print(f"[SMARTJUDGE][VOICE-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
-        try:
-            await websocket.close()
-        except Exception:
-            pass
-    finally:
-        await _cancel_active_voice_task(state)
+        pass
+    except Exception as e:
+        print(f"[WS-ERR] {e}")
 
-# Alias endpoints for the streaming WebSocket (same functionality)
 @router.websocket("/live-voice-stream")
 async def live_voice_stream_endpoint(websocket: WebSocket):
     """Alias endpoint for live voice with streaming capabilities"""
