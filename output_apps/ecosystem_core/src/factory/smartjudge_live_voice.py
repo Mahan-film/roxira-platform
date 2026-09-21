@@ -3,21 +3,22 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeVoice"])
 
-HIERARCHY_LEGAL_SYSTEM = """
-شما مستشار عالی‌رتبه قضایی و مشاور ارشد حقوقی در سامانه «قاضی هوشمند» هستید.
-پاسخ‌های شما در مکالمه زنده باید مستند، صریح، عمیق و منطبق بر سلسله‌مراتب هنجارهای حقوقی ج.ا.ایران باشد:
-۱. قوانین مصوب مجلس و مجمع تشخیص مصلحت نظام
-۲. آراء وحدت رویه هیأت عمومی دیوان عالی کشور و دیوان عدالت اداری (لازم‌الاتباع در حکم قانون)
-۳. مقررات تقریری شامل: آیین‌نامه‌های اجرایی مصوب هیئت وزیران (اصل ۱۳۸ ق.ا)، تصویب‌نامه‌ها و طرح‌های جامع دولتی
-۴. بخشنامه‌های قضایی و اداری و نظریات مشورتی اداره کل حقوقی قوه قضائیه
+HIERARCHY_LEGAL_PROMPT = """
+شما مستشار عالی‌رتبه قضایی و حقوق‌دان ارشد سامانه «قاضی هوشمند» هستید و به صورت گفتگوی صوتی زنده پاسخ می‌دهید.
+پاسخ شما باید مستند، دقیق، باوقار و منطبق بر سلسله‌مراتب هنجارهای حقوقی ج.ا.ایران باشد:
+۱. قوانین عام و خاص مصوب مجلس شورای اسلامی و مجمع تشخیص مصلحت نظام
+۲. آراء وحدت رویه هیأت عمومی دیوان عالی کشور و دیوان عدالت اداری (در حکم قانون)
+۳. مقررات تقریری و آیین‌نامه‌های اجرایی مصوب هیئت وزیران (اصل ۱۳۸ قانون اساسی) و تصویب‌نامه‌های دولتی
+۴. بخشنامه‌ها و دستورالعمل‌های اداری-قضایی و نظریات مشورتی اداره کل حقوقی قوه قضائیه
 
 مستندات استخراج‌شده از مخزن پایگاه داده:
 {retrieved_context}
 
-دستورالعمل گفتاری:
-۱. در پاسخ به پرسش کاربر، بلافاصله مستند صریح (اعم از ماده قانون، شماره رأی وحدت رویه، یا تاریخ و عنوان تصویب‌نامه هیئت وزیران) را بیان کنید.
-۲. کلام شما باید حداکثر در ۳ تا ۴ جمله کوتاه، بلیغ و شیوا تنظیم شود تا مناسب شنیدن باشد.
-۳. از هرگونه کاراکتر علامتی (* یا #) اکیداً پرهیز کنید.
+اصول مکالمه صوتی:
+۱. مستقیماً به استناد قانونی، شماره رأی وحدت رویه، یا تاریخ و عنوان تصویب‌نامه هیئت وزیران اشاره کنید.
+۲. پاسخ را کامل، بدون ابهام و در قالب حداکثر ۳ تا ۵ جمله رسا بیان کنید.
+۳. در جمله پایانی، راهکار اجرایی پرونده یا سوال تکمیلی را مطرح کنید.
+۴. مطلقاً از علائم نگارشی نظیر ستاره (*) و هشتگ (#) استفاده نکنید تا صوت پیوسته و روان پخش شود.
 """
 
 def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
@@ -30,15 +31,15 @@ def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
     return wav_io.getvalue()
 
 async def transcribe_speech_persian(wav_bytes: bytes) -> str:
-    """تبدیل دقیق صوت با هدایت صریح به اصطلاحات حقوقی و دولتی"""
+    """تبدیل دقیق صوت با فیلتر واژگان تخصصی حقوقی، آیین‌نامه‌ها و مصوبات"""
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
     if openrouter_key:
         try:
-            boundary = "----WebKitBoundaryPersianLegal"
+            boundary = "----WebKitBoundaryLegalPersianVoice"
             body = bytearray()
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nopenai/whisper-large-v3\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nfa\r\n".encode("utf-8"))
-            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nآراء وحدت رویه دیوان عالی کشور، مصوبات هیئت وزیران، آیین‌نامه اجرایی، بخشنامه، دادگاه صلح\r\n".encode("utf-8"))
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nقوانین مدنی، آراء وحدت رویه دیوان عالی کشور، مصوبات هیئت وزیران، آیین‌نامه اجرایی، بخشنامه قوه قضائیه، دادگاه صلح\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n".encode("utf-8"))
             body.extend(wav_bytes)
             body.extend(f"\r\n--{boundary}--\r\n".encode("utf-8"))
@@ -50,10 +51,10 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
                 method="POST"
             )
             loop = asyncio.get_running_loop()
-            def _call():
+            def _stt():
                 with urllib.request.urlopen(req, timeout=5.0) as resp:
                     return json.loads(resp.read().decode("utf-8")).get("text", "")
-            res = await loop.run_in_executor(None, _call)
+            res = await loop.run_in_executor(None, _stt)
             if res and len(res.strip()) > 1:
                 return res.strip()
         except Exception as e:
@@ -67,47 +68,47 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
     except Exception:
         return ""
 
-async def generate_hierarchical_legal_answer(query_text: str) -> str:
-    """استنتاج جامع حقوقی با دربرگیری مقررات تقریری، مصوبات دولت و قوانین"""
+async def analyze_hierarchical_legal(query_text: str) -> str:
+    """استنتاج تحلیلی جامع بر پایه ادله حقوقی و مقررات دولتی"""
     context_data = ""
     try:
         from output_apps.generated_modules.smartjudge.smartjudge_module import aquery_knowledge_graph
-        laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.0)
-        context_data = f"مستندات قانونی و قضایی استخراج‌شده:\nقوانین و مصوبات: {laws}\nآراء و رویه‌ها: {prec}"
+        laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.2)
+        context_data = f"مستندات قانونی و قضایی استخراج‌شده از مخزن:\nقوانین و مصوبات دولت: {laws}\nآراء وحدت رویه و دادنامه‌ها: {prec}"
     except Exception:
         pass
 
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-    system_content = HIERARCHY_LEGAL_SYSTEM.format(retrieved_context=context_data)
+    system_prompt = HIERARCHY_LEGAL_PROMPT.format(retrieved_context=context_data)
 
     payload = json.dumps({
         "model": "deepseek/deepseek-chat",
         "messages": [
-            {"role": "system", "content": system_content},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": query_text}
         ],
         "temperature": 0.2,
-        "max_tokens": 190
+        "max_tokens": 220
     }).encode("utf-8")
 
     req = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         data=payload,
-        headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": f"application/json"},
         method="POST"
     )
 
     try:
         loop = asyncio.get_running_loop()
         def _fetch():
-            with urllib.request.urlopen(req, timeout=6.0) as resp:
+            with urllib.request.urlopen(req, timeout=7.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return data["choices"][0]["message"]["content"]
         raw = await loop.run_in_executor(None, _fetch)
         return raw.replace("*", "").replace("#", "").strip()
     except Exception as e:
         print(f"[LLM-WARN] {e}", file=sys.stderr)
-        return "بر اساس مصوبات جاری هیئت وزیران، آیین‌نامه‌های اجرایی مصوب و آراء وحدت رویه، موضوع دارای رویه مشخص بوده و مطابق ضوابط آیین دادرسی تعیین تکلیف می‌گردد."
+        return "بر اساس مصوبات جاری هیئت وزیران، آیین‌نامه‌های اجرایی و آراء وحدت رویه دیوان عالی کشور، موضوع دارای احکام مشخص قانونی بوده و طبق صلاحیت ذاتی مراجع صالحه تعیین تکلیف می‌گردد."
 
 async def synthesize_speech_persian(text: str) -> str:
     try:
@@ -119,7 +120,7 @@ async def synthesize_speech_persian(text: str) -> str:
                 buf.extend(chunk["data"])
         return base64.b64encode(buf).decode("utf-8")
     except Exception as e:
-        print(f"[TTS-WARN] {e}", file=sys.stderr)
+        print(f"[TTS-ERR] {e}", file=sys.stderr)
         return ""
 
 @router.websocket("/live-voice")
@@ -155,9 +156,11 @@ async def live_voice_websocket(websocket: WebSocket):
 
                         await websocket.send_text(json.dumps({"event": "user_transcription", "text": user_text}))
 
-                        reply_text = await generate_hierarchical_legal_answer(user_text)
+                        # تحلیل جامع حقوقی همراه با مصوبات
+                        reply_text = await analyze_hierarchical_legal(user_text)
                         await websocket.send_text(json.dumps({"event": "agent_text_response", "text": reply_text}))
 
+                        # سنتز صوت و ارسال کامل
                         audio_b64 = await synthesize_speech_persian(reply_text)
                         if audio_b64:
                             await websocket.send_text(json.dumps({"event": "agent_audio_stream", "audio_data": audio_b64}))
