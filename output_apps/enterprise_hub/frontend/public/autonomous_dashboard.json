@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-22 09:05:08 UTC",
+  "timestamp": "2026-09-22 09:35:28 UTC",
   "platform_health_score": "100%",
   "active_mesh_network": "roxira_mesh",
   "infrastructure_containers": {
@@ -16,7 +16,7 @@
   "subsystem_diagnostics": {
     "legal_core_fastapi": {
       "status": "HEALTHY",
-      "latency_ms": 44.76
+      "latency_ms": 35.57
     },
     "statutory_damages_article_522": {
       "status": "PASSED",
