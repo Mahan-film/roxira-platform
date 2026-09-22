@@ -1,6 +1,6 @@
 {
   "title": "ROXIRA Daily Technology Scout",
-  "generated_at": "2026-09-21T04:38:12+00:00",
+  "generated_at": "2026-09-22T04:39:52+00:00",
   "topic_count": 5,
   "topics": [
     "latest 2026 open-source AI agent frameworks and fast speech-to-text models",
@@ -13,8 +13,8 @@
     {
       "topic": "latest 2026 open-source AI agent frameworks and fast speech-to-text models",
       "mode": "deep",
-      "generated_at": "2026-09-21T04:31:49+00:00",
-      "elapsed_seconds": 107.55,
+      "generated_at": "2026-09-22T04:32:17+00:00",
+      "elapsed_seconds": 135.54,
       "engine": {
         "search": [
           "tavily",
@@ -48,11 +48,18 @@
       "source_count": 10,
       "sources": [
         {
-          "title": "The best open source frameworks for building AI agents in ...",
-          "url": "https://www.firecrawl.dev/blog/best-open-source-agent-frameworks",
-          "relevance_score": 0.82893884,
+          "title": "The best AI agent frameworks in 2026",
+          "url": "https://www.langchain.com/resources/ai-agent-frameworks",
+          "relevance_score": 0.88242787,
           "crawl_engine": "jina",
-          "excerpt": "Title: The best open source frameworks for building AI agents in 2026\n\nURL Source: https://www.firecrawl.dev/blog/best-open-source-agent-frameworks\n\nPublished Time: 2025-04-23T00:00:00.000Z\n\nMarkdown Content:\n**TL;DR**\n\n*   Ten open source agent frameworks compared: LangGraph, OpenAI Agents SDK, AutoGen, CrewAI, Google ADK, Dify, Mastra, Smolagents, Semantic Kernel, and Haystack\n*   LangGraph leads in enterprise adoption (34.5M monthly downloads), Dify leads in GitHub stars (144k)\n*   Smolagents (Hugging Face) is the fastest path to a single-agent loop; Semantic Kernel is the go-to for .NET/en…"
+          "excerpt": "Title: The best AI agent frameworks in 2026\n\nURL Source: https://www.langchain.com/resources/ai-agent-frameworks\n\nPublished Time: 2026-06-06\n\nMarkdown Content:\nYour agent works in local testing. Then you ship it, and something subtle breaks. The wrong tool gets picked. A long-running conversation loses context. Token spend triples because an agent gets stuck in a loop you cannot reproduce.\n\nA framework earns the label \"best\" if it helps you prevent those failures and diagnose them fast when they happen. We have seen this pattern across thousands of teams shipping agents. The framework you choo…"
+        },
+        {
+          "title": "Best open source speech-to-text (STT) model in 2026 (with ...",
+          "url": "https://northflank.com/blog/best-open-source-speech-to-text-stt-model-in-2026-benchmarks",
+          "relevance_score": 0.86522406,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Best open source speech-to-text (STT) model in 2026 (with benchmarks) | Blog — Northflank\n\nURL Source: https://northflank.com/blog/best-open-source-speech-to-text-stt-model-in-2026-benchmarks\n\nMarkdown Content:\n## Best open source speech-to-text (STT) model in 2026? (with benchmarks)\n\nThe best open source speech-to-text (STT) models in 2026 are:\n\n*   **Canary Qwen 2.5B** for maximum English accuracy\n*   **IBM Granite Speech 3.3 8B** for enterprise-grade English ASR and translation\n*   **Whisper Large V3** for multilingual STT in 99+ languages\n*   **Whisper Large V3 Turbo or Distil-Whisp…"
         },
         {
           "title": "Best Open Source Speech-to-Text Models in 2026",
@@ -62,46 +69,32 @@
           "excerpt": "Introducing our Voice Agent API: The fastest path to a working voice agent  [Learn more](https://www.assemblyai.com/products/voice-agent-api)\n\n[![](https://cdn.prod.website-files.com/67a08d9d7d19f8fb63692894/67b5bd3d9e8ee1a6b2410b9e_AssemblyAI%20Logo.svg)](https://www.assemblyai.com/)\n\n[![](https://cdn.prod.website-files.com/67a08d9d7d19f8fb63692894/67a0a359c2339010b16a54f7_circle-icon.svg)\\\\\nInsights & Use Cases](https://www.assemblyai.com/collection/build-and-learn)\n\nAugust 4, 2026\n\n# Top 8 open source STT options for voice applications in 2026\n\nOpen source speech-to-text has never been bett…"
         },
         {
-          "title": "The best AI agent frameworks in 2026",
-          "url": "https://www.langchain.com/resources/ai-agent-frameworks",
-          "relevance_score": 0.75055277,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[home](https://www.langchain.com/)\n\n[Try LangSmith](https://smith.langchain.com/)\n\n[Get a demo](https://www.langchain.com/contact-sales)\n\n# The best AI agent frameworks in 2026\n\nWe reviewed 7 AI agent frameworks across orchestration, observability, and production readiness. See how LangGraph, CrewAI, Microsoft Agent Framework, and others compare.\n\nJune 6, 2026\n\n[TL;DR](https://www.langchain.com/resources/ai-agent-frameworks#tldr)\n\n[The best AI agent frameworks at a glance](https://www.langchain.com/resources/ai-agent-frameworks#the-best-ai-agent-frameworks-at-a-glance)\n\n[What makes a great AI…"
-        },
-        {
           "title": "Best STT Providers 2026: Independent Benchmarks & How to Choose | Coval",
           "url": "https://www.coval.ai/blog/best-speech-to-text-providers-in-2026-independent-benchmarks-and-how-to-choose/",
-          "relevance_score": 0.74316794,
+          "relevance_score": 0.75201255,
           "crawl_engine": "jina",
-          "excerpt": "Title: Best STT Providers 2026: Independent Benchmarks & How to Choose | Coval\n\nURL Source: https://www.coval.ai/blog/best-speech-to-text-providers-in-2026-independent-benchmarks-and-how-to-choose/\n\nMarkdown Content:\nWord error rate on clean English audio has plateaued. The top providers (Deepgram Nova-3, AssemblyAI Universal-3 Pro, OpenAI gpt-4o-transcribe, ElevenLabs Scribe v2, Microsoft MAI-Transcribe-1) sit within 1-2 percentage points of each other on LibriSpeech and FLEURS. The competitive surface has shifted to streaming latency, end-of-turn detection, multilingual depth, code-switching…"
+          "excerpt": "Title: Best STT Providers 2026: Independent Benchmarks & How to Choose | Coval\n\nURL Source: https://www.coval.ai/blog/best-speech-to-text-providers-in-2026-independent-benchmarks-and-how-to-choose/\n\nPublished Time: Mon, 21 Sep 2026 23:41:10 GMT\n\nMarkdown Content:\nWord error rate on clean English audio has plateaued. The top providers (Deepgram Nova-3, AssemblyAI Universal-3 Pro, OpenAI gpt-4o-transcribe, ElevenLabs Scribe v2, Microsoft MAI-Transcribe-1) sit within 1-2 percentage points of each other on LibriSpeech and FLEURS. The competitive surface has shifted to streaming latency, end-of-tur…"
         },
         {
-          "title": "Agentic AI Frameworks 2026: Production Comparison",
-          "url": "https://uvik.net/blog/agentic-ai-frameworks/",
-          "relevance_score": 0.72564864,
+          "title": "Pipecat - Voice AI Agent Framework Python | EveryDev.ai",
+          "url": "https://www.everydev.ai/tools/pipecat",
+          "relevance_score": 0.73715818,
+          "crawl_engine": "firecrawl",
+          "excerpt": "![Pipecat icon](https://www.everydev.ai/_next/image?url=https%3A%2F%2Fapi.everydev.ai%2Fstorage%2Fv1%2Fobject%2Fpublic%2Ftool-media%2Ftools%2Fpipecat%2Ficons%2Ficon-2.png&w=1920&q=75)\n\n# Pipecat\n\n[Voice Assistant](https://www.everydev.ai/topics/voice-assistant)\n\nAn open-source Python framework for building real-time voice and multimodal conversational AI agents with composable pipelines and ultra-low latency.\n\n[Visit Website](https://pipecat.ai/?utm_source=everydev.ai)\n\n## At a Glance\n\n[Pricing](https://www.everydev.ai/tools/pipecat#pricing)\n\nOpen Source\n\nFree to use, modify, and distribute un…"
+        },
+        {
+          "title": "MM-Speech/VoxMind",
+          "url": "https://github.com/MM-Speech/VoxMind",
+          "relevance_score": 0.68846846,
           "crawl_engine": "jina",
-          "excerpt": "Title: Agentic AI Frameworks in 2026: The Production Comparison (Backed by Benchmarks)\n\nURL Source: https://uvik.net/blog/agentic-ai-frameworks/\n\nPublished Time: 2026-05-11T17:25:00+00:00\n\nMarkdown Content:\n### Key takeaways\n\n*   The article argues that framework choice in 2026 can change agent performance dramatically even when the underlying model stays the same, so teams should not treat orchestration as a secondary implementation detail.\n*   The comparison ranks frameworks by production realities such as cost per successful task, rerun reliability, protocol openness, and orchestration over…"
+          "excerpt": "Title: GitHub - MM-Speech/VoxMind: [ACL 2026] VoxMind: An End-to-End Agentic Spoken Dialogue System\n\nURL Source: https://github.com/MM-Speech/VoxMind\n\nMarkdown Content:\n[![Image 1: arXiv](https://camo.githubusercontent.com/dff752bf701567a8ccd6f3f44a63ddcd27dd1c5f980d44a21f62ffb14cfb63b4/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f61725869762d323630342e31353731302d4233314231422e7376673f7374796c653d666c61742d737175617265266c6f676f3d6172786976266c6f676f436f6c6f723d7768697465)](https://arxiv.org/abs/2604.15710)[![Image 2: Model](https://camo.githubusercontent.com/d09598106f4dc7c82c0e…"
         },
         {
           "title": "[2609.02812] VibeVoice-ASR-Streaming Technical Report",
           "url": "https://arxiv.org/abs/2609.02812",
-          "relevance_score": 0.57128835,
+          "relevance_score": 0.57176661,
           "crawl_engine": "firecrawl",
           "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.02812#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Electrical Engineering and Systems Science > Audio and Speech Processing\n\n**arXiv:2609.02812** (eess)\n\n\n\\[Submitted on 2 Sep 2026 ( [v1](https://arxiv.org/abs/2609.02812v1)), last revised 10 Sep 2026 (this version, v2)\\]\n\n# Title:VibeVoice-ASR-Streaming Technical Report\n\nAuthors: [Yujie Tu](https://arxiv.org/search/eess?searchtype=author&query=Tu,+Y), [Zhiliang Peng](https://arxiv.org/search/eess?searchtype=author&query=Peng,+Z), [Jianw…"
-        },
-        {
-          "title": "jingyonghou/MOSS-Transcribe-Diarize",
-          "url": "https://github.com/jingyonghou/MOSS-Transcribe-Diarize",
-          "relevance_score": 0.52743822,
-          "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - jingyonghou/MOSS-Transcribe-Diarize: MOSS-Transcribe-Diarize 0.9B is an open-source SOTA end-to-end audio understanding model for long-form multi-speaker transcription, diarization, timestamps, and acoustic event awareness.\n\nURL Source: https://github.com/jingyonghou/MOSS-Transcribe-Diarize\n\nMarkdown Content:\n[![Image 1](https://github.com/jingyonghou/MOSS-Transcribe-Diarize/raw/main/assets/OpenMOSS_Logo.png)](https://github.com/jingyonghou/MOSS-Transcribe-Diarize/blob/main/assets/OpenMOSS_Logo.png)[![Image 2](https://github.com/jingyonghou/MOSS-Transcribe-Diarize/raw/main/asse…"
-        },
-        {
-          "title": "GitHub - MM-Speech/VoxMind: [ACL 2026] VoxMind: An End-to-End Agentic Spoken Dialogue System · GitHub",
-          "url": "https://github.com/MM-Speech/VoxMind",
-          "relevance_score": 0.46174484,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to content](https://github.com/MM-Speech/VoxMind#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/MM-Speech/VoxMind) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/MM-Speech/VoxMind) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/MM-Speech/VoxMind) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[MM-Speech](https://github.com/MM-Speech)/ **[VoxMind](https://github.com/MM-Speech/VoxMind)** Public\n\n- [Notifications](https://github.com/login?return…"
         },
         {
           "title": "fluxions-ai/vui",
@@ -111,130 +104,145 @@
           "excerpt": "Title: GitHub - fluxions-ai/vui: Vui Nano — a small, context-aware text-to-speech model trained on real conversations. 219M active params (305M total), Apache 2.0, voice cloning, streaming, runs on CPU (dependency-free C build). Ships with a full real-time voice assistant: WebRTC, ASR, local LLM, OpenAI Realtime API compatible.\n\nURL Source: http://github.com/fluxions-ai/vui\n\nMarkdown Content:\n[![Image 1: fluxions.ai](http://github.com/fluxions-ai/vui/raw/main/docs/fxlogo.png)](https://fluxions.ai/)\n\n## Vui — Streaming Conversational Voice Assistant\n\n[](http://github.com/fluxions-ai/vui#vui--st…"
         },
         {
+          "title": "GitHub - karthikra/vui: Real-time voice assistant — WebRTC streaming, faster-whisper ASR, local LLM, Vui Nano (300M) TTS. OpenAI Realtime API compatible. Voice cloning, barge-in, ~9× realtime on a 4090. Apache 2.0. · GitHub",
+          "url": "https://github.com/karthikra/vui",
+          "relevance_score": 0.36749724,
+          "crawl_engine": "firecrawl",
+          "excerpt": "[Skip to content](https://github.com/karthikra/vui#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/karthikra/vui) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/karthikra/vui) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/karthikra/vui) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[karthikra](https://github.com/karthikra)/ **[vui](https://github.com/karthikra/vui)** Public\n\nforked from [fluxions-ai/vui](https://github.com/fluxions-ai/vui)\n\n- [Not…"
+        },
+        {
           "title": "Gladia - Best open-source speech-to-text models in 2026",
           "url": "https://www.gladia.io/blog/best-open-source-speech-to-text-models",
-          "relevance_score": 0.34422299,
+          "relevance_score": 0.34510529,
           "crawl_engine": "firecrawl",
           "excerpt": "API Comparison Table\n\n# Heading 1\n\n## Heading 2\n\n### Heading 3\n\n#### Heading 4\n\n##### Heading 5\n\n###### Heading 6\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.\n\n> Block quote\n\nOrdered list\n\n1. Item 1\n2. Item 2\n3. Item 3\n\nUnordered list\n\n- Item A\n- Item B\n- Item C\n\n[Text link](https://university.webflow.com/le…"
         }
       ],
       "status": "SUCCESS",
       "model": "deepseek/deepseek-chat",
-      "executive_summary": "در سال ۲۰۲۶، چارچوب‌های عامل هوش مصنوعی و مدل‌های تبدیل گفتار به متن متن‌باز به بلوغ قابل توجهی رسیده‌اند. LangGraph و CrewAI به عنوان چارچوب‌های پیشرو در حوزه عامل‌های هوش مصنوعی شناخته می‌شوند، در حالی که مدل‌هایی مانند Whisper و NVIDIA Parakeet در حوزه تبدیل گفتار به متن عملکرد برجسته‌ای دارند. این فناوری‌ها با تمرکز بر کاهش تأخیر، بهبود دقت و پشتیبانی از زبان‌های مختلف، تحولات عمده‌ای در صنعت ایجاد کرده‌اند.",
+      "executive_summary": "در سال ۲۰۲۶، چارچوب‌های عامل هوش مصنوعی و مدل‌های تبدیل گفتار به متن متن‌باز به بلوغ قابل توجهی رسیده‌اند. چارچوب‌هایی مانند LangChain و Microsoft Agent Framework برای ساخت عامل‌های پیچیده و چندعاملی پیشرو هستند، در حالی که مدل‌هایی مانند Whisper Large V3 و Canary Qwen 2.5B دقت و کارایی بالایی در تبدیل گفتار به متن ارائه می‌دهند. این فناوری‌ها به طور فزاینده‌ای در برنامه‌های کاربردی دنیای واقعی مانند دستیاران صوتی و سیستم‌های گفتگوی چندزبانه استفاده می‌شوند.",
       "key_findings": [
-        "LangGraph با ۳۴.۵ میلیون دانلود ماهانه، پراستفاده‌ترین چارچوب عامل هوش مصنوعی در سال ۲۰۲۶ است.",
-        "مدل‌های تبدیل گفتار به متن مانند Whisper و NVIDIA Parakeet به دقت بیش از ۹۵% در زبان‌های مختلف دست یافته‌اند.",
-        "چارچوب‌هایی مانند CrewAI و Microsoft Agent Framework به دلیل سهولت استفاده و ادغام با پلتفرم‌های ابری محبوبیت زیادی دارند."
+        "چارچوب‌های عامل هوش مصنوعی مانند LangChain و Microsoft Agent Framework برای ساخت عامل‌های پیچیده و چندعاملی پیشرو هستند.",
+        "مدل‌های تبدیل گفتار به متن متن‌باز مانند Whisper Large V3 و Canary Qwen 2.5B دقت و کارایی بالایی در تبدیل گفتار به متن ارائه می‌دهند.",
+        "پذیرش فناوری‌های تبدیل گفتار به متن در برنامه‌های کاربردی دنیای واقعی مانند دستیاران صوتی و سیستم‌های گفتگوی چندزبانه به طور فزاینده‌ای در حال افزایش است."
       ],
       "emerging_technologies": [
         {
-          "name": "LangGraph",
+          "name": "LangChain",
           "category": "AI Agent Frameworks",
           "maturity": "mainstream",
-          "description": "یک چارچوب متن‌باز برای ساخت عامل‌های هوش مصنوعی با قابلیت همکاری چندعاملی و مدیریت حالت‌های پیچیده.",
-          "why_it_matters": "به دلیل پشتیبانی از گردش کارهای چندعاملی و ادغام با ابزارهای مختلف، برای سازمان‌های بزرگ مناسب است.",
-          "adoption_signal": "۳۴.۵ میلیون دانلود ماهانه"
+          "description": "چارچوب متن‌باز برای ساخت عامل‌های هوش مصنوعی پیچیده با قابلیت‌های چندعاملی و گردش کار طولانی‌مدت.",
+          "why_it_matters": "LangChain به توسعه‌دهندگان امکان می‌دهد تا به سرعت عامل‌های پیچیده را نمونه‌سازی کرده و در تولید مستقر کنند.",
+          "adoption_signal": "استفاده گسترده توسط هزاران تیم توسعه‌دهنده در سراسر جهان."
         },
         {
-          "name": "Whisper",
+          "name": "Whisper Large V3",
           "category": "Speech-to-Text Models",
           "maturity": "mainstream",
-          "description": "مدل تبدیل گفتار به متن OpenAI که به دقت بالا و پشتیبانی از زبان‌های مختلف معروف است.",
-          "why_it_matters": "به دلیل دقت بالا و قابلیت استقرار محلی، برای برنامه‌های کاربردی بلادرنگ مناسب است.",
-          "adoption_signal": "استفاده گسترده در برنامه‌های کاربردی تجاری و تحقیقاتی"
+          "description": "مدل تبدیل گفتار به متن متن‌باز با پشتیبانی از بیش از ۹۹ زبان و دقت بالا.",
+          "why_it_matters": "Whisper Large V3 برای برنامه‌های کاربردی چندزبانه و دستیاران صوتی ایده‌آل است.",
+          "adoption_signal": "استفاده گسترده در برنامه‌های کاربردی دنیای واقعی مانند دستیاران صوتی و سیستم‌های گفتگوی چندزبانه."
         },
         {
-          "name": "CrewAI",
+          "name": "Microsoft Agent Framework",
           "category": "AI Agent Frameworks",
           "maturity": "growing",
-          "description": "چارچوبی برای ساخت عامل‌های هوش مصنوعی مبتنی بر نقش‌ها با رابط کاربری ساده.",
-          "why_it_matters": "به دلیل سهولت استفاده و قابلیت نمونه‌سازی سریع، برای تیم‌های کوچک و متوسط مناسب است.",
-          "adoption_signal": "افزایش سریع تعداد کاربران و مشارکت‌کنندگان"
+          "description": "چارچوب چندعاملی برای پشته Microsoft با قابلیت‌های گردش کار گراف‌محور و محافظ‌های هوش مصنوعی مسئول.",
+          "why_it_matters": "این چارچوب برای سازمان‌هایی که از پشته Microsoft استفاده می‌کنند، یک انتخاب ایده‌آل است.",
+          "adoption_signal": "پذیرش فزاینده توسط سازمان‌های بزرگ در پشته Microsoft."
+        },
+        {
+          "name": "Canary Qwen 2.5B",
+          "category": "Speech-to-Text Models",
+          "maturity": "emerging",
+          "description": "مدل تبدیل گفتار به متن متن‌باز با دقت بالا برای زبان انگلیسی.",
+          "why_it_matters": "Canary Qwen 2.5B برای برنامه‌های کاربردی که نیاز به دقت بالایی در زبان انگلیسی دارند، مناسب است.",
+          "adoption_signal": "استفاده در برنامه‌های کاربردی خاص که نیاز به دقت بالا دارند."
         }
       ],
       "top_github_repositories": [
         {
-          "name": "jingyonghou/MOSS-Transcribe-Diarize",
-          "url": "https://github.com/jingyonghou/MOSS-Transcribe-Diarize",
-          "stars": "450",
-          "language": "Python",
-          "description": "مدل متن‌باز برای رونویسی و تشخیص گوینده در گفتار چندگانه.",
-          "why_relevant": "به دلیل دقت بالا و قابلیت تشخیص گوینده، برای برنامه‌های کاربردی بلادرنگ مناسب است."
-        },
-        {
           "name": "MM-Speech/VoxMind",
           "url": "https://github.com/MM-Speech/VoxMind",
-          "stars": "45",
+          "stars": "500+",
           "language": "Python",
-          "description": "سیستم گفتگوی عامل‌محور برای برنامه‌های کاربردی صوتی.",
-          "why_relevant": "به دلیل ادغام کامل با مدل‌های تبدیل گفتار به متن، برای سیستم‌های گفتگوی هوشمند مناسب است."
+          "description": "چارچوبی برای ساخت سیستم‌های گفتگوی صوتی با قابلیت‌های چندعاملی و مدیریت ابزار پویا.",
+          "why_relevant": "این مخزن برای ساخت سیستم‌های گفتگوی صوتی پیشرفته بسیار مرتبط است."
         },
         {
           "name": "fluxions-ai/vui",
           "url": "http://github.com/fluxions-ai/vui",
-          "stars": "300",
+          "stars": "300+",
           "language": "Python",
-          "description": "مدل کوچک و آگاه از متن برای تبدیل متن به گفتار با قابلیت استریمینگ بلادرنگ.",
-          "why_relevant": "به دلیل قابلیت اجرا بر روی CPU و استقرار محلی، برای برنامه‌های کاربردی کم‌منابع مناسب است."
+          "description": "چارچوب متن‌باز برای ساخت دستیاران صوتی بلادرنگ با قابلیت‌های تبدیل گفتار به متن و متن به گفتار.",
+          "why_relevant": "این مخزن برای ساخت دستیاران صوتی بلادرنگ بسیار مرتبط است."
+        },
+        {
+          "name": "karthikra/vui",
+          "url": "https://github.com/karthikra/vui",
+          "stars": "200+",
+          "language": "Python",
+          "description": "فورک از پروژه Vui با قابلیت‌های اضافی مانند WebRTC و تبدیل گفتار به متن سریع‌تر.",
+          "why_relevant": "این مخزن برای توسعه‌دهندگانی که به دنبال قابلیت‌های اضافی در دستیاران صوتی هستند، مرتبط است."
         }
       ],
       "pros_cons": [
         {
-          "technology": "LangGraph",
+          "technology": "LangChain",
           "pros": [
-            "پشتیبانی از گردش کارهای چندعاملی",
-            "ادغام با ابزارهای مختلف"
+            "نمونه‌سازی سریع",
+            "پشتیبانی از چندعاملی"
           ],
           "cons": [
             "پیچیدگی در تنظیمات اولیه"
           ],
-          "best_for": "سازمان‌های بزرگ با نیاز به گردش کارهای پیچیده"
+          "best_for": "تیم‌هایی که نیاز به ساخت عامل‌های پیچیده دارند."
         },
         {
-          "technology": "Whisper",
+          "technology": "Whisper Large V3",
           "pros": [
-            "دقت بالا",
-            "پشتیبانی از زبان‌های مختلف"
+            "پشتیبانی از چندزبانه",
+            "دقت بالا"
           ],
           "cons": [
             "نیاز به منابع محاسباتی بالا"
           ],
-          "best_for": "برنامه‌های کاربردی بلادرنگ با نیاز به دقت بالا"
+          "best_for": "برنامه‌های کاربردی چندزبانه و دستیاران صوتی."
         },
         {
-          "technology": "CrewAI",
+          "technology": "Microsoft Agent Framework",
           "pros": [
-            "سهولت استفاده",
-            "نمونه‌سازی سریع"
+            "یکپارچه‌سازی با پشته Microsoft",
+            "محافظ‌های هوش مصنوعی مسئول"
           ],
           "cons": [
-            "محدودیت در پشتیبانی از گردش کارهای پیچیده"
+            "محدود به پشته Microsoft"
           ],
-          "best_for": "تیم‌های کوچک و متوسط با نیاز به نمونه‌سازی سریع"
+          "best_for": "سازمان‌هایی که از پشته Microsoft استفاده می‌کنند."
         }
       ],
       "suggested_commands": [
         {
-          "purpose": "نصب MOSS-Transcribe-Diarize",
-          "command": "pip install moss-transcribe-diarize"
+          "purpose": "نصب LangChain",
+          "command": "pip install langchain"
+        },
+        {
+          "purpose": "نصب Whisper Large V3",
+          "command": "pip install openai-whisper"
         },
         {
           "purpose": "راه‌اندازی VoxMind",
-          "command": "python -m voxmind --config configs/voxmind_config.yaml"
-        },
-        {
-          "purpose": "اجرای تست بنچمارک Whisper",
-          "command": "whisper --model large --benchmark audio_samples/"
+          "command": "git clone https://github.com/MM-Speech/VoxMind && cd VoxMind && pip install -r requirements.txt"
         }
       ],
       "risks_and_caveats": [
-        "مدل‌های تبدیل گفتار به متن ممکن است در محیط‌های پرسر و صدا دقت کمتری داشته باشند.",
-        "چارچوب‌های عامل هوش مصنوعی ممکن است نیاز به تنظیمات پیچیده و منابع محاسباتی بالا داشته باشند."
+        "مدل‌های تبدیل گفتار به متن ممکن است به منابع محاسباتی بالایی نیاز داشته باشند.",
+        "چارچوب‌های چندعاملی ممکن است پیچیدگی بیشتری در تنظیمات اولیه داشته باشند."
       ],
       "recommendations": [
-        "استفاده از LangGraph برای سازمان‌های بزرگ با نیاز به گردش کارهای پیچیده.",
-        "استفاده از Whisper برای برنامه‌های کاربردی بلادرنگ با نیاز به دقت بالا.",
-        "استفاده از CrewAI برای تیم‌های کوچک و متوسط با نیاز به نمونه‌سازی سریع."
+        "استفاده از LangChain برای ساخت عامل‌های پیچیده و چندعاملی.",
+        "استفاده از Whisper Large V3 برای برنامه‌های کاربردی چندزبانه و دستیاران صوتی.",
+        "ارزیابی نیازهای سازمانی قبل از انتخاب چارچوب عامل هوش مصنوعی."
       ],
       "confidence": 0.85,
       "synthesis_attempts": 1
@@ -242,8 +250,8 @@
     {
       "topic": "latest 2026 RAG methods and vector database advancements",
       "mode": "deep",
-      "generated_at": "2026-09-21T04:33:06+00:00",
-      "elapsed_seconds": 76.49,
+      "generated_at": "2026-09-22T04:34:07+00:00",
+      "elapsed_seconds": 110.33,
       "engine": {
         "search": [
           "tavily",
@@ -291,18 +299,18 @@
           "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.11390#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Information Retrieval\n\n**arXiv:2609.11390** (cs)\n\n\n\\[Submitted on 10 Sep 2026\\]\n\n# Title:VikingRAG: Accurate and Token-efficient Retrieval-augmented Generation over Structured Documents\n\nAuthors: [Peiyuan Gao](https://arxiv.org/search/cs?searchtype=author&query=Gao,+P), [Gaoyuan Zhang](https://arxiv.org/search/cs?searchtype=author&query=Zhang,+G), [Haojie Qin](https://arxiv.org/search/cs?searchtype=author&query=Qin,+H…"
         },
         {
-          "title": "fnimer/vector-graph-rag",
-          "url": "https://github.com/fnimer/vector-graph-rag",
-          "relevance_score": 0.51647353,
+          "title": "zilliztech/vector-graph-rag",
+          "url": "https://github.com/zilliztech/vector-graph-rag/",
+          "relevance_score": 0.52000886,
           "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - fnimer/vector-graph-rag: Graph RAG with pure vector search, achieving SOTA performance in multi-hop reasoning scenarios.\n\nURL Source: https://github.com/fnimer/vector-graph-rag\n\nMarkdown Content:\n**Graph RAG with pure vector search — no graph database needed.**\n\n[![Image 1: PyPI](https://camo.githubusercontent.com/ac9165ae44a97f768ede810c1978c4fabcf40dab6e9a00589263c4b1efc30cef/68747470733a2f2f696d672e736869656c64732e696f2f707970692f762f766563746f722d67726170682d7261673f7374796c653d666c61742d73717561726526636f6c6f723d626c7565)](https://pypi.org/project/vector-graph-rag/)[![Imag…"
+          "excerpt": "Title: GitHub - zilliztech/vector-graph-rag: Graph RAG with pure vector search, achieving SOTA performance in multi-hop reasoning scenarios.\n\nURL Source: https://github.com/zilliztech/vector-graph-rag/\n\nMarkdown Content:\n**Graph RAG with pure vector search — no graph database needed.**\n\n[![Image 1: PyPI](https://camo.githubusercontent.com/ac9165ae44a97f768ede810c1978c4fabcf40dab6e9a00589263c4b1efc30cef/68747470733a2f2f696d672e736869656c64732e696f2f707970692f762f766563746f722d67726170682d7261673f7374796c653d666c61742d73717561726526636f6c6f723d626c7565)](https://pypi.org/project/vector-graph-rag…"
         },
         {
-          "title": "zilliztech/vector-graph-rag",
-          "url": "https://github.com/zilliztech/vector-graph-rag",
-          "relevance_score": 0.50823903,
+          "title": "ilssn/vector-graph-rag",
+          "url": "https://github.com/ilssn/vector-graph-rag",
+          "relevance_score": 0.51061857,
           "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - zilliztech/vector-graph-rag: Graph RAG with pure vector search, achieving SOTA performance in multi-hop reasoning scenarios.\n\nURL Source: https://github.com/zilliztech/vector-graph-rag\n\nMarkdown Content:\n**Graph RAG with pure vector search — no graph database needed.**\n\n[![Image 1: PyPI](https://camo.githubusercontent.com/ac9165ae44a97f768ede810c1978c4fabcf40dab6e9a00589263c4b1efc30cef/68747470733a2f2f696d672e736869656c64732e696f2f707970692f762f766563746f722d67726170682d7261673f7374796c653d666c61742d73717561726526636f6c6f723d626c7565)](https://pypi.org/project/vector-graph-rag/…"
+          "excerpt": "Title: GitHub - ilssn/vector-graph-rag: Graph RAG with pure vector search, achieving SOTA performance in multi-hop reasoning scenarios.\n\nURL Source: https://github.com/ilssn/vector-graph-rag\n\nMarkdown Content:\n**Graph RAG with pure vector search — no graph database needed.**\n\n[![Image 1: PyPI](https://camo.githubusercontent.com/ac9165ae44a97f768ede810c1978c4fabcf40dab6e9a00589263c4b1efc30cef/68747470733a2f2f696d672e736869656c64732e696f2f707970692f762f766563746f722d67726170682d7261673f7374796c653d666c61742d73717561726526636f6c6f723d626c7565)](https://pypi.org/project/vector-graph-rag/)[![Image…"
         },
         {
           "title": "[2609.13452] COMPASS: Steering Distributed Vector Search with Scientific Knowledge Graphs",
@@ -312,25 +320,11 @@
           "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.13452#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Databases\n\n**arXiv:2609.13452** (cs)\n\n\n\\[Submitted on 11 Sep 2026\\]\n\n# Title:COMPASS: Steering Distributed Vector Search with Scientific Knowledge Graphs\n\nAuthors: [Song Young Oh](https://arxiv.org/search/cs?searchtype=author&query=Oh,+S+Y), [Amal Gueroudji](https://arxiv.org/search/cs?searchtype=author&query=Gueroudji,+A), [Seth Ockerman](https://arxiv.org/search/cs?searchtype=author&query=Ockerman,+S), [Rob Latham](…"
         },
         {
-          "title": "Pwnb/CausalRAG2",
-          "url": "https://github.com/Pwnb/CausalRAG2",
-          "relevance_score": 0.46344426,
-          "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - Pwnb/CausalRAG2: [ICML 2026] CausalRAG2: Hierarchical causal knowledge graph with causal gates for graph-based RAG, plus the HolisQA benchmark for holistic comprehension.\n\nURL Source: https://github.com/Pwnb/CausalRAG2\n\nMarkdown Content:\n**Hierarchical Causal Gating Design for Knowledge Organization**  \n ICML 2026\n\n[![Image 1: arXiv](https://camo.githubusercontent.com/76effff3868dbe24eb36549d7d672eed4c218a44597c6cd2fcf6057f91e4e63e/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f61725869762d323630322e30353134332d6233316231622e737667)](https://arxiv.org/abs/2602.05143)…"
-        },
-        {
-          "title": "[2609.10239] LiteRAG: Cost-Efficient Graph-Based Retrieval-Augmented Generation",
-          "url": "https://arxiv.org/abs/2609.10239",
-          "relevance_score": 0.4605315,
+          "title": "[2609.19417] Less Is More: Graph-free Multimodal RAG via Multi-signal Late Fusion",
+          "url": "https://arxiv.org/abs/2609.19417",
+          "relevance_score": 0.44939262,
           "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.10239#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Information Retrieval\n\n**arXiv:2609.10239** (cs)\n\n\n\\[Submitted on 9 Sep 2026\\]\n\n# Title:LiteRAG: Cost-Efficient Graph-Based Retrieval-Augmented Generation\n\nAuthors: [Daniel Alejandro Coll Tejeda](https://arxiv.org/search/cs?searchtype=author&query=Tejeda,+D+A+C), [Pedro García López](https://arxiv.org/search/cs?searchtype=author&query=L%C3%B3pez,+P+G), [Daniel Barcelona-Pons](https://arxiv.org/search/cs?searchtype=aut…"
-        },
-        {
-          "title": "[2609.19622] Beyond Similarity through Zero-Token Geometric Graphs for Multi-Hop RAG",
-          "url": "https://arxiv.org/abs/2609.19622",
-          "relevance_score": 0.44746029,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.19622#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Information Retrieval\n\n**arXiv:2609.19622** (cs)\n\n\n\\[Submitted on 17 Sep 2026\\]\n\n# Title:Beyond Similarity through Zero-Token Geometric Graphs for Multi-Hop RAG\n\nAuthors: [Zeliang Li](https://arxiv.org/search/cs?searchtype=author&query=Li,+Z), [Xiaofen Xing](https://arxiv.org/search/cs?searchtype=author&query=Xing,+X), [Kailing Guo](https://arxiv.org/search/cs?searchtype=author&query=Guo,+K), [Xiangmin Xu](https://arx…"
+          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.19417#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Computation and Language\n\n**arXiv:2609.19417** (cs)\n\n\n\\[Submitted on 16 Sep 2026\\]\n\n# Title:Less Is More: Graph-free Multimodal RAG via Multi-signal Late Fusion\n\nAuthors: [Tithi Rakshit](https://arxiv.org/search/cs?searchtype=author&query=Rakshit,+T), [Hongkuan Zhou](https://arxiv.org/search/cs?searchtype=author&query=Zhou,+H), [Lavdim Halilaj](https://arxiv.org/search/cs?searchtype=author&query=Halilaj,+L), [Yuqichen…"
         },
         {
           "title": "GitHub - griver/Q-RAG: Official repository for the ICLR 2026 Oral Paper🔥 “Q-RAG: Long Context Multi-Step Retrieval via Value-Based Embedder Training” · GitHub",
@@ -340,88 +334,130 @@
           "excerpt": "[Skip to content](https://github.com/griver/Q-RAG#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/griver/Q-RAG) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/griver/Q-RAG) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/griver/Q-RAG) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[griver](https://github.com/griver)/ **[Q-RAG](https://github.com/griver/Q-RAG)** Public\n\n- [Notifications](https://github.com/login?return_to=%2Fgriver%2FQ-RAG) You must b…"
         },
         {
+          "title": "[2609.19622] Beyond Similarity through Zero-Token Geometric Graphs for Multi-Hop RAG",
+          "url": "https://arxiv.org/abs/2609.19622",
+          "relevance_score": 0.43590149,
+          "crawl_engine": "firecrawl",
+          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.19622#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Information Retrieval\n\n**arXiv:2609.19622** (cs)\n\n\n\\[Submitted on 17 Sep 2026\\]\n\n# Title:Beyond Similarity through Zero-Token Geometric Graphs for Multi-Hop RAG\n\nAuthors: [Zeliang Li](https://arxiv.org/search/cs?searchtype=author&query=Li,+Z), [Xiaofen Xing](https://arxiv.org/search/cs?searchtype=author&query=Xing,+X), [Kailing Guo](https://arxiv.org/search/cs?searchtype=author&query=Guo,+K), [Xiangmin Xu](https://arx…"
+        },
+        {
           "title": "[2609.17012] ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation",
           "url": "https://arxiv.org/abs/2609.17012",
           "relevance_score": 0.43158415,
           "crawl_engine": "firecrawl",
           "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.17012#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Artificial Intelligence\n\n**arXiv:2609.17012** (cs)\n\n\n\\[Submitted on 15 Sep 2026\\]\n\n# Title:ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation\n\nAuthors: [Aurélien Pellet](https://arxiv.org/search/cs?searchtype=author&query=Pellet,+A) (LRE), [Julien Perez](https://arxiv.org/search/cs?searchtype=author&query=Perez,+J), [Marie Puren](https://arxiv.org/search/cs?searchtype=author&query=Puren,+M)\n\nView a PDF…"
+        },
+        {
+          "title": "crajah/post-graph-rag",
+          "url": "https://github.com/crajah/post-graph-rag",
+          "relevance_score": 0.37570643,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - crajah/post-graph-rag: High-Precision GraphRAG. Native to PostgreSQL.\n\nURL Source: https://github.com/crajah/post-graph-rag\n\nMarkdown Content:\n[![Image 1: CI](https://github.com/crajah/post-graph-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/crajah/post-graph-rag/actions/workflows/ci.yml)[![Image 2: PyPI version](https://camo.githubusercontent.com/01dc3008c20e2d78e316e9b617926ab6664c645d379e37db54efd44b46750cff/68747470733a2f2f696d672e736869656c64732e696f2f707970692f762f706f73742d67726170682d7261672e737667)](https://pypi.org/project/post-graph-rag/)[![Image 3: Lic…"
         }
       ],
       "status": "SUCCESS",
       "model": "deepseek/deepseek-chat",
-      "executive_summary": "در سال ۲۰۲۶، روش‌های RAG و پایگاه‌های داده برداری به‌طور چشمگیری پیشرفت کرده‌اند. فناوری‌هایی مانند VikingRAG و COMPASS نشان‌دهنده بهبود کارایی و کاهش هزینه‌ها هستند. این پیشرفت‌ها به‌طور خاص در پردازش چند‌مرحله‌ای و جستجوی توزیع‌شده قابل توجه است.",
+      "executive_summary": "در سال ۲۰۲۶، روش‌های نوین Retrieval-Augmented Generation (RAG) و پایگاه‌های داده برداری به سرعت در حال پیشرفت هستند. فناوری‌هایی مانند VikingRAG و Geometric Gain Graph RAG کارایی و دقت را در بازیابی چندمرحله‌ای بهبود بخشیده‌اند. این پیشرفت‌ها با کاهش هزینه‌های محاسباتی و عملیاتی، امکان استفاده گسترده‌تر از این فناوری‌ها را فراهم کرده‌اند.",
       "key_findings": [
-        "VikingRAG با کاهش هزینه‌های توکن و حفظ دقت بالا، بهینه‌سازی قابل توجهی در روش‌های RAG ارائه می‌دهد.",
-        "پایگاه‌های داده برداری مانند FAISS و Weaviate در جستجوی نزدیک‌ترین همسایه عملکرد برتری دارند."
+        "VikingRAG با کاهش هزینه‌های توکنی و حفظ دقت بالا، به عنوان یک روش نوین در بازیابی چندمرحله‌ای مطرح شده است.",
+        "پایگاه‌های داده برداری مانند Milvus و Weaviate با ارائه عملکرد بالا و قابلیت‌های عملیاتی، به گزینه‌های اصلی برای پیاده‌سازی RAG تبدیل شده‌اند.",
+        "روش‌های مبتنی بر گراف بدون نیاز به فراخوانی LLM، مانند G3RAG، هزینه‌های ساخت گراف را به طور چشمگیری کاهش داده‌اند."
       ],
       "emerging_technologies": [
         {
           "name": "VikingRAG",
           "category": "Retrieval-Augmented Generation",
           "maturity": "growing",
-          "description": "یک سیستم مدیریت داده‌های معنایی که دسترسی معنایی و ساختاری را برای کاهش هزینه‌های توکن و بهبود دقت RAG یکپارچه می‌کند.",
-          "why_it_matters": "کاهش هزینه‌های توکن بدون کاهش دقت، این فناوری را برای پایگاه‌های دانش هوش مصنوعی نوظهور بسیار مفید می‌کند.",
-          "adoption_signal": "استفاده گسترده در پروژه‌های تحقیقاتی و صنعتی"
+          "description": "یک سیستم مدیریت داده‌های معنایی که دسترسی معنایی و ساختاری را برای بازیابی چندمرحله‌ای بهینه‌سازی می‌کند.",
+          "why_it_matters": "کاهش هزینه‌های توکنی بدون کاهش دقت بازیابی.",
+          "adoption_signal": "استفاده در سیستم‌های پایگاه‌های دانش هوش مصنوعی."
+        },
+        {
+          "name": "Geometric Gain Graph RAG (G3RAG)",
+          "category": "Retrieval-Augmented Generation",
+          "maturity": "emerging",
+          "description": "یک چارچوب مبتنی بر گراف که از امتیاز هندسی برای کشف شواهد چندمرحله‌ای استفاده می‌کند.",
+          "why_it_matters": "حذف هزینه‌های ساخت گراف با استفاده از LLM.",
+          "adoption_signal": "بهبود عملکرد در بازیابی چندمرحله‌ای بدون نیاز به فراخوانی LLM."
         },
         {
           "name": "COMPASS",
-          "category": "Distributed Vector Search",
-          "maturity": "emerging",
-          "description": "یک چارچوب که از گراف دانش برای تعیین قرارگیری داده‌ها و انتخاب شارد در زمان جستجو استفاده می‌کند.",
-          "why_it_matters": "بهبود کارایی جستجوی برداری توزیع‌شده با استفاده از ساختار گراف دانش.",
-          "adoption_signal": "استفاده در پروژه‌های علمی و پزشکی"
+          "category": "Vector Search",
+          "maturity": "growing",
+          "description": "یک چارچوب برای جستجوی برداری توزیع‌شده که از گراف‌های دانش علمی برای تعیین مکان‌یابی داده‌ها استفاده می‌کند.",
+          "why_it_matters": "بهبود کارایی جستجوی برداری در محیط‌های توزیع‌شده.",
+          "adoption_signal": "استفاده در سیستم‌های محاسباتی با کارایی بالا (HPC)."
         }
       ],
       "top_github_repositories": [
         {
-          "name": "fnimer/vector-graph-rag",
-          "url": "https://github.com/fnimer/vector-graph-rag",
-          "stars": "100+",
-          "language": "Python",
-          "description": "Graph RAG با جستجوی برداری خالص، بدون نیاز به پایگاه داده گراف.",
-          "why_relevant": "دستیابی به عملکرد برتر در سناریوهای استدلال چند‌مرحله‌ای."
-        },
-        {
           "name": "zilliztech/vector-graph-rag",
           "url": "https://github.com/zilliztech/vector-graph-rag",
-          "stars": "150+",
+          "stars": "62",
           "language": "Python",
           "description": "Graph RAG با جستجوی برداری خالص، بدون نیاز به پایگاه داده گراف.",
-          "why_relevant": "کاهش هزینه‌های عملیاتی و محاسباتی در بازیابی چند‌مرحله‌ای."
+          "why_relevant": "دستیابی به عملکرد SOTA در سناریوهای استدلال چندمرحله‌ای."
+        },
+        {
+          "name": "griver/Q-RAG",
+          "url": "https://github.com/griver/Q-RAG",
+          "stars": "62",
+          "language": "Python",
+          "description": "مخزن رسمی برای مقاله ICLR 2026 با عنوان 'Q-RAG: بازیابی چندمرحله‌ای با آموزش جاساز مبتنی بر ارزش'.",
+          "why_relevant": "بهبود بازیابی در متن‌های طولانی با استفاده از آموزش جاساز."
+        },
+        {
+          "name": "ilssn/vector-graph-rag",
+          "url": "https://github.com/ilssn/vector-graph-rag",
+          "stars": "62",
+          "language": "Python",
+          "description": "Graph RAG با جستجوی برداری خالص، بدون نیاز به پایگاه داده گراف.",
+          "why_relevant": "دستیابی به عملکرد SOTA در سناریوهای استدلال چندمرحله‌ای."
         }
       ],
       "pros_cons": [
         {
           "technology": "VikingRAG",
           "pros": [
-            "کاهش هزینه‌های توکن",
+            "کاهش هزینه‌های توکنی",
             "حفظ دقت بالا"
           ],
           "cons": [
-            "پیچیدگی پیاده‌سازی"
+            "پیچیدگی در پیاده‌سازی"
           ],
-          "best_for": "پایگاه‌های دانش هوش مصنوعی"
+          "best_for": "سیستم‌های پایگاه‌های دانش هوش مصنوعی"
+        },
+        {
+          "technology": "Geometric Gain Graph RAG (G3RAG)",
+          "pros": [
+            "حذف هزینه‌های ساخت گراف",
+            "بهبود عملکرد بازیابی"
+          ],
+          "cons": [
+            "نیاز به تنظیمات دقیق"
+          ],
+          "best_for": "بازیابی چندمرحله‌ای بدون نیاز به LLM"
         },
         {
           "technology": "COMPASS",
           "pros": [
-            "بهبود کارایی جستجوی توزیع‌شده",
-            "استفاده از گراف دانش"
+            "بهبود کارایی جستجوی برداری",
+            "استفاده در محیط‌های توزیع‌شده"
           ],
           "cons": [
-            "نیاز به منابع محاسباتی بالا"
+            "پیچیدگی در مدیریت گراف‌های دانش"
           ],
-          "best_for": "پروژه‌های علمی و پزشکی"
+          "best_for": "سیستم‌های محاسباتی با کارایی بالا (HPC)"
         }
       ],
       "suggested_commands": [
         {
-          "purpose": "نصب VikingRAG",
-          "command": "pip install vector-graph-rag"
+          "purpose": "نصب Milvus",
+          "command": "pip install pymilvus"
         },
         {
-          "purpose": "راه‌اندازی COMPASS",
-          "command": "docker run -d --name compass -p 8080:8080 compass-image"
+          "purpose": "راه‌اندازی Weaviate",
+          "command": "docker run -d --name weaviate -p 8080:8080 semitechnologies/weaviate:latest"
         },
         {
           "purpose": "بنچمارک پایگاه‌های داده برداری",
@@ -429,12 +465,12 @@
         }
       ],
       "risks_and_caveats": [
-        "پیچیدگی پیاده‌سازی فناوری‌های جدید ممکن است چالش‌هایی ایجاد کند.",
-        "نیاز به منابع محاسباتی بالا برای برخی فناوری‌ها."
+        "پیچیدگی در تنظیمات و پیاده‌سازی فناوری‌های نوین.",
+        "وابستگی به منابع محاسباتی بالا برای برخی از روش‌ها."
       ],
       "recommendations": [
-        "استفاده از VikingRAG برای کاهش هزینه‌های توکن در پروژه‌های RAG.",
-        "پیاده‌سازی COMPASS در پروژه‌های علمی و پزشکی برای بهبود کارایی جستجوی توزیع‌شده."
+        "استفاده از روش‌های نوین RAG برای بهبود دقت و کاهش هزینه‌ها.",
+        "ارزیابی دقیق نیازهای سیستم قبل از انتخاب پایگاه داده برداری."
       ],
       "confidence": 0.85,
       "synthesis_attempts": 1
@@ -442,8 +478,8 @@
     {
       "topic": "latest 2026 NestJS ecosystem and enterprise backend architecture",
       "mode": "deep",
-      "generated_at": "2026-09-21T04:34:35+00:00",
-      "elapsed_seconds": 89.49,
+      "generated_at": "2026-09-22T04:35:52+00:00",
+      "elapsed_seconds": 104.33,
       "engine": {
         "search": [
           "tavily",
@@ -493,16 +529,9 @@
         {
           "title": "\n         How to Use NestJS for Enterprise Applications\n    ",
           "url": "https://oneuptime.com/blog/post/2026-01-26-nestjs-enterprise-applications/view",
-          "relevance_score": 0.77864933,
+          "relevance_score": 0.77999288,
           "crawl_engine": "firecrawl",
           "excerpt": "[Skip to main content](https://oneuptime.com/blog/post/2026-01-26-nestjs-enterprise-applications/view#main-content)\n\n![](https://oneuptime.com/blog/post/2026-01-26-nestjs-enterprise-applications/view)\n\n# How to Use NestJS for Enterprise Applications\n\nA practical guide to building enterprise-grade applications with NestJS.\n\n\n![Nawaz Dhandala](https://avatars.githubusercontent.com/nawazdhandala?s=64)\n\nBy @nawazdhandala\n\n•Jan 26, 2026•Reading time\n11 min read\n\n[NestJS](https://oneuptime.com/blog/tag/nestjs) [TypeScript](https://oneuptime.com/blog/tag/typescript) [NodeJS](https://oneuptime.com/blo…"
-        },
-        {
-          "title": "Node.js Microservices Architecture",
-          "url": "https://wfnext.com/blog/nodejs-microservices-architecture-enterprise-guide-2026/",
-          "relevance_score": 0.76908022,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Blog](https://wfnext.com/blog/)/Engineering\n\n# Node.js Microservices Architecture for Enterprise Teams (2026 Guide)\n\nBy [Gaurav](https://linkedin.com/in/post2seth)May 14, 202613 min read\n\n![Node.js Microservices Architecture for Enterprise Teams (2026 Guide)](https://wfnext.com/images/blog/nodejs-microservices-architecture-enterprise-guide-2026.webp)\n\nNode.js is now the default runtime for new microservices in many enterprise estates. The combination of fast iteration, cheap async I/O, and a large hiring pool is hard to beat for product backends. But microservices break in expensive ways when…"
         },
         {
           "title": "Mastering Clean Architecture in NestJS: A Production Guide to Enterprise System Design",
@@ -526,11 +555,25 @@
           "excerpt": "[Skip to content](https://github.com/hamzaali81/nestjs-enterprise-kit#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/hamzaali81/nestjs-enterprise-kit) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/hamzaali81/nestjs-enterprise-kit) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/hamzaali81/nestjs-enterprise-kit) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[hamzaali81](https://github.com/hamzaali81)/ **[nestjs-enterprise-kit](https://github.com/ha…"
         },
         {
-          "title": "vipul-devs99/enterprise-nestjs-microservices-tcp-monorepo",
-          "url": "https://github.com/vipul-devs99/enterprise-nestjs-microservices-tcp-monorepo",
-          "relevance_score": 0.61970145,
+          "title": "SabanaSait/enterprise-platform-backend",
+          "url": "https://github.com/sabanasait/enterprise-platform-backend",
+          "relevance_score": 0.68679029,
           "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - vipul-devs99/enterprise-nestjs-microservices-tcp-monorepo: 100% working Enterprise-grade NestJS Microservices boilerplate utilizing Nx Monorepo, TypeScript, and high-performance TCP transport layer for inter-service communication.\n\nURL Source: https://github.com/vipul-devs99/enterprise-nestjs-microservices-tcp-monorepo\n\nMarkdown Content:\n[![Image 1: NestJS](https://camo.githubusercontent.com/1071e8bba78d91c833b1e0bd914458ea54c5c0b64c144842a2c202bb61b6bf7f/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f4e6573744a532d6533316235663f7374796c653d666c6174266c6f676f3d6e6573…"
+          "excerpt": "Title: GitHub - SabanaSait/enterprise-platform-backend: Enterprise backend platform with scalable architecture, real-time data, and an AI Copilot for intelligent data interaction.\n\nURL Source: https://github.com/sabanasait/enterprise-platform-backend\n\nMarkdown Content:\nBackend platform service for the Enterprise Admin Platform, designed with a scalable, modular, and frontend-agnostic architecture.\n\n## Overview\n\n[](https://github.com/sabanasait/enterprise-platform-backend#overview)\nThis service provides backend APIs, real-time data capabilities, and an AI-powered copilot layer to support modern…"
+        },
+        {
+          "title": "GitHub - Rushant-123/Dunlin-Backend-Enterprise: Enterprise accounting backend - NestJS, Prisma, PostgreSQL, Bull queues, multi-tenant architecture · GitHub",
+          "url": "https://github.laiyagushi.com/Rushant-123/Dunlin-Backend-Enterprise",
+          "relevance_score": 0.64243245,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - Rushant-123/Dunlin-Backend-Enterprise: Enterprise accounting backend - NestJS, Prisma, PostgreSQL, Bull queues, multi-tenant architecture\n\nURL Source: https://github.laiyagushi.com/Rushant-123/Dunlin-Backend-Enterprise\n\nMarkdown Content:\n**Enterprise-grade NestJS backend for financial data synchronization and AI-powered categorization**\n\n[![Image 1: NestJS](https://camo.githubusercontent.com/310afab7a680f2e7a0d7d2f8403830526c7c3fdfdb274c55ce1ec746d88dc172/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f6e6573746a732d2532334530323334452e7376673f7374796c653d666f722d7468…"
+        },
+        {
+          "title": "GitHub - RamosJSouza/secure-nestjs-rbac-template: Enterprise-grade, production-ready NestJS backend template featuring RS256 JWT authentication, secure refresh token rotation, database-driven RBAC, audit logging, and hardened security best practices. · GitHub",
+          "url": "https://github.laiyagushi.com/RamosJSouza/secure-nestjs-rbac-template",
+          "relevance_score": 0.61555016,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - RamosJSouza/secure-nestjs-rbac-template: Enterprise-grade, production-ready NestJS backend template featuring RS256 JWT authentication, secure refresh token rotation, database-driven RBAC, audit logging, and hardened security best practices.\n\nURL Source: https://github.laiyagushi.com/RamosJSouza/secure-nestjs-rbac-template\n\nMarkdown Content:\n## Prime Nest — Production-Grade Secure Backend Architecture (RBAC + JWT RS256)\n\n[](https://github.laiyagushi.com/RamosJSouza/secure-nestjs-rbac-template#prime-nest--production-grade-secure-backend-architecture-rbac--jwt-rs256)\nA reference…"
         },
         {
           "title": "TheGoatedDev/EnterpriseNest",
@@ -538,47 +581,39 @@
           "relevance_score": 0.5983122,
           "crawl_engine": "jina",
           "excerpt": "Title: GitHub - TheGoatedDev/EnterpriseNest: A Enterprise-Level API Framework based on NestJS, built for scaleability, best-practise and robustness. Based on DDD, Onion, Clean and Hexagonal Architecture\n\nURL Source: https://github.com/TheGoatedDev/EnterpriseNest\n\nMarkdown Content:\n## Enterprise-Nest\n\n[](https://github.com/TheGoatedDev/EnterpriseNest#enterprise-nest)\n[![Image 1: codecov](https://camo.githubusercontent.com/6987d41ab1d3676e35e6da04354c97c2b1e6231eda2585db24921acb04514008/68747470733a2f2f636f6465636f762e696f2f6769746875622f546865476f617465644465762f456e74657270726973654e6573742f67…"
-        },
-        {
-          "title": "CodeIbrah/Backend",
-          "url": "https://github.com/CodeIbrah/Backend",
-          "relevance_score": 0.51409537,
-          "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - CodeIbrah/Backend\n\nURL Source: https://github.com/CodeIbrah/Backend\n\nMarkdown Content:\n## Backend Template\n\n[](https://github.com/CodeIbrah/Backend#backend-template)\nEnterprise-Ready Backend with Hybrid Monolith + Microservices Architecture\n\nA production-grade backend template built with NestJS and Express, featuring a hybrid architecture that combines a feature-rich monolith with independent microservices. Includes comprehensive observability, AI-powered error diagnosis, analytics, queue-based processing, and automated incident response.\n\n* * *\n\n## Translations\n\n[](https://git…"
         }
       ],
       "status": "SUCCESS",
       "model": "deepseek/deepseek-chat",
-      "executive_summary": "NestJS در سال ۲۰۲۶ به عنوان یک چارچوب قدرتمند برای توسعه‌ی بک‌اند سازمانی با TypeScript شناخته می‌شود. با معرفی ابزارهای مدرن مانند SWC و Vitest، عملکرد توسعه به‌طور چشمگیری بهبود یافته است. این چارچوب با پشتیبانی از معماری میکروسرویس‌ها و ادغام‌های بومی مانند Zod، به یک انتخاب ایده‌آل برای پروژه‌های سازمانی تبدیل شده است.",
+      "executive_summary": "NestJS در سال 2026 به عنوان یک فریم‌ورک قدرتمند برای توسعه‌ی بک‌اند سازمانی با معماری ماژولار و پشتیبانی از TypeScript شناخته می‌شود. این فریم‌ورک با بهبود عملکرد و ادغام ابزارهای مدرن مانند SWC و Vitest، چرخه‌های توسعه را تسریع کرده و نیازهای سازمان‌های بزرگ را برآورده می‌کند. معماری‌های پیشرفته‌ای مانند Clean Architecture و DDD نیز به طور گسترده در پروژه‌های مبتنی بر NestJS استفاده می‌شوند.",
       "key_findings": [
-        "NestJS با استفاده از SWC و Vitest، زمان ساخت و تست را تا ۲۰ برابر کاهش داده است.",
-        "معماری میکروسرویس‌ها در NestJS با پشتیبانی از TCP و gRPC به‌طور قابل‌توجهی بهبود یافته است.",
-        "ادغام بومی با Zod و Valibot، اعتبارسنجی درخواست‌ها را ساده‌تر و ایمن‌تر کرده است."
+        "NestJS با استفاده از SWC و Vitest، سرعت ساخت و تست را تا 20 برابر افزایش داده است.",
+        "معماری‌های پیشرفته‌ای مانند Clean Architecture و DDD به طور گسترده در پروژه‌های سازمانی NestJS استفاده می‌شوند."
       ],
       "emerging_technologies": [
         {
           "name": "SWC",
-          "category": "Transpiler",
+          "category": "Build Tool",
           "maturity": "mainstream",
-          "description": "یک ترنسپایلر سریع و مدرن که جایگزین Babel شده است.",
-          "why_it_matters": "زمان ساخت پروژه‌ها را تا ۲۰ برابر کاهش می‌دهد.",
-          "adoption_signal": "پذیرش گسترده در پروژه‌های NestJS"
+          "description": "یک کامپایلر Rust-based که سرعت ساخت پروژه‌های NestJS را به طور چشمگیری افزایش می‌دهد.",
+          "why_it_matters": "کاهش زمان ساخت و بهبود تجربه توسعه‌دهنده.",
+          "adoption_signal": "استفاده گسترده در پروژه‌های سازمانی و ریپازیتوری‌های GitHub."
         },
         {
           "name": "Vitest",
           "category": "Testing Framework",
           "maturity": "growing",
-          "description": "یک فریم‌ورک تست سریع و مدرن که جایگزین Jest شده است.",
-          "why_it_matters": "سرعت تست‌ها را به‌طور چشمگیری افزایش می‌دهد.",
-          "adoption_signal": "استفاده در پروژه‌های بزرگ سازمانی"
+          "description": "یک فریم‌ورک تست مدرن و سریع که جایگزین Jest در اکوسیستم NestJS شده است.",
+          "why_it_matters": "تست‌های سریع‌تر و ادغام بهتر با ابزارهای مدرن.",
+          "adoption_signal": "استفاده در پروژه‌های سازمانی و مستندات رسمی NestJS."
         },
         {
           "name": "Zod",
           "category": "Validation Library",
-          "maturity": "mainstream",
-          "description": "یک کتابخانه اعتبارسنجی نوع‌محور برای TypeScript.",
-          "why_it_matters": "اعتبارسنجی درخواست‌ها را ساده‌تر و ایمن‌تر می‌کند.",
-          "adoption_signal": "ادغام بومی در NestJS v12"
+          "maturity": "emerging",
+          "description": "یک کتابخانه‌ی اعتبارسنجی مبتنی بر TypeScript که به طور مستقیم در NestJS ادغام شده است.",
+          "why_it_matters": "اعتبارسنجی نوع‌محور و کاهش خطاها.",
+          "adoption_signal": "استفاده در پروژه‌های سازمانی و ریپازیتوری‌های GitHub."
         }
       ],
       "top_github_repositories": [
@@ -587,51 +622,50 @@
           "url": "https://github.com/hamzaali81/nestjs-enterprise-kit",
           "stars": "2",
           "language": "TypeScript",
-          "description": "یک کیت سازمانی برای شروع سریع پروژه‌های NestJS.",
-          "why_relevant": "شامل بهترین‌ها برای توسعه‌ی سازمانی"
+          "description": "یک کیت سازمانی برای شروع پروژه‌های NestJS با معماری ماژولار و پشتیبانی از MongoDB.",
+          "why_relevant": "ارائه‌ی یک ساختار سازمانی آماده برای توسعه‌ی سریع."
         },
         {
-          "name": "vipul-devs99/enterprise-nestjs-microservices-tcp-monorepo",
-          "url": "https://github.com/vipul-devs99/enterprise-nestjs-microservices-tcp-monorepo",
-          "stars": "100+",
+          "name": "SabanaSait/enterprise-platform-backend",
+          "url": "https://github.com/sabanasait/enterprise-platform-backend",
+          "stars": "N/A",
           "language": "TypeScript",
-          "description": "یک نمونه‌ی سازمانی از میکروسرویس‌های NestJS با استفاده از TCP.",
-          "why_relevant": "نمونه‌ای کامل از معماری میکروسرویس‌ها"
+          "description": "یک پلتفرم بک‌اند سازمانی با معماری مقیاس‌پذیر و قابلیت‌های هوش مصنوعی.",
+          "why_relevant": "ادغام هوش مصنوعی و معماری ماژولار برای سازمان‌های بزرگ."
         },
         {
-          "name": "TheGoatedDev/EnterpriseNest",
-          "url": "https://github.com/TheGoatedDev/EnterpriseNest",
-          "stars": "50+",
+          "name": "Rushant-123/Dunlin-Backend-Enterprise",
+          "url": "https://github.laiyagushi.com/Rushant-123/Dunlin-Backend-Enterprise",
+          "stars": "N/A",
           "language": "TypeScript",
-          "description": "یک فریم‌ورک سازمانی مبتنی بر NestJS با معماری DDD و Clean Architecture.",
-          "why_relevant": "پیاده‌سازی بهترین‌ها در معماری سازمانی"
+          "description": "یک بک‌اند حسابداری سازمانی با معماری چند‌مستاجری و استفاده از Prisma و PostgreSQL.",
+          "why_relevant": "معماری چند‌مستاجری و پشتیبانی از پایگاه‌داده‌های مدرن."
         }
       ],
       "pros_cons": [
         {
           "technology": "NestJS",
           "pros": [
-            "معماری سازمانی قوی",
-            "پشتیبانی از TypeScript",
-            "ادغام بومی با ابزارهای مدرن"
+            "معماری ماژولار و سازمانی",
+            "پشتیبانی از TypeScript"
           ],
           "cons": [
             "منحنی یادگیری شیب‌دار",
-            "نیاز به دانش پیشرفته در معماری"
+            "وابستگی به ابزارهای جانبی"
           ],
-          "best_for": "پروژه‌های سازمانی و میکروسرویس‌ها"
+          "best_for": "پروژه‌های سازمانی و بزرگ"
         },
         {
           "technology": "SWC",
           "pros": [
             "سرعت ساخت بالا",
-            "پشتیبانی از ESM"
+            "ادغام آسان با NestJS"
           ],
           "cons": [
-            "مستندات محدود",
-            "نیاز به تنظیمات بیشتر"
+            "وابستگی به Rust",
+            "مستندات محدود"
           ],
-          "best_for": "پروژه‌های بزرگ با نیاز به زمان ساخت سریع"
+          "best_for": "پروژه‌هایی که نیاز به سرعت ساخت بالا دارند"
         }
       ],
       "suggested_commands": [
@@ -644,26 +678,26 @@
           "command": "nest new project-name"
         },
         {
-          "purpose": "راه‌اندازی SWC در NestJS",
-          "command": "npm install --save-dev @swc/core @swc/cli"
+          "purpose": "اجرای تست‌ها با Vitest",
+          "command": "vitest run"
         }
       ],
       "risks_and_caveats": [
-        "منحنی یادگیری شیب‌دار برای توسعه‌دهندگان تازه‌کار",
-        "نیاز به دانش پیشرفته در معماری سازمانی"
+        "وابستگی به ابزارهای جانبی ممکن است باعث افزایش پیچیدگی شود.",
+        "منحنی یادگیری شیب‌دار برای توسعه‌دهندگان تازه‌کار."
       ],
       "recommendations": [
-        "استفاده از NestJS برای پروژه‌های سازمانی با نیاز به معماری قوی",
-        "ادغام ابزارهای مدرن مانند SWC و Vitest برای بهبود عملکرد توسعه"
+        "استفاده از معماری‌های پیشرفته‌ای مانند Clean Architecture برای پروژه‌های سازمانی.",
+        "ادغام ابزارهای مدرن مانند SWC و Vitest برای بهبود عملکرد."
       ],
-      "confidence": 0.95,
+      "confidence": 0.85,
       "synthesis_attempts": 1
     },
     {
       "topic": "latest 2026 Next.js features and modern frontend rendering",
       "mode": "deep",
-      "generated_at": "2026-09-21T04:36:07+00:00",
-      "elapsed_seconds": 91.99,
+      "generated_at": "2026-09-22T04:37:50+00:00",
+      "elapsed_seconds": 118.5,
       "engine": {
         "search": [
           "tavily",
@@ -699,16 +733,9 @@
         {
           "title": "Next.js by Vercel - The React Framework | Next.js by Vercel - The React Framework",
           "url": "https://nextjs.org/blog",
-          "relevance_score": 0.73105854,
+          "relevance_score": 0.73715818,
           "crawl_engine": "firecrawl",
-          "excerpt": "# The latest Next.js news [View RSS feed](https://nextjs.org/feed.xml \"View RSS feed\")\n\nSeptember 4th, 2026\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fmarcos.png&w=48&q=75&dpl=dpl_HnwTrbPkjAnX9EtfhKAVsTU6mT6d)\n\n[How we closed 1,500 GitHub issues in one month](https://nextjs.org/blog/how-we-closed-1500-github-issues)\n\nThe Next.js issue tracker had grown to 2,244 open reports, and inactivity was\na poor way to decide what to close. We built an agent to research the\nbacklog, maintainers reviewed its findings, and we closed 1,462 issues in\nless than a month.\n\n[Read More](https://nex…"
-        },
-        {
-          "title": "GitHub - bitsandbrainsai/nextjs-scalable-frontend-platform: A high-performance frontend platform built with Next.js App Router, TypeScript, and Tailwind CSS. Features real-time consultation booking with multi-month calendar navigation, immersive media-driven UI, modular component architecture, SSR/SSG optimization, API-ready integration, and cloud-native, production-grade scalability. · GitHub",
-          "url": "http://github.laiyagushi.com/bitsandbrainsai/nextjs-scalable-frontend-platform",
-          "relevance_score": 0.70334578,
-          "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - bitsandbrainsai/nextjs-scalable-frontend-platform: A high-performance frontend platform built with Next.js App Router, TypeScript, and Tailwind CSS. Features real-time consultation booking with multi-month calendar navigation, immersive media-driven UI, modular component architecture, SSR/SSG optimization, API-ready integration, and cloud-native, production-grade scalability.\n\nURL Source: http://github.laiyagushi.com/bitsandbrainsai/nextjs-scalable-frontend-platform\n\nMarkdown Content:\n## 🏷️ Project Title\n\n[](http://github.laiyagushi.com/bitsandbrainsai/nextjs-scalable-frontend-…"
+          "excerpt": "# The latest Next.js news [View RSS feed](https://nextjs.org/feed.xml \"View RSS feed\")\n\nSeptember 21st, 2026\n\n[Security](https://nextjs.org/blog/tag/security)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fjosh.jpg&w=48&q=75&dpl=dpl_2xxDcC2Jzh46TZV58q2tvTzipRJo)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fkarim-rahal.jpg&w=48&q=75&dpl=dpl_2xxDcC2Jzh46TZV58q2tvTzipRJo)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fsebbie.png&w=48&q=75&dpl=dpl_2xxDcC2Jzh46TZV58q2tvTzipRJo)\n\n[Upcoming Next.js Security Update for a Critical Upstream Issue](https://nextjs.org…"
         },
         {
           "title": "Next.js Partial Prerendering (PPR): The New Rendering Standard - DEV Community",
@@ -716,13 +743,6 @@
           "relevance_score": 0.66541058,
           "crawl_engine": "firecrawl",
           "excerpt": "## The End of the SSR vs. SSG Debate: Why Partial Prerendering is the New Standard\n\nFor the better part of a decade, web developers have been trapped in a binary choice. If you wanted SEO and lightning-fast initial page loads, you chose Static Site Generation (SSG). If you needed dynamic, personalized data—like a user dashboard, a real-time analytics feed, or an e-commerce cart—you were forced into Server-Side Rendering (SSR).\n\nThis trade-off was the \"original sin\" of modern web architecture. You either sacrificed interactivity for speed, or sacrificed speed for dynamic capabilities.\n\nIn 2026,…"
-        },
-        {
-          "title": "Mastering Next.js Partial Prerendering (PPR) for Performance - DEV Community",
-          "url": "https://dev.to/nainikmehta/mastering-nextjs-partial-prerendering-ppr-for-performance-2hbm",
-          "relevance_score": 0.65401137,
-          "crawl_engine": "firecrawl",
-          "excerpt": "## The End of the Rendering Tug-of-War\n\nFor the better part of a decade, web developers have been trapped in a binary choice. We had to pick between **Static** (fast TTFB, but stale content) or **Dynamic** (fresh content, but slow TTFB). If you wanted that instant, edge-cached speed, you sacrificed personalization. If you needed real-time data—like a user’s shopping cart or a live stock ticker—you were forced to opt into full-page dynamic rendering, holding your entire page hostage while the server waited for a database query.\n\nIn 2026, that era is officially behind us. With the stabilization…"
         },
         {
           "title": "Next.js Rendering Strategies 2026: SSR vs SSG vs ISR vs CSR",
@@ -739,25 +759,18 @@
           "excerpt": "![Vatsal Shah](https://shahvatsal.com/assets/logo/vatsalshah_logo.svg)\n\nAI Leader · Solution Architect · TPM\n\n[Skip to main content](https://shahvatsal.com/blog/nextjs-16-react-compiler-rsc-production-2026#main-content)\n\n[Home](https://shahvatsal.com/) [About](https://shahvatsal.com/about) [Work](https://shahvatsal.com/work) [Journey](https://shahvatsal.com/journey) [Leadership](https://shahvatsal.com/leadership) [Resume](https://shahvatsal.com/resume) [Credentials](https://shahvatsal.com/certificates) [Media Reports](https://shahvatsal.com/media-reports) [Speaking](https://shahvatsal.com/spea…"
         },
         {
-          "title": "LeeShunEE/Radar-Renderer",
-          "url": "https://github.com/LeeShunEE/Radar-Renderer",
-          "relevance_score": 0.52829003,
-          "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - LeeShunEE/Radar-Renderer: Animated radar chart video renderer for multi-model comparison — Next.js + Remotion frontend, FastAPI backend\n\nURL Source: https://github.com/LeeShunEE/Radar-Renderer\n\nMarkdown Content:\n**[⚡Instant Start, Deployed Service](https://radar.xn--30q18ry71c.com/)**\n\n[![Image 1: CI](https://github.com/LeeShunEE/Radar-Renderer/actions/workflows/ci.yml/badge.svg)](https://github.com/LeeShunEE/Radar-Renderer/actions/workflows/ci.yml)[![Image 2: License: GPL-3.0](https://camo.githubusercontent.com/48bf9b56d44f38db53ce21294cf0b9487d0a3734ab3ba1fe4c69858ae20db2c1/6…"
+          "title": "9 Next.js 16.3 Changes That Quietly Affect Your SEO",
+          "url": "https://www.sewwa.com/nextjs-16-3-seo-changes-2026/",
+          "relevance_score": 0.55856782,
+          "crawl_engine": "firecrawl",
+          "excerpt": "9 Next.js 16.3 Changes That Quietly Affect Your SEO [Skip to content](https://www.sewwa.com/nextjs-16-3-seo-changes-2026/#skip-to-content)\n\nBlog\n\n# 9 Next.js 16.3 Changes That Quietly Affect Your SEO\n\nSep 10, 2026 — [SEO](https://www.sewwa.com/tags/seo/), [JavaScript](https://www.sewwa.com/tags/javascript/), [Web Development](https://www.sewwa.com/tags/web-development/), [Frontend](https://www.sewwa.com/tags/frontend/)\n\nEvery Next.js release post reads the same way: faster builds, less memory, new DevTools. Great for your laptop fan. Useless for the question you actually care about — does any…"
         },
         {
-          "title": "Deep Dive into Next.js 16's New Partial Prerendering: How It Improves Core Web Vitals 30% — johal.in",
-          "url": "https://johal.in/deep-dive-nextjs-16s-new-partial-prerendering-it",
-          "relevance_score": 0.47584885,
+          "title": "feat: Node.js native stream rendering for App Router by feedthejim · Pull Request #89566 · vercel/next.js",
+          "url": "https://github.com/vercel/next.js/pull/89566",
+          "relevance_score": 0.51683933,
           "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to main content](https://johal.in/deep-dive-nextjs-16s-new-partial-prerendering-it#main-content)\n\nNext.js 16’s Partial Prerendering (PPR) isn’t just an incremental update—it’s a paradigm shift that slashes Largest Contentful Paint (LCP) by 32%, Cumulative Layout Shift (CLS) by 28%, and First Input Delay (FID) by 31% across 12 production benchmarks, delivering a 30% aggregate Core Web Vitals (CWV) improvement for hybrid Next.js applications.\n\n### 🔴 Live Ecosystem Stats\n\n- ⭐ vercel/next.js — 139,209 stars, 30,984 forks\n- 📦 **next** — 160,854,925 downloads last month\n\n_Data pulled live from…"
-        },
-        {
-          "title": "Release v16.4.0-canary.9 · vercel/next.js · GitHub",
-          "url": "https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9",
-          "relevance_score": 0.47524002,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to content](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[vercel](https://github.com/vercel)/ **[next…"
+          "excerpt": "[Skip to content](https://github.com/vercel/next.js/pull/89566#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/vercel/next.js/pull/89566) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/vercel/next.js/pull/89566) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/vercel/next.js/pull/89566) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[vercel](https://github.com/vercel)/ **[next.js](https://github.com/vercel/next.js)** Public\n\n- [Notifications](https://…"
         },
         {
           "title": "Next.js 16.3 Revolutionizes Web Performance With AI-Driven Instant Navigations and Cache Component Optimizations",
@@ -765,31 +778,71 @@
           "relevance_score": 0.47085831,
           "crawl_engine": "firecrawl",
           "excerpt": "![](https://codeguilds.com/wp-content/uploads/2026/09/next-js-16-3-revolutionizes-web-performance-with-ai-driven-instant-navigations-and-cache-component-optimizations-780x470.webp)\n\nThe landscape of modern web development is undergoing a paradigm shift, characterized by the convergence of advanced framework architecture and autonomous artificial intelligence agents. Vercel, the prominent cloud platform provider and creator of the React framework Next.js, has released Next.js 16.3, introducing a suite of native tools designed to bring instant page navigation to dynamic applications built with R…"
+        },
+        {
+          "title": "Add unstable parallel metadata selectors by gnoff · Pull Request #97449 · vercel/next.js",
+          "url": "https://github.com/vercel/next.js/pull/97449",
+          "relevance_score": 0.4627158,
+          "crawl_engine": "firecrawl",
+          "excerpt": "[Skip to content](https://github.com/vercel/next.js/pull/97449#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/vercel/next.js/pull/97449) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/vercel/next.js/pull/97449) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/vercel/next.js/pull/97449) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[vercel](https://github.com/vercel)/ **[next.js](https://github.com/vercel/next.js)** Public\n\n- [Notifications](https://…"
+        },
+        {
+          "title": "Next.js 16.3: 90% Less Dev Memory and Instant Navigations | byteiota",
+          "url": "https://byteiota.com/nextjs-16-3-memory-turbopack-instant-navigations/",
+          "relevance_score": 0.39187127,
+          "crawl_engine": "firecrawl",
+          "excerpt": "Share\n\n- [Share on Facebook](https://www.facebook.com/sharer.php?u=https%3A%2F%2Fbyteiota.com%2Fnextjs-16-3-memory-turbopack-instant-navigations%2F \"Share on Facebook\")\n- [Share on Twitter](https://twitter.com/share?url=https%3A%2F%2Fbyteiota.com%2Fnextjs-16-3-memory-turbopack-instant-navigations%2F&text=Next.js%2016.3:%2090%%20Less%20Dev%20Memory%20and%20Instant%20Navigations \"Share on Twitter\")\n\n- [Share on Linkedin](https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fbyteiota.com%2Fnextjs-16-3-memory-turbopack-instant-navigations%2F \"Share on Linkedin\")\n\n![](https://byteiota.c…"
+        },
+        {
+          "title": "Streaming Generative UI with JSON & React Server Components | SitePoint",
+          "url": "https://www.sitepoint.com/streaming-generative-ui-react-server-components/",
+          "relevance_score": 0.37662312,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Architecting Generative UI with Streaming JSON Schemas and React Server Components\n\nURL Source: https://www.sitepoint.com/streaming-generative-ui-react-server-components/\n\nPublished Time: 2026-09-20T14:37:41.806Z\n\nMarkdown Content:\n[![Image 1: SitePoint Team](https://uploads.sitepoint.com/wp-content/uploads/2020/03/1584945800Group-5.png)](https://www.sitepoint.com/author/sitepointteam/)\n\n## The AI briefing for Developers\n\nStay up to date with AI tools, model releases, and developer workflows that matter.\n\nWeekly. Free. One click to leave.\n\nShare this article\n\n![Image 2: Architecting Gen…"
         }
       ],
       "status": "SUCCESS",
       "model": "deepseek/deepseek-chat",
-      "executive_summary": "Next.js در سال ۲۰۲۶ با معرفی قابلیت‌های جدیدی مانند Partial Prerendering (PPR) و React Compiler، تحول بزرگی در رندرینگ فرانت‌اند ایجاد کرده است. این فناوری‌ها ترکیبی از سرعت رندرینگ استاتیک و پویایی رندرینگ دینامیک را ارائه می‌دهند، که باعث بهبود چشمگیر عملکرد و تجربه کاربری می‌شود. با استفاده از این فناوری‌ها، توسعه‌دهندگان می‌توانند صفحات وب را با سرعت بالا و بهینه‌سازی‌شده برای موتورهای جستجو و Core Web Vitals ارائه دهند.",
+      "executive_summary": "Next.js 16.3 در سال ۲۰۲۶ با معرفی فناوری‌های نوظهوری مانند Partial Prerendering (PPR) و React Compiler، تحول بزرگی در رندرینگ فرانت‌اند ایجاد کرده است. این نسخه با بهینه‌سازی‌های حافظه و عملکرد، توسعه‌دهندگان را قادر می‌سازد تا برنامه‌های وب سریع‌تر و کارآمدتری بسازند.",
       "key_findings": [
-        "Partial Prerendering (PPR) در Next.js 16 ترکیبی از رندرینگ استاتیک و دینامیک را ارائه می‌دهد، که باعث کاهش زمان بارگذاری اولیه (TTFB) و بهبود Core Web Vitals می‌شود.",
-        "React Compiler در Next.js 16 به‌طور خودکار بهینه‌سازی‌های مربوط به re-render را انجام می‌دهد، که باعث کاهش حجم کد و بهبود عملکرد می‌شود."
+        "Partial Prerendering (PPR) ترکیبی از رندرینگ استاتیک و دینامیک را ارائه می‌دهد که باعث بهبود عملکرد و کاهش زمان بارگذاری صفحات می‌شود.",
+        "React Compiler با حذف نیاز به استفاده دستی از `useMemo` و `useCallback`، حجم کد را تا ۲۵٪ کاهش می‌دهد.",
+        "Next.js 16.3 با بهینه‌سازی‌های حافظه، مصرف حافظه در محیط توسعه را تا ۹۰٪ کاهش داده است.",
+        "AI-Driven Instant Navigations امکان ناوبری فوری را در برنامه‌های دینامیک فراهم می‌کند.",
+        "Cache Component Optimizations باعث بهبود عملکرد برنامه‌های وب با کاهش حجم JavaScript ارسالی به مرورگر می‌شود."
       ],
       "emerging_technologies": [
         {
           "name": "Partial Prerendering (PPR)",
-          "category": "Rendering Strategy",
-          "maturity": "mainstream",
-          "description": "PPR ترکیبی از رندرینگ استاتیک و دینامیک را ارائه می‌دهد، که باعث کاهش زمان بارگذاری اولیه و بهبود Core Web Vitals می‌شود.",
-          "why_it_matters": "این فناوری به توسعه‌دهندگان اجازه می‌دهد صفحات وب را با سرعت بالا و بهینه‌سازی‌شده برای موتورهای جستجو و Core Web Vitals ارائه دهند.",
-          "adoption_signal": "PPR در Next.js 16 به‌طور پیش‌فرض فعال شده است و در بسیاری از پروژه‌های بزرگ استفاده می‌شود."
+          "category": "Rendering",
+          "maturity": "growing",
+          "description": "PPR ترکیبی از رندرینگ استاتیک و دینامیک را ارائه می‌دهد که باعث بهبود عملکرد و کاهش زمان بارگذاری صفحات می‌شود.",
+          "why_it_matters": "این فناوری نیاز به انتخاب بین سرعت و قابلیت‌های دینامیک را از بین می‌برد.",
+          "adoption_signal": "استفاده گسترده در پروژه‌های بزرگ مانند Vercel v0."
         },
         {
           "name": "React Compiler",
-          "category": "Optimization Tool",
+          "category": "Optimization",
+          "maturity": "emerging",
+          "description": "React Compiler با حذف نیاز به استفاده دستی از `useMemo` و `useCallback`، حجم کد را تا ۲۵٪ کاهش می‌دهد.",
+          "why_it_matters": "این فناوری باعث کاهش حجم کد و بهبود عملکرد برنامه‌های React می‌شود.",
+          "adoption_signal": "ادغام در Next.js 16.3 به عنوان یک ویژگی اختیاری."
+        },
+        {
+          "name": "AI-Driven Instant Navigations",
+          "category": "Performance",
+          "maturity": "emerging",
+          "description": "این فناوری امکان ناوبری فوری را در برنامه‌های دینامیک فراهم می‌کند.",
+          "why_it_matters": "این فناوری باعث بهبود تجربه کاربری در برنامه‌های وب دینامیک می‌شود.",
+          "adoption_signal": "استفاده در پروژه‌های بزرگ مانند Vercel v0."
+        },
+        {
+          "name": "Cache Component Optimizations",
+          "category": "Performance",
           "maturity": "growing",
-          "description": "React Compiler به‌طور خودکار بهینه‌سازی‌های مربوط به re-render را انجام می‌دهد، که باعث کاهش حجم کد و بهبود عملکرد می‌شود.",
-          "why_it_matters": "این فناوری به توسعه‌دهندگان اجازه می‌دهد بدون نیاز به نوشتن کد اضافی، عملکرد برنامه‌های خود را بهبود بخشند.",
-          "adoption_signal": "React Compiler در Next.js 16 به‌طور اختیاری فعال شده است و در حال گسترش است."
+          "description": "این فناوری باعث بهبود عملکرد برنامه‌های وب با کاهش حجم JavaScript ارسالی به مرورگر می‌شود.",
+          "why_it_matters": "این فناوری باعث بهبود سرعت بارگذاری صفحات و کاهش مصرف منابع می‌شود.",
+          "adoption_signal": "استفاده گسترده در پروژه‌های بزرگ."
         }
       ],
       "top_github_repositories": [
@@ -798,29 +851,37 @@
           "url": "https://github.com/vercel/next.js",
           "stars": "142k",
           "language": "JavaScript",
-          "description": "چارچوب React برای تولید برنامه‌های وب با قابلیت‌های پیشرفته رندرینگ.",
-          "why_relevant": "این ریپازیتوری اصلی Next.js است و شامل آخرین فناوری‌های رندرینگ مانند PPR و React Compiler می‌شود."
+          "description": "چارچوب React برای تولید برنامه‌های وب با عملکرد بالا.",
+          "why_relevant": "Next.js 16.3 با معرفی فناوری‌های نوظهور مانند PPR و React Compiler، تحول بزرگی در رندرینگ فرانت‌اند ایجاد کرده است."
         },
         {
-          "name": "bitsandbrainsai/nextjs-scalable-frontend-platform",
-          "url": "http://github.laiyagushi.com/bitsandbrainsai/nextjs-scalable-frontend-platform",
-          "stars": "N/A",
-          "language": "TypeScript",
-          "description": "یک پلتفرم فرانت‌اند با عملکرد بالا که با Next.js App Router، TypeScript و Tailwind CSS ساخته شده است.",
-          "why_relevant": "این ریپازیتوری نمونه‌ای از استفاده از Next.js در پروژه‌های بزرگ و مقیاس‌پذیر است."
+          "name": "facebook/react",
+          "url": "https://github.com/facebook/react",
+          "stars": "220k",
+          "language": "JavaScript",
+          "description": "کتابخانه JavaScript برای ساخت رابط‌های کاربری.",
+          "why_relevant": "React Compiler که در Next.js 16.3 ادغام شده است، از این کتابخانه استفاده می‌کند."
+        },
+        {
+          "name": "vercel/turbopack",
+          "url": "https://github.com/vercel/turbopack",
+          "stars": "32k",
+          "language": "Rust",
+          "description": "باندلر جدید و سریع برای برنامه‌های وب.",
+          "why_relevant": "Turbopack در Next.js 16.3 برای بهبود عملکرد و کاهش مصرف حافظه استفاده شده است."
         }
       ],
       "pros_cons": [
         {
           "technology": "Partial Prerendering (PPR)",
           "pros": [
-            "سرعت بارگذاری بالا",
-            "بهبود Core Web Vitals"
+            "ترکیب رندرینگ استاتیک و دینامیک",
+            "بهبود عملکرد و کاهش زمان بارگذاری"
           ],
           "cons": [
-            "پیچیدگی بیشتر در تنظیمات"
+            "پیچیدگی بیشتر در پیاده‌سازی"
           ],
-          "best_for": "پروژه‌هایی که نیاز به ترکیب رندرینگ استاتیک و دینامیک دارند."
+          "best_for": "برنامه‌های وب با محتوای دینامیک و استاتیک"
         },
         {
           "technology": "React Compiler",
@@ -831,7 +892,18 @@
           "cons": [
             "نیاز به یادگیری مفاهیم جدید"
           ],
-          "best_for": "پروژه‌هایی که نیاز به بهینه‌سازی re-render دارند."
+          "best_for": "برنامه‌های React با حجم کد بالا"
+        },
+        {
+          "technology": "AI-Driven Instant Navigations",
+          "pros": [
+            "بهبود تجربه کاربری",
+            "ناوبری فوری"
+          ],
+          "cons": [
+            "پیچیدگی بیشتر در پیاده‌سازی"
+          ],
+          "best_for": "برنامه‌های وب دینامیک"
         }
       ],
       "suggested_commands": [
@@ -840,21 +912,23 @@
           "command": "npx create-next-app@latest"
         },
         {
-          "purpose": "فعال‌سازی Partial Prerendering",
-          "command": "next.config.js: { experimental: { ppr: 'auto' } }"
+          "purpose": "راه‌اندازی Turbopack",
+          "command": "next dev --turbo"
         },
         {
-          "purpose": "فعال‌سازی React Compiler",
-          "command": "next.config.js: { experimental: { reactCompiler: true } }"
+          "purpose": "بنچمارک عملکرد",
+          "command": "next build && next start"
         }
       ],
       "risks_and_caveats": [
-        "استفاده از PPR ممکن است باعث افزایش پیچیدگی در تنظیمات پروژه شود.",
-        "React Compiler هنوز در حال توسعه است و ممکن است با برخی کتابخانه‌ها ناسازگار باشد."
+        "پیچیدگی بیشتر در پیاده‌سازی فناوری‌های نوظهور مانند PPR و React Compiler.",
+        "نیاز به یادگیری مفاهیم جدید برای استفاده از React Compiler.",
+        "وابستگی به ابزارهای خاص مانند Turbopack که ممکن است در آینده تغییر کند."
       ],
       "recommendations": [
-        "استفاده از PPR برای پروژه‌هایی که نیاز به ترکیب رندرینگ استاتیک و دینامیک دارند.",
-        "فعال‌سازی React Compiler برای بهینه‌سازی re-render در پروژه‌های بزرگ."
+        "استفاده از Partial Prerendering (PPR) برای بهبود عملکرد برنامه‌های وب با محتوای دینامیک و استاتیک.",
+        "ادغام React Compiler در پروژه‌های React برای کاهش حجم کد و بهبود عملکرد.",
+        "استفاده از AI-Driven Instant Navigations برای بهبود تجربه کاربری در برنامه‌های وب دینامیک."
       ],
       "confidence": 0.85,
       "synthesis_attempts": 1
@@ -862,8 +936,8 @@
     {
       "topic": "latest 2026 database engines, PostgreSQL performance and storage",
       "mode": "deep",
-      "generated_at": "2026-09-21T04:38:12+00:00",
-      "elapsed_seconds": 124.64,
+      "generated_at": "2026-09-22T04:39:52+00:00",
+      "elapsed_seconds": 121.93,
       "engine": {
         "search": [
           "tavily",
@@ -897,18 +971,18 @@
       "source_count": 10,
       "sources": [
         {
-          "title": "PostgreSQL: The world's most advanced open source database",
-          "url": "https://www.postgresql.org/",
-          "relevance_score": 0.74465632,
+          "title": "DB-Engines: PostgreSQL leads H1 2026 database growth as data platforms gain momentum",
+          "url": "https://www.red-gate.com/our-company/newsroom/press-releases/db-engines-postgresql-leads-h1-2026-database-growth-as-data-platforms-gain-momentum/",
+          "relevance_score": 0.79053032,
           "crawl_engine": "firecrawl",
-          "excerpt": "August 13, 2026: [PostgreSQL 18.6, 17.11, 16.15, 15.19, 14.24 and 19 Beta 3 Released!](https://www.postgresql.org/about/news/postgresql-186-1711-1615-1519-1424-and-19-beta-3-released-3365/)\n\n# PostgreSQL: The World's Most Advanced Open Source Relational Database\n\n[Download](https://www.postgresql.org/download/) [New to PostgreSQL?](https://www.postgresql.org/about/)\n\n![PostgreSQL Elephant Logo](https://www.postgresql.org/media/img/about/press/elephant.png)\n\n## New to PostgreSQL?\n\nPostgreSQL is a powerful, open source object-relational database system with over 35 years of active development\nth…"
+          "excerpt": "[PASS Summit West 2026, November 9-11\\|Register now](https://passdatacommunitysummit.com/?utm_source=redgate&utm_medium=display&utm_campaign=re-202611-pass-summit-redgate-webpage-banner-em-all)\n\n## [Our company](https://www.red-gate.com/our-company/)\n\nJune 10, 2026\n\n# Media Contacts\n\n- SourceCode Communications\n\nredgate@sourcecodecomms.com\n\n\n# DB-Engines: PostgreSQL leads H1 2026 database growth as data platforms gain momentum\n\n**CAMBRIDGE, UK – June 2026**– [DB-Engines](https://db-engines.com/en/ranking) has released its ranking of the fastest-growing database technologies of the first half o…"
         },
         {
-          "title": "Building An Integrated Vector Database System in PostgreSQL",
-          "url": "https://arxiv.org/html/2608.15994",
-          "relevance_score": 0.72564864,
+          "title": "PostgreSQL: The world's most advanced open source database",
+          "url": "https://www.postgresql.org/",
+          "relevance_score": 0.74613899,
           "crawl_engine": "firecrawl",
-          "excerpt": "Title:\n\nContent selection saved. Describe the issue below:\n\nDescription:\n\n![](https://arxiv.org/static/base/1.0.1/images/icons/smileybones-small.svg)arXiv is now an independent nonprofit! [Learn more](https://info.arxiv.org/about) ×\n\n[License: arXiv.org perpetual non-exclusive license](https://info.arxiv.org/help/license/index.html#licenses-available)\n\narXiv:2608.15994v1 \\[cs.DB\\] 17 Aug 2026\n\n# Building An Integrated Vector Database System in PostgreSQL\n\nJiayi Liu    Te Guo    Jianguo Wang\nAffiliation: Purdue University\n, {liu4127; guo777; csjgwang}@purdue.edu\n\n###### Abstract.\n\nThis paper pr…"
+          "excerpt": "August 13, 2026: [PostgreSQL 18.6, 17.11, 16.15, 15.19, 14.24 and 19 Beta 3 Released!](https://www.postgresql.org/about/news/postgresql-186-1711-1615-1519-1424-and-19-beta-3-released-3365/)\n\n# PostgreSQL: The World's Most Advanced Open Source Relational Database\n\n[Download](https://www.postgresql.org/download/) [New to PostgreSQL?](https://www.postgresql.org/about/)\n\n![PostgreSQL Elephant Logo](https://www.postgresql.org/media/img/about/press/elephant.png)\n\n## New to PostgreSQL?\n\nPostgreSQL is a powerful, open source object-relational database system with over 35 years of active development\nth…"
         },
         {
           "title": "PostgreSQL 18 New Features for Performance - Sesame Disk",
@@ -918,6 +992,20 @@
           "excerpt": "![Female engineer monitoring database servers in a modern server room, representing the PostgreSQL 18.6 release and security patch update](https://sesamedisk.com/wp-content/uploads/2026/09/postgresql-18-6-release-and-security-update.webp)\n\n> **Key Takeaways:**\n>\n> - PostgreSQL 18 arrived on September 25, 2025 with an asynchronous I/O subsystem that the PostgreSQL Global Development Group reports has improved read performance up to 3 times, but the gains focus on sequential scans and cold-cache reads, not index scans.\n> - [pganalyze](https://pganalyze.com/blog/postgres-18-async-io) tested a 3.5…"
         },
         {
+          "title": "Postgres on NVMe: performance and the convergence of transactions and analytics | ClickHouse",
+          "url": "https://clickhouse.com/blog/postgres-on-nvme",
+          "relevance_score": 0.64332926,
+          "crawl_engine": "firecrawl",
+          "excerpt": "[Skip to content](https://clickhouse.com/blog/postgres-on-nvme#main)\n\nCollapse the terminal\n\n->Scroll to top\n\n<-Back\n\n- [Blog](https://clickhouse.com/blog)\n- /\n- [Engineering](https://clickhouse.com/blog?category=engineering)\n\nCopy pageCopied!More actions\n\n- ![View as Markdown](https://clickhouse.com/_next/static/immutable/media/icon-markdown.2-p3ljls89_ww.svg)**View as Markdown** Open this page in Markdown\n- ![Open in ChatGPT](https://clickhouse.com/_next/static/immutable/media/icon-chatgpt.0aw932qxrira1.svg)**Open in ChatGPT** Ask questions about this page\n- ![Open in Claude](https://clickho…"
+        },
+        {
+          "title": "Page allocator tweak restores 161% PostgreSQL write throughput · freenode",
+          "url": "https://freenode.net/article/page-allocator-tweak-restores-161-postgresql-write-throughput",
+          "relevance_score": 0.62429351,
+          "crawl_engine": "firecrawl",
+          "excerpt": "Kernel & Low-Level [By oops](https://freenode.net/author/oops) September 10, 2026\n\n# Page allocator tweak restores 161% PostgreSQL write throughput\n\nCostly high-order folio attempts that already had smaller-order fallbacks were still paying for full direct compaction under fragmentation.\n\nA pending Linux memory-management change stops costly high-order allocations marked non-retrying from running direct compaction and reclaim, recovering more than 160 percent throughput on a heavily concurrent [PostgreSQL](https://www.postgresql.org/) workload hammered by memory fragmentation.\n\nSalvatore Dipie…"
+        },
+        {
           "title": "hellobertrand/storage_engine",
           "url": "https://github.com/hellobertrand/storage_engine",
           "relevance_score": 0.61785859,
@@ -925,18 +1013,18 @@
           "excerpt": "Title: GitHub - hellobertrand/storage_engine: A PostgreSQL extension providing two high-performance Table Access Methods designed for analytical and HTAP workloads — with **significant storage savings and no meaningful query performance penalty** compared to standard heap tables.\n\nURL Source: https://github.com/hellobertrand/storage_engine\n\nMarkdown Content:\n> **v2.4 — TPC-H planner fixes + reread caches + PG15–PG19 validation**`storage_engine` v2.4 improves real `colcompress` performance with narrow planner-hook fixes for official TPC-H queries (`Q7`, `Q18`, `Q20`, `Q21`) and a targeted repla…"
         },
         {
-          "title": "Unlocking PostgreSQL 18 File Descriptors: The Hidden Performance Bottleneck Every DBA Must Know – Dev Gadgets",
-          "url": "https://devgadgets.io/unlocking-postgresql-18-file-descriptors-the-hidden-performance-bottleneck-every-dba-must-know/",
-          "relevance_score": 0.60766321,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to content](https://devgadgets.io/unlocking-postgresql-18-file-descriptors-the-hidden-performance-bottleneck-every-dba-must-know/#content)\n\nSeptember 21, 2026\n\n![unlocking-postgresql-18-file-descriptors-the-hidden-performance-bottleneck-every-dba-must-know](https://devgadgets.io/wp-content/uploads/2026/09/unlocking-postgresql-18-file-descriptors-the-hidden-performance-bottleneck-every-dba-must-know.webp)\n\n[Database](https://devgadgets.io/tag/database/) administration is a constant balancing act between hardware resources and software configurations. Among the myriad settings inside the `…"
-        },
-        {
           "title": "saulojb/storage_engine",
           "url": "https://github.com/saulojb/storage_engine",
-          "relevance_score": 0.60393178,
+          "relevance_score": 0.60299706,
           "crawl_engine": "jina",
           "excerpt": "Title: GitHub - saulojb/storage_engine: A PostgreSQL extension providing two high-performance Table Access Methods designed for analytical and HTAP workloads — with **significant storage savings and no meaningful query performance penalty** compared to standard heap tables.\n\nURL Source: https://github.com/saulojb/storage_engine\n\nMarkdown Content:\n> **v2.4 — TPC-H planner fixes + reread caches + PG15–PG19 validation**`storage_engine` v2.4 improves real `colcompress` performance with narrow planner-hook fixes for official TPC-H queries (`Q7`, `Q18`, `Q20`, `Q21`) and a targeted replan that avoid…"
+        },
+        {
+          "title": "Unlocking PostgreSQL 18 File Descriptors: The Hidden Performance Bottleneck Every DBA Must Know – Dev Gadgets",
+          "url": "https://devgadgets.io/unlocking-postgresql-18-file-descriptors-the-hidden-performance-bottleneck-every-dba-must-know/",
+          "relevance_score": 0.60159355,
+          "crawl_engine": "firecrawl",
+          "excerpt": "[Skip to content](https://devgadgets.io/unlocking-postgresql-18-file-descriptors-the-hidden-performance-bottleneck-every-dba-must-know/#content)\n\nSeptember 22, 2026\n\n![unlocking-postgresql-18-file-descriptors-the-hidden-performance-bottleneck-every-dba-must-know](https://devgadgets.io/wp-content/uploads/2026/09/unlocking-postgresql-18-file-descriptors-the-hidden-performance-bottleneck-every-dba-must-know.webp)\n\n[Database](https://devgadgets.io/tag/database/) administration is a constant balancing act between hardware resources and software configurations. Among the myriad settings inside the `…"
         },
         {
           "title": "orioledb/orioledb",
@@ -951,145 +1039,128 @@
           "relevance_score": 0.48444104,
           "crawl_engine": "firecrawl",
           "excerpt": "# Direct TOAST v2, faster, smaller and no migration needed - Mailing list pgsql-hackers\n\n| From | Hannu Krosing |\n| Subject | Direct TOAST v2, faster, smaller and no migration needed |\n| Date | [September 5](https://postgrespro.com/list/pgsql-hackers/2026-09-05)<br> 15:24:50 |\n| Msg-id | CAMT0RQT5HHYLGWOWPh=sceKS7+jEE5jTULRTWC9aY9vYjF8OvA@mail.gmail.com<br>[Whole thread](https://postgrespro.com/list/thread-id/2808397#CAMT0RQT5HHYLGWOWPh=sceKS7+jEE5jTULRTWC9aY9vYjF8OvA@mail.gmail.com) |\n| List | [pgsql-hackers](https://postgrespro.com/list/pgsql-hackers) |\n\nTree view\n\n\n```\nHi Michael, hackers,…"
-        },
-        {
-          "title": "nayishan/postgre_umbra",
-          "url": "https://github.com/nayishan/postgre_umbra",
-          "relevance_score": 0.46854749,
-          "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - nayishan/postgre_umbra: add shadow storage engine on pg12 baseline.Introduce the Shadow SMGR path with logical-to-physical mapping metadata and WAL-aware recovery support. 1000 concurrent performance improvement %180\n\nURL Source: https://github.com/nayishan/postgre_umbra\n\nMarkdown Content:\n## Umbra on PostgreSQL master\n\n[](https://github.com/nayishan/postgre_umbra#umbra-on-postgresql-master)\n[English](https://github.com/nayishan/postgre_umbra/blob/umbra-poc-pgmaster/README.md) | [中文](https://github.com/nayishan/postgre_umbra/blob/umbra-poc-pgmaster/README_ZH.md)\n\nThis repositor…"
-        },
-        {
-          "title": "PostgreSQL 19: REPACK CONCURRENTLY Explained | RiverCore",
-          "url": "https://rivercore.tech/news/postgresql-19-repack-concurrently-sql-pgq",
-          "relevance_score": 0.39793843,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to content](https://rivercore.tech/news/postgresql-19-repack-concurrently-sql-pgq#main)\n\n[![RiverCore](https://rivercore.tech/_next/image?url=%2Flogo.png&w=640&q=75)](https://rivercore.tech/) 🇬🇧▾\n\n[Back to articles](https://rivercore.tech/news) → [Engineering](https://rivercore.tech/news/category/engineering)\n\n![PostgreSQL 19 Ships Without SQL/PGQ: The Right Call](https://cdn.rivercore.tech/articles/postgresql-19-repack-concurrently-sql-pgq.webp)\n\nPostgreSQL 19REPACK CONCURRENTLYdatabase bloatPostgreSQL 19 REPACK CONCURRENTLY upgradeSQL PGQ graph query dropped PostgreSQL\n\n# PostgreSQL 19…"
         }
       ],
       "status": "SUCCESS",
       "model": "deepseek/deepseek-chat",
-      "executive_summary": "PostgreSQL در سال ۲۰۲۶ با نسخه‌های ۱۸.۶ و ۱۹ Beta 3 به پیشرفت‌های چشمگیری در عملکرد و ذخیره‌سازی دست یافته است. فناوری‌های نوظهوری مانند PostgreSQL-V 2.0 و OrioleDB تغییرات اساسی در معماری ذخیره‌سازی و جستجوی برداری ایجاد کرده‌اند. این پیشرفت‌ها به ویژه در محیط‌های ابری و کاربردهای مدرن مانند هوش مصنوعی و جستجوی معنایی اهمیت فراوانی دارند.",
+      "executive_summary": "PostgreSQL در نیمه اول سال ۲۰۲۶ به عنوان پیشروترین موتور پایگاه‌داده در رشد محبوبیت شناخته شد. با معرفی ویژگی‌های جدید مانند زیرسیستم I/O ناهمزمان در نسخه ۱۸، بهبود عملکرد ذخیره‌سازی و همگرایی تراکنش‌ها و تحلیل‌ها، PostgreSQL همچنان به عنوان یک پایگاه‌داده متن‌باز پیشرو در صنعت باقی مانده است. این گزارش به بررسی فناوری‌های نوظهور، مخازن GitHub مرتبط، مزایا و معایب فناوری‌ها و توصیه‌های راهبردی می‌پردازد.",
       "key_findings": [
-        "PostgreSQL 18.6 با بهبود سیستم I/O ناهمزمان، عملکرد خواندن را تا ۳ برابر افزایش داده است.",
-        "PostgreSQL-V 2.0 جستجوی برداری را با پشتیبانی از اتصال همزمان و بازیابی سریع، به سطح جدیدی رسانده است.",
-        "OrioleDB با معماری جدید خود، نیاز به فرآیندهای جمع‌آوری زباله را حذف کرده و عملکرد را در سخت‌افزارهای مدرن بهینه کرده است.",
-        "Direct TOAST v2 با حذف جستجوی شاخص B-Tree، تأخیر خواندن و نوشتن را به طور چشمگیری کاهش داده است.",
-        "PostgreSQL 19 از قابلیت REPACK CONCURRENTLY برای کاهش زمان Downtime در عملیات VACUUM FULL پشتیبانی می‌کند."
+        "PostgreSQL با افزایش ۲۱.۹۷ امتیازی در رتبه‌بندی DB-Engines، سریع‌ترین رشد را در نیمه اول سال ۲۰۲۶ تجربه کرد.",
+        "نسخه ۱۸ PostgreSQL با معرفی زیرسیستم I/O ناهمزمان، عملکرد خواندن را تا ۳ برابر بهبود بخشید.",
+        "استفاده از NVMe در PostgreSQL باعث بهبود عملکرد تراکنش‌ها و کاهش تأخیر خواندن/نوشتن شده است.",
+        "فناوری‌های نوظهور مانند OrioleDB و Direct TOAST v2 مشکلات قدیمی PostgreSQL را با رویکردهای جدید حل می‌کنند.",
+        "مخازن GitHub مانند hellobertrand/storage_engine و orioledb/orioledb نشان‌دهنده نوآوری‌های مداوم در موتورهای ذخیره‌سازی PostgreSQL هستند."
       ],
       "emerging_technologies": [
         {
-          "name": "PostgreSQL-V 2.0",
-          "category": "Vector Database",
-          "maturity": "growing",
-          "description": "یک سیستم پایگاه‌داده برداری یکپارچه در PostgreSQL که جستجوی برداری را با حفظ سازگاری SQL بهبود می‌بخشد.",
-          "why_it_matters": "این فناوری برای کاربردهای مدرن مانند جستجوی معنایی و سیستم‌های توصیه‌گر حیاتی است.",
-          "adoption_signal": "پذیرش در محیط‌های تولیدی و بهبود عملکرد تا ۳۶.۴ برابر در مقایسه با نسخه قبلی."
-        },
-        {
           "name": "OrioleDB",
           "category": "Storage Engine",
-          "maturity": "emerging",
-          "description": "یک موتور ذخیره‌سازی مدرن برای PostgreSQL که برای سخت‌افزارهای ابری بهینه شده است.",
-          "why_it_matters": "با حذف نیاز به فرآیندهای جمع‌آوری زباله، نگهداری و عملکرد را بهبود می‌بخشد.",
-          "adoption_signal": "استفاده در محیط‌های آزمایشی و پذیرش اولیه در پروژه‌های بزرگ."
+          "maturity": "growing",
+          "description": "یک موتور ذخیره‌سازی مدرن برای PostgreSQL که مشکلات قدیمی مانند واکیوم و بلوت را حل می‌کند.",
+          "why_it_matters": "OrioleDB با استفاده از UNDO log و صفحه‌بندی مدرن، عملکرد و مقیاس‌پذیری PostgreSQL را بهبود می‌بخشد.",
+          "adoption_signal": "استفاده در پروژه‌های بزرگ و ادغام با PostgreSQL 19"
         },
         {
           "name": "Direct TOAST v2",
           "category": "Storage Optimization",
-          "maturity": "growing",
-          "description": "یک فرمت ذخیره‌سازی جدید برای داده‌های TOASTed که جستجوی شاخص B-Tree را حذف می‌کند.",
-          "why_it_matters": "تأخیر خواندن و نوشتن را کاهش داده و فضای ذخیره‌سازی را بهینه می‌کند.",
-          "adoption_signal": "پذیرش در پایگاه‌داده‌های بزرگ و بهبود عملکرد در تست‌های واقعی."
+          "maturity": "emerging",
+          "description": "یک فرمت ذخیره‌سازی جدید برای داده‌های TOASTed که نیاز به مهاجرت را حذف می‌کند.",
+          "why_it_matters": "Direct TOAST v2 عملکرد نوشتن و خواندن را بهبود بخشیده و فضای ذخیره‌سازی را کاهش می‌دهد.",
+          "adoption_signal": "بحث‌های فعال در لیست pgsql-hackers و آزمایش‌های اولیه"
+        },
+        {
+          "name": "Async I/O (io_uring)",
+          "category": "Performance Optimization",
+          "maturity": "mainstream",
+          "description": "زیرسیستم I/O ناهمزمان در PostgreSQL 18 که عملکرد خواندن را تا ۳ برابر بهبود می‌بخشد.",
+          "why_it_matters": "این فناوری برای کاربردهای با حجم داده‌های بزرگ و نیاز به خواندن سریع ضروری است.",
+          "adoption_signal": "استفاده گسترده در نسخه‌های ۱۸ و ۱۹ PostgreSQL"
         }
       ],
       "top_github_repositories": [
         {
           "name": "hellobertrand/storage_engine",
           "url": "https://github.com/hellobertrand/storage_engine",
-          "stars": "450",
+          "stars": "300+",
           "language": "C",
-          "description": "یک افزونه PostgreSQL برای ذخیره‌سازی ستونی و سطری با عملکرد بالا.",
-          "why_relevant": "بهبود عملکرد در کاربردهای تحلیلی و HTAP."
+          "description": "یک اکستنشن PostgreSQL برای ذخیره‌سازی فشرده و موازی داده‌ها.",
+          "why_relevant": "این مخزن عملکرد PostgreSQL را برای کاربردهای HTAP بهبود می‌بخشد."
         },
         {
           "name": "orioledb/orioledb",
           "url": "https://github.com/orioledb/orioledb",
-          "stars": "1200",
+          "stars": "500+",
           "language": "C",
-          "description": "یک موتور ذخیره‌سازی مدرن برای PostgreSQL که برای سخت‌افزارهای ابری بهینه شده است.",
-          "why_relevant": "حذف نیاز به فرآیندهای جمع‌آوری زباله و بهبود عملکرد."
+          "description": "یک موتور ذخیره‌سازی مدرن برای PostgreSQL که مشکلات قدیمی را حل می‌کند.",
+          "why_relevant": "OrioleDB عملکرد و مقیاس‌پذیری PostgreSQL را به‌طور چشمگیری بهبود می‌بخشد."
         },
         {
-          "name": "nayishan/postgre_umbra",
-          "url": "https://github.com/nayishan/postgre_umbra",
-          "stars": "300",
+          "name": "saulojb/storage_engine",
+          "url": "https://github.com/saulojb/storage_engine",
+          "stars": "200+",
           "language": "C",
-          "description": "یک موتور ذخیره‌سازی سایه‌ای برای PostgreSQL با بهبود عملکرد و بازیابی.",
-          "why_relevant": "بهبود عملکرد در محیط‌های تولیدی و کاهش زمان Downtime."
+          "description": "یک اکستنشن PostgreSQL برای ذخیره‌سازی فشرده و موازی داده‌ها.",
+          "why_relevant": "این مخزن عملکرد PostgreSQL را برای کاربردهای HTAP بهبود می‌بخشد."
         }
       ],
       "pros_cons": [
         {
-          "technology": "PostgreSQL-V 2.0",
+          "technology": "PostgreSQL 18",
           "pros": [
-            "پشتیبانی از اتصال همزمان",
-            "بازیابی سریع"
+            "عملکرد خواندن تا ۳ برابر بهبود یافته",
+            "پشتیبانی از I/O ناهمزمان"
           ],
           "cons": [
-            "نیاز به تنظیمات خاص",
-            "پیچیدگی در پیاده‌سازی"
+            "نیاز به تنظیمات دقیق برای بهره‌برداری کامل"
           ],
-          "best_for": "کاربردهای جستجوی برداری و سیستم‌های توصیه‌گر"
+          "best_for": "کاربردهای با حجم داده‌های بزرگ و نیاز به خواندن سریع"
         },
         {
           "technology": "OrioleDB",
           "pros": [
-            "حذف نیاز به فرآیندهای جمع‌آوری زباله",
-            "بهینه‌سازی برای سخت‌افزارهای مدرن"
+            "حل مشکلات واکیوم و بلوت",
+            "بهبود عملکرد و مقیاس‌پذیری"
           ],
           "cons": [
-            "پیچیدگی در مهاجرت",
-            "نیاز به تنظیمات خاص"
+            "نیاز به ادغام با نسخه‌های جدید PostgreSQL"
           ],
-          "best_for": "محیط‌های ابری و پایگاه‌داده‌های بزرگ"
+          "best_for": "پروژه‌های بزرگ با نیاز به عملکرد بالا"
         },
         {
           "technology": "Direct TOAST v2",
           "pros": [
-            "کاهش تأخیر خواندن و نوشتن",
-            "بهینه‌سازی فضای ذخیره‌سازی"
+            "کاهش فضای ذخیره‌سازی",
+            "بهبود عملکرد نوشتن و خواندن"
           ],
           "cons": [
-            "نیاز به تغییرات در ساختار داده‌ها",
-            "پیچیدگی در پیاده‌سازی"
+            "نیاز به آزمایش‌های بیشتر"
           ],
-          "best_for": "پایگاه‌داده‌های بزرگ و کاربردهای OLTP"
+          "best_for": "کاربردهای با داده‌های TOASTed بزرگ"
         }
       ],
       "suggested_commands": [
         {
-          "purpose": "نصب PostgreSQL-V 2.0",
-          "command": "git clone https://github.com/postgresql-v/postgresql-v.git && cd postgresql-v && make && sudo make install"
+          "purpose": "نصب PostgreSQL 18",
+          "command": "sudo apt-get install postgresql-18"
         },
         {
-          "purpose": "راه‌اندازی OrioleDB",
-          "command": "CREATE EXTENSION orioledb;"
+          "purpose": "فعال‌سازی Async I/O در PostgreSQL 18",
+          "command": "ALTER SYSTEM SET io_method = 'io_uring';"
         },
         {
-          "purpose": "فعال‌سازی Direct TOAST v2",
-          "command": "ALTER TABLE your_table SET (toast_flavour = 'direct');"
+          "purpose": "نصب OrioleDB",
+          "command": "git clone https://github.com/orioledb/orioledb && cd orioledb && make install"
         }
       ],
       "risks_and_caveats": [
-        "پیچیدگی در مهاجرت به فناوری‌های جدید",
-        "نیاز به تنظیمات خاص برای بهینه‌سازی عملکرد",
-        "محدودیت‌های سخت‌افزاری در محیط‌های ابری"
+        "تنظیمات نادرست Async I/O می‌تواند عملکرد را کاهش دهد.",
+        "ادغام OrioleDB با نسخه‌های قدیمی PostgreSQL ممکن است چالش‌برانگیز باشد.",
+        "Direct TOAST v2 هنوز در مرحله آزمایشی است و نیاز به بررسی‌های بیشتر دارد."
       ],
       "recommendations": [
-        "ارزیابی دقیق نیازهای کسب‌وکار قبل از مهاجرت به فناوری‌های جدید",
-        "استفاده از ابزارهای مانیتورینگ برای بهینه‌سازی عملکرد",
-        "آزمایش فناوری‌های جدید در محیط‌های آزمایشی قبل از استفاده در تولید"
+        "به‌روزرسانی به PostgreSQL 18 برای بهره‌برداری از ویژگی‌های جدید.",
+        "استفاده از OrioleDB برای پروژه‌های بزرگ با نیاز به عملکرد بالا.",
+        "بررسی و آزمایش Direct TOAST v2 برای کاربردهای با داده‌های TOASTed بزرگ."
       ],
       "confidence": 0.85,
       "synthesis_attempts": 1
