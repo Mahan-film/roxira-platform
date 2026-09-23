@@ -1612,25 +1612,8 @@ async def _cancel_active_voice_task(state: dict) -> bool:
 # نام قراردادی اندپوینت مکالمهٔ صوتی زنده (canonical). gateway صوتی و supervisor
 # پلتفرم این نام را resolve می‌کنند؛ نبودش باعث WS-ALIAS-WARN در زمان راه‌اندازی
 # می‌شد. نام قدیمی `live_voice_websocket` به‌عنوان alias حفظ شده است.
-@router.websocket("/live-voice")
-async def live_voice_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    tier = _resolve_subscription_tier(websocket=websocket)
-    if not _is_vip_tier(tier):
-        try:
-            await websocket.send_json(dict(VIP_REQUIRED_FRAME))
-        finally:
-            await websocket.close(code=4403)
-        return
+# live-voice routed to smartjudge_live_voice module
 
-    await websocket.send_json({"type": "SESSION_STARTED", "tier": "VIP", "barge_in": True})
-
-    pcm_buffer = bytearray()
-    state = {"active_task": None, "interrupted": False}
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-
-    async def _execute_turn(audio_bytes: bytes):
-        state["interrupted"] = False
 @router.websocket("/live-voice-stream")
 async def live_voice_stream_endpoint(websocket: WebSocket):
     """Alias endpoint for live voice with streaming capabilities"""

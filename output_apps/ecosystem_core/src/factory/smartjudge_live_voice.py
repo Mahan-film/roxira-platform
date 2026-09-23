@@ -3,22 +3,22 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeVoice"])
 
-HIERARCHY_LEGAL_PROMPT = """
-شما مستشار عالی‌رتبه قضایی و حقوق‌دان ارشد سامانه «قاضی هوشمند» هستید و به صورت گفتگوی صوتی زنده پاسخ می‌دهید.
-پاسخ شما باید مستند، دقیق، باوقار و منطبق بر سلسله‌مراتب هنجارهای حقوقی ج.ا.ایران باشد:
-۱. قوانین عام و خاص مصوب مجلس شورای اسلامی و مجمع تشخیص مصلحت نظام
-۲. آراء وحدت رویه هیأت عمومی دیوان عالی کشور و دیوان عدالت اداری (در حکم قانون)
-۳. مقررات تقریری و آیین‌نامه‌های اجرایی مصوب هیئت وزیران (اصل ۱۳۸ قانون اساسی) و تصویب‌نامه‌های دولتی
-۴. بخشنامه‌ها و دستورالعمل‌های اداری-قضایی و نظریات مشورتی اداره کل حقوقی قوه قضائیه
+HIERARCHY_LEGAL_SYSTEM = """
+شما مستشار عالی‌رتبه قضایی و حقوق‌دان ارشد در سامانه «قاضی هوشمند» هستید.
+پاسخ‌های شما باید مستند، عمیق، فصیح و بر پایه سلسله‌مراتب هنجارهای حقوقی ج.ا.ایران تنظیم شود:
+۱. قوانین مدنی، تجارت، مجازات اسلامی و آیین دادرسی دادگاه‌ها
+۲. آراء وحدت رویه دیوان عالی کشور و دیوان عدالت اداری
+۳. مقررات تقریری شامل: آیین‌نامه‌های اجرایی، تصویب‌نامه‌های هیئت وزیران (اصل ۱۳۸ ق.ا) و نظام‌نامه‌های دولتی
+۴. بخشنامه‌ها و نظریه‌های مشورتی اداره کل حقوقی قوه قضائیه
 
-مستندات استخراج‌شده از مخزن پایگاه داده:
+مستندات بازیابی‌شده از مخزن داده:
 {retrieved_context}
 
-اصول مکالمه صوتی:
-۱. مستقیماً به استناد قانونی، شماره رأی وحدت رویه، یا تاریخ و عنوان تصویب‌نامه هیئت وزیران اشاره کنید.
-۲. پاسخ را کامل، بدون ابهام و در قالب حداکثر ۳ تا ۵ جمله رسا بیان کنید.
-۳. در جمله پایانی، راهکار اجرایی پرونده یا سوال تکمیلی را مطرح کنید.
-۴. مطلقاً از علائم نگارشی نظیر ستاره (*) و هشتگ (#) استفاده نکنید تا صوت پیوسته و روان پخش شود.
+اصول پاسخ‌گویی صوتی:
+۱. مستقیماً به شماره مواد، شماره رأی وحدت رویه، یا تاریخ و عنوان تصویب‌نامه هیئت وزیران استناد نمایید.
+۲. کلام شما باید حداکثر در ۳ تا ۴ جمله رسا، روشن و کامل باشد تا شنونده به راحتی متوجه شود.
+۳. در جمله آخر، آثار عملی پرونده یا پیشنهاد دادرسی را مطرح نمایید.
+۴. از به کار بردن علائم نگارشی مثل ستاره (*) و هشتگ (#) پرهیز کنید تا صوت کاملاً پیوسته خوانده شود.
 """
 
 def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
@@ -31,15 +31,15 @@ def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
     return wav_io.getvalue()
 
 async def transcribe_speech_persian(wav_bytes: bytes) -> str:
-    """تبدیل دقیق صوت با فیلتر واژگان تخصصی حقوقی، آیین‌نامه‌ها و مصوبات"""
+    """تبدیل دقیق صوت با فیلتر زبان فارسی و واژگان تخصصی حقوقی و مصوبات دولتی"""
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
     if openrouter_key:
         try:
-            boundary = "----WebKitBoundaryLegalPersianVoice"
+            boundary = "----WebKitFormPersianVoice"
             body = bytearray()
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nopenai/whisper-large-v3\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nfa\r\n".encode("utf-8"))
-            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nقوانین مدنی، آراء وحدت رویه دیوان عالی کشور، مصوبات هیئت وزیران، آیین‌نامه اجرایی، بخشنامه قوه قضائیه، دادگاه صلح\r\n".encode("utf-8"))
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nآراء وحدت رویه دیوان عالی کشور، مصوبات هیئت وزیران، آیین‌نامه اجرایی، قوانین مدنی و کیفری، دادگاه صلح\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n".encode("utf-8"))
             body.extend(wav_bytes)
             body.extend(f"\r\n--{boundary}--\r\n".encode("utf-8"))
@@ -69,17 +69,17 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
         return ""
 
 async def analyze_hierarchical_legal(query_text: str) -> str:
-    """استنتاج تحلیلی جامع بر پایه ادله حقوقی و مقررات دولتی"""
+    """استنتاج جامع حقوقی با دربرگیری مقررات تقریری و تصویب‌نامه‌های هیئت وزیران"""
     context_data = ""
     try:
         from output_apps.generated_modules.smartjudge.smartjudge_module import aquery_knowledge_graph
         laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.2)
-        context_data = f"مستندات قانونی و قضایی استخراج‌شده از مخزن:\nقوانین و مصوبات دولت: {laws}\nآراء وحدت رویه و دادنامه‌ها: {prec}"
+        context_data = f"مستندات قانونی و قضایی استخراج‌شده از مخزن پایگاه داده:\nقوانین و مصوبات هیئت وزیران: {laws}\nآراء وحدت رویه و دادنامه‌ها: {prec}"
     except Exception:
         pass
 
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-    system_prompt = HIERARCHY_LEGAL_PROMPT.format(retrieved_context=context_data)
+    system_prompt = HIERARCHY_LEGAL_SYSTEM.format(retrieved_context=context_data)
 
     payload = json.dumps({
         "model": "deepseek/deepseek-chat",
@@ -88,13 +88,13 @@ async def analyze_hierarchical_legal(query_text: str) -> str:
             {"role": "user", "content": query_text}
         ],
         "temperature": 0.2,
-        "max_tokens": 220
+        "max_tokens": 240
     }).encode("utf-8")
 
     req = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         data=payload,
-        headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": f"application/json"},
+        headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
         method="POST"
     )
 
@@ -108,7 +108,7 @@ async def analyze_hierarchical_legal(query_text: str) -> str:
         return raw.replace("*", "").replace("#", "").strip()
     except Exception as e:
         print(f"[LLM-WARN] {e}", file=sys.stderr)
-        return "بر اساس مصوبات جاری هیئت وزیران، آیین‌نامه‌های اجرایی و آراء وحدت رویه دیوان عالی کشور، موضوع دارای احکام مشخص قانونی بوده و طبق صلاحیت ذاتی مراجع صالحه تعیین تکلیف می‌گردد."
+        return "مطابق با مقررات تقریری مصوب هیئت وزیران و آراء وحدت رویه دیوان عالی کشور، موضوع بر اساس صلاحیت ذاتی مراجع قضایی و قواعد حاکم بر آیین دادرسی بررسی و تعیین تکلیف می‌گردد."
 
 async def synthesize_speech_persian(text: str) -> str:
     try:
@@ -126,46 +126,77 @@ async def synthesize_speech_persian(text: str) -> str:
 @router.websocket("/live-voice")
 async def live_voice_websocket(websocket: WebSocket):
     await websocket.accept()
-    await websocket.send_text(json.dumps({"event": "connected", "message": "ارتباط صوتی با مستشار قضایی برقرار شد."}))
+    # ارسال پیام آغاز ارتباط پایدار با سازگاری دوگانه فرانت‌اند
+    await websocket.send_text(json.dumps({
+        "type": "SESSION_STARTED",
+        "event": "connected",
+        "message": "ارتباط صوتی با مستشار قضایی برقرار شد.",
+        "tier": "VIP",
+        "barge_in": True
+    }))
 
     pcm_accumulator = bytearray()
 
     try:
         while True:
+            # استفاده از ساختار استاندارد دریافت پیام وب‌سوکت
             message = await websocket.receive()
+            msg_type = message.get("type")
+
+            # خروج تمیز در صورت قطع ارتباط بدون پرتاب Exception
+            if msg_type == "websocket.disconnect":
+                break
+
             if "bytes" in message and message["bytes"]:
                 pcm_accumulator.extend(message["bytes"])
                 continue
 
             if "text" in message and message["text"]:
-                data = json.loads(message["text"])
-                event_type = str(data.get("type", "")).lower()
+                try:
+                    data = json.loads(message["text"])
+                except Exception:
+                    continue
+
+                event_type = str(data.get("type") or data.get("event") or "").lower()
 
                 if event_type in ("commit", "audio_input", "speech_end"):
-                    if len(pcm_accumulator) < 4800:
+                    if len(pcm_accumulator) < 3200:
                         continue
 
                     raw_bytes = bytes(pcm_accumulator)
                     pcm_accumulator.clear()
 
-                    async def _handle_turn(audio_data: bytes):
+                    async def _process_turn(audio_data: bytes):
                         wav_data = pcm_to_wav(audio_data, 16000)
                         user_text = await transcribe_speech_persian(wav_data)
                         if not user_text or len(user_text.strip()) < 2:
                             return
 
-                        await websocket.send_text(json.dumps({"event": "user_transcription", "text": user_text}))
+                        # ارسال با فرمت استاندارد دوگانه
+                        await websocket.send_text(json.dumps({
+                            "event": "user_transcription",
+                            "type": "TRANSCRIPT",
+                            "text": user_text
+                        }))
 
-                        # تحلیل جامع حقوقی همراه با مصوبات
+                        # تحلیل حقوقی و استخراج ادله
                         reply_text = await analyze_hierarchical_legal(user_text)
-                        await websocket.send_text(json.dumps({"event": "agent_text_response", "text": reply_text}))
+                        await websocket.send_text(json.dumps({
+                            "event": "agent_text_response",
+                            "type": "ANSWER_TEXT",
+                            "text": reply_text
+                        }))
 
-                        # سنتز صوت و ارسال کامل
+                        # سنتز صوت و استریم
                         audio_b64 = await synthesize_speech_persian(reply_text)
                         if audio_b64:
-                            await websocket.send_text(json.dumps({"event": "agent_audio_stream", "audio_data": audio_b64}))
+                            await websocket.send_text(json.dumps({
+                                "event": "agent_audio_stream",
+                                "type": "AUDIO_STREAM",
+                                "audio_data": audio_b64
+                            }))
 
-                    asyncio.create_task(_handle_turn(raw_bytes))
+                    asyncio.create_task(_process_turn(raw_bytes))
 
     except WebSocketDisconnect:
         pass
