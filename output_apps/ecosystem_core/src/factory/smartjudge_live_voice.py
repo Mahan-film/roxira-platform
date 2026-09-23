@@ -33,60 +33,53 @@ def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
         wav_file.writeframes(pcm_data)
     return wav_io.getvalue()
 
-async def universal_transcribe(audio_bytes: bytes, audio_fmt: str = "wav") -> str:
-    """تبدیل صوت به متن با ساختار استاندارد JSON و Base64 در OpenRouter"""
+async def transcribe_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") -> str:
+    """تبدیل صوت به متن با اولویت فرم‌دیتای استاندارد Whisper"""
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
     if openrouter_key:
         try:
-            b64_data = base64.b64encode(audio_bytes).decode("utf-8")
+            boundary = "----WebKitFormSTTBoundaryDirect"
+            body = bytearray()
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nopenai/whisper-large-v3\r\n".encode("utf-8"))
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nfa\r\n".encode("utf-8"))
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nسلام، دادخواست، شکواییه، دیوان عالی کشور، مصوبات هیئت وزیران، دادگاه صلح\r\n".encode("utf-8"))
             
-            # تطبیق نام فرمت بر اساس داکیومنت OpenRouter (wav, m4a, webm, mp3, ogg)
-            valid_fmt = audio_fmt.lower().replace("audio/", "").replace("codecs=opus", "").replace(";", "").strip()
-            if valid_fmt in ["mp4", "aac"]:
-                valid_fmt = "m4a"
-            elif valid_fmt not in ["wav", "m4a", "webm", "mp3", "ogg"]:
-                valid_fmt = "wav"
+            # تعیین mime type بر اساس نام فایل
+            mime = "audio/wav"
+            if "mp4" in filename or "m4a" in filename:
+                mime = "audio/mp4"
+            elif "webm" in filename:
+                mime = "audio/webm"
 
-            payload = {
-                "model": "openai/whisper-large-v3-turbo",
-                "input_audio": {
-                    "data": b64_data,
-                    "format": valid_fmt
-                },
-                "language": "fa"
-            }
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: {mime}\r\n\r\n".encode("utf-8"))
+            body.extend(audio_bytes)
+            body.extend(f"\r\n--{boundary}--\r\n".encode("utf-8"))
 
             req = urllib.request.Request(
                 "https://openrouter.ai/api/v1/audio/transcriptions",
-                data=json.dumps(payload).encode("utf-8"),
+                data=bytes(body),
                 headers={
                     "Authorization": f"Bearer {openrouter_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://ghazihoushmand.ir",
-                    "X-Title": "Ghazihoushmand Legal Assistant"
+                    "Content-Type": f"multipart/form-data; boundary={boundary}"
                 },
                 method="POST"
             )
             loop = asyncio.get_running_loop()
             def _stt():
-                with urllib.request.urlopen(req, timeout=7.0) as resp:
+                with urllib.request.urlopen(req, timeout=6.0) as resp:
                     return json.loads(resp.read().decode("utf-8")).get("text", "")
-            
-            raw_text = await loop.run_in_executor(None, _stt)
-            if raw_text and len(raw_text.strip()) > 1:
-                return sanitize_transcription(raw_text)
-        except urllib.error.HTTPError as e:
-            err_msg = e.read().decode("utf-8", errors="ignore")
-            print(f"[STT-OPENROUTER-HTTP-ERR] {e.code}: {err_msg}", file=sys.stderr)
+            raw = await loop.run_in_executor(None, _stt)
+            if raw and len(raw.strip()) > 1:
+                return sanitize_transcription(raw)
         except Exception as e:
-            print(f"[STT-OPENROUTER-ERR] {e}", file=sys.stderr)
+            print(f"[STT-API-WARN] {e}", file=sys.stderr)
 
-    # فال‌بک به انجین محلی
+    # فال‌بک دوم
     try:
         from output_apps.ecosystem_core.src.factory.stt_engine import transcribe_audio_blob
         b64 = base64.b64encode(audio_bytes).decode("utf-8")
         loop = asyncio.get_running_loop()
-        res = await loop.run_in_executor(None, transcribe_audio_blob, b64, f"audio/{audio_fmt}")
+        res = await loop.run_in_executor(None, transcribe_audio_blob, b64, "audio/wav")
         return sanitize_transcription(str(res or ""))
     except Exception:
         return ""
@@ -98,7 +91,7 @@ async def analyze_legal_query(query_text: str) -> str:
         return "سلام و احترام. من مستشار تخصصی قضایی سامانه «قاضی هوشمند» هستم. لطفاً شرح دادخواست، پرسش یا پرونده حقوقی خود را بفرمایید تا مستند به قوانین و رویه قضایی راهنماییتان کنم."
 
     if any(p in q_norm for p in ["اسم تو چیه", "نام شما", "کی هستی", "کاربرد تو", "کارکرد تو"]):
-        return "من دستیار و مستشار قضایی سامانه «قاضی هوشمند» هستم. کاربرد اصلی من تحلیل پرونده‌های حقوقی و کیفری، تطبیق با آراء وحدت رویه، مصوبات هیئت وزیران و تنظیم لوایح قضایی است."
+        return "من دستیار و مستشار قضایی سامانه «قاضی هوشمند» هستم. کاربرد اصلی من تحلیل پرونده‌های حقوقی و کیفری، تطبیق با آراء وحدت رویه، مصوبات هیئت وزیران و تنظیم اوراق قضایی است."
 
     context_data = ""
     try:
@@ -176,6 +169,7 @@ async def judge_text_chat_status():
 @router.post("/stt")
 @router.post("/transcribe")
 async def judge_stt_api(request: Request, file: UploadFile = File(None), audio: UploadFile = File(None)):
+    """اندپوینت دریافت صوت و تبدیل به متن برای هر دو فرمت webm و mp4"""
     target = file or audio
     if not target:
         form = await request.form()
@@ -185,22 +179,14 @@ async def judge_stt_api(request: Request, file: UploadFile = File(None), audio: 
                 break
 
     if not target:
-        return {"text": "", "error": "فایل صوتی یافت نشد."}
+        return {"text": "", "transcription": ""}
 
     content = await target.read()
     if len(content) < 400:
-        return {"text": ""}
+        return {"text": "", "transcription": ""}
 
-    orig_name = getattr(target, "filename", "audio.mp4") or "audio.mp4"
-    content_type = getattr(target, "content_type", "audio/mp4") or "audio/mp4"
-
-    fmt = "wav"
-    if "webm" in orig_name.lower() or "webm" in content_type.lower():
-        fmt = "webm"
-    elif "mp4" in orig_name.lower() or "mp4" in content_type.lower() or "m4a" in content_type.lower():
-        fmt = "m4a"
-
-    text = await universal_transcribe(content, fmt)
+    fname = getattr(target, "filename", "audio.mp4") or "audio.mp4"
+    text = await transcribe_audio_bytes(content, fname)
     return {"text": text, "transcription": text}
 
 @router.websocket("/live-voice")
@@ -245,7 +231,7 @@ async def live_voice_websocket(websocket: WebSocket):
                                 return
 
                             wav_data = pcm_to_wav(audio_data, 16000)
-                            user_text = await universal_transcribe(wav_data, "wav")
+                            user_text = await transcribe_audio_bytes(wav_data, "audio.wav")
 
                             if not user_text or len(user_text.strip()) < 2 or user_text in HALLUCINATIONS:
                                 await websocket.send_text(json.dumps({"event": "turn_complete"}))
