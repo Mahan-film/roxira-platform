@@ -7,13 +7,13 @@ class PCMProcessor extends AudioWorkletProcessor {
     this.bufferSize = 2048;
 
     this.isListening = false;
-    // آستانه بسیار حساس و مناسب برای میکروفون‌های لپ‌تاپ و گوشی
-    this.silenceThreshold = 0.0035;
+    // آستانه متعادل و هوشمند برای تفکیک تنفس از کلام
+    this.silenceThreshold = 0.0065;
     this.silenceFramesCount = 0;
     this.speakingFramesCount = 0;
     this.isSpeaking = false;
-    // مکث ۱.۱ ثانیه‌ای جهت تشخیص اتمام جمله در گفتار فارسی
-    this.silenceLimit = Math.floor((this.inputSampleRate / 128) * 1.1);
+    // مکث مجاز ۱.۰ ثانیه‌ای برای ثبت پایان کلام طبیعی
+    this.silenceLimit = Math.floor((this.inputSampleRate / 128) * 1.0);
 
     this.port.onmessage = (event) => {
       const data = event.data;
@@ -68,20 +68,19 @@ class PCMProcessor extends AudioWorkletProcessor {
     const channelData = input[0];
     const rms = this.calculateRMS(channelData);
 
-    // ارسال تپش انرژی زنده به رابط کاربری جهت نمایش وضعیت میکروفون
     if (rms > this.silenceThreshold) {
       this.speakingFramesCount++;
       this.silenceFramesCount = 0;
 
-      // احراز سریع شروع کلام (حدود ۴۰ میلی‌ثانیه صحبت مداوم)
-      if (!this.isSpeaking && this.speakingFramesCount >= 3) {
+      // احراز حداقل ۱۵ فریم کلام پیوسته (~۱۲۰ میلی‌ثانیه) جهت جلوگیری از تحریک با تنفس و ضربه
+      if (!this.isSpeaking && this.speakingFramesCount >= 15) {
         this.isSpeaking = true;
         this.port.postMessage({ event: 'SPEECH_START' });
       }
     } else {
       if (this.isSpeaking) {
         this.silenceFramesCount++;
-        // تشخیص خودکار سکوت پس از پایان جمله
+        // تشخیص قطعی پایان جمله
         if (this.silenceFramesCount >= this.silenceLimit) {
           this.isSpeaking = false;
           this.speakingFramesCount = 0;
@@ -91,7 +90,6 @@ class PCMProcessor extends AudioWorkletProcessor {
       }
     }
 
-    // ارسال فریم‌ها
     const downsampled = this.downsample(channelData);
     for (let i = 0; i < downsampled.length; i++) {
       this.buffer.push(downsampled[i]);

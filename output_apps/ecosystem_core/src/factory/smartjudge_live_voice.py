@@ -1,7 +1,19 @@
 import os, sys, json, io, wave, base64, asyncio, urllib.request, re
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeVoice"])
+
+# ۱. تعریف اندپوینت چت متنی جهت رفع خطای ۴۰۴
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: str = None
+
+@router.post("/chat")
+async def judge_text_chat(req: ChatRequest):
+    """اندپوینت چت متنی پایدار متصل به پایگاه داده قوانین و هوش تحلیلی"""
+    reply = await analyze_legal_query(req.message)
+    return {"reply": reply, "conversation_id": req.conversation_id or "conv_vip_default"}
 
 BROAD_LEGAL_SYSTEM_PROMPT = """
 امروز در سال ۱۴۰۵ هجری خورشیدی (۲۰۲۶ میلادی) قرار داریم.
@@ -24,6 +36,9 @@ BROAD_LEGAL_SYSTEM_PROMPT = """
 ۴. مطلقاً از علائم نگارشی مثل ستاره (*) و هشتگ (#) استفاده نکنید.
 """
 
+# لیست فیلتر توهمات رایج ویسپر روی سکوت و نویز
+HALLUCINATIONS = {"سلامتی.", "سلامتی", "بله.", "بله", "تشکر.", "تشکر", "زیرنویس", "...", "."}
+
 PHONETIC_FIXES = [
     (r"محتم\s*صدیه", "وحدت رویه"),
     (r"وقت\s*رو\s*رویه", "وحدت رویه"),
@@ -35,7 +50,7 @@ PHONETIC_FIXES = [
 ]
 
 def sanitize_transcription(txt: str) -> str:
-    cleaned = txt
+    cleaned = txt.strip()
     for pat, rep in PHONETIC_FIXES:
         cleaned = re.sub(pat, rep, cleaned, flags=re.IGNORECASE)
     return cleaned
@@ -57,7 +72,7 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
             body = bytearray()
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nopenai/whisper-large-v3\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nfa\r\n".encode("utf-8"))
-            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nبخشنامه های قوه قضائیه، آراء وحدت رویه، مصوبات هیئت وزیران، بانک مرکزی، صمت، قوانین سال ۱۴۰۵\r\n".encode("utf-8"))
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nبخشنامه های قوه قضائیه، آراء وحدت رویه دیوان عالی، مصوبات هیئت وزیران، بانک مرکزی، صمت، قوانین سال ۱۴۰۵\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n".encode("utf-8"))
             body.extend(wav_bytes)
             body.extend(f"\r\n--{boundary}--\r\n".encode("utf-8"))
@@ -70,11 +85,11 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
             )
             loop = asyncio.get_running_loop()
             def _stt():
-                with urllib.request.urlopen(req, timeout=4.5) as resp:
+                with urllib.request.urlopen(req, timeout=4.0) as resp:
                     return json.loads(resp.read().decode("utf-8")).get("text", "")
             raw = await loop.run_in_executor(None, _stt)
             if raw:
-                return sanitize_transcription(raw.strip())
+                return sanitize_transcription(raw)
         except Exception as e:
             print(f"[STT-WARN] {e}", file=sys.stderr)
 
@@ -83,7 +98,7 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
         b64 = base64.b64encode(wav_bytes).decode("utf-8")
         loop = asyncio.get_running_loop()
         res = await loop.run_in_executor(None, transcribe_audio_blob, b64, "audio/wav")
-        return sanitize_transcription(str(res or "").strip())
+        return sanitize_transcription(str(res or ""))
     except Exception:
         return ""
 
@@ -91,8 +106,8 @@ async def analyze_legal_query(query_text: str) -> str:
     context_data = ""
     try:
         from output_apps.generated_modules.smartjudge.smartjudge_module import aquery_knowledge_graph
-        laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.2)
-        context_data = f"مستندات بازیابی‌شده:\nقوانین و مصوبات دولت: {laws}\nآراء و بخشنامه‌ها: {prec}"
+        laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.0)
+        context_data = f"مستندات بازیابی‌شده:\nقوانین و مصوبات: {laws}\nآراء و بخشنامه‌ها: {prec}"
     except Exception:
         pass
 
@@ -119,26 +134,31 @@ async def analyze_legal_query(query_text: str) -> str:
     try:
         loop = asyncio.get_running_loop()
         def _fetch():
-            with urllib.request.urlopen(req, timeout=6.5) as resp:
+            with urllib.request.urlopen(req, timeout=6.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return data["choices"][0]["message"]["content"]
         raw = await loop.run_in_executor(None, _fetch)
         return raw.replace("*", "").replace("#", "").strip()
     except Exception as e:
         print(f"[LLM-WARN] {e}", file=sys.stderr)
-        return "مطابق با آخرین بخشنامه‌ها و مصوبات هیئت وزیران و رویه قضایی جاری، موضوع بر اساس ضوابط مراجع صالحه و موازین آیین دادرسی رسیدگی و تعیین تکلیف می‌شود."
+        return "بر اساس مصوبات جاری هیئت وزیران و آخرین رویه قضایی، موضوع بر اساس صلاحیت مراجع صالحه و موازین قانونی تعیین تکلیف می‌گردد."
 
 async def synthesize_speech_persian(text: str) -> str:
+    """تبدیل متن به صوت با سقف زمانی محافظت‌شده ۳.۵ ثانیه‌ای"""
     try:
         import edge_tts
         comm = edge_tts.Communicate(text, "fa-IR-DilaraNeural", rate="+15%")
         buf = bytearray()
-        async for chunk in comm.stream():
-            if chunk["type"] == "audio":
-                buf.extend(chunk["data"])
-        return base64.b64encode(buf).decode("utf-8")
+        
+        async def _stream():
+            async for chunk in comm.stream():
+                if chunk["type"] == "audio":
+                    buf.extend(chunk["data"])
+            return base64.b64encode(buf).decode("utf-8")
+
+        return await asyncio.wait_for(_stream(), timeout=3.5)
     except Exception as e:
-        print(f"[TTS-WARN] {e}", file=sys.stderr)
+        print(f"[TTS-TIMEOUT/ERR] {e}", file=sys.stderr)
         return ""
 
 @router.websocket("/live-voice")
@@ -178,35 +198,16 @@ async def live_voice_websocket(websocket: WebSocket):
 
                     async def _handle_turn(audio_data: bytes):
                         try:
-                            # نادیده گرفتن صداهای کوتاه‌تر از ۰.۲ ثانیه
-                            if len(audio_data) < 3200:
-                                await websocket.send_text(json.dumps({
-                                    "event": "user_transcription",
-                                    "type": "TRANSCRIPT",
-                                    "text": "..."
-                                }))
-                                await websocket.send_text(json.dumps({
-                                    "event": "agent_text_response",
-                                    "type": "ANSWER_TEXT",
-                                    "text": "صدایی شنیده نشد؛ لطفاً سوال خود را بفرمایید."
-                                }))
+                            # فیلتر صداهای کمتر از ۰.۴ ثانیه برای جلوگیری از نویز
+                            if len(audio_data) < 6400:
                                 await websocket.send_text(json.dumps({"event": "turn_complete"}))
                                 return
 
                             wav_data = pcm_to_wav(audio_data, 16000)
                             user_text = await transcribe_speech_persian(wav_data)
 
-                            if not user_text or len(user_text.strip()) < 2:
-                                await websocket.send_text(json.dumps({
-                                    "event": "user_transcription",
-                                    "type": "TRANSCRIPT",
-                                    "text": "..."
-                                }))
-                                await websocket.send_text(json.dumps({
-                                    "event": "agent_text_response",
-                                    "type": "ANSWER_TEXT",
-                                    "text": "کلام شما مفهوم نبود؛ لطفاً مجدداً بفرمایید."
-                                }))
+                            # فیلتر توهمات ویسپر (مانند سلامتی، بله، تشکر)
+                            if not user_text or len(user_text.strip()) < 3 or user_text in HALLUCINATIONS:
                                 await websocket.send_text(json.dumps({"event": "turn_complete"}))
                                 return
 
@@ -234,7 +235,7 @@ async def live_voice_websocket(websocket: WebSocket):
                                 await websocket.send_text(json.dumps({"event": "turn_complete"}))
 
                         except Exception as exc:
-                            print(f"[TURN-ERR] {exc}", file=sys.stderr)
+                            print(f"[TURN-EXEC-ERR] {exc}", file=sys.stderr)
                             await websocket.send_text(json.dumps({"event": "turn_complete"}))
 
                     asyncio.create_task(_handle_turn(raw_bytes))
