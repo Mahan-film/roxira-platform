@@ -1,54 +1,34 @@
 class PCMProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    this.targetSampleRate = (options && options.processorOptions && options.processorOptions.targetSampleRate) || 16000;
-    this.inputSampleRate = sampleRate;
     this.buffer = [];
     this.bufferSize = 2048;
 
     this.isListening = false;
-    // آستانه متعادل و هوشمند برای تفکیک تنفس از کلام
-    this.silenceThreshold = 0.0065;
-    this.silenceFramesCount = 0;
-    this.speakingFramesCount = 0;
     this.isSpeaking = false;
-    // مکث مجاز ۱.۰ ثانیه‌ای برای ثبت پایان کلام طبیعی
-    this.silenceLimit = Math.floor((this.inputSampleRate / 128) * 1.0);
+    this.speakingFrames = 0;
+    this.silenceFrames = 0;
+    this.speechStartTimestamp = 0;
+
+    // نگهداری فاز اعشاری جهت جلوگیری از افتادن نمونه‌ها و نویز تق‌تق
+    this.phase = 0;
+
+    // کالیبراسیون پویای نویز محیط (Adaptive Floor)
+    this.noiseFloor = 0.004;
+    this.calibrationFrames = 0;
 
     this.port.onmessage = (event) => {
       const data = event.data;
       if (data && data.command === 'SET_LISTEN') {
         this.isListening = !!data.listening;
         this.isSpeaking = false;
-        this.silenceFramesCount = 0;
-        this.speakingFramesCount = 0;
+        this.speakingFrames = 0;
+        this.silenceFrames = 0;
+        this.calibrationFrames = 0;
         this.buffer = [];
+        this.phase = 0;
       }
     };
-  }
-
-  downsample(input) {
-    if (this.inputSampleRate === this.targetSampleRate) return input;
-    const ratio = this.inputSampleRate / this.targetSampleRate;
-    const outLength = Math.floor(input.length / ratio);
-    const out = new Float32Array(outLength);
-    for (let i = 0; i < outLength; i++) {
-      const idx = i * ratio;
-      const idxLow = Math.floor(idx);
-      const idxHigh = Math.min(idxLow + 1, input.length - 1);
-      const frac = idx - idxLow;
-      out[i] = input[idxLow] * (1 - frac) + input[idxHigh] * frac;
-    }
-    return out;
-  }
-
-  floatTo16BitPCM(float32Array) {
-    const out = new Int16Array(float32Array.length);
-    for (let i = 0; i < float32Array.length; i++) {
-      const s = Math.max(-1, Math.min(1, float32Array[i]));
-      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-    }
-    return out;
   }
 
   calculateRMS(samples) {
@@ -68,38 +48,64 @@ class PCMProcessor extends AudioWorkletProcessor {
     const channelData = input[0];
     const rms = this.calculateRMS(channelData);
 
-    if (rms > this.silenceThreshold) {
-      this.speakingFramesCount++;
-      this.silenceFramesCount = 0;
+    // ۱. کالیبراسیون نویز در ۳۰۰ میلی‌ثانیه ابتدایی
+    if (this.calibrationFrames < 35) {
+      this.calibrationFrames++;
+      this.noiseFloor = (this.noiseFloor * 0.85) + (rms * 0.15);
+      return true;
+    }
 
-      // احراز حداقل ۱۵ فریم کلام پیوسته (~۱۲۰ میلی‌ثانیه) جهت جلوگیری از تحریک با تنفس و ضربه
-      if (!this.isSpeaking && this.speakingFramesCount >= 15) {
+    const speechThreshold = Math.max(0.010, this.noiseFloor * 2.3);
+    const silenceThreshold = Math.max(0.005, this.noiseFloor * 1.3);
+    const silenceLimitFrames = Math.floor((sampleRate / 128) * 1.1); // ۱.۱ ثانیه مکث
+
+    // ۲. تشخیص شروع کلام
+    if (rms > speechThreshold) {
+      this.speakingFrames++;
+      this.silenceFrames = 0;
+      if (!this.isSpeaking && this.speakingFrames >= 4) {
         this.isSpeaking = true;
+        this.speechStartTimestamp = Date.now();
         this.port.postMessage({ event: 'SPEECH_START' });
       }
-    } else {
+    } 
+    // ۳. تشخیص سکوت و توقف خودکار
+    else if (rms < silenceThreshold) {
       if (this.isSpeaking) {
-        this.silenceFramesCount++;
-        // تشخیص قطعی پایان جمله
-        if (this.silenceFramesCount >= this.silenceLimit) {
+        this.silenceFrames++;
+        const duration = Date.now() - this.speechStartTimestamp;
+        // پایان خودکار نوبت با مکث ۱.۱ ثانیه‌ای یا سقف ۸ ثانیه کلام ممتد
+        if (this.silenceFrames >= silenceLimitFrames || duration > 8000) {
           this.isSpeaking = false;
-          this.speakingFramesCount = 0;
-          this.silenceFramesCount = 0;
+          this.speakingFrames = 0;
+          this.silenceFrames = 0;
           this.port.postMessage({ event: 'SPEECH_END' });
         }
       }
     }
 
-    const downsampled = this.downsample(channelData);
-    for (let i = 0; i < downsampled.length; i++) {
-      this.buffer.push(downsampled[i]);
+    // ۴. تبدیل نرخ نمونه‌برداری ریاضی و پیوسته بدون از دست رفتن حتی ۱ سمپل
+    const ratio = sampleRate / 16000;
+    while (this.phase < channelData.length) {
+      const idxLow = Math.floor(this.phase);
+      const idxHigh = Math.min(idxLow + 1, channelData.length - 1);
+      const frac = this.phase - idxLow;
+      const sample = channelData[idxLow] * (1 - frac) + channelData[idxHigh] * frac;
+
+      const s = Math.max(-1, Math.min(1, sample));
+      const pcm16 = s < 0 ? s * 0x8000 : s * 0x7fff;
+      this.buffer.push(pcm16);
+
+      this.phase += ratio;
     }
+    this.phase -= channelData.length;
 
     while (this.buffer.length >= this.bufferSize) {
       const chunk = this.buffer.splice(0, this.bufferSize);
-      const pcm16 = this.floatTo16BitPCM(Float32Array.from(chunk));
-      this.port.postMessage({ event: 'PCM_DATA', buffer: pcm16.buffer }, [pcm16.buffer]);
+      const pcm16Array = new Int16Array(chunk);
+      this.port.postMessage({ event: 'PCM_DATA', buffer: pcm16Array.buffer }, [pcm16Array.buffer]);
     }
+
     return true;
   }
 }

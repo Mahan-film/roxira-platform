@@ -12,6 +12,9 @@ interface LegalResponse {
 }
 
 export default function LegalChatConsole() {
+  const activeStreamRef = useRef<MediaStream | null>(null);
+  const activeRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const [caseText, setCaseText] = useState("");
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<LegalResponse | null>(null);
