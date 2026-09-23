@@ -26,17 +26,38 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   const streamRef = useRef<MediaStream | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const stateRef = useRef<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
+  const watchdogTimerRef = useRef<any>(null);
+
+  const setListenMode = (isListening: boolean) => {
+    if (workletNodeRef.current) {
+      workletNodeRef.current.port.postMessage({
+        command: 'SET_LISTEN',
+        listening: isListening,
+      });
+    }
+  };
 
   const transitionState = (newState: 'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING') => {
     stateRef.current = newState;
     setSessionState(newState);
 
-    // کنترل سخت‌افزاری ورودی میکروفون برای ریشه‌کن کردن اکو
-    if (streamRef.current) {
-      const track = streamRef.current.getAudioTracks()[0];
-      if (track) {
-        track.enabled = (newState === 'LISTENING');
-      }
+    if (watchdogTimerRef.current) {
+      clearTimeout(watchdogTimerRef.current);
+      watchdogTimerRef.current = null;
+    }
+
+    if (newState === 'LISTENING') {
+      setListenMode(true);
+    } else {
+      setListenMode(false);
+    }
+
+    if (newState === 'THINKING') {
+      watchdogTimerRef.current = setTimeout(() => {
+        if (stateRef.current === 'THINKING') {
+          transitionState('LISTENING');
+        }
+      }, 9000);
     }
   };
 
@@ -77,7 +98,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
       transitionState('SPEAKING');
 
-      // تنها پس از اتمام ۱۰۰٪ کلام وکیل و مکث ۴۰۰ میلی‌ثانیه‌ای، میکروفون باز می‌شود
       source.onended = () => {
         currentSourceRef.current = null;
         setTimeout(() => {
@@ -139,10 +159,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
         const data = event.data;
         if (!data) return;
 
-        // رد کردن فریم‌ها وقتی سیستم در حال صحبت یا استخراج ادله است
-        if (stateRef.current !== 'LISTENING') {
-          return;
-        }
+        if (stateRef.current !== 'LISTENING') return;
 
         if (data.event === 'SPEECH_END') {
           if (ws.readyState === WebSocket.OPEN) {
@@ -167,7 +184,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
           const res = JSON.parse(event.data);
           if (res.event === 'user_transcription' || res.type === 'TRANSCRIPT') {
             setTranscription(res.text || '');
-            transitionState('THINKING');
           } else if (res.event === 'agent_text_response' || res.type === 'ANSWER_TEXT') {
             setAssistantReply(res.text || '');
           } else if (res.event === 'agent_audio_stream' || res.type === 'AUDIO_STREAM') {
@@ -175,6 +191,8 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
             if (b64) {
               await playAudio(b64);
             }
+          } else if (res.event === 'turn_complete') {
+            transitionState('LISTENING');
           }
         } catch (e) {
           console.error('WS parse error:', e);
@@ -198,6 +216,11 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   };
 
   const cleanupSession = () => {
+    if (watchdogTimerRef.current) {
+      clearTimeout(watchdogTimerRef.current);
+      watchdogTimerRef.current = null;
+    }
+    setListenMode(false);
     stateRef.current = 'IDLE';
     if (currentSourceRef.current) {
       try { currentSourceRef.current.stop(); } catch (e) {}
@@ -267,7 +290,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
             {sessionState === 'IDLE' && <span className="text-slate-400">جهت آغاز تماس صوتی کلیک فرمایید</span>}
             {sessionState === 'LISTENING' && <span className="text-emerald-400">🟢 در حال شنیدن صدای شما (صحبت کنید و مکث فرمایید)...</span>}
             {sessionState === 'THINKING' && <span className="text-blue-400">🟡 در حال استخراج ادله، آراء و مصوبات دولت...</span>}
-            {sessionState === 'SPEAKING' && <span className="text-amber-400">🔊 در حال بیان تحلیل وکیل (لطفاً گوش فرادهید)...</span>}
+            {sessionState === 'SPEAKING' && <span className="text-amber-400">🔊 در حال بیان تحلیل مستشار (لطفاً گوش فرادهید)...</span>}
           </div>
 
           {sessionState === 'LISTENING' && (

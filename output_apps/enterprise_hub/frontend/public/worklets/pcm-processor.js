@@ -6,12 +6,25 @@ class PCMProcessor extends AudioWorkletProcessor {
     this.buffer = [];
     this.bufferSize = 2048;
 
-    // پارامترهای VAD بسیار حساس
-    this.silenceThreshold = 0.008; 
+    this.isListening = false;
+    // آستانه بسیار حساس و مناسب برای میکروفون‌های لپ‌تاپ و گوشی
+    this.silenceThreshold = 0.0035;
     this.silenceFramesCount = 0;
     this.speakingFramesCount = 0;
     this.isSpeaking = false;
-    this.silenceLimit = Math.floor((this.inputSampleRate / 128) * 0.7); // ۰.۷ ثانیه سکوت
+    // مکث ۱.۱ ثانیه‌ای جهت تشخیص اتمام جمله در گفتار فارسی
+    this.silenceLimit = Math.floor((this.inputSampleRate / 128) * 1.1);
+
+    this.port.onmessage = (event) => {
+      const data = event.data;
+      if (data && data.command === 'SET_LISTEN') {
+        this.isListening = !!data.listening;
+        this.isSpeaking = false;
+        this.silenceFramesCount = 0;
+        this.speakingFramesCount = 0;
+        this.buffer = [];
+      }
+    };
   }
 
   downsample(input) {
@@ -47,23 +60,29 @@ class PCMProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs) {
+    if (!this.isListening) return true;
+
     const input = inputs[0];
     if (!input || !input[0]) return true;
 
     const channelData = input[0];
     const rms = this.calculateRMS(channelData);
 
+    // ارسال تپش انرژی زنده به رابط کاربری جهت نمایش وضعیت میکروفون
     if (rms > this.silenceThreshold) {
       this.speakingFramesCount++;
       this.silenceFramesCount = 0;
-      if (!this.isSpeaking && this.speakingFramesCount > 2) {
+
+      // احراز سریع شروع کلام (حدود ۴۰ میلی‌ثانیه صحبت مداوم)
+      if (!this.isSpeaking && this.speakingFramesCount >= 3) {
         this.isSpeaking = true;
         this.port.postMessage({ event: 'SPEECH_START' });
       }
     } else {
       if (this.isSpeaking) {
         this.silenceFramesCount++;
-        if (this.silenceFramesCount > this.silenceLimit) {
+        // تشخیص خودکار سکوت پس از پایان جمله
+        if (this.silenceFramesCount >= this.silenceLimit) {
           this.isSpeaking = false;
           this.speakingFramesCount = 0;
           this.silenceFramesCount = 0;
@@ -72,6 +91,7 @@ class PCMProcessor extends AudioWorkletProcessor {
       }
     }
 
+    // ارسال فریم‌ها
     const downsampled = this.downsample(channelData);
     for (let i = 0; i < downsampled.length; i++) {
       this.buffer.push(downsampled[i]);

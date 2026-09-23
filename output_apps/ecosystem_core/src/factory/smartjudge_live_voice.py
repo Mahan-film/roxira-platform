@@ -3,30 +3,41 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeVoice"])
 
-CURRENT_LEGAL_DATE_PROMPT = """
-امروز در سال ۱۴۰۵ هجری خورشیدی (سال ۲۰۲۶ میلادی) قرار داریم.
-شما مستشار عالی‌رتبه قضایی سامانه «قاضی هوشمند» هستید.
-پاسخ شما به کاربر باید کاملاً منطبق بر آخرین تحولات قضایی تا سال ۱۴۰۵ باشد:
-۱. در پاسخ به پرسش‌های مربوط به «آخرین رأی وحدت رویه» یا «آخرین بخشنامه قوه قضائیه»، مطلقاً به آرای منسوخ یا قدیمی سال‌های ۱۴۰۱ و ۱۴۰۲ به عنوان «آخرین رأی» استناد نکنید.
-۲. اگر در مستندات پایگاه داده، رکوردهای جدید سال‌های ۱۴۰۴ و ۱۴۰۵ موجود است، به شماره و مفاد دقیق آن‌ها اشاره فرمایید. در غیر این صورت، صراحتاً اعلام کنید که آخرین موارد ثبتی در پایگاه تا دوره اخیر چه مواردی بوده است.
-۳. سلسله‌مراتب هنجارها (قوانین مجلس، آراء وحدت رویه، مصوبات هیئت وزیران و بخشنامه‌های اداری-قضایی) را رعایت نمایید.
-۴. لحن کلام باید فاخر، صریح و بدون به کار بردن علامت‌های ستاره (*) یا هشتگ (#) باشد.
+BROAD_LEGAL_SYSTEM_PROMPT = """
+امروز در سال ۱۴۰۵ هجری خورشیدی (۲۰۲۶ میلادی) قرار داریم.
+شما مستشار ارشد دیوان و مشاور حقوقی-اقتصادی سامانه «قاضی هوشمند» هستید.
+حیطه پاسخ‌گویی شما جامع بوده و کل نظام حقوقی، مالیاتی و تجاری ج.ا.ایران را در بر می‌گیرد:
+۱. قوانین مدنی، تجارت، مجازات اسلامی، کار و آیین دادرسی
+۲. آراء وحدت رویه دیوان عالی کشور و دیوان عدالت اداری
+۳. مصوبات، آیین‌نامه‌ها و طرح‌های جامع هیئت وزیران (اصل ۱۳۸ قانون اساسی)
+۴. بخشنامه‌ها و دستورالعمل‌های بانک مرکزی (ارزی، ریالی، تعهدات ارزی و چک صیادی)
+۵. بخشنامه‌ها و مقررات وزارت صنعت، معدن و تجارت (سامانه جامع تجارت و ثبت سفارش)
+۶. دستورالعمل‌های سازمان امور مالیاتی و سامانه مودیان
+
+مستندات پایگاه داده:
+{retrieved_context}
+
+دستورالعمل تولید پاسخ:
+۱. پاسخ شما باید بسیار مستند، عمیق و حاوی عنوان بخشنامه یا ماده قانون مرتبط باشد.
+۲. کلام را حداکثر در ۳ تا ۴ جمله کوتاه، شیوا و رسا تنظیم کنید تا برای شنیدن روان باشد.
+۳. در جمله آخر یک راهکار عملی یا سوال جهت تدقیق پرونده مطرح کنید.
+۴. مطلقاً از علائم نگارشی مثل ستاره (*) و هشتگ (#) استفاده نکنید.
 """
 
-# جدول انطباق و تصحیح خطاهای شنیداری رایج در گفتار حقوقی
-PHONETIC_CORRECTIONS = [
+PHONETIC_FIXES = [
     (r"محتم\s*صدیه", "وحدت رویه"),
     (r"وقت\s*رو\s*رویه", "وحدت رویه"),
     (r"قبغذایی", "قوه قضائیه"),
     (r"قوه\s*غذایی", "قوه قضائیه"),
+    (r"بخش\s*نامه\s*قبغذایی", "بخشنامه قوه قضائیه"),
     (r"به\s*چه\s*شیر\s*صورت", "به چه صورت"),
     (r"دادگاه\s*صلح\s*و\s*سازش", "دادگاه صلح"),
 ]
 
-def correct_legal_phonetics(text: str) -> str:
-    cleaned = text
-    for pattern, repl in PHONETIC_CORRECTIONS:
-        cleaned = re.sub(pattern, repl, cleaned, flags=re.IGNORECASE)
+def sanitize_transcription(txt: str) -> str:
+    cleaned = txt
+    for pat, rep in PHONETIC_FIXES:
+        cleaned = re.sub(pat, rep, cleaned, flags=re.IGNORECASE)
     return cleaned
 
 def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
@@ -42,11 +53,11 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
     if openrouter_key:
         try:
-            boundary = "----WebKitBoundaryLegalPersianVoice"
+            boundary = "----WebKitBoundaryLegalLiveSTT"
             body = bytearray()
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nopenai/whisper-large-v3\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nfa\r\n".encode("utf-8"))
-            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nآراء وحدت رویه دیوان عالی کشور، بخشنامه های رئیس قوه قضائیه، مصوبات هیئت وزیران، سال ۱۴۰۵ و ۱۴۰۴، قوانین دادگاه صلح\r\n".encode("utf-8"))
+            body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nبخشنامه های قوه قضائیه، آراء وحدت رویه، مصوبات هیئت وزیران، بانک مرکزی، صمت، قوانین سال ۱۴۰۵\r\n".encode("utf-8"))
             body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n".encode("utf-8"))
             body.extend(wav_bytes)
             body.extend(f"\r\n--{boundary}--\r\n".encode("utf-8"))
@@ -61,9 +72,9 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
             def _stt():
                 with urllib.request.urlopen(req, timeout=4.5) as resp:
                     return json.loads(resp.read().decode("utf-8")).get("text", "")
-            raw_text = await loop.run_in_executor(None, _stt)
-            if raw_text:
-                return correct_legal_phonetics(raw_text.strip())
+            raw = await loop.run_in_executor(None, _stt)
+            if raw:
+                return sanitize_transcription(raw.strip())
         except Exception as e:
             print(f"[STT-WARN] {e}", file=sys.stderr)
 
@@ -72,31 +83,21 @@ async def transcribe_speech_persian(wav_bytes: bytes) -> str:
         b64 = base64.b64encode(wav_bytes).decode("utf-8")
         loop = asyncio.get_running_loop()
         res = await loop.run_in_executor(None, transcribe_audio_blob, b64, "audio/wav")
-        return correct_legal_phonetics(str(res or "").strip())
+        return sanitize_transcription(str(res or "").strip())
     except Exception:
         return ""
 
-async def retrieve_time_aware_legal_context(query_text: str) -> str:
-    """استخراج ادله با تفکیک جستجوی زمانی برای پرسش‌های مربوط به آخرین مصوبات"""
-    is_temporal = any(w in query_text for w in ["آخرین", "جدیدترین", "اخیرا", "تازه ترین", "امسال"])
+async def analyze_legal_query(query_text: str) -> str:
     context_data = ""
-
     try:
         from output_apps.generated_modules.smartjudge.smartjudge_module import aquery_knowledge_graph
-        # در پرسش‌های مربوط به آخرین آراء، دامنه کاوش افزایش می‌یابد
-        limit_val = 5 if is_temporal else 3
-        laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=limit_val), timeout=2.2)
-        context_data = f"مستندات قانونی و قضایی استخراج‌شده از مخزن پایگاه داده:\nقوانین و مصوبات: {laws}\nآراء وحدت رویه و بخشنامه‌ها: {prec}"
+        laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.2)
+        context_data = f"مستندات بازیابی‌شده:\nقوانین و مصوبات دولت: {laws}\nآراء و بخشنامه‌ها: {prec}"
     except Exception:
         pass
 
-    return context_data
-
-async def analyze_hierarchical_legal(query_text: str) -> str:
-    context_data = await retrieve_time_aware_legal_context(query_text)
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-
-    system_prompt = f"{CURRENT_LEGAL_DATE_PROMPT}\n\nمستندات موجود در پایگاه داده:\n{context_data}"
+    system_prompt = BROAD_LEGAL_SYSTEM_PROMPT.format(retrieved_context=context_data)
 
     payload = json.dumps({
         "model": "deepseek/deepseek-chat",
@@ -104,7 +105,7 @@ async def analyze_hierarchical_legal(query_text: str) -> str:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": query_text}
         ],
-        "temperature": 0.15,
+        "temperature": 0.2,
         "max_tokens": 240
     }).encode("utf-8")
 
@@ -125,7 +126,7 @@ async def analyze_hierarchical_legal(query_text: str) -> str:
         return raw.replace("*", "").replace("#", "").strip()
     except Exception as e:
         print(f"[LLM-WARN] {e}", file=sys.stderr)
-        return "مطابق با موازین قانونی و آخرین رویه‌های قضایی دیوان عالی کشور و مصوبات هیئت وزیران، موضوع بر اساس صلاحیت مراجع صالحه و ضوابط دادرسی تعیین تکلیف می‌گردد."
+        return "مطابق با آخرین بخشنامه‌ها و مصوبات هیئت وزیران و رویه قضایی جاری، موضوع بر اساس ضوابط مراجع صالحه و موازین آیین دادرسی رسیدگی و تعیین تکلیف می‌شود."
 
 async def synthesize_speech_persian(text: str) -> str:
     try:
@@ -175,8 +176,9 @@ async def live_voice_websocket(websocket: WebSocket):
                     raw_bytes = bytes(pcm_accumulator)
                     pcm_accumulator.clear()
 
-                    async def _process_turn(audio_data: bytes):
+                    async def _handle_turn(audio_data: bytes):
                         try:
+                            # نادیده گرفتن صداهای کوتاه‌تر از ۰.۲ ثانیه
                             if len(audio_data) < 3200:
                                 await websocket.send_text(json.dumps({
                                     "event": "user_transcription",
@@ -186,7 +188,7 @@ async def live_voice_websocket(websocket: WebSocket):
                                 await websocket.send_text(json.dumps({
                                     "event": "agent_text_response",
                                     "type": "ANSWER_TEXT",
-                                    "text": "صدایی دریافت نشد؛ لطفاً مجدداً بفرمایید."
+                                    "text": "صدایی شنیده نشد؛ لطفاً سوال خود را بفرمایید."
                                 }))
                                 await websocket.send_text(json.dumps({"event": "turn_complete"}))
                                 return
@@ -203,7 +205,7 @@ async def live_voice_websocket(websocket: WebSocket):
                                 await websocket.send_text(json.dumps({
                                     "event": "agent_text_response",
                                     "type": "ANSWER_TEXT",
-                                    "text": "پرسش شما مفهوم نبود؛ لطفاً مجدداً سوال حقوقی خود را بفرمایید."
+                                    "text": "کلام شما مفهوم نبود؛ لطفاً مجدداً بفرمایید."
                                 }))
                                 await websocket.send_text(json.dumps({"event": "turn_complete"}))
                                 return
@@ -214,7 +216,7 @@ async def live_voice_websocket(websocket: WebSocket):
                                 "text": user_text
                             }))
 
-                            reply_text = await analyze_hierarchical_legal(user_text)
+                            reply_text = await analyze_legal_query(user_text)
                             await websocket.send_text(json.dumps({
                                 "event": "agent_text_response",
                                 "type": "ANSWER_TEXT",
@@ -235,7 +237,7 @@ async def live_voice_websocket(websocket: WebSocket):
                             print(f"[TURN-ERR] {exc}", file=sys.stderr)
                             await websocket.send_text(json.dumps({"event": "turn_complete"}))
 
-                    asyncio.create_task(_process_turn(raw_bytes))
+                    asyncio.create_task(_handle_turn(raw_bytes))
 
     except WebSocketDisconnect:
         pass
