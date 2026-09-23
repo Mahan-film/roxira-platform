@@ -1,194 +1,252 @@
-"use client";
+'use client';
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from 'react';
+import { Send, Mic, Square, Phone } from 'lucide-react';
+import { LiveVoiceModal } from '@/components/chat/live-voice-modal';
 
-interface LegalResponse {
-  status: string;
-  success_probability?: string;
-  statutory_basis?: Array<{ title: string; category?: string }>;
-  unified_precedents?: Array<{ title: string; subject?: string }>;
-  defense_draft?: string;
-  voice_url?: string;
+interface LegalChatConsoleProps {
+  conversationId?: string;
 }
 
-export default function LegalChatConsole() {
+export default function LegalChatConsole({ conversationId = 'default_conv' }: LegalChatConsoleProps) {
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([
+    { role: 'assistant', content: 'سلام؛ شرح پرونده یا پرسش حقوقی خود را بنویسید یا با میکروفون بگویید.' }
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isLiveVoiceOpen, setIsLiveVoiceOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
   const activeStreamRef = useRef<MediaStream | null>(null);
   const activeRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const [caseText, setCaseText] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<LegalResponse | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const [micError, setMicError] = useState("");
 
-  // ارسال متن جهت تدوین استراتژی و لایحه
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!caseText.trim()) return;
+  useEffect(() => {
+    return () => {
+      // آزادسازی تمام ترک‌ها در صورت خروج از صفحه
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach(t => t.stop());
+        activeStreamRef.current = null;
+      }
+    };
+  }, []);
 
-    setLoading(true);
-    setResponse(null);
+  const handleSend = async (textToSend?: string) => {
+    const text = (textToSend || inputText).trim();
+    if (!text || isLoading) return;
+
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    setInputText('');
+    setIsLoading(true);
 
     try {
-      const res = await fetch("/api/v1/apps/judge/build-case-strategy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ case_text: caseText }),
+      const res = await fetch('/api/v1/apps/judge/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, conversation_id: conversationId })
       });
-      const data = await res.json();
-      setResponse(data);
-    } catch (err) {
-      setResponse({ status: "ERROR", defense_draft: "خطا در برقراری ارتباط با سرور." });
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.reply || data.response || 'پاسخی دریافت نشد.';
+        setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'خطا در برقراری ارتباط با مستشار قضایی.' }]);
+      }
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'خطا در ارتباط با سرور.' }]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // فعال‌سازی ضبط صوت در مرورگر
-  const toggleRecording = async () => {
-    if (isRecording) {
-      if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            // شبیه‌سازی یا ارسال استریم صوت
-            setCaseText((prev) => (prev ? prev + " " : "") + "[شرح پرونده به صورت صوتی ثبت شد]");
-          }
-        };
+  const startRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('مرورگر شما از ضبط صدا پشتیبانی نمی‌کند.');
+        return;
+      }
 
-        mediaRecorder.start();
-        setIsRecording(true);
-      } catch (err) {
-        console.warn("Microphone access failed:", err);
-        setMicError("دسترسی به میکروفون امکان‌پذیر نیست.");
+      audioChunksRef.current = [];
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
+      activeStreamRef.current = stream;
+
+      let mimeType = '';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
+        else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+        else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+      }
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      activeRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // خاموش کردن قطعی سخت‌افزار میکروفون در سطح سیستم‌عامل
+        if (activeStreamRef.current) {
+          activeStreamRef.current.getTracks().forEach(t => t.stop());
+          activeStreamRef.current = null;
+        }
+
+        const chunks = audioChunksRef.current;
+        if (!chunks || chunks.length === 0) {
+          setIsRecording(false);
+          return;
+        }
+
+        const audioBlob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
+        if (audioBlob.size < 800) {
+          setIsRecording(false);
+          return;
+        }
+
+        try {
+          const formData = new FormData();
+          const ext = (recorder.mimeType && recorder.mimeType.includes('webm')) ? 'webm' : 'mp4';
+          formData.append('file', audioBlob, `query.${ext}`);
+
+          const response = await fetch('/api/v1/apps/judge/stt', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const transcribed = (data.text || data.transcription || '').trim();
+            if (transcribed && !transcribed.includes('خطا در موتور')) {
+              setInputText(prev => prev ? `${prev} ${transcribed}` : transcribed);
+            }
+          }
+        } catch (err) {
+          console.error('STT error:', err);
+        } finally {
+          setIsRecording(false);
+          activeRecorderRef.current = null;
+        }
+      };
+
+      recorder.start(200);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Mic access error:', err);
+      setIsRecording(false);
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach(t => t.stop());
+        activeStreamRef.current = null;
       }
     }
   };
 
+  const stopRecording = () => {
+    if (activeRecorderRef.current && activeRecorderRef.current.state !== 'inactive') {
+      try {
+        activeRecorderRef.current.stop();
+      } catch (e) {}
+    }
+    if (activeStreamRef.current) {
+      activeStreamRef.current.getTracks().forEach(t => t.stop());
+      activeStreamRef.current = null;
+    }
+    setIsRecording(false);
+  };
+
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6 font-sans" dir="rtl">
-      {/* اسکیمای ساختاریافته موتورهای هوش مصنوعی و گوگل */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "LegalService",
-            "name": "قاضی هوشمند",
-            "url": "https://ghazihoushmand.ir",
-            "description": "پلتفرم تحلیل هوشمند پرونده‌های حقوقی و تدوین لایحه دفاعیه با استناد به قوانین معتبر و آرای وحدت رویه دیوان عالی کشور.",
-            "areaServed": "IR",
-            "knowsAbout": ["حقوق مدنی", "قانون تجارت", "حقوق کیفری", "آیین دادرسی", "آرای وحدت رویه دیوان عالی کشور"],
-          }),
-        }}
-      />
-
-      {/* بخش ورودی مینیمال پرونده */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
-        <h1 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
-          دستیار هوشمند حقوقی و تحلیل پرونده
-        </h1>
-        <p className="text-sm text-zinc-500 mb-4">
-          شرح پرونده، مدارک یا سوال حقوقی خود را تایپ کنید یا با فشردن دکمه میکروفون به صورت صوتی بیان فرمایید:
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <textarea
-            value={caseText}
-            onChange={(e) => setCaseText(e.target.value)}
-            rows={4}
-            className="w-full p-4 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
-            placeholder="مثال: شرکتی در سال ۱۴۰۳ ورشکسته شده و طلبکار خواستار خسارت تاخیر تادیه است..."
-          />
-
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={toggleRecording}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition ${
-                isRecording
-                  ? "bg-red-500 text-white animate-pulse"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200"
-              }`}
-            >
-              🎤 {isRecording ? "در حال ضبط... (کلیک جهت توقف)" : "مشاوره صوتی"}
-            </button>
-
-            <button
-              type="submit"
-              disabled={loading || !caseText.trim()}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition"
-            >
-              {loading ? "در حال تحلیل قضایی..." : "تحلیل و تدوین استراتژی ⚡"}
-            </button>
+    <div className="flex flex-col h-full max-w-4xl mx-auto p-4 space-y-4">
+      {/* لیست پیام‌ها */}
+      <div className="flex-1 bg-slate-900/60 border border-slate-800 rounded-3xl p-5 overflow-y-auto space-y-4 min-h-[380px]">
+        {messages.map((m, idx) => (
+          <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed ${
+              m.role === 'user' ? 'bg-amber-600/30 text-white rounded-br-none border border-amber-500/30' : 'bg-slate-800 text-slate-100 rounded-bl-none border border-slate-700'
+            }`}>
+              <div className="font-bold text-xs mb-1 opacity-70">
+                {m.role === 'user' ? 'شما' : 'مستشار قضایی'}
+              </div>
+              <div>{m.content}</div>
+            </div>
           </div>
-
-          {micError && (
-            <p className="text-xs text-rose-500">{micError}</p>
-          )}
-        </form>
+        ))}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-slate-800 text-amber-300 p-4 rounded-2xl text-xs animate-pulse border border-slate-700">
+              در حال استخراج مواد قانونی و تدوین پاسخ...
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* خروجی تحلیل و لایحه حقوقی */}
-      {response && (
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b pb-4 border-zinc-200 dark:border-zinc-800">
-            <h2 className="font-bold text-lg text-zinc-900 dark:text-white">
-              راهبرد دادرسی و تحلیل ادله
-            </h2>
-            {response.success_probability && (
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-xs font-bold rounded-full">
-                شانس موفقیت: {response.success_probability}
-              </span>
-            )}
-          </div>
-
-          {/* مستندات قانونی استخراج‌شده */}
-          {response.statutory_basis && response.statutory_basis.length > 0 && (
-            <div>
-              <h3 className="text-xs font-bold text-zinc-400 uppercase mb-2">مواد قانونی استنادی:</h3>
-              <div className="flex flex-wrap gap-2">
-                {response.statutory_basis.map((law, idx) => (
-                  <span key={idx} className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs rounded-lg">
-                    📜 {law.title}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* آرای وحدت رویه */}
-          {response.unified_precedents && response.unified_precedents.length > 0 && (
-            <div>
-              <h3 className="text-xs font-bold text-zinc-400 uppercase mb-2">آرای وحدت رویه حاکم:</h3>
-              <div className="flex flex-wrap gap-2">
-                {response.unified_precedents.map((prec, idx) => (
-                  <span key={idx} className="px-3 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 text-xs rounded-lg">
-                    🏛️ {prec.title}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* متن پیش‌نویس لایحه */}
-          {response.defense_draft && (
-            <div>
-              <h3 className="text-xs font-bold text-zinc-400 uppercase mb-2">پیش‌نویس لایحه دفاعیه:</h3>
-              <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-sm whitespace-pre-wrap leading-relaxed text-zinc-800 dark:text-zinc-200">
-                {response.defense_draft}
-              </div>
-            </div>
-          )}
+      {/* نوار وضعیت ضبط صدا */}
+      {isRecording && (
+        <div className="flex items-center gap-2 p-2 px-4 bg-rose-500/20 border border-rose-500/30 rounded-2xl text-rose-300 text-xs animate-pulse">
+          <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+          <span>در حال ضبط صدا... لطفاً صحبت فرمایید و سپس کلید توقف را لمس کنید.</span>
         </div>
       )}
+
+      {/* ورودی متن و کنترل‌ها */}
+      <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-2xl p-2">
+        <button
+          onClick={() => handleSend()}
+          disabled={isLoading || !inputText.trim()}
+          className="flex items-center gap-1.5 px-5 py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-sm rounded-xl transition cursor-pointer"
+        >
+          <Send className="w-4 h-4" />
+          ارسال
+        </button>
+
+        <button
+          onClick={() => setIsLiveVoiceOpen(true)}
+          className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition cursor-pointer"
+          title="مشاوره صوتی زنده"
+        >
+          <Phone className="w-5 h-5" />
+        </button>
+
+        {isRecording ? (
+          <button
+            onClick={stopRecording}
+            className="p-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl transition cursor-pointer animate-pulse"
+            title="پایان ضبط"
+          >
+            <Square className="w-5 h-5 fill-current" />
+          </button>
+        ) : (
+          <button
+            onClick={startRecording}
+            className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition cursor-pointer"
+            title="شروع ضبط صدا"
+          >
+            <Mic className="w-5 h-5" />
+          </button>
+        )}
+
+        <input
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="پیام خود را بنویسید یا با میکروفون بگویید..."
+          className="flex-1 bg-transparent px-3 text-sm text-white placeholder-slate-500 focus:outline-none"
+        />
+      </div>
+
+      <LiveVoiceModal
+        isOpen={isLiveVoiceOpen}
+        onClose={() => setIsLiveVoiceOpen(false)}
+        conversationId={conversationId}
+      />
     </div>
   );
 }
