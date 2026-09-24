@@ -1,0 +1,96 @@
+{
+  "task_id": "USER-1789798872",
+  "prompt": "بهترین سیستم برای راه اندازی کارخانه نرم افزاری، ایجنت های خودکار و وب اپلیکیشن های نسل بعد",
+  "created_at": "2026-09-19 06:28:22 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "ai_engine": "DeepSeek V4.1 Flash + Roxira Deep Architect",
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "USER-1789798872_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "AI Agent Factory",
+    "expert_opinion": "برای راه‌اندازی یک کارخانه نرم‌افزاری با تمرکز بر ایجنت‌های خودکار و وب‌اپلیکیشن‌های نسل بعد، پیشنهاد می‌شود از معماری مبتنی بر میکروسرویس‌ها و پلتفرم‌های هوش مصنوعی پیشرفته استفاده شود. این رویکرد امکان توسعه سریع، مقیاس‌پذیری بالا و یکپارچه‌سازی آسان با فناوری‌های نوظهور را فراهم می‌کند. استفاده از فریم‌ورک‌هایی مانند LangGraph برای مدیریت ایجنت‌ها و Daytona برای توسعه وب‌اپلیکیشن‌ها توصیه می‌شود.",
+    "decision_matrix": [
+      {
+        "layer": "Agent Management",
+        "chosen_solution": "LangGraph",
+        "rejected_alternatives": "Custom-built monolithic agents",
+        "technical_justification": "LangGraph امکان مدیریت ایجنت‌های پیچیده را با استفاده از گراف‌های زنجیره‌ای فراهم می‌کند که باعث کاهش تاخیر و افزایش بهره‌وری در مقایسه با راه‌حل‌های سنتی می‌شود."
+      },
+      {
+        "layer": "Web Application Development",
+        "chosen_solution": "Daytona",
+        "rejected_alternatives": "Traditional MVC frameworks",
+        "technical_justification": "Daytona با ارائه ابزارهای مدرن برای توسعه وب‌اپلیکیشن‌های نسل بعد، امنیت و مقیاس‌پذیری را بهبود می‌بخشد و از فناوری‌های قدیمی مانند MVC پیشی می‌گیرد."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "Agent",
+        "table_name": "agents",
+        "description": "مدیریت و اجرای ایجنت‌های خودکار در سیستم",
+        "fields": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "status",
+            "type": "ENUM",
+            "constraints": "NOT NULL"
+          }
+        ]
+      },
+      {
+        "name": "WebApp",
+        "table_name": "web_apps",
+        "description": "مدیریت وب‌اپلیکیشن‌های نسل بعد",
+        "fields": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "version",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/agents",
+        "description": "ایجاد یک ایجنت جدید در سیستم"
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/web_apps",
+        "description": "دریافت لیست وب‌اپلیکیشن‌های نسل بعد"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "langchain-ai/langgraph",
+      "openhands",
+      "daytona"
+    ]
+  }
+}

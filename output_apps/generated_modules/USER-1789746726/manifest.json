@@ -1,0 +1,12 @@
+{
+  "task_id": "USER-1789746726",
+  "prompt": "طراحی ماژول محاسبه خودکار مالیات بر ارزش افزوده و فاکتور رسمی",
+  "created_at": "2026-09-18 15:52:06 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx"
+  ]
+}

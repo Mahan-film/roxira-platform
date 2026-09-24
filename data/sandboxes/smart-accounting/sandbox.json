@@ -1,0 +1,10 @@
+{
+  "app_id": "smart-accounting",
+  "host_port": 4001,
+  "project_name": "roxira-sandbox-smart-accounting",
+  "container_name": "roxira_sandbox_smart-accounting",
+  "subdomain": "smart-accounting.roxira.app",
+  "project_dir": "/opt/roxira_platform/data/sandboxes/smart-accounting",
+  "status": "running",
+  "created_at": 1789578824.8730762
+}

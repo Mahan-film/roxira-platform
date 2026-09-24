@@ -12,11 +12,13 @@ services:
     env_file:
       - .env
     volumes:
+      - /usr/bin/docker:/usr/bin/docker:ro
       - ./src:/app/src
       - ./output_apps:/app/output_apps
       - ./run_unified_server.py:/app/run_unified_server.py
       - ./data:/opt/roxira_platform/data
     environment:
+      - ROXIRA_AUTH_DB_URL=sqlite+aiosqlite:////data/roxira_auth.db
       - POSTGRES_HOST=roxira_pgbouncer
       - POSTGRES_PORT=6432
       - POSTGRES_USER=enterprise_admin

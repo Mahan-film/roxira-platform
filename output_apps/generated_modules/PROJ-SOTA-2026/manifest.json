@@ -1,0 +1,102 @@
+{
+  "task_id": "PROJ-SOTA-2026",
+  "prompt": "طراحی کارخانه تولید نرم‌افزار خودگردان با تیم عامل‌های هوش مصنوعی و خزش وب با فایرکراول",
+  "created_at": "2026-09-19 07:35:47 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "PROJ-SOTA-2026_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "طراحی کارخانه تولید نرم‌افزار خودگردان با استفاده از عامل‌های هوش مصنوعی و خزش وب",
+    "expert_opinion": "در سال ۲۰۲۶، طراحی کارخانه تولید نرم‌افزار خودگردان نیازمند ادغام چندین فناوری پیشرفته از جمله عامل‌های هوش مصنوعی، سیستم‌های حافظه‌ای پیشرفته و ابزارهای خزش وب مانند فایرکراول است. این سیستم‌ها باید قادر به مدیریت حجم عظیمی از داده‌ها باشند و به‌صورت خودکار فرآیندهای توسعه نرم‌افزار را انجام دهند. استفاده از ابزارهایی مانند فایرکراول برای خزش وب و سیستم‌های حافظه‌ای مانند Pinecone و ChromaDB Cloud برای ذخیره و بازیابی داده‌ها ضروری است. این ابزارها به دلیل کارایی بالا و هزینه‌های بهینه، انتخاب‌های مناسبی برای چنین سیستمی هستند.",
+    "implementation_prerequisites": [
+      "سرورهای ابری با قابلیت مقیاس‌پذیری بالا",
+      "سیستم‌های حافظه‌ای پیشرفته مانند Pinecone یا ChromaDB Cloud",
+      "ابزارهای خزش وب مانند فایرکراول",
+      "پلتفرم‌های مدیریت فرآیندهای هوش مصنوعی مانند OpenAI",
+      "زیرساخت‌های امنیتی قوی برای محافظت از داده‌ها"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "سیستم‌های حافظه‌ای",
+        "chosen_solution": "Pinecone به دلیل کارایی بالا و هزینه‌های بهینه",
+        "rejected_alternatives": "سیستم‌های حافظه‌ای سنتی مانند MySQL",
+        "technical_justification": "Pinecone قابلیت ذخیره و بازیابی داده‌ها با سرعت بالا و هزینه‌های کمتر را فراهم می‌کند، در حالی که سیستم‌های سنتی مانند MySQL برای حجم عظیم داده‌ها مناسب نیستند."
+      },
+      {
+        "layer": "ابزارهای خزش وب",
+        "chosen_solution": "فایرکراول به دلیل موفقیت بالا در بازیابی داده‌ها",
+        "rejected_alternatives": "ابزارهای سنتی مانند Scrapy",
+        "technical_justification": "فایرکراول موفقیت بالایی در بازیابی داده‌ها دارد و از نظر سرعت و دقت برتر از ابزارهای سنتی مانند Scrapy است."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "سیستم حافظه‌ای",
+        "table_name": "memory_system",
+        "description": "ذخیره و بازیابی داده‌ها برای عامل‌های هوش مصنوعی",
+        "fields": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "data",
+            "type": "JSONB",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "timestamp",
+            "type": "TIMESTAMP",
+            "constraints": "NOT NULL"
+          }
+        ]
+      },
+      {
+        "name": "ابزار خزش وب",
+        "table_name": "web_crawler",
+        "description": "جمع‌آوری داده‌ها از وب برای پردازش توسط عامل‌های هوش مصنوعی",
+        "fields": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "url",
+            "type": "TEXT",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "content",
+            "type": "JSONB",
+            "constraints": "NOT NULL"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/crawl",
+        "description": "درخواست خزش یک صفحه وب"
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/memory",
+        "description": "بازیابی داده‌ها از سیستم حافظه‌ای"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "https://github.com/firecrawl/benchmark-devdex",
+      "https://github.com/pinecone-io/pinecone",
+      "https://github.com/chroma-core/chroma"
+    ]
+  }
+}

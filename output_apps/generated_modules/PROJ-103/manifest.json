@@ -1,0 +1,12 @@
+{
+  "task_id": "PROJ-103",
+  "prompt": "طراحی موتور هوشمند تطبیق قراردادها با ماده ۱۰ قانون مدنی و قوانین تجارت الکترونیک",
+  "created_at": "2026-09-18 15:38:46 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx"
+  ]
+}

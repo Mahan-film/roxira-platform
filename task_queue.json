@@ -1,0 +1,267 @@
+{
+  "pending": [],
+  "completed": [
+    {
+      "id": "PROJ-101",
+      "prompt": "توسعه ماژول انبارداری هوشمند مبتنی بر هوش مصنوعی با پیش‌بینی کسری کالا",
+      "status": "SUCCESS",
+      "completed_at": "2026-09-18 15:33:48 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "PROJ-102",
+      "prompt": "پیاده‌سازی ماژول ارسال خودکار فاکتورهای الکترونیکی به سامانه مودیان مالیاتی با امضای دیجیتال",
+      "status": "SUCCESS",
+      "auto_generated": true,
+      "created_at": "2026-09-18 15:38:27 UTC",
+      "completed_at": "2026-09-18 15:38:30 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "PROJ-103",
+      "prompt": "طراحی موتور هوشمند تطبیق قراردادها با ماده ۱۰ قانون مدنی و قوانین تجارت الکترونیک",
+      "status": "SUCCESS",
+      "auto_generated": true,
+      "created_at": "2026-09-18 15:38:46 UTC",
+      "completed_at": "2026-09-18 15:38:49 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789746147",
+      "prompt": "طراحی پنل گزارشات پیشرفته مالیاتی",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 15:42:27 UTC",
+      "completed_at": "2026-09-18 15:42:29 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "PROJ-104",
+      "prompt": "پیاده‌سازی هسته تسعیر خودکار چندارزی بر پایه استاندارد ISO 4217 با بافر هجینگ تتر",
+      "status": "SUCCESS",
+      "auto_generated": true,
+      "created_at": "2026-09-18 15:43:51 UTC",
+      "completed_at": "2026-09-18 15:43:54 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "PROJ-105",
+      "prompt": "طراحی ماژول چندسکویی ارزیابی ادله اثبات دعوی در دادگاه‌های صلح مبتنی بر Tauri 2.0",
+      "status": "SUCCESS",
+      "auto_generated": true,
+      "created_at": "2026-09-18 15:44:27 UTC",
+      "completed_at": "2026-09-18 15:44:27 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789746318",
+      "prompt": "پیاده‌سازی ماژول تسعیر ارز و پورتفوی هوشمند رمزارز",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 15:45:18 UTC",
+      "completed_at": "2026-09-18 15:45:18 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789746570",
+      "prompt": "طراحی سیستم مدیریت انبارداری هوشمند مبتنی بر هوش مصنوعی",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 15:49:30 UTC",
+      "completed_at": "2026-09-18 15:49:30 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789746726",
+      "prompt": "طراحی ماژول محاسبه خودکار مالیات بر ارزش افزوده و فاکتور رسمی",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 15:52:06 UTC",
+      "completed_at": "2026-09-18 15:52:07 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789747637",
+      "prompt": "طراحی موتور اعتبارسنجی صورتحساب الکترونیکی با کلید خصوصی مودیان مالیاتی",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 16:07:17 UTC",
+      "completed_at": "2026-09-18 16:07:17 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789763464",
+      "prompt": "crm erp agentic accounting",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 20:31:04 UTC",
+      "completed_at": "2026-09-18 20:31:50 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789766278",
+      "prompt": "crm",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 21:17:58 UTC",
+      "completed_at": "2026-09-18 21:19:03 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789766663",
+      "prompt": "crm",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-18 21:24:23 UTC",
+      "completed_at": "2026-09-18 21:25:21 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789797493",
+      "prompt": "agentic accounting system",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 05:58:13 UTC",
+      "completed_at": "2026-09-19 05:58:13 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789797762",
+      "prompt": "agent factory ai autonomies  app and web app and database factory",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 06:02:42 UTC",
+      "completed_at": "2026-09-19 06:02:42 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789798046",
+      "prompt": "سیستم تست خودکار پورت",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 06:07:26 UTC",
+      "completed_at": "2026-09-19 06:07:26 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789798144",
+      "prompt": "agent factory ai autonomies app and web app and database factory",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 06:09:04 UTC",
+      "completed_at": "2026-09-19 06:09:04 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789798391",
+      "prompt": "تست نهایی یکپارچگی صوت و دیسپچر",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 06:13:11 UTC",
+      "completed_at": "2026-09-19 06:13:12 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789798872",
+      "prompt": "بهترین سیستم برای راه اندازه کارخانه نرم افزاری یا ایجنت و  سایر ویب اپلیکیشن ها به چه صورت و چجوری هستش؟  و در کن نظر خودت هم چیه؟  برای ساخته هم توی تکنولوژی با نسل بعد با ابزارها  چون ابزارهای ممکن لازم نباشه  همه قسمت هاشو در نظر بگیر  هم بکند هم فرانس هم  هست های مختلفه",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 06:21:12 UTC",
+      "completed_at": "2026-09-19 06:21:41 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789799567",
+      "prompt": "بهترین تکنولوژی برای ساختار کارخانه نرم‌افزار چیست؟",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 06:32:47 UTC",
+      "completed_at": "2026-09-19 06:34:13 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789801340",
+      "prompt": "بهترین تکنولوژی‌ها و زیرساخت‌های سرچ و ریسرچ و دیپ‌ریسرچ چیست؟ برای من توضیح بده و اینکه اگر احتیاج من کارهای جنرال باشد و همچنین کارهای زیرساختی باشد، کارهایی که مثلاً یک تکنولوژی را توصیف کنم یا بخواهم یک کارخانه نرم‌افزار خوش‌مسنونی را راه‌اندازی کنم یا کارهای تحقیقاتی برای مقالات علمی انجام دهم، برای کارهای مختلف چه چیزی استفاده کنم؟",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:02:20 UTC",
+      "completed_at": "2026-09-19 07:02:47 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789801566",
+      "prompt": "الان بهترین سیستم های تحقیقاتی جهان چیا هستش؟  سیستم های تکنولوژی نسل بعدی برای دیپ ریسرچ و  اطلاعات موفق برای اساس جدیدترین اطلاعات ممکنی اتلاعات لحظه آخری، تکنولوژی لحظه آخری، یعنی بتونه تا مثلا نیم ساعت پیش، اخبار یک ساعت پیش رو حتی بررسی کنه.",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:06:06 UTC",
+      "completed_at": "2026-09-19 07:06:10 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "PROJ-SOTA-2026",
+      "prompt": "طراحی کارخانه تولید نرم‌افزار خودگردان با تیم عامل‌های هوش مصنوعی و خزش وب با فایرکراول",
+      "status": "COMPLETED",
+      "created_at": "2026-09-19 07:18:46 UTC"
+    },
+    {
+      "id": "USER-1789802544",
+      "prompt": "متالوژی ها و روش های  search for research برای محققین در سال ۲۰۲۶ به چه صورت و به چه شکل هستش  و اینکه آیا این هدفش...  حقیقاتی برای این روش سرچ فاریسرچ برای محققین  از در مدیریتی از در سایر روش ها  به هینه تا این حالت ممکنه هستش  افکتیف و افیشنت هست",
+      "status": "COMPLETED",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:22:24 UTC",
+      "completed_at": "2026-09-19 07:22:52 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789802891",
+      "prompt": "بهترین تکنولوژی هم تبدیل هم  صدا به مچ  و تبیل صدا به صدا  بساته لایف چات.  هر کدوم به صورت مجزا برای من تحقیقات کن  سرچ و جیسرش بکنم  خودماش بهترین هستش  در کل جهان  الان بهتریناش کدومه؟ لطفا همه جا رو بررسی کن.  همه سایت هارو  و ایتا اینا شما لیست کن برام",
+      "status": "COMPLETED",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:28:11 UTC",
+      "completed_at": "2026-09-19 07:30:37 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789803038",
+      "prompt": ". بهترین تکنولوژیه تبدیل معطب صوت و صوت به صوت یعنی تکست تو سپیچ چی ها هستش؟ همچنین لایف چات  که به صورت زندگی صحبت میکنند چی هستش؟",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:30:38 UTC",
+      "completed_at": "2026-09-19 07:33:13 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789804227",
+      "prompt": "بر اساس جاییتر اطلاعات ممکن بهترین تکلیجی و بهترین سیستم تبدیل صوت به مت speech to text چی استش",
+      "status": "COMPLETED",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:50:27 UTC",
+      "completed_at": "2026-09-19 07:51:21 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "USER-1789804764",
+      "prompt": "بهترین سیستم‌های هاست، سرچ و ریسرچ تحقیقاتی برای دستگاه‌های live research و live deep research به چه صورت است؟ سیستم‌های agentic deep research بهترین‌هایشان کدام‌ها هستند؟ آیا نگران نیستید که بدترین‌هایشان کدام‌ها هستند؟ با چه پلتفرمی و با چه زیرساختی؟",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 07:59:24 UTC",
+      "completed_at": "2026-09-19 08:00:13 UTC",
+      "exit_code": 0
+    },
+    {
+      "id": "PROJ-COMPLETE-2026",
+      "prompt": "طراحی کارخانه تولید نرم‌افزار خودگردان با معماری وب‌آرتی‌سی، حافظه برداری و سندباکس کانتینری",
+      "status": "COMPLETED",
+      "created_at": "2026-09-19 08:56:42 UTC"
+    },
+    {
+      "id": "USER-1789818507",
+      "prompt": "بهترین زیرساخت و تکنولوژی و هوش مصنوعی برای تبدیل گفتار به متن چیست؟ برای من کاملاً جامع است که بتوانم به صورت آنلاین و در زمان واقعی صحبت کنم. پیشنهادات را برای من پیدا و آماده کن و استراتژی را ارائه بده.speech to speech",
+      "status": "SUCCESS",
+      "priority": "IMMEDIATE",
+      "created_at": "2026-09-19 11:48:27 UTC",
+      "completed_at": "2026-09-19 11:49:06 UTC",
+      "exit_code": 0
+    }
+  ]
+}

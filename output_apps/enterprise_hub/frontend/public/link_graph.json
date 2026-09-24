@@ -1,0 +1,26 @@
+{
+  "ghazihoushmand.ir": {
+    "cross_domain_links": [
+      "https://roxira.ir/accounting",
+      "https://roxira.ir/invoicing"
+    ],
+    "legal_services": [
+      "/damages",
+      "/laws",
+      "/precedents",
+      "/chat"
+    ]
+  },
+  "roxira.ir": {
+    "cross_domain_links": [
+      "https://ghazihoushmand.ir/judge",
+      "https://ghazihoushmand.ir/damages"
+    ],
+    "enterprise_modules": [
+      "/accounting",
+      "/invoicing",
+      "/crm",
+      "/inventory"
+    ]
+  }
+}

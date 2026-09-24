@@ -1,0 +1,24 @@
+{
+  "app_id": "saas-dashboard",
+  "stage": "FAILED",
+  "status": "FAILED",
+  "app_name": "saas-dashboard",
+  "prompt": "Create a modern Next.js admin portal",
+  "target_framework": "FastAPI",
+  "tier": "FRONTIER",
+  "host_port": null,
+  "subdomain": null,
+  "url": null,
+  "container_id": null,
+  "container_name": null,
+  "project_dir": null,
+  "error": "[Errno 2] No such file or directory: 'docker'",
+  "stages": [
+    {
+      "stage": "FAILED",
+      "at": 1789575077.5630658
+    }
+  ],
+  "created_at": 1789575077.545484,
+  "updated_at": 1789575077.5630658
+}

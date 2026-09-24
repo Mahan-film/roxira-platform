@@ -1,0 +1,134 @@
+{
+  "task_id": "TEST-01-NET",
+  "prompt": "طراحی سامانه توزیع بار هوشمند روی لبه شبکه با پروتکل QUIC",
+  "created_at": "2026-09-19 06:50:34 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "ai_engine": "DeepSeek V4.1 Flash + Roxira Deep Architect",
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "TEST-01-NET_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "شبکه لبه و پروتکل‌های ارتباطی",
+    "expert_opinion": "طراحی سامانه توزیع بار هوشمند روی لبه شبکه با پروتکل QUIC در سال ۲۰۲۶ نیازمند رویکردی است که از مزایای QUIC در کاهش تأخیر و بهبود امنیت بهره‌برداری کند. QUIC با ترکیب لایه‌های انتقال و امنیت، امکان ارتباط سریع‌تر و مطمئن‌تر را فراهم می‌کند. این پروتکل به‌طور خاص برای شبکه‌های لبه که نیازمند پاسخگویی سریع و مدیریت بار پویا هستند، مناسب است. با استفاده از الگوریتم‌های هوشمند توزیع بار، می‌توان منابع را به‌صورت پویا بین گره‌های لبه توزیع کرد و از اضافه‌بار یا کم‌بار شدن گره‌ها جلوگیری نمود. این سیستم باید قابلیت‌هایی مانند پیش‌بینی بار، مدیریت خودکار منابع و پشتیبانی از ارتباطات چندمسیره را داشته باشد تا در شرایط مختلف شبکه عملکرد بهینه را ارائه دهد.",
+    "decision_matrix": [
+      {
+        "layer": "پروتکل ارتباطی",
+        "chosen_solution": "QUIC",
+        "rejected_alternatives": "TCP, HTTP/2",
+        "technical_justification": "QUIC به دلیل استفاده از UDP و ادغام لایه‌های انتقال و امنیت، تأخیر کمتری نسبت به TCP دارد. همچنین، QUIC از قابلیت‌هایی مانند چندمسیره و بازیابی سریع از قطعی‌ها پشتیبانی می‌کند که برای شبکه‌های لبه حیاتی است. در مقابل، TCP و HTTP/2 به دلیل تأخیر بیشتر و عدم پشتیبانی از چندمسیره، برای این کاربرد مناسب نیستند."
+      },
+      {
+        "layer": "الگوریتم توزیع بار",
+        "chosen_solution": "الگوریتم‌های مبتنی بر یادگیری ماشین",
+        "rejected_alternatives": "الگوریتم‌های سنتی مانند Round Robin",
+        "technical_justification": "الگوریتم‌های مبتنی بر یادگیری ماشین قادر به پیش‌بینی بار و توزیع منابع به‌صورت پویا هستند، در حالی که الگوریتم‌های سنتی مانند Round Robin نمی‌توانند به تغییرات پویا در شبکه پاسخ دهند. این الگوریتم‌ها با استفاده از داده‌های تاریخی و الگوهای بار، تصمیمات بهینه‌تری اتخاذ می‌کنند."
+      },
+      {
+        "layer": "مدیریت منابع",
+        "chosen_solution": "سیستم مدیریت خودکار منابع",
+        "rejected_alternatives": "مدیریت دستی منابع",
+        "technical_justification": "سیستم مدیریت خودکار منابع قادر به تخصیص و آزادسازی منابع به‌صورت پویا بر اساس نیازهای شبکه است، در حالی که مدیریت دستی منابع نمی‌تواند به تغییرات سریع شبکه پاسخ دهد. این سیستم با استفاده از سنسورها و داده‌های بلادرنگ، منابع را به‌صورت بهینه مدیریت می‌کند."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "گره لبه",
+        "table_name": "edge_node",
+        "description": "گره‌های لبه که وظیفه پردازش و توزیع بار را در شبکه بر عهده دارند.",
+        "fields": [
+          {
+            "name": "node_id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "location",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "capacity",
+            "type": "INTEGER",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "current_load",
+            "type": "INTEGER",
+            "constraints": "NOT NULL"
+          }
+        ]
+      },
+      {
+        "name": "الگوریتم توزیع بار",
+        "table_name": "load_balancing_algorithm",
+        "description": "الگوریتم‌های هوشمند که وظیفه توزیع بار بین گره‌های لبه را بر عهده دارند.",
+        "fields": [
+          {
+            "name": "algorithm_id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "algorithm_name",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "parameters",
+            "type": "JSON",
+            "constraints": "NOT NULL"
+          }
+        ]
+      },
+      {
+        "name": "مدیریت منابع",
+        "table_name": "resource_management",
+        "description": "سیستم مدیریت خودکار منابع که وظیفه تخصیص و آزادسازی منابع را بر عهده دارد.",
+        "fields": [
+          {
+            "name": "resource_id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "resource_type",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "allocated_to",
+            "type": "UUID",
+            "constraints": "FOREIGN KEY"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/load_balancing",
+        "description": "درخواست توزیع بار بین گره‌های لبه بر اساس الگوریتم‌های هوشمند."
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/resource_status",
+        "description": "دریافت وضعیت منابع تخصیص‌یافته به گره‌های لبه."
+      },
+      {
+        "method": "PUT",
+        "endpoint": "/api/v1/resource_allocation",
+        "description": "تخصیص یا آزادسازی منابع به گره‌های لبه."
+      }
+    ],
+    "recommended_sota_repositories": [
+      "google/quic",
+      "tensorflow/tensorflow",
+      "kubernetes/kubernetes"
+    ]
+  }
+}

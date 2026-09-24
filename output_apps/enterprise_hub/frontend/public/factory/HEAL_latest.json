@@ -1,0 +1,6 @@
+{
+  "issue": "عدم تطابق فرمت تاریخ شمسی در پاسخ خروجی API",
+  "reproducer_test_status": "CONFIRMED_AND_PASSED_AFTER_PATCH",
+  "diff_summary": "Auto-repaired endpoint error handling & schema validation",
+  "verdict": "READY_FOR_FINAL_USER_ACCEPTANCE"
+}
