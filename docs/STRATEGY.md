@@ -66,11 +66,11 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 | # | Workstream | Needs server | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | W0 | Root README | no | — | ✅ PR #1 |
-| W1 | Secrets to `.env` + ports to loopback | deploy step | — | 🟨 PR #2 (draft, needs server run) |
-| W2 | Centralize DB/API config: ~55 files embed the DB password in DSNs | no | W1 merged | 🟨 PR #4 (merge after PR #2; root compose + smartjudge_module.py left to W1) |
+| W1 | Secrets to `.env` + ports to loopback | deploy step | — | ✅ PR #2 (deployed 2026-09-24) |
+| W2 | Centralize DB/API config: ~55 files embed the DB password in DSNs | no | W1 merged | ✅ PR #4 |
 | W3 | Repo hygiene: remove committed `venv/`, stop daemon audit commits to main, move one-off root scripts, remove dumps/snapshots from git, history-rewrite plan | no | W1 merged | ⬜ |
-| W4 | CI: GitHub Actions for ruff, pytest, `compose config`, gitleaks secret scan, then deploy-on-merge | no | W3 | 🟨 PR #6 (CI green; ruff + ESLint non-blocking; deploy-on-merge still todo) |
-| W5 | LLM router with tiers, fallbacks, Redis cache and cost log (section 3b) | no | W2 | 🟨 PR #5 (flag `LLM_ROUTER_ENABLED`, default off; flip on server to activate) |
+| W4 | CI: GitHub Actions for ruff, pytest, `compose config`, gitleaks secret scan, then deploy-on-merge | no | W3 | ✅ PR #6 |
+| W5 | LLM router with tiers, fallbacks, Redis cache and cost log (section 3b) | no | W2 | ✅ PR #5 (flag off) |
 | W6 | Legal corpus gap: article-level chunking and ingestion of the missing codes (Qdrant shows 1,305 points vs 1,335 articles in the Civil Code alone) | yes | — | ⬜ |
 | W7 | Voice latency: measure STT/LLM/TTS p50 first, then streaming TTS, target p50 < 2 s | yes | W5 | ⬜ |
 | W8 | Server hardening: sandbox ports 4000/4001 to loopback, DOCKER-USER firewall chain, apply updates + reboot window, off-git backups | yes | W1 deployed | ⬜ |
@@ -84,3 +84,18 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 - Before starting work, always run `git fetch && git checkout origin/main`. A local clone can be hundreds of commits behind.
 - Qdrant did not answer the audit script. `/judge/health` returns 405 and `/judge/chat` returns 422 on an empty body.
 - Keys are in git history. The owner chose not to rotate them for now.
+
+## 7. Deploy runbook (production)
+
+1. `ssh 5.75.200.67` → `cd /opt/roxira_platform && git pull --ff-only origin main`
+2. `docker compose -f docker-compose.prod.yml config -q` must pass (secrets are required from `.env`).
+3. Dry-import before restarting: `docker exec --env-file .env -w /app roxira_app_prod python3 -c "import run_unified_server"`. Compare the `LOAD-FAIL` list with the previous run.
+4. Recreate only the services whose config changed: `docker compose -f docker-compose.prod.yml up -d --no-deps <services>`.
+   `roxira_enterprise_frontend` was started with `docker run`, not compose, so do **not** include it until it is migrated (W8).
+5. **Always** run `docker exec roxira_nginx_prod nginx -s reload` afterwards. nginx caches upstream container IPs, and a recreated container gets a new IP, which causes a 502 until reload.
+6. Verify: `/health`, `POST /api/v1/apps/judge/payments/create-invoice` (not 404), a real chat through `https://ghazihoushmand.ir`, and external ports closed.
+
+Host notes:
+- `.env` backups go to `/root/env-backups/`, never inside the repo. The daemon runs `git add -A`.
+- Host cron jobs must run through `scripts/ops/with_env.py` so they see `.env`.
+- Firewall: `roxira-docker-firewall.service` (DOCKER-USER chain) blocks 6432/3000/4000/4001 on eth0.
