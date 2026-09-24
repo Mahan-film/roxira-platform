@@ -6,6 +6,7 @@ import httpx
 import pathlib
 import psycopg
 from typing import Dict, Any
+from src.roxira_config import postgres_dsn
 
 ROOT_DIR = pathlib.Path.cwd()
 ENV_FILE = ROOT_DIR / ".env"
@@ -44,7 +45,7 @@ def audit_api_keys() -> Dict[str, Any]:
     return results
 
 def audit_database_and_artifacts() -> Dict[str, Any]:
-    db_url = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+    db_url = postgres_dsn(host="127.0.0.1", port=5434)
     db_status = "UNKNOWN"
     try:
         with psycopg.connect(db_url) as conn:

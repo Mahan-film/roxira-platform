@@ -210,7 +210,7 @@ def _pg_dsn() -> str:
     host = os.getenv("PGBOUNCER_HOST") or os.getenv("POSTGRES_HOST", "127.0.0.1")
     port = os.getenv("PGBOUNCER_PORT", "6432")
     user = os.getenv("POSTGRES_USER", "enterprise_admin")
-    password = os.getenv("POSTGRES_PASSWORD", "REDACTED_SECRET_19")
+    password = os.environ["POSTGRES_PASSWORD"]
     dbname = os.getenv("POSTGRES_DB", "enterprise_db")
     return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
 

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import psycopg
 from typing import List, Dict
+from src.roxira_config import postgres_dsn
 
-DB_URL = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+DB_URL = postgres_dsn(host="127.0.0.1", port=5434)
 
 def search_relevant_statutes(query_terms: List[str], limit: int = 5) -> List[Dict[str, str]]:
     """Retrieves relevant legal statutes and precedents from PostgreSQL database."""
