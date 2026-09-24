@@ -22,13 +22,23 @@ dependencies = [
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-extend-exclude = ["**/migrations/*.py"]
+extend-exclude = ["**/migrations/*.py", "venv"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/migrations/*.py" = ["RUF012"]
+
+[tool.pytest.ini_options]
+testpaths = ["src"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
+addopts = "--import-mode=importlib"
+norecursedirs = ["venv", "node_modules", ".git", "*.egg-info", "__pycache__"]
+markers = [
+    "integration: needs live services (Postgres, Qdrant, LLM keys, network); skipped in CI",
+]
 
 [dependency-groups]
 dev = [
