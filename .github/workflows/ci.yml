@@ -1,0 +1,216 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    # The server daemon pushes an audit commit to main every ~30 minutes that only
+    # touches these generated reports. Skip CI for those pushes.
+    paths-ignore:
+      - "output_apps/enterprise_hub/frontend/public/autonomous_dashboard.json"
+      - "output_apps/enterprise_hub/frontend/public/tech_radar_report.json"
+      - "TECH_RADAR_*"
+      - "**/*.md"
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: "8.30.1"
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "20"
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      compose: ${{ steps.filter.outputs.compose }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            python:
+              - "**/*.py"
+              - "pyproject.toml"
+              - "ci/requirements-test.txt"
+              - ".github/workflows/ci.yml"
+            compose:
+              - "docker-compose.prod.yml"
+              - "ci/compose.env"
+              - ".github/workflows/ci.yml"
+            frontend:
+              - "output_apps/enterprise_hub/frontend/**"
+              - ".github/workflows/ci.yml"
+
+  gitleaks:
+    name: Secret scan (new commits only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Blobless clone: full commit graph, blobs fetched lazily only for the scanned range.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Self-test (a new fake token must be caught)
+        run: |
+          t=$(mktemp -d) && cp .gitleaks.toml "$t/" && cd "$t"
+          git init -q && git -c user.email=ci@ci -c user.name=ci commit -q --allow-empty -m base
+          echo "token = \"ghp_$(openssl rand -hex 18)\"" > leak.py
+          git add leak.py && git -c user.email=ci@ci -c user.name=ci commit -q -m leak
+          set +e
+          gitleaks git --config .gitleaks.toml --log-opts="HEAD~1..HEAD" --no-banner --exit-code 42 .
+          if [ $? -ne 42 ]; then
+            echo "::error::gitleaks did not catch a fake token; check .gitleaks.toml"; exit 1
+          fi
+      - name: Scan commits introduced by this change
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # History already contains secrets on purpose (see docs/STRATEGY.md §6), so only
+          # the commits this PR/push adds are scanned. Removing a secret never fails.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            RANGE="-1 $HEAD"
+          else
+            RANGE="$BASE..$HEAD"
+          fi
+          echo "Scanning $RANGE"
+          gitleaks git --config .gitleaks.toml --log-opts="$RANGE" --redact --no-banner --verbose .
+
+  ruff:
+    name: Ruff (non-blocking)
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install "ruff>=0.16.2,<0.17"
+      - name: ruff check
+        id: ruff
+        # Thousands of pre-existing violations: report, do not block. Flip to blocking once the count reaches 0.
+        continue-on-error: true
+        run: |
+          set +e
+          ruff check . --output-format=github
+          code=$?
+          count=$(ruff check . --output-format=concise --quiet | grep -c ':' || true)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Ruff"
+            echo "**$count** violations (non-blocking)."
+            echo
+            echo '```'
+            ruff check . --statistics | head -25
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+      - name: Report count on the PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          COUNT: ${{ steps.ruff.outputs.count }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="<!-- ci-ruff-count -->
+          **Ruff:** ${COUNT} violations (non-blocking). [Details]($RUN_URL)"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            -q '.[] | select(.body | startswith("<!-- ci-ruff-count -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh pr comment "$PR" --body "$body"
+          fi
+
+  pytest:
+    name: Pytest (unit)
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ci/requirements-test.txt
+      - run: pip install -r ci/requirements-test.txt
+      - name: pytest
+        # Tests that need Postgres, Qdrant, LLM keys or the network are marked
+        # `integration` in src/conftest.py and skipped here.
+        run: pytest -m "not integration" -q --timeout=60
+
+  compose:
+    name: Compose config
+    needs: changes
+    if: needs.changes.outputs.compose == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: docker compose config
+        # ci/compose.env holds dummy values for every required (${VAR:?}) variable.
+        # A new required variable that is not added there fails this step.
+        run: |
+          cp ci/compose.env .env
+          docker compose --env-file ci/compose.env -f docker-compose.prod.yml config -q
+
+  frontend:
+    name: Frontend lint + build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: output_apps/enterprise_hub/frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: output_apps/enterprise_hub/frontend/package-lock.json
+      - run: npm ci
+      - name: npm run lint
+        # ~28 pre-existing ESLint errors: report, do not block. Flip to blocking once clean.
+        continue-on-error: true
+        run: |
+          set +e
+          npm run lint -- --format json --output-file "$RUNNER_TEMP/eslint.json" > /dev/null
+          code=$?
+          npm run lint
+          node -e 'const r=require(process.argv[1]);const e=r.reduce((a,f)=>a+f.errorCount,0),w=r.reduce((a,f)=>a+f.warningCount,0);console.log(`### ESLint\n**${e}** errors, **${w}** warnings (non-blocking).`)' \
+            "$RUNNER_TEMP/eslint.json" >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
