@@ -10,8 +10,9 @@ import pathlib
 import sys
 import psycopg
 from typing import Dict, Any, Optional
+from src.roxira_config import postgres_dsn
 
-DB_URL = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+DB_URL = postgres_dsn(host="127.0.0.1", port=5434)
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET environment variable is not set; refusing to sign tokens with a default secret")

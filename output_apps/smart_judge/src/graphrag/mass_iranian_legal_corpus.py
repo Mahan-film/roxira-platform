@@ -6,14 +6,12 @@ import os
 import json
 import psycopg
 from typing import List, Dict, Any
+from src.roxira_config import postgres_dsn
 
 def get_db_url() -> str:
     pg_host = os.getenv("POSTGRES_HOST", "127.0.0.1")
     pg_port = os.getenv("POSTGRES_PORT", "5434" if pg_host in ("127.0.0.1", "localhost") else "5432")
-    pg_user = os.getenv("POSTGRES_USER", "enterprise_admin")
-    pg_pass = os.getenv("POSTGRES_PASSWORD", "REDACTED_SECRET_19")
-    pg_db = os.getenv("POSTGRES_DB", "enterprise_db")
-    return os.getenv("DATABASE_URL", f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}")
+    return os.getenv("DATABASE_URL") or postgres_dsn(host=pg_host, port=pg_port)
 
 class MassLegalCorpusIngestor:
     MASS_STATUTES = [

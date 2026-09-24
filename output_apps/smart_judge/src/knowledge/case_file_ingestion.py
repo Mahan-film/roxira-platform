@@ -15,8 +15,9 @@ for parent in CURRENT_FILE.parents:
         break
 
 from output_apps.ecosystem_core.src.ingestion.universal_parser import parse_unstructured_document
+from src.roxira_config import postgres_dsn
 
-DB_URL = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+DB_URL = postgres_dsn(host="127.0.0.1", port=5434)
 
 def init_case_storage():
     """Initializes tables for client legal cases, contracts, and evidence files."""

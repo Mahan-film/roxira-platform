@@ -40,3 +40,7 @@ node_modules/
 dist/
 .aider*
 twenty_data/
+
+# Claude Code: personal permissions and agent worktrees (never commit)
+.claude/settings.local.json
+.claude/worktrees/

@@ -11,6 +11,7 @@ CURRENT_DIR = pathlib.Path.cwd()
 for p in [CURRENT_DIR, pathlib.Path("/Users/mac/Developer/project-foundry-worktrees/fnd-ops-00"), pathlib.Path("/Users/mac/Developer/project-foundry")]:
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
+from src.roxira_config import postgres_dsn
 
 # ۲. بررسی و نصب در‌لحظه پیش‌نیازها
 REQUIRED_PACKAGES = ["psycopg", "fastapi", "uvicorn", "redis", "docx"]
@@ -26,7 +27,7 @@ def verify_system_readiness():
     
     # تست اتصال دیتابیس
     import psycopg
-    db_url = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+    db_url = postgres_dsn(host="127.0.0.1", port=5434)
     with psycopg.connect(db_url) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM legal_statutes_v2;")

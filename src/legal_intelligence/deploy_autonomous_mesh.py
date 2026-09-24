@@ -65,8 +65,9 @@ seo_sitemap_script = r'''#!/usr/bin/env python3
 import psycopg
 import json
 import os
+from src.roxira_config import postgres_dsn
 
-POSTGRES_DSN = "postgresql://enterprise_admin:REDACTED_SECRET_19@roxira_postgres_prod:5432/enterprise_db"
+POSTGRES_DSN = postgres_dsn(host="roxira_postgres_prod", port=5432)
 PUBLIC_DIR = "/opt/roxira_platform/output_apps/enterprise_hub/frontend/public"
 
 try:

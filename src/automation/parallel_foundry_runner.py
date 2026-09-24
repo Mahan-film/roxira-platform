@@ -13,6 +13,7 @@ ROOT_DIRS = [pathlib.Path.cwd(), pathlib.Path("/Users/mac/Developer/project-foun
 for r in ROOT_DIRS:
     if str(r) not in sys.path:
         sys.path.insert(0, str(r))
+from src.roxira_config import postgres_dsn
 
 def resolve_file(rel: str) -> pathlib.Path:
     for base in ROOT_DIRS:
@@ -94,7 +95,7 @@ async def task_devops_snapshot():
     """Agent 4: اعتبارسنجی تراز کل و ایجاد اسنپ‌شات ایزوله دیتابیس"""
     print("  [Worker 4 - DevOps/Audit] Verifying system balance & snapshotting DB...")
     t0 = time.perf_counter()
-    db_url = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+    db_url = postgres_dsn(host="127.0.0.1", port=5434)
     with psycopg.connect(db_url) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM tenant_ledger_entries;")

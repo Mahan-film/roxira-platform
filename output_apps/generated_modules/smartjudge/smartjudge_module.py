@@ -148,7 +148,10 @@ except Exception as _lr_import_exc:  # noqa: BLE001
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudge Complete Engine"])
 
-POSTGRES_DSN = "postgresql://enterprise_admin:REDACTED_SECRET_19@roxira_postgres_prod:5432/enterprise_db"
+POSTGRES_DSN = (
+    "postgresql://enterprise_admin:"
+    f"{os.environ.get('POSTGRES_PASSWORD', '')}@roxira_postgres_prod:5432/enterprise_db"
+)
 
 # ============================================================================
 # VIP access gate — اشتراک‌سنجی و صدور/اعتبارسنجی توکن JWT داخلی
@@ -316,7 +319,7 @@ def _load_env_var(key: str, default: str = "") -> str:
                 pass
     return default
 
-OPENROUTER_API_KEY = _load_env_var("OPENROUTER_API_KEY", "REDACTED_SECRET_02")
+OPENROUTER_API_KEY = _load_env_var("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
 OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 

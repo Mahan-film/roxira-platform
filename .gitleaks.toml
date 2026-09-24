@@ -1,0 +1,19 @@
+# gitleaks config for CI (.github/workflows/ci.yml).
+# CI scans only the commits a PR or push adds, so secrets already in history do not fail
+# every run (they are known; see docs/STRATEGY.md §6). New leaks do.
+title = "roxira-platform"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Vendored or generated files that are not ours"
+paths = [
+  '''(^|/)venv/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)package-lock\.json$''',
+]
+
+[[allowlists]]
+description = "Dummy values used only by the CI compose check"
+paths = ['''^ci/compose\.env$''']

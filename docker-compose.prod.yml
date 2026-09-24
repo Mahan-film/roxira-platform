@@ -22,24 +22,24 @@ services:
       - POSTGRES_HOST=roxira_pgbouncer
       - POSTGRES_PORT=6432
       - POSTGRES_USER=enterprise_admin
-      - POSTGRES_PASSWORD=REDACTED_SECRET_19
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=enterprise_db
       - REDIS_HOST=redis_prod
       - REDIS_PORT=6379
       - QDRANT_HOST=qdrant_prod
       - QDRANT_PORT=6333
       # sms.ir (Fast/Verify) — سرویس ارسال کد تأیید (از .env مقداردهی می‌شود)
-      - SMS_IR_API_KEY=${SMS_IR_API_KEY:-REDACTED_SECRET_04}
+      - SMS_IR_API_KEY=${SMS_IR_API_KEY:?set SMS_IR_API_KEY in .env}
       - SMS_IR_TEMPLATE_ID=${SMS_IR_TEMPLATE_ID:-000000}
       # Kavenegar (Verify Lookup) — مسیر رسمی ارسال OTP خطوط ghazi-verify / roxira-verify
-      - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:-REDACTED_SECRET_01}
+      - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:?set KAVENEGAR_API_KEY in .env}
       - KAVENEGAR_TEMPLATE_GHAZI=${KAVENEGAR_TEMPLATE_GHAZI:-ghazi-verify}
       - KAVENEGAR_TEMPLATE_ROXIRA=${KAVENEGAR_TEMPLATE_ROXIRA:-roxira-verify}
       # OpenRouter API Key — موتور دادرسی، استنتاج هوش مصنوعی و پیاده‌سازی صوت
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-REDACTED_SECRET_02}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in .env}
       # Kira AI — موتور استدلال سنگین قضایی و Fallback Engine بدون هزینه
       - KIRA_BASE_URL=${KIRA_BASE_URL:-https://kiraai.vn/api/v1}
-      - KIRA_API_KEY=${KIRA_API_KEY:-REDACTED_SECRET_07}
+      - KIRA_API_KEY=${KIRA_API_KEY:?set KIRA_API_KEY in .env}
       - KIRA_REASONING_MODEL=${KIRA_REASONING_MODEL:-glm-5.3-free}
       - KIRA_FALLBACK_MODEL=${KIRA_FALLBACK_MODEL:-kira-mini-1.0}
       # Google OAuth 2.0 (ورود مستقیم با حساب گوگل)
@@ -47,7 +47,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
       # امنیت توکن JWT
-      - JWT_SECRET=${JWT_SECRET:-roxira_enterprise_super_secure_jwt_secret_key_2026}
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
     depends_on:
       - postgres_prod
       - redis_prod
@@ -62,7 +62,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: enterprise_admin
-      POSTGRES_PASSWORD: REDACTED_SECRET_19
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: enterprise_db
     ports:
       - "127.0.0.1:5432:5432"
@@ -90,7 +90,7 @@ services:
       - DB_HOST=postgres_prod
       - DB_PORT=5432
       - DB_USER=enterprise_admin
-      - DB_PASSWORD=REDACTED_SECRET_19
+      - DB_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - DB_NAME=enterprise_db
       - LISTEN_PORT=6432
       - AUTH_TYPE=scram-sha-256
@@ -100,7 +100,7 @@ services:
       - MAX_DB_CONNECTIONS=500
       - IGNORE_STARTUP_PARAMETERS=extra_float_digits,options
     ports:
-      - "6432:6432"
+      - "127.0.0.1:6432:6432"
     ulimits:
       nofile:
         soft: 20000
@@ -153,13 +153,13 @@ services:
       - DATABASE_HOST=roxira_pgbouncer
       - DATABASE_PORT=6432
       - DATABASE_USER=enterprise_admin
-      - DATABASE_PASSWORD=REDACTED_SECRET_19
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - DATABASE_NAME=enterprise_db
       - REDIS_HOST=redis_prod
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-roxira_enterprise_super_secure_jwt_secret_key_2026}
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
       # Kavenegar (Verify Lookup) — مسیر رسمی ارسال OTP خطوط ghazi-verify / roxira-verify
-      - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:-REDACTED_SECRET_01}
+      - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:?set KAVENEGAR_API_KEY in .env}
       - KAVENEGAR_TEMPLATE_GHAZI=${KAVENEGAR_TEMPLATE_GHAZI:-ghazi-verify}
       - KAVENEGAR_TEMPLATE_ROXIRA=${KAVENEGAR_TEMPLATE_ROXIRA:-roxira-verify}
       # WebAuthn / Passkey — ورود بیومتریک و سخت‌افزاری
@@ -182,7 +182,7 @@ services:
       # گروه سوکت Docker روی میزبان (getent group docker)
       - "${DOCKER_GID:-988}"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - postgres_prod
       - redis_prod
@@ -206,7 +206,7 @@ services:
       - NEST_API_ORIGIN=http://roxira_enterprise_backend:3000
       - JUDGE_API_ORIGIN=http://roxira_app_prod:8000
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     depends_on:
       - roxira_enterprise_backend
     networks:
