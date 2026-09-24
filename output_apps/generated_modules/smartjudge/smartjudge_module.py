@@ -1616,6 +1616,9 @@ async def _cancel_active_voice_task(state: dict) -> bool:
 # پلتفرم این نام را resolve می‌کنند؛ نبودش باعث WS-ALIAS-WARN در زمان راه‌اندازی
 # می‌شد. نام قدیمی `live_voice_websocket` به‌عنوان alias حفظ شده است.
 # live-voice routed to smartjudge_live_voice module
+from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import (
+    live_voice_websocket as live_voice_endpoint,
+)
 
 @router.websocket("/live-voice-stream")
 async def live_voice_stream_endpoint(websocket: WebSocket):
