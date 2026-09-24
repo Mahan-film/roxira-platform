@@ -1,6 +1,6 @@
 # Roxira OS & Smart Judge — Master Strategy
 
-Single source of truth for every Claude Code session. Read this first, then work only on the workstream you were given. Last updated: 2026-09-24.
+Single source of truth for every Claude Code session. Read this first, then work only on the workstream you were given. Last updated: 2026-09-24 (hub: priorities, tooling).
 
 ## 1. What we are building
 
@@ -52,12 +52,16 @@ Hard rules:
 - Embeddings stay local (`bge-m3`), so they cost nothing per request.
 - Cache identical prompts in Redis. Log token cost per tenant per day.
 
-## 4. Claude Code token hygiene
+## 4. Claude Code token hygiene & tooling
 
 - **One chat per workstream.** Start a new chat (+) instead of continuing a long one. Use `/compact` when a chat gets long and `/clear` between unrelated tasks.
 - Use the **codebase-memory MCP** (`search_graph`, `trace_path`) for "where / who calls" questions instead of reading whole files.
 - Never read `repomix-output.xml`, `database_snapshots/`, `*.sql` or `*.tar.gz`. They are huge and add nothing.
 - Keep `CLAUDE.md` short. Put detail here and link to it.
+- **Project skills** (`.claude/skills/`, invoke with `/name`): `/start-workstream` (sync, read strategy, claim a row) and `/deploy-prod` (section 7 runbook, asks before every restart). Use them instead of re-explaining the procedure in each chat.
+- **MCP servers — keep the set small.** Every server adds tool schemas to every chat. Approved: `codebase-memory` (code structure), `context7` (current library docs for NestJS/Next.js/FastAPI/Qdrant, instead of pasting docs or guessing APIs). Not approved for now: a production Postgres/Qdrant MCP (use `ssh` read-only instead), extra GitHub MCP (`gh` already covers it).
+- **Hype filter.** A new tool/skill/repo seen on social media is adopted only if it (a) removes a step we repeat every week, or (b) measurably cuts tokens or $ per task, and (c) does not push to `main` or run unattended with shell access. "Agent swarm" frameworks usually fail (b). Proposals go to the hub chat, not straight into a workstream.
+- **Parallel chats:** at most 3 Sonnet chats at once, each in its own worktree. More parallelism mostly creates merge conflicts on this file.
 
 ## 5. Workstreams
 
@@ -77,6 +81,14 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 | W9 | Autonomous deep-research agent: pre-project stack recommender (multilingual sourcing, OpenRouter-only, agentic/modular) — see docs/research/bakeoff.md | no | — | 🟨 bake-off done, PR #10 — awaiting owner go/no-go on Phase B |
 | W10 | Safe, cheap agent workforce: inventory of factory dispatcher/daemon/OpenCode/Goose, stop agents pushing to `main` (worktree + PR + CI per task), GitHub-issue task intake with a $/day budget and concurrency limit — see docs/AGENTS_WORKFORCE.md | yes (design shown, implementation pending owner go-ahead) | W4 (CI), W5 (cost log) | 🟨 design written, PR pending — awaiting owner sign-off before touching systemd/cron/firewall |
 
+### Priority order (set by the hub, 2026-09-24)
+
+1. **W6 — real legal text into Qdrant.** Retrieval cites the right article only 16.7% of the time because 1,305 of 1,308 points are placeholders. This is the biggest product-quality problem. Next step: full ingestion into `iran_laws_v2`, re-run `scripts/eval_legal_rag.py`, switch only if citation accuracy clearly beats baseline.
+2. **W10 phase 1 only — stop daemon/worker pushes to `main`.** Remove the `git add/commit/push` from `autonomous_master_daemon.py` and `task_worker.py`, bind the dispatcher (8005) to `127.0.0.1`. This closes the last W3 item and removes the risk that took ~50 routes down on 2026-09-23. Worktree+PR agent flow (phase 2) waits.
+3. **W5 flag on (cheap tier) after W6 eval passes** — the router is built but off, so product LLM spend is still unmanaged.
+4. **W7 voice latency.**
+5. **W9 Phase B** — finish PR #15, then park. It is not on the Smart Judge revenue path.
+
 ## 6. Known facts (verified 2026-09-24)
 
 - The server `5.75.200.67` (root) runs the repo at `/opt/roxira_platform`. Its working tree is clean and matches `origin/main`, so no hand edits are in place.
@@ -85,6 +97,7 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 - Before starting work, always run `git fetch && git checkout origin/main`. A local clone can be hundreds of commits behind.
 - Qdrant did not answer the audit script. `/judge/health` returns 405 and `/judge/chat` returns 422 on an empty body.
 - W6 (2026-09-24): Qdrant `iran_laws_bge_m3` (1,308 points) is reachable and healthy; the audit script's earlier no-answer was a network-reachability issue outside the container, not a Qdrant outage. The real defect: 1,305 of 1,308 points are synthetic range-summary placeholders (49 distinct texts reused across whole article ranges, e.g. "ماده ۱۱ تا ۱۸۲"), not real per-article text; only 3 points have the correct schema. See `docs/W6_legal_corpus_diagnosis.md`.
+- Port 8005 (`roxira-dispatcher`, no auth) listens on `0.0.0.0`, but `ufw` (default DROP, only 22/tcp allowed) blocks it from outside — verified with an external probe 2026-09-24. Still bind it to loopback (W10 phase 1): one ufw change would expose it.
 - Keys are in git history. The owner chose not to rotate them for now.
 
 ## 7. Deploy runbook (production)
