@@ -29,7 +29,7 @@ import { RadarModule } from './modules/radar/radar.module';
         host: config.get<string>('DATABASE_HOST', '127.0.0.1'),
         port: config.get<number>('DATABASE_PORT', 5432),
         username: config.get<string>('DATABASE_USER', 'enterprise_admin'),
-        password: config.get<string>('DATABASE_PASSWORD', 'REDACTED_SECRET_19'),
+        password: config.getOrThrow<string>('DATABASE_PASSWORD'),
         database: config.get<string>('DATABASE_NAME', 'enterprise_db'),
         autoLoadEntities: true,
         synchronize: false,

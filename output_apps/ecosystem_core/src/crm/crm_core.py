@@ -13,6 +13,7 @@ ROOT_DIRS = [CURRENT_DIR, pathlib.Path("/Users/mac/Developer/project-foundry-wor
 for r in ROOT_DIRS:
     if str(r) not in sys.path:
         sys.path.insert(0, str(r))
+from src.roxira_config import postgres_dsn
 
 def resolve_file(rel: str) -> pathlib.Path:
     for base in ROOT_DIRS:
@@ -26,7 +27,7 @@ spec = importlib.util.spec_from_file_location("tenant_tools", tenant_file)
 tenant_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tenant_mod)
 
-DB_URL = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+DB_URL = postgres_dsn(host="127.0.0.1", port=5434)
 
 def init_crm_schema():
     with psycopg.connect(DB_URL) as conn:

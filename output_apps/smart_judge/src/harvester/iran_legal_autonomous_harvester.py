@@ -5,6 +5,7 @@ import os
 import json
 import psycopg
 from typing import List, Dict, Any
+from src.roxira_config import postgres_dsn
 
 def get_db_url() -> str:
     if os.getenv("DATABASE_URL"):
@@ -16,10 +17,7 @@ def get_db_url() -> str:
     
     pg_host = os.getenv("POSTGRES_HOST", default_host)
     pg_port = os.getenv("POSTGRES_PORT", default_port)
-    pg_user = os.getenv("POSTGRES_USER", "enterprise_admin")
-    pg_pass = os.getenv("POSTGRES_PASSWORD", "REDACTED_SECRET_19")
-    pg_db = os.getenv("POSTGRES_DB", "enterprise_db")
-    return f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+    return postgres_dsn(host=pg_host, port=pg_port)
 
 class AutonomousLegalHarvesterEngine:
     COMPREHENSIVE_STATUTES = [

@@ -17,10 +17,11 @@ from typing import Optional, List
 from fastapi import APIRouter, Request, Body, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 import psycopg
+from src.roxira_config import postgres_dsn
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudge Production"])
 
-POSTGRES_DSN = "postgresql://enterprise_admin:REDACTED_SECRET_19@roxira_postgres_prod:5432/enterprise_db"
+POSTGRES_DSN = postgres_dsn(host="roxira_postgres_prod", port=5432)
 
 # مدل‌های همواره آخرین نسخه (Always-Latest) در OpenRouter
 OPENROUTER_TIERS = {

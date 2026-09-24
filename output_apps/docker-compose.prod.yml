@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: enterprise_db
       POSTGRES_USER: enterprise_admin
-      POSTGRES_PASSWORD: REDACTED_SECRET_19
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - prod_db_data:/var/lib/postgresql/data
     healthcheck:

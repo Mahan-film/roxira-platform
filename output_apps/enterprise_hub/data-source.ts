@@ -11,7 +11,7 @@ export default new DataSource({
   host: process.env.DATABASE_HOST || '127.0.0.1',
   port: process.env.DATABASE_PORT ? Number(process.env.DATABASE_PORT) : 5432,
   username: process.env.DATABASE_USER || 'enterprise_admin',
-  password: process.env.DATABASE_PASSWORD || 'REDACTED_SECRET_19',
+  password: process.env.DATABASE_PASSWORD,
   database: process.env.DATABASE_NAME || 'enterprise_db',
   entities: ['modules/**/*.entity{.ts,.js}'],
   migrations: ['migrations/*{.ts,.js}'],
