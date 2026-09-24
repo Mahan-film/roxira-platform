@@ -1,0 +1,491 @@
+{
+  "summary": {
+    "collection": "iran_laws_bge_m3",
+    "n_questions": 30,
+    "hit_at_5": 0.7,
+    "citation_accuracy": 0.167,
+    "fallback_only_rate": 0.0
+  },
+  "per_question": [
+    {
+      "id": "q01",
+      "domain": "procedure_deadline",
+      "question": "مهلت تجدیدنظرخواهی از رأی دادگاه حقوقی برای اشخاص مقیم ایران چند روز است؟",
+      "expected_law": "قانون آیین دادرسی مدنی",
+      "expected_article": 336,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 2657.4
+    },
+    {
+      "id": "q02",
+      "domain": "procedure_deadline",
+      "question": "مهلت واخواهی نسبت به رأی غیابی چند روز است؟",
+      "expected_law": "قانون آیین دادرسی مدنی",
+      "expected_article": 306,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 100.4
+    },
+    {
+      "id": "q03",
+      "domain": "procedure_deadline",
+      "question": "مهلت فرجام‌خواهی از آرای قابل فرجام چند روز است؟",
+      "expected_law": "قانون آیین دادرسی مدنی",
+      "expected_article": 387,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 72.9
+    },
+    {
+      "id": "q04",
+      "domain": "procedure_deadline",
+      "question": "مهلت اعتراض ثالث نسبت به رأی صادره چقدر است و آیا مهلت خاصی دارد؟",
+      "expected_law": "قانون آیین دادرسی مدنی",
+      "expected_article": 417,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 98.6
+    },
+    {
+      "id": "q05",
+      "domain": "procedure_deadline",
+      "question": "دادخواست اعسار از هزینه دادرسی باید همراه چه مدارکی و تا چه زمانی تقدیم شود؟",
+      "expected_law": "قانون آیین دادرسی مدنی",
+      "expected_article": 504,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 10,
+      "match_levels": [
+        "HIGH_DOCTRINE",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 75.7
+    },
+    {
+      "id": "q06",
+      "domain": "procedure_deadline",
+      "question": "مهلت اعاده دادرسی برای اشخاص مقیم ایران از تاریخ ابلاغ رای قطعی چند روز است؟",
+      "expected_law": "قانون آیین دادرسی مدنی",
+      "expected_article": 427,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 10,
+      "match_levels": [
+        "HIGH_DOCTRINE",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 79.1
+    },
+    {
+      "id": "q07",
+      "domain": "criminal",
+      "question": "مجازات قتل عمد در قانون مجازات اسلامی چیست؟",
+      "expected_law": "قانون مجازات اسلامی",
+      "expected_article": 381,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 10,
+      "match_levels": [
+        "HIGH_DOCTRINE",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 94.0
+    },
+    {
+      "id": "q08",
+      "domain": "criminal",
+      "question": "اصل قانونی بودن جرم و مجازات در کدام ماده قانون مجازات اسلامی آمده است؟",
+      "expected_law": "قانون مجازات اسلامی",
+      "expected_article": 2,
+      "hit_at_5": true,
+      "citation_correct": true,
+      "fallback_only": false,
+      "n_laws_returned": 10,
+      "match_levels": [
+        "HIGH_DOCTRINE",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 76.8
+    },
+    {
+      "id": "q09",
+      "domain": "criminal",
+      "question": "میزان دیه کامل زن نسبت به مرد چگونه محاسبه می‌شود؟",
+      "expected_law": "قانون مجازات اسلامی",
+      "expected_article": 550,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 79.1
+    },
+    {
+      "id": "q10",
+      "domain": "criminal",
+      "question": "مهلت اعتراض به قرار منع تعقیب چند روز است؟",
+      "expected_law": "قانون آیین دادرسی کیفری",
+      "expected_article": 273,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 80.0
+    },
+    {
+      "id": "q11",
+      "domain": "criminal",
+      "question": "بازداشت موقت متهم حداکثر تا چه مدت بدون تمدید ممکن است ادامه یابد؟",
+      "expected_law": "قانون آیین دادرسی کیفری",
+      "expected_article": 240,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 85.1
+    },
+    {
+      "id": "q12",
+      "domain": "criminal",
+      "question": "اصل برائت و ضرورت تفسیر به نفع متهم در کدام ماده آیین دادرسی کیفری آمده است؟",
+      "expected_law": "قانون آیین دادرسی کیفری",
+      "expected_article": 4,
+      "hit_at_5": true,
+      "citation_correct": true,
+      "fallback_only": false,
+      "n_laws_returned": 10,
+      "match_levels": [
+        "HIGH_DOCTRINE",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 99.3
+    },
+    {
+      "id": "q13",
+      "domain": "criminal",
+      "question": "مهلت تجدیدنظرخواهی از احکام کیفری چند روز است؟",
+      "expected_law": "قانون آیین دادرسی کیفری",
+      "expected_article": 427,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 10,
+      "match_levels": [
+        "HIGH_DOCTRINE",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 89.5
+    },
+    {
+      "id": "q14",
+      "domain": "commercial",
+      "question": "شرکت با مسئولیت محدود بر چه مبنایی مسئولیت شرکا را تعیین می‌کند؟",
+      "expected_law": "قانون تجارت",
+      "expected_article": 94,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 88.1
+    },
+    {
+      "id": "q15",
+      "domain": "commercial",
+      "question": "شرکت سهامی از چه زمانی شخصیت حقوقی پیدا می‌کند؟",
+      "expected_law": "لایحه اصلاحی قانون تجارت",
+      "expected_article": 17,
+      "hit_at_5": false,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 54.2
+    },
+    {
+      "id": "q16",
+      "domain": "commercial",
+      "question": "ورشکستگی تاجر به چه معناست و در کدام ماده تعریف شده است؟",
+      "expected_law": "قانون تجارت",
+      "expected_article": 412,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 78.3
+    },
+    {
+      "id": "q17",
+      "domain": "commercial",
+      "question": "مسئولیت مدیران شرکت سهامی در برابر اشخاص ثالث بابت تخلف از مقررات قانونی چگونه است؟",
+      "expected_law": "لایحه اصلاحی قانون تجارت",
+      "expected_article": 142,
+      "hit_at_5": false,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 81.9
+    },
+    {
+      "id": "q18",
+      "domain": "commercial",
+      "question": "برات باید حاوی چه مندرجاتی باشد؟",
+      "expected_law": "قانون تجارت",
+      "expected_article": 223,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 51.4
+    },
+    {
+      "id": "q19",
+      "domain": "cheque",
+      "question": "دارنده چک برگشتی چگونه می‌تواند بدون طرح دعوای حقوقی، اجراییه بگیرد؟",
+      "expected_law": "قانون صدور چک (اصلاحی ۱۳۹۷)",
+      "expected_article": 23,
+      "hit_at_5": false,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 55.6
+    },
+    {
+      "id": "q20",
+      "domain": "cheque",
+      "question": "مجازات صدور چک بلامحل در قانون صدور چک چیست؟",
+      "expected_law": "قانون صدور چک (اصلاحی ۱۳۹۷)",
+      "expected_article": 7,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 10,
+      "match_levels": [
+        "HIGH_DOCTRINE",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 63.8
+    },
+    {
+      "id": "q21",
+      "domain": "cheque",
+      "question": "دارنده چک برای دریافت گواهی عدم پرداخت باید ظرف چه مدتی از تاریخ چک به بانک مراجعه کند؟",
+      "expected_law": "قانون صدور چک (اصلاحی ۱۳۹۷)",
+      "expected_article": 3,
+      "hit_at_5": false,
+      "citation_correct": true,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 80.1
+    },
+    {
+      "id": "q22",
+      "domain": "cheque",
+      "question": "در چه صورتی صادرکننده می‌تواند دستور عدم پرداخت چک را به بانک بدهد؟",
+      "expected_law": "قانون صدور چک (اصلاحی ۱۳۹۷)",
+      "expected_article": 14,
+      "hit_at_5": false,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 83.4
+    },
+    {
+      "id": "q23",
+      "domain": "cheque",
+      "question": "چک‌های صادره بابت تضمین انجام معامله مشمول کدام مقررات قانون چک هستند؟",
+      "expected_law": "قانون صدور چک (اصلاحی ۱۳۹۷)",
+      "expected_article": 13,
+      "hit_at_5": false,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 84.3
+    },
+    {
+      "id": "q24",
+      "domain": "peace_courts",
+      "question": "صلاحیت دادگاه‌های صلح در دعاوی مالی تا چه سقفی است؟",
+      "expected_law": "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲",
+      "expected_article": 4,
+      "hit_at_5": false,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 63.1
+    },
+    {
+      "id": "q25",
+      "domain": "peace_courts",
+      "question": "آرای دادگاه صلح در چه مواردی قابل تجدیدنظر است؟",
+      "expected_law": "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲",
+      "expected_article": 15,
+      "hit_at_5": false,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 84.8
+    },
+    {
+      "id": "q26",
+      "domain": "peace_courts",
+      "question": "اعضای شورای حل اختلاف چگونه و توسط چه مرجعی منصوب می‌شوند؟",
+      "expected_law": "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲",
+      "expected_article": 8,
+      "hit_at_5": false,
+      "citation_correct": true,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 88.4
+    },
+    {
+      "id": "q27",
+      "domain": "family",
+      "question": "زوجه چه زمانی می‌تواند مهریه خود را مطالبه کند؟",
+      "expected_law": "قانون مدنی",
+      "expected_article": 1082,
+      "hit_at_5": true,
+      "citation_correct": true,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 74.6
+    },
+    {
+      "id": "q28",
+      "domain": "family",
+      "question": "شرایط اعمال حق حضانت مادر بر فرزند پس از طلاق چیست؟",
+      "expected_law": "قانون مدنی",
+      "expected_article": 1169,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 77.9
+    },
+    {
+      "id": "q29",
+      "domain": "family",
+      "question": "طلاق بائن و رجعی چه تفاوتی دارند و مرد در کدام یک حق رجوع دارد؟",
+      "expected_law": "قانون مدنی",
+      "expected_article": 1148,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 6,
+      "match_levels": [
+        "FALLBACK",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 51.1
+    },
+    {
+      "id": "q30",
+      "domain": "family",
+      "question": "عسر و حرج زوجه به عنوان جهت درخواست طلاق در کدام ماده قانون مدنی آمده است؟",
+      "expected_law": "قانون مدنی",
+      "expected_article": 1130,
+      "hit_at_5": true,
+      "citation_correct": false,
+      "fallback_only": false,
+      "n_laws_returned": 10,
+      "match_levels": [
+        "HIGH_DOCTRINE",
+        "QDRANT_FALLBACK"
+      ],
+      "latency_ms": 81.6
+    }
+  ]
+}
