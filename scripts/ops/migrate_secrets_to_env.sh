@@ -7,7 +7,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 ENV_FILE=.env
 touch "$ENV_FILE"; chmod 600 "$ENV_FILE"
-cp -p "$ENV_FILE" "$ENV_FILE.bak.$(date +%Y%m%d%H%M%S)"
+# Backups live OUTSIDE the repo: the server daemon runs `git add -A`.
+BACKUP_DIR=${ROXIRA_ENV_BACKUP_DIR:-/root/env-backups}
+install -d -m 700 "$BACKUP_DIR"
+cp -p "$ENV_FILE" "$BACKUP_DIR/.env.bak.$(date +%Y%m%d%H%M%S)"
 
 # var -> container it is read from
 declare -A SRC=(
