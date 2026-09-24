@@ -342,6 +342,35 @@ OPENROUTER_TIERS = {
     }
 }
 
+# Central LLM router (docs/STRATEGY.md §3b). Only used when LLM_ROUTER_ENABLED=1;
+# until then the direct OpenRouter calls below stay in charge.
+try:
+    from . import llm_router as _llm_router
+except ImportError:
+    try:
+        from output_apps.generated_modules.smartjudge import llm_router as _llm_router
+    except Exception as _router_import_exc:  # noqa: BLE001 - never block server boot
+        print(f"[SMARTJUDGE][LLM-ROUTER] unavailable: {_router_import_exc}", file=sys.stderr)
+        _llm_router = None
+
+# Subscription plan -> router tier. VIP keeps Gemini Flash first (LLM_TIER_STRONG
+# default), FREE keeps DeepSeek Flash first (LLM_TIER_CHEAP default).
+ROUTER_TIER_BY_PLAN = {
+    "VIP": os.environ.get("SMARTJUDGE_ROUTER_TIER_VIP", "strong"),
+    "FREE": os.environ.get("SMARTJUDGE_ROUTER_TIER_FREE", "cheap"),
+}
+
+
+def _use_llm_router() -> bool:
+    return _llm_router is not None and _llm_router.router_enabled()
+
+
+def _hashed_user_ref(phone: Optional[str]) -> Optional[str]:
+    """Stable pseudonymous id for the usage log, so phone numbers never land in it."""
+    if not phone:
+        return None
+    return hashlib.sha256(f"smartjudge:{phone}".encode("utf-8")).hexdigest()[:16]
+
 # نگاشت سطوح موتور (سازگار با کلاینت TypeScript: tier1/tier2/tier3) به سطوح OpenRouter
 ENGINE_TIER_MAP = {
     "tier1": "FREE",
@@ -1231,8 +1260,9 @@ async def interactive_consult(payload: dict = Body(...)):
     reply_msg = ""
     prob = None
     draft = None
+    routed_model = None
 
-    if OPENROUTER_API_KEY:
+    if OPENROUTER_API_KEY or _use_llm_router():
         try:
             system_msg = (
                 "شما «قاضی هوشمند» در مکالمه صوتی زنده هستید. "
@@ -1266,19 +1296,36 @@ async def interactive_consult(payload: dict = Body(...)):
                 "temperature": 0.2 if is_voice else 0.3,
                 "max_tokens": chosen_max_tokens,
             }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(16.0, connect=3.0)) as client:
-                headers = {
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://ghazihoushmand.ir",
-                    "X-Title": "Roxira SmartJudge",
-                }
-                resp = await client.post(OPENROUTER_CHAT_URL, json=req_body, headers=headers)
-                if resp.status_code == 200:
-                    data_json = resp.json()
-                    choices = data_json.get("choices", [])
-                    if choices:
-                        reply_msg = choices[0].get("message", {}).get("content", "").strip()
+            if _use_llm_router():
+                # Case text is customer legal data: sensitive=True keeps it off :free endpoints.
+                routed = await _llm_router.complete(
+                    ROUTER_TIER_BY_PLAN.get(selected_tier, "cheap"),
+                    messages_payload,
+                    sensitive=True,
+                    tenant="smartjudge",
+                    user=_hashed_user_ref(phone),
+                    feature="consult_voice" if is_voice else "consult",
+                    timeout=16.0,
+                    max_retries=1,
+                    temperature=req_body["temperature"],
+                    max_tokens=chosen_max_tokens,
+                )
+                reply_msg = routed.content
+                routed_model = routed.model or None
+            else:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(16.0, connect=3.0)) as client:
+                    headers = {
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://ghazihoushmand.ir",
+                        "X-Title": "Roxira SmartJudge",
+                    }
+                    resp = await client.post(OPENROUTER_CHAT_URL, json=req_body, headers=headers)
+                    if resp.status_code == 200:
+                        data_json = resp.json()
+                        choices = data_json.get("choices", [])
+                        if choices:
+                            reply_msg = choices[0].get("message", {}).get("content", "").strip()
         except Exception as exc:
             print(f"[SMARTJUDGE][LLM-CALL-FAIL] {exc}", file=sys.stderr)
 
@@ -1331,7 +1378,7 @@ async def interactive_consult(payload: dict = Body(...)):
         "defense_draft": draft,
         "statutory_basis": laws,
         "unified_precedents": precedents,
-        "model_assigned": cfg["primary_model"],
+        "model_assigned": routed_model or cfg["primary_model"],
         "tier": selected_tier,
         "latency_ms": round((time.time() - t0) * 1000, 2)
     }
