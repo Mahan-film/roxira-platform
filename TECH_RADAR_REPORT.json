@@ -1,6 +1,6 @@
 {
   "title": "ROXIRA Daily Technology Scout",
-  "generated_at": "2026-09-23T04:35:38+00:00",
+  "generated_at": "2026-09-24T04:35:54+00:00",
   "topic_count": 5,
   "topics": [
     "latest 2026 open-source AI agent frameworks and fast speech-to-text models",
@@ -13,8 +13,8 @@
     {
       "topic": "latest 2026 open-source AI agent frameworks and fast speech-to-text models",
       "mode": "deep",
-      "generated_at": "2026-09-23T04:31:41+00:00",
-      "elapsed_seconds": 99.85,
+      "generated_at": "2026-09-24T04:30:29+00:00",
+      "elapsed_seconds": 28.3,
       "engine": {
         "search": [
           "tavily",
@@ -48,32 +48,25 @@
       "source_count": 10,
       "sources": [
         {
-          "title": "8 Best Open-Source AI Agent Frameworks: OpenClaw & More",
-          "url": "https://www.ayautomate.com/blog/best-open-source-ai-agent-frameworks",
-          "relevance_score": 0.83973396,
+          "title": "The best open source frameworks for building AI agents in 2026",
+          "url": "https://www.firecrawl.dev/blog/best-open-source-agent-frameworks",
+          "relevance_score": 0.74908721,
           "crawl_engine": "firecrawl",
-          "excerpt": "![8 best open-source AI agent frameworks on GitHub in 2026](https://www.ayautomate.com/_next/image?url=https%3A%2F%2Fealqqtdyihheyzgbzihq.supabase.co%2Fstorage%2Fv1%2Fobject%2Fpublic%2Fblog-images%2Fbest-open-source-ai-agent-frameworks%2Ffeatured.png&w=3840&q=75)\n\nContents\n\nBook a Free Strategy Call\n\n### Skip the read: talk to Walid in 30 min.\n\nFree strategy call. We map your AI engineering team, you keep the notes.\n\nBook a Call [Or send us a brief →](https://www.ayautomate.com/contact)\n\nOpen-source AI agents went from experiment to production reality in 2026. Search interest in agent framewor…"
+          "excerpt": "Introducing [Alexandria](https://www.firecrawl.dev/alexandria?utm_source=firecrawl-web&utm_medium=banner&utm_campaign=alexandria-launch) and our $75M Series B. [Read the announcement →](https://www.firecrawl.dev/blog/introducing-alexandria-series-b?utm_source=firecrawl-web&utm_medium=banner&utm_campaign=alexandria-launch)\n\n//\n\nGet started\n\n//\n\n### Ready to build?\n\nStart getting Web Data for free and scale seamlessly as your project expands.No credit card needed.\n\n[Start for free](https://www.firecrawl.dev/signin) [See our plans](https://www.firecrawl.dev/pricing)\n\n[Are you an AI agent? See set…"
         },
         {
-          "title": "Comparing Open-Source AI Agent Frameworks",
-          "url": "https://langfuse.com/blog/2025-03-19-ai-agent-comparison",
-          "relevance_score": 0.83655459,
+          "title": "MM-Speech/VoxMind",
+          "url": "https://github.com/MM-Speech/VoxMind",
+          "relevance_score": 0.68846846,
           "crawl_engine": "jina",
-          "excerpt": "Title: Comparing Open-Source AI Agent Frameworks - Langfuse\n\nURL Source: https://langfuse.com/blog/2025-03-19-ai-agent-comparison\n\nMarkdown Content:\nJuly 13, 2026\n\n## Open-Source AI Agent Frameworks: Which One Is Right for You?\n\nCompare the leading open-source AI agent frameworks in 2026, including LangGraph, OpenAI Agents SDK, Claude Agent SDK, Google ADK, Pydantic AI, CrewAI, Strands Agents, Mastra, Vercel AI SDK, and Microsoft Agent Framework. Learn when to use each and how to trace agent behavior with Langfuse.\n\n![Image 1: Picture Jannik Maierhöfer](https://langfuse.com/_next/image?url=%2F…"
+          "excerpt": "Title: GitHub - MM-Speech/VoxMind: [ACL 2026] VoxMind: An End-to-End Agentic Spoken Dialogue System\n\nURL Source: https://github.com/MM-Speech/VoxMind\n\nMarkdown Content:\n[![Image 1: arXiv](https://camo.githubusercontent.com/dff752bf701567a8ccd6f3f44a63ddcd27dd1c5f980d44a21f62ffb14cfb63b4/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f61725869762d323630342e31353731302d4233314231422e7376673f7374796c653d666c61742d737175617265266c6f676f3d6172786976266c6f676f436f6c6f723d7768697465)](https://arxiv.org/abs/2604.15710)[![Image 2: Model](https://camo.githubusercontent.com/d09598106f4dc7c82c0e…"
         },
         {
-          "title": "The best AI agent frameworks in 2026",
-          "url": "https://www.langchain.com/resources/ai-agent-frameworks",
-          "relevance_score": 0.75055277,
+          "title": "Pipecat Voice Agents: Which Stage Belongs on a GPU",
+          "url": "https://cerebrium.ai/resources/pipecat-voice-agent-gpu-deployment",
+          "relevance_score": 0.59077919,
           "crawl_engine": "firecrawl",
-          "excerpt": "[home](https://www.langchain.com/)\n\n[Try LangSmith](https://smith.langchain.com/)\n\n[Get a demo](https://www.langchain.com/contact-sales)\n\n# The best AI agent frameworks in 2026\n\nWe reviewed 7 AI agent frameworks across orchestration, observability, and production readiness. See how LangGraph, CrewAI, Microsoft Agent Framework, and others compare.\n\nJune 6, 2026\n\n[TL;DR](https://www.langchain.com/resources/ai-agent-frameworks#tldr)\n\n[The best AI agent frameworks at a glance](https://www.langchain.com/resources/ai-agent-frameworks#the-best-ai-agent-frameworks-at-a-glance)\n\n[What makes a great AI…"
-        },
-        {
-          "title": "Pipecat - Voice AI Agent Framework Python | EveryDev.ai",
-          "url": "https://www.everydev.ai/tools/pipecat",
-          "relevance_score": 0.73715818,
-          "crawl_engine": "firecrawl",
-          "excerpt": "![Pipecat icon](https://www.everydev.ai/_next/image?url=https%3A%2F%2Fapi.everydev.ai%2Fstorage%2Fv1%2Fobject%2Fpublic%2Ftool-media%2Ftools%2Fpipecat%2Ficons%2Ficon-2.png&w=1920&q=75)\n\n# Pipecat\n\n[Voice Assistant](https://www.everydev.ai/topics/voice-assistant)\n\nAn open-source Python framework for building real-time voice and multimodal conversational AI agents with composable pipelines and ultra-low latency.\n\n[Visit Website](https://pipecat.ai/?utm_source=everydev.ai)\n\n## At a Glance\n\n[Pricing](https://www.everydev.ai/tools/pipecat#pricing)\n\nOpen Source\n\nFree to use, modify, and distribute un…"
+          "excerpt": "Pipecat Voice Agents: Which Stage Belongs on a GPU\n\nA Pipecat pipeline is four services in a row, and only three of them are worth moving onto your own GPU. In our testing the speech-to-text hop saves 140ms, the language model hop saves 400ms or more, and text-to-speech saves 70ms. Co-locating them saves another 150ms on network alone.\n\nPipecat gives you a pipeline: transport in, speech to text, a language model, text to speech, transport out. The framework does not care where each service runs, which is exactly the decision that decides whether your agent answers in 600ms or in two seconds. T…"
         },
         {
           "title": "Speech to Text (ASR) Providers Leaderboard & Comparison",
@@ -90,11 +83,11 @@
           "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.02812#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Electrical Engineering and Systems Science > Audio and Speech Processing\n\n**arXiv:2609.02812** (eess)\n\n\n\\[Submitted on 2 Sep 2026 ( [v1](https://arxiv.org/abs/2609.02812v1)), last revised 10 Sep 2026 (this version, v2)\\]\n\n# Title:VibeVoice-ASR-Streaming Technical Report\n\nAuthors: [Yujie Tu](https://arxiv.org/search/eess?searchtype=author&query=Tu,+Y), [Zhiliang Peng](https://arxiv.org/search/eess?searchtype=author&query=Peng,+Z), [Jianw…"
         },
         {
-          "title": "jingyonghou/MOSS-Transcribe-Diarize",
-          "url": "https://github.com/jingyonghou/MOSS-Transcribe-Diarize",
-          "relevance_score": 0.52792501,
+          "title": "Lychee-FD",
+          "url": "https://hitsz-tmg.github.io/Lychee-FD/",
+          "relevance_score": 0.53011489,
           "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - jingyonghou/MOSS-Transcribe-Diarize: MOSS-Transcribe-Diarize 0.9B is an open-source SOTA end-to-end audio understanding model for long-form multi-speaker transcription, diarization, timestamps, and acoustic event awareness.\n\nURL Source: https://github.com/jingyonghou/MOSS-Transcribe-Diarize\n\nMarkdown Content:\n[![Image 1](https://github.com/jingyonghou/MOSS-Transcribe-Diarize/raw/main/assets/OpenMOSS_Logo.png)](https://github.com/jingyonghou/MOSS-Transcribe-Diarize/blob/main/assets/OpenMOSS_Logo.png)[![Image 2](https://github.com/jingyonghou/MOSS-Transcribe-Diarize/raw/main/asse…"
+          "excerpt": "Title: Lychee-FD\n\nURL Source: https://hitsz-tmg.github.io/Lychee-FD/\n\nMarkdown Content:\n![Image 1](https://hitsz-tmg.github.io/Lychee-FD/docs/assets/images/logo/Lychee-FD-logo.png)\n\n#### Lychee-FD is an open-source native end-to-end full-duplex spoken language model for real-time speech interaction. [](https://hitsz-tmg.github.io/Lychee-FD/#lychee-fd-is-an-open-source-native-end-to-end-full-duplex-spoken)\n\n[![Image 2: Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-yellow)](https://huggingface.co/HIT-TMG/Lychee-FD)[![Image 3: Demo](https://img.shields.io/badge/De…"
         },
         {
           "title": "Multimodal Duplex Interaction Agent",
@@ -104,142 +97,60 @@
           "excerpt": "# Multimodal Duplex Interaction Agent\n\nOrantqing<sup>∗1</sup> Shengpeng Ji<sup>∗†1</sup> Junlong Tong<sup>∗1,3</sup> Jialong Zuo<sup>∗1</sup>\nDongjie Fu<sup>1,2</sup> Di Cao¹ Yangzhuo Li Shangda Wu¹ Franz Evan Theron Veyra\n**Changhao Pan² Jingyu Lu² Dongchao Yang⁴ Zhifei Xie⁵ Yang Tan Xiaoyu Shen**\n**Xiaoda Yang² Wenfu Wang¹ Teddy Sun¹ Steve Yves¹ Zhou Zhao²**\n\n## Shengpeng Ji ∗†1\n\n## Junlong Tong ∗1,3\n\n¹Hunyuan Speech Team, Tencent; ²Zhejiang University; ³Shanghai Jiao Tong University\n⁴The Chinese University of Hong Kong; ⁵Nanyang Technological University\n\n[Image: **Im1]Research Project:** Ga…"
         },
         {
-          "title": "GitHub - MM-Speech/VoxMind: [ACL 2026] VoxMind: An End-to-End Agentic Spoken Dialogue System · GitHub",
-          "url": "https://github.com/MM-Speech/VoxMind",
-          "relevance_score": 0.46174484,
+          "title": "StepAudio 3 Realtime Technical Report",
+          "url": "https://arxiv.org/pdf/2609.14005v1.pdf",
+          "relevance_score": 0.48145384,
           "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to content](https://github.com/MM-Speech/VoxMind#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/MM-Speech/VoxMind) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/MM-Speech/VoxMind) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/MM-Speech/VoxMind) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[MM-Speech](https://github.com/MM-Speech)/ **[VoxMind](https://github.com/MM-Speech/VoxMind)** Public\n\n- [Notifications](https://github.com/login?return…"
+          "excerpt": "# StepAudio 3 Realtime Technical Report\n\n**StepFun-Audio Team**\n\nÀ **Project Page**\n\n## Abstract\n\nRealtime spoken interaction demands deep reasoning, prompt responses, and fluid\nturn-taking. We present StepAudio 3 Realtime, an audio-language foundation model\norganized around a continuous *listen-converse-think-act* loop. Deep Perception\ncaptures rich acoustic cues to interpret user intent, while Seamless Duplex models\nsynchronized audio streams to handle pauses, backchannels, and interruptions naturally. Crucially, we resolve the tension between deep deliberation and latency via\nThink-While-Sp…"
+        },
+        {
+          "title": "Pipecat | AISIX AI Gateway Docs",
+          "url": "https://docs.api7.ai/ai-gateway/integrations/voice-agents/pipecat",
+          "relevance_score": 0.34775856,
+          "crawl_engine": "firecrawl",
+          "excerpt": "[Skip to main content](https://docs.api7.ai/ai-gateway/integrations/voice-agents/pipecat#__docusaurus_skipToContent_fallback)\n\n[![API7.ai Logo](https://static.api7.ai/2022/10/02/63398bceeeac7.webp?imageMogr2/thumbnail/240x)](https://api7.ai/)\n\n- Products\n\n\n[API7 Gateway](https://api7.ai/enterprise) [- API7 Gateway](https://api7.ai/enterprise) [- Apache APISIX vs API7](https://api7.ai/api7-enterprise-vs-apisix) [- API7 API Portal](https://api7.ai/portal)\n\n\n\n[Apache APISIX](https://api7.ai/apisix) [- What's Apache APISIX?](https://api7.ai/apisix) [- Why Apache APISIX?](https://api7.ai/blog/why-i…"
         },
         {
           "title": "GitHub - TEN-framework/ten-framework: Open-source framework for conversational voice AI agents · GitHub",
           "url": "https://github.com/ten-framework/ten-framework",
-          "relevance_score": 0.3328523,
+          "relevance_score": 0.33807713,
           "crawl_engine": "firecrawl",
           "excerpt": "[Skip to content](https://github.com/ten-framework/ten-framework#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/ten-framework/ten-framework) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/ten-framework/ten-framework) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/ten-framework/ten-framework) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[TEN-framework](https://github.com/TEN-framework)/ **[ten-framework](https://github.com/TEN-framework/ten-framew…"
         }
       ],
-      "status": "SUCCESS",
-      "model": "deepseek/deepseek-chat",
-      "executive_summary": "در سال ۲۰۲۶، چارچوب‌های عامل هوش مصنوعی متن‌باز و مدل‌های تبدیل گفتار به متن سریع به بلوغ قابل توجهی رسیده‌اند. این فناوری‌ها از آزمایشگاه‌ها به محیط‌های تولیدی منتقل شده‌اند و انتخاب چارچوب مناسب برای توسعه عامل‌های هوش مصنوعی به یک تصمیم راهبردی تبدیل شده است. با توجه به رشد سریع این حوزه، درک نقاط قوت و ضعف هر فناوری و انتخاب ابزارهای مناسب برای نیازهای خاص کسب‌وکارها ضروری است.",
-      "key_findings": [
-        "چارچوب‌های عامل هوش مصنوعی مانند OpenClaw و CrewAI به دلیل قابلیت‌های خود میزبانی و یکپارچه‌سازی گسترده، محبوبیت زیادی پیدا کرده‌اند.",
-        "مدل‌های تبدیل گفتار به متن مانند VibeVoice-ASR-Streaming و MOSS-Transcribe-Diarize به دلیل دقت بالا و تأخیر کم، برای کاربردهای بلادرنگ مناسب هستند.",
-        "چارچوب‌های چندعاملی مانند LangGraph و Pipecat به دلیل پشتیبانی از تعاملات پیچیده و چندوجهی، برای توسعه سیستم‌های گفتگوی پیشرفته ترجیح داده می‌شوند."
-      ],
-      "emerging_technologies": [
-        {
-          "name": "OpenClaw",
-          "category": "AI Agent Framework",
-          "maturity": "mainstream",
-          "description": "چارچوبی خودمیزبان با بیش از ۵۰ یکپارچه‌سازی بومی و بدون نیاز به فراخوانی API خارجی.",
-          "why_it_matters": "به دلیل قابلیت خودمیزبانی و یکپارچه‌سازی گسترده، برای سازمان‌هایی که به حریم خصوصی و کنترل کامل نیاز دارند، ایده‌آل است.",
-          "adoption_signal": "استفاده در تولید توسط شرکت‌هایی مانند Klarna و Replit."
-        },
-        {
-          "name": "VibeVoice-ASR-Streaming",
-          "category": "Speech-to-Text",
-          "maturity": "growing",
-          "description": "مدل تبدیل گفتار به متن مبتنی بر LLM که به‌صورت بلادرنگ و بدون نیاز به مرحله‌ی تفکیک گوینده عمل می‌کند.",
-          "why_it_matters": "به دلیل تأخیر کم و دقت بالا، برای کاربردهای بلادرنگ مانند دستیارهای صوتی مناسب است.",
-          "adoption_signal": "انتشار کد و وزن‌های مدل به‌صورت متن‌باز."
-        },
-        {
-          "name": "Pipecat",
-          "category": "Voice AI Framework",
-          "maturity": "emerging",
-          "description": "چارچوبی پایتونی برای ساخت عامل‌های گفتگوی چندوجهی با تأخیر بسیار کم.",
-          "why_it_matters": "به دلیل پشتیبانی از تعاملات بلادرنگ و چندوجهی، برای توسعه سیستم‌های گفتگوی پیشرفته مناسب است.",
-          "adoption_signal": "انتشار تحت مجوز BSD 2-Clause و پشتیبانی از بیش از ۲۰ ارائه‌دهنده STT و LLM."
-        }
-      ],
-      "top_github_repositories": [
-        {
-          "name": "pipecat-ai/pipecat",
-          "url": "https://github.com/pipecat-ai/pipecat",
-          "stars": "1.2k",
-          "language": "Python",
-          "description": "چارچوبی پایتونی برای ساخت عامل‌های گفتگوی چندوجهی با تأخیر بسیار کم.",
-          "why_relevant": "به دلیل پشتیبانی از تعاملات بلادرنگ و چندوجهی، برای توسعه سیستم‌های گفتگوی پیشرفته مناسب است."
-        },
-        {
-          "name": "jingyonghou/MOSS-Transcribe-Diarize",
-          "url": "https://github.com/jingyonghou/MOSS-Transcribe-Diarize",
-          "stars": "450",
-          "language": "Python",
-          "description": "مدل تبدیل گفتار به متن متن‌باز برای رونویسی، تفکیک گوینده و آگاهی از رویدادهای صوتی.",
-          "why_relevant": "به دلیل دقت بالا و قابلیت‌های پیشرفته، برای کاربردهای بلادرنگ مناسب است."
-        },
-        {
-          "name": "MM-Speech/VoxMind",
-          "url": "https://github.com/MM-Speech/VoxMind",
-          "stars": "45",
-          "language": "Python",
-          "description": "سیستم گفتگوی عامل‌محور از انتها به انتها برای تعاملات صوتی.",
-          "why_relevant": "به دلیل پشتیبانی از تعاملات پیچیده و چندوجهی، برای توسعه سیستم‌های گفتگوی پیشرفته مناسب است."
-        }
-      ],
-      "pros_cons": [
-        {
-          "technology": "OpenClaw",
-          "pros": [
-            "خودمیزبان، یکپارچه‌سازی گسترده، بدون نیاز به API خارجی"
-          ],
-          "cons": [
-            "مستندات محدود، جامعه کاربری کوچک"
-          ],
-          "best_for": "سازمان‌هایی که به حریم خصوصی و کنترل کامل نیاز دارند."
-        },
-        {
-          "technology": "VibeVoice-ASR-Streaming",
-          "pros": [
-            "دقت بالا، تأخیر کم، پشتیبانی از تعاملات بلادرنگ"
-          ],
-          "cons": [
-            "نیاز به منابع محاسباتی بالا، مستندات محدود"
-          ],
-          "best_for": "کاربردهای بلادرنگ مانند دستیارهای صوتی."
-        },
-        {
-          "technology": "Pipecat",
-          "pros": [
-            "تأخیر بسیار کم، پشتیبانی از تعاملات چندوجهی، متن‌باز"
-          ],
-          "cons": [
-            "مستندات محدود، جامعه کاربری کوچک"
-          ],
-          "best_for": "توسعه سیستم‌های گفتگوی پیشرفته."
-        }
-      ],
-      "suggested_commands": [
-        {
-          "purpose": "نصب Pipecat",
-          "command": "pip install pipecat-ai"
-        },
-        {
-          "purpose": "راه‌اندازی MOSS-Transcribe-Diarize",
-          "command": "python -m moss_transcribe_diarize --input audio.wav --output transcript.txt"
-        },
-        {
-          "purpose": "بنچمارک VibeVoice-ASR-Streaming",
-          "command": "python benchmark.py --model vibevoice --audio audio.wav"
-        }
-      ],
+      "status": "DEGRADED",
+      "executive_summary": "سنتز مدل زبانی در دسترس نبود؛ خلاصه خام منابع ثبت شد.",
+      "key_findings": [],
+      "emerging_technologies": [],
+      "top_github_repositories": [],
+      "pros_cons": [],
+      "suggested_commands": [],
       "risks_and_caveats": [
-        "انتخاب چارچوب نامناسب می‌تواند به قفل شدن در یک پارادایم خاص منجر شود.",
-        "مدل‌های تبدیل گفتار به متن ممکن است در محیط‌های پرسر و صدا دقت کمتری داشته باشند."
+        "خروجی مدل سنتز ناموفق بود."
       ],
-      "recommendations": [
-        "قبل از انتخاب چارچوب، نیازهای کسب‌وکار و محدودیت‌های فنی را به‌دقت بررسی کنید.",
-        "برای کاربردهای بلادرنگ، مدل‌های تبدیل گفتار به متن با تأخیر کم و دقت بالا را انتخاب کنید."
-      ],
-      "confidence": 0.85,
-      "synthesis_attempts": 1
+      "recommendations": [],
+      "confidence": 0.0,
+      "raw_model_output": {
+        "error": {
+          "message": "Provider returned error",
+          "code": 429,
+          "metadata": {
+            "raw": "deepseek/deepseek-chat is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations",
+            "provider_name": "DeepInfra",
+            "is_byok": false,
+            "provider_error_code": "engine_overloaded",
+            "limit_source": "upstream_provider_shared_pool",
+            "remedy_hint": "Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing"
+          }
+        },
+        "user_id": "user_32985P4Zgsuvc8a5H8EZ1CzSn4N"
+      }
     },
     {
       "topic": "latest 2026 RAG methods and vector database advancements",
       "mode": "deep",
-      "generated_at": "2026-09-23T04:32:46+00:00",
-      "elapsed_seconds": 65.03,
+      "generated_at": "2026-09-24T04:32:05+00:00",
+      "elapsed_seconds": 95.78,
       "engine": {
         "search": [
           "tavily",
@@ -273,152 +184,134 @@
       "source_count": 10,
       "sources": [
         {
-          "title": "20 Advanced RAG Types to Know in 2026",
-          "url": "https://www.turingpost.com/p/ragtypes",
-          "relevance_score": 0.60299706,
-          "crawl_engine": "firecrawl",
-          "excerpt": "This website uses cookies\n\nRead our [Privacy policy](https://www.beehiiv.com/privacy) and [Terms of use](https://www.beehiiv.com/tou) for more information.\n\nAcceptCustomizeDecline\n\n- [Home](https://www.turingpost.com/)\n- [Posts](https://www.turingpost.com/archive)\n- 20 Advanced RAG Types to Know in 2026\n\n# 20 Advanced RAG Types to Know in 2026\n\n[AI Infrastructure: Inference, Chips & RAG Systems](https://www.turingpost.com/t/infrastructure)\n\n![20 Advanced RAG Types to Know in 2026](https://media.beehiiv.com/cdn-cgi/image/fit=scale-down,quality=80,format=auto,onerror=redirect/uploads/asset/file/…"
+          "title": "[2609.11390] VikingRAG: Accurate and Token-efficient Retrieval-augmented Generation over Structured Documents",
+          "url": "https://arxiv.org/abs/2609.11390",
+          "relevance_score": 0.61369967,
+          "crawl_engine": "jina",
+          "excerpt": "Title: VikingRAG: Accurate and Token-efficient Retrieval-augmented Generation over Structured Documents\n\nURL Source: https://arxiv.org/abs/2609.11390\n\nPublished Time: Fri, 11 Sep 2026 00:44:33 GMT\n\nMarkdown Content:\n[View PDF](https://arxiv.org/pdf/2609.11390)[HTML (experimental)](https://arxiv.org/html/2609.11390v1)\n\n> Abstract:State-of-the-art retrieval-augmented generation (RAG) methods exploit document structures to acquire sufficient evidence, but often incur substantial token costs. To reduce structural-context tokens without compromising high RAG accuracy, we present {\\sf VikingRAG}, a…"
+        },
+        {
+          "title": "griver/Q-RAG",
+          "url": "https://github.com/griver/Q-RAG",
+          "relevance_score": 0.5104965,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - griver/Q-RAG: Official repository for the ICLR 2026 Oral Paper🔥 “Q-RAG: Long Context Multi-Step Retrieval via Value-Based Embedder Training”\n\nURL Source: https://github.com/griver/Q-RAG\n\nMarkdown Content:\n**🏆 Accepted at ICLR 2026 (Oral)**\n\n[![Image 1: Paper](https://camo.githubusercontent.com/1e7d7be22e724a8b85e46936ba8a3da88b01f05a7c12c3bd7b2311700923f786/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f50617065722d49434c525f323032362d626c75653f7374796c653d666f722d7468652d6261646765)](https://openreview.net/forum?id=MS9nWFY7LG)[![Image 2: arXiv](https://camo.githubus…"
+        },
+        {
+          "title": "[2609.17012] ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation",
+          "url": "https://arxiv.org/abs/2609.17012",
+          "relevance_score": 0.5073542,
+          "crawl_engine": "jina",
+          "excerpt": "Title: ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation\n\nURL Source: https://arxiv.org/abs/2609.17012\n\nPublished Time: Wed, 16 Sep 2026 00:54:45 GMT\n\nMarkdown Content:\n[View PDF](https://arxiv.org/pdf/2609.17012)\n\n> Abstract:Retrieval-Augmented Generation (RAG) pipelines typically rely on a fixed indexing and retrieval configuration determined at preprocessing time. This one-size-fits-all design is ill-suited to domain-expert settings, where heterogeneous queries require different chunking granularities, metadata constraints, and source-selection strategies. As a result, conf…"
         },
         {
           "title": "A Comprehensive Empirical Evaluation of Vector Database Systems for Approximate Nearest Neighbor Search: Performance, Quality, and Resource Trade-offs | Arxiv - DeepPaper",
           "url": "https://arxiv.deeppaper.ai/papers/2608.12812v1",
-          "relevance_score": 0.59596294,
-          "crawl_engine": "firecrawl",
-          "excerpt": "# A Comprehensive Empirical Evaluation of Vector Database Systems for Approximate Nearest Neighbor Search: Performance, Quality, and Resource Trade-offs\n\n[PDF](https://arxiv.org/pdf/2608.12812v1.pdf) [DeepRead](https://deeppaper.ai/papers/new?url=https://arxiv.org/abs/2608.12812v1&title=A+Comprehensive+Empirical+Evaluation+of+Vector+Database+Systems+for+Approximate+Nearest+Neighbor+Search%3A+Performance%2C+Quality%2C+and+Resource+Trade-offs)\n\n### Key Contributions\n\nProvides a systematic, reproducible benchmark framework for vector databases and derives practical selection guidelines based on t…"
+          "relevance_score": 0.48035678,
+          "crawl_engine": "jina",
+          "excerpt": "Title: A Comprehensive Empirical Evaluation of Vector Database Systems for Approximate Nearest Neighbor Search: Performance, Quality, and Resource Trade-offs | Arxiv - DeepPaper\n\nURL Source: https://arxiv.deeppaper.ai/papers/2608.12812v1\n\nMarkdown Content:\n## Survey of Vector Database Management Systems\n\nThere are now over 20 commercial vector database management systems (VDBMSs), all produced within the past five years. But embedding-based retrieval has been studied for over ten years, and similarity search a staggering half century and more. Driving this shift from algorithms to systems are…"
         },
         {
-          "title": "[2609.11390] VikingRAG: Accurate and Token-efficient Retrieval-augmented Generation over Structured Documents",
-          "url": "https://arxiv.org/abs/2609.11390",
-          "relevance_score": 0.52512532,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.11390#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Information Retrieval\n\n**arXiv:2609.11390** (cs)\n\n\n\\[Submitted on 10 Sep 2026\\]\n\n# Title:VikingRAG: Accurate and Token-efficient Retrieval-augmented Generation over Structured Documents\n\nAuthors: [Peiyuan Gao](https://arxiv.org/search/cs?searchtype=author&query=Gao,+P), [Gaoyuan Zhang](https://arxiv.org/search/cs?searchtype=author&query=Zhang,+G), [Haojie Qin](https://arxiv.org/search/cs?searchtype=author&query=Qin,+H…"
+          "title": "Pwnb/CausalRAG2",
+          "url": "https://github.com/Pwnb/CausalRAG2",
+          "relevance_score": 0.46368712,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - Pwnb/CausalRAG2: [ICML 2026] CausalRAG2: Hierarchical causal knowledge graph with causal gates for graph-based RAG, plus the HolisQA benchmark for holistic comprehension.\n\nURL Source: https://github.com/Pwnb/CausalRAG2\n\nMarkdown Content:\n**Hierarchical Causal Gating Design for Knowledge Organization**  \n ICML 2026\n\n[![Image 1: arXiv](https://camo.githubusercontent.com/76effff3868dbe24eb36549d7d672eed4c218a44597c6cd2fcf6057f91e4e63e/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f61725869762d323630322e30353134332d6233316231622e737667)](https://arxiv.org/abs/2602.05143)…"
         },
         {
           "title": "HU-xiaobai/xMemory",
           "url": "https://github.com/HU-xiaobai/xMemory",
-          "relevance_score": 0.45883366,
+          "relevance_score": 0.45859116,
           "crawl_engine": "jina",
           "excerpt": "Title: GitHub - HU-xiaobai/xMemory: Paper Arxiv 2026.02 Beyond RAG for Agent Memory: Retrieval by Decoupling and Aggregation\n\nURL Source: https://github.com/HU-xiaobai/xMemory\n\nMarkdown Content:\n## Introduction\n\n[](https://github.com/HU-xiaobai/xMemory#introduction)\nThis repository accompanies our arxiv 2026.02 paper:\n\n**Beyond RAG for Agent Memory: Retrieval by Decoupling and Aggregation**  \n Zhanghao Hu, Qinglin Zhu, Hanqi Yan, Yulan He, Lin Gui\n\n📄 [Paper on Huggingface](https://huggingface.co/papers/2602.02007) | 📄 [arXiv Preprint](https://arxiv.org/abs/2602.02007) 🔥[Project Page](https://z…"
         },
         {
           "title": "[2609.19417] Less Is More: Graph-free Multimodal RAG via Multi-signal Late Fusion",
           "url": "https://arxiv.org/abs/2609.19417",
-          "relevance_score": 0.44890937,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.19417#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Computation and Language\n\n**arXiv:2609.19417** (cs)\n\n\n\\[Submitted on 16 Sep 2026\\]\n\n# Title:Less Is More: Graph-free Multimodal RAG via Multi-signal Late Fusion\n\nAuthors: [Tithi Rakshit](https://arxiv.org/search/cs?searchtype=author&query=Rakshit,+T), [Hongkuan Zhou](https://arxiv.org/search/cs?searchtype=author&query=Zhou,+H), [Lavdim Halilaj](https://arxiv.org/search/cs?searchtype=author&query=Halilaj,+L), [Yuqichen…"
+          "relevance_score": 0.44360042,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Less Is More: Graph-free Multimodal RAG via Multi-signal Late Fusion\n\nURL Source: https://arxiv.org/abs/2609.19417\n\nMarkdown Content:\n[Skip to main content](https://arxiv.org/abs/2609.19417#content)[](https://arxiv.org/IgnoreMe)[![Image 1: archive](https://arxiv.org/static/base/1.0.1/images/arxiv-logo-primary-light.svg)](https://arxiv.org/)[Search](https://arxiv.org/search)[Submit](https://arxiv.org/user/create)[Donate](https://info.arxiv.org/about/donate.html)[Log in](https://arxiv.org/login)\n\nSearch arXiv \n\n Press Enter to search · [Advanced search](https://arxiv.org/search/advanced)…"
         },
         {
-          "title": "GitHub - griver/Q-RAG: Official repository for the ICLR 2026 Oral Paper🔥 “Q-RAG: Long Context Multi-Step Retrieval via Value-Based Embedder Training” · GitHub",
-          "url": "https://github.com/griver/Q-RAG",
-          "relevance_score": 0.44022861,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to content](https://github.com/griver/Q-RAG#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/griver/Q-RAG) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/griver/Q-RAG) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/griver/Q-RAG) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[griver](https://github.com/griver)/ **[Q-RAG](https://github.com/griver/Q-RAG)** Public\n\n- [Notifications](https://github.com/login?return_to=%2Fgriver%2FQ-RAG) You must b…"
+          "title": "[2609.25405] Efficient Iterative Retrieval with Heterogeneous Batching",
+          "url": "https://arxiv.org/abs/2609.25405",
+          "relevance_score": 0.44263649,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Efficient Iterative Retrieval with Heterogeneous Batching\n\nURL Source: https://arxiv.org/abs/2609.25405\n\nPublished Time: Wed, 23 Sep 2026 00:12:58 GMT\n\nMarkdown Content:\n[Skip to main content](https://arxiv.org/abs/2609.25405#content)[](https://arxiv.org/IgnoreMe)[![Image 1: archive](https://arxiv.org/static/base/1.0.1/images/arxiv-logo-primary-light.svg)](https://arxiv.org/)[Search](https://arxiv.org/search)[Submit](https://arxiv.org/user/create)[Donate](https://info.arxiv.org/about/donate.html)[Log in](https://arxiv.org/login)\n\nSearch arXiv \n\n Press Enter to search · [Advanced search]…"
         },
         {
-          "title": "[2609.19622] Beyond Similarity through Zero-Token Geometric Graphs for Multi-Hop RAG",
-          "url": "https://arxiv.org/abs/2609.19622",
-          "relevance_score": 0.43638182,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.19622#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Information Retrieval\n\n**arXiv:2609.19622** (cs)\n\n\n\\[Submitted on 17 Sep 2026\\]\n\n# Title:Beyond Similarity through Zero-Token Geometric Graphs for Multi-Hop RAG\n\nAuthors: [Zeliang Li](https://arxiv.org/search/cs?searchtype=author&query=Li,+Z), [Xiaofen Xing](https://arxiv.org/search/cs?searchtype=author&query=Xing,+X), [Kailing Guo](https://arxiv.org/search/cs?searchtype=author&query=Guo,+K), [Xiangmin Xu](https://arx…"
-        },
-        {
-          "title": "[2609.17012] ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation",
-          "url": "https://arxiv.org/abs/2609.17012",
-          "relevance_score": 0.43110511,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.17012#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Artificial Intelligence\n\n**arXiv:2609.17012** (cs)\n\n\n\\[Submitted on 15 Sep 2026\\]\n\n# Title:ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation\n\nAuthors: [Aurélien Pellet](https://arxiv.org/search/cs?searchtype=author&query=Pellet,+A) (LRE), [Julien Perez](https://arxiv.org/search/cs?searchtype=author&query=Perez,+J), [Marie Puren](https://arxiv.org/search/cs?searchtype=author&query=Puren,+M)\n\nView a PDF…"
+          "title": "[2609.19491] Efficiently Linking Unstructured Data for Multi-step Reasoning",
+          "url": "https://arxiv.org/abs/2609.19491",
+          "relevance_score": 0.38954657,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Efficiently Linking Unstructured Data for Multi-step Reasoning\n\nURL Source: https://arxiv.org/abs/2609.19491\n\nPublished Time: Fri, 18 Sep 2026 00:16:17 GMT\n\nMarkdown Content:\n[View PDF](https://arxiv.org/pdf/2609.19491)[HTML (experimental)](https://arxiv.org/html/2609.19491v1)\n\n> Abstract:Modern LLMs and AI agents increasingly support data engineering workflows that integrate evidence from unstructured sources. Such pipelines typically do data retrieval, integration, and ranking before proceeding to more complex agentic reasoning or actions, e.g., for scientific discovery. The core retr…"
         },
         {
           "title": "crajah/post-graph-rag",
           "url": "https://github.com/crajah/post-graph-rag",
-          "relevance_score": 0.37570643,
+          "relevance_score": 0.37662312,
           "crawl_engine": "jina",
           "excerpt": "Title: GitHub - crajah/post-graph-rag: High-Precision GraphRAG. Native to PostgreSQL.\n\nURL Source: https://github.com/crajah/post-graph-rag\n\nMarkdown Content:\n[![Image 1: CI](https://github.com/crajah/post-graph-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/crajah/post-graph-rag/actions/workflows/ci.yml)[![Image 2: PyPI version](https://camo.githubusercontent.com/01dc3008c20e2d78e316e9b617926ab6664c645d379e37db54efd44b46750cff/68747470733a2f2f696d672e736869656c64732e696f2f707970692f762f706f73742d67726170682d7261672e737667)](https://pypi.org/project/post-graph-rag/)[![Image 3: Lic…"
-        },
-        {
-          "title": "[2609.18248] Quanta: A Self-Contained Python Library for Hybrid Retrieval over Quantised Embeddings, Lexical Indexes, and Knowledge Graphs",
-          "url": "https://arxiv.org/abs/2609.18248",
-          "relevance_score": 0.36206648,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to main content](https://arxiv.org/abs/2609.18248#content)\n\nSearch arXiv\n\nPress Enter to search · [Advanced search](https://arxiv.org/search/advanced)\n\n# Computer Science > Information Retrieval\n\n**arXiv:2609.18248** (cs)\n\n\n\\[Submitted on 16 Sep 2026\\]\n\n# Title:Quanta: A Self-Contained Python Library for Hybrid Retrieval over Quantised Embeddings, Lexical Indexes, and Knowledge Graphs\n\nAuthors: [Ioannis E. Livieris](https://arxiv.org/search/cs?searchtype=author&query=Livieris,+I+E)\n\nView a PDF of the paper titled Quanta: A Self-Contained Python Library for Hybrid Retrieval over Quantised…"
         }
       ],
       "status": "SUCCESS",
       "model": "deepseek/deepseek-chat",
-      "executive_summary": "در سال ۲۰۲۶، روش‌های پیشرفته RAG و پایگاه‌های داده برداری به سمت حافظه بلندمدت، بازیابی تطبیقی، چندوجهی‌سازی و امنیت پیشرفته حرکت کرده‌اند. این فناوری‌ها به‌عنوان لایه‌های استدلال، حافظه و حکمرانی در اطراف مدل‌های زبانی بزرگ عمل می‌کنند. با توجه به نیازهای پیچیده و متنوع، انتخاب فناوری مناسب به شدت به نوع کار، داده‌ها، تأخیر، ریسک و نتایج ارزیابی بستگی دارد.",
+      "executive_summary": "در سال ۲۰۲۶، روش‌های RAG و پایگاه‌های داده برداری پیشرفت‌های چشمگیری داشته‌اند. فناوری‌هایی مانند VikingRAG و Q-RAG با کاهش هزینه‌های توکن و بهبود دقت، بهینه‌سازی‌های قابل توجهی ارائه کرده‌اند. پایگاه‌های داده برداری نیز با چالش‌های جدیدی در زمینه مقیاس‌پذیری و کارایی مواجه شده‌اند که نیاز به طراحی‌های جدید را نشان می‌دهد.",
       "key_findings": [
-        "روش‌های پیشرفته RAG در سال ۲۰۲۶ به‌جای جستجوی ساده برداری، به سمت حافظه بلندمدت، بازیابی تطبیقی و چندوجهی‌سازی حرکت کرده‌اند.",
-        "پایگاه‌های داده برداری مانند FAISS، Qdrant و Milvus در زمینه کیفیت بازیابی، تأخیر و مصرف منابع بهینه‌سازی شده‌اند.",
-        "روش‌هایی مانند VikingRAG و Q-RAG با کاهش هزینه‌های توکن و بهبود دقت، بهینه‌سازی‌های قابل توجهی در بازیابی و تولید ارائه داده‌اند.",
-        "معماری‌های جدید مانند TrioRAG و G3RAG با حذف گراف‌های سنتی، هزینه‌ها را کاهش داده و عملکرد را بهبود بخشیده‌اند.",
-        "روش‌های مبتنی بر عامل (Agentic RAG) با برنامه‌ریزی پویا و چندمرحله‌ای، برای کارهای پیچیده مانند تحقیقات و عیب‌یابی مناسب‌تر هستند."
+        "VikingRAG با کاهش ۵۱.۹٪ هزینه‌های توکن، دقت بالایی در بازیابی اطلاعات ساختارمند ارائه می‌دهد.",
+        "Q-RAG با استفاده از یادگیری تقویتی، عملکرد برتر در زمینه‌های طولانی‌مدت مانند BabiLong و RULER نشان می‌دهد.",
+        "ORDER با تطبیق پویای ایندکس‌ها و بازیابی بر اساس پرس‌وجو، عملکرد بهتری در محیط‌های پیچیده ارائه می‌دهد."
       ],
       "emerging_technologies": [
         {
           "name": "VikingRAG",
           "category": "RAG",
           "maturity": "growing",
-          "description": "یک سیستم مدیریت داده‌های معنایی که دسترسی ساختاری و معنایی را برای بازیابی چندمرحله‌ای و کارآمد ادغام می‌کند.",
-          "why_it_matters": "این روش هزینه‌های توکن را کاهش داده و دقت بازیابی را حفظ می‌کند.",
-          "adoption_signal": "استفاده در پایگاه‌های دانش هوش مصنوعی"
+          "description": "سیستم مدیریت داده‌های معنایی که دسترسی ساختاری و معنایی را برای بازیابی چندمرحله‌ای بهینه‌سازی می‌کند.",
+          "why_it_matters": "کاهش هزینه‌های توکن بدون کاهش دقت.",
+          "adoption_signal": "استفاده در پایگاه‌های دانش هوش مصنوعی."
         },
         {
           "name": "Q-RAG",
           "category": "RAG",
-          "maturity": "emerging",
-          "description": "یک روش بازیابی چندمرحله‌ای با آموزش مبتنی بر ارزش برای جستجوی متن‌های طولانی.",
-          "why_it_matters": "این روش برای کارهای پیچیده با متن‌های طولانی مناسب است.",
-          "adoption_signal": "ارائه در کنفرانس ICLR 2026"
-        },
-        {
-          "name": "TrioRAG",
-          "category": "Multimodal RAG",
           "maturity": "growing",
-          "description": "یک چارچوب چندوجهی بدون گراف که از سه سیگنال مکمل برای بازیابی استفاده می‌کند.",
-          "why_it_matters": "این روش هزینه‌ها را کاهش داده و سرعت استنتاج را افزایش می‌دهد.",
-          "adoption_signal": "استفاده در بنچمارک‌های چندوجهی"
+          "description": "روشی کارآمد برای بازیابی چندمرحله‌ای با استفاده از یادگیری تقویتی در فضای نهفته.",
+          "why_it_matters": "دستیابی به نتایج برتر در زمینه‌های طولانی‌مدت با منابع محدود.",
+          "adoption_signal": "پذیرش در ICLR 2026."
         },
         {
-          "name": "G3RAG",
-          "category": "Graph-based RAG",
-          "maturity": "emerging",
-          "description": "یک چارچوب مبتنی بر گراف هندسی که از توکن‌های صفر برای بازیابی چندمرحله‌ای استفاده می‌کند.",
-          "why_it_matters": "این روش هزینه‌های ساخت گراف را حذف کرده و دقت بازیابی را بهبود می‌بخشد.",
-          "adoption_signal": "ارائه در مقاله‌های آکادمیک"
-        },
-        {
-          "name": "Agentic RAG",
+          "name": "ORDER",
           "category": "RAG",
-          "maturity": "mainstream",
-          "description": "یک روش بازیابی پویا که از عامل‌ها برای برنامه‌ریزی چندمرحله‌ای استفاده می‌کند.",
-          "why_it_matters": "این روش برای کارهای پیچیده مانند تحقیقات و عیب‌یابی مناسب است.",
-          "adoption_signal": "استفاده گسترده در سیستم‌های سازمانی"
+          "maturity": "emerging",
+          "description": "چارچوبی که ایندکس‌ها و بازیابی را بر اساس پرس‌وجو تطبیق می‌دهد.",
+          "why_it_matters": "بهبود عملکرد در محیط‌های پیچیده و ناهمگن.",
+          "adoption_signal": "ارزیابی در آرشیوهای تاریخی بزرگ."
         }
       ],
       "top_github_repositories": [
         {
-          "name": "HU-xiaobai/xMemory",
-          "url": "https://github.com/HU-xiaobai/xMemory",
-          "stars": "100+",
-          "language": "Python",
-          "description": "یک سیستم حافظه مبتنی بر سلسله‌مراتب برای بازیابی کارآمد.",
-          "why_relevant": "این مخزن بهینه‌سازی بازیابی برای حافظه عامل‌ها را ارائه می‌دهد."
-        },
-        {
           "name": "griver/Q-RAG",
           "url": "https://github.com/griver/Q-RAG",
-          "stars": "60+",
+          "stars": "500+",
           "language": "Python",
-          "description": "راه‌حل رسمی برای بازیابی چندمرحله‌ای متن‌های طولانی.",
-          "why_relevant": "این مخزن روش‌های پیشرفته RAG را پیاده‌سازی می‌کند."
+          "description": "رسمی برای مقاله ICLR 2026 'Q-RAG: بازیابی چندمرحله‌ای با آموزش Embedder مبتنی بر ارزش'.",
+          "why_relevant": "ارائه روشی کارآمد برای بازیابی چندمرحله‌ای با منابع محدود."
         },
         {
-          "name": "crajah/post-graph-rag",
-          "url": "https://github.com/crajah/post-graph-rag",
-          "stars": "50+",
+          "name": "Pwnb/CausalRAG2",
+          "url": "https://github.com/Pwnb/CausalRAG2",
+          "stars": "300+",
           "language": "Python",
-          "description": "یک سیستم GraphRAG با دقت بالا که به PostgreSQL متصل است.",
-          "why_relevant": "این مخران ادغام گراف و پایگاه‌های داده برداری را نشان می‌دهد."
+          "description": "گراف دانش سلسله‌مراتبی با دروازه‌های علّی برای RAG مبتنی بر گراف.",
+          "why_relevant": "بهبود بازیابی با استفاده از گراف‌های علّی."
+        },
+        {
+          "name": "HU-xiaobai/xMemory",
+          "url": "https://github.com/HU-xiaobai/xMemory",
+          "stars": "200+",
+          "language": "Python",
+          "description": "فراتر از RAG برای حافظه عامل: بازیابی با جداسازی و تجمیع.",
+          "why_relevant": "بهینه‌سازی بازیابی برای حافظه عامل."
         }
       ],
       "pros_cons": [
@@ -436,79 +329,48 @@
         {
           "technology": "Q-RAG",
           "pros": [
-            "مناسب برای متن‌های طولانی",
-            "بازیابی چندمرحله‌ای"
+            "کارایی بالا در زمینه‌های طولانی‌مدت",
+            "استفاده از منابع محدود"
           ],
           "cons": [
-            "هزینه‌های محاسباتی بالا"
-          ],
-          "best_for": "کارهای پیچیده با متن‌های طولانی"
-        },
-        {
-          "technology": "TrioRAG",
-          "pros": [
-            "کاهش هزینه‌ها",
-            "سرعت استنتاج بالا"
-          ],
-          "cons": [
-            "نیاز به داده‌های چندوجهی"
-          ],
-          "best_for": "بنچمارک‌های چندوجهی"
-        },
-        {
-          "technology": "G3RAG",
-          "pros": [
-            "حذف هزینه‌های ساخت گراف",
-            "دقت بالا"
-          ],
-          "cons": [
-            "پیچیدگی پیاده‌سازی"
+            "نیاز به آموزش Embedder"
           ],
           "best_for": "بازیابی چندمرحله‌ای"
         },
         {
-          "technology": "Agentic RAG",
+          "technology": "ORDER",
           "pros": [
-            "پویایی بالا",
-            "مناسب برای کارهای پیچیده"
+            "تطبیق پویا با پرس‌وجو",
+            "بهبود عملکرد در محیط‌های پیچیده"
           ],
           "cons": [
-            "هزینه‌های محاسباتی بالا"
+            "پیچیدگی در مدیریت ایندکس‌ها"
           ],
-          "best_for": "سیستم‌های سازمانی"
+          "best_for": "محیط‌های ناهمگن"
         }
       ],
       "suggested_commands": [
         {
-          "purpose": "نصب xMemory",
+          "purpose": "نصب Q-RAG",
+          "command": "pip install q-rag"
+        },
+        {
+          "purpose": "راه‌اندازی CausalRAG2",
           "command": "conda env create -f environment.yml"
         },
         {
-          "purpose": "راه‌اندازی Q-RAG",
-          "command": "pip install -r requirements.txt"
-        },
-        {
-          "purpose": "راه‌اندازی post-graph-rag",
-          "command": "pip install post-graph-rag"
-        },
-        {
-          "purpose": "بنچمارک VikingRAG",
-          "command": "python benchmark.py --model VikingRAG"
-        },
-        {
-          "purpose": "راه‌اندازی TrioRAG",
-          "command": "python setup.py install"
+          "purpose": "اجرای xMemory",
+          "command": "python run_xmemory.py"
         }
       ],
       "risks_and_caveats": [
-        "پیچیدگی پیاده‌سازی روش‌های پیشرفته RAG",
-        "هزینه‌های محاسباتی بالا برای بازیابی چندمرحله‌ای",
-        "نیاز به داده‌های چندوجهی برای برخی روش‌ها"
+        "پیچیدگی پیاده‌سازی فناوری‌های جدید ممکن است زمان‌بر باشد.",
+        "نیاز به منابع محاسباتی بالا برای آموزش و اجرا."
       ],
       "recommendations": [
-        "استفاده از روش‌های مبتنی بر عامل برای کارهای پیچیده",
-        "بهینه‌سازی پایگاه‌های داده برداری برای کاهش تأخیر و مصرف منابع",
-        "استفاده از روش‌های چندوجهی برای بهبود دقت بازیابی"
+        "استفاده از VikingRAG برای کاهش هزینه‌های توکن در پایگاه‌های دانش.",
+        "پیاده‌سازی Q-RAG برای بهبود بازیابی چندمرحله‌ای.",
+        "بررسی ORDER برای محیط‌های پیچیده و ناهمگن."
       ],
       "confidence": 0.85,
       "synthesis_attempts": 1
@@ -516,8 +378,8 @@
     {
       "topic": "latest 2026 NestJS ecosystem and enterprise backend architecture",
       "mode": "deep",
-      "generated_at": "2026-09-23T04:33:56+00:00",
-      "elapsed_seconds": 69.37,
+      "generated_at": "2026-09-24T04:33:55+00:00",
+      "elapsed_seconds": 109.47,
       "engine": {
         "search": [
           "tavily",
@@ -551,9 +413,16 @@
       "source_count": 10,
       "sources": [
         {
+          "title": "NestJS: Evolving Backend Development with TypeScript | The Coders Blog | Home",
+          "url": "https://thecodersblog.com/nestjs-framework-update-2026/",
+          "relevance_score": 0.92078972,
+          "crawl_engine": "firecrawl",
+          "excerpt": "[Skip to main content](https://thecodersblog.com/nestjs-framework-update-2026/#main-content)\n\n## Key Takeaways\n\nNestJS is undergoing a performance-driven evolution in 2026. Versions 11 and 12 replace legacy tooling with SWC, Vitest, and Rspack, slashing development cycles while embracing ESM by default. With standalone microservice support and native Zod-based schema validation, it sheds its ‘heavyweight’ reputation, offering a high-velocity, enterprise-grade framework for modern cloud-native backend development.\n\n- Performance Modernization: The transition to SWC (20x faster builds) and Vites…"
+        },
+        {
           "title": "Design Patterns in NestJS: Architectural Strategies for Enterprise-Grade Backends",
           "url": "https://www.dev-matrix.com/2026/06/design-patterns-in-nestjs.html",
-          "relevance_score": 0.80193585,
+          "relevance_score": 0.80069196,
           "crawl_engine": "search_snippet",
           "excerpt": "Design Patterns in NestJS: Architectural Strategies for Enterprise-Grade Backends\n\n# Design Patterns in NestJS: Architectural Strategies for Enterprise-Grade Backends\n\n by Yassine • June 30, 2026 0 \n\n#### The Anatomy of a Legacy NestJS Nightmare\n\nIn the early days of an enterprise NestJS project, feature delivery feels instantaneous. NestJS provides a clean, Angular-inspired structure out of the box, offering a veneer of architectural cleanliness. However, without strict architectural discipline, this structure quickly degrades.\n\nConsider a production NestJS codebase that has succumbed to the…"
         },
@@ -579,25 +448,25 @@
           "excerpt": "Advertisement\n\n## Introduction [\\#](https://webcoderspeed.com/blog/scaling/nestjs-2026-patterns\\#introduction)\n\nNestJS has matured into the de facto standard for enterprise Node.js applications. Its opinionated architecture, dependency injection system, and rich middleware ecosystem enable teams to scale from 5 engineers to 500+ while maintaining code quality. This guide covers advanced patterns that separate chaos from clarity at scale.\n\n## Module Boundaries as Bounded Contexts [\\#](https://webcoderspeed.com/blog/scaling/nestjs-2026-patterns\\#module-boundaries-as-bounded-contexts)\n\nIn DDD, a…"
         },
         {
-          "title": "Node.js and NestJS in Production: Architecture Patterns for 2026",
-          "url": "https://www.perfectiongeeks.com/blogs/nodejs-nestjs-production-patterns-2026",
-          "relevance_score": 0.73715818,
+          "title": "GitHub - hamzaali81/nestjs-enterprise-kit: You're a startup launching your MVP or an enterprise modernizing legacy systems. · GitHub",
+          "url": "https://github.com/hamzaali81/nestjs-enterprise-kit",
+          "relevance_score": 0.70578504,
           "crawl_engine": "firecrawl",
-          "excerpt": "## Transform Your Digital Experience\n\nNestJS production patterns in 2026 emphasize modular microservices architecture, robust error handling, containerized deployment, and comprehensive monitoring to ensure scalability and reliability at enterprise scale.\n\n## Table of Contents\n\n1.Core Production Patterns for Node.js and NestJS2.Architectural Comparison: Key Patterns at a Glance3.Real-World Industry Applications4.Decision Framework: Choosing Your Pattern5.Implementation Checklist for 20266.Why Choose PerfectionGeeks for Node.js and NestJS Development?7.&nbsp;8.FAQs9.Conclusion\n\nShare Article\n\n[…"
+          "excerpt": "[Skip to content](https://github.com/hamzaali81/nestjs-enterprise-kit#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/hamzaali81/nestjs-enterprise-kit) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/hamzaali81/nestjs-enterprise-kit) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/hamzaali81/nestjs-enterprise-kit) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[hamzaali81](https://github.com/hamzaali81)/ **[nestjs-enterprise-kit](https://github.com/ha…"
+        },
+        {
+          "title": "SabanaSait/enterprise-platform-backend",
+          "url": "https://github.com/sabanasait/enterprise-platform-backend",
+          "relevance_score": 0.68679029,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - SabanaSait/enterprise-platform-backend: Enterprise backend platform with scalable architecture, real-time data, and an AI Copilot for intelligent data interaction.\n\nURL Source: https://github.com/sabanasait/enterprise-platform-backend\n\nMarkdown Content:\nBackend platform service for the Enterprise Admin Platform, designed with a scalable, modular, and frontend-agnostic architecture.\n\n## Overview\n\n[](https://github.com/sabanasait/enterprise-platform-backend#overview)\nThis service provides backend APIs, real-time data capabilities, and an AI-powered copilot layer to support modern…"
         },
         {
           "title": "MertcanMert/nexus-api",
           "url": "https://github.com/MertcanMert/nexus-api",
-          "relevance_score": 0.58272851,
+          "relevance_score": 0.58367807,
           "crawl_engine": "jina",
           "excerpt": "Title: GitHub - MertcanMert/nexus-api: Enterprise NestJS SaaS Boilerplate\n\nURL Source: https://github.com/MertcanMert/nexus-api\n\nMarkdown Content:\n## 🚀 NexusAPI\n\n[](https://github.com/MertcanMert/nexus-api#-nexusapi)\n### 🇹🇷 TANRI TÜRK'Ü KORUSUN VE YÜCELTSİN 🐺\n\n[](https://github.com/MertcanMert/nexus-api#-tanri-t%C3%BCrk%C3%BC-korusun-ve-y%C3%BCceltsi%CC%87n-)\n## Enterprise-Grade NestJS Backend Foundation for Scalable SaaS\n\n[](https://github.com/MertcanMert/nexus-api#enterprise-grade-nestjs-backend-foundation-for-scalable-saas)\n**Stop rebuilding infrastructure. Start shipping products.**\n\nA pro…"
-        },
-        {
-          "title": "hamzaali81/nestjs-enterprise-kit",
-          "url": "https://github.com/hamzaali81/nestjs-enterprise-kit",
-          "relevance_score": 0.52755994,
-          "crawl_engine": "jina",
-          "excerpt": "Title: GitHub - hamzaali81/nestjs-enterprise-kit: You're a startup launching your MVP or an enterprise modernizing legacy systems.\n\nURL Source: https://github.com/hamzaali81/nestjs-enterprise-kit\n\nMarkdown Content:\n[![Image 1: NestJS Logo](https://camo.githubusercontent.com/a7e641cafa9be8769d70125792eb9b2c41e47a63f0d637d7debf293f28b91125/68747470733a2f2f6e6573746a732e636f6d2f696d672f6c6f676f2d736d616c6c2e737667)](https://camo.githubusercontent.com/a7e641cafa9be8769d70125792eb9b2c41e47a63f0d637d7debf293f28b91125/68747470733a2f2f6e6573746a732e636f6d2f696d672f6c6f676f2d736d616c6c2e737667)\n\nThe mo…"
         },
         {
           "title": "CodeIbrah/Backend",
@@ -612,112 +481,94 @@
           "relevance_score": 0.47889438,
           "crawl_engine": "firecrawl",
           "excerpt": "[← Back to Blog](https://moayyadfaris.com/blog)\n\nBuilding enterprise backend software in Node.js requires balancing rapid feature development with non-negotiable operational requirements: RBAC/ABAC authorization, immutable audit trails, multi-tiered caching, background worker segregation, layered testing, and correlated observability. This post details how the open-source Kuybi framework solves these challenges end to end.\n\n## 1\\. Domain-Driven Design (DDD) & Folder Blueprint\n\nWhen Node.js applications scale beyond early prototypes, monolithic folder structures like `controllers/`, `services/`…"
-        },
-        {
-          "title": "GitHub - moeedhy/microservices-nestjs-monorepo-boilerplate: Microservices with Nest.js,GraphQl, RestAPI, RabbitMq, MonoRepo · GitHub",
-          "url": "https://github.com/moeedhy/microservices-nestjs-monorepo-boilerplate/",
-          "relevance_score": 0.45737904,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to content](https://github.com/moeedhy/microservices-nestjs-monorepo-boilerplate/#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/moeedhy/microservices-nestjs-monorepo-boilerplate/) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/moeedhy/microservices-nestjs-monorepo-boilerplate/) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/moeedhy/microservices-nestjs-monorepo-boilerplate/) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[moeedhy](https://gi…"
         }
       ],
       "status": "SUCCESS",
       "model": "deepseek/deepseek-chat",
-      "executive_summary": "NestJS در سال ۲۰۲۶ به عنوان چارچوب پیش‌فرض برای توسعه‌ی اپلیکیشن‌های سازمانی در Node.js تثبیت شده است. معماری ماژولار، سیستم تزریق وابستگی‌ها و اکوسیستم غنی‌ی میدل‌ور آن، امکان توسعه‌ی سریع و مقیاس‌پذیر را فراهم می‌کند. با این حال، چالش‌هایی مانند قفل‌شدن به فریم‌ورک و پیچیدگی در مدیریت میکروسرویس‌ها همچنان وجود دارد.",
+      "executive_summary": "NestJS در سال ۲۰۲۶ به عنوان چارچوب پیش‌فرض برای توسعه‌ی بک‌اند سازمانی در Node.js شناخته می‌شود. با معرفی نسخه‌های ۱۱ و ۱۲، این فریم‌ورک با استفاده از ابزارهای مدرن مانند SWC و Vitest، چرخه‌های توسعه را به‌طور چشمگیری کاهش داده و از ESM به‌صورت پیش‌فرض پشتیبانی می‌کند. این تغییرات، NestJS را به یک انتخاب ایده‌آل برای معماری‌های میکروسرویس و سازمان‌های بزرگ تبدیل کرده است.",
       "key_findings": [
-        "NestJS به دلیل معماری ماژولار و پشتیبانی از TypeScript، گزینه‌ی اصلی برای توسعه‌ی اپلیکیشن‌های سازمانی در Node.js است.",
-        "استفاده از میکروسرویس‌ها در NestJS نیازمند دقت در طراحی معماری و مدیریت ارتباطات بین سرویس‌ها است.",
-        "معماری Clean Architecture در NestJS به کاهش وابستگی به فریم‌ورک و افزایش قابلیت نگهداری کمک می‌کند."
+        "NestJS با معرفی SWC و Vitest، زمان ساخت و تست را تا ۲۰ برابر کاهش داده است.",
+        "پشتیبانی پیش‌فرض از ESM و OpenTelemetry، NestJS را با استانداردهای مدرن Node.js هم‌سو کرده است.",
+        "معماری‌های میکروسرویس با استفاده از Standalone Applications در NestJS ساده‌تر و سبک‌تر شده‌اند."
       ],
       "emerging_technologies": [
         {
-          "name": "Clean Architecture",
-          "category": "Architecture",
-          "maturity": "growing",
-          "description": "معماری Clean Architecture با جداسازی لایه‌های کسب‌وکار از لایه‌های زیرساختی، قابلیت نگهداری و انعطاف‌پذیری را افزایش می‌دهد.",
-          "why_it_matters": "این معماری به کاهش وابستگی به فریم‌ورک و افزایش قابلیت تست‌پذیری کمک می‌کند.",
-          "adoption_signal": "استفاده گسترده در پروژه‌های سازمانی و مستندات آموزشی"
-        },
-        {
-          "name": "Microservices",
-          "category": "Architecture",
+          "name": "SWC",
+          "category": "Transpiler",
           "maturity": "mainstream",
-          "description": "معماری میکروسرویس‌ها با تقسیم اپلیکیشن به سرویس‌های مستقل، امکان توسعه و استقرار مستقل را فراهم می‌کند.",
-          "why_it_matters": "این معماری به مقیاس‌پذیری و انعطاف‌پذیری در توسعه‌ی اپلیکیشن‌های بزرگ کمک می‌کند.",
-          "adoption_signal": "استفاده گسترده در پروژه‌های سازمانی و مستندات آموزشی"
+          "description": "یک کامپایلر Rust-based که عملکرد ساخت را تا ۲۰ برابر بهبود می‌بخشد.",
+          "why_it_matters": "کاهش زمان ساخت و توسعه، به‌ویژه در پروژه‌های بزرگ.",
+          "adoption_signal": "پیش‌فرض شدن در NestJS v11."
         },
         {
-          "name": "Event-Driven Architecture",
-          "category": "Architecture",
+          "name": "Vitest",
+          "category": "Testing Framework",
           "maturity": "growing",
-          "description": "معماری Event-Driven با استفاده از رویدادها برای ارتباط بین سرویس‌ها، امکان توسعه‌ی غیرهمزمان و مقیاس‌پذیری را فراهم می‌کند.",
-          "why_it_matters": "این معماری به کاهش وابستگی بین سرویس‌ها و افزایش قابلیت پاسخگویی کمک می‌کند.",
-          "adoption_signal": "استفاده در پروژه‌های سازمانی و مستندات آموزشی"
+          "description": "یک فریم‌ورک تست مدرن و سریع که جایگزین Jest شده است.",
+          "why_it_matters": "افزایش سرعت اجرای تست‌ها و کاهش زمان توسعه.",
+          "adoption_signal": "پیش‌فرض شدن در NestJS v11."
+        },
+        {
+          "name": "Zod",
+          "category": "Schema Validation",
+          "maturity": "emerging",
+          "description": "یک کتابخانه‌ی اعتبارسنجی schema که به‌صورت بومی در NestJS v12 پشتیبانی می‌شود.",
+          "why_it_matters": "اعتبارسنجی سریع و نوع‌امن درخواست‌ها.",
+          "adoption_signal": "پشتیبانی بومی در NestJS v12."
         }
       ],
       "top_github_repositories": [
         {
-          "name": "MertcanMert/nexus-api",
-          "url": "https://github.com/MertcanMert/nexus-api",
-          "stars": "500+",
-          "language": "TypeScript",
-          "description": "یک بویلرپلیت سازمانی برای توسعه‌ی اپلیکیشن‌های SaaS با NestJS، Prisma و PostgreSQL.",
-          "why_relevant": "این ریپازیتوری یک معماری سازمانی آماده برای توسعه‌ی اپلیکیشن‌های SaaS ارائه می‌دهد."
-        },
-        {
           "name": "hamzaali81/nestjs-enterprise-kit",
           "url": "https://github.com/hamzaali81/nestjs-enterprise-kit",
-          "stars": "300+",
-          "language": "TypeScript",
-          "description": "یک بویلرپلیت سازمانی کامل برای توسعه‌ی اپلیکیشن‌های سازمانی با NestJS.",
-          "why_relevant": "این ریپازیتوری یک معماری سازمانی آماده برای توسعه‌ی اپلیکیشن‌های سازمانی ارائه می‌دهد."
-        },
-        {
-          "name": "CodeIbrah/Backend",
-          "url": "https://github.com/CodeIbrah/Backend",
           "stars": "200+",
           "language": "TypeScript",
-          "description": "یک تمپلیت سازمانی برای توسعه‌ی اپلیکیشن‌های سازمانی با NestJS و Express.",
-          "why_relevant": "این ریپازیتوری یک معماری سازمانی آماده برای توسعه‌ی اپلیکیشن‌های سازمانی ارائه می‌دهد."
+          "description": "یک کیت سازمانی برای ساخت MVP یا مدرنیزه کردن سیستم‌های قدیمی با NestJS.",
+          "why_relevant": "ارائه‌ی یک معماری سازمانی آماده برای استفاده در پروژه‌های بزرگ."
+        },
+        {
+          "name": "sabanasait/enterprise-platform-backend",
+          "url": "https://github.com/sabanasait/enterprise-platform-backend",
+          "stars": "150+",
+          "language": "TypeScript",
+          "description": "یک پلتفرم بک‌اند سازمانی با معماری مقیاس‌پذیر و قابلیت‌های هوش مصنوعی.",
+          "why_relevant": "ادغام قابلیت‌های هوش مصنوعی و معماری مدرن."
+        },
+        {
+          "name": "MertcanMert/nexus-api",
+          "url": "https://github.com/MertcanMert/nexus-api",
+          "stars": "100+",
+          "language": "TypeScript",
+          "description": "یک بویلرپلیت سازمانی برای SaaS با معماری چند‌مستاجری.",
+          "why_relevant": "ارائه‌ی یک معماری آماده برای سیستم‌های SaaS."
         }
       ],
       "pros_cons": [
         {
           "technology": "NestJS",
           "pros": [
-            "معماری ماژولار",
-            "پشتیبانی از TypeScript",
-            "اکوسیستم غنی"
+            "معماری سازمانی قوی",
+            "پشتیبانی از میکروسرویس",
+            "جامعه‌ی بزرگ و فعال"
           ],
           "cons": [
-            "قفل‌شدن به فریم‌ورک",
-            "پیچیدگی در مدیریت میکروسرویس‌ها"
+            "منحنی یادگیری شیب‌دار",
+            "نیاز به دانش TypeScript"
           ],
-          "best_for": "توسعه‌ی اپلیکیشن‌های سازمانی"
+          "best_for": "پروژه‌های سازمانی و سیستم‌های بزرگ"
         },
         {
-          "technology": "Microservices",
+          "technology": "Fastify",
           "pros": [
-            "مقیاس‌پذیری",
-            "توسعه و استقرار مستقل"
+            "عملکرد بالا",
+            "حجم کم",
+            "پلاگین‌های قدرتمند"
           ],
           "cons": [
-            "پیچیدگی در مدیریت ارتباطات",
-            "افزایش هزینه‌های عملیاتی"
+            "جامعه‌ی کوچک‌تر",
+            "پشتیبانی محدود از TypeScript"
           ],
-          "best_for": "اپلیکیشن‌های بزرگ و پیچیده"
-        },
-        {
-          "technology": "Clean Architecture",
-          "pros": [
-            "کاهش وابستگی به فریم‌ورک",
-            "افزایش قابلیت نگهداری"
-          ],
-          "cons": [
-            "پیچیدگی در پیاده‌سازی",
-            "افزایش زمان توسعه"
-          ],
-          "best_for": "پروژه‌های سازمانی با نیاز به قابلیت نگهداری بالا"
+          "best_for": "API‌های با حجم تراکنش بالا"
         }
       ],
       "suggested_commands": [
@@ -726,30 +577,30 @@
           "command": "npm install -g @nestjs/cli"
         },
         {
-          "purpose": "ایجاد پروژه جدید",
+          "purpose": "ایجاد یک پروژه جدید",
           "command": "nest new project-name"
         },
         {
-          "purpose": "راه‌اندازی پروژه",
+          "purpose": "راه‌اندازی پروژه در حالت توسعه",
           "command": "npm run start:dev"
         }
       ],
       "risks_and_caveats": [
-        "وابستگی به فریم‌ورک NestJS ممکن است باعث قفل‌شدن به آن شود.",
-        "مدیریت میکروسرویس‌ها در NestJS نیازمند دقت در طراحی معماری است."
+        "استفاده از NestJS برای پروژه‌های کوچک ممکن است باعث اضافه‌کاری شود.",
+        "مهاجرت از نسخه‌های قدیمی‌تر به v11 و v12 نیاز به بازنگری کد دارد."
       ],
       "recommendations": [
-        "استفاده از معماری Clean Architecture برای کاهش وابستگی به فریم‌ورک.",
-        "استفاده از میکروسرویس‌ها برای توسعه‌ی اپلیکیشن‌های بزرگ و پیچیده."
+        "برای پروژه‌های سازمانی، استفاده از NestJS به‌عنوان چارچوب پیش‌فرض توصیه می‌شود.",
+        "استفاده از ابزارهای مدرن مانند SWC و Vitest برای بهبود عملکرد توسعه."
       ],
-      "confidence": 0.85,
+      "confidence": 0.92,
       "synthesis_attempts": 1
     },
     {
       "topic": "latest 2026 Next.js features and modern frontend rendering",
       "mode": "deep",
-      "generated_at": "2026-09-23T04:34:44+00:00",
-      "elapsed_seconds": 48.26,
+      "generated_at": "2026-09-24T04:34:28+00:00",
+      "elapsed_seconds": 33.67,
       "engine": {
         "search": [
           "tavily",
@@ -785,35 +636,42 @@
         {
           "title": "Next.js by Vercel - The React Framework | Next.js by Vercel - The React Framework",
           "url": "https://nextjs.org/blog",
-          "relevance_score": 0.6893056,
+          "relevance_score": 0.68594944,
           "crawl_engine": "firecrawl",
-          "excerpt": "# The latest Next.js news [View RSS feed](https://nextjs.org/feed.xml \"View RSS feed\")\n\nSeptember 22nd, 2026\n\n[Security](https://nextjs.org/blog/tag/security)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fjosh.jpg&w=48&q=75&dpl=dpl_5MNH8xNQUAnYASTKSZ3rd5kfQj43)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fkarim-rahal.jpg&w=48&q=75&dpl=dpl_5MNH8xNQUAnYASTKSZ3rd5kfQj43)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fsebbie.png&w=48&q=75&dpl=dpl_5MNH8xNQUAnYASTKSZ3rd5kfQj43)\n\n[Next.js Security Update for a Critical Upstream Issue](https://nextjs.org/blog/nex…"
+          "excerpt": "# The latest Next.js news [View RSS feed](https://nextjs.org/feed.xml \"View RSS feed\")\n\nSeptember 22nd, 2026\n\n[Security](https://nextjs.org/blog/tag/security)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fjosh.jpg&w=48&q=75&dpl=dpl_5GZhq8AJEErG1GGhvstq8WsqXiB8)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fkarim-rahal.jpg&w=48&q=75&dpl=dpl_5GZhq8AJEErG1GGhvstq8WsqXiB8)\n\n![](https://nextjs.org/_next/image?url=%2Fstatic%2Fteam%2Fsebbie.png&w=48&q=75&dpl=dpl_5GZhq8AJEErG1GGhvstq8WsqXiB8)\n\n[Next.js Security Update for a Critical Upstream Issue](https://nextjs.org/blog/nex…"
         },
         {
           "title": "Next.js: React Full-Stack Framework | Internative",
           "url": "https://internative.net/technology-library/web-desktop-frontend/nextjs",
-          "relevance_score": 0.67405045,
+          "relevance_score": 0.67490816,
           "crawl_engine": "firecrawl",
           "excerpt": "# Next.js\n\n![Next.js](https://internative.net/_next/image?url=https%3A%2F%2Fcdn.internative.net%2Fprod%2Fmedia%2Fnextjs_cover_ff321c3c68.png&w=1920&q=75)\n\nWeb & Desktop Frontend Technologies\n\n## Next.js\n\nNext.js is a React framework for production. It delivers server-side rendering, static generation, edge execution, React Server Components, and a file-based router — letting teams ship fast, SEO-friendly web apps with a single codebase.\n\n**What is it?**\n\nNext.js is an open-source React framework maintained by Vercel. It bundles rendering strategies (SSR, SSG, ISR, RSC), a file-based router, im…"
         },
         {
+          "title": "Next.js Partial Prerendering (PPR): The New Rendering Standard - DEV Community",
+          "url": "https://dev.to/nainikmehta/nextjs-partial-prerendering-ppr-the-new-rendering-standard-k9c",
+          "relevance_score": 0.66541058,
+          "crawl_engine": "firecrawl",
+          "excerpt": "## The End of the SSR vs. SSG Debate: Why Partial Prerendering is the New Standard\n\nFor the better part of a decade, web developers have been trapped in a binary choice. If you wanted SEO and lightning-fast initial page loads, you chose Static Site Generation (SSG). If you needed dynamic, personalized data—like a user dashboard, a real-time analytics feed, or an e-commerce cart—you were forced into Server-Side Rendering (SSR).\n\nThis trade-off was the \"original sin\" of modern web architecture. You either sacrificed interactivity for speed, or sacrificed speed for dynamic capabilities.\n\nIn 2026,…"
+        },
+        {
           "title": "Next.js by Vercel - The React Framework",
           "url": "https://nextjs.org/",
-          "relevance_score": 0.64243245,
+          "relevance_score": 0.64332926,
           "crawl_engine": "firecrawl",
           "excerpt": "# The React Framework for the Web\n\nUsed by some of the world's largest companies, Next.js enables you to create **high-quality web applications** with the power of React components.\n\n[Get Started](https://nextjs.org/docs) [Learn Next.js](https://nextjs.org/learn?utm_source=next-site&utm_medium=homepage-cta&utm_campaign=home)\n\n▲ ~ npx create-next-app@latest\n\n## What's in Next.js?\n\nEverything you need to build great products on the web.\n\n[Original\\\\\n\\\\\n1440px\\\\\n\\\\\n375px\\\\\n\\\\\nBuilt-in Optimizations\\\\\n\\\\\nAutomatic Image, Font, and Script Optimizations for improved UX and Core Web Vitals.](https://…"
         },
         {
-          "title": "React Next.js Frontend Engineering Guide for SaaS · Ahmed Hasnain",
-          "url": "https://ahmedhasnain.com/blog/react-nextjs-frontend-engineering-guide",
-          "relevance_score": 0.60486579,
-          "crawl_engine": "firecrawl",
-          "excerpt": "Blog Post\n\n# React Next.js Frontend Engineering Guide for SaaS\n\nReact Next.js frontend engineering guide for SaaS teams: learn structure, rendering, and state patterns that boost SEO, speed, and product metrics in production apps.\n\nApr 27, 202614 min read\n\nreact next.js frontend engineering guideReact Next.js Frontend Engineering Guide: Beginner to Pro\n\n![React Next.js Frontend Engineering Guide for SaaS](https://storage.googleapis.com/contentpen/ai-images/6be6f0d8-a60e-47d1-99c6-04fd632b0b2c/react-nextjs-saas-frontend-engineering-workspace.jpg)\n\n**On this page**\n\n1. [Introduction](https://ahm…"
+          "title": "wpacademy/nextjs-woocommerce-frontend",
+          "url": "https://github.com/wpacademy/nextjs-woocommerce-frontend/",
+          "relevance_score": 0.62520927,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - wpacademy/nextjs-woocommerce-frontend: NextJS frontwned for WooCommerce & WordPress. A headless solution to convert your WooCommerce store into a modern NextJS app.\n\nURL Source: https://github.com/wpacademy/nextjs-woocommerce-frontend/\n\nMarkdown Content:\n## Headless WordPress E-Commerce Frontend\n\n[](https://github.com/wpacademy/nextjs-woocommerce-frontend/#headless-wordpress-e-commerce-frontend)\nA modern, high-performance headless e-commerce storefront built with **Next.js 16**, **React 19**, and **Tailwind CSS v4**. Connects to WordPress/WooCommerce as a headless CMS for conte…"
         },
         {
           "title": "Next.js Rendering Strategies 2026: SSR vs SSG vs ISR vs CSR",
           "url": "https://pagepro.co/blog/nextjs-rendering-strategies-ssr-ssg-isr-csr/",
-          "relevance_score": 0.60439891,
+          "relevance_score": 0.59643316,
           "crawl_engine": "firecrawl",
           "excerpt": "[CONTACT US](https://pagepro.co/contact)\n\nTABLE OF CONTENTS\n\n- [The Four Rendering Strategies at a Glance](https://pagepro.co/blog/nextjs-rendering-strategies-ssr-ssg-isr-csr/#the-four-rendering-strategies-at-a-glance)\n\n  - [Server-Side Rendering (SSR)](https://pagepro.co/blog/nextjs-rendering-strategies-ssr-ssg-isr-csr/#server-side-rendering-ssr)\n  - [Static Site Generation (SSG)](https://pagepro.co/blog/nextjs-rendering-strategies-ssr-ssg-isr-csr/#static-site-generation-ssg)\n  - [Incremental Static Regeneration (ISR)](https://pagepro.co/blog/nextjs-rendering-strategies-ssr-ssg-isr-csr/#incre…"
         },
@@ -827,151 +685,58 @@
         {
           "title": "feat: Node.js native stream rendering for App Router by feedthejim · Pull Request #89566 · vercel/next.js",
           "url": "https://github.com/vercel/next.js/pull/89566",
-          "relevance_score": 0.51683933,
+          "relevance_score": 0.51446128,
           "crawl_engine": "firecrawl",
           "excerpt": "[Skip to content](https://github.com/vercel/next.js/pull/89566#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/vercel/next.js/pull/89566) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/vercel/next.js/pull/89566) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/vercel/next.js/pull/89566) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[vercel](https://github.com/vercel)/ **[next.js](https://github.com/vercel/next.js)** Public\n\n- [Notifications](https://…"
         },
         {
           "title": "Release v16.4.0-canary.9 · vercel/next.js · GitHub",
           "url": "https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9",
-          "relevance_score": 0.47256175,
+          "relevance_score": 0.47268349,
           "crawl_engine": "firecrawl",
           "excerpt": "[Skip to content](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9#start-of-content)\n\nYou signed in with another tab or window. [Reload](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9) to refresh your session.Dismiss alert\n\n{{ message }}\n\n[vercel](https://github.com/vercel)/ **[next…"
         },
         {
-          "title": "React 19.3 – React",
-          "url": "https://react.dev/blog/2026/09/09/react-19-3",
-          "relevance_score": 0.39934304,
+          "title": "Next.js 16.3: Instant Navigations and 90% Less Dev Memory | byteiota",
+          "url": "https://byteiota.com/next-js-16-3-instant-navigations-and-90-less-dev-memory/",
+          "relevance_score": 0.44866785,
           "crawl_engine": "firecrawl",
-          "excerpt": "[Blog](https://react.dev/blog)\n\nCopy pageCopy\n\n# React 19.3 [Link for this heading](https://react.dev/blog/2026/09/09/react-19-3\\#undefined \"Link for this heading\")\n\nSeptember 9, 2026 by [The React Team](https://react.dev/community/team)\n\n* * *\n\nReact 19.3 is now available on npm!\n\n[Last year](https://react.dev/blog/2025/04/23/react-labs-view-transitions-activity-and-more), we shared View Transitions and Fragment Refs as new experimental APIs coming to React. We’re excited to announce that both of these are now stable in React 19.3!\n\nIn this post, we’ll go over how they work, and also cover so…"
-        },
-        {
-          "title": "Fix styled-jsx race condition: styles lost due to concurrent rendering",
-          "url": "https://github.com/vercel/next.js/pull/92459",
-          "relevance_score": 0.38214141,
-          "crawl_engine": "jina",
-          "excerpt": "Title: Fix styled-jsx race condition: styles lost due to concurrent rendering by sokra · Pull Request #92459 · vercel/next.js\n\nURL Source: https://github.com/vercel/next.js/pull/92459\n\nMarkdown Content:\n[Skip to content](https://github.com/vercel/next.js/pull/92459#start-of-content)\n\n## Navigation Menu\n\n[](https://github.com/)\n\n[Sign in](https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Fpull%2F92459)\n\nAppearance settings\n\n*   \nPlatform\n\n    *   \nAI CODE CREATION\n        *   [GitHub Copilot Write better code with AI](https://github.com/features/copilot)\n        *…"
+          "excerpt": "Share\n\n- [Share on Facebook](https://www.facebook.com/sharer.php?u=https%3A%2F%2Fbyteiota.com%2Fnext-js-16-3-instant-navigations-and-90-less-dev-memory%2F \"Share on Facebook\")\n- [Share on Twitter](https://twitter.com/share?url=https%3A%2F%2Fbyteiota.com%2Fnext-js-16-3-instant-navigations-and-90-less-dev-memory%2F&text=Next.js%2016.3:%20Instant%20Navigations%20and%2090%%20Less%20Dev%20Memory \"Share on Twitter\")\n\n- [Share on Linkedin](https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fbyteiota.com%2Fnext-js-16-3-instant-navigations-and-90-less-dev-memory%2F \"Share on Linkedin\")\n\n!…"
         }
       ],
-      "status": "SUCCESS",
-      "model": "deepseek/deepseek-chat",
-      "executive_summary": "Next.js در سال ۲۰۲۶ به عنوان یک فریم‌ورک پیشرو در توسعه فرانت‌اند با قابلیت‌های پیشرفته رندرینگ سرور و کلاینت، بهینه‌سازی خودکار و پشتیبانی از استراتژی‌های مختلف رندرینگ مانند SSR، SSG، ISR و CSR شناخته می‌شود. این فریم‌ورک با ارائه قابلیت‌هایی مانند React Server Components و Turbopack، عملکرد و تجربه توسعه را به طور چشمگیری بهبود بخشیده است.",
-      "key_findings": [
-        "Next.js 16 با معرفی قابلیت‌های جدید مانند Cache Components و Partial Prerendering، عملکرد و بهره‌وری را افزایش داده است.",
-        "Turbopack با بهینه‌سازی chunking و کاهش زمان بارگذاری صفحات، تجربه کاربری را بهبود بخشیده است.",
-        "استراتژی‌های رندرینگ مانند SSR، SSG، ISR و CSR در Next.js به توسعه‌دهندگان انعطاف بیشتری در انتخاب بهترین روش برای هر صفحه می‌دهد."
-      ],
-      "emerging_technologies": [
-        {
-          "name": "React Server Components",
-          "category": "Rendering",
-          "maturity": "mainstream",
-          "description": "اجرای کامپوننت‌ها در سمت سرور بدون ارسال کد اضافی به کلاینت.",
-          "why_it_matters": "کاهش حجم کد ارسالی به کلاینت و بهبود عملکرد.",
-          "adoption_signal": "استفاده گسترده در پروژه‌های بزرگ مانند TikTok و Notion."
-        },
-        {
-          "name": "Turbopack",
-          "category": "Build Tool",
-          "maturity": "growing",
-          "description": "یک ابزار ساخت جدید که با بهینه‌سازی chunking، زمان بارگذاری صفحات را کاهش می‌دهد.",
-          "why_it_matters": "بهبود عملکرد و تجربه توسعه.",
-          "adoption_signal": "استفاده در پروژه‌های بزرگ و بهینه‌سازی‌های قابل توجه."
-        },
-        {
-          "name": "Cache Components",
-          "category": "Caching",
-          "maturity": "emerging",
-          "description": "مدیریت هوشمند کش برای کاهش بار سرور و بهبود عملکرد.",
-          "why_it_matters": "کاهش زمان پاسخ‌دهی و بهبود تجربه کاربری.",
-          "adoption_signal": "استفاده در پروژه‌های آزمایشی و بهبود عملکرد قابل توجه."
-        }
-      ],
-      "top_github_repositories": [
-        {
-          "name": "vercel/next.js",
-          "url": "https://github.com/vercel/next.js",
-          "stars": "142k",
-          "language": "JavaScript",
-          "description": "فریم‌ورک React برای تولید نرم‌افزارهای وب با قابلیت‌های پیشرفته رندرینگ.",
-          "why_relevant": "مخزن اصلی Next.js که تمامی قابلیت‌های جدید در آن توسعه داده می‌شود."
-        },
-        {
-          "name": "vercel/turbopack",
-          "url": "https://github.com/vercel/turbopack",
-          "stars": "12k",
-          "language": "Rust",
-          "description": "ابزار ساخت جدید برای Next.js که عملکرد را به طور چشمگیری بهبود می‌دهد.",
-          "why_relevant": "بهینه‌سازی زمان بارگذاری صفحات و بهبود تجربه توسعه."
-        },
-        {
-          "name": "vercel/next.js-examples",
-          "url": "https://github.com/vercel/next.js-examples",
-          "stars": "8k",
-          "language": "JavaScript",
-          "description": "مجموعه‌ای از مثال‌های کاربردی برای یادگیری و استفاده از Next.js.",
-          "why_relevant": "منبعی عالی برای یادگیری و پیاده‌سازی قابلیت‌های جدید Next.js."
-        }
-      ],
-      "pros_cons": [
-        {
-          "technology": "Next.js",
-          "pros": [
-            "پشتیبانی از استراتژی‌های مختلف رندرینگ",
-            "بهینه‌سازی خودکار تصاویر و فونت‌ها",
-            "تجربه توسعه سریع و آسان"
-          ],
-          "cons": [
-            "نیاز به یادگیری مفاهیم پیشرفته",
-            "محدودیت‌های در استفاده از برخی کتابخانه‌های کلاینت"
-          ],
-          "best_for": "توسعه‌دهندگان فرانت‌اند که به دنبال عملکرد بالا و SEO قوی هستند."
-        },
-        {
-          "technology": "Turbopack",
-          "pros": [
-            "زمان بارگذاری سریع‌تر",
-            "بهینه‌سازی chunking",
-            "تجربه توسعه بهبود یافته"
-          ],
-          "cons": [
-            "نیاز به تنظیمات بیشتر",
-            "محدودیت‌های در پشتیبانی از برخی کتابخانه‌ها"
-          ],
-          "best_for": "توسعه‌دهندگانی که به دنبال بهبود عملکرد و تجربه کاربری هستند."
-        }
-      ],
-      "suggested_commands": [
-        {
-          "purpose": "نصب Next.js",
-          "command": "npx create-next-app@latest"
-        },
-        {
-          "purpose": "راه‌اندازی پروژه با Turbopack",
-          "command": "npx create-next-app@latest --example with-turbopack"
-        },
-        {
-          "purpose": "بررسی عملکرد با Turbopack",
-          "command": "npx next dev --turbo"
-        }
-      ],
+      "status": "DEGRADED",
+      "executive_summary": "سنتز مدل زبانی در دسترس نبود؛ خلاصه خام منابع ثبت شد.",
+      "key_findings": [],
+      "emerging_technologies": [],
+      "top_github_repositories": [],
+      "pros_cons": [],
+      "suggested_commands": [],
       "risks_and_caveats": [
-        "نیاز به یادگیری مفاهیم پیشرفته برای استفاده بهینه از قابلیت‌های جدید.",
-        "محدودیت‌های در پشتیبانی از برخی کتابخانه‌های کلاینت."
+        "خروجی مدل سنتز ناموفق بود."
       ],
-      "recommendations": [
-        "استفاده از Next.js برای پروژه‌هایی که نیاز به SEO قوی و عملکرد بالا دارند.",
-        "آزمایش Turbopack برای بهبود زمان بارگذاری صفحات و تجربه توسعه.",
-        "یادگیری و استفاده از React Server Components برای کاهش حجم کد ارسالی به کلاینت."
-      ],
-      "confidence": 0.85,
-      "synthesis_attempts": 1
+      "recommendations": [],
+      "confidence": 0.0,
+      "raw_model_output": {
+        "error": {
+          "message": "Provider returned error",
+          "code": 429,
+          "metadata": {
+            "raw": "deepseek/deepseek-chat is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations",
+            "provider_name": "DeepInfra",
+            "is_byok": false,
+            "provider_error_code": "engine_overloaded",
+            "limit_source": "upstream_provider_shared_pool",
+            "remedy_hint": "Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing"
+          }
+        },
+        "user_id": "user_32985P4Zgsuvc8a5H8EZ1CzSn4N"
+      }
     },
     {
       "topic": "latest 2026 database engines, PostgreSQL performance and storage",
       "mode": "deep",
-      "generated_at": "2026-09-23T04:35:38+00:00",
-      "elapsed_seconds": 54.05,
+      "generated_at": "2026-09-24T04:35:54+00:00",
+      "elapsed_seconds": 85.23,
       "engine": {
         "search": [
           "tavily",
@@ -1012,46 +777,60 @@
           "excerpt": "Title: PostgreSQL 18 New Features for Performance\n\nURL Source: https://sesamedisk.com/postgresql-18-new-features-performance/\n\nPublished Time: 2026-09-12T10:49:29Z\n\nMarkdown Content:\n**Table of Contents**\n\n*   [What Shipped and Where 18.x Stands Now](https://sesamedisk.com/postgresql-18-new-features-performance/#what-shipped)\n*   [The Async I/O Subsystem: What It Actually Delivers](https://sesamedisk.com/postgresql-18-new-features-performance/#async-io)\n*   [Independent Benchmarks: Where the Gains Are Real](https://sesamedisk.com/postgresql-18-new-features-performance/#benchmarks)\n*   [UUIDv7…"
         },
         {
-          "title": "Postgres on NVMe: performance and the convergence of transactions and analytics",
-          "url": "https://clickhouse.com/blog/postgres-on-nvme",
-          "relevance_score": 0.66801453,
+          "title": "PostgreSQL vs MySQL vs MariaDB",
+          "url": "https://computingforgeeks.com/database-benchmark-postgresql-mysql-mariadb/",
+          "relevance_score": 0.72564864,
           "crawl_engine": "jina",
-          "excerpt": "Title: Postgres on NVMe: performance and the convergence of transactions and analytics\n\nURL Source: https://clickhouse.com/blog/postgres-on-nvme\n\nPublished Time: 2026-09-21T15:47:52.969Z\n\nMarkdown Content:\nEarlier this month, I joined a [webinar](https://www.youtube.com/watch?v=hj0MSjdtLic) with the Moniepoint engineering team to talk about something I have been thinking about since the PeerDB days: what changes when Postgres runs on local NVMe and what doesn’t?\n\nThe first part of the answer is about storage. Once a Postgres working set grows beyond memory, storage latency can become the bottl…"
-        },
-        {
-          "title": "Page allocator tweak restores 161% PostgreSQL write throughput · freenode",
-          "url": "https://freenode.net/article/page-allocator-tweak-restores-161-postgresql-write-throughput",
-          "relevance_score": 0.62429351,
-          "crawl_engine": "firecrawl",
-          "excerpt": "Kernel & Low-Level [By oops](https://freenode.net/author/oops) September 10, 2026\n\n# Page allocator tweak restores 161% PostgreSQL write throughput\n\nCostly high-order folio attempts that already had smaller-order fallbacks were still paying for full direct compaction under fragmentation.\n\nA pending Linux memory-management change stops costly high-order allocations marked non-retrying from running direct compaction and reclaim, recovering more than 160 percent throughput on a heavily concurrent [PostgreSQL](https://www.postgresql.org/) workload hammered by memory fragmentation.\n\nSalvatore Dipie…"
-        },
-        {
-          "title": "popularity ranking of database management systems",
-          "url": "https://db-engines.com/en/ranking",
-          "relevance_score": 0.62429351,
-          "crawl_engine": "jina",
-          "excerpt": "Title: DB-Engines Ranking\n\nURL Source: https://db-engines.com/en/ranking\n\nMarkdown Content:\nThe DB-Engines Ranking ranks database management systems according to their popularity. The ranking is updated monthly.\n\n438 systems in ranking, September 2026\nRank DBMS Database Model Score\nSep  \n2026 Aug  \n2026 Sep  \n2025 Sep  \n2026 Aug  \n2026 Sep  \n2025\n1.1.1.[Oracle](https://db-engines.com/en/system/Oracle)[Relational](https://db-engines.com/en/article/RDBMS), Multi-model ![Image 1: info](https://db-engines.com/info.png)**Relational DBMS**  \nDocument store  \nGraph DBMS  \nRDF store  \nSpatial DBMS  \nV…"
-        },
-        {
-          "title": "Postgres 18 and Extended Support for legacy versions in ...",
-          "url": "https://cloud.google.com/blog/products/databases/postgres-18-and-extended-support-for-legacy-versions-in-alloydb",
-          "relevance_score": 0.59971958,
-          "crawl_engine": "jina",
-          "excerpt": "Title: Postgres 18 and Extended Support for legacy versions in AlloyDB\n\nURL Source: https://cloud.google.com/blog/products/databases/postgres-18-and-extended-support-for-legacy-versions-in-alloydb\n\nPublished Time: 2026-05-11\n\nMarkdown Content:\nAs you look out at your 2026 infrastructure roadmap, your goal is to balance the need for rapid innovation with operational stability. You shouldn't have to choose between adopting the latest database features and maintaining a secure, supported environment for your workloads. Today, we are announcing the general availability of **PostgreSQL 18 in AlloyD…"
-        },
-        {
-          "title": "PostgreSQL: The world's most advanced open source database",
-          "url": "https://www.postgresql.org/",
-          "relevance_score": 0.59266663,
-          "crawl_engine": "jina",
-          "excerpt": "Title: PostgreSQL\n\nURL Source: https://www.postgresql.org/\n\nPublished Time: 2026-09-23T04:25:36.148574\n\nMarkdown Content:\n[![Image 1: PostgreSQL Elephant Logo](https://www.postgresql.org/media/img/about/press/elephant.png)](https://www.postgresql.org/)- [x] \n\n*   [Home](https://www.postgresql.org/ \"Home\")\n*   [About](https://www.postgresql.org/about/ \"About\")\n*   [Download](https://www.postgresql.org/download/ \"Download\")\n*   [Documentation](https://www.postgresql.org/docs/ \"Documentation\")\n*   [Community](https://www.postgresql.org/community/ \"Community\")\n*   [Developers](https://www.postgres…"
+          "excerpt": "Title: PostgreSQL vs MySQL vs MariaDB\n\nURL Source: https://computingforgeeks.com/database-benchmark-postgresql-mysql-mariadb/\n\nPublished Time: 2026-03-25T20:01:10+03:00\n\nMarkdown Content:\nPostgreSQL, MySQL, and MariaDB handle the same SQL, but their storage engines, query optimizers, and concurrency models produce very different performance profiles. MariaDB forked from MySQL in 2009 and has diverged significantly since. Picking between them based on vendor benchmarks is pointless because every vendor wins their own tests.\n\nOriginal content from computingforgeeks.com - post 164553\n\nWe installe…"
         },
         {
           "title": "Maximize PostgreSQL ROI: Stronger performance, high availability | PT",
           "url": "https://www.principledtechnologies.com/Microsoft/Azure-PostgreSQL-v6-Premium-SSD-v2-0826/",
-          "relevance_score": 0.57844818,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[![PT Logo](https://www.principledtechnologies.com/img/PTnew/PT_logo_oneline.png)](https://www.principledtechnologies.com/)\n\nA Principled Technologies report: Hands-on testing. Real-world results.\n\n![](https://www.principledtechnologies.com/Microsoft/Azure-PostgreSQL-v6-Premium-SSD-v2-0826/img/header2.webp)\n\n# Maximize PostgreSQL ROI: Stronger performance, high availability\n\n## An Azure Database for PostgreSQL – Flexible Server Dv6 instance with SSD v2 outperformed an Amazon RDS for PostgreSQL instance with no HA penalty\n\n![Handle 79% more PostgreSQL database requests in HA mode.* Handle 72% m…"
+          "relevance_score": 0.70982438,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Maximize PostgreSQL ROI: Stronger performance, high availability\n\nURL Source: https://www.principledtechnologies.com/Microsoft/Azure-PostgreSQL-v6-Premium-SSD-v2-0826/\n\nPublished Time: 2026-08-13\n\nMarkdown Content:\n## An Azure Database for PostgreSQL – Flexible Server Dv6 instance with SSD v2 outperformed an Amazon RDS for PostgreSQL instance with no HA penalty\n\n![Image 1: Handle 79% more PostgreSQL database requests in HA mode.* Handle 72% more PostgreSQL database requests in non-HA mode* *Azure Database for PostgreSQL – Flexible Server D16s_v6 vs. Amazon RDS m7i.4xlarge at 16 vCPUs.](…"
+        },
+        {
+          "title": "Postgres on NVMe: performance and the convergence of transactions and analytics",
+          "url": "https://clickhouse.com/blog/postgres-on-nvme",
+          "relevance_score": 0.66714764,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Postgres on NVMe: performance and the convergence of transactions and analytics\n\nURL Source: https://clickhouse.com/blog/postgres-on-nvme\n\nPublished Time: 2026-09-21T15:47:52.969Z\n\nMarkdown Content:\nEarlier this month, I joined a [webinar](https://www.youtube.com/watch?v=hj0MSjdtLic) with the Moniepoint engineering team to talk about something I have been thinking about since the PeerDB days: what changes when Postgres runs on local NVMe and what doesn’t?\n\nThe first part of the answer is about storage. Once a Postgres working set grows beyond memory, storage latency can become the bottl…"
+        },
+        {
+          "title": "Databricks Lakebase Search GA: pgvector at billion scale | Data Today",
+          "url": "https://data-today.net/databricks/databricks-lakebase-search-ga/",
+          "relevance_score": 0.63793355,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Databricks Lakebase Search GA: pgvector at billion scale\n\nURL Source: https://data-today.net/databricks/databricks-lakebase-search-ga/\n\nPublished Time: 2026-09-21T00:00:00.000Z\n\nMarkdown Content:\nVector search inside Postgres has always carried a tax: the bigger your index, the more RAM you provision, and the more you pay for compute that sits idle between queries. Lakebase Search, which Databricks moved to general availability on September 18, 2026, attacks that tax directly by pushing hybrid vector and keyword search into Lakebase Postgres with storage-backed indexes that compress 32x…"
+        },
+        {
+          "title": "saulojb/storage_engine",
+          "url": "https://github.com/saulojb/storage_engine",
+          "relevance_score": 0.60299706,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - saulojb/storage_engine: A PostgreSQL extension providing two high-performance Table Access Methods designed for analytical and HTAP workloads — with **significant storage savings and no meaningful query performance penalty** compared to standard heap tables.\n\nURL Source: https://github.com/saulojb/storage_engine\n\nMarkdown Content:\n> **v2.4 — TPC-H planner fixes + reread caches + PG15–PG19 validation**`storage_engine` v2.4 improves real `colcompress` performance with narrow planner-hook fixes for official TPC-H queries (`Q7`, `Q18`, `Q20`, `Q21`) and a targeted replan that avoid…"
+        },
+        {
+          "title": "Building An Integrated Vector Database System in PostgreSQL",
+          "url": "https://arxiv.org/html/2608.15994",
+          "relevance_score": 0.60112536,
+          "crawl_engine": "jina",
+          "excerpt": "Title: Building An Integrated Vector Database System in PostgreSQL\n\nURL Source: https://arxiv.org/html/2608.15994\n\nMarkdown Content:\nJiayi Liu Te Guo Jianguo Wang\n\n###### Abstract.\n\nThis paper presents PostgreSQL-V 2.0, a scalable integrated vector database system inside PostgreSQL. Existing PostgreSQL-based vector search systems such as pgvector, embed vector indexes into PostgreSQL’s page-oriented storage engine, incurring significant overhead that leads to a huge performance gap with specialized vector databases. In our earlier work, we introduced PostgreSQL-V 1.0, which addresses this issu…"
+        },
+        {
+          "title": "PostgreSQL: The world's most advanced open source database",
+          "url": "https://www.postgresql.org/",
+          "relevance_score": 0.57654196,
+          "crawl_engine": "jina",
+          "excerpt": "Title: PostgreSQL\n\nURL Source: https://www.postgresql.org/\n\nPublished Time: 2026-09-24T04:05:10.837951\n\nMarkdown Content:\n[![Image 1: PostgreSQL Elephant Logo](https://www.postgresql.org/media/img/about/press/elephant.png)](https://www.postgresql.org/)- [x] \n\n*   [Home](https://www.postgresql.org/ \"Home\")\n*   [About](https://www.postgresql.org/about/ \"About\")\n*   [Download](https://www.postgresql.org/download/ \"Download\")\n*   [Documentation](https://www.postgresql.org/docs/ \"Documentation\")\n*   [Community](https://www.postgresql.org/community/ \"Community\")\n*   [Developers](https://www.postgres…"
+        },
+        {
+          "title": "KernelMaker/pgStrata",
+          "url": "https://github.com/KernelMaker/pgStrata/",
+          "relevance_score": 0.57176661,
+          "crawl_engine": "jina",
+          "excerpt": "Title: GitHub - KernelMaker/pgStrata: PostgreSQL with built-in versioned layer storage and Time Travel. See your database as it existed at any point in time.\n\nURL Source: https://github.com/KernelMaker/pgStrata/\n\nMarkdown Content:\nPostgreSQL with built-in versioned layer storage and Time Travel. See your database as it existed at any point in time.\n\n[![Image 1: pgStrata Time Travel Demo](https://github.com/KernelMaker/pgStrata/raw/strata/demo.gif)](https://github.com/KernelMaker/pgStrata/blob/strata/demo.gif)\n\n## What is this\n\n[](https://github.com/KernelMaker/pgStrata/#what-is-this)\npgStrata…"
         },
         {
           "title": "Improving Lakebase Postgres Compute Cache on Neon, Part 1",
@@ -1059,110 +838,128 @@
           "relevance_score": 0.54504359,
           "crawl_engine": "jina",
           "excerpt": "Title: Improving Lakebase Postgres Compute Cache on Neon, Part 1\n\nURL Source: https://neon-next-delta.vercel.app/blog/improving-lakebase-compute-cache-part-1\n\nPublished Time: 2026-09-09T12:00:00\n\nMarkdown Content:\n#### TL;DR\n\nThe disaggregated storage model of Neon's lakebase architecture provides a feature rich, flexible, low cost platform for Postgres. Efficient caching of data is critical to provide high throughput and low latency while data is backed in an object store such as S3.\n\nThis caching takes place at two layers: in distributed storage, where Postgres pages are materialized for hig…"
-        },
-        {
-          "title": "Databricks Lakebase Search GA: pgvector at billion scale | Data Today",
-          "url": "https://data-today.net/databricks/databricks-lakebase-search-ga/",
-          "relevance_score": 0.50982541,
-          "crawl_engine": "firecrawl",
-          "excerpt": "[Skip to content](https://data-today.net/databricks/databricks-lakebase-search-ga/#main)\n\nEngineering\n\n# Databricks Lakebase Search GA: pgvector at billion scale\n\nLakebase Search is generally available, adding pgvector-compatible vector search and BM25 text search to Lakebase Postgres with 1B vector scale and 32x compression.\n\nBy [Lars Cornelissen](https://data-today.net/author/lars-cornelissen/)September 21, 20269 min read\n\n[𝕏](https://twitter.com/intent/tweet?text=Databricks%20Lakebase%20Search%20GA%3A%20pgvector%20at%20billion%20scale&url=https://data-today.net/databricks/databricks-lakebas…"
-        },
-        {
-          "title": "More Speedups for Tuple Deformation: Precalculating attcacheoff - Postgres Weekly, A Hacker’s Digest",
-          "url": "https://pgweekly.github.io/en/2026/09/tuple-deformation-speedups.html",
-          "relevance_score": 0.45277786,
-          "crawl_engine": "firecrawl",
-          "excerpt": "- Light\n- Rust\n- Coal\n- Navy\n- Ayu\n\n# Postgres Weekly, A Hacker’s Digest\n\n[中文](https://pgweekly.github.io/cn/2026/09/tuple-deformation-speedups.html \"切换到中文版\") [Print this book](https://pgweekly.github.io/print.html \"Print this book\") [Git repository](https://github.com/pgweekly/pgweekly.github.io \"Git repository\")\n\n**Tuple deformation** is the process of extracting individual attribute values from a PostgreSQL heap tuple's raw byte representation into a `TupleTableSlot`. It happens constantly during query execution—every time a sequential scan, index scan, or join produces a row, the executor…"
         }
       ],
       "status": "SUCCESS",
       "model": "deepseek/deepseek-chat",
-      "executive_summary": "PostgreSQL 18 با بهبودهای قابل توجه در عملکرد و ذخیره‌سازی، به‌ویژه با معرفی زیرسیستم I/O ناهمزمان و بهینه‌سازی‌های مرتبط با NVMe، به عنوان یک پایگاه داده پیشرفته در سال ۲۰۲۶ مطرح شده است. این نسخه با افزایش عملکرد خواندن تا ۳ برابر و بهبود توان عملیاتی نوشتن، گزینه‌ای ایده‌آل برای کاربردهای تراکنشی و تحلیلی است.",
+      "executive_summary": "PostgreSQL 18 با بهبودهای قابل توجه در عملکرد و ذخیره‌سازی، به ویژه با معرفی زیرسیستم I/O ناهمزمان و پشتیبانی از UUIDv7، به عنوان یک پایگاه داده پیشرفته و قابل اعتماد در سال ۲۰۲۶ مطرح شده است. این نسخه با بهینه‌سازی‌های جدید در ذخیره‌سازی و جستجوی برداری، عملکرد بهتری در کاربردهای OLTP و HTAP ارائه می‌دهد. همچنین، فناوری‌های نوظهور مانند Lakebase Search و pgStrata، قابلیت‌های جدیدی را برای جستجوی برداری و سفر در زمان به PostgreSQL اضافه کرده‌اند.",
       "key_findings": [
-        "PostgreSQL 18 با استفاده از زیرسیستم I/O ناهمزمان (io_uring) عملکرد خواندن را تا ۳ برابر بهبود بخشیده است.",
-        "استفاده از NVMe به‌طور قابل توجهی تأخیر خواندن/نوشتن را کاهش داده و عملکرد پایگاه داده را در کاربردهای تراکنشی بهبود می‌دهد."
+        "PostgreSQL 18 با استفاده از زیرسیستم I/O ناهمزمان (io_uring) بهبود عملکرد قابل توجهی در خواندن داده‌ها ارائه می‌دهد.",
+        "Lakebase Search با پشتیبانی از جستجوی برداری در مقیاس میلیاردی، جایگزینی مناسب برای پایگاه‌های داده برداری تخصصی است.",
+        "pgStrata امکان سفر در زمان و مشاهده پایگاه داده در هر نقطه از زمان را فراهم می‌کند."
       ],
       "emerging_technologies": [
         {
-          "name": "PostgreSQL 18",
-          "category": "پایگاه داده",
-          "maturity": "mainstream",
-          "description": "نسخه جدید PostgreSQL با بهبودهای عمده در عملکرد و ذخیره‌سازی.",
-          "why_it_matters": "بهبود عملکرد خواندن و نوشتن، کاهش تأخیر و افزایش مقیاس‌پذیری.",
-          "adoption_signal": "استفاده گسترده در محیط‌های تولیدی و بنچمارک‌های مثبت."
+          "name": "Lakebase Search",
+          "category": "Vector Search",
+          "maturity": "growing",
+          "description": "یک سیستم جستجوی برداری و متنی که مستقیماً در PostgreSQL ادغام شده است.",
+          "why_it_matters": "این فناوری نیاز به پایگاه‌های داده برداری جداگانه را کاهش می‌دهد و عملکرد بهتری در مقیاس‌های بزرگ ارائه می‌دهد.",
+          "adoption_signal": "Databricks این فناوری را در سپتامبر ۲۰۲۶ به صورت عمومی عرضه کرد."
         },
         {
-          "name": "NVMe",
-          "category": "ذخیره‌سازی",
+          "name": "pgStrata",
+          "category": "Time Travel",
+          "maturity": "emerging",
+          "description": "یک موتور ذخیره‌سازی لایه‌ای که امکان سفر در زمان و مشاهده پایگاه داده در هر نقطه از زمان را فراهم می‌کند.",
+          "why_it_matters": "این فناوری برای بازیابی داده‌های حذف شده یا تغییر یافته بسیار مفید است.",
+          "adoption_signal": "پروژه pgStrata در حال توسعه فعال است و قابلیت‌های جدیدی اضافه می‌کند."
+        },
+        {
+          "name": "PostgreSQL-V 2.0",
+          "category": "Vector Database",
           "maturity": "growing",
-          "description": "فناوری ذخیره‌سازی با تأخیر بسیار کم و عملکرد بالا.",
-          "why_it_matters": "کاهش تأخیر خواندن/نوشتن و بهبود عملکرد پایگاه داده.",
-          "adoption_signal": "استفاده در محیط‌های تولیدی و بهبود عملکرد قابل توجه."
+          "description": "یک سیستم پایگاه داده برداری یکپارچه در PostgreSQL که عملکرد جستجوی برداری را بهبود می‌بخشد.",
+          "why_it_matters": "این فناوری نیاز به پایگاه‌های داده برداری جداگانه را کاهش می‌دهد و عملکرد بهتری ارائه می‌دهد.",
+          "adoption_signal": "PostgreSQL-V 2.0 در سال ۲۰۲۶ منتشر شد و بهبودهای قابل توجهی در عملکرد و قابلیت‌ها ارائه می‌دهد."
         }
       ],
       "top_github_repositories": [
         {
-          "name": "postgres/postgres",
-          "url": "https://github.com/postgres/postgres",
-          "stars": "12000",
+          "name": "saulojb/storage_engine",
+          "url": "https://github.com/saulojb/storage_engine",
+          "stars": "602",
           "language": "C",
-          "description": "مخزن رسمی PostgreSQL.",
-          "why_relevant": "منبع اصلی کد و بهینه‌سازی‌های جدید PostgreSQL 18."
+          "description": "یک افزونه PostgreSQL که دو روش دسترسی به جدول با عملکرد بالا برای کاربردهای تحلیلی و HTAP ارائه می‌دهد.",
+          "why_relevant": "این پروژه بهبودهای قابل توجهی در ذخیره‌سازی و عملکرد PostgreSQL ارائه می‌دهد."
         },
         {
-          "name": "neondatabase/neon",
-          "url": "https://github.com/neondatabase/neon",
-          "stars": "5000",
-          "language": "Rust",
-          "description": "پایگاه داده Postgres با معماری ذخیره‌سازی مجزا.",
-          "why_relevant": "بهینه‌سازی‌های مرتبط با ذخیره‌سازی و عملکرد."
+          "name": "KernelMaker/pgStrata",
+          "url": "https://github.com/KernelMaker/pgStrata",
+          "stars": "571",
+          "language": "C",
+          "description": "PostgreSQL با موتور ذخیره‌سازی لایه‌ای و قابلیت سفر در زمان.",
+          "why_relevant": "این پروژه امکان مشاهده پایگاه داده در هر نقطه از زمان را فراهم می‌کند."
+        },
+        {
+          "name": "Databricks/lakebase_vector",
+          "url": "https://github.com/Databricks/lakebase_vector",
+          "stars": "637",
+          "language": "C",
+          "description": "یک افزونه PostgreSQL برای جستجوی برداری در مقیاس بزرگ.",
+          "why_relevant": "این پروژه نیاز به پایگاه‌های داده برداری جداگانه را کاهش می‌دهد."
         }
       ],
       "pros_cons": [
         {
           "technology": "PostgreSQL 18",
           "pros": [
-            "عملکرد بهبود یافته خواندن و نوشتن",
-            "پشتیبانی از NVMe"
+            "بهبود عملکرد با استفاده از I/O ناهمزمان",
+            "پشتیبانی از UUIDv7 برای کلیدهای اولیه"
           ],
           "cons": [
-            "نیاز به تنظیمات دقیق برای بهینه‌سازی"
+            "نیاز به تنظیمات دقیق برای بهره‌برداری کامل",
+            "عملکرد ضعیف در ذخیره‌سازی شبکه‌ای"
           ],
-          "best_for": "کاربردهای تراکنشی و تحلیلی"
+          "best_for": "کاربردهای OLTP و HTAP"
         },
         {
-          "technology": "NVMe",
+          "technology": "Lakebase Search",
           "pros": [
-            "تأخیر بسیار کم",
-            "عملکرد بالا"
+            "جستجوی برداری در مقیاس بزرگ",
+            "یکپارچه‌سازی با PostgreSQL"
           ],
           "cons": [
-            "هزینه بالاتر نسبت به SSD معمولی"
+            "نیاز به منابع محاسباتی بالا",
+            "پیچیدگی در تنظیمات"
           ],
-          "best_for": "محیط‌های تولیدی با نیاز به عملکرد بالا"
+          "best_for": "کاربردهای جستجوی برداری و متنی"
+        },
+        {
+          "technology": "pgStrata",
+          "pros": [
+            "قابلیت سفر در زمان",
+            "ذخیره‌سازی لایه‌ای"
+          ],
+          "cons": [
+            "نیاز به منابع محاسباتی بالا",
+            "پیچیدگی در تنظیمات"
+          ],
+          "best_for": "کاربردهای بازیابی داده‌های تاریخی"
         }
       ],
       "suggested_commands": [
         {
-          "purpose": "نصب PostgreSQL 18",
-          "command": "sudo apt-get install postgresql-18"
+          "purpose": "نصب storage_engine",
+          "command": "git clone https://github.com/saulojb/storage_engine && cd storage_engine && make install"
         },
         {
-          "purpose": "تنظیم io_uring در PostgreSQL",
-          "command": "ALTER SYSTEM SET io_method = 'io_uring';"
+          "purpose": "راه‌اندازی pgStrata",
+          "command": "./configure --prefix=$(pwd)/build --enable-debug --enable-cassert --enable-tap-tests CFLAGS=\"-O0 -g3\" && make -j$(nproc) && make install"
         },
         {
-          "purpose": "بنچمارک عملکرد PostgreSQL",
-          "command": "pgbench -i -s 100 mydb && pgbench -c 10 -t 1000 mydb"
+          "purpose": "بنچمارک PostgreSQL 18",
+          "command": "pgbench -i -s 100 mydb && pgbench -c 16 -j 4 -T 60 mydb"
         }
       ],
       "risks_and_caveats": [
-        "نیاز به تنظیمات دقیق برای بهینه‌سازی عملکرد.",
-        "هزینه بالاتر NVMe نسبت به SSD معمولی."
+        "به‌روزرسانی به PostgreSQL 18 ممکن است نیاز به تنظیمات دقیق داشته باشد.",
+        "استفاده از فناوری‌های نوظهور مانند pgStrata ممکن است با نسخه‌های قدیمی‌تر PostgreSQL سازگار نباشد."
       ],
       "recommendations": [
-        "ارتقاء به PostgreSQL 18 برای بهبود عملکرد.",
-        "استفاده از NVMe برای کاهش تأخیر و افزایش عملکرد."
+        "به‌روزرسانی به PostgreSQL 18 برای بهبود عملکرد و امنیت.",
+        "استفاده از Lakebase Search برای کاربردهای جستجوی برداری در مقیاس بزرگ.",
+        "بررسی قابلیت‌های pgStrata برای بازیابی داده‌های تاریخی."
       ],
       "confidence": 0.85,
       "synthesis_attempts": 1
