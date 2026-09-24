@@ -68,7 +68,7 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 | W0 | Root README | no | — | ✅ PR #1 |
 | W1 | Secrets to `.env` + ports to loopback | deploy step | — | 🟨 PR #2 (draft, needs server run) |
 | W2 | Centralize DB/API config: ~55 files embed the DB password in DSNs | no | W1 merged | ⬜ |
-| W3 | Repo hygiene: move one-off root scripts, remove dumps/snapshots from git, history-rewrite plan | no | W1 merged | ⬜ |
+| W3 | Repo hygiene: remove committed `venv/`, stop daemon audit commits to main, move one-off root scripts, remove dumps/snapshots from git, history-rewrite plan | no | W1 merged | ⬜ |
 | W4 | CI: GitHub Actions for ruff, pytest, `compose config`, gitleaks secret scan, then deploy-on-merge | no | W3 | ⬜ |
 | W5 | LLM router with tiers, fallbacks, Redis cache and cost log (section 3b) | no | W2 | ⬜ |
 | W6 | Legal corpus gap: article-level chunking and ingestion of the missing codes (Qdrant shows 1,305 points vs 1,335 articles in the Civil Code alone) | yes | — | ⬜ |
@@ -77,6 +77,9 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 
 ## 6. Known facts (verified 2026-09-24)
 
-- The server `5.75.200.67` (root) runs the repo at `/opt/roxira_platform`. The live compose differs from the repo: the frontend is on container port 3000, while the repo says 3001.
+- The server `5.75.200.67` (root) runs the repo at `/opt/roxira_platform`. Its working tree is clean and matches `origin/main`, so no hand edits are in place.
+- A server daemon commits and pushes `chore(daemon): automated audit pass ... all green` to `main` about every 30 minutes, which is ~48 commits a day. CI must not run on those commits, and the audit output should be moved out of git (W3).
+- `venv/` (~2,900 files, >1M lines) is committed to `main`. Removing it and adding it to `.gitignore` is the first W3 item.
+- Before starting work, always run `git fetch && git checkout origin/main`. A local clone can be hundreds of commits behind.
 - Qdrant did not answer the audit script. `/judge/health` returns 405 and `/judge/chat` returns 422 on an empty body.
 - Keys are in git history. The owner chose not to rotate them for now.
