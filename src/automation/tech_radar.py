@@ -5,7 +5,6 @@ import asyncio
 import concurrent.futures
 import json
 import logging
-import os
 import pathlib
 import sys
 import time
@@ -972,7 +971,7 @@ def _run_flush() -> None:
     """Best-effort wait for llm_router's background usage-log writes."""
     try:
         asyncio.run(flush_llm_usage())
-    except Exception as exc:  # noqa: BLE001 - never let usage-log flushing fail the CLI
+    except Exception as exc:  # never let usage-log flushing fail the CLI
         logger.debug("usage log flush skipped: %s", exc)
 
 

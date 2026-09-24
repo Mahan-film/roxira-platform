@@ -115,7 +115,7 @@ def _utc_now() -> str:
 
 def _research_layer(agent: TechRadarAgent, idea: str, layer: Layer) -> dict[str, Any]:
     topic = f"{idea} — {layer.query_hint}"
-    ranked, search_bundle = agent.gather_sources(topic, deep=False)
+    ranked, _search_bundle = agent.gather_sources(topic, deep=False)
     source_index = "\n".join(
         f"- {s.get('title', '')} | {s.get('url', '')} | lang={s.get('source_lang', 'en')} | "
         f"score={s.get('relevance_score', 0.0)}"

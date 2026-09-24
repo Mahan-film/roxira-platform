@@ -88,7 +88,7 @@ def call_llm(
         result = asyncio.run(_run())
     except llm_router.LLMRouterError as exc:
         return {"status": "ERROR", "error": str(exc), "tier": tier}
-    except Exception as exc:  # noqa: BLE001 - network isolation boundary
+    except Exception as exc:  # network isolation boundary
         return {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}", "tier": tier}
 
     if not result.content:
