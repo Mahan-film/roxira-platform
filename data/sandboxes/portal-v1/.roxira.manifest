@@ -1,0 +1,16 @@
+[
+  ".dockerignore",
+  ".roxira.env",
+  "Dockerfile",
+  "app/api/health/route.ts",
+  "app/globals.css",
+  "app/layout.tsx",
+  "app/page.tsx",
+  "docker-compose.yml",
+  "next-env.d.ts",
+  "next.config.ts",
+  "package.json",
+  "postcss.config.mjs",
+  "public/robots.txt",
+  "tsconfig.json"
+]

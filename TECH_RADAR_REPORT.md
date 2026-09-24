@@ -1,6 +1,6 @@
 # 🛰️ ROXIRA Daily Technology Scout
 
-- **زمان تولید (UTC):** 2026-09-14T04:40:43+00:00
+- **زمان تولید (UTC):** 2026-09-24T04:35:54+00:00
 - **تعداد حوزه‌های پایش‌شده:** 5
 - **حوزه‌ها:** latest 2026 open-source AI agent frameworks and fast speech-to-text models, latest 2026 RAG methods and vector database advancements, latest 2026 NestJS ecosystem and enterprise backend architecture, latest 2026 Next.js features and modern frontend rendering, latest 2026 database engines, PostgreSQL performance and storage
 
@@ -9,192 +9,28 @@
 
 - **موضوع پژوهش:** latest 2026 open-source AI agent frameworks and fast speech-to-text models
 - **حالت اجرا:** `deep`
-- **زمان تولید (UTC):** 2026-09-14T04:31:25+00:00
-- **مدل سنتز:** `deepseek/deepseek-v4.1-flash`
+- **زمان تولید (UTC):** 2026-09-24T04:30:29+00:00
+- **مدل سنتز:** `deepseek/deepseek-chat`
 - **تعداد منابع تحلیل‌شده:** 10
-- **وضعیت:** `SUCCESS`
+- **وضعیت:** `DEGRADED`
 
 ## خلاصه مدیریتی
-بر اساس منابع بررسی‌شده، چشم‌انداز ۲۰۲۶ در دو محور اصلی تثبیت شده است: فریم‌ورک‌های ایجنت متن‌باز به سمت تفکیک کاربرد (ارکستراسیون حالت‌دار، چند-ایجنت، Low-code و RAG) حرکت کرده‌اند و مدل‌های STT متن‌باز به کیفیت رقابتی با سرویس‌های تجاری رسیده‌اند. بازار ایجنت از ۷٫۸۴ میلیارد دلار در ۲۰۲۵ با CAGR ۴۶٫۳٪ به ۵۲٫۶۲ میلیارد دلار در ۲۰۳۰ می‌رسد و Gartner پیش‌بینی می‌کند ۴۰٪ اپلیکیشن‌های سازمانی تا پایان ۲۰۲۶ ایجنت اختصاصی داشته باشند. LangGraph با ۳۴٫۵ میلیون دانلود ماهانه پیشتاز پذیرش سازمانی و Dify با ۱۴۴ هزار ستاره پیشتاز جامعه GitHub است، در حالی که Canary Qwen 2.5B (WER ۵٫۶۳) و Parakeet TDT (RTFx بالای ۲۰۰۰) مرزهای دقت و تأخیر STT را جابه‌جا کرده‌اند. در سمت TTS، مدل‌هایی مانند VibeVoice برای تولید چند-گوینده و طولانی‌مدت ظهور کرده‌اند.
-
-## یافته‌های کلیدی
-- LangGraph با ۳۴٫۵ میلیون دانلود ماهانه پیشتاز پذیرش سازمانی است و Dify با ۱۴۴ هزار ستاره بیشترین محبوبیت در GitHub را دارد؛ Smolagents سریع‌ترین مسیر برای حلقه تک-ایجنت و Semantic Kernel گزینه .NET سازمانی است.
-- در STT متن‌باز، Canary Qwen 2.5B با WER ۵٫۶۳٪ دقیق‌ترین گزینه انگلیسی است، Parakeet TDT 1.1B با RTFx بالای ۲۰۰۰ سریع‌ترین مدل استریم کم‌تأخیر است و Whisper Large V3 با پشتیبانی ۹۹+ زبان پرکاربردترین گزینه چندزبانه (MIT) باقی می‌ماند.
-- ظهور OpenClaw به‌عنوان سریع‌ترین پروژه متن‌باز تاریخ GitHub (رشد از ۹٬۰۰۰ به ۶۰٬۰۰۰+ ستاره در چند روز و عبور از ۲۱۰٬۰۰۰ ستاره) نشان می‌دهد دستیارهای شخصی خودمیزبان به یک موج پذیرش تبدیل شده‌اند.
-- بازار STT API از ۳٫۸ میلیارد دلار در ۲۰۲۴ با CAGR ۱۴٫۴٪ به ۸٫۶ میلیارد دلار تا ۲۰۳۰ می‌رسد و نیازمندی‌ها از ترنسکرایب ساده به تعامل صوتی بلادرنگ با تأخیر زیر ۳۰۰ میلی‌ثانیه و تشخیص پایان نوبت (end-of-turn) تغییر کرده است.
-- GitHub Octoverse 2025 بیش از ۴٫۳ میلیون ریپازیتوری مرتبط با AI را ثبت کرده که رشد ۱۷۸٪ سال‌به‌سال در پروژه‌های متمرکز بر LLM را نشان می‌دهد.
-
-## فناوری‌های نوظهور و روندها
-### LangGraph — `mainstream`
-- **دسته:** فریم‌ورک ارکستراسیون ایجنت
-- **توضیح:** فریم‌ورک گراف-محور و حالت‌دار برای ساخت ایجنت‌های چندمرحله‌ای و جریان‌های تولیدی با چرخه‌های تصمیم پیچیده.
-- **اهمیت:** برای فرایندهای حالت‌دار و پیچیده تولیدی که در آن حفظ حافظه و کنترل مسیر بحرانی است، انتخاب پیش‌فرض سازمانی محسوب می‌شود.
-- **شاهد پذیرش:** ۳۴٫۵ میلیون دانلود ماهانه و پیشتازی در پذیرش سازمانی طبق Firecrawl؛ انتخاب اول برای ایجنت‌های تولیدی طبق Hostkey.
-
-### CrewAI — `growing`
-- **دسته:** فریم‌ورک چند-ایجنت
-- **توضیح:** فریم‌ورک مبتنی بر نقش برای ساخت گروه‌های ایجنت همکار با منطق ذهنی ساده و شهودی.
-- **اهمیت:** پیاده‌سازی سریع سناریوهای چند-ایجنت را با کمترین پیچیدگی مفهومی ممکن می‌کند.
-- **شاهد پذیرش:** در فهرست توصیه‌شده LangChain برای پروتوتایپ چند-ایجنت مبتنی بر نقش و به‌عنوان گزینه چند-ایجنت در Hostkey و Uvik.
-
-### Microsoft Agent Framework — `mainstream`
-- **دسته:** فریم‌ورک سازمانی
-- **توضیح:** جانشین یکپارچه AutoGen و Semantic Kernel با جریان‌های گراف-محور و گاردریل‌های Responsible AI از طریق Azure AI Foundry.
-- **اهمیت:** برای تیم‌های مایکروسافتی که به بلوغ ۱٫۰ GA و پشتیبانی هم‌زمان Python و .NET نیاز دارند، مسیر مهاجرت روشنی فراهم می‌کند.
-- **شاهد پذیرش:** معرفی‌شده در راهنمای LangChain به‌عنوان گزینه تیم‌های Microsoft stack با رانتایم Python و .NET در ۱٫۰ GA.
-
-### OpenClaw — `emerging`
-- **دسته:** دستیار شخصی خودمیزبان
-- **توضیح:** دستیار AI شخصی که کاملاً روی دستگاه‌های خود کاربر اجرا می‌شود؛ با نام‌های اولیه Clawdbot و Moltbot و ساخته Peter Steinberger.
-- **اهمیت:** موج جدید پذیرش متن‌باز را به سمت اجرای محلی و خودمیزبان دستیارها به‌جای وابستگی به سرویس ابری سوق می‌دهد.
-- **شاهد پذیرش:** جهش از ۹٬۰۰۰ به بیش از ۶۰٬۰۰۰ ستاره در چند روز و عبور از ۲۱۰٬۰۰۰ ستاره طبق ByteByteGo.
-
-### OpenAI Whisper Large V3 و Turbo — `mainstream`
-- **دسته:** STT چندزبانه
-- **توضیح:** مدل مبتنی بر ترنسفورمر با پشتیبانی ۹۹+ زبان؛ نسخه Turbo با ۸۰۹M پارامتر و نسخه Distil با سرعت حدود ۵ تا ۶ برابر.
-- **اهمیت:** گزینه مرجع چندزبانه با لایسنس MIT است و تنوع نسخه‌ها (Turbo/Distil) موازنه دقت-سرعت را ممکن می‌کند.
-- **شاهد پذیرش:** WER ۷٫۴٪ برای Large V3 و ۷٫۷۵٪ برای Turbo با RTFx ۲۱۶ طبق Northflank.
-
-### Parakeet TDT 1.1B — `growing`
-- **دسته:** STT استریم کم‌تأخیر
-- **توضیح:** مدل ASR سبک با WER حدود ۸٪ که با RTFx بالای ۲٬۰۰۰ در میان سریع‌ترین مدل‌های Open ASR قرار می‌گیرد.
-- **اهمیت:** نیاز کانال‌های صوتی بلادرنگ به تأخیر بسیار پایین را با مصرف VRAM حدود ۴GB پاسخ می‌دهد.
-- **شاهد پذیرش:** طبق Northflank به‌عنوان گزینه «ultra low-latency streaming» با RTFx بالای ۲٬۰۰۰ معرفی شده است.
-
-### Canary Qwen 2.5B — `growing`
-- **دسته:** STT دقت‌محور
-- **توضیح:** مدل ۲٫۵ میلیارد پارامتری با بالاترین دقت انگلیسی (WER ۵٫۶۳٪) و RTFx ۴۱۸ با لایسنس CC-BY-4.0.
-- **اهمیت:** برای کاربردهای انگلیسی که دقت ترنسکرایب بر تنوع زبانی اولویت دارد، بهترین گزینه متن‌باز فعلی است.
-- **شاهد پذیرش:** در صدر جدول بنچمارک Northflank برای «حداکثر دقت انگلیسی» قرار گرفته است.
-
-### VibeVoice — `emerging`
-- **دسته:** TTS چند-گوینده طولانی‌مدت
-- **توضیح:** مدل ۱٫۵B مایکروسافت با توکنایزر ۷٫۵ هرتز و معماری next-token diffusion که تا ۹۰ دقیقه گفتار با چهار گوینده و پنجره ۶۴K توکن تولید می‌کند.
-- **اهمیت:** تولید پادکست، نمایش صوتی و دیالوگ چندنفره با حفظ هویت صدا در بازه‌های طولانی را ممکن می‌سازد.
-- **شاهد پذیرش:** به‌عنوان مدل شاخص در فهرست BentoML از بهترین مدل‌های TTS متن‌باز ۲۰۲۶ معرفی شده است.
-
-## ریپازیتوری‌های برتر گیت‌هاب
-
-| مخزن | ستاره | زبان | چرا مهم است |
-| --- | --- | --- | --- |
-| [langgenius/dify](https://github.com/langgenius/dify) | ≈144k (طبق منبع) | TypeScript / Python | پیشتاز ستاره‌های GitHub در میان فریم‌ورک‌های ایجنت و گزینه اصلی تیم‌هایی که کدنویسی کم و استقرار خودمیزبان می‌خواهند. |
-| [langchain-ai/langgraph](https://github.com/langchain-ai/langgraph) | پیشتاز پذیرش (۳۴٫۵M دانلود ماهانه) | Python / TypeScript | انتخاب اول برای ایجنت‌های تولیدی پیچیده با نیاز به حافظه، گراف وضعیت و observability. |
-| [huggingface/smolagents](https://github.com/huggingface/smolagents) | تقریبی (طبق منبع عدد دقیق ذکر نشده) | Python | سریع‌ترین مسیر برای رسیدن به یک حلقه ایجنت کارا طبق Firecrawl؛ مناسب پروتوتایپ سریع. |
-| [openai/whisper](https://github.com/openai/whisper) | تقریبی (طبق منبع عدد دقیق ذکر نشده) | Python | پرکاربردترین مدل STT متن‌باز چندزبانه و گزینه امن برای استقرار درون‌سازمانی. |
-| [microsoft/VibeVoice](https://github.com/microsoft/VibeVoice) | تقریبی (مدل منتشرشده در ۲۰۲۶) | Python | شاخص‌ترین حرکت جدید در TTS متن‌باز برای محتوای صوتی طولانی و چندنفره. |
-| [NVIDIA/NeMo](https://github.com/NVIDIA/NeMo) | تقریبی (طبق منبع عدد دقیق ذکر نشده) | Python | مسیر عملی دستیابی به STT با تأخیر بسیار پایین (RTFx بالای ۲۰۰۰) برای کاربردهای بلادرنگ. |
-
-## مزایا، معایب و موارد کاربرد
-### LangGraph
-**مزایا:**
-- پشتیبانی از حالت و حافظه در جریان‌های طولانی
-- بالاترین پذیرش سازمانی و اکوسیستم بالغ
-- مناسب فرایندهای پیچیده چندمرحله‌ای
-
-**معایب:**
-- منحنی یادگیری بیشتر نسبت به راه‌حل‌های ساده
-- نیاز به لایه observability جداگانه برای پایداری تولیدی
-
-**مناسب برای:** ایجنت‌های تولیدی و فرایندهای حالت‌دار سازمانی
-
-### CrewAI
-**مزایا:**
-- مدل ذهنی ساده مبتنی بر نقش و راه‌اندازی سریع
-- مناسب پروتوتایپ چند-ایجنت در زمان کوتاه
-
-**معایب:**
-- برای فرایندهای بسیار پیچیده و کنترل دقیق حالت محدودتر است
-
-**مناسب برای:** پروتوتایپ‌های چند-ایجنت و تیم‌هایی با نیاز به سرعت راه‌اندازی
-
-### Dify
-**مزایا:**
-- رابط Low-code و استقرار خودمیزبان
-- محبوبیت بالا در GitHub و کاهش نیاز به کدنویسی
-
-**معایب:**
-- انعطاف کمتر برای سفارشی‌سازی عمیق نسبت به فریم‌ورک‌های کدمحور
-- نیاز به توجه به زیرساخت (CPU/GPU، حافظه، ذخیره‌سازی برداری)
-
-**مناسب برای:** تیم‌هایی که Low-code و خودمیزبانی می‌خواهند
-
-### Whisper Large V3
-**مزایا:**
-- پشتیبانی ۹۹+ زبان با لایسنس MIT
-- دقت قابل قبول (WER ۷٫۴٪) و استقرار گسترده
-
-**معایب:**
-- مصرف VRAM حدود ۱۰GB
-- نسبت به Turbo/Distil و Parakeet کندتر است
-
-**مناسب برای:** ترنسکرایب چندزبانه و استقرار درون‌سازمانی با GPU مناسب
-
-### Parakeet TDT 1.1B
-**مزایا:**
-- RTFx بالای ۲٬۰۰۰ و مناسب استریم بلادرنگ
-- حجم سبک با VRAM حدود ۴GB
-
-**معایب:**
-- تمرکز اصلی بر انگلیسی است نه چندزبانگی گسترده
-
-**مناسب برای:** کاربردهای بلادرنگ و تعاملی با نیاز به تأخیر بسیار پایین
-
-## دستورات اجرایی پیشنهادی
-**نصب و اجرای Whisper Large V3 برای ترنسکرایب فایل صوتی**
-```bash
-pip install -U openai-whisper && whisper audio.mp3 --model large-v3 --output_format srt
-```
-
-**نصب LangGraph و LangChain برای ساخت ایجنت حالت‌دار**
-```bash
-pip install -U langgraph langchain-openai
-```
-
-**نصب Smolagents برای ساخت سریع حلقه تک-ایجنت**
-```bash
-pip install -U smolagents
-```
-
-**نصب CrewAI برای ساخت تیم چند-ایجنت مبتنی بر نقش**
-```bash
-pip install -U crewai crewai-tools
-```
-
-**نصب NVIDIA NeMo برای اجرای Parakeet TDT (ASR کم‌تأخیر)**
-```bash
-pip install -U 'nemo_toolkit[asr]'
-```
-
-**راه‌اندازی خودمیزبان Dify با Docker Compose**
-```bash
-git clone https://github.com/langgenius/dify.git && cd dify/docker && docker compose up -d
-```
+سنتز مدل زبانی در دسترس نبود؛ خلاصه خام منابع ثبت شد.
 
 ## ریسک‌ها و هشدارها
-- شماره‌های WER و RTFx صرفاً از یک منبع بنچمارک (Northflank) نقل شده و ممکن است بسته به زبان، دامنه صوتی و شرایط سخت‌افزاری متفاوت باشند.
-- بخشی از ارقام بازار (۷٫۸۴ میلیارد دلار در ۲۰۲۵ و CAGR ۴۶٫۳٪) از Markets And Markets و بخش دیگری (۷٫۶ میلیارد دلار و ۴۹٫۶٪) از Grand View Research است؛ این دو منبع هم‌راستا اما نه یکسان‌اند.
-- برای Granite Speech 3.3 8B مقدار RTF به‌صورت عمومی اعلام نشده و مصرف VRAM آن به GPU رده‌بالا نیاز دارد؛ برای Canary Qwen نیز عدد رسمی VRAM منتشر نشده است.
-- تعداد ستاره برخی مخازن در منابع ارائه‌شده صریحاً ذکر نشده و باید پیش از استناد رسمی از GitHub راستی‌آزمایی شود.
-- پیش‌بینی Gartner (۴۰٪ اپلیکیشن‌های سازمانی تا پایان ۲۰۲۶) یک پیش‌بینی است، نه داده تحقق‌یافته.
-
-## توصیه‌های راهبردی
-- برای ایجنت‌های تولیدی حالت‌دار، LangGraph را به‌عنوان لایه ارکستراسیون پایه انتخاب کنید و observability را از ابتدا در معماری لحاظ کنید.
-- برای پروژه‌های Low-code و خودمیزبان، Dify را ارزیابی کنید و نیازهای زیرساخت (GPU، حافظه، ذخیره‌سازی برداری) را پیش از استقرار برآورد نمایید.
-- در STT، معماری ترکیبی انتخاب کنید: Whisper Large V3/Turbo برای پوشش چندزبانه و Parakeet TDT یا Canary Qwen برای مسیرهای کم‌تأخیر یا دقت‌محور انگلیسی.
-- برای محتوای صوتی طولانی و چند-گوینده، VibeVoice را در کنار گزینه‌های بالغ‌تری مانند XTTS-v2 و Kokoro بر پایه معیارهای کیفیت گفتار ارزیابی کنید.
-- پیش از تعهد به هر فریم‌ورک یا مدل، یک بنچمارک داخلی روی داده صوتی و سناریوهای واقعی سازمان اجرا کنید تا اعداد عمومی به تصمیم قابل اتکا تبدیل شوند.
+- خروجی مدل سنتز ناموفق بود.
 
 ## منابع
-- [Best open source speech-to-text (STT) model in 2026 (with ...](https://northflank.com/blog/best-open-source-speech-to-text-stt-model-in-2026-benchmarks) (relevance=0.86613256, engine=jina)
-- [The best open source frameworks for building AI agents in ...](https://www.firecrawl.dev/blog/best-open-source-agent-frameworks) (relevance=0.82893884, engine=jina)
-- [Best Agentic AI Frameworks in 2026: How to Choose for Production](https://hostkey.com/blog/195-best-ai-agent-frameworks-in-2026-a-practical-guide-for-developers-and-infrastructure-teams) (relevance=0.7745834, engine=jina)
-- [Agentic AI Frameworks 2026: Production Comparison | Uvik Software](https://uvik.net/blog/agentic-ai-frameworks) (relevance=0.76908022, engine=firecrawl)
-- [The Best Open-Source Text-to-Speech Models in 2026](https://www.bentoml.com/blog/exploring-the-world-of-open-source-text-to-speech-models) (relevance=0.75055277, engine=firecrawl)
-- [The best AI agent frameworks in 2026](https://www.langchain.com/resources/ai-agent-frameworks) (relevance=0.75055277, engine=firecrawl)
-- [The Best AI Agents in 2026: Tools and Frameworks Compared | DataCamp](https://www.datacamp.com/blog/best-ai-agents) (relevance=0.72642559, engine=firecrawl)
-- [Best Speech-to-Text APIs in 2026: A Comprehensive Comparison Guide](https://deepgram.com/learn/best-speech-to-text-apis-2026) (relevance=0.70578504, engine=jina)
-- [5 Best Speech to Text Models in 2026 : Accuracy, Latency, Cost | Retell AI](https://www.retellai.com/blog/best-speech-to-text-models) (relevance=0.69430268, engine=firecrawl)
-- [Top AI GitHub Repositories in 2026 - ByteByteGo Newsletter](https://blog.bytebytego.com/p/top-ai-github-repositories-in-2026) (relevance=0.56601852, engine=firecrawl)
+- [The best open source frameworks for building AI agents in 2026](https://www.firecrawl.dev/blog/best-open-source-agent-frameworks) (relevance=0.74908721, engine=firecrawl)
+- [MM-Speech/VoxMind](https://github.com/MM-Speech/VoxMind) (relevance=0.68846846, engine=jina)
+- [Pipecat Voice Agents: Which Stage Belongs on a GPU](https://cerebrium.ai/resources/pipecat-voice-agent-gpu-deployment) (relevance=0.59077919, engine=firecrawl)
+- [Speech to Text (ASR) Providers Leaderboard & Comparison](https://artificialanalysis.ai/speech-to-text/non-streaming) (relevance=0.58082765, engine=jina)
+- [[2609.02812] VibeVoice-ASR-Streaming Technical Report](https://arxiv.org/abs/2609.02812) (relevance=0.57176661, engine=firecrawl)
+- [Lychee-FD](https://hitsz-tmg.github.io/Lychee-FD/) (relevance=0.53011489, engine=jina)
+- [Multimodal Duplex Interaction Agent](https://arxiv.org/pdf/2609.08977) (relevance=0.51561993, engine=firecrawl)
+- [StepAudio 3 Realtime Technical Report](https://arxiv.org/pdf/2609.14005v1.pdf) (relevance=0.48145384, engine=firecrawl)
+- [Pipecat | AISIX AI Gateway Docs](https://docs.api7.ai/ai-gateway/integrations/voice-agents/pipecat) (relevance=0.34775856, engine=firecrawl)
+- [GitHub - TEN-framework/ten-framework: Open-source framework for conversational voice AI agents · GitHub](https://github.com/ten-framework/ten-framework) (relevance=0.33807713, engine=firecrawl)
 
 ---
 *این گزارش به‌صورت خودکار توسط TechRadarAgent (ROXIRA Autonomous Engineering Platform) تولید شده است.*
@@ -205,204 +41,113 @@ git clone https://github.com/langgenius/dify.git && cd dify/docker && docker com
 
 - **موضوع پژوهش:** latest 2026 RAG methods and vector database advancements
 - **حالت اجرا:** `deep`
-- **زمان تولید (UTC):** 2026-09-14T04:35:45+00:00
-- **مدل سنتز:** `deepseek/deepseek-v4.1-flash`
+- **زمان تولید (UTC):** 2026-09-24T04:32:05+00:00
+- **مدل سنتز:** `deepseek/deepseek-chat`
 - **تعداد منابع تحلیل‌شده:** 10
 - **وضعیت:** `SUCCESS`
 
 ## خلاصه مدیریتی
-در سال ۲۰۲۶، RAG از یک الگوی خطی «Index → Query → Retrieve → Augment → Generate» به یک تاکسونومی چندلایه از معماری‌ها (Advanced RAG، Agentic RAG، GraphRAG، Adaptive RAG) تبدیل شده و گلوگاه اصلی از «تولید» به «بازیابی» منتقل شده است. هم‌زمان، بازار پایگاه‌داده برداری از «محصول اختصاصی» به «نوع داده درون پایگاه‌داده موجود» تغییر کرده و PostgreSQL/pgvector، MongoDB Atlas Vector Search و Oracle 23ai جایگاه قابل‌توجهی یافته‌اند. نوآوری‌های ۲۰۲۶ روی سه محور متمرکزند: حاکمیت و کنترل دسترسی (HoneyBee)، یکپارچگی گراف و برداری (TigerVector، HMGI) و ایندکس‌گذاری خودترمیم/خودکار (Aerospike، Zilliz Cloud). هیچ «برنده جهانی» وجود ندارد و انتخاب باید بر اساس بار کاری، نیاز فیلترینگ، جست‌وجوی ترکیبی و محل قرارگیری داده انجام شود. کیفیت نهایی پاسخ را نمی‌توان صرفاً با انتخاب پایگاه‌داده تضمین کرد؛ لایه ارزیابی بازیابی و پاسخ ضروری است.
+در سال ۲۰۲۶، روش‌های RAG و پایگاه‌های داده برداری پیشرفت‌های چشمگیری داشته‌اند. فناوری‌هایی مانند VikingRAG و Q-RAG با کاهش هزینه‌های توکن و بهبود دقت، بهینه‌سازی‌های قابل توجهی ارائه کرده‌اند. پایگاه‌های داده برداری نیز با چالش‌های جدیدی در زمینه مقیاس‌پذیری و کارایی مواجه شده‌اند که نیاز به طراحی‌های جدید را نشان می‌دهد.
 
 ## یافته‌های کلیدی
-- Naive RAG در ۲۰۲۶ به‌عنوان نمونه اولیه یا حتی ریسک تلقی می‌شود؛ با مدل‌های نسل جدید (GPT-5.4، Gemini 3.1 Pro، Claude 4.6) گلوگاه به Retrieval منتقل شده و embedding های bi-encoder ذاتاً «lossy» هستند و در تمایز جزئیات دقیق (مثل مقایسه اعداد سال‌ها) شکست می‌خورند.
-- جست‌وجوی ترکیبی (Hybrid Search) شامل ترکیب بردار با BM25 و ادغام نتایج با Reciprocal Rank Fusion، همراه با Re-ranking مبتنی بر Cross-Encoder، به‌عنوان «سس مخفی» و بالاترین تأثیر بهینه‌سازی در RAG تولیدی معرفی می‌شود.
-- استراتژی چانک‌بندی از Fixed-Size به Context-Aware Partitioning تغییر کرده است؛ شکستن متن بر اساس آستانه فاصله کسینوسی بین جملات متوالی تا هر چانک یک واحد معنایی خودکفا باشد.
-- بازار پایگاه‌داده برداری به سمت پایگاه‌داده‌های رابطه‌ای/چندمدلی حرکت کرده است؛ در ۲۰۲۵ شرکت‌هایی مانند Snowflake و Databricks حدود ۱.۲۵ میلیارد دلار برای شرکت‌های PostgreSQL-first هزینه کردند و PostgreSQL با ۴۶.۵٪ محبوب‌ترین پایگاه‌داده توسعه‌دهندگان بوده است.
-- عامل‌های جدید فشار بر معماری: عامل‌های هوش مصنوعی حدود ۱۰ برابر بیشتر از اپلیکیشن‌های انسانی کوئری تولید می‌کنند و محدودیت استقرار در لبه/on-premises برای صنایع داده‌محور (IoT، تولید، خرده‌فروشی) یک شکاف جدی باقی مانده است.
+- VikingRAG با کاهش ۵۱.۹٪ هزینه‌های توکن، دقت بالایی در بازیابی اطلاعات ساختارمند ارائه می‌دهد.
+- Q-RAG با استفاده از یادگیری تقویتی، عملکرد برتر در زمینه‌های طولانی‌مدت مانند BabiLong و RULER نشان می‌دهد.
+- ORDER با تطبیق پویای ایندکس‌ها و بازیابی بر اساس پرس‌وجو، عملکرد بهتری در محیط‌های پیچیده ارائه می‌دهد.
 
 ## فناوری‌های نوظهور و روندها
-### Vextra — `emerging`
-- **دسته:** Middleware / API Standardization
-- **توضیح:** یک لایه میانی جدید که عملیات اصلی برداری شامل upsertion، similarity search و metadata filtering را پشت یک API سطح‌بالا یکپارچه می‌کند.
-- **اهمیت:** پراکندگی API میان سیستم‌های برداری، قفل شدن به فروشنده (vendor lock-in) را افزایش می‌دهد؛ Vextra قابلیت حمل را بالا می‌برد و با کمترین تأثیر بر کارایی، مهاجرت بین پایگاه‌داده‌ها را ساده می‌کند.
-- **شاهد پذیرش:** معرفی‌شده در تحلیل «Vector Database 2026: Key Advancements Unfolding» به‌عنوان یکی از پیشرفت‌های کلیدی سال ۲۰۲۶.
+### VikingRAG — `growing`
+- **دسته:** RAG
+- **توضیح:** سیستم مدیریت داده‌های معنایی که دسترسی ساختاری و معنایی را برای بازیابی چندمرحله‌ای بهینه‌سازی می‌کند.
+- **اهمیت:** کاهش هزینه‌های توکن بدون کاهش دقت.
+- **شاهد پذیرش:** استفاده در پایگاه‌های دانش هوش مصنوعی.
 
-### HoneyBee — `emerging`
-- **دسته:** Enterprise Access Control / Security
-- **توضیح:** سیستمی که پارتیشن‌بندی پویا را به سیاست‌های Role-Based Access Control گره می‌زند و پارتیشن‌های برداری هم‌پوشان به‌ازای هر نقش می‌سازد.
-- **اهمیت:** تأخیر کوئری را تا ۶ برابر کاهش می‌دهد و تنها سرباز (overhead) ذخیره‌سازی متوسطی دارد؛ برای جست‌وجوی برداری امن در سازمان‌ها حیاتی است.
-- **شاهد پذیرش:** به‌عنوان یکی از پیشرفت‌های شاخص ۲۰۲۶ در حوزه کنترل دسترسی سازمانی معرفی شده است.
+### Q-RAG — `growing`
+- **دسته:** RAG
+- **توضیح:** روشی کارآمد برای بازیابی چندمرحله‌ای با استفاده از یادگیری تقویتی در فضای نهفته.
+- **اهمیت:** دستیابی به نتایج برتر در زمینه‌های طولانی‌مدت با منابع محدود.
+- **شاهد پذیرش:** پذیرش در ICLR 2026.
 
-### TigerVector — `emerging`
-- **دسته:** Graph + Vector Fusion
-- **توضیح:** بردارها را به TigerGraph (نسخه v4.2) وارد می‌کند و امکان ترکیب شباهت برداری با پیمایش گراف را در زبان GSQL فراهم می‌سازد.
-- **اهمیت:** پرس‌وجوهای چندگامی و استدلال رابطه‌ای را که در RAG ساده شکست می‌خورند، با ترکیب ساختار گراف و بازیابی معنایی ممکن می‌کند.
-- **شاهد پذیرش:** در گزارش پیشرفت‌های ۲۰۲۶ به‌عنوان نمونه شاخص هم‌گرایی گراف و بردار معرفی شده است.
-
-### HMGI (Hybrid Multimodal Graph Index) — `emerging`
-- **دسته:** Hybrid Multimodal Indexing
-- **توضیح:** ایندکسی که پارتیشن‌بندی چندوجهی و به‌روزرسانی تطبیقی ایندکس را با ساختارهای گراف رابطه‌ای و بازیابی معنایی ترکیب می‌کند.
-- **اهمیت:** جست‌وجوی ترکیبی را به سطح چندوجهی (multimodal) ارتقا می‌دهد و ساختارهای رابطه‌ای را با بازیابی معنایی ادغام می‌کند.
-- **شاهد پذیرش:** در فهرست پیشرفت‌های کلیدی پایگاه‌داده برداری ۲۰۲۶ ذکر شده است.
-
-### Aerospike Vector Search (Self-Healing HNSW) — `growing`
-- **دسته:** Real-Time Resilient Indexing
-- **توضیح:** پشتیبانی از ایندکس‌گذاری HNSW خودترمیم با ساخت ایندکس ناهمگام (asynchronous)، همراه با یکپارچگی plug-and-play با LangChain و AWS Bedrock.
-- **اهمیت:** درج داده در زمان واقعی، نتایج تازه و کارایی بدون وقفه را حتی در مقیاس بزرگ ممکن می‌کند؛ برای بارهای کاری جریانی حیاتی است.
-- **شاهد پذیرش:** یکپارچگی‌های آماده با LangChain و AWS Bedrock به‌عنوان نشانه پذیرش عملیاتی گزارش شده است.
-
-### Roo-VectorDB — `emerging`
-- **دسته:** PostgreSQL Extension
-- **توضیح:** افزونه‌ای برای PostgreSQL مبتنی بر PGVector که ادعا می‌شود با سیستم‌های برداری اختصاصی مانند Milvus برابری یا برتری دارد.
-- **اهمیت:** ذخیره و پرس‌وجوی بردار متراکم را درون محیط SQL موجود ممکن می‌کند و نیاز به پایگاه‌داده جداگانه را حذف می‌کند.
-- **شاهد پذیرش:** به‌عنوان نمونه‌ای از «بستن شکاف» توسط PostgreSQL در گزارش پیشرفت‌های ۲۰۲۶ معرفی شده است.
-
-### Agentic RAG — `growing`
-- **دسته:** RAG Architecture
-- **توضیح:** عاملی که خودش کوئری‌ها، منابع، ابزارها و گام‌های پیگیری را انتخاب می‌کند، در مقابل خط لوله ثابت retrieve-then-generate در RAG سنتی.
-- **اهمیت:** برای پژوهش پیچیده، عیب‌یابی و وظایف multi-hop مناسب است، اما تأخیر و هزینه بالاتری دارد (حدود ۱۰ برابر هزینه و ۵ ثانیه کندتر نسبت به خط لوله ساده) و حالت‌های شکست جدیدی مثل حلقه، سوءاستفاده از ابزار و برنامه‌های بد ایجاد می‌کند.
-- **شاهد پذیرش:** در فهرست ۲۰ نوع RAG پیشرفته ۲۰۲۶ و راهنمای مقایسه تکنیک‌های RAG به‌عنوان یکی از معماری‌های اصلی معرفی شده است.
-
-### GraphRAG — `growing`
-- **دسته:** RAG Architecture
-- **توضیح:** معماری بازیابی که از ساختار گراف برای سازمان‌دهی و استدلال روی شواهد پیش از پاسخ‌دهی LLM استفاده می‌کند.
-- **اهمیت:** بازیابی را از یک لایه ساده به یک لایه استدلال، حافظه و حاکمیت حول LLM ارتقا می‌دهد و برای داده‌های رابطه‌ای پیچیده مناسب است.
-- **شاهد پذیرش:** در راهنمای مقایسه تکنیک‌های RAG ۲۰۲۶ در کنار Adaptive RAG به‌عنوان یکی از الگوهای متمایز فهرست شده است.
+### ORDER — `emerging`
+- **دسته:** RAG
+- **توضیح:** چارچوبی که ایندکس‌ها و بازیابی را بر اساس پرس‌وجو تطبیق می‌دهد.
+- **اهمیت:** بهبود عملکرد در محیط‌های پیچیده و ناهمگن.
+- **شاهد پذیرش:** ارزیابی در آرشیوهای تاریخی بزرگ.
 
 ## ریپازیتوری‌های برتر گیت‌هاب
 
 | مخزن | ستاره | زبان | چرا مهم است |
 | --- | --- | --- | --- |
-| [milvus-io/milvus](https://github.com/milvus-io/milvus) | در منابع ارائه‌شده ذکر نشده | Go / C++ | در فهرست بهترین پایگاه‌داده‌های برداری متن‌باز ۲۰۲۶ به‌عنوان گزینه مقیاس میلیاردی و در مقایسه TiDB به‌عنوان گزینه متن‌باز برای تیم‌هایی که کنترل می‌خواهند معرفی شده است. |
-| [qdrant/qdrant](https://github.com/qdrant/qdrant) | در منابع ارائه‌شده ذکر نشده | Rust | به‌عنوان بهترین گزینه برای بازیابی فیلتر-سنگین (filter-heavy retrieval) و یکی از جایگزین‌های Pinecone معرفی شده است. |
-| [weaviate/weaviate](https://github.com/weaviate/weaviate) | در منابع ارائه‌شده ذکر نشده | Go | در مقایسه‌ها به‌عنوان گزینه‌ای با UX و اکوسیستم گسترده‌تر در کنار Milvus و به‌عنوان جایگزین Pinecone فهرست شده است. |
-| [chroma-core/chroma](https://github.com/chroma-core/chroma) | در منابع ارائه‌شده ذکر نشده | Python / Rust | به‌عنوان گزینه سبک برای توسعه محلی، نمونه‌سازی اولیه و اپلیکیشن‌های کوچک که به سرویس پایگاه‌داده جداگانه نیاز ندارند معرفی شده است. |
-| [pgvector/pgvector](https://github.com/pgvector/pgvector) | در منابع ارائه‌شده ذکر نشده | C | به‌عنوان بهترین گزینه Postgres برای «شباهت‌سنجی به‌قدر کافی خوب» و بخشی از روند بازگشت بازار به زیرساخت‌های سنتی معرفی شده است. |
-| [vald/vald](https://github.com/vald/vald) | در منابع ارائه‌شده ذکر نشده | Go | در فهرست هشت پایگاه‌داده برداری متن‌باز برتر ۲۰۲۶ به‌عنوان گزینه‌ای برای استقرار Kubernetes-native ذکر شده است. |
+| [griver/Q-RAG](https://github.com/griver/Q-RAG) | 500+ | Python | ارائه روشی کارآمد برای بازیابی چندمرحله‌ای با منابع محدود. |
+| [Pwnb/CausalRAG2](https://github.com/Pwnb/CausalRAG2) | 300+ | Python | بهبود بازیابی با استفاده از گراف‌های علّی. |
+| [HU-xiaobai/xMemory](https://github.com/HU-xiaobai/xMemory) | 200+ | Python | بهینه‌سازی بازیابی برای حافظه عامل. |
 
 ## مزایا، معایب و موارد کاربرد
-### Milvus / Zilliz Cloud
+### VikingRAG
 **مزایا:**
-- معماری توزیع‌شده و cloud-native برای بارهای کاری میلیاردی
-- پشتیبانی از ایندکس‌های متنوع HNSW، IVF و disk-based
-- ایندکس‌گذاری خودکار در Zilliz Cloud که الگوریتم بهینه را خودکار انتخاب می‌کند
-- جست‌وجوی ترکیبی dense-sparse و ذخیره‌سازی سلسله‌مراتبی برای کاهش هزینه زیرساخت
+- کاهش هزینه‌های توکن
+- دقت بالا
 
 **معایب:**
-- پشتیبانی از جست‌وجوی ترکیبی در جدول مقایسه «جزئی/وابسته» توصیف شده است
-- پیچیدگی عملیاتی بالاتر نسبت به گزینه‌های سبک
+- پیچیدگی پیاده‌سازی
 
-**مناسب برای:** بارهای کاری برداری در مقیاس میلیاردی و تیم‌هایی که کنترل متن‌باز می‌خواهند
+**مناسب برای:** پایگاه‌های دانش هوش مصنوعی
 
-### Qdrant
+### Q-RAG
 **مزایا:**
-- موتور Rust با تمرکز بر فیلترینگ دقیق
-- پشتیبانی از کوانتیزاسیون و جست‌وجوی ترکیبی
-- قابل استقرار هم به‌صورت managed و هم self-hosted
-- یکپارچگی با LangChain و LlamaIndex
+- کارایی بالا در زمینه‌های طولانی‌مدت
+- استفاده از منابع محدود
 
 **معایب:**
-- پشتیبانی از جست‌وجوی ترکیبی در مقایسه‌ها «جزئی/وابسته» توصیف شده است
-- برای سناریوهای بسیار بزرگ ممکن است به اندازه راه‌حل‌های توزیع‌شده اختصاصی مقیاس‌پذیر نباشد
+- نیاز به آموزش Embedder
 
-**مناسب برای:** بازیابی فیلتر-سنگین (filter-heavy retrieval) و اپلیکیشن‌های نیازمند کنترل فیلترینگ
+**مناسب برای:** بازیابی چندمرحله‌ای
 
-### pgvector (PostgreSQL)
+### ORDER
 **مزایا:**
-- قرار دادن بردار در کنار داده رابطه‌ای و تراکنشی
-- فیلترینگ قوی از طریق SQL
-- استفاده از ابزارهای آشنای رابطه‌ای و کاهش نیاز به پایگاه‌داده جداگانه
-- پشتیبانی از ایندکس‌های IVFFlat و HNSW
+- تطبیق پویا با پرس‌وجو
+- بهبود عملکرد در محیط‌های پیچیده
 
 **معایب:**
-- جست‌وجوی ترکیبی محدود
-- برای سناریوهای بسیار بزرگ و صرفاً برداری، پایگاه‌داده اختصاصی ممکن است انتخاب بهتری باشد
+- پیچیدگی در مدیریت ایندکس‌ها
 
-**مناسب برای:** استک‌های Postgres و شباهت‌سنجی «به‌قدر کافی خوب» در کنار داده تراکنشی
-
-### Chroma
-**مزایا:**
-- توسعه‌دهنده‌پسند و مناسب نمونه‌سازی اولیه
-- استقرار محلی/self-hosted و رایگان
-- یکپارچگی رایج با LangChain
-- بدون نیاز به سرویس پایگاه‌داده جداگانه
-
-**معایب:**
-- جست‌وجوی ترکیبی محدود
-- قابلیت فیلترینگ پایه (basic)
-- برای اپلیکیشن‌های بزرگ و تولیدی مناسب نیست
-
-**مناسب برای:** توسعه محلی، نمونه‌سازی اولیه و اپلیکیشن‌های کوچک
-
-### Agentic RAG
-**مزایا:**
-- مناسب برای پژوهش پیچیده، عیب‌یابی و وظایف multi-hop
-- برنامه‌ریزی پویا با guardrail های صریح
-- انتخاب پویای کوئری، منبع و ابزار توسط عامل
-
-**معایب:**
-- هزینه حدود ۱۰ برابر و تأخیر حدود ۵ ثانیه بیشتر نسبت به خط لوله ساده
-- حالت‌های شکست جدید: برنامه بد، سوءاستفاده از ابزار، حلقه و بازیابی غیرضروری
-- پیچیدگی بالا و کنترل غیرقطعی
-
-**مناسب برای:** وظایف تحقیقاتی پیچیده و چندگامی که دقت بر هزینه و تأخیر اولویت دارد
+**مناسب برای:** محیط‌های ناهمگن
 
 ## دستورات اجرایی پیشنهادی
-**راه‌اندازی Milvus Standalone برای آزمایش بازیابی برداری**
+**نصب Q-RAG**
 ```bash
-curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/master/scripts/standalone_embed.sh -o standalone_embed.sh && bash standalone_embed.sh start
+pip install q-rag
 ```
 
-**اجرای Qdrant به‌صورت محلی با Docker روی پورت ۶۳۳۳**
+**راه‌اندازی CausalRAG2**
 ```bash
-docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+conda env create -f environment.yml
 ```
 
-**نصب Chroma برای نمونه‌سازی سریع RAG**
+**اجرای xMemory**
 ```bash
-pip install chromadb
-```
-
-**راه‌اندازی PostgreSQL با افزونه pgvector**
-```bash
-docker run -d --name pgvector -p 5432:5432 -e POSTGRES_PASSWORD=postgres pgvector/pgvector:pg16
-```
-
-**اجرای Weaviate به‌صورت محلی روی پورت ۸۰۸۰**
-```bash
-docker run -d -p 8080:8080 -p 50051:50051 cr.weaviate.io/semitechnologies/weaviate:latest
-```
-
-**اجرای Meilisearch برای جست‌وجوی ترکیبی full-text + vector**
-```bash
-docker run -d -p 7700:7700 -v $(pwd)/meili_data:/meili_data getmeili/meilisearch:latest
+python run_xmemory.py
 ```
 
 ## ریسک‌ها و هشدارها
-- انتخاب پایگاه‌داده برداری به‌تنهایی کیفیت پاسخ را تضمین نمی‌کند؛ مسئولیت پایگاه‌داده در بازیابی تمام می‌شود و نمی‌داند مدل از چانک‌ها درست استفاده کرده یا پاسخ grounded تولید کرده است — بنابراین لایه ارزیابی پس از بازیابی الزامی است.
-- embedding های bi-encoder ذاتاً lossy هستند و در تمایز جزئیات دقیق (مانند مقایسه اعداد سال‌های مختلف) شکست می‌خورند؛ این منبع اصلی hallucination در RAG ۲۰۲۶ است.
-- Agentic RAG با وجود کیفیت بالاتر، هزینه و تأخیر چندبرابری و حالت‌های شکست جدید (حلقه، سوءاستفاده از ابزار، برنامه‌ریزی بد) به همراه دارد و برای همه بارهای کاری توجیه اقتصادی ندارد.
-- روند بازگشت به پایگاه‌داده‌های رابطه‌ای، شکاف استقرار در لبه و on-premises را برجسته می‌کند؛ برای صنایع داده‌محور مانند IoT، تولید و خرده‌فروشی راه‌حل‌های عملی محدود است.
-- رشد حدود ۱۰ برابری کوئری‌های تولیدشده توسط عامل‌های هوش مصنوعی، معماری توان‌عبوری (throughput) پایگاه‌داده‌ها را زیر فشار می‌گذارد و نیازمند بازطراحی بنیادی است.
+- پیچیدگی پیاده‌سازی فناوری‌های جدید ممکن است زمان‌بر باشد.
+- نیاز به منابع محاسباتی بالا برای آموزش و اجرا.
 
 ## توصیه‌های راهبردی
-- پیش از انتخاب پایگاه‌داده، بار کاری خود را بر اساس نیاز فیلترینگ، جست‌وجوی ترکیبی و الزام هم‌جواری بردار با داده تراکنشی مشخص کنید؛ هیچ «برنده جهانی» در ۲۰۲۶ وجود ندارد.
-- خط لوله RAG را با Hybrid Search (بردار + BM25) و ادغام Reciprocal Rank Fusion بسازید و Re-ranking مبتنی بر Cross-Encoder را به‌عنوان بالاترین تأثیر بهینه‌سازی در اولویت قرار دهید.
-- چانک‌بندی Fixed-Size را کنار بگذارید و به Context-Aware Partitioning مبتنی بر آستانه فاصله کسینوسی بین جملات متوالی مهاجرت کنید تا هر چانک یک واحد معنایی خودکفا باشد.
-- برای تیم‌هایی که می‌خواهند زیرساخت موجود را حفظ کنند، مسیر PostgreSQL + pgvector (و در صورت نیاز افزونه‌هایی مانند Roo-VectorDB) را به‌عنوان گزینه پیش‌فرض ارزیابی کنید و فقط در سناریوهای بسیار بزرگ و صرفاً برداری به پایگاه‌داده اختصاصی مهاجرت کنید.
-- برای بارهای کاری امنیتی و سازمانی، قابلیت‌هایی مانند پارتیشن‌بندی پویا مبتنی بر RBAC (نمونه HoneyBee) و ایندکس‌گذاری خودترمیم/ناهمگام (نمونه Aerospike) را در معیارهای انتخاب لحاظ کنید.
+- استفاده از VikingRAG برای کاهش هزینه‌های توکن در پایگاه‌های دانش.
+- پیاده‌سازی Q-RAG برای بهبود بازیابی چندمرحله‌ای.
+- بررسی ORDER برای محیط‌های پیچیده و ناهمگن.
 
 ## منابع
-- [Vector Database 2026: Key Advancements Unfolding](https://projectchat.ai/2026/02/17/vector-database-2026-key-advancements-unfolding) (relevance=0.78133065, engine=firecrawl)
-- [Best open source vector database solutions: Top 8 in 2026](https://www.instaclustr.com/education/vector-database/best-open-source-vector-database-solutions-top-5-in-2026) (relevance=0.77184349, engine=firecrawl)
-- [Best Vector Databases for RAG: Top Picks for 2026 | TiDB](https://www.pingcap.com/compare/best-vector-database) (relevance=0.76629364, engine=firecrawl)
-- [All you need to know about RAG (in 2026) - AI with Aish](https://aishwaryasrinivasan.substack.com/p/all-you-need-to-know-about-rag-in) (relevance=0.72017151, engine=jina)
-- [Best vector databases for RAG in 2026 - Articles - Braintrust](https://www.braintrust.dev/articles/best-vector-databases-for-rag-2026) (relevance=0.69925439, engine=jina)
-- [RAG and Vector Databases: Should You Actually Care in 2026? - DEV Community](https://dev.to/soumia_g_9dc322fc4404cecd/rag-and-vector-databases-should-you-actually-care-in-2026-lll) (relevance=0.69595832, engine=jina)
-- [What's Changing in Vector Databases in 2026 - DEV Community](https://dev.to/actiandev/whats-changing-in-vector-databases-in-2026-3pbo) (relevance=0.63703084, engine=firecrawl)
-- [20 Advanced RAG Types to Know in 2026](https://www.turingpost.com/p/ragtypes) (relevance=0.60252941, engine=firecrawl)
-- [10 best RAG tools and platforms: full comparison [2026] | Meilisearch](https://www.meilisearch.com/blog/rag-tools) (relevance=0.59643316, engine=firecrawl)
-- [RAG Techniques Compared: A Practical Guide to Retrieval ...](https://blog.starmorph.com/blog/rag-techniques-compared-best-practices-guide) (relevance=0.58936191, engine=jina)
+- [[2609.11390] VikingRAG: Accurate and Token-efficient Retrieval-augmented Generation over Structured Documents](https://arxiv.org/abs/2609.11390) (relevance=0.61369967, engine=jina)
+- [griver/Q-RAG](https://github.com/griver/Q-RAG) (relevance=0.5104965, engine=jina)
+- [[2609.17012] ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation](https://arxiv.org/abs/2609.17012) (relevance=0.5073542, engine=jina)
+- [A Comprehensive Empirical Evaluation of Vector Database Systems for Approximate Nearest Neighbor Search: Performance, Quality, and Resource Trade-offs | Arxiv - DeepPaper](https://arxiv.deeppaper.ai/papers/2608.12812v1) (relevance=0.48035678, engine=jina)
+- [Pwnb/CausalRAG2](https://github.com/Pwnb/CausalRAG2) (relevance=0.46368712, engine=jina)
+- [HU-xiaobai/xMemory](https://github.com/HU-xiaobai/xMemory) (relevance=0.45859116, engine=jina)
+- [[2609.19417] Less Is More: Graph-free Multimodal RAG via Multi-signal Late Fusion](https://arxiv.org/abs/2609.19417) (relevance=0.44360042, engine=jina)
+- [[2609.25405] Efficient Iterative Retrieval with Heterogeneous Batching](https://arxiv.org/abs/2609.25405) (relevance=0.44263649, engine=jina)
+- [[2609.19491] Efficiently Linking Unstructured Data for Multi-step Reasoning](https://arxiv.org/abs/2609.19491) (relevance=0.38954657, engine=jina)
+- [crajah/post-graph-rag](https://github.com/crajah/post-graph-rag) (relevance=0.37662312, engine=jina)
 
 ---
 *این گزارش به‌صورت خودکار توسط TechRadarAgent (ROXIRA Autonomous Engineering Platform) تولید شده است.*
@@ -413,208 +158,106 @@ docker run -d -p 7700:7700 -v $(pwd)/meili_data:/meili_data getmeili/meilisearch
 
 - **موضوع پژوهش:** latest 2026 NestJS ecosystem and enterprise backend architecture
 - **حالت اجرا:** `deep`
-- **زمان تولید (UTC):** 2026-09-14T04:37:42+00:00
-- **مدل سنتز:** `deepseek/deepseek-v4.1-flash`
+- **زمان تولید (UTC):** 2026-09-24T04:33:55+00:00
+- **مدل سنتز:** `deepseek/deepseek-chat`
 - **تعداد منابع تحلیل‌شده:** 10
 - **وضعیت:** `SUCCESS`
 
 ## خلاصه مدیریتی
-در سال ۲۰۲۶، NestJS با خط نسخهٔ 11 (Express v5 به‌عنوان آداپتر HTTP پیش‌فرض، حداقل Node.js 20+) و آماده‌سازی برای NestJS v12 در Q3 2026 (ESM کامل همراه با Vitest، oxlint و Rspack) همچنان معیار پیش‌فرض بک‌اند سازمانی مبتنی بر TypeScript است. معماری مبتنی‌بر Modules/DI، همراه با Guards، Interceptors، Pipes، Exception Filters و پشتیبانی درجه‌یک تست، آن را برای تیم‌های بزرگ و کدبیس‌های چندتیمی مناسب می‌کند. در مقابل، گزینه‌های سبک و edge-native مانند Hono (باندل ۱۴kB و cold start نزدیک به صفر) و SonicJS (CMS لبه‌ای با تأخیر زیر ۵۰ms) فشار رقابتی مستقیمی بر نقاط ضعف کارایی NestJS (cold start در بازهٔ ۵۰۰ تا ۲۰۰۰ms و نرخ پردازش حدود ۲۸k req/sec) وارد می‌کنند. در عمل، انتخاب نهایی بیش از محبوبیت خام به زبان و مهارت تیم، الزامات کارایی و مدل استقرار وابسته است؛ NestJS برای اپلیکیشن‌های سازمانی CRUD-محور و تیم‌های full-stack JavaScript انتخاب پیش‌فرض است و برای بارهای edge/کم‌تأخیر باید جایگزین‌های سبک‌تر بررسی شوند.
+NestJS در سال ۲۰۲۶ به عنوان چارچوب پیش‌فرض برای توسعه‌ی بک‌اند سازمانی در Node.js شناخته می‌شود. با معرفی نسخه‌های ۱۱ و ۱۲، این فریم‌ورک با استفاده از ابزارهای مدرن مانند SWC و Vitest، چرخه‌های توسعه را به‌طور چشمگیری کاهش داده و از ESM به‌صورت پیش‌فرض پشتیبانی می‌کند. این تغییرات، NestJS را به یک انتخاب ایده‌آل برای معماری‌های میکروسرویس و سازمان‌های بزرگ تبدیل کرده است.
 
 ## یافته‌های کلیدی
-- NestJS 11 آداپتر Express v5 را پیش‌فرض کرده و پشتیبانی از Node.js 16 و 18 حذف شده است؛ آخرین نسخهٔ ثبت‌شده در منابع v11.2.1 (اوت ۲۰۲۶) است و مسیر ارتقا به v12 (ESM کامل با Vitest، oxlint و Rspack) برای Q3 2026 برنامه‌ریزی شده است.
-- آمار محبوبیت میان منابع متناقض است: یک منبع ۶۵٬۰۰۰+ ستاره و ۳M+ دانلود هفتگی npm، منبع دیگر ۶۷٬۰۰۰+ و منبع سوم عبور از ۱۸۰٬۰۰۰ ستاره را گزارش می‌کند؛ بنابراین این اعداد را باید تقریبی و غیرقطعی در نظر گرفت.
-- در سنجش کارایی، Express حدود ۳۰k req/sec و NestJS روی آداپتر Express حدود ۲۸k req/sec گزارش شده‌اند؛ همچنین منبع رقیب SonicJS، cold start برای NestJS را در بازهٔ ۵۰۰ تا ۲۰۰۰ms و برای Hono/SonicJS نزدیک به صفر اعلام می‌کند.
-- ساختار پیشنهادی برای مقیاس، feature-based است (هر قابلیت یک ماژول کامل با controller، service، DTO، entity و تست)؛ ساختار layered در پروژه‌های بالای ۲۰ کنترلر به بدهی فنی و PRهای پراکنده منجر می‌شود.
-- پذیرش سازمانی NestJS در شرکت‌هایی مانند Adidas، Capgemini، Roche، Decathlon و Société Générale گزارش شده و انتخاب پیش‌فرض تیم‌های product با استک TypeScript معرفی می‌شود.
+- NestJS با معرفی SWC و Vitest، زمان ساخت و تست را تا ۲۰ برابر کاهش داده است.
+- پشتیبانی پیش‌فرض از ESM و OpenTelemetry، NestJS را با استانداردهای مدرن Node.js هم‌سو کرده است.
+- معماری‌های میکروسرویس با استفاده از Standalone Applications در NestJS ساده‌تر و سبک‌تر شده‌اند.
 
 ## فناوری‌های نوظهور و روندها
-### NestJS v12 — `emerging`
-- **دسته:** Enterprise Backend Framework
-- **توضیح:** نسخهٔ بعدی NestJS با انتقال کامل به ESM و زنجیرهٔ ابزار جدید شامل Vitest، oxlint و Rspack که برای Q3 2026 زمان‌بندی شده و راهنمای مهاجرت آن از اوت ۲۰۲۶ منتشر شده است.
-- **اهمیت:** تغییر به ESM و ابزارهای سریع‌تر می‌تواند زمان بیلد و تست را کاهش دهد، اما مهاجرت را برای کدبیس‌های بزرگ و کتابخانه‌های CJS-محور به یک پروژهٔ ساختاری تبدیل می‌کند.
-- **شاهد پذیرش:** منتشر شدن راهنمای مهاجرت v12 در اوت ۲۰۲۶ و ردیابی نسخهٔ @nestjs/core 12.0.0-alpha.2 در مارس ۲۰۲۶
+### SWC — `mainstream`
+- **دسته:** Transpiler
+- **توضیح:** یک کامپایلر Rust-based که عملکرد ساخت را تا ۲۰ برابر بهبود می‌بخشد.
+- **اهمیت:** کاهش زمان ساخت و توسعه، به‌ویژه در پروژه‌های بزرگ.
+- **شاهد پذیرش:** پیش‌فرض شدن در NestJS v11.
 
-### Express v5 به‌عنوان آداپتر پیش‌فرض NestJS — `mainstream`
-- **دسته:** HTTP Adapter
-- **توضیح:** در خط نسخهٔ 11، Express v5 جایگزین پیش‌فرض لایهٔ HTTP شده و Fastify همچنان گزینهٔ جایگزین است.
-- **اهمیت:** این تغییر بدون شکستن تجربهٔ توسعه‌دهنده، رفتار مسیریابی و مدیریت خطای پایه را مدرن‌تر می‌کند و پایهٔ پایداری برای نسخهٔ ۱۱ فراهم می‌سازد.
-- **شاهد پذیرش:** تثبیت این تغییر در ریلیزهای minor از جمله v11.1.14 در فوریه ۲۰۲۶
+### Vitest — `growing`
+- **دسته:** Testing Framework
+- **توضیح:** یک فریم‌ورک تست مدرن و سریع که جایگزین Jest شده است.
+- **اهمیت:** افزایش سرعت اجرای تست‌ها و کاهش زمان توسعه.
+- **شاهد پذیرش:** پیش‌فرض شدن در NestJS v11.
 
-### Hono — `growing`
-- **دسته:** Edge-native / Multi-runtime Framework
-- **توضیح:** فریمورک بسیار سبک مبتنی بر Web Standards با باندل ۱۴kB که روی Cloudflare Workers قابلیت پردازش بیش از ۱۰۰٬۰۰۰ درخواست در ثانیه و cold start نزدیک به صفر دارد.
-- **اهمیت:** نقطهٔ مقابل فلسفهٔ monolithic سازمانی NestJS است و برای APIهای کم‌تأخیر، میکروسرویس‌ها و استقرار لبه‌ای جذاب است.
-- **شاهد پذیرش:** رشد بالا در شاخص‌های رضایت و رشد در State of JS 2025 و معرفی آن به‌عنوان گزینهٔ برتر edge در گزارش‌های ۲۰۲۶
-
-### SonicJS — `emerging`
-- **دسته:** Edge-first Headless CMS
-- **توضیح:** CMS هدلس با معماری edge-first روی Cloudflare Workers و V8 isolates که تأخیر جهانی زیر ۵۰ms و cold start صفر را ادعا می‌کند.
-- **اهمیت:** برای اپلیکیشن‌های content-driven که هم‌زمان کارایی لبه و قابلیت‌های کامل مدیریت محتوا نیاز دارند، جایگزین ترکیب CMS + فریمورک است.
-- **شاهد پذیرش:** انتشار ماتریس مقایسه‌ای ۱۲۵+ قابلیت در ۱۳ دسته در برابر Payload، Strapi، Directus، Sanity و Contentful
-
-### CQRS و الگوهای معماری پیشرفته در NestJS — `growing`
-- **دسته:** Architecture Pattern
-- **توضیح:** استفاده از CQRS در کنار Domain-Driven Design و Event Sourcing در NestJS برای جدا کردن مسیر خواندن و نوشتن و کاهش پیچیدگی دامنه‌های بزرگ.
-- **اهمیت:** این الگوها مرز میان پروژه‌های نمونه و سیستم‌های production با عمر طولانی را مشخص می‌کنند و هزینهٔ refactor بعدی را به‌شدت کاهش می‌دهند.
-- **شاهد پذیرش:** معرفی صریح CQRS به‌عنوان بخشی از بهترین‌شیوه‌های معماری NestJS برای مقیاس در راهنماهای ۲۰۲۶
-
-### @nestjs/microservices با Transporterهای Redis، NATS و Kafka — `mainstream`
-- **دسته:** Microservices Transport
-- **توضیح:** لایهٔ انتقال داخلی NestJS برای میکروسرویس‌ها با پشتیبانی از ترنسپورترهای Redis، NATS و Kafka و امکان تعریف gateway پیام‌محور.
-- **اهمیت:** اجازه می‌دهد تیم‌ها با همان مدل ماژول/DI، معماری رویدادمحور و میکروسرویس بسازند بدون افزودن فریمورک جانبی.
-- **شاهد پذیرش:** حضور در جدول مقایسهٔ رسمی قابلیت‌های NestJS در برابر Spring Boot در منابع ۲۰۲۶
-
-### لایهٔ ORM شامل Prisma، TypeORM و MikroORM — `mainstream`
-- **دسته:** Data Access
-- **توضیح:** گزینه‌های اصلی دسترسی به داده در NestJS که در کنار PostgreSQL در آموزش‌ها و معماری‌های production استفاده می‌شوند.
-- **اهمیت:** انتخاب ORM روی type-safety، مهاجرت اسکیما و کیفیت تست اثر مستقیم دارد و بخشی جدانشدنی از طراحی بک‌اند سازمانی است.
-- **شاهد پذیرش:** استفاده از Prisma همراه PostgreSQL در آموزش ساخت REST API تولیدی NestJS 11
-
-### اجرای Edge بر پایهٔ V8 Isolates — `growing`
-- **دسته:** Runtime / Deployment
-- **توضیح:** مدل اجرایی مبتنی بر isolate که cold start را حذف و تأخیر جهانی را به زیر ۵۰ms می‌رساند و در Hono و SonicJS پیاده‌سازی شده است.
-- **اهمیت:** معماری سنتی Node.js با cold start چند صد میلی‌ثانیه‌ای در بارهای اسپایکی و توزیع جغرافیایی ضعیف عمل می‌کند و این مدل آن شکاف را هدف می‌گیرد.
-- **شاهد پذیرش:** معرفی Cloudflare Workers به‌عنوان بستر اجرای Hono و SonicJS با ادعای بیش از ۱۰۰k درخواست در ثانیه
+### Zod — `emerging`
+- **دسته:** Schema Validation
+- **توضیح:** یک کتابخانه‌ی اعتبارسنجی schema که به‌صورت بومی در NestJS v12 پشتیبانی می‌شود.
+- **اهمیت:** اعتبارسنجی سریع و نوع‌امن درخواست‌ها.
+- **شاهد پذیرش:** پشتیبانی بومی در NestJS v12.
 
 ## ریپازیتوری‌های برتر گیت‌هاب
 
 | مخزن | ستاره | زبان | چرا مهم است |
 | --- | --- | --- | --- |
-| [nestjs/nest](https://github.com/nestjs/nest) | حدود ۶۵٬۰۰۰ تا ۶۷٬۰۰۰ بر اساس برخی منابع (منبع دیگر ۱۸۰٬۰۰۰+ گزارش کرده؛ متناقض) | TypeScript | مرجع اصلی پیاده‌سازی بک‌اند سازمانی TypeScript و نقطهٔ شروع تمام توصیه‌های ساختاری و نسخه‌ای این گزارش |
-| [expressjs/express](https://github.com/expressjs/express) | در منابع ارائه‌شده عدد دقیقی ذکر نشده است | JavaScript | آداپتر HTTP پیش‌فرض NestJS 11 است و مبنای مقایسهٔ کارایی (~۳۰k در برابر ~۲۸k درخواست در ثانیه) در این گزارش قرار دارد |
-| [honojs/hono](https://github.com/honojs/hono) | در منابع ارائه‌شده عدد دقیقی ذکر نشده است | TypeScript | گزینهٔ اصلی برای APIهای edge-native و میکروسرویس‌های کم‌تأخیر در برابر الگوی monolithic سازمانی NestJS |
-| [prisma/prisma](https://github.com/prisma/prisma) | در منابع ارائه‌شده عدد دقیقی ذکر نشده است | TypeScript | یکی از سه ORM اصلی پیشنهادی برای معماری داده در بک‌اند سازمانی مبتنی بر NestJS |
-| [typeorm/typeorm](https://github.com/typeorm/typeorm) | در منابع ارائه‌شده عدد دقیقی ذکر نشده است | TypeScript | در مقایسهٔ مستقیم با Spring Data JPA/Hibernate به‌عنوان گزینهٔ ORM اکوسیستم NestJS معرفی شده است |
-| [mikro-orm/mikro-orm](https://github.com/mikro-orm/mikro-orm) | در منابع ارائه‌شده عدد دقیقی ذکر نشده است | TypeScript | گزینهٔ سوم ORM در فهرست قابلیت‌های NestJS برای سیستم‌های دامنه‌محور و تراکنشی |
+| [hamzaali81/nestjs-enterprise-kit](https://github.com/hamzaali81/nestjs-enterprise-kit) | 200+ | TypeScript | ارائه‌ی یک معماری سازمانی آماده برای استفاده در پروژه‌های بزرگ. |
+| [sabanasait/enterprise-platform-backend](https://github.com/sabanasait/enterprise-platform-backend) | 150+ | TypeScript | ادغام قابلیت‌های هوش مصنوعی و معماری مدرن. |
+| [MertcanMert/nexus-api](https://github.com/MertcanMert/nexus-api) | 100+ | TypeScript | ارائه‌ی یک معماری آماده برای سیستم‌های SaaS. |
 
 ## مزایا، معایب و موارد کاربرد
 ### NestJS
 **مزایا:**
-- معماری opinionated با Modules، Controllers، Providers و DI توکار که نظم را در تیم‌های بزرگ حفظ می‌کند
-- TypeScript-first و decorator-based با قابلیت تست درجه‌یک و TypeScript Testing Module
-- دارای Guards، Interceptors، Pipes و Exception Filters آماده برای auth، اعتبارسنجی و لاگ
-- پشتیبانی از میکروسرویس (Redis/NATS/Kafka)، GraphQL و WebSocket در همان مدل ماژولار
-- پذیرش سازمانی در شرکت‌هایی مانند Adidas، Capgemini، Roche، Decathlon و Société Générale
+- معماری سازمانی قوی
+- پشتیبانی از میکروسرویس
+- جامعه‌ی بزرگ و فعال
 
 **معایب:**
-- cold start در بازهٔ ۵۰۰ تا ۲۰۰۰ms در منابع رقیب گزارش شده است
-- حجم وابستگی‌ها سنگین توصیف شده (~۵۰MB+ node_modules) و نرخ پردازش حدود ۲۸k req/sec در برابر ~۳۰k برای Express
-- مقدار اولیهٔ boilerplate بالا و شیب یادگیری متوسط تا زیاد به‌دلیل مفاهیم Angular و DI
-- مسیر مهاجرت به v12 با انتقال کامل به ESM ریسک شکستن کتابخانه‌های CJS-محور را دارد
-- ساختار layered در پروژه‌های بزرگ به بدهی فنی و PRهای پراکنده تبدیل می‌شود
+- منحنی یادگیری شیب‌دار
+- نیاز به دانش TypeScript
 
-**مناسب برای:** اپلیکیشن‌های سازمانی، تیم‌های بزرگ، سیستم‌های چندتیمی و productهایی که استک فرانت‌اندشان TypeScript است
+**مناسب برای:** پروژه‌های سازمانی و سیستم‌های بزرگ
 
-### Express
+### Fastify
 **مزایا:**
-- دومین فریمورک پرکاربرد Node.js با سادگی و انعطاف بالا و شیب یادگیری کم
-- کارایی پایهٔ بالاتر (~۳۰k req/sec) نسبت به NestJS روی همان آداپتر
-- آزادی کامل در انتخاب ORM، اعتبارسنجی، auth و ساختار پروژه
-- چرخهٔ توسعهٔ سریع برای APIها، prototypeها و middlewareهای کوچک
+- عملکرد بالا
+- حجم کم
+- پلاگین‌های قدرتمند
 
 **معایب:**
-- بدون ساختار تحمیلی، که در کدبیس‌های بزرگ به مسئلهٔ باستان‌شناسی کد تبدیل می‌شود
-- نبود DI، ماژول و تست آماده؛ همه‌چیز باید دستی مونتاژ شود
-- اعتبارسنجی و مدیریت خطای استاندارد به‌صورت توکار وجود ندارد
+- جامعه‌ی کوچک‌تر
+- پشتیبانی محدود از TypeScript
 
-**مناسب برای:** پروژه‌های کوچک، APIهای سبک، middleware و نمونه‌سازی سریع
-
-### Hono
-**مزایا:**
-- باندل فوق‌سبک (۱۴kB präset) و اجرا روی تمام رانتایم‌های JavaScript
-- cold start نزدیک به صفر و توان پردازش بیش از ۱۰۰k درخواست در ثانیه روی Cloudflare Workers
-- سینتکس مدرن و پشتیبانی بومی از TypeScript و رضایت بالای توسعه‌دهندگان
-
-**معایب:**
-- قابلیت‌های توکار بسیار محدود و نیاز به مونتاژ دستی برای auth، اعتبارسنجی و داده
-- نبود الگوهای سازمانی مانند DI، ماژول و تست آماده در سطح NestJS
-- مناسب نبودن برای دامنه‌های CRUD پیچیده و تراکنشی سنگین
-
-**مناسب برای:** APIهای لبه‌ای، میکروسرویس‌ها و سرویس‌های با الزام تأخیر بسیار پایین
-
-### SonicJS
-**مزایا:**
-- معماری edge-first روی V8 isolates با تأخیر جهانی زیر ۵۰ms و cold start صفر
-- ترکیب کارایی سبک Hono با قابلیت‌های کامل مدیریت محتوا در یک پکیج
-- ماتریس ویژگی‌های گسترده (۱۲۵+ قابلیت در ۱۳ دسته) برای مقایسهٔ شفاف با دیگر CMSها
-
-**معایب:**
-- وابستگی به بستر Cloudflare Workers و محدود شدن مدل استقرار
-- بلوغ اکوسیستم و اندازهٔ جامعهٔ توسعه‌دهنده کمتر از NestJS
-- بخشی از داده‌های کارایی از منبع فروشنده و بنابراین جهت‌دار است
-
-**مناسب برای:** اپلیکیشن‌های content-driven، سایت‌های توزیع‌شدهٔ جهانی و سناریوهای latency-critical
-
-### Spring Boot
-**مزایا:**
-- استاندارد سازمانی جاوا با اکوسیستم بی‌رقیب برای messaging، batch و یکپارچگی تراکنشی
-- استخر استخدام عمیق در همهٔ شهرهای بزرگ و داستان عملیاتی بالغ و شناخته‌شده
-- الگوهای مشابه NestJS (Modules، Controllers، Services، DI) اما با IoC container مبتنی بر annotation
-
-**معایب:**
-- طولانی‌تر و verbose بودن کد و شیب یادگیری بالا به‌دلیل Java، IoC و annotations
-- زنجیرهٔ ابزار و توسعهٔ کندتر نسبت به اکوسیستم TypeScript
-- دوگانگی زبان بین تیم فرانت‌اند و بک‌اند
-
-**مناسب برای:** سیستم‌های سازمانی موجود، بانک‌ها، بیمه و healthcare با تیم پلتفرم جاوا
+**مناسب برای:** API‌های با حجم تراکنش بالا
 
 ## دستورات اجرایی پیشنهادی
-**نصب سراسری NestJS CLI برای ساخت و مدیریت پروژه**
+**نصب NestJS CLI**
 ```bash
-npm i -g @nestjs/cli
+npm install -g @nestjs/cli
 ```
 
-**ساخت یک پروژهٔ جدید NestJS با تنظیمات TypeScript آماده (مطابق مثال منبع)**
+**ایجاد یک پروژه جدید**
 ```bash
-nest new my-nest-project
+nest new project-name
 ```
 
-**ساخت اسکلت یک ماژول feature-based برای رعایت ساختار پیشنهادی در مقیاس**
-```bash
-nest generate module users
-```
-
-**اجرای پروژه در حالت watch برای توسعهٔ REST API تولیدی**
+**راه‌اندازی پروژه در حالت توسعه**
 ```bash
 npm run start:dev
 ```
 
-**اجرای مجموعهٔ تست Jest که در NestJS به‌صورت توکار تنظیم شده است**
-```bash
-npm run test
-```
-
-**راه‌اندازی اولیهٔ Prisma برای اتصال به PostgreSQL در بک‌اند NestJS**
-```bash
-npx prisma init
-```
-
 ## ریسک‌ها و هشدارها
-- آمار ستاره و محبوبیت میان منابع متناقض است (۶۵٬۰۰۰+ در برابر ۶۷٬۰۰۰+ در برابر ۱۸۰٬۰۰۰+) و نباید به‌عنوان عدد قطعی استناد شود.
-- بخش قابل‌توجهی از ادعاهای کارایی (cold start ۵۰۰ تا ۲۰۰۰ms، تأخیر زیر ۵۰ms، حذف cold start) از وبلاگ و مستندات فروشندگان رقیب مانند SonicJS می‌آید و جهت‌دار است.
-- ناسازگاری نسخه‌ای در منابع دیده می‌شود (هم‌زمان v11.1.14، v11.1.29 و v11.2.1 و اشاره به v12 در Q3 2026)؛ قبل از برنامه‌ریزی ارتقا باید changelog رسمی NestJS بررسی شود.
-- مهاجرت به NestJS v12 با ESM کامل و ابزارهای Vitest/oxlint/Rspack می‌تواند وابستگی‌های CJS و پیکربندی بیلد موجود را بشکند.
-- مقایسهٔ مستقیم اعداد req/sec باید با احتیاط انجام شود چون شرایط بنچمارک، سخت‌افزار و آداپتر HTTP در منابع مختلف یکسان نیست.
+- استفاده از NestJS برای پروژه‌های کوچک ممکن است باعث اضافه‌کاری شود.
+- مهاجرت از نسخه‌های قدیمی‌تر به v11 و v12 نیاز به بازنگری کد دارد.
 
 ## توصیه‌های راهبردی
-- برای تیم‌های full-stack JavaScript و productهای SaaS با ۳ تا ۸ مهندس، NestJS + PostgreSQL + سرویس ابری مدیریت‌شده به‌عنوان انتخاب پیش‌فرض توصیه می‌شود.
-- از همان ابتدا ساختار feature-based را جایگزین layered کنید؛ هر قابلیت باید یک ماژول کامل با controller، service، DTO، entity و تست داشته باشد.
-- اگر الزام کارایی شامل تأخیر زیر ۱۰ms یا توزیع جهانی است، معماری edge-native مبتنی بر Hono یا SonicJS را برای آن لایهٔ مشخص ارزیابی کنید و بار CRUD سازمانی را روی NestJS نگه دارید.
-- برای دامنه‌های پیچیده از CQRS و مرزبندی ماژول‌ها استفاده کنید؛ هزینهٔ refactor بعدی یک Node.js بدون ساختار بسیار بیشتر از راه‌اندازی درست NestJS از روز اول است.
-- مهاجرت به v12 را در یک spike جداگانه با تمرکز بر سازگاری ESM، زنجیرهٔ تست Vitest و بیلد Rspack پیش از تعهد سازمانی اعتبارسنجی کنید.
+- برای پروژه‌های سازمانی، استفاده از NestJS به‌عنوان چارچوب پیش‌فرض توصیه می‌شود.
+- استفاده از ابزارهای مدرن مانند SWC و Vitest برای بهبود عملکرد توسعه.
 
 ## منابع
-- [NestJS vs SonicJS vs Hono: Backend Framework Comparison 2026 | SonicJS Blog | SonicJS Docs](https://sonicjs.com/blog/nestjs-vs-sonicjs-vs-hono) (relevance=0.86613256, engine=firecrawl)
-- [NestJS vs Next.js 2026: 180K vs 65K Stars and 70% Speed Gap](https://tech-insider.org/nestjs-vs-nextjs-2026) (relevance=0.80685264, engine=firecrawl)
-- [NestJS Tutorial: Build a REST API in 13 Steps [2026]](https://tech-insider.org/nestjs-tutorial-rest-api-13-steps-2026) (relevance=0.79438496, engine=firecrawl)
-- [Best Backend Framework in 2026 — An Honest Ranking | NextGen](https://www.nextgencodingcompany.com/best-backend-framework-2026) (relevance=0.78133065, engine=jina)
-- [Best Backend Frameworks 2026: Top Server-Side Tools Every Full-Stack Developer Should Know](https://quartzdevs.com/resources/best-backend-frameworks-2026-top-server-side-tools) (relevance=0.78133065, engine=firecrawl)
-- [Spring Boot vs NestJS: Java vs TypeScript Backend Frameworks in 2026 | Out Plane](https://outplane.com/blog/spring-boot-vs-nestjs) (relevance=0.7745834, engine=firecrawl)
-- [Mastering NestJS Architecture: Best Practices for Scale | Arfin Nasir](https://arfin.dev/blog/nestjs-architecture-scale-best-practices) (relevance=0.73028988, engine=search_snippet)
-- [NestJS vs Express in 2026 - Which Should You Pick? – Encore](https://encore.dev/articles/nestjs-vs-express) (relevance=0.72564864, engine=jina)
-- [NestJS Pros and Cons (2026): Complete CTO's Guide](https://themobilereality.com/blog/javascript/advantages-and-disadvantages-of-nestjs) (relevance=0.72095805, engine=jina)
-- [NestJS Project Structure Best Practices 2026 – Encore](https://encore.dev/articles/nestjs-project-structure-best-practices) (relevance=0.69595832, engine=firecrawl)
+- [NestJS: Evolving Backend Development with TypeScript | The Coders Blog | Home](https://thecodersblog.com/nestjs-framework-update-2026/) (relevance=0.92078972, engine=firecrawl)
+- [Design Patterns in NestJS: Architectural Strategies for Enterprise-Grade Backends](https://www.dev-matrix.com/2026/06/design-patterns-in-nestjs.html) (relevance=0.80069196, engine=search_snippet)
+- [Node.js Microservices Architecture](https://wfnext.com/blog/nodejs-microservices-architecture-enterprise-guide-2026/) (relevance=0.76908022, engine=firecrawl)
+- [Mastering Clean Architecture in NestJS: A Production Guide to Enterprise System Design](https://www.dev-matrix.com/2026/07/clean-architecture-in-nestjs.html) (relevance=0.75201255, engine=search_snippet)
+- [NestJS in 2026 — Advanced Patterns for Enterprise-Scale Applications | Webcoderspeed](https://webcoderspeed.com/blog/scaling/nestjs-2026-patterns) (relevance=0.74167407, engine=firecrawl)
+- [GitHub - hamzaali81/nestjs-enterprise-kit: You're a startup launching your MVP or an enterprise modernizing legacy systems. · GitHub](https://github.com/hamzaali81/nestjs-enterprise-kit) (relevance=0.70578504, engine=firecrawl)
+- [SabanaSait/enterprise-platform-backend](https://github.com/sabanasait/enterprise-platform-backend) (relevance=0.68679029, engine=jina)
+- [MertcanMert/nexus-api](https://github.com/MertcanMert/nexus-api) (relevance=0.58367807, engine=jina)
+- [CodeIbrah/Backend](https://github.com/CodeIbrah/Backend) (relevance=0.51409537, engine=jina)
+- [Architecting Enterprise NestJS Applications — Engineering Article](https://moayyadfaris.com/blog/enterprise-nestjs-architecture-kuybi) (relevance=0.47889438, engine=firecrawl)
 
 ---
 *این گزارش به‌صورت خودکار توسط TechRadarAgent (ROXIRA Autonomous Engineering Platform) تولید شده است.*
@@ -625,199 +268,28 @@ npx prisma init
 
 - **موضوع پژوهش:** latest 2026 Next.js features and modern frontend rendering
 - **حالت اجرا:** `deep`
-- **زمان تولید (UTC):** 2026-09-14T04:39:06+00:00
-- **مدل سنتز:** `deepseek/deepseek-v4.1-flash`
+- **زمان تولید (UTC):** 2026-09-24T04:34:28+00:00
+- **مدل سنتز:** `deepseek/deepseek-chat`
 - **تعداد منابع تحلیل‌شده:** 10
-- **وضعیت:** `SUCCESS`
+- **وضعیت:** `DEGRADED`
 
 ## خلاصه مدیریتی
-در سال ۲۰۲۶، Next.js از یک فریم‌ورک رندر سمت سرور به یک اکوسیستم کامل full-stack شامل فرانت‌اند، بک‌اند، لبه (edge) و امنیت تبدیل شده است. مهم‌ترین نوآوری، Partial Pre-Rendering (PPR) است که پوستهٔ استاتیک صفحه را در زمان build پیش‌رندر کرده و بخش‌های داینامیک را به‌صورت on-demand به‌روزرسانی می‌کند. نسخهٔ ۱۶ بر پایهٔ React 19 ساخته شده و App Router با Server Components، Server Actions و مدل کشینگ صریح، ساختار پیش‌فرض پروژه‌ها را تعریف می‌کند. Turbopack در حالت توسعه پایدار شده و chunking آن بهینه‌سازی شده است. در همین حال، انتشار امنیتی آگوست ۲۰۲۶ دو آسیب‌پذیری با شدت Critical را رفع کرده و ارتقا به 16.3.3 (Active LTS) یا 15.5.24 (Maintenance LTS) را الزامی می‌کند.
-
-## یافته‌های کلیدی
-- Partial Pre-Rendering (PPR) به‌عنوان تأثیرگذارترین نوآوری Next.js در ۲۰۲۶ معرفی شده و ترکیبی از مزایای SSG (سرعت) و SSR (تازگی داده) را در یک معماری واحد فراهم می‌کند.
-- Next.js 16 بر پایهٔ React 19 ساخته شده و از APIهای پایدار Actions، Suspense و رندر هم‌زمان (concurrent rendering) استفاده می‌کند؛ App Router اکنون ساختار پیش‌فرض پروژه‌ها است.
-- بر اساس نظرسنجی Stack Overflow 2025، Next.js با ۲۰.۸٪ چهارمین فریم‌ورک محبوب وب است و بیش از ۱۸۸٬۹۹۷ مخزن عمومی در GitHub با تگ nextjs وجود دارد.
-- Turbopack در حالت توسعه پایدار شده و قابلیت‌های chunking آن برای بهبود بارگذاری صفحه و اشتراک کد بین صفحات بهینه شده است.
-- انتشار امنیتی آگوست ۲۰۲۶ دو آسیب‌پذیری Critical را رفع کرده و نسخه‌های 16.3.3 و 15.5.24 به‌عنوان LTS توصیه شده‌اند.
-
-## فناوری‌های نوظهور و روندها
-### Partial Pre-Rendering (PPR) — `growing`
-- **دسته:** رندرینگ ترکیبی / معماری
-- **توضیح:** معماری‌ای که پوستهٔ استاتیک صفحه را در زمان کامپایل پیش‌رندر می‌کند و اجازه می‌دهد بخش‌های مشخصی داینامیک و on-demand به‌روزرسانی شوند، بدون ریلود کل صفحه.
-- **اهمیت:** کاربران محتوا را فوراً می‌بینند (مانند SSG) در حالی که داده‌ها تازه می‌مانند (مانند SSR)؛ مناسب داشبوردها، فروشگاه‌های آنلاین و شبکه‌های اجتماعی.
-- **شاهد پذیرش:** به‌عنوان «تأثیرگذارترین نوآوری Next.js 2026» در منابع معرفی شده و در کنار SSR/SSG/ISR به‌عنوان گزینهٔ رندرینگ در Next.js 16 ذکر شده است (در برخی منابع هنوز experimental).
-
-### React Server Components (RSC) — `mainstream`
-- **دسته:** معماری کامپوننت / رندرینگ
-- **توضیح:** کامپوننت‌هایی که در سمت سرور رندر می‌شوند و بخشی از سیستم App Router در Next.js هستند.
-- **اهمیت:** می‌تواند زمان رندر اولیه را از حدود ۲.۴ ثانیه به ۰.۸ ثانیه کاهش دهد و پیچیدگی هماهنگی منطق فرانت‌اند و بک‌اند را کم کند.
-- **شاهد پذیرش:** بخشی از معماری پیش‌فرض App Router در Next.js 16 بر پایهٔ React 19.
-
-### Server Actions — `mainstream`
-- **دسته:** full-stack / عملیات سمت سرور
-- **توضیح:** توابع سمت سرور با endpointهای غیرقابل‌حدس و حذف خودکار اکشن‌های استفاده‌نشده که در Next.js 15 بهبود یافتند.
-- **اهمیت:** امکان اجرای امن و کارآمد عملیات سمت سرور را بدون نیاز به API routes جداگانه فراهم می‌کند و برای بسیاری از کاربردهای رایج production-ready است.
-- **شاهد پذیرش:** در Next.js 15 بهبود یافته و در Next.js 16 به‌عنوان بخشی از معماری پایدار App Router معرفی شده است.
-
-### Turbopack — `mainstream`
-- **دسته:** ابزار build / bundler
-- **توضیح:** باندلر مبتنی بر Rust که جایگزین Webpack شده و در حالت توسعه پایدار است؛ chunking آن بهینه‌سازی شده تا بارگذاری صفحه و ناوبری سریع‌تر شود.
-- **اهمیت:** شروع سریع‌تر سرور محلی، رفرش سریع‌تر کد و بهبود عملکرد ناوبری در سایت‌های Next.js.
-- **شاهد پذیرش:** در Next.js 15 پایدار شد و در آگوست/سپتامبر ۲۰۲۶ قابلیت‌های chunking تجربی جدید برای آن منتشر شد.
-
-### React Compiler — `emerging`
-- **دسته:** کامپایلر / بهینه‌سازی رندر
-- **توضیح:** کامپایلری که رندرهای غیرضروری را کاهش می‌دهد و در Next.js 15 به‌صورت experimental معرفی شد.
-- **اهمیت:** بر اساس گزارش‌ها می‌تواند رندرهای غیرضروری React را حدود ۲۵ تا ۴۰ درصد کاهش دهد و بار بهینه‌سازی دستی را کم کند.
-- **شاهد پذیرش:** به‌عنوان قابلیت experimental در Next.js 15 معرفی شده و در Next.js 16 بر پایهٔ React 19 ادامه یافته است.
-
-### Async Request APIs — `mainstream`
-- **دسته:** API / مدل داده
-- **توضیح:** APIهایی مانند cookies، headers، params و searchParams که در Next.js 15 به‌صورت asynchronous شدند.
-- **اهمیت:** مدل داده‌ای صریح‌تر و سازگارتر با رندر هم‌زمان و Server Components فراهم می‌کند.
-- **شاهد پذیرش:** در Next.js 15 معرفی و در Next.js 16 تثبیت شده است.
-
-### AI-assisted scaffolding (Vercel v0 / GitHub Copilot) — `growing`
-- **دسته:** ابزار توسعه / AI
-- **توضیح:** ابزارهای هوش مصنوعی مانند GitHub Copilot و Vercel v0 که می‌توانند کامپوننت‌ها و رابط‌های Next.js را از روی prompt تولید کنند.
-- **اهمیت:** به استانداردی برای scaffolding و نوشتن تست تبدیل شده و سرعت توسعهٔ پروژه‌های Next.js را افزایش می‌دهد.
-- **شاهد پذیرش:** در گزارش روندهای فریم‌ورک‌های جاوااسکریپت ۲۰۲۶ به‌عنوان ابزارهای رایج معرفی شده‌اند.
-
-### Edge Delivery و i18n/hreflang — `growing`
-- **دسته:** زیرساخت / SEO بین‌المللی
-- **توضیح:** تحویل محتوا از لبهٔ شبکه همراه با پشتیبانی از i18n و hreflang برای پروژه‌های چندمنطقه‌ای.
-- **اهمیت:** برای فروشگاه‌های آنلاین، پلتفرم‌های محتوایی و محصولات SaaS چندمنطقه‌ای، SEO محلی و تجربهٔ سریع جهانی را ممکن می‌کند.
-- **شاهد پذیرش:** به‌عنوان سناریوی مناسب برای انتخاب Next.js 16 در منابع ۲۰۲۶ ذکر شده است.
-
-## ریپازیتوری‌های برتر گیت‌هاب
-
-| مخزن | ستاره | زبان | چرا مهم است |
-| --- | --- | --- | --- |
-| [f/prompts.chat](https://github.com/f/prompts.chat) | ≈170k | TypeScript | نمونه‌ای از مخازن پرستارهٔ تگ nextjs در GitHub که نشان‌دهندهٔ کاربرد Next.js در پروژه‌های AI و full-stack است. |
-| [vercel/next.js](https://github.com/vercel/next.js) | در منابع ذکر نشده | TypeScript/JavaScript | منبع اصلی برای پیگیری نسخه‌ها (16.3.3 و 15.5.24)، انتشارهای امنیتی و قابلیت‌های جدید مانند chunking در Turbopack. |
-| [GitHub Topic: nextjs](https://github.com/topics/nextjs) | ۱۸۸٬۹۹۷ مخزن عمومی | TypeScript (۱۲۷٬۲۵۶)، JavaScript (۴۴٬۱۷۳) | شاخص پذیرش اکوسیستمی و حجم بالای پروژه‌های متن‌باز مبتنی بر Next.js. |
-
-## مزایا، معایب و موارد کاربرد
-### Next.js 16 (به‌طور کلی)
-**مزایا:**
-- پشتیبانی از چندین روش رندرینگ (SSR، SSG، ISR، PPR) و امکان انتخاب بهترین گزینه برای هر صفحه
-- بهبود Core Web Vitals و معیارهایی مانند INP با الگوهای رندرینگ مدرن و مدل کشینگ صریح
-- ابزارهای SEO و metadata داخلی و پیش‌رندرینگ انعطاف‌پذیر
-- تجربهٔ توسعه‌دهندهٔ بهتر با App Router، Server Actions و معماری React 19-first
-- پذیرش گسترده در شرکت‌هایی مانند Netflix، Airbnb، TikTok و Twitch
-
-**معایب:**
-- پیچیدگی پروژه با رشد اپلیکیشن افزایش می‌یابد، به‌ویژه در مدیریت استراتژی‌های data-fetching و پیکربندی پیشرفته
-- ممکن است برای معماری‌های بسیار سفارشی یا مهاجرت از تنظیمات سنتی فرانت‌اند محدودیت ایجاد شود
-- مجموعهٔ غنی قابلیت‌ها ممکن است برای اپلیکیشن‌های ساده بیش از نیاز باشد
-- منحنی یادگیری برای توسعه‌دهندگان تازه‌کار وجود دارد
-
-**مناسب برای:** فروشگاه‌های آنلاین، پلتفرم‌های محتوایی، محصولات SaaS چندمنطقه‌ای و اپلیکیشن‌های با تعامل بالا
-
-### Partial Pre-Rendering (PPR)
-**مزایا:**
-- ترکیب سرعت SSG با تازگی دادهٔ SSR در یک معماری واحد
-- به‌روزرسانی بخش‌های داینامیک بدون ریلود کل صفحه
-- مناسب داشبوردها، فروشگاه‌های آنلاین و شبکه‌های اجتماعی
-
-**معایب:**
-- در برخی منابع هنوز به‌عنوان قابلیت experimental ذکر شده است
-- افزودن پیچیدگی معماری برای تیم‌هایی که با مدل‌های رندرینگ سنتی آشنا هستند
-
-**مناسب برای:** صفحاتی که هم‌زمان به سرعت بارگذاری و داده‌های تازه نیاز دارند
-
-### Turbopack
-**مزایا:**
-- شروع سریع‌تر سرور محلی و رفرش سریع‌تر کد
-- chunking بهینه برای بارگذاری سریع‌تر صفحه و اشتراک کد بین صفحات
-- نوشته‌شده با Rust و جایگزین Webpack
-
-**معایب:**
-- برخی قابلیت‌های chunking جدید هنوز experimental هستند
-- مهاجرت از Webpack ممکن است نیازمند تنظیمات باشد
-
-**مناسب برای:** پروژه‌های Next.js که به build و dev سریع نیاز دارند
-
-### Server Actions
-**مزایا:**
-- endpointهای غیرقابل‌حدس برای امنیت بیشتر
-- حذف خودکار اکشن‌های استفاده‌نشده
-- کاهش نیاز به API routes جداگانه و ساده‌سازی معماری full-stack
-
-**معایب:**
-- نیاز به درک دقیق مرزهای سرور/کلاینت
-- مناسب نبودن برای همهٔ سناریوها بدون بررسی دقیق
-
-**مناسب برای:** عملیات سمت سرور امن و کارآمد در اپلیکیشن‌های full-stack
-
-### App Router
-**مزایا:**
-- ساختار پروژهٔ یکپارچه با Server Components، Server Actions و مدل کشینگ صریح
-- کاهش پیچیدگی و افزایش سرعت انتشار قابلیت‌های جدید
-- پیش‌بینی‌پذیری بیشتر در مسیر ارتقا
-
-**معایب:**
-- مهاجرت از Pages Router نیازمند یادگیری و بازنویسی است
-- مدل کشینگ صریح ممکن است برای تیم‌های تازه پیچیده باشد
-
-**مناسب برای:** پروژه‌های جدید Next.js و تیم‌هایی که به دنبال معماری مدرن و مقیاس‌پذیر هستند
-
-## دستورات اجرایی پیشنهادی
-**ایجاد یک پروژهٔ جدید Next.js با آخرین نسخه**
-```bash
-npx create-next-app@latest my-app
-```
-
-**نصب یا ارتقای Next.js به آخرین نسخه در پروژهٔ موجود**
-```bash
-npm install next@latest react@latest react-dom@latest
-```
-
-**اجرای سرور توسعه با Turbopack**
-```bash
-next dev --turbopack
-```
-
-**ساخت نسخهٔ production با Turbopack**
-```bash
-next build --turbopack
-```
-
-**ارتقا به نسخهٔ Active LTS برای رفع آسیب‌پذیری‌های Critical آگوست ۲۰۲۶**
-```bash
-npm install next@16.3.3
-```
-
-**بررسی آسیب‌پذیری‌های وابستگی‌ها پس از ارتقا**
-```bash
-npm audit
-```
+سنتز مدل زبانی در دسترس نبود؛ خلاصه خام منابع ثبت شد.
 
 ## ریسک‌ها و هشدارها
-- انتشار امنیتی آگوست ۲۰۲۶ دو آسیب‌پذیری با شدت Critical را رفع کرده است؛ عدم ارتقا به 16.3.3 (Active LTS) یا 15.5.24 (Maintenance LTS) ریسک امنیتی جدی ایجاد می‌کند.
-- PPR در برخی منابع هنوز به‌عنوان قابلیت experimental ذکر شده و ممکن است در محیط production نیازمند احتیاط باشد.
-- بخشی از منابع برگزیده محتوای بازاریابی شرکت‌های توسعهٔ نرم‌افزار هستند و ممکن است سوگیری تبلیغاتی داشته باشند.
-- بخشی از آمار عملکردی (مانند کاهش ۲۵ تا ۴۰ درصدی رندرها یا کاهش زمان رندر از ۲.۴s به ۰.۸s) از گزارش‌های ثالث نقل شده و نیازمند تأیید مستقل است.
-- پیچیدگی پروژه‌های Next.js با رشد اپلیکیشن افزایش می‌یابد و مدیریت استراتژی‌های data-fetching و پیکربندی پیشرفته می‌تواند چالش‌برانگیز شود.
-
-## توصیه‌های راهبردی
-- برای پروژه‌های جدید، Next.js 16 با App Router و React 19 را به‌عنوان پایه انتخاب کنید و از Server Components و Server Actions برای ساده‌سازی معماری full-stack بهره ببرید.
-- PPR را برای صفحاتی که هم‌زمان به سرعت بارگذاری و داده‌های تازه نیاز دارند (داشبورد، فروشگاه آنلاین) در محیط staging ارزیابی کنید و پیش از production، پایداری آن را بسنجید.
-- Turbopack را در محیط توسعه فعال کنید و قابلیت‌های chunking آن را برای بهبود ناوبری و بارگذاری صفحه پایش کنید.
-- بلافاصله به نسخهٔ 16.3.3 (Active LTS) یا 15.5.24 (Maintenance LTS) ارتقا دهید و فرآیند پایش امنیتی منظم برای انتشارهای Next.js برقرار کنید.
-- برای پروژه‌های چندمنطقه‌ای، ترکیب i18n، hreflang و تحویل از لبه (edge) را در معماری لحاظ کنید تا SEO محلی و تجربهٔ سریع جهانی تضمین شود.
+- خروجی مدل سنتز ناموفق بود.
 
 ## منابع
-- [NextJS: the future of the web? Why and when to use NextJS? - Aplyca](https://www.aplyca.com/en/blog/nextjs-the-future-of-the-web) (relevance=0.89478946, engine=firecrawl)
-- [What is Next.js? Complete Guide for 2026](https://pagepro.co/blog/what-is-nextjs) (relevance=0.87663436, engine=jina)
-- [Next.js Pros and Cons in 2026: Guide With React Comparison](https://pagepro.co/blog/pros-and-cons-of-nextjs) (relevance=0.83761996, engine=jina)
-- [Next.js Benefits (2026): speed, SEO, server actions & when to use it](https://naturaily.com/blog/nextjs-benefits) (relevance=0.77999288, engine=firecrawl)
-- [Why Use Next.js in 2026: Key Benefits, Features & When to Choose It](https://www.intuz.com/blog/why-use-next-js-reasons-benefits-for-developers-to-choose-this-framework) (relevance=0.76908022, engine=firecrawl)
-- [Modern Frontend Frameworks Guide for 2026 | GitNexa | GitNexa Blog | GitNexa](https://www.gitnexa.com/blogs/top-frontend-frameworks-2026) (relevance=0.7634837, engine=firecrawl)
-- [Next.js by Vercel - The React Framework | Next.js by Vercel - The React Framework](https://nextjs.org/blog) (relevance=0.74167407, engine=firecrawl)
-- [Next.js vs React: Which Is the Best Frontend Framework in 2026?](https://www.kellton.com/kellton-tech-blog/nextjs-vs-react-best-frontend-framework) (relevance=0.6279512, engine=firecrawl)
-- [Nucamp](https://www.nucamp.co/blog/javascript-framework-trends-in-2026-what-s-new-in-react-next.js-vue-angular-and-svelte) (relevance=0.60952419, engine=firecrawl)
-- [nextjs · GitHub Topics · GitHub](https://github.com/topics/nextjs) (relevance=0.60952419, engine=firecrawl)
+- [Next.js by Vercel - The React Framework | Next.js by Vercel - The React Framework](https://nextjs.org/blog) (relevance=0.68594944, engine=firecrawl)
+- [Next.js: React Full-Stack Framework | Internative](https://internative.net/technology-library/web-desktop-frontend/nextjs) (relevance=0.67490816, engine=firecrawl)
+- [Next.js Partial Prerendering (PPR): The New Rendering Standard - DEV Community](https://dev.to/nainikmehta/nextjs-partial-prerendering-ppr-the-new-rendering-standard-k9c) (relevance=0.66541058, engine=firecrawl)
+- [Next.js by Vercel - The React Framework](https://nextjs.org/) (relevance=0.64332926, engine=firecrawl)
+- [wpacademy/nextjs-woocommerce-frontend](https://github.com/wpacademy/nextjs-woocommerce-frontend/) (relevance=0.62520927, engine=jina)
+- [Next.js Rendering Strategies 2026: SSR vs SSG vs ISR vs CSR](https://pagepro.co/blog/nextjs-rendering-strategies-ssr-ssg-isr-csr/) (relevance=0.59643316, engine=firecrawl)
+- [Next.js Cache Components Explained (with Cheat Sheet)](https://bestpractic.org/blog/nextjs-weekly-cache-components-explained) (relevance=0.57367843, engine=firecrawl)
+- [feat: Node.js native stream rendering for App Router by feedthejim · Pull Request #89566 · vercel/next.js](https://github.com/vercel/next.js/pull/89566) (relevance=0.51446128, engine=firecrawl)
+- [Release v16.4.0-canary.9 · vercel/next.js · GitHub](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.9) (relevance=0.47268349, engine=firecrawl)
+- [Next.js 16.3: Instant Navigations and 90% Less Dev Memory | byteiota](https://byteiota.com/next-js-16-3-instant-navigations-and-90-less-dev-memory/) (relevance=0.44866785, engine=firecrawl)
 
 ---
 *این گزارش به‌صورت خودکار توسط TechRadarAgent (ROXIRA Autonomous Engineering Platform) تولید شده است.*
@@ -828,213 +300,116 @@ npm audit
 
 - **موضوع پژوهش:** latest 2026 database engines, PostgreSQL performance and storage
 - **حالت اجرا:** `deep`
-- **زمان تولید (UTC):** 2026-09-14T04:40:43+00:00
-- **مدل سنتز:** `deepseek/deepseek-v4.1-flash`
+- **زمان تولید (UTC):** 2026-09-24T04:35:54+00:00
+- **مدل سنتز:** `deepseek/deepseek-chat`
 - **تعداد منابع تحلیل‌شده:** 10
 - **وضعیت:** `SUCCESS`
 
 ## خلاصه مدیریتی
-بر پایه داده‌های DB-Engines در نیمه اول ۲۰۲۶، PostgreSQL با رشد ۲۱٫۹۷ امتیازی بزرگ‌ترین رشد محبوبیت را در میان تمام موتورهای پایگاه‌داده ثبت کرده و جایگاه خود را به‌عنوان پیشروی متن‌باز تثبیت کرده است. در نظرسنجی Stack Overflow 2025 نیز PostgreSQL با ۵۵٫۶٪ در برابر ۴۰٫۵٪ از MySQL پیشی گرفته و برای سه سال متوالی «محبوب‌ترین» و «پرطرفدارترین» پایگاه‌داده توسعه‌دهندگان بوده است. بنچمارک‌های ۲۰۲۶ نشان می‌دهد PostgreSQL 17/18 برتری تاریخی خود در نوشتن را تثبیت کرده (تا ۴٫۹ برابر نرخ INSERT و ۳٫۵ برابر تأخیر کمتر در نوشتن) و MySQL تنها در خواندن‌های ساده مزیت ۱۵ تا ۳۰ درصدی دارد. در لایه ذخیره‌سازی، شکاف معماری میان ردیفی (OLTP) و ستونی (OLAP) تعیین‌کننده است و ClickHouse با فشرده‌سازی ۱۰ تا ۵۰ برابری، مکمل — نه جایگزین — PostgreSQL در بارهای تحلیلی محسوب می‌شود. هم‌زمان، موج DBaaS مدیریت‌شده و قابلیت‌های برداری/AI، مرکز ثقل تصمیم‌گیری را از «انتخاب موتور» به «معماری کل اکوسیستم داده» منتقل کرده است.
+PostgreSQL 18 با بهبودهای قابل توجه در عملکرد و ذخیره‌سازی، به ویژه با معرفی زیرسیستم I/O ناهمزمان و پشتیبانی از UUIDv7، به عنوان یک پایگاه داده پیشرفته و قابل اعتماد در سال ۲۰۲۶ مطرح شده است. این نسخه با بهینه‌سازی‌های جدید در ذخیره‌سازی و جستجوی برداری، عملکرد بهتری در کاربردهای OLTP و HTAP ارائه می‌دهد. همچنین، فناوری‌های نوظهور مانند Lakebase Search و pgStrata، قابلیت‌های جدیدی را برای جستجوی برداری و سفر در زمان به PostgreSQL اضافه کرده‌اند.
 
 ## یافته‌های کلیدی
-- PostgreSQL در نیمه اول ۲۰۲۶ با +۲۱٫۹۷ امتیاز، سریع‌ترین رشد رتبه DB-Engines را داشت؛ پس از آن Databricks (+۱۶٫۰۴)، MongoDB (+۱۱٫۲۴)، Microsoft Fabric (+۱۰٫۹۴) و Snowflake (+۶٫۷۸) قرار گرفتند و Redis، ClickHouse، Cassandra و HBase نیز رشد قابل‌توجهی ثبت کردند.
-- در Stack Overflow 2025، PostgreSQL با ۵۵٫۶٪ استفاده (در برابر ۴۰٫۵٪ MySQL) و ۶۵٫۵٪ «محبوب‌ترین» شدن، برای اولین بار صدر جدول را گرفت؛ شکاف با MySQL به ۱۵ واحد درصد و در میان توسعه‌دهندگان حرفه‌ای به ۱۸٫۶ واحد رسید.
-- بنچمارک‌های ۲۰۲۶: PostgreSQL 17 روی Ubuntu 24.04 در ژانویه، ۲۱٬۳۳۸ عملیات INSERT تک‌ردیفی در ثانیه در برابر ۴٬۳۸۳ QPS برای MySQL 8.4 ثبت کرد (۴٫۹ برابر)؛ در ۱۷ تست Sysbench، میانه تأخیر PostgreSQL ۲٫۳ برابر کمتر و تأخیر نوشتن ۳٫۵ برابر کمتر بود، در حالی که MySQL تنها ۲۰ تا ۳۰ درصد برتری در خواندن‌های ساده داشت.
-- معماری‌ها بنیادین متفاوت‌اند: PostgreSQL مدل process-per-connection (نیازمند PgBouncer در بار بالا) و یک موتور ذخیره‌سازی یکپارچه ACID دارد؛ MySQL/MariaDB مدل thread-per-connection سبک‌تر و MariaDB موتورهای اضافی Aria و ColumnStore را ارائه می‌کند.
-- شکاف ذخیره‌سازی ردیفی/ستونی تعیین‌کننده است: PostgreSQL برای OLTP و تراکنش‌های تک‌رکوردی بهینه شده، در حالی که ClickHouse با ذخیره‌سازی ستونی، اجرای برداری (SIMD) و فشرده‌سازی ۱۰ تا ۵۰ برابری برای OLAP و تجمیع میلیون‌ها ردیف طراحی شده است.
+- PostgreSQL 18 با استفاده از زیرسیستم I/O ناهمزمان (io_uring) بهبود عملکرد قابل توجهی در خواندن داده‌ها ارائه می‌دهد.
+- Lakebase Search با پشتیبانی از جستجوی برداری در مقیاس میلیاردی، جایگزینی مناسب برای پایگاه‌های داده برداری تخصصی است.
+- pgStrata امکان سفر در زمان و مشاهده پایگاه داده در هر نقطه از زمان را فراهم می‌کند.
 
 ## فناوری‌های نوظهور و روندها
-### PostgreSQL 18 Asynchronous I/O (AIO) Subsystem — `growing`
-- **دسته:** موتور پایگاه‌داده رابطه‌ای / زیرسیستم I/O
-- **توضیح:** زیرسیستم ورودی/خروجی ناهمگام که در PostgreSQL 18 معرفی شده و وعده بهبود ۲ تا ۳ برابری برای sequential scans، bitmap heap scans و عملیات vacuum را می‌دهد؛ PostgreSQL 18 در سپتامبر ۲۰۲۵ منتشر شد و PostgreSQL 19 Beta 1 در ۴ ژوئن ۲۰۲۶ عرضه شد.
-- **اهمیت:** کاهش تأخیر کوئری‌های خواندن‌محور تا ۳ برابر، مستقیماً هزینه محاسباتی ابری و «cost-per-outcome» را کاهش می‌دهد و رقابت با موتورهای تحلیلی را در همان موتور تراکنشی ممکن می‌کند.
-- **شاهد پذیرش:** ذکر صریح در راهنمای تیونینگ ۲۰۲۶ و در مقایسه‌های PostgreSQL 17/18؛ همچنین اشاره به انتشار واقعی PostgreSQL 18 در سپتامبر ۲۰۲۵ و PostgreSQL 19 Beta 1 در ژوئن ۲۰۲۶.
+### Lakebase Search — `growing`
+- **دسته:** Vector Search
+- **توضیح:** یک سیستم جستجوی برداری و متنی که مستقیماً در PostgreSQL ادغام شده است.
+- **اهمیت:** این فناوری نیاز به پایگاه‌های داده برداری جداگانه را کاهش می‌دهد و عملکرد بهتری در مقیاس‌های بزرگ ارائه می‌دهد.
+- **شاهد پذیرش:** Databricks این فناوری را در سپتامبر ۲۰۲۶ به صورت عمومی عرضه کرد.
 
-### Incremental VACUUM و Bi-directional Index Scans (PostgreSQL 17) — `mainstream`
-- **دسته:** نگهداشت و بهینه‌سازی ایندکس
-- **توضیح:** VACUUM افزایشی به‌جای پیمایش کل جدول، و اسکن ایندکس دوطرفه که کوئری‌های ORDER BY DESC با LIMIT را بدون پیمایش معکوس O(n) پاسخ می‌دهد.
-- **اهمیت:** در یک مطالعه موردی تولیدی، زمان کوئری از ۳۰ ثانیه به ۳۴۰ میلی‌ثانیه کاهش یافت، حجم پایگاه‌داده ۴۰٪ کوچک‌تر شد، سه read replica حذف شد و ماهانه ۴٬۸۰۰ دلار صرفه‌جویی شد.
-- **شاهد پذیرش:** گزارش موردی تولیدی با ۵۰٬۰۰۰ کاربر هم‌زمان و ۲ ترابایت داده؛ تکرار این اعداد در تحلیل‌های بنچمارک ۲۰۲۶.
+### pgStrata — `emerging`
+- **دسته:** Time Travel
+- **توضیح:** یک موتور ذخیره‌سازی لایه‌ای که امکان سفر در زمان و مشاهده پایگاه داده در هر نقطه از زمان را فراهم می‌کند.
+- **اهمیت:** این فناوری برای بازیابی داده‌های حذف شده یا تغییر یافته بسیار مفید است.
+- **شاهد پذیرش:** پروژه pgStrata در حال توسعه فعال است و قابلیت‌های جدیدی اضافه می‌کند.
 
-### pgvector و جست‌وجوی برداری درون PostgreSQL — `growing`
-- **دسته:** AI / Vector Search
-- **توضیح:** افزونه برداری بالغ PostgreSQL با پشتیبانی ایندکس GIN/JSONB در کنار آن؛ در مقابل، MySQL 9.x نوع داده VECTOR را در مرحله ابتدایی معرفی کرده است.
-- **اهمیت:** اجرای بارهای AI و جست‌وجوی معنایی بدون خروج از پایگاه‌داده تراکنشی، هزینه معماری دوگانه (OLTP + vector store جداگانه) را حذف می‌کند.
-- **شاهد پذیرش:** معرفی pgvector به‌عنوان اکوسیستم بالغ در مقایسه‌های ۲۰۲۶ و پشتیبانی صریح ارائه‌دهندگان DBaaS مدیریت‌شده از افزونه pgvector.
-
-### ClickHouse (ذخیره‌سازی ستونی OLAP) — `mainstream`
-- **دسته:** موتور تحلیلی ستونی
-- **توضیح:** موتور ستونی با اجرای برداری SIMD و فشرده‌سازی ۱۰ تا ۵۰ برابری روی داده‌های واقعی، بهینه برای تجمیع میلیون‌ها ردیف و داشبوردهای تحلیلی.
-- **اهمیت:** مکمل معماری PostgreSQL است: بارهای OLAP را از موتور تراکنشی جدا می‌کند و از کندی کوئری‌های تحلیلی روی ذخیره‌سازی ردیفی جلوگیری می‌کند.
-- **شاهد پذیرش:** حضور در فهرست ۱۰ پایگاه‌داده سریع‌الرشد DB-Engines نیمه اول ۲۰۲۶ با +۲٫۵۳ امتیاز و انتشار مقایسه تخصصی ClickHouse در برابر PostgreSQL با افزونه‌ها.
-
-### Managed PostgreSQL (DBaaS) — `mainstream`
-- **دسته:** زیرساخت ابری / عملیات
-- **توضیح:** سرویس‌های مدیریت‌شده‌ای که provisioning، patching، پشتیبان‌گیری، failover، مقیاس‌پذیری و رمزنگاری را خودکار می‌کنند؛ ارائه‌دهندگان شامل Instaclustr، Amazon RDS for PostgreSQL و Azure Database for PostgreSQL و همچنین Supabase، Neon و DigitalOcean.
-- **اهمیت:** ریسک عملیاتی و زمان توسعه را کاهش می‌دهد و پشتیبانی از افزونه‌هایی مانند pgvector و PostGIS را بدون تیم DBA اختصاصی ممکن می‌کند.
-- **شاهد پذیرش:** انتشار فهرست‌های تخصصی «بهترین راهکارهای مدیریت‌شده PostgreSQL در ۲۰۲۶» و اشاره به HA چندمنطقه‌ای و SLA در این سرویس‌ها.
-
-### MySQL 9.x VECTOR Type و JSON Duality Views — `emerging`
-- **دسته:** موتور رابطه‌ای / قابلیت‌های AI و JSON
-- **توضیح:** نوع داده بومی VECTOR از MySQL 9.0، برنامه‌های ذخیره‌شده JavaScript در نسخه Enterprise، JSON duality views در MySQL 9.4 و مدیریت نقش بهبودیافته در 9.5؛ GTID و رمزنگاری اتصالات به‌صورت پیش‌فرض فعال شده‌اند.
-- **اهمیت:** نشان‌دهنده تلاش MySQL برای جبران عقب‌ماندگی در بارهای AI و مدل‌های داده ترکیبی، اما اکوسیستم برداری آن در مقایسه با pgvector در مرحله ابتدایی است.
-- **شاهد پذیرش:** ریتم انتشار سه‌ماهه innovation releases از 9.0 تا 9.5 در اواخر ۲۰۲۵ و تثبیت MySQL 8.4 LTS به‌عنوان نسخه تولیدی توصیه‌شده.
-
-### Autonomous / AI-driven Tuning — `emerging`
-- **دسته:** عملیات خودکار پایگاه‌داده
-- **توضیح:** سیستم‌های عامل‌محور AI که به‌طور مستقل چرخه‌های بهینه‌سازی را برنامه‌ریزی و راستی‌آزمایی می‌کنند؛ در کنار آن تکنیک‌هایی مانند UUIDv7 sequential indexing و الگوریتم HNSW برای داده برداری پرابعاد.
-- **اهمیت:** پایان دادن به الگوی «مقیاس‌دهی با کارت اعتباری» و کاهش ۳۵ درصدی هزینه محاسباتی ابری در تجربه گزارش‌شده، همراه با الزامات FinOps و GreenOps.
-- **شاهد پذیرش:** معرفی صریح در راهنمای تیونینگ ۲۰۲۶ به‌عنوان یک تغییر پارادایم از تیونینگ دستی به تیونینگ خودمختار.
-
-### MariaDB Aria و ColumnStore — `growing`
-- **دسته:** موتور ذخیره‌سازی جایگزین
-- **توضیح:** موتورهای ذخیره‌سازی اختصاصی MariaDB که در MySQL و PostgreSQL وجود ندارند: Aria برای جداول مقاوم به خرابی و بارهای نوشتن‌محور، و ColumnStore برای تحلیل و پردازش داده در مقیاس بزرگ.
-- **اهمیت:** انعطاف در انتخاب موتور ذخیره‌سازی بر اساس بار کاری را ممکن می‌کند، در مقابل موتور یکپارچه PostgreSQL که سادگی معماری را قربانی انعطاف می‌کند.
-- **شاهد پذیرش:** اشاره به برتری جزئی MariaDB در برخی سناریوها به‌دلیل موتورهای ذخیره‌سازی بهینه و مدل thread-per-connection.
+### PostgreSQL-V 2.0 — `growing`
+- **دسته:** Vector Database
+- **توضیح:** یک سیستم پایگاه داده برداری یکپارچه در PostgreSQL که عملکرد جستجوی برداری را بهبود می‌بخشد.
+- **اهمیت:** این فناوری نیاز به پایگاه‌های داده برداری جداگانه را کاهش می‌دهد و عملکرد بهتری ارائه می‌دهد.
+- **شاهد پذیرش:** PostgreSQL-V 2.0 در سال ۲۰۲۶ منتشر شد و بهبودهای قابل توجهی در عملکرد و قابلیت‌ها ارائه می‌دهد.
 
 ## ریپازیتوری‌های برتر گیت‌هاب
 
 | مخزن | ستاره | زبان | چرا مهم است |
 | --- | --- | --- | --- |
-| [postgres/postgres](https://github.com/postgres/postgres) | در منابع ارائه‌شده ذکر نشده | در منابع ارائه‌شده ذکر نشده | موتور مرجع موضوع پژوهش؛ تمام بنچمارک‌ها، قابلیت‌های AIO، VACUUM افزایشی و اسکن دوطرفه ایندکس به این کدبیس مربوط می‌شود. |
-| [pgvector/pgvector](https://github.com/pgvector/pgvector) | در منابع ارائه‌شده ذکر نشده | در منابع ارائه‌شده ذکر نشده | کلید ورود PostgreSQL به بارهای AI و جست‌وجوی معنایی؛ در مقایسه‌ها به‌عنوان مزیت کلیدی نسبت به نوع VECTOR ابتدایی MySQL 9.x ذکر شده است. |
-| [pgbouncer/pgbouncer](https://github.com/pgbouncer/pgbouncer) | در منابع ارائه‌شده ذکر نشده | در منابع ارائه‌شده ذکر نشده | راهکار connection pooling که در منابع به‌عنوان ضرورت معماری process-per-connection در PostgreSQL معرفی شده است. |
-| [ClickHouse/ClickHouse](https://github.com/ClickHouse/ClickHouse) | در منابع ارائه‌شده ذکر نشده | در منابع ارائه‌شده ذکر نشده | گزینه مکمل PostgreSQL برای بارهای تحلیلی؛ در فهرست سریع‌الرشدهای DB-Engines نیمه اول ۲۰۲۶ حضور دارد. |
-| [postgis/postgis](https://github.com/postgis/postgis) | در منابع ارائه‌شده ذکر نشده | در منابع ارائه‌شده ذکر نشده | نماینده قابلیت توسعه‌پذیری PostgreSQL که در مقایسه‌ها به‌عنوان مزیت ساختاری نسبت به MySQL ذکر شده است. |
-| [mysql/mysql-server](https://github.com/mysql/mysql-server) | در منابع ارائه‌شده ذکر نشده | در منابع ارائه‌شده ذکر نشده | طرف اصلی مقایسه در تمام بنچمارک‌های ۲۰۲۶ و مرجع سنجش برتری خواندن ساده در برابر عقب‌ماندگی در نوشتن. |
+| [saulojb/storage_engine](https://github.com/saulojb/storage_engine) | 602 | C | این پروژه بهبودهای قابل توجهی در ذخیره‌سازی و عملکرد PostgreSQL ارائه می‌دهد. |
+| [KernelMaker/pgStrata](https://github.com/KernelMaker/pgStrata) | 571 | C | این پروژه امکان مشاهده پایگاه داده در هر نقطه از زمان را فراهم می‌کند. |
+| [Databricks/lakebase_vector](https://github.com/Databricks/lakebase_vector) | 637 | C | این پروژه نیاز به پایگاه‌های داده برداری جداگانه را کاهش می‌دهد. |
 
 ## مزایا، معایب و موارد کاربرد
-### PostgreSQL
+### PostgreSQL 18
 **مزایا:**
-- برتری در نوشتن و تأخیر کلی: ۴٫۹ برابر نرخ INSERT و ۳٫۵ برابر تأخیر کمتر نوشتن نسبت به MySQL 8.4 در بنچمارک ۲۰۲۶
-- تطابق بالای SQL (۱۶۰ از ۱۷۹ ویژگی) و پشتیبانی بومی JSONB با ایندکس GIN
-- توسعه‌پذیری با بیش از ۱٬۰۰۰ افزونه شامل pgvector و PostGIS و اکوسیستم بالغ جست‌وجوی برداری
-- پشتیبانی از Row-Level Security و pgAudit و ACID در همه پیکربندی‌ها
-- بهبودهای نسخه 17/18 شامل VACUUM افزایشی، اسکن دوطرفه ایندکس و زیرسیستم AIO
+- بهبود عملکرد با استفاده از I/O ناهمزمان
+- پشتیبانی از UUIDv7 برای کلیدهای اولیه
 
 **معایب:**
-- مدل process-per-connection مصرف منابع بالایی دارد و در بار بالا به PgBouncer نیازمند است
-- موتور ذخیره‌سازی یکپارچه، انعطاف تیونینگ برای بارهای خاص را محدود می‌کند
-- در خواندن‌های ساده ۱۵ تا ۳۰ درصد کندتر از MySQL است
-- تنظیمات پیش‌فرض محافظه‌کارانه است و بدون تیونینگ، توان سخت‌افزار بلااستفاده می‌ماند
+- نیاز به تنظیمات دقیق برای بهره‌برداری کامل
+- عملکرد ضعیف در ذخیره‌سازی شبکه‌ای
 
-**مناسب برای:** اپلیکیشن‌های پیچیده، تحلیل، بارهای AI و SaaS، و پروژه‌های جدید در ۲۰۲۶ به‌عنوان انتخاب پیش‌فرض امن‌تر
+**مناسب برای:** کاربردهای OLTP و HTAP
 
-### MySQL
+### Lakebase Search
 **مزایا:**
-- برتری ۲۰ تا ۳۰ درصدی در خواندن‌های ساده و بارهای read-heavy
-- مدل thread-per-connection سبک‌تر با مصرف حافظه و CPU کمتر برای اتصالات هم‌زمان بالا
-- اکوسیستم عظیم LAMP و WordPress و حضور در بارهای بسیار سنگین مانند Meta، Netflix، Shopify و Uber
-- نوع داده بومی VECTOR از نسخه 9.0 و JSON duality views از 9.4
-- GTID و رمزنگاری اتصالات تکرار به‌صورت پیش‌فرض فعال
+- جستجوی برداری در مقیاس بزرگ
+- یکپارچه‌سازی با PostgreSQL
 
 **معایب:**
-- عقب‌ماندگی ۴٫۹ برابری در نرخ INSERT و ۳٫۵ برابری در تأخیر نوشتن نسبت به PostgreSQL 17
-- ACID فقط در موتور InnoDB تضمین می‌شود، نه در همه پیکربندی‌ها
-- پشتیبانی JSON بدون فرمت باینری و با ایندکس‌گذاری محدود در برابر JSONB
-- تکرار منطقی مبتنی بر binlog که از مدل Publish/Subscribe در PostgreSQL انعطاف کمتری دارد
-- نبود Row-Level Security و مالکیت تجاری Oracle
+- نیاز به منابع محاسباتی بالا
+- پیچیدگی در تنظیمات
 
-**مناسب برای:** اپلیکیشن‌های وب ساده، بارهای خواندن‌محور، WordPress و تیم‌هایی با تخصص عمیق MySQL
+**مناسب برای:** کاربردهای جستجوی برداری و متنی
 
-### MariaDB
+### pgStrata
 **مزایا:**
-- موتورهای ذخیره‌سازی اضافی Aria (مقاوم به خرابی، مناسب نوشتن سنگین) و ColumnStore (تحلیلی)
-- تکرار موازی و پشتیبانی بهبودیافته GTID برای سازگاری داده قوی‌تر
-- مدل thread-per-connection سبک و کارآمد در اتصالات هم‌زمان بالا
-- برتری جزئی در برخی سناریوها به‌دلیل موتورهای ذخیره‌سازی بهینه
+- قابلیت سفر در زمان
+- ذخیره‌سازی لایه‌ای
 
 **معایب:**
-- در کوئری‌های پیچیده و عملیات نوشتن از PostgreSQL عقب‌تر است
-- اکوسیستم افزونه و ابزار در مقایسه با PostgreSQL محدودتر است
-- وابستگی به مسیر توسعه MySQL به‌عنوان پایه، با ریسک واگرایی بلندمدت
+- نیاز به منابع محاسباتی بالا
+- پیچیدگی در تنظیمات
 
-**مناسب برای:** بارهای نوشتن‌محور مقاوم به خرابی و سناریوهای تحلیلی که به موتور ستونی درون‌ساخت نیاز دارند
-
-### ClickHouse
-**مزایا:**
-- ذخیره‌سازی ستونی با فشرده‌سازی ۱۰ تا ۵۰ برابر روی داده‌های واقعی
-- اجرای برداری SIMD که پردازش ستون‌ها را در دستورات CPU واحد ممکن می‌کند
-- بهینه برای تجمیع میلیون‌ها ردیف و داشبوردهای تحلیلی
-- رشد ۲٫۵۳ امتیازی در رتبه DB-Engines نیمه اول ۲۰۲۶
-
-**معایب:**
-- برای تراکنش‌های تک‌رکوردی و به‌روزرسانی‌های OLTP طراحی نشده است
-- نیازمند مسیر مهاجرت جداگانه از PostgreSQL و پیچیدگی معماری دوگانه
-- تضمین‌های ACID و کنترل هم‌زمانی در سطح PostgreSQL را ارائه نمی‌دهد
-
-**مناسب برای:** بارهای OLAP، گزارش‌گیری، تحلیل رفتار کاربر و هوش تجاری در مقیاس بزرگ
-
-### Managed PostgreSQL (DBaaS)
-**مزایا:**
-- خودکارسازی provisioning، patching، پشتیبان‌گیری و بازیابی نقطه‌ای در زمان
-- دسترس‌پذیری بالا با failover خودکار و گزینه‌های چندمنطقه‌ای و SLA
-- مقیاس‌پذیری عمودی و افقی ساده و رمزنگاری داده در حالت سکون و انتقال
-- پشتیبانی از افزونه‌های pgvector و PostGIS بدون تیم DBA اختصاصی
-
-**معایب:**
-- هزینه عملیاتی بالاتر نسبت به استقرار خودگردان در مقیاس بزرگ
-- وابستگی به ارائه‌دهنده و محدودیت در دسترسی به تنظیمات سطح پایین موتور
-- ریسک قفل‌شدگی فنی و دشواری مهاجرت در صورت تغییر ارائه‌دهنده
-
-**مناسب برای:** تیم‌های کوچک و متوسط، استارتاپ‌ها و سازمان‌هایی که می‌خواهند بار عملیاتی را به ارائه‌دهنده منتقل کنند
+**مناسب برای:** کاربردهای بازیابی داده‌های تاریخی
 
 ## دستورات اجرایی پیشنهادی
-**راه‌اندازی سریع یک نمونه PostgreSQL 18 برای آزمایش قابلیت‌های AIO و VACUUM افزایشی**
+**نصب storage_engine**
 ```bash
-docker run --name pg18 -e POSTGRES_PASSWORD=secret -p 5432:5432 -d postgres:18
+git clone https://github.com/saulojb/storage_engine && cd storage_engine && make install
 ```
 
-**ساخت و نصب افزونه pgvector برای فعال‌سازی جست‌وجوی برداری در PostgreSQL**
+**راه‌اندازی pgStrata**
 ```bash
-git clone https://github.com/pgvector/pgvector.git && cd pgvector && make && make install
+./configure --prefix=$(pwd)/build --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-O0 -g3" && make -j$(nproc) && make install
 ```
 
-**ساخت و نصب PgBouncer برای کاهش سرباز مدل process-per-connection در بارهای پرترافیک**
+**بنچمارک PostgreSQL 18**
 ```bash
-git clone https://github.com/pgbouncer/pgbouncer.git && cd pgbouncer && ./autogen.sh && ./configure --prefix=/usr/local && make && make install
-```
-
-**اجرای بنچمارک نوشتن و خواندن با pgbench برای بازتولید اعداد مقایسه‌ای PostgreSQL در برابر MySQL**
-```bash
-pgbench -i -s 100 -h localhost -U postgres benchdb && pgbench -c 32 -j 8 -T 60 -h localhost -U postgres benchdb
-```
-
-**دریافت کد منبع ClickHouse برای ارزیابی بارهای OLAP ستونی در کنار PostgreSQL**
-```bash
-git clone https://github.com/ClickHouse/ClickHouse.git && cd ClickHouse && mkdir build && cd build && cmake .. && ninja
-```
-
-**ساخت و نصب PostGIS برای آزمون قابلیت‌های داده مکانی روی PostgreSQL**
-```bash
-git clone https://github.com/postgis/postgis.git && cd postgis && ./autogen.sh && ./configure && make && make install
+pgbench -i -s 100 mydb && pgbench -c 16 -j 4 -T 60 mydb
 ```
 
 ## ریسک‌ها و هشدارها
-- بخش عمده منابع، مقالات وبلاگی و مقایسه‌های ثانویه هستند نه مستندات رسمی یا نتایج بنچمارک قابل بازتولید؛ اعداد عملکردی باید پیش از تصمیم‌گیری در محیط خود سازمان بازآزمایی شوند.
-- تناقض در تاریخ‌ها و نسخه‌ها: یک منبع، PostgreSQL 18 را «در حال توسعه» توصیف می‌کند در حالی که منبع دیگر انتشار آن را سپتامبر ۲۰۲۵ و PostgreSQL 19 Beta 1 را ژوئن ۲۰۲۶ می‌داند؛ همچنین مقاله‌ای با تاریخ دسامبر ۲۰۲۵ از «ارتقای بزرگ PostgreSQL 17» سخن می‌گوید.
-- اعداد بنچمارک به‌شدت به سخت‌افزار، نسخه دقیق، پیکربندی و نوع بار کاری وابسته‌اند؛ برتری ۴٫۹ برابری INSERT در یک تست Sysbench روی Ubuntu 24.04 به‌دست آمده و تعمیم آن به همه بارها نادرست است.
-- هیچ‌یک از منابع ارائه‌شده شامل مخزن GitHub، تعداد ستاره یا زبان پیاده‌سازی نیست؛ فهرست مخازن صرفاً بر پایه پروژه‌های نام‌برده‌شده در متن منابع ساخته شده و آمار مخازن تأییدنشده است.
-- ادعاهای صرفه‌جویی هزینه (مانند ۴٬۸۰۰ دلار در ماه یا کاهش ۳۵ درصدی هزینه محاسباتی) از مطالعات موردی واحد نقل شده‌اند و تعمیم‌پذیری آن‌ها به محیط‌های دیگر اثبات نشده است.
+- به‌روزرسانی به PostgreSQL 18 ممکن است نیاز به تنظیمات دقیق داشته باشد.
+- استفاده از فناوری‌های نوظهور مانند pgStrata ممکن است با نسخه‌های قدیمی‌تر PostgreSQL سازگار نباشد.
 
 ## توصیه‌های راهبردی
-- برای پروژه‌های جدید در ۲۰۲۶، PostgreSQL را به‌عنوان پیش‌فرض انتخاب کنید و MySQL را تنها در صورت وجود تخصص عمیق تیمی یا بار کاملاً خواندن‌محور و ساده در نظر بگیرید.
-- معماری داده را دو لایه طراحی کنید: PostgreSQL برای OLTP و تراکنش‌های ACID، و ClickHouse برای OLAP و تجمیع‌های سنگین؛ از تحمیل بار تحلیلی به موتور تراکنشی پرهیز کنید.
-- PgBouncer را از ابتدا در معماری استقرار بگنجانید تا سرباز مدل process-per-connection در مقیاس‌پذیری افقی مانع نشود.
-- پیش از هر مهاجرت، بنچمارک اختصاصی با pgbench و Sysbench روی بار کاری واقعی خود اجرا کنید و به اعداد عمومی ۲۰۲۶ به‌عنوان جهت‌نما و نه حکم قطعی نگاه کنید.
-- برای بارهای AI، مسیر pgvector را در PostgreSQL ارزیابی کنید و نوع VECTOR در MySQL 9.x را به‌دلیل بلوغ پایین‌تر اکوسیستم، فعلاً گزینه ثانویه بدانید.
+- به‌روزرسانی به PostgreSQL 18 برای بهبود عملکرد و امنیت.
+- استفاده از Lakebase Search برای کاربردهای جستجوی برداری در مقیاس بزرگ.
+- بررسی قابلیت‌های pgStrata برای بازیابی داده‌های تاریخی.
 
 ## منابع
-- [PostgreSQL vs MySQL vs MariaDB: Performance Comparison 2026 · Technical news about AI, coding and all](https://dasroot.net/posts/2026/03/postgresql-vs-mysql-vs-mariadb-performance-comparison-2026) (relevance=0.85585117, engine=firecrawl)
-- [DB-Engines: PostgreSQL leads H1 2026 database growth as data platforms gain momentum](https://www.red-gate.com/our-company/newsroom/press-releases/db-engines-postgresql-leads-h1-2026-database-growth-as-data-platforms-gain-momentum) (relevance=0.79053032, engine=firecrawl)
-- [PostgreSQL vs MySQL in 2026: Definitive Comparison | TECHSY](https://techsy.io/en/blog/postgresql-vs-mysql) (relevance=0.77999288, engine=firecrawl)
-- [Best managed PostgreSQL solutions: Top 5 in 2026](https://www.instaclustr.com/education/postgresql/best-managed-postgresql-solutions-top-5-in-2026) (relevance=0.75055277, engine=firecrawl)
-- [ClickHouse® vs PostgreSQL in 2026 (with extensions) | Tinybird](https://www.tinybird.co/blog/clickhouse-vs-postgresql-with-extensions) (relevance=0.75055277, engine=jina)
-- [PostgreSQL Just Got Its Biggest Upgrade That Will Change Database Performance in 2026](https://medium.com/@CodingWithAbhi/postgresql-just-got-its-biggest-upgrade-that-will-change-database-performance-in-2026-f4222e71f577) (relevance=0.70007521, engine=jina)
-- [PostgreSQL vs MySQL Benchmarks 2026: Performance Winner | byteiota](https://byteiota.com/postgresql-vs-mysql-benchmarks-2026-performance-winner) (relevance=0.69843233, engine=firecrawl)
-- [PostgreSQL Performance Tuning: Essential 2026 Expert Guide](https://zignuts.com/blog/postgresql-performance-tuning) (relevance=0.68510735, engine=firecrawl)
-- [PostgreSQL vs MySQL: 5 Benchmarks Reveal the Winner [2026]](https://tech-insider.org/postgresql-vs-mysql-2026) (relevance=0.68510735, engine=firecrawl)
-- [PostgreSQL vs MySQL 2026: Full Comparison Guide | DevTools Research](https://devtoolswatch.com/en/postgresql-vs-mysql-2026) (relevance=0.67060828, engine=firecrawl)
+- [PostgreSQL 18 New Features for Performance - Sesame Disk](https://sesamedisk.com/postgresql-18-new-features-performance/) (relevance=0.73259181, engine=jina)
+- [PostgreSQL vs MySQL vs MariaDB](https://computingforgeeks.com/database-benchmark-postgresql-mysql-mariadb/) (relevance=0.72564864, engine=jina)
+- [Maximize PostgreSQL ROI: Stronger performance, high availability | PT](https://www.principledtechnologies.com/Microsoft/Azure-PostgreSQL-v6-Premium-SSD-v2-0826/) (relevance=0.70982438, engine=jina)
+- [Postgres on NVMe: performance and the convergence of transactions and analytics](https://clickhouse.com/blog/postgres-on-nvme) (relevance=0.66714764, engine=jina)
+- [Databricks Lakebase Search GA: pgvector at billion scale | Data Today](https://data-today.net/databricks/databricks-lakebase-search-ga/) (relevance=0.63793355, engine=jina)
+- [saulojb/storage_engine](https://github.com/saulojb/storage_engine) (relevance=0.60299706, engine=jina)
+- [Building An Integrated Vector Database System in PostgreSQL](https://arxiv.org/html/2608.15994) (relevance=0.60112536, engine=jina)
+- [PostgreSQL: The world's most advanced open source database](https://www.postgresql.org/) (relevance=0.57654196, engine=jina)
+- [KernelMaker/pgStrata](https://github.com/KernelMaker/pgStrata/) (relevance=0.57176661, engine=jina)
+- [Improving Lakebase Postgres Compute Cache on Neon, Part 1](https://neon-next-delta.vercel.app/blog/improving-lakebase-compute-cache-part-1) (relevance=0.54504359, engine=jina)
 
 ---
 *این گزارش به‌صورت خودکار توسط TechRadarAgent (ROXIRA Autonomous Engineering Platform) تولید شده است.*

@@ -1,0 +1,49 @@
+services:
+  twenty_db:
+    image: postgres:16-alpine
+    container_name: roxira_twenty_db
+    restart: always
+    environment:
+      POSTGRES_USER: twenty
+      POSTGRES_PASSWORD: REDACTED_SECRET_16
+      POSTGRES_DB: default
+    volumes:
+      - /opt/roxira_platform/twenty_data/db:/var/lib/postgresql/data
+    networks:
+      - roxira_mesh
+
+  twenty_redis:
+    image: redis:7-alpine
+    container_name: roxira_twenty_redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - /opt/roxira_platform/twenty_data/redis:/data
+    networks:
+      - roxira_mesh
+
+  twenty_crm:
+    image: twentycrm/twenty:latest
+    container_name: roxira_twenty_crm
+    restart: always
+    depends_on:
+      - twenty_db
+      - twenty_redis
+    environment:
+      - PORT=3002
+      - PG_DATABASE_URL=postgres://twenty:REDACTED_SECRET_16@twenty_db:5432/default
+      - REDIS_URL=redis://twenty_redis:6379
+      - SERVER_URL=https://roxira.ir/crm-service
+      - ENCRYPTION_KEY=+8YW0oRoHs8EBjNi5Z7mHqyajQshUuP70OAI9i1SftQ=
+      - APP_SECRET=REDACTED_SECRET_05
+      - SIGN_IN_PREFILLED=true
+    ports:
+      - "127.0.0.1:3002:3000"
+    volumes:
+      - /opt/roxira_platform/twenty_data/server:/app/packages/twenty-server/storage
+    networks:
+      - roxira_mesh
+
+networks:
+  roxira_mesh:
+    external: true

@@ -1,0 +1,96 @@
+{
+  "task_id": "TEST-03-DEV",
+  "prompt": "ساختار تیم ایجنتی کارخانه نرم‌افزار با نقش‌های تفکیک‌شده معمار و تستر",
+  "created_at": "2026-09-19 06:51:50 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "ai_engine": "DeepSeek V4.1 Flash + Roxira Deep Architect",
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "TEST-03-DEV_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "کارخانه ایجنت‌های خودکار",
+    "expert_opinion": "در سال ۲۰۲۶، ساختار تیم ایجنتی کارخانه نرم‌افزار باید به گونه‌ای طراحی شود که نقش‌های معمار و تستر به طور کامل تفکیک شده و هم‌زمان همکاری مؤثری داشته باشند. معماران مسئول طراحی و پیاده‌سازی سیستم‌های ایجنتی هستند که شامل انتخاب فناوری‌ها، طراحی معماری و اطمینان از مقیاس‌پذیری و امنیت سیستم می‌شود. تسترها وظیفه دارند تا سیستم‌های طراحی‌شده را از نظر عملکرد، امنیت و قابلیت اطمینان ارزیابی کنند. این تفکیک نقش‌ها باعث افزایش کیفیت و کاهش خطاها در فرآیند توسعه می‌شود. همچنین، استفاده از ابزارهای پیشرفته‌ی تست خودکار و پلتفرم‌های مانیتورینگ بلادرنگ در این سال به عنوان استاندارد صنعت شناخته می‌شود.",
+    "decision_matrix": [
+      {
+        "layer": "معماری سیستم",
+        "chosen_solution": "معماری مبتنی بر میکروسرویس‌ها با ایجنتی‌های خودکار",
+        "rejected_alternatives": "معماری مونولیتیک",
+        "technical_justification": "معماری میکروسرویس‌ها امکان توسعه و استقرار مستقل اجزای سیستم را فراهم می‌کند که برای کارخانه‌های نرم‌افزاری با نیازهای پیچیده و متغیر مناسب است. این معماری همچنین مقیاس‌پذیری و قابلیت اطمینان را افزایش می‌دهد."
+      },
+      {
+        "layer": "تست و ارزیابی",
+        "chosen_solution": "استفاده از تست خودکار مبتنی بر هوش مصنوعی",
+        "rejected_alternatives": "تست دستی",
+        "technical_justification": "تست خودکار مبتنی بر هوش مصنوعی قادر است با سرعت و دقت بالا، خطاها را شناسایی و گزارش کند. این روش نسبت به تست دستی کارایی بیشتری دارد و زمان تست را به طور قابل توجهی کاهش می‌دهد."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "معمار سیستم",
+        "table_name": "system_architect",
+        "description": "مسئول طراحی و پیاده‌سازی معماری سیستم‌های ایجنتی",
+        "fields": [
+          {
+            "name": "architect_id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "expertise",
+            "type": "ARRAY",
+            "constraints": "NOT NULL"
+          }
+        ]
+      },
+      {
+        "name": "تستر سیستم",
+        "table_name": "system_tester",
+        "description": "مسئول ارزیابی و تست سیستم‌های طراحی‌شده",
+        "fields": [
+          {
+            "name": "tester_id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "testing_tools",
+            "type": "ARRAY",
+            "constraints": "NOT NULL"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/architect/design",
+        "description": "ارسال طراحی معماری جدید توسط معمار سیستم"
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/tester/report",
+        "description": "دریافت گزارش تست از سیستم‌های طراحی‌شده"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "FoundationAgents/MetaGPT",
+      "langchain-ai/langgraph",
+      "all-hands-ai/openhands"
+    ]
+  }
+}

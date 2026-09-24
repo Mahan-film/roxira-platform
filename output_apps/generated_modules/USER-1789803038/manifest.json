@@ -1,0 +1,101 @@
+{
+  "task_id": "USER-1789803038",
+  "prompt": ". بهترین تکنولوژیه تبدیل معطب صوت و صوت به صوت یعنی تکست تو سپیچ چی ها هستش؟ همچنین لایف چات  که به صورت زندگی صحبت میکنند چی هستش؟",
+  "created_at": "2026-09-19 07:33:13 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "USER-1789803038_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "تبدیل متن به گفتار (Text-to-Speech) و تبدیل گفتار به متن (Speech-to-Text)",
+    "expert_opinion": "در سال ۲۰۲۶، فناوری‌های تبدیل متن به گفتار و گفتار به متن به سطحی از بلوغ رسیده‌اند که امکان تولید صداهای طبیعی و دقیق را فراهم می‌کنند. ابزارهایی مانند مورف (Murf)، Synthesys، و Speechify در حوزه تبدیل متن به گفتار پیشرو هستند. این ابزارها از الگوریتم‌های پیشرفته هوش مصنوعی استفاده می‌کنند که قادر به تولید صداهایی با کیفیت بالا و طبیعی هستند. در حوزه تبدیل گفتار به متن، ابزارهایی مانند Live Transcribe و SpeechTexter به دلیل دقت بالا و قابلیت‌های پیشرفته مانند تشخیص نویز محیطی و تبدیل لحظه‌ای، بسیار مورد توجه قرار گرفته‌اند. این ابزارها از شبکه‌های عصبی عمیق استفاده می‌کنند که دقت و سرعت تبدیل را به طور چشمگیری افزایش داده‌اند.",
+    "implementation_prerequisites": [
+      "دسترسی به اینترنت پرسرعت برای ابزارهای مبتنی بر ابر",
+      "میکروفون با کیفیت بالا برای ورودی صدا",
+      "پردازنده‌های قدرتمند برای اجرای الگوریتم‌های هوش مصنوعی",
+      "کتابخانه‌های نرم‌افزاری مانند TensorFlow یا PyTorch برای توسعه‌دهندگان"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "کیفیت صدا",
+        "chosen_solution": "مورف (Murf) با قابلیت تبدیل متن به صدا از بیش از 100 زبان و تولید صداهای طبیعی",
+        "rejected_alternatives": "نسخه‌های قدیمی SAPI مایکروسافت و Google Text-to-Speech",
+        "technical_justification": "مورف از الگوریتم‌های پیشرفته‌تر استفاده می‌کند که کیفیت صدا را به طور قابل توجهی بهبود می‌بخشد."
+      },
+      {
+        "layer": "دقت تبدیل گفتار به متن",
+        "chosen_solution": "Live Transcribe با دقت بالا و قابلیت تشخیص نویز محیطی",
+        "rejected_alternatives": "ابزارهای قدیمی‌تر با دقت پایین‌تر",
+        "technical_justification": "Live Transcribe از شبکه‌های عصبی عمیق استفاده می‌کند که دقت تبدیل را افزایش می‌دهد."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "تبدیل متن به گفتار",
+        "table_name": "text_to_speech",
+        "description": "تبدیل متن نوشته‌شده به صدای طبیعی",
+        "fields": [
+          {
+            "name": "text",
+            "type": "string",
+            "constraints": "متن ورودی"
+          },
+          {
+            "name": "language",
+            "type": "string",
+            "constraints": "زبان متن"
+          },
+          {
+            "name": "voice",
+            "type": "string",
+            "constraints": "نوع صدا"
+          }
+        ]
+      },
+      {
+        "name": "تبدیل گفتار به متن",
+        "table_name": "speech_to_text",
+        "description": "تبدیل صدای گفتاری به متن نوشته‌شده",
+        "fields": [
+          {
+            "name": "audio",
+            "type": "binary",
+            "constraints": "فایل صوتی ورودی"
+          },
+          {
+            "name": "language",
+            "type": "string",
+            "constraints": "زبان گفتار"
+          },
+          {
+            "name": "transcript",
+            "type": "string",
+            "constraints": "متن خروجی"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/text_to_speech",
+        "description": "تبدیل متن به صدا با استفاده از پارامترهای ورودی"
+      },
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/speech_to_text",
+        "description": "تبدیل صدا به متن با استفاده از فایل صوتی ورودی"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "https://github.com/microsoft/Text-to-Speech",
+      "https://github.com/google/transcribe",
+      "https://github.com/deepmind/deepvoice"
+    ]
+  }
+}

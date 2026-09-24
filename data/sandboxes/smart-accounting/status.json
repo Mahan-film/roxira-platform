@@ -1,0 +1,46 @@
+{
+  "app_id": "smart-accounting",
+  "stage": "RUNNING",
+  "status": "RUNNING",
+  "app_name": "smart-accounting",
+  "prompt": "سیستم جامع حسابداری ابری دوطرفه، مدیریت دفتر کل، ثبت فاکتور رسمی و تراز آزمایشی",
+  "target_framework": "NextJS",
+  "tier": "AUTONOMOUS_SWARM",
+  "host_port": 4001,
+  "subdomain": "smart-accounting.roxira.app",
+  "url": "http://smart-accounting.roxira.app",
+  "container_id": "0a032ec6e64f68758489364172c90eeffd447204bfb33b2ff28cf5200afcd747",
+  "container_name": "roxira_sandbox_smart-accounting",
+  "project_dir": "/opt/roxira_platform/data/sandboxes/smart-accounting",
+  "error": null,
+  "repair_attempts": 0,
+  "repairs": [],
+  "stages": [
+    {
+      "stage": "PORT_ALLOCATED",
+      "at": 1789578721.404565
+    },
+    {
+      "stage": "PROJECT_GENERATED",
+      "at": 1789578721.408047
+    },
+    {
+      "stage": "BUILDING",
+      "at": 1789578721.433106
+    },
+    {
+      "stage": "CONTAINER_STARTED",
+      "at": 1789578824.713186
+    },
+    {
+      "stage": "ROUTE_REGISTERED",
+      "at": 1789578824.8717172
+    },
+    {
+      "stage": "RUNNING",
+      "at": 1789578824.873412
+    }
+  ],
+  "created_at": 1789578721.2393203,
+  "updated_at": 1789578824.873412
+}

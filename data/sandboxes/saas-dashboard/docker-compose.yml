@@ -1,0 +1,26 @@
+name: roxira-sandbox-saas-dashboard
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: roxira-sandbox-saas-dashboard:latest
+    container_name: roxira_sandbox_saas-dashboard
+    restart: unless-stopped
+    ports:
+      - "4000:8000"
+    environment:
+      APP_ID: "saas-dashboard"
+      BUILD_PROMPT: "Create a modern Next.js admin portal"
+      TARGET_FRAMEWORK: "FastAPI"
+      ROXIRA_TEMPLATE: "fastapi-microservice"
+    labels:
+      roxira.sandbox: "true"
+      roxira.app_id: "saas-dashboard"
+      roxira.template: "fastapi-microservice"
+      roxira.host_port: "4000"
+    networks:
+      - roxira_net
+networks:
+  roxira_net:
+    external: true

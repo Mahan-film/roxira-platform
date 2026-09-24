@@ -1,0 +1,101 @@
+{
+  "task_id": "USER-1789818507",
+  "prompt": "بهترین زیرساخت و تکنولوژی و هوش مصنوعی برای تبدیل گفتار به متن چیست؟ برای من کاملاً جامع است که بتوانم به صورت آنلاین و در زمان واقعی صحبت کنم. پیشنهادات را برای من پیدا و آماده کن و استراتژی را ارائه بده.speech to speech",
+  "created_at": "2026-09-19 11:49:06 UTC",
+  "verification_status": "ALL_GREEN",
+  "sandbox_verified": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "USER-1789818507_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "تبدیل گفتار به متن (Speech-to-Text) و گفتار به گفتار (Speech-to-Speech)",
+    "expert_opinion": "تبدیل گفتار به متن و گفتار به گفتار از فناوری‌های پیشرفته هوش مصنوعی و یادگیری عمیق استفاده می‌کنند. بهترین راهکارها در سال ۲۰۲۶ شامل مدل‌های مبتنی بر معماری Transformer مانند OpenAI Whisper، NVIDIA Canary-Qwen و IBM Granite Speech هستند. این مدل‌ها به دلیل دقت بالا، پشتیبانی از زبان‌های متعدد و قابلیت اجرا در زمان واقعی، بهترین گزینه‌ها محسوب می‌شوند. Whisper به دلیل پشتیبانی از بیش از ۹۹ زبان و اکوسیستم گسترده، همچنان محبوب‌ترین انتخاب است. برای اجرای این پروژه، نیاز به زیرساخت‌های محاسباتی قدرتمند مانند GPU‌های NVIDIA و فریم‌ورک‌هایی مانند NeMo و PyTorch داریم.",
+    "implementation_prerequisites": [
+      "GPU‌های قدرتمند مانند NVIDIA A100 یا H100",
+      "فریم‌ورک‌های یادگیری عمیق مانند PyTorch و TensorFlow",
+      "کتابخانه‌های پردازش صوت مانند Librosa و SoundFile",
+      "زیرساخت‌های ابری برای مقیاس‌پذیری و اجرای بلادرنگ"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "مدل تبدیل گفتار به متن",
+        "chosen_solution": "OpenAI Whisper Large V3",
+        "rejected_alternatives": "Mozilla DeepSpeech, Google Speech-to-Text",
+        "technical_justification": "Whisper به دلیل پشتیبانی از بیش از ۹۹ زبان، دقت بالا در تبدیل گفتار به متن و اکوسیستم گسترده، بهترین انتخاب است. مدل‌های قدیمی‌تر مانند DeepSpeech به دلیل عدم به‌روزرسانی و دقت پایین‌تر، مناسب نیستند."
+      },
+      {
+        "layer": "مدل تبدیل گفتار به گفتار",
+        "chosen_solution": "Chatterbox Turbo",
+        "rejected_alternatives": "Kokoro 82M, Step Audio EditX",
+        "technical_justification": "Chatterbox Turbo به دلیل تاخیر کم (۷۵ms) و قابلیت اجرا در زمان واقعی، بهترین گزینه برای تبدیل گفتار به گفتار است. مدل‌های دیگر مانند Kokoro 82M به دلیل تاخیر بیشتر و محدودیت‌های زبانی، مناسب‌تر نیستند."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "مدل تبدیل گفتار به متن",
+        "table_name": "speech_to_text_model",
+        "description": "مدل هوش مصنوعی برای تبدیل گفتار به متن",
+        "fields": [
+          {
+            "name": "model_name",
+            "type": "string",
+            "constraints": "unique"
+          },
+          {
+            "name": "language_support",
+            "type": "string[]",
+            "constraints": "not null"
+          },
+          {
+            "name": "accuracy",
+            "type": "float",
+            "constraints": "> 0"
+          }
+        ]
+      },
+      {
+        "name": "مدل تبدیل گفتار به گفتار",
+        "table_name": "speech_to_speech_model",
+        "description": "مدل هوش مصنوعی برای تبدیل گفتار به گفتار",
+        "fields": [
+          {
+            "name": "model_name",
+            "type": "string",
+            "constraints": "unique"
+          },
+          {
+            "name": "latency",
+            "type": "float",
+            "constraints": "> 0"
+          },
+          {
+            "name": "language_support",
+            "type": "string[]",
+            "constraints": "not null"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/speech-to-text",
+        "description": "تبدیل فایل صوتی به متن با استفاده از مدل Whisper"
+      },
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/speech-to-speech",
+        "description": "تبدیل گفتار به گفتار با استفاده از مدل Chatterbox Turbo"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "https://github.com/openai/whisper",
+      "https://github.com/NVIDIA/NeMo",
+      "https://github.com/resemble-ai/Chatterbox"
+    ]
+  }
+}

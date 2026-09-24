@@ -39,3 +39,4 @@ data/tech_radar/
 node_modules/
 dist/
 .aider*
+twenty_data/

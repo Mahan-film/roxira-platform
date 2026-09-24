@@ -1,0 +1,135 @@
+{
+  "task_id": "USER-1789804764",
+  "prompt": "بهترین سیستم‌های هاست، سرچ و ریسرچ تحقیقاتی برای دستگاه‌های live research و live deep research به چه صورت است؟ سیستم‌های agentic deep research بهترین‌هایشان کدام‌ها هستند؟ با چه پلتفرمی و با چه زیرساختی؟",
+  "created_at": "2026-09-19 08:05:22 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "USER-1789804764_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "سیستم‌های عامل‌محور برای تحقیقات عمیق و زنده",
+    "expert_opinion": "سیستم‌های عامل‌محور برای تحقیقات عمیق و زنده به‌طور فزاینده‌ای در حال تبدیل شدن به ابزارهای کلیدی برای انجام تحقیقات پیچیده و چندمرحله‌ای هستند. این سیستم‌ها با استفاده از معماری‌های چندعاملی و تک‌عاملی، توانایی‌های مختلفی را برای جستجو، استخراج و ترکیب اطلاعات از منابع متنوع ارائه می‌دهند. سیستم‌های چندعاملی به دلیل توانایی در تجزیه و تجمیع وظایف، عملکرد بهتری در کیفیت گزارش‌ها و قابلیت اطمینان دارند. پلتفرم‌هایی مانند MiroFlow، SciResearcher و DeerFlow با استفاده از مدل‌های پیشرفته مانند GPT-5، Claude 3.7 Sonnet و Qwen3-8B، قابلیت‌های تحقیقاتی را به سطح جدیدی ارتقا داده‌اند. این سیستم‌ها از روش‌های مختلفی مانند Prompting، REINFORCE، PPO و GRPO برای بهینه‌سازی عملکرد استفاده می‌کنند. زیرساخت‌های مورد نیاز شامل سرورهای محلی یا ابری، ابزارهای جستجوی وب و پایگاه‌های داده محلی است.",
+    "implementation_prerequisites": [
+      "سرورهای محلی یا ابری با قدرت پردازش بالا",
+      "ابزارهای جستجوی وب پیشرفته",
+      "پایگاه‌های داده محلی برای ذخیره‌سازی و بازیابی اطلاعات",
+      "مدل‌های زبانی بزرگ مانند GPT-5، Claude 3.7 Sonnet و Qwen3-8B",
+      "چارچوب‌های توسعه‌یافته مانند MiroFlow، SciResearcher و DeerFlow"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "معماری سیستم",
+        "chosen_solution": "سیستم‌های چندعاملی مانند MiroFlow و SciResearcher",
+        "rejected_alternatives": "سیستم‌های تک‌عاملی",
+        "technical_justification": "سیستم‌های چندعاملی به دلیل توانایی در تجزیه و تجمیع وظایف، عملکرد بهتری در کیفیت گزارش‌ها و قابلیت اطمینان دارند. این سیستم‌ها می‌توانند وظایف پیچیده را به بخش‌های کوچکتر تقسیم کرده و به‌طور همزمان پردازش کنند."
+      },
+      {
+        "layer": "بهینه‌سازی عملکرد",
+        "chosen_solution": "استفاده از روش‌های GRPO و PPO",
+        "rejected_alternatives": "روش‌های سنتی مانند SFT",
+        "technical_justification": "روش‌های GRPO و PPO به دلیل توانایی در بهینه‌سازی سیاست‌ها و پاداش‌ها، عملکرد بهتری در یادگیری و تطبیق با وظایف جدید دارند."
+      },
+      {
+        "layer": "زیرساخت",
+        "chosen_solution": "سرورهای ابری با قدرت پردازش بالا",
+        "rejected_alternatives": "سرورهای محلی با قدرت پردازش محدود",
+        "technical_justification": "سرورهای ابری به دلیل مقیاس‌پذیری و قدرت پردازش بالا، قابلیت اجرای وظایف پیچیده و سنگین را دارند."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "مدل زبانی",
+        "table_name": "language_model",
+        "description": "مدل‌های زبانی بزرگ برای پردازش و تولید متن",
+        "fields": [
+          {
+            "name": "model_name",
+            "type": "string",
+            "constraints": "unique"
+          },
+          {
+            "name": "version",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "parameters",
+            "type": "integer",
+            "constraints": "not null"
+          }
+        ]
+      },
+      {
+        "name": "ابزار جستجو",
+        "table_name": "search_tool",
+        "description": "ابزارهای جستجوی وب برای استخراج اطلاعات",
+        "fields": [
+          {
+            "name": "tool_name",
+            "type": "string",
+            "constraints": "unique"
+          },
+          {
+            "name": "version",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "api_endpoint",
+            "type": "string",
+            "constraints": "not null"
+          }
+        ]
+      },
+      {
+        "name": "پایگاه داده",
+        "table_name": "database",
+        "description": "پایگاه‌های داده محلی برای ذخیره‌سازی و بازیابی اطلاعات",
+        "fields": [
+          {
+            "name": "db_name",
+            "type": "string",
+            "constraints": "unique"
+          },
+          {
+            "name": "version",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "size",
+            "type": "integer",
+            "constraints": "not null"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/search",
+        "description": "ارسال درخواست جستجو به سیستم عامل‌محور"
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/results",
+        "description": "دریافت نتایج جستجو از سیستم عامل‌محور"
+      },
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/train",
+        "description": "ارسال درخواست آموزش مدل به سیستم عامل‌محور"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "https://github.com/MiroFlow/MiroFlow",
+      "https://github.com/SciResearcher/SciResearcher",
+      "https://github.com/DeerFlow/DeerFlow"
+    ]
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "task_id": "PROJ-COMPLETE-2026",
+  "prompt": "طراحی کارخانه تولید نرم‌افزار خودگردان با معماری وب‌آرتی‌سی، حافظه برداری و سندباکس کانتینری",
+  "created_at": "2026-09-19 08:58:48 UTC",
+  "verification_status": "ALL_GREEN",
+  "sandbox_verified": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "PROJ-COMPLETE-2026_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "سیستم‌های توزیع‌شده و تولید نرم‌افزار خودگردان",
+    "expert_opinion": "طراحی کارخانه تولید نرم‌افزار خودگردان با معماری وب‌آرتی‌سی، حافظه برداری و سندباکس کانتینری نیازمند یک رویکرد جامع و چندلایه است. این معماری باید قابلیت‌های خودگردانی، امنیت، مقیاس‌پذیری و انعطاف‌پذیری را به‌طور همزمان فراهم کند. استفاده از وب‌آرتی‌سی برای ارتباطات بلادرنگ، حافظه برداری برای ذخیره‌سازی داده‌ها و سندباکس کانتینری برای ایزوله‌سازی و امنیت، از جمله عناصر کلیدی این طراحی هستند. این معماری باید بتواند به‌طور خودکار فرآیندهای توسعه، تست و استقرار نرم‌افزار را مدیریت کند و در عین حال، امنیت و مقیاس‌پذیری را تضمین نماید.",
+    "implementation_prerequisites": [
+      "زیرساخت ابری قابل اعتماد و مقیاس‌پذیر",
+      "ابزارهای مدیریت کانتینر مانند Docker و Kubernetes",
+      "پلتفرم‌های ارتباطات بلادرنگ مانند WebRTC",
+      "سیستم‌های ذخیره‌سازی توزیع‌شده مانند Redis یا Memcached",
+      "ابزارهای نظارت و مدیریت امنیتی مانند Prometheus و Grafana"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "ارتباطات بلادرنگ",
+        "chosen_solution": "WebRTC به دلیل پشتیبانی گسترده و قابلیت‌های بلادرنگ",
+        "rejected_alternatives": "WebSocket و HTTP/2",
+        "technical_justification": "WebRTC از نظر تاخیر و پشتیبانی از ارتباطات مستقیم بین کلاینت‌ها برتر است و نیازی به سرور واسط ندارد."
+      },
+      {
+        "layer": "ذخیره‌سازی داده‌ها",
+        "chosen_solution": "Redis به دلیل سرعت بالا و پشتیبانی از ساختارهای داده متنوع",
+        "rejected_alternatives": "Memcached و MongoDB",
+        "technical_justification": "Redis از نظر سرعت و قابلیت‌های پیشرفته‌تر مانند پشتیبانی از داده‌های ساختاریافته و قابلیت‌های Pub/Sub برتر است."
+      },
+      {
+        "layer": "ایزوله‌سازی و امنیت",
+        "chosen_solution": "Docker به دلیل پشتیبانی گسترده و قابلیت‌های ایزوله‌سازی",
+        "rejected_alternatives": "LXC و Virtual Machines",
+        "technical_justification": "Docker از نظر سبک‌وزنی و قابلیت‌های مدیریت کانتینر برتر است و به‌راحتی با Kubernetes ادغام می‌شود."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "کانتینر نرم‌افزار",
+        "table_name": "software_container",
+        "description": "مؤلفه‌ای که نرم‌افزار را در یک محیط ایزوله اجرا می‌کند",
+        "fields": [
+          {
+            "name": "container_id",
+            "type": "UUID",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "image_name",
+            "type": "STRING",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "status",
+            "type": "ENUM",
+            "constraints": "NOT NULL"
+          }
+        ]
+      },
+      {
+        "name": "حافظه برداری",
+        "table_name": "cache_store",
+        "description": "مؤلفه‌ای که داده‌ها را به‌طور موقت ذخیره می‌کند",
+        "fields": [
+          {
+            "name": "cache_key",
+            "type": "STRING",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "cache_value",
+            "type": "BLOB",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "expiry_time",
+            "type": "TIMESTAMP",
+            "constraints": "NOT NULL"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/containers",
+        "description": "ایجاد یک کانتینر جدید"
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/containers/{container_id}",
+        "description": "دریافت اطلاعات یک کانتینر"
+      },
+      {
+        "method": "PUT",
+        "endpoint": "/api/v1/cache/{cache_key}",
+        "description": "ذخیره داده در حافظه برداری"
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/cache/{cache_key}",
+        "description": "دریافت داده از حافظه برداری"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "https://github.com/webrtc/webrtc",
+      "https://github.com/redis/redis",
+      "https://github.com/docker/docker-ce"
+    ]
+  }
+}
