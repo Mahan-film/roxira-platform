@@ -74,6 +74,7 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 | W6 | Legal corpus gap: article-level chunking and ingestion of the missing codes (Qdrant shows 1,305 points vs 1,335 articles in the Civil Code alone) | yes | — | ⬜ |
 | W7 | Voice latency: measure STT/LLM/TTS p50 first, then streaming TTS, target p50 < 2 s | yes | W5 | ⬜ |
 | W8 | Server hardening: sandbox ports 4000/4001 to loopback, DOCKER-USER firewall chain, apply updates + reboot window, off-git backups | yes | W1 deployed | ⬜ |
+| W9 | Autonomous deep-research agent: pre-project stack recommender (multilingual sourcing, OpenRouter-only, agentic/modular) — see docs/research/bakeoff.md | no | — | 🟨 bake-off done, PR #10 — awaiting owner go/no-go on Phase B |
 
 ## 6. Known facts (verified 2026-09-24)
 
