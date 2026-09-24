@@ -4,6 +4,7 @@ import hmac
 import hashlib
 import base64
 import json
+import os
 import time
 import pathlib
 import sys
@@ -11,7 +12,9 @@ import psycopg
 from typing import Dict, Any, Optional
 
 DB_URL = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
-JWT_SECRET = "roxira_enterprise_super_secure_jwt_secret_key_2026"
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable is not set; refusing to sign tokens with a default secret")
 
 def init_auth_schema():
     with psycopg.connect(DB_URL) as conn:

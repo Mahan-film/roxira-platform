@@ -7,7 +7,10 @@ import os
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "ROXIRA_FACTORY_SECRET_2026_PROD").encode("utf-8")
+_secret_key = os.environ.get("JWT_SECRET_KEY", "")
+if not _secret_key:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is not set; refusing to sign tokens with a default secret")
+SECRET_KEY = _secret_key.encode("utf-8")
 TOKEN_EXPIRE_SECONDS = 30 * 24 * 3600
 
 class SuperAdminTokenPayload(BaseModel):

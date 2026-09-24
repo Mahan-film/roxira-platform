@@ -39,9 +39,6 @@ SMS_IR_API_URL = os.getenv("SMS_IR_API_URL", "https://api.sms.ir/v1/send/verify"
 SMS_IR_API_KEY_ENV = "SMS_IR_API_KEY"
 SMS_IR_TEMPLATE_ID_ENV = "SMS_IR_TEMPLATE_ID"
 
-# کلید پیش‌فرض مستندشده پنل روکسیرا — در پروداکشن حتماً از متغیر محیطی جایگزین کنید.
-SMS_IR_DEFAULT_API_KEY = "REDACTED_SECRET_04"
-
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
 logger = logging.getLogger("roxira.sms_ir")
@@ -83,8 +80,10 @@ class SmsIrService:
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         base_url: str = SMS_IR_API_URL,
     ) -> None:
-        # مقداردهی کلید: پارامتر > متغیر محیطی > پیش‌فرض مستندشده
-        self.api_key = api_key or os.getenv(SMS_IR_API_KEY_ENV) or SMS_IR_DEFAULT_API_KEY
+        # مقداردهی کلید: پارامتر > متغیر محیطی (بدون مقدار پیش‌فرض)
+        self.api_key = api_key or os.getenv(SMS_IR_API_KEY_ENV)
+        if not self.api_key:
+            raise RuntimeError(f"{SMS_IR_API_KEY_ENV} environment variable is not set")
         self.base_url = base_url
         self.timeout = timeout
 
@@ -254,6 +253,6 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     svc = SmsIrService()
     print("SmsIrService ready | api_key=%s | template_id=%s" % (
-        "set" if os.getenv(SMS_IR_API_KEY_ENV) else "default-fallback",
+        "set",
         svc._template_id or "NOT_SET",
     ))

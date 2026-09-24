@@ -34,8 +34,8 @@ services:
       - PG_DATABASE_URL=postgres://twenty:REDACTED_SECRET_16@twenty_db:5432/default
       - REDIS_URL=redis://twenty_redis:6379
       - SERVER_URL=https://roxira.ir/crm-service
-      - ENCRYPTION_KEY=+8YW0oRoHs8EBjNi5Z7mHqyajQshUuP70OAI9i1SftQ=
-      - APP_SECRET=REDACTED_SECRET_05
+      - ENCRYPTION_KEY=${TWENTY_ENCRYPTION_KEY:?set TWENTY_ENCRYPTION_KEY in .env}
+      - APP_SECRET=${TWENTY_APP_SECRET:?set TWENTY_APP_SECRET in .env}
       - SIGN_IN_PREFILLED=true
     ports:
       - "127.0.0.1:3002:3000"
