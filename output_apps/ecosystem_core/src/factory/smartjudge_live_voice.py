@@ -166,6 +166,7 @@ async def judge_text_chat_api(req: ChatMessageReq):
 async def judge_text_chat_status():
     return {"status": "active", "service": "Smart Judge Legal Chat"}
 
+@router.post("/transcribe-audio")
 @router.post("/stt")
 @router.post("/transcribe")
 async def judge_stt_api(request: Request, file: UploadFile = File(None), audio: UploadFile = File(None)):
