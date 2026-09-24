@@ -69,15 +69,16 @@ router = APIRouter(
 # ─────────────────────────────────────────────────────────────────────────────
 # پیکربندی
 # ─────────────────────────────────────────────────────────────────────────────
-JWT_SECRET = os.getenv("JWT_SECRET", "roxira_enterprise_super_secure_jwt_secret_key_2026")
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable is not set; refusing to sign tokens with a default secret")
 JWT_TTL_SECONDS = int(os.getenv("JWT_TTL_SECONDS", "86400"))   # ۲۴ ساعت
 OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "180"))     # ۳ دقیقه
 PBKDF2_ITERATIONS = int(os.getenv("PBKDF2_ITERATIONS", "120000"))
 
-KAVENEGAR_API_KEY = os.getenv(
-    "KAVENEGAR_API_KEY",
-    "REDACTED_SECRET_01",
-)
+KAVENEGAR_API_KEY = os.environ.get("KAVENEGAR_API_KEY", "")
+if not KAVENEGAR_API_KEY:
+    raise RuntimeError("KAVENEGAR_API_KEY environment variable is not set")
 
 # Google OAuth 2.0 (شامل مقادیر پیش‌فرض درخواستی)
 GOOGLE_CLIENT_ID = os.getenv(
