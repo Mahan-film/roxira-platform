@@ -137,7 +137,7 @@ def check_postgres() -> dict:
     except FileNotFoundError:
         try:  # اجرا داخل کانتینر — اتصال مستقیم psycopg
             import psycopg  # type: ignore
-            conn_str = (f"postgresql://{PG_USER}:{os.getenv('POSTGRES_PASSWORD', 'REDACTED_SECRET_19')}"
+            conn_str = (f"postgresql://{PG_USER}:{os.environ['POSTGRES_PASSWORD']}"
                         f"@{os.getenv('POSTGRES_HOST', 'postgres_prod')}:{PG_PORT}/{PG_DB}")
             with psycopg.connect(conn_str, connect_timeout=5) as c:
                 with c.cursor() as cur:

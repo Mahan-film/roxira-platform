@@ -148,7 +148,10 @@ except Exception as _lr_import_exc:  # noqa: BLE001
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudge Complete Engine"])
 
-POSTGRES_DSN = "postgresql://enterprise_admin:REDACTED_SECRET_19@roxira_postgres_prod:5432/enterprise_db"
+POSTGRES_DSN = (
+    "postgresql://enterprise_admin:"
+    f"{os.environ.get('POSTGRES_PASSWORD', '')}@roxira_postgres_prod:5432/enterprise_db"
+)
 
 # ============================================================================
 # VIP access gate — اشتراک‌سنجی و صدور/اعتبارسنجی توکن JWT داخلی
@@ -316,7 +319,7 @@ def _load_env_var(key: str, default: str = "") -> str:
                 pass
     return default
 
-OPENROUTER_API_KEY = _load_env_var("OPENROUTER_API_KEY", "REDACTED_SECRET_02")
+OPENROUTER_API_KEY = _load_env_var("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
 OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
@@ -1660,6 +1663,9 @@ async def _cancel_active_voice_task(state: dict) -> bool:
 # پلتفرم این نام را resolve می‌کنند؛ نبودش باعث WS-ALIAS-WARN در زمان راه‌اندازی
 # می‌شد. نام قدیمی `live_voice_websocket` به‌عنوان alias حفظ شده است.
 # live-voice routed to smartjudge_live_voice module
+from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import (
+    live_voice_websocket as live_voice_endpoint,
+)
 
 @router.websocket("/live-voice-stream")
 async def live_voice_stream_endpoint(websocket: WebSocket):

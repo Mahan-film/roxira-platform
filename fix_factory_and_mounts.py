@@ -20,7 +20,7 @@ compose_content = """services:
       - POSTGRES_HOST=postgres_prod
       - POSTGRES_PORT=5432
       - POSTGRES_USER=enterprise_admin
-      - POSTGRES_PASSWORD=REDACTED_SECRET_19
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=enterprise_db
       - REDIS_HOST=redis_prod
       - REDIS_PORT=6379
@@ -39,7 +39,7 @@ compose_content = """services:
     restart: always
     environment:
       POSTGRES_USER: enterprise_admin
-      POSTGRES_PASSWORD: REDACTED_SECRET_19
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: enterprise_db
     ports:
       - "5432:5432"

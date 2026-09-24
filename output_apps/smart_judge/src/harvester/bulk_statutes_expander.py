@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import psycopg
+from src.roxira_config import postgres_dsn
 
-DB_URL = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+DB_URL = postgres_dsn(host="127.0.0.1", port=5434)
 
 EXPANDED_LEGAL_NODES = [
     # قانون مدنی - بیع فضولی و خیارات

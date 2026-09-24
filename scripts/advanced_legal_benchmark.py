@@ -5,7 +5,7 @@ import asyncio
 import httpx
 from pathlib import Path
 
-OPENROUTER_API_KEY = "REDACTED_SECRET_02"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 if not OPENROUTER_API_KEY or OPENROUTER_API_KEY.startswith("YOUR_"):
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 

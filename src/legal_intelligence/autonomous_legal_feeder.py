@@ -4,12 +4,10 @@ import time
 import json
 import logging
 import psycopg
+from src.roxira_config import postgres_dsn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-DB_URI = os.getenv(
-    "DATABASE_URL",
-    "postgresql://enterprise_admin:roxira_REDACTED_SECRET_19word_2026@roxira_postgres_prod:5432/enterprise_db"
-)
+DB_URI = os.getenv("DATABASE_URL") or postgres_dsn(host="roxira_postgres_prod", port=5432)
 
 def fetch_and_ingest_legal_updates():
     logging.info("🔍 آغاز چرخه خزش خودکار پایگاه‌های حقوقی و روزنامه رسمی...")

@@ -35,15 +35,15 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.roxira_config import postgres_dsn
+
 try:  # psycopg3 (production container)
     import psycopg
 except Exception:  # pragma: no cover - defensive
     psycopg = None  # type: ignore
 
-DEFAULT_POSTGRES_DSN = (
-    "postgresql://enterprise_admin:REDACTED_SECRET_19"
-    "@roxira_postgres_prod:5432/enterprise_db"
-)
+def _default_dsn() -> str:
+    return postgres_dsn(host="roxira_postgres_prod", port=5432)
 
 # --------------------------------------------------------------------------- #
 # Query parsing helpers (Persian / Arabic text)
@@ -312,11 +312,11 @@ def _execute_retrieval(dsn: str, params: Dict[str, Any]) -> List[tuple]:
             raise
 
 
-def _warmup_connection(dsn: str = DEFAULT_POSTGRES_DSN) -> None:
+def _warmup_connection(dsn: Optional[str] = None) -> None:
     """Best-effort background warmup so the first request is already fast."""
     try:
         with _conn_lock:
-            _get_connection(dsn)
+            _get_connection(dsn or _default_dsn())
     except Exception:
         pass
 
@@ -370,7 +370,7 @@ _FALLBACK_PRECEDENTS = [{"title": "رأی وحدت رویه دیوان عالی 
 def dual_retrieve(
     query_text: str,
     limit: int = 3,
-    dsn: str = DEFAULT_POSTGRES_DSN,
+    dsn: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Run the dual-level retrieval and return ``(laws, precedents)``.
 
@@ -400,7 +400,7 @@ def dual_retrieve(
     laws: List[Dict[str, Any]] = []
     precedents: List[Dict[str, Any]] = []
     try:
-        rows = _execute_retrieval(dsn, params)
+        rows = _execute_retrieval(dsn or _default_dsn(), params)
         for row in rows:
             # row = (kind, match_level, node_id, title, category, content)
             kind = row[0]

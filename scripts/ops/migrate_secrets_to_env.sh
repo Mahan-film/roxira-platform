@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Copy secrets that docker-compose.prod.yml used to hardcode into .env,
+# taking the values the RUNNING containers use today, so nothing changes at
+# runtime. Never prints secret values. Run on the server from the repo root:
+#   bash scripts/ops/migrate_secrets_to_env.sh
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+ENV_FILE=.env
+touch "$ENV_FILE"; chmod 600 "$ENV_FILE"
+# Backups live OUTSIDE the repo: the server daemon runs `git add -A`.
+BACKUP_DIR=${ROXIRA_ENV_BACKUP_DIR:-/root/env-backups}
+install -d -m 700 "$BACKUP_DIR"
+cp -p "$ENV_FILE" "$BACKUP_DIR/.env.bak.$(date +%Y%m%d%H%M%S)"
+
+# var -> container it is read from
+declare -A SRC=(
+  [SMS_IR_API_KEY]=roxira_app_prod
+  [KAVENEGAR_API_KEY]=roxira_app_prod
+  [OPENROUTER_API_KEY]=roxira_app_prod
+  [KIRA_API_KEY]=roxira_app_prod
+  [JWT_SECRET]=roxira_app_prod
+  [POSTGRES_PASSWORD]=roxira_postgres_prod
+  [TWENTY_APP_SECRET]=roxira_twenty_crm:APP_SECRET
+  [TWENTY_ENCRYPTION_KEY]=roxira_twenty_crm:ENCRYPTION_KEY
+)
+# Secrets that were only a hardcoded code default and never set in any
+# container: generate a fresh random value (tokens signed with it re-login once).
+GENERATE=(JWT_SECRET_KEY)
+
+for var in "${!SRC[@]}"; do
+  if grep -qE "^${var}=.+" "$ENV_FILE"; then
+    echo "[keep]    $var already set in .env"; continue
+  fi
+  container=${SRC[$var]%%:*}; src_var=${SRC[$var]#*:}
+  [ "$src_var" = "${SRC[$var]}" ] && src_var=$var
+  val=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
+        | sed -n "s/^${src_var}=//p" | head -1)
+  if [ -z "$val" ]; then echo "[MISSING] $var not found in ${SRC[$var]} - set it by hand"; continue; fi
+  sed -i "/^${var}=\$/d" "$ENV_FILE"
+  printf '%s=%s\n' "$var" "$val" >> "$ENV_FILE"
+  echo "[copied]  $var from ${SRC[$var]}"
+done
+
+for var in "${GENERATE[@]}"; do
+  if grep -qE "^${var}=.+" "$ENV_FILE"; then echo "[keep]    $var already set in .env"; continue; fi
+  sed -i "/^${var}=\$/d" "$ENV_FILE"
+  printf '%s=%s\n' "$var" "$(openssl rand -hex 32)" >> "$ENV_FILE"
+  echo "[new]     $var generated"
+done
+
+echo; echo "Validating compose interpolation..."
+docker compose -f docker-compose.prod.yml config -q && echo "OK: all required variables resolve"

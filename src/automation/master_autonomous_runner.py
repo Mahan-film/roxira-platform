@@ -12,6 +12,7 @@ ROOT_DIRS = [CURRENT_DIR, pathlib.Path("/Users/mac/Developer/project-foundry-wor
 for r in ROOT_DIRS:
     if str(r) not in sys.path:
         sys.path.insert(0, str(r))
+from src.roxira_config import postgres_dsn
 
 BASE_URL = "http://127.0.0.1:8000"
 
@@ -287,7 +288,7 @@ def run_autonomous_validation():
     # 18. Massive Graph Statues Coverage
     try:
         import psycopg
-        db_url = "postgresql://enterprise_admin:REDACTED_SECRET_19@127.0.0.1:5434/enterprise_db"
+        db_url = postgres_dsn(host="127.0.0.1", port=5434)
         with psycopg.connect(db_url) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT count(*) FROM graph_nodes;")
