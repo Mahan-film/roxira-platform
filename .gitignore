@@ -44,3 +44,15 @@ twenty_data/
 # Claude Code: personal permissions and agent worktrees (never commit)
 .claude/settings.local.json
 .claude/worktrees/
+
+# Python virtualenv (server uses its own /opt/roxira_platform/venv, never the repo copy)
+venv/
+.venv/
+
+# DB dumps, vector-store snapshots and repomix bundles (never commit; see docs/HISTORY_REWRITE.md)
+*.sql
+*.sql.gz
+database_snapshots/
+*.tar.gz
+*.snapshot
+repomix-output.xml
