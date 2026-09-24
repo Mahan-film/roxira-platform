@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./repomix-output.xml)",
+      "Read(./database_snapshots/**)",
+      "Read(./**/*.sql)",
+      "Read(./**/*.tar.gz)",
+      "Read(./**/*.snapshot)"
+    ]
+  }
+}
