@@ -1985,7 +1985,9 @@ class ComposeProjectGenerator:
             f"    container_name: {container_name}\n"
             "    restart: unless-stopped\n"
             "    ports:\n"
-            f'      - "{host_port}:{container_port}"\n'
+            # فقط روی loopback هاست منتشر می‌شود؛ دسترسی عمومی (در صورت نیاز)
+            # از طریق nginx sandboxes vhost انجام می‌شود، نه مستقیم به کانتینر.
+            f'      - "127.0.0.1:{host_port}:{container_port}"\n'
             "    environment:\n"
             f"      APP_ID: {app_id}\n"
             f"      BUILD_PROMPT: {prompt}\n"
