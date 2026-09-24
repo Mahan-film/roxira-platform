@@ -2677,7 +2677,7 @@ async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: s
                     print(f"[SMARTJUDGE][STT-FAIL-MULTIPART] {target_model}: {exc}", file=sys.stderr)
 
     # ۲. لایه دوم: استخر چندکلیدی AssemblyAI فارسی
-    assembly_keys = [k.strip() for k in _load_env_var("ASSEMBLYAI_API_KEYS", "REDACTED_SECRET_22,REDACTED_SECRET_23,REDACTED_SECRET_12").split(",") if k.strip()]
+    assembly_keys = [k.strip() for k in _load_env_var("ASSEMBLYAI_API_KEYS").split(",") if k.strip()]
     if assembly_keys:
         async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0)) as client:
             for a_key in assembly_keys:
