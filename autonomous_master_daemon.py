@@ -14,7 +14,8 @@ import subprocess
 import urllib.request
 import urllib.error
 
-REPORT_PATH = "/opt/roxira_platform/output_apps/enterprise_hub/frontend/public/autonomous_dashboard.json"
+REPORT_DIR = os.environ.get("ROXIRA_REPORT_DIR", "/opt/roxira_platform_reports")
+REPORT_PATH = os.path.join(REPORT_DIR, "autonomous_dashboard.json")
 
 class SystemAuditor:
     @staticmethod
@@ -152,19 +153,7 @@ def execute_autonomous_cycle():
     print(f"  • موتور محاسبه خسارت: {damages_test.get('status')}")
     print(f"  • سیستم صوتی دلارا: {voice_stat.get('status')}")
     print(f"  • وضعیت Twenty CRM: {crm_stat.get('status')}")
-    print(f"\n✅ داشبورد جامع در مسیر فرانت‌اند ذخیره شد:\n   👉 {REPORT_PATH}")
-
-    # کامیت و Push وضعیت به گیت‌هاب با Deploy Key
-    try:
-        subprocess.run(["git", "add", "-A"], cwd="/opt/roxira_platform", check=True)
-        subprocess.run([
-            "git", "commit", "-m", 
-            f"chore(daemon): automated audit pass {time.strftime('%Y-%m-%d %H:%M:%S')} - all green"
-        ], cwd="/opt/roxira_platform", check=True)
-        subprocess.run(["git", "push", "origin", "main"], cwd="/opt/roxira_platform", capture_output=True)
-        print("  📦 نتایج آزمون به‌صورت خودکار در گیت‌هاب Push گردید.")
-    except Exception:
-        pass
+    print(f"\n✅ داشبورد جامع ذخیره شد (خارج از مخزن گیت):\n   👉 {REPORT_PATH}")
 
 if __name__ == "__main__":
     execute_autonomous_cycle()

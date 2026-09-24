@@ -43,13 +43,7 @@ def run():
     with open(QUEUE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    subprocess.run(["git", "add", "-A"], cwd="/opt/roxira_platform", capture_output=True)
-    subprocess.run([
-        "git", "commit", "-m", 
-        f"feat(factory): auto-build {finished['id']} with exact task metadata"
-    ], cwd="/opt/roxira_platform", capture_output=True)
-    subprocess.run(["git", "push", "origin", "main"], cwd="/opt/roxira_platform", capture_output=True)
-    print(f"✅ تسک {finished['id']} بیلد، ثبت و ادغام شد.")
+    print(f"✅ تسک {finished['id']} بیلد و ثبت شد.")
 
 if __name__ == "__main__":
     run()

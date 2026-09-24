@@ -205,5 +205,5 @@ class SafeDispatchHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args): pass
 
 if __name__ == "__main__":
-    server = http.server.ThreadingHTTPServer(("0.0.0.0", 8005), SafeDispatchHandler)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 8005), SafeDispatchHandler)
     server.serve_forever()
