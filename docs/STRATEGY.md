@@ -1,6 +1,6 @@
 # Roxira OS & Smart Judge — Master Strategy
 
-Single source of truth for every Claude Code session. Read this first, then work only on the workstream you were given. Last updated: 2026-09-24 (hub: priorities, tooling).
+Single source of truth for every Claude Code session. Read this first, then work only on the workstream you were given. Last updated: 2026-09-24 evening (hub: Project Factory vision, W11–W13, DOTIC source for W6).
 
 ## 1. What we are building
 
@@ -80,20 +80,27 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 | W8 | Server hardening: sandbox ports 4000/4001 to loopback, DOCKER-USER firewall chain, apply updates + reboot window, off-git backups | yes | W1 deployed | 🟨 PR #14 deployed: nginx now re-resolves container IPs (`resolver` + variable `proxy_pass`, verified live by recreating a backend with no manual reload needed); both sandboxes moved to `127.0.0.1`, ports removed from `roxira-docker-firewall.sh`; `roxira_enterprise_frontend` migrated under compose (loopback-only); 32 Ubuntu updates installed + rebooted, all containers back healthy. Found & fixed a live incident during reboot: a native host `nginx.service` (unrelated to the docker stack, `enabled` in systemd) raced the container for port 80 — stopped and disabled it. Off-git backups (Hetzner Storage Box) — SSH key generated on the server, awaiting owner to add it in the Hetzner panel and share the box hostname/username. |
 | W9 | Autonomous deep-research agent: pre-project stack recommender (multilingual sourcing, OpenRouter-only, agentic/modular) — see docs/research/bakeoff.md | no | — | 🟨 Phase B built (tech_radar now routes through llm_router, multilingual zh/ja/de/ko/ru sourcing, `project-brief` mode, stdio MCP server — see docs/research/mcp-server.md) — **live run on the 3 bake-off briefs still pending**, this sandbox has no OpenRouter/search-provider keys or network egress to run them |
 | W10 | Safe, cheap agent workforce: inventory of factory dispatcher/daemon/OpenCode/Goose, stop agents pushing to `main` (worktree + PR + CI per task), GitHub-issue task intake with a $/day budget and concurrency limit — see docs/AGENTS_WORKFORCE.md | yes (design shown, implementation pending owner go-ahead) | W4 (CI), W5 (cost log) | 🟨 Phase 1 code (PR #18): removed the `git add/commit/push` blocks from `autonomous_master_daemon.py` and `task_worker.py`, moved the dashboard report path outside the repo, bound `roxira-dispatcher` (port 8005) to `127.0.0.1`. Not yet deployed — server still runs the old code under systemd. Phase 2 (restart the `roxira-autodaemon`/`roxira-worker`/`roxira-dispatcher` units, worktree+PR pipeline, GitHub-issue intake) needs owner go-ahead before touching the server |
+| W11 | Project Factory (section 8): owner brief → W9 research → Persian proposal as a GitHub issue → owner approves → planner splits into tasks → W10 agents build in worktrees → PR → CI → Claude review → merge. Works for any new project and stack, in its own repo | yes | W9 live run, W10 phase 2 | ⬜ |
+| W12 | Self-updating model & tool registry: one `config/models.yaml` read by the product router, the research agent and the coding agents. A weekly job reads the OpenRouter `/models` catalogue and prices plus the W9 radar, then opens a PR proposing swaps. A swap merges only if the evals do not regress (W6 legal eval, one coding smoke task) | no | W5, W9 | ⬜ |
+| W13 | Builder token & cost control: one cost ledger for product calls, research runs and agent tasks; a daily $ cap per agent task and per day; cheap-model-first routing with escalation; prompt caching; a weekly cost report in Persian | no | W5, W10 | ⬜ |
 
-### Priority order (set by the hub, 2026-09-24)
+### Priority order (set by the hub, 2026-09-24, evening revision)
 
-1. **W6 — real legal text into Qdrant.** Retrieval cites the right article only 16.7% of the time because 1,305 of 1,308 points are placeholders. This is the biggest product-quality problem. Next step: full ingestion into `iran_laws_v2`, re-run `scripts/eval_legal_rag.py`, switch only if citation accuracy clearly beats baseline.
-2. **W10 phase 1 only — stop daemon/worker pushes to `main`.** Remove the `git add/commit/push` from `autonomous_master_daemon.py` and `task_worker.py`, bind the dispatcher (8005) to `127.0.0.1`. This closes the last W3 item and removes the risk that took ~50 routes down on 2026-09-23. Worktree+PR agent flow (phase 2) waits.
-3. **W5 flag on (cheap tier) after W6 eval passes** — the router is built but off, so product LLM spend is still unmanaged.
-4. **W7 voice latency.**
-5. **W9 Phase B** — finish PR #15, then park. It is not on the Smart Judge revenue path.
+W10 phase 1 is live: the daemon and worker no longer push (verified, no daemon commit since `8863b06`). PRs #19 and #20 are merged.
+
+1. **W6: ingest official text from the DOTIC snapshot.** The Hugging Face dataset `endomorphosis/ipfs_iran_laws` (snapshot 2026-09-22, `data/articles.parquet`, 7 MB) holds DOTIC's consolidated article-level text, including amendment notes. It covers 4 of the 6 target laws: Civil Code `ir-5580` (1,334 rows, only repealed 1306–1311 missing), Penal Code 1392 `ir-news-5324` (728), Criminal Procedure 1392 `ir-5584` (699), Commerce Code `ir-news-5274` (529, arts 21–93 replaced by the 1347 bill) plus the 1347 companies bill `ir-news-4862` (300). Still missing and to be supplied by the owner: Civil Procedure 1379, Cheque Law (1397 amendment), Dispute Councils 1402. The text needs normalizing: `ي`→`ی`, `ك`→`ک`, strip `©N©` page markers. Do not use fa.wikisource: its Civil Code is pre-1381 (e.g. art. 1041 is the old wording).
+2. **W10 phase 2: the execution engine.** Worktree + PR wrapper around OpenCode headless (cheap OpenRouter models), GitHub-issue intake, `AGENT_DAILY_BUDGET_USD=2`, `AGENT_MAX_CONCURRENT=2`. Proven on one real task before any timer points at it.
+3. **W9 live run.** The server already has OpenRouter, Brave, Exa, Firecrawl and Jina keys, so the 3 bake-off briefs can run there. Reports are written in Persian. `roxira-radar.timer` still runs the old `tech_radar_sentinel.py`, which finishes in under a second with canned output; point it at the real `src/automation/tech_radar.py`.
+4. **W8 off-site backup (owner action).** Backups run hourly but stay on the same disk (`/opt/roxira_backups`). Either add the Storage Box key, or enable Hetzner Cloud Backups (one click, +20% of the server price) as a stopgap today.
+5. **W11 Project Factory**, once items 2 and 3 have landed.
+6. **W5 flag on (cheap tier)** after the W6 eval passes, then **W7 voice latency**, then **W12/W13**.
 
 ## 6. Known facts (verified 2026-09-24)
 
 - The server `5.75.200.67` (root) runs the repo at `/opt/roxira_platform`. Its working tree is clean and matches `origin/main`, so no hand edits are in place.
-- A server daemon commits and pushes `chore(daemon): automated audit pass ... all green` to `main` about every 30 minutes, which is ~48 commits a day. CI must not run on those commits, and the audit output should be moved out of git (W3).
-- `venv/` (~2,900 files, >1M lines) is committed to `main`. Removing it and adding it to `.gitignore` is the first W3 item.
+- The daemon/worker git pushes to `main` stopped with PR #18 (verified 2026-09-24: the autodaemon ran at 19:26 UTC and did not commit). `venv/` and the dumps were removed in PR #13.
+- API keys in the server `.env` (names only): `OPENROUTER_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, `KAVENEGAR_API_KEY`, `SMS_IR_API_KEY`. There is no Anthropic key on the server. Research and agent runs that need keys run on the server, not in a local sandbox.
+- Agent runtimes installed on the server: OpenCode 1.18 (`/usr/bin/opencode`, DeepSeek via OpenRouter, `"permission": "allow"`) and Goose 1.50. `gh` is not installed.
 - Before starting work, always run `git fetch && git checkout origin/main`. A local clone can be hundreds of commits behind.
 - Qdrant did not answer the audit script. `/judge/health` returns 405 and `/judge/chat` returns 422 on an empty body.
 - W6 (2026-09-24): Qdrant `iran_laws_bge_m3` (1,308 points) is reachable and healthy; the audit script's earlier no-answer was a network-reachability issue outside the container, not a Qdrant outage. The real defect: 1,305 of 1,308 points are synthetic range-summary placeholders (49 distinct texts reused across whole article ranges, e.g. "ماده ۱۱ تا ۱۸۲"), not real per-article text; only 3 points have the correct schema. See `docs/W6_legal_corpus_diagnosis.md`.
@@ -114,3 +121,23 @@ Host notes:
 - `.env` backups go to `/root/env-backups/`, never inside the repo. The daemon runs `git add -A`.
 - Host cron jobs must run through `scripts/ops/with_env.py` so they see `.env`.
 - Firewall: `roxira-docker-firewall.service` (DOCKER-USER chain) blocks 6432/3000/4000/4001 on eth0.
+
+## 8. Target: Roxira Project Factory (owner's vision)
+
+For any new project of the owner's, whatever the app or framework, Roxira researches the stack, proposes it in Persian, waits for approval, then agent teams build it. It keeps its own models and tools current. Research runs in English, German, Japanese, Chinese (and ko/ru). The owner sees results **in Persian only**.
+
+| Stage | What happens | Built by | State (2026-09-24) |
+| --- | --- | --- | --- |
+| 1. Brief | Owner writes a short brief (Persian is fine) as a GitHub issue labelled `brief` | W11 | ⬜ |
+| 2. Research | `tech_radar.py --project-brief`: per-layer (backend, frontend, data, infra, AI) multilingual search → crawl → rerank → scored options | W9 | 🟨 built, never run live |
+| 3. Proposal | A Persian report with 2–3 stack options, cost, risks and a task breakdown, posted on the issue | W9 + W11 | ⬜ |
+| 4. Approval | Owner adds the `approved` label or picks an option. Nothing is built before this | W11 | ⬜ |
+| 5. Build | Planner (Claude Sonnet) splits the work into small issues labelled `agent`. Workers (OpenCode + cheap OpenRouter models) do each in its own worktree and open a PR. CI runs. Claude reviews. The owner or a rule merges | W10 phase 2 + W11 | ⬜ (phase 1 done) |
+| 6. Self-update | Weekly: the model/tool registry proposes swaps as a PR, gated by evals | W12 | ⬜ |
+| 7. Cost control | Every call is logged against a daily cap. Weekly Persian cost report | W13 | ⬜ (product router has a cost log, flag off) |
+
+Rules that keep this safe and cheap:
+- Agents never push to `main` and never touch production directly. Every change is a PR with CI. Deploys follow section 7.
+- Cheapest model that passes first, escalate only on failure: `free`/`cheap` OpenRouter models for research gathering and mechanical code; Sonnet for planning and review; Opus only in the hub chat. Customer data never goes to `:free` endpoints (section 3b).
+- Adopt frameworks only through the hype filter (section 4). W9's bake-off chose to extend our own `tech_radar.py` rather than adopt DeerFlow/MiroFlow/GPT Researcher.
+- Every autonomous job has a $/day cap, a concurrency cap and a kill switch in `.env`.
