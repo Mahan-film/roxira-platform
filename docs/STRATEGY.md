@@ -70,7 +70,7 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 | W2 | Centralize DB/API config: ~55 files embed the DB password in DSNs | no | W1 merged | 🟨 PR #4 (merge after PR #2; root compose + smartjudge_module.py left to W1) |
 | W3 | Repo hygiene: remove committed `venv/`, stop daemon audit commits to main, move one-off root scripts, remove dumps/snapshots from git, history-rewrite plan | no | W1 merged | ⬜ |
 | W4 | CI: GitHub Actions for ruff, pytest, `compose config`, gitleaks secret scan, then deploy-on-merge | no | W3 | ⬜ |
-| W5 | LLM router with tiers, fallbacks, Redis cache and cost log (section 3b) | no | W2 | ⬜ |
+| W5 | LLM router with tiers, fallbacks, Redis cache and cost log (section 3b) | no | W2 | 🟨 PR #5 (flag `LLM_ROUTER_ENABLED`, default off; flip on server to activate) |
 | W6 | Legal corpus gap: article-level chunking and ingestion of the missing codes (Qdrant shows 1,305 points vs 1,335 articles in the Civil Code alone) | yes | — | ⬜ |
 | W7 | Voice latency: measure STT/LLM/TTS p50 first, then streaming TTS, target p50 < 2 s | yes | W5 | ⬜ |
 | W8 | Server hardening: sandbox ports 4000/4001 to loopback, DOCKER-USER firewall chain, apply updates + reboot window, off-git backups | yes | W1 deployed | ⬜ |
