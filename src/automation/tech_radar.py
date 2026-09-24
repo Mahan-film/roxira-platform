@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import concurrent.futures
 import json
 import logging
@@ -16,10 +17,20 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.automation.provider_base import OpenAICompatibleClient, get_env_var
+from src.automation.llm_router_bridge import call_llm, flush as flush_llm_usage
+from src.automation.source_adapters import site_restricted_adapters, structured_adapters
+from src.automation.translate import LANGUAGES, translate_queries
 from src.automation.web_intelligence import WebIntelligence
 
 logger = logging.getLogger("roxira.tech_radar")
+
+# Every LLM call in this module goes through llm_router (docs/STRATEGY.md §3b):
+# background research never touches Anthropic tokens and is never a hardcoded
+# model. Budget policy (owner brief): free/cheap tiers only; `strong` is
+# reserved for the single final project-brief synthesis call.
+DAILY_RADAR_TIER = "cheap"
+PROJECT_BRIEF_LAYER_TIER = "cheap"
+PROJECT_BRIEF_FINAL_TIER = "strong"
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_REPORT_MD = PROJECT_ROOT / "TECH_RADAR_REPORT.md"
@@ -59,34 +70,6 @@ FIELD_LIMITS = (
     "حداکثر ۵ مورد در pros_cons، حداکثر ۶ دستور در suggested_commands و حداکثر ۵ مورد در "
     "key_findings، risks_and_caveats و recommendations ثبت کن تا خروجی کامل و بدون بریدگی بماند."
 )
-
-
-class TechRadarLLM(OpenAICompatibleClient):
-    BASE_URL = "https://openrouter.ai/api/v1"
-    API_KEY_ENV = "OPENROUTER_API_KEY"
-    DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
-    HEALTH_PATH = "/models"
-    CHAT_PATH = "/chat/completions"
-
-    def __init__(
-        self,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
-        default_model: Optional[str] = None,
-        timeout: float = 120.0,
-    ) -> None:
-        super().__init__(
-            api_key=api_key,
-            base_url=base_url or get_env_var("OPENROUTER_BASE_URL", self.BASE_URL),
-            default_model=default_model or get_env_var("DEFAULT_LLM_MODEL", self.DEFAULT_MODEL),
-            timeout=timeout,
-        )
-
-    def _headers(self) -> Dict[str, str]:
-        headers = super()._headers()
-        headers["HTTP-Referer"] = "https://roxira.net"
-        headers["X-Title"] = "ROXIRA Tech Radar"
-        return headers
 
 
 def _utc_now() -> str:
@@ -129,25 +112,29 @@ class TechRadarAgent:
       1. Distributed neural search across Tavily / Exa / Brave.
       2. Clean page crawling via Firecrawl / Jina Reader.
       3. Cross-encoder reranking with Jina Reranker.
-      4. Structured synthesis with deepseek-v4.1-flash via OpenRouter.
+      4. Structured synthesis via the tiered llm_router (docs/STRATEGY.md §3b).
       5. Persistence to TECH_RADAR_REPORT.md and TECH_RADAR_REPORT.json.
     """
 
     def __init__(
         self,
         web: Optional[WebIntelligence] = None,
-        llm: Optional[TechRadarLLM] = None,
         report_md: pathlib.Path = DEFAULT_REPORT_MD,
         report_json: pathlib.Path = DEFAULT_REPORT_JSON,
         history_dir: pathlib.Path = DEFAULT_HISTORY_DIR,
         max_workers: int = 6,
+        multilingual: bool = True,
+        tier: str = DAILY_RADAR_TIER,
     ) -> None:
         self.web = web or WebIntelligence()
-        self.llm = llm or TechRadarLLM()
         self.report_md = pathlib.Path(report_md)
         self.report_json = pathlib.Path(report_json)
         self.history_dir = pathlib.Path(history_dir)
         self.max_workers = max_workers
+        self.multilingual = multilingual
+        self.tier = tier
+        self.structured_adapters = structured_adapters()
+        self.site_adapters = site_restricted_adapters(self.web)
 
     # ------------------------------------------------------------------ search
     def _build_queries(self, topic: str, deep: bool) -> List[str]:
@@ -173,22 +160,79 @@ class TechRadarAgent:
         aggregated: List[Dict[str, Any]] = []
         traces: List[Dict[str, Any]] = []
         seen: set[str] = set()
-        for query in queries:
-            response = self.web.search(query, max_results=per_query)
-            traces.append(
-                {
-                    "query": query,
-                    "status": response.get("status"),
-                    "providers": response.get("providers"),
-                    "count": len(response.get("results", [])),
-                }
-            )
-            for item in response.get("results", []):
+
+        def _absorb(items: List[Dict[str, Any]]) -> None:
+            for item in items:
                 url = (item.get("url") or "").strip()
                 if not url or url in seen:
                     continue
                 seen.add(url)
                 aggregated.append(item)
+
+        for query in queries:
+            response = self.web.search(query, max_results=per_query)
+            traces.append(
+                {
+                    "query": query,
+                    "lang": "en",
+                    "status": response.get("status"),
+                    "providers": response.get("providers"),
+                    "count": len(response.get("results", [])),
+                }
+            )
+            _absorb(response.get("results", []))
+
+        # -------------------------------------------------- structured adapters
+        # GitHub / Hugging Face / arXiv / ModelScope: keyless JSON APIs, always
+        # run once against the primary (English) query regardless of `deep`.
+        for adapter in self.structured_adapters:
+            response = adapter.search(queries[0], max_results=6 if deep else 4)
+            traces.append(
+                {
+                    "query": queries[0],
+                    "lang": "en",
+                    "status": response.get("status"),
+                    "providers": {adapter.name: response.get("status") == "SUCCESS"},
+                    "count": len(response.get("results", [])),
+                }
+            )
+            if response.get("status") == "SUCCESS":
+                _absorb(response.get("results", []))
+
+        # ---------------------------------------------- multilingual sourcing
+        # docs/research/bakeoff.md §1 finding 1: without this, every kept
+        # source is an English blog round-up. Translate the primary query
+        # into zh/ja/de/ko/ru and query GitHub trending plus the
+        # site-restricted community adapters (Qiita/Zenn/Juejin/heise) in
+        # each language.
+        if self.multilingual:
+            translations = translate_queries(queries[0], list(LANGUAGES))
+            for translation in translations:
+                gh_query = f"{translation.text} OR {queries[0]}" if not translation.ok else translation.text
+                gh_response = self.structured_adapters[0].search(gh_query, max_results=3)
+                if gh_response.get("status") == "SUCCESS":
+                    for item in gh_response.get("results", []):
+                        item["source_lang"] = translation.lang
+                    _absorb(gh_response.get("results", []))
+
+                for site_adapter in self.site_adapters:
+                    if not site_adapter.configured:
+                        continue
+                    site_response = site_adapter.search(
+                        translation.text, max_results=3, lang=translation.lang
+                    )
+                    traces.append(
+                        {
+                            "query": f"site:{site_adapter.domain} {translation.text}",
+                            "lang": translation.lang,
+                            "status": site_response.get("status"),
+                            "providers": {site_adapter.name: site_response.get("status") == "SUCCESS"},
+                            "count": len(site_response.get("results", [])),
+                        }
+                    )
+                    if site_response.get("status") == "SUCCESS":
+                        _absorb(site_response.get("results", []))
+
         logger.info("search: %d unique results from %d queries", len(aggregated), len(queries))
         return {"queries": traces, "results": aggregated}
 
@@ -274,6 +318,20 @@ class TechRadarAgent:
             used += len(block)
         return "\n\n---\n\n".join(blocks)
 
+    # -------------------------------------------------------- shared sourcing
+    def gather_sources(self, topic: str, deep: bool = False) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Run search → crawl → rerank and return (ranked_sources, search_bundle).
+
+        Public entry point so other modes (project_brief.py's per-layer
+        research) reuse the exact same multilingual sourcing pipeline as
+        daily-radar instead of duplicating it.
+        """
+        queries = self._build_queries(topic, deep)
+        search_bundle = self._distributed_search(queries, deep)
+        pages = self._crawl_selected(search_bundle["results"], deep)
+        ranked = self._rerank(topic, pages, deep)
+        return ranked, search_bundle
+
     def _synthesize(
         self,
         topic: str,
@@ -302,34 +360,41 @@ class TechRadarAgent:
             "ریپازیتوری‌های معرفی‌شده باشد. فیلد confidence یک عدد اعشاری بین ۰ و ۱ است. "
             f"{FIELD_LIMITS}"
         )
-        response = self.llm.chat(
-            prompt=prompt,
-            system_prompt=SYSTEM_PROMPT,
+        response = call_llm(
+            self.tier,
+            prompt,
+            SYSTEM_PROMPT,
             temperature=0.2,
             max_tokens=8000 if deep else 6000,
             json_mode=True,
+            feature="tech_radar_synthesis",
         )
+        # Hard rule (owner brief): a degraded synthesis must never be reported
+        # as a successful run. A call that failed outright (router exhausted
+        # every model/retry) is FAILED, not DEGRADED-but-green.
         if response.get("status") != "SUCCESS":
             logger.error("synthesis failed: %s", response.get("error"))
             return {
-                "status": "DEGRADED",
-                "executive_summary": "سنتز مدل زبانی در دسترس نبود؛ خلاصه خام منابع ثبت شد.",
+                "status": "FAILED",
+                "executive_summary": "سنتز مدل زبانی در دسترس نبود؛ اجرا ناموفق علامت‌گذاری شد.",
                 "key_findings": [],
                 "emerging_technologies": [],
                 "top_github_repositories": [],
                 "pros_cons": [],
                 "suggested_commands": [],
-                "risks_and_caveats": ["خروجی مدل سنتز ناموفق بود."],
+                "risks_and_caveats": ["فراخوانی مدل سنتز پس از تمام تلاش‌های llm_router شکست خورد."],
                 "recommendations": [],
                 "confidence": 0.0,
                 "raw_model_output": response.get("error"),
+                "model": response.get("model"),
+                "cost_usd": response.get("cost_usd", 0.0),
             }
 
         parsed = _extract_json(response.get("content", ""))
         if parsed is None:
-            logger.warning("model returned non-JSON payload; storing raw")
+            logger.warning("model returned non-JSON payload; marking run failed")
             return {
-                "status": "DEGRADED",
+                "status": "FAILED",
                 "executive_summary": _truncate(response.get("content", ""), 2000),
                 "key_findings": [],
                 "emerging_technologies": [],
@@ -340,9 +405,12 @@ class TechRadarAgent:
                 "recommendations": [],
                 "confidence": 0.0,
                 "raw_model_output": _truncate(response.get("content", ""), 8000),
+                "model": response.get("model"),
+                "cost_usd": response.get("cost_usd", 0.0),
             }
         parsed["status"] = "SUCCESS"
         parsed["model"] = response.get("model")
+        parsed["cost_usd"] = response.get("cost_usd", 0.0)
         parsed = self._normalize_analysis(parsed, topic)
         parsed = self._repair_analysis(parsed, topic, context)
         return parsed
@@ -381,12 +449,14 @@ class TechRadarAgent:
                 f"کلیدهای الزامی:\n{field_hint}\n"
                 f"برای مرجع ساختار از این اسکیما استفاده کن:\n{REPORT_SCHEMA_HINT}"
             )
-            response = self.llm.chat(
-                prompt=prompt,
-                system_prompt=SYSTEM_PROMPT,
+            response = call_llm(
+                self.tier,
+                prompt,
+                SYSTEM_PROMPT,
                 temperature=0.1,
                 max_tokens=6000,
                 json_mode=True,
+                feature="tech_radar_repair",
             )
             repaired = (
                 _extract_json(response.get("content", ""))
@@ -398,6 +468,7 @@ class TechRadarAgent:
                     value = repaired.get(field)
                     if value:
                         analysis[field] = value if isinstance(value, list) else [value]
+            analysis["cost_usd"] = analysis.get("cost_usd", 0.0) + response.get("cost_usd", 0.0)
             missing = [field for field in self.CRITICAL_FIELDS if not analysis.get(field)]
             if not missing:
                 break
@@ -405,6 +476,17 @@ class TechRadarAgent:
         if not analysis.get("suggested_commands"):
             analysis["suggested_commands"] = self._fallback_commands(analysis)
         analysis["synthesis_attempts"] = attempts
+
+        # Hard rule (owner brief): a synthesis that is still missing required
+        # fields after every repair attempt is DEGRADED, not a silent SUCCESS.
+        # main() below turns this into a non-zero exit code.
+        still_missing = [field for field in self.CRITICAL_FIELDS if not analysis.get(field)]
+        if still_missing:
+            analysis["status"] = "DEGRADED"
+            analysis.setdefault("risks_and_caveats", [])
+            analysis["risks_and_caveats"] = list(analysis["risks_and_caveats"]) + [
+                f"فیلدهای زیر پس از تلاش‌های ترمیم همچنان ناقص ماندند: {', '.join(still_missing)}"
+            ]
         return analysis
 
     @staticmethod
@@ -453,23 +535,66 @@ class TechRadarAgent:
         started = time.perf_counter()
         queries = self._build_queries(topic, deep)
         search_bundle = self._distributed_search(queries, deep)
+
+        providers = self.web.providers()
+        base_report: Dict[str, Any] = {
+            "topic": topic,
+            "mode": "deep" if deep else "standard",
+            "generated_at": _utc_now(),
+            "engine": {
+                "search": ["tavily", "exa", "brave"],
+                "structured_adapters": [a.name for a in self.structured_adapters],
+                "site_restricted_adapters": [a.name for a in self.site_adapters],
+                "multilingual": self.multilingual,
+                "crawl": ["firecrawl", "jina-reader"],
+                "rerank": "jina-reranker-v2-base-multilingual",
+                "synthesis_tier": self.tier,
+            },
+            "providers": providers,
+            "queries": [q["query"] for q in search_bundle["queries"]],
+        }
+
+        # Confirmed systemic bug (docs/research/bakeoff.md §1 finding 5):
+        # providers() silently all-False, or every query returning 0 results,
+        # used to still reach synthesis and log "completed successfully".
+        # Fail loudly and early instead of spending an LLM call on zero
+        # evidence.
+        if not search_bundle["results"] and not any(providers.values()):
+            logger.error(
+                "no search-provider API key is configured (all of tavily/exa/brave/"
+                "firecrawl/jina are False); aborting before synthesis"
+            )
+            base_report.update(
+                {
+                    "status": "FAILED",
+                    "source_count": 0,
+                    "sources": [],
+                    "executive_summary": "",
+                    "key_findings": [],
+                    "emerging_technologies": [],
+                    "top_github_repositories": [],
+                    "pros_cons": [],
+                    "suggested_commands": [],
+                    "risks_and_caveats": [
+                        "هیچ کلید API فعالی برای موتورهای جست‌وجو (tavily/exa/brave) یافت نشد؛ "
+                        "اجرا بدون هیچ شاهدی متوقف شد."
+                    ],
+                    "recommendations": [],
+                    "confidence": 0.0,
+                    "cost_usd": 0.0,
+                    "elapsed_seconds": round(time.perf_counter() - started, 2),
+                }
+            )
+            base_report["markdown"] = self.render_markdown(base_report)
+            return base_report
+
         pages = self._crawl_selected(search_bundle["results"], deep)
         ranked = self._rerank(topic, pages, deep)
         analysis = self._synthesize(topic, ranked, search_bundle, deep)
 
         report: Dict[str, Any] = {
-            "topic": topic,
-            "mode": "deep" if deep else "standard",
-            "generated_at": _utc_now(),
+            **base_report,
             "elapsed_seconds": round(time.perf_counter() - started, 2),
-            "engine": {
-                "search": ["tavily", "exa", "brave"],
-                "crawl": ["firecrawl", "jina-reader"],
-                "rerank": "jina-reranker-v2-base-multilingual",
-                "synthesis_model": self.llm.default_model,
-            },
-            "providers": self.web.providers(),
-            "queries": [q["query"] for q in search_bundle["queries"]],
             "source_count": len(ranked),
             "sources": [
                 {
@@ -477,6 +602,7 @@ class TechRadarAgent:
                     "url": s.get("url", ""),
                     "relevance_score": s.get("relevance_score", 0.0),
                     "crawl_engine": s.get("crawl_engine", ""),
+                    "source_lang": s.get("source_lang", "en"),
                     "excerpt": _truncate(s.get("content", ""), 600),
                 }
                 for s in ranked
@@ -488,6 +614,7 @@ class TechRadarAgent:
                 for key in (
                     "status",
                     "model",
+                    "cost_usd",
                     "executive_summary",
                     "key_findings",
                     "emerging_technologies",
@@ -514,8 +641,10 @@ class TechRadarAgent:
         lines.append(f"- **موضوع پژوهش:** {report.get('topic', '')}")
         lines.append(f"- **حالت اجرا:** `{report.get('mode', 'standard')}`")
         lines.append(f"- **زمان تولید (UTC):** {report.get('generated_at', '')}")
-        lines.append(f"- **مدل سنتز:** `{report.get('engine', {}).get('synthesis_model', '')}`")
+        lines.append(f"- **رده مدل سنتز:** `{report.get('engine', {}).get('synthesis_tier', '')}`")
+        lines.append(f"- **مدل واقعی استفاده‌شده:** `{report.get('model', '')}`")
         lines.append(f"- **تعداد منابع تحلیل‌شده:** {report.get('source_count', 0)}")
+        lines.append(f"- **هزینه تخمینی (USD):** {report.get('cost_usd', 0.0)}")
         lines.append(f"- **وضعیت:** `{report.get('status', 'UNKNOWN')}`")
         lines.append("")
 
@@ -743,6 +872,24 @@ def build_parser() -> argparse.ArgumentParser:
         default="ROXIRA Daily Technology Scout",
         help="Title used for the merged digest report.",
     )
+    parser.add_argument(
+        "--no-multilingual",
+        action="store_true",
+        help="Skip the zh/ja/de/ko/ru query translation + community-site sourcing pass.",
+    )
+    parser.add_argument(
+        "--project-brief",
+        metavar="IDEA",
+        help=(
+            "New-project mode (W9 Phase B): research one idea per architecture layer "
+            "(UI/UX, frontend, backend, infra/server, database/SQL, AI models, "
+            "observability, security, cost) and write docs/research/briefs/<slug>.md."
+        ),
+    )
+    parser.add_argument(
+        "--brief-out",
+        help="Override the output path for --project-brief (default: docs/research/briefs/<slug>.md).",
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging.")
     return parser
 
@@ -764,7 +911,29 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)
-    agent = TechRadarAgent()
+
+    if args.project_brief:
+        from src.automation.project_brief import run_project_brief
+
+        result = run_project_brief(
+            args.project_brief,
+            out_path=pathlib.Path(args.brief_out) if args.brief_out else None,
+            multilingual=not args.no_multilingual,
+        )
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        else:
+            logger.info("project brief written: %s", result.get("markdown_path"))
+            logger.info(
+                "status=%s cost_usd=%.4f elapsed_seconds=%.1f",
+                result.get("status"),
+                result.get("total_cost_usd", 0.0),
+                result.get("elapsed_seconds", 0.0),
+            )
+        _run_flush()
+        return 0 if result.get("status") == "SUCCESS" else 1
+
+    agent = TechRadarAgent(multilingual=not args.no_multilingual)
 
     if args.merge_dir:
         reports = _load_reports(args.merge_dir)
@@ -774,10 +943,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         artifacts = agent.save_digest(reports, args.title)
         logger.info("digest written: %s (%d topics)", artifacts["markdown"], len(reports))
         logger.info("json written:   %s", artifacts["json"])
+        _run_flush()
         return 0
 
     if not args.topic:
-        parser.error("--topic is required unless --merge-dir is used")
+        parser.error("--topic is required unless --merge-dir or --project-brief is used")
 
     report = agent.run(args.topic, deep=args.deep, persist=not args.no_save)
 
@@ -790,7 +960,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         logger.info("report written: %s", artifacts.get("markdown"))
         logger.info("json written:   %s", artifacts.get("json"))
         logger.info("history:        %s", artifacts.get("history"))
-    return 0 if report.get("status") in ("SUCCESS", "DEGRADED") else 1
+
+    _run_flush()
+    # Hard rule (owner brief): a degraded or failed synthesis must exit
+    # non-zero, never read by the caller (cron script, NestJS radar job) as a
+    # clean success.
+    return 0 if report.get("status") == "SUCCESS" else 1
+
+
+def _run_flush() -> None:
+    """Best-effort wait for llm_router's background usage-log writes."""
+    try:
+        asyncio.run(flush_llm_usage())
+    except Exception as exc:  # noqa: BLE001 - never let usage-log flushing fail the CLI
+        logger.debug("usage log flush skipped: %s", exc)
 
 
 if __name__ == "__main__":

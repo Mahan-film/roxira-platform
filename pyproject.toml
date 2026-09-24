@@ -60,3 +60,10 @@ documents = [
 legal-graph = [
     "lightrag-hku>=1.4.0",
 ]
+
+# ── سرور MCP رادار فناوری (W9 Phase B) ──────────────────────────────────────
+# src/automation/mcp_server.py — research_project/radar_digest/compare_technologies
+# را از طریق stdio به هر پروژه دیگری که Claude Code در آن باز است عرضه می‌کند.
+research-mcp = [
+    "mcp>=1.2.0",
+]
