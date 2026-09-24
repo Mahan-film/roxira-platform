@@ -68,13 +68,14 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 | W0 | Root README | no | — | ✅ PR #1 |
 | W1 | Secrets to `.env` + ports to loopback | deploy step | — | ✅ PR #2 (deployed 2026-09-24) |
 | W2 | Centralize DB/API config: ~55 files embed the DB password in DSNs | no | W1 merged | ✅ PR #4 |
-| W3 | Repo hygiene: remove committed `venv/`, stop daemon audit commits to main, move one-off root scripts, remove dumps/snapshots from git, history-rewrite plan | no | W1 merged | ⬜ |
+| W3 | Repo hygiene: remove committed `venv/`, stop daemon audit commits to main, move one-off root scripts, remove dumps/snapshots from git, history-rewrite plan | no | W1 merged | 🟨 PR #13 (venv/scripts/dumps removed + rewrite plan; daemon-commit stop is separate/W8-adjacent, not yet done) |
 | W4 | CI: GitHub Actions for ruff, pytest, `compose config`, gitleaks secret scan, then deploy-on-merge | no | W3 | ✅ PR #6 |
 | W5 | LLM router with tiers, fallbacks, Redis cache and cost log (section 3b) | no | W2 | ✅ PR #5 (flag off) |
-| W6 | Legal corpus gap: article-level chunking and ingestion of the missing codes (Qdrant shows 1,305 points vs 1,335 articles in the Civil Code alone) | yes | — | ⬜ |
+| W6 | Legal corpus gap: article-level chunking and ingestion of the missing codes (Qdrant shows 1,305 points vs 1,335 articles in the Civil Code alone) | yes | — | 🟨 diagnosed + proof-of-concept, see `docs/W6_legal_corpus_diagnosis.md` |
 | W7 | Voice latency: measure STT/LLM/TTS p50 first, then streaming TTS, target p50 < 2 s | yes | W5 | ⬜ |
 | W8 | Server hardening: sandbox ports 4000/4001 to loopback, DOCKER-USER firewall chain, apply updates + reboot window, off-git backups | yes | W1 deployed | ⬜ |
 | W9 | Autonomous deep-research agent: pre-project stack recommender (multilingual sourcing, OpenRouter-only, agentic/modular) — see docs/research/bakeoff.md | no | — | 🟨 Phase B built (tech_radar now routes through llm_router, multilingual zh/ja/de/ko/ru sourcing, `project-brief` mode, stdio MCP server — see docs/research/mcp-server.md) — **live run on the 3 bake-off briefs still pending**, this sandbox has no OpenRouter/search-provider keys or network egress to run them |
+| W10 | Safe, cheap agent workforce: inventory of factory dispatcher/daemon/OpenCode/Goose, stop agents pushing to `main` (worktree + PR + CI per task), GitHub-issue task intake with a $/day budget and concurrency limit — see docs/AGENTS_WORKFORCE.md | yes (design shown, implementation pending owner go-ahead) | W4 (CI), W5 (cost log) | 🟨 design written, PR pending — awaiting owner sign-off before touching systemd/cron/firewall |
 
 ## 6. Known facts (verified 2026-09-24)
 
@@ -83,6 +84,7 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 - `venv/` (~2,900 files, >1M lines) is committed to `main`. Removing it and adding it to `.gitignore` is the first W3 item.
 - Before starting work, always run `git fetch && git checkout origin/main`. A local clone can be hundreds of commits behind.
 - Qdrant did not answer the audit script. `/judge/health` returns 405 and `/judge/chat` returns 422 on an empty body.
+- W6 (2026-09-24): Qdrant `iran_laws_bge_m3` (1,308 points) is reachable and healthy; the audit script's earlier no-answer was a network-reachability issue outside the container, not a Qdrant outage. The real defect: 1,305 of 1,308 points are synthetic range-summary placeholders (49 distinct texts reused across whole article ranges, e.g. "ماده ۱۱ تا ۱۸۲"), not real per-article text; only 3 points have the correct schema. See `docs/W6_legal_corpus_diagnosis.md`.
 - Keys are in git history. The owner chose not to rotate them for now.
 
 ## 7. Deploy runbook (production)
