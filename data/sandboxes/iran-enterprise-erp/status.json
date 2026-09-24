@@ -1,0 +1,1271 @@
+{
+  "app_id": "iran-enterprise-erp",
+  "stage": "FAILED",
+  "status": "FAILED",
+  "app_name": "iran-enterprise-erp",
+  "prompt": "سامانه یکپارچه ERP سازمانی شامل حسابداری مالیاتی، ترازنامه، انبارداری هوشمند، ثبت اسناد دریافتنی و مدیریت اشخاص",
+  "target_framework": "NextJS",
+  "tier": "AUTONOMOUS_SWARM",
+  "target_host": null,
+  "node_id": "local",
+  "node_ip": "127.0.0.1",
+  "dispatch_mode": "local",
+  "host_port": 4002,
+  "subdomain": null,
+  "url": null,
+  "container_id": null,
+  "container_name": "roxira_sandbox_iran-enterprise-erp",
+  "container_state": null,
+  "port_bound": null,
+  "project_dir": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp",
+  "route_status": null,
+  "upstream": null,
+  "nginx_conf": null,
+  "route_registered_at": null,
+  "swarm": {
+    "app_id": "iran-enterprise-erp",
+    "prompt": "سامانه یکپارچه ERP سازمانی شامل حسابداری مالیاتی، ترازنامه، انبارداری هوشمند، ثبت اسناد دریافتنی و مدیریت اشخاص",
+    "tier": "AUTONOMOUS_SWARM",
+    "status": "completed",
+    "stage": "DONE",
+    "output_dir": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp",
+    "blueprint": {
+      "title": "سامانه یکپارچه Erp سازمانی شامل حسابداری مالیاتی، ترازنامه،",
+      "prompt": "سامانه یکپارچه ERP سازمانی شامل حسابداری مالیاتی، ترازنامه، انبارداری هوشمند، ثبت اسناد دریافتنی و مدیریت اشخاص",
+      "openapi": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "سامانه یکپارچه Erp سازمانی شامل حسابداری مالیاتی، ترازنامه،",
+          "version": "1.0.0",
+          "description": "سامانه یکپارچه ERP سازمانی شامل حسابداری مالیاتی، ترازنامه، انبارداری هوشمند، ثبت اسناد دریافتنی و مدیریت اشخاص",
+          "x-domain": "financial"
+        },
+        "paths": {
+          "/accounts": {
+            "get": {
+              "summary": "List accounts",
+              "operationId": "list_accounts",
+              "tags": [
+                "accounts"
+              ],
+              "responses": {
+                "200": {
+                  "description": "accounts list",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/Account"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "post": {
+              "summary": "Create account",
+              "operationId": "create_account",
+              "tags": [
+                "accounts"
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/Account"
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "201": {
+                  "description": "Created account",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Account"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/accounts/{item_id}": {
+            "get": {
+              "summary": "Read one account",
+              "operationId": "get_account",
+              "tags": [
+                "accounts"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "account",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Account"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            },
+            "put": {
+              "summary": "Update account",
+              "operationId": "update_account",
+              "tags": [
+                "accounts"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/Account"
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Updated account",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Account"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            },
+            "delete": {
+              "summary": "Delete account",
+              "operationId": "delete_account",
+              "tags": [
+                "accounts"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "Deleted account"
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            }
+          },
+          "/journal_entries": {
+            "get": {
+              "summary": "List journal_entries",
+              "operationId": "list_journal_entries",
+              "tags": [
+                "journal_entries"
+              ],
+              "responses": {
+                "200": {
+                  "description": "journal_entries list",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/JournalEntry"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "post": {
+              "summary": "Create journal_entry",
+              "operationId": "create_journal_entry",
+              "tags": [
+                "journal_entries"
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/JournalEntry"
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "201": {
+                  "description": "Created journal_entry",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/JournalEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/journal_entries/{item_id}": {
+            "get": {
+              "summary": "Read one journal_entry",
+              "operationId": "get_journal_entry",
+              "tags": [
+                "journal_entries"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "journal_entry",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/JournalEntry"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            },
+            "put": {
+              "summary": "Update journal_entry",
+              "operationId": "update_journal_entry",
+              "tags": [
+                "journal_entries"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/JournalEntry"
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Updated journal_entry",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/JournalEntry"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            },
+            "delete": {
+              "summary": "Delete journal_entry",
+              "operationId": "delete_journal_entry",
+              "tags": [
+                "journal_entries"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "Deleted journal_entry"
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            }
+          },
+          "/journal_items": {
+            "get": {
+              "summary": "List journal_items",
+              "operationId": "list_journal_items",
+              "tags": [
+                "journal_items"
+              ],
+              "responses": {
+                "200": {
+                  "description": "journal_items list",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/JournalItem"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "post": {
+              "summary": "Create journal_item",
+              "operationId": "create_journal_item",
+              "tags": [
+                "journal_items"
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/JournalItem"
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "201": {
+                  "description": "Created journal_item",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/JournalItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/journal_items/{item_id}": {
+            "get": {
+              "summary": "Read one journal_item",
+              "operationId": "get_journal_item",
+              "tags": [
+                "journal_items"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "journal_item",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/JournalItem"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            },
+            "put": {
+              "summary": "Update journal_item",
+              "operationId": "update_journal_item",
+              "tags": [
+                "journal_items"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/JournalItem"
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Updated journal_item",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/JournalItem"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            },
+            "delete": {
+              "summary": "Delete journal_item",
+              "operationId": "delete_journal_item",
+              "tags": [
+                "journal_items"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "Deleted journal_item"
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            }
+          },
+          "/invoices": {
+            "get": {
+              "summary": "List invoices",
+              "operationId": "list_invoices",
+              "tags": [
+                "invoices"
+              ],
+              "responses": {
+                "200": {
+                  "description": "invoices list",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/Invoice"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "post": {
+              "summary": "Create invoice",
+              "operationId": "create_invoice",
+              "tags": [
+                "invoices"
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "201": {
+                  "description": "Created invoice",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Invoice"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/invoices/{item_id}": {
+            "get": {
+              "summary": "Read one invoice",
+              "operationId": "get_invoice",
+              "tags": [
+                "invoices"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "invoice",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Invoice"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            },
+            "put": {
+              "summary": "Update invoice",
+              "operationId": "update_invoice",
+              "tags": [
+                "invoices"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Updated invoice",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Invoice"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            },
+            "delete": {
+              "summary": "Delete invoice",
+              "operationId": "delete_invoice",
+              "tags": [
+                "invoices"
+              ],
+              "parameters": [
+                {
+                  "name": "item_id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "integer"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "Deleted invoice"
+                },
+                "404": {
+                  "description": "Not found"
+                }
+              }
+            }
+          }
+        },
+        "components": {
+          "schemas": {
+            "Account": {
+              "type": "object",
+              "description": "Chart-of-accounts node (double-entry ledger account).",
+              "required": [
+                "code",
+                "title",
+                "type"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "code": {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "ASSET",
+                    "LIABILITY",
+                    "EQUITY",
+                    "INCOME",
+                    "EXPENSE"
+                  ]
+                },
+                "balance": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "JournalEntry": {
+              "type": "object",
+              "description": "A double-entry voucher header.",
+              "required": [
+                "entry_number",
+                "date",
+                "status"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "entry_number": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 400
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "DRAFT",
+                    "POSTED"
+                  ]
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "JournalItem": {
+              "type": "object",
+              "description": "One debit or credit line of a journal entry.",
+              "required": [
+                "entry_id",
+                "account_id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "entry_id": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "account_id": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "debit": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "credit": {
+                  "type": "number",
+                  "format": "double"
+                }
+              }
+            },
+            "Invoice": {
+              "type": "object",
+              "description": "Sales / purchase invoice.",
+              "required": [
+                "number",
+                "total_amount"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "number": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "party_name": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "total_amount": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "tax_amount": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "DRAFT",
+                    "ISSUED",
+                    "PAID",
+                    "CANCELLED"
+                  ]
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "folders": [
+        "app/",
+        "app/models/",
+        "app/routers/",
+        "app/schemas/",
+        "web/app/",
+        "web/components/",
+        "contracts/"
+      ],
+      "resources": [
+        "accounts",
+        "invoices",
+        "journal_entries",
+        "journal_items"
+      ],
+      "source": "fallback",
+      "domain": "financial",
+      "model": null,
+      "notes": "deterministic double-entry blueprint (accounting domain)"
+    },
+    "artifacts": [
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/contracts/blueprint.json",
+        "kind": "blueprint",
+        "bytes": 0,
+        "stage": "ARCHITECT_RESEARCH"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/contracts/openapi.json",
+        "kind": "openapi",
+        "bytes": 19215,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/__init__.py",
+        "kind": "model",
+        "bytes": 48,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/base.py",
+        "kind": "model",
+        "bytes": 1728,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/accounts.py",
+        "kind": "model",
+        "bytes": 681,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/journal_entries.py",
+        "kind": "model",
+        "bytes": 712,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/journal_items.py",
+        "kind": "model",
+        "bytes": 639,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/invoices.py",
+        "kind": "model",
+        "bytes": 746,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/registry.py",
+        "kind": "model",
+        "bytes": 307,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/db.py",
+        "kind": "database",
+        "bytes": 1250,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/__init__.py",
+        "kind": "router",
+        "bytes": 292,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/accounts.py",
+        "kind": "router",
+        "bytes": 2246,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/invoices.py",
+        "kind": "router",
+        "bytes": 2246,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/journal_entries.py",
+        "kind": "router",
+        "bytes": 2360,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/journal_items.py",
+        "kind": "router",
+        "bytes": 2334,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/seed.py",
+        "kind": "seed",
+        "bytes": 2971,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/main.py",
+        "kind": "router",
+        "bytes": 1460,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/requirements.txt",
+        "kind": "requirements",
+        "bytes": 89,
+        "stage": "BACKEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/lib/api.ts",
+        "kind": "page",
+        "bytes": 938,
+        "stage": "FRONTEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/accounts/page.tsx",
+        "kind": "page",
+        "bytes": 1586,
+        "stage": "FRONTEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/invoices/page.tsx",
+        "kind": "page",
+        "bytes": 1586,
+        "stage": "FRONTEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/journal_entries/page.tsx",
+        "kind": "page",
+        "bytes": 1606,
+        "stage": "FRONTEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/journal_items/page.tsx",
+        "kind": "page",
+        "bytes": 1600,
+        "stage": "FRONTEND_GENERATION"
+      },
+      {
+        "path": "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/layout.tsx",
+        "kind": "page",
+        "bytes": 398,
+        "stage": "FRONTEND_GENERATION"
+      }
+    ],
+    "qa": {
+      "passed": true,
+      "score": 1.0,
+      "checks": [
+        {
+          "check": "contract_present",
+          "passed": true,
+          "detail": "8 paths / 4 schemas"
+        },
+        {
+          "check": "contract_written",
+          "passed": true,
+          "detail": "contracts/openapi.json"
+        },
+        {
+          "check": "models_generated",
+          "passed": true,
+          "detail": "4 tables for 4 schemas"
+        },
+        {
+          "check": "model_files_exist",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "router_per_resource",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "page_per_resource",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "operations_covered",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "routers_mounted",
+          "passed": true,
+          "detail": "app/main.py include_router"
+        },
+        {
+          "check": "async_sessions_injected",
+          "passed": true,
+          "detail": "app/db.py get_session"
+        },
+        {
+          "check": "tables_created_on_startup",
+          "passed": true,
+          "detail": "Base.metadata.create_all via lifespan"
+        },
+        {
+          "check": "financial_entities",
+          "passed": true,
+          "detail": "app/seed.py chart of accounts"
+        }
+      ],
+      "issues": []
+    },
+    "stages": [
+      {
+        "stage": "ARCHITECT_RESEARCH",
+        "at": 1789623408.420056,
+        "title": "سامانه یکپارچه Erp سازمانی شامل حسابداری مالیاتی، ترازنامه،",
+        "source": "fallback",
+        "model": null,
+        "paths": 8,
+        "schemas": 4
+      },
+      {
+        "stage": "SCHEMA_DESIGN",
+        "at": 1789623408.421143,
+        "tables": [
+          {
+            "name": "accounts",
+            "model": "Account",
+            "columns": [
+              [
+                "id",
+                "Integer",
+                false
+              ],
+              [
+                "code",
+                "String",
+                true
+              ],
+              [
+                "title",
+                "String",
+                true
+              ],
+              [
+                "type",
+                "String",
+                true
+              ],
+              [
+                "balance",
+                "Float",
+                false
+              ],
+              [
+                "created_at",
+                "String",
+                false
+              ]
+            ]
+          },
+          {
+            "name": "journal_entries",
+            "model": "JournalEntry",
+            "columns": [
+              [
+                "id",
+                "Integer",
+                false
+              ],
+              [
+                "entry_number",
+                "String",
+                true
+              ],
+              [
+                "date",
+                "String",
+                true
+              ],
+              [
+                "description",
+                "String",
+                false
+              ],
+              [
+                "status",
+                "String",
+                true
+              ],
+              [
+                "created_at",
+                "String",
+                false
+              ]
+            ]
+          },
+          {
+            "name": "journal_items",
+            "model": "JournalItem",
+            "columns": [
+              [
+                "id",
+                "Integer",
+                false
+              ],
+              [
+                "entry_id",
+                "Integer",
+                true
+              ],
+              [
+                "account_id",
+                "Integer",
+                true
+              ],
+              [
+                "debit",
+                "Float",
+                false
+              ],
+              [
+                "credit",
+                "Float",
+                false
+              ]
+            ]
+          },
+          {
+            "name": "invoices",
+            "model": "Invoice",
+            "columns": [
+              [
+                "id",
+                "Integer",
+                false
+              ],
+              [
+                "number",
+                "String",
+                true
+              ],
+              [
+                "party_name",
+                "String",
+                false
+              ],
+              [
+                "total_amount",
+                "Float",
+                true
+              ],
+              [
+                "tax_amount",
+                "Float",
+                false
+              ],
+              [
+                "status",
+                "String",
+                false
+              ],
+              [
+                "created_at",
+                "String",
+                false
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "stage": "BACKEND_GENERATION",
+        "at": 1789623408.4274871,
+        "files": [
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/contracts/openapi.json",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/__init__.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/base.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/accounts.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/journal_entries.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/journal_items.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/invoices.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/models/registry.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/db.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/__init__.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/accounts.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/invoices.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/journal_entries.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/routers/journal_items.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/seed.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/app/main.py",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/requirements.txt"
+        ]
+      },
+      {
+        "stage": "FRONTEND_GENERATION",
+        "at": 1789623408.4284668,
+        "files": [
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/lib/api.ts",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/accounts/page.tsx",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/invoices/page.tsx",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/journal_entries/page.tsx",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/journal_items/page.tsx",
+          "/opt/roxira_platform/data/sandboxes/iran-enterprise-erp/web/app/layout.tsx"
+        ]
+      },
+      {
+        "stage": "QA_EVALUATION",
+        "at": 1789623408.4295819,
+        "passed": true,
+        "score": 1.0,
+        "issues": []
+      }
+    ],
+    "errors": [],
+    "duration_seconds": 30.984
+  },
+  "error": "command failed (1): docker network create roxira_net\nfailed to connect to the docker API at unix:///var/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /var/run/docker.sock: connect: no such file or directory",
+  "repair_attempts": 0,
+  "repairs": [],
+  "stages": [
+    {
+      "stage": "PORT_ALLOCATED",
+      "at": 1789623377.442017
+    },
+    {
+      "stage": "PROJECT_GENERATED",
+      "at": 1789623408.435169
+    },
+    {
+      "stage": "FAILED",
+      "at": 1789623408.5091252
+    }
+  ],
+  "created_at": 1789623377.4359875,
+  "updated_at": 1789623408.5091252
+}

@@ -1,0 +1,8 @@
+[
+  ".roxira.env",
+  "Dockerfile",
+  "app/__init__.py",
+  "app/main.py",
+  "docker-compose.yml",
+  "requirements.txt"
+]

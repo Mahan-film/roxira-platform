@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 
 export function ChatShell() {
+  const activeAudioStreamRef = React.useRef<MediaStream | null>(null);
   const [messages, setMessages] = useState<Array<{role: string, content: string, draft?: string, probability?: string}>>([
     {
       role: "assistant",

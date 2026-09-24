@@ -1,0 +1,26 @@
+name: roxira-sandbox-portal-v1
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: roxira-sandbox-portal-v1:latest
+    container_name: roxira_sandbox_portal-v1
+    restart: unless-stopped
+    ports:
+      - "4000:3000"
+    environment:
+      APP_ID: "portal-v1"
+      BUILD_PROMPT: "Minimal Next.js dashboard"
+      TARGET_FRAMEWORK: "NextJS"
+      ROXIRA_TEMPLATE: "nextjs-tailwind-landing"
+    labels:
+      roxira.sandbox: "true"
+      roxira.app_id: "portal-v1"
+      roxira.template: "nextjs-tailwind-landing"
+      roxira.host_port: "4000"
+    networks:
+      - roxira_net
+networks:
+  roxira_net:
+    external: true

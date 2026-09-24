@@ -1,0 +1,105 @@
+{
+  "task_id": "USER-1789802544",
+  "prompt": "متدولوژی‌ها و روش‌های search for research برای محققین در سال ۲۰۲۶",
+  "created_at": "2026-09-19 07:36:08 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "USER-1789802544_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "روش‌ها و ابزارهای جستجوی پژوهشی برای محققین در سال ۲۰۲۶",
+    "expert_opinion": "در سال ۲۰۲۶، روش‌ها و ابزارهای جستجوی پژوهشی به‌طور چشمگیری تحت تأثیر پیشرفت‌های هوش مصنوعی قرار گرفته‌اند. ابزارهایی مانند Google Scholar، Semantic Scholar و Paperguide به‌عنوان موتورهای جستجوی پیشرفته در دسترس هستند. Google Scholar همچنان برای کشف گسترده مفید است، در حالی که Semantic Scholar با ارائه خلاصه‌های هوش مصنوعی و گراف‌های استنادی، کشف مقالات را تسهیل می‌کند. Paperguide نیز با ترکیب جستجو، درک مقالات، پشتیبانی از مرور ادبیات و کمک به نوشتن، به‌عنوان یک ابزار جامع در سال ۲۰۲۶ شناخته می‌شود. متدولوژی‌هایی مانند زنجیره‌سازی استناد (Citation Chaining) و تنظیم هشدارهای پژوهشی نیز به محققین کمک می‌کنند تا به‌طور مؤثرتری در جریان تحقیقات قرار گیرند.",
+    "implementation_prerequisites": [
+      "دسترسی به اینترنت پرسرعت",
+      "عضویت در پایگاه‌های داده پژوهشی مانند PubMed، IEEE Xplore، arXiv، ERIC و PsycINFO",
+      "استفاده از ابزارهای هوش مصنوعی مانند Semantic Scholar و Paperguide"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "کشف مقالات پژوهشی",
+        "chosen_solution": "Semantic Scholar با ارائه خلاصه‌های هوش مصنوعی و گراف‌های استنادی",
+        "rejected_alternatives": "Google Scholar به دلیل عدم فیلتر قابل اعتماد برای مقالات مرور شده توسط همتا",
+        "technical_justification": "Semantic Scholar با استفاده از هوش مصنوعی، سرعت و دقت کشف مقالات را افزایش می‌دهد و هزینه‌های زمانی محققین را کاهش می‌دهد."
+      },
+      {
+        "layer": "پشتیبانی از مرور ادبیات و نوشتن",
+        "chosen_solution": "Paperguide با ترکیب جستجو، درک مقالات، پشتیبانی از مرور ادبیات و کمک به نوشتن",
+        "rejected_alternatives": "ابزارهای سنتی مانند EndNote و Zotero",
+        "technical_justification": "Paperguide با ارائه یک پلتفرم جامع، کارایی محققین را در مرور ادبیات و نوشتن مقالات افزایش می‌دهد و نیاز به استفاده از چندین ابزار مختلف را کاهش می‌دهد."
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "مقاله پژوهشی",
+        "table_name": "research_paper",
+        "description": "مقالات پژوهشی که توسط محققین منتشر شده‌اند",
+        "fields": [
+          {
+            "name": "title",
+            "type": "string",
+            "constraints": "not null"
+          },
+          {
+            "name": "authors",
+            "type": "array",
+            "constraints": "not null"
+          },
+          {
+            "name": "publication_date",
+            "type": "date",
+            "constraints": "not null"
+          },
+          {
+            "name": "abstract",
+            "type": "text",
+            "constraints": "not null"
+          }
+        ]
+      },
+      {
+        "name": "استناد",
+        "table_name": "citation",
+        "description": "استنادهای بین مقالات پژوهشی",
+        "fields": [
+          {
+            "name": "source_paper_id",
+            "type": "integer",
+            "constraints": "not null"
+          },
+          {
+            "name": "target_paper_id",
+            "type": "integer",
+            "constraints": "not null"
+          },
+          {
+            "name": "citation_date",
+            "type": "date",
+            "constraints": "not null"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/research_papers",
+        "description": "دریافت لیست مقالات پژوهشی بر اساس فیلترهای مختلف"
+      },
+      {
+        "method": "POST",
+        "endpoint": "/api/v1/citations",
+        "description": "افزودن استناد جدید بین مقالات پژوهشی"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "https://github.com/allenai/semantic-scholar",
+      "https://github.com/paperguide/paperguide",
+      "https://github.com/google/scholar"
+    ]
+  }
+}

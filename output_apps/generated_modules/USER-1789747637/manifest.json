@@ -1,0 +1,12 @@
+{
+  "task_id": "USER-1789747637",
+  "prompt": "طراحی موتور اعتبارسنجی صورتحساب الکترونیکی با کلید خصوصی مودیان مالیاتی",
+  "created_at": "2026-09-18 16:07:17 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx"
+  ]
+}

@@ -1,0 +1,26 @@
+name: roxira-sandbox-saas-portal-v2
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: roxira-sandbox-saas-portal-v2:latest
+    container_name: roxira_sandbox_saas-portal-v2
+    restart: unless-stopped
+    ports:
+      - "4000:3000"
+    environment:
+      APP_ID: "saas-portal-v2"
+      BUILD_PROMPT: "Enterprise SaaS Landing with Dark Mode"
+      TARGET_FRAMEWORK: "NextJS"
+      ROXIRA_TEMPLATE: "nextjs-tailwind-landing"
+    labels:
+      roxira.sandbox: "true"
+      roxira.app_id: "saas-portal-v2"
+      roxira.template: "nextjs-tailwind-landing"
+      roxira.host_port: "4000"
+    networks:
+      - roxira_net
+networks:
+  roxira_net:
+    external: true

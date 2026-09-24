@@ -1,0 +1,58 @@
+{
+  "task_id": "USER-1789801340",
+  "prompt": "بهترین تکنولوژی‌ها و زیرساخت‌های سرچ و ریسرچ و دیپ‌ریسرچ چیست؟ برای من توضیح بده و اینکه اگر احتیاج من کارهای جنرال باشد و همچنین کارهای زیرساختی باشد، کارهایی که مثلاً یک تکنولوژی را توصیف کنم یا بخواهم یک کارخانه نرم‌افزار خوش‌مسنونی را راه‌اندازی کنم یا کارهای تحقیقاتی برای مقالات علمی انجام دهم، برای کارهای مختلف چه چیزی استفاده کنم؟",
+  "created_at": "2026-09-19 07:02:47 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "ai_engine": "DeepSeek V4.1 Flash + Roxira Deep Architect",
+  "artifacts": [
+    "router.py",
+    "Component.tsx",
+    "USER-1789801340_Report.docx",
+    "REPORT.md"
+  ],
+  "arch_data": {
+    "domain_detected": "سیستم‌های پیشرفته نسل بعد",
+    "expert_opinion": "برای پیاده‌سازی 'بهترین تکنولوژی‌ها و زیرساخت‌های سرچ و ریسرچ و دیپ‌ریسرچ چیست؟ برای من توضیح بده و اینکه اگر احتیاج من کارهای جنرال باشد و همچنین کارهای زیرساختی باشد، کارهایی که مثلاً یک تکنولوژی را توصیف کنم یا بخواهم یک کارخانه نرم‌افزار خوش‌مسنونی را راه‌اندازی کنم یا کارهای تحقیقاتی برای مقالات علمی انجام دهم، برای کارهای مختلف چه چیزی استفاده کنم؟'، ترکیب سیستم‌های ارکستراسیون ایجنتی نظیر LangGraph، کاوشگرهای Crawl4AI و مخازن مرجع متن‌باز بهترین بازدهی عملیاتی را تضمین می‌کند.",
+    "implementation_prerequisites": [
+      "داکر و محیط‌های ایزوله ARM64",
+      "موتورهای وب‌خوانی Crawl4AI",
+      "پایگاه داده هیبریدی"
+    ],
+    "decision_matrix": [
+      {
+        "layer": "معماری ارکستراسیون",
+        "chosen_solution": "LangGraph StateGraph + MCP",
+        "rejected_alternatives": "اسکریپت‌های خطی صلب",
+        "technical_justification": "مدیریت چرخه‌های خطا و قابلیت برگشت وضعیت"
+      }
+    ],
+    "domain_entities": [
+      {
+        "name": "ResearchArtifact",
+        "table_name": "research_artifacts",
+        "description": "داده‌ها و شواهد مستندشده پژوهش",
+        "fields": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraints": "PK"
+          }
+        ]
+      }
+    ],
+    "api_contracts": [
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/research/summary",
+        "description": "دریافت خروجی ممیزی"
+      }
+    ],
+    "recommended_sota_repositories": [
+      "langchain-ai/open_deep_research",
+      "unclecode/crawl4ai",
+      "all-hands-ai/openhands"
+    ]
+  }
+}

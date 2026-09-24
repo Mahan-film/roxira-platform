@@ -1,0 +1,46 @@
+{
+  "app_id": "saas-portal-v2",
+  "stage": "RUNNING",
+  "status": "RUNNING",
+  "app_name": "saas-portal-v2",
+  "prompt": "Enterprise SaaS Landing with Dark Mode",
+  "target_framework": "NextJS",
+  "tier": "FRONTIER",
+  "host_port": 4000,
+  "subdomain": "saas-portal-v2.roxira.app",
+  "url": "http://saas-portal-v2.roxira.app",
+  "container_id": "e07837eef71f85669f909b04b9290149a7f2e8b5691b8d2c61aa3f34914787b8",
+  "container_name": "roxira_sandbox_saas-portal-v2",
+  "project_dir": "/opt/roxira_platform/data/sandboxes/saas-portal-v2",
+  "error": null,
+  "repair_attempts": 0,
+  "repairs": [],
+  "stages": [
+    {
+      "stage": "PORT_ALLOCATED",
+      "at": 1789577278.8343756
+    },
+    {
+      "stage": "PROJECT_GENERATED",
+      "at": 1789577278.8376307
+    },
+    {
+      "stage": "BUILDING",
+      "at": 1789577278.859803
+    },
+    {
+      "stage": "CONTAINER_STARTED",
+      "at": 1789577387.1609938
+    },
+    {
+      "stage": "ROUTE_REGISTERED",
+      "at": 1789577387.3376188
+    },
+    {
+      "stage": "RUNNING",
+      "at": 1789577387.3397727
+    }
+  ],
+  "created_at": 1789577278.7206578,
+  "updated_at": 1789577387.3397727
+}

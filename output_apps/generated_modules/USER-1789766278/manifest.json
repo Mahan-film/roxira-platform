@@ -1,0 +1,12 @@
+{
+  "task_id": "USER-1789766278",
+  "prompt": "crm",
+  "created_at": "2026-09-18 21:17:58 UTC",
+  "verification_status": "ALL_GREEN",
+  "backend_syntax_pass": true,
+  "frontend_ready": true,
+  "artifacts": [
+    "router.py",
+    "Component.tsx"
+  ]
+}

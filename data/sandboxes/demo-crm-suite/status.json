@@ -1,0 +1,24 @@
+{
+  "app_id": "demo-crm-suite",
+  "stage": "QUEUED",
+  "status": "QUEUED",
+  "app_name": "demo-crm-suite",
+  "prompt": "Lead capture landing page",
+  "target_framework": "FastAPI",
+  "tier": "FRONTIER",
+  "host_port": null,
+  "subdomain": null,
+  "url": null,
+  "container_id": null,
+  "container_name": null,
+  "project_dir": null,
+  "error": null,
+  "stages": [
+    {
+      "stage": "QUEUED",
+      "at": 1789571407.3869972
+    }
+  ],
+  "created_at": 1789571407.3868866,
+  "updated_at": 1789571407.3869972
+}
