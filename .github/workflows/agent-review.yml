@@ -24,9 +24,10 @@ name: Agent review
 #    anti-recursion rule -- see ci.yml's own comment on this). This workflow
 #    is therefore primarily triggered by `workflow_dispatch` with a
 #    `pr_number` input, called by agent-task.yml right after it opens a PR
-#    (the same pattern agent-task.yml already uses to dispatch ci.yml). The
-#    `pull_request` trigger is kept only as a secondary path for a human (or
-#    anything else) opening a PR from an `agent/*` branch directly.
+#    (the same pattern agent-task.yml already uses to dispatch ci.yml). There
+#    is deliberately no `pull_request` trigger: on that event GitHub runs the
+#    workflow file from the PR's own branch, with secrets, so a PR could
+#    rewrite this reviewer. workflow_dispatch always runs main's copy.
 
 on:
   workflow_dispatch:
@@ -35,11 +36,9 @@ on:
         description: "PR number to review"
         required: true
         type: string
-  pull_request:
-    branches: [main]
 
 concurrency:
-  group: agent-review-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  group: agent-review-${{ github.event.inputs.pr_number }}
   cancel-in-progress: true
 
 permissions:
@@ -58,12 +57,7 @@ jobs:
     name: Agent review
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (
-        startsWith(github.event.pull_request.head.ref, 'agent/') &&
-        github.event.pull_request.head.repo.full_name == github.repository
-      )
+    if: github.event_name == 'workflow_dispatch'
     steps:
       # Only `main` is ever checked out in this job -- see the module
       # docstring above. review_gate.py/cost_ledger.py always run from here,
