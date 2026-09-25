@@ -320,6 +320,39 @@ def test_runner_config_defaults():
     assert cfg.lock_dir == cfg.ledger_path.parent / "locks"
 
 
+def test_default_model_comes_from_executor_role():
+    """DEFAULT_MODEL (W12) tracks config/models.yaml's `executor` role, not a hardcoded id."""
+    from output_apps.generated_modules.smartjudge import model_registry
+
+    primary = model_registry.role_models("executor")[0]
+    assert agent_runner.DEFAULT_MODEL == f"openrouter/{primary}"
+
+
+# ---------------------------------------------------------------------------
+# run_opencode
+# ---------------------------------------------------------------------------
+
+
+def test_run_opencode_pins_build_agent(monkeypatch, tmp_path):
+    """`--agent build` must always be passed: OpenCode runs non-interactively in CI, and
+    only the `build` agent's permissions in opencode.json avoid `ask` (which would hang)."""
+    captured = {}
+
+    def fake_run_cmd(args, **kwargs):
+        captured["args"] = args
+        return object()
+
+    monkeypatch.setattr(agent_runner, "run_cmd", fake_run_cmd)
+    agent_runner.run_opencode(tmp_path, "do the thing", "openrouter/some/model", 60, {})
+
+    args = captured["args"]
+    assert args[:2] == ["opencode", "run"]
+    assert "--agent" in args
+    assert args[args.index("--agent") + 1] == "build"
+    assert "--model" in args
+    assert args[args.index("--model") + 1] == "openrouter/some/model"
+
+
 def test_runner_config_overrides_and_bad_numbers_fall_back():
     env = {
         "GITHUB_REPO": "owner/repo",

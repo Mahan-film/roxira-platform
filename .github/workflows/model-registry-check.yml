@@ -1,0 +1,133 @@
+name: Model registry check
+
+# W12: weekly freshness/price audit of config/models.yaml against the live
+# OpenRouter catalogue (GET /api/v1/models, no key required — the public
+# endpoint works unauthenticated; scripts/check_models.py only uses one if
+# present, to raise the rate limit). Never edits config/models.yaml — a swap
+# only merges through a normal PR + evals (docs/STRATEGY.md §3a, W12 row).
+# Opens or updates ONE issue labelled `model-registry` when a primary model
+# is missing from the catalogue or a price moved by more than 20%. All
+# untrusted/report text is passed through `env:`/files, never spliced into a
+# `run:` script via `${{ }}`.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Check config/models.yaml against OpenRouter
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install "pyyaml>=6.0"
+
+      - name: Run check_models.py
+        id: check
+        run: |
+          set -euo pipefail
+          python3 scripts/check_models.py --json > "$RUNNER_TEMP/report.json" || true
+          cat "$RUNNER_TEMP/report.json"
+
+      - name: Evaluate report (missing primary or >20% price move)
+        id: eval
+        env:
+          REPORT_PATH: ${{ runner.temp }}/report.json
+          BODY_PATH: ${{ runner.temp }}/issue_body.md
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+
+          report_path = os.environ["REPORT_PATH"]
+          body_path = os.environ["BODY_PATH"]
+
+          with open(report_path, encoding="utf-8") as fh:
+              rows = json.load(fh)
+
+          flagged = []
+          for row in rows:
+              if row["status"] == "MISSING" and row["primary"]:
+                  flagged.append(f"- **MISSING** `{row['role']}` primary model `{row['id']}` "
+                                  "is no longer in the OpenRouter catalogue.")
+                  continue
+              if row["status"] == "PRICE":
+                  reg = row.get("registry_price_per_1m") or {}
+                  live = row.get("live_price_per_1m") or {}
+                  for direction in ("in", "out"):
+                      reg_v = float(reg.get(direction) or 0)
+                      live_v = float(live.get(direction) or 0)
+                      if reg_v <= 0:
+                          continue
+                      pct = abs(live_v - reg_v) / reg_v * 100
+                      if pct > 20:
+                          marker = "primary" if row["primary"] else "fallback"
+                          flagged.append(
+                              f"- **PRICE** `{row['role']}` {marker} model `{row['id']}` "
+                              f"{direction} price moved {pct:.0f}%: registry={reg_v}, live={live_v} "
+                              "(USD / 1M tokens)."
+                          )
+                      break
+
+          needed = "true" if flagged else "false"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"needed={needed}\n")
+
+          if flagged:
+              lines = [
+                  "Automated weekly check (`.github/workflows/model-registry-check.yml`) "
+                  "found drift between `config/models.yaml` and the live OpenRouter "
+                  "catalogue:",
+                  "",
+                  *flagged,
+                  "",
+                  "This issue never edits `config/models.yaml` automatically. A swap "
+                  "merges only through a normal PR once the evals (W6 legal eval, one "
+                  "coding smoke task) do not regress — docs/STRATEGY.md §3a.",
+                  "",
+                  "Full report: `python3 scripts/check_models.py`",
+              ]
+              with open(body_path, "w", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Open or update the model-registry issue
+        if: steps.eval.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY_PATH: ${{ runner.temp }}/issue_body.md
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Idempotent: create the label if it doesn't exist yet, ignore if it does.
+          gh label create "model-registry" --repo "$REPO" \
+            --description "Weekly model & price drift report (W12)" --color "1D76DB" \
+            2>/dev/null || true
+          existing=$(gh api "repos/$REPO/issues?state=open&labels=model-registry" \
+            --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$REPO" --body-file "$BODY_PATH"
+            echo "Updated issue #$existing"
+          else
+            gh issue create --repo "$REPO" \
+              --title "Model registry drift: config/models.yaml vs OpenRouter" \
+              --label "model-registry" \
+              --body-file "$BODY_PATH"
+          fi
