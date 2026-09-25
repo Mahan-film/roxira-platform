@@ -3,12 +3,14 @@
 Pure logic only: budget ledger, concurrency lock, denylist, slug/branch naming,
 prompt building, and RunnerConfig parsing, plus the process_one_issue
 orchestration with git/opencode/GitHub all mocked. No real subprocess, no real
-network call, no import-time side effects — safe for `pytest -m "not integration"`.
+network call — safe for `pytest -m "not integration"`.
 
 agent_runner.py lives under output_apps/, outside pytest's `testpaths = ["src"]`
-(see pyproject.toml), so it is loaded here by explicit file path rather than
-sys.path manipulation, the same pattern src/conftest.py uses for
-src/ci_quarantine.py.
+(see pyproject.toml), so it can't be `import`-ed normally. src/test_ci_quarantine_guard.py
+forbids module-level side effects in any src/test_*.py (import-time code it can't see is
+exactly what src/ci_quarantine.py exists to quarantine), so the dynamic file-path load
+happens inside a fixture at test-setup time, not at collection/import time. Every test
+below relies on the `agent_runner` global that fixture populates.
 """
 
 from __future__ import annotations
@@ -20,18 +22,27 @@ from pathlib import Path
 
 import pytest
 
-_MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "output_apps"
-    / "ecosystem_core"
-    / "src"
-    / "factory"
-    / "agent_runner.py"
-)
-_spec = importlib.util.spec_from_file_location("agent_runner", _MODULE_PATH)
-agent_runner = importlib.util.module_from_spec(_spec)
-sys.modules["agent_runner"] = agent_runner
-_spec.loader.exec_module(agent_runner)
+agent_runner = None  # populated by _load_agent_runner() before any test runs
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _load_agent_runner():
+    global agent_runner
+    if agent_runner is None:
+        module_path = (
+            Path(__file__).resolve().parents[2]
+            / "output_apps"
+            / "ecosystem_core"
+            / "src"
+            / "factory"
+            / "agent_runner.py"
+        )
+        spec = importlib.util.spec_from_file_location("agent_runner", module_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["agent_runner"] = module
+        spec.loader.exec_module(module)
+        agent_runner = module
+    return agent_runner
 
 
 # ---------------------------------------------------------------------------
