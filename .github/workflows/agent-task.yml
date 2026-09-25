@@ -65,6 +65,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Do not leave GITHUB_TOKEN in .git/config: the agent's shell could read it and
+          # push anywhere (incl. main). agent_runner pushes with an explicit token URL instead.
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v7
