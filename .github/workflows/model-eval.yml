@@ -1,0 +1,108 @@
+name: Model eval (coding smoke + gate)
+
+# W12 follow-up (docs/STRATEGY.md §3a): before a model in config/models.yaml is
+# swapped, "the evals (W6 legal eval, one coding smoke task) do not regress".
+# This workflow runs the coding-smoke half (scripts/eval_coding_smoke.py) in
+# --compare mode: the candidate model vs. the given role's current registry
+# primary, and gates on the result. It is manual (workflow_dispatch) only --
+# an eval run costs real OpenRouter credits, so it is never triggered on push
+# or pull_request.
+#
+# SECURITY: `role` and `candidate` are user-supplied workflow_dispatch inputs.
+# Both are passed through `env:` and referenced as "$VAR" inside `run:`
+# blocks -- never interpolated directly via `${{ }}` into a shell string --
+# same convention as agent-review.yml (see that file's own comment on this).
+
+on:
+  workflow_dispatch:
+    inputs:
+      role:
+        description: "config/models.yaml role whose primary model is the baseline (e.g. executor, reviewer, cheap)"
+        required: true
+        type: string
+      candidate:
+        description: "candidate OpenRouter model id to compare against that role's primary"
+        required: true
+        type: string
+      max_usd:
+        description: "stop calling the model once this run's cumulative cost reaches this many USD (per model)"
+        required: false
+        type: string
+        default: "0.50"
+
+concurrency:
+  group: model-eval-${{ github.event.inputs.role }}-${{ github.event.inputs.candidate }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  EVAL_ROLE: ${{ github.event.inputs.role }}
+  EVAL_CANDIDATE: ${{ github.event.inputs.candidate }}
+  EVAL_MAX_USD: ${{ github.event.inputs.max_usd }}
+
+jobs:
+  eval:
+    name: Coding smoke eval + gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install pyyaml pytest
+
+      - name: Run compare + gate
+        id: run_eval
+        env:
+          OPENROUTER_AGENT_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
+        run: |
+          set -euo pipefail
+          set +e
+          python3 scripts/eval_coding_smoke.py \
+            --compare \
+            --role "$EVAL_ROLE" \
+            --candidate "$EVAL_CANDIDATE" \
+            --max-usd "$EVAL_MAX_USD" \
+            --json > "$RUNNER_TEMP/eval_result.json"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/eval_result.json"
+          exit 0
+
+      - name: Write job summary
+        env:
+          EXIT_CODE: ${{ steps.run_eval.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Model eval: \`$EVAL_CANDIDATE\` vs. role \`$EVAL_ROLE\` primary"
+            echo
+            if [ -s "$RUNNER_TEMP/eval_result.json" ]; then
+              gate=$(jq -r '.gate // "UNKNOWN"' "$RUNNER_TEMP/eval_result.json")
+              echo "**Gate: ${gate}** (exit code ${EXIT_CODE})"
+              echo
+              echo '```json'
+              cat "$RUNNER_TEMP/eval_result.json"
+              echo '```'
+            else
+              echo "**Gate: ERROR** -- the eval script produced no output (exit code ${EXIT_CODE})."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail the job if the gate did not pass
+        env:
+          EXIT_CODE: ${{ steps.run_eval.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::Model eval gate failed for candidate '$EVAL_CANDIDATE' against role '$EVAL_ROLE' primary (see job summary)."
+            exit 1
+          fi

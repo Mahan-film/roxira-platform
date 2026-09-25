@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "description": "W12 coding smoke eval task set (docs/STRATEGY.md §3a). Each task ships a prompt shown to the candidate model, a starter.py stub, a hidden checks.py (pytest), and a reference_solution.py used only by --offline canned runs / task self-tests -- never shown to the candidate model.",
+  "tasks": [
+    {
+      "id": "01_clamp_scores",
+      "title": "Clamp scores into a range (pure function, edge cases)",
+      "category": "pure_function",
+      "entry_filename": "solution.py",
+      "timeout_s": 10
+    },
+    {
+      "id": "02_bugfix_dedupe",
+      "title": "Fix a broken de-duplication function",
+      "category": "bug_fix",
+      "entry_filename": "solution.py",
+      "timeout_s": 10
+    },
+    {
+      "id": "03_refactor_total_price",
+      "title": "Refactor duplicated tax logic without changing behavior",
+      "category": "refactor",
+      "entry_filename": "solution.py",
+      "timeout_s": 10
+    },
+    {
+      "id": "04_persian_text",
+      "title": "Normalize Persian text and convert Persian digits to int",
+      "category": "persian_text",
+      "entry_filename": "solution.py",
+      "timeout_s": 10
+    },
+    {
+      "id": "05_json_config",
+      "title": "Parse a JSON config safely with fallbacks",
+      "category": "json_parsing",
+      "entry_filename": "solution.py",
+      "timeout_s": 10
+    },
+    {
+      "id": "06_chunk_list",
+      "title": "Chunk a list into fixed-size pieces (pure function, edge cases)",
+      "category": "pure_function",
+      "entry_filename": "solution.py",
+      "timeout_s": 10
+    },
+    {
+      "id": "07_bugfix_word_counts",
+      "title": "Fix a broken word-count function",
+      "category": "bug_fix",
+      "entry_filename": "solution.py",
+      "timeout_s": 10
+    }
+  ]
+}
