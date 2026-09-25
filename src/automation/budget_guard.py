@@ -16,8 +16,8 @@ make a real HTTP call (see src/automation/test_tech_radar_live_ready.py).
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 import httpx
 
@@ -87,9 +87,9 @@ class BudgetGuard:
         guard.check("before final synthesis")   # raises BudgetExceeded past cap
     """
 
-    max_usd: Optional[float]
+    max_usd: float | None
     snapshot_fn: Callable[[], float] = field(default=fetch_openrouter_usage)
-    _baseline_usd: Optional[float] = field(default=None, init=False, repr=False)
+    _baseline_usd: float | None = field(default=None, init=False, repr=False)
 
     @property
     def enabled(self) -> bool:
@@ -122,7 +122,7 @@ class BudgetGuard:
         if spent > self.max_usd:  # type: ignore[operator]
             raise BudgetExceeded(spent, self.max_usd, context)  # type: ignore[arg-type]
 
-    def spent_so_far(self) -> Optional[float]:
+    def spent_so_far(self) -> float | None:
         """Best-effort current spend since start(); None if disabled, not
         started, or usage can't currently be read."""
         if not self.enabled or self._baseline_usd is None:

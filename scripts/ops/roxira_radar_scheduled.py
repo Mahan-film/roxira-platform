@@ -48,7 +48,11 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.automation.budget_guard import BudgetGuard, BudgetGuardError, fetch_openrouter_usage  # noqa: E402
+from src.automation.budget_guard import (  # noqa: E402
+    BudgetGuard,
+    BudgetGuardError,
+    fetch_openrouter_usage,
+)
 from src.automation.llm_router_bridge import flush as flush_llm_usage  # noqa: E402
 from src.automation.tech_radar import TechRadarAgent  # noqa: E402
 
@@ -65,7 +69,8 @@ OUTPUT_DIR = pathlib.Path(
 # sentinel's hardcoded, never-updated finding list. Keep this short: each
 # topic is one full search -> crawl -> rerank -> cheap-tier-synthesis pass.
 TOPICS = [
-    "Persian legal RAG stack: Qdrant, LightRAG, PostgreSQL graph CTE production best practices 2026",
+    "Persian legal RAG stack: Qdrant, LightRAG, PostgreSQL graph CTE "
+    "production best practices 2026",
     "FastAPI + NestJS + Next.js enterprise SaaS architecture updates 2026",
     "Persian real-time voice assistant STT TTS latency optimization 2026",
 ]
