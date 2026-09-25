@@ -236,6 +236,53 @@ def test_is_enabled_missing_defaults_off():
 
 
 # ---------------------------------------------------------------------------
+# GitHub-Actions-only host allowlist
+# ---------------------------------------------------------------------------
+
+
+def test_is_github_actions_runtime_true_only_for_exact_marker():
+    assert agent_runner.is_github_actions_runtime({"AGENT_RUNTIME": "github-actions"}) is True
+
+
+@pytest.mark.parametrize("value", ["", "true", "1", "GitHub-Actions", "production"])
+def test_is_github_actions_runtime_false_otherwise(value):
+    assert agent_runner.is_github_actions_runtime({"AGENT_RUNTIME": value}) is False
+
+
+def test_is_github_actions_runtime_tolerates_surrounding_whitespace():
+    assert agent_runner.is_github_actions_runtime({"AGENT_RUNTIME": " github-actions "}) is True
+
+
+def test_is_github_actions_runtime_missing_defaults_false():
+    assert agent_runner.is_github_actions_runtime({}) is False
+
+
+# ---------------------------------------------------------------------------
+# minimal opencode env (no environment inheritance beyond PATH/HOME)
+# ---------------------------------------------------------------------------
+
+
+def test_minimal_opencode_env_contains_only_expected_keys():
+    base_env = {
+        "PATH": "/usr/bin",
+        "HOME": "/home/runner",
+        "GITHUB_AGENT_TOKEN": "supersecret",
+        "ACTIONS_RUNTIME_TOKEN": "also-secret",
+        "AWS_SECRET_ACCESS_KEY": "leaked-if-copied",
+    }
+    env = agent_runner.minimal_opencode_env("or-key-123", base_env=base_env)
+    assert env == {"PATH": "/usr/bin", "HOME": "/home/runner", "OPENROUTER_API_KEY": "or-key-123"}
+    assert "GITHUB_AGENT_TOKEN" not in env
+    assert "ACTIONS_RUNTIME_TOKEN" not in env
+    assert "AWS_SECRET_ACCESS_KEY" not in env
+
+
+def test_minimal_opencode_env_tolerates_missing_path_or_home():
+    env = agent_runner.minimal_opencode_env("or-key", base_env={})
+    assert env == {"OPENROUTER_API_KEY": "or-key"}
+
+
+# ---------------------------------------------------------------------------
 # prompt building
 # ---------------------------------------------------------------------------
 
@@ -321,7 +368,22 @@ def test_process_one_issue_dry_run_does_no_io(tmp_path, monkeypatch):
     assert called["create_worktree"] is False
 
 
+def test_process_one_issue_refuses_real_run_off_actions(tmp_path, monkeypatch):
+    monkeypatch.delenv("AGENT_RUNTIME", raising=False)
+    called = {"create_worktree": False}
+    monkeypatch.setattr(
+        agent_runner, "create_worktree", lambda *a, **k: called.__setitem__("create_worktree", True)
+    )
+    cfg = _base_cfg(tmp_path)
+    issue = {"number": 99, "title": "Should not run for real", "body": ""}
+    result = agent_runner.process_one_issue(issue, cfg, tmp_path, dry_run=False)
+    assert result["status"] == "refused-not-actions"
+    assert called["create_worktree"] is False
+    assert not (tmp_path / "locks" / "99.lock").exists()  # never even got to the lock
+
+
 def test_process_one_issue_no_changes(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_RUNTIME", "github-actions")
     cfg = _base_cfg(tmp_path)
     worktree = tmp_path / "wt"
     worktree.mkdir()
@@ -344,6 +406,7 @@ def test_process_one_issue_no_changes(tmp_path, monkeypatch):
 
 
 def test_process_one_issue_denylist_blocked(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_RUNTIME", "github-actions")
     cfg = _base_cfg(tmp_path)
     worktree = tmp_path / "wt"
     worktree.mkdir()
@@ -369,6 +432,7 @@ def test_process_one_issue_denylist_blocked(tmp_path, monkeypatch):
 
 
 def test_process_one_issue_checks_failed(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_RUNTIME", "github-actions")
     cfg = _base_cfg(tmp_path)
     worktree = tmp_path / "wt"
     worktree.mkdir()
@@ -395,6 +459,7 @@ def test_process_one_issue_checks_failed(tmp_path, monkeypatch):
 
 
 def test_process_one_issue_success_opens_pr_and_logs_spend(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_RUNTIME", "github-actions")
     cfg = _base_cfg(tmp_path)
     worktree = tmp_path / "wt"
     worktree.mkdir()
@@ -440,6 +505,7 @@ def test_process_one_issue_success_opens_pr_and_logs_spend(tmp_path, monkeypatch
 
 
 def test_process_one_issue_releases_lock_on_exception(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_RUNTIME", "github-actions")
     cfg = _base_cfg(tmp_path)
 
     def boom(*a, **k):
@@ -450,6 +516,42 @@ def test_process_one_issue_releases_lock_on_exception(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         agent_runner.process_one_issue(issue, cfg, tmp_path, dry_run=False)
     assert not (tmp_path / "locks" / "6.lock").exists()
+
+
+def test_process_one_issue_use_worktree_false_branches_in_place(tmp_path, monkeypatch):
+    """On GitHub Actions (AGENT_USE_WORKTREE=false), branch in repo_dir directly and
+    never call create_worktree/remove_worktree at all."""
+    monkeypatch.setenv("AGENT_RUNTIME", "github-actions")
+    cfg = _base_cfg(tmp_path, use_worktree=False)
+
+    create_worktree_calls = []
+    remove_worktree_calls = []
+    monkeypatch.setattr(
+        agent_runner, "create_worktree", lambda *a, **k: create_worktree_calls.append(1)
+    )
+    monkeypatch.setattr(
+        agent_runner, "remove_worktree", lambda *a, **k: remove_worktree_calls.append(1)
+    )
+
+    in_place_calls = []
+
+    def fake_create_branch_in_place(repo_dir, branch, base_ref="origin/main"):
+        in_place_calls.append((repo_dir, branch))
+        return repo_dir
+
+    monkeypatch.setattr(agent_runner, "create_branch_in_place", fake_create_branch_in_place)
+    monkeypatch.setattr(agent_runner, "run_opencode", lambda *a, **k: None)
+    monkeypatch.setattr(agent_runner, "changed_files", lambda *a, **k: [])
+    monkeypatch.setattr(agent_runner, "openrouter_key_usage", lambda *a, **k: None)
+    monkeypatch.setattr(agent_runner, "comment_on_issue", lambda *a, **k: None)
+
+    issue = {"number": 10, "title": "In-place branch test", "body": ""}
+    result = agent_runner.process_one_issue(issue, cfg, tmp_path, dry_run=False)
+
+    assert result["status"] == "no-changes"
+    assert in_place_calls == [(tmp_path, "agent/10-in-place-branch-test")]
+    assert not create_worktree_calls
+    assert not remove_worktree_calls  # nothing to clean up in the caller's own checkout
 
 
 # ---------------------------------------------------------------------------
@@ -468,3 +570,71 @@ def test_push_branch_scrubs_token_on_failure(tmp_path, monkeypatch):
         agent_runner.push_branch(tmp_path, "agent/1-x", "SECRET123", "owner/repo")
     assert "SECRET123" not in str(excinfo.value)
     assert "***" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("branch", ["main", "master", "feature/x", "", "Agent/1-x"])
+def test_push_branch_refuses_non_agent_branch(tmp_path, monkeypatch, branch):
+    calls = []
+    monkeypatch.setattr(agent_runner, "run_cmd", lambda *a, **k: calls.append(1))
+    with pytest.raises(ValueError, match="agent"):
+        agent_runner.push_branch(tmp_path, branch, "tok", "owner/repo")
+    assert not calls  # never even attempted the push
+
+
+def test_push_branch_allows_agent_branch(tmp_path, monkeypatch):
+    class FakeResult:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    monkeypatch.setattr(agent_runner, "run_cmd", lambda *a, **k: FakeResult())
+    agent_runner.push_branch(tmp_path, "agent/1-x", "tok", "owner/repo")  # no raise
+
+
+# ---------------------------------------------------------------------------
+# in-place branching (GitHub Actions mode, no worktree)
+# ---------------------------------------------------------------------------
+
+
+def test_create_branch_in_place_success(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run_cmd(args, cwd=None, timeout=None, env=None):
+        calls.append((args, cwd))
+        return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    monkeypatch.setattr(agent_runner, "run_cmd", fake_run_cmd)
+    result = agent_runner.create_branch_in_place(tmp_path, "agent/1-x")
+    assert result == tmp_path
+    assert calls == [(["git", "checkout", "-B", "agent/1-x", "origin/main"], tmp_path)]
+
+
+def test_create_branch_in_place_raises_on_failure(tmp_path, monkeypatch):
+    def fake_run_cmd(*a, **k):
+        return type("R", (), {"returncode": 1, "stdout": "", "stderr": "fatal: bad ref"})()
+
+    monkeypatch.setattr(agent_runner, "run_cmd", fake_run_cmd)
+    with pytest.raises(RuntimeError, match="bad ref"):
+        agent_runner.create_branch_in_place(tmp_path, "agent/1-x")
+
+
+# ---------------------------------------------------------------------------
+# RunnerConfig.use_worktree parsing
+# ---------------------------------------------------------------------------
+
+
+def test_runner_config_use_worktree_defaults_true():
+    cfg = agent_runner.RunnerConfig.from_env({})
+    assert cfg.use_worktree is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", "garbage"])
+def test_runner_config_use_worktree_false(value):
+    cfg = agent_runner.RunnerConfig.from_env({"AGENT_USE_WORKTREE": value})
+    assert cfg.use_worktree is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "True", "yes", "on"])
+def test_runner_config_use_worktree_true(value):
+    cfg = agent_runner.RunnerConfig.from_env({"AGENT_USE_WORKTREE": value})
+    assert cfg.use_worktree is True

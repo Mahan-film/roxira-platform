@@ -1,0 +1,164 @@
+name: Agent task
+
+# W10 phase 2 (revised): a cheap coding agent (OpenCode headless) does one small,
+# GitHub-issue-labelled task and opens a PR. Runs ONLY on GitHub's ephemeral,
+# single-use runners — never on the production server. See the security
+# rationale in output_apps/ecosystem_core/src/factory/agent_runner.py's module
+# docstring and docs/AGENTS_WORKFORCE.md #6.
+#
+# The runner is thin on purpose: budget, lock, denylist, prompt, git, checks and
+# PR logic all live in agent_runner.py (unit tested in
+# src/factory/test_agent_runner.py). This file only does what genuinely needs a
+# CI environment: the actor/kill-switch gate, pinning and installing OpenCode,
+# an approximate concurrency cap across runs, and dispatching CI on the branch
+# it pushes (a PR opened with the built-in GITHUB_TOKEN does not itself trigger
+# `pull_request` events — see ci.yml's workflow_dispatch trigger).
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to run (must be labelled `agent`)"
+        required: true
+        type: string
+
+concurrency:
+  # One run per issue at a time. This is NOT the AGENT_MAX_CONCURRENT cap across
+  # *different* issues — GitHub Actions' concurrency groups have no native
+  # "max N in parallel" primitive, so that cap is enforced by the "Enforce
+  # concurrency cap" step below instead, via `gh run list`.
+  group: agent-task-${{ github.event.issue.number || github.event.inputs.issue_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  # Needed only to dispatch ci.yml on the new branch (`gh workflow run`) once a
+  # PR is opened, since that PR doesn't trigger `pull_request` events on its own.
+  actions: write
+
+env:
+  ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
+  OPENCODE_VERSION: "1.18.30"
+
+jobs:
+  run-agent-task:
+    name: Run agent task
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Job guard: kill switch + author/actor allowlist. Both must hold before any
+    # checkout happens. AGENT_ALLOWED_ACTORS is a comma-separated repo variable;
+    # unset defaults to the repo owner only. `contains(',a,b,', ',x,')`-style
+    # padding avoids "mahan-films2" matching an allowlist entry of "mahan-films".
+    if: >
+      vars.AGENT_ENABLED == 'true' &&
+      (
+        (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'agent' &&
+         contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.event.sender.login)))
+        ||
+        (github.event_name == 'workflow_dispatch' &&
+         contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.actor)))
+      )
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Install OpenCode (pinned)
+        run: |
+          set -euo pipefail
+          npm install -g "opencode-ai@${OPENCODE_VERSION}"
+          got="$(opencode --version)"
+          if [ "$got" != "$OPENCODE_VERSION" ]; then
+            echo "::error::opencode --version reported '$got', expected '$OPENCODE_VERSION'"
+            exit 1
+          fi
+
+      - name: Enforce concurrency cap
+        id: concurrency_cap
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX_CONCURRENT: ${{ vars.AGENT_MAX_CONCURRENT || '2' }}
+        run: |
+          set -euo pipefail
+          # Includes this run itself, so ">" (not ">=") means "at cap, still fine".
+          running=$(gh run list --workflow agent-task.yml --status in_progress --json databaseId --jq 'length')
+          echo "in-progress agent-task runs (including this one): $running / max $MAX_CONCURRENT"
+          if [ "$running" -gt "$MAX_CONCURRENT" ]; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment when deferred by the concurrency cap
+        if: steps.concurrency_cap.outputs.proceed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body \
+            "Max concurrent agent tasks (\`AGENT_MAX_CONCURRENT\`) already running. This run will not proceed. Remove and re-add the \`agent\` label, or re-run this workflow, once a slot frees up."
+
+      - name: Configure git identity
+        if: steps.concurrency_cap.outputs.proceed == 'true'
+        run: |
+          git config --global user.name "roxira-agent[bot]"
+          git config --global user.email "roxira-agent[bot]@users.noreply.github.com"
+
+      - name: Run agent task
+        id: agent
+        if: steps.concurrency_cap.outputs.proceed == 'true'
+        continue-on-error: true
+        env:
+          AGENT_ENABLED: "true"
+          AGENT_RUNTIME: "github-actions"
+          AGENT_USE_WORKTREE: "false"
+          AGENT_DAILY_BUDGET_USD: ${{ vars.AGENT_DAILY_BUDGET_USD || '2' }}
+          AGENT_MAX_CONCURRENT: ${{ vars.AGENT_MAX_CONCURRENT || '2' }}
+          # A fresh, ephemeral runner starts this empty every single run — it's a
+          # same-run sanity check only, not a cross-run budget (that's the OpenRouter
+          # key's own limit, see docs/AGENTS_WORKFORCE.md #6). Keep it out of the
+          # checked-out workspace, in the runner's own temp dir.
+          AGENT_LEDGER_PATH: ${{ runner.temp }}/agent-ledger/agent_ledger.jsonl
+          GITHUB_REPO: ${{ github.repository }}
+          # The job's own short-lived, repo-scoped token — no PAT. Never logged.
+          GITHUB_AGENT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A dedicated, capped OpenRouter key (never the product's main key). Its
+          # own limit/limit_reset is the real $ cap — see docs/AGENTS_WORKFORCE.md #6.
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
+        run: |
+          set -o pipefail
+          python3 output_apps/ecosystem_core/src/factory/agent_runner.py --issue "$ISSUE_NUMBER" \
+            | tee "$RUNNER_TEMP/agent_result.json"
+
+      - name: Dispatch CI for the new PR branch
+        if: steps.concurrency_cap.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          status=$(jq -r '.status // empty' "$RUNNER_TEMP/agent_result.json")
+          branch=$(jq -r '.branch // empty' "$RUNNER_TEMP/agent_result.json")
+          echo "agent status: ${status:-<none>}, branch: ${branch:-<none>}"
+          if [ "$status" = "pr-opened" ] && [ -n "$branch" ]; then
+            gh workflow run ci.yml --ref "$branch"
+          fi
+
+      - name: Fail the job if the agent task did not end cleanly
+        if: steps.concurrency_cap.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          status=$(jq -r '.status // "error"' "$RUNNER_TEMP/agent_result.json")
+          case "$status" in
+            pr-opened|no-changes|skipped|dry-run) exit 0 ;;
+            *)
+              echo "::error::agent task ended with status: $status"
+              exit 1
+              ;;
+          esac

@@ -1,29 +1,57 @@
 #!/usr/bin/env python3
 """W10 phase 2 execution engine: turns one GitHub issue labelled `agent` into a PR.
 
-Design lives in docs/AGENTS_WORKFORCE.md (sections 2-3) and docs/STRATEGY.md (W10 row).
+Design lives in docs/AGENTS_WORKFORCE.md (sections 2-3, 6) and docs/STRATEGY.md (W10 row).
+
+**Agent tasks run on GitHub Actions ephemeral runners (`.github/workflows/agent-task.yml`),
+never on the production server.** A prior version of this design ran `opencode run` on
+the always-on prod host with a broad shell-permission config and a copied-in environment,
+which meant a model error or a prompt-injected issue body could reach the live `.env`,
+`docker`, or anything else the host process could see. GitHub's ephemeral, single-job
+runner is disposable, has no access to the production host or its secrets, and only ever
+sees the two secrets the workflow explicitly gives it (a scoped OpenRouter key and the
+job's own short-lived `GITHUB_TOKEN`). This module still contains all the actual logic
+(budget, lock, denylist, prompt, git, checks, PR) and is unit tested directly; the
+workflow is a thin, hardened wrapper around it. `task_worker.py` (the legacy
+`task_queue.json` path on the server) and a direct `agent_runner.py` invocation on the
+server both refuse to do a real run — see `is_github_actions_runtime()` below.
+
 The short version:
 
-  - Never pushes to `main`. Every task runs in its own git worktree, created
-    *outside* this repo checkout, on branch ``agent/<issue>-<slug>`` cut from
-    ``origin/main``.
-  - A cheap coding agent (OpenCode headless, OpenRouter DeepSeek tier) does the
-    work inside that worktree with a prompt built from the issue plus the repo
-    rules in AGENTS.md.
-  - The diff is gated: it must touch at least one file, must not touch the
-    denylist (compose files, CI config, nginx/systemd config, .env*, auth or
-    payment modules), and must pass ``py_compile`` (and ``ruff`` if installed).
-  - On success: commit, push the branch over HTTPS with a fine-grained PAT,
-    open a PR via the GitHub REST API, comment the PR link on the issue, label
-    the issue ``agent-pr-open``.
-  - On any failure: comment on the issue explaining why, and stop. Nothing is
-    pushed.
-  - A kill switch (``AGENT_ENABLED``, default off), a daily $ budget tracked in
-    a JSONL ledger outside the repo, and a concurrency cap (lock files) gate
-    every run.
+  - Never pushes to `main`. On GitHub Actions (`AGENT_USE_WORKTREE=false`), the task
+    branches directly in the ephemeral, single-use checkout. Locally/in tests
+    (`AGENT_USE_WORKTREE=true`, the default), it uses a git worktree created *outside*
+    the repo checkout instead — either way, on branch ``agent/<issue>-<slug>`` cut
+    from ``origin/main``.
+  - A cheap coding agent (OpenCode headless, OpenRouter DeepSeek tier) does the work
+    with a prompt built from the issue plus the repo rules in AGENTS.md, given an
+    *explicit, minimal* environment (`PATH`, `HOME`, `OPENROUTER_API_KEY` only) rather
+    than a copy of the whole process environment — so it can't read `GITHUB_TOKEN` or
+    anything else the wrapper process holds, even by accident.
+  - The diff is gated: it must touch at least one file, must not touch the denylist
+    (compose files, CI config, nginx/systemd config, .env*, auth or payment modules),
+    and must pass ``py_compile`` (and ``ruff`` if installed). This check happens *after*
+    the agent runs and *before* anything is pushed — it can't stop the agent process
+    from reading a file mid-run, which is exactly why the sandboxing above (ephemeral
+    runner, minimal env, no prod secrets in scope) is the real control, not the denylist.
+  - On success: commit, push the branch (with an assertion that its name starts with
+    ``agent/`` — never `main`), open a PR via the GitHub REST API, comment the PR link
+    on the issue, label the issue ``agent-pr-open``.
+  - On any failure: comment on the issue explaining why, and stop. Nothing is pushed.
+  - A kill switch (``AGENT_ENABLED``, default off), a daily $ budget tracked in a JSONL
+    ledger, and a concurrency cap gate every run. On GitHub Actions the real $ cap is
+    the OpenRouter key's own `limit`/`limit_reset` (see docs #6); the ledger there is
+    a same-run sanity check, not the enforcement boundary.
 
 Env vars (documented in docs/AGENTS_WORKFORCE.md #6):
     AGENT_ENABLED            "1"/"true"/"yes" to allow real runs. Default: off.
+    AGENT_RUNTIME            Must be exactly "github-actions" for a real (non-dry-run)
+                             run to proceed at all — see is_github_actions_runtime().
+                             Set by .github/workflows/agent-task.yml; never set this on
+                             the production server.
+    AGENT_USE_WORKTREE       "1"/"true" (default) uses a git worktree outside repo_dir;
+                             "0"/"false" branches in place inside repo_dir (the mode
+                             used on GitHub Actions' own ephemeral, single-use checkout).
     AGENT_DAILY_BUDGET_USD   Default 2.0.
     AGENT_MAX_CONCURRENT     Default 2.
     AGENT_LEDGER_PATH        Default /opt/roxira_platform_reports/agent_ledger.jsonl
@@ -31,11 +59,13 @@ Env vars (documented in docs/AGENTS_WORKFORCE.md #6):
     AGENT_WORKTREES_ROOT     Default /opt/roxira_platform_agent_worktrees
     AGENT_TASK_TIMEOUT_SECS  Default 900 (opencode run timeout)
     AGENT_OPENCODE_MODEL     Default openrouter/deepseek/deepseek-v4.1-flash
-    GITHUB_AGENT_TOKEN       Fine-grained PAT: contents + pull requests + issues,
-                             read/write, this repo only. Required for any GitHub
-                             call. Never logged, never defaulted.
+    GITHUB_AGENT_TOKEN       On GitHub Actions: the job's own built-in `GITHUB_TOKEN`
+                             (contents/pull-requests/issues write, scoped to this repo,
+                             expires when the job ends) — no PAT. Required for any
+                             GitHub call. Never logged, never defaulted.
     GITHUB_REPO              Default mahan-films/roxira-platform
-    OPENROUTER_API_KEY       Required by `opencode run` itself and used (via
+    OPENROUTER_API_KEY       A dedicated, capped OpenRouter key (never the product's
+                             main key). Required by `opencode run` itself and used (via
                              GET /api/v1/key) to measure spend before/after a task.
 
 CLI:
@@ -110,6 +140,7 @@ class RunnerConfig:
     worktrees_root: Path = field(default_factory=lambda: Path(DEFAULT_WORKTREES_ROOT))
     github_token: str = ""
     openrouter_key: str = ""
+    use_worktree: bool = True
 
     def __post_init__(self) -> None:
         if self.lock_dir is None:
@@ -133,6 +164,8 @@ class RunnerConfig:
             ),
             github_token=env.get("GITHUB_AGENT_TOKEN", "").strip(),
             openrouter_key=env.get("OPENROUTER_API_KEY", "").strip(),
+            use_worktree=env.get("AGENT_USE_WORKTREE", "1").strip().lower()
+            in {"1", "true", "yes", "on"},
         )
 
 
@@ -154,6 +187,20 @@ def is_enabled(env: dict[str, str] | None = None) -> bool:
     """Kill switch. Default OFF: an unset/empty/garbage value never enables runs."""
     env = os.environ if env is None else env
     return env.get("AGENT_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def is_github_actions_runtime(env: dict[str, str] | None = None) -> bool:
+    """Host allowlist for real (non-dry-run) work.
+
+    Agent tasks must only ever execute on a GitHub Actions ephemeral runner, never on
+    the always-on production server — see the module docstring for why. This is a
+    positive allowlist, not a denylist: it requires .github/workflows/agent-task.yml to
+    have explicitly set AGENT_RUNTIME=github-actions, rather than trying to detect and
+    block "is this the prod server", which is easy to get wrong in the other direction.
+    The production server's .env must never set this variable.
+    """
+    env = os.environ if env is None else env
+    return env.get("AGENT_RUNTIME", "").strip() == "github-actions"
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +436,21 @@ def remove_worktree(repo_dir: Path, path: Path, branch: str) -> None:
     run_cmd(["git", "branch", "-D", branch], cwd=repo_dir, timeout=30)
 
 
+def create_branch_in_place(repo_dir: Path, branch: str, base_ref: str = "origin/main") -> Path:
+    """Branch directly inside repo_dir instead of a separate worktree.
+
+    Used on GitHub Actions (AGENT_USE_WORKTREE=false): the job's checkout is already a
+    fresh, single-use clone that nothing else touches, so a worktree buys nothing there
+    and just adds a step that can fail. Not used on a long-lived checkout (e.g. a
+    developer's local repo or the production server) — that path keeps using
+    create_worktree() so it never branches inside a checkout other processes rely on.
+    """
+    res = run_cmd(["git", "checkout", "-B", branch, base_ref], cwd=repo_dir, timeout=60)
+    if res.returncode != 0:
+        raise RuntimeError(f"git checkout -B failed: {res.stderr.strip()}")
+    return repo_dir
+
+
 def changed_files(worktree_path: Path, base_ref: str = "origin/main") -> list[str]:
     res = run_cmd(["git", "status", "--porcelain"], cwd=worktree_path, timeout=30)
     files = []
@@ -397,6 +459,27 @@ def changed_files(worktree_path: Path, base_ref: str = "origin/main") -> list[st
         if len(line) > 3:
             files.append(line[3:].strip())
     return files
+
+
+def minimal_opencode_env(
+    openrouter_key: str, base_env: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Build an explicit, minimal environment for the opencode subprocess.
+
+    Deliberately NOT os.environ.copy(): the wrapper process may hold GITHUB_AGENT_TOKEN,
+    the GitHub Actions runner's own ACTIONS_*/RUNNER_* tokens, or (on the server) far
+    worse. The agent should never be able to read any of that, whether through a model
+    mistake or a prompt-injected issue body telling it to print its environment. Only
+    PATH (needed to find any tool it shells out to) and HOME (needed by most CLIs for
+    config/cache dirs) are carried over from the real environment; everything else,
+    including OPENROUTER_API_KEY, is set explicitly here.
+    """
+    base_env = os.environ if base_env is None else base_env
+    env = {"OPENROUTER_API_KEY": openrouter_key}
+    for key in ("PATH", "HOME"):
+        if base_env.get(key):
+            env[key] = base_env[key]
+    return env
 
 
 def run_opencode(
@@ -507,7 +590,13 @@ def create_pull_request(
 
 
 def push_branch(worktree_path: Path, branch: str, token: str, repo: str) -> None:
-    """Push over HTTPS using the token, never printing it. Raises with the token scrubbed."""
+    """Push over HTTPS using the token, never printing it. Raises with the token scrubbed.
+
+    Refuses outright to push anything not on an `agent/` branch — belt-and-suspenders
+    against a bug (or a compromised prompt) ever pointing this at `main`.
+    """
+    if not branch.startswith("agent/"):
+        raise ValueError(f"refusing to push non-agent branch: {branch!r}")
     push_url = f"https://x-access-token:{token}@github.com/{repo}.git"
     res = run_cmd(
         ["git", "push", push_url, f"HEAD:refs/heads/{branch}"], cwd=worktree_path, timeout=120
@@ -575,17 +664,28 @@ def process_one_issue(
     if dry_run:
         return {"status": "dry-run", **plan}
 
+    # Defense in depth, independent of main()'s own gate: no caller, present or future,
+    # gets a real run off GitHub Actions. See the module docstring and
+    # is_github_actions_runtime().
+    if not is_github_actions_runtime():
+        return {"status": "refused-not-actions", **plan}
+
     lock_path = acquire_lock(cfg.lock_dir, number, cfg.max_concurrent)
     if lock_path is None:
         return {"status": "skipped", "reason": "concurrency limit or already running", **plan}
 
     worktree_path: Path | None = None
+    created_worktree = False
     try:
-        worktree_path = create_worktree(cfg.worktrees_root, repo_dir, branch)
+        if cfg.use_worktree:
+            worktree_path = create_worktree(cfg.worktrees_root, repo_dir, branch)
+            created_worktree = True
+        else:
+            # GitHub Actions: the checkout itself is already a fresh, single-use clone.
+            worktree_path = create_branch_in_place(repo_dir, branch)
 
         spend_before = openrouter_key_usage(cfg.openrouter_key) if cfg.openrouter_key else None
-        env = os.environ.copy()
-        env["OPENROUTER_API_KEY"] = cfg.openrouter_key
+        env = minimal_opencode_env(cfg.openrouter_key)
         # The opencode process's own exit code isn't authoritative (it can exit 0
         # having refused the task); what matters is whether files changed, checked
         # below. Its raw output is still useful for debugging a stuck task.
@@ -675,7 +775,7 @@ def process_one_issue(
         )
         return {"status": "pr-opened", "pr_url": pr_url, "cost_usd": cost_usd, **plan}
     finally:
-        if worktree_path is not None:
+        if created_worktree and worktree_path is not None:
             remove_worktree(repo_dir, worktree_path, branch)
         release_lock(lock_path)
 
@@ -694,6 +794,14 @@ def main(argv: list[str] | None = None) -> int:
     if not args.dry_run and not is_enabled():
         print(
             "AGENT_ENABLED is off; refusing to run (set AGENT_ENABLED=1 to enable). See --dry-run."
+        )
+        return 0
+
+    if not args.dry_run and not is_github_actions_runtime():
+        print(
+            "AGENT_RUNTIME != github-actions; refusing to run for real. Agent tasks only run "
+            "on GitHub Actions (.github/workflows/agent-task.yml), never on this host. "
+            "See docs/AGENTS_WORKFORCE.md #6. Use --dry-run to preview."
         )
         return 0
 
@@ -727,7 +835,8 @@ def main(argv: list[str] | None = None) -> int:
 
     result = process_one_issue(issues[0], cfg, args.repo_dir, dry_run=args.dry_run)
     print(json.dumps(result, indent=2, default=str))
-    return 0 if result.get("status") in {"pr-opened", "dry-run", "no-changes", "skipped"} else 1
+    ok_statuses = {"pr-opened", "dry-run", "no-changes", "skipped", "refused-not-actions"}
+    return 0 if result.get("status") in ok_statuses else 1
 
 
 def _cfg_summary(cfg: RunnerConfig) -> dict[str, Any]:

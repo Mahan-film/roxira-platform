@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 """Legacy task_queue.json worker.
 
+**This server is not an agent host.** Agent tasks run only on GitHub Actions
+ephemeral runners (`.github/workflows/agent-task.yml`) — see the security
+rationale in agent_runner.py's module docstring and docs/AGENTS_WORKFORCE.md #6.
+`agent_runner.py` itself refuses any real (non-dry-run) work unless
+`AGENT_RUNTIME=github-actions` is set, which the production server's `.env`
+must never set.
+
 W10 phase 1 (PR #18) removed this file's `git add/commit/push` to `main`.
 W10 phase 2 goes further: this worker no longer runs `roxira_factory_engine.py`
 in the live checkout at all. `task_queue.json` has no real GitHub issue behind
-it, so this legacy path always calls `agent_runner.process_one_issue()` with
-`dry_run=True` — it plans and previews (worktree branch name, prompt, would-be
+it anyway, so this legacy path always calls `agent_runner.process_one_issue()`
+with `dry_run=True` — it plans and previews (branch name, prompt, would-be
 denylist/checks outcome) but never runs `opencode`, commits, pushes, or talks
-to the GitHub API. The primary, real path is the GitHub-issue `agent` label,
-handled by `agent_runner.py`'s own `main()` (see docs/AGENTS_WORKFORCE.md #6).
+to the GitHub API. The real, actionable path is the GitHub-issue `agent` label,
+handled entirely by the GitHub Actions workflow above.
 """
 import json
 import os
