@@ -1,0 +1,95 @@
+name: Factory status
+
+# W11 Project Factory, stage 6. `/status` on a parent project issue replies in
+# Persian with progress, open PRs, and spend so far. Comment parsing is pure
+# logic in src/factory_pipeline/commands.py (is_status_command, unit tested);
+# this workflow only wires it to the real issue/plan data via
+# factory_status.py. Comment text passed through `env:`, never spliced into a
+# `run:` script via `${{ }}` (script-injection safety).
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: factory-status-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  status:
+    name: Reply with progress and spend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >
+      vars.FACTORY_ENABLED == 'true' &&
+      github.event.issue.pull_request == null &&
+      contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.event.comment.user.login))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install "httpx>=0.28.1"
+
+      - name: Check for the /status command
+        id: check
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+
+          from src.factory_pipeline.commands import is_status_command
+
+          body = os.environ.get("COMMENT_BODY", "")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"is_status={'true' if is_status_command(body) else 'false'}\n")
+          PY
+
+      - name: Locate this issue's plan.json
+        if: steps.check.outputs.is_status == 'true'
+        id: find_plan
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import json
+          import os
+
+          issue_number = int(os.environ["ISSUE_NUMBER"])
+          found = "projects/__not_found__/plan.json"
+          for path in sorted(glob.glob("projects/*/plan.json")):
+              with open(path, encoding="utf-8") as fh:
+                  plan = json.load(fh)
+              if plan.get("parent_issue") == issue_number:
+                  found = path
+                  break
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"plan_path={found}\n")
+          PY
+
+      - name: Post the status reply
+        if: steps.check.outputs.is_status == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
+          AGENT_DAILY_BUDGET_USD: ${{ vars.AGENT_DAILY_BUDGET_USD || '2' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PLAN_PATH: ${{ steps.find_plan.outputs.plan_path }}
+        run: |
+          python3 output_apps/ecosystem_core/src/factory/factory_status.py \
+            --plan "$PLAN_PATH" --issue "$ISSUE_NUMBER"

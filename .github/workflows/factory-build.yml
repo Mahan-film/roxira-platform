@@ -1,0 +1,81 @@
+name: Factory build
+
+# W11 Project Factory, stage 5. When one task's agent PR (branch `agent/*`,
+# opened by .github/workflows/agent-task.yml) merges, dispatch the next ready
+# task(s) -- respecting AGENT_MAX_CONCURRENT and the task dependency graph in
+# projects/<slug>/plan.json (written by factory-plan.yml). Explicit
+# workflow_dispatch, not a label add: GITHUB_TOKEN-authored events never
+# trigger other workflows (docs/AGENTS_WORKFORCE.md #6), the same reason
+# agent-task.yml dispatches ci.yml this way for its own PRs.
+
+on:
+  pull_request:
+    types: [closed]
+
+concurrency:
+  group: factory-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  dispatch-next:
+    name: Dispatch next ready task
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >
+      vars.FACTORY_ENABLED == 'true' &&
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'agent/')
+    steps:
+      - name: Checkout main (the merge already landed there)
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install "httpx>=0.28.1"
+
+      - name: Locate the plan for this merged task
+        id: find_plan
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import json
+          import os
+          import re
+
+          body = os.environ.get("PR_BODY", "") or ""
+          match = re.search(r"Resolves #(\d+)", body)
+          found = "projects/__not_found__/plan.json"
+          if match:
+              issue_number = int(match.group(1))
+              for path in sorted(glob.glob("projects/*/plan.json")):
+                  with open(path, encoding="utf-8") as fh:
+                      plan = json.load(fh)
+                  if any(t.get("issue") == issue_number for t in plan.get("tasks", [])):
+                      found = path
+                      break
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"plan_path={found}\n")
+          PY
+
+      - name: Dispatch next ready task(s)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENT_MAX_CONCURRENT: ${{ vars.AGENT_MAX_CONCURRENT || '2' }}
+          PLAN_PATH: ${{ steps.find_plan.outputs.plan_path }}
+        run: |
+          python3 output_apps/ecosystem_core/src/factory/factory_dispatch_next.py --plan "$PLAN_PATH"
