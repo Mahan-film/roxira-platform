@@ -1,0 +1,236 @@
+name: Agent auto-merge
+
+# W13 / W10 follow-up: merges an `agent/*` PR automatically when every gate in
+# output_apps/ecosystem_core/src/factory/automerge_gate.py holds. Runs only
+# when the repo variable AUTO_MERGE_ENABLED is exactly "true" -- the default
+# is off, and it should STAY off until GitHub Pro + a ruleset on `main` are in
+# place. See docs/ops/AUTO_MERGE.md: without Pro, this workflow's own
+# `gh pr merge` call is the only thing gating an agent PR at all -- a direct
+# push to `main`, or a manual merge from the UI, bypasses it completely. This
+# is a safety net for one path, not a security boundary.
+#
+# SECURITY (fixed after hub review of the first version of this file):
+# 1. No `pull_request` trigger. A `pull_request`-triggered job runs with the
+#    workflow file taken from the PR's own merge ref, not always `main` --
+#    this workflow instead only runs via `workflow_run` (which always uses
+#    the workflow file from the default branch, per GitHub's own semantics)
+#    or a manual `workflow_dispatch`. The job also never checks out or
+#    executes anything from the PR head -- only `main` is checked out, same
+#    reasoning as agent-review.yml.
+# 2. Every PR-derived or step-output value (branch, author login, diff
+#    bytes, etc.) is threaded through `env:` and referenced as "$VAR" in
+#    `run:` blocks, never interpolated directly via `${{ }}` into shell text.
+# 3. The PR author check requires the `github-actions[bot]` account (see
+#    automerge_gate.py's module docstring) -- a PR opened by a human never
+#    auto-merges, only ones agent-task.yml itself opened with GITHUB_TOKEN.
+# 4. The `agent-review` commit status's `creator.login` must also be
+#    `github-actions[bot]`; a status posted by any other identity is ignored
+#    (treated the same as "no review yet"), enforced both here and again,
+#    defensively, inside automerge_gate.decide() itself.
+
+on:
+  # workflow_run always evaluates using the workflow file on the default
+  # branch, regardless of what triggered the run being watched -- this is
+  # what makes it safe to react to a PR's CI/review runs without a
+  # `pull_request` trigger of its own.
+  workflow_run:
+    workflows: ["Agent review", "CI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to (re-)evaluate for auto-merge"
+        required: true
+        type: string
+
+concurrency:
+  group: agent-automerge-${{ github.event.workflow_run.pull_requests[0].number || github.event.inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  REQUIRED_BOT_LOGIN: "github-actions[bot]"
+
+jobs:
+  gate:
+    name: Auto-merge gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: vars.AUTO_MERGE_ENABLED == 'true'
+    # contents: write is required for `gh pr merge` to push the squash-merge
+    # commit to main; every other permission stays at the minimum needed.
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      issues: write
+    steps:
+      - name: Resolve the PR number for this event
+        id: pr_number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCH_PR_NUMBER: ${{ github.event.inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DISPATCH_PR_NUMBER:-}" ]; then
+            number="$DISPATCH_PR_NUMBER"
+          elif [ -n "${WORKFLOW_RUN_PR_NUMBER:-}" ] && [ "$WORKFLOW_RUN_PR_NUMBER" != "null" ]; then
+            number="$WORKFLOW_RUN_PR_NUMBER"
+          elif [ -n "${WORKFLOW_RUN_HEAD_SHA:-}" ]; then
+            number=$(gh api "repos/$GITHUB_REPOSITORY/commits/$WORKFLOW_RUN_HEAD_SHA/pulls" \
+              -H "Accept: application/vnd.github.groot-preview+json" \
+              --jq '.[0].number // empty')
+          else
+            number=""
+          fi
+          if [ -z "$number" ]; then
+            echo "No PR associated with this event; nothing to do."
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      # Only `main` is ever checked out -- automerge_gate.py always runs as
+      # the trusted, reviewed copy on `main`, never anything from the PR.
+      - name: Checkout default branch (trusted code only, never the PR head)
+        if: steps.pr_number.outputs.number != ''
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Python
+        if: steps.pr_number.outputs.number != ''
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Gather PR facts (branch, author, CI conclusion, changed files, diff size)
+        if: steps.pr_number.outputs.number != ''
+        id: facts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr_number.outputs.number }}
+        run: |
+          set -euo pipefail
+          pr_json=$(gh pr view "$PR_NUMBER" --json headRefName,author,headRefOid)
+          branch=$(echo "$pr_json" | jq -r '.headRefName')
+          author_login=$(echo "$pr_json" | jq -r '.author.login')
+          sha=$(echo "$pr_json" | jq -r '.headRefOid')
+          {
+            echo "branch=$branch"
+            echo "author_login=$author_login"
+            echo "sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+
+          # Cheap, best-effort provenance check independent of the PR
+          # metadata above: who does the commit object itself say authored
+          # it. Missing/unavailable is fine (automerge_gate.py doesn't block
+          # on an unchecked value, only on a confirmed mismatch).
+          commit_author_login=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq '.author.login // empty' || echo "")
+          echo "commit_author_login=$commit_author_login" >> "$GITHUB_OUTPUT"
+
+          ci_conclusion=$(gh run list --workflow ci.yml --json headSha,status,conclusion \
+            --jq --arg sha "$sha" '[.[] | select(.headSha == $sha and .status == "completed")] | sort_by(.databaseId) | last | .conclusion // "unknown"')
+          echo "ci_conclusion=$ci_conclusion" >> "$GITHUB_OUTPUT"
+
+          gh pr diff "$PR_NUMBER" --name-only > "$RUNNER_TEMP/changed_files.txt"
+          diff_bytes=$(gh pr diff "$PR_NUMBER" | wc -c | tr -d ' ')
+          echo "diff_bytes=$diff_bytes" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch the agent-review commit status (creator-checked)
+        if: steps.pr_number.outputs.number != ''
+        id: review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.facts.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # hub review point 6: a status posted by anything other than the
+          # trusted bot account must be ignored, not read as a real verdict.
+          status_json=$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/status" \
+            --jq '[.statuses[] | select(.context == "agent-review")] | sort_by(.id) | last // {}')
+          creator_login=$(echo "$status_json" | jq -r '.creator.login // empty')
+          description=$(echo "$status_json" | jq -r '.description // empty')
+          echo "creator_login=$creator_login" >> "$GITHUB_OUTPUT"
+
+          # agent-review.yml sets the description to "verdict=... risk=...";
+          # this is the only cross-run-readable copy of the verdict (see
+          # docs/ops/AUTO_MERGE.md's "how the gate works" note on this
+          # limitation). Only trust it once the creator check above passes --
+          # done again, defensively, inside automerge_gate.py itself.
+          verdict=$(echo "$description" | grep -oE 'verdict=[a-z_]+' | cut -d= -f2 || true)
+          risk=$(echo "$description" | grep -oE 'risk=[a-z]+' | cut -d= -f2 || true)
+          jq -n --arg v "${verdict:-}" --arg r "${risk:-}" \
+            '{verdict: {verdict: ($v | select(. != "")), risk: ($r | select(. != ""))}}' \
+            > "$RUNNER_TEMP/review_result.json"
+
+      - name: Run the gate decision
+        if: steps.pr_number.outputs.number != ''
+        id: gate_decision
+        env:
+          AUTO_MERGE_ENABLED: ${{ vars.AUTO_MERGE_ENABLED }}
+          AGENT_AUTOMERGE_MAX_DIFF_BYTES: ${{ vars.AGENT_AUTOMERGE_MAX_DIFF_BYTES || '60000' }}
+          BRANCH: ${{ steps.facts.outputs.branch }}
+          AUTHOR_LOGIN: ${{ steps.facts.outputs.author_login }}
+          COMMIT_AUTHOR_LOGIN: ${{ steps.facts.outputs.commit_author_login }}
+          CI_CONCLUSION: ${{ steps.facts.outputs.ci_conclusion }}
+          REVIEW_CREATOR: ${{ steps.review.outputs.creator_login }}
+          DIFF_BYTES: ${{ steps.facts.outputs.diff_bytes }}
+        run: |
+          set -euo pipefail
+          args=(
+            --branch "$BRANCH"
+            --pr-author-login "$AUTHOR_LOGIN"
+            --ci-conclusion "$CI_CONCLUSION"
+            --review-json "$RUNNER_TEMP/review_result.json"
+            --changed-files-file "$RUNNER_TEMP/changed_files.txt"
+            --diff-bytes "$DIFF_BYTES"
+            --required-bot-login "$REQUIRED_BOT_LOGIN"
+          )
+          if [ -n "$COMMIT_AUTHOR_LOGIN" ]; then
+            args+=(--head-commit-author-login "$COMMIT_AUTHOR_LOGIN")
+          fi
+          if [ -n "$REVIEW_CREATOR" ]; then
+            args+=(--review-status-creator "$REVIEW_CREATOR")
+          fi
+          python3 output_apps/ecosystem_core/src/factory/automerge_gate.py "${args[@]}" \
+            | tee "$RUNNER_TEMP/gate_decision.json"
+
+      - name: Merge or label needs-human
+        if: steps.pr_number.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr_number.outputs.number }}
+        run: |
+          set -euo pipefail
+          allow=$(jq -r '.allow' "$RUNNER_TEMP/gate_decision.json")
+          reasons=$(jq -r '.reasons | join("; ")' "$RUNNER_TEMP/gate_decision.json")
+          if [ "$allow" = "true" ]; then
+            gh pr merge "$PR_NUMBER" --squash --auto
+            # Single-quoted: the literal backticks below are markdown, not
+            # shell command substitution -- see hub review point 2 (never
+            # let backticks/`$()`/PR text sit inside a double-quoted `run:`
+            # string, where the shell would try to execute them).
+            comment='🤖 Auto-merge gate passed; `gh pr merge --squash --auto` requested. Note: without GitHub Pro / a ruleset on `main`, this is a safety net, not an enforced check -- see docs/ops/AUTO_MERGE.md.'
+            gh pr comment "$PR_NUMBER" --body "$comment"
+          else
+            gh pr edit "$PR_NUMBER" --add-label needs-human || true
+            # printf with a single-quoted format string: %s substitutes
+            # $reasons as inert data, and the literal backticks in the
+            # format string are never re-parsed by the shell.
+            comment=$(printf '🤖 Auto-merge gate did not pass, labelled `needs-human`: %s' "$reasons")
+            gh pr comment "$PR_NUMBER" --body "$comment"
+          fi
+
+      - name: Job summary
+        if: steps.pr_number.outputs.number != ''
+        env:
+          PR_NUMBER: ${{ steps.pr_number.outputs.number }}
+        run: |
+          {
+            echo "### Auto-merge gate decision (PR #$PR_NUMBER)"
+            echo '```json'
+            cat "$RUNNER_TEMP/gate_decision.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

