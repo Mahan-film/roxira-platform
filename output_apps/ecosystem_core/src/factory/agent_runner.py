@@ -58,7 +58,8 @@ Env vars (documented in docs/AGENTS_WORKFORCE.md #6):
     AGENT_LOCK_DIR           Default <ledger dir>/locks
     AGENT_WORKTREES_ROOT     Default /opt/roxira_platform_agent_worktrees
     AGENT_TASK_TIMEOUT_SECS  Default 900 (opencode run timeout)
-    AGENT_OPENCODE_MODEL     Default openrouter/deepseek/deepseek-v4.1-flash
+    AGENT_OPENCODE_MODEL     Default: the `executor` role's primary model from
+                             config/models.yaml (W12), OpenRouter-prefixed.
     GITHUB_AGENT_TOKEN       On GitHub Actions: the job's own built-in `GITHUB_TOKEN`
                              (contents/pull-requests/issues write, scoped to this repo,
                              expires when the job ends) — no PAT. Required for any
@@ -98,7 +99,33 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 DEFAULT_REPO = "mahan-films/roxira-platform"
-DEFAULT_MODEL = "openrouter/deepseek/deepseek-v4.1-flash"
+# Hardcoded fallback only: used if config/models.yaml can't be read (see
+# _default_model() below). The real default comes from the `executor` role
+# in config/models.yaml (docs/STRATEGY.md §3, W12).
+_FALLBACK_MODEL = "openrouter/deepseek/deepseek-v4.1-flash"
+
+
+def _default_model() -> str:
+    """Primary `executor` model from config/models.yaml, OpenRouter-prefixed.
+
+    Falls back to _FALLBACK_MODEL if the registry file is missing or malformed
+    (e.g. a stripped-down checkout) rather than raising — agent_runner should
+    still be able to run, just with a possibly-stale model id.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+        from output_apps.generated_modules.smartjudge import model_registry
+
+        models = model_registry.role_models("executor")
+        if not models:
+            return _FALLBACK_MODEL
+        model_id = models[0]
+        return model_id if model_id.startswith("openrouter/") else f"openrouter/{model_id}"
+    except Exception:
+        return _FALLBACK_MODEL
+
+
+DEFAULT_MODEL = _default_model()
 DEFAULT_DAILY_BUDGET_USD = 2.0
 DEFAULT_MAX_CONCURRENT = 2
 DEFAULT_TASK_TIMEOUT_SECS = 900
@@ -489,11 +516,19 @@ def run_opencode(
     timeout_secs: int,
     env: dict[str, str],
 ) -> subprocess.CompletedProcess:
-    """Run OpenCode headless in the worktree. `opencode run [message] --model ... --format json`."""
+    """Run OpenCode headless in the worktree.
+
+    `opencode run [message] --agent build --model ... --format json`. `--agent build`
+    pins the non-interactive `build` agent defined in opencode.json (explicit
+    allow/deny permissions, no `ask` prompts) — CI has no terminal to answer an
+    `ask`, so an unpinned run would hang until AGENT_TASK_TIMEOUT_SECS killed it.
+    """
     args = [
         "opencode",
         "run",
         prompt,
+        "--agent",
+        "build",
         "--model",
         model,
         "--format",
