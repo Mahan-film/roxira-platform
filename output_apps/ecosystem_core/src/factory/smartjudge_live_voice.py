@@ -21,6 +21,11 @@ PHONETIC_FIXES = [
     (r"دادگاه\s*صلح\s*و\s*سازش", "دادگاه صلح"),
 ]
 
+# One model id for both the blocking and the streaming LLM path. Kept on the
+# model voice already used in production; moving it to a config/models.yaml
+# role is a product change that waits for the W6 legal eval.
+VOICE_LLM_MODEL = os.environ.get("VOICE_LLM_MODEL", "").strip() or "deepseek/deepseek-chat"
+
 # Streaming TTS (W7, docs/W7_voice_latency.md), default OFF: split the LLM reply at
 # Persian sentence boundaries and start Edge-TTS on the first sentence while later
 # sentences are still being generated/synthesized, instead of waiting for the whole
@@ -134,7 +139,7 @@ async def _analyze_legal_query_impl(query_text: str) -> str:
 """
 
     payload = json.dumps({
-        "model": "deepseek/deepseek-chat",
+        "model": VOICE_LLM_MODEL,
         "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": query_text}],
         "temperature": 0.2,
         "max_tokens": 190
@@ -230,7 +235,7 @@ async def analyze_legal_query_streaming(query_text: str, on_sentence) -> str:
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
                 json={
-                    "model": "deepseek/deepseek-chat",
+                    "model": VOICE_LLM_MODEL,
                     "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": query_text}],
                     "temperature": 0.2,
                     "max_tokens": 190,
