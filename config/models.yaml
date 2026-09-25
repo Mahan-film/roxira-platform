@@ -1,0 +1,147 @@
+# Roxira model & tool registry (W12, first slice — docs/STRATEGY.md §3, row W12).
+#
+# Single source of truth for "which model for which job". Read by:
+#   - output_apps/generated_modules/smartjudge/model_registry.py (loader), which
+#     output_apps/generated_modules/smartjudge/llm_router.py and
+#     src/automation/provider_base.py both import their default model lists from.
+#   - scripts/check_models.py, which diffs these ids/prices against the live
+#     OpenRouter catalogue and fails on a missing primary.
+#   - opencode.json (repo root), whose `build`/`plan` agents take their model
+#     from the `executor` role below.
+#
+# Every id here was checked LIVE against OpenRouter's GET /api/v1/models on
+# 2026-09-25 (docs/research/TECH_CURRENCY_2026-09.md) unless a `note` says
+# otherwise. Prices are USD per 1M tokens, in/out, from that same audit.
+#
+# data_policy:
+#   non_sensitive_only  — free-tier / logs-or-trains-on-prompts providers.
+#                          Customer case data must NEVER be routed here
+#                          (docs/STRATEGY.md §3b). llm_router.py enforces this
+#                          in code for the `free` role regardless of this file.
+#   standard             — provider terms are the normal paid-API terms;
+#                          customer case data is allowed.
+#
+# An env var (LLM_TIER_<ROLE>, see llm_router.py) always overrides the model
+# list for a role at runtime. This file only sets the defaults.
+
+schema_version: 1
+checked_at: "2026-09-25"
+source: docs/research/TECH_CURRENCY_2026-09.md
+
+roles:
+  # ---- Product runtime tiers (docs/STRATEGY.md §3b) -----------------------
+  free:
+    description: Non-sensitive background work — crawler summaries, SEO text, tagging, tech radar.
+    data_policy: non_sensitive_only
+    models:
+      - id: qwen/qwen3.8-27b:free
+        price_per_1m: { in: 0, out: 0 }
+      - id: google/gemma-4-31b-it:free
+        price_per_1m: { in: 0, out: 0 }
+      - id: nvidia/nemotron-3-super-120b-a12b:free
+        price_per_1m: { in: 0, out: 0 }
+
+  cheap:
+    description: Default chat, classification, query rewriting.
+    data_policy: standard
+    models:
+      # 2026-09-25 audit: ~10x cheaper than the previously configured
+      # deepseek/deepseek-v4.1-flash for a similar-class model. Not yet
+      # A/B-evaluated against production traffic — swap is proposed here,
+      # not yet forced; LLM_TIER_CHEAP still overrides if an eval regresses it.
+      - id: deepseek/deepseek-v4-flash-0731
+        price_per_1m: { in: 0.03, out: 0.32 }
+      - id: qwen/qwen3.8-flash
+        price_per_1m: { in: 0.15, out: 0.47 }
+      - id: google/gemini-3.1-flash-lite
+        price_per_1m: { in: 0.25, out: 1.50 }
+
+  strong:
+    description: Final legal drafting and reasoning shown to the customer.
+    data_policy: standard
+    models:
+      - id: anthropic/claude-sonnet-5
+        price_per_1m: { in: 2.00, out: 10.00 }
+      - id: google/gemini-3.8-flash
+        price_per_1m: { in: 0.75, out: 3.75 }
+      # Undated snapshot is live and slightly cheaper than the previously
+      # configured deepseek/deepseek-v4-pro-0813.
+      - id: deepseek/deepseek-v4-pro
+        price_per_1m: { in: 0.462, out: 1.386 }
+
+  stt:
+    description: Speech-to-text for the voice pipeline (Persian/Farsi required).
+    data_policy: standard
+    models:
+      - id: openai/whisper-large-v3-turbo
+        price_per_1m: null
+        note: >
+          UNVERIFIED against the 2026-09-25 OpenRouter audit — that pass only
+          checked chat-completion ids grepped from repo source, not STT ids.
+          STRATEGY.md §3b names "Whisper-turbo via OpenRouter or AssemblyAI";
+          confirm this id and its price on OpenRouter (or pick AssemblyAI's
+          whisper-rt streaming model, which does support Persian) before W7
+          (voice latency) depends on it.
+
+  tts:
+    description: Text-to-speech for the voice pipeline (Persian/Farsi required).
+    data_policy: standard
+    models:
+      - id: edge-tts:fa-IR-FaridNeural
+        price_per_1m: { in: 0, out: 0 }
+        note: >
+          Not an OpenRouter model — Microsoft Edge neural TTS, free, called
+          directly (not through llm_router.py). Documented Persian voice per
+          docs/research/TECH_CURRENCY_2026-09.md. scripts/check_models.py
+          skips this id (it will never appear in GET /api/v1/models).
+
+  # ---- Builder roles (agents that write/review code, W10/W12) -------------
+  architect:
+    description: >
+      Deep system reasoning, schema design, plan review. Driven through the
+      Claude Code subscription, not billed per-token via this registry — the
+      price below is the OpenRouter reference price only, for cost-comparison
+      tooling, and is never charged in practice for this role.
+      docs/STRATEGY.md §3a.
+    data_policy: standard
+    billed_via_api: false
+    models:
+      - id: anthropic/claude-opus-5
+        price_per_1m: { in: 5.00, out: 25.00 }
+
+  executor:
+    description: >
+      Cheap coding model driving OpenCode's `build` agent on GitHub Actions
+      runners (W10 phase 2, .github/workflows/agent-task.yml). Cheapest
+      coding-capable id live on 2026-09-25, already used in
+      src/automation/self_healing_agent.py.
+    data_policy: standard
+    models:
+      - id: deepseek/deepseek-v4-flash-0731
+        price_per_1m: { in: 0.03, out: 0.32 }
+      - id: deepseek/deepseek-v4-flash
+        price_per_1m: { in: 0.049, out: 0.098 }
+
+  reviewer:
+    description: >
+      Reviews the executor's diff before CI/PR. Must be a different model
+      family from `executor` (DeepSeek) so a single vendor's blind spot or
+      outage does not silently pass its own bad output.
+    data_policy: standard
+    models:
+      - id: qwen/qwen3-coder
+        price_per_1m: { in: 0.30, out: 1.00 }
+
+  mechanical:
+    description: >
+      Mechanical edits, renames, formatting, triage/format-checking
+      (docs/STRATEGY.md §3a "Haiku" row; AGENTS.md §3 "Triage/Format Checker").
+      google/gemini-3.5-flash-lite (the id previously hardcoded in AGENTS.md)
+      was NOT found live in the 2026-09-25 audit; google/gemini-3.1-flash-lite
+      is the live sibling id and is used here instead.
+    data_policy: standard
+    models:
+      - id: google/gemini-3.1-flash-lite
+        price_per_1m: { in: 0.25, out: 1.50 }
+      - id: anthropic/claude-haiku-4.5
+        price_per_1m: { in: 1.00, out: 5.00 }

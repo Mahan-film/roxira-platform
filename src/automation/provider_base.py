@@ -216,9 +216,28 @@ class OpenAICompatibleClient:
 
 
 # نگاشت سلسله‌مراتبی مدل‌های هوش مصنوعی (سپتامبر ۲۰۲۶)
-FRONTIER_MODELS = {
-    "architect_tier": ["anthropic/claude-opus-5", "anthropic/claude-sonnet-5", "anthropic/claude-fable-5"],
-    "balanced_tier": ["anthropic/claude-sonnet-5", "zhipu/glm-5.2", "qwen/qwen3.8-max"],
-    "swarm_worker_tier": ["deepseek/deepseek-v4.1-flash", "anthropic/claude-haiku-4.5"],
-    "contract_tier": ["qwen/qwen3-coder", "deepseek/deepseek-v4.1-flash"]
+#
+# "executor_tier"/"reviewer_tier" mirror config/models.yaml's executor/reviewer
+# roles (W12 model registry) when that file/module is importable, so this
+# legacy map and the registry do not silently drift apart; other tiers here
+# have no direct registry equivalent yet (W12 is a first slice) and stay
+# hardcoded, with retired ids fixed directly per the 2026-09-25 audit
+# (docs/research/TECH_CURRENCY_2026-09.md): "zhipu/glm-5.2" is retired/renamed
+# to "z-ai/glm-5.2" (provider namespace moved), and "qwen/qwen3.8-max" is an
+# unknown/retired id — the nearest live evergreen id is "qwen/qwen3-max".
+FRONTIER_MODELS: Dict[str, List[str]] = {
+    "architect_tier": [
+        "anthropic/claude-opus-5", "anthropic/claude-sonnet-5", "anthropic/claude-fable-5",
+    ],
+    "balanced_tier": ["anthropic/claude-sonnet-5", "z-ai/glm-5.2", "qwen/qwen3-max"],
+    "swarm_worker_tier": ["deepseek/deepseek-v4-flash-0731", "anthropic/claude-haiku-4.5"],
+    "contract_tier": ["qwen/qwen3-coder", "deepseek/deepseek-v4-flash-0731"],
 }
+
+try:
+    from output_apps.generated_modules.smartjudge import model_registry as _model_registry
+
+    FRONTIER_MODELS["executor_tier"] = _model_registry.role_models("executor")
+    FRONTIER_MODELS["reviewer_tier"] = _model_registry.role_models("reviewer")
+except Exception:  # registry is optional; keep the hardcoded map usable alone
+    pass

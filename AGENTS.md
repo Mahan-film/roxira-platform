@@ -13,6 +13,10 @@
 5. **Zero Hardware Waste**: Optimize asynchronous tasks using Redis Streams / BullMQ.
 
 ## 3. Tool & Model Orchestration
-- **Architect/Planner**: `anthropic/claude-sonnet-5` (Deep system reasoning & schema design)
-- **Fast Coder/Editor**: `deepseek/deepseek-v4-flash-0731` / `deepseek/deepseek-v4-pro`
-- **Triage/Format Checker**: `google/gemini-3.5-flash-lite`
+Model ids and prices live in one place now: `config/models.yaml` (the W12 model
+registry, docs/STRATEGY.md §3/§5). Roles: `architect`, `executor`, `reviewer`,
+`mechanical` (builder agents) and `free`/`cheap`/`strong`/`stt`/`tts` (product
+runtime). Read it via `output_apps/generated_modules/smartjudge/model_registry.py`,
+or run `python3 scripts/check_models.py` to check every id against the live
+OpenRouter catalogue. Do not hardcode a model id anywhere else — add or change
+it in `config/models.yaml`.
