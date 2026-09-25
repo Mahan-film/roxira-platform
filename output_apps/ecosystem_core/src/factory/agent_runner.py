@@ -64,7 +64,7 @@ Env vars (documented in docs/AGENTS_WORKFORCE.md #6):
                              (contents/pull-requests/issues write, scoped to this repo,
                              expires when the job ends) — no PAT. Required for any
                              GitHub call. Never logged, never defaulted.
-    GITHUB_REPO              Default mahan-films/roxira-platform
+    GITHUB_REPO              Default Mahan-film/roxira-platform
     OPENROUTER_API_KEY       A dedicated, capped OpenRouter key (never the product's
                              main key). Required by `opencode run` itself and used (via
                              GET /api/v1/key) to measure spend before/after a task.
@@ -98,7 +98,7 @@ from typing import Any
 # Config
 # ---------------------------------------------------------------------------
 
-DEFAULT_REPO = "mahan-films/roxira-platform"
+DEFAULT_REPO = "Mahan-film/roxira-platform"
 # Hardcoded fallback only: used if config/models.yaml can't be read (see
 # _default_model() below). The real default comes from the `executor` role
 # in config/models.yaml (docs/STRATEGY.md §3, W12).

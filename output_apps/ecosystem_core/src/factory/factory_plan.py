@@ -45,7 +45,7 @@ CLI:
 Env:
     GITHUB_TOKEN            Required (unless --dry-run). issues:write, contents:write,
                              pull-requests:write, actions:write (to dispatch agent-task.yml).
-    GITHUB_REPO              Default: mahan-films/roxira-platform.
+    GITHUB_REPO              Default: Mahan-film/roxira-platform.
     OPENROUTER_API_KEY       A dedicated key for planning/research (OPENROUTER_RESEARCH_KEY
                              in the workflow) -- read by llm_router itself, not by this script.
     AGENT_MAX_CONCURRENT     Default 2. How many of the first ready tasks to dispatch.

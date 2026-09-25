@@ -374,7 +374,7 @@ def test_runner_config_overrides_and_bad_numbers_fall_back():
 
 def _base_cfg(tmp_path, **overrides):
     kwargs = dict(
-        repo="mahan-films/roxira-platform",
+        repo="Mahan-film/roxira-platform",
         model="openrouter/deepseek/deepseek-v4.1-flash",
         daily_budget_usd=2.0,
         max_concurrent=2,
