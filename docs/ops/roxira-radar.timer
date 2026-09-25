@@ -1,0 +1,19 @@
+# PROPOSED replacement for /etc/systemd/system/roxira-radar.timer
+# (W9 live-run readiness). NOT installed automatically — see
+# docs/ops/roxira-radar.service and docs/research/LIVE_RUN.md for context
+# and the install steps.
+#
+# Same 6h cadence as the current timer; OnBootSec pushed to 15min (was
+# 10min) to give docker/roxira_app_prod more room to be healthy before the
+# first run execs into it.
+
+[Unit]
+Description=Run the real Roxira Tech-Radar scan every 6 hours (W9 live-run readiness)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

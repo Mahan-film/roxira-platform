@@ -1,0 +1,56 @@
+# PROPOSED replacement for /etc/systemd/system/roxira-radar.service
+# (W9 live-run readiness, docs/STRATEGY.md W9 row / §8).
+#
+# NOT installed automatically. This is read-only documentation until the
+# owner approves switching the timer — see docs/research/LIVE_RUN.md
+# "Switching the timer from the old sentinel to the real pipeline".
+#
+# Why replace it: the current unit runs
+# output_apps/ecosystem_core/src/factory/tech_radar_sentinel.py, which
+# finishes in under a second with a hardcoded/canned finding list and writes
+# TECH_RADAR_PROPOSALS.md + tech_radar_report.json INSIDE the git repo (the
+# autonomous daemon then `git add -A`s those files on its next pass). This
+# unit instead runs scripts/ops/roxira_radar_scheduled.py — the real
+# search -> crawl -> rerank -> tiered-LLM-synthesis pipeline
+# (src/automation/tech_radar.py) — with output written outside the repo, to
+# /opt/roxira_platform_reports/tech_radar/.
+#
+# Why `docker exec` into roxira_app_prod instead of running the host python3
+# directly (as the old unit does): the real pipeline imports httpx (via
+# output_apps/generated_modules/smartjudge/llm_router.py). Verified
+# 2026-09-24 on the production host:
+#   - `python3 -c "import httpx"` on the bare host -> ModuleNotFoundError
+#   - `docker exec roxira_app_prod python3 -c "import httpx"` -> httpx 0.28.1
+# roxira_app_prod already has /app bind-mounted from /opt/roxira_platform
+# (confirmed live: `docker exec roxira_app_prod python3 -c "import src.automation.tech_radar as t; print(t.__file__)"`
+# -> /app/src/automation/tech_radar.py), so no extra image build is needed —
+# only a `git pull` + the normal deploy runbook (docs/STRATEGY.md §7).
+#
+# To install (only after owner approval — this is deploy activity, not part
+# of this LOCAL-ONLY PR):
+#   ssh 5.75.200.67
+#   cp docs/ops/roxira-radar.service /etc/systemd/system/roxira-radar.service
+#   cp docs/ops/roxira-radar.timer   /etc/systemd/system/roxira-radar.timer
+#   systemctl daemon-reload
+#   systemctl restart roxira-radar.timer
+#   systemctl start roxira-radar.service   # optional: trigger one run now
+
+[Unit]
+Description=Roxira Tech Radar — real search/crawl/rerank/LLM-synthesis scan (W9)
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+# --env-file gives the container process the same OPENROUTER_API_KEY /
+# BRAVE_API_KEY / EXA_API_KEY / FIRECRAWL_API_KEY / JINA_API_KEY the app
+# itself already uses; -w /app matches the repo root inside the container.
+ExecStart=/usr/bin/docker exec --env-file /opt/roxira_platform/.env -w /app roxira_app_prod python3 scripts/ops/roxira_radar_scheduled.py
+TimeoutStartSec=900
+# A DEGRADED/FAILED pipeline run exits non-zero (see
+# src/automation/tech_radar.py's "never report a degraded run as success"
+# hard rule) instead of the old sentinel's unconditional success — let
+# systemd record that as a failed unit so `systemctl --failed` surfaces it.
+
+[Install]
+WantedBy=multi-user.target
