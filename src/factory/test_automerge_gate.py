@@ -40,17 +40,21 @@ def _load_automerge_gate():
     return automerge_gate
 
 
+BOT = "github-actions[bot]"
+
+
 def _happy_path_input(**overrides):
     kwargs = dict(
         branch="agent/42-fix-thing",
-        actor="mahan-films",
+        pr_author_login=BOT,
         ci_conclusion="success",
         review_verdict="approve",
         review_risk="low",
+        review_status_creator=BOT,
+        head_commit_author_login=BOT,
         changed_files=["src/factory/foo.py"],
         diff_bytes=100,
         automerge_enabled=True,
-        allowed_actors=["mahan-films"],
         max_diff_bytes=60_000,
     )
     kwargs.update(overrides)
@@ -80,10 +84,25 @@ def test_decide_blocks_non_agent_branch():
     assert any("agent/" in r for r in decision.reasons)
 
 
-def test_decide_blocks_actor_not_in_allowlist():
-    decision = automerge_gate.decide(_happy_path_input(actor="random-user"))
+def test_decide_blocks_human_pr_author():
+    # A PR opened directly by a human (not the GITHUB_TOKEN bot) must never
+    # auto-merge, even from an agent/* branch -- see hub review point 5.
+    decision = automerge_gate.decide(_happy_path_input(pr_author_login="mahan-films"))
     assert decision.allow is False
-    assert any("allowlist" in r for r in decision.reasons)
+    assert any("PR author is" in r for r in decision.reasons)
+
+
+def test_decide_blocks_mismatched_head_commit_provenance():
+    decision = automerge_gate.decide(_happy_path_input(head_commit_author_login="someone-else"))
+    assert decision.allow is False
+    assert any("provenance check" in r for r in decision.reasons)
+
+
+def test_decide_does_not_block_when_provenance_unchecked():
+    # None means "the caller couldn't cheaply verify this" -- must not block
+    # by itself, only pr_author_login is the required (non-optional) check.
+    decision = automerge_gate.decide(_happy_path_input(head_commit_author_login=None))
+    assert decision.allow is True
 
 
 def test_decide_blocks_when_ci_not_green():
@@ -99,7 +118,9 @@ def test_decide_blocks_when_review_not_approve():
 
 
 def test_decide_blocks_when_review_missing():
-    decision = automerge_gate.decide(_happy_path_input(review_verdict=None, review_risk=None))
+    decision = automerge_gate.decide(
+        _happy_path_input(review_verdict=None, review_risk=None, review_status_creator=None)
+    )
     assert decision.allow is False
 
 
@@ -107,6 +128,23 @@ def test_decide_blocks_when_risk_not_low():
     decision = automerge_gate.decide(_happy_path_input(review_risk="medium"))
     assert decision.allow is False
     assert any("risk is" in r for r in decision.reasons)
+
+
+def test_decide_ignores_review_verdict_from_untrusted_status_creator():
+    # Even a claimed approve/low-risk verdict must be ignored if the commit
+    # status wasn't posted by the trusted bot account -- hub review point 6.
+    decision = automerge_gate.decide(
+        _happy_path_input(
+            review_status_creator="some-random-app[bot]",
+            review_verdict="approve",
+            review_risk="low",
+        )
+    )
+    assert decision.allow is False
+    assert any("status creator is" in r for r in decision.reasons)
+    # And it must not also complain about verdict/risk individually -- those
+    # are only evaluated once the creator is trusted.
+    assert not any("agent-review verdict is" in r for r in decision.reasons)
 
 
 def test_decide_blocks_when_diff_too_large():
@@ -178,7 +216,6 @@ def test_denylisted_paths_normalizes_leading_slash_and_backslash():
 
 def test_main_prints_allow_true_for_compliant_input(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("AUTO_MERGE_ENABLED", "true")
-    monkeypatch.setenv("AGENT_ALLOWED_ACTORS", "mahan-films")
 
     review_json = tmp_path / "review.json"
     verdict = {"verdict": "approve", "risk": "low", "reasons": []}
@@ -190,12 +227,16 @@ def test_main_prints_allow_true_for_compliant_input(tmp_path, monkeypatch, capsy
         [
             "--branch",
             "agent/1-x",
-            "--actor",
-            "mahan-films",
+            "--pr-author-login",
+            BOT,
+            "--head-commit-author-login",
+            BOT,
             "--ci-conclusion",
             "success",
             "--review-json",
             str(review_json),
+            "--review-status-creator",
+            BOT,
             "--changed-files-file",
             str(changed_files_file),
             "--diff-bytes",
@@ -207,11 +248,36 @@ def test_main_prints_allow_true_for_compliant_input(tmp_path, monkeypatch, capsy
     assert out["allow"] is True
 
 
-def test_main_defaults_automerge_disabled_when_env_unset(tmp_path, monkeypatch, capsys):
+def test_main_defaults_automerge_disabled_when_env_unset(monkeypatch, capsys):
     monkeypatch.delenv("AUTO_MERGE_ENABLED", raising=False)
     rc = automerge_gate.main(
-        ["--branch", "agent/1-x", "--actor", "mahan-films", "--ci-conclusion", "success"]
+        [
+            "--branch",
+            "agent/1-x",
+            "--pr-author-login",
+            BOT,
+            "--ci-conclusion",
+            "success",
+        ]
     )
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["allow"] is False
+
+
+def test_main_blocks_non_bot_author_by_default(monkeypatch, capsys):
+    monkeypatch.setenv("AUTO_MERGE_ENABLED", "true")
+    rc = automerge_gate.main(
+        [
+            "--branch",
+            "agent/1-x",
+            "--pr-author-login",
+            "mahan-films",
+            "--ci-conclusion",
+            "success",
+        ]
+    )
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["allow"] is False
+    assert any("PR author is" in r for r in out["reasons"])

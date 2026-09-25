@@ -275,7 +275,19 @@ def call_reviewer_model(
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Agent-review reviewer call + verdict formatter")
     ap.add_argument("--diff-file", type=Path, required=True)
-    ap.add_argument("--pr-title", default="")
+    ap.add_argument(
+        "--pr-title",
+        default="",
+        help="PR title text (prefer --pr-title-file from a caller passing untrusted text)",
+    )
+    ap.add_argument(
+        "--pr-title-file",
+        type=Path,
+        default=None,
+        help="read the PR title from a file instead of a CLI arg -- avoids putting "
+        "attacker-controlled PR title text through shell argument interpolation "
+        "in the caller (see .github/workflows/agent-review.yml)",
+    )
     ap.add_argument("--pr-body-file", type=Path, default=None)
     ap.add_argument("--ci-status", default="unknown")
     ap.add_argument("--max-diff-bytes", type=int, default=60_000)
@@ -334,13 +346,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     diff_text = args.diff_file.read_text(encoding="utf-8", errors="replace")
+    pr_title = (
+        args.pr_title_file.read_text(encoding="utf-8", errors="replace").strip()
+        if args.pr_title_file
+        else args.pr_title
+    )
     pr_body = (
         args.pr_body_file.read_text(encoding="utf-8", errors="replace") if args.pr_body_file else ""
     )
 
-    prompt = build_review_prompt(
-        args.pr_title, pr_body, diff_text, args.ci_status, args.max_diff_bytes
-    )
+    prompt = build_review_prompt(pr_title, pr_body, diff_text, args.ci_status, args.max_diff_bytes)
     verdict, usage = call_reviewer_model(prompt, api_key, model)
 
     result = {

