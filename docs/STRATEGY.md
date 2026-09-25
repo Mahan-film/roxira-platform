@@ -92,7 +92,7 @@ W10 phase 1 is live: the daemon and worker no longer push (verified, no daemon c
 2. **Owner setup for W10:** merge PR #25, add a capped OpenRouter key as `OPENROUTER_AGENT_KEY`, set `AGENT_ENABLED=true`, turn on branch protection for `main` (require PR + CI), then run one low-risk issue labelled `agent` end to end. Revoke the PAT that was pasted in chat on 2026-09-24.
 3. **W6 missing laws:** the owner supplies the 3 files, then ingest and re-run the eval. Switch production to `iran_laws_v2` only if citation accuracy clearly beats 16.7%.
 4. W8 is done (PR #22).
-5. **W11 Project Factory**, once items 2 and 3 have landed.
+5. **W11 Project Factory**, once the W9 live run (item 1) and the W10 setup (item 2) have landed.
 6. **W5 flag on (cheap tier)** after the W6 eval passes, then **W7 voice latency**, then **W12/W13**.
 
 ## 6. Known facts (verified 2026-09-24)
