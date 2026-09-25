@@ -93,3 +93,132 @@ Rule of thumb: if a wrong answer is embarrassing or expensive (money, legal corr
 4. Whether `roxira-worker.timer` / `roxira-autodaemon.timer` should be disabled/reworked in the same change, or done as a follow-up once the worktree+PR wrapper is proven on one task end-to-end.
 
 **Nothing above has been enabled.** No systemd unit, cron entry, or firewall rule has been changed. Once the owner signs off on this design (and specifically on which pieces should run unattended), the next step is a PR implementing the worktree+PR wrapper and the daemon's git-push removal, tested against one real task before any timer is pointed at it.
+
+## 6. Phase 2 implementation
+
+`output_apps/ecosystem_core/src/factory/agent_runner.py` is the execution engine described in
+§2-3, implemented as code. **Revised after security review of the first version of this section:**
+agent tasks run on **GitHub Actions ephemeral runners only, never on the production server.**
+
+### Why the server was rejected
+
+The first cut of this design ran `opencode run` on the always-on prod host, using its existing
+OpenCode config (`"permission": "allow"` — unrestricted shell access, per §1's inventory) and
+`os.environ.copy()` for the subprocess environment. That means the agent process would have
+inherited `GITHUB_AGENT_TOKEN` and everything else in that environment, and could read
+`/opt/roxira_platform/.env`, call `docker`, or otherwise reach the live system — whether from a
+model mistake or a prompt injected into an issue body. The denylist only inspects the *diff*,
+after the agent has already run, so it cannot stop any of that mid-task; it only stops a bad diff
+from being pushed. This PR keeps the denylist (defense in depth) but replaces the actual security
+boundary: a GitHub Actions job runs on a disposable, single-use VM with no access to the
+production host, and only ever holds the two secrets the workflow explicitly hands it.
+
+### `.github/workflows/agent-task.yml`
+
+Triggered by an issue being labelled `agent`, or manually via `workflow_dispatch` with an issue
+number. Steps:
+
+1. **Job guard** (`if:`, before checkout even runs): the repo variable `AGENT_ENABLED` must be
+   `true`, **and** the triggering actor (whoever added the label, or whoever ran the manual
+   dispatch) must be in the repo variable `AGENT_ALLOWED_ACTORS` (comma-separated; unset defaults
+   to `mahan-films` only).
+2. Installs OpenCode pinned to an exact version (`npm install -g opencode-ai@1.18.30`, the
+   official pinned-version method — `npm i -g opencode-ai@<version>`), then asserts
+   `opencode --version` matches exactly.
+3. **Concurrency cap**: `concurrency:` groups by issue number (so the same issue never runs
+   twice at once), and a separate step lists other in-progress `agent-task.yml` runs via
+   `gh run list` and refuses to proceed past `AGENT_MAX_CONCURRENT` (repo variable, default 2) —
+   GitHub Actions' `concurrency:` field has no native "max N in parallel across different
+   triggers" primitive, so this is done explicitly rather than faked with the YAML field alone.
+4. Runs `agent_runner.py --issue <N>` with `AGENT_RUNTIME=github-actions`,
+   `AGENT_USE_WORKTREE=false` (the job's own checkout is already a fresh, single-use clone, so
+   branching happens directly in it — see `create_branch_in_place()`), `GITHUB_AGENT_TOKEN` set
+   to the job's own built-in `secrets.GITHUB_TOKEN` (no PAT), and `OPENROUTER_API_KEY` set to
+   `secrets.OPENROUTER_AGENT_KEY` (a dedicated, capped key — never the product's main one).
+   `agent_runner.py` itself passes OpenCode an **explicit, minimal environment**
+   (`minimal_opencode_env()`: `PATH`, `HOME`, `OPENROUTER_API_KEY` only) rather than a copy of
+   the job's environment, so the agent process cannot read `GITHUB_TOKEN` or anything else even
+   by mistake. `push_branch()` also asserts the branch name starts with `agent/` before pushing,
+   as a last-resort check independent of everything above.
+5. **CI on the agent's PR**: a PR opened with the built-in `GITHUB_TOKEN` does **not** trigger
+   `pull_request` events (a deliberate GitHub anti-recursion rule), so `ci.yml`'s own triggers
+   would never fire for it. Verified fix: `ci.yml` now also has a `workflow_dispatch:` trigger,
+   and this workflow calls `gh workflow run ci.yml --ref <branch>` right after a PR is opened,
+   using the `actions: write` permission granted for exactly this. (`ci.yml`'s `paths-filter`
+   step also needed an explicit `base: main` for the `workflow_dispatch` case only — it has no
+   natural "before" commit to diff against the way `push`/`pull_request` do.)
+6. Comments on the issue and fails the job (red X, visible in the Actions tab) for any outcome
+   other than `pr-opened` / `no-changes` / `skipped` / `dry-run` — `checks-failed`,
+   `denylist-blocked`, or an actual error all surface as a failed run.
+
+`agent_runner.py` also refuses to do a real (non-dry-run) task at all — in both `main()` and
+`process_one_issue()` itself, independently — unless `AGENT_RUNTIME=github-actions` is set. The
+production server's `.env` must never set this. `task_worker.py` (the legacy `task_queue.json`
+path) always calls `process_one_issue(..., dry_run=True)` for the same reason, unconditionally.
+
+`factory_dispatch_api.py`'s `POST /api/v1/factory/dispatch` (already loopback-only since phase 1)
+still requires a `X-Factory-Token` header matching `FACTORY_DISPATCH_TOKEN` from the environment;
+unset (the default) disables it entirely. This is unrelated to the GitHub Actions path and is not
+where agent tasks run from — it's the legacy manual-queue endpoint from §1, kept gated shut.
+
+### OpenRouter key limits (verified)
+
+`OPENROUTER_AGENT_KEY` should be a key created specifically for this workflow, with its own
+`limit` (a USD cap) and `limit_reset` set to `daily` — **OpenRouter does support this**: a key's
+`limit_reset` can be `daily`, `weekly`, `monthly`, or unset (never resets), and resets run
+automatically at midnight UTC. This is the *real* dollar cap for the GitHub Actions path — the
+JSONL ledger `agent_runner.py` writes only exists for the lifetime of one ephemeral job and is a
+same-run sanity check, not a cross-run budget the way it was on a persistent server. Set the
+limit via OpenRouter's key management UI or the Provisioning/Management API
+(`POST/PATCH /api/v1/keys`); `GET /api/v1/key` (already used by `openrouter_key_usage()`) reports
+`limit`, `limit_reset`, and `limit_remaining` back.
+Sources: [OpenRouter API Credit & Rate Limits](https://openrouter.ai/docs/api_reference/limits),
+[Provisioning API Keys](https://openrouter.ai/docs/features/provisioning-api-keys).
+
+### Env vars
+
+| Var | Where | Default | Notes |
+| --- | --- | --- | --- |
+| `AGENT_ENABLED` | repo **variable** | off | Kill switch; must be exactly `true` |
+| `AGENT_ALLOWED_ACTORS` | repo **variable** | `mahan-films` | Comma-separated GitHub logins allowed to trigger a run |
+| `AGENT_MAX_CONCURRENT` | repo **variable** | `2` | Approximated via `gh run list`, see above |
+| `AGENT_DAILY_BUDGET_USD` | repo **variable** | `2` | Same-run sanity check only on Actions; the OpenRouter key limit is the real cap |
+| `OPENROUTER_AGENT_KEY` | repo **secret** | — (required) | Dedicated, capped OpenRouter key — never the product's main key |
+| `GITHUB_AGENT_TOKEN` | set by the workflow | — | On Actions: the job's own built-in `GITHUB_TOKEN`, not a PAT |
+| `AGENT_RUNTIME` | set by the workflow | — | Must be `github-actions` for any real run; never set on the server |
+| `AGENT_USE_WORKTREE` | set by the workflow | `true` | Set to `false` on Actions (in-place branch, no separate worktree) |
+| `FACTORY_DISPATCH_TOKEN` | server `.env` | — (unset = disabled) | Legacy manual-dispatch HTTP endpoint gate, unrelated to agent tasks |
+
+### Verified
+
+- `ssh 5.75.200.67 'opencode --version; opencode run --help'` (read-only) on 2026-09-25 confirms
+  OpenCode 1.18.30 and the `run [message..] --model <provider/model> --format {default,json}`
+  flags this code relies on.
+- OpenCode's official pinned-version install is `npm i -g opencode-ai@<version>` (also the method
+  its own `opencode upgrade --method npm` uses internally).
+- `.github/workflows/agent-task.yml` and the updated `ci.yml` both pass `actionlint` v1.7.12
+  clean (includes embedded-shellcheck checks on every `run:` block).
+- OpenRouter per-key `limit_reset: daily` (midnight UTC) is documented and current — see sources
+  above.
+
+### Manual one-task run (owner)
+
+```bash
+gh workflow run agent-task.yml -f issue_number=<N>
+gh run watch   # or: open the Actions tab
+```
+
+### Owner steps to go live
+
+1. Create a dedicated OpenRouter API key with a `limit` (e.g. $2) and `limit_reset: daily`, and
+   add it as the repo secret `OPENROUTER_AGENT_KEY` (Settings → Secrets and variables → Actions).
+   **No server token is needed for this path** — the workflow uses the built-in `GITHUB_TOKEN`.
+2. Set repo variables (Settings → Secrets and variables → Actions → Variables):
+   `AGENT_ENABLED=true`, and optionally `AGENT_ALLOWED_ACTORS`, `AGENT_MAX_CONCURRENT`,
+   `AGENT_DAILY_BUDGET_USD` to override their defaults.
+3. Create the `agent` and `agent-pr-open` labels on the repo.
+4. Open one real, low-risk issue labelled `agent` (per §4's table) and watch it go end-to-end
+   into a reviewable PR with a real CI run, before relying on this for anything else.
+5. The old server-side path (`task_worker.py`, `factory_dispatch_api.py`) stays dry-run/disabled
+   as documented above — it is not part of how agent tasks actually run and needs no further
+   owner action.

@@ -164,6 +164,21 @@ class SafeDispatchHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             if raw_path == "/api/v1/factory/dispatch":
+                # W10 phase 2: this endpoint used to accept anonymous POSTs and, via
+                # task_worker.py, end in an unreviewed push to `main` (see
+                # docs/AGENTS_WORKFORCE.md #1). It now requires a shared-secret token
+                # from the environment (no default — unset means the endpoint stays
+                # closed) and the dispatched task goes through agent_runner.py's
+                # worktree+PR pipeline instead of writing straight to the checkout.
+                expected_token = os.environ.get("FACTORY_DISPATCH_TOKEN", "").strip()
+                if not expected_token:
+                    self.send_safe_json(503, {"error": "Dispatch disabled: FACTORY_DISPATCH_TOKEN not set"})
+                    return
+                sent_token = self.headers.get("X-Factory-Token", "").strip()
+                if sent_token != expected_token:
+                    self.send_safe_json(401, {"error": "Missing or invalid X-Factory-Token"})
+                    return
+
                 length = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(length)
                 payload = json.loads(body.decode("utf-8"))

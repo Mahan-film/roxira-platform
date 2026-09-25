@@ -11,6 +11,11 @@ on:
       - "output_apps/enterprise_hub/frontend/public/tech_radar_report.json"
       - "TECH_RADAR_*"
       - "**/*.md"
+  # A PR opened with the default GITHUB_TOKEN (as agent-task.yml's agent PRs are)
+  # does not trigger `pull_request` events — a deliberate GitHub anti-recursion
+  # rule. agent-task.yml dispatches this workflow directly on the new branch via
+  # `gh workflow run ci.yml --ref <branch>` so agent PRs still get a real CI run.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -41,6 +46,12 @@ jobs:
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          # workflow_dispatch (used to run CI on agent-task.yml's PR branches, since a
+          # PR opened with GITHUB_TOKEN doesn't trigger pull_request events) has no
+          # natural "before" commit to diff against, unlike push/pull_request; give it
+          # one explicitly. Left empty for push/pull_request so their own automatic
+          # base detection (unaffected by this input) keeps working.
+          base: ${{ github.event_name == 'workflow_dispatch' && 'main' || '' }}
           filters: |
             python:
               - "**/*.py"
