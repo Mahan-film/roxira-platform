@@ -1,0 +1,210 @@
+name: Agent review
+
+# W13 / W10 follow-up: an AI reviewer looks at an `agent/*` PR's diff and CI
+# status and posts a verdict as a PR comment + a commit status/check named
+# `agent-review`. This is one of the two inputs agent-automerge.yml requires
+# (the other being CI itself); neither this nor auto-merge is a substitute
+# for GitHub branch protection, which this private/Free repo cannot enable
+# today (see docs/ops/AUTO_MERGE.md).
+#
+# Deliberately `pull_request`, not `pull_request_target`: this workflow reads
+# the PR's own untrusted diff and title/body as *inert text* sent to the
+# reviewer model -- it is never executed, never interpolated into a shell
+# command, never used to install/run the PR's own code. `pull_request_target`
+# exists to run trusted workflow code against untrusted PR content with base-
+# branch secrets and privileges; that combination is exactly what this
+# workflow avoids needing, since it does nothing but read text and call an
+# API. See output_apps/ecosystem_core/src/factory/review_gate.py's module
+# docstring for the full reasoning and the prompt-injection framing used on
+# the diff itself.
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: agent-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+  actions: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  MAX_DIFF_BYTES: "60000"
+  CI_WAIT_TIMEOUT_SECS: "900"
+
+jobs:
+  review:
+    name: Agent review
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only for the branches this whole gate exists for, only for PRs opened
+    # within this repo (never a fork -- a fork PR gets no OPENROUTER_AGENT_KEY
+    # spend and no reviewer call), and only once real content changed.
+    if: >
+      startsWith(github.event.pull_request.head.ref, 'agent/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout PR head (read-only diff, nothing executed)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Compute diff against base (size-capped, text only)
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.event.pull_request.base.sha }}" --depth=1
+          git diff "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" \
+            > "$RUNNER_TEMP/pr.diff"
+          wc -c "$RUNNER_TEMP/pr.diff"
+          {
+            echo "${{ github.event.pull_request.body }}"
+          } > "$RUNNER_TEMP/pr_body.txt"
+
+      - name: List changed files (for the automerge gate to reuse)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh pr diff ${{ github.event.pull_request.number }} --name-only \
+            > "$RUNNER_TEMP/changed_files.txt" || true
+          cat "$RUNNER_TEMP/changed_files.txt"
+
+      # A PR opened by the built-in GITHUB_TOKEN (agent-task.yml's PRs) does
+      # not trigger `pull_request`, so agent-task.yml itself dispatches
+      # ci.yml on the branch. By the time this job's diff/checkout steps
+      # above finish, that CI run is usually already in flight; poll for its
+      # conclusion instead of assuming it already happened.
+      - name: Wait for CI conclusion on this commit
+        id: ci_status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + CI_WAIT_TIMEOUT_SECS ))
+          conclusion="unknown"
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            run_json=$(gh run list --workflow ci.yml --json headSha,status,conclusion \
+              --jq "[.[] | select(.headSha == \"$HEAD_SHA\")] | sort_by(.databaseId) | last // empty")
+            if [ -n "$run_json" ]; then
+              status=$(echo "$run_json" | jq -r '.status')
+              if [ "$status" = "completed" ]; then
+                conclusion=$(echo "$run_json" | jq -r '.conclusion')
+                break
+              fi
+            fi
+            sleep 15
+          done
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          echo "CI conclusion for $HEAD_SHA: $conclusion"
+
+      - name: Run reviewer (fails closed if config or the call itself fails)
+        id: run_review
+        env:
+          AGENT_REVIEW_MODEL: ${{ vars.AGENT_REVIEW_MODEL }}
+          OPENROUTER_AGENT_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
+          AGENT_DAILY_BUDGET_USD: ${{ vars.AGENT_DAILY_BUDGET_USD || '2' }}
+        run: |
+          set -euo pipefail
+          python3 output_apps/ecosystem_core/src/factory/review_gate.py \
+            --diff-file "$RUNNER_TEMP/pr.diff" \
+            --pr-title "${{ github.event.pull_request.title }}" \
+            --pr-body-file "$RUNNER_TEMP/pr_body.txt" \
+            --ci-status "${{ steps.ci_status.outputs.conclusion }}" \
+            --max-diff-bytes "$MAX_DIFF_BYTES" \
+            --out "$RUNNER_TEMP/review_result.json"
+
+      - name: Post PR comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          status=$(jq -r '.status' "$RUNNER_TEMP/review_result.json")
+          if [ "$status" = "skipped-budget" ]; then
+            body="<!-- agent-review-verdict -->
+          ### ⏭️ Agent review skipped: daily budget guard
+          $(jq -r '.message' "$RUNNER_TEMP/review_result.json")"
+          else
+            body=$(jq -r '.comment_body' "$RUNNER_TEMP/review_result.json")
+          fi
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            -q '.[] | select(.body | startswith("<!-- agent-review-verdict -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh pr comment "$PR" --body "$body"
+          fi
+
+      - name: Set the agent-review commit status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          status=$(jq -r '.status' "$RUNNER_TEMP/review_result.json")
+          if [ "$status" = "skipped-budget" ]; then
+            state="pending"
+            desc="skipped: daily budget guard"
+          elif [ "$status" = "error" ]; then
+            state="failure"
+            desc="reviewer misconfigured, failed closed"
+          else
+            state=$(jq -r '.commit_status_state' "$RUNNER_TEMP/review_result.json")
+            verdict=$(jq -r '.verdict.verdict' "$RUNNER_TEMP/review_result.json")
+            risk=$(jq -r '.verdict.risk' "$RUNNER_TEMP/review_result.json")
+            desc="verdict=$verdict risk=$risk"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state="$state" -f context="agent-review" -f description="$desc" > /dev/null
+
+      - name: Job summary (usage, no secret values)
+        run: |
+          {
+            echo "### Agent review usage"
+            echo '```json'
+            jq '.usage // {}' "$RUNNER_TEMP/review_result.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Append to cost ledger
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/agent-ledger"
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          sys.path.insert(0, "output_apps/ecosystem_core/src/factory")
+          import cost_ledger
+
+          runner_temp = os.environ["RUNNER_TEMP"]
+          result_path = f"{runner_temp}/review_result.json"
+          ledger_path = f"{runner_temp}/agent-ledger/agent_review_ledger.jsonl"
+          with open(result_path, encoding="utf-8") as fh:
+              result = json.load(fh)
+          usage = result.get("usage") or {}
+          cost_ledger.append_row(
+              __import__("pathlib").Path(ledger_path),
+              cost_ledger.SOURCE_AGENT_REVIEW,
+              {
+                  "pr": ${{ github.event.pull_request.number }},
+                  "status": result.get("status"),
+                  "model": usage.get("model"),
+                  "cost_usd": usage.get("cost_usd") or 0.0,
+              },
+          )
+          PY

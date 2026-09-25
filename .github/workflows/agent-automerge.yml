@@ -1,0 +1,170 @@
+name: Agent auto-merge
+
+# W13 / W10 follow-up: merges an `agent/*` PR automatically when every gate in
+# output_apps/ecosystem_core/src/factory/automerge_gate.py holds. Runs only
+# when the repo variable AUTO_MERGE_ENABLED is exactly "true" -- the default
+# is off, and it should STAY off until GitHub Pro + a ruleset on `main` are in
+# place. See docs/ops/AUTO_MERGE.md: without Pro, this workflow's own
+# `gh pr merge` call is the only thing gating an agent PR at all -- a direct
+# push to `main`, or a manual merge from the UI, bypasses it completely. This
+# is a safety net for one path, not a security boundary.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: [main]
+  # agent-review.yml finishes after this PR's own pull_request event and
+  # would otherwise never re-trigger a re-check of this workflow's gate.
+  workflow_run:
+    workflows: ["Agent review", "CI"]
+    types: [completed]
+
+concurrency:
+  group: agent-automerge-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+  issues: write
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  gate:
+    name: Auto-merge gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: vars.AUTO_MERGE_ENABLED == 'true'
+    steps:
+      - name: Resolve the PR number for this event
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            number="${{ github.event.pull_request.number }}"
+          else
+            number="${{ github.event.workflow_run.pull_requests[0].number }}"
+            if [ -z "$number" ] || [ "$number" = "null" ]; then
+              sha="${{ github.event.workflow_run.head_sha }}"
+              number=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" \
+                -H "Accept: application/vnd.github.groot-preview+json" \
+                --jq '.[0].number // empty')
+            fi
+          fi
+          if [ -z "$number" ]; then
+            echo "No PR associated with this event; nothing to do."
+            echo "number=" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=$number" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.pr.outputs.number != ''
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        if: steps.pr.outputs.number != ''
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Gather PR facts (branch, actor, CI conclusion, changed files, diff size)
+        if: steps.pr.outputs.number != ''
+        id: facts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          pr_json=$(gh pr view "$PR" --json headRefName,author,headRefOid,additions,deletions)
+          branch=$(echo "$pr_json" | jq -r '.headRefName')
+          actor=$(echo "$pr_json" | jq -r '.author.login')
+          sha=$(echo "$pr_json" | jq -r '.headRefOid')
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "actor=$actor" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+          ci_conclusion=$(gh run list --workflow ci.yml --json headSha,status,conclusion \
+            --jq "[.[] | select(.headSha == \"$sha\" and .status == \"completed\")] | sort_by(.databaseId) | last | .conclusion // \"unknown\"")
+          echo "ci_conclusion=$ci_conclusion" >> "$GITHUB_OUTPUT"
+
+          gh pr diff "$PR" --name-only > "$RUNNER_TEMP/changed_files.txt"
+          diff_bytes=$(gh pr diff "$PR" | wc -c | tr -d ' ')
+          echo "diff_bytes=$diff_bytes" >> "$GITHUB_OUTPUT"
+
+          status_json=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/status" --jq '.statuses[] | select(.context == "agent-review")' || echo "")
+          echo "$status_json" > "$RUNNER_TEMP/agent_review_status.json"
+
+      - name: Fetch the agent-review verdict comment
+        if: steps.pr.outputs.number != ''
+        id: review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          # agent-review.yml posts the machine-readable verdict as a PR comment
+          # with the same marker it uses for idempotent updates; the workflow
+          # itself only kept the JSON in its own ephemeral $RUNNER_TEMP, so
+          # this job re-derives verdict/risk from the commit status
+          # description it also sets ("verdict=... risk=..."), which is the
+          # cross-run-readable copy.
+          desc=$(jq -r '.description // empty' "$RUNNER_TEMP/agent_review_status.json" 2>/dev/null || echo "")
+          verdict=$(echo "$desc" | grep -oE 'verdict=[a-z_]+' | cut -d= -f2 || true)
+          risk=$(echo "$desc" | grep -oE 'risk=[a-z]+' | cut -d= -f2 || true)
+          jq -n --arg v "${verdict:-}" --arg r "${risk:-}" \
+            '{verdict: {verdict: ($v | select(. != "")), risk: ($r | select(. != ""))}}' \
+            > "$RUNNER_TEMP/review_result.json"
+          cat "$RUNNER_TEMP/review_result.json"
+
+      - name: Run the gate decision
+        if: steps.pr.outputs.number != ''
+        id: gate_decision
+        env:
+          AUTO_MERGE_ENABLED: ${{ vars.AUTO_MERGE_ENABLED }}
+          AGENT_ALLOWED_ACTORS: ${{ vars.AGENT_ALLOWED_ACTORS || 'mahan-films' }}
+          AGENT_AUTOMERGE_MAX_DIFF_BYTES: ${{ vars.AGENT_AUTOMERGE_MAX_DIFF_BYTES || '60000' }}
+        run: |
+          set -euo pipefail
+          python3 output_apps/ecosystem_core/src/factory/automerge_gate.py \
+            --branch "${{ steps.facts.outputs.branch }}" \
+            --actor "${{ steps.facts.outputs.actor }}" \
+            --ci-conclusion "${{ steps.facts.outputs.ci_conclusion }}" \
+            --review-json "$RUNNER_TEMP/review_result.json" \
+            --changed-files-file "$RUNNER_TEMP/changed_files.txt" \
+            --diff-bytes "${{ steps.facts.outputs.diff_bytes }}" \
+            | tee "$RUNNER_TEMP/gate_decision.json"
+
+      - name: Merge or label needs-human
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          allow=$(jq -r '.allow' "$RUNNER_TEMP/gate_decision.json")
+          reasons=$(jq -r '.reasons | join("; ")' "$RUNNER_TEMP/gate_decision.json")
+          if [ "$allow" = "true" ]; then
+            gh pr merge "$PR" --squash --auto
+            gh pr comment "$PR" --body "🤖 Auto-merge gate passed; \`gh pr merge --squash --auto\` requested. Note: without GitHub Pro / a ruleset on \`main\`, this is a safety net, not an enforced check -- see docs/ops/AUTO_MERGE.md."
+          else
+            gh pr edit "$PR" --add-label needs-human || true
+            gh pr comment "$PR" --body "🤖 Auto-merge gate did not pass, labelled \`needs-human\`: ${reasons}"
+          fi
+
+      - name: Job summary
+        if: steps.pr.outputs.number != ''
+        run: |
+          {
+            echo "### Auto-merge gate decision (PR #${{ steps.pr.outputs.number }})"
+            echo '```json'
+            cat "$RUNNER_TEMP/gate_decision.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
