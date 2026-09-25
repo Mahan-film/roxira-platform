@@ -25,7 +25,7 @@ CLI:
 
 Env:
     GITHUB_TOKEN            Required. issues:write, actions:write.
-    GITHUB_REPO             Default: mahan-films/roxira-platform.
+    GITHUB_REPO             Default: Mahan-film/roxira-platform.
     AGENT_MAX_CONCURRENT    Default 2.
 """
 

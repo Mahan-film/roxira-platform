@@ -11,8 +11,8 @@ Two separate problems currently live in git history, not just the working
 tree:
 
 1. **Secrets in history.** Real API keys / DB passwords were committed at
-   some point before W1/W2 (PRs [#2](https://github.com/mahan-films/roxira-platform/pull/2),
-   [#4](https://github.com/mahan-films/roxira-platform/pull/4)) moved
+   some point before W1/W2 (PRs [#2](https://github.com/Mahan-film/roxira-platform/pull/2),
+   [#4](https://github.com/Mahan-film/roxira-platform/pull/4)) moved
    config to `.env`. Removing them from the current tree does not remove
    them from history — anyone with clone access (or a leaked git bundle)
    can still `git log -p` or `git show <old-sha>` to read them.
@@ -52,13 +52,13 @@ pip install --user git-filter-repo
 2. **Take a full backup** of the repo (bare clone) before touching
    anything:
    ```bash
-   git clone --bare git@github.com:mahan-films/roxira-platform.git roxira-platform-backup.git
+   git clone --bare git@github.com:Mahan-film/roxira-platform.git roxira-platform-backup.git
    ```
 
 3. **Fresh clone to work from** (filter-repo refuses to run on a clone
    that still has a remote configured, to avoid accidental pushes):
    ```bash
-   git clone git@github.com:mahan-films/roxira-platform.git roxira-rewrite
+   git clone git@github.com:Mahan-film/roxira-platform.git roxira-rewrite
    cd roxira-rewrite
    ```
 
@@ -77,7 +77,7 @@ pip install --user git-filter-repo
 5. **Strip known secret strings.** Build a replacement list of every real
    key/password found in history (grep history first, do not guess):
    ```bash
-   git clone --bare git@github.com:mahan-films/roxira-platform.git /tmp/scan.git
+   git clone --bare git@github.com:Mahan-film/roxira-platform.git /tmp/scan.git
    cd /tmp/scan.git
    git log -p --all | grep -EoI '(sk-[a-zA-Z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|postgres://[^ ]+|OPENROUTER_API_KEY=.*|KAVENEGAR_API_KEY=.*|SMS_IR_API_KEY=.*|JWT_SECRET=.*)' \
      | sort -u > /tmp/found_secrets.txt
@@ -104,7 +104,7 @@ pip install --user git-filter-repo
 7. **Re-add the remote and force-push**, protected branch rules
    temporarily relaxed:
    ```bash
-   git remote add origin git@github.com:mahan-films/roxira-platform.git
+   git remote add origin git@github.com:Mahan-film/roxira-platform.git
    git push origin --force --all
    git push origin --force --tags
    ```
@@ -115,7 +115,7 @@ pip install --user git-filter-repo
    # on 5.75.200.67
    cd /opt
    mv roxira_platform roxira_platform.old-history
-   git clone git@github.com:mahan-films/roxira-platform.git roxira_platform
+   git clone git@github.com:Mahan-film/roxira-platform.git roxira_platform
    cp roxira_platform.old-history/.env roxira_platform/.env
    # re-point docker compose, verify `docker compose config -q`, then swap in
    ```

@@ -114,6 +114,7 @@ Everything that can be done without the owner or the server is merged (PRs #29�
 - Qdrant did not answer the audit script. `/judge/health` returns 405 and `/judge/chat` returns 422 on an empty body.
 - W6 (2026-09-24): Qdrant `iran_laws_bge_m3` (1,308 points) is reachable and healthy; the audit script's earlier no-answer was a network-reachability issue outside the container, not a Qdrant outage. The real defect: 1,305 of 1,308 points are synthetic range-summary placeholders (49 distinct texts reused across whole article ranges, e.g. "ماده ۱۱ تا ۱۸۲"), not real per-article text; only 3 points have the correct schema. See `docs/W6_legal_corpus_diagnosis.md`.
 - Port 8005 (`roxira-dispatcher`, no auth) listens on `0.0.0.0`, but `ufw` (default DROP, only 22/tcp allowed) blocks it from outside — verified with an external probe 2026-09-24. Still bind it to loopback (W10 phase 1): one ufw change would expose it.
+- 2026-09-25: the repo moved to the **Mahan-film** organization (GitHub Team, rulesets available). The server pulls with a repo deploy key, so the org setting *Allow deploy keys* must stay on.
 - Keys are in git history. The owner chose not to rotate them for now.
 
 ## 7. Deploy runbook (production)

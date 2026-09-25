@@ -18,7 +18,7 @@ CLI:
 
 Env:
     GITHUB_TOKEN   Required. The workflow's own token is enough (issues: write).
-    GITHUB_REPO    Default: mahan-films/roxira-platform (agent_runner.DEFAULT_REPO).
+    GITHUB_REPO    Default: Mahan-film/roxira-platform (agent_runner.DEFAULT_REPO).
 """
 
 from __future__ import annotations

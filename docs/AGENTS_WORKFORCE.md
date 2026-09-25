@@ -67,7 +67,7 @@ Concretely:
 
 ## 3. Task intake
 
-- **Primary:** GitHub issues labelled `agent`. Dispatcher polls the GitHub REST API (`GET /repos/mahan-films/roxira-platform/issues?labels=agent&state=open`) instead of accepting anonymous POSTs.
+- **Primary:** GitHub issues labelled `agent`. Dispatcher polls the GitHub REST API (`GET /repos/Mahan-film/roxira-platform/issues?labels=agent&state=open`) instead of accepting anonymous POSTs.
 - **Fallback / manual queue:** keep `task_queue.json` for tasks the owner queues locally, but the dispatcher becomes the only writer — the public `POST /api/v1/factory/dispatch` endpoint either gets removed or moved behind auth and loopback-only, closing the exposure in §1.
 - **Per-day budget:** the router's cost log (W5, `output_apps/generated_modules/smartjudge/llm_router.py`) already tracks token cost; extend the same log (or a sibling one) to cover agent-task spend, and have the dispatcher refuse to start a new task once today's agent spend crosses a configurable `AGENT_DAILY_BUDGET_USD`.
 - **Concurrency:** dispatcher tracks how many `agent/*` worktrees are currently active (i.e. have an open PR) and refuses new dispatches above `AGENT_MAX_CONCURRENT` (proposed default: 2, given the cheap-model/low-RAM box).

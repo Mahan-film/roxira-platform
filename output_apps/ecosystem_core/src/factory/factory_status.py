@@ -16,7 +16,7 @@ CLI:
 
 Env:
     GITHUB_TOKEN            Required.
-    GITHUB_REPO             Default: mahan-films/roxira-platform.
+    GITHUB_REPO             Default: Mahan-film/roxira-platform.
     OPENROUTER_API_KEY      Optional. If set, its total usage is reported as
                             "spent so far" (best-effort; the OpenRouter key
                             usage is account-wide, not scoped to this project).
