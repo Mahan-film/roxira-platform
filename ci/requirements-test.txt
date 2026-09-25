@@ -3,5 +3,6 @@ pytest>=9.1
 pytest-timeout>=2.3
 httpx>=0.28.1
 pydantic>=2.13
+pyyaml>=6.0
 fastapi
 psycopg[binary]>=3.3

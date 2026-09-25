@@ -48,24 +48,42 @@ from typing import Any
 
 import httpx
 
+from . import model_registry
+
 log = logging.getLogger("llm_router")
 usage_log = logging.getLogger("llm_router.usage")
 
 TIERS = ("free", "cheap", "strong")
 
-# Defaults chosen from the live OpenRouter catalogue on 2026-09-24.
-# free:   multilingual (Persian-capable) :free models, different vendors so one
-#         vendor retiring its free endpoint does not empty the list.
-# cheap:  current SmartJudge FREE-plan model first, then two cheap models on
-#         different providers.
-# strong: current SmartJudge VIP model first. Replace with the benchmark winner
-#         from scripts/ once W5 benchmarks exist.
-DEFAULT_TIER_MODELS = {
+# Fallback defaults, used only if config/models.yaml (the registry, W12) cannot
+# be read — e.g. the file is missing or PyYAML is not installed. Kept in sync
+# with config/models.yaml's free/cheap/strong roles by scripts/check_models.py;
+# do not edit one without the other.
+_FALLBACK_TIER_MODELS = {
     "free": "qwen/qwen3.8-27b:free,google/gemma-4-31b-it:free,"
     "nvidia/nemotron-3-super-120b-a12b:free",
-    "cheap": "deepseek/deepseek-v4.1-flash,qwen/qwen3.8-flash,google/gemini-3.1-flash-lite",
-    "strong": "google/gemini-3.8-flash,deepseek/deepseek-v4-pro-0813,z-ai/glm-5.3",
+    "cheap": "deepseek/deepseek-v4-flash-0731,qwen/qwen3.8-flash,google/gemini-3.1-flash-lite",
+    "strong": "anthropic/claude-sonnet-5,google/gemini-3.8-flash,deepseek/deepseek-v4-pro",
 }
+
+
+def _default_tier_models() -> dict[str, str]:
+    """Tier -> comma-joined model list, from config/models.yaml where possible."""
+    out = dict(_FALLBACK_TIER_MODELS)
+    for tier in TIERS:
+        try:
+            models = model_registry.role_models(tier)
+        except model_registry.ModelRegistryError as exc:
+            log.warning("model_registry unavailable for tier %r, using fallback: %s", tier, exc)
+            continue
+        if models:
+            out[tier] = ",".join(models)
+    return out
+
+
+# Read once at import time (same as the old hardcoded dict); an env var
+# (LLM_TIER_<TIER>) always overrides this per call, see tier_models() below.
+DEFAULT_TIER_MODELS = _default_tier_models()
 
 RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
