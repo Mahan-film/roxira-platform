@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional
 
-from src.automation.provider_base import get_env_var
+from src.automation.provider_base import get_env_var, get_env_var_any
 
 ROTATION_HTTP_CODES = {401, 402, 403, 429, 432}
 DEFAULT_USER_AGENT = "RoxiraWebIntelligence/1.0 (+https://roxira.net)"
@@ -111,6 +111,13 @@ class KeyPool:
     def from_env(cls, env_name: str) -> "KeyPool":
         return cls(_split_keys(get_env_var(env_name)), env_name)
 
+    @classmethod
+    def from_env_any(cls, env_names: List[str]) -> "KeyPool":
+        """Same as `from_env`, but accepts the first non-empty of several
+        candidate env var names (production `.env` key-name aliases;
+        see provider_base.get_env_var_any)."""
+        return cls(_split_keys(get_env_var_any(env_names)), env_names[0])
+
     @property
     def configured(self) -> bool:
         return any(self._is_active(key) for key in self._keys)
@@ -137,6 +144,9 @@ class KeyPool:
 
 class TavilySearchClient:
     API_KEY_ENV = "TAVILY_API_KEYS"
+    # Production `.env` on 5.75.200.67 uses this name instead (confirmed by a
+    # live W9 run 2026-09-24) — see provider_base.get_env_var_any.
+    API_KEY_ENV_ALIASES = ("TAVILY_API_KEYS", "TAVILY_KEYS")
 
     def __init__(
         self,
@@ -146,7 +156,7 @@ class TavilySearchClient:
     ) -> None:
         self.base_url = (base_url or get_env_var("TAVILY_BASE_URL", "https://api.tavily.com")).rstrip("/")
         self.timeout = timeout
-        self.pool = pool or KeyPool.from_env(self.API_KEY_ENV)
+        self.pool = pool or KeyPool.from_env_any(list(self.API_KEY_ENV_ALIASES))
 
     @property
     def configured(self) -> bool:
@@ -282,9 +292,15 @@ class ExaSearchClient:
 
 class BraveSearchClient:
     API_KEY_ENV = "BRAVE_SEARCH_API_KEY"
+    # Production `.env` on 5.75.200.67 uses this name instead (confirmed by a
+    # live W9 run 2026-09-24, per docs/STRATEGY.md §6 "known facts") — without
+    # this fallback, .configured is silently False on the server and Brave
+    # never runs (a real instance of the "missing keys" degraded-run gap,
+    # W9 live-ready). See provider_base.get_env_var_any.
+    API_KEY_ENV_ALIASES = ("BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY")
 
     def __init__(self, base_url: Optional[str] = None, timeout: float = 30.0) -> None:
-        self.api_key = get_env_var(self.API_KEY_ENV)
+        self.api_key = get_env_var_any(list(self.API_KEY_ENV_ALIASES))
         self.base_url = (
             base_url or get_env_var("BRAVE_SEARCH_BASE_URL", "https://api.search.brave.com/res/v1")
         ).rstrip("/")
@@ -296,7 +312,11 @@ class BraveSearchClient:
 
     def search(self, query: str, count: int = 8) -> Dict[str, Any]:
         if not self.configured:
-            return {"status": "ERROR", "error": f"{self.API_KEY_ENV} is missing", "results": []}
+            return {
+                "status": "ERROR",
+                "error": f"none of {', '.join(self.API_KEY_ENV_ALIASES)} is set",
+                "results": [],
+            }
 
         params = urllib.parse.urlencode({"q": query, "count": count})
         response = _http_json(

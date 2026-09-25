@@ -23,14 +23,17 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Optional
 
+from src.automation.budget_guard import BudgetExceeded, BudgetGuard
 from src.automation.llm_router_bridge import call_llm
 from src.automation.tech_radar import (
+    DEFAULT_REPORT_LANG,
     PROJECT_BRIEF_FINAL_TIER,
     PROJECT_BRIEF_LAYER_TIER,
     TechRadarAgent,
     _extract_json,
+    _report_language_name,
     _truncate,
 )
 
@@ -77,14 +80,19 @@ LAYER_SCHEMA_HINT = """{
   "recommendation_reason": "یک جمله توجیه انتخاب"
 }"""
 
-LAYER_SYSTEM_PROMPT = (
-    "You are a ROXIRA layer-specialist technology scout. Ground every claim in the "
-    "provided sources; never invent a product, license or price. Give 2 to 3 real "
-    "alternatives, each with an adoption_score from 0 (unproven) to 10 (industry "
-    "standard). Write narrative fields in Persian (fa-IR); keep product/technology "
-    "names in their original English form. Respond ONLY with one valid JSON object, "
-    "no markdown fences."
-)
+def _layer_system_prompt(report_lang: str = DEFAULT_REPORT_LANG) -> str:
+    return (
+        "You are a ROXIRA layer-specialist technology scout. Ground every claim in the "
+        "provided sources; never invent a product, license or price. Give 2 to 3 real "
+        "alternatives, each with an adoption_score from 0 (unproven) to 10 (industry "
+        f"standard). Write narrative fields in {_report_language_name(report_lang)}; keep "
+        "product/technology names in their original English form. Respond ONLY with one "
+        "valid JSON object, no markdown fences."
+    )
+
+
+# Backward-compatible default (fa) for any caller that imports the constant directly.
+LAYER_SYSTEM_PROMPT = _layer_system_prompt(DEFAULT_REPORT_LANG)
 
 FINAL_SCHEMA_HINT = """{
   "executive_summary": "چکیده مدیریتی ۴ تا ۶ جمله‌ای برای کل پروژه",
@@ -94,14 +102,19 @@ FINAL_SCHEMA_HINT = """{
   "open_questions_for_owner": ["سوالی که پاسخش را فقط مالک پروژه می‌داند"]
 }"""
 
-FINAL_SYSTEM_PROMPT = (
-    "You are the ROXIRA Chief Technology Scout doing final reconciliation across "
-    "already-researched architecture layers for one new project. Do not invent new "
-    "technologies; only reconcile, prioritize and flag conflicts between the "
-    "per-layer recommendations you are given. Write narrative fields in Persian "
-    "(fa-IR); keep product/technology names in English. Respond ONLY with one valid "
-    "JSON object, no markdown fences."
-)
+def _final_system_prompt(report_lang: str = DEFAULT_REPORT_LANG) -> str:
+    return (
+        "You are the ROXIRA Chief Technology Scout doing final reconciliation across "
+        "already-researched architecture layers for one new project. Do not invent new "
+        "technologies; only reconcile, prioritize and flag conflicts between the "
+        f"per-layer recommendations you are given. Write narrative fields in "
+        f"{_report_language_name(report_lang)}; keep product/technology names in English. "
+        "Respond ONLY with one valid JSON object, no markdown fences."
+    )
+
+
+# Backward-compatible default (fa) for any caller that imports the constant directly.
+FINAL_SYSTEM_PROMPT = _final_system_prompt(DEFAULT_REPORT_LANG)
 
 
 def _slugify(idea: str) -> str:
@@ -113,7 +126,9 @@ def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
-def _research_layer(agent: TechRadarAgent, idea: str, layer: Layer) -> dict[str, Any]:
+def _research_layer(
+    agent: TechRadarAgent, idea: str, layer: Layer, report_lang: str = DEFAULT_REPORT_LANG
+) -> dict[str, Any]:
     topic = f"{idea} — {layer.query_hint}"
     ranked, _search_bundle = agent.gather_sources(topic, deep=False)
     source_index = "\n".join(
@@ -153,7 +168,7 @@ def _research_layer(agent: TechRadarAgent, idea: str, layer: Layer) -> dict[str,
     response = call_llm(
         PROJECT_BRIEF_LAYER_TIER,
         prompt,
-        LAYER_SYSTEM_PROMPT,
+        _layer_system_prompt(report_lang),
         temperature=0.2,
         max_tokens=3000,
         json_mode=True,
@@ -193,7 +208,9 @@ def _research_layer(agent: TechRadarAgent, idea: str, layer: Layer) -> dict[str,
     }
 
 
-def _final_synthesis(idea: str, layers: list[dict[str, Any]]) -> dict[str, Any]:
+def _final_synthesis(
+    idea: str, layers: list[dict[str, Any]], report_lang: str = DEFAULT_REPORT_LANG
+) -> dict[str, Any]:
     layer_digest = "\n\n".join(
         f"### {layer['label_en']} ({layer['label_fa']}) — وضعیت: {layer['status']}\n"
         f"خلاصه: {layer.get('summary', '')}\n"
@@ -212,7 +229,7 @@ def _final_synthesis(idea: str, layers: list[dict[str, Any]]) -> dict[str, Any]:
     response = call_llm(
         PROJECT_BRIEF_FINAL_TIER,
         prompt,
-        FINAL_SYSTEM_PROMPT,
+        _final_system_prompt(report_lang),
         temperature=0.2,
         max_tokens=3000,
         json_mode=True,
@@ -321,17 +338,62 @@ def run_project_brief(
     idea: str,
     out_path: pathlib.Path | None = None,
     multilingual: bool = True,
+    report_lang: str = DEFAULT_REPORT_LANG,
+    offline: bool = False,
+    budget_guard: Optional[BudgetGuard] = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
-    agent = TechRadarAgent(multilingual=multilingual, tier=PROJECT_BRIEF_LAYER_TIER)
+    agent = TechRadarAgent(
+        multilingual=multilingual,
+        tier=PROJECT_BRIEF_LAYER_TIER,
+        report_lang=report_lang,
+        offline=offline,
+    )
 
     layers: list[dict[str, Any]] = []
+    budget_exceeded: BudgetExceeded | None = None
     for layer in LAYERS:
+        if budget_guard is not None and budget_exceeded is None:
+            try:
+                budget_guard.check(f"before layer '{layer.key}'")
+            except BudgetExceeded as exc:
+                budget_exceeded = exc
+                logger.error("budget cap hit, aborting remaining layers: %s", exc)
+
+        if budget_exceeded is not None:
+            layers.append(
+                {
+                    "layer": layer.key,
+                    "label_fa": layer.label_fa,
+                    "label_en": layer.label_en,
+                    "status": "FAILED",
+                    "summary": "",
+                    "alternatives": [],
+                    "recommended": "",
+                    "recommendation_reason": f"اجرا به دلیل عبور از سقف بودجه (--max-usd) متوقف شد: {budget_exceeded}",
+                    "sources": [],
+                    "cost_usd": 0.0,
+                }
+            )
+            continue
+
         logger.info("researching layer: %s", layer.key)
-        layers.append(_research_layer(agent, idea, layer))
+        layers.append(_research_layer(agent, idea, layer, report_lang=report_lang))
 
     layer_statuses = {layer["status"] for layer in layers}
-    if layer_statuses == {"FAILED"}:
+    if budget_exceeded is not None:
+        # A cap hit mid-run must never be reported as anything but FAILED —
+        # the final strong-tier reconciliation call never runs either.
+        final = {
+            "status": "FAILED",
+            "executive_summary": "",
+            "cross_layer_risks": [f"اجرا به دلیل عبور از سقف بودجه (--max-usd) متوقف شد: {budget_exceeded}"],
+            "total_monthly_cost_usd_estimate": "",
+            "build_order": [],
+            "open_questions_for_owner": [],
+            "cost_usd": 0.0,
+        }
+    elif layer_statuses == {"FAILED"}:
         # Every layer failed (almost certainly no search-provider keys at
         # all) — do not spend the strong-tier final call on zero evidence.
         final = {
@@ -344,7 +406,21 @@ def run_project_brief(
             "cost_usd": 0.0,
         }
     else:
-        final = _final_synthesis(idea, layers)
+        try:
+            if budget_guard is not None:
+                budget_guard.check("before final project-brief synthesis")
+            final = _final_synthesis(idea, layers, report_lang=report_lang)
+        except BudgetExceeded as exc:
+            logger.error("budget cap hit before final synthesis: %s", exc)
+            final = {
+                "status": "FAILED",
+                "executive_summary": "",
+                "cross_layer_risks": [f"اجرا به دلیل عبور از سقف بودجه (--max-usd) متوقف شد: {exc}"],
+                "total_monthly_cost_usd_estimate": "",
+                "build_order": [],
+                "open_questions_for_owner": [],
+                "cost_usd": 0.0,
+            }
 
     total_cost = sum(layer.get("cost_usd", 0.0) for layer in layers) + final.get("cost_usd", 0.0)
     # Hard rule (owner brief): degraded/failed must never read as a clean

@@ -17,12 +17,103 @@ Research prompts never carry customer/case data, so `sensitive=False` always.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from typing import Any
 
 from src.automation.provider_base import _ENV_CACHE, _load_env_file
 
 _ROUTER_ENV_LOADED = False
+
+# Zero-network, zero-cost offline mode (W9 live-run readiness): set
+# ROXIRA_OFFLINE_TEST=1 and every call_llm() call below returns a canned,
+# schema-shaped response instead of importing llm_router / calling
+# OpenRouter at all. Used by `tech_radar --offline-test` and by
+# src/automation/test_tech_radar_live_ready.py to exercise the full
+# search -> crawl -> rerank -> synthesize pipeline in CI with zero spend and
+# no API keys required.
+OFFLINE_ENV_VAR = "ROXIRA_OFFLINE_TEST"
+
+# A superset payload covering every JSON schema used across tech_radar.py /
+# project_brief.py / translate.py (daily-radar report, project-brief layer,
+# project-brief final reconciliation, and repair-pass partial payloads) so an
+# offline run can reach a genuine SUCCESS status end to end, not just avoid
+# crashing.
+_OFFLINE_JSON_PAYLOAD: dict[str, Any] = {
+    "executive_summary": "این یک خلاصه آفلاین آزمایشی است (ROXIRA_OFFLINE_TEST=1).",
+    "summary": "این یک خلاصه لایه‌ای آفلاین آزمایشی است.",
+    "key_findings": ["یافته آفلاین نمونه ۱", "یافته آفلاین نمونه ۲"],
+    "emerging_technologies": [
+        {
+            "name": "OfflineFixtureTech",
+            "category": "test-fixture",
+            "maturity": "growing",
+            "description": "خروجی ثابت حالت آفلاین.",
+            "why_it_matters": "برای آزمون بدون هزینه.",
+            "adoption_signal": "fixture",
+        }
+    ],
+    "top_github_repositories": [
+        {
+            "name": "offline/fixture-repo",
+            "url": "https://github.com/offline/fixture-repo",
+            "stars": "0",
+            "language": "Python",
+            "description": "fixture",
+            "why_relevant": "fixture",
+        }
+    ],
+    "pros_cons": [
+        {
+            "technology": "OfflineFixtureTech",
+            "pros": ["fixture pro"],
+            "cons": ["fixture con"],
+            "best_for": "offline testing",
+        }
+    ],
+    "suggested_commands": [{"purpose": "fixture install", "command": "echo offline-fixture"}],
+    "risks_and_caveats": ["این خروجی از حالت آفلاین (ROXIRA_OFFLINE_TEST) تولید شده و صرفاً برای آزمون است."],
+    "recommendations": ["fixture recommendation"],
+    "confidence": 0.5,
+    "alternatives": [
+        {
+            "name": "OfflineFixtureOption",
+            "maturity": "growing",
+            "license": "MIT",
+            "adoption_score": 5,
+            "risks": ["fixture risk"],
+            "monthly_cost_usd_estimate": "0",
+            "why": "fixture",
+        }
+    ],
+    "recommended": "OfflineFixtureOption",
+    "recommendation_reason": "fixture reason",
+    "cross_layer_risks": ["fixture cross-layer risk"],
+    "total_monthly_cost_usd_estimate": "0",
+    "build_order": ["backend", "frontend"],
+    "open_questions_for_owner": ["fixture open question"],
+}
+
+
+def _offline_response(prompt: str, json_mode: bool) -> dict[str, Any]:
+    if json_mode:
+        content = json.dumps(_OFFLINE_JSON_PAYLOAD, ensure_ascii=False)
+    else:
+        # translate_query() etc. just need short, deterministic, non-empty
+        # text back — echo the last non-empty line of the prompt.
+        lines = [line for line in prompt.strip().splitlines() if line.strip()]
+        tail = lines[-1] if lines else "offline-fixture"
+        content = f"[offline] {tail}"
+    return {
+        "status": "SUCCESS",
+        "model": "offline/fixture",
+        "content": content,
+        "cost_usd": 0.0,
+        "cached": False,
+        "tier": "offline",
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+    }
 
 
 def _ensure_router_env() -> None:
@@ -60,7 +151,14 @@ def call_llm(
     existing tech_radar.py parsing logic barely changes, but every call now
     goes through the tier/fallback/cache/usage-log machinery instead of a
     hardcoded model and a bare urllib POST.
+
+    When ROXIRA_OFFLINE_TEST=1 is set, this returns a canned response
+    immediately: no environment loading, no OPENROUTER_API_KEY requirement,
+    no import of llm_router, no network call at all.
     """
+    if os.environ.get(OFFLINE_ENV_VAR) == "1":
+        return _offline_response(prompt, json_mode)
+
     _ensure_router_env()
     from output_apps.generated_modules.smartjudge import llm_router
 
@@ -108,6 +206,8 @@ def call_llm(
 
 async def flush() -> None:
     """Wait for pending usage-log writes. Call once at the end of a CLI run."""
+    if os.environ.get(OFFLINE_ENV_VAR) == "1":
+        return
     _ensure_router_env()
     from output_apps.generated_modules.smartjudge import llm_router
 

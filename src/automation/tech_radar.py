@@ -5,6 +5,7 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+import os
 import pathlib
 import sys
 import time
@@ -16,7 +17,8 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.automation.llm_router_bridge import call_llm, flush as flush_llm_usage
+from src.automation.budget_guard import BudgetExceeded, BudgetGuard, BudgetGuardError, fetch_openrouter_usage
+from src.automation.llm_router_bridge import OFFLINE_ENV_VAR, call_llm, flush as flush_llm_usage
 from src.automation.source_adapters import site_restricted_adapters, structured_adapters
 from src.automation.translate import LANGUAGES, translate_queries
 from src.automation.web_intelligence import WebIntelligence
@@ -36,13 +38,35 @@ DEFAULT_REPORT_MD = PROJECT_ROOT / "TECH_RADAR_REPORT.md"
 DEFAULT_REPORT_JSON = PROJECT_ROOT / "TECH_RADAR_REPORT.json"
 DEFAULT_HISTORY_DIR = PROJECT_ROOT / "data" / "tech_radar"
 
-SYSTEM_PROMPT = (
-    "You are the ROXIRA Chief Technology Scout. You synthesize live web intelligence into "
-    "an executive, decision-grade technology radar. Ground every claim in the provided sources; "
-    "never invent repositories, benchmarks or versions. Write the narrative in Persian (fa-IR) "
-    "while keeping technology names, repository names and shell commands in their original English form. "
-    "Respond ONLY with a single valid JSON object, no markdown fences."
-)
+# Owner requirement (docs/STRATEGY.md §8): sourcing/queries are multilingual
+# (en + zh/ja/de/ko/ru), but the synthesized report the owner reads is
+# Persian by default. --report-lang lets a caller (tests, another consumer)
+# override the narrative language without touching query translation, which
+# is a fully independent code path (translate.py).
+DEFAULT_REPORT_LANG = "fa"
+REPORT_LANGUAGE_NAMES: Dict[str, str] = {
+    "fa": "Persian (fa-IR)",
+    "en": "English (en-US)",
+}
+
+
+def _report_language_name(report_lang: str) -> str:
+    return REPORT_LANGUAGE_NAMES.get(report_lang, report_lang)
+
+
+def _synthesis_system_prompt(report_lang: str = DEFAULT_REPORT_LANG) -> str:
+    return (
+        "You are the ROXIRA Chief Technology Scout. You synthesize live web intelligence into "
+        "an executive, decision-grade technology radar. Ground every claim in the provided sources; "
+        f"never invent repositories, benchmarks or versions. Write the narrative in {_report_language_name(report_lang)} "
+        "while keeping technology names, repository names and shell commands in their original English form. "
+        "Respond ONLY with a single valid JSON object, no markdown fences."
+    )
+
+
+# Backward-compatible default (fa) for any caller that imports the constant
+# directly instead of using _synthesis_system_prompt(report_lang).
+SYSTEM_PROMPT = _synthesis_system_prompt(DEFAULT_REPORT_LANG)
 
 REPORT_SCHEMA_HINT = """{
   "executive_summary": "چکیده مدیریتی ۳ تا ۵ جمله‌ای",
@@ -104,6 +128,90 @@ def _extract_json(raw: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+class _OfflineSearchClient:
+    """Deterministic, zero-network stand-in for a Tavily/Exa/Brave/Firecrawl/
+    Jina client, used only when TechRadarAgent(offline=True) (--offline-test /
+    ROXIRA_OFFLINE_TEST=1). Duck-types the same .search/.scrape/.rerank shape
+    those real clients expose to WebIntelligence."""
+
+    configured = True
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def search(self, query: str, max_results: int = 6, **_: Any) -> Dict[str, Any]:
+        return {
+            "status": "SUCCESS",
+            "results": [
+                {
+                    "title": f"[offline:{self.name}] {query}"[:120],
+                    "url": f"https://example.invalid/offline/{self.name}",
+                    "content": f"Deterministic offline fixture content for query {query!r} via {self.name}.",
+                    "score": 0.9,
+                    "provider": self.name,
+                }
+            ],
+        }
+
+    def scrape(self, url: str) -> Dict[str, Any]:
+        return {
+            "status": "SUCCESS",
+            "markdown": f"# Offline fixture\n\nDeterministic offline content for {url}.",
+            "title": "Offline fixture",
+            "engine": "offline",
+        }
+
+    def rerank(self, query: str, texts: List[str], top_n: Optional[int] = None) -> Dict[str, Any]:
+        n = top_n or len(texts)
+        return {
+            "status": "SUCCESS",
+            "model": "offline-fixture",
+            "results": [
+                {"index": i, "relevance_score": round(1.0 - i * 0.05, 2)}
+                for i in range(min(n, len(texts)))
+            ],
+        }
+
+
+def _build_offline_web_intelligence() -> WebIntelligence:
+    return WebIntelligence(
+        tavily=_OfflineSearchClient("tavily"),
+        exa=_OfflineSearchClient("exa"),
+        brave=_OfflineSearchClient("brave"),
+        firecrawl=_OfflineSearchClient("firecrawl"),
+        jina_reader=_OfflineSearchClient("jina_reader"),
+        jina_reranker=_OfflineSearchClient("jina_reranker"),
+    )
+
+
+class _OfflineStructuredAdapter:
+    """Stands in for GitHubSearchAdapter/HuggingFaceAdapter/ArxivAdapter/
+    ModelScopeAdapter (src/automation/source_adapters.py), which otherwise
+    call real keyless-but-live HTTP APIs regardless of the injected
+    WebIntelligence instance."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    @property
+    def configured(self) -> bool:
+        return True
+
+    def search(self, query: str, max_results: int = 6) -> Dict[str, Any]:
+        return {
+            "status": "SUCCESS",
+            "results": [
+                {
+                    "title": f"[offline:{self.name}] {query}"[:120],
+                    "url": f"https://example.invalid/offline/{self.name}",
+                    "content": f"Deterministic offline fixture result for {self.name}.",
+                    "score": 0.8,
+                    "provider": self.name,
+                }
+            ],
+        }
+
+
 class TechRadarAgent:
     """Autonomous multi-stage technology research and strategic reporting engine.
 
@@ -124,15 +232,29 @@ class TechRadarAgent:
         max_workers: int = 6,
         multilingual: bool = True,
         tier: str = DAILY_RADAR_TIER,
+        report_lang: str = DEFAULT_REPORT_LANG,
+        offline: bool = False,
+        budget_guard: Optional[BudgetGuard] = None,
     ) -> None:
-        self.web = web or WebIntelligence()
+        self.offline = offline
+        self.web = web or (_build_offline_web_intelligence() if offline else WebIntelligence())
         self.report_md = pathlib.Path(report_md)
         self.report_json = pathlib.Path(report_json)
         self.history_dir = pathlib.Path(history_dir)
         self.max_workers = max_workers
         self.multilingual = multilingual
         self.tier = tier
-        self.structured_adapters = structured_adapters()
+        self.report_lang = report_lang
+        self.budget_guard = budget_guard
+        if offline:
+            self.structured_adapters = [
+                _OfflineStructuredAdapter(name)
+                for name in ("github", "huggingface", "arxiv", "modelscope")
+            ]
+        else:
+            self.structured_adapters = structured_adapters()
+        # Safe in both modes: SiteRestrictedAdapter routes through self.web,
+        # which is already the offline fixture when offline=True.
         self.site_adapters = site_restricted_adapters(self.web)
 
     # ------------------------------------------------------------------ search
@@ -362,7 +484,7 @@ class TechRadarAgent:
         response = call_llm(
             self.tier,
             prompt,
-            SYSTEM_PROMPT,
+            _synthesis_system_prompt(self.report_lang),
             temperature=0.2,
             max_tokens=8000 if deep else 6000,
             json_mode=True,
@@ -451,7 +573,7 @@ class TechRadarAgent:
             response = call_llm(
                 self.tier,
                 prompt,
-                SYSTEM_PROMPT,
+                _synthesis_system_prompt(self.report_lang),
                 temperature=0.1,
                 max_tokens=6000,
                 json_mode=True,
@@ -472,8 +594,10 @@ class TechRadarAgent:
             if not missing:
                 break
 
+        used_fallback_commands = False
         if not analysis.get("suggested_commands"):
             analysis["suggested_commands"] = self._fallback_commands(analysis)
+            used_fallback_commands = bool(analysis["suggested_commands"])
         analysis["synthesis_attempts"] = attempts
 
         # Hard rule (owner brief): a synthesis that is still missing required
@@ -485,6 +609,19 @@ class TechRadarAgent:
             analysis.setdefault("risks_and_caveats", [])
             analysis["risks_and_caveats"] = list(analysis["risks_and_caveats"]) + [
                 f"فیلدهای زیر پس از تلاش‌های ترمیم همچنان ناقص ماندند: {', '.join(still_missing)}"
+            ]
+        elif used_fallback_commands:
+            # suggested_commands exists only because the programmatic
+            # _fallback_commands() stand-in filled it in, never because the
+            # model (even after repair) produced evidence-grounded commands.
+            # A caller (cron, NestJS job) must not read this as a clean
+            # SUCCESS — "fallback-only synthesis" is one of the owner's named
+            # degraded-run cases.
+            analysis["status"] = "DEGRADED"
+            analysis.setdefault("risks_and_caveats", [])
+            analysis["risks_and_caveats"] = list(analysis["risks_and_caveats"]) + [
+                "suggested_commands توسط مکانیزم پشتیبان برنامه‌ای (نه مدل زبانی) تولید شد؛ "
+                "اجرا fallback-only و degraded علامت‌گذاری شد."
             ]
         return analysis
 
@@ -589,6 +726,33 @@ class TechRadarAgent:
 
         pages = self._crawl_selected(search_bundle["results"], deep)
         ranked = self._rerank(topic, pages, deep)
+
+        if self.budget_guard is not None:
+            try:
+                self.budget_guard.check("before tech_radar synthesis")
+            except BudgetExceeded as exc:
+                logger.error(str(exc))
+                base_report.update(
+                    {
+                        "status": "FAILED",
+                        "source_count": len(ranked),
+                        "sources": [],
+                        "executive_summary": "",
+                        "key_findings": [],
+                        "emerging_technologies": [],
+                        "top_github_repositories": [],
+                        "pros_cons": [],
+                        "suggested_commands": [],
+                        "risks_and_caveats": [str(exc)],
+                        "recommendations": [],
+                        "confidence": 0.0,
+                        "cost_usd": 0.0,
+                        "elapsed_seconds": round(time.perf_counter() - started, 2),
+                    }
+                )
+                base_report["markdown"] = self.render_markdown(base_report)
+                return base_report
+
         analysis = self._synthesize(topic, ranked, search_bundle, deep)
 
         report: Dict[str, Any] = {
@@ -889,6 +1053,37 @@ def build_parser() -> argparse.ArgumentParser:
         "--brief-out",
         help="Override the output path for --project-brief (default: docs/research/briefs/<slug>.md).",
     )
+    parser.add_argument(
+        "--report-lang",
+        default=DEFAULT_REPORT_LANG,
+        choices=sorted(REPORT_LANGUAGE_NAMES),
+        help=(
+            "Language the synthesized narrative is written in (default: fa — Persian, "
+            "per the owner's requirement). Query translation/sourcing (zh/ja/de/ko/ru) is "
+            "independent of this and always runs unless --no-multilingual is passed."
+        ),
+    )
+    parser.add_argument(
+        "--max-usd",
+        type=float,
+        default=None,
+        metavar="USD",
+        help=(
+            "Abort the run before spending past this much OpenRouter usage (checked via "
+            "GET /api/v1/key before the run and before every subsequent paid call). "
+            "Requires OPENROUTER_API_KEY to be set; the run fails fast if usage can't be "
+            "verified rather than proceeding unmetered."
+        ),
+    )
+    parser.add_argument(
+        "--offline-test",
+        action="store_true",
+        help=(
+            "Zero-network, zero-cost smoke-test mode: search/crawl/rerank/LLM calls all "
+            "return deterministic canned fixtures (no API keys needed, nothing billed). "
+            "Exercises the full pipeline end to end; not for a real research run."
+        ),
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging.")
     return parser
 
@@ -911,6 +1106,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)
 
+    if args.offline_test:
+        # Single toggle for the whole process: llm_router_bridge.call_llm()
+        # checks this directly, so translate.py's calls are covered too.
+        os.environ[OFFLINE_ENV_VAR] = "1"
+        if args.max_usd is not None:
+            parser.error("--offline-test and --max-usd are mutually exclusive (offline mode spends nothing)")
+
+    budget_guard: Optional[BudgetGuard] = None
+    if args.max_usd is not None:
+        budget_guard = BudgetGuard(max_usd=args.max_usd, snapshot_fn=fetch_openrouter_usage)
+        try:
+            budget_guard.start()
+        except BudgetGuardError as exc:
+            logger.error("cannot arm --max-usd budget guard: %s", exc)
+            return 1
+
     if args.project_brief:
         from src.automation.project_brief import run_project_brief
 
@@ -918,6 +1129,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             args.project_brief,
             out_path=pathlib.Path(args.brief_out) if args.brief_out else None,
             multilingual=not args.no_multilingual,
+            report_lang=args.report_lang,
+            offline=args.offline_test,
+            budget_guard=budget_guard,
         )
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
@@ -932,7 +1146,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         _run_flush()
         return 0 if result.get("status") == "SUCCESS" else 1
 
-    agent = TechRadarAgent(multilingual=not args.no_multilingual)
+    agent = TechRadarAgent(
+        multilingual=not args.no_multilingual,
+        report_lang=args.report_lang,
+        offline=args.offline_test,
+        budget_guard=budget_guard,
+    )
 
     if args.merge_dir:
         reports = _load_reports(args.merge_dir)

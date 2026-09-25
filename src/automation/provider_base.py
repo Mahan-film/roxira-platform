@@ -45,6 +45,25 @@ def get_env_var(name: str, default: str = "") -> str:
     return _ENV_CACHE.get(name, default)
 
 
+def get_env_var_any(names: List[str], default: str = "") -> str:
+    """Return the first non-empty value among several candidate env var names.
+
+    A live W9 run against the production server (2026-09-24) found its `.env`
+    actually sets `BRAVE_API_KEY` and `TAVILY_KEYS`, not the
+    `BRAVE_SEARCH_API_KEY` / `TAVILY_API_KEYS` names the search clients in
+    web_intelligence.py were hardcoded to — both providers were silently
+    "not configured" despite valid keys being present, exactly the systemic
+    gap docs/research/bakeoff.md §1 finding 5 warned about. Callers should
+    list the documented/canonical name first, then any known production
+    alias.
+    """
+    for name in names:
+        value = get_env_var(name)
+        if value:
+            return value
+    return default
+
+
 class OpenAICompatibleClient:
     BASE_URL = ""
     API_KEY_ENV = ""
