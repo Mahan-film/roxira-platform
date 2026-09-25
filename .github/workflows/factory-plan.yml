@@ -1,0 +1,95 @@
+name: Factory plan
+
+# W11 Project Factory, stages 3-4 (approval -> plan). Triggered by a comment
+# on the brief issue (checked for `/approve` or `/approve <option>`) or by
+# adding the `approved` label. Nothing is built before one of those happens
+# -- see docs/PROJECT_FACTORY.md and docs/STRATEGY.md section 8.
+#
+# Job guard mirrors .github/workflows/agent-task.yml: FACTORY_ENABLED kill
+# switch + actor allowlist, checked before any checkout. The actual
+# comment/label parsing is pure logic in src/factory_pipeline/commands.py
+# (unit tested), run here via factory_approval_gate.py. Untrusted comment
+# text is passed through `env:`, never spliced into a `run:` script via
+# `${{ }}` (script-injection safety, same rule agent-task.yml follows).
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [labeled]
+
+concurrency:
+  group: factory-plan-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  # Needed only to dispatch agent-task.yml for the first ready task(s) once
+  # the plan is written -- a GITHUB_TOKEN-authored label/issue-create never
+  # triggers other workflows on its own (see docs/AGENTS_WORKFORCE.md #6).
+  actions: write
+
+env:
+  ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+jobs:
+  plan:
+    name: Approve and plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A PR also fires issue_comment events; github.event.issue.pull_request only
+    # exists when the commented-on "issue" is actually a PR, so this excludes those.
+    if: >
+      vars.FACTORY_ENABLED == 'true' &&
+      github.event.issue.pull_request == null &&
+      (
+        (github.event_name == 'issue_comment' &&
+         contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.event.comment.user.login)))
+        ||
+        (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'approved' &&
+         contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.event.sender.login)))
+      )
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install "httpx>=0.28.1"
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "roxira-factory[bot]"
+          git config --global user.email "roxira-factory[bot]@users.noreply.github.com"
+
+      - name: Decide whether to proceed (approval gate)
+        id: gate
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          LABEL_NAME: ${{ github.event.label.name }}
+        run: |
+          set -euo pipefail
+          python3 output_apps/ecosystem_core/src/factory/factory_approval_gate.py \
+            --event-name "${{ github.event_name }}" \
+            --comment-body "$COMMENT_BODY" \
+            --label-name "$LABEL_NAME"
+
+      - name: Run the planner
+        if: steps.gate.outputs.proceed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_RESEARCH_KEY }}
+          AGENT_MAX_CONCURRENT: ${{ vars.AGENT_MAX_CONCURRENT || '2' }}
+          CHOSEN_OPTION: ${{ steps.gate.outputs.option }}
+        run: |
+          set -euo pipefail
+          python3 output_apps/ecosystem_core/src/factory/factory_plan.py \
+            --issue "$ISSUE_NUMBER" --option "$CHOSEN_OPTION"

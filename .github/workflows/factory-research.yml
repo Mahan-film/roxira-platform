@@ -1,0 +1,124 @@
+name: Factory research
+
+# W11 Project Factory, stage 2. Triggered when an owner brief gets the `brief`
+# label (.github/ISSUE_TEMPLATE/project-brief.yml applies it automatically),
+# or manually via workflow_dispatch. Runs src.automation.tech_radar in
+# --project-brief mode (W9: multilingual sourcing, --report-lang fa,
+# --max-usd budget guard), then posts the Persian proposal as an issue
+# comment (factory_post_proposal.py) and uploads the full report as a
+# workflow artifact. Runs only on GitHub Actions, never on the production
+# server -- see docs/PROJECT_FACTORY.md and docs/STRATEGY.md section 8.
+#
+# Same guard shape as .github/workflows/agent-task.yml: a kill switch
+# (FACTORY_ENABLED repo variable) and an actor allowlist, both checked in the
+# job's `if:` before any checkout happens.
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Brief issue number to research (must be labelled `brief`)"
+        required: true
+        type: string
+
+concurrency:
+  group: factory-research-${{ github.event.issue.number || github.event.inputs.issue_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
+
+jobs:
+  research:
+    name: Research technology stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >
+      vars.FACTORY_ENABLED == 'true' &&
+      (
+        (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'brief' &&
+         contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.event.sender.login)))
+        ||
+        (github.event_name == 'workflow_dispatch' &&
+         contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.actor)))
+      )
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install research pipeline dependencies
+        run: |
+          set -euo pipefail
+          # tech_radar.py's whole call chain (project_brief, llm_router_bridge,
+          # llm_router, web_intelligence, source_adapters, translate,
+          # budget_guard) is stdlib + httpx only -- no crawlee/playwright needed
+          # for this path (verified by reading each module's imports).
+          pip install "httpx>=0.28.1"
+
+      - name: Fetch the brief issue title and compute its slug
+        id: brief
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh issue view "$ISSUE_NUMBER" --json title -q '.title' > "$RUNNER_TEMP/idea.txt"
+          python3 - <<'PY'
+          import os
+
+          from src.factory_pipeline.slugs import slugify_project
+
+          idea_path = os.path.join(os.environ["RUNNER_TEMP"], "idea.txt")
+          idea = open(idea_path, encoding="utf-8").read().strip()
+          slug = slugify_project(idea)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"slug={slug}\n")
+          PY
+
+      - name: Run project-brief research
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_RESEARCH_KEY }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
+          TAVILY_KEYS: ${{ secrets.TAVILY_KEYS }}
+        run: |
+          set -o pipefail
+          idea="$(cat "$RUNNER_TEMP/idea.txt")"
+          python3 -m src.automation.tech_radar \
+            --project-brief "$idea" \
+            --report-lang fa \
+            --max-usd 0.50 \
+            --brief-out "$RUNNER_TEMP/brief.md" \
+            --json > "$RUNNER_TEMP/brief.result.json"
+
+      - name: Post the Persian proposal on the brief issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 output_apps/ecosystem_core/src/factory/factory_post_proposal.py \
+            --issue "$ISSUE_NUMBER" --brief-json "$RUNNER_TEMP/brief.result.json"
+
+      - name: Upload full research report as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-research-${{ env.ISSUE_NUMBER }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/brief.md
+            ${{ runner.temp }}/brief.result.json
+          retention-days: 30
+          if-no-files-found: warn

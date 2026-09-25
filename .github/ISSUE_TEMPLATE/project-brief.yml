@@ -1,0 +1,59 @@
+name: بریف پروژه جدید (Project Factory)
+description: یک بریف کوتاه برای ساخت یک پروژه جدید توسط Roxira Project Factory بنویسید.
+title: "[بریف] "
+labels: ["brief"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        این بریف پس از ثبت به‌صورت خودکار تحقیق می‌شود (چند دقیقه طول می‌کشد) و یک
+        **پیشنهاد فناوری به زبان فارسی** به‌عنوان کامنت روی همین ایشو دریافت خواهید کرد:
+        ۲ تا ۳ گزینه برای هر بخش فنی، همراه با امتیاز، برآورد هزینه ماهانه و ریسک‌ها.
+        **پیش از تأیید شما (کامنت `/approve`، یا لیبل `approved`) هیچ کدی ساخته نمی‌شود.**
+  - type: textarea
+    id: goal
+    attributes:
+      label: هدف پروژه
+      description: این پروژه چه مشکلی را حل می‌کند؟ در یک تا چند جمله توضیح دهید.
+      placeholder: "مثلاً: یک اپلیکیشن وب برای مدیریت نوبت‌دهی مطب‌های دندان‌پزشکی"
+    validations:
+      required: true
+  - type: textarea
+    id: users
+    attributes:
+      label: کاربران هدف
+      description: چه کسانی از این محصول استفاده خواهند کرد؟ (مثلاً تعداد تقریبی، نوع کسب‌وکار)
+    validations:
+      required: true
+  - type: textarea
+    id: features
+    attributes:
+      label: ویژگی‌های ضروری (Must-have)
+      description: مهم‌ترین ویژگی‌هایی که این پروژه باید از روز اول داشته باشد را فهرست کنید.
+      placeholder: |
+        - ورود و ثبت‌نام کاربران
+        - ...
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: محدودیت‌ها و بودجه
+      description: بودجه ماهانه تقریبی، محدودیت‌های فنی یا قانونی (مثلاً باید داخل ایران میزبانی شود، پرداخت با زیبال).
+    validations:
+      required: false
+  - type: input
+    id: stack
+    attributes:
+      label: استک فناوری ترجیحی (اختیاری)
+      description: اگر ترجیح خاصی برای فناوری دارید بنویسید؛ در غیر این صورت تحقیق فناوری بهترین گزینه‌ها را پیشنهاد می‌دهد.
+      placeholder: "مثلاً: ترجیحاً Next.js برای فرانت‌اند"
+    validations:
+      required: false
+  - type: input
+    id: deadline
+    attributes:
+      label: مهلت زمانی (اختیاری)
+      description: تاریخ یا بازه زمانی مدنظر برای تحویل نسخه اول.
+    validations:
+      required: false
