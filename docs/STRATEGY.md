@@ -33,7 +33,11 @@ Rules:
 | Normal implementation chats (one per workstream) | **Sonnet 5**, the default |
 | Mechanical edits, renames, formatting | Haiku |
 
-Claude Code can run through OpenRouter (`ANTHROPIC_BASE_URL=https://openrouter.ai/api`), but only Anthropic models are supported there. Non-Claude models break on tool use, so do not use them to drive Claude Code on production code.
+**Brain expensive, hands cheap, memory open** (adopted from the owner's 2026-09 solo-developer strategy brief):
+- Claude Code stays on the **Pro subscription**. Do not set `ANTHROPIC_BASE_URL` / a gateway key locally: that switches billing to per-token and bypasses the plan. Opus plans and reviews diffs; it does not type.
+- Execution of well-scoped tasks goes to **OpenCode on GitHub Actions** (W10 phase 2) with the `executor` model from `config/models.yaml` (W12). The reviewer is a **different model family** from the executor.
+- All model IDs live in `config/models.yaml` only. A newer model (DeepSeek V4.1 Flash, Qwen3.8, GLM-5.x, Kimi K3...) replaces the current one only after `scripts/check_models.py` shows it is live and the evals (W6 legal eval, one coding smoke task) do not regress. "Newer" is not a reason by itself: the 2026-09-25 audit found `deepseek-v4-flash-0731` about 10x cheaper than `v4.1-flash`.
+- Not adopted: BMAD / SuperClaude / claude-flow / spec-kit (token overhead), agent teams on Pro, Graphify/Serena (codebase-memory MCP already covers it), LiteLLM (our router already has fallbacks + cost log), Chinese personal coding plans for CI (their terms usually forbid automated use).
 
 ### 3b. Product runtime (what the app spends per user request)
 All LLM calls go through **one router module** with tiers, configured from `.env`:
@@ -62,6 +66,12 @@ Hard rules:
 - **MCP servers — keep the set small.** Every server adds tool schemas to every chat. Approved: `codebase-memory` (code structure), `context7` (current library docs for NestJS/Next.js/FastAPI/Qdrant, instead of pasting docs or guessing APIs). Not approved for now: a production Postgres/Qdrant MCP (use `ssh` read-only instead), extra GitHub MCP (`gh` already covers it).
 - **Hype filter.** A new tool/skill/repo seen on social media is adopted only if it (a) removes a step we repeat every week, or (b) measurably cuts tokens or $ per task, and (c) does not push to `main` or run unattended with shell access. "Agent swarm" frameworks usually fail (b). Proposals go to the hub chat, not straight into a workstream.
 - **Parallel chats:** at most 2 Sonnet chats at once (all chats, Opus and Sonnet, share one plan limit: three parallel agents hit it on 2026-09-24), each in its own worktree. More parallelism mostly creates merge conflicts on this file.
+
+### Repository visibility & auto-merge (decided 2026-09-25)
+
+- **The repo stays private.** Keys are still in git history and have not been rotated; making it public would leak them within minutes. It would also publish the legal corpus work and business logic.
+- On GitHub Free, a private repo has no branch protection or rulesets (API: "Upgrade to GitHub Pro"). **Buy GitHub Pro ($4/month)** instead: rulesets on `main`, required checks, and 3,000 Actions minutes.
+- Auto-merge is allowed only for `agent/*` PRs that pass CI + a cross-model `agent-review` (risk low) and touch no sensitive path (auth, payments, secrets, `.github/`, compose, nginx, migrations, `config/models.yaml`, `scripts/ops/`). Everything else waits for the owner. Owner checklist: `docs/ops/AUTO_MERGE.md`.
 
 ## 5. Workstreams
 
