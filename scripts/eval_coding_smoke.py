@@ -44,6 +44,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -191,6 +192,26 @@ def call_model(
         "latency_ms": latency_ms,
     }
     return content, usage
+
+
+def _call_with_deadline(
+    prompt: str, api_key: str, model: str, deadline_s: float = DEFAULT_CALL_TIMEOUT_S * 2
+) -> tuple[str | None, dict[str, Any]]:
+    """call_model() with a hard wall-clock deadline. urllib's timeout only bounds
+    each socket read, so a provider that trickles bytes can hold a call open
+    for tens of minutes (seen on the first live executor eval). A daemon thread
+    is used so an abandoned call cannot keep the process alive at exit."""
+    box: dict[str, Any] = {}
+
+    def _run() -> None:
+        box["result"] = call_model(prompt, api_key, model)
+
+    worker = threading.Thread(target=_run, daemon=True)
+    worker.start()
+    worker.join(deadline_s)
+    if "result" in box:
+        return box["result"]
+    return None, {"error": f"deadline {deadline_s:.0f}s exceeded", "latency_ms": deadline_s * 1000}
 
 
 def price_for_model(model_id: str) -> dict[str, float] | None:
@@ -350,7 +371,14 @@ def run_eval(
             }
         else:
             prompt = build_task_prompt(task)
-            content, usage = call_model(prompt, api_key or "", model)
+            print(f"[{model}] {task.id}: calling...", file=sys.stderr, flush=True)
+            content, usage = _call_with_deadline(prompt, api_key or "", model)
+            print(
+                f"[{model}] {task.id}: {'ok' if content is not None else usage.get('error')} "
+                f"({usage.get('latency_ms', 0):.0f} ms)",
+                file=sys.stderr,
+                flush=True,
+            )
 
         if content is None:
             error = usage.get("error", "unknown error")
