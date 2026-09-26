@@ -1,0 +1,13 @@
+{
+  "name": "@roxira/e2e-smoke",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Read-only Playwright smoke tests against the live production site.",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

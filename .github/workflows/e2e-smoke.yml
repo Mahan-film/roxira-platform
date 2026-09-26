@@ -1,0 +1,108 @@
+name: E2E smoke (production)
+
+on:
+  schedule:
+    # 06:00 UTC daily (~09:30 Tehran).
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to test"
+        required: false
+        default: "https://ghazihoushmand.ir"
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  E2E_BASE_URL: ${{ inputs.base_url || 'https://ghazihoushmand.ir' }}
+
+jobs:
+  smoke:
+    name: Playwright smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.run-tests.outcome }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install dependencies
+        working-directory: e2e
+        run: npm install
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+
+      - name: Install Playwright chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - name: Install Playwright OS deps only (cache hit)
+        working-directory: e2e
+        run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: Run smoke tests
+        id: run-tests
+        working-directory: e2e
+        run: npm test
+
+      - name: Upload HTML report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+  report-failure:
+    name: Open/update failure issue
+    needs: smoke
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the e2e-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BASE_URL: ${{ env.E2E_BASE_URL }}
+        run: |
+          set -euo pipefail
+          TITLE="E2E smoke: production checks failing"
+          BODY_FILE="$(mktemp)"
+          {
+            echo "The daily production E2E smoke suite failed against \`$BASE_URL\`."
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            echo "See the uploaded \`playwright-report\` artifact on that run for details."
+          } > "$BODY_FILE"
+
+          existing=$(gh issue list --repo "$REPO" --label e2e-failure --state open \
+            --json number --jq '.[0].number' || true)
+
+          if [ -n "${existing:-}" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body-file "$BODY_FILE"
+          else
+            gh issue create --repo "$REPO" --title "$TITLE" --label e2e-failure --body-file "$BODY_FILE"
+          fi
