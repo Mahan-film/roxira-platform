@@ -1,11 +1,84 @@
 #!/usr/bin/env python3
 """
 Roxira Dual-Agent Acoustic & Phonetic Correction Engine
-Agent 1: In-memory ffmpeg PCM + One-Shot Gemini 2.0 Flash Candidate
+Agent 1: In-memory ffmpeg PCM + remote STT over the config/models.yaml `stt`
+    role's fallback chain (W15: replaces the dead, retired
+    google/gemini-2.0-flash-001 id that used to be hardcoded here -- see
+    config/models.yaml's `stt` role note and issue #39).
 Agent 2: Technical Domain Phonetic Rescorer (Corrects acoustic slips)
 """
-import os, json, subprocess, base64, urllib.request, re
+import json, logging, subprocess, base64, urllib.request, urllib.error, re
 from output_apps.ecosystem_core.src.factory.llm_client import get_config, ask_deepseek
+
+logger = logging.getLogger(__name__)
+
+# Used only if config/models.yaml / model_registry.py cannot be read (missing
+# file, malformed YAML, PyYAML not installed) -- must never be the dead
+# google/gemini-2.0-flash-001 id. Mirrors the registry's current `stt` role
+# order so the behaviour is the same whether or not the registry loads.
+_DEFAULT_STT_CHAIN = ["openai/whisper-large-v3-turbo", "openai/gpt-audio"]
+
+
+def _stt_model_chain() -> list:
+    """Ordered STT model ids to try: config/models.yaml's `stt` role
+    (primary first, then fallbacks), else _DEFAULT_STT_CHAIN. Never raises --
+    a missing/malformed registry file must not break this local-engine
+    fallback path (same contract as smartjudge_live_voice.py's
+    _default_stt_model)."""
+    try:
+        from output_apps.generated_modules.smartjudge import model_registry
+
+        ids = model_registry.role_models("stt")
+        if ids:
+            return ids
+    except Exception:
+        pass
+    return list(_DEFAULT_STT_CHAIN)
+
+
+def _call_stt_model(model_id: str, clean_b64: str, headers: dict) -> str:
+    """Call one STT model id with the request shape its endpoint expects:
+    dedicated Whisper ids use OpenRouter's /audio/transcriptions endpoint,
+    everything else (general multimodal chat models) uses /chat/completions
+    with an input_audio content part."""
+    if "whisper" in model_id.lower():
+        url = "https://openrouter.ai/api/v1/audio/transcriptions"
+        payload = json.dumps(
+            {"model": model_id, "input_audio": {"data": clean_b64, "format": "wav"}}
+        ).encode("utf-8")
+    else:
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        payload = json.dumps(
+            {
+                "model": model_id,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Transcribe this audio verbatim in "
+                                    "Persian/English technical context."
+                                ),
+                            },
+                            {
+                                "type": "input_audio",
+                                "input_audio": {"data": clean_b64, "format": "wav"},
+                            },
+                        ],
+                    }
+                ],
+                "temperature": 0.0,
+            }
+        ).encode("utf-8")
+
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    if "choices" in data:
+        return (data["choices"][0]["message"]["content"] or "").strip()
+    return (data.get("text") or "").strip()
 
 PHONETIC_REPLACEMENT_RULES = [
     (r'\bجاییتر\b', 'جدیدترین'),
@@ -72,39 +145,33 @@ def transcribe_audio_blob(audio_b64: str, mime_type: str = "audio/webm") -> str:
     wav_bytes = convert_to_wav_pcm(raw_audio)
     clean_b64 = base64.b64encode(wav_bytes).decode("utf-8")
 
-    # عامل ۱: استخراج اولیه صوت
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://roxira.ir"}
+    # عامل اول: استخراج اولیه صوت -- زنجیره فال‌بک از نقش stt در config/models.yaml
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://roxira.ir",
+    }
 
-    payload = json.dumps({
-        "model": "google/gemini-2.0-flash-001",
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Transcribe this audio verbatim in Persian/English technical context."},
-                {"type": "input_audio", "input_audio": {"data": clean_b64, "format": "wav"}}
-            ]
-        }],
-        "temperature": 0.0
-    }).encode("utf-8")
-
+    chain = _stt_model_chain()
     raw_text = ""
-    try:
-        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            raw_text = data["choices"][0]["message"]["content"].strip()
-    except Exception:
-        # فالبک اضطراری به Whisper
+    last_error: Exception | None = None
+    for idx, model_id in enumerate(chain):
         try:
-            url_w = "https://openrouter.ai/api/v1/audio/transcriptions"
-            p_w = json.dumps({"model": "openai/whisper-large-v3", "input_audio": {"data": clean_b64, "format": "wav"}}).encode("utf-8")
-            req_w = urllib.request.Request(url_w, data=p_w, headers=headers, method="POST")
-            with urllib.request.urlopen(req_w, timeout=8) as resp_w:
-                data_w = json.loads(resp_w.read().decode("utf-8"))
-                raw_text = data_w.get("text", "").strip()
-        except Exception as e2:
-            return f"خطا در موتور صوت: {e2}"
+            raw_text = _call_stt_model(model_id, clean_b64, headers)
+        except Exception as e:
+            last_error = e
+            logger.warning("[STT-FALLBACK] model %r failed (%s); trying next in chain", model_id, e)
+            continue
+        if raw_text:
+            if idx > 0:
+                logger.warning(
+                    "[STT-FALLBACK] used fallback STT model %r (position %d/%d, stt role chain)",
+                    model_id, idx + 1, len(chain),
+                )
+            break
+
+    if not raw_text and last_error is not None:
+        return f"خطا در موتور صوت: {last_error}"
 
     # عامل ۲: پالایش و بازسازی فونتیک بدون خطا
     if raw_text:
