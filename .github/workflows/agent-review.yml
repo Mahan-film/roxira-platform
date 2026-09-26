@@ -111,8 +111,9 @@ jobs:
           deadline=$(( $(date +%s) + CI_WAIT_TIMEOUT_SECS ))
           conclusion="unknown"
           while [ "$(date +%s)" -lt "$deadline" ]; do
-            run_json=$(gh run list --workflow ci.yml --json headSha,status,conclusion \
-              --jq --arg sha "$HEAD_SHA" '[.[] | select(.headSha == $sha)] | sort_by(.databaseId) | last // empty')
+            # `gh --jq` has no --arg; filter by commit with --commit instead.
+            run_json=$(gh run list --workflow ci.yml --commit "$HEAD_SHA" \
+              --json databaseId,status,conclusion --jq '[.[] | select(.conclusion != "action_required")] | sort_by(.databaseId) | last // empty')
             if [ -n "$run_json" ]; then
               status=$(echo "$run_json" | jq -r '.status')
               if [ "$status" = "completed" ]; then
@@ -216,6 +217,8 @@ jobs:
           runner_temp = os.environ["RUNNER_TEMP"]
           result_path = f"{runner_temp}/review_result.json"
           ledger_path = f"{runner_temp}/agent-ledger/agent_review_ledger.jsonl"
+          if not os.path.exists(result_path):
+              sys.exit(0)  # an earlier step failed; nothing to record
           with open(result_path, encoding="utf-8") as fh:
               result = json.load(fh)
           usage = result.get("usage") or {}

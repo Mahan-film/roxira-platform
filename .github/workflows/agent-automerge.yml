@@ -130,8 +130,9 @@ jobs:
           commit_author_login=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq '.author.login // empty' || echo "")
           echo "commit_author_login=$commit_author_login" >> "$GITHUB_OUTPUT"
 
-          ci_conclusion=$(gh run list --workflow ci.yml --json headSha,status,conclusion \
-            --jq --arg sha "$sha" '[.[] | select(.headSha == $sha and .status == "completed")] | sort_by(.databaseId) | last | .conclusion // "unknown"')
+          # `gh --jq` has no --arg; filter by commit with --commit instead.
+          ci_conclusion=$(gh run list --workflow ci.yml --commit "$sha" --status completed \
+            --json databaseId,conclusion --jq '[.[] | select(.conclusion != "action_required")] | sort_by(.databaseId) | last | .conclusion // "unknown"')
           echo "ci_conclusion=$ci_conclusion" >> "$GITHUB_OUTPUT"
 
           gh pr diff "$PR_NUMBER" --name-only > "$RUNNER_TEMP/changed_files.txt"
