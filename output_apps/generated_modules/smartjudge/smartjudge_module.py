@@ -3,7 +3,15 @@ import io, wave
 
 from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router as live_voice_router
 
-from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_payment_router
+# NOTE (W17): the real Zibal router (router_payment.py) is mounted directly on
+# the root `app` in run_unified_server.py — do not import/include it here too.
+# It used to be included a second (and, via a broken `app` fallback, third)
+# time on this module's own `router`, which has its own `/api/v1/apps/judge`
+# prefix; that produced a dead, wrongly-prefixed duplicate path
+# (/api/v1/apps/judge/api/v1/payment/zibal/...). See docs/W17_payment_audit.md.
+from output_apps.ecosystem_core.src.billing import zibal_service
+from output_apps.ecosystem_core.src.billing import payment_orders
+from output_apps.ecosystem_core.src.billing import payment_service
 
 # ==============================================================================
 # موتور حافظه پرونده‌ها (Mem0) و پشتیبانی دوزبانه فارسی/انگلیسی
@@ -1705,39 +1713,112 @@ print(
     file=sys.stderr,
 )
 # افزودن به انتهای روت‌های قاضی هوشمند
+# W17: واقعی — پشت فلگ PAYMENTS_LIVE (پیش‌فرض خاموش). قیمت فقط از
+# get_calculated_pricing() خوانده می‌شود، هرگز از کلاینت. وقتی فلگ خاموش
+# است هرگز موفقیت جعلی برنمی‌گرداند؛ ۵۰۳ می‌دهد.
 @router.post("/payments/create-invoice")
-async def create_payment_invoice(payload: dict = Body(...)):
-    """ایجاد فاکتور پرداخت برای خرید لایحه تکی یا اشتراک ماهانه"""
-    phone = payload.get("phone", "09129367796")
-    plan_type = payload.get("plan_type", "SINGLE_DRAFT") # SINGLE_DRAFT یا VIP_MONTHLY
-    
-    amount = 99000 if plan_type == "SINGLE_DRAFT" else 490000
-    description = "خرید لایحه دفاعیه تخصصی" if plan_type == "SINGLE_DRAFT" else "اشتراک یک‌ماهه VIP قاضی هوشمند"
-    
-    # تولید شناسه پرداخت امن
-    invoice_id = str(uuid.uuid4())[:8].upper()
-    payment_url = f"https://payment.zarinpal.com/pg/StartPay/SANDBOX_{invoice_id}"
-    
-    return {
-        "status": "SUCCESS",
-        "invoice_id": invoice_id,
-        "amount_toman": amount,
-        "description": description,
-        "payment_url": payment_url,
-        "gateway": "ZarinPal / Shetab"
-    }
+async def create_payment_invoice(request: Request, payload: dict = Body(...)):
+    """ایجاد فاکتور واقعی زیبال برای خرید لایحه تکی یا اشتراک ماهانه"""
+    if not payment_service.payments_live_enabled():
+        return JSONResponse(
+            status_code=503,
+            content={"status": "UNAVAILABLE", "message": "درگاه پرداخت موقتاً در دسترس نیست."},
+        )
+
+    raw_phone = payload.get("phone")
+    plan_type = payload.get("plan_type", "SINGLE_DRAFT")
+
+    # هویت فعال‌سازی: اول توکن JWT معتبر (کاربر احرازهویت‌شده)، در غیر این
+    # صورت شماره موبایل معتبر ارسالی. هیچ‌کدام نباشد یعنی کسی برای فعال‌سازی
+    # وجود ندارد؛ payment_service.create_invoice خودش هم همین را دوباره چک
+    # می‌کند (MissingIdentifierError) — این‌جا فقط شناسه را هش می‌کنیم تا هم
+    # در ایجاد فاکتور و هم در فعال‌سازی از یک کلید یکسان استفاده شود.
+    token = _extract_bearer_token(payload, request)
+    claims = _decode_jwt(token) if token else None
+    auth_identifier = None
+    if claims:
+        auth_identifier = claims.get("sub") or claims.get("user_id") or claims.get("phone")
+    mobile = payment_service.normalize_iranian_mobile(raw_phone)
+    identifier = auth_identifier or mobile
+    user_ref = _hashed_user_ref(str(identifier)) if identifier else None
+
+    plans = get_calculated_pricing()
+    try:
+        conn = payment_orders.get_connection()
+        try:
+            store = payment_orders.PgOrderStore(conn)
+            result = payment_service.create_invoice(
+                plan_type=plan_type,
+                phone=raw_phone,
+                user_ref=user_ref,
+                plans=plans,
+                order_store=store,
+                zibal_create_fn=lambda **kw: zibal_service.create_payment_request(
+                    callback_url=os.environ.get(
+                        "ZIBAL_CALLBACK_URL",
+                        "https://ghazihoushmand.ir/judge/payment/callback",
+                    ),
+                    **kw,
+                ),
+                order_id_fn=lambda: f"GH_{plan_type}_{int(time.time())}_{uuid.uuid4().hex[:6]}",
+            )
+        finally:
+            conn.close()
+    except payment_service.PlanNotFoundError:
+        return JSONResponse(
+            status_code=400,
+            content={"status": "FAILED", "message": "نوع پلن نامعتبر است."},
+        )
+    except payment_service.MissingIdentifierError:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "FAILED",
+                "message": "برای صدور فاکتور، ورود به سیستم یا یک شماره موبایل معتبر ایرانی لازم است.",
+            },
+        )
+
+    if result.get("status") != "SUCCESS":
+        return JSONResponse(status_code=400, content=result)
+    return result
+
 
 @router.post("/payments/verify")
 async def verify_payment(payload: dict = Body(...)):
-    """تأیید تراکنش و فعال‌سازی آنی دسترسی VIP"""
-    invoice_id = payload.get("invoice_id")
-    authority = payload.get("authority", "MOCK_AUTH_SUCCESS")
-    
-    return {
-        "status": "PAID",
-        "reference_id": f"REF-{int(time.time())}",
-        "message": "پرداخت با موفقیت انجام شد. دسترسی نامحدود به لایحه و مدل‌های VIP فعال گردید."
-    }
+    """تأیید واقعی تراکنش زیبال با trackId و فعال‌سازی دسترسی VIP پس از تطابق مبلغ"""
+    if not payment_service.payments_live_enabled():
+        return JSONResponse(
+            status_code=503,
+            content={"status": "UNAVAILABLE", "message": "درگاه پرداخت موقتاً در دسترس نیست."},
+        )
+
+    track_id = payload.get("track_id") or payload.get("trackId")
+    if not track_id:
+        return JSONResponse(
+            status_code=400,
+            content={"status": "FAILED", "message": "شناسه پیگیری (track_id) الزامی است."},
+        )
+
+    conn = payment_orders.get_connection()
+    try:
+        store = payment_orders.PgOrderStore(conn)
+        result = payment_service.verify_invoice(
+            track_id=str(track_id),
+            order_store=store,
+            zibal_verify_fn=zibal_service.verify_payment,
+            activate_fn=zibal_service.activate_user_subscription,
+        )
+    finally:
+        conn.close()
+
+    status = result.get("status")
+    if status == "PENDING_RETRY":
+        # پاسخ قطعی از زیبال نرسید (خطای گذرا/شبکه) — سفارش هنوز pending است؛
+        # ۵۰۳ تا صفحه callback دوباره تلاش کند، بدون آن‌که هرگز failed شود.
+        return JSONResponse(status_code=503, content=result)
+    if status != "PAID":
+        return JSONResponse(status_code=400, content=result)
+    return result
 @router.post("/telephony-session")
 async def create_telephony_session(payload: dict = Body(...)):
     """صدور توکن و ایجاد سشن رمزنگاری‌شده برای تماس‌های صوتی WebRTC و ترانک‌های SIP Asterisk"""
@@ -2365,27 +2446,17 @@ async def pilot_lawyer_onboarding(payload: dict = Body(...)):
 
 
 
+# W17: پشت فلگ PAYMENTS_CRYPTO_ENABLED (پیش‌فرض خاموش، تصمیم مالک) — بدون
+# تایید on-chain واقعی، این مسیر همیشه ۵۰۳ می‌دهد.
 @router.post("/payments/crypto/create-invoice")
 async def create_crypto_invoice(payload: dict = Body(...)):
-    """ایجاد سفارش پرداخت ارزی تتر (USDT-TRC20) برای کاربران خارج از کشور"""
-    phone_or_email = payload.get("contact", "")
-    plan_key = payload.get("plan_key", "DIASPORA_SPECIAL")
-    
-    plan_info = PRICING_PLANS.get(plan_key, PRICING_PLANS["DIASPORA_SPECIAL"])
-    usdt_amount = plan_info["price_usdt"]
-    
-    order_id = f"CRYPTO-{int(time.time())}"
-    wallet_address = "TQn9Y2khEsLJW1ChVWFMSMex3iHGXp8888" # والت پلتفرم
-    
-    return {
-        "status": "SUCCESS",
-        "order_id": order_id,
-        "network": "TRON (TRC20)",
-        "currency": "USDT",
-        "amount": usdt_amount,
-        "deposit_address": wallet_address,
-        "instructions": "پس از انتقال تتر، شناسه تراکنش (TxHash) را در سامانه ثبت فرمایید."
-    }
+    """ایجاد سفارش پرداخت ارزی تتر (USDT-TRC20) — غیرفعال تا پیاده‌سازی تایید on-chain"""
+    # PAYMENTS_CRYPTO_ENABLED=true فقط زمانی معنا پیدا می‌کند که تایید on-chain
+    # واقعی پیاده‌سازی شود؛ تا آن زمان این مسیر همیشه ۵۰۳ می‌دهد.
+    return JSONResponse(
+        status_code=503,
+        content={"status": "UNAVAILABLE", "message": "پرداخت ارزی (کریپتو) در حال حاضر در دسترس نیست."},
+    )
 # ------------------------------------------------------------------------------
 # موتور قیمت‌گذاری پویا بر پایه دلار (USD-Pegged Dynamic Pricing Engine)
 # ------------------------------------------------------------------------------
@@ -2425,32 +2496,15 @@ async def get_pricing_matrix():
         "plans": get_calculated_pricing()
     }
 
+# W17: این مسیر قبلاً هم stub بود (track_id/payment_url جعلی، بدون تماس با
+# زیبال). به‌جای نگه‌داشتن یک stub موازی، همان مسیر واقعی create-invoice را
+# صدا می‌زند تا دو نسخه از یک قابلیت با رفتار متفاوت وجود نداشته باشد.
 @router.post("/payments/zibal/create-invoice")
-async def create_zibal_invoice(payload: dict = Body(...)):
-    """ایجاد فاکتور زیبال منطبق بر محاسبات ریالی و تومانی روز"""
-    phone = payload.get("phone", "09129367796")
-    plan_key = payload.get("plan_key", "SINGLE_DRAFT")
-    
-    current_plans = get_calculated_pricing()
-    plan_info = current_plans.get(plan_key, current_plans["SINGLE_DRAFT"])
-    
-    amount_toman = plan_info["price_toman"]
-    amount_rial = plan_info["price_rial"]
-    
-    track_id = f"ZBL-{int(time.time())}-{str(uuid.uuid4())[:4]}"
-    zibal_payment_url = f"https://gateway.zibal.ir/start/{track_id}"
-
-    return {
-        "status": "SUCCESS",
-        "gateway": "Zibal / Shetab",
-        "track_id": track_id,
-        "plan_name": plan_info["name"],
-        "base_usd": plan_info["base_usd"],
-        "amount_toman": amount_toman,
-        "amount_rial": amount_rial,
-        "payment_url": zibal_payment_url,
-        "callback_url": "https://ghazihoushmand.ir/payment/verify?gateway=zibal"
-    }
+async def create_zibal_invoice(request: Request, payload: dict = Body(...)):
+    """ایجاد فاکتور واقعی زیبال — نگاشت plan_key به همان مسیر create-invoice"""
+    mapped_payload = dict(payload)
+    mapped_payload["plan_type"] = payload.get("plan_key") or payload.get("plan_type", "SINGLE_DRAFT")
+    return await create_payment_invoice(request, mapped_payload)
 # ------------------------------------------------------------------------------
 # پردازش مستقیم متن استخراج‌شده از اسناد و دادنامه‌ها (Vision OCR Ingest)
 # ------------------------------------------------------------------------------
@@ -4700,14 +4754,8 @@ async def export_chat_dataset(admin_key: str = ""):
         headers={"Content-Disposition": "attachment; filename=ghazihoushmand_dataset.jsonl"}
     )
 
-router.include_router(zibal_payment_router)
-
 router.include_router(live_voice_router)
 
-
-# Mount Zibal payment directly on root app to avoid 404
-from output_apps.ecosystem_core.src.billing.router_payment import router as zibal_root_router
-try:
-    app.include_router(zibal_root_router)
-except Exception:
-    router.include_router(zibal_root_router)
+# W17: the Zibal router is mounted once, directly on the root app, in
+# run_unified_server.py. It is intentionally NOT included on `router` here —
+# see the note next to the top-of-file imports.
