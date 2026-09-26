@@ -7,6 +7,9 @@ and are exercised locally (see docs/W6_legal_corpus_diagnosis.md), not here.
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 from scripts.w6_ingest_dotic import (
     build_point_id,
     content_hash,
@@ -15,6 +18,7 @@ from scripts.w6_ingest_dotic import (
     detect_status,
     extract_amended_on,
     find_missing_numbers,
+    main,
     normalize_text,
     split_long_text,
     split_owner_text_by_articles,
@@ -187,3 +191,67 @@ class TestContentHashAndPointId:
         a = build_point_id("ir-5580", "1", 0)
         b = build_point_id("ir-5580", "1", 1)
         assert a != b
+
+
+class TestDryRunNeverWritesBuild:
+    """``--dry-run`` must parse and print only; it must never touch ``--build``.
+
+    Uses an owner-supplied ``.txt`` so no pandas/pyarrow/Qdrant/network is
+    needed (see the script's lazy-import design note).
+    """
+
+    def _run(self, monkeypatch, argv: list[str]) -> int:
+        monkeypatch.setattr(sys, "argv", ["w6_ingest_dotic.py", *argv])
+        return main()
+
+    def test_dry_run_does_not_create_build_file(self, tmp_path, monkeypatch) -> None:
+        src = tmp_path / "law.txt"
+        src.write_text("ماده 1- متن اول\n\nماده 2- متن دوم", encoding="utf-8")
+        out = tmp_path / "out.jsonl"
+        rc = self._run(
+            monkeypatch,
+            [
+                "--file", str(src),
+                "--law-name", "قانون آزمایشی",
+                "--law-type", "CIVIL",
+                "--build", str(out),
+                "--dry-run",
+            ],
+        )
+        assert rc == 0
+        assert not out.exists()
+
+    def test_dry_run_does_not_append_to_existing_build_file(self, tmp_path, monkeypatch) -> None:
+        src = tmp_path / "law.txt"
+        src.write_text("ماده 1- متن اول", encoding="utf-8")
+        out = tmp_path / "out.jsonl"
+        out.write_text('{"existing": true}\n', encoding="utf-8")
+        rc = self._run(
+            monkeypatch,
+            [
+                "--file", str(src),
+                "--law-name", "قانون آزمایشی",
+                "--law-type", "CIVIL",
+                "--build", str(out),
+                "--append",
+                "--dry-run",
+            ],
+        )
+        assert rc == 0
+        assert out.read_text(encoding="utf-8") == '{"existing": true}\n'
+
+    def test_build_still_writes_without_dry_run(self, tmp_path, monkeypatch) -> None:
+        src = tmp_path / "law.txt"
+        src.write_text("ماده 1- متن اول", encoding="utf-8")
+        out = tmp_path / "out.jsonl"
+        rc = self._run(
+            monkeypatch,
+            [
+                "--file", str(src),
+                "--law-name", "قانون آزمایشی",
+                "--law-type", "CIVIL",
+                "--build", str(out),
+            ],
+        )
+        assert rc == 0
+        assert out.read_text(encoding="utf-8").strip()

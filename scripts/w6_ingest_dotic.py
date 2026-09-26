@@ -629,8 +629,10 @@ def main() -> int:
 
     if args.dry_run:
         print_dry_run_report(records, dropped)
+        if args.build:
+            print(f"[dotic] dry run: not writing {args.build}")
 
-    if args.build:
+    if args.build and not args.dry_run:
         out_path = Path(args.build)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         mode = "a" if args.append else "w"
