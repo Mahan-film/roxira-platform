@@ -49,6 +49,8 @@
 }
 
 :root {
+  /* فونت فارسی Vazirmatn (next/font، layout.tsx) با بازگشت به پشته سیستمی فارسی/لاتین */
+  --font-sans: var(--font-vazirmatn), ui-sans-serif, system-ui, "Segoe UI", Tahoma, sans-serif;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -126,5 +128,35 @@
   }
   html {
     @apply font-sans;
+  }
+
+  /* سطوح پیش‌فرض مرورگر (انتخاب متن، اسکرول‌بار) هم از پالت تم پیروی کنند */
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+  * {
+    scrollbar-color: var(--border) transparent;
+  }
+}
+
+@layer utilities {
+  /* نوارهای اسکرول افقی (منوی موبایل، دکمه‌های اقدام سریع): بدون اسکرول‌بار
+     ولی با محو تدریجی لبه‌ها تا قابل‌اسکرول بودن محتوای بریده‌شده مشخص باشد */
+  .scroll-fade-x {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black 16px,
+      black calc(100% - 16px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black 16px,
+      black calc(100% - 16px),
+      transparent 100%
+    );
   }
 }

@@ -1,7 +1,23 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-provider";
+
+/**
+ * فونت فارسی اصلی رابط کاربری (Vazirmatn) — self-host شده (next/font/local) تا
+ * بیلد و رندر به دسترسی شبکه‌ای به Google Fonts در زمان اجرا وابسته نباشد،
+ * با display: swap تا از فونت سیستم به فونت فارسی بدون مسدود کردن رندر (FOIT)
+ * سوییچ شود. فایل وریبل (wght 100..900، ساب‌ست عربی/فارسی) در
+ * src/app/fonts/Vazirmatn-Variable.woff2 (SIL OFL) قرار دارد. متغیر CSS در
+ * globals.css به‌عنوان --font-sans مصرف می‌شود.
+ */
+const vazirmatn = localFont({
+  src: "./fonts/Vazirmatn-Variable.woff2",
+  weight: "100 900",
+  variable: "--font-vazirmatn",
+  display: "swap",
+});
 
 /** تفکیک دامنه‌های سه‌گانه جهت سئو و استخراج متادیتا */
 async function getHostInfo(): Promise<{ isEnglish: boolean; isGhazi: boolean }> {
@@ -45,7 +61,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={isEnglish ? "en" : "fa"}
       dir={isEnglish ? "ltr" : "rtl"}
-      className="h-full antialiased"
+      className={`h-full antialiased ${vazirmatn.variable}`}
     >
       <body className="min-h-full flex flex-col font-sans">
         <AuthProvider>

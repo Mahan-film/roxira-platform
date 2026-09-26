@@ -1,5 +1,15 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
+import {
+  AlertTriangle,
+  FileSignature,
+  FileText,
+  Gavel,
+  Mic,
+  Phone,
+  Send,
+  Square,
+} from "lucide-react";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 
 export function ChatShell() {
@@ -200,33 +210,33 @@ export function ChatShell() {
             <div className={`max-w-[90%] sm:max-w-[80%] p-4 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-sm ${
               msg.role === "user"
                 ? "bg-amber-500/15 border border-amber-500/40 text-amber-100 rounded-br-none font-medium"
-                : "bg-slate-900/95 border border-slate-800 text-slate-200 rounded-bl-none shadow-md"
+                : "bg-card border border-border text-card-foreground rounded-bl-none shadow-md"
             }`}>
               {msg.role === "assistant" && (
-                <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-slate-800/80 text-[11px] text-slate-400 font-medium">
+                <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-border/80 text-[11px] text-muted-foreground font-medium">
                   <span>دستیار</span>
                   {msg.probability && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-normal mr-auto">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-normal mr-auto">
                       احتمال موفقیت: {msg.probability}
                     </span>
                   )}
                 </div>
               )}
-              
+
               <div className="whitespace-pre-line leading-relaxed">{msg.content}</div>
 
               {msg.draft && (
-                <div className="mt-3 pt-3 border-t border-slate-800 bg-slate-950/60 p-3 rounded-xl">
+                <div className="mt-3 pt-3 border-t border-border bg-background/60 p-3 rounded-xl">
                   <div className="flex items-center justify-between mb-1.5 text-xs text-amber-400 font-bold">
                     <span>پیش‌نویس لایحه قانونی:</span>
                     <button
                       onClick={() => navigator.clipboard.writeText(msg.draft || "")}
-                      className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                      className="text-[10px] px-2 py-0.5 rounded bg-muted hover:bg-accent text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     >
                       کپی لایحه
                     </button>
                   </div>
-                  <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">{msg.draft}</pre>
+                  <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap leading-relaxed">{msg.draft}</pre>
                 </div>
               )}
             </div>
@@ -235,7 +245,7 @@ export function ChatShell() {
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl rounded-bl-none text-xs text-amber-400 flex items-center gap-2 shadow-sm">
+            <div className="bg-card border border-border p-3.5 rounded-2xl rounded-bl-none text-xs text-amber-400 flex items-center gap-2 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
               <span>در حال تحلیل پرونده...</span>
             </div>
@@ -246,47 +256,47 @@ export function ChatShell() {
       </div>
 
       {/* ناحیه ورودی داک‌شده در پایین بدون تداخل */}
-      <div className="bg-slate-950/95 border-t border-slate-800/90 p-2.5 sm:p-4 backdrop-blur-xl shrink-0 space-y-2">
+      <div className="bg-background/95 border-t border-border/90 p-2.5 sm:p-4 backdrop-blur-xl shrink-0 space-y-2">
         {/* نوار ابزار اقدامات حقوقی پرونده (لایحه، دادخواست، شکواییه، اظهارنامه) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 pb-1 border-b border-slate-800/60">
-          <span className="text-[11px] text-slate-400 font-semibold whitespace-nowrap pl-1">اقدامات حقوقی:</span>
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-fade-x py-0.5 pb-1 border-b border-border/60">
+          <span className="text-[11px] text-muted-foreground font-semibold whitespace-nowrap pl-1">اقدامات حقوقی:</span>
           <button
             onClick={() => handleSendMessage("بر اساس آخرین مکالمه و ادله پرونده، لایحه دفاعیه مستدل با استناد به مواد قانونی مرتبط، رویه قضایی و آرای وحدت رویه تنظیم کن.")}
-            className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-[11px] text-slate-200 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+            className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
-            <span className="text-amber-400">📄</span>
+            <FileText className="size-3.5 text-amber-400" />
             <span>صدور لایحه دفاعیه</span>
           </button>
           <button
             onClick={() => handleSendMessage("بر اساس شرح پرونده و مطالبات، دادخواست حقوقی کامل شامل خواسته، دلایل و منضمات و شرح دادخواست تدوین کن.")}
-            className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-[11px] text-slate-200 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+            className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
-            <span className="text-cyan-400">⚖️</span>
+            <Gavel className="size-3.5 text-cyan-400" />
             <span>صدور دادخواست حقوقی</span>
           </button>
           <button
             onClick={() => handleSendMessage("با توجه به موضوع پرونده و ادله، شکواییه کیفری رسمی با ذکر عنوان اتهامی، ادله و درخواست تعقیب متهم تدوین کن.")}
-            className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-[11px] text-slate-200 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+            className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
-            <span className="text-rose-400">🚨</span>
+            <AlertTriangle className="size-3.5 text-rose-400" />
             <span>صدور شکواییه کیفری</span>
           </button>
           <button
             onClick={() => handleSendMessage("یک اظهارنامه رسمی موضوع ماده ۱۵۶ قانون آیین دادرسی مدنی با اخطار و مهلت قانونی برای موضوع پرونده تدوین کن.")}
-            className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-[11px] text-slate-200 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+            className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
-            <span className="text-emerald-400">📑</span>
+            <FileSignature className="size-3.5 text-emerald-400" />
             <span>صدور اظهارنامه رسمی</span>
           </button>
         </div>
 
         {/* نوار سوالات متداول و سریع */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-fade-x py-1">
           {quickPrompts.map((item, idx) => (
             <button
               key={idx}
               onClick={() => handleSendMessage(item.prompt)}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-[11px] sm:text-xs rounded-xl whitespace-nowrap transition-colors shadow-sm"
+              className="px-3 py-1.5 bg-card hover:bg-accent border border-border text-muted-foreground hover:text-foreground text-[11px] sm:text-xs rounded-xl whitespace-nowrap transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               {item.title}
             </button>
@@ -295,34 +305,34 @@ export function ChatShell() {
 
         {/* وضعیت زنده ضبط صدا */}
         {recordingStatus && (
-          <div className="text-xs text-slate-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center gap-2">
+          <div className="text-xs text-foreground bg-card border border-border px-3 py-1.5 rounded-xl flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
             <span>{recordingStatus}</span>
           </div>
         )}
 
         {/* جعبه ارسال پیام و دکمه‌های صوتی */}
-        <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-2 flex items-center gap-2 shadow-xl">
+        <div className="bg-card/95 border border-border rounded-2xl p-2 flex items-center gap-2 shadow-xl">
           <input
             type="text"
             placeholder="پیام خود را بنویسید..."
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-            className="flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm text-white focus:outline-none placeholder:text-slate-500"
+            className="flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
           />
 
           {/* دکمه تبدیل گفتار به متن (Voice STT) */}
           <button
             onClick={toggleVoiceRecording}
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm transition-all shadow-sm ${
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
               isVoiceRecording
                 ? "bg-rose-500 text-white animate-pulse shadow-rose-500/40 scale-105"
-                : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                : "bg-muted hover:bg-accent text-muted-foreground border border-border"
             }`}
             title={isVoiceRecording ? "اتمام ضبط" : "تبدیل گفتار به متن"}
           >
-            {isVoiceRecording ? "⏹️" : "🎙️"}
+            {isVoiceRecording ? <Square className="size-4" /> : <Mic className="size-4" />}
           </button>
 
           {/* دکمه تماس صوتی زنده */}
@@ -333,19 +343,19 @@ export function ChatShell() {
               unlockSafariAudio();
               setIsLiveAudioOpen(true);
             }}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-sm transition-all shadow-sm"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center justify-center transition-all shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             title="مکالمه صوتی زنده"
           >
-            📞
+            <Phone className="size-4" />
           </button>
 
           {/* دکمه ارسال پیام */}
           <button
             onClick={() => handleSendMessage()}
-            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/25 active:scale-95"
+            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/25 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             <span>ارسال</span>
-            <span>➤</span>
+            <Send className="size-3.5 -scale-x-100" />
           </button>
         </div>
       </div>

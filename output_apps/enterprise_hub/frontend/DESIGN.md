@@ -13,8 +13,21 @@ edit the CSS/shadcn config, then update this file.
   `chart-1..5`. Light mode is near-achromatic (chroma 0 across primary/secondary/muted/accent);
   `destructive` and the sidebar-primary accent in dark mode carry the only real chroma.
 - **Fonts:** `--font-sans` (also used as `--font-heading`), `--font-mono` (Geist Mono).
+  `--font-sans` resolves to the Persian typeface **Vazirmatn**, loaded via `next/font/google`
+  in `src/app/layout.tsx` (`display: swap`, CSS variable `--font-vazirmatn`) and wired to
+  `--font-sans` in `globals.css` `:root`, with a system-sans fallback stack. Every page under
+  `<html>` inherits it; do not hardcode a different `font-family` in a component.
 - **Dark mode:** `.dark` class variant (`@custom-variant dark (&:is(.dark *))`), not
-  `prefers-color-scheme`.
+  `prefers-color-scheme`. The Smart Judge (ghazi) surfaces (`/chat`, `/judge`,
+  `/judge/payment/callback`) are a committed dark experience: their root element carries the
+  `dark` class explicitly (not a global site default) so their `bg-background`/`text-foreground`
+  etc. resolve to the dark token set. Keep that class when touching those root wrappers.
+- **Browser surfaces:** `::selection` and the scrollbar track/thumb color (`scrollbar-color`)
+  are themed from the palette in `globals.css` `@layer base`, per the Impeccable craft-floor
+  checklist.
+- **Horizontal scroll rows** (mobile chip/action bars with `overflow-x-auto`): pair
+  `overflow-x-auto` with the `.scroll-fade-x` utility (`globals.css` `@layer utilities`) so a
+  clipped row reads as scrollable instead of abruptly cut off at the viewport edge.
 
 ## Rules
 
@@ -25,3 +38,5 @@ edit the CSS/shadcn config, then update this file.
 - A new semantic token (e.g. a new chart color) is added to both `:root` and `.dark` in
   `globals.css`, with a browser-default check (focus ring, selection, scrollbar) per the
   Impeccable skill's craft-floor checklist (`.claude/skills/impeccable/reference/craft-floor.md`).
+- Icons are `lucide-react` components (already a dependency), one consistent stroke/weight —
+  never an emoji or Unicode glyph standing in for an icon.

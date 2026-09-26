@@ -2,6 +2,20 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  Building2,
+  Calculator,
+  FileText,
+  LogOut,
+  Menu,
+  MessageCircle,
+  Phone,
+  Scale,
+  ShieldCheck,
+  User,
+  X,
+  Zap,
+} from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { UserQuotaBadge } from "@/components/judge/subscription/user-quota-badge";
 
@@ -11,14 +25,14 @@ export function GhaziHeader() {
   const { isAuthenticated, openLogin, logout } = useAuth();
 
   const navLinks = [
-    { href: "/chat", label: "گفتگوی حقوقی", icon: "💬" },
-    { href: "/damages", label: "محاسبه‌گر قضایی و خسارت", icon: "🧮" },
-    { href: "/services", label: "محصولات و اشتراک", icon: "⚡" },
-    { href: "/technology", label: "تکنولوژی و معماری", icon: "🔬" },
-    { href: "/about", label: "درباره سامانه", icon: "🏛️" },
-    { href: "/contact", label: "تماس با ما", icon: "📞" },
-    { href: "/terms", label: "قوانین و مقررات", icon: "📜" },
-    { href: "/privacy", label: "حریم خصوصی", icon: "🛡️" },
+    { href: "/chat", label: "گفتگوی حقوقی", icon: MessageCircle },
+    { href: "/damages", label: "محاسبه‌گر قضایی و خسارت", icon: Calculator },
+    { href: "/services", label: "محصولات و اشتراک", icon: Zap },
+    { href: "/technology", label: "تکنولوژی و معماری", icon: Building2 },
+    { href: "/about", label: "درباره سامانه", icon: Scale },
+    { href: "/contact", label: "تماس با ما", icon: Phone },
+    { href: "/terms", label: "قوانین و مقررات", icon: FileText },
+    { href: "/privacy", label: "حریم خصوصی", icon: ShieldCheck },
   ];
 
   const handleOpenAuth = () => {
@@ -30,38 +44,41 @@ export function GhaziHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-slate-950/95 border-b border-slate-800/80 backdrop-blur-2xl transition-all shadow-lg" dir="rtl">
+    <header className="sticky top-0 z-40 w-full bg-background/95 border-b border-border backdrop-blur-2xl transition-all shadow-lg" dir="rtl">
       {/* ردیف اصلی هدر */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
         {/* لوگو و عنوان سامانه */}
         <div className="flex items-center gap-3">
-          <Link href="/chat" className="flex items-center gap-2.5 sm:gap-3 group">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-lg group-hover:scale-105 group-hover:border-amber-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.15)]">
-              ⚖️
+          <Link
+            href="/chat"
+            className="flex items-center gap-2.5 sm:gap-3 group rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:scale-105 group-hover:border-amber-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+              <Scale className="size-5" strokeWidth={2} />
             </div>
             <div>
-              <span className="font-bold text-sm sm:text-base text-slate-100 tracking-tight">قاضی هوشمند</span>
-              <p className="text-[10px] text-slate-500 hidden sm:block">دستیار حقوقی</p>
+              <span className="font-bold text-sm sm:text-base text-foreground tracking-tight">قاضی هوشمند</span>
+              <p className="text-[10px] text-muted-foreground hidden sm:block">دستیار حقوقی</p>
             </div>
           </Link>
         </div>
 
         {/* ناوبری دسکتاپ */}
         <nav className="hidden lg:flex items-center gap-1.5 xl:gap-2">
-          {navLinks.map((item) => {
-            const isActive = pathname === item.href;
+          {navLinks.map(({ href, label, icon: Icon }) => {
+            const isActive = pathname === href;
             return (
               <Link
-                key={item.href}
-                href={item.href}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 ${
+                key={href}
+                href={href}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
                   isActive
                     ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold shadow-sm"
-                    : "text-slate-300 hover:text-white hover:bg-slate-900 border border-transparent"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"
                 }`}
               >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
+                <Icon className="size-3.5" />
+                <span>{label}</span>
               </Link>
             );
           })}
@@ -74,18 +91,19 @@ export function GhaziHeader() {
               <UserQuotaBadge />
               <button
                 onClick={logout}
-                className="text-[11px] text-slate-400 hover:text-rose-400 px-2 py-1 bg-slate-900/80 hover:bg-slate-800 rounded-lg border border-slate-800 transition-colors"
+                className="text-[11px] text-muted-foreground hover:text-destructive px-2 py-1 bg-muted/80 hover:bg-muted rounded-lg border border-border transition-colors flex items-center gap-1 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 title="خروج از حساب کاربری"
               >
-                خروج
+                <LogOut className="size-3.5" />
+                <span>خروج</span>
               </button>
             </>
           ) : (
             <button
               onClick={handleOpenAuth}
-              className="px-3 sm:px-3.5 py-1.5 bg-gradient-to-l from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.15)] active:scale-95"
+              className="px-3 sm:px-3.5 py-1.5 bg-gradient-to-l from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.15)] active:scale-95 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <span>👤</span>
+              <User className="size-3.5" />
               <span>ورود / ثبت‌نام</span>
             </button>
           )}
@@ -93,30 +111,31 @@ export function GhaziHeader() {
           {/* دکمه منوی موبایل */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+            className="lg:hidden p-2 rounded-xl bg-muted border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             title="منوی ناوبری"
+            aria-expanded={mobileMenuOpen}
           >
-            {mobileMenuOpen ? "✕" : "☰"}
+            {mobileMenuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
           </button>
         </div>
       </div>
 
       {/* نوار بکلینک‌های اسکرولی افقی زیر هدر (روی موبایل و تبلت همیشه فعال) */}
-      <div className="lg:hidden border-t border-slate-800/60 bg-slate-950/90 px-2 sm:px-4 py-1.5 overflow-x-auto no-scrollbar flex items-center gap-1.5 text-xs">
-        {navLinks.map((item) => {
-          const isActive = pathname === item.href;
+      <div className="lg:hidden border-t border-border/60 bg-background/90 px-2 sm:px-4 py-1.5 overflow-x-auto no-scrollbar scroll-fade-x flex items-center gap-1.5 text-xs">
+        {navLinks.map(({ href, label, icon: Icon }) => {
+          const isActive = pathname === href;
           return (
             <Link
-              key={item.href}
-              href={item.href}
-              className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-[11px] flex items-center gap-1 transition-all ${
+              key={href}
+              href={href}
+              className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-[11px] flex items-center gap-1 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
                 isActive
                   ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold"
-                  : "bg-slate-900/80 text-slate-300 hover:text-white border border-slate-800/70"
+                  : "bg-muted/80 text-muted-foreground hover:text-foreground border border-border/70"
               }`}
             >
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
+              <Icon className="size-3.5" />
+              <span>{label}</span>
             </Link>
           );
         })}
@@ -124,26 +143,26 @@ export function GhaziHeader() {
 
       {/* منوی بازشونده کشویی موبایل */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-slate-800 bg-slate-900/98 px-4 py-4 space-y-3 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-2 duration-150">
+        <div className="lg:hidden border-t border-border bg-popover/98 px-4 py-4 space-y-3 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-2 duration-150">
           <div className="grid grid-cols-2 gap-2 text-xs">
-            {navLinks.map((item) => (
+            {navLinks.map(({ href, label, icon: Icon }) => (
               <Link
-                key={item.href}
-                href={item.href}
+                key={href}
+                href={href}
                 onClick={() => setMobileMenuOpen(false)}
-                className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all ${
-                  pathname === item.href
+                className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                  pathname === href
                     ? "bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold"
-                    : "bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700"
+                    : "bg-background/60 border-border text-muted-foreground hover:border-ring/50"
                 }`}
               >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
+                <Icon className="size-3.5" />
+                <span>{label}</span>
               </Link>
             ))}
           </div>
 
-          <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <div className="pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
             <span>مرکز تماس: <a href="tel:09129367796" className="text-amber-400 font-mono">09129367796</a></span>
             {!isAuthenticated && (
               <button
@@ -151,7 +170,7 @@ export function GhaziHeader() {
                   setMobileMenuOpen(false);
                   handleOpenAuth();
                 }}
-                className="text-amber-400 font-semibold underline"
+                className="text-amber-400 font-semibold underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded"
               >
                 ورود با پیامک (OTP)
               </button>
