@@ -163,7 +163,11 @@ roles:
       src/automation/self_healing_agent.py. Price re-checked live 2026-09-26
       (issue #39): moved from 0.03 to 0.021 in (out unchanged at 0.32).
     data_policy: standard
+    # 2026-09-26 hub: model-eval.yml run 36235122337 -- v4.1-flash 7/7, 5.2s avg,
+    # $0.0066; v4-flash-0731 3/7 (4 calls hit the 120s deadline), 39s avg, $0.0022.
     models:
+      - id: deepseek/deepseek-v4.1-flash
+        price_per_1m: { in: 0.3, out: 1.2 }
       - id: deepseek/deepseek-v4-flash-0731
         price_per_1m: { in: 0.021, out: 0.32 }
       - id: deepseek/deepseek-v4-flash
