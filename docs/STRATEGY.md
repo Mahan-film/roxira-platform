@@ -67,6 +67,28 @@ Hard rules:
 - **Hype filter.** A new tool/skill/repo seen on social media is adopted only if it (a) removes a step we repeat every week, or (b) measurably cuts tokens or $ per task, and (c) does not push to `main` or run unattended with shell access. "Agent swarm" frameworks usually fail (b). Proposals go to the hub chat, not straight into a workstream.
 - **Parallel chats:** at most 2 Sonnet chats at once (all chats, Opus and Sonnet, share one plan limit: three parallel agents hit it on 2026-09-24), each in its own worktree. More parallelism mostly creates merge conflicts on this file.
 
+### Builder toolchain decisions (hub, 2026-09-26)
+
+Source: the owner's end-of-September tooling brief. It is adapted to our stack: FastAPI + NestJS + Next.js + self-hosted Postgres/Redis/Qdrant. We do not use Supabase or Vercel.
+
+| Tool / idea | Decision | Why |
+| --- | --- | --- |
+| Context7 MCP | ✅ in use (`.mcp.json`) | Current library docs, no code access |
+| codebase-memory-mcp | ✅ in use | Code graph; published result: ~10x fewer tokens for ~9 points less answer quality |
+| Claude Code subagents `implementer` (Sonnet), `tester` (Haiku), `reviewer` (Opus) | ✅ adopt (`.claude/agents/`) | 1 main agent + 3 locked subagents. Agent Teams stay **off** (~7x tokens in plan mode) |
+| Impeccable (+ `DESIGN.md`) | ✅ adopt, vendored markdown only | Frontend quality for `enterprise_hub/frontend` |
+| engram (local memory) | 🟨 owner installs locally (optional) | Local SQLite, no LLM. Store only verified decisions, never secrets. `docs/` + `progress.md` remain the source of truth |
+| OpenCode as the vendor-neutral harness | ✅ in CI (agent-task); 🟨 optional locally | `opencode.json` agents: `plan`, `build`, `free` |
+| Executor model | ✅ `deepseek-v4.1-flash` (eval 7/7). GLM-5.3 / Kimi K3 are candidates | Swap only via `model-eval.yml` + a PR |
+| `openrouter/free` as the last free-tier fallback | ✅ adopt | The free list changes weekly; never pin a single `:free` id |
+| RTK (Bash output compressor) | ❌ skip for now | Independent JetBrains test: +7.6% cost at low effort, ±0 at high; hook covers only Bash |
+| Playwright E2E | 🟨 next workstream | Smoke flows: Smart Judge chat, payment invoice |
+| Chrome DevTools MCP | ❌ not needed | The Claude Code browser pane already covers it |
+| Supabase MCP / Vercel MCP | ❌ n/a | Not our stack. Never connect a DB MCP to production |
+| OmniRoute, treg | ❌ reject | ToS risk (subscription OAuth) and third-party credential custody |
+| agency-agents (full), OpenMontage, Hyperresearch, Hindsight, Graft | ❌ reject | Token overhead, overlap, or unrelated to our work |
+| Jev (typed classifier) | 🟨 product backlog | For in-app intent routing with a confidence threshold ≥0.95; signups closed as of 2026-09-22 |
+
 ### Repository visibility & auto-merge (decided 2026-09-25)
 
 - **The repo stays private.** Keys are still in git history and have not been rotated; making it public would leak them within minutes. It would also publish the legal corpus work and business logic.
