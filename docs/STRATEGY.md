@@ -116,15 +116,11 @@ Status: ⬜ todo · 🟨 in progress · ✅ done. Each chat updates its own row 
 | W12 | Self-updating model & tool registry: one `config/models.yaml` read by the product router, the research agent and the coding agents. A weekly job reads the OpenRouter `/models` catalogue and prices plus the W9 radar, then opens a PR proposing swaps. A swap merges only if the evals do not regress (W6 legal eval, one coding smoke task) | no | W5, W9 | ✅ PR #30 (`config/models.yaml` + loader; router and provider_base read it), PR #32 (weekly `model-registry-check.yml` opens an issue on drift; OpenCode `--agent build` wired), PR #34 (`scripts/eval_coding_smoke.py` + manual `model-eval.yml` gate). Model swaps: run `model-eval.yml` + the W6 legal eval, then a normal PR |
 | W13 | Builder token & cost control: one cost ledger for product calls, research runs and agent tasks; a daily $ cap per agent task and per day; cheap-model-first routing with escalation; prompt caching; a weekly cost report in Persian | no | W5, W10 | 🟨 PR #31: cross-model `agent-review.yml`, `agent-automerge.yml` (off until `AUTO_MERGE_ENABLED=true`; needs GitHub Pro + ruleset), JSONL cost ledger + `scripts/cost_report.py` (Persian output). Left: wire the product router cost log into the same weekly report, prompt caching |
 
-### Priority order (set by the hub, 2026-09-25)
+### Priority order (hub, 2026-09-26)
 
-Everything that can be done without the owner or the server is merged (PRs #29–#34). What remains is owner-gated:
+Live status, the owner queue and the next workstreams are in **`docs/STATE.md`** (kept current via `/handoff`). The parallel-chat operating model is in **`docs/PARALLEL_CHATS.md`**: 1 Opus hub, up to 2 Sonnet workstream chats, and unlimited cheap `agent` issues on the OpenRouter key.
 
-1. **GitHub Pro + auto-merge setup** (`docs/ops/AUTO_MERGE.md`): ruleset on `main` (require PR, checks `ci` + `agent-review`, no force push), "Allow auto-merge", secret `OPENROUTER_AGENT_KEY` (dedicated key, daily `limit_reset`), variables `AGENT_ENABLED`, `AGENT_REVIEW_MODEL` (≠ executor family), labels `agent` / `needs-human`. Run one low-risk `agent` issue end to end, **then** set `AUTO_MERGE_ENABLED=true`. Revoke the PAT pasted in chat on 2026-09-24.
-2. **Server (owner-run):** deploy per §7 (brings W7 timing + W12 registry to prod; router flag stays off), W6 upsert + eval, W7 bench, revert the 2 radar files, W9 live run, restart `roxira-dispatcher`, clean `/tmp/w9run`.
-3. **W6 missing laws:** owner supplies the 3 files → ingest → eval; switch to `iran_laws_v2` only if citation accuracy clearly beats 16.7%.
-4. **W5 flag on** (cheap tier from the registry) after the W6 eval passes; **W7** streaming TTS on after the bench.
-5. **W11** first real project once 1–2 are done.
+Order: (1) owner-approved server steps: W6 eval, W7 bench, cleanup; (2) W14 Playwright E2E and W15 STT robustness in parallel Sonnet chats; (3) W5 router `cheap` tier on, after the W6 eval passes; (4) W16 nginx `/health`; (5) W11 first real Project Factory run.
 
 ## 6. Known facts (verified 2026-09-24)
 
