@@ -59,7 +59,7 @@ OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_TASKS_DIR = ROOT / "data" / "eval" / "coding_smoke"
 DEFAULT_MAX_USD = 0.50
 DEFAULT_CHECK_TIMEOUT_S = 10.0
-DEFAULT_CALL_TIMEOUT_S = 90.0
+DEFAULT_CALL_TIMEOUT_S = 60.0
 
 SYSTEM_PROMPT = (
     "You are a careful Python engineer completing a small, self-contained coding task. "
@@ -462,14 +462,15 @@ def print_text_summary(summary: EvalSummary) -> None:
             print(f"  FAIL {r.task_id}: {first_line}")
 
 
-def print_compare_table(summaries: list[EvalSummary]) -> None:
+def print_compare_table(summaries: list[EvalSummary], file=None) -> None:
     header = f"{'model':45} {'pass':>8} {'cost($)':>10} {'tokens':>8} {'latency(ms)':>12}"
-    print(header)
-    print("-" * len(header))
+    print(header, file=file)
+    print("-" * len(header), file=file)
     for s in summaries:
         print(
             f"{s.model:45} {s.n_passed}/{s.n_tasks:>5} {s.total_cost_usd:>10.4f} "
-            f"{s.total_tokens:>8} {s.avg_latency_ms:>12.0f}"
+            f"{s.total_tokens:>8} {s.avg_latency_ms:>12.0f}",
+            file=file,
         )
 
 
@@ -544,7 +545,10 @@ def main(argv: list[str] | None = None) -> int:
         primary_summary = summaries[primary_id]
         candidate_summary = summaries.get(args.candidate, primary_summary)
 
-        print_compare_table(list(summaries.values()))
+        # In --json mode stdout must be pure JSON (the workflow pipes it to jq),
+        # so the human-readable table and gate line go to stderr instead.
+        text_out = sys.stderr if args.json else sys.stdout
+        print_compare_table(list(summaries.values()), file=text_out)
 
         passed = gate_passes(
             candidate_summary.pass_rate,
@@ -559,7 +563,8 @@ def main(argv: list[str] | None = None) -> int:
             f"  candidate pass_rate={candidate_summary.pass_rate:.0%} "
             f"cost=${candidate_summary.total_cost_usd:.4f}\n"
             f"  primary   pass_rate={primary_summary.pass_rate:.0%} "
-            f"cost=${primary_summary.total_cost_usd:.4f}"
+            f"cost=${primary_summary.total_cost_usd:.4f}",
+            file=text_out,
         )
 
         if args.json:

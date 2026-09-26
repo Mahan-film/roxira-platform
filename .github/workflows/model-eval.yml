@@ -47,7 +47,7 @@ jobs:
   eval:
     name: Coding smoke eval + gate
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v7
