@@ -25,7 +25,7 @@
 # list for a role at runtime. This file only sets the defaults.
 
 schema_version: 1
-checked_at: "2026-09-25"
+checked_at: "2026-09-26"
 source: docs/research/TECH_CURRENCY_2026-09.md
 
 roles:
@@ -49,8 +49,10 @@ roles:
       # deepseek/deepseek-v4.1-flash for a similar-class model. Not yet
       # A/B-evaluated against production traffic — swap is proposed here,
       # not yet forced; LLM_TIER_CHEAP still overrides if an eval regresses it.
+      # Price re-checked live 2026-09-26 (issue #39, weekly model-registry-check):
+      # moved from 0.03 to 0.021 in (out unchanged at 0.32).
       - id: deepseek/deepseek-v4-flash-0731
-        price_per_1m: { in: 0.03, out: 0.32 }
+        price_per_1m: { in: 0.021, out: 0.32 }
       - id: qwen/qwen3.8-flash
         price_per_1m: { in: 0.15, out: 0.47 }
       - id: google/gemini-3.1-flash-lite
@@ -75,13 +77,57 @@ roles:
     models:
       - id: openai/whisper-large-v3-turbo
         price_per_1m: null
+        catalogue_listed: false
         note: >
-          UNVERIFIED against the 2026-09-25 OpenRouter audit — that pass only
-          checked chat-completion ids grepped from repo source, not STT ids.
-          STRATEGY.md §3b names "Whisper-turbo via OpenRouter or AssemblyAI";
-          confirm this id and its price on OpenRouter (or pick AssemblyAI's
-          whisper-rt streaming model, which does support Persian) before W7
-          (voice latency) depends on it.
+          Issue #39 (weekly model-registry-check, opened 2026-09-26): this id
+          is absent from a fresh GET /api/v1/models fetch (zero "whisper" ids
+          in the 458-model live catalogue) -- confirming the UNVERIFIED flag
+          this note replaces. `catalogue_listed: false` tells
+          scripts/check_models.py to skip the live-catalogue check for this
+          entry (like the edge-tts: tts entry below) instead of reporting it
+          MISSING, because production evidence says it is not actually gone:
+          docker logs on 5.75.200.67 (roxira_app_prod, 2026-09-24 22:53 UTC)
+          show this id executing against OpenRouter's *separate*
+          `/api/v1/audio/transcriptions` endpoint and getting back HTTP 429
+          (rate-limited), not 404/model-not-found -- i.e. OpenRouter's
+          dedicated transcription models are apparently just not surfaced via
+          the general /api/v1/models listing at all. A live re-check
+          (2026-09-26) found no successor dedicated STT/transcription id on
+          OpenRouter either; the only remaining audio-capable ids are general
+          multimodal chat-completion models (openai/gpt-audio,
+          google/gemini-3.x-flash family, mistralai/voxtral-small-24b-2507 --
+          see the fallback entry below) which need a different request shape
+          (chat completions with an `input_audio` content part, not this
+          endpoint's {model, input_audio, language} POST body) -- adopting
+          one as the primary is a real provider-integration change, not made
+          in this PR. Least-change recommendation for the owner: self-host
+          `faster-whisper large-v3-turbo` (same weights; Persian is in
+          Whisper's 99-language set per
+          docs/research/TECH_CURRENCY_2026-09.md's STT section) directly on
+          5.75.200.67 -- removes the OpenRouter network hop and per-call cost,
+          likely *lower* latency, but needs a deploy step (CPU/GPU sizing,
+          model download, a code path change) the owner must approve; not
+          done here.
+      - id: openai/gpt-audio
+        price_per_1m: { in: 2.50, out: 10.00 }
+        note: >
+          Not yet wired into any code path (a documented fallback candidate
+          only, per issue #39 task 2). Real, live-listed OpenRouter id
+          (audio input modality, chat completions) in the same model family
+          as `gpt-4o-transcribe`, which
+          docs/research/TECH_CURRENCY_2026-09.md's STT section cites Persian
+          as included in its 99+ language set. Price shown is the
+          chat-completion prompt/completion price that
+          scripts/check_models.py verifies; OpenRouter bills raw audio input
+          separately (~$32/1M audio tokens at this audit) and there is no
+          streaming/low-latency transcription mode for it the way there was
+          for the dedicated Whisper endpoint -- a real latency regression risk
+          if it is ever promoted to primary. output_apps/ecosystem_core/src/
+          factory/stt_engine.py's own internal fallback currently hardcodes
+          `google/gemini-2.0-flash-001` for this same purpose, which this
+          2026-09-26 audit also found retired from the live catalogue; that
+          is a second, pre-existing degradation this PR flags but does not
+          fix, to keep this change small.
 
   tts:
     description: Text-to-speech for the voice pipeline (Persian/Farsi required).
@@ -114,11 +160,12 @@ roles:
       Cheap coding model driving OpenCode's `build` agent on GitHub Actions
       runners (W10 phase 2, .github/workflows/agent-task.yml). Cheapest
       coding-capable id live on 2026-09-25, already used in
-      src/automation/self_healing_agent.py.
+      src/automation/self_healing_agent.py. Price re-checked live 2026-09-26
+      (issue #39): moved from 0.03 to 0.021 in (out unchanged at 0.32).
     data_policy: standard
     models:
       - id: deepseek/deepseek-v4-flash-0731
-        price_per_1m: { in: 0.03, out: 0.32 }
+        price_per_1m: { in: 0.021, out: 0.32 }
       - id: deepseek/deepseek-v4-flash
         price_per_1m: { in: 0.049, out: 0.098 }
 

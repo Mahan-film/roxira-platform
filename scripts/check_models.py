@@ -47,6 +47,12 @@ OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 # check_models.py skips these rather than reporting them MISSING.
 NON_OPENROUTER_PREFIXES = ("edge-tts:",)
 
+# A registry entry can also set `catalogue_listed: false` (see config/models.yaml,
+# stt role, issue #39) for a real OpenRouter id that is verified live but simply
+# is not surfaced by GET /api/v1/models -- e.g. OpenRouter's dedicated
+# /api/v1/audio/transcriptions models. Skipped the same way as the prefixes
+# above: reported, but never counted as MISSING.
+
 
 def fetch_live_catalogue(timeout: float = 20.0) -> dict[str, dict[str, Any]]:
     """id -> {"prompt": float_usd_per_token, "completion": float_usd_per_token}."""
@@ -99,7 +105,9 @@ def check(
         for position, entry in enumerate(entries):
             model_id = entry.get("id", "")
             is_primary = position == 0
-            if any(model_id.startswith(p) for p in NON_OPENROUTER_PREFIXES):
+            if any(model_id.startswith(p) for p in NON_OPENROUTER_PREFIXES) or (
+                entry.get("catalogue_listed") is False
+            ):
                 rows.append(
                     {"role": role, "id": model_id, "primary": is_primary, "status": "skipped"}
                 )

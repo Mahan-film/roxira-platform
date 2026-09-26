@@ -26,6 +26,33 @@ PHONETIC_FIXES = [
 # role is a product change that waits for the W6 legal eval.
 VOICE_LLM_MODEL = os.environ.get("VOICE_LLM_MODEL", "").strip() or "deepseek/deepseek-chat"
 
+_STT_FALLBACK_ID = "openai/whisper-large-v3-turbo"
+
+
+def _default_stt_model() -> str:
+    """The registry's `stt` primary (config/models.yaml), else the id this
+    module has always hardcoded. Never raises: the registry module does no
+    network I/O, but a missing/malformed config/models.yaml, or PyYAML not
+    being installed, must not break the voice pipeline (issue #39)."""
+    try:
+        from output_apps.generated_modules.smartjudge import model_registry
+
+        ids = model_registry.role_models("stt")
+        if ids:
+            return ids[0]
+    except Exception:
+        pass
+    return _STT_FALLBACK_ID
+
+
+# STT model id (issue #39: the previously-hardcoded openai/whisper-large-v3-turbo
+# is unverifiable against OpenRouter's live GET /api/v1/models catalogue -- see
+# config/models.yaml's `stt` role for the full note). VOICE_STT_MODEL always wins
+# when set; otherwise this defaults to the registry's stt primary, falling back to
+# the historical hardcoded id if config/models.yaml or model_registry.py is
+# unavailable.
+VOICE_STT_MODEL = os.environ.get("VOICE_STT_MODEL", "").strip() or _default_stt_model()
+
 # Streaming TTS (W7, docs/W7_voice_latency.md), default OFF: split the LLM reply at
 # Persian sentence boundaries and start Edge-TTS on the first sentence while later
 # sentences are still being generated/synthesized, instead of waiting for the whole
@@ -64,7 +91,7 @@ async def _transcribe_audio_payload_impl(audio_bytes: bytes, audio_fmt: str = "w
                 fmt = "wav"
 
             payload = {
-                "model": "openai/whisper-large-v3-turbo",
+                "model": VOICE_STT_MODEL,
                 "input_audio": {
                     "data": b64_data,
                     "format": fmt
