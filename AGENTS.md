@@ -20,3 +20,14 @@ runtime). Read it via `output_apps/generated_modules/smartjudge/model_registry.p
 or run `python3 scripts/check_models.py` to check every id against the live
 OpenRouter catalogue. Do not hardcode a model id anywhere else — add or change
 it in `config/models.yaml`.
+
+## 4. Hard rules
+- Never put a service key or token in frontend code (`output_apps/enterprise_hub/frontend/`).
+  It ships to the browser.
+- Every new Postgres table needs an ownership/tenant column, with access checks enforced in
+  the NestJS repository layer — never trust a client-supplied tenant id alone.
+- Migrations only land via reviewed PRs. No direct migration on the production database.
+- Customer/case data never goes to a `:free`-tier model (`config/models.yaml`'s `free` role
+  and the `free` agent in `opencode.json`) — those providers may log or train on prompts.
+- Subagent roles for this repo are defined in `.claude/agents/` (`implementer`, `tester`,
+  `reviewer`); use them instead of re-deriving the same scope/model split ad hoc.

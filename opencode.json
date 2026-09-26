@@ -12,6 +12,16 @@
         "patch": false
       }
     },
+    "free": {
+      "description": "Mechanical/non-sensitive chores only (formatting checks, doc typo scans, renaming). Read-only, same as `plan`. Must NEVER receive customer or case data: this model is config/models.yaml's `free` role, a non_sensitive_only, logs-or-trains-on-prompts provider (docs/STRATEGY.md §3b).",
+      "model": "openrouter/qwen/qwen3.8-27b:free",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false,
+        "patch": false
+      }
+    },
     "build": {
       "description": "Implements one GitHub-issue-labelled task in a worktree/branch (W10 phase 2, agent-task.yml). Runs non-interactively in CI: no `ask` permissions anywhere. Never pushes to main, never force-deletes, never touches secrets or the network directly.",
       "model": "openrouter/deepseek/deepseek-v4.1-flash",

@@ -40,6 +40,16 @@ roles:
         price_per_1m: { in: 0, out: 0 }
       - id: nvidia/nemotron-3-super-120b-a12b:free
         price_per_1m: { in: 0, out: 0 }
+      # Last-resort fallback: openrouter/free is OpenRouter's own auto-router id, not a
+      # single named model, so it never appears in GET /api/v1/models and price/quality
+      # vary per request. catalogue_listed: false makes scripts/check_models.py skip the
+      # live-catalogue check for it, same as the stt role's whisper entry above.
+      - id: openrouter/free
+        price_per_1m: { in: 0, out: 0 }
+        catalogue_listed: false
+        note: >
+          OpenRouter router id (auto-picks among its free-tier models), used only as the
+          last fallback if every named free model above is unavailable.
 
   cheap:
     description: Default chat, classification, query rewriting.
@@ -172,6 +182,16 @@ roles:
         price_per_1m: { in: 0.021, out: 0.32 }
       - id: deepseek/deepseek-v4-flash
         price_per_1m: { in: 0.049, out: 0.098 }
+    # Not active models, not read by role_models()/role_entries() (they only read
+    # `models:` above). Noted here so the next model-eval run has a shortlist instead
+    # of starting from scratch. Promote to `models:` only after scripts/check_models.py
+    # shows the id live and it passes the eval bar described in role_entries' comment
+    # above (coding smoke task + no regression).
+    candidates:
+      - id: z-ai/glm-5.3
+        note: pending model-eval runs
+      - id: moonshotai/kimi-k3
+        note: pending model-eval runs
 
   reviewer:
     description: >
