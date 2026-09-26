@@ -24,9 +24,13 @@ export function GhaziHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isAuthenticated, openLogin, logout } = useAuth();
 
-  const navLinks = [
+  // "/damages" روی دامنه قاضی سرو نمی‌شود (میدل‌ور آن را به roxira.ir
+  // هدایت می‌کند)؛ با external:true به‌جای next/link از <a> ساده استفاده
+  // می‌شود چون ناوبری کلاینتی Next.js برای ریدایرکت میان‌دامنه‌ای middleware
+  // به خطای شبه-CORS در کنسول منجر می‌شود (fetch داده RSC به مبدأ دیگر).
+  const navLinks: { href: string; label: string; icon: typeof MessageCircle; external?: boolean }[] = [
     { href: "/chat", label: "گفتگوی حقوقی", icon: MessageCircle },
-    { href: "/damages", label: "محاسبه‌گر قضایی و خسارت", icon: Calculator },
+    { href: "/damages", label: "محاسبه‌گر قضایی و خسارت", icon: Calculator, external: true },
     { href: "/services", label: "محصولات و اشتراک", icon: Zap },
     { href: "/technology", label: "تکنولوژی و معماری", icon: Building2 },
     { href: "/about", label: "درباره سامانه", icon: Scale },
@@ -65,20 +69,26 @@ export function GhaziHeader() {
 
         {/* ناوبری دسکتاپ */}
         <nav className="hidden lg:flex items-center gap-1.5 xl:gap-2">
-          {navLinks.map(({ href, label, icon: Icon }) => {
+          {navLinks.map(({ href, label, icon: Icon, external }) => {
             const isActive = pathname === href;
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-                  isActive
-                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold shadow-sm"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"
-                }`}
-              >
+            const className = `px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+              isActive
+                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"
+            }`;
+            const content = (
+              <>
                 <Icon className="size-3.5" />
                 <span>{label}</span>
+              </>
+            );
+            return external ? (
+              <a key={href} href={href} className={className}>
+                {content}
+              </a>
+            ) : (
+              <Link key={href} href={href} className={className}>
+                {content}
               </Link>
             );
           })}
@@ -122,20 +132,26 @@ export function GhaziHeader() {
 
       {/* نوار بکلینک‌های اسکرولی افقی زیر هدر (روی موبایل و تبلت همیشه فعال) */}
       <div className="lg:hidden border-t border-border/60 bg-background/90 px-2 sm:px-4 py-1.5 overflow-x-auto no-scrollbar scroll-fade-x flex items-center gap-1.5 text-xs">
-        {navLinks.map(({ href, label, icon: Icon }) => {
+        {navLinks.map(({ href, label, icon: Icon, external }) => {
           const isActive = pathname === href;
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-[11px] flex items-center gap-1 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-                isActive
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold"
-                  : "bg-muted/80 text-muted-foreground hover:text-foreground border border-border/70"
-              }`}
-            >
+          const className = `px-2.5 py-1 rounded-lg whitespace-nowrap text-[11px] flex items-center gap-1 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+            isActive
+              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold"
+              : "bg-muted/80 text-muted-foreground hover:text-foreground border border-border/70"
+          }`;
+          const content = (
+            <>
               <Icon className="size-3.5" />
               <span>{label}</span>
+            </>
+          );
+          return external ? (
+            <a key={href} href={href} className={className}>
+              {content}
+            </a>
+          ) : (
+            <Link key={href} href={href} className={className}>
+              {content}
             </Link>
           );
         })}
@@ -145,21 +161,38 @@ export function GhaziHeader() {
       {mobileMenuOpen && (
         <div className="lg:hidden border-t border-border bg-popover/98 px-4 py-4 space-y-3 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-2 duration-150">
           <div className="grid grid-cols-2 gap-2 text-xs">
-            {navLinks.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-                  pathname === href
-                    ? "bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold"
-                    : "bg-background/60 border-border text-muted-foreground hover:border-ring/50"
-                }`}
-              >
-                <Icon className="size-3.5" />
-                <span>{label}</span>
-              </Link>
-            ))}
+            {navLinks.map(({ href, label, icon: Icon, external }) => {
+              const className = `p-2.5 rounded-xl border flex items-center gap-2 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                pathname === href
+                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold"
+                  : "bg-background/60 border-border text-muted-foreground hover:border-ring/50"
+              }`;
+              const content = (
+                <>
+                  <Icon className="size-3.5" />
+                  <span>{label}</span>
+                </>
+              );
+              return external ? (
+                <a
+                  key={href}
+                  href={href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={className}
+                >
+                  {content}
+                </a>
+              ) : (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={className}
+                >
+                  {content}
+                </Link>
+              );
+            })}
           </div>
 
           <div className="pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">

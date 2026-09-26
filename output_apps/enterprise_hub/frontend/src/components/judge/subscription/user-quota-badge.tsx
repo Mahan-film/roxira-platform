@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Coins, Sparkles } from "lucide-react";
 
-import { type PlanTier, type SubscriptionSelection, formatPersianNumber } from "./types";
+import { useAuth } from "@/components/auth/auth-provider";
+import { type PlanTier, formatPersianNumber } from "./types";
 import { SubscriptionModal } from "./subscription-modal";
 
 const PLAN_STYLES: Record<PlanTier, string> = {
@@ -15,28 +16,14 @@ const PLAN_STYLES: Record<PlanTier, string> = {
 export interface UserQuotaBadgeProps {
   remainingTokens?: number;
   plan?: PlanTier;
-  onTopUp?: (tokens: number) => void;
 }
 
 export function UserQuotaBadge({
   remainingTokens = 0,
   plan = "عادی",
-  onTopUp,
 }: UserQuotaBadgeProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-
-  const handleSelect = (selection: SubscriptionSelection) => {
-    if (selection.tokens && onTopUp) {
-      onTopUp(selection.tokens);
-    }
-    setNote(
-      selection.tokens
-        ? `${formatPersianNumber(selection.tokens)} توکن به سبد شما افزوده شد.`
-        : `طرح «${selection.label}» انتخاب شد.`,
-    );
-    window.setTimeout(() => setNote(null), 4000);
-  };
+  const { accessToken, user } = useAuth();
 
   return (
     <div className="flex items-center gap-2">
@@ -60,20 +47,17 @@ export function UserQuotaBadge({
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-300 transition-colors hover:bg-amber-500/20"
+        className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         افزایش موجودی
       </button>
-
-      {note && (
-        <span className="hidden text-[10px] text-emerald-300 lg:inline">{note}</span>
-      )}
 
       <SubscriptionModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         currentPlan={plan}
-        onSelect={handleSelect}
+        accessToken={accessToken}
+        phone={user?.phone}
       />
     </div>
   );

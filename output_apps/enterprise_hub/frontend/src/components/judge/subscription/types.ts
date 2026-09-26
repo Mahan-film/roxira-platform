@@ -12,6 +12,27 @@ export interface SubscriptionSelection {
   tokens?: number;
 }
 
+/** Real backend plan keys accepted by POST /payments/create-invoice (see
+ * `get_calculated_pricing()` in smartjudge_module.py). Any UI option that
+ * does not map to one of these must be shown as "coming soon", never wired
+ * to a fake/local-only charge. */
+export type BackendPlanType = "SINGLE_DRAFT" | "VIP_MONTHLY_PRO";
+
+/** Shape of one entry in GET /payments/pricing-matrix's `plans` map. */
+export interface BackendPlanPrice {
+  name: string;
+  base_usd: number;
+  price_toman: number;
+  price_rial: number;
+  rate_usd_toman: number;
+}
+
+export interface PricingMatrixResponse {
+  status: string;
+  current_usd_rate_toman: number;
+  plans: Partial<Record<BackendPlanType, BackendPlanPrice>>;
+}
+
 /** Format an integer with Persian digits and thousands separators. */
 export function formatPersianNumber(value: number): string {
   const safe = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;

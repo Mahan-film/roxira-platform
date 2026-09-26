@@ -54,9 +54,11 @@ export function middleware(request: NextRequest) {
   const domain = resolveDomain(request.headers.get("host") ?? "");
 
   if (domain === "ghazi") {
-    // مسیرهای پورتال سازمانی در دامنه قاضی معنا ندارند
+    // مسیرهای پورتال سازمانی در دامنه قاضی معنا ندارند؛ به همان مسیر روی
+    // roxira.ir هدایت می‌شویم (نه صرفاً ریشه) تا کاربر روی صفحه درخواستی
+    // فرود بیاید، نه صفحه اصلی یک سایت دیگر.
     if (ROXIRA_ONLY_PATHS.some((path) => pathname.startsWith(path))) {
-      return NextResponse.redirect(new URL("https://roxira.ir/"));
+      return NextResponse.redirect(new URL(pathname + request.nextUrl.search, "https://roxira.ir"));
     }
     // ریشه دامنه قاضی = رابط چت هوشمند حقوقی
     if (pathname === "/" || pathname === "/judge") {
