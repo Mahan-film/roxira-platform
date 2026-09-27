@@ -18,6 +18,11 @@ RUN pip install --no-cache-dir psycopg fastapi uvicorn pydantic python-docx pymu
 RUN pip install --no-cache-dir docling
 # موتور گراف دانش حقوقی (LightRAG): موجودیت/رابطه + بازیابی برداری ترکیبی
 RUN pip install --no-cache-dir lightrag-hku
+# TTS مسیر آبشاری صدای زنده (smartjudge_live_voice.py): edge-tts هرگز اینجا
+# نصب نشده بود (W20 diagnosis) -- یعنی هر پاسخ صوتی از ابتدا و بی‌صدا شکست
+# می‌خورد. google-genai برای مسیر اختیاری VOICE_REALTIME_PROVIDER=gemini
+# (پیش‌فرض خاموش، docs/W20_realtime_voice.md) است.
+RUN pip install --no-cache-dir edge-tts google-genai
 
 COPY output_apps /app/output_apps
 COPY src /app/src

@@ -151,6 +151,40 @@ roles:
           docs/research/TECH_CURRENCY_2026-09.md. scripts/check_models.py
           skips this id (it will never appear in GET /api/v1/models).
 
+  voice_realtime:
+    description: >
+      W20 (docs/W20_realtime_voice.md): optional native speech-to-speech
+      provider for the live-voice websocket, behind VOICE_REALTIME_PROVIDER
+      (default off — the STT→LLM→TTS cascade above stays the default path).
+      Not an OpenRouter model — called directly against Google's Gemini Live
+      API with GEMINI_API_KEY (server env only, never sent to the browser).
+      scripts/check_models.py skips these ids (Gemini Live models are not in
+      OpenRouter's GET /api/v1/models catalogue); ids were instead confirmed
+      live 2026-09-26 via a read-only `client.models.list()` call from
+      5.75.200.67 against the real GEMINI_API_KEY now in that server's .env.
+    data_policy: standard
+    models:
+      - id: gemini-3.8-live
+        price_per_1m: null
+        catalogue_listed: false
+        note: >
+          Primary: newest full-quality native-audio live model (not the
+          `-extended-thinking` variant, which adds reasoning latency this
+          live-voice path doesn't need — legal grounding is injected as RAG
+          context per turn instead, see gemini_live_bridge.py). Confirmed
+          live 2026-09-26. Google's per-token audio price
+          (ai.google.dev/gemini-api/docs/pricing, fetched 2026-09-26):
+          input $3/1M audio tokens (~$0.005/min), output $12/1M audio tokens
+          (~$0.018/min) — no flat per-1M text-equivalent price, hence `null`
+          here; docs/W20_realtime_voice.md has the per-minute estimate.
+      - id: gemini-3.1-flash-live-preview
+        price_per_1m: null
+        catalogue_listed: false
+        note: >
+          Fallback / cost-reduction option: same live-audio family, smaller
+          and cheaper. Confirmed live 2026-09-26. Preview status — do not
+          promote to primary without an explicit stability check.
+
   # ---- Builder roles (agents that write/review code, W10/W12) -------------
   architect:
     description: >

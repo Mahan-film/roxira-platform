@@ -399,13 +399,14 @@ except Exception as e:
     print(f"  [ROXIRA-WARN] Payment mount error: {e}")
 
 
-# Mount Gemini Live Native Voice Bridge
-try:
-    from output_apps.ecosystem_core.src.factory.gemini_live_bridge import router as gemini_voice_router
-    app.include_router(gemini_voice_router)
-    print("  [ROXIRA] Gemini 3.8 Live API Bridge mounted successfully.")
-except Exception as e:
-    print(f"  [ROXIRA-ERR] Gemini bridge load failed: {e}")
+# NOTE (W20, docs/W20_realtime_voice.md): there used to be a second router
+# mounted here (gemini_live_bridge.router) with its own
+# @router.websocket("/live-voice") at this SAME path as live_voice_router
+# above. FastAPI/Starlette match routes in registration order, so with
+# live_voice_router registered first, that second handler was never reached
+# by any real request -- dead code. The Gemini Live path is now a branch
+# *inside* live_voice_router's own handler (VOICE_REALTIME_PROVIDER=gemini,
+# see smartjudge_live_voice.live_voice_websocket), not a second router.
 
 
 @app.get("/api/v1/apps/judge/health")

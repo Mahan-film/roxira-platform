@@ -63,6 +63,14 @@ VOICE_STREAM_TTS = os.environ.get("VOICE_STREAM_TTS", "0").strip().lower() not i
     "0", "false", "off", "no",
 )
 
+# W20 (docs/W20_realtime_voice.md): optional native speech-to-speech provider,
+# default OFF (empty/unset -> the STT/LLM/edge-tts cascade above stays the
+# default path). The only supported value today is "gemini" -- see
+# gemini_live_bridge.run_gemini_realtime_session(), called below instead of
+# the cascade loop when this is set. Any other/unknown value is treated as
+# off rather than raising, so a typo in the env never breaks live voice.
+VOICE_REALTIME_PROVIDER = os.environ.get("VOICE_REALTIME_PROVIDER", "").strip().lower()
+
 
 def sanitize_transcription(txt: str) -> str:
     cleaned = txt.strip()
@@ -337,7 +345,13 @@ async def synthesize_speech_persian(text: str) -> str:
                     buf.extend(chunk["data"])
             return base64.b64encode(buf).decode("utf-8")
         return await asyncio.wait_for(_stream(), timeout=2.8)
-    except Exception:
+    except Exception as e:
+        # Was a bare `except Exception: return ""` with no logging (W20
+        # diagnosis): a missing/broken edge-tts install failed 100% of turns
+        # silently, with nothing in `docker logs` to point at it. Printing
+        # here costs nothing (no transcript/PII, just the exception) and is
+        # the only signal an owner has without VOICE_TIMING_LOG-level tracing.
+        print(f"[TTS-WARN] {e}", file=sys.stderr)
         return ""
     finally:
         log_voice_timing("tts", tts_first_byte_ms=first_byte_ms, tts_total_ms=sw.elapsed_ms())
@@ -402,6 +416,18 @@ async def live_voice_websocket(websocket: WebSocket):
         "tier": "VIP",
         "barge_in": True
     }))
+
+    if VOICE_REALTIME_PROVIDER == "gemini":
+        # W20: hand the whole (already-accepted) connection to the Gemini
+        # Live proxy for its lifetime instead of running the STT/LLM/TTS
+        # cascade below. Same SESSION_STARTED contract as the cascade path
+        # above, so the frontend needs no branching.
+        from output_apps.ecosystem_core.src.factory.gemini_live_bridge import (
+            run_gemini_realtime_session,
+        )
+
+        await run_gemini_realtime_session(websocket)
+        return
 
     pcm_accumulator = bytearray()
 

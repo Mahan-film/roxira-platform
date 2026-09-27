@@ -28,6 +28,16 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   const stateRef = useRef<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
   const watchdogTimerRef = useRef<any>(null);
 
+  // Playback queue: sentence-chunk (VOICE_STREAM_TTS) and Gemini-live audio
+  // both arrive as several `agent_audio_stream` messages per turn. The old
+  // code called currentSourceRef.current.stop() on every new message, so
+  // only the LAST chunk of a multi-chunk turn was ever actually heard. Now
+  // every chunk is queued and played back to back; the mic only re-arms
+  // once the queue is empty AND the server has said `turn_complete`.
+  const audioQueueRef = useRef<Array<{ data: string; mime?: string }>>([]);
+  const isPlayingRef = useRef(false);
+  const turnCompletePendingRef = useRef(false);
+
   const setListenMode = (isListening: boolean) => {
     if (workletNodeRef.current) {
       workletNodeRef.current.port.postMessage({
@@ -52,12 +62,20 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       setListenMode(false);
     }
 
-    if (newState === 'THINKING') {
+    if (newState === 'THINKING' || newState === 'SPEAKING') {
+      // Safety net for BOTH states: THINKING covers a stuck/slow backend
+      // turn; SPEAKING covers a playback error or a dropped `turn_complete`
+      // message (e.g. a raw-PCM decode failure, or a websocket hiccup)
+      // that would otherwise leave the mic permanently off -- this is the
+      // main "does not automatically continue listening" failure mode.
+      const timeoutMs = newState === 'THINKING' ? 9000 : 15000;
       watchdogTimerRef.current = setTimeout(() => {
-        if (stateRef.current === 'THINKING') {
+        if (stateRef.current === newState) {
+          audioQueueRef.current = [];
+          isPlayingRef.current = false;
           transitionState('LISTENING');
         }
-      }, 9000);
+      }, timeoutMs);
     }
   };
 
@@ -66,49 +84,95 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     return () => cleanupSession();
   }, [isOpen]);
 
-  const playAudio = async (base64Audio: string) => {
-    try {
-      const ctx = audioContextRef.current;
-      if (!ctx) return;
+  const base64ToBytes = (base64Audio: string): Uint8Array => {
+    const binaryString = window.atob(base64Audio);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
 
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
+  // The two backends this modal talks to (smartjudge_live_voice.py's
+  // edge-tts cascade, or VOICE_REALTIME_PROVIDER=gemini's raw PCM stream,
+  // docs/W20_realtime_voice.md) send audio in different containers.
+  // decodeAudioData() only understands an encoded container (mp3/wav/ogg
+  // with headers) -- calling it on headerless raw PCM silently rejects the
+  // promise, which is one of the two root causes of "no audio at all"
+  // fixed in W20. Raw PCM is now built into an AudioBuffer by hand instead.
+  const decodeToBuffer = async (
+    ctx: AudioContext,
+    base64Audio: string,
+    mime?: string,
+  ): Promise<AudioBuffer> => {
+    const bytes = base64ToBytes(base64Audio);
+
+    const pcmMatch = /audio\/pcm;?\s*rate=(\d+)/i.exec(mime || '');
+    if (pcmMatch) {
+      const sampleRate = parseInt(pcmMatch[1], 10) || 24000;
+      const pcm16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+      const buffer = ctx.createBuffer(1, pcm16.length, sampleRate);
+      const channel = buffer.getChannelData(0);
+      for (let i = 0; i < pcm16.length; i++) {
+        channel[i] = pcm16[i] / 0x8000;
       }
+      return buffer;
+    }
 
-      if (currentSourceRef.current) {
-        try { currentSourceRef.current.stop(); } catch (e) {}
-        currentSourceRef.current = null;
+    // Encoded clip (edge-tts mp3 chunks concatenated) -- the original path.
+    return await new Promise<AudioBuffer>((resolve, reject) => {
+      ctx.decodeAudioData(bytes.buffer.slice(0), resolve, reject);
+    });
+  };
+
+  const pumpAudioQueue = () => {
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+
+    const next = audioQueueRef.current.shift();
+    if (!next) {
+      isPlayingRef.current = false;
+      currentSourceRef.current = null;
+      if (turnCompletePendingRef.current) {
+        turnCompletePendingRef.current = false;
+        setTimeout(() => transitionState('LISTENING'), 250);
       }
+      return;
+    }
 
-      const binaryString = window.atob(base64Audio);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-        ctx.decodeAudioData(bytes.buffer.slice(0), resolve, reject);
-      });
-
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(ctx.destination);
-      currentSourceRef.current = source;
-
+    isPlayingRef.current = true;
+    if (stateRef.current !== 'SPEAKING') {
       transitionState('SPEAKING');
+    }
 
-      source.onended = () => {
-        currentSourceRef.current = null;
-        setTimeout(() => {
-          transitionState('LISTENING');
-        }, 400);
-      };
+    (async () => {
+      try {
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+        }
+        const audioBuffer = await decodeToBuffer(ctx, next.data, next.mime);
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        currentSourceRef.current = source;
+        source.onended = () => {
+          pumpAudioQueue();
+        };
+        source.start(0);
+      } catch (err) {
+        console.error('Audio playback error:', err);
+        // Skip the bad chunk instead of stalling the whole queue/turn.
+        pumpAudioQueue();
+      }
+    })();
+  };
 
-      source.start(0);
-    } catch (err) {
-      console.error('Audio playback error:', err);
-      transitionState('LISTENING');
+  const enqueueAudio = (base64Audio: string, mime?: string) => {
+    if (!base64Audio) return;
+    audioQueueRef.current.push({ data: base64Audio, mime });
+    if (!isPlayingRef.current) {
+      pumpAudioQueue();
     }
   };
 
@@ -189,10 +253,23 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
           } else if (res.event === 'agent_audio_stream' || res.type === 'AUDIO_STREAM') {
             const b64 = res.audio_data;
             if (b64) {
-              await playAudio(b64);
+              enqueueAudio(b64, res.mime);
             }
           } else if (res.event === 'turn_complete') {
-            transitionState('LISTENING');
+            // Don't cut playback short: if audio is still queued/playing
+            // (streaming TTS sentence chunks, or a multi-chunk Gemini
+            // reply), wait for the queue to actually drain before re-
+            // arming the mic -- pumpAudioQueue() does that once
+            // turnCompletePendingRef is set. If nothing is playing (e.g.
+            // TTS failed and produced no audio at all), go straight back
+            // to LISTENING so the conversation keeps moving.
+            if (isPlayingRef.current || audioQueueRef.current.length > 0) {
+              turnCompletePendingRef.current = true;
+            } else {
+              transitionState('LISTENING');
+            }
+          } else if (res.event === 'error' || res.type === 'ERROR') {
+            setErrorMessage(res.message || 'خطای سرور.');
           }
         } catch (e) {
           console.error('WS parse error:', e);
@@ -222,6 +299,9 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     }
     setListenMode(false);
     stateRef.current = 'IDLE';
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    turnCompletePendingRef.current = false;
     if (currentSourceRef.current) {
       try { currentSourceRef.current.stop(); } catch (e) {}
       currentSourceRef.current = null;
