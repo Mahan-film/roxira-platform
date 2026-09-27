@@ -1,0 +1,15 @@
+name: Test Self-Hosted Hetzner Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-server:
+    runs-on: [self-hosted, Linux, ARM64]
+    steps:
+      - name: Print Server Info
+        run: |
+          echo "Hostname: $(hostname)"
+          free -h
+          docker --version
+          docker compose version
