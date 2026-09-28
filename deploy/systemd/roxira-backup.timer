@@ -1,0 +1,13 @@
+[Unit]
+Description=Run roxira-backup.service nightly
+
+[Timer]
+# 02:30 UTC (~06:00 Tehran), off-peak. Adjust if it ever collides with the
+# existing hourly cron backup (scripts/auto_backup_daemon.sh) — see
+# docs/ops/RESILIENCE.md before installing both.
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

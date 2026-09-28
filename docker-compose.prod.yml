@@ -53,6 +53,17 @@ services:
       - redis_prod
       - qdrant_prod
       - pgbouncer_prod
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - roxira_net
 
@@ -74,6 +85,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - roxira_net
 
@@ -114,6 +130,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - roxira_net
 
@@ -125,6 +146,17 @@ services:
       - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - roxira_net
 
@@ -136,6 +168,19 @@ services:
       - "127.0.0.1:6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      # qdrant/qdrant ships no curl/wget; a bash /dev/tcp probe confirms the
+      # HTTP port accepts connections (qdrant image includes bash).
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - roxira_net
 
@@ -187,6 +232,13 @@ services:
       - postgres_prod
       - redis_prod
       - pgbouncer_prod
+    # Healthcheck comes from output_apps/enterprise_hub/Dockerfile (curl /docs);
+    # not redefined here so it stays in sync with the image.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - roxira_net
 
@@ -209,6 +261,13 @@ services:
       - "127.0.0.1:3001:3001"
     depends_on:
       - roxira_enterprise_backend
+    # Healthcheck comes from output_apps/enterprise_hub/frontend/Dockerfile
+    # (curl /); not redefined here so it stays in sync with the image.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - roxira_net
 
@@ -237,6 +296,20 @@ services:
       - enterprise_app
       - roxira_enterprise_backend
       - roxira_enterprise_frontend
+    healthcheck:
+      # curl (not busybox wget) ships in nginx:alpine. No -f: a 502 from a
+      # down upstream still proves nginx itself answers; only a refused/timed
+      # out connection should flip this unhealthy.
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - roxira_net
 

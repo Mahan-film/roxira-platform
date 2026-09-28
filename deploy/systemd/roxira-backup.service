@@ -1,0 +1,16 @@
+[Unit]
+Description=Roxira nightly Postgres + Qdrant backup (scripts/ops/backup.sh)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/opt/roxira_platform/scripts/ops/backup.sh
+# Backups touch prod databases via `docker exec` and write only under
+# /opt/roxira_backups; root is required for the docker socket, same as the
+# existing crontab entry it may replace.
+User=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

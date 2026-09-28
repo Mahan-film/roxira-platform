@@ -1,0 +1,102 @@
+name: Uptime check (production)
+
+on:
+  schedule:
+    # Every 15 minutes.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to check"
+        required: false
+        default: "https://ghazihoushmand.ir"
+
+permissions:
+  contents: read
+
+env:
+  BASE_URL: ${{ inputs.base_url || 'https://ghazihoushmand.ir' }}
+
+jobs:
+  check:
+    name: External uptime probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      failed: ${{ steps.summary.outputs.failed }}
+    steps:
+      - name: GET /
+        id: home
+        run: |
+          set +e
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "${BASE_URL}/")
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "GET / -> $code"
+          [ "$code" = "200" ]
+        continue-on-error: true
+
+      - name: POST /api/v1/apps/judge/payments/create-invoice (expect 400)
+        id: payments
+        run: |
+          set +e
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+            -X POST -H 'Content-Type: application/json' -d '{}' \
+            "${BASE_URL}/api/v1/apps/judge/payments/create-invoice")
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "POST payments/create-invoice -> $code"
+          [ "$code" = "400" ]
+        continue-on-error: true
+
+      - name: Summarize
+        id: summary
+        run: |
+          home_ok="${{ steps.home.outcome }}"
+          payments_ok="${{ steps.payments.outcome }}"
+          echo "home: $home_ok (http ${{ steps.home.outputs.code }})"
+          echo "payments: $payments_ok (http ${{ steps.payments.outputs.code }})"
+          if [ "$home_ok" != "success" ] || [ "$payments_ok" != "success" ]; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail the job if any probe failed
+        if: steps.summary.outputs.failed == 'true'
+        run: exit 1
+
+  report-incident:
+    name: Open/update incident issue
+    needs: check
+    if: always() && needs.check.outputs.failed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or comment on the incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BASE_URL: ${{ env.BASE_URL }}
+        run: |
+          set -euo pipefail
+          TITLE="Uptime check: production probes failing"
+          BODY_FILE="$(mktemp)"
+          {
+            echo "The 15-minute uptime check against \`$BASE_URL\` failed (GET / or the payments create-invoice probe)."
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            echo "See docs/ops/RESILIENCE.md for the runbook (what to check first, how to roll back)."
+          } > "$BODY_FILE"
+
+          existing=$(gh issue list --repo "$REPO" --label incident --state open \
+            --json number --jq '.[0].number' || true)
+
+          if [ -n "${existing:-}" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body-file "$BODY_FILE"
+          else
+            gh issue create --repo "$REPO" --title "$TITLE" --label incident --body-file "$BODY_FILE"
+          fi
