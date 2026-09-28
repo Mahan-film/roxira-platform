@@ -10,11 +10,21 @@ import sys
 import json
 import time
 import asyncio
+import pathlib
 import urllib.request
 import subprocess
 
-RADAR_OUTPUT_PATH = "/opt/roxira_platform/output_apps/enterprise_hub/frontend/public/tech_radar_report.json"
-MARKDOWN_REPORT_PATH = "/opt/roxira_platform/TECH_RADAR_PROPOSALS.md"
+# Runtime artifacts live OUTSIDE the git checkout (var/tech_radar/, gitignored)
+# so a scheduled run never rewrites tracked files (issue #78). The committed
+# TECH_RADAR_PROPOSALS.md / frontend/public/tech_radar_report.json are kept
+# only as static placeholders. Override the directory with
+# ROXIRA_RADAR_OUTPUT_DIR (e.g. a container where the repo root is /app).
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
+RADAR_OUTPUT_DIR = pathlib.Path(
+    os.environ.get("ROXIRA_RADAR_OUTPUT_DIR", REPO_ROOT / "var" / "tech_radar")
+)
+RADAR_OUTPUT_PATH = RADAR_OUTPUT_DIR / "tech_radar_report.json"
+MARKDOWN_REPORT_PATH = RADAR_OUTPUT_DIR / "TECH_RADAR_PROPOSALS.md"
 
 class TechRadarSentinel:
     def __init__(self):
@@ -75,7 +85,7 @@ class TechRadarSentinel:
         return report
 
     def save_and_render_reports(self, report: dict):
-        os.makedirs(os.path.dirname(RADAR_OUTPUT_PATH), exist_ok=True)
+        RADAR_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         with open(RADAR_OUTPUT_PATH, "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
 

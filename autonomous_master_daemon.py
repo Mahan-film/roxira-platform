@@ -118,11 +118,22 @@ def execute_autonomous_cycle():
 
     # خواندن وضعیت رادار فناوری و گزارش‌های استخراج یوتیوب در صورت وجود
     radar_data = {}
-    radar_file = "/opt/roxira_platform/output_apps/enterprise_hub/frontend/public/tech_radar_report.json"
-    if os.path.exists(radar_file):
+    # Runtime output moved out of the checkout (issue #78); fall back to the
+    # committed static placeholder when no scheduled run has produced a report.
+    radar_candidates = (
+        os.environ.get(
+            "ROXIRA_RADAR_REPORT_JSON",
+            "/opt/roxira_platform/var/tech_radar/tech_radar_report.json",
+        ),
+        "/opt/roxira_platform/output_apps/enterprise_hub/frontend/public/tech_radar_report.json",
+    )
+    for radar_file in radar_candidates:
+        if not os.path.exists(radar_file):
+            continue
         try:
             with open(radar_file, "r") as f:
                 radar_data = json.load(f)
+            break
         except Exception:
             pass
 

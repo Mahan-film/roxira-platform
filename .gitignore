@@ -28,6 +28,11 @@ uploads/
 # Tech Radar append-only research history (root report is tracked)
 data/tech_radar/
 
+# Tech Radar runtime output (issue #78): the scheduled sentinel writes here, not
+# into the checkout. The committed TECH_RADAR_PROPOSALS.md and
+# frontend/public/tech_radar_report.json are static placeholders only.
+var/tech_radar/
+
 # W6: raw HF dataset snapshots downloaded by scripts/w6_ingest_dotic.py --build
 # (rebuild with the command documented in docs/W6_legal_corpus_diagnosis.md;
 # the built JSONL under data/legal/ is tracked, this raw source is not)
