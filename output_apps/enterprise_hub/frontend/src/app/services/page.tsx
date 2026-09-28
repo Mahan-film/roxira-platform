@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
+import { SubscriptionCta } from "@/components/judge/subscription/subscription-cta";
 
 export const metadata: Metadata = {
   title: "محصولات، خدمات و تعرفه اشتراک | سامانه هوشمند قاضی هوشمند",
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function ServicesPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 font-sans" dir="rtl">
+    <div className="dark glass-app-bg flex flex-col min-h-screen text-foreground font-sans" dir="rtl">
       <GhaziHeader />
 
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-12">
@@ -32,7 +33,7 @@ export default function ServicesPage() {
         {/* جدول مقایسه طرح رایگان در برابر اشتراک VIP */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
           {/* کارت طرح رایگان */}
-          <div className="bg-slate-900/60 border border-slate-800 p-6 sm:p-8 rounded-3xl flex flex-col justify-between space-y-6">
+          <div className="glass-raised p-6 sm:p-8 rounded-3xl flex flex-col justify-between space-y-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-bold rounded-full">
@@ -88,12 +89,15 @@ export default function ServicesPage() {
           </div>
 
           {/* کارت طرح ویژه VIP */}
-          <div className="bg-gradient-to-b from-amber-500/10 via-slate-900/90 to-slate-900 border-2 border-amber-500/40 p-6 sm:p-8 rounded-3xl flex flex-col justify-between space-y-6 relative shadow-2xl shadow-amber-500/10">
+          <div className="glass-raised p-6 sm:p-8 rounded-3xl flex flex-col justify-between space-y-6 relative outline outline-2 outline-amber-500/40 shadow-2xl shadow-amber-500/10">
+            {/* لایهٔ تینت طلایی روی سطح شیشه‌ای، بدون تداخل با blur/border سطح پایه */}
+            <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-amber-500/15 via-transparent to-transparent" />
+
             <div className="absolute -top-3.5 right-6 px-3.5 py-1 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 text-xs font-black rounded-full uppercase tracking-wider shadow-md">
               ویژه وکلا، مشاوران و پرونده‌های سنگین
             </div>
 
-            <div className="space-y-4 pt-2">
+            <div className="relative space-y-4 pt-2">
               <div className="flex items-center justify-between">
                 <span className="px-3 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-full border border-amber-500/30">
                   VIP UNLIMITED
@@ -141,11 +145,15 @@ export default function ServicesPage() {
             </div>
 
             <div className="space-y-2">
+              <SubscriptionCta
+                label="خرید و فعال‌سازی اشتراک VIP"
+                className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-center text-xs rounded-xl transition-all shadow-lg shadow-amber-500/20 block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+              />
               <a
                 href="tel:09129367796"
-                className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-center text-xs rounded-xl transition-all shadow-lg shadow-amber-500/20 block"
+                className="w-full py-2.5 bg-slate-900/60 hover:bg-slate-800 border border-amber-500/30 text-amber-300 font-semibold text-center text-xs rounded-xl transition-colors block"
               >
-                فعال‌سازی فوری اشتراک VIP (تماس با 09129367796)
+                فعال‌سازی تلفنی اشتراک VIP (تماس با 09129367796)
               </a>
               <p className="text-[10px] text-center text-slate-500">
                 کاربران دارای اشتراک فعال به محض احراز هویت با شماره همراه خود به کلیه قابلیت‌ها دسترسی دارند.

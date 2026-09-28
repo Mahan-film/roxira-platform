@@ -216,7 +216,7 @@ export function ChatShell() {
                 <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-border/80 text-[11px] text-muted-foreground font-medium">
                   <span>دستیار</span>
                   {msg.probability && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-normal mr-auto">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-normal ms-auto">
                       احتمال موفقیت: {msg.probability}
                     </span>
                   )}
@@ -256,10 +256,10 @@ export function ChatShell() {
       </div>
 
       {/* ناحیه ورودی داک‌شده در پایین بدون تداخل */}
-      <div className="bg-background/95 border-t border-border/90 p-2.5 sm:p-4 backdrop-blur-xl shrink-0 space-y-2">
+      <div className="glass-raised p-2.5 sm:p-4 shrink-0 space-y-2">
         {/* نوار ابزار اقدامات حقوقی پرونده (لایحه، دادخواست، شکواییه، اظهارنامه) */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-fade-x py-0.5 pb-1 border-b border-border/60">
-          <span className="text-[11px] text-muted-foreground font-semibold whitespace-nowrap pl-1">اقدامات حقوقی:</span>
+          <span className="text-[11px] text-muted-foreground font-semibold whitespace-nowrap ps-1">اقدامات حقوقی:</span>
           <button
             onClick={() => handleSendMessage("بر اساس آخرین مکالمه و ادله پرونده، لایحه دفاعیه مستدل با استناد به مواد قانونی مرتبط، رویه قضایی و آرای وحدت رویه تنظیم کن.")}
             className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -312,7 +312,7 @@ export function ChatShell() {
         )}
 
         {/* جعبه ارسال پیام و دکمه‌های صوتی */}
-        <div className="bg-card/95 border border-border rounded-2xl p-2 flex items-center gap-2 shadow-xl">
+        <div className="glass-surface rounded-2xl p-2 flex items-center gap-2">
           <input
             type="text"
             placeholder="پیام خود را بنویسید..."

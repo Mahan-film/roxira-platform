@@ -180,7 +180,7 @@ export function SubscriptionModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border bg-card text-card-foreground shadow-2xl"
+        className="glass-overlay flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl text-foreground shadow-2xl"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">

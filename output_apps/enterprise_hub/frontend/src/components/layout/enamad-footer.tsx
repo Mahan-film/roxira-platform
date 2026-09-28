@@ -14,7 +14,7 @@ interface EnamadFooterProps {
 
 export function EnamadFooter({ compact = false }: EnamadFooterProps) {
   return (
-    <footer className="w-full border-t border-border/80 bg-background text-muted-foreground text-xs mt-auto select-none" dir="rtl">
+    <footer className="glass-surface w-full text-muted-foreground text-xs mt-auto select-none" dir="rtl">
       {compact ? (
         /* نسخه فشرده مخصوص پایین صفحه چت */
         <div className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">

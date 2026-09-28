@@ -36,3 +36,11 @@ checklist, not a design doc — keep entries short and link elsewhere for detail
 - [ ] W13: builder token & cost ledger, daily $ cap, cheap-first routing with
       escalation, prompt caching, weekly Persian cost report. Depends on W5, W10.
 - [ ] W5: flip the `cheap` tier flag on, once the W6 eval passes.
+- [ ] W21b: glassmorphism design tokens + app shell. Add glass CSS
+      variables/Tailwind theme entries/utilities in frontend
+      `src/app/globals.css` (three elevations + fallbacks), then apply only to
+      the shell: page background (`src/app/chat/page.tsx`,
+      `src/app/judge/page.tsx`), header (`src/components/layout/ghazi-header.tsx`),
+      footer (`src/components/layout/enamad-footer.tsx`), and chat composer
+      (`src/components/chat/chat-shell.tsx`). Update frontend `DESIGN.md`.
+      Verify `npm run build` + `npx tsc --noEmit`.

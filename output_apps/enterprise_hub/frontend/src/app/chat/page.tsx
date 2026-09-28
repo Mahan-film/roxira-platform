@@ -6,7 +6,7 @@ import { EnamadFooter } from "@/components/layout/enamad-footer";
 
 export default function ChatPage() {
   return (
-    <div className="dark flex flex-col h-screen bg-background text-foreground font-sans overflow-hidden" dir="rtl">
+    <div className="dark glass-app-bg flex flex-col h-screen text-foreground font-sans overflow-hidden" dir="rtl">
       <GhaziHeader />
       <main className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
         <ChatShell />

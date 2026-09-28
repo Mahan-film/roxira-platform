@@ -48,7 +48,7 @@ export function GhaziHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-background/95 border-b border-border backdrop-blur-2xl transition-all shadow-lg" dir="rtl">
+    <header className="glass-surface sticky top-0 z-40 w-full transition-all motion-reduce:transition-none" dir="rtl">
       {/* ردیف اصلی هدر */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
         {/* لوگو و عنوان سامانه */}
@@ -131,7 +131,7 @@ export function GhaziHeader() {
       </div>
 
       {/* نوار بکلینک‌های اسکرولی افقی زیر هدر (روی موبایل و تبلت همیشه فعال) */}
-      <div className="lg:hidden border-t border-border/60 bg-background/90 px-2 sm:px-4 py-1.5 overflow-x-auto no-scrollbar scroll-fade-x flex items-center gap-1.5 text-xs">
+      <div className="lg:hidden border-t border-border/60 bg-transparent px-2 sm:px-4 py-1.5 overflow-x-auto no-scrollbar scroll-fade-x flex items-center gap-1.5 text-xs">
         {navLinks.map(({ href, label, icon: Icon, external }) => {
           const isActive = pathname === href;
           const className = `px-2.5 py-1 rounded-lg whitespace-nowrap text-[11px] flex items-center gap-1 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
@@ -159,7 +159,7 @@ export function GhaziHeader() {
 
       {/* منوی بازشونده کشویی موبایل */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-border bg-popover/98 px-4 py-4 space-y-3 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-2 duration-150">
+        <div className="glass-overlay lg:hidden px-4 py-4 space-y-3 animate-in slide-in-from-top-2 duration-150 motion-reduce:animate-none">
           <div className="grid grid-cols-2 gap-2 text-xs">
             {navLinks.map(({ href, label, icon: Icon, external }) => {
               const className = `p-2.5 rounded-xl border flex items-center gap-2 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${

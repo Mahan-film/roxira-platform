@@ -46,6 +46,14 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* طراحی شیشه‌ای (W21b): رنگ سطح، لبه و ارتفاع‌ها */
+  --color-glass-surface: var(--glass-surface);
+  --color-glass-raised: var(--glass-raised);
+  --color-glass-overlay: var(--glass-overlay);
+  --color-glass-border: var(--glass-border);
+  --shadow-glass-surface: var(--glass-shadow-surface);
+  --shadow-glass-raised: var(--glass-shadow-raised);
+  --shadow-glass-overlay: var(--glass-shadow-overlay);
 }
 
 :root {
@@ -83,6 +91,20 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* سیستم طراحی شیشه‌ای (W21b): سه ارتفاع — surface / raised / overlay.
+     سطح شفاف + سایه نرم؛ مقدار blur/saturate داخل utility اعمال می‌شود. */
+  --glass-surface: oklch(1 0 0 / 62%);
+  --glass-raised: oklch(1 0 0 / 74%);
+  --glass-overlay: oklch(1 0 0 / 88%);
+  --glass-border: oklch(0 0 0 / 10%);
+  --glass-solid: oklch(0.99 0 0);
+  --glass-shadow-surface: 0 1px 2px oklch(0 0 0 / 6%), 0 8px 24px oklch(0 0 0 / 6%);
+  --glass-shadow-raised: 0 2px 4px oklch(0 0 0 / 8%), 0 12px 32px oklch(0 0 0 / 10%);
+  --glass-shadow-overlay: 0 8px 16px oklch(0 0 0 / 12%), 0 24px 56px oklch(0 0 0 / 18%);
+  --glass-app-bg: radial-gradient(1200px 800px at 100% -10%, oklch(0.92 0.03 250 / 70%), transparent 60%),
+    radial-gradient(900px 700px at 0% 0%, oklch(0.94 0.03 120 / 60%), transparent 55%),
+    linear-gradient(180deg, oklch(0.99 0 0), oklch(0.96 0.005 260));
 }
 
 .dark {
@@ -117,6 +139,20 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* سیستم طراحی شیشه‌ای (W21b): مقادیر تم تاریک پوسته اپ */
+  --glass-surface: oklch(1 0 0 / 6%);
+  --glass-raised: oklch(1 0 0 / 10%);
+  --glass-overlay: oklch(1 0 0 / 16%);
+  --glass-border: oklch(1 0 0 / 12%);
+  --glass-solid: oklch(0.2 0.015 260);
+  --glass-shadow-surface: 0 1px 2px oklch(0 0 0 / 40%), 0 8px 24px oklch(0 0 0 / 30%);
+  --glass-shadow-raised: 0 2px 6px oklch(0 0 0 / 45%), 0 14px 36px oklch(0 0 0 / 38%);
+  --glass-shadow-overlay: 0 8px 18px oklch(0 0 0 / 50%), 0 28px 64px oklch(0 0 0 / 45%);
+  --glass-app-bg: radial-gradient(1100px 700px at 100% -10%, oklch(0.34 0.07 255 / 55%), transparent 60%),
+    radial-gradient(900px 650px at 0% 5%, oklch(0.32 0.06 285 / 45%), transparent 55%),
+    radial-gradient(1000px 900px at 50% 115%, oklch(0.28 0.05 205 / 45%), transparent 60%),
+    linear-gradient(180deg, oklch(0.17 0.02 260), oklch(0.12 0.015 260));
 }
 
 @layer base {
@@ -158,5 +194,70 @@
       black calc(100% - 16px),
       transparent 100%
     );
+  }
+
+  /* پس‌زمینه لایه‌ای گرادیانی پوسته اپ (W21b) */
+  .glass-app-bg {
+    background-color: var(--background);
+    background-image: var(--glass-app-bg);
+  }
+
+  /* سطوح شیشه‌ای (W21b): پرکننده نیمه‌شفاف + blur(16px) saturate(140%)
+     + لبه ۱ پیکسلی روشن + سایه نرم. سه ارتفاع سطح/برجسته/روکش. */
+  .glass-surface {
+    background-color: var(--glass-surface);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-surface);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+  }
+
+  .glass-raised {
+    background-color: var(--glass-raised);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-raised);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+  }
+
+  .glass-overlay {
+    background-color: var(--glass-overlay);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-overlay);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+  }
+}
+
+/* اگر backdrop-filter پشتیبانی نشود، سطح شیشه‌ای به رنگ توپر برمی‌گردد
+   تا متن فارسی همچنان واجد کنتراست AA بماند. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-surface,
+  .glass-raised,
+  .glass-overlay {
+    background-color: var(--glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* احترام به کاهش شفافیت: حذف blur و استفاده از سطح توپر */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-surface,
+  .glass-raised,
+  .glass-overlay {
+    background-color: var(--glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* احترام به کاهش حرکت */
+@media (prefers-reduced-motion: reduce) {
+  .glass-surface,
+  .glass-raised,
+  .glass-overlay {
+    transition: none;
+    animation: none;
   }
 }

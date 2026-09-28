@@ -8,7 +8,7 @@ import { type PlanTier, formatPersianNumber } from "./types";
 import { SubscriptionModal } from "./subscription-modal";
 
 const PLAN_STYLES: Record<PlanTier, string> = {
-  "عادی": "border-slate-600/50 bg-slate-700/20 text-slate-300",
+  "عادی": "border-border bg-muted text-foreground",
   "طلایی": "border-amber-400/40 bg-amber-400/10 text-amber-300",
   "حقوقی": "border-violet-400/40 bg-violet-400/10 text-violet-300",
 };
@@ -28,12 +28,12 @@ export function UserQuotaBadge({
   return (
     <div className="flex items-center gap-2">
       <span
-        className="hidden items-center gap-1.5 rounded-xl border border-white/10 bg-slate-900/80 px-2.5 py-1.5 font-mono text-[11px] text-slate-300 sm:inline-flex"
+        className="hidden items-center gap-1.5 rounded-xl border border-border bg-muted px-2.5 py-1.5 font-mono text-[11px] text-foreground sm:inline-flex"
         title="توکن‌های باقی‌مانده"
       >
         <Coins className="size-3.5 text-amber-300" />
         {formatPersianNumber(remainingTokens)}
-        <span className="text-slate-500">توکن</span>
+        <span className="text-muted-foreground">توکن</span>
       </span>
 
       <span

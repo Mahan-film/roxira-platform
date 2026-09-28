@@ -30,7 +30,7 @@ export default function JudgePage() {
   const [draftOpen, setDraftOpen] = useState(false);
 
   return (
-    <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
+    <div className="dark glass-app-bg flex min-h-full flex-1 flex-col text-foreground">
       <GhaziHeader />
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-3">

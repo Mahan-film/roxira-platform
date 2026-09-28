@@ -28,6 +28,17 @@ edit the CSS/shadcn config, then update this file.
 - **Horizontal scroll rows** (mobile chip/action bars with `overflow-x-auto`): pair
   `overflow-x-auto` with the `.scroll-fade-x` utility (`globals.css` `@layer utilities`) so a
   clipped row reads as scrollable instead of abruptly cut off at the viewport edge.
+- **Glass design system (W21b):** CSS variables in `:root`/`.dark` (`--glass-surface`,
+  `--glass-raised`, `--glass-overlay`, `--glass-border`, `--glass-solid`, `--glass-shadow-*`,
+  `--glass-app-bg`) registered in `@theme inline` as `glass-*` colors/shadows. The three
+  elevations are applied through the `globals.css` utilities `.glass-surface`, `.glass-raised`,
+  `.glass-overlay` (semi-transparent fill + `backdrop-filter: blur(16px) saturate(140%)` + 1px
+  light border + soft shadow), plus `.glass-app-bg` for the layered page gradient. Scope is the
+  ghazi app shell only (`/chat`, `/judge`): page background, header, footer, chat composer.
+  When `backdrop-filter` is unsupported the utilities fall back to the opaque `--glass-solid`
+  under `@supports not (...)`, and to the same solid under `prefers-reduced-transparency`;
+  `prefers-reduced-motion` removes their transitions/animations. Any new glass surface uses
+  these utilities instead of raw translucency/blur values.
 
 ## Rules
 
