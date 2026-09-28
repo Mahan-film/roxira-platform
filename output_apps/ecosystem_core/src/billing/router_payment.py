@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
+from urllib.parse import quote
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from typing import Optional
+
 from output_apps.ecosystem_core.src.billing.zibal_service import (
+    activate_user_subscription,
     create_payment_request,
-    verify_payment,
-    activate_user_subscription
 )
 
 router = APIRouter(prefix="/api/v1/payment/zibal", tags=["ZibalPayment"])
@@ -14,7 +16,7 @@ class SubscriptionOrderRequest(BaseModel):
     user_id: str = Field(..., example="usr_1001")
     plan_type: str = Field(..., example="PERMANENT") # TRIAL, MONTHLY, PERMANENT
     amount_rials: int = Field(default=0, example=5000000)
-    mobile: Optional[str] = Field(default=None, example="09123456789")
+    mobile: str | None = Field(default=None, example="09123456789")
 
 @router.post("/trial/start")
 async def start_free_trial(user_id: str):
@@ -43,26 +45,22 @@ async def checkout_subscription(order: SubscriptionOrderRequest):
     return res
 
 @router.get("/callback")
-async def payment_callback(trackId: str = Query(...), success: int = Query(...), status: Optional[int] = Query(None)):
-    """کال‌بک بازگشتی از درگاه زیبال جهت نهایی‌سازی و شارژ حساب کاربر"""
-    if success != 1:
-        return {
-            "status": "FAILED",
-            "message": "پرداخت توسط کاربر لغو شد یا ناموفق بود."
-        }
+async def payment_callback(trackId: str = Query(...), success: int = Query(...), status: int | None = Query(None)):
+    """کال‌بک بازگشتی از درگاه زیبال — مسیر قدیمی (Issue #97).
 
-    verify_res = verify_payment(trackId)
-    if verify_res.get("success"):
-        # فعال‌سازی حساب دائم پس از پرداخت موفق
-        sub = activate_user_subscription("authenticated_user", "PERMANENT")
-        return {
-            "status": "PAID_VERIFIED",
-            "message": "پرداخت با موفقیت انجام و حساب کاربری قاضی هوشمند به حالت دائمی ارتقا یافت.",
-            "transaction": verify_res,
-            "subscription": sub
-        }
-    else:
-        return {
-            "status": "VERIFY_FAILED",
-            "message": verify_res.get("message")
-        }
+    این مسیر دیگر خودش تایید/فعال‌سازی انجام نمی‌دهد: قبلاً با یک شناسه
+    کاربری ثابت (``"authenticated_user"``) هر پرداخت موفق را — صرف‌نظر از
+    اینکه واقعاً چه کسی پرداخت کرده — به همان یک حساب فعال می‌کرد، و علاوه
+    بر آن یک JSON خام (نه یک صفحهٔ واقعی) به مرورگر کاربر برمی‌گرداند.
+
+    مسیر واقعی و صحیح، صفحهٔ فرانت‌اند ``/judge/payment/callback`` است که
+    trackId را می‌خواند و با ``POST /api/v1/apps/judge/payments/verify``
+    (``payment_service.verify_invoice``) وضعیت را از سفارش واقعی در جدول
+    ``payment_orders`` — با شناسهٔ کاربر درست، نه رشتهٔ ثابت — تایید می‌کند.
+    این مسیر فقط برای سازگاری با ``ZIBAL_CALLBACK_URL``ی که هنوز به آدرس
+    قدیمی اشاره می‌کند نگه داشته شده و صرفاً کاربر را با همان query params
+    به صفحهٔ صحیح هدایت می‌کند."""
+    return RedirectResponse(
+        url=f"/judge/payment/callback?trackId={quote(str(trackId))}&success={int(success)}",
+        status_code=302,
+    )
