@@ -32,6 +32,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -93,6 +94,24 @@ def _article_in_text(article_no: int, *texts: str) -> bool:
     return False
 
 
+def _article_no_matches(expected_article: int, law: Dict[str, Any]) -> bool:
+    """مسیر مستقیم (schema-tolerant): برخی لایه‌های بازیابی (Qdrant fallback در
+    ``lightrag_engine._rank_payloads``) اکنون کلید ``article_no`` را مستقیماً
+    برمی‌گردانند (نگاشت‌شده از payload چه با فیلد صریح ``article_no`` باشد چه
+    با استخراج از متن «ماده N»). این تابع آن کلید را هم بررسی می‌کند تا eval
+    وابسته به این نباشد که شمارهٔ ماده حتماً داخل ``title``/``summary`` هم
+    تحت‌اللفظی تکرار شده باشد.
+    """
+    raw = law.get("article_no")
+    if raw in (None, ""):
+        return False
+    match = re.match(r"\s*([0-9۰-۹]+)", str(raw))
+    if not match:
+        return False
+    num = match.group(1).translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789"))
+    return num.lstrip("0") == str(expected_article).lstrip("0")
+
+
 async def retrieve_all(question: str, limit: int = 5, collection: str | None = None) -> Dict[str, Any]:
     """سه لایهٔ بازیابی را به‌ترتیب امتحان می‌کند و همه را برای ارزیابی برمی‌گرداند."""
     result: Dict[str, Any] = {"laws": [], "precedents": [], "sources": []}
@@ -152,9 +171,12 @@ async def run_eval(rows: List[Dict[str, Any]], collection: str | None, limit: in
             for l in laws
         )
         cited = any(
-            isinstance(l, dict) and _article_in_text(
-                expected_article,
-                str(l.get("title", "")), str(l.get("summary", "")), str(l.get("node_id", "")),
+            isinstance(l, dict) and (
+                _article_no_matches(expected_article, l)
+                or _article_in_text(
+                    expected_article,
+                    str(l.get("title", "")), str(l.get("summary", "")), str(l.get("node_id", "")),
+                )
             )
             for l in laws
         )

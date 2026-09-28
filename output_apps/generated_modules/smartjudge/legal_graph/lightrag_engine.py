@@ -96,6 +96,23 @@ _QDRANT_HOST_CANDIDATES: Tuple[str, ...] = tuple(
     dict.fromkeys([QDRANT_HOST, "qdrant_prod", "qdrant", "127.0.0.1", "localhost"])
 )
 
+# مدل embedding پرس‌وجو برای جست‌وجوی برداری واقعی روی Qdrant — همان مدل و
+# نرمال‌سازی‌ای که `scripts/w6_ingest_dotic.py` هنگام تزریق استفاده کرده
+# (`BAAI/bge-m3`، `normalize_embeddings=True`، بردار بدون نام/unnamed،
+# ۱۰۲۴بعدی، cosine). اگر مدل بارگذاری نشود (نصب نبودن sentence_transformers،
+# نبود دانلود محلی و…) یا ابعاد کالکشن با ابعاد مدل نخواند، به‌صورت خودکار به
+# مسیر scroll (پنجرهٔ کوچک، `QDRANT_SCAN_LIMIT`) تنزل می‌کنیم.
+QDRANT_EMBED_MODEL_NAME = os.environ.get("LIGHTRAG_QDRANT_EMBED_MODEL", "BAAI/bge-m3")
+# تعداد کاندیدهایی که از جست‌وجوی برداری واقعی گرفته می‌شود و سپس با
+# هم‌پوشانی واژگانی/article_no محلی (همان `_rank_payloads`) رتبه‌بندی نهایی
+# می‌شوند.
+QDRANT_VECTOR_TOPK = int(os.environ.get("LIGHTRAG_QDRANT_VECTOR_TOPK", "20"))
+# کلید اضطراری عملیاتی: خاموش‌کردن جست‌وجوی برداری بدون ریدیپلوی، در صورتی که
+# روی کالکشنی خاص (مثلاً به‌خاطر کیفیت پایین embedding، نگاه کنید به §۸ سند
+# W6) نتیجهٔ بدتری نسبت به مسیر scroll بدهد. پیش‌فرض روشن است — طبق تصمیم هاب
+# مبنی بر استفاده از جست‌وجوی برداری واقعی هر جا ابعاد سازگار باشد.
+QDRANT_VECTOR_SEARCH_ENABLED = os.environ.get("LIGHTRAG_QDRANT_VECTOR_SEARCH_ENABLED", "1") != "0"
+
 _rag_lock = threading.Lock()
 _rag_instance: Any = None
 _rag_init_error: Optional[str] = None
@@ -285,8 +302,18 @@ _PAYLOAD_TEXT_KEYS = (
     "body",
     "description",
     "law_text",
+    "article_label",
+    "law_name",
 )
 _TOKEN_RE = re.compile(r"[\w\u0600-\u06FF]+", re.UNICODE)
+
+# مسیر اصلی اکنون جست‌وجوی برداری واقعی است (پایین‌تر: ``_try_vector_search``)؛
+# این ثابت فقط برای مسیر اضطراری scroll به کار می‌رود — وقتی مدل embedding
+# بارگذاری نشود یا ابعاد کالکشن با مدل نخواند. عمداً کوچک نگه داشته شده
+# (نه کل کالکشن) چون هزینهٔ latency/حافظهٔ هر پرس‌وجوی چت را بالا می‌برد؛
+# نسخهٔ قبلی این عدد را برای رفع W6b موقتاً تا ۶۰۰۰ (کل کالکشن) بالا برده
+# بود که هاب آن را به‌عنوان راه‌حل موقت نپذیرفت (نگاه کنید به §۸ سند W6).
+QDRANT_SCAN_LIMIT = int(os.environ.get("LIGHTRAG_QDRANT_SCAN_LIMIT", "200"))
 
 
 def _payload_text(payload: Dict[str, Any]) -> str:
@@ -296,6 +323,38 @@ def _payload_text(payload: Dict[str, Any]) -> str:
         if isinstance(value, str) and value.strip():
             parts.append(value.strip())
     return " ".join(parts)
+
+
+def _payload_article_no(payload: Dict[str, Any]) -> Optional[str]:
+    """شمارهٔ مادهٔ خام از هر شکل payload (schema-tolerant).
+
+    ``iran_laws_v2`` فیلد ``article_no`` صریح دارد (مثلاً ``"218-mokarrar"``)؛
+    کالکشن قدیمی این فیلد را ندارد، اما شمارهٔ ماده معمولاً در ``title``/
+    ``text`` به شکل «ماده N» تعبیه شده. هر دو حالت اینجا نگاشت می‌شوند تا
+    بقیهٔ پایپ‌لاین (و eval) همیشه شمارهٔ مادهٔ قابل‌اتکا ببینند.
+    """
+    raw = payload.get("article_no") or payload.get("article_number")
+    if raw:
+        match = re.match(r"\s*([0-9\u06F0-\u06F9\u0660-\u0669]+)", str(raw))
+        if match:
+            return normalize_digits(match.group(1)).lstrip("0") or "0"
+    for key in ("article_label", "title", "text"):
+        value = payload.get(key)
+        if not isinstance(value, str):
+            continue
+        match = re.search(r"ماده\s*\(?\s*([0-9۰-۹٠-٩]{1,4})", value)
+        if match:
+            return normalize_digits(match.group(1)).lstrip("0") or "0"
+    return None
+
+
+def normalize_digits(text: str) -> str:
+    """تبدیل ارقام فارسی/عربی به ASCII (سازگار با ``dual_retrieval.normalize_digits``)."""
+    persian = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"
+    arabic = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669"
+    ascii_digits = "0123456789"
+    table = str.maketrans(persian + arabic, ascii_digits + ascii_digits)
+    return (text or "").translate(table)
 
 
 def _tokens(text: str) -> set:
@@ -319,27 +378,47 @@ def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -
     rows: List[Dict[str, Any]] = []
     for overlap, _, payload, text in scored[: max(1, limit)]:
         raw_id = payload.get("id") or payload.get("uid") or payload.get("article_no")
+        # schema-tolerant: کالکشن قدیمی «title» تخت دارد؛ iran_laws_v2 هم
+        # «title» تخت می‌سازد (`w6_ingest_dotic.py`) اما اگر نبود، از
+        # law_name/article_label ساخته می‌شود تا هرگز به «سند حقوقی N» عمومی
+        # (که شمارهٔ ماده را برای eval قابل‌تشخیص نمی‌کند) سقوط نکنیم.
+        law_name = payload.get("law_name")
+        article_label = payload.get("article_label")
         title = (
             payload.get("title")
+            or (f"{law_name} - {article_label}" if law_name and article_label else None)
             or payload.get("name")
             or payload.get("article")
             or (f"سند حقوقی {raw_id}" if raw_id else "سند حقوقی")
         )
+        article_no = _payload_article_no(payload)
         rows.append(
             {
                 "title": str(title),
-                "category": str(payload.get("category") or payload.get("collection") or QDRANT_FALLBACK_COLLECTION),
+                "category": str(
+                    payload.get("category")
+                    or payload.get("collection")
+                    or law_name
+                    or payload.get("law_type")
+                    or QDRANT_FALLBACK_COLLECTION
+                ),
                 "summary": (text or json.dumps(payload, ensure_ascii=False))[:1200],
                 "match_level": "QDRANT_FALLBACK",
                 "source": f"qdrant:{QDRANT_FALLBACK_COLLECTION}",
                 "score": overlap,
+                # مسیر مستقیم و قابل‌اتکای شمارهٔ ماده برای مصرف‌کننده‌های پایین‌دست
+                # (مثل eval_legal_rag.py) که نباید همیشه با regex متن را بکاوند.
+                "article_no": article_no,
             }
         )
     return rows
 
 
 def _scroll_body(limit: int, active_only: Optional[bool] = None) -> Dict[str, Any]:
-    body: Dict[str, Any] = {"limit": max(limit * 4, 20), "with_payload": True, "with_vector": False}
+    # مسیر اضطراری (نه اصلی): سقف کوچک و ثابت ``QDRANT_SCAN_LIMIT``، مستقل از
+    # ``limit`` درخواستی، تا هزینهٔ هر پرس‌وجو کران‌دار بماند وقتی جست‌وجوی
+    # برداری واقعی ممکن نبود. نگاه کنید به توضیح بالای ``QDRANT_SCAN_LIMIT``.
+    body: Dict[str, Any] = {"limit": QDRANT_SCAN_LIMIT, "with_payload": True, "with_vector": False}
     point_filter = active_point_filter(active_only)
     if point_filter:
         body["filter"] = point_filter
@@ -371,6 +450,179 @@ def active_point_filter(active_only: Optional[bool] = None) -> Optional[Dict[str
 def _only_active(payloads: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Defence-in-depth: drop repealed rows even if the server ignored the filter."""
     return [row for row in payloads if isinstance(row, dict) and row.get("is_active") is not False]
+
+
+# ── جست‌وجوی برداری واقعی روی Qdrant (نه scroll) ─────────────────────────────
+# مدل و تنظیمات دقیقاً همان چیزی است که `scripts/w6_ingest_dotic.py` هنگام
+# تزریق استفاده کرده: `BAAI/bge-m3` (sentence-transformers، محلی/CPU)،
+# `normalize_embeddings=True`، بردار بدون نام (unnamed vector). بارگذاری مدل
+# فقط یک‌بار و تنبل انجام می‌شود (singleton سطح ماژول) چون خودِ بارگذاری چند
+# ثانیه طول می‌کشد ولی encode یک پرس‌وجوی تکی بعد از آن سریع است.
+_embedder_lock = threading.Lock()
+_embedder_instance: Any = None
+_embedder_load_failed = False
+
+
+def _get_query_embedder() -> Any:
+    """بارگذاری تنبل و یک‌بارهٔ مدل embedding پرس‌وجو؛ در شکست، ``None`` (بدون استثنا)."""
+    global _embedder_instance, _embedder_load_failed
+    if _embedder_instance is not None:
+        return _embedder_instance
+    if _embedder_load_failed:
+        return None
+    with _embedder_lock:
+        if _embedder_instance is not None:
+            return _embedder_instance
+        if _embedder_load_failed:
+            return None
+        try:
+            from sentence_transformers import SentenceTransformer  # لازی، وابستهٔ اختیاری
+
+            logger.info("Loading query embedder %s for Qdrant search ...", QDRANT_EMBED_MODEL_NAME)
+            _embedder_instance = SentenceTransformer(QDRANT_EMBED_MODEL_NAME)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Qdrant query embedder unavailable (%s) -> scroll fallback: %s",
+                QDRANT_EMBED_MODEL_NAME,
+                exc,
+            )
+            _embedder_load_failed = True
+            return None
+    return _embedder_instance
+
+
+def _embed_query_sync(text: str) -> Optional[List[float]]:
+    """رشته را با مدل بارگذاری‌شده embed می‌کند؛ در نبود مدل/شکست، ``None``."""
+    model = _get_query_embedder()
+    if model is None:
+        return None
+    try:
+        vector = model.encode([text], normalize_embeddings=True)[0]
+        return [float(x) for x in vector]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Query embedding failed -> scroll fallback: %s", exc)
+        return None
+
+
+# کش ابعاد بردار هر کالکشن (بعد از اولین تشخیص موفق، ثابت می‌ماند چون بدون
+# بازسازی کالکشن ابعاد عوض نمی‌شود). مقدار منفی/None یعنی هنوز نامشخص است —
+# دوباره تلاش می‌شود، نه این‌که برای همیشه fallback فرض شود.
+_collection_vector_dim_cache: Dict[str, int] = {}
+_collection_vector_dim_lock = threading.Lock()
+
+
+async def _qdrant_collection_vector_size(collection: str) -> Optional[int]:
+    """اندازهٔ بردار کالکشن (``config.params.vectors.size``) یا ``None`` در شکست/عدم قطعیت."""
+    cached = _collection_vector_dim_cache.get(collection)
+    if cached:
+        return cached
+    try:
+        import httpx  # وابستهٔ اختیاری؛ نبودش یعنی جست‌وجوی برداری ممکن نیست
+    except ImportError:
+        return None
+    async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
+        for host in _QDRANT_HOST_CANDIDATES:
+            url = f"http://{host}:{QDRANT_PORT}/collections/{collection}"
+            try:
+                response = await client.get(url)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("qdrant collection-info host %s unreachable: %s", host, exc)
+                continue
+            if getattr(response, "status_code", 0) != 200:
+                return None
+            try:
+                payload = response.json()
+            except Exception:  # noqa: BLE001
+                return None
+            vectors_cfg = (
+                (((payload or {}).get("result") or {}).get("config") or {}).get("params", {})
+                .get("vectors")
+            )
+            size: Optional[int] = None
+            if isinstance(vectors_cfg, dict):
+                if isinstance(vectors_cfg.get("size"), int):
+                    size = vectors_cfg["size"]
+                else:
+                    # named vectors: هیوریستیک — اولین بردار نام‌دار را می‌خوانیم.
+                    for named in vectors_cfg.values():
+                        if isinstance(named, dict) and isinstance(named.get("size"), int):
+                            size = named["size"]
+                            break
+            if size:
+                with _collection_vector_dim_lock:
+                    _collection_vector_dim_cache[collection] = size
+            return size
+    return None
+
+
+async def _qdrant_vector_search_httpx(
+    vector: List[float], collection: str, limit: int, active_only: Optional[bool] = None
+) -> Optional[List[Dict[str, Any]]]:
+    """جست‌وجوی برداری واقعی (`points/search`)؛ ``None`` یعنی خودِ جست‌وجو شکست خورد
+    (باید به scroll تنزل کرد)؛ لیست خالی یعنی جست‌وجو موفق بود ولی نتیجه‌ای نداشت
+    (fallback لازم نیست، این یک نتیجهٔ معتبر صفر است)."""
+    global _qdrant_last_reachable
+    body: Dict[str, Any] = {
+        "vector": vector,
+        "limit": max(1, limit),
+        "with_payload": True,
+        "with_vector": False,
+    }
+    point_filter = active_point_filter(active_only)
+    if point_filter:
+        body["filter"] = point_filter
+    try:
+        import httpx
+    except ImportError:
+        return None
+    async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
+        for host in _QDRANT_HOST_CANDIDATES:
+            url = f"http://{host}:{QDRANT_PORT}/collections/{collection}/points/search"
+            try:
+                response = await client.post(url, json=body)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("qdrant vector-search host %s unreachable: %s", host, exc)
+                continue
+            _qdrant_last_reachable = True
+            if getattr(response, "status_code", 0) != 200:
+                logger.warning("Qdrant vector search HTTP %s on %s", response.status_code, url)
+                return None
+            try:
+                payload = response.json()
+            except Exception:  # noqa: BLE001
+                return None
+            points = (payload or {}).get("result") or []
+            rows = [
+                p.get("payload")
+                for p in points
+                if isinstance(p, dict) and isinstance(p.get("payload"), dict)
+            ]
+            return rows
+    return None
+
+
+async def _try_vector_search(
+    text: str, limit: int, active_only: Optional[bool] = None
+) -> Optional[List[Dict[str, Any]]]:
+    """مسیر اصلی: embed پرس‌وجو + `points/search`. در هر مانعی (مدل، ابعاد
+    ناسازگار، شبکه، یا خاموش‌بودن دستی با ``QDRANT_VECTOR_SEARCH_ENABLED``)
+    ``None`` برمی‌گرداند تا کالر به scroll تنزل کند."""
+    if not QDRANT_VECTOR_SEARCH_ENABLED:
+        return None
+    vector = await asyncio.to_thread(_embed_query_sync, text)
+    if vector is None:
+        return None
+    dim = await _qdrant_collection_vector_size(QDRANT_FALLBACK_COLLECTION)
+    if dim is not None and dim != len(vector):
+        logger.info(
+            "Qdrant vector dim mismatch (collection=%s dim=%d, query dim=%d) -> scroll fallback",
+            QDRANT_FALLBACK_COLLECTION,
+            dim,
+            len(vector),
+        )
+        return None
+    top_k = max(limit, QDRANT_VECTOR_TOPK)
+    return await _qdrant_vector_search_httpx(vector, QDRANT_FALLBACK_COLLECTION, top_k, active_only)
 
 
 _qdrant_failed_at: float = 0.0
@@ -481,6 +733,17 @@ async def qdrant_fallback_laws(
 
     desired = max(1, int(limit))
     _qdrant_last_reachable = False
+
+    # مسیر اصلی: جست‌وجوی برداری واقعی روی حدود QDRANT_VECTOR_TOPK کاندید،
+    # سپس همان رتبه‌بندی واژگانی/article_no محلی روی همین کاندیدها.
+    # ``None`` یعنی مسیر برداری ممکن نبود (مدل/ابعاد/شبکه) -> تنزل به scroll.
+    vector_payloads = await _try_vector_search(text, desired, active_only)
+    if vector_payloads is not None:
+        _qdrant_failed_at = 0.0
+        if not vector_payloads:
+            return []
+        return _rank_payloads(_only_active(vector_payloads), text, desired)
+
     try:
         payloads = await _qdrant_scroll_httpx(text, desired, active_only)
     except ImportError:
