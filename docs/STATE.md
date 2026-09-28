@@ -14,6 +14,7 @@ Short snapshot for a new chat. `docs/STRATEGY.md` explains **why**; this file sa
   - `glm` and `dspro` (SiliconFlow GLM-5.3 and DeepSeek-V4-Pro) are configured but return 402 because the account has no credit.
   - OpenCode's global config `~/.config/opencode/opencode.json` uses provider `pool`, default `pool/gptoss`. All four free/last-resort groups answered a smoke test on 2026-09-28.
 - **Tooling:** subagents `implementer`/`tester`/`reviewer`; skills `start-workstream`, `feature-plan`, `review-diff`, `deploy-prod`, `impeccable`, `handoff`; MCP servers Context7, codebase-memory, engram.
+- **Role rule:** Opus = strategist/architect only; all implementation via cheap lanes (see STRATEGY.md).
 
 ## Security changes on 2026-09-28
 - Removed the self-hosted runner from prod: its service is disabled, and the `runner` user has no sudo and no docker group. PR #60 moves factory-build, model-eval and e2e back to `ubuntu-latest` (auto-merge set).

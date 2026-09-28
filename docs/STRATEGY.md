@@ -2,6 +2,15 @@
 
 Single source of truth for every Claude Code session. Read this first, then work only on the workstream you were given. Last updated: 2026-09-25 (hub: W6/W8/W9/W10 status, agents moved to GitHub Actions).
 
+## Role rule (hard rule, 2026-09-28)
+
+Claude Opus 5.5 is strategist and architect only: plans, specs, reviews, merge and deploy decisions. It never implements.
+
+Implementation lanes, in order:
+1. **GitHub agent issues** — OpenCode + DeepSeek V4.1 Flash via OpenRouter, reviewed by `agent-review`.
+2. **Local OpenCode** on the owner's Mac via the `rx` helper and the LiteLLM key pool at `127.0.0.1:4000` (`codestral` = Mistral ×4, `qwen` = Groq ×3, `dsflash` = DeepSeek via OpenRouter, `glm`/`dspro` = SiliconFlow ×3 needs credit).
+3. **Claude Sonnet** only as a last resort, one at a time, with owner approval.
+
 ## 1. What we are building
 
 - **Roxira OS** (`roxira.net` / `roxira.ir`): multi-tenant enterprise SaaS. It covers INTA/Moadian tax compliance, accounting, ERP, CRM/HR/inventory and Zibal payments.
