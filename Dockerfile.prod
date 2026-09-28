@@ -27,6 +27,14 @@ RUN pip install --no-cache-dir edge-tts google-genai
 COPY output_apps /app/output_apps
 COPY src /app/src
 COPY run_unified_server.py /app/run_unified_server.py
+# W24 (issue #72): config/models.yaml is the model registry's single source
+# of truth (output_apps/generated_modules/smartjudge/model_registry.py). It
+# was never COPYed into the prod image, so every product-runtime call fell
+# back to llm_router.py's hardcoded _FALLBACK_TIER_MODELS constant instead
+# ("model_registry unavailable ... cannot read /app/config/models.yaml" in
+# prod logs). Ship it so the registry (and its owner-set model priorities)
+# actually take effect in production.
+COPY config/models.yaml /app/config/models.yaml
 
 EXPOSE 8000
 

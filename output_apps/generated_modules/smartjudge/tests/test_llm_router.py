@@ -290,6 +290,31 @@ def test_default_tiers_have_no_free_model_outside_free_tier(monkeypatch):
         assert not any(llm_router.is_free_model(m) for m in llm_router.tier_models(tier))
 
 
+def test_default_cheap_tier_resolves_to_deepseek_v4_1_flash(monkeypatch):
+    """W24 (2026-09-28): the registry's `cheap` role -- and, through it, the
+    LLM_TIER_CHEAP default -- must resolve to DeepSeek V4.1 Flash first."""
+    monkeypatch.delenv("LLM_TIER_CHEAP", raising=False)
+    assert llm_router.tier_models("cheap")[0] == "deepseek/deepseek-v4.1-flash"
+
+
+def test_default_strong_tier_has_no_claude_sonnet(monkeypatch):
+    """W24 (2026-09-28): no anthropic/claude-sonnet-5 in the product runtime."""
+    monkeypatch.delenv("LLM_TIER_STRONG", raising=False)
+    models = llm_router.tier_models("strong")
+    assert "anthropic/claude-sonnet-5" not in models
+    assert models[0] == "deepseek/deepseek-v4-pro"
+
+
+def test_default_tier_models_match_registry_when_registry_readable():
+    """The hardcoded _FALLBACK_TIER_MODELS constant is a last resort only;
+    when config/models.yaml is readable (the normal case) DEFAULT_TIER_MODELS
+    must come from the registry, not silently diverge from it."""
+    from output_apps.generated_modules.smartjudge import model_registry
+
+    for tier in llm_router.TIERS:
+        assert llm_router.DEFAULT_TIER_MODELS[tier] == ",".join(model_registry.role_models(tier))
+
+
 def test_flag_defaults_off(monkeypatch):
     monkeypatch.delenv("LLM_ROUTER_ENABLED", raising=False)
     assert llm_router.router_enabled() is False

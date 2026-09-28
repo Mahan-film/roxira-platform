@@ -336,19 +336,53 @@ OPENROUTER_API_KEY = _load_env_var("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
 OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL}/chat/completions"
 
+# W24 (docs/STATE.md): config/models.yaml (the registry) is the single source
+# of truth for "which model for which job" (AGENTS.md §3). The two literal
+# strings per tier below are only the last-resort fallback if the registry
+# file cannot be read (e.g. missing PyYAML) -- kept in sync with the
+# registry's `cheap`/`strong` role primaries by scripts/check_models.py; do
+# not edit one without the other.
+try:
+    from . import model_registry as _model_registry
+except ImportError:
+    try:
+        from output_apps.generated_modules.smartjudge import model_registry as _model_registry
+    except Exception as _registry_import_exc:  # noqa: BLE001 - never block server boot
+        print(f"[SMARTJUDGE][MODEL-REGISTRY] unavailable: {_registry_import_exc}", file=sys.stderr)
+        _model_registry = None
+
+
+def _registry_primary_and_fallback(role: str, default_primary: str, default_fallback: str) -> tuple:
+    if _model_registry is not None:
+        try:
+            models = _model_registry.role_models(role)
+            if models:
+                return models[0], (models[1] if len(models) > 1 else models[0])
+        except Exception as _exc:  # noqa: BLE001 - registry read is best-effort here
+            print(f"[SMARTJUDGE][MODEL-REGISTRY] role {role!r} unavailable: {_exc}", file=sys.stderr)
+    return default_primary, default_fallback
+
+
+_VIP_PRIMARY, _VIP_FALLBACK = _registry_primary_and_fallback(
+    "strong", "deepseek/deepseek-v4-pro", "z-ai/glm-5.3"
+)
+_FREE_PRIMARY, _FREE_FALLBACK = _registry_primary_and_fallback(
+    "cheap", "deepseek/deepseek-v4.1-flash", "deepseek/deepseek-v4-flash-0731"
+)
+
 OPENROUTER_TIERS = {
     "VIP": {
-        "primary_model": "google/gemini-3.8-flash",
-        "fallback_model": "google/gemini-3.8-flash",
-        "voice_model": "google/gemini-3.8-flash",
+        "primary_model": _VIP_PRIMARY,
+        "fallback_model": _VIP_FALLBACK,
+        "voice_model": _FREE_PRIMARY,  # voice needs low latency: Flash, not Pro
         "stt_primary": "deepgram/nova-3",
         "stt_secondary": "openai/whisper-large-v3-turbo",
         "label": "سامانه قاضی هوشمند (نسخه پیشرفته سازمانی)"
     },
     "FREE": {
-        "primary_model": "deepseek/deepseek-v4.1-flash",
-        "fallback_model": "deepseek/deepseek-chat",
-        "voice_model": "deepseek/deepseek-v4.1-flash",
+        "primary_model": _FREE_PRIMARY,
+        "fallback_model": _FREE_FALLBACK,
+        "voice_model": _FREE_PRIMARY,
         "stt_primary": "deepgram/nova-3",
         "stt_secondary": "openai/whisper-large-v3-turbo",
         "label": "سامانه قاضی هوشمند (نسخه استاندارد)"
@@ -366,8 +400,9 @@ except ImportError:
         print(f"[SMARTJUDGE][LLM-ROUTER] unavailable: {_router_import_exc}", file=sys.stderr)
         _llm_router = None
 
-# Subscription plan -> router tier. VIP keeps Gemini Flash first (LLM_TIER_STRONG
-# default), FREE keeps DeepSeek Flash first (LLM_TIER_CHEAP default).
+# Subscription plan -> router tier. VIP maps to the registry's `strong` role
+# (DeepSeek V4 Pro first, W24), FREE maps to `cheap` (DeepSeek V4.1 Flash
+# first, LLM_TIER_CHEAP default) -- see OPENROUTER_TIERS above.
 ROUTER_TIER_BY_PLAN = {
     "VIP": os.environ.get("SMARTJUDGE_ROUTER_TIER_VIP", "strong"),
     "FREE": os.environ.get("SMARTJUDGE_ROUTER_TIER_FREE", "cheap"),
@@ -1408,8 +1443,13 @@ async def judge_chat_alias(payload: dict = Body(...)):
     return await interactive_consult(payload)
 
 
+# W24: this used to default to OPENROUTER_TIERS["VIP"]["primary_model"], which
+# was safe only while that was google/gemini-3.8-flash (audio-input capable).
+# Now that VIP's primary_model tracks the `strong` role (text-only DeepSeek
+# V4 Pro, W24), that default would silently break transcription -- pin the
+# literal audio-capable id instead; SMARTJUDGE_TRANSCRIBE_MODEL still overrides.
 VOICE_TRANSCRIBE_MODEL = os.environ.get(
-    "SMARTJUDGE_TRANSCRIBE_MODEL", OPENROUTER_TIERS["VIP"]["primary_model"]
+    "SMARTJUDGE_TRANSCRIBE_MODEL", "google/gemini-3.8-flash"
 )
 _VOICE_AUDIO_FORMATS = {"wav", "mp3", "ogg", "webm", "flac", "m4a", "aac", "opus", "oga", "mp4"}
 

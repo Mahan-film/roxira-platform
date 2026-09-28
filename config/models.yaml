@@ -12,6 +12,8 @@
 # Every id here was checked LIVE against OpenRouter's GET /api/v1/models on
 # 2026-09-25 (docs/research/TECH_CURRENCY_2026-09.md) unless a `note` says
 # otherwise. Prices are USD per 1M tokens, in/out, from that same audit.
+# `cheap` and `strong` (the product-runtime roles) were re-verified live
+# 2026-09-28 for W24 (docs/STATE.md) -- see the notes on those two roles below.
 #
 # data_policy:
 #   non_sensitive_only  — free-tier / logs-or-trains-on-prompts providers.
@@ -52,15 +54,23 @@ roles:
           last fallback if every named free model above is unavailable.
 
   cheap:
-    description: Default chat, classification, query rewriting.
+    description: Default chat, classification, query rewriting -- every website chat
+      turn, free and paid subscription plans alike (W24, docs/STATE.md).
     data_policy: standard
     models:
-      # 2026-09-25 audit: ~10x cheaper than the previously configured
-      # deepseek/deepseek-v4.1-flash for a similar-class model. Not yet
-      # A/B-evaluated against production traffic — swap is proposed here,
-      # not yet forced; LLM_TIER_CHEAP still overrides if an eval regresses it.
-      # Price re-checked live 2026-09-26 (issue #39, weekly model-registry-check):
-      # moved from 0.03 to 0.021 in (out unchanged at 0.32).
+      # W24 owner decision (2026-09-28): DeepSeek V4.1 Flash is the mandated
+      # first choice for every product chat turn (free and paid plans), not
+      # just an eval candidate. Live re-check 2026-09-28 found the 2026-09-25
+      # audit's "~10x cheaper" note for deepseek-v4-flash-0731 stale: on the
+      # live catalogue today v4.1-flash is actually the cheaper of the two on
+      # output tokens (0.29 vs 0.32) and only slightly pricier on input
+      # (0.035 vs 0.021) -- effectively tied, so there is no cost reason left
+      # to prefer 0731 over the owner-mandated primary.
+      - id: deepseek/deepseek-v4.1-flash
+        price_per_1m: { in: 0.035, out: 0.29 }
+      # Fallback if the primary is rate-limited/retired: same DeepSeek Flash
+      # family, near-identical price. Price re-checked live 2026-09-26
+      # (issue #39): moved from 0.03 to 0.021 in (out unchanged at 0.32).
       - id: deepseek/deepseek-v4-flash-0731
         price_per_1m: { in: 0.021, out: 0.32 }
       - id: qwen/qwen3.8-flash
@@ -69,17 +79,23 @@ roles:
         price_per_1m: { in: 0.25, out: 1.50 }
 
   strong:
-    description: Final legal drafting and reasoning shown to the customer.
+    description: Final legal drafting and reasoning shown to the customer -- harder
+      chat turns and legal drafts on every plan (W24). No anthropic/claude-sonnet-5
+      here by owner decision (2026-09-28); Sonnet stays only in the builder
+      `reviewer`/`architect` roles below, never in the product runtime.
     data_policy: standard
     models:
-      - id: anthropic/claude-sonnet-5
-        price_per_1m: { in: 2.00, out: 10.00 }
+      # W24 owner priority order: DeepSeek V4 Pro, then GLM-5.3, then Kimi K3,
+      # then Gemini 3.8 Flash as the last, cheapest-but-lowest-priority
+      # fallback. Prices verified live 2026-09-28 (openrouter.ai/api/v1/models).
+      - id: deepseek/deepseek-v4-pro
+        price_per_1m: { in: 0.955, out: 1.911 }
+      - id: z-ai/glm-5.3
+        price_per_1m: { in: 1.40, out: 4.40 }
+      - id: moonshotai/kimi-k3
+        price_per_1m: { in: 3.00, out: 15.00 }
       - id: google/gemini-3.8-flash
         price_per_1m: { in: 0.75, out: 3.75 }
-      # Undated snapshot is live and slightly cheaper than the previously
-      # configured deepseek/deepseek-v4-pro-0813.
-      - id: deepseek/deepseek-v4-pro
-        price_per_1m: { in: 0.462, out: 1.386 }
 
   stt:
     description: Speech-to-text for the voice pipeline (Persian/Farsi required).

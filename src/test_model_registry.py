@@ -149,3 +149,53 @@ def test_reviewer_is_a_different_model_family_from_executor():
     executor_families = {family(m) for m in model_registry.role_models("executor", real_path)}
     reviewer_families = {family(m) for m in model_registry.role_models("reviewer", real_path)}
     assert not executor_families & reviewer_families
+
+
+# --- W24 (cost-optimized product-runtime models, docs/STATE.md) ------------
+
+def test_cheap_role_primary_is_deepseek_v4_1_flash():
+    """Owner decision (2026-09-28): every website chat turn, free and paid
+    plans alike, must try DeepSeek V4.1 Flash first."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    models = model_registry.role_models("cheap", real_path)
+    assert models[0] == "deepseek/deepseek-v4.1-flash"
+
+
+def test_strong_role_priority_order_and_no_sonnet():
+    """Owner decision (2026-09-28): DeepSeek V4 Pro, then GLM-5.3, then
+    Kimi K3, then Gemini 3.8 Flash -- and no anthropic/claude-sonnet-5
+    anywhere in the product runtime (it stays only in builder roles)."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    models = model_registry.role_models("strong", real_path)
+    assert models == [
+        "deepseek/deepseek-v4-pro",
+        "z-ai/glm-5.3",
+        "moonshotai/kimi-k3",
+        "google/gemini-3.8-flash",
+    ]
+    assert "anthropic/claude-sonnet-5" not in models
+
+
+def test_no_product_runtime_role_uses_claude_sonnet():
+    """anthropic/claude-sonnet-5 may only appear in builder roles
+    (architect/executor/reviewer/mechanical), never in free/cheap/strong."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    for role in ("free", "cheap", "strong"):
+        models = model_registry.role_models(role, real_path)
+        assert "anthropic/claude-sonnet-5" not in models, role
+
+
+def test_no_product_runtime_role_routes_case_data_to_a_free_model():
+    """Hard rule (AGENTS.md §4): customer/case data never goes to a `:free`
+    model. Only the `free` role (non-sensitive-only background work) may
+    contain `:free`-suffixed or `openrouter/free` ids; cheap/strong (which
+    carry customer chat/legal-draft data) must never."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+
+    def is_free_model(model_id: str) -> bool:
+        return model_id.endswith(":free") or model_id == "openrouter/free"
+
+    for role in ("cheap", "strong"):
+        models = model_registry.role_models(role, real_path)
+        assert not any(is_free_model(m) for m in models), role
+        assert model_registry.data_policy(role, real_path) == "standard"
