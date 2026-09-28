@@ -46,7 +46,7 @@ env:
 jobs:
   eval:
     name: Coding smoke eval + gate
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     if: github.event_name == 'workflow_dispatch'
     steps:

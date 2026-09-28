@@ -24,7 +24,7 @@ permissions:
 jobs:
   dispatch-next:
     name: Dispatch next ready task
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >
       vars.FACTORY_ENABLED == 'true' &&

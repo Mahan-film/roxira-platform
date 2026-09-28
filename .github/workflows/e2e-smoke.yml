@@ -21,7 +21,7 @@ env:
 jobs:
   smoke:
     name: Playwright smoke test
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -74,7 +74,7 @@ jobs:
     name: Open/update failure issue
     needs: smoke
     if: failure()
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
