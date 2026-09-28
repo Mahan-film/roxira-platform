@@ -12,6 +12,11 @@ from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router 
 from output_apps.ecosystem_core.src.billing import zibal_service
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
+# W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
+# see output_apps/ecosystem_core/src/billing/pricing_service.py.
+from output_apps.ecosystem_core.src.billing.pricing_service import (
+    get_calculated_pricing,
+)
 
 # ==============================================================================
 # موتور حافظه پرونده‌ها (Mem0) و پشتیبانی دوزبانه فارسی/انگلیسی
@@ -2458,41 +2463,17 @@ async def create_crypto_invoice(payload: dict = Body(...)):
         content={"status": "UNAVAILABLE", "message": "پرداخت ارزی (کریپتو) در حال حاضر در دسترس نیست."},
     )
 # ------------------------------------------------------------------------------
-# موتور قیمت‌گذاری پویا بر پایه دلار (USD-Pegged Dynamic Pricing Engine)
+# قیمت‌گذاری ثابت تومانی (Fixed Toman Pricing) — W22
 # ------------------------------------------------------------------------------
-# نرخ مبنای هر دلار به تومان (قابل تغییر از طریق متغیر محیطی سرور)
-CURRENT_USD_RATE_TOMAN = int(os.getenv("USD_TO_TOMAN_RATE", 250000))
-VOLATILITY_BUFFER = 1.00 # ضریب احتیاطی نوسان
-
-# قیمت‌های پایه به دلار
-BASE_PLANS_USD = {
-    "SINGLE_DRAFT": {"name": "خرید لایحه تکی تخصصی دادگاه", "usd": 2.5},
-    "VOICE_PACK_10MIN": {"name": "بسته ۱۰ دقیقه مشاوره صوتی زنده", "usd": 1.8},
-    "VIP_MONTHLY_PRO": {"name": "اشتراک ماهانه نامحدود VIP وکلا و مراجعین", "usd": 14.0},
-    "DIASPORA_SPECIAL": {"name": "بسته تخصصی امور حقوقی خارج از کشور (املاک/ارث)", "usd": 29.0}
-}
-
-def get_calculated_pricing():
-    """محاسبه بلادرنگ قیمت‌ها به تومان و ریال بر اساس نرخ ارز"""
-    rate = CURRENT_USD_RATE_TOMAN * VOLATILITY_BUFFER
-    plans = {}
-    for key, item in BASE_PLANS_USD.items():
-        price_toman = int(round(item["usd"] * rate, -3)) # رند شده به هزار تومان
-        price_rial = price_toman * 10
-        plans[key] = {
-            "name": item["name"],
-            "base_usd": item["usd"],
-            "price_toman": price_toman,
-            "price_rial": price_rial,
-            "rate_usd_toman": int(rate)
-        }
-    return plans
-
+# قیمت هر پلن یک عدد ثابت به تومان است که مالک سامانه کنترل می‌کند؛ دیگر به
+# نرخ دلار گره نخورده و با نوسان ارز تغییر نمی‌کند. منطق واقعی (قیمت پایه هر
+# پلن و override با PRICE_TOMAN_<PLAN_KEY>) در
+# output_apps/ecosystem_core/src/billing/pricing_service.py است (import در
+# بالای فایل) تا بدون هیچ وابستگی سنگین (FastAPI/DB/شبکه) قابل تست باشد.
 @router.get("/payments/pricing-matrix")
 async def get_pricing_matrix():
     return {
         "status": "SUCCESS",
-        "current_usd_rate_toman": CURRENT_USD_RATE_TOMAN,
         "plans": get_calculated_pricing()
     }
 

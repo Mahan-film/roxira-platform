@@ -1,6 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+
+import {
+  type PricingMatrixResponse,
+  formatPersianNumber,
+} from "./subscription/types";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -13,8 +18,21 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [pricing, setPricing] = useState<PricingMatrixResponse | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // قیمت‌ها همیشه از سرور خوانده می‌شوند، هرگز عدد ثابت در کلاینت.
+    fetch("/api/v1/apps/judge/payments/pricing-matrix")
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data: PricingMatrixResponse) => setPricing(data))
+      .catch(() => setPricing(null));
+  }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const singleDraftPrice = pricing?.plans?.SINGLE_DRAFT?.price_toman;
+  const vipMonthlyPrice = pricing?.plans?.VIP_MONTHLY_PRO?.price_toman;
 
   const handlePayment = async () => {
     setLoading(true);
@@ -71,7 +89,10 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
             }`}
           >
             <div className="font-bold text-sm text-primary mb-1">خرید لایحه تکی</div>
-            <div className="text-xl font-extrabold text-foreground mb-2">۹۹,۰۰۰ <span className="text-xs font-normal text-muted-foreground">تومان</span></div>
+            <div className="text-xl font-extrabold text-foreground mb-2">
+              {singleDraftPrice != null ? formatPersianNumber(singleDraftPrice) : "..."}{" "}
+              <span className="text-xs font-normal text-muted-foreground">تومان</span>
+            </div>
             <p className="text-xs text-muted-foreground">دانلود متن کامل لایحه دفاعیه با قابلیت ویرایش و پرینت</p>
           </div>
 
@@ -84,7 +105,10 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
             }`}
           >
             <div className="font-bold text-sm text-amber-400 mb-1">اشتراک یک‌ماهه VIP</div>
-            <div className="text-xl font-extrabold text-foreground mb-2">۴۹۰,۰۰۰ <span className="text-xs font-normal text-muted-foreground">تومان</span></div>
+            <div className="text-xl font-extrabold text-foreground mb-2">
+              {vipMonthlyPrice != null ? formatPersianNumber(vipMonthlyPrice) : "..."}{" "}
+              <span className="text-xs font-normal text-muted-foreground">تومان</span>
+            </div>
             <p className="text-xs text-muted-foreground">دسترسی نامحدود به تحلیل پرونده‌ها، مدل‌های Claude و Gemini و مشاوره صوتی</p>
           </div>
         </div>
@@ -103,7 +127,7 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
 
         <button
           onClick={handlePayment}
-          disabled={loading}
+          disabled={loading || (selectedPlan === "SINGLE_DRAFT" ? singleDraftPrice == null : vipMonthlyPrice == null)}
           className="w-full py-3.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {loading ? "در حال اتصال به شاپرک..." : "پرداخت امن آنلاین 🔒"}
