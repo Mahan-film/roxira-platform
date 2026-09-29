@@ -34,6 +34,13 @@ workflow خودکاری ندارد):
 کلید فقط از ``OPENROUTER_API_KEY`` خوانده می‌شود و هیچ‌جا نوشته/لاگ نمی‌شود.
 ``--budget-usd`` fail-closed است: به‌محض این‌که هزینهٔ جاری از فیلد usage از
 بودجه بگذرد، فراخوانی‌ها متوقف و با کد خروج غیرصفر بازمی‌گردد.
+
+issue #119 — شکست بلند (fail loudly): خطاهای API هر مدل شمرده و ثبت می‌شوند
+(با نخستین پیام خطا؛ کلید هرگز چاپ نمی‌شود)، سطر مدل با ``ERRORS n/N`` علامت
+می‌خورد، پاسخ‌های خطادار از مبنای نرخ اصابت حذف می‌شوند و اگر نرخ خطای هر مدل
+از ۲۰٪ بگذرد، با کد خروج ۲ و بنر خطا اجرا شکست می‌خورد. در هیچ اجرایی که خطا
+دارد مدلی پیشنهاد نمی‌شود. اگر خطای گواهی SSL تشخیص داده شود، راهنمای
+``export SSL_CERT_FILE=...`` چاپ می‌شود.
 """
 
 from __future__ import annotations
@@ -68,6 +75,10 @@ DEFAULT_CALL_TIMEOUT_S = 60.0
 # آستانهٔ تصمیم issue #104: ارزان‌ترین مدلی که به این نسبت از نرخ اصابت بهترین
 # مدل برسد پیشنهاد می‌شود.
 BEST_HIT_RATE_RATIO = 0.9
+# issue #119: اگر نرخ خطای API برای هر مدلی از این نسبت بگذرد، اجرا شکست
+# تلقی می‌شود (fail loudly) و کد خروج ۲ برمی‌گردد.
+MAX_ERROR_RATE = 0.20
+SSL_CERT_HINT = "export SSL_CERT_FILE=$(python3 -c 'import certifi;print(certifi.where())')"
 
 SYSTEM_PROMPT = (
     "شما یک دستیار حقوقی فارسی‌زبان هستید که فقط بر پایهٔ قوانین ایران پاسخ "
@@ -101,7 +112,17 @@ class ModelReport:
     median_latency_ms: float
     cost_per_100_answers: float
     total_cost_usd: float
+    n_errors: int = 0
+    first_error: str | None = None
     results: list[AnswerResult] = field(default_factory=list)
+
+    @property
+    def n_ok(self) -> int:
+        return self.n - self.n_errors
+
+    @property
+    def error_rate(self) -> float:
+        return self.n_errors / self.n if self.n else 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +137,14 @@ def answer_cites_article(answer: str | None, expected_article: int) -> bool:
     if not answer:
         return False
     return _article_in_text(int(expected_article), answer)
+
+
+def is_ssl_cert_error(message: str | None) -> bool:
+    """آیا پیام خطا مربوط به عدم تأیید گواهی SSL است؟ (روی macOS بدون CA
+    bundle شایع است؛ issue #119.)"""
+    if not message:
+        return False
+    return "CERTIFICATE_VERIFY_FAILED" in message.upper()
 
 
 # ---------------------------------------------------------------------------
@@ -218,19 +247,26 @@ def estimate_cost_usd(usage: dict[str, Any], model_id: str) -> float:
 
 def summarize_model(model: str, results: list[AnswerResult]) -> ModelReport:
     n = len(results)
-    n_cited = sum(1 for r in results if r.cited)
+    n_errors = sum(1 for r in results if r.error is not None)
+    n_ok = n - n_errors
+    n_cited = sum(1 for r in results if r.cited and r.error is None)
     latencies = [r.latency_ms for r in results if r.error is None]
     median_latency = statistics.median(latencies) if latencies else 0.0
     total_cost = sum(r.cost_usd for r in results)
     cost_per_100 = (total_cost / n * 100.0) if n else 0.0
+    first_error = next((r.error for r in results if r.error is not None), None)
+    # نرخ اصابت فقط روی پاسخ‌های موفق محاسبه می‌شود؛ خطاها از مخرج حذف
+    # می‌شوند تا یک اجرای شکست‌خورده به‌صورت «۰٪ اصابت» گزارش نشود.
     return ModelReport(
         model=model,
         n=n,
         n_cited=n_cited,
-        hit_rate=round(n_cited / n, 4) if n else 0.0,
+        hit_rate=round(n_cited / n_ok, 4) if n_ok else 0.0,
         median_latency_ms=round(median_latency, 1),
         cost_per_100_answers=round(cost_per_100, 6),
         total_cost_usd=round(total_cost, 6),
+        n_errors=n_errors,
+        first_error=first_error,
         results=results,
     )
 
@@ -297,8 +333,11 @@ def cheapest_meeting_threshold(
     reports: list[ModelReport], ratio: float = BEST_HIT_RATE_RATIO
 ) -> ModelReport | None:
     """ارزان‌ترین مدلی (بر مبنای هزینهٔ هر ۱۰۰ پاسخ) که نرخ اصابتش ≥
-    ``ratio`` برابر بهترین نرخ اصابت باشد."""
+    ``ratio`` برابر بهترین نرخ اصابت باشد. در اجرایی که هر خطای API دارد هیچ
+    مدلی پیشنهاد نمی‌شود (issue #119)."""
     if not reports:
+        return None
+    if any(r.n_errors for r in reports):
         return None
     best_hit_rate = max(r.hit_rate for r in reports)
     eligible = [r for r in reports if r.hit_rate >= ratio * best_hit_rate]
@@ -322,18 +361,36 @@ def render_markdown(
     n = reports[0].n if reports else 0
     lines.append(f"## cheap-tier eval — Persian legal questions (n={n})")
     lines.append("")
-    lines.append("| model | citation hit-rate | median latency (ms) | cost / 100 answers (USD) |")
-    lines.append("| --- | ---: | ---: | ---: |")
+    lines.append(
+        "| model | citation hit-rate | median latency (ms) | "
+        "cost / 100 answers (USD) | errors |"
+    )
+    lines.append("| --- | ---: | ---: | ---: | ---: |")
     for r in reports:
+        errors_cell = f"ERRORS {r.n_errors}/{r.n}" if r.n_errors else "—"
         lines.append(
-            f"| `{r.model}` | {r.hit_rate:.1%} ({r.n_cited}/{r.n}) | "
-            f"{r.median_latency_ms:.0f} | ${r.cost_per_100_answers:.4f} |"
+            f"| `{r.model}` | {r.hit_rate:.1%} ({r.n_cited}/{r.n_ok}) | "
+            f"{r.median_latency_ms:.0f} | ${r.cost_per_100_answers:.4f} | "
+            f"{errors_cell} |"
         )
     lines.append("")
     lines.append(f"total run cost: ${spent:.4f}")
     if budget_exceeded:
         lines.append("**budget exceeded — run stopped early (fail-closed).**")
-    best = cheapest_meeting_threshold(reports, ratio)
+    if any(r.n_errors for r in reports):
+        lines.append(
+            "**API errors recorded — results are not reliable; no model is "
+            "recommended.**"
+        )
+        for r in reports:
+            if r.n_errors:
+                lines.append(
+                    f"- `{r.model}`: {r.n_errors}/{r.n} calls failed "
+                    f"(first error: {r.first_error})"
+                )
+        best = None
+    else:
+        best = cheapest_meeting_threshold(reports, ratio)
     if best is None:
         lines.append("cheapest model reaching ≥ 90% of the best hit-rate: (none)")
     else:
@@ -403,10 +460,34 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(render_markdown(reports, spent, exceeded))
 
+    error_reports = [r for r in reports if r.n_errors]
+    if error_reports:
+        for r in error_reports:
+            print(
+                f"error: {r.model}: {r.n_errors}/{r.n} API calls failed; "
+                f"first error: {r.first_error}",
+                file=sys.stderr,
+            )
+        if any(is_ssl_cert_error(r.first_error) for r in error_reports):
+            print(
+                "hint: TLS certificate verification failed (common on macOS "
+                f"python without a CA bundle). Try:\n  {SSL_CERT_HINT}",
+                file=sys.stderr,
+            )
+
     if exceeded:
         print(
             f"error: --budget-usd {args.budget_usd:.2f} exceeded "
             f"(spent ${spent:.4f}); stopped.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if any(r.error_rate > MAX_ERROR_RATE for r in reports):
+        print(
+            f"error: API error rate over {MAX_ERROR_RATE:.0%} for at least one "
+            "model — results are unreliable and no model is recommended "
+            "(fail loudly).",
             file=sys.stderr,
         )
         return 2
