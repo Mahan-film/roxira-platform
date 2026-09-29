@@ -127,9 +127,20 @@ standard Ubuntu/Roxira infra, nothing dangerous observed.
    `:prev`, builds + recreates only those services, polls
    `docker inspect .State.Health.Status` until `healthy` (or a fixed grace
    period for services with no healthcheck), and calls `rollback.sh` for
-   every touched service plus an nginx reload if any of them fails.
+   every touched service plus an nginx refresh if any of them fails.
    `scripts/ops/rollback.sh <service>` retags `:prev` back to `:latest`,
    recreates just that service, and waits for it to come back healthy.
+   **nginx.conf changes need more than a reload**: the compose volume is a
+   single-file bind mount, so after `git pull` the container keeps the old
+   inode and `nginx -s reload` silently keeps serving the old config. When
+   `output_apps/nginx_config/nginx.conf` changed between the old and new
+   HEAD, `deploy.sh` validates the new file inside the running container
+   (`docker cp` to `/tmp` + `nginx -t -c`), runs
+   `docker compose up -d --no-deps --force-recreate nginx_gateway` to remount
+   the new inode, and verifies the running config matches (a `docker exec
+   grep` for a line this deploy added, plus an md5 match against the deployed
+   file). A plain `nginx -s reload` is used only when nginx.conf did not
+   change.
 3. `scripts/ops/backup.sh` — nightly Postgres `pg_dump` (gzip, 7-day
    retention) + Qdrant snapshot via the HTTP snapshot API.
    `deploy/systemd/roxira-backup.service` + `.timer` — **not installed by
@@ -167,6 +178,24 @@ standard Ubuntu/Roxira infra, nothing dangerous observed.
 6. تأیید نهایی: `curl -I https://ghazihoushmand.ir/` باید ۲۰۰ بدهد؛
    `curl -X POST .../payments/create-invoice -d '{}'` باید ۴۰۰ بدهد (نه
    ۴۰۴/۵۰۲).
+
+### وقتی nginx.conf عوض شده ولی nginx هنوز فایل قدیمی را می‌بیند
+اگر بعد از `git pull` تغییر تازهٔ `output_apps/nginx_config/nginx.conf`
+(مثلاً بلوک `location = /health` از #86) روی هاست هست ولی داخل کانتینر نه —
+`docker exec roxira_nginx_prod grep -c 'location = /health'
+/etc/nginx/nginx.conf` صفر می‌دهد — علت این است که مانت تک‌فایلی داکر بعد از
+جایگزینی فایل توسط git همان inode قدیمی را نگه می‌دارد و `nginx -s reload`
+کافی نیست. راه‌حل:
+1. اعتبارسنجی فایل جدید داخل کانتینر در حال اجرا:
+   `docker cp output_apps/nginx_config/nginx.conf roxira_nginx_prod:/tmp/nginx.conf.new`
+   `docker exec roxira_nginx_prod nginx -t -c /tmp/nginx.conf.new`
+2. بازسازی کانتینر nginx تا inode جدید مانت شود:
+   `docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate nginx_gateway`
+3. تأیید: همان `grep -c` بالا باید حداقل ۱ بدهد و
+   `curl -I https://ghazihoushmand.ir/` باید ۲۰۰ بدهد.
+
+از این پس `deploy.sh` وقتی تشخیص دهد `nginx.conf` بین دو HEAD عوض شده، همین
+مراحل را خودکار انجام می‌دهد؛ فقط وقتی تغییری نبود `nginx -s reload` می‌زند.
 
 ### وقتی یک دیپلوی جدید سایت را خراب می‌کند
 1. `scripts/ops/deploy.sh <service...>` خودش healthcheck را چک می‌کند و اگر
