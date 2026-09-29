@@ -16,8 +16,9 @@ expanded into a repeatable drill).
 - Postgres و Qdrant را در دو کانتینر دورانداختنی (`--rm`، پورت لوکال غیرپیش‌فرض)
   بالا بیاورید، دیتای بکاپ را داخلشان بریزید و بعد پاکشان کنید.
 - تأیید: تعداد سطرهای `payment_orders` و `users` باید بزرگ‌تر از صفر و نزدیک به
-  تمرین قبلی باشد؛ یک جست‌وجوی حقوقی برداری روی کالکشن `iran_laws_bge_m3` باید
-  نتیجه بدهد.
+  تمرین قبلی باشد؛ یک جست‌وجوی حقوقی برداری روی **هر دو** کالکشن `iran_laws_v2`
+  (کالکشن تولیدی، ۴٬۲۴۳ نقطه) و `iran_laws_bge_m3` (قدیمی، ۱٬۳۰۸ نقطه) باید
+  نتیجه بدهد. بکاپ باید هر دو کالکشن را داشته باشد.
 - زمان تقریبی: بار اول ~۱۰ تا ۱۵ دقیقه (شامل دانلود ایمیج‌ها)، بعد از آن ~۵ دقیقه.
 - چک‌لیست ماهانه در انتهای همین سند است.
 
@@ -51,7 +52,9 @@ expanded into a repeatable drill).
   - `postgres_<YYYYmmdd_HHMMSS>.sql.gz` — hourly `pg_dump`, from
     `scripts/auto_backup_daemon.sh`.
   - `qdrant_<YYYYmmdd_HHMMSS>.tar.gz` — hourly raw tar of the Qdrant
-    container's `/qdrant/storage`.
+    container's `/qdrant/storage`. It must contain **both** `iran_laws_v2`
+    (production retrieval) and `iran_laws_bge_m3` (legacy); if either is absent
+    the backup is incomplete and the drill fails.
   - `twenty_<YYYY-MM-DD>.sql.gz` — Twenty CRM (not part of this drill).
 - Optional: `qdrant_<...>.snapshot` — only exists if the **not-yet-installed**
   nightly timer (`scripts/ops/backup.sh`, see `deploy/systemd/`) has been
@@ -176,36 +179,46 @@ docker exec roxira_restore_pg psql -U enterprise_admin -d enterprise_db -c \
   "\d payment_orders" -c "\d users"
 ```
 
-### 6b. One legal search (Qdrant)
+### 6b. Legal searches (Qdrant)
 
-Check the collection loaded and how many points it has:
-
-```bash
-curl -sf "http://127.0.0.1:16333/collections/iran_laws_bge_m3" \
-  | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]; print("status", r["status"], "| points", r["points_count"], "| vectors", r["config"]["params"]["vectors"])'
-```
-
-Then run one real nearest-neighbour search. Pull an existing vector from the
-restored collection and use it as the query (no embedding model needed):
+Production answer retrieval now uses `iran_laws_v2`; `iran_laws_bge_m3` is the
+legacy collection. Check **both** loaded and how many points each has:
 
 ```bash
-VID="$(curl -sf -X POST \
-  "http://127.0.0.1:16333/collections/iran_laws_bge_m3/points/scroll" \
-  -H 'Content-Type: application/json' \
-  -d '{"limit":1,"with_vector":true,"with_payload":false}' \
-  | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["result"]["points"][0]["vector"]))')"
-
-curl -sf -X POST \
-  "http://127.0.0.1:16333/collections/iran_laws_bge_m3/points/search" \
-  -H 'Content-Type: application/json' \
-  -d "{\"vector\":${VID},\"limit\":3,\"with_payload\":true}" \
-  | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]; print(len(r),"hits"); [print(round(h["score"],4), (h.get("payload") or {}).get("article") or (h.get("payload") or {}).get("title") or h["id"]) for h in r]'
+for COL in iran_laws_v2 iran_laws_bge_m3; do
+  echo "== $COL"
+  curl -sf "http://127.0.0.1:16333/collections/$COL" \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]; print("status", r["status"], "| points", r["points_count"], "| vectors", r["config"]["params"]["vectors"])'
+done
 ```
 
-Expected: `status green`, a plausible `points` count, and 3 hits with scores near
-1.0 for the first hit. For reference, the W6 audit found `points_count: 1308`
-(vector size 1024, cosine, unnamed vector — `docs/W6_legal_corpus_diagnosis.md`);
-a wildly different number means the wrong snapshot or a corrupt restore.
+Then run one real nearest-neighbour search **per collection**. Pull an existing
+vector from the restored collection and use it as the query (no embedding model
+needed):
+
+```bash
+for COL in iran_laws_v2 iran_laws_bge_m3; do
+  VID="$(curl -sf -X POST \
+    "http://127.0.0.1:16333/collections/$COL/points/scroll" \
+    -H 'Content-Type: application/json' \
+    -d '{"limit":1,"with_vector":true,"with_payload":false}' \
+    | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["result"]["points"][0]["vector"]))')"
+
+  echo "== $COL"
+  curl -sf -X POST \
+    "http://127.0.0.1:16333/collections/$COL/points/search" \
+    -H 'Content-Type: application/json' \
+    -d "{\"vector\":${VID},\"limit\":3,\"with_payload\":true}" \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]; print(len(r),"hits"); [print(round(h["score"],4), (h.get("payload") or {}).get("article") or (h.get("payload") or {}).get("title") or h["id"]) for h in r]'
+done
+```
+
+Expected for each collection: `status green`, a plausible `points` count, and 3
+hits with scores near 1.0 for the first hit. For reference, `iran_laws_v2` is the
+production collection with `points_count: 4243` across 8 laws, and the W6 audit
+found `iran_laws_bge_m3` at `points_count: 1308` (both vector size 1024, cosine,
+unnamed vector — `docs/W6_legal_corpus_diagnosis.md`); a wildly different number
+means the wrong snapshot or a corrupt restore.
 
 Optional end-to-end: if you also run the app against the throwaway Qdrant, the
 legal search is `POST /api/v1/apps/judge/query` with body
@@ -218,10 +231,11 @@ Append one line to the drill log so next month has a baseline to compare with:
 
 ```bash
 mkdir -p "$HOME/RoxiraBackups"
-printf '%s set=%s users=%s payment_orders=%s qdrant_points=%s\n' \
+printf '%s set=%s users=%s payment_orders=%s qdrant_v2_points=%s qdrant_bge_m3_points=%s\n' \
   "$(date +%Y-%m-%d)" "$(basename "$LATEST")" \
   "$(docker exec roxira_restore_pg psql -U enterprise_admin -d enterprise_db -tAc 'SELECT count(*) FROM users')" \
   "$(docker exec roxira_restore_pg psql -U enterprise_admin -d enterprise_db -tAc 'SELECT count(*) FROM payment_orders')" \
+  "$(curl -sf http://127.0.0.1:16333/collections/iran_laws_v2 | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["points_count"])')" \
   "$(curl -sf http://127.0.0.1:16333/collections/iran_laws_bge_m3 | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["points_count"])')" \
   >> "$HOME/RoxiraBackups/drill.log"
 tail -1 "$HOME/RoxiraBackups/drill.log"
@@ -263,9 +277,12 @@ major version, or the Qdrant image). Tick each item and paste the log line.
 - [ ] Postgres restores with `ON_ERROR_STOP=1` and exits 0.
 - [ ] `payment_orders` and `users` row counts both query successfully; `users`
       is > 0 and within a reasonable range of the previous drill's number.
-- [ ] `iran_laws_bge_m3` reports `status green` and a plausible `points_count`.
-- [ ] The one nearest-neighbour legal search returns 3 hits (first score near
-      1.0).
+- [ ] The Qdrant archive contains **both** `iran_laws_v2` and
+      `iran_laws_bge_m3` (a backup missing either is incomplete).
+- [ ] `iran_laws_v2` and `iran_laws_bge_m3` each report `status green` and a
+      plausible `points_count` (~4243 and ~1308 respectively).
+- [ ] The nearest-neighbour legal search returns 3 hits on **each** collection
+      (first score near 1.0).
 - [ ] A log line was appended to `~/RoxiraBackups/drill.log`.
 - [ ] Throwaway containers and `~/RoxiraRestore/qdrant` were removed.
 - [ ] Any anomaly (failed `gzip -t`, SQL error, missing file, big count drop)
@@ -286,4 +303,7 @@ major version, or the Qdrant image). Tick each item and paste the log line.
 - `output_apps/ecosystem_core/src/factory/user_auth_models.py` — `users`
   schema (`class User`, `__tablename__ = "users"`).
 - `output_apps/generated_modules/smartjudge/smartjudge_module.py` — `/query`
-  legal search and `CITATION_QDRANT_COLLECTION = "iran_laws_bge_m3"`.
+  legal search; `CITATION_QDRANT_COLLECTION = "iran_laws_bge_m3"` is the citation
+  guard's collection, while production answer retrieval selects the collection
+  via `LIGHTRAG_QDRANT_COLLECTION` (now `iran_laws_v2`) in
+  `output_apps/generated_modules/smartjudge/legal_graph/lightrag_engine.py`.
