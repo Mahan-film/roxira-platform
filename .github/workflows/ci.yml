@@ -225,3 +225,44 @@ jobs:
       - run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+  frontend-gate:
+    name: Frontend gate
+    # Always runs so it can be a required check even on PRs with no frontend
+    # changes, where the `frontend` job is skipped. It needs both the change
+    # detector (to tell "skipped because nothing changed" from a real skip) and
+    # the frontend job itself.
+    needs: [changes, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify frontend result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend }}
+        run: |
+          echo "changes=$CHANGES_RESULT frontend=$FRONTEND_RESULT frontend_changed=$FRONTEND_CHANGED"
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::Detect changes job ended as '$CHANGES_RESULT'; cannot verify frontend."
+            exit 1
+          fi
+          case "$FRONTEND_RESULT" in
+            success)
+              echo "Frontend lint + build passed."
+              ;;
+            skipped)
+              # The only legitimate skip is dorny/paths-filter reporting no
+              # frontend files changed (frontend_changed != true).
+              if [ "$FRONTEND_CHANGED" = "true" ]; then
+                echo "::error::Frontend job was skipped even though frontend files changed."
+                exit 1
+              fi
+              echo "No frontend files changed; frontend job skipped as expected."
+              ;;
+            *)
+              echo "::error::Frontend job ended as '$FRONTEND_RESULT'."
+              exit 1
+              ;;
+          esac
