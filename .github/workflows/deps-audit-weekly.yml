@@ -1,0 +1,193 @@
+name: Weekly dependency audit
+
+# Issue #114: weekly npm + pip-audit sweep. Opens or updates ONE issue
+# labelled `deps-security` when a high/critical advisory is found; does
+# nothing (and never fails the workflow) when the tree is clean.
+# Findings are advisory only — the audit does not block CI. A real tool
+# failure (bad JSON, npm/pip-audit crash) fails the step loudly: no `|| true`.
+# No repository secrets are used; the only token is the workflow's own
+# scoped GITHUB_TOKEN (issues: write).
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    name: npm audit + pip-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: output_apps/enterprise_hub/frontend/package-lock.json
+
+      - name: npm ci (frontend)
+        working-directory: output_apps/enterprise_hub/frontend
+        run: npm ci
+
+      - name: npm audit --omit=dev --json
+        working-directory: output_apps/enterprise_hub/frontend
+        run: |
+          set +e
+          npm audit --omit=dev --json > "$RUNNER_TEMP/npm-audit.json"
+          code=$?
+          # 0 = clean, 1 = advisories found. Any malformed/erroring report is
+          # rejected by the evaluate step below, so this is not swallowed.
+          echo "npm audit exit code: $code"
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install pip-audit
+        run: pip install "pip-audit>=2.7"
+
+      - name: pip-audit
+        id: pip
+        run: |
+          set +e
+          req="requirements/prod.txt"
+          if [ ! -f "$req" ]; then
+            req="ci/requirements-test.txt"
+          fi
+          echo "requirements=$req" >> "$GITHUB_OUTPUT"
+          pip-audit -r "$req" --format=json --progress-spinner off > "$RUNNER_TEMP/pip-audit.json"
+          code=$?
+          # 0 = clean, 1 = advisories found. A crash / bad JSON is rejected by
+          # the evaluate step below.
+          echo "pip-audit exit code: $code"
+
+      - name: Evaluate reports
+        id: eval
+        env:
+          NPM_PATH: ${{ runner.temp }}/npm-audit.json
+          PIP_PATH: ${{ runner.temp }}/pip-audit.json
+          BODY_PATH: ${{ runner.temp }}/issue_body.md
+          REQUIREMENTS: ${{ steps.pip.outputs.requirements }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+
+          npm_path = os.environ["NPM_PATH"]
+          pip_path = os.environ["PIP_PATH"]
+          body_path = os.environ["BODY_PATH"]
+          requirements = os.environ["REQUIREMENTS"]
+
+          with open(npm_path, encoding="utf-8") as fh:
+              npm = json.load(fh)
+          if not isinstance(npm, dict) or "vulnerabilities" not in npm:
+              raise SystemExit(
+                  f"npm audit did not return a usable report: {str(npm)[:500]}"
+              )
+
+          with open(pip_path, encoding="utf-8") as fh:
+              pip = json.load(fh)
+          if isinstance(pip, dict) and "dependencies" in pip:
+              pip_deps = pip["dependencies"]
+          elif isinstance(pip, list):
+              pip_deps = pip
+          else:
+              raise SystemExit(
+                  f"pip-audit did not return a usable report: {str(pip)[:500]}"
+              )
+
+          rows = []
+
+          for name, vuln in sorted(npm["vulnerabilities"].items()):
+              severity = (vuln.get("severity") or "unknown").lower()
+              if severity not in ("high", "critical"):
+                  continue
+              fix = vuln.get("fixAvailable")
+              if isinstance(fix, dict):
+                  fixed = fix.get("version") or "unknown"
+              elif fix is True:
+                  fixed = "available (version unknown)"
+              else:
+                  fixed = "none"
+              rows.append((name, severity, fixed, "npm"))
+
+          for dep in pip_deps:
+              name = dep.get("name") or "unknown"
+              for vuln in dep.get("vulns", []) or []:
+                  # pip-audit's JSON has no severity field; surface it as
+                  # "unknown" rather than silently dropping the advisory.
+                  severity = (vuln.get("severity") or "unknown").lower()
+                  if severity not in ("high", "critical", "unknown"):
+                      continue
+                  fixes = vuln.get("fix_versions") or []
+                  fixed = ", ".join(fixes) if fixes else "none"
+                  rows.append((name, severity, fixed, "pip"))
+
+          needed = "true" if rows else "false"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"needed={needed}\n")
+
+          if not rows:
+              print("No high/critical advisories found.")
+              raise SystemExit(0)
+
+          today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          lines = [
+              f"Automated weekly dependency audit (`.github/workflows/deps-audit-weekly.yml`) "
+              f"for **{today}** found high/critical advisories:",
+              "",
+              "| Package | Severity | Fixed version | Source |",
+              "| --- | --- | --- | --- |",
+          ]
+          for name, severity, fixed, source in rows:
+              lines.append(f"| `{name}` | {severity} | `{fixed}` | {source} |")
+          lines += [
+              "",
+              f"- npm: `npm audit --omit=dev --json` in `output_apps/enterprise_hub/frontend`.",
+              f"- pip: `pip-audit -r {requirements} --format=json`.",
+              "- `pip-audit` does not report severity, so its advisories are listed as "
+              "`unknown` rather than omitted.",
+              "",
+              "This workflow files the report only; it never edits a manifest or lockfile. "
+              "Bump the dependency through a normal PR.",
+          ]
+          with open(body_path, "w", encoding="utf-8") as fh:
+              fh.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Open or update the deps-security issue
+        if: steps.eval.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BODY_PATH: ${{ runner.temp }}/issue_body.md
+        run: |
+          set -euo pipefail
+          # --force creates the label or updates its description/colour if it
+          # already exists; no error on re-run.
+          gh label create "deps-security" --repo "$REPO" --force \
+            --description "Weekly npm + pip-audit findings" --color "B60205"
+          existing=$(gh api "repos/$REPO/issues?state=open&labels=deps-security" \
+            --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$REPO" --body-file "$BODY_PATH"
+            echo "Updated issue #$existing"
+          else
+            gh issue create --repo "$REPO" \
+              --title "Dependency audit: high/critical advisories" \
+              --label "deps-security" \
+              --body-file "$BODY_PATH"
+          fi
