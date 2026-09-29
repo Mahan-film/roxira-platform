@@ -14,6 +14,9 @@
 # otherwise. Prices are USD per 1M tokens, in/out, from that same audit.
 # `cheap` and `strong` (the product-runtime roles) were re-verified live
 # 2026-09-28 for W24 (docs/STATE.md) -- see the notes on those two roles below.
+# All price_per_1m values were re-verified LIVE against
+# https://openrouter.ai/api/v1/models on 2026-09-29 (issue #103); the roles
+# whose prices changed carry the updated figure in their comment below.
 #
 # data_policy:
 #   non_sensitive_only  — free-tier / logs-or-trains-on-prompts providers.
@@ -27,7 +30,7 @@
 # list for a role at runtime. This file only sets the defaults.
 
 schema_version: 1
-checked_at: "2026-09-26"
+checked_at: "2026-09-29"
 source: docs/research/TECH_CURRENCY_2026-09.md
 
 roles:
@@ -60,23 +63,26 @@ roles:
     models:
       # W24 owner decision (2026-09-28): DeepSeek V4.1 Flash is the mandated
       # first choice for every product chat turn (free and paid plans), not
-      # just an eval candidate. Live re-check 2026-09-28 found the 2026-09-25
-      # audit's "~10x cheaper" note for deepseek-v4-flash-0731 stale: on the
-      # live catalogue today v4.1-flash is actually the cheaper of the two on
-      # output tokens (0.29 vs 0.32) and only slightly pricier on input
-      # (0.035 vs 0.021) -- effectively tied, so there is no cost reason left
-      # to prefer 0731 over the owner-mandated primary.
+      # just an eval candidate. Price re-checked LIVE 2026-09-29
+      # (openrouter.ai/api/v1/models, issue #103): the 2026-09-28 audit's
+      # "0.035/0.29 nearly tied" reading is stale -- v4.1-flash is now
+      # 0.30/1.20. The owner-mandated primary is kept unchanged (this PR
+      # corrects prices only; a primary swap is a separate owner decision).
       - id: deepseek/deepseek-v4.1-flash
-        price_per_1m: { in: 0.035, out: 0.29 }
+        price_per_1m: { in: 0.30, out: 1.20 }
       # Fallback if the primary is rate-limited/retired: same DeepSeek Flash
-      # family, near-identical price. Price re-checked live 2026-09-26
-      # (issue #39): moved from 0.03 to 0.021 in (out unchanged at 0.32).
+      # family. Price re-checked live 2026-09-29 (issue #103):
+      # 0.018/0.32 (was 0.021/0.32 in the 2026-09-26 audit).
       - id: deepseek/deepseek-v4-flash-0731
-        price_per_1m: { in: 0.021, out: 0.32 }
+        price_per_1m: { in: 0.018, out: 0.32 }
       - id: qwen/qwen3.8-flash
         price_per_1m: { in: 0.15, out: 0.47 }
       - id: google/gemini-3.1-flash-lite
         price_per_1m: { in: 0.25, out: 1.50 }
+      # Last-resort fallback, added 2026-09-29 (issue #103). candidate: 4x
+      # cheaper, pending quality eval.
+      - id: deepseek/deepseek-v4-flash
+        price_per_1m: { in: 0.0763, out: 0.1526 }
 
   strong:
     description: Final legal drafting and reasoning shown to the customer -- harder
@@ -87,9 +93,12 @@ roles:
     models:
       # W24 owner priority order: DeepSeek V4 Pro, then GLM-5.3, then Kimi K3,
       # then Gemini 3.8 Flash as the last, cheapest-but-lowest-priority
-      # fallback. Prices verified live 2026-09-28 (openrouter.ai/api/v1/models).
+      # fallback. Prices verified LIVE 2026-09-29 (openrouter.ai/api/v1/models,
+      # issue #103): only v4-pro moved (0.955/1.911 -> 0.936294/1.872588);
+      # GLM-5.3 (1.40/4.40), Kimi K3 (3.00/15.00) and Gemini 3.8 Flash
+      # (0.75/3.75) were already current.
       - id: deepseek/deepseek-v4-pro
-        price_per_1m: { in: 0.955, out: 1.911 }
+        price_per_1m: { in: 0.936294, out: 1.872588 }
       - id: z-ai/glm-5.3
         price_per_1m: { in: 1.40, out: 4.40 }
       - id: moonshotai/kimi-k3
@@ -220,8 +229,10 @@ roles:
       Cheap coding model driving OpenCode's `build` agent on GitHub Actions
       runners (W10 phase 2, .github/workflows/agent-task.yml). Cheapest
       coding-capable id live on 2026-09-25, already used in
-      src/automation/self_healing_agent.py. Price re-checked live 2026-09-26
-      (issue #39): moved from 0.03 to 0.021 in (out unchanged at 0.32).
+      src/automation/self_healing_agent.py. Price re-checked LIVE 2026-09-29
+      (issue #103): deepseek-v4-flash-0731 0.018/0.32 (was 0.021/0.32) and
+      deepseek-v4-flash 0.0763/0.1526 (was 0.049/0.098); v4.1-flash unchanged
+      at 0.30/1.20.
     data_policy: standard
     # 2026-09-26 hub: model-eval.yml run 36235122337 -- v4.1-flash 7/7, 5.2s avg,
     # $0.0066; v4-flash-0731 3/7 (4 calls hit the 120s deadline), 39s avg, $0.0022.
@@ -229,9 +240,9 @@ roles:
       - id: deepseek/deepseek-v4.1-flash
         price_per_1m: { in: 0.3, out: 1.2 }
       - id: deepseek/deepseek-v4-flash-0731
-        price_per_1m: { in: 0.021, out: 0.32 }
+        price_per_1m: { in: 0.018, out: 0.32 }
       - id: deepseek/deepseek-v4-flash
-        price_per_1m: { in: 0.049, out: 0.098 }
+        price_per_1m: { in: 0.0763, out: 0.1526 }
     # Not active models, not read by role_models()/role_entries() (they only read
     # `models:` above). Noted here so the next model-eval run has a shortlist instead
     # of starting from scratch. Promote to `models:` only after scripts/check_models.py
