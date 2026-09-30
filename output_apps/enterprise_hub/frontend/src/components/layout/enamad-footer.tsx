@@ -32,6 +32,8 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
             <span>•</span>
             <Link href="/services" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">محصولات و اشتراک</Link>
             <span>•</span>
+            <Link href="/coverage" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">پوشش قوانین</Link>
+            <span>•</span>
             <Link href="/terms" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">قوانین</Link>
             <span>•</span>
             <Link href="/privacy" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">حریم خصوصی</Link>
@@ -74,6 +76,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
                 <li><Link href="/services" className="hover:text-amber-400 transition-colors">طرح‌های اشتراک و مقایسه VIP</Link></li>
                 <li><Link href="/technology" className="hover:text-amber-400 transition-colors">معماری فنی و گراف دانش RAG</Link></li>
                 <li><Link href="/laws" className="hover:text-amber-400 transition-colors">پایگاه مواد و تنقیح قوانین</Link></li>
+                <li><Link href="/coverage" className="hover:text-amber-400 transition-colors">پوشش قوانین</Link></li>
                 <li><Link href="/precedents" className="hover:text-amber-400 transition-colors">آرای وحدت رویه دیوان عالی</Link></li>
               </ul>
             </div>

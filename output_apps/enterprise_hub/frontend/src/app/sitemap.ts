@@ -26,6 +26,7 @@ const DOMAIN_ROUTES: Record<SeoDomain, SitemapRoute[]> = {
     { path: "/inventory", changeFrequency: "weekly", priority: 0.8 },
     { path: "/crm", changeFrequency: "weekly", priority: 0.7 },
     { path: "/hr", changeFrequency: "monthly", priority: 0.6 },
+    { path: "/coverage", changeFrequency: "weekly", priority: 0.6 },
   ],
   "roxira.net": [
     { path: "/", changeFrequency: "daily", priority: 1.0 },
@@ -40,6 +41,7 @@ const DOMAIN_ROUTES: Record<SeoDomain, SitemapRoute[]> = {
   "ghazihoushmand.ir": [
     { path: "/", changeFrequency: "daily", priority: 1.0 },
     { path: "/chat", changeFrequency: "daily", priority: 0.9 },
+    { path: "/coverage", changeFrequency: "weekly", priority: 0.6 },
   ],
 };
 
