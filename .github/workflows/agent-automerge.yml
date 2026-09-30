@@ -180,6 +180,15 @@ jobs:
           DIFF_BYTES: ${{ steps.facts.outputs.diff_bytes }}
         run: |
           set -euo pipefail
+          # Human-authored PRs are out of scope for this workflow. Exit
+          # successfully before invoking the gate, whose denial exit status
+          # would otherwise make this check fail on every such PR.
+          if [ "$AUTHOR_LOGIN" != "$REQUIRED_BOT_LOGIN" ]; then
+            echo "::notice::Skipping agent auto-merge: PR author is not the required agent bot."
+            echo "skip_non_agent=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip_non_agent=false" >> "$GITHUB_OUTPUT"
           args=(
             --branch "$BRANCH"
             --pr-author-login "$AUTHOR_LOGIN"
@@ -199,7 +208,7 @@ jobs:
             | tee "$RUNNER_TEMP/gate_decision.json"
 
       - name: Merge or label needs-human
-        if: steps.pr_number.outputs.number != ''
+        if: steps.pr_number.outputs.number != '' && steps.gate_decision.outputs.skip_non_agent != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr_number.outputs.number }}
@@ -225,7 +234,7 @@ jobs:
           fi
 
       - name: Job summary
-        if: steps.pr_number.outputs.number != ''
+        if: steps.pr_number.outputs.number != '' && steps.gate_decision.outputs.skip_non_agent != 'true'
         env:
           PR_NUMBER: ${{ steps.pr_number.outputs.number }}
         run: |
