@@ -124,3 +124,37 @@ def test_main_long_writes(tmp_path, monkeypatch):
     out = tmp_path / "sub" / "o.txt"
     assert lfp.main(["http://x", "--out", str(out), "--sleep", "0"]) == 0
     assert out.read_text(encoding="utf-8").startswith("ماده ۱")
+
+
+def test_leading_zwnj_line_counted():
+    html = "<div class='entry-content'><p>\u200cماده 1 - متن قانون</p></div>"
+    text = lfp.extract_main_text(html)
+    assert text.startswith("ماده 1")
+    assert lfp.count_articles(text) == 1
+
+
+def test_leading_and_trailing_marks_stripped_inside_kept():
+    html = "<div class='entry-content'><p>\u200eماده ۱ می\u200cشود\u200f</p></div>"
+    text = lfp.extract_main_text(html)
+    assert text == "ماده ۱ می\u200cشود"
+
+
+def test_made_vahede_counted():
+    assert lfp.count_articles("ماده واحده\nمتن") == 1
+
+
+def test_stop_marker_cuts():
+    text = "a\nماده 1\nSTOP here\nماده 2"
+    assert lfp.apply_markers(text, stop_markers=["STOP"]) == "a\nماده 1"
+    assert lfp.apply_markers(text, stop_markers=["ماده 2"]) == "a\nماده 1\nSTOP here"
+
+
+def test_start_marker_keeps_line():
+    text = "chrome\nماده 1\nمتن"
+    assert lfp.apply_markers(text, start_marker="ماده 1") == "ماده 1\nمتن"
+
+
+def test_markers_absent_unchanged():
+    text = "a\nb\nc"
+    assert lfp.apply_markers(text) == text
+    assert lfp.apply_markers(text, start_marker="zzz", stop_markers=["qqq"]) == text

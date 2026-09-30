@@ -28,7 +28,8 @@ BLOCK_TAGS = {
 }
 MIN_CHARS = 500
 
-_ARTICLE_RE = re.compile(r"^\s*ماده\s*[۰-۹٠-٩0-9]+", re.MULTILINE)
+_ARTICLE_RE = re.compile(r"^\s*ماده\s*(?:[۰-۹٠-٩0-9]+|واحده)", re.MULTILINE)
+_EDGE_MARKS = "\u200c\u200f\u200e\ufeff"
 
 
 def _encode_url(url: str) -> str:
@@ -138,7 +139,8 @@ def _normalize(text: str) -> str:
     out = []
     blank = False
     for line in text.split("\n"):
-        line = re.sub(r"[ \t]+", " ", line).strip()
+        line = re.sub(r"[ \t]+", " ", line)
+        line = line.strip().strip(_EDGE_MARKS).strip()
         if not line:
             blank = True
             continue
@@ -163,24 +165,52 @@ def count_articles(text: str) -> int:
     return len(_ARTICLE_RE.findall(text))
 
 
+def first_article_line(text: str) -> str:
+    for line in text.split("\n"):
+        if _ARTICLE_RE.match(line):
+            return line[:40]
+    return ""
+
+
+def apply_markers(text, start_marker=None, stop_markers=None) -> str:
+    lines = text.split("\n")
+    if start_marker:
+        for i, line in enumerate(lines):
+            if start_marker in line:
+                lines = lines[i:]
+                break
+    if stop_markers:
+        for i, line in enumerate(lines):
+            if any(line == m or line.startswith(m) for m in stop_markers):
+                lines = lines[:i]
+                break
+    return "\n".join(lines)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Fetch a legal page and save its main text.")
     ap.add_argument("url")
     ap.add_argument("--out", required=True)
     ap.add_argument("--selector-class", default="entry-content")
     ap.add_argument("--sleep", type=float, default=2)
+    ap.add_argument("--start-marker", default=None)
+    ap.add_argument("--stop-marker", action="append", default=None)
     args = ap.parse_args(argv)
 
     html = fetch_html(args.url)
     time.sleep(args.sleep)
     text = extract_main_text(html, args.selector_class)
+    text = apply_markers(text, args.start_marker, args.stop_marker)
     if len(text) < MIN_CHARS:
         print(f"too short: chars={len(text)} (min {MIN_CHARS}); nothing written", file=sys.stderr)
         return 2
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
-    print(f"chars={len(text)} articles={count_articles(text)} out={out}")
+    print(
+        f"chars={len(text)} articles={count_articles(text)} "
+        f"first={first_article_line(text)} out={out}"
+    )
     return 0
 
 
