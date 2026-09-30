@@ -1,40 +1,49 @@
 # Current state (read this first)
 
-Short snapshot for a new chat. `docs/STRATEGY.md` explains **why** (incl. the "Role rule"); this file says **where we are now**. Every chat updates it through `/handoff`. Keep it under 100 lines. Last update: 2026-09-30 (hub, Sonnet 5.5).
+Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: domains, server, keys by name, toolchain, permissions). `docs/STRATEGY.md` explains **why**. Every chat updates this file through `/handoff`. Keep it under 100 lines. Last update: 2026-09-30 evening (hub).
 
-## Roles and lanes (hard rule)
-- Opus = big decisions only. Day-to-day hub = Sonnet: writes specs as GitHub issues, reviews PRs, merges, asks the owner ONE question before any prod deploy. The hub never implements product code.
-- Implementation lanes, in order: (1) GitHub `agent` label (OpenCode+DeepSeek on GitHub runners; unreliable today: can report success with no PR, issue #99, queue fix #77 not delivered); (2) owner runs `rx <issue>` / `rxall <issues…>` on the Mac (OpenCode pool/dsflash; OpenCode has no shell tool, so `git show`-style jobs fail: do those with a tiny script); (3) Claude subagents only as last resort, one at a time (they exhausted the weekly limit on 2026-09-28).
-- Mac tools: `~/bin/rx`, `~/bin/rxall` (also linked in /opt/homebrew/bin), LiteLLM pool in Docker (`~/.config/litellm/`), OpenCode config `~/.config/opencode/opencode.json`. Gemini CLI / `agy` installed for low-level tasks only.
+## Roles and lanes (ADR `docs/decisions/0003-agent-operating-model.md`)
+- The hub chat is the control room: strategy, issue specs, diff review, merge. It does not implement product code.
+- Escalation ladder, cheapest first: (1) `rx <issue>` / `rxall` (`scripts/dev/`, linked from `~/bin`): default worker is the **Codex CLI** (owner's ChatGPT Plus login, no Claude quota), fallback dsflash → dspro → codestral on the LiteLLM pool, 15-minute timeout per attempt, ruff undefined-name gate before a PR; (2) a Claude `implementer`/general-purpose subagent on Sonnet that only edits files in a prepared worktree (subagents cannot run git: the hub commits); (3) a separate Sonnet chat (design, investigation); (4) Opus for ADRs only. Caps: 3 rx, 2 subagents, 1 extra chat.
+- Research lane: `codex --search exec ...` (live web search, no Claude quota). A Sonnet research subagent cost 311k tokens on 2026-09-30: avoid for web research.
+- Merging: the hub reviews the diff, then `gh pr merge <n> --auto --squash`. Not for PRs that add spend or touch the auto-merge workflow itself.
+- Owner rules (memory): test every link/command before presenting it; research anything the owner names (and alternatives) first-hand on several sites; disagree only with evidence; the lawyer gets only hard questions that search cannot settle.
 
-## Live and working (prod `5.75.200.67`, deployed main ≥ 2026-09-29)
-- Site https://ghazihoushmand.ir: real Zibal payments, fixed Toman prices (single draft 100k, VIP monthly 490k, voice pack 63k, diaspora 1.015M; env `PRICE_TOMAN_*`), glass UI, SMS OTP login (Kavenegar), STT/TTS voice, `/health` 200, `uptime.yml` green.
-- Payment callback fixed (#100): legacy Zibal callback only redirects; real verify via `payment_orders`. Citation guard restored verbatim (#132, sha256 verified) after daemon commit 2b605a1 deleted it.
-- Answer retrieval uses Qdrant `iran_laws_v2` (4,243 pts, 8 laws; env `LIGHTRAG_QDRANT_COLLECTION`); the citation guard still uses old `iran_laws_bge_m3` (issue #117).
-- Security: runner removed; `roxira-worker.timer` disabled; `/factory` routes removed from nginx (#131); `roxira-autodaemon` (health audit only) still runs; owner 2FA on; paid GitHub Advanced Security deliberately NOT enabled. Rule: model/agent code never runs on prod.
-- Keys: prod uses OpenRouter key `roxira-prod-chat` (cap $3/day) in `/opt/roxira_platform/.env`; GitHub agents and the Mac share key `roxira-agent` (cap raised to $4/day: set back to $2). Old keys revoked. Never paste keys in chat.
-- Ruleset `main-protection`: PR + checks Detect changes, Secret scan, Pytest (unit), Frontend gate. Weekly deps audit workflow (#127).
-- Resilience merged but NOT installed on prod: `scripts/ops/deploy.sh` (auto-rollback; recreates nginx when nginx.conf changed), `rollback.sh`, `backup.sh`, compose healthchecks (#81). The existing hourly backup cron + daily pull to the Mac stay in charge. Restore drill: `docs/ops/RESTORE_DRILL.md`.
-- Config: `config/models.yaml` prices corrected 2026-09-29 (#109). Cheap tier now sends `reasoning: {enabled:false}` (#135, merged, **not deployed**).
+## Live and working (prod `5.75.200.67`)
+- Prod runs commit **64478f3**. Merged but NOT deployed: #135 (cheap tier reasoning off), #149 (exact article lookup), #150 (`/coverage` page), #151, #146 (chat declutter), #171 (commerce act is enacted law) and docs/scripts. The assistant's ssh writes are blocked by the app's permission classifier: the owner deploys (STRATEGY §7) or adds an ssh allow rule.
+- Site https://ghazihoushmand.ir: Zibal payments, SMS OTP login, STT/TTS voice, `/health` 200. Details in SYSTEM_MAP §1-3.
+- Keys: prod `roxira-prod-chat` ($3/day); `roxira-agent` for GitHub and the Mac ($4/day, set back to $2). Only ONE Actions secret exists (`OPENROUTER_AGENT_KEY`): workflows that want search keys or `OPENROUTER_RESEARCH_KEY` get empty values (incl. `tech-radar-weekly.yml`, merged in #96, runs Mondays, $1.50 cap).
+- CI: required checks Detect changes, Secret scan, Pytest (unit), Frontend gate; new jobs `Undefined names` (#154) and `System inventory up to date` (#166) are not yet in the required list (owner adds them in the ruleset).
+- OmniRoute pilot: Docker on the Mac, `127.0.0.1:20128`, 3 GB cap, MITM off, next to LiteLLM (`127.0.0.1:4000`). Not configured yet: the owner must paste the one-time bootstrap token (`docker logs omniroute | grep -i bootstrap`) in the onboarding Security step (use Chrome; Safari showed a client-side error), add API keys, create an endpoint key. API-key mode only.
+- Gemini CLI returns 403 from this Mac (region); Codex CLI works.
+
+## Legal corpus (W25)
+- Served corpus: `iran_laws_v2`, 8 laws, 4,216 article rows, all without `source_tier` (manifest shows them as unknown/unofficial). `docs/LEGAL_COVERAGE_MANIFEST.md` is generated.
+- Lawyer rules (`docs/LAWYER_ANSWERS_2026-09-30.md`): delete repealed articles; official sources only (Official Gazette, rc.majlis.ir); advisory opinions not authoritative; unification rulings authoritative; peace court up to 1,000,000,000 rials (art. 12 of the 1402 law, adjustable every 3 years).
+- Research (`docs/LEGAL_RESEARCH_2026-09-30.md`): «لایحه اصلاحی قانون تجارت» is enacted law (1347/12/24); only arts 51 and 53-71 were declared invalid (1403/11/15) and must be removed. Official rc.majlis.ir ids for the remaining laws are listed there (reported by the agent; the hub could not re-open them). A second, deeper pass by Codex is being written to `docs/LEGAL_RESEARCH_ROUND2_2026-09-30.md` (branch `docs-legal-research-2`, may be unfinished).
+- Tools: `scripts/legal_fetch_page.py` (deterministic, works on `https://rc.majlis.ir/fa/law/print_version/<id>`), `scripts/w6_ingest_dotic.py --file ... --source-tier official`. rc.majlis.ir is reachable only intermittently: retry later rather than switching source.
+- Staged, NOT in Qdrant: `data/raw/phase1/phase1_staged.jsonl` (git-ignored, on the Mac only), 586 rows, 7 laws with no missing article numbers (labour 203, civil execution 180, family protection 58, courts 38, rent 1356 32, financial sentences 29, civil liability 16).
+- Still to fetch: rent 1362 and 1376, social security (+ regulations), registration 1310 (id 92284; 91802 is the 1308 law), civil procedure 1379, cheque (base + 1397 + 1400), dispute councils 1402, re-fetch of all 8 served laws from the official source. «کاهش مجازات حبس تعزیری» needs a special splitter (it quotes penal-code article numbers).
 
 ## Waiting on the owner
-1. VPN/network: OpenRouter returns 403 "Access denied" for the Mac's IP (the server key still works). Change VPN location, then `curl -s -o /dev/null -w "%{http_code}" https://openrouter.ai/api/v1/models` must print 200.
-2. Approve ONE deploy for #135 and any newer merges. Then re-run the quality eval: `SSL_CERT_FILE=$(python3 -c "import certifi;print(certifi.where())") python3 scripts/eval_cheap_tier.py --models deepseek/deepseek-v4-flash,deepseek/deepseek-v4.1-flash --n 30 --budget-usd 1.00` (qwen3.8-flash is blocked by the account's ZDR setting).
-3. DB fixes (explicit approval needed): owner's order 4815502353 is paid but `pending`; revoke fake user `authenticated_user`. Design SINGLE_DRAFT credits (#101; needs a reviewed migration).
-4. A lawyer must review `لایحه اصلاحی قانون تجارت` (possibly a bill, stored as active).
-5. Server housekeeping: kernel reboot, delete old `.env.bak.*`, `git checkout` the 2 radar files, an nginx-recreate window for compose healthchecks.
+1. Deploy: `git checkout` the 2 radar files on prod, `git pull --ff-only`, then `scripts/ops/deploy.sh enterprise_app` (never run on prod before) and a frontend deploy. One command is in the 2026-09-30 chat.
+2. OmniRoute onboarding (above). Decide whether to keep it after a real comparison with LiteLLM.
+3. PR #167 (agent-automerge skips non-agent PRs): touches the auto-merge workflow, needs the owner's eyes.
+4. Approve the first official ingest into Qdrant (prod write) once the staged laws are complete.
+5. DB fixes: order 4815502353 paid but `pending`; revoke fake user `authenticated_user`; SINGLE_DRAFT credits (#101).
+6. Server housekeeping: kernel reboot, old `.env.bak.*`, nginx-recreate window.
+7. Add the missing Actions secrets, or accept that the weekly radar runs without web search.
 
 ## Next workstreams
 | Id | What | Lane |
 | --- | --- | --- |
-| W25 | Legal coverage (`docs/LEGAL_COVERAGE_ROADMAP.md`): #138 exact article lookup, #139 coverage manifest, #140 public coverage page, then ingest waves | rx / agent |
-| W9b | Research system: #93 (PR #96 red CI), #94, #95 | rx |
-| W20b | Gemini Live voice (#84) | rx |
-| misc | #117 guard collection env, #122 F821 CI check, #99 agent no-change status, #77 queue, #66 cost report, #113 pin prod Python deps, #67 Kimi role | rx / agent |
+| W25 | Fetch remaining official texts, drop inactive rows, remove commerce arts 51/53-71, special splitter for the 1399 law, jurisdiction rules as data (`config/jurisdiction_rules.yaml`), unification rulings (Phase 4 first item) | rx (codex) |
+| W26b | Design tokens + visual pass (separate Sonnet chat started 2026-09-30; status unknown to this chat) | chat |
+| infra | OmniRoute vs LiteLLM comparison on one real issue; rx timeout/fallback paths never exercised; eval_cheap_tier needs a stable network (Mac run had >20% API errors) | rx |
+| misc | #99, #77, #113, #67, #66, #84 voice, #94/#95 research, #74 e2e (red) | rx |
 
 ## Known issues
-- Legal search is weak on exact lookups («ماده ۱۰» returned 1010) and covers only 8 laws; marketing text overclaims (fix in #140).
-- Token packs are "coming soon" (no backend plan).
-- No secondary sources (circulars, advisory opinions, cabinet decrees, rulings) in the corpus.
-- Keys remain in git history (owner chose not to rotate). `@RTK.md` is loaded globally; rtk is installed.
-- `pytest`/`git` may be intercepted by the rtk wrapper: use `python3 -m pytest <file>` and `/usr/bin/git`.
+- Dockerfile.prod is Python 3.11 while pyproject says >=3.13; `.env.example` names differ from prod (SYSTEM_MAP §3-4).
+- The Mac's link to GitHub, OpenRouter and Iranian sites drops often: retry loops are normal; `gh` needs `SSL_CERT_FILE` from certifi.
+- rtk wraps git/pytest: use `rtk proxy python3 -m pytest <file>`. Never run pytest over `src/` or the repo root.
+- Git worktree creation needs the sandbox disabled (writes `.git/config`). Many stale worktrees under `.claude/worktrees/` and `~/Developer/rx-wt/` can be pruned.
