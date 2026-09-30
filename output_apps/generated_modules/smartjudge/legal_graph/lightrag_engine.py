@@ -29,6 +29,7 @@ import os
 import re
 import threading
 import time
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger("smartjudge.lightrag")
@@ -361,6 +362,49 @@ def _tokens(text: str) -> set:
     return {token.lower() for token in _TOKEN_RE.findall(text or "") if len(token) > 1}
 
 
+def _payload_to_row(
+    payload: Dict[str, Any], match_level: str = "QDRANT_FALLBACK", score: int = 0
+) -> Dict[str, Any]:
+    """یک payload خام Qdrant را به قرارداد ثابت ردیف قانونی تبدیل میکند.
+
+    schema-tolerant: کالکشن قدیمی «title» تخت دارد؛ iran_laws_v2 هم «title»
+    تخت میسازد (`w6_ingest_dotic.py`) اما اگر نبود، از law_name/article_label
+    ساخته میشود تا هرگز به «سند حقوقی N» عمومی (که شمارهٔ ماده را برای eval
+    قابلتشخیص نمیکند) سقوط نکنیم.
+    """
+    raw_id = payload.get("id") or payload.get("uid") or payload.get("article_no")
+    law_name = payload.get("law_name")
+    article_label = payload.get("article_label")
+    text = _payload_text(payload)
+    title = (
+        payload.get("title")
+        or (f"{law_name} - {article_label}" if law_name and article_label else None)
+        or payload.get("name")
+        or payload.get("article")
+        or (f"سند حقوقی {raw_id}" if raw_id else "سند حقوقی")
+    )
+    article_no = _payload_article_no(payload)
+    return {
+        "title": str(title),
+        "category": str(
+            payload.get("category")
+            or payload.get("collection")
+            or law_name
+            or payload.get("law_type")
+            or QDRANT_FALLBACK_COLLECTION
+        ),
+        "summary": (text or json.dumps(payload, ensure_ascii=False))[:1200],
+        "match_level": match_level,
+        "source": f"qdrant:{QDRANT_FALLBACK_COLLECTION}",
+        "score": score,
+        # مسیر مستقیم و قابل‌اتکای شمارهٔ ماده برای مصرف‌کننده‌های پایین‌دست
+        # (مثل eval_legal_rag.py) که نباید همیشه با regex متن را بکاوند.
+        "article_no": article_no,
+        "law_name": law_name,
+        "is_bill": "لایحه" in str(law_name or ""),
+    }
+
+
 def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -> List[Dict[str, Any]]:
     """رتبه‌بندی واژگانی نقاط Qdrant تا مرتبط‌ترین مواد اول برگردند."""
     tokens = _tokens(query)
@@ -376,41 +420,8 @@ def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -
     scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
 
     rows: List[Dict[str, Any]] = []
-    for overlap, _, payload, text in scored[: max(1, limit)]:
-        raw_id = payload.get("id") or payload.get("uid") or payload.get("article_no")
-        # schema-tolerant: کالکشن قدیمی «title» تخت دارد؛ iran_laws_v2 هم
-        # «title» تخت می‌سازد (`w6_ingest_dotic.py`) اما اگر نبود، از
-        # law_name/article_label ساخته می‌شود تا هرگز به «سند حقوقی N» عمومی
-        # (که شمارهٔ ماده را برای eval قابل‌تشخیص نمی‌کند) سقوط نکنیم.
-        law_name = payload.get("law_name")
-        article_label = payload.get("article_label")
-        title = (
-            payload.get("title")
-            or (f"{law_name} - {article_label}" if law_name and article_label else None)
-            or payload.get("name")
-            or payload.get("article")
-            or (f"سند حقوقی {raw_id}" if raw_id else "سند حقوقی")
-        )
-        article_no = _payload_article_no(payload)
-        rows.append(
-            {
-                "title": str(title),
-                "category": str(
-                    payload.get("category")
-                    or payload.get("collection")
-                    or law_name
-                    or payload.get("law_type")
-                    or QDRANT_FALLBACK_COLLECTION
-                ),
-                "summary": (text or json.dumps(payload, ensure_ascii=False))[:1200],
-                "match_level": "QDRANT_FALLBACK",
-                "source": f"qdrant:{QDRANT_FALLBACK_COLLECTION}",
-                "score": overlap,
-                # مسیر مستقیم و قابل‌اتکای شمارهٔ ماده برای مصرف‌کننده‌های پایین‌دست
-                # (مثل eval_legal_rag.py) که نباید همیشه با regex متن را بکاوند.
-                "article_no": article_no,
-            }
-        )
+    for overlap, _, payload, _text in scored[: max(1, limit)]:
+        rows.append(_payload_to_row(payload, score=overlap))
     return rows
 
 
@@ -712,6 +723,366 @@ def _qdrant_scroll_urllib(query: str, limit: int, active_only: Optional[bool] = 
     return []
 
 
+# ── پیش‌قدم قطعی: «ماده N قانون X» را با فیلتر payload پیدا کن (W25-1) ───────
+# مسئله (بررسی زندهٔ ۲۰۲۶-۰۹-۳۰): پرس‌وجوی «ماده ۱۰ قانون مدنی» مادهٔ ۱۰۱۰ را
+# برمی‌گرداند چون جست‌وجوی برداری به شباهت واژگانی/عددی حساس است. این پیش‌قدم
+# الگوی «ماده/مواد N [قانون X]» را پارس می‌کند و اگر نام قانون شناخته شود، با
+# فیلتر payload (``law_name`` + ``article_no`` + ``is_active``) مستقیماً روی
+# همان کالکشن Qdrant scroll می‌زند و مادهٔ دقیق را نتیجهٔ اول برمی‌گرداند؛ اگر
+# قانونی نام برده نشده باشد فقط با ``article_no`` فیلتر می‌کند و حداکثر ۳
+# کاندید از قوانین مختلف را با نام قانون برمی‌گرداند. در نبود تطابق، ``None``
+# برمی‌گرداند تا مسیر برداری موجود دست‌نخورده ادامه یابد. مجموعهٔ پیش‌فرض
+# کالکشن تغییر نمی‌کند (همان ``LIGHTRAG_QDRANT_COLLECTION``).
+_LIGHTRAG_LAW_NAMES_FILE = os.environ.get("LIGHTRAG_LAW_NAMES_FILE", "").strip()
+_LAW_NAMES_FILE = (
+    Path(_LIGHTRAG_LAW_NAMES_FILE)
+    if _LIGHTRAG_LAW_NAMES_FILE
+    else Path(__file__).resolve().parents[4] / "data" / "legal" / "dotic_articles_2026-09-22.jsonl"
+)
+# نام‌های کامل/مخفف → ``law_name`` دقیق در کالکشن. عمداً هیچ نام تک‌کلمه‌ای
+# («مدنی»، «تجارت»، «چک») نیست: این‌ها تکهٔ نام قوانین بلندتر (مسئولیت مدنی،
+# تجارت الکترونیکی، اجرای احکام مدنی) هستند و باعث نسبت‌دادن اشتباه می‌شدند.
+_LAW_NAME_ALIASES: Tuple[Tuple[str, str], ...] = (
+    ("لایحه اصلاحی قانون تجارت", "لایحه اصلاحی قانون تجارت"),
+    ("قانون آیین دادرسی کیفری", "قانون آیین دادرسی کیفری"),
+    ("قانون آیین دادرسی مدنی", "قانون آیین دادرسی مدنی"),
+    ("قانون مجازات اسلامی", "قانون مجازات اسلامی"),
+    ("قانون صدور چک", "قانون صدور چک (اصلاحی ۱۳۹۷)"),
+    ("قانون شوراهای حل اختلاف", "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲"),
+    ("قانون تجارت", "قانون تجارت"),
+    ("قانون مدنی", "قانون مدنی"),
+    ("آیین دادرسی کیفری", "قانون آیین دادرسی کیفری"),
+    ("آیین دادرسی مدنی", "قانون آیین دادرسی مدنی"),
+    ("ق.آ.د.ک", "قانون آیین دادرسی کیفری"),
+    ("ق.آ.د.م", "قانون آیین دادرسی مدنی"),
+    ("مجازات اسلامی", "قانون مجازات اسلامی"),
+    ("صدور چک", "قانون صدور چک (اصلاحی ۱۳۹۷)"),
+    ("شوراهای حل اختلاف", "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲"),
+    ("ق.م", "قانون مدنی"),
+)
+
+# واژه‌هایی که ادامهٔ نام قانون نیستند (پایان عبارت نام قانون را نشان می‌دهند).
+_LAW_PHRASE_STOP_WORDS = frozenset(
+    {
+        "ماده", "مواد", "مصوب", "اصلاحی", "اصلاحیه", "چیست", "چه", "را", "و", "یا", "در",
+        "از", "به", "که", "می", "است", "آیا", "بر", "طبق", "برای", "با", "این", "آن",
+        "ایران", "جمهوری", "اسلامی‌ایران", "مکرر", "تبصره", "بند", "چند", "کدام", "چگونه",
+        "چطور",
+    }
+)
+_LAW_PREFIX_WORDS = ("قانون", "لایحه")
+_LAW_MENTION_RE = re.compile(r"(?:^|\s)(?:قانون|لایحه)\s+([^\s]+)")
+
+_known_law_names_cache: Optional[List[str]] = None
+
+
+def _normalize_law_text(text: str) -> str:
+    """یکسان‌سازی متن برای تطبیق نام قانون (ارقام، ی/ک، نیم‌فاصله، پرانتز)."""
+    normalized = normalize_digits(text or "")
+    normalized = (
+        normalized.replace("\u200c", " ")
+        .replace("ي", "ی")
+        .replace("ك", "ک")
+        .replace("(", " ")
+        .replace(")", " ")
+        .replace("،", " ")
+    )
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _known_law_names() -> List[str]:
+    """نام‌های قانون یکتا از فایل corpus (best-effort؛ در نبود فایل، تهی)."""
+    global _known_law_names_cache
+    if _known_law_names_cache is not None:
+        return _known_law_names_cache
+    names: List[str] = []
+    try:
+        with _LAW_NAMES_FILE.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    name = json.loads(line).get("law_name")
+                except Exception:  # noqa: BLE001 - خطوط بدشکل را رد کن
+                    continue
+                if isinstance(name, str) and name.strip():
+                    names.append(name.strip())
+    except Exception as exc:  # noqa: BLE001 - نبود فایل نباید چیزی را بشکند
+        logger.debug("law-name corpus unavailable (%s): %s", _LAW_NAMES_FILE, exc)
+    _known_law_names_cache = list(dict.fromkeys(names))
+    return _known_law_names_cache
+
+
+def _law_tokens(text: str) -> List[str]:
+    """توکن‌های متن نرمال‌شده؛ نقطه‌گذاری کناری («؟» «.» «:») حذف می‌شود."""
+    tokens = [t.strip("؟?!.:;\"'«»[]") for t in _normalize_law_text(text).split(" ")]
+    return [t for t in tokens if t]
+
+
+def _is_stop_token(token: str) -> bool:
+    return token in _LAW_PHRASE_STOP_WORDS or token.isdigit()
+
+
+def _is_fragment_match(tokens: List[str], start: int, end: int) -> bool:
+    """آیا تطبیق [start, end) فقط تکه‌ای از نام بلندتر «قانون X …» است؟"""
+    # ادامهٔ نام بعد از تطبیق («قانون تجارت الکترونیکی»).
+    if end < len(tokens):
+        nxt = tokens[end]
+        if not _is_stop_token(nxt) and nxt not in _LAW_PREFIX_WORDS:
+            return True
+    # کلمات دیگرِ «قانون X …» قبل از تطبیق («قانون اجرای احکام مدنی»).
+    if tokens[start] not in _LAW_PREFIX_WORDS and not tokens[start].startswith("ق."):
+        idx = start - 1
+        gap = 0
+        while idx >= 0 and tokens[idx] not in _LAW_PREFIX_WORDS and not _is_stop_token(tokens[idx]):
+            gap += 1
+            idx -= 1
+        if idx >= 0 and tokens[idx] in _LAW_PREFIX_WORDS and gap > 0:
+            return True
+    return False
+
+
+def _find_phrase(tokens: List[str], phrase: List[str]) -> Optional[Tuple[int, int]]:
+    """اولین جای توکن‌به‌توکن (نه زیررشته) که ``phrase`` تکهٔ نام بلندتر نیست."""
+    size = len(phrase)
+    for start in range(0, len(tokens) - size + 1):
+        if tokens[start : start + size] == phrase and not _is_fragment_match(
+            tokens, start, start + size
+        ):
+            return start, start + size
+    return None
+
+
+def mentions_law_phrase(text: str) -> bool:
+    """آیا متن «قانون <نام>» یا «لایحه <نام>» را می‌گوید (نام واقعی، نه واژهٔ توقف)؟"""
+    for match in _LAW_MENTION_RE.finditer(_normalize_law_text(text)):
+        word = match.group(1).strip("؟?!.:;\"'«»[]")
+        if word and not _is_stop_token(word):
+            return True
+    return False
+
+
+def recognize_law_name(text: str) -> Optional[str]:
+    """بلندترین نام قانون (از میان نام‌های واقعی corpus و aliasها) را پیدا کن.
+
+    تطبیق توکن‌به‌توکن است و تکهٔ نام بلندتر («قانون مسئولیت مدنی»، «قانون تجارت
+    الکترونیکی»، «قانون اجرای احکام مدنی») رد می‌شود.
+    """
+    tokens = _law_tokens(text)
+    if not tokens:
+        return None
+    best_len = -1
+    best_name: Optional[str] = None
+    candidates: List[Tuple[str, str]] = list(_LAW_NAME_ALIASES)
+    candidates.extend((name, name) for name in _known_law_names())
+    for alias, canonical in candidates:
+        phrase = _law_tokens(alias)
+        if not phrase:
+            continue
+        needle_len = len(_normalize_law_text(alias))
+        if needle_len > best_len and _find_phrase(tokens, phrase):
+            best_len = needle_len
+            best_name = canonical
+    if best_name is None:
+        # «لایحه اصلاحی» تنها، فقط وقتی قانون دیگری نام برده نشده.
+        bill = _law_tokens("لایحه اصلاحی")
+        if not mentions_law_phrase(text) and _find_phrase(tokens, bill):
+            return "لایحه اصلاحی قانون تجارت"
+    return best_name
+
+
+_MAX_ARTICLE_NOS = 5
+
+
+def _parse_article_query(text: str) -> Optional[Dict[str, Any]]:
+    """الگوهای «ماده N»، «ماده N قانون X» و «مواد N و M …» را پارس می‌کند."""
+    normalized = normalize_digits(text or "")
+    article_nos: List[str] = []
+    mokarrar = False
+    plural = re.search(r"مواد\s*(.+)$", normalized)
+    if plural:
+        tail = plural.group(1)
+        # سال‌های بعد از «مصوب» (مثلاً «مصوب ۱۳۹۲») شمارهٔ ماده نیستند.
+        tail = re.sub(r"مصوب\s*[0-9]{1,4}(?:\s*/\s*[0-9]{1,2}){0,2}", " ", tail)
+        article_nos = [n.lstrip("0") or "0" for n in re.findall(r"[0-9]{1,4}", tail)]
+        mokarrar = bool(re.search(r"مکرر|مكرر", tail))
+    if not article_nos:
+        single = re.search(r"ماده\s*\(?\s*([0-9]{1,4})\s*(مکرر|مكرر)?", normalized)
+        if single:
+            article_nos = [single.group(1).lstrip("0") or "0"]
+            mokarrar = bool(single.group(2))
+    if not article_nos:
+        return None
+    return {
+        "article_nos": list(dict.fromkeys(article_nos))[:_MAX_ARTICLE_NOS],
+        "mokarrar": mokarrar,
+        "law_name": recognize_law_name(text),
+        "mentions_law": mentions_law_phrase(text),
+    }
+
+
+def _exact_article_point_filter(
+    law_name: Optional[str], article_no: Any, mokarrar: bool = False,
+    active_only: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """فیلتر Qdrant برای مادهٔ دقیق: ``article_no`` (+ ``law_name``) و فعال‌بودن."""
+    must: List[Dict[str, Any]] = []
+    active = active_point_filter(active_only)
+    if active:
+        must.extend(active.get("must", []))
+    numbers = [article_no] if isinstance(article_no, str) else list(article_no)
+    article_values: List[str] = []
+    for number in numbers:
+        article_values.append(number)
+        if mokarrar:
+            article_values.append(f"{number}-mokarrar")
+    must.append({"key": "article_no", "match": {"any": list(dict.fromkeys(article_values))}})
+    if law_name:
+        must.append({"key": "law_name", "match": {"value": law_name}})
+    return {"must": must}
+
+
+async def _scroll_by_point_filter(point_filter: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
+    """scroll با فیلتر دلخواه payload؛ هرگز استثنا پرتاب نمی‌کند."""
+    global _qdrant_last_reachable
+    try:
+        import httpx
+    except ImportError:
+        return await asyncio.to_thread(
+            _scroll_by_point_filter_urllib, point_filter, limit, QDRANT_FALLBACK_COLLECTION
+        )
+    body = {
+        "limit": max(1, int(limit)),
+        "with_payload": True,
+        "with_vector": False,
+        "filter": point_filter,
+    }
+    async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
+        for host in _QDRANT_HOST_CANDIDATES:
+            url = f"http://{host}:{QDRANT_PORT}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
+            try:
+                response = await client.post(url, json=body)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("qdrant exact-scroll host %s unreachable: %s", host, exc)
+                continue
+            _qdrant_last_reachable = True
+            return _extract_points(response)
+    return []
+
+
+def _scroll_by_point_filter_urllib(
+    point_filter: Dict[str, Any], limit: int, collection: str
+) -> List[Dict[str, Any]]:
+    """مسیر بدون httpx (فقط stdlib) برای scroll فیلترشده."""
+    import urllib.request
+
+    global _qdrant_last_reachable
+    body = json.dumps(
+        {
+            "limit": max(1, int(limit)),
+            "with_payload": True,
+            "with_vector": False,
+            "filter": point_filter,
+        }
+    ).encode("utf-8")
+    for host in _QDRANT_HOST_CANDIDATES:
+        url = f"http://{host}:{QDRANT_PORT}/collections/{collection}/points/scroll"
+        request = urllib.request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=QDRANT_FALLBACK_TIMEOUT) as response:
+                payload = json.loads(response.read().decode("utf-8") or "{}")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("qdrant exact-scroll (urllib) host %s unreachable: %s", host, exc)
+            continue
+        _qdrant_last_reachable = True
+        points = ((payload or {}).get("result") or {}).get("points") or []
+        return [p.get("payload") for p in points if isinstance(p.get("payload"), dict)]
+    return []
+
+
+def _dedupe_article_payloads(
+    payloads: Sequence[Dict[str, Any]], limit: int, per_law: bool = False
+) -> List[Dict[str, Any]]:
+    """یک payload به‌ازای هر (قانون، ماده) — یا هر قانون وقتی ``per_law``."""
+    rows: List[Dict[str, Any]] = []
+    seen: set = set()
+    for payload in payloads:
+        if not isinstance(payload, dict) or payload.get("is_active") is False:
+            continue
+        law = str(payload.get("law_name") or "")
+        article = str(_payload_article_no(payload) or "")
+        key = law if per_law else (law, article)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(payload)
+        if len(rows) >= max(1, limit):
+            break
+    return rows
+
+
+async def exact_article_lookup(
+    query: str, limit: int = 3, active_only: Optional[bool] = None
+) -> Optional[List[Dict[str, Any]]]:
+    """جست‌وجوی قطعی ماده با فیلتر payload پیش از جست‌وجوی برداری (W25-1).
+
+    خروجی ``None`` یعنی الگوی ماده شناسایی نشد یا چیزی تطبیق نداد — کالر باید
+    به مسیر برداری موجود تنزل کند. در غیر این صورت، فهرست ردیف‌های قانونی با
+    ``match_level == "QDRANT_EXACT"`` برگردانده می‌شود.
+    """
+    parsed = _parse_article_query(query)
+    if not parsed or not parsed["article_nos"]:
+        return None
+
+    article_nos = list(parsed["article_nos"])[:_MAX_ARTICLE_NOS]
+    mokarrar = bool(parsed.get("mokarrar"))
+    law_name = parsed.get("law_name")
+
+    def _order(payloads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        rank = {n: i for i, n in enumerate(article_nos)}
+
+        def key(p: Dict[str, Any]) -> int:
+            no = str(_payload_article_no(p) or "").split("-")[0]
+            return rank.get(no, len(rank))
+
+        return sorted(payloads, key=key)  # پایدار: ترتیب ماده‌های درخواستی
+
+    if law_name:
+        point_filter = _exact_article_point_filter(
+            law_name, article_nos, mokarrar=mokarrar, active_only=active_only
+        )
+        wanted = max(1, limit, len(article_nos))
+        payloads = _only_active(await _scroll_by_point_filter(point_filter, wanted * 2))
+        if not payloads:
+            return None
+        selected = _dedupe_article_payloads(_order(payloads), wanted)
+        return [_payload_to_row(p, match_level="QDRANT_EXACT") for p in selected]
+
+    # قانونی نام برده شده ولی شناخته نشد → مسیر برداری اجرا شود.
+    if parsed.get("mentions_law"):
+        return None
+
+    # قانونی نام برده نشده → فقط article_no، حداکثر ۳ کاندید از قوانین مختلف.
+    point_filter = _exact_article_point_filter(
+        None, article_nos, mokarrar=mokarrar, active_only=active_only
+    )
+    payloads = _only_active(await _scroll_by_point_filter(point_filter, 30 * len(article_nos)))
+    if not payloads:
+        return None
+    selected: List[Dict[str, Any]] = []
+    for number in article_nos:
+        group = [
+            p for p in payloads if str(_payload_article_no(p) or "").split("-")[0] == number
+        ]
+        selected.extend(_dedupe_article_payloads(group, 3, per_law=True))
+    if not selected:
+        return None
+    return [_payload_to_row(p, match_level="QDRANT_EXACT") for p in selected]
+
+
 async def qdrant_fallback_laws(
     query: str, limit: int = 5, active_only: Optional[bool] = None
 ) -> List[Dict[str, Any]]:
@@ -733,6 +1104,37 @@ async def qdrant_fallback_laws(
 
     desired = max(1, int(limit))
     _qdrant_last_reachable = False
+
+    # پیش‌قدم قطعی (W25-1): «ماده N قانون X» را با فیلتر payload پیدا کن تا
+    # جست‌وجوی برداری اشتباهاً مادهٔ دیگری (مثلاً ۱۰۱۰ برای ۱۰) را برنگرداند.
+    try:
+        exact_rows = await exact_article_lookup(text, limit=desired, active_only=active_only)
+    except Exception as exc:  # noqa: BLE001 - هرگز مسیر پرس‌وجو را نشکند
+        logger.debug("exact article lookup failed: %s", exc)
+        exact_rows = None
+    rest = await _qdrant_vector_or_scroll_laws(text, desired, active_only)
+    if not exact_rows:
+        return rest
+    # ردیف‌های دقیق اول، سپس نتایج معمول تا سقف limit (یکتا بر اساس قانون+ماده).
+    _qdrant_failed_at = 0.0
+    merged: List[Dict[str, Any]] = []
+    seen: set = set()
+    for row in list(exact_rows) + list(rest):
+        key = (str(row.get("law_name") or ""), str(row.get("article_no") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(row)
+        if len(merged) >= desired:
+            break
+    return merged
+
+
+async def _qdrant_vector_or_scroll_laws(
+    text: str, desired: int, active_only: Optional[bool]
+) -> List[Dict[str, Any]]:
+    """مسیر موجود: جست‌وجوی برداری و در نبودش scroll (رفتار بدون تغییر)."""
+    global _qdrant_failed_at, _qdrant_last_reachable
 
     # مسیر اصلی: جست‌وجوی برداری واقعی روی حدود QDRANT_VECTOR_TOPK کاندید،
     # سپس همان رتبه‌بندی واژگانی/article_no محلی روی همین کاندیدها.
@@ -941,6 +1343,7 @@ def lightrag_health() -> dict:
 __all__ = [
     "LIGHTRAG_AVAILABLE",
     "QDRANT_FALLBACK_COLLECTION",
+    "exact_article_lookup",
     "get_rag",
     "graph_entity_count",
     "graph_is_empty",
@@ -954,5 +1357,6 @@ __all__ = [
     "rag_query",
     "rag_query_sync",
     "rag_retrieve",
+    "recognize_law_name",
     "run_coro_blocking",
 ]
