@@ -311,6 +311,7 @@ def _build_records_for_article(
     source_url: str,
     source: str,
     approval_date: str | None,
+    source_tier: str = "secondary",
     max_chunk_len: int = DEFAULT_MAX_CHUNK_LEN,
 ) -> list[dict[str, Any]]:
     label = _article_label(article_no)
@@ -335,6 +336,7 @@ def _build_records_for_article(
                 "status": status,
                 "is_active": status != "REPEALED",
                 "source_url": source_url,
+                "source_tier": source_tier,
                 "source": source,
                 "content_hash": content_hash(chunk_text),
                 "chunk_index": i,
@@ -395,6 +397,7 @@ def build_records_from_parquet(
                 source_url=row["source_url"],
                 source=DOTIC_SOURCE,
                 approval_date=None,
+                source_tier="official",
                 max_chunk_len=max_chunk_len,
             )
         )
@@ -429,6 +432,7 @@ def build_records_from_file(
     law_type: str,
     source_url: str | None = None,
     approval_date: str | None = None,
+    source_tier: str = "secondary",
     max_chunk_len: int = DEFAULT_MAX_CHUNK_LEN,
 ) -> list[dict[str, Any]]:
     raw_text = read_owner_file(path)
@@ -445,6 +449,7 @@ def build_records_from_file(
                 source_url=source_url or "owner-supplied",
                 source="owner-supplied file",
                 approval_date=approval_date,
+                source_tier=source_tier,
                 max_chunk_len=max_chunk_len,
             )
         )
@@ -592,6 +597,12 @@ def main() -> int:
     parser.add_argument("--source-url", default=None)
     parser.add_argument("--approval-date", default=None)
     parser.add_argument(
+        "--source-tier",
+        choices=("official", "secondary"),
+        default="secondary",
+        help="Trust tier for --file records (parquet/DOTIC records are always official)",
+    )
+    parser.add_argument(
         "--append", action="store_true",
         help="Append to --build's output file instead of overwriting",
     )
@@ -616,6 +627,7 @@ def main() -> int:
         records = build_records_from_file(
             args.file, args.law_name, args.law_type,
             source_url=args.source_url, approval_date=args.approval_date,
+            source_tier=args.source_tier,
             max_chunk_len=args.max_chunk_len,
         )
         dropped: list[dict[str, Any]] = []

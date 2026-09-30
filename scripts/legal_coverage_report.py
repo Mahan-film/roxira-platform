@@ -128,6 +128,7 @@ def build_manifest(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "inactive": 0,
                 "sources": set(),
                 "source_urls": set(),
+                "source_tiers": set(),
             }
             laws[name] = entry
 
@@ -144,6 +145,7 @@ def build_manifest(records: list[dict[str, Any]]) -> dict[str, Any]:
             entry["sources"].add(str(record["source"]))
         if record.get("source_url"):
             entry["source_urls"].add(str(record["source_url"]))
+        entry["source_tiers"].add(str(record.get("source_tier") or "unknown"))
 
         amended = record.get("amended_on")
         approval = record.get("approval_date")
@@ -170,6 +172,7 @@ def build_manifest(records: list[dict[str, Any]]) -> dict[str, Any]:
             "newest_approval_date": _newest(entry.get("_approval", [])),
             "sources": sorted(entry["sources"]),
             "source_urls": sorted(entry["source_urls"]),
+            "source_tiers": sorted(entry["source_tiers"]),
             "is_bill": is_bill,
         }
         law_rows.append(row)
@@ -177,6 +180,10 @@ def build_manifest(records: list[dict[str, Any]]) -> dict[str, Any]:
             warnings.append(
                 f"نام «{name}» شامل «{BILL_MARKER}» است؛ لوایح قانون لازم‌الاجرا نیستند "
                 "و نباید به‌عنوان قانون در حال اجرا استناد شوند."
+            )
+        if row["source_tiers"] != ["official"]:
+            warnings.append(
+                f"متن «{name}» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود."
             )
 
     # Largest law first, then alphabetical for a stable, reviewable order.
@@ -237,16 +244,18 @@ def render_markdown(manifest: dict[str, Any]) -> str:
     lines.append("## پوشش به تفکیک قانون")
     lines.append("")
     lines.append(
-        "| Law | Type | Articles | Active | Inactive | Latest amendment | Approval date | Source |"
+        "| Law | Type | Articles | Active | Inactive | Latest amendment | Approval date | "
+        "Source | Tier |"
     )
-    lines.append("| --- | --- | ---: | ---: | ---: | --- | --- | --- |")
+    lines.append("| --- | --- | ---: | ---: | ---: | --- | --- | --- | --- |")
     for row in manifest["laws"]:
         name = row["name"] + (" (لایحه)" if row["is_bill"] else "")
         sources = "; ".join(row["sources"]) or "-"
+        tiers = "; ".join(row["source_tiers"]) or "-"
         lines.append(
             f"| {name} | {row['type']} | {row['articles']} | {row['active']} | "
             f"{row['inactive']} | {row['newest_amended_on'] or '-'} | "
-            f"{row['newest_approval_date'] or '-'} | {sources} |"
+            f"{row['newest_approval_date'] or '-'} | {sources} | {tiers} |"
         )
     lines.append("")
     lines.append(

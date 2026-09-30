@@ -30,7 +30,16 @@ def _load_report_module():
         report = module
 
 
-def _row(law_name, law_type, article_no, is_active, amended_on, approval_date, source):
+def _row(
+    law_name,
+    law_type,
+    article_no,
+    is_active,
+    amended_on,
+    approval_date,
+    source,
+    source_tier="official",
+):
     return {
         "law_id": None,
         "law_name": law_name,
@@ -44,6 +53,7 @@ def _row(law_name, law_type, article_no, is_active, amended_on, approval_date, s
         "is_active": is_active,
         "source_url": f"https://example.test/{article_no}",
         "source": source,
+        "source_tier": source_tier,
         "content_hash": f"hash-{law_name}-{article_no}",
         "chunk_index": 0,
         "text": "متن نمونه",
@@ -107,6 +117,65 @@ def test_bill_warning_emitted(sample_records):
     assert len(manifest["warnings"]) == 1
     assert "لایحه ب" in manifest["warnings"][0]
     assert "لایحه" in manifest["warnings"][0]
+
+
+def test_manifest_contains_source_tiers(sample_records):
+    manifest = report.build_manifest(sample_records)
+    by_name = {row["name"]: row for row in manifest["laws"]}
+    assert by_name["قانون الف"]["source_tiers"] == ["official"]
+    assert by_name["لایحه ب"]["source_tiers"] == ["official"]
+
+
+def test_secondary_only_law_warns():
+    records = [
+        _row(
+            "قانون غیررسمی",
+            "CIVIL",
+            "1",
+            True,
+            None,
+            None,
+            "owner-supplied file",
+            source_tier="secondary",
+        )
+    ]
+    manifest = report.build_manifest(records)
+    warnings = [w for w in manifest["warnings"] if "قانون غیررسمی" in w]
+    assert len(warnings) == 1
+    assert "منبع غیررسمی" in warnings[0]
+    assert "تطبیق" in warnings[0]
+
+
+def test_official_law_does_not_warn():
+    records = [
+        _row(
+            "قانون رسمی",
+            "CIVIL",
+            "1",
+            True,
+            None,
+            None,
+            "dotic via HF snapshot",
+            source_tier="official",
+        )
+    ]
+    manifest = report.build_manifest(records)
+    assert all("قانون رسمی" not in warning for warning in manifest["warnings"])
+
+
+def test_missing_source_tier_is_unknown():
+    row = _row("قانون بی‌تیر", "CIVIL", "1", True, None, None, "owner-supplied file")
+    row.pop("source_tier")
+    manifest = report.build_manifest([row])
+    by_name = {r["name"]: r for r in manifest["laws"]}
+    assert by_name["قانون بی‌تیر"]["source_tiers"] == ["unknown"]
+
+
+def test_render_markdown_has_tier_column(sample_records):
+    manifest = report.build_manifest(sample_records)
+    markdown = report.render_markdown(manifest)
+    assert "| Source | Tier |" in markdown
+    assert "official" in markdown
 
 
 def test_date_sort_key_normalizes_digits(sample_records):
