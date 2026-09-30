@@ -21,6 +21,11 @@ Hard rules enforced here, not by callers:
 * A free-tier 429 (daily/minute cap) falls through to ``cheap`` for
   non-sensitive calls. 408/429/5xx and transport errors are retried with
   exponential backoff (``Retry-After`` honoured).
+* The ``cheap`` role disables hidden reasoning by default
+  (``reasoning: {"enabled": false}``), because those tokens bill as output and
+  can return empty answers on a small ``max_tokens``. Override with
+  ``LLM_REASONING_CHEAP=default|off|low``. The ``strong`` role is untouched; a
+  provider that rejects the field (HTTP 400) gets one retry without it.
 
 Responses are cached in Redis (``LLM_CACHE_TTL_SECONDS``) only when the call is
 deterministic (``temperature == 0``). Every call, cached or not, writes one
@@ -190,6 +195,34 @@ def tier_models(tier: str) -> list[str]:
         if m and m not in seen:
             seen.append(m)
     return seen
+
+
+# Hidden "thinking" tokens on the cheap providers are billed as output and can
+# eat the whole max_tokens budget, returning empty answers (issue #134, verified
+# 2026-09-29 on deepseek/deepseek-v4-flash and v4.1-flash). Disable them for the
+# cheap role by default; override per tier with
+# LLM_REASONING_CHEAP=default|off|low. The strong tier is never changed.
+REASONING_MODES = ("default", "off", "low")
+DEFAULT_REASONING_CHEAP = "off"
+
+
+def reasoning_param(tier: str) -> dict[str, Any] | None:
+    """OpenRouter ``reasoning`` body field for ``tier``, or None to omit it.
+
+    ``default`` omits the field (provider default), ``off`` sends
+    ``{"enabled": false}``, ``low`` sends ``{"enabled": true, "effort": "low"}``.
+    Only the ``cheap`` role is affected; every other tier is left untouched.
+    """
+    if tier != "cheap":
+        return None
+    mode = os.environ.get("LLM_REASONING_CHEAP", "").strip().lower() or DEFAULT_REASONING_CHEAP
+    if mode == "default":
+        return None
+    if mode == "low":
+        return {"enabled": True, "effort": "low"}
+    if mode != "off":
+        log.warning("unknown LLM_REASONING_CHEAP=%r; using 'off'", mode)
+    return {"enabled": False}
 
 
 def _resolve_models(tier: str, sensitive: bool) -> tuple[str, list[str]]:
@@ -461,6 +494,30 @@ async def _post_with_retries(
     raise _CallFailed(f"retries exhausted, last error: {last_msg}", last_status)
 
 
+async def _post_with_reasoning_fallback(
+    body: dict[str, Any],
+    *,
+    fail_fast_on_429: bool,
+    timeout: float | None,
+    max_retries: int | None,
+) -> tuple[dict[str, Any], int]:
+    """POST, and if a provider rejects the ``reasoning`` field (HTTP 400) retry
+    once with it stripped. Returns (json, attempts), including the rejected try."""
+    try:
+        return await _post_with_retries(
+            body, fail_fast_on_429=fail_fast_on_429, timeout=timeout, max_retries=max_retries
+        )
+    except _CallFailed as exc:
+        if exc.status != 400 or "reasoning" not in body:
+            raise
+        log.warning("provider rejected the reasoning field (HTTP 400); retrying once without it")
+        stripped = {k: v for k, v in body.items() if k != "reasoning"}
+        data, attempts = await _post_with_retries(
+            stripped, fail_fast_on_429=fail_fast_on_429, timeout=timeout, max_retries=max_retries
+        )
+        return data, attempts + 1
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -513,13 +570,16 @@ async def complete(
     total_attempts = 0
     while True:
         body: dict[str, Any] = {**params, "models": models, "messages": messages}
+        reasoning = reasoning_param(tier)
+        if reasoning is not None:
+            body["reasoning"] = reasoning
         if sensitive and _env_bool("LLM_SENSITIVE_DENY_DATA_COLLECTION", True):
             provider = dict(body.get("provider") or {})
             provider.setdefault("data_collection", "deny")
             body["provider"] = provider
         can_fall_through = tier == "free" and not sensitive
         try:
-            data, attempts = await _post_with_retries(
+            data, attempts = await _post_with_reasoning_fallback(
                 body, fail_fast_on_429=can_fall_through, timeout=timeout, max_retries=max_retries
             )
             total_attempts += attempts

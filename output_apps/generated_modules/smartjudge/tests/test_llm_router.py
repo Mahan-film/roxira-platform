@@ -55,6 +55,7 @@ class Upstream:
 def env(monkeypatch, tmp_path):
     for key in ("LLM_TIER_FREE", "LLM_TIER_CHEAP", "LLM_TIER_STRONG", "LLM_USAGE_DSN",
                 "REDIS_URL", "REDIS_HOST", "LLM_ROUTER_ENABLED",
+                "LLM_REASONING_CHEAP",
                 "LLM_SENSITIVE_DENY_DATA_COLLECTION"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
@@ -187,7 +188,7 @@ def test_transport_error_is_retried(env):
 def test_4xx_is_not_retried(env):
     up = use(Upstream((400, {"error": {"code": 400, "message": "bad model"}}, None)))
     with pytest.raises(llm_router.LLMRouterError) as info:
-        run(llm_router.complete("cheap", MESSAGES, sensitive=False, temperature=0.3))
+        run(llm_router.complete("strong", MESSAGES, sensitive=False, temperature=0.3))
     assert info.value.status == 400
     assert len(up.requests) == 1
 
@@ -332,3 +333,41 @@ def test_daily_summary_from_jsonl(env):
     assert row["tenant"] == "t1" and row["calls"] == 2
     assert row["prompt_tokens"] == 200
     assert row["cost_usd"] == pytest.approx(0.003)
+
+
+def test_cheap_tier_disables_reasoning_by_default(env):
+    up = use(Upstream((200, ok_body(), None)))
+    run(llm_router.complete("cheap", MESSAGES, sensitive=False, temperature=0.3))
+    assert up.requests[0]["reasoning"] == {"enabled": False}
+
+
+def test_strong_tier_keeps_provider_reasoning_default(env):
+    up = use(Upstream((200, ok_body(), None)))
+    run(llm_router.complete("strong", MESSAGES, sensitive=False, temperature=0.3))
+    assert "reasoning" not in up.requests[0]
+
+
+def test_reasoning_env_default_omits_field_for_cheap(env, monkeypatch):
+    monkeypatch.setenv("LLM_REASONING_CHEAP", "default")
+    up = use(Upstream((200, ok_body(), None)))
+    run(llm_router.complete("cheap", MESSAGES, sensitive=False, temperature=0.3))
+    assert "reasoning" not in up.requests[0]
+
+
+def test_reasoning_env_low_enables_low_effort_for_cheap(env, monkeypatch):
+    monkeypatch.setenv("LLM_REASONING_CHEAP", "low")
+    up = use(Upstream((200, ok_body(), None)))
+    run(llm_router.complete("cheap", MESSAGES, sensitive=False, temperature=0.3))
+    assert up.requests[0]["reasoning"] == {"enabled": True, "effort": "low"}
+
+
+def test_rejected_reasoning_field_is_retried_without_it(env):
+    up = use(Upstream(
+        (400, {"error": {"code": 400, "message": "reasoning not supported"}}, None),
+        (200, ok_body(), None),
+    ))
+    res = run(llm_router.complete("cheap", MESSAGES, sensitive=False, temperature=0.3))
+    assert up.requests[0]["reasoning"] == {"enabled": False}
+    assert "reasoning" not in up.requests[1]
+    assert res.content == "پاسخ"
+    assert res.attempts == 2
