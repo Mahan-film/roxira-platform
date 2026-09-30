@@ -1,0 +1,116 @@
+name: Tech radar weekly
+
+# Issue #93 (split from #92, part 1/3): a weekly technology-radar pass on
+# GitHub Actions. It reuses the existing W9 research entry point
+# (src/automation/tech_radar.py --project-brief, the same path
+# .github/workflows/factory-research.yml drives) instead of adding a second
+# pipeline.
+#
+# Model discipline (config/models.yaml is the only place a model id lives):
+# every per-layer summarization/crawl step runs on the `cheap` role
+# (DeepSeek V4.1 Flash first), and exactly one `strong` call does the final
+# cross-layer comparison/scoring (src/automation/project_brief.py's
+# PROJECT_BRIEF_LAYER_TIER / PROJECT_BRIEF_FINAL_TIER). Neither product role
+# contains an anthropic/claude id, so no Claude model is ever billed here.
+#
+# Cost discipline: --max-usd 1.50 is a hard cap, fail closed. BudgetGuard reads
+# OpenRouter GET /api/v1/key before the run and before every paid step and
+# aborts before the next call would cross the cap; if usage cannot be verified
+# at all the run exits non-zero without spending, and the CLI also exits
+# non-zero on FAILED/DEGRADED. Nothing is posted anywhere -- this workflow
+# only produces the structured result as a workflow artifact.
+#
+# Scope (#93): scheduled run + budget cap only. Persian report formatting and
+# an on-demand trigger are separate issues; this pass deliberately does not
+# render or post a report.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1" # Mondays 05:00 UTC
+  workflow_dispatch:
+    inputs:
+      idea:
+        description: "Project/stack idea to research (default: the weekly platform radar brief)"
+        required: false
+        type: string
+
+concurrency:
+  group: tech-radar-weekly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Hard per-run ceiling (issue #93). This is the ceiling, not the expected
+  # spend; a healthy run costs cents (docs/research/bakeoff.md §1).
+  TECH_RADAR_MAX_USD: "1.50"
+  TECH_RADAR_DEFAULT_IDEA: >-
+    Roxira platform 2026 technology radar: compare and score current and
+    emerging options for each architecture layer (RAG/vector DB, backend,
+    frontend, voice pipeline, infra, observability, security, cost)
+
+jobs:
+  radar:
+    name: Weekly tech radar (project-brief)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install research pipeline dependencies
+        run: |
+          set -euo pipefail
+          # tech_radar.py's call chain (project_brief, llm_router_bridge,
+          # llm_router, web_intelligence, source_adapters, translate,
+          # budget_guard) is stdlib + httpx + PyYAML (model_registry reads
+          # config/models.yaml); no crawlee/playwright needed for this path.
+          pip install "httpx>=0.28.1" "pyyaml>=6.0"
+
+      - name: Verify budget-cap logic offline (no API calls)
+        run: |
+          set -euo pipefail
+          pip install "pytest>=9.1" "pytest-timeout>=2.3"
+          pytest src/automation/test_tech_radar_weekly_budget.py -q
+
+      - name: Run weekly project-brief radar
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
+          TAVILY_KEYS: ${{ secrets.TAVILY_KEYS }}
+          IDEA_INPUT: ${{ github.event.inputs.idea }}
+        run: |
+          set -euo pipefail
+          # IDEA_INPUT comes from a workflow_dispatch input; pass it via env
+          # (never spliced into the script) to avoid shell injection.
+          idea="${IDEA_INPUT:-$TECH_RADAR_DEFAULT_IDEA}"
+          mkdir -p "$RUNNER_TEMP/tech-radar"
+          out="$RUNNER_TEMP/tech-radar/brief.md"
+          python3 -m src.automation.tech_radar \
+            --project-brief "$idea" \
+            --max-usd "$TECH_RADAR_MAX_USD" \
+            --brief-out "$out" \
+            --json > "$RUNNER_TEMP/tech-radar/brief.result.json"
+
+      - name: Upload structured radar output
+        # Artifact only -- never a comment/post. Kept even on a failed run so a
+        # DEGRADED/FAILED cap-abort leaves a diagnostic trace; the JSON never
+        # contains a secret (the pipeline logs/records model ids and cost only).
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tech-radar-weekly-${{ github.run_id }}
+          path: ${{ runner.temp }}/tech-radar/*.json
+          retention-days: 30
+          if-no-files-found: warn
