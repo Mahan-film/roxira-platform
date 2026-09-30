@@ -1,0 +1,75 @@
+#!/bin/zsh
+# rx <issue> [model] [base-branch] — do a GitHub issue with OpenCode on the free-key pool, then open a PR.
+# Network calls to GitHub are retried (this Mac's connection drops HTTP2/graphql calls).
+# Exit codes: 0 PR opened, 1 no changes from any model, 2 usage, 3 ruff gate failed.
+set -eu
+retry()     { local i; for i in 1 2 3 4 5 6; do "$@" && return 0; sleep 5; done; return 1; }
+retry_out() { local i out; for i in 1 2 3 4 5 6; do out=$("$@" 2>/dev/null) && { print -r -- "$out"; return 0; }; sleep 5; done; return 1; }
+[ $# -ge 1 ] || { echo "usage: rx <issue> [model] [base-branch]"; exit 2; }
+n=$1; model=${2:-dsflash}; base=${3:-main}
+repo=~/Developer/roxira-platform; wt=~/Developer/rx-wt/$n; br=issue-$n
+mkdir -p ~/rx-logs; log=~/rx-logs/$n.log; : > "$log"
+retry git -C $repo -c http.version=HTTP/1.1 fetch -q origin
+[ -d $wt ] && git -C $repo worktree remove --force $wt
+git -C $repo worktree prune
+git -C $repo worktree add -q -B $br $wt origin/$base
+cd $wt
+title=$(retry_out gh issue view $n --repo Mahan-film/roxira-platform --json title -q .title)
+body=$(retry_out gh issue view $n --repo Mahan-film/roxira-platform --json body -q .body)
+
+# Size guard: warn only.
+if [ ${#body} -gt 6000 ] || ! print -r -- "$body" | grep -Eq '/[^[:space:]/]*\.[A-Za-z0-9]+'; then
+  echo "rx: WARNING issue may be too large/unspecific for the cheap lane"
+fi
+
+prompt="You are in a git worktree of Mahan-film/roxira-platform. Task = GitHub issue #$n: $title
+
+$body
+
+Rules: edit only files this task needs; never run pytest on src/ or the repo root; never write secrets; model ids only in config/models.yaml; do NOT run git or gh (the wrapper commits). Do not start subagents. Do not read data files under data/. Do not call a shell/bash tool (it does not exist). Write the code with your edit/write tools now; do not only describe it. Stop when the change is complete."
+
+# Fallback chain: start from the given model, then the following ones (max 2 attempts).
+chain=(dsflash dspro codestral)
+if (( ${chain[(Ie)$model]} )); then
+  models=(${chain[${chain[(Ie)$model]},-1]})
+else
+  models=($model dsflash)
+fi
+models=(${models[1,2]})
+
+used=""
+for m in $models; do
+  echo "rx: #$n trying pool/$m"
+  echo "==== rx attempt: pool/$m ====" >> "$log"
+  rc=0
+  opencode run -m pool/$m "$prompt" >> "$log" 2>&1 || rc=$?
+  [ $rc -ne 0 ] && echo "rx: opencode (pool/$m) exited $rc (see $log)"
+  if [ $rc -eq 0 ] && [ -n "$(git status --porcelain)" ]; then used=$m; break; fi
+  [ -n "$(git status --porcelain)" ] && used=$m
+  echo "rx: pool/$m gave no usable result"
+done
+echo "---- rx #$n summary (full log: $log) ----"; tail -n 10 "$log" | cut -c1-170
+if [ -z "$(git status --porcelain)" ]; then echo "rx: no changes for #$n"; exit 1; fi
+echo "rx: result produced by pool/$used"
+model=$used
+
+git add -A
+# Pre-PR gate: catch undefined names / redefinitions / syntax errors in changed Python files.
+pyfiles=(${(f)"$(git diff --cached --name-only --diff-filter=ACMR -- '*.py')"})
+if [ ${#pyfiles} -gt 0 ]; then
+  if python3 -m ruff --version >/dev/null 2>&1; then
+    if ! ruff_out=$(python3 -m ruff check --select F821,F811,E9 $pyfiles 2>&1); then
+      echo "$ruff_out" | tee -a "$log"
+      echo "rx: ruff gate failed for #$n; not committing, no PR"
+      exit 3
+    fi
+  else
+    echo "rx: ruff not installed, skipping gate"
+  fi
+fi
+
+git commit -q -m "$title (closes #$n)"
+retry git -c http.version=HTTP/1.1 push -q -u origin $br
+retry gh pr create --repo Mahan-film/roxira-platform --base main --head $br --title "$title" --body "Closes #$n
+
+Implemented by OpenCode (pool/$model) via rx."
