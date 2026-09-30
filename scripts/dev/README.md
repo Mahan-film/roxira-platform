@@ -1,6 +1,6 @@
 # scripts/dev: rx and rxall
 
-Run a cheap OpenCode worker on a GitHub issue in its own git worktree, then open a PR.
+Run a worker on a GitHub issue in its own git worktree, then open a PR.
 
 Install:
 
@@ -11,9 +11,14 @@ Install:
     rx <issue> [model] [base-branch]
     rxall [-m model] <issue> [<issue> ...]     # max 3 in parallel
 
-- `model`: `dsflash` (default), `dspro`, `codestral`. If a run ends with no
-  changes or opencode fails, rx retries once with the next model in the chain
-  `dsflash -> dspro -> codestral`, and prints which model produced the result.
+- `model`: `codex` (default), `dsflash`, `dspro`, or `codestral`. `codex` uses
+  `codex exec` and the Codex CLI's ChatGPT subscription login—no API key and no
+  Claude quota. The other models run through the OpenCode pool.
+- If a run ends with no changes, fails, or times out, rx retries once with the
+  next model in `codex -> dsflash -> dspro -> codestral`, and prints which model
+  produced the result. If the Codex CLI is unavailable, rx skips `codex`.
+- `RX_TIMEOUT_SECS`: per-worker-attempt timeout in seconds (default `900`). A
+  timed-out worker is stopped and rx continues to the next fallback model.
 - `base-branch`: worktree starts from `origin/<base-branch>` (default `main`),
   so a worker can continue an existing PR branch. The PR still targets `main`
   from `issue-<n>`.
