@@ -61,6 +61,40 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
+
+# Articles 51 and 53–71 were declared invalid by the 1403/11/15 law.
+INVALID_ARTICLES = {
+    "لایحه اصلاحی قانون تجارت": {51, *range(53, 72)},
+    "لایحه قانونی اصلاح قسمتی از قانون تجارت": {51, *range(53, 72)},
+}
+
+
+def filter_records(
+    records: list[dict],
+    drop_inactive: bool = True,
+    invalid_articles: dict[str, set[int]] | None = None,
+) -> tuple[list[dict], list[dict]]:
+    """Split Dotic records into corpus-eligible and excluded records."""
+    invalid_articles = invalid_articles or {}
+    kept: list[dict] = []
+    dropped: list[dict] = []
+
+    for record in records:
+        article_no = str(record.get("article_no", ""))
+        article_part = article_no.split("-", 1)[0]
+        try:
+            article_number = int(article_part)
+        except (TypeError, ValueError):
+            article_number = None
+
+        is_invalid = article_number in invalid_articles.get(record.get("law_name"), set())
+        if (drop_inactive and record.get("is_active") is False) or is_invalid:
+            dropped.append(record)
+        else:
+            kept.append(record)
+
+    return kept, dropped
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
@@ -607,6 +641,11 @@ def main() -> int:
         help="Append to --build's output file instead of overwriting",
     )
     parser.add_argument("--max-chunk-len", type=int, default=DEFAULT_MAX_CHUNK_LEN)
+    parser.add_argument(
+        "--keep-inactive",
+        action="store_true",
+        help="Keep records explicitly marked inactive (default: drop them).",
+    )
     args = parser.parse_args()
 
     if args.upsert:
@@ -635,6 +674,14 @@ def main() -> int:
         records, dropped = build_records_from_parquet(
             args.parquet, max_chunk_len=args.max_chunk_len
         )
+
+    if args.build:
+        records, filtered_dropped = filter_records(
+            records,
+            drop_inactive=not args.keep_inactive,
+            invalid_articles=INVALID_ARTICLES,
+        )
+        print(f"[dotic] dropped {len(filtered_dropped)} inactive/invalid records")
 
     if not args.dry_run and not args.build:
         parser.error("nothing to do: pass --dry-run and/or --build PATH")
