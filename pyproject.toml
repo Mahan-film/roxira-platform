@@ -30,6 +30,8 @@ select = ["E", "F", "I", "UP", "B", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/migrations/*.py" = ["RUF012"]
+# pre-existing: undefined 'app' (issue #122); fix the file, then remove this line
+"src/roxira_manager/main.py" = ["F821"]
 
 [tool.pytest.ini_options]
 testpaths = ["src"]

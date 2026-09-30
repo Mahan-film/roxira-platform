@@ -160,6 +160,27 @@ jobs:
             gh pr comment "$PR" --body "$body"
           fi
 
+  undefined-names:
+    name: Undefined names
+    # Always runs (no change filter), like Frontend gate, so it can be a required
+    # check on every PR. This is the F821/F822/F823 guard for issue #122: a deleted
+    # function whose call sites remained must fail instead of shipping.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: ruff check (undefined names)
+        # Blocking on purpose (no continue-on-error). The two --exclude files do not
+        # parse today (pre-existing, issue #122) and must be fixed or deleted in a
+        # follow-up before this check can drop its excludes.
+        run: |
+          python3 -m pip install ruff && ruff check --select F821,F822,F823 output_apps/generated_modules/smartjudge output_apps/ecosystem_core/src src --exclude output_apps/ecosystem_core/src/crawlers/roxira_factory_core.py --exclude src/legal_intelligence/inject_remaining_corpus.py
+
   pytest:
     name: Pytest (unit)
     needs: changes
