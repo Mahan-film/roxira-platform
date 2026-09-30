@@ -1,0 +1,176 @@
+{
+  "totals": {
+    "laws": 8,
+    "articles": 4216,
+    "active": 4198,
+    "inactive": 18,
+    "bills": 1,
+    "newest_amended_on": "1395-11-10",
+    "newest_approval_date": "1402-06-22"
+  },
+  "warnings": [
+    "نام «لایحه اصلاحی قانون تجارت» شامل «لایحه» است؛ لوایح قانون لازم‌الاجرا نیستند و نباید به‌عنوان قانون در حال اجرا استناد شوند."
+  ],
+  "laws": [
+    {
+      "name": "قانون مدنی",
+      "law_id": "ir-5580",
+      "types": [
+        "CIVIL"
+      ],
+      "type": "CIVIL",
+      "articles": 1334,
+      "active": 1323,
+      "inactive": 11,
+      "newest_amended_on": "1387-11-06",
+      "newest_approval_date": null,
+      "sources": [
+        "dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22"
+      ],
+      "source_urls": [
+        "https://dotic.ir/print/5580"
+      ],
+      "is_bill": false
+    },
+    {
+      "name": "قانون مجازات اسلامی",
+      "law_id": "ir-news-5324",
+      "types": [
+        "CRIMINAL"
+      ],
+      "type": "CRIMINAL",
+      "articles": 735,
+      "active": 735,
+      "inactive": 0,
+      "newest_amended_on": "1395-08-16",
+      "newest_approval_date": null,
+      "sources": [
+        "dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22"
+      ],
+      "source_urls": [
+        "https://dotic.ir:443/news/5324/"
+      ],
+      "is_bill": false
+    },
+    {
+      "name": "قانون آیین دادرسی کیفری",
+      "law_id": "ir-5584",
+      "types": [
+        "PROCEDURE"
+      ],
+      "type": "PROCEDURE",
+      "articles": 706,
+      "active": 704,
+      "inactive": 2,
+      "newest_amended_on": "1395-11-10",
+      "newest_approval_date": null,
+      "sources": [
+        "dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22"
+      ],
+      "source_urls": [
+        "https://dotic.ir/print/5584"
+      ],
+      "is_bill": false
+    },
+    {
+      "name": "قانون آیین دادرسی مدنی",
+      "law_id": null,
+      "types": [
+        "PROCEDURE"
+      ],
+      "type": "PROCEDURE",
+      "articles": 529,
+      "active": 527,
+      "inactive": 2,
+      "newest_amended_on": null,
+      "newest_approval_date": "1379-01-21",
+      "sources": [
+        "owner-supplied file"
+      ],
+      "source_urls": [
+        "https://www.ekhtebar.ir/‌قانون-آیین-دادرسی-مدنی/"
+      ],
+      "is_bill": false
+    },
+    {
+      "name": "قانون تجارت",
+      "law_id": "ir-news-5274",
+      "types": [
+        "COMMERCIAL"
+      ],
+      "type": "COMMERCIAL",
+      "articles": 529,
+      "active": 528,
+      "inactive": 1,
+      "newest_amended_on": "1358-10-26",
+      "newest_approval_date": null,
+      "sources": [
+        "dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22"
+      ],
+      "source_urls": [
+        "https://dotic.ir:443/news/5274/%D9%82%D8%A7%D9%86%D9%88%D9%86-%D8%AA%D8%AC%D8%A7%D8%B1%D8%AA"
+      ],
+      "is_bill": false
+    },
+    {
+      "name": "لایحه اصلاحی قانون تجارت",
+      "law_id": "ir-news-4862",
+      "types": [
+        "COMMERCIAL"
+      ],
+      "type": "COMMERCIAL",
+      "articles": 301,
+      "active": 301,
+      "inactive": 0,
+      "newest_amended_on": "1395-02-20",
+      "newest_approval_date": null,
+      "sources": [
+        "dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22"
+      ],
+      "source_urls": [
+        "https://dotic.ir/news/4862/mabna2"
+      ],
+      "is_bill": true
+    },
+    {
+      "name": "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲",
+      "law_id": null,
+      "types": [
+        "PROCEDURE"
+      ],
+      "type": "PROCEDURE",
+      "articles": 46,
+      "active": 46,
+      "inactive": 0,
+      "newest_amended_on": null,
+      "newest_approval_date": "1402-06-22",
+      "sources": [
+        "owner-supplied file"
+      ],
+      "source_urls": [
+        "https://www.ekhtebar.ir/قانون-شوراهای-حل-اختلاف-مصوب-۱۴۰۲/"
+      ],
+      "is_bill": false
+    },
+    {
+      "name": "قانون صدور چک (اصلاحی ۱۳۹۷)",
+      "law_id": null,
+      "types": [
+        "COMMERCIAL"
+      ],
+      "type": "COMMERCIAL",
+      "articles": 36,
+      "active": 34,
+      "inactive": 2,
+      "newest_amended_on": null,
+      "newest_approval_date": "1355-04-16",
+      "sources": [
+        "owner-supplied file"
+      ],
+      "source_urls": [
+        "https://www.ekhtebar.ir/متن-قانون-چک-با-آخرین-اصلاحات/"
+      ],
+      "is_bill": false
+    }
+  ]
+}
