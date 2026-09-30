@@ -181,6 +181,20 @@ jobs:
         run: |
           python3 -m pip install ruff && ruff check --select F821,F822,F823 output_apps/generated_modules/smartjudge output_apps/ecosystem_core/src src --exclude output_apps/ecosystem_core/src/crawlers/roxira_factory_core.py --exclude src/legal_intelligence/inject_remaining_corpus.py
 
+  system-inventory:
+    name: System inventory up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # If this fails, run `python3 scripts/gen_system_inventory.py` and commit docs/SYSTEM_INVENTORY.generated.md.
+      - run: python3 -m pip install pyyaml && python3 scripts/gen_system_inventory.py --check
+
   pytest:
     name: Pytest (unit)
     needs: changes
