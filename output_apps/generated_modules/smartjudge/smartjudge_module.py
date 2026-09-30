@@ -4120,7 +4120,16 @@ async def draft_template(
 #   خودکار استناد نامعتبر با متن رسمی مصوب یا درج نشان ``[فاقد تطابق رسمی]``.
 # ==============================================================================
 CITATION_GUARD_VERSION = "1.0"
-CITATION_QDRANT_COLLECTION = "iran_laws_bge_m3"
+CITATION_QDRANT_COLLECTION_DEFAULT = "iran_laws_bge_m3"
+
+
+def _resolve_citation_collection(environ=None) -> str:
+    """Collection name reported by the guard; env ROXIRA_CITATION_QDRANT_COLLECTION, default unchanged."""
+    env = os.environ if environ is None else environ
+    return (env.get("ROXIRA_CITATION_QDRANT_COLLECTION") or "").strip() or CITATION_QDRANT_COLLECTION_DEFAULT
+
+
+CITATION_QDRANT_COLLECTION = _resolve_citation_collection()
 CITATION_MISMATCH_FLAG = "[فاقد تطابق رسمی]"
 CITATION_GUARD_QDRANT_ENABLED = os.environ.get("ROXIRA_CITATION_GUARD_QDRANT", "1") != "0"
 CITATION_QDRANT_TIMEOUT = float(os.environ.get("ROXIRA_CITATION_QDRANT_TIMEOUT", "1.5"))
