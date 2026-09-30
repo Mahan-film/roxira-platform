@@ -9,9 +9,8 @@ the rows per law, and writes two artifacts with identical numbers:
 
 Per law it reports: name, type, article (row) count, active/inactive counts,
 newest ``amended_on`` and ``approval_date`` (Jalali, compared numerically), and
-the distinct sources. A warning is emitted for any law whose name contains
-«لایحه» (a bill is not an enacted, in-force law -- see
-docs/LEGAL_COVERAGE_ROADMAP.md risk R1).
+the distinct sources. A warning is emitted for bills whose name contains «لایحه»,
+except for enacted laws that retain «لایحه» in their historical titles.
 
 Usage:
     python3 scripts/legal_coverage_report.py
@@ -43,6 +42,11 @@ _DIGIT_TABLE = str.maketrans(
 )
 
 BILL_MARKER = "لایحه"
+ENACTED_DESPITE_TITLE = (
+    "لایحه اصلاحی قانون تجارت",
+    "لایحه قانونی اصلاح قسمتی از قانون تجارت",
+    "لایحه قانونی استقلال کانون وکلای دادگستری",
+)
 
 
 def load_records(data_dir: pathlib.Path) -> list[dict[str, Any]]:
@@ -159,7 +163,15 @@ def build_manifest(records: list[dict[str, Any]]) -> dict[str, Any]:
     law_rows: list[dict[str, Any]] = []
     warnings: list[str] = []
     for name, entry in laws.items():
-        is_bill = BILL_MARKER in name
+        is_bill = BILL_MARKER in name and not any(
+            enacted_name in name for enacted_name in ENACTED_DESPITE_TITLE
+        )
+        if any(commerce_law in name for commerce_law in ENACTED_DESPITE_TITLE[:2]):
+            warnings.append(
+                f"«{name}» قانون لازم‌الاجرا است (مصوب کمیسیون مشترک مجلسین)؛ "
+                "مواد ۵۱ و ۵۳ تا ۷۱ آن طبق قانون ۱۴۰۳/۱۱/۱۵ نامعتبر اعلام شده "
+                "و باید از پایگاه حذف شود."
+            )
         row = {
             "name": name,
             "law_id": entry["law_id"],

@@ -112,11 +112,44 @@ def test_per_law_counts_and_dates(sample_records):
     assert bill["is_bill"] is True
 
 
-def test_bill_warning_emitted(sample_records):
-    manifest = report.build_manifest(sample_records)
-    assert len(manifest["warnings"]) == 1
-    assert "لایحه ب" in manifest["warnings"][0]
-    assert "لایحه" in manifest["warnings"][0]
+def test_bill_warning_emitted():
+    commerce_name = "لایحه اصلاحی قانون تجارت"
+    commerce_manifest = report.build_manifest(
+        [
+            _row(
+                commerce_name,
+                "COMMERCIAL",
+                "1",
+                True,
+                None,
+                None,
+                "dotic via HF snapshot",
+            )
+        ]
+    )
+    commerce_row = commerce_manifest["laws"][0]
+    assert commerce_row["is_bill"] is False
+    assert commerce_manifest["totals"]["bills"] == 0
+    assert commerce_manifest["warnings"] == [
+        "«لایحه اصلاحی قانون تجارت» قانون لازم‌الاجرا است (مصوب کمیسیون مشترک مجلسین)؛ "
+        "مواد ۵۱ و ۵۳ تا ۷۱ آن طبق قانون ۱۴۰۳/۱۱/۱۵ نامعتبر اعلام شده و باید از پایگاه حذف شود."
+    ]
+
+    unknown_manifest = report.build_manifest(
+        [
+            _row(
+                "لایحه آزمایشی",
+                "COMMERCIAL",
+                "1",
+                True,
+                None,
+                None,
+                "dotic via HF snapshot",
+            )
+        ]
+    )
+    assert unknown_manifest["laws"][0]["is_bill"] is True
+    assert unknown_manifest["totals"]["bills"] == 1
 
 
 def test_manifest_contains_source_tiers(sample_records):

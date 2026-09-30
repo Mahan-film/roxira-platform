@@ -307,6 +307,11 @@ _PAYLOAD_TEXT_KEYS = (
     "law_name",
 )
 _TOKEN_RE = re.compile(r"[\w\u0600-\u06FF]+", re.UNICODE)
+_ENACTED_DESPITE_TITLE = (
+    "لایحه اصلاحی قانون تجارت",
+    "لایحه قانونی اصلاح قسمتی از قانون تجارت",
+    "لایحه قانونی استقلال کانون وکلای دادگستری",
+)
 
 # مسیر اصلی اکنون جست‌وجوی برداری واقعی است (پایین‌تر: ``_try_vector_search``)؛
 # این ثابت فقط برای مسیر اضطراری scroll به کار می‌رود — وقتی مدل embedding
@@ -401,7 +406,10 @@ def _payload_to_row(
         # (مثل eval_legal_rag.py) که نباید همیشه با regex متن را بکاوند.
         "article_no": article_no,
         "law_name": law_name,
-        "is_bill": "لایحه" in str(law_name or ""),
+        "is_bill": "لایحه" in str(law_name or "") and not any(
+            enacted_name in str(law_name or "")
+            for enacted_name in _ENACTED_DESPITE_TITLE
+        ),
     }
 
 

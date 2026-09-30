@@ -347,8 +347,18 @@ class TestMergeWithVectorPath:
 
 class TestIsBill:
     def test_flag(self) -> None:
-        assert le._payload_to_row(TRADE_BILL_5)["is_bill"] is True
+        for enacted_name in (
+            "لایحه اصلاحی قانون تجارت",
+            "لایحه قانونی اصلاح قسمتی از قانون تجارت",
+            "لایحه قانونی استقلال کانون وکلای دادگستری",
+        ):
+            assert le._payload_to_row(
+                {**TRADE_BILL_5, "law_name": enacted_name}
+            )["is_bill"] is False
         assert le._payload_to_row(COMMERCIAL_5)["is_bill"] is False
+        assert le._payload_to_row(
+            {**TRADE_BILL_5, "law_name": "لایحه آزمایشی"}
+        )["is_bill"] is True
 
     def test_trade_code_not_bill(self) -> None:
         assert le.recognize_law_name("ماده ۵ قانون تجارت") == "قانون تجارت"

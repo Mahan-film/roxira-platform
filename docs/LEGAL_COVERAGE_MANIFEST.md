@@ -10,25 +10,33 @@
 | Articles (rows) | 4216 |
 | Active | 4198 |
 | Inactive | 18 |
-| Bills (لوایح) | 1 |
+| Bills (لوایح) | 0 |
 | Newest amendment date | 1395-11-10 |
 | Newest approval date | 1402-06-22 |
 
 ## هشدارها
 
-> ⚠️ نام «لایحه اصلاحی قانون تجارت» شامل «لایحه» است؛ لوایح قانون لازم‌الاجرا نیستند و نباید به‌عنوان قانون در حال اجرا استناد شوند.
+> ⚠️ متن «قانون مدنی» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود.
+> ⚠️ متن «قانون آیین دادرسی کیفری» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود.
+> ⚠️ «لایحه اصلاحی قانون تجارت» قانون لازم‌الاجرا است (مصوب کمیسیون مشترک مجلسین)؛ مواد ۵۱ و ۵۳ تا ۷۱ آن طبق قانون ۱۴۰۳/۱۱/۱۵ نامعتبر اعلام شده و باید از پایگاه حذف شود.
+> ⚠️ متن «لایحه اصلاحی قانون تجارت» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود.
+> ⚠️ متن «قانون تجارت» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود.
+> ⚠️ متن «قانون مجازات اسلامی» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود.
+> ⚠️ متن «قانون آیین دادرسی مدنی» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود.
+> ⚠️ متن «قانون صدور چک (اصلاحی ۱۳۹۷)» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود.
+> ⚠️ متن «قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲» از منبع غیررسمی است و باید با متن رسمی تطبیق داده شود.
 
 ## پوشش به تفکیک قانون
 
-| Law | Type | Articles | Active | Inactive | Latest amendment | Approval date | Source |
-| --- | --- | ---: | ---: | ---: | --- | --- | --- |
-| قانون مدنی | CIVIL | 1334 | 1323 | 11 | 1387-11-06 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 |
-| قانون مجازات اسلامی | CRIMINAL | 735 | 735 | 0 | 1395-08-16 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 |
-| قانون آیین دادرسی کیفری | PROCEDURE | 706 | 704 | 2 | 1395-11-10 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 |
-| قانون آیین دادرسی مدنی | PROCEDURE | 529 | 527 | 2 | - | 1379-01-21 | owner-supplied file |
-| قانون تجارت | COMMERCIAL | 529 | 528 | 1 | 1358-10-26 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 |
-| لایحه اصلاحی قانون تجارت (لایحه) | COMMERCIAL | 301 | 301 | 0 | 1395-02-20 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 |
-| قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ | PROCEDURE | 46 | 46 | 0 | - | 1402-06-22 | owner-supplied file |
-| قانون صدور چک (اصلاحی ۱۳۹۷) | COMMERCIAL | 36 | 34 | 2 | - | 1355-04-16 | owner-supplied file |
+| Law | Type | Articles | Active | Inactive | Latest amendment | Approval date | Source | Tier |
+| --- | --- | ---: | ---: | ---: | --- | --- | --- | --- |
+| قانون مدنی | CIVIL | 1334 | 1323 | 11 | 1387-11-06 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 | unknown |
+| قانون مجازات اسلامی | CRIMINAL | 735 | 735 | 0 | 1395-08-16 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 | unknown |
+| قانون آیین دادرسی کیفری | PROCEDURE | 706 | 704 | 2 | 1395-11-10 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 | unknown |
+| قانون آیین دادرسی مدنی | PROCEDURE | 529 | 527 | 2 | - | 1379-01-21 | owner-supplied file | unknown |
+| قانون تجارت | COMMERCIAL | 529 | 528 | 1 | 1358-10-26 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 | unknown |
+| لایحه اصلاحی قانون تجارت | COMMERCIAL | 301 | 301 | 0 | 1395-02-20 | - | dotic via HF endomorphosis/ipfs_iran_laws snapshot 2026-09-22 | unknown |
+| قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ | PROCEDURE | 46 | 46 | 0 | - | 1402-06-22 | owner-supplied file | unknown |
+| قانون صدور چک (اصلاحی ۱۳۹۷) | COMMERCIAL | 36 | 34 | 2 | - | 1355-04-16 | owner-supplied file | unknown |
 
 > هیچ خروجی این سامانه مشاوره حقوقی نیست تا زمانی که وکیل رسمی ایرانی آن را بازبینی کند.
