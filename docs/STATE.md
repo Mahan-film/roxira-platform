@@ -1,6 +1,6 @@
 # Current state (read this first)
 
-Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: domains, server, keys by name, toolchain, permissions). `docs/STRATEGY.md` explains **why**. Every chat updates this file through `/handoff`. Keep it under 100 lines. Last update: 2026-09-30 evening (hub).
+Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: domains, server, keys by name, toolchain, permissions). `docs/STRATEGY.md` explains **why**. Every chat updates this file through `/handoff`. Keep it under 100 lines. Last update: 2026-09-30 late (hub).
 
 ## Roles and lanes (ADR `docs/decisions/0003-agent-operating-model.md`)
 - The hub chat is the control room: strategy, issue specs, diff review, merge. It does not implement product code.
@@ -10,7 +10,7 @@ Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: doma
 - Owner rules (memory): test every link/command before presenting it; research anything the owner names (and alternatives) first-hand on several sites; disagree only with evidence; the lawyer gets only hard questions that search cannot settle.
 
 ## Live and working (prod `5.75.200.67`)
-- Prod runs commit **64478f3**. Merged but NOT deployed: #135 (cheap tier reasoning off), #149 (exact article lookup), #150 (`/coverage` page), #151, #146 (chat declutter), #171 (commerce act is enacted law) and docs/scripts. The assistant's ssh writes are blocked by the app's permission classifier: the owner deploys (STRATEGY §7) or adds an ssh allow rule.
+- **Prod is half-deployed (2026-09-30 15:09 UTC):** the owner ran `git pull` there, so the repo on disk is at 66431cf, but `scripts/ops/deploy.sh enterprise_app` stopped at "working tree is not clean" (three untracked `.env.bak.*` files). No container was recreated; `output_apps/` is bind-mounted into `roxira_app_prod`, so new code is on disk while the running process is the old one (health was 200). Pending in that deploy: #135, #149, #151, #171, #176, #177 (app) and #150, #146 (frontend, separate deploy). The assistant cannot run ssh writes or edit Claude Code permission settings (both refused by the app's classifier): the owner runs deploy commands or adds `Bash(ssh 5.75.200.67:*)` via `/permissions`.
 - Site https://ghazihoushmand.ir: Zibal payments, SMS OTP login, STT/TTS voice, `/health` 200. Details in SYSTEM_MAP §1-3.
 - Keys: prod `roxira-prod-chat` ($3/day); `roxira-agent` for GitHub and the Mac ($4/day, set back to $2). Only ONE Actions secret exists (`OPENROUTER_AGENT_KEY`): workflows that want search keys or `OPENROUTER_RESEARCH_KEY` get empty values (incl. `tech-radar-weekly.yml`, merged in #96, runs Mondays, $1.50 cap).
 - CI: required checks Detect changes, Secret scan, Pytest (unit), Frontend gate; new jobs `Undefined names` (#154) and `System inventory up to date` (#166) are not yet in the required list (owner adds them in the ruleset).
@@ -26,9 +26,9 @@ Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: doma
 - Still to fetch: rent 1362 and 1376, social security (+ regulations), registration 1310 (id 92284; 91802 is the 1308 law), civil procedure 1379, cheque (base + 1397 + 1400), dispute councils 1402, re-fetch of all 8 served laws from the official source. «کاهش مجازات حبس تعزیری» needs a special splitter (it quotes penal-code article numbers).
 
 ## Waiting on the owner
-1. Deploy: `git checkout` the 2 radar files on prod, `git pull --ff-only`, then `scripts/ops/deploy.sh enterprise_app` (never run on prod before) and a frontend deploy. One command is in the 2026-09-30 chat.
-2. OmniRoute onboarding (above). Decide whether to keep it after a real comparison with LiteLLM.
-3. PR #167 (agent-automerge skips non-agent PRs): touches the auto-merge workflow, needs the owner's eyes.
+1. Finish the deploy: `ssh 5.75.200.67 'mkdir -p /root/env-backups && cd /opt/roxira_platform && mv .env.bak.* /root/env-backups/ && git status --short && scripts/ops/deploy.sh enterprise_app'`, then the frontend deploy; verify /health and an exact lookup.
+2. OmniRoute onboarding (above; alternative: recreate the container with the owner's own `-e INITIAL_PASSWORD=...`, untested). Decide whether to keep it after a real comparison with LiteLLM.
+3. Send (or not) the five expert questions at the end of `docs/LEGAL_RESEARCH_ROUND2_2026-09-30.md` to the lawyer.
 4. Approve the first official ingest into Qdrant (prod write) once the staged laws are complete.
 5. DB fixes: order 4815502353 paid but `pending`; revoke fake user `authenticated_user`; SINGLE_DRAFT credits (#101).
 6. Server housekeeping: kernel reboot, old `.env.bak.*`, nginx-recreate window.
@@ -37,7 +37,7 @@ Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: doma
 ## Next workstreams
 | Id | What | Lane |
 | --- | --- | --- |
-| W25 | Fetch remaining official texts, drop inactive rows, remove commerce arts 51/53-71, special splitter for the 1399 law, jurisdiction rules as data (`config/jurisdiction_rules.yaml`), unification rulings (Phase 4 first item) | rx (codex) |
+| W25 | Fetch remaining official texts and rebuild the staged JSONL with the new ingest filters (#177 drops inactive rows and commerce arts 51/53-71), special splitter for the 1399 law, wire `config/jurisdiction_rules.yaml` (#176; only the peace-court threshold is `confirmed`) into answers after the lawyer's reply, unification rulings (Phase 4 first item) | rx (codex) |
 | W26b | Design tokens + visual pass (separate Sonnet chat started 2026-09-30; status unknown to this chat) | chat |
 | infra | OmniRoute vs LiteLLM comparison on one real issue; rx timeout/fallback paths never exercised; eval_cheap_tier needs a stable network (Mac run had >20% API errors) | rx |
 | misc | #99, #77, #113, #67, #66, #84 voice, #94/#95 research, #74 e2e (red) | rx |
