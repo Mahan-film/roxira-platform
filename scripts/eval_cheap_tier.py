@@ -41,6 +41,15 @@ issue #119 — شکست بلند (fail loudly): خطاهای API هر مدل ش�
 از ۲۰٪ بگذرد، با کد خروج ۲ و بنر خطا اجرا شکست می‌خورد. در هیچ اجرایی که خطا
 دارد مدلی پیشنهاد نمی‌شود. اگر خطای گواهی SSL تشخیص داده شود، راهنمای
 ``export SSL_CERT_FILE=...`` چاپ می‌شود.
+
+issue #133 — مدل‌های reasoning: مدل‌های استدلالی (مثل
+deepseek/deepseek-v4-flash و v4.1-flash) با ``max_tokens`` کوچک کل بودجه را صرف
+استدلال پنهان می‌کنند و محتوای خالی با ``finish_reason=length`` برمی‌گردانند.
+پرچم ``--reasoning {off,low,default}`` (پیش‌فرض ``off``) فیلد ``reasoning`` را
+فقط وقتی مقدار ``default`` نباشد می‌فرستد. پاسخ خالی با برچسب
+``EMPTY (finish_reason=..)`` ثبت می‌شود (نه «unknown error») و در ستون ``empty``
+جدول شمرده می‌شود. برای خطاهای HTTP، متن بدنهٔ پاسخ (۳۰۰ کاراکتر اول) چاپ
+می‌شود و کلید هرگز در پیام خطا قرار نمی‌گیرد.
 """
 
 from __future__ import annotations
@@ -72,6 +81,13 @@ DEFAULT_N = 30
 DEFAULT_BUDGET_USD = 1.00
 DEFAULT_MAX_TOKENS = 800
 DEFAULT_CALL_TIMEOUT_S = 60.0
+# issue #133: پیش‌فرض ``off`` است تا مدل‌های reasoning بودجه را صرف استدلال
+# پنهان نکنند و پاسخ خالی برنگردانند.
+DEFAULT_REASONING = "off"
+REASONING_CHOICES = ("off", "low", "default")
+# متن بدنهٔ خطای HTTP که در پیام خطا نگه داشته می‌شود (کلید هرگز بخشی از آن
+# نیست؛ فقط بدنهٔ پاسخ سرور است).
+HTTP_ERROR_BODY_LIMIT = 300
 # آستانهٔ تصمیم issue #104: ارزان‌ترین مدلی که به این نسبت از نرخ اصابت بهترین
 # مدل برسد پیشنهاد می‌شود.
 BEST_HIT_RATE_RATIO = 0.9
@@ -101,6 +117,7 @@ class AnswerResult:
     completion_tokens: int
     cost_usd: float
     error: str | None = None
+    empty: bool = False
 
 
 @dataclass
@@ -113,6 +130,7 @@ class ModelReport:
     cost_per_100_answers: float
     total_cost_usd: float
     n_errors: int = 0
+    n_empty: int = 0
     first_error: str | None = None
     results: list[AnswerResult] = field(default_factory=list)
 
@@ -152,27 +170,57 @@ def is_ssl_cert_error(message: str | None) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def http_error_body(exc: urllib.error.HTTPError, limit: int = HTTP_ERROR_BODY_LIMIT) -> str:
+    """بدنهٔ پاسخ خطای HTTP را (حداکثر ``limit`` کاراکتر) برمی‌گرداند.
+
+    این متن *بدنهٔ پاسخ سرور* است و هرگز شامل کلید API (که فقط در هدر درخواست
+    بوده) نمی‌شود. در صورت عدم دسترسی به بدنه، رشتهٔ خالی برمی‌گردد."""
+    try:
+        raw = exc.read()
+    except Exception:
+        return ""
+    if not raw:
+        return ""
+    text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+    return text[:limit]
+
+
+def _reasoning_field(reasoning: str) -> dict[str, Any] | None:
+    """فیلد ``reasoning`` درخواست OpenRouter برای حالت‌های issue #133.
+
+    ``off`` -> ``{"enabled": false}``؛ ``low`` -> ``{"effort": "low"}``؛
+    ``default`` -> ``None`` (فیلد اصلاً فرستاده نمی‌شود)."""
+    if reasoning == "off":
+        return {"enabled": False}
+    if reasoning == "low":
+        return {"effort": "low"}
+    return None
+
+
 def call_model(
     question: str,
     api_key: str,
     model: str,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     timeout: float = DEFAULT_CALL_TIMEOUT_S,
+    reasoning: str = DEFAULT_REASONING,
 ) -> tuple[str | None, dict[str, Any]]:
     """POST به OpenRouter. در خطای شبکه/تجزیه هرگز استثنا نمی‌اندازد؛
     ``(None, {"error": ...})`` برمی‌گرداند تا یک فراخوانی بد کل اجرا را
     متوقف نکند."""
-    body = json.dumps(
-        {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": question},
-            ],
-            "temperature": 0,
-            "max_tokens": max_tokens,
-        }
-    ).encode("utf-8")
+    request_body: dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": question},
+        ],
+        "temperature": 0,
+        "max_tokens": max_tokens,
+    }
+    reasoning_field = _reasoning_field(reasoning)
+    if reasoning_field is not None:
+        request_body["reasoning"] = reasoning_field
+    body = json.dumps(request_body).encode("utf-8")
     req = urllib.request.Request(OPENROUTER_CHAT_URL, data=body, method="POST")
     req.add_header("Authorization", f"Bearer {api_key}")
     req.add_header("Content-Type", "application/json")
@@ -181,6 +229,14 @@ def call_model(
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        # HTTPError زیرکلاس URLError است، پس باید پیش‌تر گرفته شود. متن بدنهٔ
+        # پاسخ را برای تشخیص (مثلاً 404 «ZDR violation») نگه می‌داریم.
+        body_text = http_error_body(exc)
+        error = f"HTTPError: {exc.code} {exc.reason}"
+        if body_text:
+            error = f"{error} — {body_text}"
+        return None, {"error": error, "latency_ms": (time.time() - t0) * 1000.0}
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
         return None, {
             "error": f"{type(exc).__name__}: {exc}",
@@ -189,7 +245,9 @@ def call_model(
 
     latency_ms = (time.time() - t0) * 1000.0
     try:
-        content = payload["choices"][0]["message"]["content"]
+        choice = payload["choices"][0]
+        content = choice["message"]["content"]
+        finish_reason = choice.get("finish_reason")
     except (KeyError, IndexError, TypeError):
         return None, {"error": f"no message content: {payload!r}", "latency_ms": latency_ms}
 
@@ -203,6 +261,13 @@ def call_model(
         "cost_usd": float(usage_raw["cost"]) if usage_raw.get("cost") is not None else None,
         "latency_ms": latency_ms,
     }
+    # issue #133: پاسخ خالی (None یا "") را با برچسب EMPTY ثبت می‌کنیم نه
+    # «unknown error»؛ finish_reason معمولاً length است چون بودجه صرف استدلال
+    # پنهان شده. usage واقعی (توکن/هزینه) حفظ می‌شود.
+    if not content:
+        usage["error"] = f"EMPTY (finish_reason={finish_reason})"
+        usage["empty"] = True
+        return None, usage
     return content, usage
 
 
@@ -248,6 +313,7 @@ def estimate_cost_usd(usage: dict[str, Any], model_id: str) -> float:
 def summarize_model(model: str, results: list[AnswerResult]) -> ModelReport:
     n = len(results)
     n_errors = sum(1 for r in results if r.error is not None)
+    n_empty = sum(1 for r in results if r.empty)
     n_ok = n - n_errors
     n_cited = sum(1 for r in results if r.cited and r.error is None)
     latencies = [r.latency_ms for r in results if r.error is None]
@@ -266,6 +332,7 @@ def summarize_model(model: str, results: list[AnswerResult]) -> ModelReport:
         cost_per_100_answers=round(cost_per_100, 6),
         total_cost_usd=round(total_cost, 6),
         n_errors=n_errors,
+        n_empty=n_empty,
         first_error=first_error,
         results=results,
     )
@@ -277,6 +344,7 @@ def run_eval(
     api_key: str,
     budget_usd: float = DEFAULT_BUDGET_USD,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    reasoning: str = DEFAULT_REASONING,
 ) -> tuple[list[ModelReport], float, bool]:
     """هر مدل را روی پرسش‌ها اجرا می‌کند. بودجهٔ ``budget_usd`` برای کل اجرا
     (همهٔ مدل‌ها) انباشته می‌شود؛ به‌محض عبور از بودجه اجرا متوقف و
@@ -289,7 +357,7 @@ def run_eval(
         results: list[AnswerResult] = []
         for row in questions:
             content, usage = call_model(
-                row["question"], api_key, model, max_tokens=max_tokens
+                row["question"], api_key, model, max_tokens=max_tokens, reasoning=reasoning
             )
             cost = estimate_cost_usd(usage, model)
             spent += cost
@@ -300,10 +368,11 @@ def run_eval(
                         question_id=row["id"],
                         cited=False,
                         latency_ms=usage.get("latency_ms") or 0.0,
-                        prompt_tokens=0,
-                        completion_tokens=0,
+                        prompt_tokens=usage.get("prompt_tokens") or 0,
+                        completion_tokens=usage.get("completion_tokens") or 0,
                         cost_usd=cost,
                         error=usage.get("error", "unknown error"),
+                        empty=bool(usage.get("empty")),
                     )
                 )
             else:
@@ -363,15 +432,16 @@ def render_markdown(
     lines.append("")
     lines.append(
         "| model | citation hit-rate | median latency (ms) | "
-        "cost / 100 answers (USD) | errors |"
+        "cost / 100 answers (USD) | errors | empty |"
     )
-    lines.append("| --- | ---: | ---: | ---: | ---: |")
+    lines.append("| --- | ---: | ---: | ---: | ---: | ---: |")
     for r in reports:
         errors_cell = f"ERRORS {r.n_errors}/{r.n}" if r.n_errors else "—"
+        empty_cell = str(r.n_empty) if r.n_empty else "—"
         lines.append(
             f"| `{r.model}` | {r.hit_rate:.1%} ({r.n_cited}/{r.n_ok}) | "
             f"{r.median_latency_ms:.0f} | ${r.cost_per_100_answers:.4f} | "
-            f"{errors_cell} |"
+            f"{errors_cell} | {empty_cell} |"
         )
     lines.append("")
     lines.append(f"total run cost: ${spent:.4f}")
@@ -429,6 +499,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--max-tokens", type=int, default=DEFAULT_MAX_TOKENS, help="max_tokens per call (800)"
     )
+    ap.add_argument(
+        "--reasoning",
+        choices=REASONING_CHOICES,
+        default=DEFAULT_REASONING,
+        help=(
+            "reasoning-model handling: 'off' sends {\"enabled\": false} (default), "
+            "'low' sends {\"effort\": \"low\"}, 'default' sends no reasoning field"
+        ),
+    )
     args = ap.parse_args(argv)
 
     if args.n < 1:
@@ -456,7 +535,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     reports, spent, exceeded = run_eval(
-        models, questions, api_key, budget_usd=args.budget_usd, max_tokens=args.max_tokens
+        models,
+        questions,
+        api_key,
+        budget_usd=args.budget_usd,
+        max_tokens=args.max_tokens,
+        reasoning=args.reasoning,
     )
     print(render_markdown(reports, spent, exceeded))
 

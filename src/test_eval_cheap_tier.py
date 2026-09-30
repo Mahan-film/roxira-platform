@@ -13,6 +13,7 @@ the key-presence check passes.
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
 import urllib.error
@@ -168,6 +169,152 @@ def test_call_model_handles_missing_content(monkeypatch):
     content, usage = eval_cheap_tier.call_model("سؤال", "dummy-key", "vendor/model")
     assert content is None
     assert "no message content" in usage["error"]
+
+
+# ---------------------------------------------------------------------------
+# issue #133 — reasoning flag
+# ---------------------------------------------------------------------------
+
+
+def test_call_model_reasoning_off_sends_enabled_false(monkeypatch):
+    captured = {}
+
+    def handler(body):
+        captured.update(body)
+        return _chat_payload("ماده ۳۳۶", cost=0.0)
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    eval_cheap_tier.call_model("سؤال", "dummy-key", "vendor/model", reasoning="off")
+    assert captured["reasoning"] == {"enabled": False}
+
+
+def test_call_model_reasoning_low_sends_effort(monkeypatch):
+    captured = {}
+
+    def handler(body):
+        captured.update(body)
+        return _chat_payload("ماده ۳۳۶", cost=0.0)
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    eval_cheap_tier.call_model("سؤال", "dummy-key", "vendor/model", reasoning="low")
+    assert captured["reasoning"] == {"effort": "low"}
+
+
+def test_call_model_reasoning_default_omits_field(monkeypatch):
+    captured = {}
+
+    def handler(body):
+        captured.update(body)
+        return _chat_payload("ماده ۳۳۶", cost=0.0)
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    eval_cheap_tier.call_model("سؤال", "dummy-key", "vendor/model", reasoning="default")
+    assert "reasoning" not in captured
+
+
+def test_run_eval_passes_reasoning_to_every_call(monkeypatch):
+    seen = []
+
+    def handler(body):
+        seen.append(body.get("reasoning"))
+        return _chat_payload("ماده ۳۳۶", cost=0.0)
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    eval_cheap_tier.run_eval(
+        ["vendor/model"], QUESTIONS, "dummy-key", budget_usd=10.0, reasoning="low"
+    )
+    assert seen == [{"effort": "low"}, {"effort": "low"}]
+
+
+# ---------------------------------------------------------------------------
+# issue #133 — empty content + HTTP error body
+# ---------------------------------------------------------------------------
+
+
+def _empty_payload(finish_reason: str = "length", completion_tokens: int = 300):
+    return {
+        "model": "vendor/model",
+        "choices": [
+            {"message": {"content": None}, "finish_reason": finish_reason}
+        ],
+        "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": completion_tokens,
+            "cost": 0.0001,
+        },
+    }
+
+
+def test_call_model_empty_content_is_recorded_as_empty(monkeypatch):
+    _install_http(eval_cheap_tier, monkeypatch, lambda body: _empty_payload())
+    content, usage = eval_cheap_tier.call_model(
+        "سؤال", "dummy-key", "vendor/model", reasoning="default"
+    )
+    assert content is None
+    assert usage["error"] == "EMPTY (finish_reason=length)"
+    assert usage["empty"] is True
+    # real usage is preserved so cost/budget accounting stays honest
+    assert usage["completion_tokens"] == 300
+
+
+def test_call_model_empty_content_empty_string_also_empty(monkeypatch):
+    def handler(body):
+        payload = _empty_payload(finish_reason="stop")
+        payload["choices"][0]["message"]["content"] = ""
+        return payload
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    content, usage = eval_cheap_tier.call_model("سؤال", "dummy-key", "vendor/model")
+    assert content is None
+    assert usage["error"] == "EMPTY (finish_reason=stop)"
+    assert usage["empty"] is True
+
+
+def test_call_model_http_error_includes_body_not_key(monkeypatch):
+    body = json.dumps({"error": {"message": "ZDR violation (account settings)"}}).encode()
+
+    def handler(body_dict):
+        raise urllib.error.HTTPError(
+            "https://openrouter.ai/api/v1/chat/completions",
+            404,
+            "Not Found",
+            {},
+            io.BytesIO(body),
+        )
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    content, usage = eval_cheap_tier.call_model("سؤال", "dummy-key", "vendor/model")
+    assert content is None
+    assert "404" in usage["error"]
+    assert "ZDR violation" in usage["error"]
+    assert "dummy-key" not in usage["error"]
+
+
+def test_http_error_body_is_truncated(monkeypatch):
+    body = json.dumps({"error": {"message": "x" * 1000}}).encode()
+
+    def handler(body_dict):
+        raise urllib.error.HTTPError("https://x", 500, "Server Error", {}, io.BytesIO(body))
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    content, usage = eval_cheap_tier.call_model("سؤال", "dummy-key", "vendor/model")
+    assert content is None
+    # error prefix + at most 300 chars of body
+    assert len(usage["error"]) <= len("HTTPError: 500 Server Error — ") + 300
+
+
+def test_run_eval_counts_empty_answers_in_empty_column(monkeypatch):
+    _install_http(eval_cheap_tier, monkeypatch, lambda body: _empty_payload())
+    reports, spent, exceeded = eval_cheap_tier.run_eval(
+        ["vendor/model"], QUESTIONS, "dummy-key", budget_usd=10.0, reasoning="default"
+    )
+    report = reports[0]
+    assert report.n_empty == 2
+    assert report.n_errors == 2
+    assert report.n_ok == 0
+    markdown = eval_cheap_tier.render_markdown(reports, spent, exceeded)
+    assert "empty" in markdown
+    assert "EMPTY (finish_reason=length)" in markdown
 
 
 # ---------------------------------------------------------------------------
@@ -520,6 +667,78 @@ def test_main_error_rate_below_threshold_still_exits_0(monkeypatch, tmp_path, ca
     assert "ERRORS 1/10" in captured.out
     # a run with any errors still must not recommend a model
     assert "(none)" in captured.out
+
+
+def test_main_http_error_prints_body_and_never_the_key(monkeypatch, tmp_path, capsys):
+    eval_path = _write_eval_set(tmp_path)
+    body = json.dumps({"error": {"message": "ZDR violation (account settings)"}}).encode()
+
+    def handler(body_dict):
+        raise urllib.error.HTTPError(
+            "https://openrouter.ai/api/v1/chat/completions",
+            404,
+            "Not Found",
+            {},
+            io.BytesIO(body),
+        )
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
+
+    code = eval_cheap_tier.main(
+        ["--models", "vendor/model", "--n", "2", "--eval-set", str(eval_path)]
+    )
+    assert code == 2
+    captured = capsys.readouterr()
+    assert "ZDR violation" in captured.err
+    assert "dummy-key" not in captured.out
+    assert "dummy-key" not in captured.err
+
+
+def test_main_default_reasoning_is_off(monkeypatch, tmp_path, capsys):
+    eval_path = _write_eval_set(tmp_path)
+    seen = []
+
+    def handler(body):
+        seen.append(body.get("reasoning"))
+        return _chat_payload("ماده ۳۳۶", cost=0.0)
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
+
+    code = eval_cheap_tier.main(
+        ["--models", "vendor/model", "--n", "2", "--eval-set", str(eval_path)]
+    )
+    assert code == 0
+    # default is off -> every request carries {"enabled": false}
+    assert seen == [{"enabled": False}, {"enabled": False}]
+
+
+def test_main_reasoning_default_flag_omits_field(monkeypatch, tmp_path, capsys):
+    eval_path = _write_eval_set(tmp_path)
+    seen = []
+
+    def handler(body):
+        seen.append("reasoning" in body)
+        return _chat_payload("ماده ۳۳۶", cost=0.0)
+
+    _install_http(eval_cheap_tier, monkeypatch, handler)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
+
+    code = eval_cheap_tier.main(
+        [
+            "--models",
+            "vendor/model",
+            "--n",
+            "2",
+            "--reasoning",
+            "default",
+            "--eval-set",
+            str(eval_path),
+        ]
+    )
+    assert code == 0
+    assert seen == [False, False]
 
 
 # ---------------------------------------------------------------------------
