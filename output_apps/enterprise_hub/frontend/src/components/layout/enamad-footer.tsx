@@ -16,38 +16,23 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
   return (
     <footer className="glass-surface w-full text-muted-foreground text-xs mt-auto select-none" dir="rtl">
       {compact ? (
-        /* نسخه فشرده مخصوص پایین صفحه چت */
-        <div className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-foreground/80 font-medium">قاضی هوشمند | دستیار تخصصی دادرسی و ادله</span>
+        /* نسخه فشرده تک‌خطی مخصوص /chat و /judge: فقط نقطه وضعیت + نماد اینماد.
+           سایر پیوندها در منوی همبرگری هدر موجودند. */
+        <div className="max-w-6xl mx-auto px-4 py-1.5 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="w-2 h-2 shrink-0 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="truncate font-medium text-foreground/80">قاضی هوشمند | دستیار تخصصی دادرسی و ادله</span>
           </div>
 
-          <nav className="flex flex-wrap items-center gap-3">
-            <Link href="/about" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">درباره ما</Link>
-            <span>•</span>
-            <Link href="/contact" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">تماس با ما</Link>
-            <span>•</span>
-            <Link href="/technology" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">تکنولوژی RAG</Link>
-            <span>•</span>
-            <Link href="/services" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">محصولات و اشتراک</Link>
-            <span>•</span>
-            <Link href="/coverage" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">پوشش قوانین</Link>
-            <span>•</span>
-            <Link href="/terms" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">قوانین</Link>
-            <span>•</span>
-            <Link href="/privacy" className="hover:text-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">حریم خصوصی</Link>
-            <span>•</span>
-            {/* نماد اینماد: بدون rel و بدون target تا مرورگر ارجاع (referrer) را حذف نکند */}
-            <a
-              {...ENAMAD_REFERRER_ATTRIBUTE}
-              href={enamadTrustUrl("ghazi")}
-              className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1 font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded"
-            >
-              <ShieldCheck className="size-3.5" />
-              <span>اینماد ۷۴۹۱۴۳۹</span>
-            </a>
-          </nav>
+          {/* نماد اینماد: بدون rel و بدون target تا مرورگر ارجاع (referrer) را حذف نکند */}
+          <a
+            {...ENAMAD_REFERRER_ATTRIBUTE}
+            href={enamadTrustUrl("ghazi")}
+            className="flex shrink-0 cursor-pointer items-center gap-1 font-medium text-emerald-400 transition-colors hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded"
+          >
+            <ShieldCheck className="size-3.5" />
+            <span>اینماد ۷۴۹۱۴۳۹</span>
+          </a>
         </div>
       ) : (
         /* نسخه کامل با تمام بکلینک‌های سئو و نماد اعتماد */

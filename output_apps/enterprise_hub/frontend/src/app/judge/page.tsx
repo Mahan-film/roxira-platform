@@ -76,7 +76,7 @@ export default function JudgePage() {
 
         {tab === "analysis" ? <CaseAnalysisPanel /> : <RetrialPanel />}
       </main>
-      <EnamadFooter />
+      <EnamadFooter compact={true} />
 
       <DraftBuilderDrawer isOpen={draftOpen} onClose={() => setDraftOpen(false)} />
     </div>

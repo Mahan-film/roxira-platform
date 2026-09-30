@@ -24,7 +24,6 @@ const NEST_API_VERSION_PREFIX = "v1";
 
 const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
   // خروجی مستقل (standalone) برای بیلد/اجرای پروداکشن داخل Docker؛
   // فقط فایل‌های لازم اجرای سرور Next.js را در .next/standalone کپی
   // می‌کند و نیاز به نصب کامل node_modules در ایمیج نهایی را حذف می‌کند.

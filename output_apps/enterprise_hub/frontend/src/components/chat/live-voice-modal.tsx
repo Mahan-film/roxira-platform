@@ -122,7 +122,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
     // Encoded clip (edge-tts mp3 chunks concatenated) -- the original path.
     return await new Promise<AudioBuffer>((resolve, reject) => {
-      ctx.decodeAudioData(bytes.buffer.slice(0), resolve, reject);
+      ctx.decodeAudioData(bytes.buffer.slice(0) as ArrayBuffer, resolve, reject);
     });
   };
 

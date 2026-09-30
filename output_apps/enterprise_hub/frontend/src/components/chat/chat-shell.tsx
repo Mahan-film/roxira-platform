@@ -194,12 +194,30 @@ export function ChatShell() {
     }
   };
 
+  // اقدامات حقوقی (اولویت اول نوار تک‌ردیفه)
+  const legalActions = [
+    { label: "صدور لایحه دفاعیه", icon: FileText, color: "text-amber-400", prompt: "بر اساس آخرین مکالمه و ادله پرونده، لایحه دفاعیه مستدل با استناد به مواد قانونی مرتبط، رویه قضایی و آرای وحدت رویه تنظیم کن." },
+    { label: "صدور دادخواست حقوقی", icon: Gavel, color: "text-cyan-400", prompt: "بر اساس شرح پرونده و مطالبات، دادخواست حقوقی کامل شامل خواسته، دلایل و منضمات و شرح دادخواست تدوین کن." },
+    { label: "صدور شکواییه کیفری", icon: AlertTriangle, color: "text-rose-400", prompt: "با توجه به موضوع پرونده و ادله، شکواییه کیفری رسمی با ذکر عنوان اتهامی، ادله و درخواست تعقیب متهم تدوین کن." },
+    { label: "صدور اظهارنامه رسمی", icon: FileSignature, color: "text-emerald-400", prompt: "یک اظهارنامه رسمی موضوع ماده ۱۵۶ قانون آیین دادرسی مدنی با اخطار و مهلت قانونی برای موضوع پرونده تدوین کن." }
+  ];
+
   const quickPrompts = [
     { title: "استراتژی پرونده", prompt: "استراتژی دفاعی پرونده با تکیه بر ادله اثبات دعوی چیست؟" },
     { title: "لایحه اعاده دادرسی", prompt: "لایحه اعاده دادرسی کیفری بر اساس بندهای ماده ۴۷۴ تنظیم کن." },
     { title: "صلاحیت دادگاه صلح ۱۴۰۲", prompt: "صلاحیت دادگاه‌های صلح مصوب ۱۴۰۲ در خصوص دعاوی مالی و تخلیه را تشریح کن." },
     { title: "آرای وحدت رویه", prompt: "جدیدترین آرای وحدت رویه هیأت عمومی دیوان عالی کشور در خصوص مسئولیت مدنی و خسارت را توضیح بده." }
   ];
+
+  // سه پرسش نمونه برای پر کردن ناحیه خالی پیام‌ها
+  const exampleQuestions = quickPrompts.slice(0, 3);
+
+  const showExamples = !isLoading && !messages.some((msg) => msg.role === "user");
+
+  const legalChipClass =
+    "px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+  const quickChipClass =
+    "px-3 py-1.5 bg-card hover:bg-accent border border-border text-muted-foreground hover:text-foreground text-[11px] sm:text-xs rounded-xl whitespace-nowrap transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
   return (
     <div className="flex flex-col h-full w-full max-w-4xl mx-auto overflow-hidden">
@@ -252,52 +270,40 @@ export function ChatShell() {
           </div>
         )}
 
+        {/* سه پرسش نمونه قابل لمس در ناحیه خالی پیام‌ها */}
+        {showExamples && (
+          <div className="space-y-2 pt-1">
+            <p className="ps-1 text-[11px] font-semibold text-muted-foreground">نمونه پرسش‌ها را انتخاب کنید:</p>
+            {exampleQuestions.map((item, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSendMessage(item.prompt)}
+                className="glass-surface w-full rounded-2xl border border-border/80 p-3 text-start text-xs text-foreground transition-all hover:border-ring/50 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <span className="font-semibold">{item.title}</span>
+                <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">{item.prompt}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
       {/* ناحیه ورودی داک‌شده در پایین بدون تداخل */}
       <div className="glass-raised p-2.5 sm:p-4 shrink-0 space-y-2">
-        {/* نوار ابزار اقدامات حقوقی پرونده (لایحه، دادخواست، شکواییه، اظهارنامه) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-fade-x py-0.5 pb-1 border-b border-border/60">
-          <span className="text-[11px] text-muted-foreground font-semibold whitespace-nowrap ps-1">اقدامات حقوقی:</span>
-          <button
-            onClick={() => handleSendMessage("بر اساس آخرین مکالمه و ادله پرونده، لایحه دفاعیه مستدل با استناد به مواد قانونی مرتبط، رویه قضایی و آرای وحدت رویه تنظیم کن.")}
-            className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <FileText className="size-3.5 text-amber-400" />
-            <span>صدور لایحه دفاعیه</span>
-          </button>
-          <button
-            onClick={() => handleSendMessage("بر اساس شرح پرونده و مطالبات، دادخواست حقوقی کامل شامل خواسته، دلایل و منضمات و شرح دادخواست تدوین کن.")}
-            className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <Gavel className="size-3.5 text-cyan-400" />
-            <span>صدور دادخواست حقوقی</span>
-          </button>
-          <button
-            onClick={() => handleSendMessage("با توجه به موضوع پرونده و ادله، شکواییه کیفری رسمی با ذکر عنوان اتهامی، ادله و درخواست تعقیب متهم تدوین کن.")}
-            className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <AlertTriangle className="size-3.5 text-rose-400" />
-            <span>صدور شکواییه کیفری</span>
-          </button>
-          <button
-            onClick={() => handleSendMessage("یک اظهارنامه رسمی موضوع ماده ۱۵۶ قانون آیین دادرسی مدنی با اخطار و مهلت قانونی برای موضوع پرونده تدوین کن.")}
-            className="px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <FileSignature className="size-3.5 text-emerald-400" />
-            <span>صدور اظهارنامه رسمی</span>
-          </button>
-        </div>
-
-        {/* نوار سوالات متداول و سریع */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-fade-x py-1">
+        {/* نوار واحد اقدامات حقوقی و پرسش‌های سریع (اقدامات حقوقی در ابتدا) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-fade-x py-0.5">
+          <span className="ps-1 text-[11px] font-semibold whitespace-nowrap text-muted-foreground">اقدامات حقوقی:</span>
+          {legalActions.map(({ label, icon: Icon, color, prompt }) => (
+            <button key={label} onClick={() => handleSendMessage(prompt)} className={legalChipClass}>
+              <Icon className={`size-3.5 ${color}`} />
+              <span>{label}</span>
+            </button>
+          ))}
+          <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
           {quickPrompts.map((item, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSendMessage(item.prompt)}
-              className="px-3 py-1.5 bg-card hover:bg-accent border border-border text-muted-foreground hover:text-foreground text-[11px] sm:text-xs rounded-xl whitespace-nowrap transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
+            <button key={idx} onClick={() => handleSendMessage(item.prompt)} className={quickChipClass}>
               {item.title}
             </button>
           ))}
