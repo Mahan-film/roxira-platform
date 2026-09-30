@@ -1,0 +1,43 @@
+schema_version: 1
+checked_at: "2026-09-30"
+rules:
+  - id: peace_court_monetary
+    forum: "دادگاه صلح"
+    matter: "دعاوی مالی"
+    threshold_rials: 1000000000
+    legal_basis: "قانون شوراهای حل اختلاف مصوب ۱۴۰۲، ماده ۱۲ بند ۱ و تبصره آن"
+    source_url: "https://rc.majlis.ir/fa/law/show/1787453"
+    status: confirmed
+    note: "Adjustable every 3 years by the Head of the Judiciary; no new amount announced as of 2026-09-30"
+  - id: peace_court_appealable_over
+    forum: "دادگاه صلح"
+    matter: "قابلیت تجدیدنظر آرای مالی"
+    threshold_rials: 500000000
+    legal_basis: "قانون شوراهای حل اختلاف مصوب ۱۴۰۲، تبصره ۵ ماده ۱۲"
+    source_url: "https://rc.majlis.ir/fa/law/show/1787453"
+    status: needs_lawyer
+    note: "Interaction with article 368 of the civil procedure code and unification ruling 873 is an open question"
+  - id: civil_appeal_nisab
+    forum: "دادگاه تجدیدنظر استان"
+    matter: "دعاوی مالی"
+    threshold_rials: 3000000
+    legal_basis: "قانون آیین دادرسی مدنی ۱۳۷۹، ماده ۳۳۱ بند الف"
+    source_url: "https://rc.majlis.ir/fa/law/show/93305"
+    status: needs_lawyer
+    note: "Text unchanged; practical effect after the 1402 law to be confirmed"
+  - id: civil_cassation_nisab
+    forum: "دیوان عالی کشور"
+    matter: "فرجام‌خواهی احکام مالی"
+    threshold_rials: 20000000
+    legal_basis: "قانون آیین دادرسی مدنی ۱۳۷۹، ماده ۳۶۷"
+    source_url: "https://rc.majlis.ir/fa/law/show/93305"
+    status: needs_lawyer
+    note: "Text unchanged; practical effect after the 1402 law to be confirmed"
+  - id: criminal_courts_1_2
+    forum: "دادگاه کیفری یک و دو"
+    matter: "صلاحیت ذاتی جرایم"
+    threshold_rials: null
+    legal_basis: "قانون آیین دادرسی کیفری ۱۳۹۲، مواد ۳۰۱ و ۳۰۲"
+    source_url: null
+    status: needs_lawyer
+    note: "Article numbers to be verified against the official text before use"
