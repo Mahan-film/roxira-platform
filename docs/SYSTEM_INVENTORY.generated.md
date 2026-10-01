@@ -46,6 +46,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | factory-status.yml | Factory status | issue_comment |
 | model-eval.yml | Model eval (coding smoke + gate) | workflow_dispatch |
 | model-registry-check.yml | Model registry check | schedule, workflow_dispatch |
+| model-tournament.yml | Model Tournament | workflow_dispatch |
 | preview-e2e.yml | Preview E2E | workflow_dispatch |
 | tech-radar-weekly.yml | Tech radar weekly | schedule, workflow_dispatch |
 | uptime.yml | Uptime check (production) | schedule, workflow_dispatch |

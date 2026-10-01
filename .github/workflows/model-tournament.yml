@@ -1,0 +1,56 @@
+name: Model Tournament
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Comma-separated list of model IDs'
+        required: true
+        default: '{{ vars.EXECUTOR_MODEL_ID }},{{ vars.CHEAP_MODEL_ID_1 }},{{ vars.CHEAP_MODEL_ID_2 }}'
+      trials:
+        description: 'Number of trials per model'
+        required: true
+        default: '3'
+
+jobs:
+  run-tournament:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    if: vars.FACTORY_ENABLED == 'true' && contains(fromJson(vars.AGENT_ALLOWED_ACTORS), github.actor)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run model tournament
+        env:
+          OPENROUTER_AGENT_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
+        run: |
+          python scripts/eval_tournament.py \
+            --models ${{ inputs.models }} \
+            --trials ${{ inputs.trials }} \
+            --api-key-env OPENROUTER_AGENT_KEY
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: tournament-results
+          path: data/eval/tournament_*.json
+
+      - name: Write summary
+        run: |
+          echo "## Model Tournament Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Model | Pass Rate | Cost ($) | Tokens | Latency (ms) |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-----------|----------|--------|--------------|" >> $GITHUB_STEP_SUMMARY
+          python scripts/print_tournament_summary.py >> $GITHUB_STEP_SUMMARY
