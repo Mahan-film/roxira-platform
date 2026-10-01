@@ -1,8 +1,13 @@
+import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 def test_packs_small_files_without_repomix(tmp_path, monkeypatch):
+    if shutil.which("zsh") is None:
+        pytest.skip("zsh not installed on this runner")
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     (repo_root / "a.txt").write_text("alpha\n")
@@ -26,6 +31,8 @@ def test_packs_small_files_without_repomix(tmp_path, monkeypatch):
 
 
 def test_refuses_data_paths(tmp_path):
+    if shutil.which("zsh") is None:
+        pytest.skip("zsh not installed on this runner")
     listfile = tmp_path / "files.txt"
     listfile.write_text("data/x.json\n")
     outfile = tmp_path / "context.txt"
