@@ -20,6 +20,8 @@ services:
 
   valkey:
     image: docker.io/valkey/valkey:8-alpine
+    # Run as non-root directly: with cap_drop ALL the image entrypoint cannot drop privileges itself.
+    user: "999:999"
     command: valkey-server --save "" --appendonly no
     mem_limit: 128m
     restart: unless-stopped
