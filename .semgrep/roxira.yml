@@ -1,0 +1,24 @@
+rules:
+  - id: python-subprocess-shell-true
+    message: Avoid subprocess calls with shell=True; pass an argument list instead.
+    severity: ERROR
+    languages: [python]
+    pattern: subprocess.$FUNCTION(..., shell=True, ...)
+
+  - id: frontend-public-env-secret
+    message: NEXT_PUBLIC_ variables must not expose keys, secrets, or tokens.
+    severity: ERROR
+    languages: [javascript, typescript]
+    paths:
+      include:
+        - output_apps/enterprise_hub/frontend/**
+    pattern-regex: '\bNEXT_PUBLIC_[A-Z0-9_]*(?:KEY|SECRET|TOKEN)[A-Z0-9_]*\b'
+
+  - id: nest-controller-direct-repository-import
+    message: NestJS controllers must use services, not repository modules directly.
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include:
+        - "**/*.controller.ts"
+    pattern-regex: '(?m)^\s*import\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["''][^"'']+\.repository["'']\s*;?'

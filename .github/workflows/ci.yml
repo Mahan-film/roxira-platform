@@ -28,6 +28,8 @@ env:
   GITLEAKS_VERSION: "8.30.1"
   PYTHON_VERSION: "3.13"
   NODE_VERSION: "20"
+  SEMGREP_VERSION: "1.178.0"
+  TRIVY_VERSION: "0.75.0"
 
 jobs:
   changes:
@@ -107,6 +109,42 @@ jobs:
           fi
           echo "Scanning $RANGE"
           gitleaks git --config .gitleaks.toml --log-opts="$RANGE" --redact --no-banner --verbose .
+
+  trivy-fs:
+    name: Trivy filesystem scan (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Trivy
+        run: |
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | tar -xz -C /usr/local/bin trivy
+          trivy --version
+      - name: Scan filesystem
+        run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 0 --format table . > "$RUNNER_TEMP/trivy-fs.txt"
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: ${{ runner.temp }}/trivy-fs.txt
+          if-no-files-found: warn
+
+  semgrep:
+    name: Semgrep (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install "semgrep==${SEMGREP_VERSION}"
+      - name: Run custom rules
+        run: semgrep --config .semgrep/roxira.yml --metrics=off output_apps src scripts
 
   ruff:
     name: Ruff (non-blocking)
