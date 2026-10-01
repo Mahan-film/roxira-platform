@@ -102,7 +102,14 @@ jobs:
               fh.write(f"slug={slug}\n")
           PY
 
+      - name: Record research start in the run ledger
+        run: |
+          python3 -m src.factory_pipeline.run_ledger append \
+            --file "$RUNNER_TEMP/ledger.jsonl" --run-id "${{ github.run_id }}" \
+            --stage research --status started --issue "$ISSUE_NUMBER"
+
       - name: Run project-brief research
+        id: project_brief_research
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_RESEARCH_KEY }}
           BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
@@ -126,6 +133,15 @@ jobs:
             --brief-out "$RUNNER_TEMP/brief.md" \
             --json > "$RUNNER_TEMP/brief.result.json"
 
+      - name: Record research result in the run ledger
+        if: always()
+        run: |
+          python3 -m src.factory_pipeline.run_ledger append \
+            --file "$RUNNER_TEMP/ledger.jsonl" --run-id "${{ github.run_id }}" \
+            --stage research \
+            --status "${{ steps.project_brief_research.outcome == 'success' && 'success' || 'failure' }}" \
+            --issue "$ISSUE_NUMBER"
+
       - name: Post the Persian proposal on the brief issue
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -141,5 +157,14 @@ jobs:
           path: |
             ${{ runner.temp }}/brief.md
             ${{ runner.temp }}/brief.result.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload run ledger artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-ledger-${{ env.ISSUE_NUMBER }}
+          path: ${{ runner.temp }}/ledger.jsonl
           retention-days: 30
           if-no-files-found: warn
