@@ -1,0 +1,12 @@
+# NOT enabled by default; enable only if GitHub Actions deploy is unavailable.
+# Running it alongside GitHub Actions is safe: ci-deploy.sh is locked and idempotent.
+[Unit]
+Description=Run Roxira pull-based deployment periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

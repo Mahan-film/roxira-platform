@@ -1,0 +1,10 @@
+# NOT enabled by default; enable only if GitHub Actions deploy is unavailable.
+# Running it alongside GitHub Actions is safe: ci-deploy.sh is locked and idempotent.
+[Unit]
+Description=Roxira pull-based deployment
+
+[Service]
+Type=oneshot
+ExecStart=/opt/roxira_platform/scripts/ops/pull-deploy.sh
+Environment=PULL_DEPLOY_REQUIRE_GREEN=1
+TimeoutStartSec=2400
