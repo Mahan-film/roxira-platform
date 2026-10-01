@@ -1,5 +1,5 @@
 #!/bin/zsh
-# rx <issue> [model] [base-branch] — do a GitHub issue with a worker, then open a PR.
+# rx <issue> [model, including team] [base-branch] — do a GitHub issue with a worker, then open a PR.
 # Network calls to GitHub are retried (this Mac's connection drops HTTP2/graphql calls).
 # Exit codes: 0 PR opened, 1 no changes from any model, 2 usage, 3 ruff gate failed.
 set -eu
@@ -56,6 +56,14 @@ for m in $models; do
   rm -f "$timeout_marker"
   if [ "$m" = codex ]; then
     codex exec --sandbox workspace-write "$prompt" < /dev/null >> "$log" 2>&1 &
+  elif [[ "$m" == "team" ]]; then
+    worker=omniroute/team-coding
+    (
+      if [[ -f ~/.config/omniroute.env ]]; then
+        set -a; . ~/.config/omniroute.env; set +a
+      fi
+      opencode run -m omniroute/team-coding "$prompt" < /dev/null >> "$log" 2>&1
+    ) &
   else
     opencode run -m pool/$m "$prompt" < /dev/null >> "$log" 2>&1 &
   fi
