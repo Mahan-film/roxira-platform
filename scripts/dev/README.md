@@ -39,3 +39,6 @@ Write issues for the cheap lane as: at most ~80 changed lines, at most 3 files,
 and every fact the worker needs inline in the issue body (file paths, function
 names, signatures). rx warns when the body is over 6000 characters or names no
 file path.
+## PR auto-merge
+
+After `rx` opens a PR, it enables squash auto-merge unless the diff touches a sensitive path. Set `RX_AUTOMERGE=0` to skip this step; sensitive PRs remain for hub review.
