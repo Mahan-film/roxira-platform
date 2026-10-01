@@ -1,0 +1,97 @@
+name: Factory project pages
+
+# W11 Project Factory, final delivery step for static projects. Dispatched by
+# hand for one built project under projects/<slug>/ (e.g. the #236 microsite):
+# builds its `out/` static bundle and publishes it to GitHub Pages through the
+# official Pages artifact/deploy actions. GitHub Actions only, never the prod
+# server (docs/PROJECT_FACTORY.md, docs/STRATEGY.md section 8).
+#
+# Same guard shape as .github/workflows/agent-task.yml: the FACTORY_ENABLED
+# kill switch and the AGENT_ALLOWED_ACTORS allowlist are checked in the job's
+# `if:` before any checkout. The slug input is validated by the first step
+# before anything is built, and only ever reaches a script through `env:`
+# (never spliced into a `run:` expression). Owner one-time setup and unpublish
+# steps: docs/ops/PROJECT_PAGES.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "Project slug under projects/ (lowercase letters, digits, hyphens)"
+        required: true
+        type: string
+
+concurrency:
+  group: pages-${{ inputs.slug }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SLUG: ${{ inputs.slug }}
+
+jobs:
+  build:
+    name: Build static project
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >
+      vars.FACTORY_ENABLED == 'true' &&
+      contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.actor))
+    steps:
+      - name: Validate slug
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$SLUG" | grep -Eq '^[a-z0-9][a-z0-9-]{1,40}$'; then
+            echo "::error::slug must match ^[a-z0-9][a-z0-9-]{1,40}$"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: projects/${{ env.SLUG }}
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        working-directory: projects/${{ env.SLUG }}
+        run: npm run build
+
+      - name: Require build output
+        run: |
+          set -euo pipefail
+          test -f "projects/$SLUG/out/index.html"
+
+      - name: Template check (report-only)
+        continue-on-error: true
+        run: python3 -m src.factory_pipeline.template_check "projects/$SLUG"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: projects/${{ env.SLUG }}/out
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
