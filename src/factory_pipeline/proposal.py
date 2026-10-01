@@ -23,6 +23,11 @@ _TRUNCATION_NOTE = (
 PROPOSAL_MARKER = "<!-- roxira-factory-proposal -->"
 
 
+def _short_title(idea: str, limit: int = 120) -> str:
+    """Return the concise title portion of a Factory subject."""
+    return idea.split(" — ", 1)[0].strip()[:limit]
+
+
 def _format_layer_section(layer: dict[str, Any]) -> list[str]:
     lines = [f"### {layer.get('label_fa') or layer.get('layer', '')} ({layer.get('label_en', '')})"]
     status = layer.get("status", "UNKNOWN")
@@ -65,7 +70,7 @@ def format_proposal_comment(
 
     lines = [
         PROPOSAL_MARKER,
-        f"## پیشنهاد فناوری برای: {idea}",
+        f"## پیشنهاد فناوری برای: {_short_title(idea)}",
         "",
         f"وضعیت تحقیق: `{status}` — هزینه: ${cost:.4f}",
         "",

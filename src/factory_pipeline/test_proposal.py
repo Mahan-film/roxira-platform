@@ -49,6 +49,12 @@ def test_includes_idea_and_status():
     assert "SUCCESS" in text
 
 
+def test_heading_uses_only_subject_title():
+    text = format_proposal_comment(_brief_result(idea="عنوان کوتاه — متن کامل موضوع"))
+    assert "## پیشنهاد فناوری برای: عنوان کوتاه" in text
+    assert "## پیشنهاد فناوری برای: عنوان کوتاه — متن کامل موضوع" not in text
+
+
 def test_starts_with_hidden_proposal_marker():
     text = format_proposal_comment(_brief_result())
     assert text.startswith(PROPOSAL_MARKER)

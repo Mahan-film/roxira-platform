@@ -20,11 +20,13 @@ def _section(body: str, heading: str) -> str:
 
 def build_subject(title: str, body: str, max_chars: int = 900) -> str:
     """Return the title plus the issue goal and, where possible, must-haves."""
-    goal = _section(body, "هدف پروژه") or re.sub(r"\s+", " ", body).strip()
-    subject = f"{title} — {goal}"
+    goal = (_section(body, "هدف پروژه") or re.sub(r"\s+", " ", body).strip())[:400]
     must_haves = _section(body, "ویژگی‌های ضروری")
-    if must_haves and len(subject) < max_chars:
-        subject += f". ویژگی‌های ضروری: {must_haves}"
+    stack = _section(body, "استک فناوری ترجیحی")
+    tail = f". ویژگی‌های ضروری: {must_haves}" if must_haves else ""
+    if stack and stack != "_No response_":
+        tail += f". استک ترجیحی مالک: {stack}"
+    subject = f"{title} — {goal[:max(0, max_chars - len(title) - 3 - len(tail))]}{tail}"
     return subject[:max_chars]
 
 
