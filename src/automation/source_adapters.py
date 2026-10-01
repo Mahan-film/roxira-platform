@@ -5,7 +5,7 @@ with English queries, so every kept source was an English blog. This module
 adds:
 
 * Structured, keyless-by-default JSON API adapters — GitHub code/repo search,
-  Hugging Face models/datasets, arXiv, ModelScope — that return the same
+  Hugging Face models/datasets, arXiv, Hacker News, ModelScope — that return the same
   ``{"title", "url", "content", "score", "provider", "source_lang"}`` shape
   ``WebIntelligence.search`` already produces, so they merge straight into
   the existing search → crawl → rerank pipeline.
@@ -24,6 +24,8 @@ from __future__ import annotations
 import logging
 import xml.etree.ElementTree as ET
 from typing import Any
+
+import httpx
 
 from src.automation.provider_base import get_env_var
 from src.automation.web_intelligence import DEFAULT_USER_AGENT, WebIntelligence, _http_json, _http_text
@@ -172,6 +174,52 @@ class ArxivAdapter:
         return {"status": "SUCCESS", "provider": self.name, "results": results}
 
 
+class HackerNewsAdapter:
+    """Hacker News story search through Algolia's free public API."""
+
+    name = "hackernews"
+
+    def __init__(self, timeout: float = 20.0) -> None:
+        self.timeout = timeout
+
+    @property
+    def configured(self) -> bool:
+        return True
+
+    def search(self, query: str, max_results: int = 6) -> dict[str, Any]:
+        try:
+            with httpx.Client(timeout=self.timeout, headers={"User-Agent": DEFAULT_USER_AGENT}) as client:
+                response = client.get(
+                    "https://hn.algolia.com/api/v1/search",
+                    params={"query": query, "tags": "story", "hitsPerPage": 10},
+                )
+                response.raise_for_status()
+                hits = response.json().get("hits", [])
+        except Exception as exc:  # noqa: BLE001 - public API isolation boundary
+            return {"status": "ERROR", "provider": self.name, "error": str(exc), "results": []}
+
+        results = []
+        for hit in hits[:max_results] if isinstance(hits, list) else []:
+            if not isinstance(hit, dict):
+                continue
+            points = hit.get("points") or 0
+            comments = hit.get("num_comments") or 0
+            engagement = sum(value for value in (points, comments) if isinstance(value, (int, float)))
+            object_id = hit.get("objectID", "")
+            url = hit.get("url") or f"https://news.ycombinator.com/item?id={object_id}"
+            results.append(
+                _result(
+                    title=hit.get("title") or "",
+                    url=url,
+                    content=f"points={points} comments={comments}",
+                    score=min(1.0, engagement / 1_000),
+                    provider=self.name,
+                    lang="en",
+                )
+            )
+        return {"status": "SUCCESS", "provider": self.name, "results": results}
+
+
 class ModelScopeAdapter:
     """ModelScope (魔搭) model listing API — best-effort: ModelScope has no
     stable public search API, so a non-200/unexpected-shape response is
@@ -243,7 +291,7 @@ class SiteRestrictedAdapter:
 
 def structured_adapters() -> list[Any]:
     """API-based adapters that never need the web search providers."""
-    return [GitHubSearchAdapter(), HuggingFaceAdapter(), ArxivAdapter(), ModelScopeAdapter()]
+    return [GitHubSearchAdapter(), HuggingFaceAdapter(), ArxivAdapter(), HackerNewsAdapter(), ModelScopeAdapter()]
 
 
 def site_restricted_adapters(web: WebIntelligence) -> list[SiteRestrictedAdapter]:

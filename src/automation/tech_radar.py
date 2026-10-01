@@ -188,7 +188,7 @@ def _build_offline_web_intelligence() -> WebIntelligence:
 
 class _OfflineStructuredAdapter:
     """Stands in for GitHubSearchAdapter/HuggingFaceAdapter/ArxivAdapter/
-    ModelScopeAdapter (src/automation/source_adapters.py), which otherwise
+    HackerNewsAdapter/ModelScopeAdapter (src/automation/source_adapters.py), which otherwise
     call real keyless-but-live HTTP APIs regardless of the injected
     WebIntelligence instance."""
 
@@ -251,7 +251,7 @@ class TechRadarAgent:
         if offline:
             self.structured_adapters = [
                 _OfflineStructuredAdapter(name)
-                for name in ("github", "huggingface", "arxiv", "modelscope")
+                for name in ("github", "huggingface", "arxiv", "hackernews", "modelscope")
             ]
         else:
             self.structured_adapters = structured_adapters()
