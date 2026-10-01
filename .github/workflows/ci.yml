@@ -62,7 +62,9 @@ jobs:
               - ".github/workflows/ci.yml"
             compose:
               - "docker-compose.prod.yml"
+              - "docker/research-stack/docker-compose.yml"
               - "ci/compose.env"
+              - "scripts/ci/compose_policy.py"
               - ".github/workflows/ci.yml"
             frontend:
               - "output_apps/enterprise_hub/frontend/**"
@@ -260,6 +262,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Compose policy (report only)
+        run: |
+          python3 -m pip install pyyaml
+          python3 scripts/ci/compose_policy.py docker-compose.prod.yml docker/research-stack/docker-compose.yml
       - name: docker compose config
         # ci/compose.env holds dummy values for every required (${VAR:?}) variable.
         # A new required variable that is not added there fails this step.
