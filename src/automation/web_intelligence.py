@@ -533,6 +533,7 @@ class WebIntelligence:
         jina_reranker: Optional[JinaReranker] = None,
         searxng: Optional[Any] = None,
         ddgs: Optional[Any] = None,
+        local_reranker: Optional[Any] = None,
     ) -> None:
         from src.automation.ddgs_client import DdgsSearchClient
         from src.automation.searxng_client import SearxngSearchClient
@@ -543,6 +544,11 @@ class WebIntelligence:
         self.firecrawl = firecrawl or FirecrawlScraper()
         self.jina_reader = jina_reader or JinaReaderScraper()
         self.jina_reranker = jina_reranker or JinaReranker()
+        self.local_reranker = local_reranker
+        if self.local_reranker is None and os.environ.get("ROXIRA_LOCAL_RERANK") == "1":
+            from src.automation.local_reranker import LocalReranker
+
+            self.local_reranker = LocalReranker()
         self.searxng = searxng if searxng is not None else SearxngSearchClient()
         self.ddgs = ddgs if ddgs is not None else DdgsSearchClient()
 
@@ -652,6 +658,13 @@ class WebIntelligence:
             else:
                 texts.append(str(doc))
 
+        if self.local_reranker is not None:
+            response = self.local_reranker.rerank(query, texts, top_n=top_n)
+            if response.get("status") == "SUCCESS":
+                return {"status": "SUCCESS", "provider": "local-bge", "results": [
+                    {"document": documents[item["index"]], "relevance_score": item["score"]}
+                    for item in response["results"]
+                ]}
         response = self.jina_reranker.rerank(query, texts, top_n=top_n)
         if response.get("status") != "SUCCESS":
             return response
