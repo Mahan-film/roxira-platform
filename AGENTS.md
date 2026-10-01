@@ -31,3 +31,9 @@ it in `config/models.yaml`.
   and the `free` agent in `opencode.json`) — those providers may log or train on prompts.
 - Subagent roles for this repo are defined in `.claude/agents/` (`implementer`, `tester`,
   `reviewer`); use them instead of re-deriving the same scope/model split ad hoc.
+
+## 5. Context selection
+
+For “where is X?” or “who calls Y?” questions, use the codebase-memory MCP and qmd first.
+Use `scripts/dev/pack_agent_context.sh` to pack a file list only for a documented cross-cutting task.
+Never pack the whole repository, `data/`, `database_snapshots/`, or customer data, and never put a secret in a pack.

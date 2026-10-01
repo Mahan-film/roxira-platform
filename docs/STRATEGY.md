@@ -131,6 +131,10 @@ Live status, the owner queue and the next workstreams are in **`docs/STATE.md`**
 
 Order: (1) owner-approved server steps: W6 eval, W7 bench, cleanup; (2) W14 Playwright E2E and W15 STT robustness in parallel Sonnet chats; (3) W5 router `cheap` tier on, after the W6 eval passes; (4) W16 nginx `/health`; (5) W11 first real Project Factory run.
 
+- Context selection: use the codebase-memory MCP and qmd first; pack a file list with `scripts/dev/pack_agent_context.sh` only for a documented cross-cutting task.
+- Never pack the whole repo, `data/`, `database_snapshots/` or customer data.
+- Issues for workers follow the `agent-issue-handoff` skill (`.agents/skills/agent-issue-handoff/SKILL.md`).
+
 ## 6. Known facts (verified 2026-09-24)
 
 - The server `5.75.200.67` (root) runs the repo at `/opt/roxira_platform`. Its working tree is clean and matches `origin/main`, so no hand edits are in place.
