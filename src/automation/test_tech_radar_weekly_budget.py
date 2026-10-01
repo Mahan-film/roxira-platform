@@ -54,13 +54,15 @@ def test_weekly_cap_fails_closed_when_usage_cannot_be_verified():
         guard.start()
 
 
-def test_weekly_research_tiers_are_cheap_then_strong_and_never_claude():
-    # Bulk per-layer work is `cheap`; only the final comparison/scoring call is
-    # `strong`. Both ids come from config/models.yaml, and neither product role
-    # carries an anthropic/claude model, so this path can never bill Claude.
-    assert PROJECT_BRIEF_LAYER_TIER == "cheap"
-    assert PROJECT_BRIEF_FINAL_TIER == "strong"
-    for role in ("cheap", "strong"):
+def test_weekly_research_tiers_are_free_then_cheap_and_never_claude():
+    # Zero-cost default (owner decision 2026-10-01): bulk per-layer work is
+    # `free` (public web data only) and the single final synthesis is `cheap`;
+    # `strong` is opt-in via RADAR_FINAL_TIER. All ids come from
+    # config/models.yaml and none of these roles carries an anthropic/claude
+    # model, so this path can never bill Claude.
+    assert PROJECT_BRIEF_LAYER_TIER == "free"
+    assert PROJECT_BRIEF_FINAL_TIER == "cheap"
+    for role in ("free", "cheap", "strong"):
         ids = model_registry.role_models(role)
         assert ids, f"config/models.yaml role {role!r} has no models"
         assert not any(model_id.startswith("anthropic/") for model_id in ids), (role, ids)

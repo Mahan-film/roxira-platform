@@ -29,9 +29,11 @@ logger = logging.getLogger("roxira.tech_radar")
 # background research never touches Anthropic tokens and is never a hardcoded
 # model. Budget policy (owner brief): free/cheap tiers only; `strong` is
 # reserved for the single final project-brief synthesis call.
-DAILY_RADAR_TIER = "cheap"
-PROJECT_BRIEF_LAYER_TIER = "cheap"
-PROJECT_BRIEF_FINAL_TIER = "strong"
+# Default zero-cost (free) for daily radar and per-layer gathering, with cheap
+# for the single final synthesis. Set RADAR_FINAL_TIER=strong for a high-stakes brief.
+DAILY_RADAR_TIER = os.environ.get("RADAR_DAILY_TIER", "free")
+PROJECT_BRIEF_LAYER_TIER = os.environ.get("RADAR_LAYER_TIER", "free")
+PROJECT_BRIEF_FINAL_TIER = os.environ.get("RADAR_FINAL_TIER", "cheap")
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_REPORT_MD = PROJECT_ROOT / "TECH_RADAR_REPORT.md"
