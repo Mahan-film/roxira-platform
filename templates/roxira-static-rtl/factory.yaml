@@ -1,0 +1,10 @@
+name: roxira-static-rtl
+stack: next-static
+locale: fa
+rtl: true
+allowed_paths:
+  - app/
+  - content/
+  - tests/
+owned_by: frontend
+deploy: github-pages
