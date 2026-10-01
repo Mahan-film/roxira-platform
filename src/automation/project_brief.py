@@ -341,8 +341,14 @@ def run_project_brief(
     report_lang: str = DEFAULT_REPORT_LANG,
     offline: bool = False,
     budget_guard: Optional[BudgetGuard] = None,
+    layers: list[str] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    known_layer_keys = {layer.key for layer in LAYERS}
+    for layer_id in layers or ():
+        if layer_id not in known_layer_keys:
+            raise ValueError(f"unknown layer: {layer_id}")
+    research_layers = tuple(layer for layer in LAYERS if not layers or layer.key in layers)
     agent = TechRadarAgent(
         multilingual=multilingual,
         tier=PROJECT_BRIEF_LAYER_TIER,
@@ -352,7 +358,7 @@ def run_project_brief(
 
     layers: list[dict[str, Any]] = []
     budget_exceeded: BudgetExceeded | None = None
-    for layer in LAYERS:
+    for layer in research_layers:
         if budget_guard is not None and budget_exceeded is None:
             try:
                 budget_guard.check(f"before layer '{layer.key}'")

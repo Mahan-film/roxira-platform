@@ -1056,6 +1056,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override the output path for --project-brief (default: docs/research/briefs/<slug>.md).",
     )
     parser.add_argument(
+        "--layers",
+        default="",
+        help="Comma-separated architecture layer IDs for --project-brief (default: all).",
+    )
+    parser.add_argument(
         "--report-lang",
         default=DEFAULT_REPORT_LANG,
         choices=sorted(REPORT_LANGUAGE_NAMES),
@@ -1134,6 +1139,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             report_lang=args.report_lang,
             offline=args.offline_test,
             budget_guard=budget_guard,
+            layers=[x.strip() for x in args.layers.split(",") if x.strip()] or None,
         )
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
