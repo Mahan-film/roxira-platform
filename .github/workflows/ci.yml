@@ -44,6 +44,7 @@ jobs:
       compose: ${{ steps.filter.outputs.compose }}
       frontend: ${{ steps.filter.outputs.frontend }}
       projects: ${{ steps.filter.outputs.projects }}
+      templates: ${{ steps.filter.outputs.templates }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -72,6 +73,9 @@ jobs:
               - ".github/workflows/ci.yml"
             projects:
               - "projects/**"
+              - ".github/workflows/ci.yml"
+            templates:
+              - "templates/**"
               - ".github/workflows/ci.yml"
 
   gitleaks:
@@ -271,6 +275,52 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: python3 -m src.factory_pipeline.template_check
+
+  template-build:
+    name: Static RTL template build (report-only)
+    needs: changes
+    if: needs.changes.outputs.templates == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: templates/roxira-static-rtl
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Build static RTL template
+        env:
+          BUILD_LOG: ${{ runner.temp }}/template-build.log
+        run: |
+          set -o pipefail
+          npm install --no-audit --no-fund 2>&1 | tee "$BUILD_LOG"
+          npm run build 2>&1 | tee -a "$BUILD_LOG"
+          test -f out/index.html
+          grep -q 'dir="rtl"' out/index.html
+      - name: Report failure on the PR
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_LOG: ${{ runner.temp }}/template-build.log
+          COMMENT: ${{ runner.temp }}/template-build-comment.md
+        run: |
+          {
+            echo "<!-- ci-template-build -->"
+            echo "### Static RTL template build failed (report-only)"
+            echo
+            echo "[Workflow details]($RUN_URL)"
+            echo
+            echo '```text'
+            tail -100 "$BUILD_LOG"
+            echo '```'
+          } > "$COMMENT"
+          gh pr comment "$PR" --body-file "$COMMENT"
 
   compose:
     name: Compose config
