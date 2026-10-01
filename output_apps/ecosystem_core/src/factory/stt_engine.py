@@ -7,6 +7,7 @@ Agent 1: In-memory ffmpeg PCM + remote STT over the config/models.yaml `stt`
     config/models.yaml's `stt` role note and issue #39).
 Agent 2: Technical Domain Phonetic Rescorer (Corrects acoustic slips)
 """
+import os
 import json, logging, subprocess, base64, urllib.request, urllib.error, re
 from output_apps.ecosystem_core.src.factory.llm_client import get_config, ask_deepseek
 
@@ -177,6 +178,16 @@ def transcribe_audio_blob(audio_b64: str, mime_type: str = "audio/webm") -> str:
         return f"خطا در دیکود فایل صوتی: {e}"
 
     wav_bytes = convert_to_wav_pcm(raw_audio)
+
+    if os.environ.get("ROXIRA_STT_LOCAL") == "1":
+        try:
+            from .stt_local_whisper import is_confident, transcribe_local
+
+            local_text, min_logprob = transcribe_local(wav_bytes, STT_PROMPT)
+            if is_confident(local_text, min_logprob):
+                return phonetic_rescorer_agent(local_text)
+        except Exception as exc:
+            logger.warning("Local faster-whisper transcription failed: %s", exc)
     clean_b64 = base64.b64encode(wav_bytes).decode("utf-8")
 
     # عامل اول: استخراج اولیه صوت -- زنجیره فال‌بک از نقش stt در config/models.yaml
