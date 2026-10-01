@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import ssl
 import time
 import urllib.error
@@ -506,6 +507,19 @@ class JinaReranker:
         }
 
 
+FREE_FIRST_ORDER = ("searxng", "ddgs", "tavily")
+PAID_CAPABLE = frozenset({"exa", "brave"})
+
+
+def _search_order(engines):
+    if engines is not None:
+        return engines
+    configured_order = os.getenv("RESEARCH_SEARCH_ORDER")
+    if configured_order:
+        return tuple(engine.strip() for engine in configured_order.split(",") if engine.strip())
+    return FREE_FIRST_ORDER
+
+
 class WebIntelligence:
     """Unified facade for multi-provider neural search, clean scraping and RAG reranking."""
 
@@ -517,16 +531,25 @@ class WebIntelligence:
         firecrawl: Optional[FirecrawlScraper] = None,
         jina_reader: Optional[JinaReaderScraper] = None,
         jina_reranker: Optional[JinaReranker] = None,
+        searxng: Optional[Any] = None,
+        ddgs: Optional[Any] = None,
     ) -> None:
+        from src.automation.ddgs_client import DdgsSearchClient
+        from src.automation.searxng_client import SearxngSearchClient
+
         self.tavily = tavily or TavilySearchClient()
         self.exa = exa or ExaSearchClient()
         self.brave = brave or BraveSearchClient()
         self.firecrawl = firecrawl or FirecrawlScraper()
         self.jina_reader = jina_reader or JinaReaderScraper()
         self.jina_reranker = jina_reranker or JinaReranker()
+        self.searxng = searxng if searxng is not None else SearxngSearchClient()
+        self.ddgs = ddgs if ddgs is not None else DdgsSearchClient()
 
     def providers(self) -> Dict[str, bool]:
         return {
+            "searxng": self.searxng.configured,
+            "ddgs": self.ddgs.configured,
             "tavily": self.tavily.configured,
             "exa": self.exa.configured,
             "brave": self.brave.configured,
@@ -541,8 +564,10 @@ class WebIntelligence:
         max_results: int = 8,
         engines: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        engines = engines or ["tavily", "exa", "brave"]
+        order = _search_order(engines)
         clients = {
+            "searxng": lambda: self.searxng.search(query, count=max_results),
+            "ddgs": lambda: self.ddgs.search(query, count=max_results),
             "tavily": lambda: self.tavily.search(query, max_results=max_results),
             "exa": lambda: self.exa.search(query, num_results=max_results),
             "brave": lambda: self.brave.search(query, count=max_results),
@@ -551,7 +576,19 @@ class WebIntelligence:
         aggregated: List[Dict[str, Any]] = []
         traces: Dict[str, Any] = {}
         seen_urls: set[str] = set()
-        for engine in engines:
+        allow_paid = os.getenv("RESEARCH_ALLOW_PAID") == "1"
+        for engine in order:
+            if engine in PAID_CAPABLE and not allow_paid:
+                traces[engine] = {"status": "SKIPPED_PAID"}
+                continue
+            if len(aggregated) >= max_results:
+                traces[engine] = {"status": "NOT_NEEDED"}
+                continue
+            if engine in {"searxng", "ddgs", "tavily", "exa", "brave"} and not getattr(
+                getattr(self, engine, None), "configured", True
+            ):
+                traces[engine] = {"status": "SKIPPED_UNCONFIGURED"}
+                continue
             runner = clients.get(engine)
             if runner is None:
                 traces[engine] = {"status": "UNKNOWN_ENGINE"}
@@ -570,6 +607,8 @@ class WebIntelligence:
                 if url:
                     seen_urls.add(url)
                 aggregated.append(item)
+                if len(aggregated) >= max_results:
+                    break
 
         return {
             "status": "SUCCESS" if aggregated else "EMPTY",
