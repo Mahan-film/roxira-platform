@@ -82,7 +82,20 @@ jobs:
             --comment-body "$COMMENT_BODY" \
             --label-name "$LABEL_NAME"
 
+      - name: Post plan start ledger event to the brief issue
+        if: steps.gate.outputs.proceed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LEDGER_ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          LEDGER_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 -m src.factory_pipeline.ledger_comments post \
+            --issue "$LEDGER_ISSUE_NUMBER" --run-id "$LEDGER_RUN_ID" \
+            --stage plan --status started
+
       - name: Run the planner
+        id: planner
         if: steps.gate.outputs.proceed == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -93,3 +106,16 @@ jobs:
           set -euo pipefail
           python3 output_apps/ecosystem_core/src/factory/factory_plan.py \
             --issue "$ISSUE_NUMBER" --option "$CHOSEN_OPTION"
+
+      - name: Post plan result ledger event to the brief issue
+        if: steps.gate.outputs.proceed == 'true' && always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LEDGER_ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          LEDGER_RUN_ID: ${{ github.run_id }}
+          LEDGER_STATUS: ${{ steps.planner.outcome == 'success' && 'ok' || 'failed' }}
+        run: |
+          python3 -m src.factory_pipeline.ledger_comments post \
+            --issue "$LEDGER_ISSUE_NUMBER" --run-id "$LEDGER_RUN_ID" \
+            --stage plan --status "$LEDGER_STATUS"

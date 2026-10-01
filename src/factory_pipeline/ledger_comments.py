@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import re
+import subprocess
 from typing import Any
 
-from .run_ledger import _safe, summarize
+from .run_ledger import ALLOWED_STAGES, _safe, make_event, summarize
 
 _COMMENT_RE = re.compile(r"<!--\s*roxira-ledger\s+(.*?)\s*-->", re.DOTALL)
 def encode_event(event: dict[str, Any]) -> str:
@@ -41,3 +44,41 @@ def decode_comments(bodies: list[str]) -> list[dict[str, Any]]:
 def build_summary(bodies: list[str]) -> dict[str, Any]:
     """Build the normal Factory ledger summary from issue-comment bodies."""
     return summarize(decode_comments(bodies))
+
+
+def main() -> int:
+    """Post a validated Factory ledger event to an issue comment."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    post = commands.add_parser("post", help="post one ledger event to an issue")
+    post.add_argument("--issue", required=True, type=int)
+    post.add_argument("--run-id", required=True)
+    post.add_argument("--stage", choices=ALLOWED_STAGES, required=True)
+    post.add_argument(
+        "--status", choices=("ok", "failed", "started", "skipped"), required=True
+    )
+    post.add_argument("--cost-usd", type=float)
+    post.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    fields: dict[str, float] = {}
+    if args.cost_usd is not None:
+        fields["cost_usd"] = args.cost_usd
+    try:
+        event = make_event(args.run_id, args.stage, args.status, **fields)
+        body = encode_event(event)
+    except ValueError as error:
+        parser.error(str(error))
+    if args.dry_run:
+        print(body)
+        return 0
+    subprocess.run(
+        ["gh", "issue", "comment", str(args.issue), "--body", body],
+        check=True,
+        env=os.environ.copy(),
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

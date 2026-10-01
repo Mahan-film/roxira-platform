@@ -126,6 +126,18 @@ jobs:
             --file "$RUNNER_TEMP/ledger.jsonl" --run-id "${{ github.run_id }}" \
             --stage research --status started --issue "$ISSUE_NUMBER"
 
+      - name: Post research start ledger event to the brief issue
+        if: steps.preflight.outputs.ok == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LEDGER_ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          LEDGER_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 -m src.factory_pipeline.ledger_comments post \
+            --issue "$LEDGER_ISSUE_NUMBER" --run-id "$LEDGER_RUN_ID" \
+            --stage research --status started
+
       - name: Run project-brief research
         if: steps.preflight.outputs.ok == 'true'
         id: project_brief_research
@@ -160,6 +172,19 @@ jobs:
             --stage research \
             --status "${{ steps.project_brief_research.outcome == 'success' && 'success' || 'failure' }}" \
             --issue "$ISSUE_NUMBER"
+
+      - name: Post research result ledger event to the brief issue
+        if: steps.preflight.outputs.ok == 'true' && always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LEDGER_ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          LEDGER_RUN_ID: ${{ github.run_id }}
+          LEDGER_STATUS: ${{ steps.project_brief_research.outcome == 'success' && 'ok' || 'failed' }}
+        run: |
+          python3 -m src.factory_pipeline.ledger_comments post \
+            --issue "$LEDGER_ISSUE_NUMBER" --run-id "$LEDGER_RUN_ID" \
+            --stage research --status "$LEDGER_STATUS"
 
       - name: Post the Persian proposal on the brief issue
         if: steps.preflight.outputs.ok == 'true'

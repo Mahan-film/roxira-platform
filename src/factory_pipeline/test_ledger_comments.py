@@ -1,5 +1,8 @@
 """Tests for durable Factory ledger issue comments."""
 
+import subprocess
+import sys
+
 import pytest
 
 from src.factory_pipeline.ledger_comments import (
@@ -57,3 +60,64 @@ def test_encode_event_refuses_html_comment_terminator() -> None:
 def test_encode_event_refuses_secret() -> None:
     with pytest.raises(ValueError, match="secret"):
         encode_event(_event(api_key="sk-abcdefghijklmnop"))
+
+
+def test_post_dry_run_round_trips_event() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.factory_pipeline.ledger_comments",
+            "post",
+            "--issue",
+            "302",
+            "--run-id",
+            "12345",
+            "--stage",
+            "research",
+            "--status",
+            "ok",
+            "--cost-usd",
+            "0.5",
+            "--dry-run",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    [event] = decode_comments([result.stdout])
+    assert event["run_id"] == "12345"
+    assert event["stage"] == "research"
+    assert event["status"] == "ok"
+    assert event["cost_usd"] == 0.5
+
+
+def test_post_rejects_bad_stage() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.factory_pipeline.ledger_comments",
+            "post",
+            "--issue",
+            "302",
+            "--run-id",
+            "12345",
+            "--stage",
+            "not-a-stage",
+            "--status",
+            "ok",
+            "--dry-run",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "invalid choice" in result.stderr
+
+
+def test_encode_event_refuses_secret_in_nested_field() -> None:
+    with pytest.raises(ValueError, match="secret"):
+        encode_event(_event(metadata={"token": "ghp_abcdefghijklmnop"}))
