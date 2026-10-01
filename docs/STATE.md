@@ -1,6 +1,6 @@
 # Current state (read this first)
 
-Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: domains, server, keys by name, toolchain, permissions). `docs/STRATEGY.md` explains **why**. Every chat updates this file through `/handoff`. Keep it under 100 lines. Last update: 2026-10-01 (hub).
+Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: domains, server, keys by name, toolchain, permissions). `docs/STRATEGY.md` explains **why**. Every chat updates this file through `/handoff`. Keep it under 100 lines. Last update: 2026-10-01 night (hub).
 
 ## Roles and lanes (ADR `docs/decisions/0003-agent-operating-model.md`)
 - The hub chat is the control room: strategy, issue specs, diff review, merge. It does not implement product code.
@@ -10,11 +10,13 @@ Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: doma
 - Owner rules (memory): test every link/command before presenting it; research anything the owner names (and alternatives) first-hand on several sites; disagree only with evidence; the lawyer gets only hard questions that search cannot settle.
 
 ## Live and working (prod `5.75.200.67`)
-- **Prod is fully deployed as of 2026-09-30 19:57 UTC** (core app + frontend at 129ef71, `/coverage` and `/health` 200). Merged since and NOT yet deployed: #182 (pin lightrag-hku 1.5.7 + openai 3.22.1), #192-#195 (DESIGN.md contract, status tokens, LegalProvenanceCard/LegalResultState, not yet used by pages), #200 (amending-law splitter, script only). Deploy recipe (detached, interactive ssh drops): `ssh 5.75.200.67 'cd /opt/roxira_platform && nohup scripts/ops/deploy.sh <service> > /root/deploy.log 2>&1 &'`. See `docs/OPERATIONS_RUNBOOK.md`.
-- Site https://ghazihoushmand.ir: Zibal payments, SMS OTP login, STT/TTS voice, `/health` 200. Details in SYSTEM_MAP §1-3.
-- Keys: prod `roxira-prod-chat` ($3/day); `roxira-agent` for GitHub and the Mac ($4/day, set back to $2). Only ONE Actions secret exists (`OPENROUTER_AGENT_KEY`): workflows that want search keys or `OPENROUTER_RESEARCH_KEY` get empty values (incl. `tech-radar-weekly.yml`, merged in #96, runs Mondays, $1.50 cap).
-- CI: required checks Detect changes, Secret scan, Pytest (unit), Frontend gate; new jobs `Undefined names` (#154) and `System inventory up to date` (#166) are not yet in the required list (owner adds them in the ruleset).
-- OmniRoute (Mac, Docker, `127.0.0.1:20128`) is configured: DB already encrypted (key auto-generated into the volume's `server.env`, backed up in `~/omniroute-backups/`; never set a new storage key), Cloud off, combo `team-coding` = Priority [mistral codestral-latest, groq gpt-oss-120b], OpenCode provider `omniroute` (key env `OMNIROUTE_OPENCODE_KEY`). `rx <n> team` uses it. First comparison: `team` failed the F821 gate on #198, Codex passed; LiteLLM-vs-OmniRoute 5-step comparison still to run.
+- **Prod fully deployed** (core + frontend, last core deploy 2026-10-01 10:18 UTC): exact article lookup, identity fast path (`fast_path.classify_fast_path`; «سلام تو کی هستی» answers as «قاضی هوشمند»), Whisper request forces `language=fa` + vocabulary prompt, `/coverage`, new design tokens/components (not yet used by pages). Recipe: `ssh 5.75.200.67 'cd /opt/roxira_platform && nohup scripts/ops/deploy.sh <enterprise_app|roxira_enterprise_frontend> > /root/deploy.log 2>&1 &'`; never deploy `enterprise_app` during a long job inside `roxira_app_prod` (it recreates the container).
+- Merged but NOT deployed to prod: local faster-whisper engine (`ROXIRA_STT_LOCAL=1`, off; model `large-v3-turbo` already cached on the server, loads in ~9 s), LightRAG/openai pin (#182 deployed in the 10:18 deploy), research libraries (SearXNG/ddgs clients, local reranker, free-first order in `WebIntelligence`).
+- Qdrant `iran_laws_v2`: 5103 points (12 new official laws added 2026-10-01; snapshots from 08:54 exist in Qdrant as backup).
+- Site https://ghazihoushmand.ir: Zibal payments, SMS OTP login, STT/TTS voice, `/health` 200.
+- GitHub Actions: secrets BRAVE_API_KEY, EXA_API_KEY, FIRECRAWL_API_KEY, JINA_API_KEY, TAVILY_KEYS, OPENROUTER_AGENT_KEY, OPENROUTER_RESEARCH_KEY (daily-capped) are set; variables FACTORY_ENABLED=true, AGENT_ENABLED=true, AUTO_MERGE_ENABLED=true, AGENT_REVIEW_MODEL=deepseek/deepseek-v4.1-flash. Auto-merge is enabled on the repo (runbook §7). Required checks list in the ruleset still lacks `Undefined names` and `System inventory up to date` (owner).
+- Project Factory first live run: brief issue #236 (Persian legal FAQ microsite). Research step ran but all LLM calls failed with HTTP 400 `'models' array must have 3 items or fewer` (llm_router sends the whole tier list; prod hides it via `LLM_TIER_*`). Fix: issue #238 (rx). After it merges, re-run by re-labelling #236. Second small bug: query translation logs «Event loop is closed».
+- OmniRoute (Mac, `127.0.0.1:20128`): encrypted DB (key in the volume's `server.env`, backup in `~/omniroute-backups/`), Cloud off, combo `team-coding`, key env `OMNIROUTE_OPENCODE_KEY` in `~/.config/omniroute.env` (rotated 2026-10-01). Measured: LiteLLM codestral 7/7 at 1.6 s, OmniRoute team-coding 7/7 at 3.9 s; LiteLLM stays the default gateway, `rx <n> team` is the secondary lane.
 - Gemini CLI returns 403 from this Mac (region); Codex CLI works.
 
 ## Legal corpus (W25)
@@ -26,20 +28,23 @@ Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: doma
 - Remaining legal gaps: re-fetch of the 8 laws served in `iran_laws_v2` (commerce, civil code, etc. not in the staged file except commerce 96314 not staged yet), unification rulings (Phase 4), wiring `config/jurisdiction_rules.yaml` into answers after the lawyer replies.
 
 ## Waiting on the owner
-1. Yes/no: write the 1504 official rows into Qdrant (prod write).
-2. Deploy: `deploy.sh enterprise_app` (LightRAG pin) and `roxira_enterprise_frontend` (new tokens/components) with the detached recipe above.
-3. Send (or not) the five expert questions at the end of `docs/LEGAL_RESEARCH_ROUND2_2026-09-30.md` to the lawyer.
-4. Add allow rules himself in an interactive `claude` terminal (`/permissions`): `Bash(gh pr merge:*)`, `Bash(ssh 5.75.200.67:*)`. The auto-mode classifier otherwise refuses direct merges, ssh writes and secret-file handling for the assistant. Auto-merge IS enabled on the repo (runbook §7).
+1. `/permissions` allow rules in an interactive `claude` terminal: `Bash(ssh 5.75.200.67:*)`, `Bash(gh:*)`, `Bash(docker:*)`. Without them the assistant's auto-mode classifier refuses ssh writes, direct merges, secret-file handling and anything that looks like a deploy pipeline.
+2. Approve the Factory proposal on issue #236 with a `/approve` comment once the research run succeeds.
+3. Enable local Whisper on prod (add `ROXIRA_STT_LOCAL=1` to the server `.env`, redeploy `enterprise_app`) after a real-voice test; install SearXNG+Valkey and Crawl4AI (compose file comes from an rx issue).
+4. Send (or not) the five expert questions at the end of `docs/LEGAL_RESEARCH_ROUND2_2026-09-30.md` to the lawyer.
 5. DB fixes: order 4815502353 paid but `pending`; revoke fake user `authenticated_user`; SINGLE_DRAFT credits (#101).
-6. Server housekeeping: kernel reboot; CI required checks `Undefined names` and `System inventory up to date`; missing Actions secrets for the weekly radar.
+6. Server housekeeping: kernel reboot; disk is at 79% (31 GB free) which limits preview environments.
 
-## Next workstreams
+## Next workstreams (roadmap: `docs/research/FULL_AUTONOMY_GAP_ANALYSIS_2026-10.md`)
 | Id | What | Lane |
 | --- | --- | --- |
-| W25 | Fetch remaining official texts and rebuild the staged JSONL with the new ingest filters (#177 drops inactive rows and commerce arts 51/53-71), special splitter for the 1399 law, wire `config/jurisdiction_rules.yaml` (#176; only the peace-court threshold is `confirmed`) into answers after the lawyer's reply, unification rulings (Phase 4 first item) | rx (codex) |
-| W26b | Design tokens + visual pass (separate Sonnet chat started 2026-09-30; status unknown to this chat) | chat |
-| infra | Promptfoo gateway fixtures (docs/research/AGENTIC_TOOLING_RESEARCH_2026-10.md task 1-2); OmniRoute vs LiteLLM comparison on one real issue; rx timeout/fallback paths never exercised; eval_cheap_tier needs a stable network (Mac run had >20% API errors) | rx |
-| misc | #99, #77, #113, #67, #66, #84 voice, #94/#95 research, #74 e2e (red) | rx |
+| F0 | Fix llm_router `models` cap (#238), then re-run brief #236 and record the run | rx |
+| F1 | Preview environments on the same server with hard limits (<=2, 1 CPU/1 GB each, TTL 24 h), preview E2E (Playwright), `deploy-prod.yml` with forced-command SSH key + `.deploy-freeze` | rx + owner install |
+| F2 | Golden templates (Next+Nest+Postgres, RTL fa) checked by `template_check.py`; run ledger + budget wired into factory workflows; final Persian report in factory-status | rx |
+| R1 | Zero-cost research stack: SearXNG+Valkey compose, Crawl4AI, wire `LocalReranker`, disable paid auto-reload in Brave/Exa/Tavily/Firecrawl/Jina dashboards (`docs/research/ZERO_COST_RESEARCH_STACK_2026-10.md`) | rx + owner |
+| W25 | Official laws still to add: replace the 3 overlapping laws (civil procedure, dispute councils, cheque) with official versions, unification rulings, wire `config/jurisdiction_rules.yaml` after the lawyer answers | rx |
+| V1 | Voice: promote local Whisper after a measured test, VAD/endpointing tuning, re-ask on low confidence (`docs/research/STT_PERSIAN_RESEARCH_2026-10.md`) | rx |
+| misc | #99, #77, #113, #67, #66, #84, #94/#95, PR #74 e2e (red) | rx |
 
 ## Known issues
 - Dockerfile.prod is Python 3.11 while pyproject says >=3.13; `.env.example` names differ from prod (SYSTEM_MAP §3-4).
