@@ -225,6 +225,9 @@ def reasoning_param(tier: str) -> dict[str, Any] | None:
     return {"enabled": False}
 
 
+OPENROUTER_MAX_MODELS = 3
+
+
 def _resolve_models(tier: str, sensitive: bool) -> tuple[str, list[str]]:
     if tier not in TIERS:
         raise ValueError(f"unknown LLM tier {tier!r}; expected one of {TIERS}")
@@ -239,7 +242,7 @@ def _resolve_models(tier: str, sensitive: bool) -> tuple[str, list[str]]:
         models = [m for m in models if not is_free_model(m)]
     if not models:
         raise LLMRouterError(f"no usable models configured for tier {tier!r}", tier=tier)
-    return tier, models
+    return tier, models[:OPENROUTER_MAX_MODELS]
 
 
 # ---------------------------------------------------------------------------
