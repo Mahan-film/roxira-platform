@@ -1,0 +1,110 @@
+name: Deploy prod
+
+# Continuous delivery for the single Hetzner host (owner approved 2026-10-01).
+#
+# Safety model (docs/research/AUTONOMY_OPS_RESEARCH_2026-10.md):
+#  - Triggered only after the `CI` workflow succeeded on `main` (or by hand).
+#  - The SSH key stored in the `production` environment can run exactly ONE command on the
+#    server: scripts/ops/ci-deploy.sh (authorized_keys forced command). It accepts only
+#    "deploy <40-hex-sha>", takes a lock, honours /opt/roxira_platform/.deploy-freeze, and
+#    refuses commits that are not on origin/main. deploy.sh rolls back on a failed health check.
+#  - Kill switch: repository variable DEPLOY_ENABLED must be exactly "true".
+#  - One deploy at a time (concurrency group), never cancelled mid-flight.
+#
+# Owner-only setup (once), see docs/OPERATIONS_RUNBOOK.md "Automatic deploy":
+#   secrets in the `production` environment: PROD_DEPLOY_KEY (private ed25519 key),
+#   PROD_KNOWN_HOSTS (output of `ssh-keyscan -t ed25519 5.75.200.67`); variable PROD_HOST.
+#
+# Platform independence: nothing here is GitHub-specific except the trigger. The server side
+# (scripts/ops/ci-deploy.sh) can be driven by any runner or by a local timer.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit to deploy (40-hex, must be on main). Empty = current main head."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
+    steps:
+      - name: Resolve the commit to deploy
+        id: sha
+        env:
+          EVENT: ${{ github.event_name }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_SHA: ${{ inputs.sha }}
+          MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_run" ]; then sha="$RUN_SHA"
+          elif [ -n "${INPUT_SHA:-}" ]; then sha="$INPUT_SHA"
+          else sha="$MAIN_SHA"; fi
+          if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "refusing: not a 40-hex sha"; exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Install the deploy key
+        env:
+          KEY: ${{ secrets.PROD_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [ -n "$KEY" ] && [ -n "$KNOWN_HOSTS" ] || { echo "PROD_DEPLOY_KEY / PROD_KNOWN_HOSTS missing"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy (forced command on the server)
+        env:
+          HOST: ${{ vars.PROD_HOST }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [ -n "$HOST" ] || { echo "variable PROD_HOST is not set"; exit 1; }
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=40 \
+              "root@${HOST}" "deploy ${SHA}"
+
+      - name: Public smoke test
+        env:
+          URL: ${{ vars.PROD_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          url="${URL:-https://ghazihoushmand.ir}"
+          for path in /health /; do
+            code=""
+            for i in 1 2 3 4 5 6; do
+              code="$(curl -s -o /dev/null -m 20 -w '%{http_code}' "${url}${path}" || true)"
+              [ "$code" = "200" ] && break
+              sleep 10
+            done
+            echo "${url}${path} -> ${code}"
+            [ "$code" = "200" ] || { echo "public smoke test failed"; exit 1; }
+          done
+
+      - name: Remove the deploy key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
