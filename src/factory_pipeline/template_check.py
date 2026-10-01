@@ -1,5 +1,6 @@
 """Offline acceptance checks for generated project templates."""
 
+import argparse
 from pathlib import Path
 import re
 
@@ -47,3 +48,30 @@ def check_project(root: Path) -> list[str]:
                 if not re.search(r"\b(?:tenant_id|owner_id)\b", statement.group(2), re.I):
                     problems.append(f"{relative}: table {statement.group(1)} has no tenant_id/owner_id")
     return problems
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Check generated project templates.")
+    parser.add_argument("--strict", action="store_true", help="exit 1 when problems are found")
+    parser.add_argument("roots", nargs="*", metavar="ROOT", help="project roots to check")
+    args = parser.parse_args(argv)
+
+    if args.roots:
+        roots = [Path(root) for root in args.roots]
+    else:
+        projects = Path("projects")
+        if not projects.is_dir():
+            print("no projects")
+            return 0
+        roots = sorted(path for path in projects.iterdir() if path.is_dir())
+
+    found_problems = False
+    for root in roots:
+        for problem in check_project(root):
+            found_problems = True
+            print(f"{root}: {problem}")
+    return 1 if args.strict and found_problems else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

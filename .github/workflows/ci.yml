@@ -43,6 +43,7 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       compose: ${{ steps.filter.outputs.compose }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      projects: ${{ steps.filter.outputs.projects }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -68,6 +69,9 @@ jobs:
               - ".github/workflows/ci.yml"
             frontend:
               - "output_apps/enterprise_hub/frontend/**"
+              - ".github/workflows/ci.yml"
+            projects:
+              - "projects/**"
               - ".github/workflows/ci.yml"
 
   gitleaks:
@@ -253,6 +257,20 @@ jobs:
         # Tests that need Postgres, Qdrant, LLM keys or the network are marked
         # `integration` in src/conftest.py and skipped here.
         run: pytest -m "not integration" -q --timeout=60
+
+  template-check:
+    name: Generated template check (report-only)
+    needs: changes
+    if: needs.changes.outputs.projects == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python3 -m src.factory_pipeline.template_check
 
   compose:
     name: Compose config
