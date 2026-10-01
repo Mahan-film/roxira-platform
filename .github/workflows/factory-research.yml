@@ -95,6 +95,11 @@ jobs:
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
           TAVILY_KEYS: ${{ secrets.TAVILY_KEYS }}
+          # Free models return empty completions for structured per-layer synthesis
+          # (first live run, 2026-10-01); `cheap` costs ~5 cents per run. Override with
+          # the repo variables RADAR_LAYER_TIER / RADAR_FINAL_TIER (free|cheap|strong).
+          RADAR_LAYER_TIER: ${{ vars.RADAR_LAYER_TIER || 'cheap' }}
+          RADAR_FINAL_TIER: ${{ vars.RADAR_FINAL_TIER || 'cheap' }}
         run: |
           set -o pipefail
           idea="$(cat "$RUNNER_TEMP/idea.txt")"
