@@ -30,9 +30,16 @@ Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: doma
 - Staged, NOT in Qdrant: `data/raw/phase1/phase1_official_v2.jsonl` (git-ignored, Mac only): 1504 rows, 17 law units, all `source_tier=official`, built from the official rc.majlis.ir texts fetched 2026-10-01 into `data/raw/phase1/*.txt` with the #177 filters and the #200 `--amending` splitter (reduction 1399, cheque amendments 1397/1400). Ingest into prod Qdrant needs the owner's explicit yes (plan: backup, separate collection, spot-check lookups, then switch).
 - Remaining legal gaps: re-fetch of the 8 laws served in `iran_laws_v2` (commerce, civil code, etc. not in the staged file except commerce 96314 not staged yet), unification rulings (Phase 4), wiring `config/jurisdiction_rules.yaml` into answers after the lawyer replies.
 
+## Autonomy wave (2026-10-01 night, hub = strategist only)
+- Research: `docs/research/NEXTGEN_ROADMAP_2026-10.md` (+ `nextgen/A,B,C`), Persian overview `docs/OWNER_MASTER_OVERVIEW_FA.md`, lane/capacity plan `docs/research/AGENT_LANES_CAPACITY_2026-10.md`.
+- Merged via rx (issues #267-#299): run-ledger CLI in factory-research, HN adapter, spec_artifacts, reachability matrix, task-contract validation in the planner, eval tournament runner, axe a11y e2e, preview.sh (bash) + preview compose template, Trivy/Semgrep (report-only), compose_policy, template_check job, preflight report, golden template `templates/roxira-static-rtl`, rx auto-merge step, Agent review on rx PRs (`pull_request_target`, trusted checkout). Open: #298 ledger via hidden issue comments.
+- Still unwired: delivery_report, budget in factory workflows, spec_artifacts gate, `/report` command. Next waves are in the roadmap (DBOS spike, SOPS, gVisor, Coolify, tournament schedule).
+- Lanes (measured research, 2026-10-01): local LiteLLM pool first, Groq, Cerebras, SiliconFlow free, OpenRouter `:free`, OpenCode Zen free. Codex CLI/Gemini are officially unsupported in Iran: treat as supervised escalation, not capacity. GitHub Models is retired; Team has no Copilot; 3,000 Actions min/month is a shared budget.
+- Classifier limits: the assistant cannot post `/approve`, plain `gh pr merge`, or delete branches; owner runs those. Local branches with unpushed work: feature/weekly-research-radar, fix/runners-off-prod, hub/status-2026-09-25, issue-133, issue-144, worktree-agent-aedbb559e8fd6de8f, plus a stash and 12 dirty worktrees: back up before any cleanup.
+
 ## Waiting on the owner
 1. `/permissions` allow rules in an interactive `claude` terminal: `Bash(ssh 5.75.200.67:*)`, `Bash(gh:*)`, `Bash(docker:*)`. Without them the assistant's auto-mode classifier refuses ssh writes, direct merges, secret-file handling and anything that looks like a deploy pipeline.
-2. Approve the Factory proposal on issue #236 with a `/approve` comment once the research run succeeds.
+2. Approve the Factory proposal on issue #236 with a `/approve` comment (run 6 proposal is good).
 3. Enable local Whisper on prod (add `ROXIRA_STT_LOCAL=1` to the server `.env`, redeploy `enterprise_app`) after a real-voice test; Crawl4AI is not installed yet (SearXNG+Valkey already run).
 4. Send (or not) the five expert questions at the end of `docs/LEGAL_RESEARCH_ROUND2_2026-09-30.md` to the lawyer.
 5. DB fixes: order 4815502353 paid but `pending`; revoke fake user `authenticated_user`; SINGLE_DRAFT credits (#101).
