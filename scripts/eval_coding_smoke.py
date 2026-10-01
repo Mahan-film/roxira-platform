@@ -57,6 +57,7 @@ sys.path.insert(0, str(ROOT))
 from output_apps.generated_modules.smartjudge import model_registry  # noqa: E402
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+CHAT_URL = OPENROUTER_CHAT_URL
 DEFAULT_TASKS_DIR = ROOT / "data" / "eval" / "coding_smoke"
 DEFAULT_MAX_USD = 0.50
 DEFAULT_CHECK_TIMEOUT_S = 10.0
@@ -161,7 +162,7 @@ def call_model(
             "temperature": 0,
         }
     ).encode("utf-8")
-    req = urllib.request.Request(OPENROUTER_CHAT_URL, data=body, method="POST")
+    req = urllib.request.Request(CHAT_URL, data=body, method="POST")
     req.add_header("Authorization", f"Bearer {api_key}")
     req.add_header("Content-Type", "application/json")
 
@@ -508,11 +509,14 @@ def print_compare_table(summaries: list[EvalSummary], file=None) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global CHAT_URL
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--model", default=None, help="single OpenRouter model id to evaluate")
     ap.add_argument("--models", default=None, help="comma-separated OpenRouter model ids")
+    ap.add_argument("--base-url", default=None, help="OpenAI-compatible API base URL")
+    ap.add_argument("--api-key-env", default=None, help="environment variable containing the API key")
     ap.add_argument(
         "--compare",
         action="store_true",
@@ -540,15 +544,19 @@ def main(argv: list[str] | None = None) -> int:
         "--json", action="store_true", help="print machine-readable JSON instead of a text report"
     )
     args = ap.parse_args(argv)
+    if args.base_url:
+        CHAT_URL = args.base_url.rstrip("/") + "/chat/completions"
 
     tasks = load_tasks(args.tasks_dir)
 
-    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip() or os.environ.get(
-        "OPENROUTER_AGENT_KEY", ""
-    ).strip()
+    api_key = os.environ.get(args.api_key_env, "").strip() if args.api_key_env else (
+        os.environ.get("OPENROUTER_API_KEY", "").strip()
+        or os.environ.get("OPENROUTER_AGENT_KEY", "").strip()
+    )
     if not args.offline and not api_key:
+        key_source = args.api_key_env or "OPENROUTER_API_KEY or OPENROUTER_AGENT_KEY"
         print(
-            "error: no API key found. Set OPENROUTER_API_KEY or OPENROUTER_AGENT_KEY, "
+            f"error: no API key found. Set {key_source}, "
             "or pass --offline to run with canned responses.",
             file=sys.stderr,
         )
