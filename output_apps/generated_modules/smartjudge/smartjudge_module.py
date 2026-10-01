@@ -10,6 +10,7 @@ from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router 
 # prefix; that produced a dead, wrongly-prefixed duplicate path
 # (/api/v1/apps/judge/api/v1/payment/zibal/...). See docs/W17_payment_audit.md.
 from output_apps.ecosystem_core.src.billing import zibal_service
+from output_apps.generated_modules.smartjudge.fast_path import IDENTITY_REPLY, classify_fast_path
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 # W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
@@ -1234,18 +1235,22 @@ async def interactive_consult(payload: dict = Body(...)):
     cfg = OPENROUTER_TIERS[selected_tier]
 
     # تشخیص هوشمند تست میکروفون و احوالپرسی (پاسخ بلادرنگ بدون فراخوانی بی‌مورد مواد قانونی)
-    mic_test_patterns = [
-        "صدای منو میشنوی", "صدام میاد", "صدای من میاد", "میشنوی صدامو", "میشنوی",
-        "صدا داری", "الو", "سلام صدام میاد", "تست صدا", "صدام میرسه", "میشنوید",
-        "هستی", "سلام هستی", "صدامو داری", "سلام صدای من", "سلام الو", "صحبت کنی", "سو بات کنی"
-    ]
-    is_mic_check = any(p in user_text for p in mic_test_patterns) or (
-        any(w in user_text for w in ["میشنوی", "صدام", "صدا میاد", "الو"]) and len(user_text.split()) <= 7
-    )
-    greeting_words = ["سلام", "درود", "صبح بخیر", "عصر بخیر", "روز بخیر", "شب بخیر", "خسته نباشید", "خوبی", "چطوری", "احوال شما"]
-    is_greeting_only = any(w in user_text for w in greeting_words) and len(user_text.split()) <= 4 and not any(w in user_text for w in ["قانون", "دادگاه", "شکایت", "طلاق", "مهریه", "چک", "قرارداد", "لایحه", "دادخواست", "سکه", "نفقه"])
+    kind = classify_fast_path(user_text)
 
-    if is_mic_check:
+    if kind == "identity":
+        return {
+            "status": "SUCCESS",
+            "conversation_id": conv_id or str(uuid.uuid4()),
+            "reply": IDENTITY_REPLY,
+            "success_probability": None,
+            "defense_draft": None,
+            "statutory_basis": [],
+            "unified_precedents": [],
+            "model_assigned": cfg["primary_model"],
+            "tier": selected_tier,
+            "latency_ms": round((time.time() - t0) * 1000, 2)
+        }
+    elif kind == "mic_check":
         reply_fast = "سلام! بله، صدای شما رو کاملاً شفاف، واضح و رسا می‌شنوم. در خدمت شما هستم؛ بفرمایید چه موضوع یا پرونده‌ای رو می‌خواهید بررسی کنیم؟"
         return {
             "status": "SUCCESS",
@@ -1259,7 +1264,7 @@ async def interactive_consult(payload: dict = Body(...)):
             "tier": selected_tier,
             "latency_ms": round((time.time() - t0) * 1000, 2)
         }
-    elif is_greeting_only:
+    elif kind == "greeting":
         reply_fast = "سلام و درود بر شما، وقت بخیر. در خدمت شما هستم؛ لطفاً شرح پرونده یا پرسش حقوقی خود را بفرمایید تا بررسی و راهنمایی کنم."
         return {
             "status": "SUCCESS",
