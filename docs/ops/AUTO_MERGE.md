@@ -12,7 +12,7 @@ The repo is **private on GitHub Free**. Branch protection / rulesets on
 
 - Nothing stops a direct `git push` to `main` by anyone with write access.
 - Nothing stops a manual merge from the GitHub UI that skips CI or the
-  `agent-review` check.
+  `Agent review` check.
 - `agent-automerge.yml`'s `gh pr merge --squash --auto` is a **safety net for
   one specific path** (an agent's own PR going through its own workflow),
   not an enforced gate. It only runs the checks the workflow itself asks for.
@@ -31,7 +31,7 @@ actual safety property this was built for.
    - Target branch: `main`.
    - Require a pull request before merging.
    - Require status checks to pass: `ci` (the CI workflow's job names -- at
-     minimum `ruff`, `pytest`, `gitleaks`) **and** `agent-review`.
+     minimum `ruff`, `pytest`, `gitleaks`) **and** `Agent review`.
    - Block force pushes.
    - Do not allow bypass (no "Repository admin" bypass list entry) -- a
      bypass entry defeats the point of the ruleset for exactly the actors
@@ -60,6 +60,17 @@ actual safety property this was built for.
    first, and confirm the `agent-review` comment + commit status look right,
    before flipping it on.
 
+## Require the Agent review check
+
+Add the visible **`Agent review`** job check to the `main-protection`
+ruleset's required checks. It runs for `agent/*` PRs and for `issue-<n>` PRs
+opened by an actor in `AGENT_ALLOWED_ACTORS` (default `mahan-films`); other
+branches show it as skipped. The check succeeds only for an `approve`,
+low-risk verdict. A rejection or high-risk verdict fails it, so auto-merge
+waits; the hub should read the review comment on that PR before deciding what
+to do next. The separate lowercase `agent-review` commit status remains the
+input used by `agent-automerge.yml`.
+
 ## How the gate works
 
 **Neither workflow ever checks out or executes anything from a PR's head.**
@@ -77,12 +88,13 @@ not run anything.
 **Trigger note:** a PR opened by `agent-task.yml` is authored with the
 built-in `GITHUB_TOKEN`, and GitHub does not fire `pull_request` events for
 a `GITHUB_TOKEN`-authored PR (the same anti-recursion rule `ci.yml` already
-works around). `agent-review.yml` is therefore triggered primarily by
+works around). `agent-review.yml` is therefore triggered by
 `workflow_dispatch` (input `pr_number`), which `agent-task.yml` calls right
 after opening a PR -- the same pattern it already uses to dispatch `ci.yml`.
-Its `pull_request` trigger is a secondary path only (e.g. a human pushing an
-`agent/*` branch directly). `agent-automerge.yml` has **no** `pull_request`
-trigger at all -- only `workflow_run` (reacting to `Agent review`/`CI`
+It also uses `pull_request_target` for `agent/*` PRs and trusted rx
+`issue-<n>` PRs; that event evaluates the workflow from the target branch,
+not the PR head. `agent-automerge.yml` has **no** `pull_request` trigger at
+all -- only `workflow_run` (reacting to `Agent review`/`CI`
 completing, always evaluated using the workflow file on `main`, never the
 PR's own copy) and an optional `workflow_dispatch` for a manual re-check.
 
@@ -99,7 +111,9 @@ PR's own copy) and an optional `workflow_dispatch` for a manual re-check.
    model to treat that as data to flag, not an instruction to follow). See
    `output_apps/ecosystem_core/src/factory/review_gate.py`.
 5. Posts the verdict (`approve`/`request_changes`, `risk`, `reasons`) as a PR
-   comment and sets a commit status named `agent-review`.
+   comment, sets the legacy commit status named `agent-review`, and completes
+   the visible `Agent review` job check successfully only for `approve` with
+   `low` risk.
 
 `agent-automerge.yml` runs only when `AUTO_MERGE_ENABLED == 'true'`, and
 merges (`gh pr merge --squash --auto`) only when **all** of these hold

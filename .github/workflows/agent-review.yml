@@ -1,8 +1,9 @@
 name: Agent review
 
-# W13 / W10 follow-up: an AI reviewer looks at an `agent/*` PR's diff and CI
-# status and posts a verdict as a PR comment + a commit status/check named
-# `agent-review`. This is one of the two inputs agent-automerge.yml requires
+# W13 / W10 follow-up: an AI reviewer looks at an `agent/*` PR's or a trusted
+# rx `issue-<n>` PR's diff and CI status and posts a verdict as a PR comment
+# + a commit status named `agent-review`. Its job check is `Agent review`.
+# This is one of the two inputs agent-automerge.yml requires
 # (the other being CI itself); neither this nor auto-merge is a substitute
 # for GitHub branch protection, which this private/Free repo cannot enable
 # today (see docs/ops/AUTO_MERGE.md).
@@ -22,12 +23,11 @@ name: Agent review
 # 3. PRs opened by agent-task.yml use the built-in `GITHUB_TOKEN`, and a
 #    GITHUB_TOKEN-authored PR does NOT trigger `pull_request` events (GitHub's
 #    anti-recursion rule -- see ci.yml's own comment on this). This workflow
-#    is therefore primarily triggered by `workflow_dispatch` with a
-#    `pr_number` input, called by agent-task.yml right after it opens a PR
-#    (the same pattern agent-task.yml already uses to dispatch ci.yml). There
-#    is deliberately no `pull_request` trigger: on that event GitHub runs the
-#    workflow file from the PR's own branch, with secrets, so a PR could
-#    rewrite this reviewer. workflow_dispatch always runs main's copy.
+#    is therefore dispatched by agent-task.yml with a `pr_number` input right
+#    after it opens a PR. rx PRs are also received through
+#    `pull_request_target`, which runs this workflow from the trusted target
+#    branch rather than the PR head. There is deliberately no `pull_request`
+#    trigger: that event would run the workflow file from the PR's own branch.
 
 on:
   workflow_dispatch:
@@ -36,9 +36,11 @@ on:
         description: "PR number to review"
         required: true
         type: string
+  pull_request_target:
+    types: [opened, reopened, synchronize]
 
 concurrency:
-  group: agent-review-${{ github.event.inputs.pr_number }}
+  group: agent-review-${{ github.event.inputs.pr_number || github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -53,11 +55,50 @@ env:
   PYTHON_VERSION: "3.13"
 
 jobs:
+  resolve-pr:
+    name: Resolve review eligibility
+    runs-on: ubuntu-latest
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      branch: ${{ steps.pr.outputs.branch }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      base_sha: ${{ steps.pr.outputs.base_sha }}
+      eligible: ${{ steps.pr.outputs.eligible }}
+    steps:
+      - name: Resolve the PR to review
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+          AGENT_ALLOWED_ACTORS: ${{ vars.AGENT_ALLOWED_ACTORS || 'mahan-films' }}
+        run: |
+          set -euo pipefail
+          pr_json=$(gh pr view "$PR_NUMBER_INPUT" --json number,title,body,headRefName,headRefOid,baseRefOid,author,headRepositoryOwner)
+          branch=$(echo "$pr_json" | jq -r '.headRefName')
+          author_login=$(echo "$pr_json" | jq -r '.author.login')
+          eligible=false
+          if [[ "$branch" == agent/* ]]; then
+            eligible=true
+          elif [[ "$branch" =~ ^issue-[0-9]+$ ]] && [[ ",$AGENT_ALLOWED_ACTORS," == *,"$author_login",* ]]; then
+            eligible=true
+          fi
+          {
+            echo "number=$(echo "$pr_json" | jq -r '.number')"
+            echo "branch=$branch"
+            echo "head_sha=$(echo "$pr_json" | jq -r '.headRefOid')"
+            echo "base_sha=$(echo "$pr_json" | jq -r '.baseRefOid')"
+            echo "eligible=$eligible"
+          } >> "$GITHUB_OUTPUT"
+
   review:
     name: Agent review
+    needs: resolve-pr
+    # A skipped job renders a neutral/skipped `Agent review` check for all
+    # other branches. `issue-<n>` PRs must be opened by an allowlisted owner;
+    # `agent/*` retains its existing eligibility.
+    if: needs.resolve-pr.outputs.eligible == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: github.event_name == 'workflow_dispatch'
     steps:
       # Only `main` is ever checked out in this job -- see the module
       # docstring above. review_gate.py/cost_ledger.py always run from here,
@@ -73,28 +114,20 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Resolve the PR to review
-        id: pr
+      - name: Fetch untrusted PR metadata as data
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+          PR_NUMBER: ${{ needs.resolve-pr.outputs.number }}
         run: |
           set -euo pipefail
-          pr_json=$(gh pr view "$PR_NUMBER_INPUT" --json number,title,body,headRefName,headRefOid,baseRefOid,author,headRepositoryOwner)
-          {
-            echo "number=$(echo "$pr_json" | jq -r '.number')"
-            echo "branch=$(echo "$pr_json" | jq -r '.headRefName')"
-            echo "head_sha=$(echo "$pr_json" | jq -r '.headRefOid')"
-            echo "base_sha=$(echo "$pr_json" | jq -r '.baseRefOid')"
-            echo "author_login=$(echo "$pr_json" | jq -r '.author.login')"
-          } >> "$GITHUB_OUTPUT"
-          echo "$pr_json" | jq -r '.title' > "$RUNNER_TEMP/pr_title.txt"
-          echo "$pr_json" | jq -r '.body // ""' > "$RUNNER_TEMP/pr_body.txt"
+          gh pr view "$PR_NUMBER" --json title,body > "$RUNNER_TEMP/pr_metadata.json"
+          jq -r '.title' "$RUNNER_TEMP/pr_metadata.json" > "$RUNNER_TEMP/pr_title.txt"
+          jq -r '.body // ""' "$RUNNER_TEMP/pr_metadata.json" > "$RUNNER_TEMP/pr_body.txt"
 
       - name: Fetch the diff (read-only, never checked out or executed)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ needs.resolve-pr.outputs.number }}
         run: |
           set -euo pipefail
           gh pr diff "$PR_NUMBER" > "$RUNNER_TEMP/pr.diff"
@@ -105,7 +138,7 @@ jobs:
         id: ci_status
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          HEAD_SHA: ${{ needs.resolve-pr.outputs.head_sha }}
         run: |
           set -euo pipefail
           deadline=$(( $(date +%s) + CI_WAIT_TIMEOUT_SECS ))
@@ -146,7 +179,7 @@ jobs:
       - name: Post PR comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ needs.resolve-pr.outputs.number }}
         run: |
           set -euo pipefail
           status=$(jq -r '.status' "$RUNNER_TEMP/review_result.json")
@@ -170,7 +203,7 @@ jobs:
       - name: Set the agent-review commit status
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          HEAD_SHA: ${{ needs.resolve-pr.outputs.head_sha }}
         run: |
           set -euo pipefail
           status=$(jq -r '.status' "$RUNNER_TEMP/review_result.json")
@@ -181,13 +214,33 @@ jobs:
             state="failure"
             desc="reviewer misconfigured, failed closed"
           else
-            state=$(jq -r '.commit_status_state' "$RUNNER_TEMP/review_result.json")
             verdict=$(jq -r '.verdict.verdict' "$RUNNER_TEMP/review_result.json")
             risk=$(jq -r '.verdict.risk' "$RUNNER_TEMP/review_result.json")
+            if [ "$verdict" = "approve" ] && [ "$risk" = "low" ]; then
+              state="success"
+            else
+              state="failure"
+            fi
             desc="verdict=$verdict risk=$risk"
           fi
           gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
             -f state="$state" -f context="agent-review" -f description="$desc" > /dev/null
+
+      - name: Require an approve, low-risk verdict
+        run: |
+          set -euo pipefail
+          status=$(jq -r '.status' "$RUNNER_TEMP/review_result.json")
+          if [ "$status" = "reviewed" ]; then
+            verdict=$(jq -r '.verdict.verdict' "$RUNNER_TEMP/review_result.json")
+            risk=$(jq -r '.verdict.risk' "$RUNNER_TEMP/review_result.json")
+            if [ "$verdict" = "approve" ] && [ "$risk" = "low" ]; then
+              exit 0
+            fi
+            echo "Agent review did not approve this PR at low risk." >&2
+          else
+            echo "Agent review did not produce an approval." >&2
+          fi
+          exit 1
 
       - name: Job summary (usage, no secret values)
         run: |
@@ -201,7 +254,7 @@ jobs:
       - name: Append to cost ledger
         if: always()
         env:
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ needs.resolve-pr.outputs.number }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/agent-ledger"
