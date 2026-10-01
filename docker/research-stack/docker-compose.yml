@@ -34,6 +34,24 @@ services:
         max-file: "2"
     networks: [research]
 
+  crawl4ai:
+    image: unclecode/crawl4ai:0.9.4
+    ports:
+      - 127.0.0.1:11235:11235
+    mem_limit: 1536m
+    cpus: 1.0
+    pids_limit: 256
+    restart: unless-stopped
+    shm_size: 1gb
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+    networks: [research]
+
 networks:
   research:
     name: research

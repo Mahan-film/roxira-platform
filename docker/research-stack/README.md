@@ -18,4 +18,4 @@ Smoke-check the loopback-only endpoint:
 curl -s '127.0.0.1:8888/search?q=test&format=json' | head -c 200
 ```
 
-Set `SEARXNG_BASE_URL=http://127.0.0.1:8888` for the application.
+Set `SEARXNG_BASE_URL=http://127.0.0.1:8888` and `CRAWL4AI_BASE_URL=http://127.0.0.1:11235` for the application.
