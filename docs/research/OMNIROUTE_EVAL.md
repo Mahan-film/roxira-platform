@@ -214,3 +214,16 @@ or drop OmniRoute solely as a local coding-worker router.**
    absolute difference is **≤2%** and the final test suite passes. Export only
    aggregate timings/tokens, rotate the test keys, and delete the scrubbed test
    logs afterwards.
+
+## 5. Measured comparison on the coding smoke eval (2026-10-01)
+
+Command (same 7 hidden-check tasks, `scripts/eval_coding_smoke.py`, flags `--base-url` / `--api-key-env` from #203; no keys are printed):
+
+| Gateway | Model route | Pass | Avg latency | Cost |
+| --- | --- | --- | --- | --- |
+| LiteLLM `127.0.0.1:4000/v1` | `codestral` (Mistral direct) | 7/7 | 1614 ms | $0 |
+| OmniRoute `127.0.0.1:20128/v1` | `team-coding` (Priority: codestral-latest, then groq gpt-oss-120b) | 7/7 | 3890 ms | $0 |
+
+Reading: equal quality on this small set; LiteLLM is ~2.4x faster for the same provider because the OmniRoute combo's first healthy target in the Priority order was `groq/openai/gpt-oss-120b` in several calls (reasoning model, longer generations).
+
+Decision (hub): keep LiteLLM as the default worker gateway for `rx`; keep OmniRoute as the secondary lane (`rx <n> team`) and as a failover/health dashboard for the direct Mistral and Groq keys. To make `team-coding` as fast, reorder the combo so `mistral/codestral-latest` is first and gpt-oss second (it already is in the dashboard list, but latency shows gpt-oss was served first when Codestral was slow or rate-limited); re-measure after one week of use. Eight tasks are a smoke test, not a benchmark: do not generalise beyond "both are fit for small single-file edits".
