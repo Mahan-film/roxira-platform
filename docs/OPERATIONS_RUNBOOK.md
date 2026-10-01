@@ -41,3 +41,20 @@ Complements `docs/SYSTEM_MAP.md` (what exists) and `docs/STATE.md` (current stat
 ## 6. Prod notes
 - `roxira_app_prod` logs `Updating package: openai` at startup (LightRAG's pipmaster installing at runtime). Issue #181 pins `lightrag-hku` 1.5.7 and `openai` 3.22.1; verify on prod after the next deploy.
 - Old generated `TEST-*`/`USER-*` router modules print `LOAD-FAIL` at startup; harmless.
+
+## 7. Merging PRs (facts)
+- Auto-merge is enabled on `Mahan-film/roxira-platform` (`allow_auto_merge=true`; squash only; branches delete on merge).
+- Owner's stated preference (2026-10-01): reviewed, green PRs are merged by the hub without a further question.
+- While CI is pending: `gh pr merge <n> --repo Mahan-film/roxira-platform --auto --squash`.
+- When the PR is already green, `--auto` answers "Pull request is in clean status" (nothing to wait for); that does not mean auto-merge is off. Merge directly with `gh pr merge <n> --repo Mahan-film/roxira-platform --squash`; add `--delete-branch=false` to skip the interactive "Delete the branch locally?" prompt.
+- Pushing a new commit to a PR makes it BLOCKED until CI re-runs.
+
+## 8. Things learned the hard way (2026-09-30/10-01)
+- `~/bin/rx` and `~/bin/rxall` are symlinks into the MAIN checkout `~/Developer/roxira-platform` (detached HEAD). Merged script changes reach them only after `git -C ~/Developer/roxira-platform checkout origin/main`. This is why `rx <n> team` kept failing after #183 merged.
+- Codex workers cannot write dot-directories such as `.agents/`, so the hub creates those files. A worker once put a test under the frontend `src/` instead of the repo-root `src/`: check test paths in review.
+- The `rx` ruff F821 gate works: a `team` (Codestral) attempt that used an undefined name was rejected automatically. Issue #198: `team` took ~40 s and failed the gate. Prefer Codex for multi-function edits; use `team` for tiny single-file ones.
+- `rx` prints `trying pool/team` even when it runs the OmniRoute lane (cosmetic).
+- `scripts/w6_ingest_dotic.py --dry-run` does not write the JSONL; omit it to build locally. Only `--upsert` writes to Qdrant and that needs the owner's yes.
+- rc.majlis.ir fetches work outside the sandbox. Some pages are presidential notification letters (cheque amendments, dispute councils 1402, reduction 1399): the page title is a letter number and the law text is inside. Amending laws quote other laws' articles (issue #198 adds an ordinal splitter).
+- Two `rx` started in the same second collide on `.git/config`; stagger by ~50 s.
+- Running `docker rm -f omniroute` a second time deleted the healthy container; recreate with the command in section 3.
