@@ -51,3 +51,28 @@ edit the CSS/shadcn config, then update this file.
   Impeccable skill's craft-floor checklist (`.claude/skills/impeccable/reference/craft-floor.md`).
 - Icons are `lucide-react` components (already a dependency), one consistent stroke/weight —
   never an emoji or Unicode glyph standing in for an icon.
+# Design contract
+
+## Personality
+
+The product is trustworthy, calm, and precise: legal-tech rather than marketing-tech. Use restrained surfaces, clear hierarchy, and deliberate emphasis. Do not use glossy gradients.
+
+## Persian copy tone
+
+Write formal Persian in short, direct sentences. Explain scope and next steps clearly. Never promise legal outcomes, guarantees, or certainty where the law is uncertain.
+
+## Component and state rules
+
+Loading, no-result, caution, and error states must always be visually distinct. Use explicit labels, iconography, and appropriate contrast; do not rely on colour alone. Legal uncertainty must never be styled as certainty.
+
+## Layout rhythm
+
+Use an 8px spacing grid and generous whitespace. Preserve readable line lengths and maintain a consistent vertical rhythm across screens.
+
+## RTL rules
+
+Use logical utilities (`ms`, `me`, `ps`, `pe`, and `text-start`) for direction-aware layout. Never apply blanket `flex-row-reverse`. Test Persian numerals and mixed Persian/Latin legal citations together.
+
+## Anti-patterns
+
+Do not copy another brand's identity. Avoid permanent `backdrop-filter` effects on dense screens. Do not add font CDNs: retain the single local Vazirmatn variable font.
