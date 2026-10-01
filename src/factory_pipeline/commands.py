@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 _APPROVE_RE = re.compile(r"^\s*/approve\b(.*)$", re.IGNORECASE)
 _STATUS_RE = re.compile(r"^\s*/status\s*$", re.IGNORECASE)
+_REPORT_RE = re.compile(r"^\s*/report\s*$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -37,3 +38,8 @@ def parse_approval_comment(body: str) -> ApprovalCommand | None:
 def is_status_command(body: str) -> bool:
     """True if any line of `body` is exactly `/status` (case-insensitive)."""
     return any(_STATUS_RE.match(line) for line in (body or "").splitlines())
+
+
+def is_report_command(body: str) -> bool:
+    """True if any line of `body` is exactly `/report` (case-insensitive)."""
+    return any(_REPORT_RE.match(line) for line in (body or "").splitlines())

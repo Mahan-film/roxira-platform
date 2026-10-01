@@ -1,11 +1,13 @@
 name: Factory status
 
 # W11 Project Factory, stage 6. `/status` on a parent project issue replies in
-# Persian with progress, open PRs, and spend so far. Comment parsing is pure
-# logic in src/factory_pipeline/commands.py (is_status_command, unit tested);
-# this workflow only wires it to the real issue/plan data via
-# factory_status.py. Comment text passed through `env:`, never spliced into a
-# `run:` script via `${{ }}` (script-injection safety).
+# Persian with progress, open PRs, and spend so far; `/report` replies with the
+# final delivery report built from the durable run-ledger comments. Comment
+# parsing is pure logic in src/factory_pipeline/commands.py (is_status_command /
+# is_report_command, unit tested); this workflow wires `/status` to the real
+# issue/plan data via factory_status.py and `/report` to
+# src/factory_pipeline/report_cli.py. Comment text passed through `env:`, never
+# spliced into a `run:` script via `${{ }}` (script-injection safety).
 
 on:
   issue_comment:
@@ -58,6 +60,23 @@ jobs:
               fh.write(f"is_status={'true' if is_status_command(body) else 'false'}\n")
           PY
 
+      - name: Check for the /report command
+        id: check_report
+        continue-on-error: true
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+
+          from src.factory_pipeline.commands import is_report_command
+
+          body = os.environ.get("COMMENT_BODY", "")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"is_report={'true' if is_report_command(body) else 'false'}\n")
+          PY
+
       - name: Locate this issue's plan.json
         if: steps.check.outputs.is_status == 'true'
         id: find_plan
@@ -93,3 +112,15 @@ jobs:
         run: |
           python3 output_apps/ecosystem_core/src/factory/factory_status.py \
             --plan "$PLAN_PATH" --issue "$ISSUE_NUMBER"
+
+      - name: Post the delivery report reply
+        if: steps.check_report.outputs.is_report == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          python3 -m src.factory_pipeline.report_cli --issue "$ISSUE_NUMBER" > /tmp/factory-report.md
+          gh issue comment "$ISSUE_NUMBER" --body-file /tmp/factory-report.md
