@@ -301,7 +301,32 @@ def build_point_id(law_key: str, article_no: str, chunk_index: int) -> str:
     return str(uuid.uuid5(NAMESPACE, f"{law_key}:{article_no}:{chunk_index}"))
 
 
+def split_amending_law_by_ordinal(raw_text: str) -> list[tuple[str, str]]:
+    """Split an amending law, leaving quoted article headings in their body."""
+    text = normalize_text(raw_text)
+    articles: list[tuple[str, str]] = []
+    expected = 1
+    current_no: str | None = None
+    current_start = 0
+
+    for match in _ARTICLE_HEADER_RE.finditer(text):
+        article_no = to_latin_digits(match.group(1))
+        if "مکرر" in match.group(0) or article_no != str(expected):
+            continue
+        if current_no is not None:
+            articles.append((current_no, text[current_start:match.start()].strip()))
+        current_no = article_no
+        current_start = match.end()
+        expected += 1
+
+    if current_no is not None:
+        articles.append((current_no, text[current_start:].strip()))
+    return articles
+
+
 def split_owner_text_by_articles(raw_text: str) -> list[tuple[str, str]]:
+    if globals().get("_AMENDING_FILE_MODE", False):
+        return split_amending_law_by_ordinal(raw_text)
     """Split an owner-supplied plain-text law into ``(article_no, body)`` pairs
     on "ماده N" / "ماده N مکرر" headings. Used for the 3 laws not in the HF
     dataset (Civil Procedure 1379, Cheque Law 1397, Dispute Councils 1402).
@@ -646,7 +671,13 @@ def main() -> int:
         action="store_true",
         help="Keep records explicitly marked inactive (default: drop them).",
     )
+    parser.add_argument(
+        "--amending",
+        action="store_true",
+        help="Split --file input as an ordinal-numbered amending law.",
+    )
     args = parser.parse_args()
+    globals()["_AMENDING_FILE_MODE"] = args.amending and args.file is not None
 
     if args.upsert:
         if not args.collection:
