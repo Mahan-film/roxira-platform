@@ -11,7 +11,8 @@ name: Factory research
 #
 # Same guard shape as .github/workflows/agent-task.yml: a kill switch
 # (FACTORY_ENABLED repo variable) and an actor allowlist, both checked in the
-# job's `if:` before any checkout happens.
+# job's `if:` before any checkout happens. The preflight step additionally
+# reports missing secrets to the brief issue in Persian.
 
 on:
   issues:
@@ -59,7 +60,22 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Check Factory controls
+        id: preflight
+        env:
+          SECRETS_PRESENT: >-
+            ${{ secrets.OPENROUTER_RESEARCH_KEY != '' && 'OPENROUTER_RESEARCH_KEY' || '' }},${{ secrets.BRAVE_API_KEY != '' && 'BRAVE_API_KEY' || '' }},${{ secrets.EXA_API_KEY != '' && 'EXA_API_KEY' || '' }},${{ secrets.FIRECRAWL_API_KEY != '' && 'FIRECRAWL_API_KEY' || '' }},${{ secrets.JINA_API_KEY != '' && 'JINA_API_KEY' || '' }},${{ secrets.TAVILY_KEYS != '' && 'TAVILY_KEYS' || '' }}
+          VARS_JSON: ${{ toJSON(vars) }}
+        run: python3 -m src.factory_pipeline.preflight | tee "$RUNNER_TEMP/preflight-report.txt"
+
+      - name: Report missing Factory controls on the brief issue
+        if: steps.preflight.outputs.ok == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/preflight-report.txt"
+
       - name: Install research pipeline dependencies
+        if: steps.preflight.outputs.ok == 'true'
         run: |
           set -euo pipefail
           # tech_radar.py's whole call chain (project_brief, llm_router_bridge,
@@ -69,6 +85,7 @@ jobs:
           pip install "httpx>=0.28.1"
 
       - name: Fetch the brief issue title and compute its slug
+        if: steps.preflight.outputs.ok == 'true'
         id: brief
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -103,12 +120,14 @@ jobs:
           PY
 
       - name: Record research start in the run ledger
+        if: steps.preflight.outputs.ok == 'true'
         run: |
           python3 -m src.factory_pipeline.run_ledger append \
             --file "$RUNNER_TEMP/ledger.jsonl" --run-id "${{ github.run_id }}" \
             --stage research --status started --issue "$ISSUE_NUMBER"
 
       - name: Run project-brief research
+        if: steps.preflight.outputs.ok == 'true'
         id: project_brief_research
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_RESEARCH_KEY }}
@@ -134,7 +153,7 @@ jobs:
             --json > "$RUNNER_TEMP/brief.result.json"
 
       - name: Record research result in the run ledger
-        if: always()
+        if: steps.preflight.outputs.ok == 'true' && always()
         run: |
           python3 -m src.factory_pipeline.run_ledger append \
             --file "$RUNNER_TEMP/ledger.jsonl" --run-id "${{ github.run_id }}" \
@@ -143,6 +162,7 @@ jobs:
             --issue "$ISSUE_NUMBER"
 
       - name: Post the Persian proposal on the brief issue
+        if: steps.preflight.outputs.ok == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -150,7 +170,7 @@ jobs:
             --issue "$ISSUE_NUMBER" --brief-json "$RUNNER_TEMP/brief.result.json"
 
       - name: Upload full research report as an artifact
-        if: always()
+        if: steps.preflight.outputs.ok == 'true' && always()
         uses: actions/upload-artifact@v4
         with:
           name: factory-research-${{ env.ISSUE_NUMBER }}-${{ github.run_id }}
@@ -161,7 +181,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload run ledger artifact
-        if: always()
+        if: steps.preflight.outputs.ok == 'true' && always()
         uses: actions/upload-artifact@v4
         with:
           name: factory-ledger-${{ env.ISSUE_NUMBER }}

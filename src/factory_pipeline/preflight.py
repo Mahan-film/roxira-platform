@@ -1,3 +1,5 @@
+import json
+import os
 from dataclasses import dataclass
 
 REQUIRED_SECRETS = {
@@ -50,3 +52,36 @@ def render_report_fa(findings: list[Finding]) -> str:
         else:
             lines.append(f"- {finding.workflow}: متغیر {finding.name} باید true باشد")
     return "\n".join(lines)
+
+
+def main() -> int:
+    secret_names = {
+        name.strip()
+        for name in os.environ.get("SECRETS_PRESENT", "").split(",")
+        if name.strip()
+    }
+    try:
+        raw_variables = json.loads(os.environ.get("VARS_JSON", "{}"))
+    except json.JSONDecodeError:
+        raw_variables = {}
+    variables = (
+        {str(name): str(value) for name, value in raw_variables.items()}
+        if isinstance(raw_variables, dict)
+        else {}
+    )
+    findings = [
+        finding
+        for finding in check(secret_names, variables)
+        if finding.workflow == "factory-research"
+    ]
+    print(render_report_fa(findings))
+
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output:
+        with open(github_output, "a", encoding="utf-8") as output:
+            output.write(f"ok={'true' if not findings else 'false'}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
