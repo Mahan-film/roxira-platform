@@ -1,0 +1,93 @@
+name: Preview E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "HTTPS preview or staging URL to test"
+        required: true
+        type: string
+      grep:
+        description: "Optional Playwright test-title grep"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  E2E_BASE_URL: ${{ inputs.url }}
+  E2E_GREP: ${{ inputs.grep }}
+
+jobs:
+  preview-e2e:
+    name: Playwright preview E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Preview testing is report-only: it must not make the CI run non-green.
+    continue-on-error: true
+    # Keep the Factory kill switch and the manual-workflow actor allowlist before
+    # checking out or executing a user-selected URL.
+    if: >
+      vars.FACTORY_ENABLED == 'true' &&
+      contains(format(',{0},', vars.AGENT_ALLOWED_ACTORS || 'mahan-films'), format(',{0},', github.actor))
+    steps:
+      - name: Validate HTTPS URL
+        id: validate-url
+        continue-on-error: true
+        run: |
+          case "$E2E_BASE_URL" in
+            https://*) ;;
+            *)
+              echo "::error::url must use the https scheme"
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        if: steps.validate-url.outcome == 'success'
+        continue-on-error: true
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        if: steps.validate-url.outcome == 'success'
+        continue-on-error: true
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install dependencies
+        if: steps.validate-url.outcome == 'success'
+        continue-on-error: true
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright chromium
+        if: steps.validate-url.outcome == 'success'
+        continue-on-error: true
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        if: steps.validate-url.outcome == 'success'
+        continue-on-error: true
+        working-directory: e2e
+        run: |
+          if [ -n "$E2E_GREP" ]; then
+            npx playwright test --grep "$E2E_GREP"
+          else
+            npx playwright test
+          fi
+
+      - name: Upload Playwright report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
