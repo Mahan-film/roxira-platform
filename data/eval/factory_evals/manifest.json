@@ -1,0 +1,12 @@
+{
+  "name": "factory_evals",
+  "description": "Deterministic Persian/RTL and tenant-scoped backend coding tasks.",
+  "tasks": [
+    {"id": "persian_number_format", "path": "persian_number_format"},
+    {"id": "rtl_control_cleanup", "path": "rtl_control_cleanup"},
+    {"id": "tenant_repository", "path": "tenant_repository"},
+    {"id": "dto_validation", "path": "dto_validation"},
+    {"id": "run_step_claim", "path": "run_step_claim"},
+    {"id": "persian_date_sort", "path": "persian_date_sort"}
+  ]
+}
