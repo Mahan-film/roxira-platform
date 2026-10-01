@@ -27,6 +27,10 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-confidence: var(--confidence);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -105,6 +109,14 @@
   --glass-app-bg: radial-gradient(1200px 800px at 100% -10%, oklch(0.92 0.03 250 / 70%), transparent 60%),
     radial-gradient(900px 700px at 0% 0%, oklch(0.94 0.03 120 / 60%), transparent 55%),
     linear-gradient(180deg, oklch(0.99 0 0), oklch(0.96 0.005 260));
+  --success: oklch(0.45 0.13 150);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.45 0.12 80);
+  --warning-foreground: oklch(0.99 0 0);
+  --info: oklch(0.45 0.13 250);
+  --info-foreground: oklch(0.99 0 0);
+  --confidence: oklch(0.45 0.1 190);
+  --confidence-foreground: oklch(0.99 0 0);
 }
 
 .dark {
@@ -153,6 +165,14 @@
     radial-gradient(900px 650px at 0% 5%, oklch(0.32 0.06 285 / 45%), transparent 55%),
     radial-gradient(1000px 900px at 50% 115%, oklch(0.28 0.05 205 / 45%), transparent 60%),
     linear-gradient(180deg, oklch(0.17 0.02 260), oklch(0.12 0.015 260));
+  --success: oklch(0.45 0.13 150);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.45 0.12 80);
+  --warning-foreground: oklch(0.99 0 0);
+  --info: oklch(0.45 0.13 250);
+  --info-foreground: oklch(0.99 0 0);
+  --confidence: oklch(0.45 0.1 190);
+  --confidence-foreground: oklch(0.99 0 0);
 }
 
 @layer base {
