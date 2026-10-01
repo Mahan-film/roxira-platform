@@ -27,7 +27,7 @@ prompt="You are in a git worktree of Mahan-film/roxira-platform. Task = GitHub i
 
 $body
 
-Rules: edit only files this task needs; never run pytest on src/ or the repo root; never write secrets; model ids only in config/models.yaml; do NOT run git or gh (the wrapper commits). Do not start subagents. Do not read data files under data/. Do not call a shell/bash tool (it does not exist). Write the code with your edit/write tools now; do not only describe it. Stop when the change is complete."
+Rules: edit only files this task needs; never run pytest on src/ or the repo root; never write secrets; model ids only in config/models.yaml; do NOT run git or gh (the wrapper commits). Do not start subagents. Do not read data files under data/. Do not call a shell/bash tool (it does not exist). Before you finish, re-read every file you wrote and check every name you use is imported or defined. Write the code with your edit/write tools now; do not only describe it. Stop when the change is complete."
 
 # Fallback chain: start from the given model, then the following ones (max 2 attempts).
 chain=(codex dsflash dspro codestral)
@@ -101,9 +101,37 @@ pyfiles=(${(f)"$(git diff --cached --name-only --diff-filter=ACMR -- '*.py')"})
 if [ ${#pyfiles} -gt 0 ]; then
   if python3 -m ruff --version >/dev/null 2>&1; then
     if ! ruff_out=$(python3 -m ruff check --select F821,F811,E9 $pyfiles 2>&1); then
-      echo "$ruff_out" | tee -a "$log"
-      echo "rx: ruff gate failed for #$n; not committing, no PR"
-      exit 3
+      if [ -z "${RX_REPAIR:-}" ] || [ "${RX_REPAIR:-}" != "0" ]; then
+        echo "$ruff_out" | tee -a "$log"
+        echo "rx: ruff gate failed for #$n; attempting repair round"
+        repair_prompt="$prompt\n\nYour previous change failed this lint check. Fix ONLY these errors; an undefined name means a missing import or a typo. Re-read every file you changed and make sure every name is imported or defined.\n\n$(echo "$ruff_out" | head -n 60)"
+        if [ "$model" = codex ]; then
+          codex exec --sandbox workspace-write "$repair_prompt" < /dev/null >> "$log" 2>&1
+        elif [[ "$model" == "team" ]]; then
+          (
+            if [[ -f ~/.config/omniroute.env ]]; then
+              set -a; . ~/.config/omniroute.env; set +a
+            fi
+            opencode run -m omniroute/team-coding "$repair_prompt" < /dev/null >> "$log" 2>&1
+          )
+        else
+          opencode run -m pool/$model "$repair_prompt" < /dev/null >> "$log" 2>&1
+        fi
+        if [ -n "$(git status --porcelain)" ]; then
+          if ! ruff_out=$(python3 -m ruff check --select F821,F811,E9 $pyfiles 2>&1); then
+            echo "$ruff_out" | tee -a "$log"
+            echo "rx: ruff gate failed after repair for #$n; not committing, no PR"
+            exit 3
+          fi
+        else
+          echo "rx: no changes after repair for #$n; not committing, no PR"
+          exit 3
+        fi
+      else
+        echo "$ruff_out" | tee -a "$log"
+        echo "rx: ruff gate failed for #$n; not committing, no PR"
+        exit 3
+      fi
     fi
   else
     echo "rx: ruff not installed, skipping gate"

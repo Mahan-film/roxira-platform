@@ -19,6 +19,7 @@ Install:
   produced the result. If the Codex CLI is unavailable, rx skips `codex`.
 - `RX_TIMEOUT_SECS`: per-worker-attempt timeout in seconds (default `900`). A
   timed-out worker is stopped and rx continues to the next fallback model.
+- `RX_REPAIR`: enable repair round on ruff gate failure (default `1`). When enabled, the worker gets one repair round with the lint output before giving up.
 - `base-branch`: worktree starts from `origin/<base-branch>` (default `main`),
   so a worker can continue an existing PR branch. The PR still targets `main`
   from `issue-<n>`.
