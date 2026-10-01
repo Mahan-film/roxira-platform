@@ -75,6 +75,21 @@ jobs:
         run: |
           set -euo pipefail
           gh issue view "$ISSUE_NUMBER" --json title -q '.title' > "$RUNNER_TEMP/idea.txt"
+          ISSUE_NUMBER="$ISSUE_NUMBER" python3 - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          from src.factory_pipeline.brief_subject import build_subject, pick_layers
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          title = (temp / "idea.txt").read_text()
+          body = subprocess.check_output(
+              ["gh", "issue", "view", os.environ["ISSUE_NUMBER"], "--json", "body", "-q", ".body"],
+              text=True,
+          )
+          (temp / "subject.txt").write_text(build_subject(title.strip(), body))
+          (temp / "layers.txt").write_text(",".join(pick_layers(body)))
+          PY
           python3 - <<'PY'
           import os
 
@@ -104,7 +119,8 @@ jobs:
           set -o pipefail
           idea="$(cat "$RUNNER_TEMP/idea.txt")"
           python3 -m src.automation.tech_radar \
-            --project-brief "$idea" \
+            --project-brief "$(cat "$RUNNER_TEMP/subject.txt")" \
+            --layers "$(cat "$RUNNER_TEMP/layers.txt")" \
             --report-lang fa \
             --max-usd 0.50 \
             --brief-out "$RUNNER_TEMP/brief.md" \
