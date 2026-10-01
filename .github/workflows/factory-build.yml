@@ -60,6 +60,7 @@ jobs:
           body = os.environ.get("PR_BODY", "") or ""
           match = re.search(r"Resolves #(\d+)", body)
           found = "projects/__not_found__/plan.json"
+          parent_issue = ""
           if match:
               issue_number = int(match.group(1))
               for path in sorted(glob.glob("projects/*/plan.json")):
@@ -67,15 +68,92 @@ jobs:
                       plan = json.load(fh)
                   if any(t.get("issue") == issue_number for t in plan.get("tasks", [])):
                       found = path
+                      parent_issue = str(plan.get("parent_issue", ""))
                       break
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
               fh.write(f"plan_path={found}\n")
+              fh.write(f"parent_issue={parent_issue}\n")
           PY
 
+      - name: Post completed task ledger event to the parent issue
+        if: steps.find_plan.outputs.parent_issue != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LEDGER_ISSUE_NUMBER: ${{ steps.find_plan.outputs.parent_issue }}
+          LEDGER_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 -m src.factory_pipeline.ledger_comments post \
+            --issue "$LEDGER_ISSUE_NUMBER" --run-id "$LEDGER_RUN_ID" \
+            --stage task --status ok
+
       - name: Dispatch next ready task(s)
+        id: dispatch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENT_MAX_CONCURRENT: ${{ vars.AGENT_MAX_CONCURRENT || '2' }}
           PLAN_PATH: ${{ steps.find_plan.outputs.plan_path }}
         run: |
-          python3 output_apps/ecosystem_core/src/factory/factory_dispatch_next.py --plan "$PLAN_PATH"
+          set -euo pipefail
+          DISPATCH_OUTPUT="$(python3 output_apps/ecosystem_core/src/factory/factory_dispatch_next.py --plan "$PLAN_PATH")"
+          printf '%s\n' "$DISPATCH_OUTPUT"
+          DISPATCH_OUTPUT="$DISPATCH_OUTPUT" python3 - <<'PY'
+          import json
+          import os
+
+          if os.environ["PLAN_PATH"] == "projects/__not_found__/plan.json":
+              result = {"dispatched": [], "status": "waiting"}
+          else:
+              result = json.loads(os.environ["DISPATCH_OUTPUT"])
+          dispatched = result.get("dispatched", [])
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"dispatched={json.dumps(dispatched, separators=(',', ':'))}\n")
+              output.write(f"all_done={str(result.get('status') == 'complete').lower()}\n")
+          PY
+
+      - name: Post dispatched task ledger events to the parent issue
+        if: steps.find_plan.outputs.parent_issue != '' && steps.dispatch.outputs.dispatched != '[]'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LEDGER_ISSUE_NUMBER: ${{ steps.find_plan.outputs.parent_issue }}
+          LEDGER_RUN_ID: ${{ github.run_id }}
+          DISPATCHED_ISSUES: ${{ steps.dispatch.outputs.dispatched }}
+        run: |
+          DISPATCHED_ISSUES="$DISPATCHED_ISSUES" python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          for _ in json.loads(os.environ["DISPATCHED_ISSUES"]):
+              subprocess.run(
+                  [
+                      sys.executable,
+                      "-m",
+                      "src.factory_pipeline.ledger_comments",
+                      "post",
+                      "--issue",
+                      os.environ["LEDGER_ISSUE_NUMBER"],
+                      "--run-id",
+                      os.environ["LEDGER_RUN_ID"],
+                      "--stage",
+                      "task",
+                      "--status",
+                      "started",
+                  ],
+                  check=True,
+              )
+          PY
+
+      - name: Post completed review ledger event to the parent issue
+        if: steps.find_plan.outputs.parent_issue != '' && steps.dispatch.outputs.all_done == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LEDGER_ISSUE_NUMBER: ${{ steps.find_plan.outputs.parent_issue }}
+          LEDGER_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 -m src.factory_pipeline.ledger_comments post \
+            --issue "$LEDGER_ISSUE_NUMBER" --run-id "$LEDGER_RUN_ID" \
+            --stage review --status ok
