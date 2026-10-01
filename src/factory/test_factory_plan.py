@@ -80,6 +80,39 @@ def _stub_planner_response(monkeypatch, content):
     )
 
 
+def _stub_non_dry_plan(monkeypatch, tmp_path, plan_content, max_concurrent=2):
+    """Run run_plan() end-to-end with every GitHub/LLM/git call mocked."""
+    _stub_planner_response(monkeypatch, plan_content)
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    monkeypatch.setattr(
+        factory_plan.agent_runner, "create_branch_in_place", lambda *a, **k: worktree
+    )
+    monkeypatch.setattr(factory_plan.agent_runner, "run_cmd", lambda *a, **k: None)
+    numbers = iter(range(101, 200))
+    monkeypatch.setattr(
+        factory_plan, "create_issue", lambda *a, **k: {"number": next(numbers)}
+    )
+    monkeypatch.setattr(factory_plan, "push_plan_branch", lambda *a, **k: None)
+    monkeypatch.setattr(
+        factory_plan.agent_runner,
+        "create_pull_request",
+        lambda *a, **k: {"html_url": "https://x/pr/1"},
+    )
+    monkeypatch.setattr(factory_plan.agent_runner, "comment_on_issue", lambda *a, **k: None)
+    monkeypatch.setattr(factory_plan.agent_runner, "add_labels", lambda *a, **k: None)
+    monkeypatch.setattr(factory_plan, "dispatch_workflow", lambda *a, **k: None)
+    result = factory_plan.run_plan(
+        issue_number=1,
+        chosen_option=None,
+        repo_dir=tmp_path,
+        repo="o/r",
+        token="tok",
+        max_concurrent=max_concurrent,
+    )
+    return result, worktree
+
+
 # ---------------------------------------------------------------------------
 # find_latest_proposal_comment
 # ---------------------------------------------------------------------------
@@ -476,3 +509,49 @@ def test_run_plan_all_tasks_independent_dispatches_up_to_max_concurrent(tmp_path
     # 3 independent tasks, max_concurrent=2 -> only the first 2 dispatched.
     assert len(dispatched) == 2
     assert result["dispatched"] == [201, 202]
+
+
+# ---------------------------------------------------------------------------
+# spec artifacts (report-only)
+# ---------------------------------------------------------------------------
+
+
+def test_run_plan_writes_spec_artifacts_with_task_lines(tmp_path, monkeypatch):
+    result, worktree = _stub_non_dry_plan(monkeypatch, tmp_path, _valid_plan_json(3))
+
+    assert result["status"] == "plan-ready"
+    spec_dir = worktree / "projects" / "idea" / "spec"
+    assert sorted(p.name for p in spec_dir.iterdir()) == [
+        "acceptance.md",
+        "plan.md",
+        "spec.md",
+        "tasks.md",
+    ]
+    tasks_md = (spec_dir / "tasks.md").read_text(encoding="utf-8")
+    assert "- Task 0 owned: src/component_0.py" in tasks_md
+    assert "- Task 1 owned: src/component_1.py" in tasks_md
+    assert "- Task 2 owned: src/component_2.py" in tasks_md
+    plan_md = (spec_dir / "plan.md").read_text(encoding="utf-8")
+    assert "1. Task 0" in plan_md
+    assert "2. Task 1" in plan_md
+    assert "3. Task 2" in plan_md
+    spec_md = (spec_dir / "spec.md").read_text(encoding="utf-8")
+    assert "version:" in spec_md
+    assert "proposal" in spec_md
+    assert result["spec_warnings"] == []
+
+
+def test_run_plan_reports_spec_warning_without_failing(tmp_path, monkeypatch):
+    original_template = factory_plan.render_template
+
+    def broken_template(slug):
+        artifacts = original_template(slug)
+        artifacts["acceptance.md"] = "# Acceptance\n"
+        return artifacts
+
+    monkeypatch.setattr(factory_plan, "render_template", broken_template)
+
+    result, _ = _stub_non_dry_plan(monkeypatch, tmp_path, _valid_plan_json(1))
+
+    assert result["status"] == "plan-ready"
+    assert "acceptance.md has no checklist line" in result["spec_warnings"]

@@ -15,11 +15,14 @@ means "go" (see that module and `src/factory_pipeline/commands.py`). Steps:
   3. Validate/parse it (`src.factory_pipeline.plan_parsing`, unit tested with
      canned LLM responses -- this script does not re-test that logic, only
      wires it to real GitHub/LLM calls).
-  4. Write `projects/<slug>/PLAN.md` + `plan.json` via a PR (branch
+  4. Write `projects/<slug>/PLAN.md` + `plan.json`, plus the spec-first
+     artifact set under `projects/<slug>/spec/` (`spec.md`, `plan.md`,
+     `tasks.md`, `acceptance.md`), via a PR (branch
      `factory-plan/<issue>-<slug>`, distinct from W10's `agent/*` branches:
      this PR is produced by the trusted planner, not a cheap sandboxed coding
      agent, so it is not subject to agent_runner's denylist/checks -- but it
-     is still a PR, never a direct push to `main`).
+     is still a PR, never a direct push to `main`). `check_dir` problems are
+     reported in the plan result as `spec_warnings` (report-only).
   5. Open one child issue per task, labelled `agent`, in dependency order, so
      each later task's body can link the real issue numbers of the tasks it
      depends on.
@@ -82,6 +85,7 @@ from src.factory_pipeline.plan_parsing import (  # noqa: E402
 )
 from src.factory_pipeline.proposal import PROPOSAL_MARKER  # noqa: E402
 from src.factory_pipeline.slugs import slugify_project, unique_slug  # noqa: E402
+from src.factory_pipeline.spec_artifacts import check_dir, render_template  # noqa: E402
 from src.factory_pipeline.status_report import format_progress_checklist  # noqa: E402
 from src.factory_pipeline.task_contract import (  # noqa: E402
     TaskContract,
@@ -167,8 +171,14 @@ def _depends_on(task: PlanTask, dependency_index: int, by_index: dict[int, PlanT
     )
 
 
-def validate_task_contracts(raw_content: str, tasks: list[PlanTask]) -> None:
-    """Validate every task contract and reject unsafe concurrent task pairs."""
+def validate_task_contracts(
+    raw_content: str, tasks: list[PlanTask]
+) -> dict[int, TaskContract]:
+    """Validate every task contract and reject unsafe concurrent task pairs.
+
+    Returns the parsed contracts keyed by plan task index so callers can reuse
+    them (e.g. to render the spec artifacts) instead of parsing twice.
+    """
     raw_plan = _extract_json(raw_content)
     raw_tasks = raw_plan.get("tasks", []) if isinstance(raw_plan, dict) else []
     contracts: dict[int, TaskContract] = {}
@@ -198,6 +208,53 @@ def validate_task_contracts(raw_content: str, tasks: list[PlanTask]) -> None:
             )
     if errors:
         raise PlanValidationError("task contract validation failed: " + "; ".join(errors))
+    return contracts
+
+
+def write_spec_artifacts(
+    spec_dir: pathlib.Path,
+    slug: str,
+    tasks: list[PlanTask],
+    contracts: dict[int, TaskContract],
+    proposal_summary: str,
+) -> list[str]:
+    """Write the four spec-first artifacts under `projects/<slug>/spec/`.
+
+    Starts from `render_template(slug)` (the merged library shared with the
+    checker), fills in the task/plan/proposal content the plan already knows,
+    then runs `check_dir`. Problems are returned -- and logged -- so the caller
+    can surface them as `spec_warnings`; this is report-only for now and never
+    raises, so a malformed artifact can never fail the plan.
+    """
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = render_template(slug)
+
+    order = topological_order(tasks)
+    by_index = {task.index: task for task in tasks}
+
+    task_lines = ["# Tasks", ""]
+    for i in order:
+        task = by_index[i]
+        contract = contracts.get(task.index)
+        owned = ", ".join(contract.allowed_paths) if contract else ""
+        task_lines.append(f"- {task.title} owned: {owned}")
+    artifacts["tasks.md"] = "\n".join(task_lines) + "\n"
+
+    plan_lines = [f"# Plan: {slug}", "", "## Order", ""]
+    for pos, i in enumerate(order, start=1):
+        plan_lines.append(f"{pos}. {by_index[i].title}")
+    artifacts["plan.md"] = "\n".join(plan_lines) + "\n"
+
+    if proposal_summary.strip():
+        artifacts["spec.md"] = artifacts["spec.md"] + "\n" + proposal_summary.strip() + "\n"
+
+    for name, content in artifacts.items():
+        (spec_dir / name).write_text(content, encoding="utf-8")
+
+    problems = check_dir(spec_dir)
+    for problem in problems:
+        print(f"spec artifact warning: {problem}")
+    return problems
 
 
 def create_issue(
@@ -290,7 +347,7 @@ def run_plan(
 
     try:
         tasks = parse_plan_response(response.get("content", ""))
-        validate_task_contracts(response.get("content", ""), tasks)
+        contracts = validate_task_contracts(response.get("content", ""), tasks)
     except PlanValidationError as exc:
         agent_runner.comment_on_issue(
             token,
@@ -349,6 +406,10 @@ def run_plan(
         json.dumps(plan_json, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
+    spec_warnings = write_spec_artifacts(
+        plan_dir / "spec", idea_slug, tasks, contracts, proposal_body
+    )
+
     agent_runner.run_cmd(["git", "add", "-A"], cwd=worktree_path, timeout=30)
     agent_runner.run_cmd(
         ["git", "commit", "-m", f"factory: plan for {idea} (#{issue_number})"],
@@ -396,6 +457,7 @@ def run_plan(
         "pr_url": pr.get("html_url", ""),
         "task_count": len(created_tasks),
         "dispatched": dispatched,
+        "spec_warnings": spec_warnings,
     }
 
 
