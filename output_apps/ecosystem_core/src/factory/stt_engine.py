@@ -41,11 +41,16 @@ def _call_stt_model(model_id: str, clean_b64: str, headers: dict) -> str:
     dedicated Whisper ids use OpenRouter's /audio/transcriptions endpoint,
     everything else (general multimodal chat models) uses /chat/completions
     with an input_audio content part."""
-    if "whisper" in model_id.lower():
+    is_whisper = "whisper" in model_id.lower()
+    if is_whisper:
         url = "https://openrouter.ai/api/v1/audio/transcriptions"
-        payload = json.dumps(
-            {"model": model_id, "input_audio": {"data": clean_b64, "format": "wav"}}
-        ).encode("utf-8")
+        payload = {
+            "model": model_id,
+            "input_audio": {"data": clean_b64, "format": "wav"},
+            "language": "fa",
+            "temperature": 0,
+            "prompt": STT_PROMPT,
+        }
     else:
         url = "https://openrouter.ai/api/v1/chat/completions"
         payload = json.dumps(
@@ -71,14 +76,37 @@ def _call_stt_model(model_id: str, clean_b64: str, headers: dict) -> str:
                 ],
                 "temperature": 0.0,
             }
-        ).encode("utf-8")
+        )
 
-    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        if not is_whisper or error.code not in (400, 422):
+            raise
+        fallback_payload = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"language", "temperature", "prompt"}
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(fallback_payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
     if "choices" in data:
         return (data["choices"][0]["message"]["content"] or "").strip()
     return (data.get("text") or "").strip()
+
+STT_PROMPT = "فارسی ایران. سامانه قاضی هوشمند؛ قوه قضائیه؛ دادگاه؛ دادخواست؛ لایحه؛ رأی وحدت رویه؛ سلام، تو کی هستی."
+STT_PHRASE_CORRECTIONS = {"سلام از فتیر دویستی": "سلام تو کی هستی"}
+
 
 PHONETIC_REPLACEMENT_RULES = [
     (r'\bجاییتر\b', 'جدیدترین'),
@@ -93,12 +121,18 @@ PHONETIC_REPLACEMENT_RULES = [
     (r'\bجیسرش\b', 'ریسرچ'),
     (r'\bویب\b', 'وب'),
     (r'\bفرانس\b', 'فرانت‌اند'),
-    (r'\bهست\b', 'هاست'),
     (r'\bچی استش\b', 'چیست')
 ]
 
+def apply_phrase_corrections(text: str) -> str:
+    """Apply exact corrections for known Whisper transcription failures."""
+    normalized = text.strip().replace("ي", "ی").replace("ك", "ک")
+    return STT_PHRASE_CORRECTIONS.get(normalized, text)
+
+
 def apply_rule_based_phonetics(text: str) -> str:
     """اصلاح مستقیم و بدون تاخیر لغزش‌های رایج آوایی با Regex"""
+    text = apply_phrase_corrections(text)
     result = text
     for pattern, replacement in PHONETIC_REPLACEMENT_RULES:
         result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
