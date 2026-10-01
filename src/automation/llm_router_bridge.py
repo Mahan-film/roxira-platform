@@ -172,15 +172,22 @@ def call_llm(
     ]
 
     async def _run() -> llm_router.LLMResult:
-        return await llm_router.complete(
-            tier,
-            messages,
-            sensitive=False,
-            tenant="tech_radar",
-            feature=feature,
-            timeout=timeout,
-            **params,
-        )
+        llm_router.set_http_client(None)
+        try:
+            return await llm_router.complete(
+                tier,
+                messages,
+                sensitive=False,
+                tenant="tech_radar",
+                feature=feature,
+                timeout=timeout,
+                **params,
+            )
+        finally:
+            client = llm_router._http_client
+            llm_router.set_http_client(None)
+            if client is not None:
+                await client.aclose()
 
     try:
         result = asyncio.run(_run())
