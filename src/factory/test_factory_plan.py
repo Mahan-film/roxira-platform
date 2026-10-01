@@ -53,10 +53,31 @@ def _valid_plan_json(n=2):
             "summary_fa": f"خلاصه {i}",
             "depends_on": [i - 1] if i > 0 else [],
             "est_lines": 50,
+            "contract": {
+                "area": "backend",
+                "allowed_paths": [f"src/component_{i}.py"],
+                "needs_migration": False,
+                "test_command": "python3 -m pytest src/factory/test_factory_plan.py -q",
+            },
         }
         for i in range(n)
     ]
     return json.dumps({"tasks": tasks})
+
+
+def _stub_planner_response(monkeypatch, content):
+    monkeypatch.setattr(
+        factory_plan, "get_issue", lambda *a, **k: {"title": "Idea", "body": "brief"}
+    )
+    monkeypatch.setattr(
+        factory_plan,
+        "list_issue_comments",
+        lambda *a, **k: [{"body": f"{factory_plan.PROPOSAL_MARKER}\nproposal"}],
+    )
+    monkeypatch.setattr(factory_plan.agent_runner, "read_agents_md", lambda *a, **k: "")
+    monkeypatch.setattr(
+        factory_plan, "call_llm", lambda *a, **k: {"status": "SUCCESS", "content": content}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +238,7 @@ def test_run_plan_invalid_plan_json(tmp_path, monkeypatch):
     assert comments
 
 
-def test_run_plan_dry_run_does_no_writes_or_git(tmp_path, monkeypatch):
+def test_run_plan_valid_contracts_passes_dry_run(tmp_path, monkeypatch):
     monkeypatch.setattr(
         factory_plan, "get_issue", lambda *a, **k: {"title": "Voice App", "body": "brief"}
     )
@@ -252,6 +273,62 @@ def test_run_plan_dry_run_does_no_writes_or_git(tmp_path, monkeypatch):
     assert result["idea_slug"] == "voice-app"
     assert result["task_count"] == 2
     assert called["create_branch"] is False
+
+
+def test_run_plan_missing_contract_fails_without_creating_issues(tmp_path, monkeypatch):
+    plan = json.loads(_valid_plan_json(1))
+    plan["tasks"][0].pop("contract")
+    _stub_planner_response(monkeypatch, json.dumps(plan))
+    comments, created = [], []
+    monkeypatch.setattr(
+        factory_plan.agent_runner,
+        "comment_on_issue",
+        lambda *a: comments.append(a[-1]),
+    )
+    monkeypatch.setattr(factory_plan, "create_issue", lambda *a: created.append(a))
+
+    result = factory_plan.run_plan(
+        issue_number=1, chosen_option=None, repo_dir=tmp_path, repo="o/r", token="tok", max_concurrent=2
+    )
+
+    assert result["status"] == "invalid-plan"
+    assert "task contract is required" in result["error"]
+    assert created == []
+    assert comments
+
+
+def test_run_plan_rejects_overlapping_parallel_task_contracts(tmp_path, monkeypatch):
+    plan = json.loads(_valid_plan_json(2))
+    plan["tasks"][1]["depends_on"] = []
+    plan["tasks"][1]["contract"]["allowed_paths"] = ["src/component_0.py"]
+    _stub_planner_response(monkeypatch, json.dumps(plan))
+    monkeypatch.setattr(factory_plan.agent_runner, "comment_on_issue", lambda *a: None)
+
+    result = factory_plan.run_plan(
+        issue_number=1, chosen_option=None, repo_dir=tmp_path, repo="o/r", token="tok", max_concurrent=2
+    )
+
+    assert result["status"] == "invalid-plan"
+    assert "Task 0" in result["error"] and "Task 1" in result["error"]
+    assert "overlapping allowed_paths" in result["error"]
+
+
+def test_run_plan_allows_overlapping_contracts_when_dependent(tmp_path, monkeypatch):
+    plan = json.loads(_valid_plan_json(2))
+    plan["tasks"][1]["contract"]["allowed_paths"] = ["src/component_0.py"]
+    _stub_planner_response(monkeypatch, json.dumps(plan))
+
+    result = factory_plan.run_plan(
+        issue_number=1,
+        chosen_option=None,
+        repo_dir=tmp_path,
+        repo="o/r",
+        token="tok",
+        max_concurrent=2,
+        dry_run=True,
+    )
+
+    assert result["status"] == "dry-run"
 
 
 def test_run_plan_success_creates_issues_writes_plan_and_dispatches(tmp_path, monkeypatch):
@@ -356,20 +433,10 @@ def test_run_plan_all_tasks_independent_dispatches_up_to_max_concurrent(tmp_path
         lambda *a, **k: [{"body": f"{factory_plan.PROPOSAL_MARKER}\nproposal"}],
     )
     monkeypatch.setattr(factory_plan.agent_runner, "read_agents_md", lambda *a, **k: "")
-    independent_plan = json.dumps(
-        {
-            "tasks": [
-                {
-                    "title": f"T{i}",
-                    "body_en": "b",
-                    "summary_fa": "f",
-                    "depends_on": [],
-                    "est_lines": 10,
-                }
-                for i in range(3)
-            ]
-        }
-    )
+    independent = json.loads(_valid_plan_json(3))
+    for task in independent["tasks"]:
+        task["depends_on"] = []
+    independent_plan = json.dumps(independent)
     monkeypatch.setattr(
         factory_plan, "call_llm", lambda *a, **k: {"status": "SUCCESS", "content": independent_plan}
     )

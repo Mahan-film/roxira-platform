@@ -58,6 +58,7 @@ import json
 import os
 import pathlib
 import sys
+from itertools import combinations
 from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -68,8 +69,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.automation.llm_router_bridge import call_llm  # noqa: E402
+from src.automation.tech_radar import _extract_json  # noqa: E402
 from src.factory_pipeline.plan_parsing import (  # noqa: E402
     PlanValidationError,
+    PlanTask,
     parse_plan_response,
     ready_tasks,
     render_plan_markdown,
@@ -80,6 +83,12 @@ from src.factory_pipeline.plan_parsing import (  # noqa: E402
 from src.factory_pipeline.proposal import PROPOSAL_MARKER  # noqa: E402
 from src.factory_pipeline.slugs import slugify_project, unique_slug  # noqa: E402
 from src.factory_pipeline.status_report import format_progress_checklist  # noqa: E402
+from src.factory_pipeline.task_contract import (  # noqa: E402
+    TaskContract,
+    parallel_safe,
+    parse_contract,
+    paths_overlap,
+)
 
 PLANNER_TIER = "strong"
 AGENT_LABEL = "agent"
@@ -144,8 +153,51 @@ def build_planner_prompt(
         '"body_en": "a precise English description of the change", '
         '"summary_fa": "one-sentence Persian summary for the project owner", '
         '"depends_on": [0-based indices of earlier tasks in this same list that must '
-        'land first], "est_lines": approximate integer lines of change}]}'
+        'land first], "est_lines": approximate integer lines of change, '
+        '"contract": {"area": "frontend|backend|database|tests|infra|docs", '
+        '"allowed_paths": ["repository-relative/path"], "needs_migration": false, '
+        '"test_command": "a focused verification command"}}]}'
     )
+
+
+def _depends_on(task: PlanTask, dependency_index: int, by_index: dict[int, PlanTask]) -> bool:
+    return dependency_index in task.depends_on or any(
+        _depends_on(by_index[dependency], dependency_index, by_index)
+        for dependency in task.depends_on
+    )
+
+
+def validate_task_contracts(raw_content: str, tasks: list[PlanTask]) -> None:
+    """Validate every task contract and reject unsafe concurrent task pairs."""
+    raw_plan = _extract_json(raw_content)
+    raw_tasks = raw_plan.get("tasks", []) if isinstance(raw_plan, dict) else []
+    contracts: dict[int, TaskContract] = {}
+    errors: list[str] = []
+    for task, raw_task in zip(tasks, raw_tasks):
+        try:
+            contracts[task.index] = parse_contract(raw_task)
+        except PlanValidationError as exc:
+            errors.append(f"task {task.index} ({task.title}): {exc}")
+
+    by_index = {task.index: task for task in tasks}
+    for left, right in combinations(tasks, 2):
+        if _depends_on(left, right.index, by_index) or _depends_on(right, left.index, by_index):
+            continue
+        left_contract, right_contract = contracts.get(left.index), contracts.get(right.index)
+        if left_contract is None or right_contract is None or parallel_safe([left_contract, right_contract]):
+            continue
+        if paths_overlap(left_contract, right_contract):
+            errors.append(
+                f"parallel tasks {left.index} ({left.title}) and {right.index} ({right.title}) "
+                "have overlapping allowed_paths"
+            )
+        else:
+            errors.append(
+                f"parallel tasks {left.index} ({left.title}) and {right.index} ({right.title}) "
+                "both require a migration"
+            )
+    if errors:
+        raise PlanValidationError("task contract validation failed: " + "; ".join(errors))
 
 
 def create_issue(
@@ -238,6 +290,7 @@ def run_plan(
 
     try:
         tasks = parse_plan_response(response.get("content", ""))
+        validate_task_contracts(response.get("content", ""), tasks)
     except PlanValidationError as exc:
         agent_runner.comment_on_issue(
             token,
