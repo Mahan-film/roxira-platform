@@ -2,9 +2,21 @@
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-ALLOWED_STAGES = ("intake", "research", "approval", "plan", "task", "review", "preview", "deploy", "verify", "report")
+
+ALLOWED_STAGES = (
+    "intake",
+    "research",
+    "approval",
+    "plan",
+    "task",
+    "review",
+    "preview",
+    "deploy",
+    "verify",
+    "report",
+)
 _STATUSES = ("started", "success", "failure", "ok", "failed", "skipped")
 _FORBIDDEN = {"prompt", "token", "api_key", "password", "text"}
 _SECRET = re.compile(r"sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16}")
@@ -20,9 +32,13 @@ def make_event(run_id: str, stage: str, status: str, *, now: str | None = None, 
         raise ValueError(f"unknown stage: {stage}")
     if status not in _STATUSES:
         raise ValueError(f"unknown status: {status}")
-    if any(key in _FORBIDDEN or _SECRET.search(key) or not _safe(value) for key, value in fields.items()):
+    status = {"success": "ok", "failure": "failed"}.get(status, status)
+    if any(
+        key in _FORBIDDEN or _SECRET.search(key) or not _safe(value)
+        for key, value in fields.items()
+    ):
         raise ValueError("unsafe ledger field")
-    ts = now or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    ts = now or datetime.now(UTC).isoformat().replace("+00:00", "Z")
     if not all(_safe(value) for value in (run_id, stage, status, ts)):
         raise ValueError("unsafe ledger event")
     return {"run_id": run_id, "stage": stage, "status": status, "ts": ts, **fields}

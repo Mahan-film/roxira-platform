@@ -3,7 +3,11 @@ import subprocess
 import sys
 
 import pytest
+
+from src.factory_pipeline.delivery_report import render_delivery_report_fa
 from src.factory_pipeline.run_ledger import append_event, make_event, read_events, summarize
+
+
 def test_round_trip_and_corrupt_line(tmp_path):
     path = tmp_path / "ledger" / "events.jsonl"
     event = make_event("run-1", "intake", "started", now="2026-10-01T00:00:00Z", count=2)
@@ -25,6 +29,11 @@ def test_summarize_uses_last_status_and_costs():
                                  "failed": ["review"], "total_cost_usd": 3.25}
 
 
+def test_make_event_normalizes_legacy_terminal_statuses():
+    assert make_event("run-1", "research", "success", now="a")["status"] == "ok"
+    assert make_event("run-1", "research", "failure", now="b")["status"] == "failed"
+
+
 def test_cli_appends_redacted_event(tmp_path):
     path = tmp_path / "ledger.jsonl"
     result = subprocess.run(
@@ -36,8 +45,9 @@ def test_cli_appends_redacted_event(tmp_path):
     assert result.returncode == 0
     assert json.loads(path.read_text(encoding="utf-8")) == {
         "cost_usd": 0.5, "issue": 267, "run_id": "run-1", "stage": "research",
-        "status": "success", "ts": read_events(path)[0]["ts"],
+        "status": "ok", "ts": read_events(path)[0]["ts"],
     }
+    assert "پژوهش: انجام شد" in render_delivery_report_fa(summarize(read_events(path)))
 
 
 def test_cli_rejects_secrets_and_bad_status(tmp_path):
