@@ -126,10 +126,31 @@ def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
+def normalize_alternatives(alts: list) -> list[dict]:
+    """Normalise common LLM alternative-key variants to the proposal schema."""
+    normalized = []
+    aliases = {
+        "name": ("name", "name_en", "title"),
+        "why": ("why", "why_it_matters_for_this_project_fa"),
+        "license": ("license", "license_or_pricing_note_fa"),
+    }
+    for alt in alts:
+        if not isinstance(alt, dict):
+            continue
+        item = alt.copy()
+        for field, keys in aliases.items():
+            value = next((item.get(key) for key in keys if item.get(key)), None)
+            if value:
+                item[field] = value
+        if item.get("name"):
+            normalized.append(item)
+    return normalized
+
+
 def _research_layer(
     agent: TechRadarAgent, idea: str, layer: Layer, report_lang: str = DEFAULT_REPORT_LANG
 ) -> dict[str, Any]:
-    topic = f"{idea} — {layer.query_hint}"
+    topic = f"{idea[:160]} — {layer.query_hint} {layer.label_en} comparison"
     ranked, _search_bundle = agent.gather_sources(topic, deep=False)
     source_index = "\n".join(
         f"- {s.get('title', '')} | {s.get('url', '')} | lang={s.get('source_lang', 'en')} | "
@@ -189,6 +210,17 @@ def _research_layer(
         }
 
     parsed = _extract_json(response.get("content", "")) or {}
+    alternatives = normalize_alternatives(parsed.get("alternatives") or [])
+    parsed["alternatives"] = alternatives
+    names = {alternative["name"] for alternative in alternatives}
+    if alternatives and parsed.get("recommended") not in names:
+        parsed["recommended"] = max(
+            alternatives,
+            key=lambda alternative: alternative.get("adoption_score")
+            if isinstance(alternative.get("adoption_score"), (int, float))
+            and not isinstance(alternative.get("adoption_score"), bool)
+            else 0,
+        )["name"]
     ok = bool(parsed.get("alternatives"))
     return {
         "layer": layer.key,
