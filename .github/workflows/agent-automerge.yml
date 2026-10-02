@@ -9,6 +9,13 @@ name: Agent auto-merge
 # push to `main`, or a manual merge from the UI, bypasses it completely. This
 # is a safety net for one path, not a security boundary.
 #
+# NON-AGENT RUNS ARE SKIPPED. This workflow also reacts to `CI` completing on
+# a push to `main` and to `Agent review` completing on an rx `issue-<n>` PR.
+# Neither is an `agent/*` PR and neither has an `agent-review` status to read,
+# so the first step short-circuits those runs to a successful skip
+# (`not an agent/* PR; nothing to do`) instead of failing the status fetch and
+# drowning real failures in noise.
+#
 # SECURITY (fixed after hub review of the first version of this file):
 # 1. No `pull_request` trigger. A `pull_request`-triggered job runs with the
 #    workflow file taken from the PR's own merge ref, not always `main` --
@@ -65,7 +72,30 @@ jobs:
       actions: read
       issues: write
     steps:
+      # The watched run only concerns this gate when it came from an
+      # `agent/*` PR. A push to `main` has no `pull_requests` entry, and an rx
+      # `issue-<n>` PR has a non-agent head branch; both legitimately have no
+      # `agent-review` status, so this step short-circuits them to a successful
+      # no-op rather than letting the status fetch fail. Values from the
+      # (untrusted) event payload are threaded through `env:` only.
+      - name: Decide whether this run concerns an agent/* PR
+        id: scope
+        env:
+          WORKFLOW_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          if [ -n "${WORKFLOW_RUN_PR_NUMBER:-}" ] \
+            && [ "$WORKFLOW_RUN_PR_NUMBER" != "null" ] \
+            && [[ "${WORKFLOW_RUN_HEAD_BRANCH:-}" == agent/* ]]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "not an agent/* PR; nothing to do"
+          fi
+
       - name: Resolve the PR number for this event
+        if: steps.scope.outputs.proceed == 'true'
         id: pr_number
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -93,20 +123,20 @@ jobs:
       # Only `main` is ever checked out -- automerge_gate.py always runs as
       # the trusted, reviewed copy on `main`, never anything from the PR.
       - name: Checkout default branch (trusted code only, never the PR head)
-        if: steps.pr_number.outputs.number != ''
+        if: steps.scope.outputs.proceed == 'true' && steps.pr_number.outputs.number != ''
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: Set up Python
-        if: steps.pr_number.outputs.number != ''
+        if: steps.scope.outputs.proceed == 'true' && steps.pr_number.outputs.number != ''
         uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Gather PR facts (branch, author, CI conclusion, changed files, diff size)
-        if: steps.pr_number.outputs.number != ''
+        if: steps.scope.outputs.proceed == 'true' && steps.pr_number.outputs.number != ''
         id: facts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -140,7 +170,7 @@ jobs:
           echo "diff_bytes=$diff_bytes" >> "$GITHUB_OUTPUT"
 
       - name: Fetch the agent-review commit status (creator-checked)
-        if: steps.pr_number.outputs.number != ''
+        if: steps.scope.outputs.proceed == 'true' && steps.pr_number.outputs.number != ''
         id: review
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -167,7 +197,7 @@ jobs:
             > "$RUNNER_TEMP/review_result.json"
 
       - name: Run the gate decision
-        if: steps.pr_number.outputs.number != ''
+        if: steps.scope.outputs.proceed == 'true' && steps.pr_number.outputs.number != ''
         id: gate_decision
         env:
           AUTO_MERGE_ENABLED: ${{ vars.AUTO_MERGE_ENABLED }}
@@ -208,7 +238,7 @@ jobs:
             | tee "$RUNNER_TEMP/gate_decision.json"
 
       - name: Merge or label needs-human
-        if: steps.pr_number.outputs.number != '' && steps.gate_decision.outputs.skip_non_agent != 'true'
+        if: steps.scope.outputs.proceed == 'true' && steps.pr_number.outputs.number != '' && steps.gate_decision.outputs.skip_non_agent != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr_number.outputs.number }}
@@ -234,7 +264,7 @@ jobs:
           fi
 
       - name: Job summary
-        if: steps.pr_number.outputs.number != '' && steps.gate_decision.outputs.skip_non_agent != 'true'
+        if: steps.scope.outputs.proceed == 'true' && steps.pr_number.outputs.number != '' && steps.gate_decision.outputs.skip_non_agent != 'true'
         env:
           PR_NUMBER: ${{ steps.pr_number.outputs.number }}
         run: |
