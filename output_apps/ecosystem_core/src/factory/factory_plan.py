@@ -9,9 +9,13 @@ means "go" (see that module and `src/factory_pipeline/commands.py`). Steps:
   1. Read the parent issue (the brief) and its most recent proposal comment
      (marked with `src.factory_pipeline.proposal.PROPOSAL_MARKER`, posted by
      factory_post_proposal.py in stage 2).
-  2. Ask a `strong`-tier model, through the existing router
+  2. Ask a model, through the existing router
      (`src.automation.llm_router_bridge.call_llm`, same one tech_radar.py and
      project_brief.py use -- never a bespoke client), for a JSON task list.
+     The tier comes from `FACTORY_PLANNER_TIER` (default `cheap`, because a
+     reasoning model on `strong` burns the token budget on hidden reasoning
+     and returns empty content). If the first response is missing or has
+     empty/whitespace content, retry once on `strong` with a larger budget.
   3. Validate/parse it (`src.factory_pipeline.plan_parsing`, unit tested with
      canned LLM responses -- this script does not re-test that logic, only
      wires it to real GitHub/LLM calls).
@@ -51,6 +55,8 @@ Env:
     GITHUB_REPO              Default: Mahan-film/roxira-platform.
     OPENROUTER_API_KEY       A dedicated key for planning/research (OPENROUTER_RESEARCH_KEY
                              in the workflow) -- read by llm_router itself, not by this script.
+    FACTORY_PLANNER_TIER     Default `cheap`; valid values `cheap`/`strong`. Anything else
+                             falls back to `cheap`. A one-shot retry always uses `strong`.
     AGENT_MAX_CONCURRENT     Default 2. How many of the first ready tasks to dispatch.
 """
 
@@ -94,7 +100,12 @@ from src.factory_pipeline.task_contract import (  # noqa: E402
     paths_overlap,
 )
 
-PLANNER_TIER = "strong"
+FACTORY_PLANNER_TIER_ENV = "FACTORY_PLANNER_TIER"
+DEFAULT_PLANNER_TIER = "cheap"
+VALID_PLANNER_TIERS = ("cheap", "strong")
+PLANNER_MAX_TOKENS = 8000
+PLANNER_RETRY_TIER = "strong"
+PLANNER_RETRY_MAX_TOKENS = 16000
 AGENT_LABEL = "agent"
 PLAN_READY_LABEL = "plan-ready"
 DISPATCHED_LABEL = "agent-dispatched"
@@ -297,6 +308,51 @@ def existing_project_slugs(repo_dir: pathlib.Path) -> set[str]:
     return {p.name for p in projects_dir.iterdir() if p.is_dir()}
 
 
+def planner_tier() -> str:
+    """Resolve the planner tier from `FACTORY_PLANNER_TIER`, defaulting to cheap.
+
+    `cheap` disables reasoning, so hidden reasoning tokens cannot consume the
+    whole completion budget and leave the visible content empty. Any value
+    other than the two known tiers falls back to `cheap`.
+    """
+    tier = os.environ.get(FACTORY_PLANNER_TIER_ENV, "").strip().lower()
+    return tier if tier in VALID_PLANNER_TIERS else DEFAULT_PLANNER_TIER
+
+
+def _request_plan(prompt: str) -> tuple[dict[str, Any], list[str]]:
+    """Call the planner once, then retry once on `strong` if that came back empty.
+
+    Returns the response and the tiers tried, in order, so the caller can name
+    them in the failure comment. Only the tier/max_tokens differ between the
+    two calls; json_mode, temperature and the feature tag stay identical.
+    """
+    tier = planner_tier()
+    tried = [tier]
+    response = call_llm(
+        tier,
+        prompt,
+        PLANNER_SYSTEM_PROMPT,
+        temperature=0.2,
+        max_tokens=PLANNER_MAX_TOKENS,
+        json_mode=True,
+        feature="factory_plan",
+    )
+    if response.get("status") == "SUCCESS" and (response.get("content") or "").strip():
+        return response, tried
+
+    tried.append(PLANNER_RETRY_TIER)
+    retry = call_llm(
+        PLANNER_RETRY_TIER,
+        prompt,
+        PLANNER_SYSTEM_PROMPT,
+        temperature=0.2,
+        max_tokens=PLANNER_RETRY_MAX_TOKENS,
+        json_mode=True,
+        feature="factory_plan",
+    )
+    return retry, tried
+
+
 def run_plan(
     *,
     issue_number: int,
@@ -327,27 +383,22 @@ def run_plan(
     proposal_body = proposal.get("body", "")
     prompt = build_planner_prompt(idea, brief_body, proposal_body, chosen_option, agents_md)
 
-    response = call_llm(
-        PLANNER_TIER,
-        prompt,
-        PLANNER_SYSTEM_PROMPT,
-        temperature=0.2,
-        max_tokens=4000,
-        json_mode=True,
-        feature="factory_plan",
-    )
-    if response.get("status") != "SUCCESS":
+    response, tiers_tried = _request_plan(prompt)
+    content = response.get("content") or ""
+    if response.get("status") != "SUCCESS" or not content.strip():
+        error = response.get("error") or "empty completion content"
         agent_runner.comment_on_issue(
             token,
             repo,
             issue_number,
-            f"فراخوانی مدل برنامه‌ریز شکست خورد؛ هیچ وظیفه‌ای ساخته نشد: {response.get('error')}",
+            "فراخوانی مدل برنامه‌ریز شکست خورد؛ هیچ وظیفه‌ای ساخته نشد "
+            f"(tiers tried: {', '.join(tiers_tried)}): {error}",
         )
-        return {"status": "planner-failed", "error": response.get("error")}
+        return {"status": "planner-failed", "error": error, "tiers": tiers_tried}
 
     try:
-        tasks = parse_plan_response(response.get("content", ""))
-        contracts = validate_task_contracts(response.get("content", ""), tasks)
+        tasks = parse_plan_response(content)
+        contracts = validate_task_contracts(content, tasks)
     except PlanValidationError as exc:
         agent_runner.comment_on_issue(
             token,

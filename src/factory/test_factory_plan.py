@@ -512,6 +512,156 @@ def test_run_plan_all_tasks_independent_dispatches_up_to_max_concurrent(tmp_path
 
 
 # ---------------------------------------------------------------------------
+# planner tier selection + empty-content retry
+# ---------------------------------------------------------------------------
+
+
+def _stub_issue_and_proposal(monkeypatch):
+    monkeypatch.setattr(
+        factory_plan, "get_issue", lambda *a, **k: {"title": "Idea", "body": "brief"}
+    )
+    monkeypatch.setattr(
+        factory_plan,
+        "list_issue_comments",
+        lambda *a, **k: [{"body": f"{factory_plan.PROPOSAL_MARKER}\nproposal"}],
+    )
+    monkeypatch.setattr(factory_plan.agent_runner, "read_agents_md", lambda *a, **k: "")
+
+
+def _recording_call_llm(responses):
+    calls = []
+    remaining = iter(responses)
+
+    def fake(tier, prompt, system_prompt, **kwargs):
+        calls.append({"tier": tier, "kwargs": kwargs})
+        return next(remaining)
+
+    return fake, calls
+
+
+def test_planner_tier_defaults_to_cheap(monkeypatch):
+    monkeypatch.delenv(factory_plan.FACTORY_PLANNER_TIER_ENV, raising=False)
+    assert factory_plan.planner_tier() == "cheap"
+
+
+def test_planner_tier_reads_valid_env(monkeypatch):
+    monkeypatch.setenv(factory_plan.FACTORY_PLANNER_TIER_ENV, "strong")
+    assert factory_plan.planner_tier() == "strong"
+
+
+def test_planner_tier_invalid_env_falls_back_to_cheap(monkeypatch):
+    monkeypatch.setenv(factory_plan.FACTORY_PLANNER_TIER_ENV, "expensive")
+    assert factory_plan.planner_tier() == "cheap"
+
+
+def test_run_plan_single_call_when_first_succeeds(tmp_path, monkeypatch):
+    monkeypatch.setenv(factory_plan.FACTORY_PLANNER_TIER_ENV, "cheap")
+    _stub_issue_and_proposal(monkeypatch)
+    fake, calls = _recording_call_llm([{"status": "SUCCESS", "content": _valid_plan_json(1)}])
+    monkeypatch.setattr(factory_plan, "call_llm", fake)
+
+    result = factory_plan.run_plan(
+        issue_number=1,
+        chosen_option=None,
+        repo_dir=tmp_path,
+        repo="o/r",
+        token="tok",
+        max_concurrent=2,
+        dry_run=True,
+    )
+
+    assert result["status"] == "dry-run"
+    assert len(calls) == 1
+    assert calls[0]["tier"] == "cheap"
+    assert calls[0]["kwargs"]["max_tokens"] == 8000
+
+
+def test_run_plan_empty_content_retries_once_on_strong(tmp_path, monkeypatch):
+    monkeypatch.setenv(factory_plan.FACTORY_PLANNER_TIER_ENV, "cheap")
+    _stub_issue_and_proposal(monkeypatch)
+    fake, calls = _recording_call_llm(
+        [
+            {"status": "SUCCESS", "content": "   "},
+            {"status": "SUCCESS", "content": _valid_plan_json(1)},
+        ]
+    )
+    monkeypatch.setattr(factory_plan, "call_llm", fake)
+
+    result = factory_plan.run_plan(
+        issue_number=1,
+        chosen_option=None,
+        repo_dir=tmp_path,
+        repo="o/r",
+        token="tok",
+        max_concurrent=2,
+        dry_run=True,
+    )
+
+    assert result["status"] == "dry-run"
+    assert [c["tier"] for c in calls] == ["cheap", "strong"]
+    assert calls[0]["kwargs"]["max_tokens"] == 8000
+    assert calls[1]["kwargs"]["max_tokens"] == 16000
+
+
+def test_run_plan_both_attempts_fail_reports_tiers_without_tasks(tmp_path, monkeypatch):
+    monkeypatch.setenv(factory_plan.FACTORY_PLANNER_TIER_ENV, "cheap")
+    _stub_issue_and_proposal(monkeypatch)
+    fake, calls = _recording_call_llm(
+        [
+            {"status": "ERROR", "error": "empty completion content"},
+            {"status": "SUCCESS", "content": ""},
+        ]
+    )
+    monkeypatch.setattr(factory_plan, "call_llm", fake)
+    comments, created = [], []
+    monkeypatch.setattr(
+        factory_plan.agent_runner,
+        "comment_on_issue",
+        lambda token, repo, number, body: comments.append(body),
+    )
+    monkeypatch.setattr(
+        factory_plan, "create_issue", lambda *a, **k: (created.append(a), {"number": 1})[1]
+    )
+
+    result = factory_plan.run_plan(
+        issue_number=1,
+        chosen_option=None,
+        repo_dir=tmp_path,
+        repo="o/r",
+        token="tok",
+        max_concurrent=2,
+    )
+
+    assert result["status"] == "planner-failed"
+    assert result["tiers"] == ["cheap", "strong"]
+    assert len(calls) == 2
+    assert created == []
+    assert comments
+    assert "cheap" in comments[0] and "strong" in comments[0]
+
+
+def test_run_plan_env_tier_strong_used_for_first_call(tmp_path, monkeypatch):
+    monkeypatch.setenv(factory_plan.FACTORY_PLANNER_TIER_ENV, "strong")
+    _stub_issue_and_proposal(monkeypatch)
+    fake, calls = _recording_call_llm([{"status": "SUCCESS", "content": _valid_plan_json(1)}])
+    monkeypatch.setattr(factory_plan, "call_llm", fake)
+
+    result = factory_plan.run_plan(
+        issue_number=1,
+        chosen_option=None,
+        repo_dir=tmp_path,
+        repo="o/r",
+        token="tok",
+        max_concurrent=2,
+        dry_run=True,
+    )
+
+    assert result["status"] == "dry-run"
+    assert len(calls) == 1
+    assert calls[0]["tier"] == "strong"
+
+
+# ---------------------------------------------------------------------------
 # spec artifacts (report-only)
 # ---------------------------------------------------------------------------
 
