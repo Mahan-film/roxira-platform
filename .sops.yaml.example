@@ -1,0 +1,18 @@
+# Example SOPS configuration for Roxira.
+#
+# Copy this file to `.sops.yaml` and replace every `age1PLACEHOLDER...` value
+# with the real public recipient for that environment. The placeholders below
+# are deliberately invalid so a real key can never be mistaken for them.
+# Never commit a private age key or a real `.sops.yaml` to a public repository.
+creation_rules:
+  # dev: the development recipient. Any developer may decrypt dev secrets.
+  - path_regex: ^secrets/dev/.*\.enc\.yaml$
+    age: age1PLACEHOLDERDEV0000000000000000000000000000000000000000000000000000
+  # preview: the preview/CI recipient. Used only by ephemeral previews, which
+  # never hold production data.
+  - path_regex: ^secrets/preview/.*\.enc\.yaml$
+    age: age1PLACEHOLDERPREVIEW000000000000000000000000000000000000000000000000
+  # production: ONLY the deploy job's age key may decrypt. Do not add the dev or
+  # preview recipients to this rule.
+  - path_regex: ^secrets/production/.*\.enc\.yaml$
+    age: age1PLACEHOLDERPRODUCTION00000000000000000000000000000000000000000000000
