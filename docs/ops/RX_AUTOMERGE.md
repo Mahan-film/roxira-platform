@@ -118,3 +118,52 @@ bypass and the missing checks cannot be turned into an automatic bad merge.
 It builds and tests only the decision library and this doc. It performs no
 network calls and writes no workflow. Wiring the library into a trusted
 workflow that merges with `MERGE_BOT_TOKEN` is a follow-up issue.
+
+## Workflow
+
+`.github/workflows/rx-automerge.yml` wires the decision library into a trusted
+workflow. The section above describes the library-only first step; this
+workflow is the follow-up.
+
+**Flow.** When the `CI` or `Agent review` workflow completes for a pull request
+whose head branch starts with `issue-`, the `gate` job runs (also on manual
+`workflow_dispatch`). It checks out the **default branch only** with
+`persist-credentials: false` and runs one step,
+`python3 scripts/ci/merge_gate_run.py`. The script reads the PR, its changed
+files and its check-runs through `gh` (paginated with `--paginate --slurp`),
+calls `merge_gate.decide`, and acts. It never checks out or executes PR code.
+`MERGE_BOT_TOKEN` is passed only in the environment of that single step, and
+only the `gh pr merge` call uses it. Runs are serialized
+(`concurrency: rx-automerge`, no cancellation).
+
+**Outcomes.**
+
+- `merge` -- `gh pr merge N --squash --match-head-commit <sha>` with
+  `MERGE_BOT_TOKEN`. If that secret is missing the gate does not merge; it
+  only posts the marked comment and exits non-zero.
+- `wait` -- no writes. CI or mergeability is not settled, or the head moved; a
+  later `workflow_run` decides.
+- `block` -- the reasons are written to the PR and the PR is left alone.
+
+**Where the reasons appear.** In ONE marked PR comment (first line
+`<!-- rx-merge-gate -->`, then `Merge gate: BLOCK` and one `- reason` bullet
+each). The gate creates it once and PATCHes it on later runs. The decision JSON
+is also in the step log and the step summary. A failing `gh` call makes the job
+fail with `error: gh failed (exit N)` (no arguments or tokens printed).
+
+**Kill switches.** Set repo variable `AUTO_MERGE_ENABLED` to anything other
+than `true` (for example `false`) and the job does not run at all. Add label
+`hold` to stop a single PR.
+
+**Sensitive paths.** A PR touching `SENSITIVE` paths (for example `.github/`)
+only merges after a human adds the label `hub-approved`.
+
+**PAT expiry.** Fine-grained PATs expire. The owner records the expiry date of
+`MERGE_BOT_TOKEN` (for example in `docs/STATE.md`) and renews it before then;
+after expiry the gate reports `error: gh failed` instead of merging.
+
+**Testing.** Open a harmless docs-only `issue-<n>` PR by a trusted author, wait
+for CI, then run the workflow from the Actions tab with `workflow_dispatch` and
+the PR number as `pr_number`. With no run SHA, the gate judges the PR's current
+head. Check the job log or the marked PR comment; with
+`AUTO_MERGE_ENABLED=true` a clean PR is squash-merged.
