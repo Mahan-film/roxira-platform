@@ -1,0 +1,25 @@
+# MCP server allowlist (issue #334; docs/research/nextgen/A_agent_native_architecture.md §2).
+#
+# Every server configured in the repo-root .mcp.json must appear here with an
+# owner, transport, data class, scopes, network destination and expiry.
+# scripts/ci/check_mcp_allowlist.py fails when a configured server is missing,
+# an entry is expired, a transport/data_class is unknown, or an http server has
+# no named network host.
+#
+# transport:  stdio | http
+# data_class: public | code | none   (highest sensitivity the tools may touch)
+# network:    "none" for a local stdio server, or a list of exact hostnames for
+#             a remote server (explicit egress approval)
+# expires:    YYYY-MM-DD; re-review on or before this date.
+
+schema_version: 1
+servers:
+  - name: context7
+    owner: platform
+    transport: http
+    data_class: public
+    scopes:
+      - docs:read
+    network:
+      - mcp.context7.com
+    expires: "2027-10-01"
