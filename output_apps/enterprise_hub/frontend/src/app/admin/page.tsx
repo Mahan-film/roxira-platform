@@ -2,35 +2,17 @@
 import React, { useState, useEffect } from "react";
 
 export default function AdminDashboard() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [passcode, setPasscode] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  const isAuthenticated = process.env.NODE_ENV !== "production";
+  
+  
 
-  const MASTER_KEY = "Roxira2026#"; // رمز عبور مدیریت
+  // Temporary measure until proper server-side guard exists
 
-  useEffect(() => {
-    const savedAuth = sessionStorage.getItem("roxira_admin_auth");
-    if (savedAuth === "true") {
-      setIsAuthenticated(true);
-    }
-  }, []);
+  
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passcode === MASTER_KEY) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem("roxira_admin_auth", "true");
-      setErrorMsg("");
-    } else {
-      setErrorMsg("رمز عبور نامعتبر است.");
-    }
-  };
+  
 
-  const handleLogout = () => {
-    sessionStorage.removeItem("roxira_admin_auth");
-    setIsAuthenticated(false);
-    setPasscode("");
-  };
+  
 
   const handleDownloadDataset = () => {
     window.open("/api/v1/apps/judge/admin/export-dataset", "_blank");
@@ -50,39 +32,7 @@ export default function AdminDashboard() {
   ];
 
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl max-w-sm w-full shadow-2xl text-center">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-4 text-xl font-bold">
-            🔒
-          </div>
-          <h2 className="text-lg font-bold text-white mb-2">درگاه ورود به پنل مدیریت</h2>
-          <p className="text-xs text-slate-400 mb-6">جهت مشاهده اطلاعات سازمانی و خروجی دیتاست، رمز عبور را وارد کنید.</p>
-          
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="password"
-              placeholder="رمز عبور مدیر..."
-              value={passcode}
-              onChange={(e) => setPasscode(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-center text-white focus:outline-none focus:border-amber-400 font-mono tracking-widest placeholder:text-slate-600"
-              autoFocus
-            />
-            {errorMsg && <p className="text-xs text-rose-400 font-medium">{errorMsg}</p>}
-            
-            <button
-              type="submit"
-              className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-            >
-              ورود به داشبورد
-            </button>
-          </form>
-          <a href="/" className="inline-block mt-6 text-xs text-slate-500 hover:text-slate-400">
-            بازگشت به سایت
-          </a>
-        </div>
-      </div>
-    );
+    notFound();
   }
 
   return (
