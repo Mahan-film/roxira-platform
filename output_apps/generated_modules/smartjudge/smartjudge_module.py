@@ -64,6 +64,7 @@ import time
 import uuid
 import hmac
 import hashlib
+import secrets
 import base64
 import struct
 import asyncio
@@ -179,19 +180,60 @@ VIP_REQUIRED_FRAME = {
     "action": "UPGRADE_PLAN",
 }
 
-JWT_SECRET = os.environ.get(
-    "JWT_SECRET", "roxira_enterprise_super_secure_jwt_secret_key_2026"
-).encode("utf-8")
+_JWT_TTL_DEFAULT_SECONDS = 60 * 60 * 24 * 7  # 7 روز
+_JWT_TTL_MIN_SECONDS = 300
+_JWT_TTL_MAX_SECONDS = 2592000
+
+
+def _resolve_jwt_secret(raw_secret: Optional[str] = None) -> bytes:
+    """کلید امضای JWT: مقدار محیطی، یا یک کلید تصادفی هر-روند (fail-closed).
+
+    در نبود ``JWT_SECRET`` هرگز از یک کلید پیش‌فرض شناخته‌شده استفاده نمی‌شود؛
+    یک کلید تصادفی ساخته و فقط هشدار داده می‌شود که توکن‌ها پس از راه‌اندازی
+    مجدد نامعتبر می‌شوند. خود کلید هرگز لاگ نمی‌شود.
+    """
+    if raw_secret is None:
+        raw_secret = os.environ.get("JWT_SECRET", "")
+    secret = str(raw_secret).strip()
+    if secret:
+        return secret.encode("utf-8")
+    print(
+        "[SMARTJUDGE][JWT] WARNING: JWT_SECRET is not set; using a random "
+        "per-process secret — issued tokens will not survive a restart.",
+        file=sys.stderr,
+    )
+    return secrets.token_urlsafe(48).encode("utf-8")
+
+
+def _resolve_jwt_ttl_seconds(raw_ttl: Optional[str] = None) -> int:
+    """مدت اعتبار توکن (ثانیه): پیش‌فرض ۷ روز، قابل بازنویسی با ``JWT_TTL_SECONDS``."""
+    if raw_ttl is None:
+        raw_ttl = os.environ.get("JWT_TTL_SECONDS", "")
+    try:
+        value = int(str(raw_ttl).strip())
+    except (TypeError, ValueError):
+        value = _JWT_TTL_DEFAULT_SECONDS
+    return max(_JWT_TTL_MIN_SECONDS, min(value, _JWT_TTL_MAX_SECONDS))
+
+
+def _parse_vip_phone_allowlist(raw_allowlist: Optional[str] = None) -> set:
+    """شماره‌های VIP از ``VIP_PHONE_ALLOWLIST`` (با کاما جدا)؛ پیش‌فرض خالی."""
+    if raw_allowlist is None:
+        raw_allowlist = os.environ.get("VIP_PHONE_ALLOWLIST", "")
+    return {item.strip() for item in str(raw_allowlist).split(",") if item.strip()}
+
+
+JWT_SECRET = _resolve_jwt_secret()
 JWT_ALGORITHM = "HS256"
-JWT_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 روز
+JWT_TTL_SECONDS = _resolve_jwt_ttl_seconds()
 
 # سطوحی که دسترسی VIP محسوب می‌شوند.
 VIP_TIER_VALUES = {
     "VIP", "VIP_MONTHLY", "VIP_MONTHLY_PRO", "VIP_UNLIMITED", "PRO",
     "PREMIUM", "ENTERPRISE", "TIER2", "TIER3",
 }
-# فهرست اختیاری شماره‌های VIP (با کاما جدا شده) از متغیر محیطی.
-VIP_PHONE_ALLOWLIST = {'09129367796', '+989129367796', '09120000000'}
+# فهرست اختیاری شماره‌های VIP (با کاما جدا شده) از متغیر محیطی؛ در نبود آن خالی.
+VIP_PHONE_ALLOWLIST = _parse_vip_phone_allowlist()
 
 def _is_vip_tier(tier: Optional[str]) -> bool:
     """آیا سطح داده‌شده معادل دسترسی VIP است؟"""
@@ -228,9 +270,14 @@ def _decode_jwt(token: str) -> Optional[dict]:
         expected = hmac.new(JWT_SECRET, signing_input, hashlib.sha256).digest()
         if not hmac.compare_digest(expected, _b64url_decode(signature_b64)):
             return None
+        header = json.loads(_b64url_decode(header_b64).decode("utf-8"))
+        if not isinstance(header, dict) or header.get("alg") != JWT_ALGORITHM:
+            return None
         payload = json.loads(_b64url_decode(payload_b64).decode("utf-8"))
         exp = payload.get("exp")
-        if exp is not None and time.time() > float(exp):
+        if exp is None:
+            return None
+        if time.time() > float(exp):
             return None
         return payload
     except Exception:
@@ -284,11 +331,11 @@ def _resolve_subscription_tier(payload: Optional[dict] = None,
         if ws_tier and _is_vip_tier(ws_tier):
             return "VIP"
         ws_phone = websocket.query_params.get("phone") or websocket.query_params.get("user_phone")
-        if ws_phone and (str(ws_phone).strip() in VIP_PHONE_ALLOWLIST or str(ws_phone).strip() in {"09129367796", "09120000000"}):
+        if ws_phone and str(ws_phone).strip() in VIP_PHONE_ALLOWLIST:
             return "VIP"
 
     phone = payload.get("phone") or payload.get("user_phone")
-    if phone and (str(phone).strip() in VIP_PHONE_ALLOWLIST or str(phone).strip() in {"09129367796", "09120000000"}):
+    if phone and str(phone).strip() in VIP_PHONE_ALLOWLIST:
         return "VIP"
     if payload.get("is_vip") is True:
         return "VIP"

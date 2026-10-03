@@ -48,6 +48,8 @@ services:
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
       # امنیت توکن JWT
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
+      - JWT_TTL_SECONDS=${JWT_TTL_SECONDS:-}
+      - VIP_PHONE_ALLOWLIST=${VIP_PHONE_ALLOWLIST:-}
     depends_on:
       - postgres_prod
       - redis_prod
