@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { notFound } from "next/navigation";
 
 export default function AdminDashboard() {
   const isAuthenticated = process.env.NODE_ENV !== "production";
