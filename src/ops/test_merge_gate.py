@@ -261,6 +261,12 @@ def test_allows_exactly_max_changed_lines(merge_gate):
         ".semgrep/rules.yml",
         "scripts/ci/merge_gate.py",
         "scripts/dev/rx",
+        "output_apps/ecosystem_core/src/billing/invoice.py",
+        "output_apps/ecosystem_core/src/auth/session.ts",
+        "output_apps/nginx_config/default.conf",
+        "output_apps/generated_modules/smartjudge/smartjudge_module.py",
+        "output_apps/generated_modules/smartjudge/payment_service.py",
+        "Dockerfile.prod",
     ],
 )
 def test_blocks_sensitive_path(merge_gate, path):
@@ -278,6 +284,19 @@ def test_blocks_sensitive_path(merge_gate, path):
     ],
 )
 def test_not_sensitive_when_ops_appears_midpath(merge_gate, path):
+    decision = _decide(merge_gate, files=[path])
+    assert decision["action"] == "merge"
+    assert not _reason(decision, "hub-approved")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/billing/test_x.py",
+        "docs/ops/nginx.md",
+    ],
+)
+def test_not_sensitive_for_lookalike_paths(merge_gate, path):
     decision = _decide(merge_gate, files=[path])
     assert decision["action"] == "merge"
     assert not _reason(decision, "hub-approved")

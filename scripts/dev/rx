@@ -21,7 +21,7 @@ rx_enable_auto_merge() {
 
   while IFS= read -r rx_changed_file; do
     case "$rx_changed_file" in
-      .github/*|scripts/ops/*|ops/*|config/models.yaml|docker-compose*.yml|nginx|nginx/*|migrations/*|docker/*|*.sql|src/factory_pipeline/budget.py|.semgrep/*)
+      .github/*|scripts/ops/*|ops/*|config/models.yaml|docker-compose*.yml|nginx|nginx.conf|nginx/*|migrations/*|docker/*|*.sql|src/factory_pipeline/budget.py|.semgrep/*|output_apps/nginx_config/*|output_apps/ecosystem_core/src/billing/*|output_apps/ecosystem_core/src/auth/*|output_apps/generated_modules/smartjudge/smartjudge_module.py|output_apps/generated_modules/smartjudge/payment_service.py|Dockerfile.prod)
         rx_sensitive_path="$rx_changed_file"
         break
         ;;

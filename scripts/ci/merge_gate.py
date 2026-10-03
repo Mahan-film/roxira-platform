@@ -50,6 +50,8 @@ SENSITIVE_PREFIXES: tuple[str, ...] = (
     "docker/",
     ".semgrep/",
     "output_apps/nginx_config/",
+    "output_apps/ecosystem_core/src/billing/",
+    "output_apps/ecosystem_core/src/auth/",
 )
 
 # Entire repo-relative files that need `hub-approved` (matched whole-path).
@@ -58,6 +60,9 @@ SENSITIVE_FILES: tuple[str, ...] = (
     "src/factory_pipeline/budget.py",
     "scripts/ci/merge_gate.py",
     "scripts/dev/rx",
+    "output_apps/generated_modules/smartjudge/smartjudge_module.py",
+    "output_apps/generated_modules/smartjudge/payment_service.py",
+    "Dockerfile.prod",
 )
 
 # Globs matched against the BASENAME of a TOP-LEVEL file only.
