@@ -255,3 +255,71 @@ def test_gh_merge_requires_merge_bot_token(mgr: Any, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("GH_TOKEN", SECRET)
     with pytest.raises(ValueError):
         mgr.gh(["pr", "merge", "1"], token_env="MERGE_BOT_TOKEN")
+
+
+def test_main_prints_sanitized_gh_error(
+    mgr: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    summary = tmp_path / "step_summary.md"
+    monkeypatch.setenv("PR_NUMBER", "362")
+    monkeypatch.setenv("EXPECTED_SHA", SHA)
+    monkeypatch.setenv("MERGE_BOT_TOKEN", SECRET)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    fake = FakeGh()
+
+    def boom(args: list[str], *, token_env: str = "GH_TOKEN") -> str:
+        if args[:2] == ["pr", "merge"]:
+            raise subprocess.CalledProcessError(
+                1,
+                ["gh", *args],
+                stderr=(
+                    "GraphQL: Resource not accessible by personal access token "
+                    "(mergePullRequest)\nextra detail"
+                ),
+            )
+        return fake(args, token_env=token_env)
+
+    monkeypatch.setattr(mgr, "gh", boom)
+    assert mgr.main() == 1
+    out = capsys.readouterr()
+    assert "error: gh failed (exit 1) while running: gh pr merge" in out.out
+    assert (
+        "gh said: GraphQL: Resource not accessible by personal access token "
+        "(mergePullRequest)" in out.out
+    )
+    assert "extra detail" not in out.out
+    assert "extra detail" not in out.err
+    written = summary.read_text(encoding="utf-8")
+    assert "error: gh failed (exit 1) while running: gh pr merge" in written
+    assert "gh said: GraphQL: Resource not accessible by personal access token" in written
+
+
+def test_main_gh_error_redacts_tokens(
+    mgr: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bot_token = "merge_bot_secret_value_0123456789"
+    fake_pat = "ghp_" + "A" * 30
+    monkeypatch.setenv("PR_NUMBER", "362")
+    monkeypatch.setenv("EXPECTED_SHA", SHA)
+    monkeypatch.setenv("MERGE_BOT_TOKEN", bot_token)
+    fake = FakeGh()
+
+    def boom(args: list[str], *, token_env: str = "GH_TOKEN") -> str:
+        if args[:2] == ["pr", "merge"]:
+            raise subprocess.CalledProcessError(
+                1,
+                ["gh", *args],
+                stderr=f"token {fake_pat} and {bot_token} denied\nmore",
+            )
+        return fake(args, token_env=token_env)
+
+    monkeypatch.setattr(mgr, "gh", boom)
+    assert mgr.main() == 1
+    out = capsys.readouterr()
+    combined = out.out + out.err
+    assert fake_pat not in combined
+    assert bot_token not in combined
+    assert "[REDACTED]" in out.out

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from collections.abc import Sequence
 from typing import Any, Callable
@@ -26,6 +27,32 @@ MARKER = "<!-- rx-merge-gate -->"
 PR_FIELDS = (
     "number,state,isDraft,author,headRefName,headRefOid,mergeable,labels,additions,deletions"
 )
+
+REDACT_PATTERNS = (
+    re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}"),
+    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
+)
+REDACT_ENV_VARS = ("MERGE_BOT_TOKEN", "GH_TOKEN", "GITHUB_TOKEN")
+
+
+def sanitize(text: str) -> str:
+    """Replace token-looking substrings and known token env values with ``[REDACTED]``."""
+    for var in REDACT_ENV_VARS:
+        value = os.environ.get(var)
+        if value:
+            text = text.replace(value, "[REDACTED]")
+    for pattern in REDACT_PATTERNS:
+        text = pattern.sub("[REDACTED]", text)
+    return text
+
+
+def command_summary(cmd: object) -> str:
+    """``gh`` plus at most its first two arguments, never any later ones."""
+    if isinstance(cmd, (list, tuple)):
+        parts = [str(part) for part in cmd[:3]]
+    else:
+        parts = str(cmd).split()[:3]
+    return " ".join(parts)
 
 
 def gh(args: list[str], *, token_env: str = "GH_TOKEN") -> str:
@@ -209,8 +236,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             has_merge_token=bool(os.environ.get("MERGE_BOT_TOKEN")),
         )
     except subprocess.CalledProcessError as exc:
-        # Never echo arguments or stderr: they could carry tokens.
-        print(f"error: gh failed (exit {exc.returncode})")
+        # Show enough to diagnose the failure, but never a token.
+        stderr = (exc.stderr or "").strip()
+        first_line = stderr.splitlines()[0] if stderr else ""
+        lines = [
+            f"error: gh failed (exit {exc.returncode}) while running: "
+            f"{sanitize(command_summary(exc.cmd))}",
+            f"gh said: {sanitize(first_line)[:300]}",
+        ]
+        for line in lines:
+            print(line)
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as handle:
+                handle.write("\n".join(lines) + "\n")
         return 1
     except (ValueError, KeyError, OSError) as exc:
         print(f"error: {type(exc).__name__}")
