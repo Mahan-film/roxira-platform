@@ -10,7 +10,11 @@ from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router 
 # prefix; that produced a dead, wrongly-prefixed duplicate path
 # (/api/v1/apps/judge/api/v1/payment/zibal/...). See docs/W17_payment_audit.md.
 from output_apps.ecosystem_core.src.billing import zibal_service
-from output_apps.generated_modules.smartjudge.fast_path import IDENTITY_REPLY, classify_fast_path
+from output_apps.generated_modules.smartjudge.fast_path import (
+    IDENTITY_REPLY,
+    OUT_OF_SCOPE_REPLY,
+    classify_fast_path,
+)
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 # W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
@@ -1328,6 +1332,19 @@ async def interactive_consult(payload: dict = Body(...)):
             "status": "SUCCESS",
             "conversation_id": conv_id or str(uuid.uuid4()),
             "reply": reply_fast,
+            "success_probability": None,
+            "defense_draft": None,
+            "statutory_basis": [],
+            "unified_precedents": [],
+            "model_assigned": cfg["primary_model"],
+            "tier": selected_tier,
+            "latency_ms": round((time.time() - t0) * 1000, 2)
+        }
+    elif kind == "out_of_scope":
+        return {
+            "status": "SUCCESS",
+            "conversation_id": conv_id or str(uuid.uuid4()),
+            "reply": OUT_OF_SCOPE_REPLY,
             "success_probability": None,
             "defense_draft": None,
             "statutory_basis": [],

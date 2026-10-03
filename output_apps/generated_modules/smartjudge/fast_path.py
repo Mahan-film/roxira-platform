@@ -47,7 +47,53 @@ legal_words = [
     "ارث",
     "چک",
     "مهریه",
+    "دعوا",
+    "حکم",
+    "قضایی",
 ]
+
+off_topic_patterns = [
+    # آشپزی
+    "دستور پخت",
+    "دستور غذا",
+    "آشپزی",
+    "قورمه سبزی",
+    "کیک",
+    "شیرینی",
+    "پیتزا",
+    "رسپی",
+    # ورزش و نتایج
+    "فوتبال",
+    "پرسپولیس",
+    "استقلال",
+    "نتیجه بازی",
+    "لیگ برتر",
+    "ورزش",
+    # آب و هوا
+    "آب و هوا",
+    "پیش‌بینی هوا",
+    "پیش بینی هوا",
+    "دمای هوا",
+    "وضعیت هوا",
+    # سرگرمی
+    "فیلم",
+    "سریال",
+    "بازیگر",
+    "آهنگ",
+    "موسیقی",
+    "کنسرت",
+    "سینما",
+    # برنامه‌نویسی
+    "برنامه‌نویسی",
+    "برنامه نویسی",
+    "کدنویسی",
+    "کد نویسی",
+    "پایتون",
+    "جاوااسکریپت",
+    "دیباگ",
+]
+
+OUT_OF_SCOPE_REPLY = "من دستیار حقوقی هستم و فقط به پرسش‌های حقوقی و قضایی پاسخ می‌دهم؛ اگر پرسش حقوقی یا پرونده‌ای دارید بفرمایید تا بررسی کنم."
 
 IDENTITY_PATTERNS = [
     "تو کی",
@@ -76,6 +122,12 @@ def classify_fast_path(user_text: str) -> str | None:
         return "identity"
     if any(pattern in normalized_text for pattern in mic_test_patterns):
         return "mic_check"
+
+    has_legal_term = any(word in normalized_text for word in legal_words)
+    if not has_legal_term and any(
+        pattern in normalized_text for pattern in off_topic_patterns
+    ):
+        return "out_of_scope"
 
     is_greeting_only = (
         any(word in normalized_text for word in greeting_words)

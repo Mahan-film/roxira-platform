@@ -12,9 +12,24 @@ import {
 } from "lucide-react";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 
+type StatutoryItem = string | { title?: string; category?: string; article?: string; law?: string };
+
+type ChatMessage = {
+  role: string;
+  content: string;
+  draft?: string;
+  probability?: string;
+  statutory_basis?: StatutoryItem[];
+};
+
+function statutoryLabel(item: StatutoryItem): string {
+  if (typeof item === "string") return item;
+  return item.title || item.article || item.law || item.category || "";
+}
+
 export function ChatShell() {
   const activeAudioStreamRef = React.useRef<MediaStream | null>(null);
-  const [messages, setMessages] = useState<Array<{role: string, content: string, draft?: string, probability?: string}>>([
+  const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content: "سلام؛ شرح پرونده یا پرسش حقوقی خود را بنویسید یا با میکروفون بگویید."
@@ -178,7 +193,8 @@ export function ChatShell() {
           role: "assistant",
           content: reply,
           draft: data.defense_draft,
-          probability: data.success_probability
+          probability: data.success_probability,
+          statutory_basis: Array.isArray(data.statutory_basis) ? data.statutory_basis : undefined
         }
       ]);
     } catch (err) {
@@ -255,6 +271,17 @@ export function ChatShell() {
                     </button>
                   </div>
                   <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap leading-relaxed">{msg.draft}</pre>
+                </div>
+              )}
+
+              {msg.role === "assistant" && msg.statutory_basis && msg.statutory_basis.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="mb-1.5 text-xs text-cyan-400 font-bold">مستندات</div>
+                  <ul className="list-disc ps-4 space-y-1 text-[11px] text-muted-foreground">
+                    {msg.statutory_basis.map((item, itemIdx) => (
+                      <li key={itemIdx}>{statutoryLabel(item)}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
@@ -364,6 +391,11 @@ export function ChatShell() {
             <Send className="size-3.5 -scale-x-100" />
           </button>
         </div>
+
+        {/* سلب مسئولیت حقوقی دائمی زیر جعبهٔ پیام */}
+        <p className="px-1 text-center text-[10px] leading-relaxed text-muted-foreground">
+          پاسخ‌ها مشاوره حقوقی رسمی نیستند و پیش از اقدام باید توسط وکیل بازبینی شوند.
+        </p>
       </div>
 
       {/* مدال مکالمه صوتی زنده با همگام‌سازی کامل به صفحه چت */}
