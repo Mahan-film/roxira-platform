@@ -1261,6 +1261,17 @@ async def get_conversation_messages(conv_id: str):
         return JSONResponse({"status": "ERROR", "message": str(e)}, status_code=500)
     return {"status": "SUCCESS", "messages": messages}
 
+
+def derive_success_probability(user_text: str) -> Optional[str]:
+    """Return the computed chance of success, or None when none can be computed.
+
+    No success-probability model exists in this product, so this must never
+    invent a number (issue #372): a fabricated percentage is unacceptable in a
+    legal product. The field is kept for API compatibility and stays None.
+    """
+    return None
+
+
 # ارسال پیام، تحلیل با گراف و مدل زبانی، و ذخیره خودکار در دیتابیس
 @router.post("/consult")
 async def interactive_consult(payload: dict = Body(...)):
@@ -1450,8 +1461,7 @@ async def interactive_consult(payload: dict = Body(...)):
             else:
                 reply_msg = "درود بر شما، در خدمت شما هستم. لطفاً شرح پرونده، سوال حقوقی یا خواسته مد نظر خود را بفرمایید تا مستندات قانونی و رویه قضایی آن را بررسی کنم."
 
-    if len(user_text.split()) >= 6:
-        prob = "۸۵٪ (مبتنی بر استدلال قضایی و رویه جاری)"
+    prob = derive_success_probability(user_text)
 
     # ذخیره پیام کاربر و پاسخ سیستم در دیتابیس
     try:
