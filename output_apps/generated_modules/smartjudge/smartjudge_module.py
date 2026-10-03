@@ -3139,7 +3139,10 @@ _CACHE_PRIME_METRICS = {
     "max_consecutive_hits": 0,
     "last_eviction_ts": 0.0,
 }
-_CACHE_PRIME_INTERVAL = int(os.environ.get("SMARTJUDGE_CACHE_PRIME_INTERVAL", "180"))
+try:
+    _CACHE_PRIME_INTERVAL = int((os.environ.get("SMARTJUDGE_CACHE_PRIME_INTERVAL") or "").strip() or "180")
+except ValueError:
+    _CACHE_PRIME_INTERVAL = 180
 _CACHE_PRIME_ENABLED = os.environ.get("SMARTJUDGE_CACHE_PRIME", "1") != "0"
 
 

@@ -72,9 +72,11 @@ router = APIRouter(
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET environment variable is not set; refusing to sign tokens with a default secret")
-JWT_TTL_SECONDS = int(os.getenv("JWT_TTL_SECONDS", "86400"))   # ۲۴ ساعت
-OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "180"))     # ۳ دقیقه
-PBKDF2_ITERATIONS = int(os.getenv("PBKDF2_ITERATIONS", "120000"))
+from output_apps.generated_modules.unifiedauth.env_utils import _int_env  # noqa: E402
+
+JWT_TTL_SECONDS = _int_env("JWT_TTL_SECONDS", 86400, 300, 2592000)   # ۲۴ ساعت
+OTP_TTL_SECONDS = _int_env("OTP_TTL_SECONDS", 180, 30, 3600)         # ۳ دقیقه
+PBKDF2_ITERATIONS = _int_env("PBKDF2_ITERATIONS", 120000, 10000, 5000000)
 
 KAVENEGAR_API_KEY = os.environ.get("KAVENEGAR_API_KEY", "")
 if not KAVENEGAR_API_KEY:
