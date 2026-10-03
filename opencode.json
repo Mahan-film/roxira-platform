@@ -10,6 +10,24 @@
         "edit": false,
         "bash": false,
         "patch": false
+      },
+      "permission": {
+        "read": {
+          "*": "allow",
+          ".env*": "deny",
+          "**/.env*": "deny",
+          "*.pem": "deny",
+          "**/*.pem": "deny",
+          "*.key": "deny",
+          "**/*.key": "deny",
+          "database_snapshots/**": "deny",
+          "*.sql": "deny",
+          "**/*.sql": "deny",
+          "*.tar.gz": "deny",
+          "**/*.tar.gz": "deny",
+          "repomix-output.xml": "deny",
+          "**/repomix-output.xml": "deny"
+        }
       }
     },
     "free": {
@@ -20,6 +38,55 @@
         "edit": false,
         "bash": false,
         "patch": false
+      },
+      "permission": {
+        "read": {
+          "*": "allow",
+          ".env*": "deny",
+          "**/.env*": "deny",
+          "*.pem": "deny",
+          "**/*.pem": "deny",
+          "*.key": "deny",
+          "**/*.key": "deny",
+          "database_snapshots/**": "deny",
+          "*.sql": "deny",
+          "**/*.sql": "deny",
+          "*.tar.gz": "deny",
+          "**/*.tar.gz": "deny",
+          "repomix-output.xml": "deny",
+          "**/repomix-output.xml": "deny"
+        }
+      }
+    },
+    "critical-reviewer": {
+      "description": "Read-only critical reviewer for diffs touching auth, tenancy (ownership/tenant checks in the repository layer), payments (Zibal) and SSRF (outbound URL fetches). Reports pass/fail per area; never modifies anything. No `model` key on purpose: the id comes from config/models.yaml's `reviewer` role (via model_registry.py) and is passed with `--model`, the same mechanism as the executor id.",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false,
+        "patch": false
+      },
+      "permission": {
+        "edit": "deny",
+        "write": "deny",
+        "bash": "deny",
+        "webfetch": "deny",
+        "read": {
+          "*": "allow",
+          ".env*": "deny",
+          "**/.env*": "deny",
+          "*.pem": "deny",
+          "**/*.pem": "deny",
+          "*.key": "deny",
+          "**/*.key": "deny",
+          "database_snapshots/**": "deny",
+          "*.sql": "deny",
+          "**/*.sql": "deny",
+          "*.tar.gz": "deny",
+          "**/*.tar.gz": "deny",
+          "repomix-output.xml": "deny",
+          "**/repomix-output.xml": "deny"
+        }
       }
     },
     "build": {
@@ -32,20 +99,27 @@
         "patch": true
       },
       "permission": {
+        "read": {
+          "*": "allow",
+          ".env*": "deny",
+          "**/.env*": "deny",
+          "*.pem": "deny",
+          "**/*.pem": "deny",
+          "*.key": "deny",
+          "**/*.key": "deny",
+          "database_snapshots/**": "deny",
+          "*.sql": "deny",
+          "**/*.sql": "deny",
+          "*.tar.gz": "deny",
+          "**/*.tar.gz": "deny",
+          "repomix-output.xml": "deny",
+          "**/repomix-output.xml": "deny"
+        },
         "edit": "allow",
         "write": "allow",
         "webfetch": "deny",
         "bash": {
-          "cat *.env*": "deny",
-          "cat */.env*": "deny",
-          "cat .env*": "deny",
-          "curl*": "deny",
-          "wget*": "deny",
-          "rm -rf*": "deny",
-          "sudo*": "deny",
-          "git push*": "deny",
-          "git reset --hard*": "deny",
-          "git clean -f*": "deny",
+          "*": "deny",
           "git status*": "allow",
           "git diff*": "allow",
           "git log*": "allow",
@@ -65,7 +139,24 @@
           "npm run lint*": "allow",
           "npm run build*": "allow",
           "npm test*": "allow",
-          "*": "deny"
+          "cat *.env*": "deny",
+          "cat */.env*": "deny",
+          "cat .env*": "deny",
+          "curl*": "deny",
+          "wget*": "deny",
+          "rm -rf*": "deny",
+          "sudo*": "deny",
+          "git push*": "deny",
+          "git reset --hard*": "deny",
+          "git clean -f*": "deny",
+          "git push --force*": "deny",
+          "ssh*": "deny",
+          "scp*": "deny",
+          "*5.75.200.67*": "deny",
+          "*DROP *": "deny",
+          "*drop *": "deny",
+          "*DELETE FROM*": "deny",
+          "*delete from*": "deny"
         }
       }
     }
