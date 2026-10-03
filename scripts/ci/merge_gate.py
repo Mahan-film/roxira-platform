@@ -178,7 +178,10 @@ def decide(
                 block.append(f"required check {name!r} did not pass ({conclusion!r})")
 
     for run in by_name.get(AGENT_REVIEW, []):
-        if run.get("status") == "completed" and run.get("conclusion") in AGENT_REVIEW_BLOCKING:
+        if run.get("status") != "completed":
+            wait.append("agent review still running")
+            continue
+        if run.get("conclusion") in AGENT_REVIEW_BLOCKING:
             block.append("agent review rejected")
 
     # 6. Size guard.

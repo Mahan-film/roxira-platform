@@ -211,6 +211,14 @@ def test_absent_agent_review_is_fine(merge_gate):
     assert _decide(merge_gate)["action"] == "merge"
 
 
+def test_waits_while_agent_review_in_progress(merge_gate):
+    checks = _checks()
+    checks.append({"name": "Agent review", "status": "in_progress", "conclusion": None})
+    decision = _decide(merge_gate, checks=checks)
+    assert decision["action"] == "wait"
+    assert _reason(decision, "agent review still running")
+
+
 @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out"])
 def test_agent_review_rejection_blocks(merge_gate, conclusion):
     checks = _checks()
