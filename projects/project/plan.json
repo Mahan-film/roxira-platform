@@ -1,0 +1,72 @@
+{
+  "idea": "[بریف] میکروسایت ایستا پرسش‌های متداول حقوقی فارسی",
+  "slug": "project",
+  "parent_issue": 236,
+  "option": "گزینه توصیه‌شده در هر لایه (پیش‌فرض)",
+  "tasks": [
+    {
+      "index": 0,
+      "issue": 433,
+      "title": "Scaffold static Next.js app with RTL Tailwind and Vazirmatn",
+      "depends_on": []
+    },
+    {
+      "index": 1,
+      "issue": 434,
+      "title": "Define FAQ content schema and Markdown loader",
+      "depends_on": [
+        0
+      ]
+    },
+    {
+      "index": 2,
+      "issue": 435,
+      "title": "Author the 10 Persian legal FAQ Markdown entries",
+      "depends_on": [
+        1
+      ]
+    },
+    {
+      "index": 3,
+      "issue": 436,
+      "title": "Build FAQ list and detail components with disclaimer",
+      "depends_on": [
+        2
+      ]
+    },
+    {
+      "index": 4,
+      "issue": 437,
+      "title": "Add in-page client-side search filter",
+      "depends_on": [
+        3
+      ]
+    },
+    {
+      "index": 5,
+      "issue": 438,
+      "title": "Add per-question static routes and metadata",
+      "depends_on": [
+        3
+      ]
+    },
+    {
+      "index": 6,
+      "issue": 439,
+      "title": "Add Playwright tests for search and Persian rendering",
+      "depends_on": [
+        4,
+        5
+      ]
+    },
+    {
+      "index": 7,
+      "issue": 440,
+      "title": "Add GitHub Pages static deploy workflow",
+      "depends_on": [
+        6
+      ]
+    }
+  ],
+  "serialized_pairs": []
+}
