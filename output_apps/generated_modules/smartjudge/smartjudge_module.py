@@ -78,6 +78,41 @@ from fastapi.responses import JSONResponse, StreamingResponse
 import psycopg
 import httpx
 
+# ==============================================================================
+# #453 — تولید پیش‌نویس غیررسمی هوش مصنوعی: هرگز نباید شبیه سند رسمی/تأییدشدهٔ
+# مرجع قضایی به نظر برسد. هیچ سربرگ قضایی، وضعیت تأیید یا هش اصالت جعلی نداریم.
+# ==============================================================================
+AI_DRAFT_DISCLAIMER = (
+    "این متن توسط هوش مصنوعی تهیه شده، رسمی نیست و پیش از هر استفاده باید "
+    "توسط وکیل یا مرجع صالح بررسی شود."
+)
+AI_DRAFT_HEADER = "پیش‌نویس غیررسمی تولیدشده با هوش مصنوعی — فاقد اعتبار قضایی"
+AI_DRAFT_STATUS = "AI_DRAFT_UNVERIFIED"
+
+
+def content_sha256(content: Any) -> str:
+    """هش SHA-256 محتوا؛ فقط برای شناسایی نسخهٔ پیش‌نویس، نه اعتبارسنجی حقوقی."""
+    return hashlib.sha256(str(content or "").encode("utf-8")).hexdigest()
+
+
+def build_ai_draft_metadata(content: Any) -> dict:
+    """فرادادهٔ شناسایی پیش‌نویس هوش مصنوعی (غیررسمی و نیازمند بازبینی انسانی)."""
+    return {
+        "disclaimer": AI_DRAFT_DISCLAIMER,
+        "requires_human_review": True,
+        "draft_id": str(uuid.uuid4()),
+        "content_sha256": content_sha256(content),
+    }
+
+
+def with_ai_draft_disclaimer(text: Any) -> str:
+    """درج سطر افشای هوش مصنوعی در ابتدای هر متن پیش‌نویس صادرشده."""
+    body = str(text or "")
+    if body.startswith(AI_DRAFT_DISCLAIMER):
+        return body
+    return f"{AI_DRAFT_DISCLAIMER}\n{body}"
+
+
 # ------------------------------------------------------------------------------
 # پکیج پردازشی اسناد (Docling → استخراج بومی → OCR بینایی)
 # نصب موتور اصلی:  pip install docling
@@ -1959,46 +1994,44 @@ async def create_telephony_session(payload: dict = Body(...)):
         "token": str(uuid.uuid4())
     }
 # ------------------------------------------------------------------------------
-# ماژول صدور لایحه با فرمت استاندارد قضایی و قالب رسمی دادگستری
+# ماژول صدور پیش‌نویس غیررسمی لایحه دفاعیه (فاقد اعتبار قضایی؛ نیازمند بازبینی)
 # ------------------------------------------------------------------------------
 @router.post("/export-defense-document")
 async def export_defense_document(payload: dict = Body(...)):
-    """تولید متن فرمت‌بندی‌شده لایحه دفاعیه با سربرگ استاندارد مراجع قضایی"""
+    """تولید متن پیش‌نویس غیررسمی لایحه دفاعیه (دارای سطر افشای هوش مصنوعی)."""
     case_title = payload.get("case_title", "دفاعیه حقوقی")
     draft_text = payload.get("draft_text", "")
-    court_branch = payload.get("court_branch", "شعبه دادگاه عمومی حقوقی / تجدیدنظر")
+    court_branch = payload.get("court_branch", "شعبه (فرضی)")
     user_phone = payload.get("phone", "09129367796")
-    
-    formatted_document = f"""================================================================================
-                    جمهوری اسلامی ایران - قوه قضائیه
-                    برگ لایحه دفاعیه و پیوست دادخواست
+
+    formatted_document = f"""{AI_DRAFT_DISCLAIMER}
 ================================================================================
-مرجع رسیدگی‌کننده : {court_branch}
+                    {AI_DRAFT_HEADER}
+                    پیش‌نویس پیشنهادی لایحه دفاعیه — غیرقابل استناد در دادگاه
+================================================================================
+مرجع فرضی : {court_branch}
 موضوع خواسته / اتهام: {case_title}
-شماره پیگیری سیستمی: ROX-JUDGE-{int(time.time())}
+شناسه پیش‌نویس: DRAFT-{str(uuid.uuid4())[:8].upper()}
 تاریخ تنظیم: {time.strftime('%Y/%m/%d')}
 --------------------------------------------------------------------------------
-
-ریاست و مستشاران محترم دادگاه؛
-
-با سلام و احترام؛
-در مقام دفاع و تبیین مبانی قانونی پرونده کلاسه فوق، مراتب زیر مستنداً به قوانین موضوعه،
-آرای وحدت رویه هیأت عمومی دیوان عالی کشور و موازین شرعی و قانونی تقدیم می‌گردد:
 
 {draft_text}
 
 --------------------------------------------------------------------------------
-با تجدید احترام؛
-تنظیم‌شده توسط سامانه هوشمند قاضی (نسخه VIP وکلا و مراجعین)
-استعلام اصالت سند: https://ghazihoushmand.ir/verify
+این پیش‌نویس توسط سامانه هوشمند قاضی (دستیار هوش مصنوعی) تهیه شده است.
+وضعیت: {AI_DRAFT_STATUS} — نیازمند بازبینی توسط وکیل یا مرجع صالح.
 ================================================================================
 """
+    meta = build_ai_draft_metadata(draft_text)
     return {
-        "status": "SUCCESS",
-        "doc_id": f"DOC-{str(uuid.uuid4())[:8].upper()}",
+        "status": AI_DRAFT_STATUS,
+        "doc_id": meta["draft_id"],
         "formatted_text": formatted_document,
         "download_ready": True,
-        "format": "TXT / PDF Compatible"
+        "format": "TXT / PDF Compatible",
+        "disclaimer": meta["disclaimer"],
+        "requires_human_review": meta["requires_human_review"],
+        "content_sha256": meta["content_sha256"],
     }
 
 # ------------------------------------------------------------------------------
@@ -3495,7 +3528,7 @@ async def get_realtime_pricing_matrix():
     }
 
 # ------------------------------------------------------------------------------
-# اندپوینت صدور رسمی لایحه دفاعیه با سربرگ استاندارد مراجع قضایی
+# اندپوینت صدور پیش‌نویس غیررسمی لایحه دفاعیه (برچسب هوش مصنوعی، بدون سربرگ قضایی)
 # ------------------------------------------------------------------------------
 @router.post("/defense/generate-document")
 async def generate_official_document(payload: dict = Body(...)):
@@ -3505,14 +3538,14 @@ async def generate_official_document(payload: dict = Body(...)):
     statutory_articles = payload.get("statutory_articles", [])
     
     formatted_doc = {
-        "header": "جمهوری اسلامی ایران - قوه قضائیه",
+        "header": AI_DRAFT_HEADER,
         "document_type": case_title,
         "applicant": client_name,
         "statutory_basis": statutory_articles,
         "content": defense_text,
-        "verification_hash": f"GH-{int(time.time())}",
-        "status": "APPROVED_FOR_COURT"
+        "status": AI_DRAFT_STATUS,
     }
+    formatted_doc.update(build_ai_draft_metadata(defense_text))
     return {"status": "success", "document": formatted_doc}
 
 # ------------------------------------------------------------------------------
@@ -4159,7 +4192,8 @@ async def draft_template(
 
     # CitationHallucinationGuard — ماده‌های نامعتبر اصلاح یا نشان‌گذاری می‌شوند.
     citation_report = await _guard_citations(rendered, use_qdrant=verify_citations)
-    rendered = citation_report["text"]
+    rendered = with_ai_draft_disclaimer(citation_report["text"])
+    draft_meta = build_ai_draft_metadata(rendered)
     warning_list = (
         ["برخی فیلدهای اجباری تکمیل نشده است: " + "، ".join(missing_required)]
         if missing_required
@@ -4193,6 +4227,10 @@ async def draft_template(
         "citation_report": _citation_report_public(citation_report),
         "rendered_text": rendered,
         "warnings": warning_list,
+        "disclaimer": draft_meta["disclaimer"],
+        "requires_human_review": draft_meta["requires_human_review"],
+        "draft_id": draft_meta["draft_id"],
+        "content_sha256": draft_meta["content_sha256"],
     }
 
 # ==============================================================================
