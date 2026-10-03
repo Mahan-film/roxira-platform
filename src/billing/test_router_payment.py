@@ -24,6 +24,23 @@ def client() -> TestClient:
     return TestClient(app, follow_redirects=False)
 
 
+def test_removed_checkout_route_is_gone(client: TestClient):
+    """Issue #363: the unauthenticated /checkout route must no longer exist."""
+    resp = client.post(
+        "/api/v1/payment/zibal/checkout",
+        json={"user_id": "usr_1001", "plan_type": "PERMANENT", "amount_rials": 0},
+    )
+
+    assert resp.status_code in (404, 405)
+
+
+def test_removed_trial_route_is_gone(client: TestClient):
+    """Issue #363: the unauthenticated /trial/start route must no longer exist."""
+    resp = client.post("/api/v1/payment/zibal/trial/start", params={"user_id": "usr_1001"})
+
+    assert resp.status_code in (404, 405)
+
+
 def test_callback_redirects_to_frontend_page_on_success(client: TestClient):
     resp = client.get("/api/v1/payment/zibal/callback", params={"trackId": "12345", "success": 1})
 
