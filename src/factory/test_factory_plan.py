@@ -80,7 +80,7 @@ def _stub_planner_response(monkeypatch, content):
     )
 
 
-def _stub_non_dry_plan(monkeypatch, tmp_path, plan_content, max_concurrent=2):
+def _stub_non_dry_plan(monkeypatch, tmp_path, plan_content, max_concurrent=2, comments=None):
     """Run run_plan() end-to-end with every GitHub/LLM/git call mocked."""
     _stub_planner_response(monkeypatch, plan_content)
     worktree = tmp_path / "wt"
@@ -99,7 +99,11 @@ def _stub_non_dry_plan(monkeypatch, tmp_path, plan_content, max_concurrent=2):
         "create_pull_request",
         lambda *a, **k: {"html_url": "https://x/pr/1"},
     )
-    monkeypatch.setattr(factory_plan.agent_runner, "comment_on_issue", lambda *a, **k: None)
+    monkeypatch.setattr(
+        factory_plan.agent_runner,
+        "comment_on_issue",
+        lambda *a, **k: comments.append(a[-1]) if comments is not None else None,
+    )
     monkeypatch.setattr(factory_plan.agent_runner, "add_labels", lambda *a, **k: None)
     monkeypatch.setattr(factory_plan, "dispatch_workflow", lambda *a, **k: None)
     result = factory_plan.run_plan(
@@ -330,10 +334,87 @@ def test_run_plan_missing_contract_fails_without_creating_issues(tmp_path, monke
     assert comments
 
 
-def test_run_plan_rejects_overlapping_parallel_task_contracts(tmp_path, monkeypatch):
+def _overlapping_parallel_plan(n=3):
+    plan = json.loads(_valid_plan_json(n))
+    for task in plan["tasks"]:
+        task["depends_on"] = []
+        task["contract"]["allowed_paths"] = ["app/"]
+    return plan
+
+
+def test_run_plan_serializes_overlapping_parallel_task_contracts(tmp_path, monkeypatch):
+    plan = _overlapping_parallel_plan(3)
+    _stub_planner_response(monkeypatch, json.dumps(plan))
+    monkeypatch.setattr(factory_plan.agent_runner, "comment_on_issue", lambda *a: None)
+
+    result = factory_plan.run_plan(
+        issue_number=1,
+        chosen_option=None,
+        repo_dir=tmp_path,
+        repo="o/r",
+        token="tok",
+        max_concurrent=2,
+        dry_run=True,
+    )
+
+    assert result["status"] == "dry-run"
+    assert result["serialized_pairs"] == [(1, 0), (2, 0), (2, 1)]
+
+
+def test_validate_task_contracts_chains_overlapping_tasks():
+    content = json.dumps(_overlapping_parallel_plan(3))
+    tasks = factory_plan.parse_plan_response(content)
+
+    _, new_tasks, pairs = factory_plan.validate_task_contracts(content, tasks)
+
+    assert pairs
+    assert factory_plan.topological_order(new_tasks) == [0, 1, 2]
+    assert 0 in new_tasks[1].depends_on
+    assert 1 in new_tasks[2].depends_on
+
+
+def test_validate_task_contracts_does_not_chain_independent_tasks():
+    plan = json.loads(_valid_plan_json(3))
+    for task in plan["tasks"]:
+        task["depends_on"] = []
+    content = json.dumps(plan)
+    tasks = factory_plan.parse_plan_response(content)
+
+    _, new_tasks, pairs = factory_plan.validate_task_contracts(content, tasks)
+
+    assert pairs == []
+    assert all(task.depends_on == () for task in new_tasks)
+
+
+def test_validate_task_contracts_serializes_two_migrations():
     plan = json.loads(_valid_plan_json(2))
-    plan["tasks"][1]["depends_on"] = []
-    plan["tasks"][1]["contract"]["allowed_paths"] = ["src/component_0.py"]
+    for task in plan["tasks"]:
+        task["depends_on"] = []
+        task["contract"]["needs_migration"] = True
+    content = json.dumps(plan)
+    tasks = factory_plan.parse_plan_response(content)
+
+    _, new_tasks, pairs = factory_plan.validate_task_contracts(content, tasks)
+
+    assert pairs == [(1, 0)]
+    assert new_tasks[1].depends_on == (0,)
+
+
+def test_validate_task_contracts_keeps_error_when_edge_would_create_cycle(monkeypatch):
+    content = json.dumps(_overlapping_parallel_plan(2))
+    tasks = factory_plan.parse_plan_response(content)
+    monkeypatch.setattr(factory_plan, "_would_create_cycle", lambda *a: True)
+
+    with pytest.raises(factory_plan.PlanValidationError) as exc:
+        factory_plan.validate_task_contracts(content, tasks)
+
+    assert "Task 0" in str(exc.value) and "Task 1" in str(exc.value)
+    assert "overlapping allowed_paths" in str(exc.value)
+
+
+def test_run_plan_invalid_contract_still_rejected_alongside_overlap(tmp_path, monkeypatch):
+    plan = _overlapping_parallel_plan(2)
+    plan["tasks"][1]["contract"]["area"] = "nonsense"
     _stub_planner_response(monkeypatch, json.dumps(plan))
     monkeypatch.setattr(factory_plan.agent_runner, "comment_on_issue", lambda *a: None)
 
@@ -342,8 +423,47 @@ def test_run_plan_rejects_overlapping_parallel_task_contracts(tmp_path, monkeypa
     )
 
     assert result["status"] == "invalid-plan"
-    assert "Task 0" in result["error"] and "Task 1" in result["error"]
-    assert "overlapping allowed_paths" in result["error"]
+    assert "area is invalid" in result["error"]
+
+
+def test_run_plan_serialized_plan_md_follows_dependency_order(tmp_path, monkeypatch):
+    plan = _overlapping_parallel_plan(3)
+    result, worktree = _stub_non_dry_plan(monkeypatch, tmp_path, json.dumps(plan))
+
+    assert result["status"] == "plan-ready"
+    assert result["serialized_pairs"] == [(1, 0), (2, 0), (2, 1)]
+    assert result["dispatched"] == [101]
+    plan_md = (worktree / "projects" / "idea" / "spec" / "plan.md").read_text(encoding="utf-8")
+    assert plan_md.index("1. Task 0") < plan_md.index("2. Task 1") < plan_md.index("3. Task 2")
+    top_plan = (worktree / "projects" / "idea" / "PLAN.md").read_text(encoding="utf-8")
+    assert "task 1: Task 1** (depends on: task 0)" in top_plan
+
+
+def test_run_plan_plan_md_order_uses_final_dependencies(tmp_path, monkeypatch):
+    plan = _overlapping_parallel_plan(3)
+    plan["tasks"][0]["depends_on"] = [2]  # 2 must land before 0; task 1 then follows 0
+    result, worktree = _stub_non_dry_plan(monkeypatch, tmp_path, json.dumps(plan))
+
+    assert result["status"] == "plan-ready"
+    assert result["serialized_pairs"] == [(1, 0)]
+    plan_md = (worktree / "projects" / "idea" / "spec" / "plan.md").read_text(encoding="utf-8")
+    assert plan_md.index("1. Task 2") < plan_md.index("2. Task 0") < plan_md.index("3. Task 1")
+
+
+def test_run_plan_summary_mentions_serialized_pairs(tmp_path, monkeypatch):
+    comments = []
+    result, _ = _stub_non_dry_plan(
+        monkeypatch,
+        tmp_path,
+        json.dumps(_overlapping_parallel_plan(2)),
+        comments=comments,
+    )
+
+    assert result["serialized_pairs"] == [(1, 0)]
+    assert any(
+        "برای جلوگیری از تداخل مسیرها، این وظایف پشت‌سرهم اجرا می‌شوند" in body
+        for body in comments
+    )
 
 
 def test_run_plan_allows_overlapping_contracts_when_dependent(tmp_path, monkeypatch):

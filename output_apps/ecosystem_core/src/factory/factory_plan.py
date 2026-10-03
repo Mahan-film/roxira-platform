@@ -67,6 +67,7 @@ import json
 import os
 import pathlib
 import sys
+from dataclasses import replace
 from itertools import combinations
 from typing import Any
 
@@ -156,7 +157,9 @@ def build_planner_prompt(
         "engineering tasks, each roughly <= 200 lines of change, ordered by dependency "
         "(earlier tasks unblock later ones). Every task must be small enough for a cheap, "
         "sandboxed coding agent to implement alone, in its own branch, without asking "
-        "questions.\n\n"
+        "questions. Tasks that touch the same files must list the earlier task in "
+        "depends_on. For a small project (a static site or a single feature) use at "
+        "most 8 tasks.\n\n"
         f"Project idea: {idea}\n\n"
         f"Original brief (may be in Persian):\n{brief_body}\n\n"
         f"Approved technology proposal (Persian):\n{proposal_comment_body}\n\n"
@@ -182,13 +185,24 @@ def _depends_on(task: PlanTask, dependency_index: int, by_index: dict[int, PlanT
     )
 
 
+def _would_create_cycle(lower: PlanTask, higher: PlanTask, by_index: dict[int, PlanTask]) -> bool:
+    """True if making `higher` depend on `lower` would close a dependency cycle."""
+    return _depends_on(lower, higher.index, by_index)
+
+
 def validate_task_contracts(
     raw_content: str, tasks: list[PlanTask]
-) -> dict[int, TaskContract]:
-    """Validate every task contract and reject unsafe concurrent task pairs.
+) -> tuple[dict[int, TaskContract], list[PlanTask], list[tuple[int, int]]]:
+    """Validate every task contract and serialize unsafe concurrent task pairs.
 
-    Returns the parsed contracts keyed by plan task index so callers can reuse
-    them (e.g. to render the spec artifacts) instead of parsing twice.
+    Contract parse errors still reject the plan. Two tasks that are not ordered
+    by `depends_on` but have overlapping `allowed_paths` (or both need a
+    migration) are no longer rejected: the task with the higher plan index is
+    made to depend on the lower one. If that edge would create a cycle, the
+    pair is reported as an error as before.
+
+    Returns (contracts keyed by plan task index, the task list with the added
+    dependencies, the added edges as (higher_index, lower_index) pairs).
     """
     raw_plan = _extract_json(raw_content)
     raw_tasks = raw_plan.get("tasks", []) if isinstance(raw_plan, dict) else []
@@ -201,25 +215,38 @@ def validate_task_contracts(
             errors.append(f"task {task.index} ({task.title}): {exc}")
 
     by_index = {task.index: task for task in tasks}
-    for left, right in combinations(tasks, 2):
-        if _depends_on(left, right.index, by_index) or _depends_on(right, left.index, by_index):
+    serialized_pairs: list[tuple[int, int]] = []
+    for first, second in combinations(tasks, 2):
+        low_index, high_index = sorted((first.index, second.index))
+        lower, higher = by_index[low_index], by_index[high_index]  # fresh: edges may be added
+        if _depends_on(lower, higher.index, by_index) or _depends_on(higher, lower.index, by_index):
             continue
-        left_contract, right_contract = contracts.get(left.index), contracts.get(right.index)
-        if left_contract is None or right_contract is None or parallel_safe([left_contract, right_contract]):
+        lower_contract, higher_contract = contracts.get(lower.index), contracts.get(higher.index)
+        if (
+            lower_contract is None
+            or higher_contract is None
+            or parallel_safe([lower_contract, higher_contract])
+        ):
             continue
-        if paths_overlap(left_contract, right_contract):
+        if not _would_create_cycle(lower, higher, by_index):
+            by_index[higher.index] = replace(
+                higher, depends_on=tuple(sorted({*higher.depends_on, lower.index}))
+            )
+            serialized_pairs.append((higher.index, lower.index))
+            continue
+        if paths_overlap(lower_contract, higher_contract):
             errors.append(
-                f"parallel tasks {left.index} ({left.title}) and {right.index} ({right.title}) "
+                f"parallel tasks {lower.index} ({lower.title}) and {higher.index} ({higher.title}) "
                 "have overlapping allowed_paths"
             )
         else:
             errors.append(
-                f"parallel tasks {left.index} ({left.title}) and {right.index} ({right.title}) "
+                f"parallel tasks {lower.index} ({lower.title}) and {higher.index} ({higher.title}) "
                 "both require a migration"
             )
     if errors:
         raise PlanValidationError("task contract validation failed: " + "; ".join(errors))
-    return contracts
+    return contracts, [by_index[task.index] for task in tasks], serialized_pairs
 
 
 def write_spec_artifacts(
@@ -398,7 +425,7 @@ def run_plan(
 
     try:
         tasks = parse_plan_response(content)
-        contracts = validate_task_contracts(content, tasks)
+        contracts, tasks, serialized_pairs = validate_task_contracts(content, tasks)
     except PlanValidationError as exc:
         agent_runner.comment_on_issue(
             token,
@@ -418,6 +445,7 @@ def run_plan(
             "idea_slug": idea_slug,
             "branch": branch,
             "task_count": len(tasks),
+            "serialized_pairs": serialized_pairs,
         }
 
     worktree_path = agent_runner.create_branch_in_place(repo_dir, branch)
@@ -452,6 +480,7 @@ def run_plan(
         "parent_issue": issue_number,
         "option": option_label,
         "tasks": created_tasks,
+        "serialized_pairs": [list(pair) for pair in serialized_pairs],
     }
     (plan_dir / "plan.json").write_text(
         json.dumps(plan_json, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -488,8 +517,16 @@ def run_plan(
     summary = (
         f"برنامه ساخت آماده شد: {len(created_tasks)} وظیفه ایجاد شد.\n"
         f"PR برنامه: {pr.get('html_url', '')}\n\n"
-        + format_progress_checklist(idea, checklist_tasks)
     )
+    if serialized_pairs:
+        pairs_text = "، ".join(
+            f"{higher} بعد از {lower}" for higher, lower in serialized_pairs
+        )
+        summary += (
+            "برای جلوگیری از تداخل مسیرها، این وظایف پشت‌سرهم اجرا می‌شوند: "
+            f"{pairs_text}\n\n"
+        )
+    summary += format_progress_checklist(idea, checklist_tasks)
     agent_runner.comment_on_issue(token, repo, issue_number, summary)
     agent_runner.add_labels(token, repo, issue_number, [PLAN_READY_LABEL])
 
@@ -509,6 +546,7 @@ def run_plan(
         "task_count": len(created_tasks),
         "dispatched": dispatched,
         "spec_warnings": spec_warnings,
+        "serialized_pairs": serialized_pairs,
     }
 
 
