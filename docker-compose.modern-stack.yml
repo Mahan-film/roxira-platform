@@ -1,11 +1,16 @@
 services:
   twenty_db:
-    image: postgres:16-alpine
+    image: postgres:16.9-alpine
     container_name: roxira_twenty_db
     restart: always
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: twenty
-      POSTGRES_PASSWORD: REDACTED_SECRET_16
+      POSTGRES_PASSWORD: ${TWENTY_DB_PASSWORD:?set TWENTY_DB_PASSWORD in .env}
       POSTGRES_DB: default
     volumes:
       - /opt/roxira_platform/twenty_data/db:/var/lib/postgresql/data
@@ -13,9 +18,14 @@ services:
       - roxira_mesh
 
   twenty_redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine
     container_name: roxira_twenty_redis
     restart: always
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
     command: redis-server --appendonly yes
     volumes:
       - /opt/roxira_platform/twenty_data/redis:/data
@@ -23,20 +33,25 @@ services:
       - roxira_mesh
 
   twenty_crm:
-    image: twentycrm/twenty:latest
+    image: twentycrm/twenty:v2.41.0
     container_name: roxira_twenty_crm
     restart: always
     depends_on:
       - twenty_db
       - twenty_redis
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 512
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PORT=3002
-      - PG_DATABASE_URL=postgres://twenty:REDACTED_SECRET_16@twenty_db:5432/default
+      - PG_DATABASE_URL=postgres://twenty:${TWENTY_DB_PASSWORD:?set TWENTY_DB_PASSWORD in .env}@twenty_db:5432/default
       - REDIS_URL=redis://twenty_redis:6379
       - SERVER_URL=https://roxira.ir/crm-service
       - ENCRYPTION_KEY=${TWENTY_ENCRYPTION_KEY:?set TWENTY_ENCRYPTION_KEY in .env}
       - APP_SECRET=${TWENTY_APP_SECRET:?set TWENTY_APP_SECRET in .env}
-      - SIGN_IN_PREFILLED=true
+      - SIGN_IN_PREFILLED=false
     ports:
       - "127.0.0.1:3002:3000"
     volumes:
