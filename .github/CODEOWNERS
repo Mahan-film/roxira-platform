@@ -1,0 +1,12 @@
+# Default owner for everything in this repository.
+* @mahan-films
+
+# Security- and infrastructure-sensitive paths.
+/.github/ @mahan-films
+/nginx* @mahan-films
+/output_apps/nginx_config/ @mahan-films
+/deploy/ @mahan-films
+/scripts/ops/ @mahan-films
+/output_apps/ecosystem_core/src/billing/ @mahan-films
+/output_apps/ecosystem_core/src/auth/ @mahan-films
+/config/models.yaml @mahan-films
