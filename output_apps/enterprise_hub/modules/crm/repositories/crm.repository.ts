@@ -21,8 +21,10 @@ export interface ContactCountRow {
  * لایه Repository — تنها نقطه دسترسی به جداول `crm_leads` و
  * `contact_messages` برای ماژول CRM.
  *
- * تمام کوئری‌ها و تجمیع‌های تحلیلی فروش اینجا متمرکز شده‌اند و Service هیچ
- * دسترسی مستقیمی به پایگاه‌داده ندارد (Rule #3 - AGENTS.md: Repository Pattern).
+ * همه متدها `tenantId` را به‌عنوان پارامتر اول می‌گیرند و هر کوئری/ذخیره را به
+ * همان مستأجر محدود می‌کنند تا هیچ داده‌ای از مستأجر دیگر خوانده یا تغییر نکند
+ * (Rule #4 - AGENTS.md: جداسازی مستأجر در لایه Repository). Service هیچ دسترسی
+ * مستقیمی به پایگاه‌داده ندارد (Rule #3 - AGENTS.md: Repository Pattern).
  */
 @Injectable()
 export class CrmRepository {
@@ -37,30 +39,62 @@ export class CrmRepository {
   // سرنخ‌ها (Leads)
   // ---------------------------------------------------------------------------
 
-  async createLead(data: Partial<CrmLeadEntity>): Promise<CrmLeadEntity> {
-    const entity = this.leads.create(data);
+  async createLead(
+    tenantId: string,
+    data: Partial<CrmLeadEntity>,
+  ): Promise<CrmLeadEntity> {
+    const entity = this.leads.create({ ...data, tenantId });
     return this.leads.save(entity);
   }
 
-  async saveLead(entity: CrmLeadEntity): Promise<CrmLeadEntity> {
-    return this.leads.save(entity);
+  async saveLead(
+    tenantId: string,
+    entity: CrmLeadEntity,
+  ): Promise<CrmLeadEntity> {
+    entity.tenantId = tenantId;
+    await this.leads.update(
+      { id: entity.id, tenantId },
+      {
+        fullName: entity.fullName,
+        email: entity.email,
+        phone: entity.phone,
+        company: entity.company,
+        pipelineStage: entity.pipelineStage,
+        estimatedValue: entity.estimatedValue,
+        owner: entity.owner,
+        notes: entity.notes,
+        updatedAt: entity.updatedAt,
+      },
+    );
+    return entity;
   }
 
-  async findLeadById(id: number): Promise<CrmLeadEntity | null> {
-    return this.leads.findOne({ where: { id } });
+  async findLeadById(
+    tenantId: string,
+    id: number,
+  ): Promise<CrmLeadEntity | null> {
+    return this.leads.findOne({ where: { id, tenantId } });
   }
 
-  async findLeadByEmail(email: string): Promise<CrmLeadEntity | null> {
-    return this.leads.findOne({ where: { email } });
+  async findLeadByEmail(
+    tenantId: string,
+    email: string,
+  ): Promise<CrmLeadEntity | null> {
+    return this.leads.findOne({ where: { email, tenantId } });
   }
 
-  async findLeadsAndCount(options: {
-    search?: string;
-    stage?: string;
-    skip: number;
-    take: number;
-  }): Promise<[CrmLeadEntity[], number]> {
+  async findLeadsAndCount(
+    tenantId: string,
+    options: {
+      search?: string;
+      stage?: string;
+      skip: number;
+      take: number;
+    },
+  ): Promise<[CrmLeadEntity[], number]> {
     const query = this.leads.createQueryBuilder('lead');
+
+    query.andWhere('lead.tenantId = :tenantId', { tenantId });
 
     if (options.search) {
       const pattern = `%${options.search}%`;
@@ -82,24 +116,26 @@ export class CrmRepository {
     return query.getManyAndCount();
   }
 
-  async findAllLeads(): Promise<CrmLeadEntity[]> {
+  async findAllLeads(tenantId: string): Promise<CrmLeadEntity[]> {
     return this.leads.find({
+      where: { tenantId },
       order: { updatedAt: 'DESC', id: 'DESC' },
       take: 1000,
     });
   }
 
-  async countAllLeads(): Promise<number> {
-    return this.leads.count();
+  async countAllLeads(tenantId: string): Promise<number> {
+    return this.leads.count({ where: { tenantId } });
   }
 
-  /** تجمیع تعداد و ارزش ریالی سرنخ‌ها به تفکیک مرحله. */
-  async getStageAggregates(): Promise<StageAggregateRow[]> {
+  /** تجمیع تعداد و ارزش ریالی سرنخ‌ها به تفکیک مرحله (فقط مستأجر جاری). */
+  async getStageAggregates(tenantId: string): Promise<StageAggregateRow[]> {
     return this.leads
       .createQueryBuilder('lead')
       .select('lead.pipelineStage', 'stage')
       .addSelect('COUNT(lead.id)', 'count')
       .addSelect('COALESCE(SUM(lead.estimatedValue), 0)', 'value')
+      .where('lead.tenantId = :tenantId', { tenantId })
       .groupBy('lead.pipelineStage')
       .getRawMany<StageAggregateRow>();
   }
@@ -109,30 +145,36 @@ export class CrmRepository {
   // ---------------------------------------------------------------------------
 
   async createContactMessage(
+    tenantId: string,
     data: Partial<ContactMessageEntity>,
   ): Promise<ContactMessageEntity> {
-    const entity = this.contacts.create(data);
+    const entity = this.contacts.create({ ...data, tenantId });
     return this.contacts.save(entity);
   }
 
   async findContactMessagesAndCount(
+    tenantId: string,
     leadId: number,
     options: { skip: number; take: number },
   ): Promise<[ContactMessageEntity[], number]> {
     return this.contacts.findAndCount({
-      where: { leadId },
+      where: { leadId, tenantId },
       order: { createdAt: 'DESC', id: 'DESC' },
       skip: options.skip,
       take: options.take,
     });
   }
 
-  async countContactsByLeadId(leadId: number): Promise<number> {
-    return this.contacts.count({ where: { leadId } });
+  async countContactsByLeadId(
+    tenantId: string,
+    leadId: number,
+  ): Promise<number> {
+    return this.contacts.count({ where: { leadId, tenantId } });
   }
 
   /** شمارش سوابق تماس برای مجموعه‌ای از سرنخ‌ها (برای غنی‌سازی فهرست). */
   async getContactCountsByLeadIds(
+    tenantId: string,
     leadIds: number[],
   ): Promise<Map<number, number>> {
     if (leadIds.length === 0) {
@@ -143,7 +185,7 @@ export class CrmRepository {
       .createQueryBuilder('contact')
       .select('contact.leadId', 'leadId')
       .addSelect('COUNT(contact.id)', 'count')
-      .where({ leadId: In(leadIds) })
+      .where({ leadId: In(leadIds), tenantId })
       .groupBy('contact.leadId')
       .getRawMany<ContactCountRow>();
 

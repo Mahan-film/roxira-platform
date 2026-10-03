@@ -9,8 +9,15 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  AuthenticatedRequest,
+  JwtAuthGuard,
+} from '../../auth/guards/jwt-auth.guard';
 import { AddLeadNoteDto } from '../dto/add-lead-note.dto';
 import {
   ContactMessageResponseDto,
@@ -39,11 +46,25 @@ import { CrmService } from '../services/crm.service';
  *
  * فقط مسیریابی و اعتبارسنجی DTO؛ هیچ منطق کسب‌وکار یا دسترسی مستقیم به
  * پایگاه‌داده در این لایه وجود ندارد (Rule #3 - AGENTS.md).
+ *
+ * همه مسیرها با `JwtAuthGuard` محافظت می‌شوند و شناسه مستأجر تنها از پیلود
+ * تأییدشده JWT استخراج می‌شود — هرگز از بدنه یا کوئری درخواست (Rule #4).
  */
 @ApiTags('CRM - مدیریت مشتریان و پایپ‌لاین فروش')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('enterprise-hub/crm')
 export class CrmController {
   constructor(private readonly crmService: CrmService) {}
+
+  /** استخراج شناسه مستأجر از کاربر تأییدشده روی Request (هرگز از ورودی). */
+  private tenantIdOf(request: AuthenticatedRequest): string {
+    const tenantId = request.user?.sub;
+    if (!tenantId) {
+      throw new UnauthorizedException('شناسه مستأجر در توکن یافت نشد.');
+    }
+    return tenantId;
+  }
 
   // ---------------------------------------------------------------------------
   // سرنخ‌ها
@@ -54,17 +75,21 @@ export class CrmController {
   @ApiOperation({ summary: 'ثبت سرنخ فروش جدید' })
   @ApiResponse({ status: HttpStatus.CREATED, type: LeadResponseDto })
   @ApiResponse({ status: HttpStatus.CONFLICT, description: 'رایانامه تکراری است' })
-  async createLead(@Body() dto: CreateLeadDto): Promise<LeadResponseDto> {
-    return this.crmService.createLead(dto);
+  async createLead(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CreateLeadDto,
+  ): Promise<LeadResponseDto> {
+    return this.crmService.createLead(this.tenantIdOf(request), dto);
   }
 
   @Get('leads')
   @ApiOperation({ summary: 'فهرست صفحه‌بندی‌شده سرنخ‌ها با فیلتر مرحله و جست‌وجو' })
   @ApiResponse({ status: HttpStatus.OK, type: PaginatedLeadsResponseDto })
   async listLeads(
+    @Req() request: AuthenticatedRequest,
     @Query() query: QueryLeadDto,
   ): Promise<PaginatedLeadsResponseDto> {
-    return this.crmService.listLeads(query);
+    return this.crmService.listLeads(this.tenantIdOf(request), query);
   }
 
   @Get('leads/:id')
@@ -72,9 +97,10 @@ export class CrmController {
   @ApiResponse({ status: HttpStatus.OK, type: LeadResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'سرنخ یافت نشد' })
   async getLead(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<LeadResponseDto> {
-    return this.crmService.getLead(id);
+    return this.crmService.getLead(this.tenantIdOf(request), id);
   }
 
   @Patch('leads/:id')
@@ -83,10 +109,11 @@ export class CrmController {
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'سرنخ یافت نشد' })
   @ApiResponse({ status: HttpStatus.CONFLICT, description: 'رایانامه تکراری است' })
   async updateLead(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateLeadDto,
   ): Promise<LeadResponseDto> {
-    return this.crmService.updateLead(id, dto);
+    return this.crmService.updateLead(this.tenantIdOf(request), id, dto);
   }
 
   @Patch('leads/:id/stage')
@@ -98,10 +125,11 @@ export class CrmController {
   @ApiResponse({ status: HttpStatus.OK, type: LeadResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'سرنخ یافت نشد' })
   async updateLeadStage(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateLeadStageDto,
   ): Promise<LeadResponseDto> {
-    return this.crmService.updateLeadStage(id, dto);
+    return this.crmService.updateLeadStage(this.tenantIdOf(request), id, dto);
   }
 
   @Post('leads/:id/notes')
@@ -110,10 +138,11 @@ export class CrmController {
   @ApiResponse({ status: HttpStatus.CREATED, type: LeadResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'سرنخ یافت نشد' })
   async addLeadNote(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AddLeadNoteDto,
   ): Promise<LeadResponseDto> {
-    return this.crmService.addLeadNote(id, dto);
+    return this.crmService.addLeadNote(this.tenantIdOf(request), id, dto);
   }
 
   // ---------------------------------------------------------------------------
@@ -125,10 +154,15 @@ export class CrmController {
   @ApiResponse({ status: HttpStatus.OK, type: PaginatedContactMessagesResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'سرنخ یافت نشد' })
   async listContactRecords(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Query() query: QueryContactRecordDto,
   ): Promise<PaginatedContactMessagesResponseDto> {
-    return this.crmService.listContactRecords(id, query);
+    return this.crmService.listContactRecords(
+      this.tenantIdOf(request),
+      id,
+      query,
+    );
   }
 
   @Post('leads/:id/contacts')
@@ -137,10 +171,15 @@ export class CrmController {
   @ApiResponse({ status: HttpStatus.CREATED, type: ContactMessageResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'سرنخ یافت نشد' })
   async addContactRecord(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateContactRecordDto,
   ): Promise<ContactMessageResponseDto> {
-    return this.crmService.addContactRecord(id, dto);
+    return this.crmService.addContactRecord(
+      this.tenantIdOf(request),
+      id,
+      dto,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -154,14 +193,18 @@ export class CrmController {
       'ارزش پایپ‌لاین باز، درآمد تحقق‌یافته، نرخ تبدیل و تفکیک هر مرحله.',
   })
   @ApiResponse({ status: HttpStatus.OK, type: LeadStatsResponseDto })
-  async getStats(): Promise<LeadStatsResponseDto> {
-    return this.crmService.getStats();
+  async getStats(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<LeadStatsResponseDto> {
+    return this.crmService.getStats(this.tenantIdOf(request));
   }
 
   @Get('pipeline')
   @ApiOperation({ summary: 'پایپ‌لاین گروه‌بندی‌شده برای تابلوی کانبان' })
   @ApiResponse({ status: HttpStatus.OK, type: [PipelineStageGroupDto] })
-  async getPipeline(): Promise<PipelineStageGroupDto[]> {
-    return this.crmService.getPipeline();
+  async getPipeline(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PipelineStageGroupDto[]> {
+    return this.crmService.getPipeline(this.tenantIdOf(request));
   }
 }

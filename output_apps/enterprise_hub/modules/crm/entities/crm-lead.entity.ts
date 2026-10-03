@@ -24,6 +24,9 @@ export class CrmLeadEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Index()
   @Column({ type: 'varchar', length: 120, name: 'full_name' })
   fullName: string;

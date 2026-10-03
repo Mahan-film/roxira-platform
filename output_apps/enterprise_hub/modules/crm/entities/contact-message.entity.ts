@@ -22,6 +22,9 @@ export class ContactMessageEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 100, name: 'sender_name' })
   senderName: string;
 

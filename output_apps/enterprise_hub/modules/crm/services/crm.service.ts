@@ -96,8 +96,14 @@ export class CrmService {
     };
   }
 
-  private async enrichSingle(lead: CrmLeadEntity): Promise<LeadResponseDto> {
-    const contactCount = await this.crmRepository.countContactsByLeadId(lead.id);
+  private async enrichSingle(
+    tenantId: string,
+    lead: CrmLeadEntity,
+  ): Promise<LeadResponseDto> {
+    const contactCount = await this.crmRepository.countContactsByLeadId(
+      tenantId,
+      lead.id,
+    );
     return this.toLeadResponse(lead, contactCount);
   }
 
@@ -105,9 +111,12 @@ export class CrmService {
   // سرنخ‌ها (Leads)
   // ---------------------------------------------------------------------------
 
-  async createLead(dto: CreateLeadDto): Promise<LeadResponseDto> {
+  async createLead(
+    tenantId: string,
+    dto: CreateLeadDto,
+  ): Promise<LeadResponseDto> {
     const email = this.normalizeEmail(dto.email);
-    const existing = await this.crmRepository.findLeadByEmail(email);
+    const existing = await this.crmRepository.findLeadByEmail(tenantId, email);
     if (existing) {
       throw new ConflictException(
         `سرنخی با رایانامه ${email} قبلاً ثبت شده است.`,
@@ -115,7 +124,7 @@ export class CrmService {
     }
 
     const now = new Date();
-    const created = await this.crmRepository.createLead({
+    const created = await this.crmRepository.createLead(tenantId, {
       fullName: dto.fullName.trim(),
       email,
       phone: dto.phone?.trim() || null,
@@ -131,15 +140,22 @@ export class CrmService {
     return this.toLeadResponse(created, 0);
   }
 
-  async listLeads(query: QueryLeadDto): Promise<PaginatedLeadsResponseDto> {
-    const [entities, total] = await this.crmRepository.findLeadsAndCount({
-      search: query.search?.trim() || undefined,
-      stage: query.stage,
-      skip: (query.page - 1) * query.limit,
-      take: query.limit,
-    });
+  async listLeads(
+    tenantId: string,
+    query: QueryLeadDto,
+  ): Promise<PaginatedLeadsResponseDto> {
+    const [entities, total] = await this.crmRepository.findLeadsAndCount(
+      tenantId,
+      {
+        search: query.search?.trim() || undefined,
+        stage: query.stage,
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      },
+    );
 
     const counts = await this.crmRepository.getContactCountsByLeadIds(
+      tenantId,
       entities.map((entity) => entity.id),
     );
 
@@ -153,16 +169,20 @@ export class CrmService {
     };
   }
 
-  async getLead(id: number): Promise<LeadResponseDto> {
-    const lead = await this.crmRepository.findLeadById(id);
+  async getLead(tenantId: string, id: number): Promise<LeadResponseDto> {
+    const lead = await this.crmRepository.findLeadById(tenantId, id);
     if (!lead) {
       throw new NotFoundException(`سرنخ با شناسه ${id} یافت نشد.`);
     }
-    return this.enrichSingle(lead);
+    return this.enrichSingle(tenantId, lead);
   }
 
-  async updateLead(id: number, dto: UpdateLeadDto): Promise<LeadResponseDto> {
-    const lead = await this.crmRepository.findLeadById(id);
+  async updateLead(
+    tenantId: string,
+    id: number,
+    dto: UpdateLeadDto,
+  ): Promise<LeadResponseDto> {
+    const lead = await this.crmRepository.findLeadById(tenantId, id);
     if (!lead) {
       throw new NotFoundException(`سرنخ با شناسه ${id} یافت نشد.`);
     }
@@ -170,7 +190,10 @@ export class CrmService {
     if (dto.email !== undefined) {
       const email = this.normalizeEmail(dto.email);
       if (email !== lead.email) {
-        const duplicate = await this.crmRepository.findLeadByEmail(email);
+        const duplicate = await this.crmRepository.findLeadByEmail(
+          tenantId,
+          email,
+        );
         if (duplicate) {
           throw new ConflictException(
             `سرنخی با رایانامه ${email} قبلاً ثبت شده است.`,
@@ -202,30 +225,32 @@ export class CrmService {
     }
 
     lead.updatedAt = new Date();
-    const saved = await this.crmRepository.saveLead(lead);
-    return this.enrichSingle(saved);
+    const saved = await this.crmRepository.saveLead(tenantId, lead);
+    return this.enrichSingle(tenantId, saved);
   }
 
   async updateLeadStage(
+    tenantId: string,
     id: number,
     dto: UpdateLeadStageDto,
   ): Promise<LeadResponseDto> {
-    const lead = await this.crmRepository.findLeadById(id);
+    const lead = await this.crmRepository.findLeadById(tenantId, id);
     if (!lead) {
       throw new NotFoundException(`سرنخ با شناسه ${id} یافت نشد.`);
     }
 
     lead.pipelineStage = dto.pipelineStage;
     lead.updatedAt = new Date();
-    const saved = await this.crmRepository.saveLead(lead);
-    return this.enrichSingle(saved);
+    const saved = await this.crmRepository.saveLead(tenantId, lead);
+    return this.enrichSingle(tenantId, saved);
   }
 
   async addLeadNote(
+    tenantId: string,
     id: number,
     dto: AddLeadNoteDto,
   ): Promise<LeadResponseDto> {
-    const lead = await this.crmRepository.findLeadById(id);
+    const lead = await this.crmRepository.findLeadById(tenantId, id);
     if (!lead) {
       throw new NotFoundException(`سرنخ با شناسه ${id} یافت نشد.`);
     }
@@ -235,8 +260,8 @@ export class CrmService {
     lead.notes = lead.notes ? `${lead.notes}\n${entry}` : entry;
     lead.updatedAt = new Date();
 
-    const saved = await this.crmRepository.saveLead(lead);
-    return this.enrichSingle(saved);
+    const saved = await this.crmRepository.saveLead(tenantId, lead);
+    return this.enrichSingle(tenantId, saved);
   }
 
   // ---------------------------------------------------------------------------
@@ -244,16 +269,17 @@ export class CrmService {
   // ---------------------------------------------------------------------------
 
   async listContactRecords(
+    tenantId: string,
     leadId: number,
     query: QueryContactRecordDto,
   ): Promise<PaginatedContactMessagesResponseDto> {
-    const lead = await this.crmRepository.findLeadById(leadId);
+    const lead = await this.crmRepository.findLeadById(tenantId, leadId);
     if (!lead) {
       throw new NotFoundException(`سرنخ با شناسه ${leadId} یافت نشد.`);
     }
 
     const [entities, total] =
-      await this.crmRepository.findContactMessagesAndCount(leadId, {
+      await this.crmRepository.findContactMessagesAndCount(tenantId, leadId, {
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       });
@@ -267,15 +293,16 @@ export class CrmService {
   }
 
   async addContactRecord(
+    tenantId: string,
     leadId: number,
     dto: CreateContactRecordDto,
   ): Promise<ContactMessageResponseDto> {
-    const lead = await this.crmRepository.findLeadById(leadId);
+    const lead = await this.crmRepository.findLeadById(tenantId, leadId);
     if (!lead) {
       throw new NotFoundException(`سرنخ با شناسه ${leadId} یافت نشد.`);
     }
 
-    const created = await this.crmRepository.createContactMessage({
+    const created = await this.crmRepository.createContactMessage(tenantId, {
       leadId: lead.id,
       senderName: dto.senderName?.trim() || lead.fullName,
       senderPhone: dto.senderPhone?.trim() || lead.phone || '',
@@ -287,7 +314,7 @@ export class CrmService {
     });
 
     lead.updatedAt = new Date();
-    await this.crmRepository.saveLead(lead);
+    await this.crmRepository.saveLead(tenantId, lead);
 
     return this.toContactResponse(created);
   }
@@ -296,8 +323,8 @@ export class CrmService {
   // آمار تحلیلی فروش و پایپ‌لاین
   // ---------------------------------------------------------------------------
 
-  async getStats(): Promise<LeadStatsResponseDto> {
-    const aggregates = await this.crmRepository.getStageAggregates();
+  async getStats(tenantId: string): Promise<LeadStatsResponseDto> {
+    const aggregates = await this.crmRepository.getStageAggregates(tenantId);
     const aggregateByStage = new Map(
       aggregates.map((row) => [
         row.stage as PipelineStage,
@@ -375,9 +402,10 @@ export class CrmService {
     };
   }
 
-  async getPipeline(): Promise<PipelineStageGroupDto[]> {
-    const leads = await this.crmRepository.findAllLeads();
+  async getPipeline(tenantId: string): Promise<PipelineStageGroupDto[]> {
+    const leads = await this.crmRepository.findAllLeads(tenantId);
     const counts = await this.crmRepository.getContactCountsByLeadIds(
+      tenantId,
       leads.map((lead) => lead.id),
     );
 
