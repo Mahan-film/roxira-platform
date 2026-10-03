@@ -4,7 +4,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     groups:
       github-actions-minor-patch:
         update-types:
@@ -15,7 +15,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     groups:
       pip-minor-patch:
         update-types:
@@ -26,7 +30,11 @@ updates:
     directory: /output_apps/enterprise_hub/frontend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     groups:
       frontend-minor-patch:
         update-types:
@@ -37,7 +45,11 @@ updates:
     directory: /output_apps/enterprise_hub
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     groups:
       enterprise-hub-minor-patch:
         update-types:
@@ -48,7 +60,11 @@ updates:
     directory: /e2e
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     groups:
       e2e-minor-patch:
         update-types:
