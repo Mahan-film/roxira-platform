@@ -83,14 +83,8 @@ if not KAVENEGAR_API_KEY:
     raise RuntimeError("KAVENEGAR_API_KEY environment variable is not set")
 
 # Google OAuth 2.0 (شامل مقادیر پیش‌فرض درخواستی)
-GOOGLE_CLIENT_ID = os.getenv(
-    "GOOGLE_CLIENT_ID",
-    "32324849132-d0iln7dvbdppjmfp1l1i4v1kugsvmf35.apps.googleusercontent.com",
-)
-GOOGLE_CLIENT_SECRET = os.getenv(
-    "GOOGLE_CLIENT_SECRET",
-    "REDACTED_SECRET_24",
-)
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -591,8 +585,14 @@ async def forgot_password(req: ForgotPasswordRequest, request: Request):
 _GOOGLE_STATES: Dict[str, float] = {}
 
 
+def _require_google_config() -> None:
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail="google login not configured")
+
+
 @router.get("/google/url")
 async def google_auth_url(request: Request):
+    _require_google_config()
     redirect_uri = GOOGLE_REDIRECT_URI or (
         f"{str(request.base_url).rstrip('/')}/api/v1/auth/google/callback"
     )
@@ -664,8 +664,7 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
       ۳) ثبت/ورود خودکار کاربر
       ۴) ریدایرکت به /app با توکن JWT در کوکی + هش window.postMessage
     """
-    if not GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=503, detail="ورود با گوگل پیکربندی نشده است.")
+    _require_google_config()
 
     if state and state in _GOOGLE_STATES:
         _GOOGLE_STATES.pop(state, None)
