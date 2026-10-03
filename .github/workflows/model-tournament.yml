@@ -1,5 +1,8 @@
 name: Model Tournament
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:

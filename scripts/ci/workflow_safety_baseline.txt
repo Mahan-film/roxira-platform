@@ -1,3 +1,2 @@
 # Known findings of scripts/ci/check_workflow_safety.py, one per line.
 # Format: <workflow file name>:<job>: <rule>: <message>
-model-tournament.yml:run-tournament: missing-permissions: workflow and job have no permissions
