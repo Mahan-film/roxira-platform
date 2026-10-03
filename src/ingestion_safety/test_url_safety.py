@@ -1,4 +1,4 @@
-from ingestion_safety.url_safety import is_safe_public_url, robots_allows
+from src.ingestion_safety.url_safety import is_safe_public_url, robots_allows
 
 
 def _resolver(mapping):
