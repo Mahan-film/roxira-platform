@@ -4,10 +4,22 @@ import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
 import { SubscriptionCta } from "@/components/judge/subscription/subscription-cta";
 
+const SERVICES_TITLE = "محصولات، خدمات و تعرفه اشتراک | سامانه هوشمند قاضی هوشمند";
+const SERVICES_DESCRIPTION =
+  "آشنایی با محصولات، خدمات تخصصی و مقایسه طرح رایگان با اشتراک نامحدود VIP در سامانه هوشمند قاضی هوشمند.";
+
 export const metadata: Metadata = {
-  title: "محصولات، خدمات و تعرفه اشتراک | سامانه هوشمند قاضی هوشمند",
-  description:
-    "آشنایی با محصولات، خدمات تخصصی و مقایسه طرح رایگان با اشتراک نامحدود VIP در سامانه هوشمند قاضی هوشمند.",
+  title: SERVICES_TITLE,
+  description: SERVICES_DESCRIPTION,
+  alternates: { canonical: "https://ghazihoushmand.ir/services" },
+  openGraph: {
+    title: SERVICES_TITLE,
+    description: SERVICES_DESCRIPTION,
+    url: "https://ghazihoushmand.ir/services",
+    siteName: "قاضی هوشمند",
+    locale: "fa_IR",
+    type: "website",
+  },
 };
 
 export default function ServicesPage() {

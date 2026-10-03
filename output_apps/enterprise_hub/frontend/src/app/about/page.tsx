@@ -3,10 +3,22 @@ import Link from "next/link";
 import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
 
+const ABOUT_TITLE = "درباره ما | سامانه هوشمند قاضی هوشمند";
+const ABOUT_DESCRIPTION =
+  "آشنایی با سامانه هوشمند قاضی هوشمند؛ اولین پلتفرم تخصصی تحلیل دعاوی، استخراج ادله اثبات دعوی و انشای لوایح قضایی مبتنی بر هوش مصنوعی و پایگاه تنقیح قوانین ایران.";
+
 export const metadata: Metadata = {
-  title: "درباره ما | سامانه هوشمند قاضی هوشمند",
-  description:
-    "آشنایی با سامانه هوشمند قاضی هوشمند؛ اولین پلتفرم تخصصی تحلیل دعاوی، استخراج ادله اثبات دعوی و انشای لوایح قضایی مبتنی بر هوش مصنوعی و پایگاه تنقیح قوانین ایران.",
+  title: ABOUT_TITLE,
+  description: ABOUT_DESCRIPTION,
+  alternates: { canonical: "https://ghazihoushmand.ir/about" },
+  openGraph: {
+    title: ABOUT_TITLE,
+    description: ABOUT_DESCRIPTION,
+    url: "https://ghazihoushmand.ir/about",
+    siteName: "قاضی هوشمند",
+    locale: "fa_IR",
+    type: "website",
+  },
 };
 
 export default function AboutPage() {

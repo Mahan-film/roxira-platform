@@ -32,10 +32,21 @@ export async function generateMetadata(): Promise<Metadata> {
   const { isEnglish, isGhazi } = await getHostInfo();
 
   if (isGhazi) {
+    const title = "قاضی هوشمند | دستیار تخصصی حقوقی و قضایی مبتنی بر هوش مصنوعی";
+    const description =
+      "سامانه هوشمند تحلیل دعاوی، استخراج ادله اثبات دعوا، تنظیم لایحه اعاده دادرسی و استعلام آرای وحدت رویه دیوان عالی کشور.";
     return {
-      title: "قاضی هوشمند | دستیار تخصصی حقوقی و قضایی مبتنی بر هوش مصنوعی",
-      description:
-        "سامانه هوشمند تحلیل دعاوی، استخراج ادله اثبات دعوا، تنظیم لایحه اعاده دادرسی و استعلام آرای وحدت رویه دیوان عالی کشور.",
+      title,
+      description,
+      alternates: { canonical: "https://ghazihoushmand.ir/" },
+      openGraph: {
+        title,
+        description,
+        url: "https://ghazihoushmand.ir/",
+        siteName: "قاضی هوشمند",
+        locale: "fa_IR",
+        type: "website",
+      },
     };
   }
 

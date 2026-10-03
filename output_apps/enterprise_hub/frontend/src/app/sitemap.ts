@@ -41,7 +41,13 @@ const DOMAIN_ROUTES: Record<SeoDomain, SitemapRoute[]> = {
   "ghazihoushmand.ir": [
     { path: "/", changeFrequency: "daily", priority: 1.0 },
     { path: "/chat", changeFrequency: "daily", priority: 0.9 },
+    { path: "/services", changeFrequency: "weekly", priority: 0.8 },
+    { path: "/about", changeFrequency: "monthly", priority: 0.7 },
+    { path: "/technology", changeFrequency: "monthly", priority: 0.7 },
     { path: "/coverage", changeFrequency: "weekly", priority: 0.6 },
+    { path: "/contact", changeFrequency: "monthly", priority: 0.6 },
+    { path: "/terms", changeFrequency: "yearly", priority: 0.4 },
+    { path: "/privacy", changeFrequency: "yearly", priority: 0.4 },
   ],
 };
 

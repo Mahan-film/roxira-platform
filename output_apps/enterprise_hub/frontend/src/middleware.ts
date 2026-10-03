@@ -24,6 +24,7 @@ const ROXIRA_ONLY_PATHS = [
   "/accounting",
   "/inventory",
   "/crm",
+  "/docs",
 ];
 
 type ServiceDomain = "ghazi" | "roxira_ir" | "roxira_net";
@@ -105,5 +106,6 @@ export const config = {
     "/services",
     "/technology",
     "/contact",
+    "/docs",
   ],
 };
