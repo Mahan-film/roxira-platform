@@ -5368,3 +5368,161 @@ router.include_router(live_voice_router)
 # W17: the Zibal router is mounted once, directly on the root app, in
 # run_unified_server.py. It is intentionally NOT included on `router` here —
 # see the note next to the top-of-file imports.
+
+
+# ------------------------------------------------------------------------------
+# #455 — POST /drafts/ruling: پیش‌نویس غیررسمی و غیرقطعی رأی (هسته: ruling_draft.py)
+# مدل فقط از طریق llm_router با ردهٔ `strong` و sensitive=True (هرگز :free)؛
+# لاگ فقط شناسهٔ درخواست و اندازه‌ها را ثبت می‌کند، نه متن پرونده.
+# ------------------------------------------------------------------------------
+try:
+    from . import ruling_draft as _ruling_draft
+except ImportError:
+    from output_apps.generated_modules.smartjudge import ruling_draft as _ruling_draft
+
+from typing import Literal as _Literal
+
+from pydantic import BaseModel as _BaseModel, ConfigDict as _ConfigDict, Field as _Field
+
+_RULING_MODEL_TIER = "strong"
+_RULING_TIMEOUT_SECONDS = 90.0
+_RULING_RETRIEVE_LIMIT = 8
+_RULING_QUERY_MAX_CHARS = 1500
+
+
+class RulingEvidenceItem(_BaseModel):
+    model_config = _ConfigDict(extra="forbid")
+
+    title: str = _Field("", max_length=_ruling_draft.MAX_EVIDENCE_TITLE)
+    text: str = _Field("", max_length=_ruling_draft.MAX_EVIDENCE_TEXT)
+
+
+class RulingDraftRequest(_BaseModel):
+    model_config = _ConfigDict(extra="forbid")
+
+    court_type: _Literal["civil", "criminal"]
+    claimant: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_NAME)
+    respondent: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_NAME)
+    facts: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_FACTS)
+    claims: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_CLAIMS)
+    evidence: List[RulingEvidenceItem] = _Field(
+        default_factory=list, max_length=_ruling_draft.MAX_EVIDENCE_ITEMS
+    )
+    jurisdiction: Optional[str] = _Field(None, min_length=1, max_length=_ruling_draft.MAX_NAME)
+
+
+async def _ruling_retrieve_laws(query: str) -> list:
+    """Qdrant retrieval (active laws only) mapped to {law_name, article_no, text}."""
+    result = await _lightrag_qdrant_retrieve(
+        query, limit=_RULING_RETRIEVE_LIMIT, active_only=CITATION_QDRANT_ACTIVE_ONLY
+    )
+    rows = []
+    for law in (result or {}).get("laws") or []:
+        if not isinstance(law, dict) or law.get("is_bill"):
+            continue
+        rows.append(
+            {
+                "law_name": law.get("law_name"),
+                "article_no": law.get("article_no"),
+                "text": law.get("summary") or law.get("text") or "",
+            }
+        )
+    return rows
+
+
+async def _ruling_complete(prompt: str) -> str:
+    if not _use_llm_router():
+        raise RuntimeError("llm router disabled")
+    routed = await _llm_router.complete(
+        _RULING_MODEL_TIER,
+        [{"role": "user", "content": prompt}],
+        sensitive=True,  # case data: keeps the call off :free endpoints
+        tenant="smartjudge",
+        feature="ruling_draft",
+        timeout=_RULING_TIMEOUT_SECONDS,
+        max_retries=1,
+        temperature=0.2,
+        max_tokens=4000,
+    )
+    return routed.content
+
+
+def _finalize_ruling_response(result: dict, request_id: str) -> dict:
+    """Enforce the non-binding invariants no matter what the core returned."""
+    out = dict(result) if isinstance(result, dict) else {}
+    if out.get("status") not in (_ruling_draft.STATUS_DRAFT, _ruling_draft.STATUS_INSUFFICIENT):
+        out = {
+            "status": _ruling_draft.STATUS_INSUFFICIENT,
+            "proposed_operative_part": "",
+            "removed_citations": [],
+            "missing_information": ["نتیجهٔ نامعتبر"],
+        }
+    out["banner"] = _ruling_draft.BANNER
+    out["requires_human_review"] = True
+    out["request_id"] = request_id
+    out["model_tier"] = _RULING_MODEL_TIER
+    out["disclaimer"] = AI_DRAFT_DISCLAIMER
+    out["draft_id"] = str(uuid.uuid4())
+    out["content_sha256"] = content_sha256(
+        json.dumps(out, ensure_ascii=False, sort_keys=True, default=str)
+    )
+    return out
+
+
+@router.post("/drafts/ruling")
+async def draft_ruling(request: Request, body: RulingDraftRequest):
+    """پیش‌نویس غیررسمی رأی؛ همیشه AI_DRAFT_UNVERIFIED یا INSUFFICIENT_BASIS."""
+    # Entitlement: `strong` tier is VIP-only. Only the signed JWT counts here;
+    # client-supplied body fields are never trusted for the tier.
+    tier = _resolve_subscription_tier(payload=None, request=request)
+    if not _is_vip_tier(tier):
+        return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
+
+    request_id = str(uuid.uuid4())
+    try:
+        case = _ruling_draft.RulingCase(
+            court_type=body.court_type,
+            claimant=body.claimant,
+            respondent=body.respondent,
+            facts=body.facts,
+            claims=body.claims,
+            evidence=[{"title": e.title, "text": e.text} for e in body.evidence],
+            jurisdiction=body.jurisdiction,
+        )
+    except ValueError:
+        return JSONResponse(
+            status_code=422, content={"status": "error", "request_id": request_id}
+        )
+    print(
+        f"[SMARTJUDGE][RULING-DRAFT] request_id={request_id} court_type={body.court_type} "
+        f"facts_len={len(body.facts)} claims_len={len(body.claims)} evidence={len(body.evidence)}",
+        file=sys.stderr,
+    )
+
+    loop = asyncio.get_running_loop()
+
+    def _bridge(coro):
+        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_RULING_TIMEOUT_SECONDS)
+
+    def _retrieve(c):
+        query = (c.claims + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]
+        return _bridge(_ruling_retrieve_laws(query))
+
+    def _call_llm(prompt):
+        return _bridge(_ruling_complete(prompt))
+
+    def _verify(text):
+        return _bridge(_guard_citations(text, use_qdrant=True))
+
+    result = await asyncio.to_thread(
+        _ruling_draft.generate_ruling_draft,
+        case,
+        retrieve=_retrieve,
+        call_llm=_call_llm,
+        verify_citations=_verify,
+    )
+    print(
+        f"[SMARTJUDGE][RULING-DRAFT] request_id={request_id} status={result.get('status')}",
+        file=sys.stderr,
+    )
+    return _finalize_ruling_response(result, request_id)
