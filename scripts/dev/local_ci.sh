@@ -117,6 +117,20 @@ step_gitleaks() {
   gitleaks git --config .gitleaks.toml --log-opts="$range" --redact --no-banner --verbose .
 }
 
+# provider keys: gitleaks' generic rules miss provider-specific formats, so also grep every
+# tracked file for them. Prints file names and counts only, never the matching line.
+step_provider_keys() {
+  local pat hits
+  pat='(tvly-(dev|prod)-[A-Za-z0-9]{16,}|BSA[A-Za-z0-9_-]{20,}|gsk_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{30,}|sk-or-v1-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|xai-[A-Za-z0-9]{20,}|pplx-[A-Za-z0-9]{20,}|jina_[A-Za-z0-9]{20,}|fc-[a-f0-9]{24,})'
+  hits="$(git grep -cEI "$pat" -- . ':(exclude)*.lock' || true)"
+  if [ -n "$hits" ]; then
+    echo "Provider-style API keys found in tracked files (file:count). Remove them and rotate the keys:"
+    echo "$hits"
+    return 1
+  fi
+  echo "no provider-style API keys in tracked files"
+}
+
 # frontend: lint is non-blocking like CI; build is blocking.
 step_frontend() {
   (
@@ -145,6 +159,8 @@ else
   skip_step "pytest (unit)" "not installed: pip install -r ci/requirements-test.txt"
   FAIL+=("pytest (missing)")
 fi
+
+run_step "provider API keys in tracked files" step_provider_keys
 
 if have gitleaks; then
   run_step "gitleaks (new commits)" step_gitleaks
