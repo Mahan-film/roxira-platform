@@ -1,0 +1,67 @@
+{
+  "_comment": "Phase 1 product boundary config. See docs/ops/IMPORT_BOUNDARIES.md. Regenerate allowed_edges with: python3 scripts/ci/check_import_boundaries.py --write-baseline",
+  "scan_roots": [
+    "output_apps",
+    "src"
+  ],
+  "import_roots": [
+    ".",
+    "src",
+    "output_apps/generated_modules",
+    "output_apps/smart_judge",
+    "output_apps/smart_judge/src",
+    "output_apps/ecosystem_core/src",
+    "output_apps/enterprise_hub"
+  ],
+  "products": {
+    "smart_judge": {
+      "paths": [
+        "output_apps/smart_judge",
+        "output_apps/generated_modules/smartjudge"
+      ],
+      "exclude": []
+    },
+    "roxira": {
+      "paths": [
+        "output_apps/ecosystem_core/src/accounting",
+        "output_apps/ecosystem_core/src/banking",
+        "output_apps/ecosystem_core/src/crm",
+        "output_apps/ecosystem_core/src/inventory",
+        "output_apps/ecosystem_core/src/payroll",
+        "output_apps/ecosystem_core/src/treasury",
+        "output_apps/ecosystem_core/src/compliance",
+        "output_apps/ecosystem_core/src/trading",
+        "output_apps/enterprise_hub"
+      ],
+      "exclude": [
+        "output_apps/enterprise_hub/frontend"
+      ]
+    },
+    "core": {
+      "paths": [
+        "output_apps/ecosystem_core/src/billing",
+        "output_apps/ecosystem_core/src/notifications",
+        "output_apps/ecosystem_core/src/auth",
+        "output_apps/generated_modules/unifiedauth",
+        "src/roxira_config.py"
+      ],
+      "exclude": []
+    }
+  },
+  "restricted_pairs": [
+    [
+      "smart_judge",
+      "roxira"
+    ],
+    [
+      "roxira",
+      "smart_judge"
+    ]
+  ],
+  "allowed_edges": [
+    {
+      "from": "output_apps/ecosystem_core/src/banking/sayad_check_engine.py",
+      "to": "output_apps/smart_judge/src/engines/legal_drafter.py"
+    }
+  ]
+}
