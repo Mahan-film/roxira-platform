@@ -16,6 +16,7 @@ from output_apps.generated_modules.smartjudge.fast_path import (
     classify_fast_path,
 )
 from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
+from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 # W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
@@ -1393,6 +1394,30 @@ async def interactive_consult(payload: dict = Body(...)):
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     laws, precedents = await aquery_knowledge_graph(user_text, limit=5)
 
+    # Opt-in (SMARTJUDGE_PROMPT_LIBRARY=1): competence questions get up to 3 extra
+    # targeted retrieval queries, merged and de-duplicated by title.
+    use_prompt_library = _prompt_library.prompt_library_enabled()
+    detected_domains: list = []
+    if use_prompt_library:
+        detected_domains = _prompt_library.detect_domains(user_text)
+        for extra_q in _prompt_library.expand_competence_queries(user_text):
+            try:
+                extra_laws, extra_prec = await aquery_knowledge_graph(extra_q, limit=3)
+            except Exception as exc:  # noqa: BLE001 - boost is best effort
+                print(f"[SMARTJUDGE][COMPETENCE-EXPAND-FAIL] {exc}", file=sys.stderr)
+                continue
+            for rows, extra in ((laws, extra_laws), (precedents, extra_prec)):
+                known = {r.get("title") for r in rows if isinstance(r, dict)}
+                for r in extra or []:
+                    if isinstance(r, dict) and str(r.get("match_level") or "") != "FALLBACK" \
+                            and r.get("title") not in known:
+                        known.add(r.get("title"))
+                        rows.append(r)
+        if _chat_safety.is_grounded(laws, precedents):
+            # real hits exist: drop placeholder rows so they never mix in
+            laws = [r for r in laws if str((r or {}).get("match_level") or "") != "FALLBACK"]
+            precedents = [r for r in precedents if str((r or {}).get("match_level") or "") != "FALLBACK"]
+
     # اگر سشن وجود ندارد یک گفتگوی جدید باز شود
     if not conv_id:
         conv_id = str(uuid.uuid4())
@@ -1442,6 +1467,8 @@ async def interactive_consult(payload: dict = Body(...)):
             system_msg += " " + _chat_safety.LATIN_DIGITS_INSTRUCTION
             if not grounded:
                 system_msg += " " + _chat_safety.GENERAL_KNOWLEDGE_INSTRUCTION
+            if use_prompt_library and not payload.get("is_voice_mode"):
+                system_msg = _prompt_library.build_system_prompt(detected_domains, grounded, user_text)
             if grounded and laws:
                 law_lines = "\n".join([f"- {l.get('title')}: {l.get('summary', '')}" for l in laws[:5]])
                 context_text += f"\nمواد قانونی استخراج‌شده از پایگاه دانش:\n{law_lines}"
