@@ -31,21 +31,21 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
             className="flex shrink-0 cursor-pointer items-center gap-1 font-medium text-emerald-400 transition-colors hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded"
           >
             <ShieldCheck className="size-3.5" />
-            <span>اینماد ۷۴۹۱۴۳۹</span>
+            <span>اینماد 7491439</span>
           </a>
         </div>
       ) : (
         /* نسخه کامل با تمام بکلینک‌های سئو و نماد اعتماد */
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-xs border-b border-border/80 pb-6">
-            {/* ستون ۱: معرفی سامانه */}
+            {/* ستون 1: معرفی سامانه */}
             <div className="space-y-2 md:col-span-2">
               <div className="flex items-center gap-2">
                 <Scale className="size-4 text-amber-400" />
                 <span className="font-bold text-foreground text-sm">سامانه هوشمند قاضی هوشمند</span>
               </div>
               <p className="text-muted-foreground text-xs leading-relaxed max-w-md">
-                اولین پلتفرم بومی پردازش زبان حقوقی، استخراج ادله اثبات دعوی و انشای لوایح مستند به ۵٬۱۸۴ گره تنقیح‌شده قوانین و آرای دیوان عالی کشور بر پایه معماری Dual-Level GraphRAG.
+                اولین پلتفرم بومی پردازش زبان حقوقی، استخراج ادله اثبات دعوی و انشای لوایح مستند به 5,184 گره تنقیح‌شده قوانین و آرای دیوان عالی کشور بر پایه معماری Dual-Level GraphRAG.
               </p>
               <div className="pt-1 flex items-center gap-2 text-muted-foreground text-[11px]">
                 <span>پشتیبانی شبانه‌روزی:</span>
@@ -53,7 +53,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
               </div>
             </div>
 
-            {/* ستون ۲: دسترسی سریع و بکلینک‌ها */}
+            {/* ستون 2: دسترسی سریع و بکلینک‌ها */}
             <div className="space-y-2">
               <span className="text-foreground font-bold block text-xs">خدمات و ماژول‌ها</span>
               <ul className="space-y-1.5 text-[11px] text-muted-foreground">
@@ -68,7 +68,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
               </ul>
             </div>
 
-            {/* ستون ۳: بخش حقوقی و اینماد رسمی */}
+            {/* ستون 3: بخش حقوقی و اینماد رسمی */}
             <div className="space-y-3">
               <span className="text-foreground font-bold block text-xs">اعتبار قانونی و مجوزها</span>
               <ul className="space-y-1.5 text-[11px] text-muted-foreground">
@@ -78,12 +78,12 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
                 <li><Link href="/privacy" className="hover:text-amber-400 transition-colors">حفظ محرمانگی اسناد و پرونده</Link></li>
               </ul>
 
-              {/* نشان تایید اینماد — کامپوننت مشترک EnamadBadge (اینماد قاضی هوشمند، شناسه ۷۴۹۱۴۳۹) */}
+              {/* نشان تایید اینماد — کامپوننت مشترک EnamadBadge (اینماد قاضی هوشمند، شناسه 7491439) */}
               <div className="pt-1">
                 <EnamadBadge domain="ghazi" />
                 <div className="mt-2 text-right text-[10px]">
                   <span className="block font-bold text-foreground/90">نماد اعتماد الکترونیکی</span>
-                  <span className="font-mono text-muted-foreground">شناسه: ۷۴۹۱۴۳۹</span>
+                  <span className="font-mono text-muted-foreground">شناسه: 7491439</span>
                 </div>
               </div>
             </div>

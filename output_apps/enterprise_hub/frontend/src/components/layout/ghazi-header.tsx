@@ -3,43 +3,80 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Building2,
-  Calculator,
-  FileText,
+  Coins,
   LogOut,
   Menu,
-  MessageCircle,
-  Phone,
   Scale,
-  ShieldCheck,
   User,
   X,
-  Zap,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
-import { UserQuotaBadge } from "@/components/judge/subscription/user-quota-badge";
+import { SubscriptionModal } from "@/components/judge/subscription/subscription-modal";
+import { ApDropdown } from "@/components/layout/ap-dropdown";
+import { DRAFT_ACTIONS, DRAFT_PAGES, draftActionHref } from "@/lib/chat-actions";
+
+interface NavDest {
+  href: string;
+  label: string;
+  /** "/damages" is not served on the Ghazi domain (middleware redirects to roxira.ir):
+   *  a plain <a> avoids Next client navigation hitting a cross-origin RSC fetch. */
+  external?: boolean;
+}
+
+const MAIN_LINKS: NavDest[] = [
+  { href: "/chat", label: "گفتگوی حقوقی" },
+  { href: "/damages", label: "محاسبه‌گر خسارت", external: true },
+  { href: "/services", label: "محصولات و اشتراک" },
+  { href: "/technology", label: "تکنولوژی" },
+];
+
+const DRAFT_LINKS: NavDest[] = [
+  ...DRAFT_PAGES.map((p) => ({ href: p.href, label: p.label })),
+  ...DRAFT_ACTIONS.map((a) => ({ href: draftActionHref(a.key), label: a.label })),
+];
+
+const INFO_LINKS: NavDest[] = [
+  { href: "/about", label: "درباره سامانه" },
+  { href: "/contact", label: "تماس با ما" },
+  { href: "/terms", label: "قوانین و مقررات" },
+  { href: "/privacy", label: "حریم خصوصی" },
+];
+
+function DestLink({
+  dest,
+  className,
+  current,
+  role,
+  onNavigate,
+}: {
+  dest: NavDest;
+  className: string;
+  current: boolean;
+  role?: "menuitem";
+  onNavigate?: () => void;
+}) {
+  const common = {
+    className,
+    role,
+    "aria-current": current ? ("page" as const) : undefined,
+    onClick: onNavigate,
+  };
+  return dest.external ? (
+    <a href={dest.href} {...common}>
+      {dest.label}
+    </a>
+  ) : (
+    <Link href={dest.href} {...common}>
+      {dest.label}
+    </Link>
+  );
+}
 
 export function GhaziHeader() {
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { isAuthenticated, openLogin, logout } = useAuth();
-
-  // "/damages" روی دامنه قاضی سرو نمی‌شود (میدل‌ور آن را به roxira.ir
-  // هدایت می‌کند)؛ با external:true به‌جای next/link از <a> ساده استفاده
-  // می‌شود چون ناوبری کلاینتی Next.js برای ریدایرکت میان‌دامنه‌ای middleware
-  // به خطای شبه-CORS در کنسول منجر می‌شود (fetch داده RSC به مبدأ دیگر).
-  const navLinks: { href: string; label: string; icon: typeof MessageCircle; external?: boolean }[] = [
-    { href: "/chat", label: "گفتگوی حقوقی", icon: MessageCircle },
-    { href: "/draft-ruling", label: "پیش‌نویس رأی", icon: FileText },
-    { href: "/draft-indictment", label: "پیش‌نویس کیفرخواست", icon: FileText },
-    { href: "/damages", label: "محاسبه‌گر قضایی و خسارت", icon: Calculator, external: true },
-    { href: "/services", label: "محصولات و اشتراک", icon: Zap },
-    { href: "/technology", label: "تکنولوژی و معماری", icon: Building2 },
-    { href: "/about", label: "درباره سامانه", icon: Scale },
-    { href: "/contact", label: "تماس با ما", icon: Phone },
-    { href: "/terms", label: "قوانین و مقررات", icon: FileText },
-    { href: "/privacy", label: "حریم خصوصی", icon: ShieldCheck },
-  ];
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  const { isAuthenticated, openLogin, logout, accessToken, user } = useAuth();
 
   const handleOpenAuth = () => {
     openLogin({
@@ -49,171 +86,163 @@ export function GhaziHeader() {
     });
   };
 
-  return (
-    <header className="glass-surface sticky top-0 z-40 w-full transition-all motion-reduce:transition-none" dir="rtl">
-      {/* ردیف اصلی هدر */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
-        {/* لوگو و عنوان سامانه */}
-        <div className="flex items-center gap-3">
-          <Link
-            href="/chat"
-            className="flex items-center gap-2.5 sm:gap-3 group rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:scale-105 group-hover:border-amber-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.15)]">
-              <Scale className="size-5" strokeWidth={2} />
-            </div>
-            <div>
-              <span className="font-bold text-sm sm:text-base text-foreground tracking-tight">قاضی هوشمند</span>
-              <p className="text-[10px] text-muted-foreground hidden sm:block">دستیار حقوقی</p>
-            </div>
-          </Link>
-        </div>
+  const draftsActive = pathname.startsWith("/draft-");
+  const closeMobile = () => setMobileOpen(false);
 
-        {/* ناوبری دسکتاپ */}
-        <nav className="hidden lg:flex items-center gap-1.5 xl:gap-2">
-          {navLinks.map(({ href, label, icon: Icon, external }) => {
-            const isActive = pathname === href;
-            const className = `px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-              isActive
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"
-            }`;
-            const content = (
-              <>
-                <Icon className="size-3.5" />
-                <span>{label}</span>
-              </>
-            );
-            return external ? (
-              <a key={href} href={href} className={className}>
-                {content}
-              </a>
-            ) : (
-              <Link key={href} href={href} className={className}>
-                {content}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* بخش وضعیت کاربر */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {isAuthenticated ? (
-            <>
-              <UserQuotaBadge />
-              <button
-                onClick={logout}
-                className="text-[11px] text-muted-foreground hover:text-destructive px-2 py-1 bg-muted/80 hover:bg-muted rounded-lg border border-border transition-colors flex items-center gap-1 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                title="خروج از حساب کاربری"
-              >
-                <LogOut className="size-3.5" />
-                <span>خروج</span>
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={handleOpenAuth}
-              className="px-3 sm:px-3.5 py-1.5 bg-gradient-to-l from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.15)] active:scale-95 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <User className="size-3.5" />
-              <span>ورود / ثبت‌نام</span>
-            </button>
-          )}
-
-          {/* دکمه منوی موبایل */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-xl bg-muted border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-            title="منوی ناوبری"
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
-          </button>
-        </div>
-      </div>
-
-      {/* نوار بکلینک‌های اسکرولی افقی زیر هدر (روی موبایل و تبلت همیشه فعال) */}
-      <div className="lg:hidden border-t border-border/60 bg-transparent px-2 sm:px-4 py-1.5 overflow-x-auto no-scrollbar scroll-fade-x flex items-center gap-1.5 text-xs">
-        {navLinks.map(({ href, label, icon: Icon, external }) => {
-          const isActive = pathname === href;
-          const className = `px-2.5 py-1 rounded-lg whitespace-nowrap text-[11px] flex items-center gap-1 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-            isActive
-              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold"
-              : "bg-muted/80 text-muted-foreground hover:text-foreground border border-border/70"
-          }`;
-          const content = (
-            <>
-              <Icon className="size-3.5" />
-              <span>{label}</span>
-            </>
-          );
-          return external ? (
-            <a key={href} href={href} className={className}>
-              {content}
-            </a>
-          ) : (
-            <Link key={href} href={href} className={className}>
-              {content}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* منوی بازشونده کشویی موبایل */}
-      {mobileMenuOpen && (
-        <div className="glass-overlay lg:hidden px-4 py-4 space-y-3 animate-in slide-in-from-top-2 duration-150 motion-reduce:animate-none">
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {navLinks.map(({ href, label, icon: Icon, external }) => {
-              const className = `p-2.5 rounded-xl border flex items-center gap-2 transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-                pathname === href
-                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold"
-                  : "bg-background/60 border-border text-muted-foreground hover:border-ring/50"
-              }`;
-              const content = (
-                <>
-                  <Icon className="size-3.5" />
-                  <span>{label}</span>
-                </>
-              );
-              return external ? (
-                <a
-                  key={href}
-                  href={href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={className}
-                >
-                  {content}
-                </a>
-              ) : (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={className}
-                >
-                  {content}
-                </Link>
-              );
-            })}
+  const accountSection = (close: () => void, role?: "menuitem") => (
+    <>
+      {isAuthenticated ? (
+        <>
+          <div className="ap-menu-label">حساب کاربری</div>
+          <div className="ap-menuitem" style={{ cursor: "default" }}>
+            <Coins className="size-4" aria-hidden="true" />
+            <span>توکن باقی‌مانده: 0</span>
           </div>
+          <button
+            type="button"
+            role={role}
+            className="ap-menuitem"
+            onClick={() => {
+              close();
+              setTopUpOpen(true);
+            }}
+          >
+            افزایش موجودی
+          </button>
+          <button
+            type="button"
+            role={role}
+            className="ap-menuitem"
+            data-danger="true"
+            onClick={() => {
+              close();
+              logout();
+            }}
+          >
+            <LogOut className="size-4" aria-hidden="true" />
+            <span>خروج از حساب کاربری</span>
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          role={role}
+          className="ap-menuitem"
+          onClick={() => {
+            close();
+            handleOpenAuth();
+          }}
+        >
+          <User className="size-4" aria-hidden="true" />
+          <span>ورود با پیامک (OTP)</span>
+        </button>
+      )}
+      <div className="ap-menu-sep" role="separator" />
+      <div className="ap-menu-label">اطلاعات</div>
+      {INFO_LINKS.map((d) => (
+        <DestLink key={d.href} dest={d} className="ap-menuitem" role={role} current={pathname === d.href} onNavigate={close} />
+      ))}
+    </>
+  );
 
-          <div className="pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-            <span>مرکز تماس: <a href="tel:09129367796" className="text-amber-400 font-mono">09129367796</a></span>
+  return (
+    <>
+      <header className="ap-theme ap-header" data-theme="dark" dir="rtl" lang="fa">
+        <div className="ap-header-row">
+          <Link href="/chat" className="ap-brand">
+            <span className="ap-brand-mark" aria-hidden="true">
+              <Scale className="size-5" />
+            </span>
+            <span>قاضی هوشمند</span>
+          </Link>
+
+          {/* Desktop primary navigation */}
+          <nav className="ap-nav-list" aria-label="ناوبری اصلی">
+            <DestLink dest={MAIN_LINKS[0]} className="ap-navlink" current={pathname === "/chat"} />
+            <ApDropdown label="پیش‌نویس‌ها" active={draftsActive}>
+              {(close) => (
+                <>
+                  <div className="ap-menu-label">صفحه‌های اختصاصی</div>
+                  {DRAFT_LINKS.slice(0, DRAFT_PAGES.length).map((d) => (
+                    <DestLink key={d.href} dest={d} className="ap-menuitem" role="menuitem" current={pathname === d.href} onNavigate={close} />
+                  ))}
+                  <div className="ap-menu-sep" role="separator" />
+                  <div className="ap-menu-label">در گفتگو</div>
+                  {DRAFT_LINKS.slice(DRAFT_PAGES.length).map((d) => (
+                    <DestLink key={d.href} dest={d} className="ap-menuitem" role="menuitem" current={false} onNavigate={close} />
+                  ))}
+                </>
+              )}
+            </ApDropdown>
+            {MAIN_LINKS.slice(1).map((d) => (
+              <DestLink key={d.href} dest={d} className="ap-navlink" current={pathname === d.href} />
+            ))}
+          </nav>
+
+          <div className="ap-header-end">
             {!isAuthenticated && (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleOpenAuth();
-                }}
-                className="text-amber-400 font-semibold underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded"
-              >
-                ورود با پیامک (OTP)
+              <button type="button" className="ap-btn" onClick={handleOpenAuth}>
+                <span>ورود</span>
               </button>
             )}
+            <span className="ap-only-desktop">
+              <ApDropdown
+                triggerClassName="ap-iconbtn"
+                ariaLabel="حساب کاربری و اطلاعات بیشتر"
+                icon={<User className="size-5" aria-hidden="true" />}
+                align="end"
+              >
+                {(close) => accountSection(close, "menuitem")}
+              </ApDropdown>
+            </span>
+            <button
+              type="button"
+              className="ap-iconbtn ap-only-mobile"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label={mobileOpen ? "بستن منو" : "باز کردن منو"}
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? <X className="size-5" aria-hidden="true" /> : <Menu className="size-5" aria-hidden="true" />}
+            </button>
           </div>
         </div>
-      )}
-    </header>
+
+        {/* Mobile / tablet panel: everything grouped, no horizontal scrolling bar */}
+        {mobileOpen && (
+          <div className="ap-mobile-panel ap-only-mobile">
+            <DestLink dest={MAIN_LINKS[0]} className="ap-menuitem" current={pathname === "/chat"} onNavigate={closeMobile} />
+            <div className="ap-menu-label">پیش‌نویس‌ها</div>
+            {DRAFT_LINKS.map((d) => (
+              <DestLink key={d.href} dest={d} className="ap-menuitem" current={pathname === d.href} onNavigate={closeMobile} />
+            ))}
+            <div className="ap-menu-sep" role="separator" />
+            {MAIN_LINKS.slice(1).map((d) => (
+              <DestLink key={d.href} dest={d} className="ap-menuitem" current={pathname === d.href} onNavigate={closeMobile} />
+            ))}
+            <div className="ap-menu-sep" role="separator" />
+            {accountSection(closeMobile)}
+            <div className="ap-menu-sep" role="separator" />
+            <div className="ap-menuitem" style={{ cursor: "default" }}>
+              <span>
+                مرکز تماس:{" "}
+                <a href="tel:09129367796" className="ap-link" dir="ltr">
+                  09129367796
+                </a>
+              </span>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* Rendered outside the header: its backdrop-filter would trap a fixed overlay. */}
+      <SubscriptionModal
+        isOpen={topUpOpen}
+        onClose={() => setTopUpOpen(false)}
+        currentPlan="عادی"
+        accessToken={accessToken}
+        phone={user?.phone}
+      />
+    </>
   );
 }
 

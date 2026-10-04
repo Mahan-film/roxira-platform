@@ -1,15 +1,27 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   FileSignature,
   FileText,
   Gavel,
+  Info,
   Mic,
   Phone,
   Send,
   Square,
 } from "lucide-react";
+import {
+  COMPETENCE_NOTE,
+  DISCLAIMER_LINE,
+  DRAFT_ACTIONS,
+  DRAFT_PAGES,
+  STARTER_GROUPS,
+  findDraftAction,
+  type DraftActionKey,
+} from "@/lib/chat-actions";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 
 type StatutoryItem = string | { title?: string; category?: string; article?: string; law?: string };
@@ -22,6 +34,13 @@ type ChatMessage = {
   statutory_basis?: StatutoryItem[];
 };
 
+const ACTION_ICONS: Record<DraftActionKey, typeof FileText> = {
+  defense: FileText,
+  petition: Gavel,
+  complaint: AlertTriangle,
+  notice: FileSignature,
+};
+
 function statutoryLabel(item: StatutoryItem): string {
   if (typeof item === "string") return item;
   return item.title || item.article || item.law || item.category || "";
@@ -32,7 +51,7 @@ export function ChatShell() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "سلام؛ شرح پرونده یا پرسش حقوقی خود را بنویسید یا با میکروفون بگویید."
+      content: "سلام. شرح پرونده یا پرسش حقوقی خود را بنویسید، یا با میکروفون بگویید."
     }
   ]);
   const [inputPrompt, setInputPrompt] = useState("");
@@ -54,6 +73,17 @@ export function ChatShell() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading]);
+
+  // /chat?draft=defense|petition|complaint|notice (links from the header menu)
+  // pre-fill the composer; the user reviews and sends it.
+  const searchParams = useSearchParams();
+  const draftParam = searchParams.get("draft");
+  const [appliedDraft, setAppliedDraft] = useState<string | null>(null);
+  if (draftParam !== appliedDraft) {
+    setAppliedDraft(draftParam);
+    const action = findDraftAction(draftParam);
+    if (action) setInputPrompt(action.prompt);
+  }
 
   // تبدیل گفتار به متن (STT): ضبط مستقیم صدا و ارسال آن به موتور سرور.
   // هیچ وابستگی‌ای به Web Speech API مرورگر وجود ندارد (سازگار با Safari فارسی).
@@ -210,74 +240,48 @@ export function ChatShell() {
     }
   };
 
-  // اقدامات حقوقی (اولویت اول نوار تک‌ردیفه)
-  const legalActions = [
-    { label: "صدور لایحه دفاعیه", icon: FileText, color: "text-amber-400", prompt: "بر اساس آخرین مکالمه و ادله پرونده، لایحه دفاعیه مستدل با استناد به مواد قانونی مرتبط، رویه قضایی و آرای وحدت رویه تنظیم کن." },
-    { label: "صدور دادخواست حقوقی", icon: Gavel, color: "text-cyan-400", prompt: "بر اساس شرح پرونده و مطالبات، دادخواست حقوقی کامل شامل خواسته، دلایل و منضمات و شرح دادخواست تدوین کن." },
-    { label: "صدور شکواییه کیفری", icon: AlertTriangle, color: "text-rose-400", prompt: "با توجه به موضوع پرونده و ادله، شکواییه کیفری رسمی با ذکر عنوان اتهامی، ادله و درخواست تعقیب متهم تدوین کن." },
-    { label: "صدور اظهارنامه رسمی", icon: FileSignature, color: "text-emerald-400", prompt: "یک اظهارنامه رسمی موضوع ماده ۱۵۶ قانون آیین دادرسی مدنی با اخطار و مهلت قانونی برای موضوع پرونده تدوین کن." }
-  ];
-
-  const quickPrompts = [
-    { title: "استراتژی پرونده", prompt: "استراتژی دفاعی پرونده با تکیه بر ادله اثبات دعوی چیست؟" },
-    { title: "لایحه اعاده دادرسی", prompt: "لایحه اعاده دادرسی کیفری بر اساس بندهای ماده ۴۷۴ تنظیم کن." },
-    { title: "صلاحیت دادگاه صلح ۱۴۰۲", prompt: "صلاحیت دادگاه‌های صلح مصوب ۱۴۰۲ در خصوص دعاوی مالی و تخلیه را تشریح کن." },
-    { title: "آرای وحدت رویه", prompt: "جدیدترین آرای وحدت رویه هیأت عمومی دیوان عالی کشور در خصوص مسئولیت مدنی و خسارت را توضیح بده." }
-  ];
-
-  // سه پرسش نمونه برای پر کردن ناحیه خالی پیام‌ها
-  const exampleQuestions = quickPrompts.slice(0, 3);
-
   const showExamples = !isLoading && !messages.some((msg) => msg.role === "user");
 
-  const legalChipClass =
-    "px-3 py-1 bg-card/90 hover:bg-accent border border-border hover:border-ring/50 text-[11px] text-foreground rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
-  const quickChipClass =
-    "px-3 py-1.5 bg-card hover:bg-accent border border-border text-muted-foreground hover:text-foreground text-[11px] sm:text-xs rounded-xl whitespace-nowrap transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
-
   return (
-    <div className="flex flex-col h-full w-full max-w-4xl mx-auto overflow-hidden">
+    <div className="flex flex-col h-full w-full max-w-[var(--ap-content-max)] mx-auto overflow-hidden">
       {/* ناحیه اسکرول پیام‌ها */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 space-y-4">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[90%] sm:max-w-[80%] p-4 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-sm ${
-              msg.role === "user"
-                ? "bg-amber-500/15 border border-amber-500/40 text-amber-100 rounded-br-none font-medium"
-                : "bg-card border border-border text-card-foreground rounded-bl-none shadow-md"
-            }`}>
+            <div className={`ap-bubble ${msg.role === "user" ? "ap-bubble-user" : "ap-bubble-ai"}`}>
               {msg.role === "assistant" && (
-                <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-border/80 text-[11px] text-muted-foreground font-medium">
+                <div className="flex items-center gap-2 mb-2 ap-notice">
                   <span>دستیار</span>
                   {msg.probability && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-normal ms-auto">
+                    <span className="ms-auto rounded-full px-2 py-0.5" style={{ background: "var(--ap-surface-2)" }}>
                       احتمال موفقیت: {msg.probability}
                     </span>
                   )}
                 </div>
               )}
 
-              <div className="whitespace-pre-line leading-relaxed">{msg.content}</div>
+              <div className="whitespace-pre-line">{msg.content}</div>
 
               {msg.draft && (
-                <div className="mt-3 pt-3 border-t border-border bg-background/60 p-3 rounded-xl">
-                  <div className="flex items-center justify-between mb-1.5 text-xs text-amber-400 font-bold">
+                <div className="mt-3 p-3 rounded-[14px]" style={{ background: "var(--ap-surface-2)" }}>
+                  <div className="flex items-center justify-between gap-2 mb-2 text-sm font-semibold" style={{ color: "var(--ap-warn)" }}>
                     <span>پیش‌نویس لایحه قانونی:</span>
                     <button
+                      type="button"
                       onClick={() => navigator.clipboard.writeText(msg.draft || "")}
-                      className="text-[10px] px-2 py-0.5 rounded bg-muted hover:bg-accent text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      className="ap-chip"
                     >
                       کپی لایحه
                     </button>
                   </div>
-                  <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap leading-relaxed">{msg.draft}</pre>
+                  <pre className="ap-muted text-xs font-mono whitespace-pre-wrap leading-relaxed">{msg.draft}</pre>
                 </div>
               )}
 
               {msg.role === "assistant" && msg.statutory_basis && msg.statutory_basis.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  <div className="mb-1.5 text-xs text-cyan-400 font-bold">مستندات</div>
-                  <ul className="list-disc ps-4 space-y-1 text-[11px] text-muted-foreground">
+                <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--ap-line)" }}>
+                  <div className="mb-1.5 text-sm font-semibold ap-link">مستندات</div>
+                  <ul className="list-disc ps-4 space-y-1 ap-notice">
                     {msg.statutory_basis.map((item, itemIdx) => (
                       <li key={itemIdx}>{statutoryLabel(item)}</li>
                     ))}
@@ -289,114 +293,126 @@ export function ChatShell() {
         ))}
 
         {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-card border border-border p-3.5 rounded-2xl rounded-bl-none text-xs text-amber-400 flex items-center gap-2 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+          <div className="flex justify-start" role="status">
+            <div className="ap-bubble ap-bubble-ai flex items-center gap-2 text-sm">
+              <span className="w-2 h-2 rounded-full animate-ping" style={{ background: "var(--ap-accent)" }} aria-hidden="true" />
               <span>در حال تحلیل پرونده...</span>
             </div>
           </div>
         )}
 
-        {/* سه پرسش نمونه قابل لمس در ناحیه خالی پیام‌ها */}
+        {/* پرسش‌های نمونه، گروه‌بندی‌شده، در ناحیه خالی پیام‌ها */}
         {showExamples && (
-          <div className="space-y-2 pt-1">
-            <p className="ps-1 text-[11px] font-semibold text-muted-foreground">نمونه پرسش‌ها را انتخاب کنید:</p>
-            {exampleQuestions.map((item, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSendMessage(item.prompt)}
-                className="glass-surface w-full rounded-2xl border border-border/80 p-3 text-start text-xs text-foreground transition-all hover:border-ring/50 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-              >
-                <span className="font-semibold">{item.title}</span>
-                <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">{item.prompt}</span>
-              </button>
+          <section className="space-y-5 pt-2" aria-label="پرسش‌های نمونه">
+            <p className="ap-notice">{COMPETENCE_NOTE}</p>
+            {STARTER_GROUPS.map((group) => (
+              <div key={group.title}>
+                <h2 className="ap-group-title">{group.title}</h2>
+                <div className="ap-starter-grid">
+                  {group.items.map((item) => (
+                    <button
+                      key={item.title}
+                      type="button"
+                      onClick={() => handleSendMessage(item.prompt)}
+                      className="ap-starter"
+                    >
+                      <span className="font-semibold">{item.title}</span>
+                      <span className="mt-1 block ap-muted text-xs leading-relaxed line-clamp-2">{item.prompt}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
-          </div>
+          </section>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ناحیه ورودی داک‌شده در پایین بدون تداخل */}
-      <div className="glass-raised p-2.5 sm:p-4 shrink-0 space-y-2">
-        {/* نوار واحد اقدامات حقوقی و پرسش‌های سریع (اقدامات حقوقی در ابتدا) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-fade-x py-0.5">
-          <span className="ps-1 text-[11px] font-semibold whitespace-nowrap text-muted-foreground">اقدامات حقوقی:</span>
-          {legalActions.map(({ label, icon: Icon, color, prompt }) => (
-            <button key={label} onClick={() => handleSendMessage(prompt)} className={legalChipClass}>
-              <Icon className={`size-3.5 ${color}`} />
-              <span>{label}</span>
-            </button>
+      {/* ناحیه ورودی داک‌شده در پایین */}
+      <div className="shrink-0 space-y-3 px-4 pb-3 pt-3 sm:px-6" style={{ borderTop: "1px solid var(--ap-line)" }}>
+        {/* اقدامات حقوقی: چت‌محور + پیوند به صفحه‌های اختصاصی */}
+        <div className="ap-chip-row scroll-fade-x" role="group" aria-label="اقدامات حقوقی">
+          <span className="ap-notice whitespace-nowrap font-semibold">اقدامات حقوقی</span>
+          {DRAFT_PAGES.map((page) => (
+            <Link key={page.href} href={page.href} className="ap-chip ap-chip-link">
+              <FileText className="size-4" aria-hidden="true" />
+              <span>{page.label}</span>
+            </Link>
           ))}
-          <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
-          {quickPrompts.map((item, idx) => (
-            <button key={idx} onClick={() => handleSendMessage(item.prompt)} className={quickChipClass}>
-              {item.title}
-            </button>
-          ))}
+          {DRAFT_ACTIONS.map((action) => {
+            const Icon = ACTION_ICONS[action.key];
+            return (
+              <button key={action.key} type="button" onClick={() => handleSendMessage(action.prompt)} className="ap-chip">
+                <Icon className="size-4 ap-chip-icon" aria-hidden="true" />
+                <span>{action.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* وضعیت زنده ضبط صدا */}
         {recordingStatus && (
-          <div className="text-xs text-foreground bg-card border border-border px-3 py-1.5 rounded-xl flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-            <span>{recordingStatus}</span>
+          <div className="ap-notice flex items-center gap-2" role="status" aria-live="polite">
+            <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--ap-danger)" }} aria-hidden="true" />
+            <span style={{ color: "var(--ap-text)" }}>{recordingStatus}</span>
           </div>
         )}
 
         {/* جعبه ارسال پیام و دکمه‌های صوتی */}
-        <div className="glass-surface rounded-2xl p-2 flex items-center gap-2">
+        <div className="ap-composer">
           <input
             type="text"
+            aria-label="پیام شما"
             placeholder="پیام خود را بنویسید..."
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-            className="flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
           />
 
           {/* دکمه تبدیل گفتار به متن (Voice STT) */}
           <button
+            type="button"
             onClick={toggleVoiceRecording}
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-              isVoiceRecording
-                ? "bg-rose-500 text-white animate-pulse shadow-rose-500/40 scale-105"
-                : "bg-muted hover:bg-accent text-muted-foreground border border-border"
-            }`}
+            className={`ap-iconbtn ${isVoiceRecording ? "animate-pulse" : ""}`}
+            data-active={isVoiceRecording}
+            aria-label={isVoiceRecording ? "اتمام ضبط" : "تبدیل گفتار به متن"}
+            aria-pressed={isVoiceRecording}
             title={isVoiceRecording ? "اتمام ضبط" : "تبدیل گفتار به متن"}
           >
-            {isVoiceRecording ? <Square className="size-4" /> : <Mic className="size-4" />}
+            {isVoiceRecording ? <Square className="size-4" aria-hidden="true" /> : <Mic className="size-5" aria-hidden="true" />}
           </button>
 
           {/* دکمه تماس صوتی زنده */}
           <button
+            type="button"
             onClick={() => {
               // Safari: unlock audio inside the real user gesture, so the whole
               // voice session (every later TTS turn) is allowed to make sound.
               unlockSafariAudio();
               setIsLiveAudioOpen(true);
             }}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center justify-center transition-all shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="ap-iconbtn"
+            aria-label="مکالمه صوتی زنده"
             title="مکالمه صوتی زنده"
           >
-            <Phone className="size-4" />
+            <Phone className="size-5" aria-hidden="true" />
           </button>
 
           {/* دکمه ارسال پیام */}
-          <button
-            onClick={() => handleSendMessage()}
-            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/25 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
+          <button type="button" onClick={() => handleSendMessage()} className="ap-btn">
             <span>ارسال</span>
-            <Send className="size-3.5 -scale-x-100" />
+            <Send className="size-4 -scale-x-100" aria-hidden="true" />
           </button>
         </div>
 
-        {/* سلب مسئولیت حقوقی دائمی زیر جعبهٔ پیام */}
-        <p className="px-1 text-center text-[10px] leading-relaxed text-muted-foreground">
-          پاسخ‌ها مشاوره حقوقی رسمی نیستند و پیش از اقدام باید توسط وکیل بازبینی شوند.
+        {/* سلب مسئولیت حقوقی دائمی، پررنگ زیر جعبهٔ پیام */}
+        <p className="ap-disclaimer" role="note">
+          <Info className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <span>{DISCLAIMER_LINE}</span>
         </p>
       </div>
+
 
       {/* مدال مکالمه صوتی زنده با همگام‌سازی کامل به صفحه چت */}
       <LiveVoiceModal

@@ -310,6 +310,19 @@
   --ap-radius-card: 18px;
   --ap-radius-pill: 980px;
   --ap-nav-h: 44px;
+  /* Shell tokens (chat + header). Edit here to restyle them from a reference image. */
+  --ap-touch: 44px;
+  --ap-radius-input: 14px;
+  --ap-link: #2997ff;
+  --ap-hover: rgb(255 255 255 / 0.08);
+  --ap-accent-soft: rgb(0 113 227 / 0.18);
+  --ap-menu-bg: #232326;
+  --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.5);
+  --ap-header-h: 56px;
+  --ap-content-max: 880px;
+  --ap-gap: 16px;
+  --ap-small-size: 14px;
+  --ap-tiny-size: 12px;
   background: var(--ap-bg);
   color: var(--ap-text);
   font-family: var(--ap-font);
@@ -328,6 +341,11 @@
     --ap-warn: #b25000;
     --ap-danger: #d70015;
     --ap-ok: #248a3d;
+    --ap-link: #0066cc;
+    --ap-hover: rgb(0 0 0 / 0.06);
+    --ap-accent-soft: rgb(0 113 227 / 0.12);
+    --ap-menu-bg: #ffffff;
+    --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.16);
   }
 }
 .ap-theme[data-theme="light"] {
@@ -341,6 +359,11 @@
   --ap-warn: #b25000;
   --ap-danger: #d70015;
   --ap-ok: #248a3d;
+  --ap-link: #0066cc;
+  --ap-hover: rgb(0 0 0 / 0.06);
+  --ap-accent-soft: rgb(0 113 227 / 0.12);
+  --ap-menu-bg: #ffffff;
+  --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.16);
 }
 .ap-theme .ap-hero {
   font-size: var(--ap-hero-size);
@@ -375,6 +398,102 @@
 .ap-theme :is(.ap-btn, .ap-input, a, button, select, textarea):focus-visible {
   outline: 2px solid var(--ap-accent); outline-offset: 2px;
 }
+
+/* ---- Shell components (header, chat). Tokens only; no hard-coded colours. ---- */
+.ap-theme { min-width: 0; }
+.ap-theme.ap-header {
+  position: sticky; top: 0; z-index: 40; width: 100%;
+  background: var(--ap-nav-bg); border-bottom: 1px solid var(--ap-line);
+  -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  font-size: var(--ap-small-size); line-height: 1.5;
+}
+.ap-theme .ap-header-row {
+  max-width: 1152px; margin-inline: auto; padding-inline: 16px;
+  min-height: var(--ap-header-h); display: flex; align-items: center; gap: 12px;
+}
+.ap-theme .ap-brand { display: flex; align-items: center; gap: 10px; min-height: var(--ap-touch); border-radius: var(--ap-radius-input); color: var(--ap-text); font-weight: 600; text-decoration: none; }
+.ap-theme .ap-brand-mark { width: 36px; height: 36px; border-radius: 50%; background: var(--ap-surface-2); display: inline-flex; align-items: center; justify-content: center; color: var(--ap-link); flex-shrink: 0; }
+.ap-theme .ap-nav-list { display: none; align-items: center; gap: 4px; margin-inline-start: 12px; flex: 1; min-width: 0; }
+@media (min-width: 1024px) { .ap-theme .ap-nav-list { display: flex; } .ap-theme .ap-only-mobile { display: none !important; } }
+@media (max-width: 1023px) { .ap-theme .ap-only-desktop { display: none !important; } }
+.ap-theme .ap-header-end { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
+.ap-theme .ap-navlink {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--ap-touch); padding: 0 14px;
+  border-radius: var(--ap-radius-pill); border: 0; background: transparent; color: var(--ap-text-muted);
+  font: inherit; font-size: var(--ap-small-size); cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+.ap-theme .ap-navlink:hover { color: var(--ap-text); background: var(--ap-hover); }
+.ap-theme .ap-navlink[aria-current="page"], .ap-theme .ap-navlink[aria-expanded="true"] { color: var(--ap-text); background: var(--ap-surface-2); }
+.ap-theme .ap-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: var(--ap-touch); height: var(--ap-touch); border-radius: 50%; cursor: pointer;
+  background: var(--ap-surface-2); color: var(--ap-text); border: 1px solid transparent;
+}
+.ap-theme .ap-iconbtn:hover { background: var(--ap-hover); }
+.ap-theme .ap-iconbtn[data-active="true"] { background: var(--ap-danger); color: #fff; }
+.ap-theme .ap-iconbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ap-theme .ap-dropdown { position: relative; }
+.ap-theme .ap-menu {
+  position: absolute; top: calc(100% + 8px); inset-inline-start: 0; z-index: 50; min-width: 240px; max-width: calc(100vw - 32px);
+  padding: 8px; border-radius: var(--ap-radius-card); background: var(--ap-menu-bg);
+  border: 1px solid var(--ap-line); box-shadow: var(--ap-menu-shadow);
+}
+.ap-theme .ap-menu[data-align="end"] { inset-inline-start: auto; inset-inline-end: 0; }
+.ap-theme .ap-menu-label { padding: 8px 12px 4px; font-size: var(--ap-tiny-size); color: var(--ap-text-muted); }
+.ap-theme .ap-menu-sep { height: 1px; margin: 6px 4px; background: var(--ap-line); }
+.ap-theme .ap-menuitem {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--ap-touch); padding: 0 12px;
+  border-radius: 12px; border: 0; background: transparent; color: var(--ap-text); font: inherit;
+  font-size: var(--ap-small-size); text-align: start; cursor: pointer; text-decoration: none;
+}
+.ap-theme .ap-menuitem:hover, .ap-theme .ap-menuitem[aria-current="page"] { background: var(--ap-hover); }
+.ap-theme .ap-menuitem[data-danger="true"] { color: var(--ap-danger); }
+.ap-theme .ap-mobile-panel { border-top: 1px solid var(--ap-line); background: var(--ap-menu-bg); padding: 12px 16px 16px; max-height: calc(100vh - var(--ap-header-h)); overflow-y: auto; }
+.ap-theme .ap-chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: var(--ap-touch); padding: 0 16px; flex-shrink: 0;
+  border-radius: var(--ap-radius-pill); background: var(--ap-surface-2); color: var(--ap-text);
+  border: 1px solid var(--ap-line); font: inherit; font-size: var(--ap-small-size); white-space: nowrap; cursor: pointer; text-decoration: none;
+}
+.ap-theme .ap-chip:hover { background: var(--ap-hover); }
+.ap-theme .ap-chip-link { color: var(--ap-link); border-color: var(--ap-link); background: transparent; }
+.ap-theme .ap-chip-icon { color: var(--ap-link); }
+.ap-theme .ap-chip-row { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding-block: 2px; scrollbar-width: none; }
+.ap-theme .ap-chip-row::-webkit-scrollbar { display: none; }
+.ap-theme .ap-group-title { margin: 0 0 8px; font-size: var(--ap-tiny-size); font-weight: 600; color: var(--ap-text-muted); }
+.ap-theme .ap-starter-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 640px) { .ap-theme .ap-starter-grid { grid-template-columns: 1fr 1fr; } }
+.ap-theme .ap-starter {
+  display: block; width: 100%; min-height: var(--ap-touch); padding: 14px 16px; text-align: start; cursor: pointer;
+  background: var(--ap-surface); color: var(--ap-text); border: 1px solid var(--ap-line);
+  border-radius: var(--ap-radius-card); font: inherit; font-size: var(--ap-small-size); line-height: 1.7;
+}
+.ap-theme .ap-starter:hover { background: var(--ap-surface-2); }
+.ap-theme .ap-bubble {
+  max-width: min(92%, 640px); padding: 14px 18px; border-radius: var(--ap-radius-card);
+  font-size: 15px; line-height: 1.9; overflow-wrap: anywhere;
+}
+.ap-theme .ap-bubble-user { background: var(--ap-accent); color: var(--ap-accent-text); }
+.ap-theme .ap-bubble-ai { background: var(--ap-surface); color: var(--ap-text); border: 1px solid var(--ap-line); }
+.ap-theme .ap-composer {
+  display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: var(--ap-radius-card);
+  background: var(--ap-surface); border: 1px solid var(--ap-line);
+}
+.ap-theme .ap-composer:focus-within { outline: 2px solid var(--ap-accent); outline-offset: 2px; }
+.ap-theme .ap-composer input {
+  flex: 1; min-width: 0; min-height: var(--ap-touch); padding: 0 12px; background: transparent;
+  border: 0; outline: none; color: var(--ap-text); font: inherit; font-size: 16px;
+}
+.ap-theme .ap-composer input::placeholder { color: var(--ap-text-muted); }
+.ap-theme .ap-disclaimer {
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-radius: var(--ap-radius-input);
+  background: var(--ap-accent-soft); color: var(--ap-text); font-size: var(--ap-tiny-size); line-height: 1.7;
+}
+.ap-theme .ap-notice { font-size: var(--ap-tiny-size); line-height: 1.7; color: var(--ap-text-muted); }
+.ap-theme .ap-notice-warn { color: var(--ap-warn); }
+.ap-theme .ap-link { color: var(--ap-link); text-decoration: none; }
+.ap-theme .ap-link:hover { text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) { .ap-theme * { transition: none !important; animation: none !important; } }
+
 @media print {
   .ap-theme .no-print { display: none !important; }
   .ap-theme { background: #fff; color: #000; }

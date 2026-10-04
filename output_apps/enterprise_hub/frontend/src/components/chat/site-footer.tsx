@@ -10,7 +10,7 @@ export function SiteFooter() {
       
 
       <div className="mx-auto mt-8 w-full max-w-5xl border-t border-white/5 pt-4 text-center text-[11px] text-slate-500">
-        © ۱۴۰۵ — تمامی حقوق برای سامانه قاضی هوشمند محفوظ است.
+        © 1405 — تمامی حقوق برای سامانه قاضی هوشمند محفوظ است.
       </div>
     </footer>
   );
