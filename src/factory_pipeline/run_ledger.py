@@ -1,8 +1,10 @@
 """Redacted, JSONL-backed event records for Factory runs."""
 import argparse
+import hashlib
 import json
+import os
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 ALLOWED_STAGES = (
@@ -74,6 +76,84 @@ def summarize(events: list[dict]) -> dict:
             "failed": [stage for stage, status in stages.items()
                        if status in ("failed", "failure")],
             "total_cost_usd": total}
+
+# --- Task-level ledger (counts/ids/statuses/hashes only; never prompts or contents) ---
+TASK_KINDS = ("step", "park", "end")
+_TASK_FIELDS = ("pr", "steps", "tokens_in", "tokens_out", "usd", "wall_s", "err_hash",
+                "reason", "status")
+
+
+def state_dir() -> Path:
+    base = os.environ.get("ROXIRA_STATE_DIR") or str(Path.home() / ".local" / "state" / "roxira")
+    return Path(base) / "runs"
+
+
+def task_ledger_path() -> Path:
+    return state_dir() / "tasks.jsonl"
+
+
+def error_hash(signature: str) -> str:
+    return hashlib.sha256(signature.encode("utf-8")).hexdigest()[:12]
+
+
+def make_task_event(task_id: str, lane: str, model_role: str, kind: str, *,
+                    now: str | None = None, **fields) -> dict:
+    if kind not in TASK_KINDS:
+        raise ValueError(f"unknown kind: {kind}")
+    if any(key not in _TASK_FIELDS or not _safe(value) for key, value in fields.items()):
+        raise ValueError("unsafe ledger field")
+    ts = now or datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    head = (str(task_id), str(lane), str(model_role), ts)
+    if not all(_safe(value) for value in head):
+        raise ValueError("unsafe ledger event")
+    return {"ts": ts, "task_id": head[0], "lane": head[1], "model_role": head[2],
+            "kind": kind, **fields}
+
+
+def append_task_event(task_id, lane, model_role, kind, *, path=None, now=None, **fields) -> dict:
+    event = make_task_event(task_id, lane, model_role, kind, now=now, **fields)
+    append_event(path or task_ledger_path(), event)
+    return event
+
+
+def _parse_ts(value):
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def summarize_days(days: int = 7, *, path=None, now: datetime | None = None) -> dict:
+    """USD per merged PR, steps and wall time per task, park rate over the last days."""
+    cutoff = (now or datetime.now(UTC)) - timedelta(days=days)
+    tasks: dict = {}
+    for event in read_events(path or task_ledger_path()):
+        ts = _parse_ts(event.get("ts"))
+        if ts is None or ts < cutoff or "task_id" not in event:
+            continue
+        t = tasks.setdefault(event["task_id"], {"steps": 0, "usd": 0.0, "first": ts,
+                                                "last": ts, "parked": False, "merged": False})
+        t["first"], t["last"] = min(t["first"], ts), max(t["last"], ts)
+        usd = event.get("usd")
+        if isinstance(usd, (int, float)) and not isinstance(usd, bool):
+            t["usd"] += usd
+        if event.get("kind") == "step":
+            t["steps"] += 1
+        elif event.get("kind") == "park":
+            t["parked"] = True
+        elif event.get("kind") == "end" and event.get("status") == "merged":
+            t["merged"] = True
+    merged = sum(t["merged"] for t in tasks.values())
+    total = sum(t["usd"] for t in tasks.values())
+    parked = sum(t["parked"] for t in tasks.values())
+    return {
+        "days": days, "tasks": len(tasks), "merged_prs": merged, "total_usd": round(total, 4),
+        "usd_per_merged_pr": round(total / merged, 4) if merged else None,
+        "park_rate": round(parked / len(tasks), 4) if tasks else 0.0,
+        "per_task": {k: {"steps": t["steps"],
+                         "wall_s": int((t["last"] - t["first"]).total_seconds()),
+                         "usd": round(t["usd"], 4)} for k, t in tasks.items()},
+    }
 
 
 def main() -> int:
