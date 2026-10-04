@@ -8,6 +8,8 @@
 #   scripts/ops/deploy_local.sh plan
 #   scripts/ops/deploy_local.sh deploy [--yes]     # dry-run unless --yes
 #   scripts/ops/deploy_local.sh rollback [--yes]   # dry-run unless --yes
+#   scripts/ops/deploy_local.sh migrate [--yes]    # prod DB migration; dry-run unless --yes
+#   scripts/ops/deploy_local.sh migrate-rollback <dump> [--yes]   # restore a pg_dump backup
 #
 # See docs/ops/DEPLOY_LOCAL.md. L4: owner-only (CODEOWNERS /scripts/ops/).
 set -euo pipefail
@@ -21,11 +23,27 @@ CHAT_DOMAIN="${DEPLOY_CHAT_DOMAIN:-ghazihoushmand.ir}"
 API_PATH="${DEPLOY_SMOKE_API_PATH:-/api/v1/apps/judge/pricing/plans}"
 REQUIRED_ENV="GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ADMIN_HEALTH_KEY JWT_SECRET KAVENEGAR_API_KEY"
 FREEZE_FILE=".deploy-freeze"
+PG_CONTAINER="roxira_postgres_prod"
+BACKEND_CONTAINER="roxira_enterprise_backend"
+DB_USER="enterprise_admin"          # same literals as docker-compose.prod.yml
+DB_NAME="enterprise_db"
+MIG_DIR="output_apps/enterprise_hub/migrations"
+DATA_SOURCE="output_apps/enterprise_hub/data-source.ts"
+BACKUP_DIR="$STATE_DIR/db-backups"
+MIGRATE_WORK="$STATE_DIR/migrate-work"
+# One-off container: image built from the `deps` stage of the enterprise_hub Dockerfile (full
+# npm ci, so ts-node + typeorm CLI exist; the runner image has neither). Migration files,
+# data-source.ts and tsconfig.json come from the archive export of origin/main and are
+# bind-mounted read-only. Command is the package.json script "migration:run".
+HUB_DIR="output_apps/enterprise_hub"
+MIGRATE_CMD="${DEPLOY_MIGRATE_CMD:-npm run migration:run}"
+# Tables the CRM tenant migration (AddCrmTenantIsolation) must add tenant_id to.
+VERIFY_TABLES="crm_leads contact_messages"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 die() { log "ERROR: $*" >&2; exit 1; }
-usage() { sed -n '2,12p' "$0" >&2; exit 2; }
+usage() { sed -n '2,14p' "$0" >&2; exit 2; }
 
 rsh() { ssh "${SSH_OPTS[@]}" "$SSH_HOST" "$@"; }
 rgit() { rsh "cd '$REMOTE_DIR' && git $*"; }
@@ -37,6 +55,7 @@ fetch_target() {
   git fetch -q origin main || die "git fetch origin main failed"
   TARGET_SHA="$(git rev-parse origin/main)"
   TARGET_SHORT="$(git rev-parse --short=8 origin/main)"
+  MIGRATE_IMAGE="roxira-migrate:$TARGET_SHORT"
   DEPLOYED_SHA="$(rgit rev-parse HEAD | tr -d '\r')"
   [ -n "$DEPLOYED_SHA" ] || die "cannot read the deployed commit"
   git cat-file -e "${DEPLOYED_SHA}^{commit}" 2>/dev/null \
@@ -136,7 +155,7 @@ cmd_check() {
   else echo "  none missing"; fi
   log "health: $CHAT_DOMAIN/health -> $(http_code "https://$CHAT_DOMAIN/health")"
   local m; m="$(migration_files)"
-  if [ -n "$m" ]; then log "WARNING: migration files in the diff (deploy will refuse):"; printf '%s\n' "$m"; fi
+  if [ -n "$m" ]; then log "WARNING: migration files in the diff (deploy will refuse; apply with the migrate subcommand):"; printf '%s\n' "$m"; fi
   if [ -e "$(local_root)/$FREEZE_FILE" ]; then log "NOTE: local $FREEZE_FILE present"; fi
   return 0
 }
@@ -204,7 +223,7 @@ cmd_deploy() {
   local m; m="$(migration_files)"
   if [ -n "$m" ]; then
     printf '%s\n' "$m"
-    die "migration files in the diff. This script never runs migrations; review and apply them by hand, then deploy"
+    die "migration files in the diff. deploy never runs migrations: run 'scripts/ops/deploy_local.sh migrate' (dry-run first, then --yes), then deploy again"
   fi
   print_plan
   local miss v names; miss="$(missing_env)"
@@ -259,6 +278,153 @@ cmd_deploy() {
   fi
 }
 
+# ---------------------------------------------------------------- migrations
+# Owner-run, L4. Operates on the production database. Never auto-restores.
+
+list_migration_files() {  # file names in the target tree, oldest first
+  git ls-tree --name-only "$TARGET_SHA" "$MIG_DIR/" | sed 's#.*/##' | grep -E '^[0-9]+-.+\.ts$' | sort || true
+}
+
+# Sets PENDING (files not recorded in the TypeORM "migrations" table) and APPLIED_OK.
+pending_migrations() {
+  local applied="" f ts rest name
+  PENDING=(); APPLIED_OK=1
+  if ! applied="$(rsh "docker exec $PG_CONTAINER psql -U $DB_USER -d $DB_NAME -tAc \"SELECT name FROM migrations\"" 2>/dev/null)"; then
+    APPLIED_OK=0; applied=""
+  fi
+  applied="$(tr -d '\r' <<<"$applied")"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    ts="${f%%-*}"; rest="${f#*-}"; name="${rest%.ts}${ts}"   # TypeORM name = ClassName + timestamp
+    grep -qxF "$name" <<<"$applied" || PENDING+=("$f")
+  done < <(list_migration_files)
+  return 0
+}
+
+restore_cmd() {  # the exact command that restores dump $1 (run on the server)
+  printf "docker exec -i %s pg_restore -U %s -d %s --clean --if-exists --no-owner --single-transaction < %s" \
+    "$PG_CONTAINER" "$DB_USER" "$DB_NAME" "$1"
+}
+
+print_migrate_plan() {
+  echo "Target:   $TARGET_SHORT ($TARGET_SHA)"
+  echo "Pending TypeORM migrations ($MIG_DIR):"
+  if [ "${#PENDING[@]}" -eq 0 ]; then echo "  (none)"; else printf '  %s\n' "${PENDING[@]}"; fi
+  if [ "$APPLIED_OK" = 0 ]; then
+    echo "  WARNING: could not read the 'migrations' table on the server; the real run will refuse."
+  fi
+  echo "Steps on $SSH_HOST (one-off container; database container $PG_CONTAINER):"
+  echo "  1. refuse if $FREEZE_FILE exists (local or server) or the server tree is dirty"
+  echo "  2. preflight: $PG_CONTAINER and $BACKEND_CONTAINER running; DB user, credential and name present in the backend env"
+  echo "  3. archive of $TARGET_SHORT (Dockerfile, package files, tsconfig, data-source.ts, migrations) -> $MIGRATE_WORK"
+  echo "     docker build --target deps -t $MIGRATE_IMAGE (server checkout is NOT changed; deploy is a separate step)"
+  echo "  4. pg_dump -Fc inside $PG_CONTAINER -> $BACKUP_DIR/<timestamp>.dump; verify with pg_restore --list"
+  echo "  5. docker run --rm --network <network of $PG_CONTAINER> --env-file <DB credentials from the backend env, never printed>"
+  echo "     -e DATABASE_HOST=$PG_CONTAINER -e DATABASE_PORT=5432 $MIGRATE_IMAGE $MIGRATE_CMD"
+  echo "  6. remove the one-off image, env file and work dir"
+  echo "  7. verify via psql that tenant_id exists and is NOT NULL on: $VERIFY_TABLES"
+  echo "  8. on any failure: print the restore command; NO automatic restore"
+}
+
+migrate_cleanup() {  # best effort; removes secrets file, work dir and the one-off image
+  rsh "rm -rf '$MIGRATE_WORK'; docker image rm -f '$MIGRATE_IMAGE' >/dev/null 2>&1 || true" || true
+}
+
+verify_tenant_columns() {
+  local out t
+  out="$(rsh "docker exec $PG_CONTAINER psql -U $DB_USER -d $DB_NAME -tAc \"SELECT table_name||':'||is_nullable FROM information_schema.columns WHERE column_name='tenant_id' AND table_name IN ('crm_leads','contact_messages') ORDER BY 1\"" | tr -d '\r')" || return 1
+  for t in $VERIFY_TABLES; do
+    if grep -qx "$t:NO" <<<"$out"; then log "verify ok: $t.tenant_id exists, NOT NULL"
+    else log "verify FAIL: $t.tenant_id missing or nullable"; return 1; fi
+  done
+}
+
+cmd_migrate() {
+  local yes="${1:-}"
+  check_freeze
+  fetch_target
+  pending_migrations
+  print_migrate_plan
+  if [ "$yes" != "--yes" ]; then log "dry-run only. Re-run with --yes to execute."; return 0; fi
+  [ "$APPLIED_OK" = 1 ] || die "cannot read the migrations table on the server; refusing to guess what is pending"
+  if [ "${#PENDING[@]}" -eq 0 ]; then log "no pending migrations; nothing to do"; return 0; fi
+
+  local typed
+  read -r -p "This changes the PRODUCTION DATABASE. Type the short commit SHA ($TARGET_SHORT) to confirm: " typed
+  [ "$typed" = "$TARGET_SHORT" ] || die "SHA mismatch; aborting"
+
+  log "preflight + one-off image build ($MIGRATE_IMAGE)"
+  rsh "set -euo pipefail; cd '$REMOTE_DIR'
+    [ -z \"\$(git status --porcelain)\" ] || { echo 'server working tree not clean' >&2; exit 1; }
+    [ \"\$(docker inspect -f '{{.State.Running}}' $PG_CONTAINER)\" = true ] || { echo '$PG_CONTAINER not running' >&2; exit 1; }
+    [ \"\$(docker inspect -f '{{.State.Running}}' $BACKEND_CONTAINER)\" = true ] || { echo '$BACKEND_CONTAINER not running' >&2; exit 1; }
+    umask 077
+    w='$MIGRATE_WORK'; rm -rf \"\$w\"; mkdir -p \"\$w\"
+    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' $BACKEND_CONTAINER | grep -E '^DATABASE_(USER|PASSW|NAME)=' > \"\$w/db.env\" || true
+    [ \"\$(wc -l < \"\$w/db.env\")\" -eq 3 ] || { echo 'DB user/credential/name not all set in the backend container env' >&2; exit 1; }
+    git fetch -q origin main
+    git archive '$TARGET_SHA' $HUB_DIR/Dockerfile $HUB_DIR/package.json $HUB_DIR/package-lock.json $HUB_DIR/tsconfig.json $DATA_SOURCE $MIG_DIR | tar -x -C \"\$w\"
+    docker build -q --target deps -t '$MIGRATE_IMAGE' \"\$w/$HUB_DIR\" >/dev/null" \
+    || { migrate_cleanup; die "preflight/build failed; nothing was changed and no backup was taken"; }
+
+  local ts dump
+  ts="$(date '+%Y%m%d-%H%M%S')"; dump="$BACKUP_DIR/$ts.dump"
+  log "backup -> $SSH_HOST:$dump"
+  rsh "set -euo pipefail; umask 077; mkdir -p '$BACKUP_DIR'
+    docker exec $PG_CONTAINER pg_dump -U $DB_USER -d $DB_NAME -Fc > '$dump'
+    [ -s '$dump' ] || { echo 'backup file is empty' >&2; exit 1; }
+    docker exec -i $PG_CONTAINER pg_restore --list < '$dump' | head -n 1 >/dev/null
+    echo \"backup size: \$(stat -c %s '$dump') bytes\"" \
+    || { migrate_cleanup; die "backup failed; the migration was NOT run. Remove the partial file $dump on the server if present"; }
+
+  log "running migration in a one-off container from $MIGRATE_IMAGE"
+  local rc=0
+  rsh "set -euo pipefail
+    w='$MIGRATE_WORK'; h=\"\$w/$HUB_DIR\"
+    net=\$(docker inspect -f '{{range \$k, \$v := .NetworkSettings.Networks}}{{println \$k}}{{end}}' $PG_CONTAINER | head -n 1)
+    [ -n \"\$net\" ] || { echo 'cannot discover the network of $PG_CONTAINER' >&2; exit 1; }
+    docker run --rm --network \"\$net\" --env-file \"\$w/db.env\" \
+      -e DATABASE_HOST=$PG_CONTAINER -e DATABASE_PORT=5432 -e TS_NODE_TRANSPILE_ONLY=true \
+      -v \"\$h/data-source.ts:/app/data-source.ts:ro\" -v \"\$h/tsconfig.json:/app/tsconfig.json:ro\" \
+      -v \"\$h/migrations:/app/migrations:ro\" -w /app \
+      '$MIGRATE_IMAGE' $MIGRATE_CMD" || rc=$?
+  migrate_cleanup
+  if [ "$rc" -ne 0 ]; then
+    log "MIGRATION FAILED (rc=$rc). NOT restoring automatically. To restore the pre-migration backup, run on $SSH_HOST:"
+    echo "  $(restore_cmd "$dump")"
+    echo "  (or: scripts/ops/deploy_local.sh migrate-rollback $dump --yes)"
+    die "migration failed; database may be partially changed; decide on restore manually"
+  fi
+
+  if ! verify_tenant_columns; then
+    log "POST-MIGRATION VERIFY FAILED. NOT restoring automatically. To restore, run on $SSH_HOST:"
+    echo "  $(restore_cmd "$dump")"
+    die "verification failed"
+  fi
+  log "migrate OK. Backup kept at $SSH_HOST:$dump. Next: scripts/ops/deploy_local.sh deploy"
+}
+
+cmd_migrate_rollback() {
+  local dump="${1:-}" yes="${2:-}"
+  [ -n "$dump" ] || usage
+  case "$dump" in
+    "$BACKUP_DIR"/[0-9]*.dump) ;;
+    *) die "dump must be a file like $BACKUP_DIR/<timestamp>.dump" ;;
+  esac
+  case "$dump" in *[!A-Za-z0-9/._-]*|*..*) die "dump path has unsafe characters" ;; esac
+  rsh "test -s '$dump'" || die "dump not found or empty on the server: $dump"
+  log "restore plan on $SSH_HOST (replaces objects in $DB_NAME with the dump contents; data written after the dump is lost):"
+  echo "  $(restore_cmd "$dump")"
+  log "stop writers first if you can: docker compose -f $COMPOSE stop $BACKEND_CONTAINER"
+  if [ "$yes" != "--yes" ]; then log "dry-run: pass --yes to restore"; return 0; fi
+  local typed base; base="${dump##*/}"
+  read -r -p "This OVERWRITES the PRODUCTION DATABASE. Type the dump file name ($base) to confirm: " typed
+  [ "$typed" = "$base" ] || die "name mismatch; aborting"
+  rsh "set -euo pipefail; docker exec -i $PG_CONTAINER pg_restore -U $DB_USER -d $DB_NAME --clean --if-exists --no-owner --single-transaction < '$dump'" \
+    || die "restore failed; manual attention needed"
+  log "restore OK from $dump"
+}
+
 [ "$#" -ge 1 ] || usage
 sub="$1"; shift
 case "$sub" in
@@ -266,5 +432,7 @@ case "$sub" in
   plan) cmd_plan ;;
   deploy) cmd_deploy "${1:-}" ;;
   rollback) cmd_rollback "${1:-}" ;;
+  migrate) cmd_migrate "${1:-}" ;;
+  migrate-rollback) cmd_migrate_rollback "${1:-}" "${2:-}" ;;
   *) usage ;;
 esac

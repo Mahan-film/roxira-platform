@@ -40,7 +40,48 @@ the script never writes `.env`.
 ## توقف‌ها (freeze, migrations)
 
 - `.deploy-freeze` present locally (repo root) or on the server (`/opt/roxira_platform`) blocks deploy and rollback.
-- If the diff contains migration files, deploy stops. Review and apply migrations by hand via a reviewed PR process, then deploy.
+- If the diff contains migration files, deploy stops and points to `migrate` (below). Migration files land only via reviewed PRs; `migrate` applies them to the production DB, then you run `deploy`.
+
+## Database migrations (`migrate`, `migrate-rollback`) — owner-run, L4
+
+```bash
+scripts/ops/deploy_local.sh migrate                 # dry-run: lists pending migrations + exact steps
+scripts/ops/deploy_local.sh migrate --yes           # real run; type the short SHA of origin/main
+scripts/ops/deploy_local.sh migrate-rollback /root/deploy-state/db-backups/<timestamp>.dump        # dry-run
+scripts/ops/deploy_local.sh migrate-rollback /root/deploy-state/db-backups/<timestamp>.dump --yes  # restore
+```
+
+Pending = files in `output_apps/enterprise_hub/migrations/` (at origin/main) whose
+`<ClassName><timestamp>` is not in the production `migrations` table. The first pending one is
+`1789120000000-AddCrmTenantIsolation.ts` (adds `tenant_id` to `crm_leads` and `contact_messages`).
+
+`migrate --yes` does: freeze check (local + server), refuses if the migrations table is unreadable or
+the server tree is dirty, preflight (`roxira_postgres_prod` and `roxira_enterprise_backend` running, the
+backend container env has the DB user/credential/name), then exports the target commit's
+Dockerfile, package files, `tsconfig.json`, `data-source.ts` and `migrations/` into
+`/root/deploy-state/migrate-work` and builds a one-off image `roxira-migrate:<sha>` from the Dockerfile's
+`deps` stage (full `npm ci`, so ts-node and the TypeORM CLI exist). The Dockerfile is not edited and the
+server checkout is not changed (so `deploy` still sees the full diff). Then `pg_dump -Fc` inside
+`roxira_postgres_prod` to `/root/deploy-state/db-backups/<timestamp>.dump` (verified with
+`pg_restore --list`), then `docker run --rm --network <network of roxira_postgres_prod>` with the migration
+files bind-mounted read-only, running `npm run migration:run`. The image, env file and work dir are removed
+afterwards (also on failure). Finally psql checks that `tenant_id` exists and is NOT NULL on both CRM
+tables. On any failure it prints the exact restore command and does NOT restore automatically.
+
+Why a one-off container: the backend runner image is built with `npm ci --omit=dev` and copies only
+`dist/`, so it has neither ts-node nor `migrations/`. The `builder` stage lacks them too (it copies only
+`main.ts`, `app.module.ts`, `modules/`), hence `deps` + bind mounts.
+
+Env: the DB user, credential and name are read on the server from the backend container's environment
+(`docker inspect`, filtered by variable name) into a mode-0600 env file that is passed with `--env-file`
+and deleted afterwards; values are never printed or sent to the Mac. `DATABASE_HOST` is overridden to
+`roxira_postgres_prod` and `DATABASE_PORT` to `5432` (direct, bypassing pgbouncer, which the backend uses
+on 6432). Names read: `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` (as set in
+`docker-compose.prod.yml`). The command can be overridden with `DEPLOY_MIGRATE_CMD`
+(default `npm run migration:run`).
+
+Restore replaces database objects with the dump (data written after the dump is lost); stop the backend
+first if you can.
 
 ## اگر چیزی خراب شد
 
@@ -48,7 +89,7 @@ the script never writes `.env`.
 - Server tree not clean (for example `.env.bak.*`): move those files to `/root/env-backups/`, retry.
 - Missing env name: add it to the server `.env`, retry.
 - Later regret: `scripts/ops/deploy_local.sh rollback --yes` (uses the last recorded previous commit).
-- A rollback does not undo database migrations or data changes.
+- A rollback does not undo database migrations or data changes (use `migrate-rollback <dump>`).
 - Smoke settings can be overridden: `DEPLOY_DOMAINS`, `DEPLOY_CHAT_DOMAIN`, `DEPLOY_SMOKE_API_PATH`.
 
 ## Setting server env variables safely / گذاشتن متغیر روی سرور
