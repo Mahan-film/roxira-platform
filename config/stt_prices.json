@@ -1,0 +1,15 @@
+{
+  "_note": "USD per hour of audio for scripts/dev/stt_bakeoff.py. verified=true means FETCHED from the source on 2026-10-04; false means UNVERIFIED (derived or search-only). OpenRouter catalogue transcription prices are per SECOND of audio (whisper-1 0.0001/s = $0.36/h matches OpenAI's $0.006/min), except microsoft/mai-transcribe-2 which lists 0.1 (taken as $/hour, matching Microsoft's $0.10/h).",
+  "providers": {
+    "assemblyai:universal-2": {"usd_per_hour": 0.15, "verified": true, "source": "https://www.assemblyai.com/pricing"},
+    "openrouter:microsoft/mai-transcribe-2": {"usd_per_hour": 0.10, "verified": true, "source": "https://openrouter.ai/api/v1/models + https://microsoft.ai/news/mai-transcribe-2 (limited-time price through end of 2026)"},
+    "openrouter:openai/whisper-large-v3-turbo": {"usd_per_hour": 0.012, "verified": false, "source": "openrouter catalogue 0.00000333/s x 3600 (unit assumed per second)"},
+    "openrouter:openai/whisper-large-v3": {"usd_per_hour": 0.027, "verified": false, "source": "openrouter catalogue 0.0000075/s x 3600 (unit assumed per second)"},
+    "openrouter:openai/whisper-1": {"usd_per_hour": 0.36, "verified": true, "source": "openrouter catalogue 0.0001/s; OpenAI $0.006/min"},
+    "openrouter:openai/gpt-4o-transcribe": {"usd_per_hour": 0.36, "verified": false, "source": "OpenAI $0.006/min (search-only); OpenRouter lists token prices"},
+    "openrouter:deepgram/nova-3": {"usd_per_hour": 0.258, "verified": false, "source": "openrouter catalogue 0.0000716667/s x 3600"},
+    "openrouter:google/gemini-3.5-transcribe": {"usd_per_hour": 0.35, "verified": false, "source": "token priced ($2/M in, $12/M out); ~32 audio tokens/s assumed => ~0.23 + text output; rough"},
+    "local:mlx-whisper": {"usd_per_hour": 0.0, "verified": true, "source": "local compute"},
+    "local:whisper-cli": {"usd_per_hour": 0.0, "verified": true, "source": "local compute"}
+  }
+}
