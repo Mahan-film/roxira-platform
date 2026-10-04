@@ -1,0 +1,26 @@
+# Per-feature escalation policies (docs/ops/ESCALATION.md). Tier names map to
+# config/models.yaml roles; no model ids here. "mid" reuses the strong role
+# until a dedicated mid role exists.
+tier_roles: {free: free, cheap: cheap, mid: strong, strong: strong}
+features:
+  chat:
+    tiers: [cheap, strong]
+    sensitive: true
+    max_cost_usd: 0.05
+    gates: [non_empty_min_length, persian_text_ratio, no_unverified_article_numbers, latin_digits_only]
+  ruling_draft:
+    tiers: [strong]
+    sensitive: true
+    max_cost_usd: 0.50
+    gates: [non_empty_min_length, persian_text_ratio, no_unverified_article_numbers, banner_present, latin_digits_only]
+  indictment:
+    tiers: [strong]
+    sensitive: true
+    max_cost_usd: 0.50
+    gates: [non_empty_min_length, persian_text_ratio, no_unverified_article_numbers, banner_present, latin_digits_only]
+  research_summary:
+    tiers: [cheap, mid]       # may be [free, cheap] ONLY for public, non-sensitive text
+    sensitive: false
+    allow_free_tier: true
+    max_cost_usd: 0.02
+    gates: [non_empty_min_length, persian_text_ratio]
