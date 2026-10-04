@@ -222,8 +222,15 @@ cmd_deploy() {
   if [ "$DEPLOYED_SHA" = "$TARGET_SHA" ]; then log "server already at $TARGET_SHORT; nothing to do"; return 0; fi
   local m; m="$(migration_files)"
   if [ -n "$m" ]; then
-    printf '%s\n' "$m"
-    die "migration files in the diff. deploy never runs migrations: run 'scripts/ops/deploy_local.sh migrate' (dry-run first, then --yes), then deploy again"
+    # Migration files in the diff are fine only when every one is a TypeORM file already recorded
+    # as applied on the server (the migrate subcommand did it). Anything else (pending, unreadable
+    # table, raw .sql) still refuses: deploy never runs migrations.
+    pending_migrations
+    if [ "$APPLIED_OK" = 0 ] || [ "${#PENDING[@]}" -gt 0 ] || grep -qvE "^$MIG_DIR/[0-9]+-.+\.ts\$" <<<"$m"; then
+      printf '%s\n' "$m"
+      die "migration files in the diff are not all applied. deploy never runs migrations: run 'scripts/ops/deploy_local.sh migrate' (dry-run first, then --yes), then deploy again"
+    fi
+    log "migration files in the diff are all recorded as applied on the server; continuing"
   fi
   print_plan
   local miss v names; miss="$(missing_env)"

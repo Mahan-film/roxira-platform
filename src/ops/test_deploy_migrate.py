@@ -161,6 +161,15 @@ def test_deploy_refuses_migrations_and_points_to_migrate(sandbox: dict) -> None:
     assert MIG_PATH in result.stdout
 
 
+def test_deploy_continues_when_migrations_already_applied(sandbox: dict) -> None:
+    result = _run(
+        sandbox, "deploy", extra_env={"FAKE_APPLIED": "AddCrmTenantIsolation1789120000000\n"}
+    )
+    out = result.stdout + result.stderr
+    assert "recorded as applied" in out
+    assert "not all applied" not in out
+
+
 def test_migrate_rollback_dry_run_prints_restore_command(sandbox: dict) -> None:
     dump = "/root/deploy-state/db-backups/20261004-120000.dump"
     result = _run(sandbox, "migrate-rollback", dump)
