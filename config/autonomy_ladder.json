@@ -1,0 +1,16 @@
+{
+  "_doc": "Autonomy ladder L0-L4 (docs/ops/LOCAL_INTEGRATOR.md). Patterns are fnmatch globs ('*' also matches '/'); the highest level of any changed file wins. Unmatched files are L1.",
+  "max_changed_lines_auto": 400,
+  "hub_approved_label": "hub-approved",
+  "reviewer_fail_labels": ["review:fail", "reviewer-fail"],
+  "docs_patterns": ["docs/*", "*.md"],
+  "test_patterns": ["*/test_*.py", "test_*.py", "*_test.py", "*.test.ts", "*.spec.ts", "*.test.tsx", "*/tests/*", "*/__tests__/*"],
+  "test_function_regex": "^\\s*(?:async\\s+)?def\\s+test_\\w+|^\\s*(?:it|test)\\s*\\(",
+  "code_patterns": ["*.py", "*.ts", "*.tsx", "*.js", "*.jsx", "*.sh"],
+  "manifest_names": ["package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "requirements.txt", "requirements-test.txt", "pyproject.toml", "poetry.lock", "uv.lock", "Pipfile", "Pipfile.lock", "Cargo.toml", "Cargo.lock", "go.mod", "go.sum", "Gemfile", "Gemfile.lock"],
+  "levels": {
+    "L4": [".github/*", "scripts/ci/*", "scripts/dev/rx*", "scripts/dev/merge_check.py", "scripts/dev/integrate.sh", "scripts/ops/*", "ops/*", "docker-compose*", "*/docker-compose*", "nginx/*", "*/nginx/*", "*nginx*.conf", "*/budget.py", "budget.py", "config/autonomy_ladder.json"],
+    "L3": ["*/auth/*", "*auth*.ts", "*/billing/*", "*billing*", "*/migrations/*", "migrations/*", "*.dto.ts", "*openapi*", "*swagger*", "*/tenant/*", "*tenant*.ts", "*tenant*.py"],
+    "L2": ["output_apps/generated_modules/smartjudge/prompts*", "output_apps/generated_modules/smartjudge/*prompt*", "output_apps/generated_modules/smartjudge/*retriev*", "output_apps/generated_modules/smartjudge/*citation*", "output_apps/generated_modules/smartjudge/corpus*", "data/corpus/*", "config/models.yaml"]
+  }
+}
