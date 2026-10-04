@@ -23,6 +23,7 @@ import urllib.request
 
 TIMEOUT = 10
 SSL_HINT = "hint: pip install certifi"
+OMNIROUTE_HINT = "hint: is the OmniRoute container running?"
 
 
 def build_ssl_context() -> ssl.SSLContext:
@@ -135,26 +136,59 @@ def probe(
             code = getattr(resp, "status", 200)
             if not 200 <= code < 300:
                 status = f"FAIL({code})"
-    except urllib.error.HTTPError as exc:
-        status = f"FAIL({exc.code})"
-    except TimeoutError:
-        status = "FAIL(timeout)"
-    except urllib.error.URLError as exc:
-        if isinstance(exc.reason, (TimeoutError, socket.timeout)):
-            status = "FAIL(timeout)"
-        elif isinstance(exc.reason, ssl.SSLError):
-            status = "FAIL(ssl-cert)"
-        else:
-            status = "FAIL(network)"
-    except ssl.SSLError:
-        status = "FAIL(ssl-cert)"
     except Exception as exc:
-        status = f"FAIL({type(exc).__name__})"
+        status = _classify(exc)
     return status, int((time.monotonic() - start) * 1000)
 
 
-def _line(name: str, status: str, latency: int | None) -> str:
+def _classify(exc: Exception) -> str:
+    """Reduce an exception to a status string without echoing its message."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return f"FAIL({exc.code})"
+    if isinstance(exc, TimeoutError):
+        return "FAIL(timeout)"
+    if isinstance(exc, urllib.error.URLError):
+        if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+            return "FAIL(timeout)"
+        if isinstance(exc.reason, ssl.SSLError):
+            return "FAIL(ssl-cert)"
+        return "FAIL(network)"
+    if isinstance(exc, ssl.SSLError):
+        return "FAIL(ssl-cert)"
+    return f"FAIL({type(exc).__name__})"
+
+
+def probe_omniroute(
+    base_url: str, key: str, context: ssl.SSLContext | None = None
+) -> tuple[str, int, int | None]:
+    """GET {base}/models. Return (status, latency_ms, model_count or None).
+
+    The URL may be non-http(s) or non-loopback; it is used as given and never printed.
+    """
+    url = base_url.strip().rstrip("/") + "/models"
+    start = time.monotonic()
+    count: int | None = None
+    status = "OK"
+    try:
+        req = urllib.request.Request(url, headers=_bearer(key), method="GET")
+        with urllib.request.urlopen(req, timeout=TIMEOUT, context=context) as resp:
+            code = getattr(resp, "status", 200)
+            if not 200 <= code < 300:
+                status = f"FAIL({code})"
+            else:
+                try:
+                    data = json.loads(resp.read()).get("data")
+                    count = len(data) if isinstance(data, list) else None
+                except Exception:
+                    count = None
+    except Exception as exc:
+        status = _classify(exc)
+    return status, int((time.monotonic() - start) * 1000), count
+
+
+def _line(name: str, status: str, latency: int | None, extra: str = "") -> str:
     suffix = "" if latency is None else f"{latency} ms"
+    suffix += extra
     return f"{name:<14}{status:<18}{suffix}".rstrip()
 
 
@@ -163,11 +197,11 @@ def main() -> int:
     ctx = build_ssl_context()
     ssl_failed = False
 
-    def emit(name: str, status: str, latency: int | None = None) -> None:
+    def emit(name: str, status: str, latency: int | None = None, extra: str = "") -> None:
         nonlocal ssl_failed
         counts[status.split("(")[0]] += 1
         ssl_failed = ssl_failed or status == "FAIL(ssl-cert)"
-        print(_line(name, status, latency))
+        print(_line(name, status, latency, extra))
 
     for name, var, method, url, hdr, body in SIMPLE:
         key = os.environ.get(var, "").strip()
@@ -186,6 +220,17 @@ def main() -> int:
             status, ms = probe(method, url, hdr(key), body, ctx)
             emit(f"{name}#{i}", status, ms)
 
+    # OmniRoute: local gateway (Mac/agent side only). Key and URL are never printed.
+    om_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
+    om_base = os.environ.get("OMNIROUTE_BASE_URL", "").strip()
+    omniroute_down = False
+    if not om_key or not om_base:
+        emit("OMNIROUTE", "SKIP(not set)")
+    else:
+        status, ms, n = probe_omniroute(om_base, om_key, ctx)
+        omniroute_down = status == "FAIL(network)"
+        emit("OMNIROUTE", status, ms, "" if n is None else f", {n} models")
+
     for var in PRESENCE_ONLY:
         value = os.environ.get(var, "")
         if value:
@@ -196,6 +241,8 @@ def main() -> int:
     print(f"Summary: {counts['OK']} OK, {counts['FAIL']} FAIL, {counts['SKIP']} SKIP")
     if ssl_failed:
         print(SSL_HINT)
+    if omniroute_down:
+        print(OMNIROUTE_HINT)
     return 0
 
 

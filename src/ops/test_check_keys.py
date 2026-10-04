@@ -26,7 +26,10 @@ ALL_VARS = [
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "KAVENEGAR_API_KEY",
+    "OMNIROUTE_API_KEY",
+    "OMNIROUTE_BASE_URL",
 ]
+FAKE_URL = "http://127.0.0.1:29999/v1/"
 
 
 @pytest.fixture
@@ -133,6 +136,68 @@ def test_ssl_cert_classified_with_single_hint(ck, monkeypatch, capsys):
     assert out.count("hint: pip install certifi") == 1
     assert "FAIL(network)" not in out
     assert SECRET not in out
+
+
+class _ModelsResp(_Resp):
+    def read(self):
+        return b'{"data": [{"id": "a"}, {"id": "b"}, {"id": "c"}]}'
+
+
+def _set_omni(monkeypatch):
+    monkeypatch.setenv("OMNIROUTE_API_KEY", SECRET)
+    monkeypatch.setenv("OMNIROUTE_BASE_URL", FAKE_URL)
+
+
+def test_omniroute_skipped_without_url(ck, monkeypatch, capsys):
+    monkeypatch.setenv("OMNIROUTE_API_KEY", SECRET)
+    ck.main()
+    line = next(x for x in capsys.readouterr().out.splitlines() if x.startswith("OMNIROUTE"))
+    assert "SKIP(not set)" in line
+
+
+def test_omniroute_ok_counts_models(ck, monkeypatch, capsys):
+    _set_omni(monkeypatch)
+    seen = []
+
+    def fake(req, timeout=None, context=None):
+        seen.append((req.full_url, req.get_header("Authorization")))
+        return _ModelsResp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    ck.main()
+    out = capsys.readouterr().out
+    assert seen == [("http://127.0.0.1:29999/v1/models", f"Bearer {SECRET}")]
+    line = next(x for x in out.splitlines() if x.startswith("OMNIROUTE"))
+    assert "OK" in line and "3 models" in line
+    assert SECRET not in out and "127.0.0.1" not in out and "29999" not in out
+
+
+def test_omniroute_401(ck, monkeypatch, capsys):
+    _set_omni(monkeypatch)
+
+    def boom(req, timeout=None, context=None):
+        raise _http_error(401)
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    ck.main()
+    out = capsys.readouterr().out
+    assert "FAIL(401)" in out
+    assert "OmniRoute container" not in out
+    assert SECRET not in out and "29999" not in out
+
+
+def test_omniroute_connection_refused(ck, monkeypatch, capsys):
+    _set_omni(monkeypatch)
+
+    def boom(req, timeout=None, context=None):
+        raise urllib.error.URLError(ConnectionRefusedError(f"{FAKE_URL} {SECRET}"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    ck.main()
+    out = capsys.readouterr().out
+    assert "FAIL(network)" in out
+    assert "is the OmniRoute container running?" in out
+    assert SECRET not in out and "127.0.0.1" not in out and "29999" not in out
 
 
 def test_context_passed_to_urlopen(ck, monkeypatch):
