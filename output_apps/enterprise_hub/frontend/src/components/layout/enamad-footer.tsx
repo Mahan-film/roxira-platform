@@ -58,6 +58,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
               <span className="text-foreground font-bold block text-xs">خدمات و ماژول‌ها</span>
               <ul className="space-y-1.5 text-[11px] text-muted-foreground">
                 <li><Link href="/chat" className="hover:text-amber-400 transition-colors">گفتگوی دادرسی و تحلیل ادله</Link></li>
+                <li><Link href="/draft-ruling" className="hover:text-amber-400 transition-colors">پیش‌نویس غیررسمی رأی (VIP)</Link></li>
                 <li><Link href="/services" className="hover:text-amber-400 transition-colors">طرح‌های اشتراک و مقایسه VIP</Link></li>
                 <li><Link href="/technology" className="hover:text-amber-400 transition-colors">معماری فنی و گراف دانش RAG</Link></li>
                 <li><Link href="/laws" className="hover:text-amber-400 transition-colors">پایگاه مواد و تنقیح قوانین</Link></li>

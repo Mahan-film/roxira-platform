@@ -71,7 +71,7 @@ export function middleware(request: NextRequest) {
   }
 
   // قاضی هوشمند فقط روی دامنه اختصاصی خودش سرو می‌شود
-  if (pathname === "/chat" || pathname === "/judge") {
+  if (pathname === "/chat" || pathname === "/judge" || pathname === "/draft-ruling") {
     return redirectGhazi();
   }
 
@@ -95,6 +95,7 @@ export const config = {
     "/en",
     "/chat",
     "/judge",
+    "/draft-ruling",
     "/damages",
     "/invoicing",
     "/accounting",

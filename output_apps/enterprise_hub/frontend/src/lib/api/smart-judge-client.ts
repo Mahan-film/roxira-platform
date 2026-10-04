@@ -580,3 +580,139 @@ export async function streamChat(
   }
   if (buffer.trim()) dispatch(buffer);
 }
+
+/* ------------------------------------------------------------------ */
+/* پیش‌نویس غیررسمی رأی — POST /api/v1/apps/judge/drafts/ruling        */
+/* منطبق با RulingDraftRequest در smartjudge_module.py و ruling_draft.py */
+/* ------------------------------------------------------------------ */
+
+export type RulingCourtType =
+  | "civil"
+  | "criminal"
+  | "family"
+  | "commercial"
+  | "labor"
+  | "administrative";
+
+/** سقف‌های بک‌اند (ruling_draft.py) */
+export const RULING_LIMITS = {
+  maxName: 300,
+  maxFacts: 12000,
+  maxClaims: 6000,
+  maxEvidenceItems: 20,
+  maxEvidenceTitle: 200,
+  maxEvidenceText: 6000,
+} as const;
+
+export interface RulingEvidenceItem {
+  title: string;
+  text: string;
+}
+
+export interface RulingDraftRequest {
+  court_type: RulingCourtType;
+  claimant: string;
+  respondent: string;
+  facts: string;
+  claims: string;
+  evidence: RulingEvidenceItem[];
+  jurisdiction?: string;
+}
+
+export type RulingDraftStatus = "AI_DRAFT_UNVERIFIED" | "INSUFFICIENT_BASIS";
+
+export interface RulingArticle {
+  law_name: string;
+  article_no: string;
+}
+
+export interface RulingRemovedCitation extends RulingArticle {
+  reason: string;
+}
+
+export interface RulingDraftResponse {
+  status: RulingDraftStatus;
+  banner: string;
+  requires_human_review: boolean;
+  proposed_operative_part: string;
+  articles?: RulingArticle[];
+  removed_citations: RulingRemovedCitation[];
+  missing_information: string[];
+  disclaimer: string;
+  draft_id: string;
+  content_sha256: string;
+  request_id?: string;
+}
+
+export type RulingDraftErrorKind = "vip_required" | "validation" | "network" | "server";
+
+/** خطای پیش‌نویس رأی؛ `fieldErrors` از آرایه `detail` در 422 FastAPI ساخته می‌شود. */
+export class RulingDraftError extends Error {
+  readonly kind: RulingDraftErrorKind;
+  readonly statusCode: number;
+  readonly fieldErrors: Record<string, string>;
+
+  constructor(
+    kind: RulingDraftErrorKind,
+    statusCode: number,
+    fieldErrors: Record<string, string> = {},
+  ) {
+    super(kind);
+    this.name = "RulingDraftError";
+    this.kind = kind;
+    this.statusCode = statusCode;
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+function extractFieldErrors(detail: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!Array.isArray(detail)) return out;
+  for (const item of detail) {
+    const loc = (item as { loc?: unknown })?.loc;
+    if (!Array.isArray(loc)) continue;
+    const parts = loc.filter((p) => p !== "body").map(String);
+    if (parts.length) out[parts.join(".")] = String((item as { msg?: unknown }).msg ?? "");
+  }
+  return out;
+}
+
+/**
+ * ساخت پیش‌نویس غیررسمی رأی (فقط VIP). احراز هویت سمت سرور از طریق نشست
+ * هم‌مبدأ انجام می‌شود؛ هیچ کلید یا توکنی در کد فرانت‌اند قرار نمی‌گیرد.
+ * قاب 403 بک‌اند ({type:"VIP_REQUIRED"}) در سطح بالای بدنه است، نه در `detail`.
+ */
+export async function draftRuling(
+  payload: RulingDraftRequest,
+  signal?: AbortSignal,
+): Promise<RulingDraftResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${JUDGE_ENDPOINT}/drafts/ruling`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal,
+      cache: "no-store",
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new RulingDraftError("network", 0);
+  }
+
+  if (response.ok) return (await response.json()) as RulingDraftResponse;
+
+  let body: { type?: string; detail?: unknown } = {};
+  try {
+    body = await response.json();
+  } catch {
+    /* بدنه JSON نیست */
+  }
+  if (response.status === 403 && body.type === "VIP_REQUIRED") {
+    throw new RulingDraftError("vip_required", 403);
+  }
+  if (response.status === 422) {
+    throw new RulingDraftError("validation", 422, extractFieldErrors(body.detail));
+  }
+  throw new RulingDraftError("server", response.status);
+}

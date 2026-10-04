@@ -30,6 +30,7 @@ export function GhaziHeader() {
   // به خطای شبه-CORS در کنسول منجر می‌شود (fetch داده RSC به مبدأ دیگر).
   const navLinks: { href: string; label: string; icon: typeof MessageCircle; external?: boolean }[] = [
     { href: "/chat", label: "گفتگوی حقوقی", icon: MessageCircle },
+    { href: "/draft-ruling", label: "پیش‌نویس رأی", icon: FileText },
     { href: "/damages", label: "محاسبه‌گر قضایی و خسارت", icon: Calculator, external: true },
     { href: "/services", label: "محصولات و اشتراک", icon: Zap },
     { href: "/technology", label: "تکنولوژی و معماری", icon: Building2 },
