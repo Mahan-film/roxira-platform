@@ -5,13 +5,24 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
-_path = ROOT / "scripts/dev/model_bakeoff.py"
-_spec = importlib.util.spec_from_file_location("model_bakeoff", _path)
-mb = importlib.util.module_from_spec(_spec)
-sys.modules["model_bakeoff"] = mb
-_spec.loader.exec_module(mb)
-mb._SLEEP = 0
+mb = None
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _load_model_bakeoff():
+    """Load scripts/dev/model_bakeoff.py inside a fixture (no import-time code here)."""
+    global mb
+    path = ROOT / "scripts/dev/model_bakeoff.py"
+    spec = importlib.util.spec_from_file_location("model_bakeoff", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["model_bakeoff"] = module
+    spec.loader.exec_module(module)
+    module._SLEEP = 0
+    mb = module
+    yield
 
 KEY = "sk-or-SECRETVALUE123"
 
