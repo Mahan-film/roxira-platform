@@ -1,4 +1,65 @@
 
+async def _execute_parallel_legal_discovery(query: str, top_k: int = 4) -> dict:
+    """استعلام هم‌زمان و موازی از ۳ منبع: قوانین مصوب، احکام قضایی، و جستجوی زنده مراجع وبی"""
+    import asyncio, httpx, urllib.parse, json
+
+    statutes_results = []
+    precedents_results = []
+    web_live_results = []
+
+    async def _fetch_qdrant(collection_name: str, limit: int = 3):
+        hosts = [os.getenv("QDRANT_HOST", "roxira_qdrant_prod"), "127.0.0.1", "localhost"]
+        port = os.getenv("QDRANT_PORT", "6333")
+        for h in hosts:
+            try:
+                url = f"http://{h}:{port}/collections/{collection_name}/points/scroll"
+                payload = {"limit": limit, "with_payload": True}
+                async with httpx.AsyncClient(timeout=4.0) as client:
+                    r = await client.post(url, json=payload)
+                    if r.status_code == 200:
+                        return r.json().get("result", {}).get("points", [])
+            except Exception:
+                continue
+        return []
+
+    async def _fetch_searxng(q: str, limit: int = 4):
+        searx_urls = [
+            os.getenv("SEARXNG_INTERNAL_URL", "http://research-stack-searxng-1:8080"),
+            "http://172.17.0.1:8888",
+            "http://127.0.0.1:8888"
+        ]
+        headers = {"User-Agent": "RoxiraSmartJudgeAgent/2.0 (Legal Parallel Engine)"}
+        for base_url in searx_urls:
+            try:
+                params = {
+                    "q": f"{q} سایت سامane قوانین یا روزنامه رسمی یا دیوان عالی",
+                    "format": "json",
+                    "language": "fa"
+                }
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(f"{base_url}/search", params=params, headers=headers)
+                    if resp.status_code == 200:
+                        items = resp.json().get("results", [])
+                        return [{"title": x.get("title"), "snippet": x.get("content"), "url": x.get("url")} for x in items[:limit]]
+            except Exception:
+                continue
+        return []
+
+    # اجرای هم‌زمان و غیرمسدودکننده ۳ شاخه
+    t1 = asyncio.create_task(_fetch_qdrant(os.getenv("LEGAL_COLLECTION_NAME", "iran_laws_mistral_v1"), top_k))
+    t2 = asyncio.create_task(_fetch_qdrant(os.getenv("JUDICIAL_PRECEDENTS_COLLECTION", "judicial_precedents"), top_k))
+    t3 = asyncio.create_task(_fetch_searxng(query, top_k))
+
+    statutes_results, precedents_results, web_live_results = await asyncio.gather(t1, t2, t3, return_exceptions=True)
+
+    return {
+        "statutes": statutes_results if isinstance(statutes_results, list) else [],
+        "precedents": precedents_results if isinstance(precedents_results, list) else [],
+        "live_web": web_live_results if isinstance(web_live_results, list) else []
+    }
+
+
+
 async def _fetch_live_legal_web_fallback(query: str, limit: int = 4) -> list:
     """جستجوی زنده در پایگاه‌های حقوقی معتبر (سامانه قوانین، روزنامه رسمی، اختبار) از طریق SearXNG"""
     import urllib.parse, httpx
