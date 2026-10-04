@@ -360,7 +360,7 @@ cmd_migrate() {
     [ \"\$(docker inspect -f '{{.State.Running}}' $BACKEND_CONTAINER)\" = true ] || { echo '$BACKEND_CONTAINER not running' >&2; exit 1; }
     umask 077
     w='$MIGRATE_WORK'; rm -rf \"\$w\"; mkdir -p \"\$w\"
-    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' $BACKEND_CONTAINER | grep -E '^DATABASE_(USER|PASSW|NAME)=' > \"\$w/db.env\" || true
+    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' $BACKEND_CONTAINER | grep -E '^DATABASE_(USER|PASSW[A-Z]*|NAME)=' > \"\$w/db.env\" || true
     [ \"\$(wc -l < \"\$w/db.env\")\" -eq 3 ] || { echo 'DB user/credential/name not all set in the backend container env' >&2; exit 1; }
     git fetch -q origin main
     git archive '$TARGET_SHA' $HUB_DIR/Dockerfile $HUB_DIR/package.json $HUB_DIR/package-lock.json $HUB_DIR/tsconfig.json $DATA_SOURCE $MIG_DIR | tar -x -C \"\$w\"
