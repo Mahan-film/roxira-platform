@@ -5,13 +5,25 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-_spec = importlib.util.spec_from_file_location("merge_check", ROOT / "scripts/dev/merge_check.py")
-mc = importlib.util.module_from_spec(_spec)
-sys.modules["merge_check"] = mc
-_spec.loader.exec_module(mc)
+import pytest
 
-CFG = mc.load_config()
+ROOT = Path(__file__).resolve().parents[2]
+mc = None
+CFG = None
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _load_merge_check():
+    """Load scripts/dev/merge_check.py inside a fixture (no import-time code in this file)."""
+    global mc, CFG
+    path = ROOT / "scripts/dev/merge_check.py"
+    spec = importlib.util.spec_from_file_location("merge_check", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["merge_check"] = module
+    spec.loader.exec_module(module)
+    mc = module
+    CFG = module.load_config()
+    yield
 
 
 def mkdiff(name, added=(), removed=(), new=False, deleted=False):
