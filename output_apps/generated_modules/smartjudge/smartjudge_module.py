@@ -5427,7 +5427,22 @@ class RulingEvidenceItem(_BaseModel):
 class RulingDraftRequest(_BaseModel):
     model_config = _ConfigDict(extra="forbid")
 
-    court_type: _Literal["civil", "criminal", "family", "commercial", "labor", "administrative"]
+    court_type: _Literal[
+        "civil",
+        "criminal",
+        "family",
+        "commercial",
+        "labor",
+        "administrative",
+        "general_civil",
+        "peace",
+        "criminal_1",
+        "criminal_2",
+        "revolution",
+        "guild_violations",
+        "computer_guild",
+        "bar_disciplinary",
+    ]
     claimant: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_NAME)
     respondent: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_NAME)
     facts: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_FACTS)
@@ -5553,3 +5568,143 @@ async def draft_ruling(request: Request, body: RulingDraftRequest):
         file=sys.stderr,
     )
     return _finalize_ruling_response(result, request_id)
+
+
+# ------------------------------------------------------------------------------
+# POST /drafts/court-suggest: پیشنهاد مرجع رسیدگی (قاعده‌محور، بدون LLM، بدون VIP)
+# POST /drafts/indictment: پیش‌نویس غیررسمی کیفرخواست (strong + sensitive، VIP)
+# لاگ فقط شناسه و اندازه؛ هرگز متن پرونده.
+# ------------------------------------------------------------------------------
+try:
+    from . import court_catalog as _court_catalog
+    from . import indictment_draft as _indictment_draft
+except ImportError:
+    from output_apps.generated_modules.smartjudge import court_catalog as _court_catalog
+    from output_apps.generated_modules.smartjudge import indictment_draft as _indictment_draft
+
+
+class CourtSuggestRequest(_BaseModel):
+    model_config = _ConfigDict(extra="forbid")
+
+    facts: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_FACTS)
+    claims: str = _Field("", max_length=_ruling_draft.MAX_CLAIMS)
+    hint: Optional[str] = _Field(None, min_length=1, max_length=_ruling_draft.MAX_NAME)
+
+
+@router.post("/drafts/court-suggest")
+async def court_suggest(request: Request, body: CourtSuggestRequest):
+    """راهنمای مرجع صالح؛ فقط قواعد کلیدواژه‌ای، غیرقطعی."""
+    request_id = str(uuid.uuid4())
+    print(
+        f"[SMARTJUDGE][COURT-SUGGEST] request_id={request_id} "
+        f"facts_len={len(body.facts)} claims_len={len(body.claims)}",
+        file=sys.stderr,
+    )
+    return {
+        "suggestions": _court_catalog.suggest_courts(body.facts, body.claims, body.hint),
+        "banner": _ruling_draft.BANNER,
+        "requires_human_review": True,
+        "disclaimer": _court_catalog.DISCLAIMER_FA,
+        "request_id": request_id,
+    }
+
+
+class IndictmentDraftRequest(_BaseModel):
+    model_config = _ConfigDict(extra="forbid")
+
+    accused: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_NAME)
+    complainant: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_NAME)
+    facts: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_FACTS)
+    charges_hint: Optional[str] = _Field(
+        None, min_length=1, max_length=_indictment_draft.MAX_CHARGES_HINT
+    )
+    evidence: List[RulingEvidenceItem] = _Field(
+        default_factory=list, max_length=_ruling_draft.MAX_EVIDENCE_ITEMS
+    )
+
+
+async def _indictment_complete(prompt: str) -> str:
+    if not _use_llm_router():
+        raise RuntimeError("llm router disabled")
+    routed = await _llm_router.complete(
+        _RULING_MODEL_TIER,
+        [{"role": "user", "content": prompt}],
+        sensitive=True,  # case data: never a :free endpoint
+        tenant="smartjudge",
+        feature="indictment_draft",
+        timeout=_RULING_TIMEOUT_SECONDS,
+        max_retries=1,
+        temperature=0.2,
+        max_tokens=4000,
+    )
+    return routed.content
+
+
+def _finalize_indictment_response(result: dict, request_id: str) -> dict:
+    out = dict(result) if isinstance(result, dict) else {}
+    if out.get("status") not in (_ruling_draft.STATUS_DRAFT, _ruling_draft.STATUS_INSUFFICIENT):
+        out = {
+            "status": _ruling_draft.STATUS_INSUFFICIENT,
+            "charge_description": "",
+            "evidence_summary": "",
+            "legal_basis": [],
+            "removed_citations": [],
+            "missing_information": ["نتیجهٔ نامعتبر"],
+        }
+    out["banner"] = _ruling_draft.BANNER
+    out["requires_human_review"] = True
+    out["request_id"] = request_id
+    out["model_tier"] = _RULING_MODEL_TIER
+    out["disclaimer"] = AI_DRAFT_DISCLAIMER
+    out["draft_id"] = str(uuid.uuid4())
+    out["content_sha256"] = content_sha256(
+        json.dumps(out, ensure_ascii=False, sort_keys=True, default=str)
+    )
+    return out
+
+
+@router.post("/drafts/indictment")
+async def draft_indictment(request: Request, body: IndictmentDraftRequest):
+    """پیش‌نویس غیررسمی کیفرخواست؛ همیشه AI_DRAFT_UNVERIFIED یا INSUFFICIENT_BASIS."""
+    tier = _resolve_subscription_tier(payload=None, request=request)
+    if not _is_vip_tier(tier):
+        return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
+
+    request_id = str(uuid.uuid4())
+    try:
+        case = _indictment_draft.IndictmentCase(
+            accused=body.accused,
+            complainant=body.complainant,
+            facts=body.facts,
+            evidence=[{"title": e.title, "text": e.text} for e in body.evidence],
+            charges_hint=body.charges_hint,
+        )
+    except ValueError:
+        return JSONResponse(status_code=422, content={"status": "error", "request_id": request_id})
+    print(
+        f"[SMARTJUDGE][INDICTMENT-DRAFT] request_id={request_id} "
+        f"facts_len={len(body.facts)} evidence={len(body.evidence)}",
+        file=sys.stderr,
+    )
+
+    loop = asyncio.get_running_loop()
+
+    def _bridge(coro):
+        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_RULING_TIMEOUT_SECONDS)
+
+    def _retrieve(c):
+        query = ((c.charges_hint or "") + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]
+        return _bridge(_ruling_retrieve_laws(query))
+
+    result = await asyncio.to_thread(
+        _indictment_draft.generate_indictment_draft,
+        case,
+        retrieve=_retrieve,
+        call_llm=lambda prompt: _bridge(_indictment_complete(prompt)),
+        verify_citations=lambda text: _bridge(_guard_citations(text, use_qdrant=True)),
+    )
+    print(
+        f"[SMARTJUDGE][INDICTMENT-DRAFT] request_id={request_id} status={result.get('status')}",
+        file=sys.stderr,
+    )
+    return _finalize_indictment_response(result, request_id)

@@ -85,8 +85,83 @@ COURT_TYPES: Dict[str, Dict[str, Any]] = {
             "الزام به انجام وظیفه."
         ),
     },
+    "general_civil": {
+        "name": "دادگاه عمومی حقوقی",
+        "parties": ("خواهان", "خوانده"),
+        "checklist": (
+            "ساختار پیشنهادی: خواسته و بهای آن، دلایل و مستندات، دفاعیات خوانده، "
+            "موضوعات اختلافی، نتیجهٔ پیشنهادی غیرقطعی."
+        ),
+    },
+    "peace": {
+        "name": "دادگاه صلح",
+        "parties": ("خواهان", "خوانده"),
+        "checklist": (
+            "ساختار پیشنهادی: خواسته و بهای آن، مستندات، دفاعیات، موضوعات اختلافی، "
+            "نتیجهٔ پیشنهادی غیرقطعی."
+        ),
+    },
+    "criminal_1": {
+        "name": "دادگاه کیفری یک",
+        "parties": ("شاکی", "متهم"),
+        "checklist": (
+            "ساختار پیشنهادی: عنوان اتهام، خلاصهٔ کیفرخواست، ادله و دفاعیات، "
+            "موضوعات اثباتی؛ بدون تعیین مجازات قطعی."
+        ),
+    },
+    "criminal_2": {
+        "name": "دادگاه کیفری دو",
+        "parties": ("شاکی", "متهم"),
+        "checklist": (
+            "ساختار پیشنهادی: عنوان اتهام، خلاصهٔ کیفرخواست، ادله و دفاعیات، "
+            "موضوعات اثباتی؛ بدون تعیین مجازات قطعی."
+        ),
+    },
+    "revolution": {
+        "name": "دادگاه انقلاب",
+        "parties": ("شاکی", "متهم"),
+        "checklist": (
+            "ساختار پیشنهادی: عنوان اتهام، خلاصهٔ کیفرخواست، ادله و دفاعیات، "
+            "موضوعات اثباتی؛ بدون تعیین مجازات قطعی."
+        ),
+    },
+    "guild_violations": {
+        "name": "هیئت/کمیسیون رسیدگی به تخلفات صنفی",
+        "parties": ("شاکی/گزارش‌دهنده", "متشاکی (واحد صنفی)"),
+        "checklist": (
+            "ساختار پیشنهادی: واحد صنفی و نوع پروانه، گزارش تخلف، دفاعیات متشاکی، "
+            "ادله و صورت‌جلسه بازرسی؛ بدون تعیین جریمهٔ قطعی."
+        ),
+    },
+    "computer_guild": {
+        "name": "رسیدگی انتظامی نظام صنفی رایانه‌ای / تخلفات حوزهٔ فناوری و هوش مصنوعی",
+        "parties": ("شاکی/گزارش‌دهنده", "متشاکی"),
+        "checklist": (
+            "ساختار پیشنهادی: عضویت یا پروانهٔ صنفی، شرح تخلف حرفه‌ای، ادله فنی، "
+            "دفاعیات؛ بدون تعیین مجازات انتظامی قطعی."
+        ),
+    },
+    "bar_disciplinary": {
+        "name": "دادگاه انتظامی وکلا",
+        "parties": ("شاکی", "وکیل مورد شکایت"),
+        "checklist": (
+            "ساختار پیشنهادی: شرح شکایت، سوابق وکالت، ادله، دفاعیات وکیل؛ "
+            "بدون تعیین مجازات انتظامی قطعی."
+        ),
+    },
 }
-NONFINAL_COURT_TYPES = ("family", "commercial", "labor", "administrative")
+NONFINAL_COURT_TYPES = (
+    "family",
+    "commercial",
+    "labor",
+    "administrative",
+    "general_civil",
+    "peace",
+    "guild_violations",
+    "computer_guild",
+    "bar_disciplinary",
+)
+CRIMINAL_COURT_TYPES = ("criminal", "criminal_1", "criminal_2", "revolution")
 COURT_TYPE_NAMES = tuple(COURT_TYPES)
 
 MAX_EVIDENCE_ITEMS = 20
@@ -412,7 +487,7 @@ def generate_ruling_draft(
         return _insufficient(missing + ["هیچ ماده قانونی معتبر و تأییدشده‌ای باقی نماند"], removed)
 
     result["legal_reasoning"] = reasoning_out
-    if case.court_type == "criminal":
+    if case.court_type in CRIMINAL_COURT_TYPES:
         part = result["proposed_operative_part"].strip()
         if part.startswith(CRIMINAL_PREFIX.strip()):
             part = part[len(CRIMINAL_PREFIX.strip()) :].strip()
