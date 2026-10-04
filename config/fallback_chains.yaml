@@ -1,0 +1,35 @@
+# Named provider fallback chains (see docs/ops/FALLBACK_CHAINS.md).
+# Holds provider ids and the ENV VAR NAMES of their keys only. No key values
+# and no model ids: models live in config/models.yaml and chains reference
+# its roles. A step is skipped when none of its env vars is set.
+providers:
+  openrouter: {env: [OPENROUTER_API_KEY]}
+  mistral: {env: [MISTRAL_API_KEY]}
+  sambanova: {env: [SAMBANOVA_API_KEY]}
+  omniroute: {env: [OMNIROUTE_API_KEY]}
+  tavily: {env: [TAVILY_API_KEYS, TAVILY_KEYS]}
+  brave: {env: [BRAVE_SEARCH_API_KEY, BRAVE_API_KEY]}
+  exa: {env: [EXA_API_KEY]}
+  jina: {env: [JINA_API_KEY]}
+  firecrawl: {env: [FIRECRAWL_API_KEY]}
+  assemblyai: {env: [ASSEMBLYAI_API_KEYS]}
+
+chains:
+  llm_cheap:
+    role: cheap            # config/models.yaml role
+    allow_free_tier: false # case data may flow through this chain
+    steps: [openrouter, mistral, sambanova, omniroute]
+  llm_strong:
+    role: strong
+    allow_free_tier: false
+    steps: [openrouter, mistral, omniroute]
+  search_web:
+    allow_free_tier: false
+    steps: [tavily, brave, exa, jina]
+  extract_page:
+    allow_free_tier: false
+    steps: [firecrawl, jina]
+  stt:
+    role: stt
+    allow_free_tier: false
+    steps: [assemblyai]
