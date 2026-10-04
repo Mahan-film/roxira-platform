@@ -1,0 +1,19 @@
+{
+  "_comment": "Search targets for scripts/legal/fetch_ekhtebar.py and scripts/legal/fetch_laws.py (multi-source; allowed_domains is the allow-list for fetching and search discovery; a law may carry an optional sources object with keys order, skip, qavanin{query,search_url}, wikisource{query}, discovery{query}, ekhtebar{query}). query_fa is the site-search text; title_fa is the expected law title used for candidate similarity and as law_name in staged rows. ekhtebar.ir is an UNOFFICIAL aggregator (source_tier=unofficial); every fetched text needs owner approval and lawyer sign-off. Which exact instrument is wanted for guild_violations, computer_guild_system and lawyers_discipline is a lawyer decision (docs/research/LEGAL_SOURCES_PLAN_2026-10.md section 2).",
+  "schema_version": 1,
+  "allowed_domains": ["ekhtebar.ir", "qavanin.ir", "rc.majlis.ir", "dotic.ir", "rrk.ir", "fa.wikisource.org", "ical.ir"],
+  "laws": [
+    {"id": "cybercrime", "title_fa": "قانون جرایم رایانه‌ای", "query_fa": "قانون جرایم رایانه‌ای", "topic": "criminal-cyber", "priority": 1},
+    {"id": "ecommerce", "title_fa": "قانون تجارت الکترونیکی", "query_fa": "قانون تجارت الکترونیکی", "topic": "commerce-ecommerce", "priority": 1},
+    {"id": "consumer_protection", "title_fa": "قانون حمایت از حقوق مصرف‌کنندگان", "query_fa": "قانون حمایت از حقوق مصرف‌کنندگان", "topic": "consumer", "priority": 1},
+    {"id": "admin_justice_court", "title_fa": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری", "query_fa": "قانون دیوان عدالت اداری", "topic": "administrative", "priority": 2},
+    {"id": "traffic_violations", "title_fa": "قانون رسیدگی به تخلفات رانندگی", "query_fa": "قانون رسیدگی به تخلفات رانندگی", "topic": "traffic", "priority": 2},
+    {"id": "third_party_insurance", "title_fa": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه", "query_fa": "قانون بیمه اجباری شخص ثالث", "topic": "insurance", "priority": 2},
+    {"id": "direct_taxes", "title_fa": "قانون مالیات‌های مستقیم", "query_fa": "قانون مالیات‌های مستقیم", "topic": "tax", "priority": 3},
+    {"id": "peace_court_1402", "title_fa": "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲", "query_fa": "قانون شوراهای حل اختلاف دادگاه صلح ۱۴۰۲", "topic": "civil-procedure", "priority": 2},
+    {"id": "lawyers_discipline", "title_fa": "قانون دادسرا و دادگاه انتظامی وکلا", "query_fa": "دادسرا و دادگاه انتظامی وکلا", "topic": "lawyers", "priority": 3},
+    {"id": "guild_violations", "title_fa": "قانون نظام صنفی", "query_fa": "قانون نظام صنفی تعزیرات تخلفات صنفی", "topic": "guild", "priority": 3},
+    {"id": "computer_guild_system", "title_fa": "نظام صنفی رایانه‌ای", "query_fa": "نظام صنفی رایانه‌ای", "topic": "guild", "priority": 3},
+    {"id": "commerce_code_amend_1347", "title_fa": "لایحه اصلاحی قسمتی از قانون تجارت", "query_fa": "لایحه اصلاحی قسمتی از قانون تجارت ۱۳۴۷", "topic": "commerce", "priority": 2}
+  ]
+}
