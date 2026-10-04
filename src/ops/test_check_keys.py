@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import ssl
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -67,7 +68,7 @@ def test_all_skipped(ck, capsys):
 def test_ok_and_never_leaks(ck, monkeypatch, capsys):
     monkeypatch.setenv("OPENROUTER_API_KEY", SECRET)
     monkeypatch.setenv("GOOGLE_CLIENT_ID", SECRET)
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _Resp())
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None, context=None: _Resp())
     assert ck.main() == 0
     out = capsys.readouterr().out
     assert "OPENROUTER" in out and "OK" in out
@@ -90,7 +91,7 @@ def test_ok_and_never_leaks(ck, monkeypatch, capsys):
 def test_errors_redacted(ck, monkeypatch, capsys, exc, expected):
     monkeypatch.setenv("MISTRAL_API_KEY", SECRET)
 
-    def boom(req, timeout=None):
+    def boom(req, timeout=None, context=None):
         raise exc
 
     monkeypatch.setattr(urllib.request, "urlopen", boom)
@@ -104,7 +105,7 @@ def test_comma_lists_by_index(ck, monkeypatch, capsys):
     monkeypatch.setenv("TAVILY_API_KEYS", f"{SECRET}a, {SECRET}b")
     seen = []
 
-    def fake(req, timeout=None):
+    def fake(req, timeout=None, context=None):
         seen.append(timeout)
         if req.get_header("Authorization", "").endswith("b"):
             raise _http_error(401)
@@ -116,3 +117,32 @@ def test_comma_lists_by_index(ck, monkeypatch, capsys):
     assert "TAVILY#1" in out and "TAVILY#2" in out and "FAIL(401)" in out
     assert seen == [10, 10]
     assert SECRET not in out
+
+
+def test_ssl_cert_classified_with_single_hint(ck, monkeypatch, capsys):
+    monkeypatch.setenv("MISTRAL_API_KEY", SECRET)
+    monkeypatch.setenv("GROQ_API_KEY", SECRET)
+
+    def boom(req, timeout=None, context=None):
+        raise urllib.error.URLError(ssl.SSLCertVerificationError(1, f"bad {SECRET}"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    assert ck.main() == 0
+    out = capsys.readouterr().out
+    assert out.count("FAIL(ssl-cert)") == 2
+    assert out.count("hint: pip install certifi") == 1
+    assert "FAIL(network)" not in out
+    assert SECRET not in out
+
+
+def test_context_passed_to_urlopen(ck, monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", SECRET)
+    seen = []
+
+    def fake(req, timeout=None, context=None):
+        seen.append(context)
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    ck.main()
+    assert len(seen) == 1 and isinstance(seen[0], ssl.SSLContext)

@@ -16,11 +16,22 @@ from __future__ import annotations
 import json
 import os
 import socket
+import ssl
 import time
 import urllib.error
 import urllib.request
 
 TIMEOUT = 10
+SSL_HINT = "hint: pip install certifi"
+
+
+def build_ssl_context() -> ssl.SSLContext:
+    """Use certifi's CA bundle when installed, else the system default."""
+    try:
+        import certifi
+    except ImportError:
+        return ssl.create_default_context()
+    return ssl.create_default_context(cafile=certifi.where())
 
 
 def _bearer(key: str) -> dict[str, str]:
@@ -103,7 +114,13 @@ LISTS = [
 PRESENCE_ONLY = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "KAVENEGAR_API_KEY"]
 
 
-def probe(method: str, url: str, headers: dict[str, str], body: dict | None) -> tuple[str, int]:
+def probe(
+    method: str,
+    url: str,
+    headers: dict[str, str],
+    body: dict | None,
+    context: ssl.SSLContext | None = None,
+) -> tuple[str, int]:
     """Return (status, latency_ms). Never leaks key material."""
     data = None
     hdrs = dict(headers)
@@ -114,7 +131,7 @@ def probe(method: str, url: str, headers: dict[str, str], body: dict | None) -> 
     status = "OK"
     try:
         req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=TIMEOUT, context=context) as resp:
             code = getattr(resp, "status", 200)
             if not 200 <= code < 300:
                 status = f"FAIL({code})"
@@ -123,11 +140,14 @@ def probe(method: str, url: str, headers: dict[str, str], body: dict | None) -> 
     except TimeoutError:
         status = "FAIL(timeout)"
     except urllib.error.URLError as exc:
-        status = (
-            "FAIL(timeout)"
-            if isinstance(exc.reason, (TimeoutError, socket.timeout))
-            else "FAIL(network)"
-        )
+        if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+            status = "FAIL(timeout)"
+        elif isinstance(exc.reason, ssl.SSLError):
+            status = "FAIL(ssl-cert)"
+        else:
+            status = "FAIL(network)"
+    except ssl.SSLError:
+        status = "FAIL(ssl-cert)"
     except Exception as exc:
         status = f"FAIL({type(exc).__name__})"
     return status, int((time.monotonic() - start) * 1000)
@@ -140,9 +160,13 @@ def _line(name: str, status: str, latency: int | None) -> str:
 
 def main() -> int:
     counts = {"OK": 0, "FAIL": 0, "SKIP": 0}
+    ctx = build_ssl_context()
+    ssl_failed = False
 
     def emit(name: str, status: str, latency: int | None = None) -> None:
+        nonlocal ssl_failed
         counts[status.split("(")[0]] += 1
+        ssl_failed = ssl_failed or status == "FAIL(ssl-cert)"
         print(_line(name, status, latency))
 
     for name, var, method, url, hdr, body in SIMPLE:
@@ -150,7 +174,7 @@ def main() -> int:
         if not key:
             emit(name, "SKIP(not set)")
             continue
-        status, ms = probe(method, url, hdr(key), body)
+        status, ms = probe(method, url, hdr(key), body, ctx)
         emit(name, status, ms)
 
     for name, var, method, url, hdr, body in LISTS:
@@ -159,7 +183,7 @@ def main() -> int:
             emit(name, "SKIP(not set)")
             continue
         for i, key in enumerate(keys, 1):
-            status, ms = probe(method, url, hdr(key), body)
+            status, ms = probe(method, url, hdr(key), body, ctx)
             emit(f"{name}#{i}", status, ms)
 
     for var in PRESENCE_ONLY:
@@ -170,6 +194,8 @@ def main() -> int:
             print(_line(var, "SKIP(not set)", None))
 
     print(f"Summary: {counts['OK']} OK, {counts['FAIL']} FAIL, {counts['SKIP']} SKIP")
+    if ssl_failed:
+        print(SSL_HINT)
     return 0
 
 
