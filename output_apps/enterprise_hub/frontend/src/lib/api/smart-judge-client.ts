@@ -586,13 +586,8 @@ export async function streamChat(
 /* منطبق با RulingDraftRequest در smartjudge_module.py و ruling_draft.py */
 /* ------------------------------------------------------------------ */
 
-export type RulingCourtType =
-  | "civil"
-  | "criminal"
-  | "family"
-  | "commercial"
-  | "labor"
-  | "administrative";
+import type { RulingCourtType } from "@/lib/court-types";
+export type { RulingCourtType };
 
 /** سقف‌های بک‌اند (ruling_draft.py) */
 export const RULING_LIMITS = {
@@ -715,4 +710,146 @@ export async function draftRuling(
     throw new RulingDraftError("validation", 422, extractFieldErrors(body.detail));
   }
   throw new RulingDraftError("server", response.status);
+}
+
+/* ------------------------------------------------------------------ */
+/* راهنمای انتخاب دادگاه — POST /drafts/court-suggest (بدون نیاز به VIP) */
+/* ------------------------------------------------------------------ */
+
+export type CourtStage = "prosecution" | "trial" | "appeal" | "disciplinary" | "council";
+
+export interface CourtSuggestRequest {
+  facts: string; // 1..12000
+  claims?: string; // <=6000, default ""
+  hint?: string; // <=300
+}
+
+/** کلیدهای court_key پاسخ راهنمای دادگاه */
+export type CourtSuggestKey =
+  | "prosecution_investigator"
+  | "prosecution_deputy"
+  | "criminal_1"
+  | "criminal_2"
+  | "general_civil"
+  | "peace"
+  | "revolution"
+  | "family"
+  | "commercial"
+  | "labor"
+  | "administrative"
+  | "dispute_council"
+  | "guild_violations"
+  | "computer_guild"
+  | "bar_disciplinary";
+
+export interface CourtSuggestion {
+  court_key: CourtSuggestKey | (string & {});
+  court_name_fa: string;
+  stage: CourtStage;
+  reason_fa: string;
+  score: number;
+}
+
+export interface CourtSuggestResponse {
+  suggestions: CourtSuggestion[];
+  banner: string;
+  requires_human_review: true;
+  disclaimer: string;
+  request_id: string;
+}
+
+/** خطای مشترک فراخوانی‌های پیش‌نویس (راهنمای دادگاه و کیفرخواست) */
+export class DraftApiError extends Error {
+  readonly kind: RulingDraftErrorKind;
+  readonly statusCode: number;
+  readonly fieldErrors: Record<string, string>;
+
+  constructor(kind: RulingDraftErrorKind, statusCode: number, fieldErrors: Record<string, string> = {}) {
+    super(kind);
+    this.name = "DraftApiError";
+    this.kind = kind;
+    this.statusCode = statusCode;
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+async function postDraft<T>(path: string, payload: unknown, signal?: AbortSignal): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${JUDGE_ENDPOINT}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal,
+      cache: "no-store",
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new DraftApiError("network", 0);
+  }
+  if (response.ok) return (await response.json()) as T;
+  let body: { type?: string; detail?: unknown } = {};
+  try {
+    body = await response.json();
+  } catch {
+    /* بدنه JSON نیست */
+  }
+  if (response.status === 403 && body.type === "VIP_REQUIRED") throw new DraftApiError("vip_required", 403);
+  if (response.status === 422) throw new DraftApiError("validation", 422, extractFieldErrors(body.detail));
+  throw new DraftApiError("server", response.status);
+}
+
+export function suggestCourt(payload: CourtSuggestRequest, signal?: AbortSignal): Promise<CourtSuggestResponse> {
+  return postDraft<CourtSuggestResponse>("/drafts/court-suggest", payload, signal);
+}
+
+/* ------------------------------------------------------------------ */
+/* پیش‌نویس غیررسمی کیفرخواست — POST /drafts/indictment (فقط VIP)      */
+/* ------------------------------------------------------------------ */
+
+export const INDICTMENT_LIMITS = {
+  maxName: 300,
+  maxFacts: 12000,
+  maxChargesHint: 1000,
+  maxEvidenceItems: 20,
+  maxEvidenceTitle: 200,
+  maxEvidenceText: 6000,
+} as const;
+
+export interface IndictmentDraftRequest {
+  accused: string;
+  complainant: string;
+  facts: string;
+  charges_hint?: string;
+  evidence: RulingEvidenceItem[]; // max 20
+}
+
+export interface IndictmentLegalBasis {
+  law_name: string;
+  article_no: string;
+  reasoning: string;
+}
+
+/** پاسخ تخت (بدون شیء sections)؛ charge_description با «پیشنهاد (غیرقطعی):» آغاز می‌شود. */
+export interface IndictmentDraftResponse {
+  status: RulingDraftStatus;
+  charge_description: string;
+  evidence_summary: string;
+  legal_basis: IndictmentLegalBasis[];
+  removed_citations: string[];
+  missing_information: string[];
+  banner: string;
+  requires_human_review: true;
+  disclaimer: string;
+  model_tier: string;
+  request_id: string;
+  draft_id: string;
+  content_sha256: string;
+}
+
+export function draftIndictment(
+  payload: IndictmentDraftRequest,
+  signal?: AbortSignal,
+): Promise<IndictmentDraftResponse> {
+  return postDraft<IndictmentDraftResponse>("/drafts/indictment", payload, signal);
 }

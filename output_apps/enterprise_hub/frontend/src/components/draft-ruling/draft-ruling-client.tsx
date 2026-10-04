@@ -15,20 +15,13 @@ import {
   RULING_LIMITS as L,
   RulingDraftError,
   draftRuling,
-  type RulingCourtType,
   type RulingDraftResponse,
   type RulingEvidenceItem,
 } from "@/lib/api/smart-judge-client";
 import { ResultView } from "@/components/draft-ruling/result-view";
+import { CourtPicker } from "@/components/draft-ruling/court-picker";
+import { courtLabel, type RulingCourtType } from "@/lib/court-types";
 
-const COURTS: { value: RulingCourtType; label: string }[] = [
-  { value: "civil", label: "دادگاه حقوقی" },
-  { value: "criminal", label: "دادگاه کیفری" },
-  { value: "family", label: "دادگاه خانواده" },
-  { value: "commercial", label: "دادگاه تجاری" },
-  { value: "labor", label: "دادگاه کار" },
-  { value: "administrative", label: "دیوان عدالت اداری" },
-];
 
 type ErrKind = null | "vip" | "validation" | "network" | "server";
 
@@ -142,25 +135,7 @@ export function DraftRulingClient() {
 
         <form onSubmit={submit} className="no-print pb-12" noValidate aria-busy={loading}>
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="ap-card md:col-span-2">
-              <label htmlFor="court_type" className="mb-2 block font-medium">
-                نوع دادگاه
-              </label>
-              <select
-                id="court_type"
-                className="ap-input"
-                value={court}
-                onChange={(e) => setCourt(e.target.value as RulingCourtType)}
-                {...inv("court_type")}
-              >
-                {COURTS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              {hint("court_type")}
-            </div>
+            <CourtPicker court={court} onCourtChange={setCourt} fieldError={fe("court_type")} />
 
             {(
               [
@@ -366,7 +341,7 @@ export function DraftRulingClient() {
 
         {result && (
           <section id="result" tabIndex={-1} aria-label="نتیجه پیش‌نویس" className="ap-section pt-0 outline-none">
-            <ResultView result={result} courtLabel={COURTS.find((c) => c.value === court)?.label ?? ""} />
+            <ResultView result={result} courtLabel={courtLabel(court)} />
           </section>
         )}
       </main>
