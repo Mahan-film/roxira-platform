@@ -1,55 +1,34 @@
-> **2026-10-04: read `docs/HANDOFF_2026-10-04.md` first** (full state, what is on main vs deployed, open work in priority order, rules and gotchas).
+> **Last update: 2026-10-04 (late). Read `docs/HANDOFF_2026-10-04.md` for the full picture; this file is the short, current snapshot. Then `docs/SYSTEM_MAP.md`, then `docs/STRATEGY.md` only as needed.**
 
 # Current state (read this first)
 
-Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: domains, server, keys by name, toolchain, permissions). `docs/STRATEGY.md` explains **why**; `docs/research/NEXTGEN_ROADMAP_2026-10.md` is the build order; `docs/research/PLATFORM_CAPABILITY_ASSESSMENT_2026-10.md` says what each product can and cannot do today. Every chat updates this file through `/handoff`. Last update: 2026-10-03 (hub on Sonnet, context full, handoff).
+Owner speaks Persian: reply in Persian; code, commits and docs in English. Hub = strategist/architect (Opus-class), workers = cheap models (`rx <issue> dsflash`) or Claude `implementer` subagents in worktrees. The hub never merges or deploys: the owner does (`gh pr merge N --repo Mahan-film/roxira-platform --squash --admin --delete-branch`, ONE command per message; the owner's terminal Run buttons replay old blocks, so ask them to type or paste into a new tab).
 
-## Roles and lanes (ADR `docs/decisions/0003-agent-operating-model.md`)
-- The hub is strategist and reviewer: it writes exact issue specs (files, verified data shapes, rules), reviews diffs line by line, and does not implement product code. Hard fixes go to a Sonnet `implementer` subagent in a prepared worktree (`~/Developer/rx-wt/...`; subagents cannot run git, the hub commits and pushes).
-- Workers: `rx <issue> [model] [base-branch]` (`scripts/dev/rx`, zsh). Codex is EXHAUSTED until 2026-10-30 and officially unsupported in Iran: use `dsflash` (DeepSeek V4.1 Flash via OpenRouter, reachable again), `dspro`, `gptoss`, `team` (OmniRoute) for hard tasks. Weak models loop on code-graph search, invent images/versions/URLs and miss imports: verify every pin, send follow-ups by editing the issue body and rerunning `rx <n> dsflash issue-<n>`. Max 3 workers, stagger starts 25 s. rx enables auto-merge itself except for sensitive paths; use `RX_AUTOMERGE=0` for billing/auth/nginx/compose/workflows.
-- Merging: rx PRs merge through `rx-automerge.yml` (server-side gate, PAT secret `MERGE_BOT_TOKEN`; needs green required checks, Agent review not failing, size <= 1500 lines, no sensitive path unless label `hub-approved`). `agent/*` PRs go through `agent-automerge.yml`. The assistant is denied: plain `gh pr merge`, `/approve` comments, cron/unattended jobs, branch deletion, batch edits of many issues. Allowed: `gh pr merge --auto`, labels, `gh workflow run`, `gh pr close` + `reopen`.
-- Bot-authored PRs (Factory plan/agent) get 0 checks because `GITHUB_TOKEN` events do not trigger CI: close + reopen as the owner (fix in PR #446).
-- Owner rules (memory): test every link/command before presenting it; give the owner exact commands, one per block; research first-hand; disagree only with evidence; lawyer gets only hard questions.
+## Rules that changed in 2026-10 (older docs may still say otherwise)
+- GitHub Actions is OFF (zero spend). CI = `bash scripts/dev/local_ci.sh` (about 1230 tests, quarantined). Never run pytest over `src/` or the repo root. Auto-deploy via Actions does NOT exist: deploys go through `scripts/ops/deploy_local.sh` (owner-run).
+- Keys only in `~/Secrets/roxira/roxira.env` (chmod 600). Never print or ask for values. Server `.env` writes only through `scripts/ops/set_server_env.sh` (owner-run).
+- Autonomy ladder `config/autonomy_ladder.json`: L0 docs, L1 non-sensitive code, L2 smartjudge prompts/retrieval/corpus/models.yaml (`hub-approved`), L3 auth/billing/migrations (owner reads), L4 `.github`, `scripts/ci`, `scripts/ops`, rx, compose, nginx (owner writes).
+- Case data never goes to a `:free` model. Model ids only in `config/models.yaml`.
+- Every agent worktree: run full `local_ci.sh` before the PR. Test files must not run code at import (quarantine guard).
+- Claude desktop app leaves `core.bare=true`: run `git config core.bare false` at the start of every bash chain; launch agents one at a time.
 
-## Live and working (prod `5.75.200.67`, Hetzner, Cloudflare in front)
-- Auto-deploy armed (`deploy-prod.yml` after green CI on main; `DEPLOY_ENABLED`, `.deploy-freeze`). CI ignores `*.md`-only pushes: if main drifted (generated `docs/SYSTEM_INVENTORY.generated.md`), run `gh workflow run ci.yml --ref main`, then deploy follows. Last verified 2026-10-03: `/health` 200, 45 routers, `/admin` 404, legacy `/api/v1/payment/zibal/checkout` and `/trial/start` 404.
-- Security done (owner + hub, 2026-10-02/03): sshd key-only, `ufw` 2053 closed, JWT_SECRET rotated (prod value had equalled the repo default), `VIP_PHONE_ALLOWLIST` and `JWT_TTL_SECONDS` in `.env`, Dependabot alerts + security updates, ruleset has 6 required checks, Cloudflare OTP rate-limit rule, GitHub Pages source = Actions, server rebooted (15 containers healthy). Merged: #379 payments, #378 JWT, #381 sensitive paths, #382 actions kit (`pin_actions.py`, CODEOWNERS, SECURITY.md, Dependabot majors ignored via #419), #385-#388 Smart Judge fixes (fake 85% removed, disclaimer + scope guard, admin passcode removed, SEO), #430 unifiedauth robust env ints.
-- Factory first real run: brief #236 -> proposal (run 6) -> `/approve` -> plan (8 tasks #433-#440, plan PR #441 merged) -> build: #433 scaffold merged (#442), #434 running. Planner on `cheap` tier (#390), overlapping tasks serialized (#431), ledger comments on the issue (`/report`), spec artifacts, task contracts. Agent PRs are reviewed by `deepseek/deepseek-v4.1-flash` (~$0.0005 each).
-- Research stack: SearXNG + Valkey on prod (127.0.0.1:8888, not wired into the app), Crawl4AI compose pinned `unclecode/crawl4ai:0.9.4`. Local Whisper (`ROXIRA_STT_LOCAL=1`) merged but off.
-- Qdrant: `iran_laws_v2` 5,103 points (8 laws), `judicial_precedents` 6, `judiciary_circulars` 250, advisory opinions 0.
-- Smart Judge https://ghazihoushmand.ir: chat, document analysis (OCR), defense-document generation, damages calculator, citation check, voice, Zibal payments, SMS OTP. It is an assistant, by design NOT a judge (system prompt). Roxira OS https://roxira.ir (+ roxira.net -> roxira.ir): pages exist (accounting, crm, hr, inventory, invoicing, radar) but modules are skeletons with empty tables.
+## On main, NOT yet on the live site (prod still runs 160081b)
+Everything since #461: court-aware drafting (14 court types), indictment draft, prompt library (off unless `SMARTJUDGE_PROMPT_LIBRARY=1`), escalation (off unless `SMARTJUDGE_ESCALATION=1`), fallback chains, chat restyle, minimal `/health` (#475; live `/health` still leaks details), CRM tenant isolation (migration `1789120000000-AddCrmTenantIsolation.ts` pending), local deploy tooling (#502, #509 `migrate`), merge-gate fixes (#508), set_server_env fix (#512), law fetcher (#511).
+Server `.env` already set (names only): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ADMIN_HEALTH_KEY (take effect at next restart). JWT_SECRET, KAVENEGAR_API_KEY already present. Backups `.env.bak-*` on server.
 
-## Legal corpus (W25)
-- Rules (`docs/LAWYER_ANSWERS_2026-09-30.md`): delete repealed articles; official sources only (rc.majlis.ir, Official Gazette); advisory opinions not authoritative; unification rulings authoritative.
-- Staged, NOT in Qdrant: `data/raw/phase1/phase1_official_v2.jsonl` (git-ignored, Mac only): 1504 rows, 17 laws, all official. Ingest needs the owner's explicit yes (backup, separate collection, spot checks, switch).
-- Gaps: invalid commerce arts 51 and 53-71 still served, no `source_tier` on served rows, unification rulings, `config/jurisdiction_rules.yaml` not wired, no case-level eval. FAQ citation checker for the public microsite: issue #447.
+## NEXT STEPS, in order (owner types each, hub reads the output)
+1. `bash scripts/ops/deploy_local.sh migrate` (plan, read-only) was run: ONE pending migration (AddCrmTenantIsolation). Then `migrate --yes` (type short SHA; pg_dump backup first, never auto-restore). Result not yet known when this was written.
+2. `bash scripts/ops/deploy_local.sh deploy` (dry-run), then `deploy --yes`; verify `/health` minimal, `/admin` 404, Google login, chat. Rollback is automatic on smoke-test failure.
+3. Owner runs `python3 scripts/legal/fetch_laws.py --dry-run` from their own network (see `docs/ops/LEGAL_FETCH_LAWS.md`), then the real fetch. ekhtebar.ir works; qavanin.ir reachable; rc.majlis.ir, rrk.ir unreachable, dotic.ir returns 403 (do not bypass).
+4. Hub + agents: fix 99 duplicate-key rows (39 keys) and missing `approval_date` in staged `phase1_official_v2.jsonl`, then local `validate -> plan -> apply -> eval`; production ingest only with owner yes, into a NEW collection with a rollback switch; lawyer signs the repeal list.
+5. Evaluation: build the 50-question Persian legal set (`docs/research/DEEP_RESEARCH_PROMPTS_2026-10.md`; the owner has a Deep Research draft in `~/Downloads`: its article numbers are UNVERIFIED and partly look wrong, treat every `statutory authority` as TO-VERIFY and have a lawyer check). Promptfoo gate in `local_ci`.
+6. Model roles: bake-off (`docs/research/BAKEOFF_2026-10-04.md`): Gemini 3.8 Flash 0.23 pass, others <= 0.07 (strict citation criteria, no RAG). Candidate reviewer = Gemini 3.8 Flash (different family from DeepSeek executor). Decide in `config/models.yaml` (L2); verify MiMo id with `--list-verify`.
 
-## Open work (check `gh pr list`; do not redo merged work)
-- Workflow PRs reviewed by the hub, waiting for the owner's plain merge: #445 (agent-automerge regression fix), #446 (kick CI as PAT user), #432 (Pages basePath). Red PRs with known causes and follow-ups sent: #380 nginx (quote bug in test), #384 model gateway (Persian-digit card redaction), #383 hub CRM tenant isolation (brittle test), #389 /health (async handler not found by the test, branch DIRTY), #345 artifact cache. Dependabot major PRs must NOT be merged (django 6, typescript 7, nestjs 12, bullmq 6, eslint 10); #419 stops new ones.
-- Issues: #423 merge gate treats skipped required checks as passed, #425 superseded by #430, #396 hub accounting audit, #447 FAQ citation verification, #428 and older W-items.
+## Tools verdicts (docs/research/TOOLS_ADOPTION_2026-10.md)
+ADOPT/TRY: SearXNG + Crawl4AI (server), Wayback CDX client, Tesseract `fas` baseline vs Surya/Docling on 20 gazette pages, Promptfoo, bge-reranker-v2-m3 behind a flag. SKIP: Flowise (archived), Composio (SaaS), n8n, Dify, Mem0. AVOID: HexStrike AI ("Hexbot" ambiguous: ask the owner which one; never install the offensive tool).
+
+## Known open work (see HANDOFF for detail)
+rx not wired to `src/factory_pipeline/task_caps.py`; `opencode serve` spike; product split (smart-judge / roxira / core) not started beyond import-boundary check; header token count hard-coded 0, Persian digits remain in `formatPersianNumber`; about 230 stale worktrees and about 20 stale/Dependabot PRs (do NOT merge Dependabot majors); backend Dockerfile runner stage has no ts-node (migrate uses a one-off `--target deps` image instead); `set_server_env.sh` rewrite fails if server `.env` holds only that variable.
 
 ## Waiting on the owner
-1. Plain merges listed above, and later `/approve`-type actions (the assistant cannot do them).
-2. Apply `docs/ops/TWENTY_HARDENING.md` on the server (pinned compose, secrets from `.env`); decide the one-day Twenty Persian/RTL/Jalali spike.
-3. Enable local Whisper after a real-voice test (`scripts/stt_bench.py`); legal ingest yes; send lawyer questions (`docs/LEGAL_RESEARCH_ROUND2_2026-09-30.md`).
-4. DB fixes: order 4815502353 paid but `pending`; revoke fake user `authenticated_user`; SINGLE_DRAFT credits (#101). Move the old burned admin passcode anywhere it was reused.
-5. Local branches with unpushed work (back up before any cleanup): feature/weekly-research-radar, fix/runners-off-prod, hub/status-2026-09-25, issue-133, issue-144, a stash, 12 dirty worktrees under `.claude/worktrees/`.
-6. Optional: GitHub App instead of the PAT for the merge bot; PAT expiry date reminder.
-
-## Next workstreams
-| Id | What | Lane |
-| --- | --- | --- |
-| F1 | Finish brief #236 (tasks #434-#440), verify FAQ citations (#447), publish via `project-pages.yml` (basePath #432), then `/report` | agents |
-| F2 | Preview environments on host (planner/preview.sh/compose template exist), golden fullstack template (#330, #335 backend slice merged), budget wiring | rx |
-| M1 | Merge automation hardening: #423, #445, #446; required check `Agent review` only after it is stable | rx + owner |
-| S1 | Security round 2: nginx (#380), OTP (#366), docker.sock removal from backend, RAG tenant isolation and prompt-injection tests, `pin_actions.py --apply` then `sha_pinning_required`, SOPS/age secrets | rx + owner |
-| C1 | Agentic CRM on `CrmPort` + own agent layer (`docs/research/COMPOSABLE_CRM_ACCOUNTING_2026-10.md`): tenant/auth (#369), model gateway (#368), ledger audit (#396), Twenty spike | rx |
-| J1 | Smart Judge: verified-citation drafts for lawyers/judges, eval set of expert-labelled cases, corpus expansion, scope/disclaimer done (see capability assessment) | rx + lawyer |
-| V1 | Voice: local Whisper decision from `stt_bench`, VAD tuning | rx |
-| X1 | Intelligence: tournament runs (#326), radar decision log (#347), DBOS spike, bake-off lab (`src/factory_pipeline/bakeoff.py` exists) | rx |
-
-## Known issues
-- Mac to GitHub/OpenRouter is flaky: use `timeout`, retries, kill hung shells; `gh pr merge` prompts "Delete the branch locally?" for merged PRs (answer N).
-- rtk wraps git/pytest: use `rtk proxy python3 -m pytest <file>`; never run pytest over `src/` or the repo root. In zsh an unquoted variable is not word-split and `echo ====` fails: use bash -c or literal paths.
-- Compose passes unset optional vars as empty strings: code must treat empty env values as unset (see #430).
-- Dockerfile.prod is Python 3.11 while pyproject says >=3.13; `.env.example` names differ from prod.
+Merges; the `migrate`/`deploy` runs above; Twenty CRM hardening (`docs/ops/TWENTY_HARDENING.md`); local Whisper decision (needs a real Persian recording, `scripts/dev/stt_bakeoff.py --make-sample`); DB fixes (order 4815502353, user `authenticated_user`, SINGLE_DRAFT #101); a second copy of `~/Backups/roxira-legal/phase1_20261004/`; lawyer review of repeal list and benchmark answers; Iran-related account risk (Anthropic supported-country list, GitHub, Groq 403): keep local backups.
