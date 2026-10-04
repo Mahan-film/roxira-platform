@@ -292,7 +292,7 @@ def test_other_length_and_type_validation():
 
 def test_invalid_court_type():
     with pytest.raises(ValueError):
-        make_case("administrative")
+        make_case("tax")  # administrative is now a valid court type
 
 
 def test_validation_error_does_not_leak_content():
