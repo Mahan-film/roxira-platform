@@ -16,6 +16,14 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. Hub =
 Everything since #461: court-aware drafting (14 court types), indictment draft, prompt library (off unless `SMARTJUDGE_PROMPT_LIBRARY=1`), escalation (off unless `SMARTJUDGE_ESCALATION=1`), fallback chains, chat restyle, minimal `/health` (#475; live `/health` still leaks details), CRM tenant isolation (migration `1789120000000-AddCrmTenantIsolation.ts` pending), local deploy tooling (#502, #509 `migrate`), merge-gate fixes (#508), set_server_env fix (#512), law fetcher (#511).
 Server `.env` already set (names only): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ADMIN_HEALTH_KEY (take effect at next restart). JWT_SECRET, KAVENEGAR_API_KEY already present. Backups `.env.bak-*` on server.
 
+
+## Recent Accomplishments (2026-10-05)
+- **Legal Corpus Cleansed & Validated**: Staged multi-part articles consolidated into `data/legal/phase1_canonical.jsonl` (1,444 articles, 17 official laws, 0 duplicate keys, 0 repealed rows, 100% pass on ingest gates).
+- **Zero-Destruction Guardrail Enforced**: Commit `599a539` committed strict read-only audit & anti-bulk-wipe rules into `AGENTS.md`.
+- **SearXNG API Rate-Limit Resolved**: `limiter: false` configured on server (`:8888`), unblocking zero-cost automated research.
+- **Port Reservation Standardized**: Server network footprint (15 active ports) mapped and guarded against port collisions.
+- **Dual-Domain Kavenegar OTP In Progress**: Automatic template switching (`roxira-verify` vs `ghazi-verify`) based on request host and payload.
+
 ## NEXT STEPS, in order (owner types each, hub reads the output)
 1. `bash scripts/ops/deploy_local.sh migrate` (plan, read-only) was run: ONE pending migration (AddCrmTenantIsolation). Then `migrate --yes` (type short SHA; pg_dump backup first, never auto-restore). Result not yet known when this was written.
 2. `bash scripts/ops/deploy_local.sh deploy` (dry-run), then `deploy --yes`; verify `/health` minimal, `/admin` 404, Google login, chat. Rollback is automatic on smoke-test failure.

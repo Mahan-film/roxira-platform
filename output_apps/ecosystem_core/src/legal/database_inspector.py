@@ -59,7 +59,7 @@ class LegalDatabaseInspector:
                     res = await client.get(f"http://{host}:{port}/collections/iran_laws_bge_m3")
                     if res.status_code == 200:
                         q_data = res.json().get("result", {})
-                        report["qdrant_collections"]["iran_laws_bge_m3"] = {
+                        report["qdrant_collections"][os.getenv("LEGAL_COLLECTION_NAME", "iran_laws_mistral_v1")] = {
                             "points_count": q_data.get("points_count", 0),
                             "vectors_count": q_data.get("vectors_count", 0),
                             "status": q_data.get("status")

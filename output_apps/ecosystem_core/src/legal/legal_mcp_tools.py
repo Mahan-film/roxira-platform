@@ -22,7 +22,7 @@ class LegalMCPTools:
                     return {
                         "status": "success",
                         "nodes_indexed": data.get("points_count", 1305),
-                        "source": "iran_laws_bge_m3",
+                        "source": os.getenv("LEGAL_COLLECTION_NAME", "iran_laws_mistral_v1"),
                         "summary": f"استخراج مستندات برای '{keyword}' از میان ۵۱۸۴ گره مصوب قوانین مدنی، کیفری و دادگاه صلح."
                     }
         except Exception as e:

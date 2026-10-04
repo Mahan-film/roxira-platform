@@ -37,3 +37,34 @@ it in `config/models.yaml`.
 For “where is X?” or “who calls Y?” questions, use the codebase-memory MCP and qmd first.
 Use `scripts/dev/pack_agent_context.sh` to pack a file list only for a documented cross-cutting task.
 Never pack the whole repository, `data/`, `database_snapshots/`, or customer data, and never put a secret in a pack.
+
+## 6. Zero-Destruction & Mandatory Pre-Flight Audit Policy (STRICT GUARDRAIL)
+
+Every agent, LLM, or automated script operating in this repository MUST strictly follow these rules:
+
+1. **Mandatory Read-Only Discovery Phase First**:
+   - Before executing ANY action, migration, file edit, or cleanup, you MUST conduct a comprehensive research/audit phase using ONLY read-only commands (e.g., git status, git branch --no-merged, find, grep, sed, head, python read-only scripts).
+   - Never assume directory structure, unmerged branches, or database states without verifying live evidence first.
+
+2. **Absolute Ban on Bulk Destructive Commands**:
+   - NEVER suggest or execute bulk destructive commands (rm -rf, git reset --hard on remote/shared heads, git clean -fdx, or dropping database tables).
+   - Worktree cleanup MUST be selective and per-branch verified; NEVER execute bulk directory wipes on .claude/worktrees/, ~/Developer/rx-wt/, or any staging backup directory.
+   - Files in ~/Backups/ and ./data/ are strictly IMMUTABLE. Any data hygiene or deduplication must be output to a NEW, isolated destination file.
+
+3. **Deterministic 4-Step Safety Lifecycle**:
+   - Step 1 (Audit & Research): Inspect dependencies, unmerged commits, and configuration schemas.
+   - Step 2 (Dry Run / Validation): Test using --dry-run, validate, or sandbox fixtures without writing to prod/git state.
+   - Step 3 (Explicit Impact Report): Print exact filenames, line counts, and revert strategies to the owner.
+   - Step 4 (Targeted Execution): Only apply surgical, reversible changes after the owner explicitly approves.
+
+## 7. Port Reservation & Network Map Policy (STRICT GUARDRAIL)
+
+To prevent breaking existing live services, background workers, or proxies on the host:
+1. **Never Bind to Active Reserved Ports**:
+   - Web / Apps: 80, 443 (Nginx Gateway), 8000 (Python AI Core), 3000 (NestJS Enterprise Hub), 3001 (Next.js Frontend), 3002 (Twenty CRM).
+   - Data / Cache: 5432 (Postgres), 6432 (PgBouncer), 6379 (Redis), 6333 (Qdrant).
+   - Research / Automation: 8888 (SearXNG API), 8005 (Factory Dispatcher), 4000/4001 (Gateways).
+   - Tunneling & Proxies: 2053, 2096, 8443, 11111, 62789.
+2. **Pre-Allocation Verification**:
+   - Any new tool, container, or background process MUST explicitly run `ss -tulnp | grep <PORT>` first.
+   - If a port is occupied, binding without owner-approved reconfiguration is strictly prohibited.

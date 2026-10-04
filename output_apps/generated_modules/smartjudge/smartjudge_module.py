@@ -75,7 +75,7 @@ import base64
 import struct
 import asyncio
 from typing import Optional, List, Any
-from fastapi import APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile
+from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 import psycopg
 import httpx
@@ -5005,10 +5005,9 @@ KAVENEGAR_API_KEY = os.environ.get("KAVENEGAR_API_KEY", "").strip()
 KAVENEGAR_BASE_URL = os.environ.get(
     "KAVENEGAR_BASE_URL", "https://api.kavenegar.com/v1"
 ).rstrip("/")
-KAVENEGAR_TEMPLATE = os.environ.get(
-    "KAVENEGAR_TEMPLATE_GHAZI",
-    os.environ.get("KAVENEGAR_TEMPLATE", "ghazi-verify"),
-)
+KAVENEGAR_TEMPLATE_GHAZI = os.environ.get("KAVENEGAR_TEMPLATE_GHAZI", "ghazi-verify")
+KAVENEGAR_TEMPLATE_ROXIRA = os.environ.get("KAVENEGAR_TEMPLATE_ROXIRA", "roxira-verify")
+KAVENEGAR_TEMPLATE = KAVENEGAR_TEMPLATE_GHAZI
 
 # نگاشت ارقام فارسی/عربی به ارقام استاندارد ASCII
 _PHONE_DIGIT_TRANS = str.maketrans(
@@ -5056,7 +5055,7 @@ def _is_valid_phone(phone: str) -> bool:
     return len(phone) == 11 and phone.startswith("09") and phone.isdigit()
 
 
-async def _deliver_verification_code(phone: str, code: str) -> bool:
+async def _deliver_verification_code(phone: str, code: str, template: str = None) -> bool:
     """ارسال کد تأیید از طریق دروازهٔ پیامکی Kavenegar.
 
     هرگز استثنا پرتاب نمی‌کند؛ در صورت نبود/خطای کلید یا دروازه ``False``
@@ -5067,7 +5066,8 @@ async def _deliver_verification_code(phone: str, code: str) -> bool:
         return False
     try:
         url = f"{KAVENEGAR_BASE_URL}/{KAVENEGAR_API_KEY}/verify/lookup.json"
-        params = {"receptor": phone, "token": code, "template": KAVENEGAR_TEMPLATE}
+        chosen_template = template or KAVENEGAR_TEMPLATE_GHAZI
+        params = {"receptor": phone, "token": code, "template": chosen_template}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(url, params=params)
             if resp.status_code == 200:
@@ -5100,7 +5100,7 @@ def _issue_access_token(phone: str, tier: str, profile: dict) -> str:
 
 
 @router.post("/auth/send-otp")
-async def send_auth_otp(payload: dict = Body(...)):
+async def send_auth_otp(request: Request, payload: dict = Body(...)):
     phone = normalize_phone(payload.get("phone", ""))
     if not _is_valid_phone(phone):
         return JSONResponse(status_code=400, content={"status": "error", "message": "شماره همراه نامعتبر است."})
@@ -5114,8 +5114,12 @@ async def send_auth_otp(payload: dict = Body(...)):
         "attempts": 0,
     }
 
+    req_host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").lower()
+    service_req = str(payload.get("service") or "").upper()
+    target_template = KAVENEGAR_TEMPLATE_ROXIRA if ("roxira" in req_host or service_req == "ROXIRA") else KAVENEGAR_TEMPLATE_GHAZI
+
     try:
-        delivered = await _deliver_verification_code(phone, otp_code)
+        delivered = await _deliver_verification_code(phone, otp_code, template=target_template)
     except Exception as exc:  # هیچ خطای ارسالی نباید منجر به 500 شود
         print(f"[AUTH][OTP-DELIVERY-ERROR] {type(exc).__name__}: {exc}", file=sys.stderr)
         delivered = False
