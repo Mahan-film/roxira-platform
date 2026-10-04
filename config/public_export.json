@@ -1,0 +1,26 @@
+{
+  "_doc": "Rules for scripts/ops/export_public.py (docs/ops/PUBLIC_EXPORT.md). Globs are fnmatch; '*' also matches '/'. L4: owner-only.",
+  "include": [
+    "src/", "output_apps/", "scripts/", "docs/", "config/", "e2e/", "templates/", "skills/",
+    "LICENSE", "README.md", "SECURITY.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md"
+  ],
+  "exclude": [
+    "output_apps/generated_modules/PROJ-*", "output_apps/generated_modules/USER-*", "output_apps/generated_modules/TEST-*",
+    "scripts/ops/*",
+    "docs/OPERATIONS_RUNBOOK*",
+    "data/*", "archive/*", "projects/*", "backups/*", "production_bundle/*", ".claude/*", ".agents/*",
+    "deploy/*", "nginx/*", "ops/*",
+    ".mcp.json", "CLAUDE.md", "Dockerfile.prod", "docker-compose.prod.yml",
+    "*.env", "*.env.*", "*/.env", "*/.env.*", ".env", ".env.*",
+    "TECH_RADAR*", "*/TECH_RADAR*"
+  ],
+  "exclude_root_globs": [
+    "*HANDOVER*", "SYSTEM_STATUS*", "SYSTEM_STATE*", "STATUS*.md", "LATEST_*.md"
+  ],
+  "content_exclude_scopes": ["docs/", "config/"],
+  "content_exclude_regex": [
+    "5\\.75\\.200\\.67"
+  ],
+  "content_exclude_public_ipv4": true,
+  "max_file_bytes": 2097152
+}
