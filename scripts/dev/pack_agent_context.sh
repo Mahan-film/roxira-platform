@@ -1,6 +1,9 @@
 #!/bin/zsh
 set -eu
 
+# zsh builtin stat: avoids depending on `wc` being on PATH (macOS has no /bin/wc).
+zmodload zsh/stat
+
 if (( $# < 1 || $# > 2 )); then
   print -u2 "usage: $0 <file-list.txt> [out-file]"
   exit 2
@@ -49,7 +52,7 @@ for path in "${paths[@]}"; do
     exit 2
   fi
 
-  byte_size=$(wc -c < "$file_path")
+  byte_size=$(zstat +size -- "$file_path")
   if (( byte_size > 200000 )); then
     print -u2 "refusing file larger than 200000 bytes: $path"
     exit 2
@@ -62,9 +65,9 @@ else
   : > "$out_file"
   for path in "${paths[@]}"; do
     print -r -- "=== $path ===" >> "$out_file"
-    cat "$repo_root/$path" >> "$out_file"
+    print -r -- "$(<"$repo_root/$path")" >> "$out_file"
   done
 fi
 
-out_size=$(wc -c < "$out_file")
+out_size=$(zstat +size -- "$out_file")
 print -r -- "$out_file ($out_size bytes)"

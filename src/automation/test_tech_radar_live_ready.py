@@ -286,12 +286,22 @@ def test_clean_repair_success_is_not_downgraded(monkeypatch):
 
 
 # --------------------------------------------------------------------------- BRAVE_API_KEY fallback
+@pytest.fixture(autouse=True)
+def _hermetic_env_files(monkeypatch):
+    """get_env_var falls back to a local .env; neutralise it so results never
+    depend on a developer's machine (and no real key can reach an assertion)."""
+    from src.automation import provider_base
+
+    monkeypatch.setattr(provider_base, "_ENV_CACHE", {})
+    monkeypatch.setattr(provider_base, "_ENV_LOADED", True)
+
+
 def test_brave_client_honors_legacy_brave_api_key(monkeypatch):
     monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
     monkeypatch.setenv("BRAVE_API_KEY", "test-key-123")
     client = BraveSearchClient()
     assert client.configured is True
-    assert client.api_key == "test-key-123"
+    assert client.api_key == "test-key-123"  # synthetic value set above
 
 
 def test_brave_client_prefers_documented_env_var_when_both_set(monkeypatch):
