@@ -15,6 +15,7 @@ from output_apps.generated_modules.smartjudge.fast_path import (
     OUT_OF_SCOPE_REPLY,
     classify_fast_path,
 )
+from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 # W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
@@ -1436,10 +1437,15 @@ async def interactive_consult(payload: dict = Body(...)):
                 "پاسخ باید صریح، بی‌درنگ و کاملاً خلاصه باشد."
             )
             context_text = ""
-            if laws:
+            # FALLBACK rows are fixed placeholders, not corpus hits: never feed them as grounding.
+            grounded = _chat_safety.is_grounded(laws, precedents)
+            system_msg += " " + _chat_safety.LATIN_DIGITS_INSTRUCTION
+            if not grounded:
+                system_msg += " " + _chat_safety.GENERAL_KNOWLEDGE_INSTRUCTION
+            if grounded and laws:
                 law_lines = "\n".join([f"- {l.get('title')}: {l.get('summary', '')}" for l in laws[:5]])
                 context_text += f"\nمواد قانونی استخراج‌شده از پایگاه دانش:\n{law_lines}"
-            if precedents:
+            if grounded and precedents:
                 prec_lines = "\n".join([f"- {p.get('title')}: {p.get('summary', '')}" for p in precedents[:5]])
                 context_text += f"\nآرای وحدت رویه و رویه قضایی دیوان عالی کشور:\n{prec_lines}"
             
@@ -1492,6 +1498,14 @@ async def interactive_consult(payload: dict = Body(...)):
         except Exception as exc:
             print(f"[SMARTJUDGE][LLM-CALL-FAIL] {exc}", file=sys.stderr)
 
+    # Never-empty answers: ungrounded model replies carry the general-knowledge
+    # notice, lose unverified article numbers and keep the disclaimer.
+    if reply_msg and not _chat_safety.is_grounded(laws, precedents):
+        report = await _guard_citations(reply_msg, use_qdrant=True)
+        reply_msg = _chat_safety.finalize_general_knowledge_answer(
+            reply_msg, report.get("validated_articles") or []
+        )
+
     # ۲. فالبک هوشمند در صورت در دسترس نبودن کلید یا خطای شبکه
     if not reply_msg:
         greeting_words = ["سلام", "درود", "صبح", "عصر", "روز", "شب", "خسته", "خوبی", "چطوری", "بله", "اوکی", "باشه"]
@@ -1500,19 +1514,26 @@ async def interactive_consult(payload: dict = Body(...)):
             reply_msg = "سلام و درود بر شما، وقت بخیر. در خدمت شما هستم. لطفاً موضوع یا سوال حقوقی خود را بفرمایید تا بر اساس قوانین و رویه قضایی کشور بررسی و راهنمایی کنم."
         else:
             is_dowry = any(w in user_text for w in ["مهریه", "سکه", "زوجه", "عقدنامه", "عندالمطالبه", "توقیف اموال"])
-            law_refs = " و ".join([l["title"] for l in laws[:2]]) if laws else "مقررات قانون مدنی و ثبت"
+            is_legal_topic = is_dowry or any(w in user_text for w in ["دادگاه", "قانون", "شکایت", "پرونده", "رای", "رأی", "وحدت رویه", "طلاق", "مهریه", "نفقه", "چک", "قرارداد", "ملک", "سند", "وکیل", "صلح"])
+            law_refs = " و ".join([l["title"] for l in laws[:2]]) if (laws and _chat_safety.is_grounded(laws, precedents)) else "مقررات قانون مدنی و ثبت"
             if is_dowry:
                 reply_msg = "مطابق آیین‌نامه اجرای مفاد اسناد رسمی لازم‌الاجرا، فرایند مطالبه مهریه مستقیماً از طریق صدور اجرائیه در دایره اجرای ثبت اسناد و املاک و توقیف اموال زوج آغاز می‌گردد."
                 draft = f"""بسمه‌تعالی
 ریاست محترم دایره اجرای مفاد اسناد رسمی لازم‌الاجرا
 با سلام و احترام؛ در خصوص مطالبه مهریه به استناد ماده ۱۰۸۲ قانون مدنی و {law_refs}..."""
-            else:
-                is_legal_topic = any(w in user_text for w in ["دادگاه", "قانون", "شکایت", "پرونده", "رای", "رأی", "وحدت رویه", "طلاق", "مهریه", "نفقه", "چک", "قرارداد", "ملک", "سند", "وکیل", "صلح"])
-            if is_legal_topic:
+            elif is_legal_topic:
                 reply_msg = f"موضوع حقوقی شما بر مبنای {law_refs} و رویه دیوان عالی کشور بررسی شد. جهت تنظیم دقیق لایحه یا دادخواست، لطفاً جزئیات و ادله پرونده را بفرمایید."
             else:
                 reply_msg = "درود بر شما، در خدمت شما هستم. لطفاً شرح پرونده، سوال حقوقی یا خواسته مد نظر خود را بفرمایید تا مستندات قانونی و رویه قضایی آن را بررسی کنم."
+            # Canned template replies are not corpus-verified either.
+            if is_legal_topic and not _chat_safety.is_grounded(laws, precedents):
+                reply_msg = _chat_safety.GENERAL_KNOWLEDGE_NOTICE + "\n\n" + reply_msg + "\n\n" + _chat_safety.CHAT_DISCLAIMER
 
+    reply_msg = _chat_safety.to_latin_digits(reply_msg)
+    draft = _chat_safety.to_latin_digits(draft)
+    # Placeholder FALLBACK rows never leave the server.
+    if not _chat_safety.is_grounded(laws, precedents):
+        laws, precedents = [], []
     prob = derive_success_probability(user_text)
 
     # ذخیره پیام کاربر و پاسخ سیستم در دیتابیس
@@ -3462,7 +3483,13 @@ async def chat_stream(request: Request, payload: dict = Body(default=None)):
             usage_out: dict = {}
             try:
                 async for chunk in _openrouter_stream(model, messages, usage_out):
-                    yield _sse_frame("delta", {"content": chunk})
+                    yield _sse_frame("delta", {"content": _chat_safety.to_latin_digits(chunk)})
+                # chat-stream does no corpus retrieval: every answer is ungrounded.
+                yield _sse_frame("notice", {
+                    "grounded": False,
+                    "message": _chat_safety.GENERAL_KNOWLEDGE_NOTICE,
+                })
+                yield _sse_frame("delta", {"content": "\n\n" + _chat_safety.CHAT_DISCLAIMER})
                 details = (usage_out.get("prompt_tokens_details") or {})
                 yield _sse_frame("done", {
                     "model": model,
@@ -5400,7 +5427,7 @@ class RulingEvidenceItem(_BaseModel):
 class RulingDraftRequest(_BaseModel):
     model_config = _ConfigDict(extra="forbid")
 
-    court_type: _Literal["civil", "criminal"]
+    court_type: _Literal["civil", "criminal", "family", "commercial", "labor", "administrative"]
     claimant: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_NAME)
     respondent: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_NAME)
     facts: str = _Field(..., min_length=1, max_length=_ruling_draft.MAX_FACTS)

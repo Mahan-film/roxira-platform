@@ -151,7 +151,7 @@ def test_non_vip_gets_403(app_client, monkeypatch):
 @pytest.mark.parametrize(
     "over",
     [
-        {"court_type": "family"},
+        {"court_type": "tax"},
         {"claimant": ""},
         {"facts": "x" * (rd.MAX_FACTS + 1)},
         {"claims": "x" * (rd.MAX_CLAIMS + 1)},

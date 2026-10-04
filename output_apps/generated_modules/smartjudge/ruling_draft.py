@@ -36,6 +36,59 @@ STATUS_INSUFFICIENT = "INSUFFICIENT_BASIS"
 CRIMINAL_PREFIX = "پیشنهاد (غیرقطعی): "
 PUNISHMENT_PLACEHOLDER = "مجازات توسط مرجع صالح تعیین می‌شود"
 
+NONFINAL_PREFIX = CRIMINAL_PREFIX
+LATIN_DIGITS_RULE = "همهٔ ارقام را فقط با ارقام لاتین 0-9 بنویس (Use Latin digits)."
+
+# court_type -> display name, party labels (side_a, side_b) and a short structure checklist.
+COURT_TYPES: Dict[str, Dict[str, Any]] = {
+    "civil": {
+        "name": "دادگاه حقوقی",
+        "parties": ("خواهان", "خوانده"),
+        "checklist": "",
+    },
+    "criminal": {
+        "name": "دادگاه کیفری",
+        "parties": ("شاکی", "متهم"),
+        "checklist": "",
+    },
+    "family": {
+        "name": "دادگاه خانواده",
+        "parties": ("خواهان", "خوانده"),
+        "checklist": (
+            "ساختار پیشنهادی: نسبت و وضعیت زوجین/خویشاوندی، موضوع (مهریه، نفقه، طلاق، "
+            "حضانت، ملاقات)، ادله و گواهی‌ها، ملاحظات مصلحت کودک در صورت وجود، "
+            "ارجاع به داوری/مشاوره در صورت لزوم."
+        ),
+    },
+    "commercial": {
+        "name": "دادگاه تجاری",
+        "parties": ("خواهان", "خوانده"),
+        "checklist": (
+            "ساختار پیشنهادی: شخصیت تجاری طرفین (تاجر/شرکت)، قرارداد یا سند تجاری "
+            "(چک، سفته، برات)، تعهدات و نقض، دفاتر و اسناد تجاری، خسارت تأخیر تأدیه."
+        ),
+    },
+    "labor": {
+        "name": "دادگاه کار (شورای حل اختلاف کار)",
+        "parties": ("کارگر", "کارفرما"),
+        "checklist": (
+            "ساختار پیشنهادی: رابطهٔ کارگری-کارفرمایی و نوع قرارداد، سابقه و آخرین "
+            "حقوق، موضوع اختلاف (اخراج، مطالبات، بیمه)، ادله و گزارش بازرسی کار."
+        ),
+    },
+    "administrative": {
+        "name": "دیوان عدالت اداری",
+        "parties": ("شاکی", "مشتکی‌عنه (مرجع اداری)"),
+        "checklist": (
+            "ساختار پیشنهادی: مرجع اداری و مصوبه یا تصمیم مورد اعتراض، صلاحیت دیوان، "
+            "مهلت اعتراض، دلایل مخالفت با قانون یا خروج از اختیار، درخواست ابطال یا "
+            "الزام به انجام وظیفه."
+        ),
+    },
+}
+NONFINAL_COURT_TYPES = ("family", "commercial", "labor", "administrative")
+COURT_TYPE_NAMES = tuple(COURT_TYPES)
+
 MAX_EVIDENCE_ITEMS = 20
 MAX_EVIDENCE_TITLE = 200
 MAX_EVIDENCE_TEXT = 6000
@@ -72,8 +125,8 @@ class RulingCase:
     jurisdiction: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if self.court_type not in ("civil", "criminal"):
-            raise ValueError("نوع دادگاه باید civil یا criminal باشد")
+        if self.court_type not in COURT_TYPES:
+            raise ValueError("نوع دادگاه نامعتبر است")
         for value in (self.claimant, self.respondent):
             if not isinstance(value, str) or not value.strip() or len(value) > MAX_NAME:
                 raise ValueError("نام طرفین باید متن غیرخالی و حداکثر ۳۰۰ نویسه باشد")
@@ -160,7 +213,14 @@ def _build_prompt(case: RulingCase, articles: List[Dict[str, str]]) -> str:
     evidence_lines = ["- " + e.get("title", "") + ": " + e.get("text", "") for e in case.evidence]
     articles_block = "\n".join(article_lines)
     evidence_block = "\n".join(evidence_lines) if evidence_lines else "- (ندارد)"
-    side_a, side_b = ("شاکی", "متهم") if case.court_type == "criminal" else ("خواهان", "خوانده")
+    meta = COURT_TYPES[case.court_type]
+    side_a, side_b = meta["parties"]
+    extra = ""
+    if meta["checklist"]:
+        extra = (
+            meta["checklist"] + "\n"
+            "هیچ مبلغ قطعی، حضانت قطعی یا حکم قطعی ننویس؛ هر نتیجه را «پیشنهاد (غیرقطعی)» بنام.\n"
+        )
     template = (
         "{\n"
         '  "facts_summary": "string",\n'
@@ -181,7 +241,8 @@ def _build_prompt(case: RulingCase, articles: List[Dict[str, str]]) -> str:
         "اگر این مواد برای نتیجه‌گیری کافی نیستند، در proposed_operative_part "
         "بنویس «اطلاعات کافی نیست» و کمبودها را در missing_information بیاور.\n\n"
         "مواد قانونی مجاز:\n" + articles_block + "\n\n"
-        "نوع پرونده: " + case.court_type + "\n"
+        + extra + LATIN_DIGITS_RULE + "\n"
+        "نوع پرونده: " + case.court_type + " (" + meta["name"] + ")\n"
         + ("مرجع: " + case.jurisdiction + "\n" if case.jurisdiction else "")
         + side_a + ": " + case.claimant + "\n"
         + side_b + ": " + case.respondent + "\n"
@@ -230,6 +291,20 @@ def _is_accepted(verify_citations: Callable[[str], Any], law: str, article: str)
         if got == wanted:
             return True
     return False
+
+
+_DIGIT_SKIP_KEYS = ("articles", "removed_citations", "status", "banner")
+
+
+def _latinize(value: Any) -> Any:
+    """Latin digits in model-facing text; identifier-like keys are left untouched."""
+    if isinstance(value, str):
+        return value.translate(_DIGIT_TRANS)
+    if isinstance(value, list):
+        return [_latinize(v) for v in value]
+    if isinstance(value, dict):
+        return {k: (v if k in _DIGIT_SKIP_KEYS else _latinize(v)) for k, v in value.items()}
+    return value
 
 
 def _scrub(value: Any) -> Any:
@@ -346,11 +421,17 @@ def generate_ruling_draft(
             part = PUNISHMENT_PLACEHOLDER
         result["proposed_operative_part"] = CRIMINAL_PREFIX + part
 
+    elif case.court_type in NONFINAL_COURT_TYPES:
+        part = result["proposed_operative_part"].strip()
+        if part.startswith(NONFINAL_PREFIX.strip()):
+            part = part[len(NONFINAL_PREFIX.strip()) :].strip()
+        result["proposed_operative_part"] = NONFINAL_PREFIX + part
+
     result["missing_information"] = result["missing_information"] + missing
     result["removed_citations"] = removed
     result["status"] = STATUS_DRAFT
     result["requires_human_review"] = True
     result["banner"] = BANNER
-    scrubbed = _scrub(result)
+    scrubbed = _scrub(_latinize(result))
     scrubbed["banner"] = BANNER
     return scrubbed
