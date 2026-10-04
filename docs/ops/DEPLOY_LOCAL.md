@@ -98,7 +98,9 @@ first if you can.
 the production `.env` without printing its value: the value travels over ssh stdin only, a timestamped
 backup `.env.bak-<time>` is made first, the file keeps its permissions, only the NAME and the value LENGTH
 are printed. `--from-local` copies the value from `~/Secrets/roxira/roxira.env`; `--generate` makes a random
-64-hex value and saves it in the local file too (use it for `ADMIN_HEALTH_KEY`). Containers read `.env`
+64-hex value and saves it in the local file too, but only after the server write is verified (atomic write,
+previous local file kept as `roxira.env.bak-<time>`, chmod 600; a refusal without `--replace` or any
+failure leaves the local file untouched). Use it for `ADMIN_HEALTH_KEY`. Containers read `.env`
 only when they are (re)started, so run it BEFORE `deploy`.
 
 Required before the first deploy of the Oct-2026 changes: `ADMIN_HEALTH_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
