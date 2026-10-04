@@ -332,16 +332,8 @@ GHAZI_APP_HTML = _read_landing("ghazi_index.html", _FALLBACK_GHAZI)
 
 
 
-@app.get("/health")
-async def health():
-    return {
-        "status": "ONLINE",
-        "service": "roxira-unified-server",
-        "version": "3.6.0",
-        "portals": ["ghazihoushmand.ir", "roxira.net", "roxira.ir"],
-        "loaded_routers": loaded_routers,
-        "failed_imports": failed_imports
-    }
+from output_apps.ecosystem_core.src.security.server_health import build_health_router
+app.include_router(build_health_router(lambda: loaded_routers, lambda: failed_imports))
 
 @app.get("/")
 @app.get("/dashboard")
