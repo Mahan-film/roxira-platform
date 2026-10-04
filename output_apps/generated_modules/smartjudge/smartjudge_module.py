@@ -1,4 +1,43 @@
 
+async def _fetch_live_legal_web_fallback(query: str, limit: int = 4) -> list:
+    """جستجوی زنده در پایگاه‌های حقوقی معتبر (سامانه قوانین، روزنامه رسمی، اختبار) از طریق SearXNG"""
+    import urllib.parse, httpx
+    searx_urls = [
+        os.getenv("SEARXNG_INTERNAL_URL", "http://research-stack-searxng-1:8080"),
+        "http://127.0.0.1:8888",
+        "http://5.75.200.67:8888"
+    ]
+    headers = {"User-Agent": "RoxiraSmartJudgeAgent/2.0 (Legal Intelligence Engine)"}
+    
+    for base_url in searx_urls:
+        try:
+            params = {
+                "q": f"{query} سایت سامانه ملی قوانین یا روزنامه رسمی یا دیوان عالی",
+                "format": "json",
+                "language": "fa"
+            }
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                resp = await client.get(f"{base_url}/search", params=params, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results = data.get("results", [])
+                    extracted = []
+                    for item in results[:limit]:
+                        extracted.append({
+                            "title": item.get("title", ""),
+                            "text": item.get("content", ""),
+                            "url": item.get("url", ""),
+                            "source": "جستجوی زنده مراجع و پرتال‌های قضایی"
+                        })
+                    if extracted:
+                        print(f"[SMARTJUDGE][WEB-FALLBACK] استخراج {len(extracted)} منبع زنده برای: {query[:40]}")
+                        return extracted
+        except Exception:
+            continue
+    return []
+
+
+
 import io, wave
 
 from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router as live_voice_router
@@ -2849,7 +2888,7 @@ def _get_local_whisper_instance():
     return _local_whisper_model if _local_whisper_model else None
 
 
-async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: str) -> str:
+async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: str, language: str = "fa") -> str:
     """تبدیل دقیق گفتار فارسی به متن با پشتیبانی چندلایه: OpenRouter STT -> AssemblyAI Pool -> faster-whisper."""
     if not audio_bytes:
         return ""
@@ -2874,7 +2913,7 @@ async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: s
             "X-Title": "Roxira SmartJudge",
         }
         b64_audio = base64.b64encode(audio_bytes).decode("ascii")
-        candidate_models = ["openai/whisper-large-v3", "openai/whisper-1", "microsoft/mai-transcribe-2"]
+        candidate_models = ["openai/whisper-large-v3", "openai/whisper-1"]
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0)) as client:
             # روش ۱-الف: درخواست استاندارد JSON Base64
@@ -2901,7 +2940,7 @@ async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: s
             for target_model in candidate_models:
                 try:
                     files = {"file": (f"speech.{ext}", audio_bytes, upload_mime)}
-                    data_form = {"model": target_model, "language": "fa"}
+                    data_form = {"model": target_model, "language": "fa", "prompt": "درخواست و دادخواست حقوقی، ماده قانون، دادگاه، رای وحدت رویه، سرقفلی"}
                     resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, data=data_form, files=files, headers=headers_auth)
                     if resp.status_code == 200:
                         text_out = _extract_openrouter_text(resp.json())
@@ -3000,7 +3039,7 @@ async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: s
         for target_model in stt_models:
             try:
                 files = {"file": (f"speech.{ext}", audio_bytes, upload_mime)}
-                data_form = {"model": target_model, "language": "fa"}
+                data_form = {"model": target_model, "language": "fa", "prompt": "درخواست و دادخواست حقوقی، ماده قانون، دادگاه، رای وحدت رویه، سرقفلی"}
                 resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, data=data_form, files=files, headers=headers_auth)
                 if resp.status_code == 200:
                     text_out = _extract_openrouter_text(resp.json())
