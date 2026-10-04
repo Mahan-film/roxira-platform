@@ -47,9 +47,6 @@ export default function AdminDashboard() {
           <p className="text-xs text-slate-400 mt-1">پایش وضعیت شبکه ۱۰ عاملی، پایگاه داده کاربران و استخراج دیتاست</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={handleLogout} className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl hover:bg-rose-500/20 transition-colors">
-            خروج از پنل
-          </button>
           <a href="/" className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-xl transition-colors">
             صفحه اصلی سایت
           </a>
