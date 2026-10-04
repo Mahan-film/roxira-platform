@@ -1,3 +1,5 @@
+> **2026-10-04: read `docs/HANDOFF_2026-10-04.md` first** (full state, what is on main vs deployed, open work in priority order, rules and gotchas).
+
 # Current state (read this first)
 
 Short snapshot for a new chat. Next read `docs/SYSTEM_MAP.md` (what exists: domains, server, keys by name, toolchain, permissions). `docs/STRATEGY.md` explains **why**; `docs/research/NEXTGEN_ROADMAP_2026-10.md` is the build order; `docs/research/PLATFORM_CAPABILITY_ASSESSMENT_2026-10.md` says what each product can and cannot do today. Every chat updates this file through `/handoff`. Last update: 2026-10-03 (hub on Sonnet, context full, handoff).
