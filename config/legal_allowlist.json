@@ -1,0 +1,31 @@
+{
+  "_comment": "Allowlist of laws the local ingest pipeline (scripts/legal/ingest_pipeline.py) may write. Source: docs/research/LEGAL_CORPUS_GAP_AUDIT_2026-10.md sections 2-4 (present + staged checklist). Names are compared after normalisation (ZWNJ, Arabic letters/digits, hamza). Adding a law needs lawyer/owner review. All entries are enacted laws; a bill is never allowed when an enacted law exists.",
+  "schema_version": 1,
+  "laws": [
+    {"name": "قانون مدنی", "status": "present", "enacted": true},
+    {"name": "قانون مجازات اسلامی", "status": "present", "enacted": true},
+    {"name": "قانون آیین دادرسی کیفری", "status": "present", "enacted": true},
+    {"name": "قانون تجارت", "status": "present", "enacted": true},
+    {"name": "لایحه اصلاحی قانون تجارت", "status": "present", "enacted": true},
+    {"name": "قانون آیین دادرسی مدنی", "status": "present", "enacted": true},
+    {"name": "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲", "status": "present", "enacted": true},
+    {"name": "قانون صدور چک (اصلاحی ۱۳۹۷)", "status": "present", "enacted": true},
+    {"name": "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی", "status": "staged", "enacted": true},
+    {"name": "قانون کار", "status": "staged", "enacted": true},
+    {"name": "قانون اجرای احکام مدنی", "status": "staged", "enacted": true},
+    {"name": "قانون ثبت اسناد و املاک", "status": "staged", "enacted": true},
+    {"name": "قانون تأمین اجتماعی", "status": "staged", "enacted": true},
+    {"name": "قانون حمایت خانواده", "status": "staged", "enacted": true},
+    {"name": "قانون شوراهای حل اختلاف", "status": "staged", "enacted": true},
+    {"name": "قانون تشکیل دادگاه‌های عمومی و انقلاب", "status": "staged", "enacted": true},
+    {"name": "قانون نحوه اجرای محکومیت‌های مالی", "status": "staged", "enacted": true},
+    {"name": "قانون اصلاح قانون تشکیل دادگاه‌های عمومی و انقلاب", "status": "staged", "enacted": true},
+    {"name": "قانون صدور چک", "status": "staged", "enacted": true},
+    {"name": "قانون کاهش مجازات حبس تعزیری", "status": "staged", "enacted": true},
+    {"name": "قانون مسئولیت مدنی", "status": "staged", "enacted": true},
+    {"name": "قانون اصلاح قانون صدور چک (۱۳۹۷)", "status": "staged", "enacted": true},
+    {"name": "قانون روابط موجر و مستأجر ۱۳۶۲", "status": "staged", "enacted": true},
+    {"name": "قانون روابط موجر و مستاجر ۱۳۷۶", "status": "staged", "enacted": true},
+    {"name": "قانون اصلاح قانون صدور چک (۱۴۰۰)", "status": "staged", "enacted": true}
+  ]
+}
