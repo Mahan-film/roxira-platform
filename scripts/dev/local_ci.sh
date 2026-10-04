@@ -151,6 +151,13 @@ fi
 
 run_step "system inventory up to date" step_inventory
 
+# reviewer family: REPORT-ONLY for now (prints the finding, never fails the run).
+step_reviewer_family() {
+  python3 scripts/dev/check_reviewer_family.py || echo "report-only: fix config/models.yaml reviewer/executor families"
+  return 0
+}
+run_step "reviewer family differs from executor" step_reviewer_family
+
 if [ "${LOCAL_CI_SKIP_PYTEST:-0}" = "1" ]; then
   skip_step "pytest (unit)" "LOCAL_CI_SKIP_PYTEST=1"
 elif have pytest; then

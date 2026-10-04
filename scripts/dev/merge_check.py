@@ -74,6 +74,23 @@ def split_diff(diff: str) -> dict[str, dict]:
     return files
 
 
+def tamper_signals(path: str, d: dict, cfg: dict) -> list[str]:
+    """Test-tampering signals in a (non-deleted) test file; each needs owner review."""
+    out: list[str] = []
+    tamper = [re.compile(x) for x in cfg.get("test_tamper_regexes", [])]
+    for line in d["added"]:
+        hit = next((rx.pattern for rx in tamper if rx.search(line)), None)
+        if hit:
+            out.append(f"test tampering signal in {path}: added line matches {hit!r}")
+    assert_re = re.compile(r"\bassert\s")
+    n_add = sum(bool(assert_re.search(x)) for x in d["added"])
+    n_rem = sum(bool(assert_re.search(x)) for x in d["removed"])
+    slack = cfg.get("max_assert_net_removal", 2)
+    if n_rem - n_add > slack:
+        out.append(f"assertions removed in {path}: -{n_rem} / +{n_add} (net > {slack})")
+    return out
+
+
 def evaluate(pr: dict, diff: str, cfg: dict) -> tuple[str, str, list[str]]:
     """Return (verdict, level_label, reasons). Pure; no I/O."""
     info = split_diff(diff)
@@ -101,6 +118,7 @@ def evaluate(pr: dict, diff: str, cfg: dict) -> tuple[str, str, list[str]]:
                 n_rem = sum(bool(test_re.search(x)) for x in d["removed"])
                 if n_rem > n_add:
                     block.append(f"net deletion of test functions: {p}")
+                review.extend(tamper_signals(p, d, cfg))
                 if d["new"] or n_add > n_rem:
                     new_test = True
         elif _match(p, cfg["code_patterns"]) and file_level(p, cfg) >= 1:

@@ -174,7 +174,10 @@ def decide(
             wait.append(f"required check {name!r} not complete")
         for run in runs:
             conclusion = run.get("conclusion")
-            if run.get("status") == "completed" and conclusion != "success":
+            normalized = str(conclusion).lower() if conclusion is not None else None
+            if run.get("status") == "completed" and normalized != "success":
+                # Only "success" passes a REQUIRED check (issue #423): failure,
+                # skipped, neutral, cancelled, timed_out and null all block.
                 block.append(f"required check {name!r} did not pass ({conclusion!r})")
 
     for run in by_name.get(AGENT_REVIEW, []):

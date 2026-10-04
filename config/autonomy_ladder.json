@@ -6,6 +6,8 @@
   "docs_patterns": ["docs/*", "*.md"],
   "test_patterns": ["*/test_*.py", "test_*.py", "*_test.py", "*.test.ts", "*.spec.ts", "*.test.tsx", "*/tests/*", "*/__tests__/*"],
   "test_function_regex": "^\\s*(?:async\\s+)?def\\s+test_\\w+|^\\s*(?:it|test)\\s*\\(",
+  "test_tamper_regexes": ["pytest\\.mark\\.skip", "pytest\\.skip\\(", "xfail", "\\.only\\(", "#\\s*noqa", "#\\s*type:\\s*ignore"],
+  "max_assert_net_removal": 2,
   "code_patterns": ["*.py", "*.ts", "*.tsx", "*.js", "*.jsx", "*.sh"],
   "manifest_names": ["package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "requirements.txt", "requirements-test.txt", "pyproject.toml", "poetry.lock", "uv.lock", "Pipfile", "Pipfile.lock", "Cargo.toml", "Cargo.lock", "go.mod", "go.sum", "Gemfile", "Gemfile.lock"],
   "levels": {
