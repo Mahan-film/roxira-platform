@@ -5,6 +5,7 @@ Owner-run only. Sends ONLY cases from data/eval/ to OpenRouter (OpenAI-compatibl
 endpoint) using OPENROUTER_API_KEY from the environment. Never prints the key,
 headers or prompts. See docs/ops/MODEL_BAKEOFF.md.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -12,6 +13,7 @@ import datetime as dt
 import importlib.util
 import json
 import os
+import ssl
 import sys
 import threading
 import time
@@ -85,14 +87,25 @@ def est_tokens(text: str) -> int:
     return max(1, len(text) // 3)  # conservative for Persian
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """Use certifi's CA bundle when installed (system Python on macOS often lacks one)."""
+    try:
+        import certifi
+    except ImportError:
+        return ssl.create_default_context()
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 def _http_post(url: str, headers: dict, body: dict, timeout: float = 120) -> dict:
     req = urllib.request.Request(url, json.dumps(body).encode(), headers, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
         return json.loads(r.read())
 
 
 def _http_get(url: str, headers: dict, timeout: float = 60) -> dict:
-    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
+    with urllib.request.urlopen(
+        urllib.request.Request(url, headers=headers), timeout=timeout, context=_ssl_context()
+    ) as r:
         return json.loads(r.read())
 
 
@@ -189,17 +202,19 @@ def summarize(report: dict) -> list[dict]:
     for mid, rs in report["results"].items():
         done = [r for r in rs if "pass" in r]
         n = len(done)
-        rows.append({
-            "model": mid,
-            "answered": n,
-            "total": len(rs),
-            "pass_rate": round(sum(r["pass"] for r in done) / n, 3) if n else None,
-            "citation_validity": (
-                round(sum(r["citation_valid"] for r in done) / n, 3) if n else None
-            ),
-            "avg_latency_s": round(sum(r["latency_s"] for r in done) / n, 2) if n else None,
-            "est_usd": round(sum(r["usd"] for r in done), 5),
-        })
+        rows.append(
+            {
+                "model": mid,
+                "answered": n,
+                "total": len(rs),
+                "pass_rate": round(sum(r["pass"] for r in done) / n, 3) if n else None,
+                "citation_validity": (
+                    round(sum(r["citation_valid"] for r in done) / n, 3) if n else None
+                ),
+                "avg_latency_s": round(sum(r["latency_s"] for r in done) / n, 2) if n else None,
+                "est_usd": round(sum(r["usd"] for r in done), 5),
+            }
+        )
     return rows
 
 
