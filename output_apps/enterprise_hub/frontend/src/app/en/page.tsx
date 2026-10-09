@@ -334,7 +334,7 @@ export default function InternationalPortal() {
 curl -X POST \\
   https://roxira.net/api/backend/auth/verify-otp \\
   -H "Content-Type: application/json" \\
-  -d '{"phone":"+98...","code":"12345"}'
+  -d '{"phone":"+98...","code":"<otp>"}'
 
 # Create a multi-currency invoice
 curl -X POST \\

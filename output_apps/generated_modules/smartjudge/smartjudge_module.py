@@ -1363,7 +1363,7 @@ async def get_user_conversations(phone: str = Query(..., description="شماره
 # ایجاد گفتگوی جدید
 @router.post("/conversations")
 async def create_new_conversation(payload: dict = Body(...)):
-    phone = payload.get("phone", "09129367796")
+    phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
     title = payload.get("title", "پرونده جدید")
     conv_id = str(uuid.uuid4())
     try:
@@ -1423,7 +1423,7 @@ async def interactive_consult(payload: dict = Body(...)):
         user_text = repair_legal_phonetics(user_text)
     except Exception:
         pass
-    phone = payload.get("phone", "09129367796")
+    phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
     conv_id = payload.get("conversation_id")
     tier = payload.get("tier", "VIP").upper()
     
@@ -2129,7 +2129,7 @@ async def verify_payment(payload: dict = Body(...)):
 @router.post("/telephony-session")
 async def create_telephony_session(payload: dict = Body(...)):
     """صدور توکن و ایجاد سشن رمزنگاری‌شده برای تماس‌های صوتی WebRTC و ترانک‌های SIP Asterisk"""
-    phone = payload.get("phone", "09129367796")
+    phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
     call_id = f"CALL-{int(time.time())}-{str(uuid.uuid4())[:4]}"
     
     return {
@@ -2150,7 +2150,7 @@ async def export_defense_document(payload: dict = Body(...)):
     case_title = payload.get("case_title", "دفاعیه حقوقی")
     draft_text = payload.get("draft_text", "")
     court_branch = payload.get("court_branch", "شعبه (فرضی)")
-    user_phone = payload.get("phone", "09129367796")
+    user_phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
 
     formatted_document = f"""{AI_DRAFT_DISCLAIMER}
 ================================================================================
@@ -5065,7 +5065,7 @@ async def verify_citations(payload: dict = Body(...)):
 @router.post("/payment/initiate")
 async def initiate_payment(payload: dict = Body(...)):
     plan_key = payload.get("plan", "single_defense")
-    phone = payload.get("phone", "09129367796")
+    phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
     
     # مبالغ تومانی متصل به موتور ارزی
     prices = {"single_defense": 99000, "monthly_vip": 490000}
@@ -5097,6 +5097,8 @@ async def synthesize_speech(payload: dict = Body(...)):
 # سامانهٔ احراز هویت یک‌بارمصرف (OTP) و صدور توکن JWT امن کاربران قاضی هوشمند
 # ------------------------------------------------------------------------------
 _OTP_CACHE = {}
+# Optional fallback phone for non-auth endpoints; configured by env only, empty by default.
+_DEFAULT_CONTACT_PHONE = os.environ.get("DEFAULT_CONTACT_PHONE", "")
 _OTP_TTL_SECONDS = 180
 _OTP_MAX_ATTEMPTS = 5
 
@@ -5150,6 +5152,25 @@ def normalize_otp_code(code) -> str:
     return "".join(char for char in normalized if char.isdigit())
 
 
+def _otp_matches(expected, supplied) -> bool:
+    """Constant-time OTP comparison. No master/bypass codes exist."""
+    return hmac.compare_digest(str(expected), str(supplied))
+
+
+def _mask_phone(phone: str) -> str:
+    """Mask a phone for logs: 0912***7796 -> 0912***96."""
+    phone = str(phone or "")
+    return phone[:4] + "***" + phone[-2:] if len(phone) >= 8 else "***"
+
+
+def _dev_echo_enabled() -> bool:
+    """OTP dev echo only outside production AND with OTP_DEV_ECHO=1 (default off)."""
+    return (
+        os.environ.get("ROXIRA_ENV", "").strip().lower() != "production"
+        and os.environ.get("OTP_DEV_ECHO", "0").strip() == "1"
+    )
+
+
 def _is_valid_phone(phone: str) -> bool:
     """اعتبارسنجی شمارهٔ ۱۱ رقمی ایران با پیشوند 09."""
     return len(phone) == 11 and phone.startswith("09") and phone.isdigit()
@@ -5173,12 +5194,12 @@ async def _deliver_verification_code(phone: str, code: str, template: str = None
             if resp.status_code == 200:
                 return True
             print(
-                f"[AUTH][OTP-DELIVERY-ERROR] HTTP {resp.status_code}: {resp.text[:200]}",
+                f"[AUTH][OTP-DELIVERY-ERROR] HTTP {resp.status_code}",
                 file=sys.stderr,
             )
             return False
     except Exception as exc:
-        print(f"[AUTH][OTP-DELIVERY-ERROR] {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"[AUTH][OTP-DELIVERY-ERROR] {type(exc).__name__}", file=sys.stderr)
         return False
 
 
@@ -5221,14 +5242,13 @@ async def send_auth_otp(request: Request, payload: dict = Body(...)):
     try:
         delivered = await _deliver_verification_code(phone, otp_code, template=target_template)
     except Exception as exc:  # هیچ خطای ارسالی نباید منجر به 500 شود
-        print(f"[AUTH][OTP-DELIVERY-ERROR] {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"[AUTH][OTP-DELIVERY-ERROR] {type(exc).__name__}", file=sys.stderr)
         delivered = False
 
     if delivered:
-        print(f"[AUTH][OTP-SENT] phone={phone}", file=sys.stdout)
+        print(f"[AUTH][OTP-SENT] phone={_mask_phone(phone)}", file=sys.stdout)
     else:
-        # حالت توسعه / عدم دسترسی به دروازه: ثبت کد در stdout سرور
-        print(f"[AUTH][OTP-ISSUED] phone={phone} code={otp_code} delivered=False", file=sys.stdout)
+        print(f"[AUTH][OTP-NOT-DELIVERED] phone={_mask_phone(phone)}", file=sys.stdout)
 
     response = {
         "status": "success",
@@ -5237,7 +5257,7 @@ async def send_auth_otp(request: Request, payload: dict = Body(...)):
         "channel": "SECURE_OTP",
         "delivery_confirmed": delivered,
     }
-    if not delivered:
+    if not delivered and _dev_echo_enabled():
         response["dev_code"] = otp_code
     return response
 
@@ -5258,7 +5278,7 @@ async def verify_auth_otp(payload: dict = Body(...)):
         _OTP_CACHE.pop(phone, None)
         return JSONResponse(status_code=429, content={"status": "error", "message": "تعداد تلاش‌های ناموفق بیش از حد مجاز است."})
 
-    if cached["code"] != code and code != "12345":
+    if not _otp_matches(cached["code"], code):
         return JSONResponse(status_code=400, content={"status": "error", "message": "کد تأیید وارد شده صحیح نمی‌باشد."})
 
     # احراز موفق: مصرف کد و صدور توکن JWT تمیز
@@ -5285,180 +5305,6 @@ async def verify_auth_otp(payload: dict = Body(...)):
         },
     }
 
-
-# ==============================================================================
-# موتور جامع و چندمسیره احراز هویت پیامکی (پشتیبانی ۱۰۰٪ از ارقام فارسی و تمام روت‌ها)
-# ==============================================================================
-_GLOBAL_OTP_CACHE = {}
-
-def _universal_clean_phone(raw_phone: str) -> str:
-    if not raw_phone:
-        return ""
-    persian = "۰۱۲۳۴۵۶۷۸۹"
-    arabic = "٠١٢٣٤٥٦٧٨٩"
-    cleaned = str(raw_phone)
-    for i in range(10):
-        cleaned = cleaned.replace(persian[i], str(i)).replace(arabic[i], str(i))
-    cleaned = "".join(ch for ch in cleaned if ch.isdigit())
-    if cleaned.startswith("98") and len(cleaned) == 12:
-        cleaned = "0" + cleaned[2:]
-    elif len(cleaned) == 10 and cleaned.startswith("9"):
-        cleaned = "0" + cleaned
-    return cleaned
-
-async def _core_send_otp_logic(payload: dict):
-    raw_phone = payload.get("phone", "") or payload.get("mobile", "")
-    phone = _universal_clean_phone(raw_phone)
-    
-    if not phone or len(phone) != 11 or not phone.startswith("09"):
-        return JSONResponse(
-            status_code=400,
-            content={"status": "error", "success": False, "ok": False, "message": "شماره همراه معتبر نیست (مثال: ۰۹۱۲۹۳۶۷۷۹۶)."}
-        )
-    
-    import random
-    otp_code = f"{random.randint(10000, 99999)}"
-    _GLOBAL_OTP_CACHE[phone] = {"code": otp_code, "expires_at": time.time() + 180}
-    
-    kavenegar_key = os.getenv("KAVENEGAR_API_KEY", "")
-    sms_sent = False
-    
-    if kavenegar_key:
-        try:
-            sms_url = f"https://api.kavenegar.com/v1/{kavenegar_key}/verify/lookup.json"
-            params = {"receptor": phone, "token": otp_code, "template": "smartjudge-otp"}
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                res = await client.post(sms_url, params=params)
-                if res.status_code == 200:
-                    sms_sent = True
-        except Exception as e:
-            print(f"[KAVENEGAR-WARN] {e}", file=sys.stderr)
-            
-    print(f"[AUTH-OTP-ISSUED] phone={phone} code={otp_code} delivered={sms_sent}", file=sys.stderr)
-    
-    return {
-        "status": "success",
-        "success": True,
-        "ok": True,
-        "delivery_confirmed": True,
-        "message": "کد تأیید با موفقیت ارسال شد.",
-        "expires_in": 180,
-        "dev_code": otp_code
-    }
-
-async def _core_verify_otp_logic(payload: dict):
-    raw_phone = payload.get("phone", "") or payload.get("mobile", "")
-    phone = _universal_clean_phone(raw_phone)
-    raw_code = payload.get("code", "") or payload.get("otp", "")
-    code = normalize_otp_code(raw_code)
-    
-    cached = _GLOBAL_OTP_CACHE.get(phone)
-    if not cached or time.time() > cached["expires_at"]:
-        return JSONResponse(
-            status_code=400,
-            content={"status": "error", "success": False, "ok": False, "message": "کد تأیید منقضی شده یا درخواست نشده است."}
-        )
-        
-    if cached["code"] != code and code != "12345":
-        return JSONResponse(
-            status_code=400,
-            content={"status": "error", "success": False, "ok": False, "message": "کد تأیید وارد شده صحیح نمی‌باشد."}
-        )
-        
-    _GLOBAL_OTP_CACHE.pop(phone, None)
-    return {
-        "status": "success",
-        "success": True,
-        "ok": True,
-        "token": f"jwt_smartjudge_{uuid.uuid4().hex}",
-        "user": {
-            "phone": phone,
-            "subscription_tier": "FREE"
-        }
-    }
-
-# ثبت روی تمام روت‌های ممکن
-@router.post("/auth/send-otp")
-@router.post("/unifiedauth/send-otp")
-async def judge_send_otp(payload: dict = Body(...)):
-    return await _core_send_otp_logic(payload)
-
-@router.post("/auth/verify-otp")
-@router.post("/unifiedauth/verify-otp")
-async def judge_verify_otp(payload: dict = Body(...)):
-    return await _core_verify_otp_logic(payload)
-
-
-# ==============================================================================
-# روتر سراسری و خطاناپذیر احراز هویت پیامکی
-# ==============================================================================
-@router.post("/auth/send-otp")
-@router.post("/unifiedauth/send-otp")
-@router.post("/send-otp")
-async def universal_send_otp_handler(payload: dict = Body(...)):
-    raw_phone = str(payload.get("phone", "") or payload.get("mobile", "") or "")
-    p_map = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
-    phone = "".join(filter(str.isdigit, raw_phone.translate(p_map)))
-    
-    if phone.startswith("98") and len(phone) == 12:
-        phone = "0" + phone[2:]
-    elif len(phone) == 10 and phone.startswith("9"):
-        phone = "0" + phone
-        
-    import random
-    otp_code = f"{random.randint(10000, 99999)}"
-    _GLOBAL_OTP_CACHE[phone] = {"code": otp_code, "expires_at": time.time() + 180}
-    
-    kavenegar_key = os.getenv("KAVENEGAR_API_KEY", "")
-    sms_sent = False
-    if kavenegar_key:
-        try:
-            sms_url = f"https://api.kavenegar.com/v1/{kavenegar_key}/verify/lookup.json"
-            params = {"receptor": phone, "token": otp_code, "template": "smartjudge-otp"}
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                r = await client.post(sms_url, params=params)
-                if r.status_code == 200:
-                    sms_sent = True
-        except Exception as e:
-            print(f"[SMS-ERR] {e}", file=sys.stderr)
-            
-    print(f"[AUTH-CONFIRMED] phone={phone} code={otp_code} sms_sent={sms_sent}", file=sys.stderr)
-    
-    return {
-        "status": "success",
-        "success": True,
-        "ok": True,
-        "delivery_confirmed": True,
-        "message": "کد تأیید هویت با موفقیت ارسال شد.",
-        "expires_in": 180,
-        "dev_code": otp_code
-    }
-
-@router.post("/auth/verify-otp")
-@router.post("/unifiedauth/verify-otp")
-@router.post("/verify-otp")
-async def universal_verify_otp_handler(payload: dict = Body(...)):
-    raw_phone = str(payload.get("phone", "") or payload.get("mobile", "") or "")
-    raw_code = str(payload.get("code", "") or payload.get("otp", "") or "")
-    p_map = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
-    phone = "".join(filter(str.isdigit, raw_phone.translate(p_map)))
-    code = "".join(filter(str.isdigit, raw_code.translate(p_map)))
-    
-    if phone.startswith("98") and len(phone) == 12:
-        phone = "0" + phone[2:]
-    elif len(phone) == 10 and phone.startswith("9"):
-        phone = "0" + phone
-
-    return {
-        "status": "success",
-        "success": True,
-        "ok": True,
-        "token": f"jwt_smartjudge_{uuid.uuid4().hex}",
-        "user": {
-            "phone": phone,
-            "subscription_tier": "FREE"
-        }
-    }
 
 
 # ==============================================================================

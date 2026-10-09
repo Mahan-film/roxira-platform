@@ -5,6 +5,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from output_apps.ecosystem_core.src.security.cors_config import (
+    CORS_HEADERS, CORS_METHODS, cors_allowed_origins,
+)
 
 # ============ Roxira OS Unified Server v3.6 ============
 # مسیرهای پویا: هم روی هاست (/opt/roxira_platform) و هم داخل کانتینر (/app) صحیح کار می‌کند
@@ -15,10 +18,10 @@ sys.path.insert(0, str(BASE_DIR / "output_apps"))
 app = FastAPI(title="Roxira OS & Smart Judge Production", version="3.6.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=CORS_METHODS,
+    allow_headers=CORS_HEADERS,
 )
 
 # ============ Static assets (/static/*) ============
