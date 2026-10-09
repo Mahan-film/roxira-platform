@@ -66,3 +66,8 @@ Do not edit past entries — add a new one instead.
 - What changed: merged #502 (deploy_local.sh), #475 (minimal /health), #508 (merge-gate: skipped checks, test-tamper, reviewer-family check), #509 (migrate / migrate-rollback via one-off container), #511 (multi-source law fetcher + sources plan + tools adoption research), #512 (set_server_env generate mode no longer desyncs local and server). Server `.env` got GOOGLE_CLIENT_ID/SECRET and ADMIN_HEALTH_KEY. `check` and the `migrate` plan ran read-only on prod: one pending migration, all required env names present.
 - Why: the owner wants everything deployed with minimal manual steps; deploy and prod DB changes stay owner-run by design.
 - Follow-up: owner runs `migrate --yes` then `deploy --yes`; legal fetch + ingest; 50-question eval (the owner's Deep Research draft needs lawyer verification); model roles decision; wire task caps into rx. See `docs/STATE.md`.
+
+## 2026-10-09 — hub (Sonnet 5.5) — deploy completed, prod verified read-only, handoff to Opus 5.5
+- What changed: deployed 537d94c0 with `deploy_local.sh` after `migrate --yes` (CRM tenant isolation; backup kept); fixed three script bugs on the way (#514 DATABASE_PASSWORD pattern, #515 deploy accepts applied migrations, #512). Later sessions deployed #516-#518 by hand. Read-only audit on 2026-10-09 found: server git tree in conflict (`UU docker-compose.prod.yml`), disk 96%, docker.sock mounted into the backend, stale `prev_commit`.
+- Why: owner wanted everything deployed and a clean handoff to an Opus 5.5 strategist chat.
+- Follow-up: fix the compose conflict and free disk (owner approves), law fetch + ingest, 50-question eval with lawyer, model roles, secrets plan, full audit rerun. See `docs/STATE.md`.
