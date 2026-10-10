@@ -7,13 +7,17 @@ interface LegalStreamingTextProps {
   content: string;
   isStreaming: boolean;
   className?: string;
+  /** "plain" renders unformatted text (chat bubbles) with no indicator. */
+  variant?: "legal" | "plain";
+  /** Called once the typewriter has revealed the whole text. */
+  onComplete?: () => void;
 }
 
 /**
  * Enhanced streaming text component with legal document formatting.
  * Features professional typing effects, legal paragraph structure, and animated indicators.
  */
-export function LegalStreamingText({ content, isStreaming, className }: LegalStreamingTextProps) {
+export function LegalStreamingText({ content, isStreaming, className, variant = "legal", onComplete }: LegalStreamingTextProps) {
   const [displayedContent, setDisplayedContent] = useState("");
   const [typingIndex, setTypingIndex] = useState(0);
   const [cursorVisible, setCursorVisible] = useState(true);
@@ -27,12 +31,17 @@ export function LegalStreamingText({ content, isStreaming, className }: LegalStr
     }
 
     if (typingIndex < content.length) {
+      // Reveal several characters per tick for long answers (about 3 s max).
+      const step = Math.max(1, Math.ceil(content.length / 200));
       const timer = setTimeout(() => {
-        setDisplayedContent(content.slice(0, typingIndex + 1));
-        setTypingIndex(typingIndex + 1);
+        const next = Math.min(content.length, typingIndex + step);
+        setDisplayedContent(content.slice(0, next));
+        setTypingIndex(next);
       }, 15); // Typing speed in milliseconds
       return () => clearTimeout(timer);
     }
+    onComplete?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, isStreaming, typingIndex]);
 
   // Cursor blinking effect
@@ -70,6 +79,10 @@ export function LegalStreamingText({ content, isStreaming, className }: LegalStr
       );
     });
   };
+
+  if (variant === "plain") {
+    return <div className={cn("whitespace-pre-line", className)}>{displayedContent}</div>;
+  }
 
   return (
     <div className={cn("relative", className)}>

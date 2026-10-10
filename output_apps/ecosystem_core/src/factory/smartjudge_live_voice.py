@@ -5,6 +5,9 @@ from pydantic import BaseModel
 from output_apps.ecosystem_core.src.factory.voice_timing import Stopwatch, log_voice_timing
 from output_apps.ecosystem_core.src.factory.persian_text import split_persian_sentences
 
+# chat_auth is a leaf module (no import of smartjudge_module), so there is no cycle.
+from output_apps.generated_modules.smartjudge import chat_auth
+
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeVoice"])
 
 HALLUCINATIONS = {"سلامتی.", "سلامتی", "بله.", "بله", "تشکر.", "تشکر", "زیرنویس", "...", "."}
@@ -379,6 +382,10 @@ async def judge_text_chat_status():
 @router.post("/stt")
 @router.post("/transcribe")
 async def judge_stt_api(request: Request, file: UploadFile = File(None), audio: UploadFile = File(None)):
+    # Same policy as smartjudge_module.transcribe_audio: bearer token or strict anonymous limit.
+    denied = chat_auth.gate_voice(request, await asyncio.to_thread(chat_auth.authenticate, request.headers))
+    if denied is not None:
+        return denied
     target = file or audio
     if not target:
         form = await request.form()
@@ -391,6 +398,8 @@ async def judge_stt_api(request: Request, file: UploadFile = File(None), audio: 
         return {"text": "", "transcription": ""}
 
     content = await target.read()
+    if len(content) > chat_auth.MAX_UPLOAD_BYTES:
+        return chat_auth.error_json(413, chat_auth.MSG_UPLOAD_TOO_LARGE, code="PAYLOAD_TOO_LARGE")
     if len(content) < 500:
         return {"text": "", "transcription": ""}
 
@@ -408,6 +417,10 @@ async def judge_stt_api(request: Request, file: UploadFile = File(None), audio: 
 
 @router.websocket("/live-voice")
 async def live_voice_websocket(websocket: WebSocket):
+    # Token via ?token= (browsers cannot set WS headers); anonymous callers get a strict
+    # per-IP limit. A rejection is sent as a JSON error frame, then close 4401 / 4429.
+    if not await chat_auth.gate_voice_ws(websocket):
+        return
     await websocket.accept()
     await websocket.send_text(json.dumps({
         "type": "SESSION_STARTED",

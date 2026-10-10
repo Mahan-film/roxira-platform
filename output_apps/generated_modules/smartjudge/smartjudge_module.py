@@ -116,6 +116,8 @@ from output_apps.generated_modules.smartjudge.fast_path import (
     classify_fast_path,
 )
 from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
+from output_apps.generated_modules.smartjudge import chat_fast as _chat_fast
+from output_apps.generated_modules.smartjudge import chat_auth
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.ecosystem_core.src.billing import payment_orders
@@ -175,9 +177,12 @@ import secrets
 import base64
 import struct
 import asyncio
+import contextvars
 from typing import Optional, List, Any
-from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile, Depends
+from fastapi.responses import JSONResponse, StreamingResponse, Response
+from pydantic import field_validator as _field_validator
+from pydantic import BaseModel as _BaseModel, ConfigDict as _ConfigDict
 import psycopg
 import httpx
 
@@ -449,58 +454,85 @@ def _extract_bearer_token(payload: Optional[dict], request: Optional[Request],
     return None
 
 
+# ---------------------------------------------------------------------------
+# Identity: phone + tier come ONLY from a verified bearer token (never the body)
+# ---------------------------------------------------------------------------
+_ENTITLEMENT_CACHE: dict = {}
+_ENTITLEMENT_CACHE_TTL = 60
+
+
+def _entitlement_tier(phone: str) -> Optional[str]:
+    """Paid tier from ``user_entitlements`` (written by the payment flow).
+
+    Returns "VIP" / "FREE", or None when the lookup is unavailable (callers then
+    default to FREE). Cached for 60s so chat does not hit Postgres on every message.
+    """
+    cached = _ENTITLEMENT_CACHE.get(phone)
+    if cached and cached[0] > time.time():
+        return cached[1]
+    result: Optional[str] = None
+    try:
+        with psycopg.connect(payment_orders._dsn(), connect_timeout=3, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT plan_type FROM user_entitlements "
+                    "WHERE user_ref = %s AND expires_at > now();",
+                    (_hashed_user_ref(phone),),
+                )
+                plans = [row[0] for row in cur.fetchall()]
+        result = "VIP" if any(_is_vip_tier(plan) for plan in plans) else "FREE"
+    except Exception as exc:  # table missing / DB down: caller defaults to FREE
+        print(f"[SMARTJUDGE][TIER-LOOKUP-UNAVAILABLE] {type(exc).__name__}", file=sys.stderr)
+        result = None
+    _ENTITLEMENT_CACHE[phone] = (time.time() + (_ENTITLEMENT_CACHE_TTL if result else 15), result)
+    if len(_ENTITLEMENT_CACHE) > 5000:
+        _ENTITLEMENT_CACHE.clear()
+    return result
+
+
+def _tier_for_phone(phone: str) -> str:
+    if phone in VIP_PHONE_ALLOWLIST:
+        return "VIP"
+    return _entitlement_tier(phone) or "FREE"
+
+
+def _user_from_token(token: str) -> Optional[chat_auth.CurrentUser]:
+    """Verify a token issued by verify-otp (HS256, pinned in ``_decode_jwt``)."""
+    claims = _decode_jwt(token)
+    if not claims:
+        return None
+    phone = normalize_phone(claims.get("phone") or claims.get("sub") or "")
+    if not _is_valid_phone(phone):
+        return None
+    return chat_auth.CurrentUser(phone=phone, tier=_tier_for_phone(phone), authenticated=True)
+
+
+chat_auth.configure(_user_from_token)
+
+
+async def get_current_user(request: Request) -> chat_auth.CurrentUser:
+    """FastAPI dependency. ``Authorization: Bearer <token>`` -> real phone + tier.
+
+    No token -> anonymous (FREE, ``phone=None``). Bad/expired token -> ``token_invalid``;
+    handlers must answer it with a 401 via ``chat_auth.deny_if_invalid``. Phone, tier
+    and is_vip in request bodies are never read.
+    """
+    # the tier lookup may touch Postgres (cached): keep it off the event loop
+    return await asyncio.to_thread(chat_auth.authenticate, request.headers)
+
+
 def _resolve_subscription_tier(payload: Optional[dict] = None,
                                request: Optional[Request] = None,
                                websocket: Optional[WebSocket] = None) -> str:
-    """تعیین سطح اشتراک کاربر: ابتدا JWT معتبر، سپس فیلدهای صریح درخواست."""
-    token = _extract_bearer_token(payload, request, websocket)
-    if token:
-        claims = _decode_jwt(token)
-        if claims:
-            tier = claims.get("subscription_tier") or claims.get("tier")
-            phone = claims.get("sub") or claims.get("phone")
-            if _is_vip_tier(tier):
-                return "VIP"
-            if phone and str(phone) in VIP_PHONE_ALLOWLIST:
-                return "VIP"
-            if tier is not None:
-                return str(tier).upper()
-            return "FREE"
+    """Subscription tier of the caller, from a verified bearer token only.
 
-    payload = payload or {}
-    if websocket is not None:
-        ws_tier = websocket.query_params.get("tier") or websocket.query_params.get("subscription_tier")
-        if ws_tier and _is_vip_tier(ws_tier):
-            return "VIP"
-        ws_phone = websocket.query_params.get("phone") or websocket.query_params.get("user_phone")
-        if ws_phone and str(ws_phone).strip() in VIP_PHONE_ALLOWLIST:
-            return "VIP"
-
-    phone = payload.get("phone") or payload.get("user_phone")
-    if phone and str(phone).strip() in VIP_PHONE_ALLOWLIST:
-        return "VIP"
-    if payload.get("is_vip") is True:
-        return "VIP"
-
-    explicit = None
-    for key in ("subscription_tier", "tier", "plan", "plan_key"):
-        value = payload.get(key)
-        if value:
-            explicit = str(value)
-            break
-    if explicit and _is_vip_tier(explicit):
-        return "VIP"
-
-    # نگاشت سطوح موتور کلاینت (tier2/tier3) پیش از اعلام FREE.
-    engine_tier = str(payload.get("engine_tier") or "").lower()
-    if engine_tier in ENGINE_TIER_MAP:
-        mapped = ENGINE_TIER_MAP[engine_tier]
-        if _is_vip_tier(mapped):
-            return "VIP"
-
-    if explicit:
-        return explicit.upper()
-    return "FREE"
+    ``payload`` is accepted for backward compatibility and ignored: body fields
+    (tier / is_vip / phone / token) are client controlled and never trusted.
+    """
+    headers = request.headers if request is not None else (websocket.headers if websocket is not None else {})
+    query = websocket.query_params if websocket is not None else None
+    user = chat_auth.authenticate(headers, query)
+    return user.tier if user.authenticated else "FREE"
 
 # --- OpenRouter routing configuration ---------------------------------------
 # NOTE: OpenRouter floating "latest" aliases MUST be prefixed with `~`
@@ -905,7 +937,35 @@ def query_knowledge_graph(query_text: str, limit: int = 3):
     return _run_coro_blocking(aquery_knowledge_graph(query_text, limit=limit))
 
 
+_RETRIEVAL_CACHE = _chat_fast.TTLCache(
+    ttl=float(os.environ.get("SMARTJUDGE_RETRIEVAL_CACHE_TTL", "600")), max_entries=256
+)
+
+
 async def aquery_knowledge_graph(query_text: str, limit: int = 3, meta_out: Optional[dict] = None):
+    """Cached (10 min) wrapper around the dual-level retrieval below.
+
+    Only real corpus hits are cached (never the FALLBACK placeholder), and callers get a
+    deep copy so in-place merging by the caller cannot poison the cache.
+    """
+    import copy
+    key = (" ".join(str(query_text or "").split()), int(limit))
+    hit = _RETRIEVAL_CACHE.get(key)
+    if hit is not None:
+        laws_c, prec_c, meta_c = copy.deepcopy(hit)
+        if meta_out is not None:
+            meta_out.update(meta_c)
+        return laws_c, prec_c
+    local_meta: dict = {}
+    laws, precedents = await _aquery_knowledge_graph_uncached(query_text, limit=limit, meta_out=local_meta)
+    if meta_out is not None:
+        meta_out.update(local_meta)
+    if _chat_safety.is_grounded(laws, precedents):
+        _RETRIEVAL_CACHE.set(key, copy.deepcopy((laws, precedents, local_meta)))
+    return laws, precedents
+
+
+async def _aquery_knowledge_graph_uncached(query_text: str, limit: int = 3, meta_out: Optional[dict] = None):
     """بازیابی دوسطحی async از گراف دانش حقوقی و بازگرداندن (laws, precedents).
 
     ترتیب لایه‌ها (هر لایه در نبود لایهٔ قبلی):
@@ -921,11 +981,19 @@ async def aquery_knowledge_graph(query_text: str, limit: int = 3, meta_out: Opti
     laws: list = []
     precedents: list = []
 
-    # لایهٔ ۱ — LightRAG (await مستقیم؛ هرگز asyncio.run از داخل رویداد async)
-    try:
-        retrieval = await _lightrag_retrieve(query_text, limit=max(limit, 4))
-    except Exception as exc:  # noqa: BLE001 - تنزل به لایهٔ SQL
-        print(f"[SMARTJUDGE][LIGHTRAG-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+    # لایهٔ ۱ و ۲/۳ — بازیابی برداری (Qdrant/LightRAG) و SQL هم‌زمان اجرا می‌شوند
+    # (قبلاً پشت‌سرهم بودند؛ هیچ‌کدام به خروجی دیگری وابسته نیست).
+    async def _qdrant_branch():
+        return await _lightrag_retrieve(query_text, limit=max(limit, 4))
+
+    async def _sql_branch():
+        return await asyncio.to_thread(_dual_retrieve, query_text, limit, POSTGRES_DSN)
+
+    retrieval, sql_result, lr_exc, sql_exc = await _chat_fast.parallel_retrieve(
+        _qdrant_branch, _sql_branch if _dual_retrieve is not None else None
+    )
+    if lr_exc is not None:  # تنزل به لایهٔ SQL
+        print(f"[SMARTJUDGE][LIGHTRAG-FAIL] {type(lr_exc).__name__}: {lr_exc}", file=sys.stderr)
         retrieval = {}
 
     retrieval = retrieval or {}
@@ -958,9 +1026,9 @@ async def aquery_knowledge_graph(query_text: str, limit: int = 3, meta_out: Opti
     # لایهٔ ۲/۳ — دو بازیابی SQL بومی (همگام؛ در نخ جدا اجرا می‌شود)
     if _dual_retrieve is not None:
         try:
-            sql_laws, sql_precedents = await asyncio.to_thread(
-                _dual_retrieve, query_text, limit, POSTGRES_DSN
-            )
+            if sql_exc is not None:
+                raise sql_exc
+            sql_laws, sql_precedents = sql_result
             if sql_laws:
                 laws = list(sql_laws) + laws
             if sql_precedents:
@@ -1340,58 +1408,109 @@ async def retrial_evaluation(payload: dict = Body(...)):
         "statutory_advice": _retrial_statutory_advice(verdict_type, normalized_grounds),
     }
 
-# دریافت لیست مکالمات کاربر بر اساس شماره تماس
-@router.get("/conversations")
-async def get_user_conversations(phone: str = Query(..., description="شماره موبایل کاربر")):
-    conversations = []
+def _parse_conversation_id(conv_id) -> Optional[str]:
     try:
+        return str(uuid.UUID(str(conv_id)))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _conversation_owned_by(conv_id: str, phone: str) -> bool:
+    """Ownership check against chat_conversations.user_phone (phone comes from the token)."""
+    with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM chat_conversations WHERE id = %s AND user_phone = %s;",
+                (conv_id, phone),
+            )
+            return cur.fetchone() is not None
+
+
+def _chat_internal_error() -> JSONResponse:
+    return chat_auth.error_json(500, "خطای داخلی سرور؛ لطفاً دوباره تلاش کنید.", code="INTERNAL_ERROR", label="ERROR")
+
+
+# دریافت لیست مکالمات کاربر لاگین‌شده (شماره فقط از توکن؛ پارامتر phone نادیده گرفته می‌شود)
+@router.get("/conversations")
+async def get_user_conversations(user: chat_auth.CurrentUser = Depends(get_current_user)):
+    denied = chat_auth.require_auth(user, label="ERROR")
+    if denied is not None:
+        return denied
+    conversations = []
+
+    def _list_conversations() -> list:
+        out = []
         with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT id, title, updated_at FROM chat_conversations WHERE user_phone = %s ORDER BY updated_at DESC LIMIT 30;",
-                    (phone,)
+                    (user.phone,)
                 )
                 for r in cur.fetchall():
-                    conversations.append({
+                    out.append({
                         "id": str(r[0]),
                         "title": r[1],
                         "updated_at": r[2].isoformat() if r[2] else None
                     })
+        return out
+
+    try:
+        conversations = await asyncio.to_thread(_list_conversations)
     except Exception as e:
-        return JSONResponse({"status": "ERROR", "message": str(e)}, status_code=500)
+        print("[SMARTJUDGE][CONV-LIST-ERR]", type(e).__name__, file=sys.stderr)
+        return _chat_internal_error()
     return {"status": "SUCCESS", "conversations": conversations}
 
-# ایجاد گفتگوی جدید
+# ایجاد گفتگوی جدید (فقط کاربر لاگین‌شده؛ مالک از توکن)
 @router.post("/conversations")
-async def create_new_conversation(payload: dict = Body(...)):
-    phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
-    title = payload.get("title", "پرونده جدید")
+async def create_new_conversation(payload: dict = Body(default=None),
+                                  user: chat_auth.CurrentUser = Depends(get_current_user)):
+    denied = chat_auth.require_auth(user, label="ERROR")
+    if denied is not None:
+        return denied
+    title = str((payload or {}).get("title") or "پرونده جدید")[:200]
     conv_id = str(uuid.uuid4())
-    try:
+
+    def _create_conversation() -> None:
         with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "INSERT INTO chat_conversations (id, user_phone, title) VALUES (%s, %s, %s);",
-                    (conv_id, phone, title)
+                    (conv_id, user.phone, title)
                 )
+
+    try:
+        await asyncio.to_thread(_create_conversation)
     except Exception as e:
-        return JSONResponse({"status": "ERROR", "message": str(e)}, status_code=500)
+        print("[SMARTJUDGE][CONV-CREATE-ERR]", type(e).__name__, file=sys.stderr)
+        return _chat_internal_error()
     return {"status": "SUCCESS", "id": conv_id, "title": title}
 
-# دریافت تمام پیام‌های یک گفتگو
+# دریافت پیام‌های یک گفتگو (فقط مالک؛ در غیر این صورت 404)
 @router.get("/conversations/{conv_id}/messages")
-async def get_conversation_messages(conv_id: str):
+async def get_conversation_messages(conv_id: str, user: chat_auth.CurrentUser = Depends(get_current_user)):
+    denied = chat_auth.require_auth(user, label="ERROR")
+    if denied is not None:
+        return denied
+    not_found = chat_auth.error_json(404, chat_auth.MSG_NOT_FOUND, code="NOT_FOUND", label="ERROR")
+    parsed_id = _parse_conversation_id(conv_id)
+    if parsed_id is None:
+        return not_found
     messages = []
-    try:
+
+    def _load_messages() -> Optional[list]:
+        if not _conversation_owned_by(parsed_id, user.phone):
+            return None
+        out = []
         with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT role, content, metadata, created_at FROM chat_messages WHERE conversation_id = %s ORDER BY created_at ASC;",
-                    (conv_id,)
+                    (parsed_id,)
                 )
                 for r in cur.fetchall():
                     meta = r[2] if isinstance(r[2], dict) else json.loads(r[2] or "{}")
-                    messages.append({
+                    out.append({
                         "role": r[0],
                         "text": r[1],
                         "probability": meta.get("probability"),
@@ -1399,8 +1518,16 @@ async def get_conversation_messages(conv_id: str):
                         "laws": meta.get("laws", []),
                         "precedents": meta.get("precedents", [])
                     })
+        return out
+
+    try:
+        loaded = await asyncio.to_thread(_load_messages)
+        if loaded is None:
+            return not_found
+        messages = loaded
     except Exception as e:
-        return JSONResponse({"status": "ERROR", "message": str(e)}, status_code=500)
+        print("[SMARTJUDGE][CONV-MSG-ERR]", type(e).__name__, file=sys.stderr)
+        return _chat_internal_error()
     return {"status": "SUCCESS", "messages": messages}
 
 
@@ -1415,21 +1542,284 @@ def derive_success_probability(user_text: str) -> Optional[str]:
 
 
 # ارسال پیام، تحلیل با گراف و مدل زبانی، و ذخیره خودکار در دیتابیس
+_chat_timing = _chat_fast.timing_var  # shared with chat_fast / legal_graph (embed_ms, qdrant_ms, ...)
+
+
+def _timing_set(key: str, started: float) -> None:
+    bucket = _chat_timing.get()
+    if bucket is not None:
+        bucket[key] = round((time.perf_counter() - started) * 1000)
+
+
+def _is_cacheable_success(resp) -> bool:
+    return isinstance(resp, dict) and resp.get("status") == "SUCCESS"
+
+
+async def _consult_idempotent(payload: dict, request, user: chat_auth.CurrentUser, request_id: str, stream_cb=None):
+    """Run the consult once per (request_id, identity, message); retries replay the cached body.
+
+    A retry that arrives while the first attempt is still running waits for it (up to
+    ``IDEM_WAIT_SECONDS``) instead of recomputing. Replays skip the rate limiter, so a
+    retry is never charged twice. Errors are never cached.
+    """
+    if request is not None:
+        identity = f"ip:{chat_auth.request_ip(request)}" if not user.authenticated else f"p:{user.phone}"
+    else:
+        identity = f"p:{user.phone}" if user.authenticated else "ip:direct"
+    message = payload.get("message", "")
+    res_key, lock_key = chat_auth.idem_keys(request_id, identity, message if isinstance(message, str) else str(message))
+
+    def _replay(body):
+        return JSONResponse(body, headers={"X-Idempotent-Replay": "1"})
+
+    deadline = time.monotonic() + chat_auth.IDEM_WAIT_SECONDS
+    while True:
+        cached = await asyncio.to_thread(chat_auth.idem_get, res_key)
+        if cached is not None:
+            return _replay(cached)
+        if await asyncio.to_thread(chat_auth.idem_claim, lock_key):
+            try:
+                resp = await _consult_core(payload, request, user, *([stream_cb] if stream_cb else []))
+                if _is_cacheable_success(resp):
+                    try:
+                        await asyncio.to_thread(chat_auth.idem_store, res_key, resp)
+                    except Exception as exc:  # caching is best effort; the answer still goes out
+                        print(f"[CHAT-IDEM-STORE-FAIL] {type(exc).__name__}", file=sys.stderr)
+                return resp
+            finally:
+                await asyncio.to_thread(chat_auth.idem_release, lock_key)
+        if time.monotonic() >= deadline:
+            return await _consult_core(payload, request, user, *([stream_cb] if stream_cb else []))  # waited long enough: compute
+        await asyncio.sleep(chat_auth.IDEM_POLL_SECONDS)
+
+
 @router.post("/consult")
-async def interactive_consult(payload: dict = Body(...)):
+async def interactive_consult(payload: dict = Body(...), request: Request = None,
+                              user: chat_auth.CurrentUser = Depends(get_current_user)):
+    return await _run_consult(payload, request, user)
+
+
+async def _run_consult(payload: dict, request, user, stream_cb=None):
+    t0 = time.perf_counter()
+    if not isinstance(user, chat_auth.CurrentUser):  # direct (non-HTTP) call: no identity
+        user = chat_auth.ANONYMOUS
+    request_id = chat_auth.extract_request_id(payload, request.headers if request is not None else None)
+    timing: dict = {}
+    token = _chat_timing.set(timing)
+    try:
+        if request_id and not user.token_invalid:
+            return await _consult_idempotent(payload, request, user, request_id, stream_cb)
+        return await _consult_core(payload, request, user, *([stream_cb] if stream_cb else []))
+    finally:
+        _chat_timing.reset(token)
+        # one line per request; never the message text or phone
+        print(f"[CHAT-TIMING] request_id={request_id or '-'} embed_ms={timing.get('embed_ms', 0)} "
+              f"qdrant_ms={timing.get('qdrant_ms', 0)} sql_ms={timing.get('sql_ms', 0)} "
+              f"retrieval_ms={timing.get('retrieval_ms', 0)} ttft_ms={timing.get('ttft_ms', 0)} "
+              f"llm_ms={timing.get('llm_ms', 0)} total_ms={round((time.perf_counter() - t0) * 1000)} "
+              f"tier={'VIP' if user.tier == 'VIP' else 'FREE'}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Chat LLM call path: streaming, first-token timeout, fast fallback, key fallback
+# ---------------------------------------------------------------------------
+def _env_num(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
+
+
+_BG_TASKS: set = set()
+CHAT_MAX_TOKENS = int(_env_num("SMARTJUDGE_CHAT_MAX_TOKENS", 1000))
+CHAT_TTFT_STRONG_S = _env_num("SMARTJUDGE_TTFT_STRONG_SECONDS", 12.0)
+CHAT_TTFT_FAST_S = _env_num("SMARTJUDGE_TTFT_FAST_SECONDS", 8.0)
+CHAT_LLM_TOTAL_S = _env_num("SMARTJUDGE_LLM_TOTAL_SECONDS", 40.0)
+CHAT_CTX_TOPK = int(_env_num("SMARTJUDGE_CTX_TOPK", 4))
+CHAT_CTX_CHARS = int(_env_num("SMARTJUDGE_CTX_CHARS", 600))
+_LLM_HTTP: Optional[httpx.AsyncClient] = None
+
+
+def _llm_http_client() -> httpx.AsyncClient:
+    """One keep-alive client for all chat LLM calls (saves a TLS handshake per request)."""
+    global _LLM_HTTP
+    if _LLM_HTTP is None:
+        _LLM_HTTP = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=3.0),
+            limits=httpx.Limits(max_keepalive_connections=20, keepalive_expiry=60.0),
+        )
+    return _LLM_HTTP
+
+
+def _llm_api_keys() -> list:
+    """[(label, key)] primary first; OPENROUTER_API_KEY_FALLBACK (env only) is tried when the first is out of quota."""
+    keys = []
+    for label, val in (("openrouter", OPENROUTER_API_KEY), ("openrouter-fallback", os.environ.get("OPENROUTER_API_KEY_FALLBACK", ""))):
+        if val and val not in [k for _, k in keys]:
+            keys.append((label, val))
+    return keys
+
+
+def _is_free_model_id(model: str) -> bool:
+    return model.endswith(":free") or model == "openrouter/free"
+
+
+def _registry_models(role: str, fallback: list) -> list:
+    if _model_registry is not None:
+        try:
+            return list(_model_registry.role_models(role)) or fallback
+        except Exception:  # noqa: BLE001
+            pass
+    return fallback
+
+
+def _chat_model_plan(selected_tier: str, is_voice: bool = False) -> list:
+    """[(model, first_token_timeout_s)] -- all ids come from config/models.yaml via the registry.
+
+    VIP: strong primary with a 12 s first-token budget, then the fast (cheap) models.
+    FREE/voice: the cheap models only. Free-tier (:free) ids are never used for case data.
+    """
+    fast = [_FREE_PRIMARY, _FREE_FALLBACK]
+    plan: list = []
+    if selected_tier == "VIP" and not is_voice:
+        plan.append((OPENROUTER_TIERS["VIP"]["primary_model"], CHAT_TTFT_STRONG_S))
+    for m in fast:
+        plan.append((m, CHAT_TTFT_FAST_S))
+    seen, out = set(), []
+    for m, t in plan:
+        if m and m not in seen and not _is_free_model_id(m):
+            seen.add(m)
+            out.append((m, t))
+    return out
+
+
+def _reasoning_body(model: str) -> Optional[dict]:
+    """Hidden thinking tokens delay the first visible token: off for the cheap role (issue #134), low for strong."""
+    cheap = set(_registry_models("cheap", [_FREE_PRIMARY, _FREE_FALLBACK]))
+    mode = os.environ.get("SMARTJUDGE_REASONING_CHEAP" if model in cheap else "SMARTJUDGE_REASONING_STRONG", "").strip().lower()
+    if model in cheap:
+        mode = mode or "off"
+    else:
+        mode = mode or "low"
+    if mode == "default":
+        return None
+    if mode == "off":
+        return {"enabled": False}
+    return {"enabled": True, "effort": "low"}
+
+
+def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature: float, usage_out: dict):
+    async def opener(model: str):
+        if _is_free_model_id(model):  # case data must never reach a :free model
+            raise _chat_fast.LLMProviderError(None, model, "free model refused")
+        body = {
+            "model": model, "messages": messages, "stream": True,
+            "temperature": temperature, "max_tokens": max_tokens,
+            "usage": {"include": True},
+        }
+        reasoning = _reasoning_body(model)
+        if reasoning is not None:
+            body["reasoning"] = reasoning
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://ghazihoushmand.ir",
+            "X-Title": "Roxira SmartJudge",
+        }
+        async with _llm_http_client().stream("POST", OPENROUTER_CHAT_URL, json=body, headers=headers) as resp:
+            if resp.status_code >= 400:
+                raw = (await resp.aread())[:200].decode("utf-8", errors="replace")
+                raise _chat_fast.LLMProviderError(resp.status_code, model, raw)
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                except Exception:  # noqa: BLE001
+                    continue
+                if obj.get("error"):
+                    err = obj["error"] if isinstance(obj["error"], dict) else {"message": str(obj["error"])}
+                    raise _chat_fast.LLMProviderError(err.get("code") if isinstance(err.get("code"), int) else None, model, str(err.get("message", "")))
+                if obj.get("usage"):
+                    usage_out.update(obj["usage"])
+                for choice in obj.get("choices", []):
+                    piece = (choice.get("delta") or {}).get("content")
+                    if piece:
+                        yield piece
+    return opener
+
+
+async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool, max_tokens: int,
+                             temperature: float, on_delta=None):
+    """Returns (StreamOutcome, failure_kind). Empty outcome.text means every provider failed."""
+    plan = _chat_model_plan(selected_tier, is_voice)
+    keys = _llm_api_keys()
+    outcome = _chat_fast.StreamOutcome()
+    kind = "no_key" if not keys else "error"
+    for label, key in keys:
+        usage: dict = {}
+        outcome = await _chat_fast.stream_with_fallback(
+            plan, _make_chat_opener(key, messages, max_tokens, temperature, usage), on_delta,
+            total_timeout=CHAT_LLM_TOTAL_S,
+        )
+        if outcome.text:
+            return outcome, "ok"
+        kinds = [k for _, _, k in outcome.failures]
+        kind = next((k for k in ("quota", "auth", "upstream", "timeout") if k in kinds), "error")
+        last = outcome.failures[-1] if outcome.failures else (None, None, kind)
+        print(f"[LLM-UNAVAILABLE] provider={label} status={last[1]} model={last[0]} kind={kind}", file=sys.stderr)
+        if kind not in ("quota", "auth"):
+            break  # a second key only helps when the first key is out of quota / rejected
+    if not keys:
+        print("[LLM-UNAVAILABLE] provider=none status=None model=None kind=no_key", file=sys.stderr)
+    return outcome, kind
+
+
+def _llm_unavailable_response() -> JSONResponse:
+    return JSONResponse(_chat_fast.llm_unavailable_body(), status_code=503, headers={"Retry-After": "30"})
+
+
+async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, stream_cb=None):
     t0 = time.time()
-    user_text = payload.get("message", "").strip()
+    # Identity and tier come ONLY from the verified bearer token. Body fields
+    # phone / tier / is_vip / user_phone are ignored on purpose.
+    denied = chat_auth.deny_if_invalid(user, label="ERROR")
+    if denied is not None:
+        return denied
+    raw_message = payload.get("message", "")
+    user_text = (raw_message if isinstance(raw_message, str) else str(raw_message or "")).strip()
+    if len(user_text) > chat_auth.MAX_CHAT_CHARS:
+        return chat_auth.error_json(400, chat_auth.MSG_CHAT_TOO_LONG, code="MESSAGE_TOO_LONG", label="ERROR")
+    if not user_text:
+        return JSONResponse({"status": "ERROR", "message": "متن درخواست الزامی است."}, status_code=400)
+    if not user.authenticated:
+        # TODO: per-IP counters are per worker unless REDIS_HOST/REDIS_URL is set
+        ok, left = await chat_auth.acheck_limit("chat-anon", chat_auth.request_ip(request), chat_auth.chat_anon_hourly_limit()) \
+            if request is not None else (True, 0)
+        if not ok:
+            return chat_auth.rate_limited(left, label="ERROR", anonymous=True)
     try:
         from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
         user_text = repair_legal_phonetics(user_text)
     except Exception:
         pass
-    phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
-    conv_id = payload.get("conversation_id")
-    tier = payload.get("tier", "VIP").upper()
-    
-    if not user_text:
-        return JSONResponse({"status": "ERROR", "message": "متن درخواست الزامی است."}, status_code=400)
+    phone = user.phone  # None for anonymous visitors: nothing is persisted for them
+    persist_chat = user.authenticated
+    conv_id = payload.get("conversation_id") if persist_chat else None
+    if conv_id:
+        parsed_conv = _parse_conversation_id(conv_id)
+        try:
+            owned = bool(parsed_conv) and await asyncio.to_thread(_conversation_owned_by, parsed_conv, phone)
+        except Exception as e:
+            print("[SMARTJUDGE][CONV-OWNER-ERR]", type(e).__name__, file=sys.stderr)
+            return _chat_internal_error()
+        if not owned:
+            return chat_auth.error_json(404, chat_auth.MSG_NOT_FOUND, code="NOT_FOUND", label="ERROR")
+        conv_id = parsed_conv
+    tier = user.tier
 
     selected_tier = "VIP" if tier == "VIP" else "FREE"
     cfg = OPENROUTER_TIERS[selected_tier]
@@ -1493,6 +1883,7 @@ async def interactive_consult(payload: dict = Body(...)):
         }
     
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
+    _t_retrieval = time.perf_counter()
     laws, precedents = await aquery_knowledge_graph(user_text, limit=5)
 
     # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
@@ -1501,12 +1892,15 @@ async def interactive_consult(payload: dict = Body(...)):
     detected_domains: list = []
     if use_prompt_library:
         detected_domains = _prompt_library.detect_domains(user_text)
-        for extra_q in _prompt_library.expand_competence_queries(user_text):
-            try:
-                extra_laws, extra_prec = await aquery_knowledge_graph(extra_q, limit=3)
-            except Exception as exc:  # noqa: BLE001 - boost is best effort
-                print(f"[SMARTJUDGE][COMPETENCE-EXPAND-FAIL] {exc}", file=sys.stderr)
+        extra_queries = list(_prompt_library.expand_competence_queries(user_text))
+        extra_results = await asyncio.gather(
+            *[aquery_knowledge_graph(q, limit=3) for q in extra_queries], return_exceptions=True
+        )
+        for extra_res in extra_results:
+            if isinstance(extra_res, BaseException):  # boost is best effort
+                print(f"[SMARTJUDGE][COMPETENCE-EXPAND-FAIL] {extra_res}", file=sys.stderr)
                 continue
+            extra_laws, extra_prec = extra_res
             for rows, extra in ((laws, extra_laws), (precedents, extra_prec)):
                 known = {r.get("title") for r in rows if isinstance(r, dict)}
                 for r in extra or []:
@@ -1519,21 +1913,28 @@ async def interactive_consult(payload: dict = Body(...)):
     laws = _source_filter.filter_relevant(laws)
     precedents = _source_filter.filter_relevant(precedents)
 
-    # اگر سشن وجود ندارد یک گفتگوی جدید باز شود
+    _timing_set("retrieval_ms", _t_retrieval)
+
+    # اگر سشن وجود ندارد یک گفتگوی جدید باز شود (فقط برای کاربر لاگین‌شده)
     if not conv_id:
         conv_id = str(uuid.uuid4())
         short_title = user_text[:35] + "..." if len(user_text) > 35 else user_text
-        try:
-            with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("INSERT INTO chat_conversations (id, user_phone, title) VALUES (%s, %s, %s);", (conv_id, phone, short_title))
-        except Exception as e:
-            print("[SMARTJUDGE][DB-CONV-INIT] ", e)
+        if persist_chat:
+            def _init_conversation() -> None:
+                with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("INSERT INTO chat_conversations (id, user_phone, title) VALUES (%s, %s, %s);", (conv_id, phone, short_title))
+
+            try:
+                await asyncio.to_thread(_init_conversation)
+            except Exception as e:
+                print("[SMARTJUDGE][DB-CONV-INIT] ", e)
 
     # بازیابی تاریخچه مکالمه برای ایجاد حافظه بلندمدت چندمرحله‌ای (Memory Expansion)
     history_messages = []
-    if conv_id:
-        try:
+    if conv_id and persist_chat:
+        def _fetch_history() -> list:
+            out = []
             with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
@@ -1542,7 +1943,11 @@ async def interactive_consult(payload: dict = Body(...)):
                     )
                     for r in cur.fetchall():
                         if r[0] in ("user", "assistant") and r[1]:
-                            history_messages.append({"role": r[0], "content": r[1]})
+                            out.append({"role": r[0], "content": r[1]})
+            return out
+
+        try:
+            history_messages = await asyncio.to_thread(_fetch_history)
         except Exception as e:
             print("[SMARTJUDGE][HISTORY-FETCH-ERROR]", e)
 
@@ -1552,7 +1957,9 @@ async def interactive_consult(payload: dict = Body(...)):
     draft = None
     routed_model = None
 
-    if OPENROUTER_API_KEY or _use_llm_router():
+    _t_llm = time.perf_counter()
+    llm_failed_kind = None
+    if OPENROUTER_API_KEY or _llm_api_keys() or _use_llm_router():
         try:
             is_voice = bool(payload.get("is_voice_mode"))
             # FALLBACK rows are fixed placeholders, not corpus hits: never feed them as grounding.
@@ -1568,27 +1975,21 @@ async def interactive_consult(payload: dict = Body(...)):
                 system_msg = _prompt_library.build_text_prompt_basic(grounded)
             context_text = ""
             if grounded and laws:
-                law_lines = "\n".join([f"- {l.get('title')}: {l.get('summary', '')}" for l in laws[:5]])
-                context_text += f"\nمواد قانونی استخراج‌شده از پایگاه دانش:\n{law_lines}"
+                context_text += "\nمواد قانونی استخراج‌شده از پایگاه دانش:\n" + _chat_fast.context_lines(
+                    laws, top_k=CHAT_CTX_TOPK, summary_chars=CHAT_CTX_CHARS)
             if grounded and precedents:
-                prec_lines = "\n".join([f"- {p.get('title')}: {p.get('summary', '')}" for p in precedents[:5]])
-                context_text += f"\nآرای وحدت رویه و رویه قضایی دیوان عالی کشور:\n{prec_lines}"
-            
+                context_text += "\nآرای وحدت رویه و رویه قضایی دیوان عالی کشور:\n" + _chat_fast.context_lines(
+                    precedents, top_k=max(2, CHAT_CTX_TOPK - 1), summary_chars=CHAT_CTX_CHARS)
+
             prompt_system_content = (system_msg + "\n" + context_text) if context_text else system_msg
             messages_payload = [{"role": "system", "content": prompt_system_content}]
             if history_messages:
                 messages_payload.extend(history_messages[-8:])
             messages_payload.append({"role": "user", "content": user_text})
 
-            chosen_model = cfg.get("voice_model", "deepseek/deepseek-v4.1-flash") if is_voice else cfg.get("primary_model", "deepseek/deepseek-v4.1-flash")
-            chosen_max_tokens = 60 if is_voice else 1500
-
-            req_body = {
-                "model": chosen_model,
-                "messages": messages_payload,
-                "temperature": 0.2 if is_voice else 0.3,
-                "max_tokens": chosen_max_tokens,
-            }
+            is_voice = bool(payload.get("is_voice_mode"))
+            chosen_max_tokens = 60 if is_voice else CHAT_MAX_TOKENS
+            temperature = 0.2 if is_voice else 0.3
             if _use_llm_router():
                 # Case text is customer legal data: sensitive=True keeps it off :free endpoints.
                 routed = await _llm_router.complete(
@@ -1600,27 +2001,33 @@ async def interactive_consult(payload: dict = Body(...)):
                     feature="consult_voice" if is_voice else "consult",
                     timeout=16.0,
                     max_retries=1,
-                    temperature=req_body["temperature"],
+                    temperature=temperature,
                     max_tokens=chosen_max_tokens,
                 )
                 reply_msg = routed.content
                 routed_model = routed.model or None
+                if stream_cb and reply_msg:
+                    await stream_cb(_chat_safety.to_latin_digits(reply_msg))
             else:
-                async with httpx.AsyncClient(timeout=httpx.Timeout(16.0, connect=3.0)) as client:
-                    headers = {
-                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://ghazihoushmand.ir",
-                        "X-Title": "Roxira SmartJudge",
-                    }
-                    resp = await client.post(OPENROUTER_CHAT_URL, json=req_body, headers=headers)
-                    if resp.status_code == 200:
-                        data_json = resp.json()
-                        choices = data_json.get("choices", [])
-                        if choices:
-                            reply_msg = choices[0].get("message", {}).get("content", "").strip()
+                async def _emit(piece: str):
+                    if stream_cb:
+                        await stream_cb(_chat_safety.to_latin_digits(piece))
+
+                outcome, llm_failed_kind = await _llm_stream_answer(
+                    messages_payload, selected_tier, is_voice, chosen_max_tokens, temperature, _emit)
+                reply_msg = (outcome.text or "").strip()
+                routed_model = outcome.model
+                bucket = _chat_timing.get()
+                if bucket is not None and outcome.ttft_ms is not None:
+                    bucket["ttft_ms"] = outcome.ttft_ms
         except Exception as exc:
-            print(f"[SMARTJUDGE][LLM-CALL-FAIL] {exc}", file=sys.stderr)
+            llm_failed_kind = llm_failed_kind or "error"
+            print(f"[SMARTJUDGE][LLM-CALL-FAIL] {type(exc).__name__}", file=sys.stderr)
+            print(f"[LLM-UNAVAILABLE] provider={'router' if _use_llm_router() else 'openrouter'} "
+                  f"status={getattr(exc, 'status', None)} model=- kind={llm_failed_kind}", file=sys.stderr)
+    else:
+        print("[LLM-UNAVAILABLE] provider=none status=None model=None kind=no_key", file=sys.stderr)
+    _timing_set("llm_ms", _t_llm)
 
     # Never-empty answers: ungrounded model replies carry the general-knowledge
     # notice, lose unverified article numbers and keep the disclaimer.
@@ -1630,28 +2037,9 @@ async def interactive_consult(payload: dict = Body(...)):
             reply_msg, report.get("validated_articles") or []
         )
 
-    # ۲. فالبک هوشمند در صورت در دسترس نبودن کلید یا خطای شبکه
+    # No canned "answers": when every provider failed the caller gets a 503, never a fake reply.
     if not reply_msg:
-        greeting_words = ["سلام", "درود", "صبح", "عصر", "روز", "شب", "خسته", "خوبی", "چطوری", "بله", "اوکی", "باشه"]
-        is_greeting = any(w in user_text.lower() for w in greeting_words) and len(user_text.split()) <= 4
-        if is_greeting:
-            reply_msg = "سلام و درود بر شما، وقت بخیر. در خدمت شما هستم. لطفاً موضوع یا سوال حقوقی خود را بفرمایید تا بر اساس قوانین و رویه قضایی کشور بررسی و راهنمایی کنم."
-        else:
-            is_dowry = any(w in user_text for w in ["مهریه", "سکه", "زوجه", "عقدنامه", "عندالمطالبه", "توقیف اموال"])
-            is_legal_topic = is_dowry or any(w in user_text for w in ["دادگاه", "قانون", "شکایت", "پرونده", "رای", "رأی", "وحدت رویه", "طلاق", "مهریه", "نفقه", "چک", "قرارداد", "ملک", "سند", "وکیل", "صلح"])
-            law_refs = " و ".join([l["title"] for l in laws[:2]]) if (laws and _chat_safety.is_grounded(laws, precedents)) else "مقررات قانون مدنی و ثبت"
-            if is_dowry:
-                reply_msg = "مطابق آیین‌نامه اجرای مفاد اسناد رسمی لازم‌الاجرا، فرایند مطالبه مهریه مستقیماً از طریق صدور اجرائیه در دایره اجرای ثبت اسناد و املاک و توقیف اموال زوج آغاز می‌گردد."
-                draft = f"""بسمه‌تعالی
-ریاست محترم دایره اجرای مفاد اسناد رسمی لازم‌الاجرا
-با سلام و احترام؛ در خصوص مطالبه مهریه به استناد ماده ۱۰۸۲ قانون مدنی و {law_refs}..."""
-            elif is_legal_topic:
-                reply_msg = f"موضوع حقوقی شما بر مبنای {law_refs} و رویه دیوان عالی کشور بررسی شد. جهت تنظیم دقیق لایحه یا دادخواست، لطفاً جزئیات و ادله پرونده را بفرمایید."
-            else:
-                reply_msg = "درود بر شما، در خدمت شما هستم. لطفاً شرح پرونده، سوال حقوقی یا خواسته مد نظر خود را بفرمایید تا مستندات قانونی و رویه قضایی آن را بررسی کنم."
-            # Canned template replies are not corpus-verified either.
-            if is_legal_topic and not _chat_safety.is_grounded(laws, precedents):
-                reply_msg = _chat_safety.GENERAL_KNOWLEDGE_NOTICE + "\n\n" + reply_msg + "\n\n" + _chat_safety.CHAT_DISCLAIMER
+        return _llm_unavailable_response()
 
     reply_msg = _chat_safety.to_latin_digits(reply_msg)
     draft = _chat_safety.to_latin_digits(draft)
@@ -1662,22 +2050,33 @@ async def interactive_consult(payload: dict = Body(...)):
         laws, precedents = _source_filter.select_displayed(reply_msg, laws, precedents)
     prob = derive_success_probability(user_text)
 
-    # ذخیره پیام کاربر و پاسخ سیستم در دیتابیس
-    try:
-        with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO chat_messages (conversation_id, role, content, metadata) VALUES (%s, %s, %s, %s::jsonb);",
-                    (conv_id, "user", user_text, json.dumps({}))
-                )
-                meta_res = {"probability": prob, "draft": draft, "laws": laws, "precedents": precedents}
-                cur.execute(
-                    "INSERT INTO chat_messages (conversation_id, role, content, metadata) VALUES (%s, %s, %s, %s::jsonb);",
-                    (conv_id, "assistant", reply_msg, json.dumps(meta_res, ensure_ascii=False))
-                )
-                cur.execute("UPDATE chat_conversations SET updated_at = NOW() WHERE id = %s;", (conv_id,))
-    except Exception as e:
-        print("خطا در ذخیره پیام:", e)
+    # ذخیره پیام کاربر و پاسخ سیستم در دیتابیس (فقط کاربر لاگین‌شده؛ ناشناس ذخیره نمی‌شود).
+    # خارج از مسیر پاسخ: ذخیره در نخ پس‌زمینه انجام می‌شود تا کاربر منتظر آن نماند.
+    if persist_chat:
+        def _save_messages() -> None:
+            with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO chat_messages (conversation_id, role, content, metadata) VALUES (%s, %s, %s, %s::jsonb);",
+                        (conv_id, "user", user_text, json.dumps({}))
+                    )
+                    meta_res = {"probability": prob, "draft": draft, "laws": laws, "precedents": precedents}
+                    cur.execute(
+                        "INSERT INTO chat_messages (conversation_id, role, content, metadata) VALUES (%s, %s, %s, %s::jsonb);",
+                        (conv_id, "assistant", reply_msg, json.dumps(meta_res, ensure_ascii=False))
+                    )
+                    cur.execute("UPDATE chat_conversations SET updated_at = NOW() WHERE id = %s;", (conv_id,))
+
+        async def _persist_turn() -> None:
+            try:
+                await asyncio.to_thread(_save_messages)
+            except Exception as e:
+                print("خطا در ذخیره پیام:", type(e).__name__)
+
+        # Off the response path (perf), blocking driver still offloaded via to_thread (#530).
+        _persist_task = asyncio.create_task(_persist_turn())
+        _BG_TASKS.add(_persist_task)
+        _persist_task.add_done_callback(_BG_TASKS.discard)
 
     return {
         "status": "SUCCESS",
@@ -1685,8 +2084,8 @@ async def interactive_consult(payload: dict = Body(...)):
         "reply": reply_msg,
         "success_probability": prob,
         "defense_draft": draft,
-        "statutory_basis": laws,
-        "unified_precedents": precedents,
+        "statutory_basis": _chat_fast.trim_sources(laws),
+        "unified_precedents": _chat_fast.trim_sources(precedents),
         "model_assigned": routed_model or cfg["primary_model"],
         "tier": selected_tier,
         "latency_ms": round((time.time() - t0) * 1000, 2)
@@ -1695,13 +2094,100 @@ async def interactive_consult(payload: dict = Body(...)):
 
 
 @router.post("/chat")
-async def judge_chat_alias(payload: dict = Body(...)):
+async def judge_chat_alias(request: Request, payload: dict = Body(...),
+                           user: chat_auth.CurrentUser = Depends(get_current_user)):
     """پشتیبانی از مسیر استاندارد /chat و سازگاری با آرایه messages"""
     if "messages" in payload and not payload.get("message"):
         msgs = payload.get("messages", [])
         if msgs and isinstance(msgs, list):
             payload["message"] = msgs[-1].get("content", "")
-    return await interactive_consult(payload)
+    return await interactive_consult(payload, request, user)
+
+
+
+@router.post("/chat/stream")
+async def judge_chat_stream(request: Request, payload: dict = Body(...),
+                            user: chat_auth.CurrentUser = Depends(get_current_user)):
+    """SSE variant of /chat for every tier: same auth, identity, limits and idempotency.
+
+    Events: ``meta`` -> ``delta``* -> ``done`` (the full /chat JSON body) | ``error``.
+    Failures before the first token keep their normal HTTP status and JSON body, so the
+    client can fall back to /chat. A request_id that already completed is replayed as one chunk.
+    """
+    if "messages" in payload and not payload.get("message"):
+        msgs = payload.get("messages", [])
+        if msgs and isinstance(msgs, list) and isinstance(msgs[-1], dict):
+            payload["message"] = msgs[-1].get("content", "")
+    q: asyncio.Queue = asyncio.Queue()
+
+    async def _cb(piece: str) -> None:
+        await q.put(piece)
+
+    task = asyncio.create_task(_run_consult(payload, request, user, _cb))
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+    first = asyncio.create_task(q.get())
+    done, _pending = await asyncio.wait({task, first}, return_when=asyncio.FIRST_COMPLETED)
+    first_piece = None
+    if first in done:
+        first_piece = first.result()
+    else:
+        first.cancel()
+        try:
+            result = task.result()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[CHAT-STREAM-ERR] {type(exc).__name__}", file=sys.stderr)
+            return _chat_internal_error()
+        body = None
+        if isinstance(result, dict):
+            body = result
+        elif isinstance(result, JSONResponse) and result.status_code == 200:
+            try:
+                body = json.loads(result.body)
+            except Exception:  # noqa: BLE001
+                body = None
+        if body is None:
+            return result  # error / limit / 503: normal status + JSON
+
+        async def _single():
+            yield _chat_fast.sse_frame("meta", {"replay": isinstance(result, JSONResponse)})
+            yield _chat_fast.sse_frame("delta", {"content": body.get("reply", "")})
+            yield _chat_fast.sse_frame("done", body)
+
+        return StreamingResponse(_single(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+    async def _events():
+        yield _chat_fast.sse_frame("meta", {"replay": False})
+        yield _chat_fast.sse_frame("delta", {"content": first_piece})
+        while True:
+            getter = asyncio.create_task(q.get())
+            fin, _ = await asyncio.wait({task, getter}, return_when=asyncio.FIRST_COMPLETED)
+            if getter in fin:
+                yield _chat_fast.sse_frame("delta", {"content": getter.result()})
+                continue
+            getter.cancel()
+            while not q.empty():
+                yield _chat_fast.sse_frame("delta", {"content": q.get_nowait()})
+            break
+        try:
+            result = task.result()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[CHAT-STREAM-ERR] {type(exc).__name__}", file=sys.stderr)
+            yield _chat_fast.sse_frame("error", {"code": "INTERNAL_ERROR", "message": "خطای داخلی سرور؛ لطفاً دوباره تلاش کنید."})
+            return
+        if isinstance(result, dict):
+            yield _chat_fast.sse_frame("done", result)
+        else:  # JSONResponse after partial text (e.g. 503): surface as error event
+            try:
+                err = json.loads(result.body)
+            except Exception:  # noqa: BLE001
+                err = {"code": "INTERNAL_ERROR"}
+            yield _chat_fast.sse_frame("error", err)
+
+    return StreamingResponse(_events(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+_SSE_HEADERS = {"Cache-Control": "no-store", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
 
 
 # W24: this used to default to OPENROUTER_TIERS["VIP"]["primary_model"], which
@@ -2126,9 +2612,13 @@ async def verify_payment(payload: dict = Body(...)):
         return JSONResponse(status_code=400, content=result)
     return result
 @router.post("/telephony-session")
-async def create_telephony_session(payload: dict = Body(...)):
+async def create_telephony_session(payload: dict = Body(default=None),
+                                   user: chat_auth.CurrentUser = Depends(get_current_user)):
     """صدور توکن و ایجاد سشن رمزنگاری‌شده برای تماس‌های صوتی WebRTC و ترانک‌های SIP Asterisk"""
-    phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
+    denied = chat_auth.require_auth(user)
+    if denied is not None:
+        return denied
+    phone = user.phone  # from the token only
     call_id = f"CALL-{int(time.time())}-{str(uuid.uuid4())[:4]}"
     
     return {
@@ -2149,7 +2639,6 @@ async def export_defense_document(payload: dict = Body(...)):
     case_title = payload.get("case_title", "دفاعیه حقوقی")
     draft_text = payload.get("draft_text", "")
     court_branch = payload.get("court_branch", "شعبه (فرضی)")
-    user_phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
 
     formatted_document = f"""{AI_DRAFT_DISCLAIMER}
 ================================================================================
@@ -3112,9 +3601,20 @@ async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: s
     return ""
 
 
+class _AudioTooLarge(ValueError):
+    """Upload exceeds ``chat_auth.MAX_UPLOAD_BYTES``."""
+
+
 async def _read_audio_from_request(request: Request):
     """استخراج بایت‌های صوتی و نوع MIME از درخواست multipart یا JSON Base64."""
     content_type = (request.headers.get("content-type") or "").lower()
+    try:
+        declared = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        declared = 0
+    # base64 JSON bodies are ~4/3 larger than the audio they carry
+    if declared > chat_auth.MAX_UPLOAD_BYTES * 4 // 3 + 4096:
+        raise _AudioTooLarge(chat_auth.MSG_UPLOAD_TOO_LARGE)
     audio_bytes = b""
     mime_type = ""
     if "multipart/form-data" in content_type:
@@ -3144,16 +3644,23 @@ async def _read_audio_from_request(request: Request):
             audio_bytes = base64.b64decode(raw)
         except Exception:
             raise ValueError("دادهٔ Base64 نامعتبر است.")
+    if len(audio_bytes) > chat_auth.MAX_UPLOAD_BYTES:
+        raise _AudioTooLarge(chat_auth.MSG_UPLOAD_TOO_LARGE)
     if not audio_bytes:
         raise ValueError("فایل صوتی خالی است.")
     return audio_bytes, mime_type
 
 
 @router.post("/transcribe-audio")
-async def transcribe_audio(request: Request):
+async def transcribe_audio(request: Request, user: chat_auth.CurrentUser = Depends(get_current_user)):
     """تبدیل دقیق گفتار فارسی به متن با موتورهای پیشرفته صوتی."""
+    denied = await chat_auth.agate_voice(request, user)
+    if denied is not None:
+        return denied
     try:
         audio_bytes, mime_type = await _read_audio_from_request(request)
+    except _AudioTooLarge as exc:
+        return chat_auth.error_json(413, str(exc), code="PAYLOAD_TOO_LARGE")
     except ValueError as exc:
         return JSONResponse({"status": "error", "message": str(exc)}, status_code=400)
 
@@ -3176,11 +3683,17 @@ async def transcribe_audio(request: Request):
         status_code=502,
     )
 @router.post("/speak")
-async def generate_speech(payload: dict = Body(...)):
+async def generate_speech(request: Request, payload: dict = Body(...),
+                          user: chat_auth.CurrentUser = Depends(get_current_user)):
     """تبدیل متن حقوقی به گفتار صوتی بلادرنگ با کیفیت استودیویی و صدای بومی فارسی (Microsoft Neural TTS)."""
+    denied = await chat_auth.agate_voice(request, user)
+    if denied is not None:
+        return denied
     text = str(payload.get("text") or payload.get("input") or "").strip()
     if not text:
         return JSONResponse({"status": "error", "message": "متن خالی است"}, status_code=400)
+    if len(text) > chat_auth.MAX_SPEAK_CHARS:
+        return chat_auth.error_json(413, chat_auth.MSG_SPEAK_TOO_LONG, code="PAYLOAD_TOO_LARGE")
 
     import re
     # تمیزسازی متن از کاراکترهای مارک‌داون
@@ -3578,7 +4091,7 @@ async def chat_stream(request: Request, payload: dict = Body(default=None)):
     payload = payload or {}
 
     # ---- VIP access gate -------------------------------------------------
-    tier = _resolve_subscription_tier(payload=payload, request=request)
+    tier = await asyncio.to_thread(_resolve_subscription_tier, payload=payload, request=request)
     if not _is_vip_tier(tier):
         return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
 
@@ -5061,11 +5574,59 @@ async def verify_citations(payload: dict = Body(...)):
 # ------------------------------------------------------------------------------
 # آماده‌باش سوئیچ پرداخت شتابی (زرین‌پال / سداد / نوینو)
 # ------------------------------------------------------------------------------
+_CLIENT_ERR_MAX = 300
+_CLIENT_ERR_HOURLY_LIMIT = 30
+
+
+class ClientErrorReport(_BaseModel):
+    """Browser-side failure report. Unknown fields (phone, token, ...) are dropped, never logged."""
+    model_config = _ConfigDict(extra="ignore")
+    kind: str = ""
+    message: str = ""
+    request_id: str = ""
+    elapsed_ms: Optional[int] = None
+    online: str = ""
+    visibility: str = ""
+    ua_hint: str = ""
+
+    @_field_validator("kind", "message", "request_id", "online", "visibility", "ua_hint", mode="before")
+    @classmethod
+    def _clip(cls, v):
+        if v is None:
+            return ""
+        return str(v)[:_CLIENT_ERR_MAX]
+
+    @_field_validator("elapsed_ms", mode="before")
+    @classmethod
+    def _int_or_none(cls, v):
+        try:
+            return int(v) if v is not None and not isinstance(v, bool) else None
+        except (TypeError, ValueError):
+            return None
+
+
+@router.post("/client-errors", status_code=204)
+async def report_client_error(report: ClientErrorReport, request: Request):
+    ip = chat_auth.request_ip(request)
+    ok, left = await asyncio.to_thread(chat_auth.check_limit, "client-err", ip, _CLIENT_ERR_HOURLY_LIMIT)
+    if not ok:
+        return chat_auth.rate_limited(left)
+    fields = report.model_dump()
+    line = " ".join(f"{k}={json.dumps(v, ensure_ascii=False)}" for k, v in fields.items())
+    print(f"[CLIENT-ERROR] ip={json.dumps(ip)} {line}", file=sys.stderr)
+    return Response(status_code=204)
+
+
 @router.post("/payment/initiate")
-async def initiate_payment(payload: dict = Body(...)):
+async def initiate_payment(payload: dict = Body(...),
+                           user: chat_auth.CurrentUser = Depends(get_current_user)):
+    denied = chat_auth.require_auth(user)
+    if denied is not None:
+        return denied
     plan_key = payload.get("plan", "single_defense")
-    phone = payload.get("phone", _DEFAULT_CONTACT_PHONE)
-    
+    # شماره از توکن (در صورت وجود) می‌آید؛ هیچ شمارهٔ پیش‌فرضی وجود ندارد.
+    phone = user.phone
+
     # مبالغ تومانی متصل به موتور ارزی
     prices = {"single_defense": 99000, "monthly_vip": 490000}
     amount = prices.get(plan_key, 99000)
@@ -5095,11 +5656,30 @@ async def synthesize_speech(payload: dict = Body(...)):
 # ------------------------------------------------------------------------------
 # سامانهٔ احراز هویت یک‌بارمصرف (OTP) و صدور توکن JWT امن کاربران قاضی هوشمند
 # ------------------------------------------------------------------------------
-_OTP_CACHE = {}
-# Optional fallback phone for non-auth endpoints; configured by env only, empty by default.
-_DEFAULT_CONTACT_PHONE = os.environ.get("DEFAULT_CONTACT_PHONE", "")
+# OTP records live in chat_auth's store (Redis when REDIS_HOST/REDIS_URL is set, else
+# an in-process dict with the same TTL semantics). The code is stored hashed.
 _OTP_TTL_SECONDS = 180
-_OTP_MAX_ATTEMPTS = 5
+_OTP_MAX_ATTEMPTS = 5          # wrong guesses per issued code, then the code is invalidated
+_OTP_RESEND_COOLDOWN_SECONDS = 60
+_OTP_MAX_SENDS_PER_HOUR = 5    # per phone
+
+
+def _otp_ip_send_limit() -> int:
+    return chat_auth._int_env("OTP_IP_SEND_LIMIT_PER_HOUR", 10)
+
+
+def _otp_ip_verify_limit() -> int:
+    return chat_auth._int_env("OTP_IP_VERIFY_LIMIT_PER_HOUR", 30)
+
+
+def _otp_digest(phone: str, code: str) -> str:
+    return hashlib.sha256(f"smartjudge-otp:{phone}:{code}".encode("utf-8")).hexdigest()
+
+
+def _otp_store(phone: str, code: str) -> None:
+    """Persist a freshly issued code (TTL 180s) and reset its attempt counter."""
+    chat_auth.kv_delete(f"otp:att:{phone}")
+    chat_auth.kv_set(f"otp:code:{phone}", {"h": _otp_digest(phone, code)}, _OTP_TTL_SECONDS)
 
 # پیکربندی دروازهٔ پیامکی (Kavenegar Verify Lookup)
 KAVENEGAR_API_KEY = os.environ.get("KAVENEGAR_API_KEY", "").strip()
@@ -5219,20 +5799,38 @@ def _issue_access_token(phone: str, tier: str, profile: dict) -> str:
     return _sign_jwt(claims)
 
 
+def _otp_error(status_code: int, message: str, code: str, **extra) -> JSONResponse:
+    return chat_auth.error_json(status_code, message, code=code, **extra)
+
+
+def _otp_rate_limited(retry_after: int, message: str) -> JSONResponse:
+    retry_after = max(1, int(retry_after))
+    return chat_auth.error_json(
+        429, message, code="RATE_LIMITED", headers={"Retry-After": str(retry_after)},
+        retry_after=retry_after,
+    )
+
+
 @router.post("/auth/send-otp")
 async def send_auth_otp(request: Request, payload: dict = Body(...)):
     phone = normalize_phone(payload.get("phone", ""))
     if not _is_valid_phone(phone):
         return JSONResponse(status_code=400, content={"status": "error", "message": "شماره همراه نامعتبر است."})
 
+    # --- rate limits (checked before any code is generated or SMS is paid for) ---
+    if not await chat_auth.aset_nx(f"otp:cd:{phone}", _OTP_RESEND_COOLDOWN_SECONDS):
+        left = await chat_auth.attl(f"otp:cd:{phone}") or _OTP_RESEND_COOLDOWN_SECONDS
+        return _otp_rate_limited(left, f"لطفاً {left} ثانیه دیگر برای ارسال مجدد کد صبر کنید.")
+    ip_ok, ip_left = await chat_auth.acheck_limit("otp-send-ip", chat_auth.request_ip(request), _otp_ip_send_limit())
+    if not ip_ok:
+        return _otp_rate_limited(ip_left, chat_auth.rate_limited_message(ip_left))
+    ph_ok, ph_left = await chat_auth.acheck_limit("otp-send-phone", phone, _OTP_MAX_SENDS_PER_HOUR)
+    if not ph_ok:
+        return _otp_rate_limited(ph_left, "تعداد درخواست کد برای این شماره بیش از حد مجاز است. بعداً دوباره تلاش کنید.")
+
     # تولید کد یک‌بارمصرف ۵ رقمی با منبع تصادفی رمزنگاری‌شده
-    import secrets
     otp_code = f"{secrets.randbelow(90000) + 10000}"
-    _OTP_CACHE[phone] = {
-        "code": otp_code,
-        "expires_at": time.time() + _OTP_TTL_SECONDS,
-        "attempts": 0,
-    }
+    await asyncio.to_thread(_otp_store, phone, otp_code)
 
     req_host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").lower()
     service_req = str(payload.get("service") or "").upper()
@@ -5248,46 +5846,56 @@ async def send_auth_otp(request: Request, payload: dict = Body(...)):
         print(f"[AUTH][OTP-SENT] phone={_mask_phone(phone)}", file=sys.stdout)
     else:
         print(f"[AUTH][OTP-NOT-DELIVERED] phone={_mask_phone(phone)}", file=sys.stdout)
+        if _dev_echo_enabled():
+            # local development only: the code goes to the server log, NEVER the response
+            print(f"[AUTH][OTP-DEV-ECHO] phone={_mask_phone(phone)} code={otp_code}", file=sys.stderr)
 
-    response = {
+    return {
         "status": "success",
         "message": "کد تأیید هویت با موفقیت ارسال شد.",
         "expires_in": _OTP_TTL_SECONDS,
+        "resend_after": _OTP_RESEND_COOLDOWN_SECONDS,
         "channel": "SECURE_OTP",
         "delivery_confirmed": delivered,
     }
-    if not delivered and _dev_echo_enabled():
-        response["dev_code"] = otp_code
-    return response
 
 
 @router.post("/auth/verify-otp")
-async def verify_auth_otp(payload: dict = Body(...)):
+async def verify_auth_otp(payload: dict = Body(...), request: Request = None):
     phone = normalize_phone(payload.get("phone", ""))
     code = normalize_otp_code(payload.get("code", ""))
     if not _is_valid_phone(phone):
         return JSONResponse(status_code=400, content={"status": "error", "message": "شماره همراه نامعتبر است."})
 
-    cached = _OTP_CACHE.get(phone)
-    if not cached or time.time() > cached["expires_at"]:
+    if request is not None:
+        ok, left = await chat_auth.acheck_limit("otp-verify-ip", chat_auth.request_ip(request), _otp_ip_verify_limit())
+        if not ok:
+            return _otp_rate_limited(left, chat_auth.rate_limited_message(left))
+
+    record = await chat_auth.akv_get(f"otp:code:{phone}")
+    if not record:
         return JSONResponse(status_code=400, content={"status": "error", "message": "کد تأیید منقضی شده یا درخواست نشده است."})
 
-    cached["attempts"] = int(cached.get("attempts", 0)) + 1
-    if cached["attempts"] > _OTP_MAX_ATTEMPTS:
-        _OTP_CACHE.pop(phone, None)
-        return JSONResponse(status_code=429, content={"status": "error", "message": "تعداد تلاش‌های ناموفق بیش از حد مجاز است."})
+    attempts, _ = await chat_auth.aincr(f"otp:att:{phone}", _OTP_TTL_SECONDS)
+    if attempts > _OTP_MAX_ATTEMPTS:
+        await chat_auth.akv_delete(f"otp:code:{phone}", f"otp:att:{phone}")
+        return _otp_rate_limited(60, "تعداد تلاش‌های ناموفق بیش از حد مجاز است. لطفاً کد جدید دریافت کنید.")
 
-    if not _otp_matches(cached["code"], code):
+    if not _otp_matches(record.get("h", ""), _otp_digest(phone, code)):
+        if attempts >= _OTP_MAX_ATTEMPTS:
+            # last allowed guess failed: burn the code so it cannot be brute-forced
+            await chat_auth.akv_delete(f"otp:code:{phone}", f"otp:att:{phone}")
+            return _otp_rate_limited(60, "تعداد تلاش‌های ناموفق بیش از حد مجاز است. لطفاً کد جدید دریافت کنید.")
         return JSONResponse(status_code=400, content={"status": "error", "message": "کد تأیید وارد شده صحیح نمی‌باشد."})
 
     # احراز موفق: مصرف کد و صدور توکن JWT تمیز
-    _OTP_CACHE.pop(phone, None)
+    await chat_auth.akv_delete(f"otp:code:{phone}", f"otp:att:{phone}")
     profile = {
         "first_name": payload.get("first_name", ""),
         "last_name": payload.get("last_name", ""),
         "username": payload.get("username", phone),
     }
-    tier = "VIP" if phone in VIP_PHONE_ALLOWLIST else "FREE"
+    tier = await asyncio.to_thread(_tier_for_phone, phone)
     token = _issue_access_token(phone, tier, profile)
 
     return {
@@ -5492,7 +6100,7 @@ async def draft_ruling(request: Request, body: RulingDraftRequest):
     """پیش‌نویس غیررسمی رأی؛ همیشه AI_DRAFT_UNVERIFIED یا INSUFFICIENT_BASIS."""
     # Entitlement: `strong` tier is VIP-only. Only the signed JWT counts here;
     # client-supplied body fields are never trusted for the tier.
-    tier = _resolve_subscription_tier(payload=None, request=request)
+    tier = await asyncio.to_thread(_resolve_subscription_tier, payload=None, request=request)
     if not _is_vip_tier(tier):
         return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
 
@@ -5642,7 +6250,7 @@ def _finalize_indictment_response(result: dict, request_id: str) -> dict:
 @router.post("/drafts/indictment")
 async def draft_indictment(request: Request, body: IndictmentDraftRequest):
     """پیش‌نویس غیررسمی کیفرخواست؛ همیشه AI_DRAFT_UNVERIFIED یا INSUFFICIENT_BASIS."""
-    tier = _resolve_subscription_tier(payload=None, request=request)
+    tier = await asyncio.to_thread(_resolve_subscription_tier, payload=None, request=request)
     if not _is_vip_tier(tier):
         return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
 

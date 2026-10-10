@@ -10,6 +10,7 @@ import {
   Info,
   Mic,
   Phone,
+  RotateCw,
   Send,
   Square,
 } from "lucide-react";
@@ -23,8 +24,31 @@ import {
   type DraftActionKey,
 } from "@/lib/chat-actions";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
+import { ChatHttpError, streamChat } from "@/lib/api/chat-stream";
+import { LegalStreamingText } from "./legal-streaming-text";
+import { useAuth } from "@/components/auth/auth-provider";
+import {
+  CHAT_TIMEOUT_MS,
+  EMPTY_FAILURE,
+  JUDGE_TRANSCRIBE_PATH,
+  MAX_CHAT_CHARS,
+  MAX_RECORDING_MS,
+  NETWORK_FAILURE,
+  RetryTimeoutError,
+  TIMEOUT_FAILURE,
+  authHeaders,
+  clearPending,
+  failureFromResponse,
+  fetchWithRetry,
+  loadPending,
+  newRequestId,
+  savePending,
+  type ChatFailure,
+} from "@/lib/api/judge-chat-client";
 
-type StatutoryItem = string | { title?: string; category?: string; article?: string; law?: string };
+type StatutoryItem =
+  | string
+  | { title?: string; category?: string; article?: string; law?: string; law_name?: string; article_no?: string | number; number?: string | number };
 
 type ChatMessage = {
   role: string;
@@ -32,6 +56,13 @@ type ChatMessage = {
   draft?: string;
   probability?: string;
   statutory_basis?: StatutoryItem[];
+  /** Typewriter animation still running for this (fresh) answer. */
+  animating?: boolean;
+  /** Error bubble; `retryPrompt` is the user text to resend. */
+  isError?: boolean;
+  retryPrompt?: string;
+  /** Idempotency id of the failed question; a manual retry reuses it. */
+  retryRequestId?: string;
 };
 
 const ACTION_ICONS: Record<DraftActionKey, typeof FileText> = {
@@ -43,11 +74,14 @@ const ACTION_ICONS: Record<DraftActionKey, typeof FileText> = {
 
 function statutoryLabel(item: StatutoryItem): string {
   if (typeof item === "string") return item;
-  return item.title || item.article || item.law || item.category || "";
+  if (item.title) return item.title;
+  const law = item.law_name || item.law || "";
+  const art = item.article_no ?? item.article ?? item.number;
+  const lawArt = [art !== undefined && art !== "" ? `ماده ${art}` : "", law].filter(Boolean).join(" ");
+  return lawArt || item.category || "";
 }
 
 export function ChatShell() {
-  const activeAudioStreamRef = React.useRef<MediaStream | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -60,11 +94,18 @@ export function ChatShell() {
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState("");
   const [isLiveAudioOpen, setIsLiveAudioOpen] = useState(false);
-  
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [weakConnection, setWeakConnection] = useState(false);
+  const recoveredRef = useRef(false);
+  const { getAccessToken, isAuthenticated, openLogin, logout } = useAuth();
+  const recordingTimerRef = useRef<number | null>(null);
+  const statusClearRef = useRef<number | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const busyRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -85,11 +126,38 @@ export function ChatShell() {
     if (action) setInputPrompt(action.prompt);
   }
 
+  const showVoiceError = (message: string) => {
+    setRecordingStatus(message);
+    if (statusClearRef.current) window.clearTimeout(statusClearRef.current);
+    statusClearRef.current = window.setTimeout(() => setRecordingStatus(""), 8000);
+  };
+
+  // نشست منقضی/نامعتبر: پاک‌سازی سشن و باز کردن مودال ورود
+  const handleSessionExpired = () => {
+    logout();
+    openLogin({
+      serviceDomain: "GHAZI",
+      title: "ورود مجدد",
+      description: "نشست شما منقضی شده است. برای ادامه دوباره وارد شوید.",
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) window.clearTimeout(recordingTimerRef.current);
+      if (statusClearRef.current) window.clearTimeout(statusClearRef.current);
+    };
+  }, []);
+
   // تبدیل گفتار به متن (STT): ضبط مستقیم صدا و ارسال آن به موتور سرور.
   // هیچ وابستگی‌ای به Web Speech API مرورگر وجود ندارد (سازگار با Safari فارسی).
   const toggleVoiceRecording = async () => {
     if (isVoiceRecording) {
       // توقف ضبط صوت و ارسال فایل به سرور
+      if (recordingTimerRef.current) {
+        window.clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
         setRecordingStatus("در حال پردازش صدا...");
         mediaRecorderRef.current.stop();
@@ -127,6 +195,10 @@ export function ChatShell() {
 
       recorder.onstop = async () => {
         setIsVoiceRecording(false);
+        if (recordingTimerRef.current) {
+          window.clearTimeout(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
 
         // توقف ترک‌های سخت‌افزاری میکروفون
         if (streamRef.current) {
@@ -144,7 +216,7 @@ export function ChatShell() {
         audioChunksRef.current = [];
 
         if (audioBlob.size === 0) {
-          setRecordingStatus("");
+          showVoiceError("صدایی ضبط نشد. میکروفون را بررسی کنید و دوباره تلاش کنید.");
           return;
         }
 
@@ -161,29 +233,59 @@ export function ChatShell() {
           const formData = new FormData();
           formData.append("file", audioBlob, `speech.${ext}`);
 
-          const res = await fetch("/api/v1/apps/judge/transcribe-audio", {
-            method: "POST",
-            body: formData,
-          });
+          const res = await fetchWithRetry(
+            JUDGE_TRANSCRIBE_PATH,
+            { method: "POST", headers: authHeaders(getAccessToken()), body: formData },
+            {
+              maxAttempts: 2,
+              timeoutMs: CHAT_TIMEOUT_MS,
+              retryOnGatewayStatus: false,
+              requestId: newRequestId(),
+              onRetry: () => setRecordingStatus("اتصال ضعیف است؛ در حال تلاش دوباره…"),
+            },
+          );
 
+          if (res.status === 401) {
+            handleSessionExpired();
+            showVoiceError("نشست شما منقضی شده است. لطفاً دوباره وارد شوید.");
+            return;
+          }
+          if (res.status === 429) {
+            showVoiceError("تعداد درخواست‌ها بیش از حد مجاز است. چند دقیقه بعد دوباره تلاش کنید.");
+            return;
+          }
           const data = res.ok ? await res.json().catch(() => null) : null;
-          const transcript = (data?.text || data?.transcript || "").trim();
-          if (transcript) setInputPrompt(transcript);
+          const transcript = String(data?.text || data?.transcript || "").trim();
+          if (transcript) {
+            setInputPrompt(transcript.slice(0, MAX_CHAT_CHARS));
+            setRecordingStatus("");
+          } else if (!res.ok) {
+            showVoiceError("تبدیل گفتار به متن انجام نشد. لطفاً دوباره تلاش کنید یا پیام را تایپ کنید.");
+          } else {
+            showVoiceError("گفتار شما تشخیص داده نشد. واضح‌تر و نزدیک‌تر به میکروفون صحبت کنید.");
+          }
         } catch (err) {
           console.warn("Transcribe-audio request failed:", err);
-        } finally {
-          setRecordingStatus("");
+          showVoiceError("ارتباط با سرور برقرار نشد. لطفاً دوباره تلاش کنید.");
         }
       };
 
       // Safari در برابر timeslice مقاوم نیست؛ در صورت خطا بدون بازهٔ زمانی شروع می‌کنیم
       try {
         recorder.start(250);
-      } catch (_) {
+      } catch {
         recorder.start();
       }
       setIsVoiceRecording(true);
-      setRecordingStatus("در حال ضبط...");
+      setRecordingStatus("در حال ضبط... (حداکثر ۲ دقیقه)");
+      // سقف زمان ضبط: پس از ۱۲۰ ثانیه به‌طور خودکار متوقف و ارسال می‌شود
+      recordingTimerRef.current = window.setTimeout(() => {
+        recordingTimerRef.current = null;
+        if (recorder.state !== "inactive") {
+          setRecordingStatus("حداکثر زمان ضبط به پایان رسید؛ در حال پردازش صدا...");
+          recorder.stop();
+        }
+      }, MAX_RECORDING_MS);
     } catch (err) {
       console.warn("Mic error:", err);
       setIsVoiceRecording(false);
@@ -191,54 +293,129 @@ export function ChatShell() {
     }
   };
 
-  const handleSendMessage = async (customPrompt?: string) => {
-    const textToSend = customPrompt || inputPrompt;
-    if (!textToSend || !textToSend.trim() || isLoading) return;
+  const errorBubble = (failure: ChatFailure, prompt: string, requestId: string): ChatMessage => ({
+    role: "assistant",
+    content: failure.message,
+    isError: true,
+    retryPrompt: failure.retryable ? prompt : undefined,
+    retryRequestId: failure.retryable ? requestId : undefined,
+  });
 
-    const newMsgs = [...messages, { role: "user", content: textToSend }];
-    setMessages(newMsgs);
-    setInputPrompt("");
+  // پیشرفت: شمارندهٔ ثانیه‌ها تا زمانی که درخواست در جریان است
+  useEffect(() => {
+    if (!isLoading) return;
+    const started = Date.now();
+    const id = window.setInterval(() => setElapsedSec(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => {
+      window.clearInterval(id);
+      setElapsedSec(0);
+      setWeakConnection(false);
+    };
+  }, [isLoading]);
+
+  const sendChat = async (textToSend: string, baseMsgs: ChatMessage[], requestIdIn?: string) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    const requestId = requestIdIn ?? newRequestId();
+    setMessages(baseMsgs);
     setIsLoading(true);
+    savePending(textToSend, requestId);
+
+    const finish = (msg: ChatMessage) => setMessages([...baseMsgs, msg]);
 
     try {
-      const res = await fetch("/api/v1/apps/judge/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMsgs,
+      // فقط نقش و متن پیام‌های واقعی ارسال می‌شود؛ tier/phone/is_vip را سرور از توکن می‌خواند
+      const history = baseMsgs
+        .filter((m) => !m.isError)
+        .map((m) => ({ role: m.role, content: m.content }));
+      let streamed = "";
+      const data = await streamChat({
+        headers: authHeaders(getAccessToken()),
+        payload: {
+          messages: history,
           message: textToSend,
           conversation_id: conversationId || undefined,
-          is_vip: true,
-          tier: "VIP"
-        })
+          request_id: requestId,
+        },
+        onDelta: (piece) => {
+          streamed += piece;
+          setWeakConnection(false);
+          setIsLoading(false); // first text arrived: hide the spinner, show live text
+          setMessages([...baseMsgs, { role: "assistant", content: streamed }]);
+        },
+        onReset: () => {
+          streamed = "";
+          setIsLoading(true);
+          setMessages(baseMsgs);
+        },
+        onRetry: () => setWeakConnection(true),
       });
-      const data = await res.json();
+      setWeakConnection(false);
+
+      const reply = typeof (data?.reply ?? data?.response) === "string" ? String(data.reply ?? data.response).trim() : "";
+      if (!reply) {
+        finish(errorBubble(EMPTY_FAILURE, textToSend, requestId));
+        return;
+      }
+      clearPending();
       if (data.conversation_id && !conversationId) {
         setConversationId(data.conversation_id);
       }
-      const reply = data.reply || data.response || "تحلیل ادله و بررسی مواد قانونی با موفقیت انجام شد.";
-      setMessages([
-        ...newMsgs,
-        {
-          role: "assistant",
-          content: reply,
-          draft: data.defense_draft,
-          probability: data.success_probability,
-          statutory_basis: Array.isArray(data.statutory_basis) ? data.statutory_basis : undefined
-        }
-      ]);
+      finish({
+        role: "assistant",
+        content: reply,
+        draft: data.defense_draft,
+        probability: data.success_probability,
+        statutory_basis: Array.isArray(data.statutory_basis) ? (data.statutory_basis as StatutoryItem[]) : undefined,
+        // text already streamed live: no typewriter replay
+        animating: !streamed,
+      });
     } catch (err) {
-      setMessages([
-        ...newMsgs,
-        {
-          role: "assistant",
-          content: "خطا در ارتباط با سرور. لطفاً چند لحظه بعد دوباره تلاش کنید."
-        }
-      ]);
+      setWeakConnection(false);
+      if (err instanceof ChatHttpError) {
+        const failure = failureFromResponse(err.status, err.body);
+        if (failure.kind === "auth") handleSessionExpired();
+        if (!failure.retryable) clearPending();
+        finish(errorBubble(failure, textToSend, requestId));
+      } else {
+        finish(errorBubble(err instanceof RetryTimeoutError ? TIMEOUT_FAILURE : NETWORK_FAILURE, textToSend, requestId));
+      }
     } finally {
+      busyRef.current = false;
       setIsLoading(false);
     }
   };
+
+  const handleSendMessage = async (customPrompt?: string) => {
+    const textToSend = customPrompt || inputPrompt;
+    if (!textToSend || !textToSend.trim() || isLoading || busyRef.current) return;
+    if (textToSend.length > MAX_CHAT_CHARS) return;
+
+    setInputPrompt("");
+    await sendChat(textToSend, [...messages, { role: "user", content: textToSend }]);
+  };
+
+  // تلاش مجدد: حباب خطا حذف و همان پرسش بدون تکرار پیام کاربر دوباره ارسال می‌شود
+  const handleRetry = async (idx: number) => {
+    if (isLoading) return;
+    const msg = messages[idx];
+    if (!msg?.retryPrompt) return;
+    await sendChat(msg.retryPrompt, messages.slice(0, idx), msg.retryRequestId);
+  };
+
+  // بازیابی پاسخ پس از بارگذاری مجدد صفحه: همان request_id دوباره ارسال می‌شود
+  useEffect(() => {
+    if (recoveredRef.current || !isAuthenticated) return;
+    recoveredRef.current = true;
+    const pending = loadPending();
+    if (!pending) return;
+    window.setTimeout(() => {
+      void sendChat(pending.text, [...messages, { role: "user", content: pending.text }], pending.request_id);
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  const overLimit = inputPrompt.length > MAX_CHAT_CHARS;
 
   const showExamples = !isLoading && !messages.some((msg) => msg.role === "user");
 
@@ -260,7 +437,33 @@ export function ChatShell() {
                 </div>
               )}
 
-              <div className="whitespace-pre-line">{msg.content}</div>
+              {msg.role === "assistant" && !msg.isError ? (
+                <LegalStreamingText
+                  variant="plain"
+                  content={msg.content}
+                  isStreaming={Boolean(msg.animating)}
+                  onComplete={() =>
+                    setMessages((prev) =>
+                      prev.map((m, i) => (i === idx && m.animating ? { ...m, animating: false } : m)),
+                    )
+                  }
+                />
+              ) : (
+                <div
+                  className="whitespace-pre-line"
+                  role={msg.isError ? "alert" : undefined}
+                  style={msg.isError ? { color: "var(--ap-danger)" } : undefined}
+                >
+                  {msg.content}
+                </div>
+              )}
+
+              {msg.isError && msg.retryPrompt && (
+                <button type="button" onClick={() => void handleRetry(idx)} disabled={isLoading} className="ap-chip mt-2">
+                  <RotateCw className="size-4" aria-hidden="true" />
+                  <span>تلاش مجدد</span>
+                </button>
+              )}
 
               {msg.draft && (
                 <div className="mt-3 p-3 rounded-[14px]" style={{ background: "var(--ap-surface-2)" }}>
@@ -296,7 +499,13 @@ export function ChatShell() {
           <div className="flex justify-start" role="status">
             <div className="ap-bubble ap-bubble-ai flex items-center gap-2 text-sm">
               <span className="w-2 h-2 rounded-full animate-ping" style={{ background: "var(--ap-accent)" }} aria-hidden="true" />
-              <span>در حال تحلیل پرونده...</span>
+              <span>
+                {weakConnection
+                  ? "اتصال ضعیف است؛ در حال تلاش دوباره…"
+                  : elapsedSec >= 8
+                  ? `در حال بررسی قوانین و آرا… ${elapsedSec.toLocaleString("fa-IR")} ثانیه`
+                  : "در حال تحلیل پرونده..."}
+              </span>
             </div>
           </div>
         )}
@@ -330,9 +539,9 @@ export function ChatShell() {
       </div>
 
       {/* ناحیه ورودی داک‌شده در پایین */}
-      <div className="shrink-0 space-y-3 px-4 pb-3 pt-3 sm:px-6" style={{ borderTop: "1px solid var(--ap-line)" }}>
+      <div className="shrink-0 space-y-2 px-4 pb-2 pt-2 sm:space-y-3 sm:px-6 sm:pb-3 sm:pt-3" style={{ borderTop: "1px solid var(--ap-line)" }}>
         {/* اقدامات حقوقی: چت‌محور + پیوند به صفحه‌های اختصاصی */}
-        <div className="ap-chip-row scroll-fade-x" role="group" aria-label="اقدامات حقوقی">
+        <div className="ap-chip-row scroll-fade-x max-w-full min-w-0 touch-pan-x" role="group" aria-label="اقدامات حقوقی">
           <span className="ap-notice whitespace-nowrap font-semibold">اقدامات حقوقی</span>
           {DRAFT_PAGES.map((page) => (
             <Link key={page.href} href={page.href} className="ap-chip ap-chip-link">
@@ -367,6 +576,7 @@ export function ChatShell() {
             placeholder="پیام خود را بنویسید..."
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
+            aria-invalid={overLimit}
             onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
           />
 
@@ -400,11 +610,40 @@ export function ChatShell() {
           </button>
 
           {/* دکمه ارسال پیام */}
-          <button type="button" onClick={() => handleSendMessage()} className="ap-btn">
+          <button type="button" onClick={() => handleSendMessage()} disabled={isLoading || overLimit} className="ap-btn">
             <span>ارسال</span>
             <Send className="size-4 -scale-x-100" aria-hidden="true" />
           </button>
         </div>
+
+        {(inputPrompt.length > MAX_CHAT_CHARS * 0.8 || overLimit) && (
+          <div
+            className="ap-notice text-end"
+            style={overLimit ? { color: "var(--ap-danger)" } : undefined}
+            role={overLimit ? "alert" : undefined}
+          >
+            {inputPrompt.length.toLocaleString("fa-IR")} / {MAX_CHAT_CHARS.toLocaleString("fa-IR")}
+            {overLimit ? " — پیام طولانی‌تر از حد مجاز است؛ لطفاً کوتاه‌تر کنید." : ""}
+          </div>
+        )}
+
+        {!isAuthenticated && (
+          <p className="ap-notice text-center">
+            <button
+              type="button"
+              className="ap-link underline"
+              onClick={() =>
+                openLogin({
+                  serviceDomain: "GHAZI",
+                  title: "ورود به قاضی هوشمند",
+                  description: "برای پاسخ‌های کامل‌تر وارد شوید؛ کد تأیید به شمارهٔ همراه شما پیامک می‌شود.",
+                })
+              }
+            >
+              برای پاسخ‌های کامل‌تر وارد شوید
+            </button>
+          </p>
+        )}
 
         {/* سلب مسئولیت حقوقی دائمی، پررنگ زیر جعبهٔ پیام */}
         <p className="ap-disclaimer" role="note">

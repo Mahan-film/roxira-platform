@@ -238,6 +238,23 @@ async def _init_auth_schema() -> None:
 # Registered on the low-level startup list (no deprecated on_event decorator).
 app.router.on_startup.append(_init_auth_schema)
 
+
+async def _warm_up_chat_embedder() -> None:
+    """Load the Qdrant query embedder in the background so the first chat is not cold."""
+    async def _run() -> None:
+        try:
+            from output_apps.generated_modules.smartjudge.legal_graph import warm_up_embedder_async
+            ok = await warm_up_embedder_async()
+            print("[ROXIRA] chat embedder warm-up: %s" % ok, file=sys.stderr)
+        except Exception as exc:  # pragma: no cover - must never block startup
+            print("[ROXIRA][WARMUP-WARN] %s" % exc, file=sys.stderr)
+
+    import asyncio as _asyncio
+    _asyncio.create_task(_run())
+
+
+app.router.on_startup.append(_warm_up_chat_embedder)
+
 # اتصال خودکار تمامی روترهای فعال پلتفرم (با لاگ کامل خطاها - بدون شکست بی‌صدا)
 modules_dir = BASE_DIR / "output_apps" / "generated_modules"
 SKIP_MODULES = {"enterprisedashboard_module"}  # روت‌های / و /dashboard توسط dispatcher اصلی سرو می‌شوند

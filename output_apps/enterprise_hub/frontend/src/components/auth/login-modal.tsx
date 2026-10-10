@@ -16,7 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AuthServiceDomain, AuthSession } from "@/lib/api/auth-client";
+import type { AuthServiceDomain, AuthSession, UserRole } from "@/lib/api/auth-client";
 import {
   JudgeAuthError,
   isValidIranianMobile,
@@ -26,6 +26,16 @@ import {
   verifyJudgeOtp,
 } from "@/lib/api/judge-auth-client";
 import { cn } from "@/lib/utils";
+
+/** Minimum wait before the user may request another code. */
+const RESEND_COOLDOWN_SECONDS = 60;
+/** Dev-only OTP echo box; never rendered in production builds. */
+const SHOW_DEV_CODE = process.env.NODE_ENV !== "production";
+
+function toUserRole(role: string | null | undefined): UserRole {
+  const upper = typeof role === "string" ? role.toUpperCase() : "";
+  return upper === "ADMIN" || upper === "LAWYER" ? upper : "USER";
+}
 
 interface LoginModalProps {
   open: boolean;
@@ -112,12 +122,13 @@ export function LoginModal({
       setPhone(targetPhone);
       setStep("code");
       setCode("");
-      setResendIn(response.expiresIn || 120);
+      setResendIn(RESEND_COOLDOWN_SECONDS);
       setSmsDelivered(response.deliveryConfirmed);
-      setDevCode(response.devCode);
+      setDevCode(SHOW_DEV_CODE ? response.devCode : null);
+      const validMinutes = Math.max(1, Math.round((response.expiresIn || 180) / 60));
       setNotice(
         response.deliveryConfirmed
-          ? "کد تأیید ارسال شد. تا ۲ دقیقه اعتبار دارد."
+          ? `کد تأیید ارسال شد. تا ${validMinutes.toLocaleString("fa-IR")} دقیقه اعتبار دارد. برای ارسال مجدد ۶۰ ثانیه صبر کنید.`
           : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، چند لحظه بعد دوباره درخواست کنید.",
       );
     } catch (err) {
@@ -166,7 +177,8 @@ export function LoginModal({
             phone: session.user.phone,
             displayName: session.user.displayName,
             email: session.user.email,
-            role: "USER",
+            role: toUserRole(session.user.role),
+            subscriptionTier: session.user.subscriptionTier,
             serviceDomain: serviceDomain ?? "GHAZI",
             createdAt: new Date().toISOString(),
           },
@@ -338,7 +350,7 @@ export function LoginModal({
                 </p>
               )}
 
-              {devCode && (
+              {SHOW_DEV_CODE && devCode && (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center font-mono text-sm text-amber-200">
                   کد آزمایشی: {devCode}
                 </p>

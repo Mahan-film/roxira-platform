@@ -7,7 +7,10 @@ import path from "path";
  * این‌صورت مقدار پیش‌فرض توسعه (`main.ts` -> `process.env.PORT ?? 3000`)
  * استفاده می‌شود.
  */
-const NEST_API_ORIGIN = process.env.NEST_API_ORIGIN ?? "http://localhost:3000";
+const NEST_API_ORIGIN = (process.env.NEST_API_ORIGIN ?? "http://localhost:3000")
+  .trim()
+  // origin only: a trailing slash or path would corrupt `${origin}/v1/:path*`
+  .replace(/\/+$/, "");
 
 /**
  * آدرس واقعی موتور قاضی هوشمند (AI Core Layer — FastAPI/Python).

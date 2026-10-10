@@ -28,9 +28,9 @@ export default function ChatPage() {
     <div className="dark ap-theme flex flex-col h-dvh overflow-hidden" data-theme="dark" dir="rtl" lang="fa">
       <GhaziHeader />
       <main className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
-        <div className="mx-auto w-full max-w-[var(--ap-content-max)] px-4 pt-4 pb-1 text-center sm:px-6">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">گفتگوی هوشمند حقوقی</h1>
-          <p className="ap-notice mx-auto mt-1 max-w-[60ch]">{ONBOARDING_LINE}</p>
+        <div className="mx-auto w-full max-w-[var(--ap-content-max)] px-4 pt-2 pb-0 text-center sm:px-6 sm:pt-4 sm:pb-1">
+          <h1 className="text-base font-semibold tracking-tight sm:text-2xl">گفتگوی هوشمند حقوقی</h1>
+          <p className="ap-notice mx-auto mt-1 hidden max-w-[60ch] sm:block">{ONBOARDING_LINE}</p>
         </div>
         <Suspense fallback={null}>
           <ChatShell />

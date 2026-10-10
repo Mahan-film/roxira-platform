@@ -26,6 +26,8 @@ export interface AuthUser {
   displayName: string | null;
   email: string | null;
   role: UserRole;
+  /** Subscription tier from the verify-otp response (FREE / VIP ...). */
+  subscriptionTier?: string;
   serviceDomain: AuthServiceDomain;
   createdAt: string;
 }

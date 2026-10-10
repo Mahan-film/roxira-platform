@@ -510,14 +510,44 @@ def _get_query_embedder() -> Any:
     return _embedder_instance
 
 
+try:  # latency helpers (query-embedding cache + [CHAT-TIMING] embed_ms)
+    from .. import chat_fast as _chat_fast
+except Exception:  # noqa: BLE001 - never block engine import
+    try:
+        from output_apps.generated_modules.smartjudge import chat_fast as _chat_fast
+    except Exception:  # noqa: BLE001
+        _chat_fast = None
+
+_embed_cache = _chat_fast.TTLCache(ttl=600.0, max_entries=512) if _chat_fast else None
+
+
+def warm_up_embedder() -> bool:
+    """Load the embedder and run one encode so the first user request is not cold."""
+    return _embed_query_sync("warm up") is not None
+
+
+async def warm_up_embedder_async() -> bool:
+    return await asyncio.to_thread(warm_up_embedder)
+
+
 def _embed_query_sync(text: str) -> Optional[List[float]]:
     """رشته را با مدل بارگذاری‌شده embed می‌کند؛ در نبود مدل/شکست، ``None``."""
+    if _embed_cache is not None:
+        hit = _embed_cache.get(text)
+        if hit is not None:
+            return list(hit)
     model = _get_query_embedder()
     if model is None:
         return None
     try:
-        vector = model.encode([text], normalize_embeddings=True)[0]
-        return [float(x) for x in vector]
+        t0 = time.perf_counter()
+        vector = model.encode([text], normalize_embeddings=True, show_progress_bar=False)[0]
+        result = [float(x) for x in vector]
+        if _chat_fast is not None:
+            _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
+        if _embed_cache is not None:
+            _embed_cache.set(text, result)
+        return result
     except Exception as exc:  # noqa: BLE001
         logger.warning("Query embedding failed -> scroll fallback: %s", exc)
         return None
@@ -1115,12 +1145,20 @@ async def qdrant_fallback_laws(
 
     # پیش‌قدم قطعی (W25-1): «ماده N قانون X» را با فیلتر payload پیدا کن تا
     # جست‌وجوی برداری اشتباهاً مادهٔ دیگری (مثلاً ۱۰۱۰ برای ۱۰) را برنگرداند.
-    try:
-        exact_rows = await exact_article_lookup(text, limit=desired, active_only=active_only)
-    except Exception as exc:  # noqa: BLE001 - هرگز مسیر پرس‌وجو را نشکند
-        logger.debug("exact article lookup failed: %s", exc)
+    # exact lookup and vector search are independent: run them concurrently.
+    exact_res, rest_res = await asyncio.gather(
+        exact_article_lookup(text, limit=desired, active_only=active_only),
+        _qdrant_vector_or_scroll_laws(text, desired, active_only),
+        return_exceptions=True,
+    )
+    if isinstance(exact_res, BaseException):
+        logger.debug("exact article lookup failed: %s", exact_res)
         exact_rows = None
-    rest = await _qdrant_vector_or_scroll_laws(text, desired, active_only)
+    else:
+        exact_rows = exact_res
+    if isinstance(rest_res, BaseException):
+        raise rest_res
+    rest = rest_res
     if not exact_rows:
         return rest
     # ردیف‌های دقیق اول، سپس نتایج معمول تا سقف limit (یکتا بر اساس قانون+ماده).
@@ -1362,6 +1400,8 @@ __all__ = [
     "qdrant_fallback_laws",
     "qdrant_fallback_state",
     "qdrant_retrieve",
+    "warm_up_embedder",
+    "warm_up_embedder_async",
     "rag_query",
     "rag_query_sync",
     "rag_retrieve",

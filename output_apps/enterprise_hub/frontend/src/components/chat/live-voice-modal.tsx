@@ -1,20 +1,23 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/components/auth/auth-provider';
+import { liveVoiceUrl } from '@/lib/api/judge-chat-client';
 import { Phone, PhoneOff, Mic, Volume2, AlertCircle, Send } from 'lucide-react';
 
 interface LiveVoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
   conversationId?: string;
-  onConversationIdChange?: (id: any) => void;
-  onNewMessage?: (userText: any, aiReply: any, draft?: any, prob?: any) => void;
-  onTriggerLegalDraft?: (_type: any, _title: any, prompt: any) => void;
+  onConversationIdChange?: (id: string) => void;
+  onNewMessage?: (userText: string, aiReply: string, draft?: string, prob?: string) => void;
+  onTriggerLegalDraft?: (type: string, title: string, prompt: string) => void;
 }
 
 export const unlockSafariAudio = () => {};
 
 export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose }) => {
+  const { getAccessToken } = useAuth();
   const [sessionState, setSessionState] = useState<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
   const [transcription, setTranscription] = useState<string>('');
   const [assistantReply, setAssistantReply] = useState<string>('');
@@ -26,7 +29,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   const streamRef = useRef<MediaStream | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const stateRef = useRef<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
-  const watchdogTimerRef = useRef<any>(null);
+  const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Playback queue: sentence-chunk (VOICE_STREAM_TTS) and Gemini-live audio
   // both arrive as several `agent_audio_stream` messages per turn. The old
@@ -214,8 +217,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       });
       workletNodeRef.current = worklet;
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/v1/apps/judge/live-voice?tier=VIP&phone=09129367796`;
+      const wsUrl = liveVoiceUrl(getAccessToken());
       const ws = new WebSocket(wsUrl);
       socketRef.current = ws;
 

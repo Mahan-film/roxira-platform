@@ -138,6 +138,8 @@ export interface JudgeAuthSession {
 const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
   0: "ارتباط با سرور قاضی هوشمند برقرار نشد. اتصال اینترنت را بررسی و دوباره تلاش کنید.",
   400: "درخواست نامعتبر است. شماره همراه و کد تأیید را بازبینی کنید.",
+  413: "درخواست بیش از حد بزرگ است.",
+  422: "اطلاعات واردشده معتبر نیست. شماره همراه و کد تأیید را بازبینی کنید.",
   401: "نشست منقضی شده است. لطفاً دوباره وارد شوید.",
   403: "دسترسی به این سرویس مجاز نیست.",
   404: "سرویس احراز هویت در دسترس نیست. لطفاً بعداً تلاش کنید.",
@@ -157,6 +159,9 @@ const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
  *   • عمومی    → {"error": "..."} / {"message": {...}}
  */
 function extractErrorMessages(parsed: unknown, statusCode: number): string[] {
+  // FastAPI validation errors (422) are English pydantic payloads: never show them.
+  if (statusCode === 422) return [STATUS_FALLBACK_MESSAGES[422]];
+
   const collected: string[] = [];
 
   const push = (value: unknown) => {

@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from output_apps.ecosystem_core.src.security import cors_config
+from output_apps.generated_modules.smartjudge import chat_auth
 from output_apps.generated_modules.smartjudge import smartjudge_module as mod
 
 PHONE = "09120000001"
@@ -15,9 +16,10 @@ GOOD = "54321"
 
 
 def _verify(code):
-    mod._OTP_CACHE[PHONE] = {"code": GOOD, "expires_at": 9e12, "attempts": 0}
+    chat_auth.reset_for_tests()
+    mod._otp_store(PHONE, GOOD)
     resp = asyncio.run(mod.verify_auth_otp({"phone": PHONE, "code": code}))
-    mod._OTP_CACHE.pop(PHONE, None)
+    chat_auth.reset_for_tests()
     return resp
 
 
@@ -39,7 +41,7 @@ def test_correct_code_accepted():
 
 
 def test_no_universal_otp_routes_left():
-    assert not hasattr(mod, "_GLOBAL_OTP_CACHE")
+    assert not hasattr(mod, "_GLOBAL_OTP_CACHE") and not hasattr(mod, "_OTP_CACHE")
     paths = {getattr(r, "path", "") for r in mod.router.routes}
     assert not any(p.endswith(("/send-otp", "/verify-otp")) and "/auth/" not in p for p in paths)
 
@@ -53,8 +55,9 @@ def _send(monkeypatch, delivered):
     class Req:
         headers = {"host": "x"}
 
+    chat_auth.reset_for_tests()
     resp = asyncio.run(mod.send_auth_otp(Req(), {"phone": PHONE}))
-    mod._OTP_CACHE.pop(PHONE, None)
+    chat_auth.reset_for_tests()
     return resp if isinstance(resp, dict) else json.loads(resp.body)
 
 
@@ -70,10 +73,10 @@ def test_dev_code_never_in_production(monkeypatch):
     assert "dev_code" not in _send(monkeypatch, False)
 
 
-def test_dev_code_only_when_opted_in(monkeypatch):
+def test_dev_code_never_in_response_even_when_opted_in(monkeypatch):
     monkeypatch.setenv("OTP_DEV_ECHO", "1")
     monkeypatch.setenv("ROXIRA_ENV", "development")
-    assert "dev_code" in _send(monkeypatch, False)
+    assert "dev_code" not in _send(monkeypatch, False)
 
 
 def test_otp_not_logged(monkeypatch, capsys):

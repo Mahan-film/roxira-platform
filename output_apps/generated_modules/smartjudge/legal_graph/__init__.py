@@ -18,6 +18,7 @@ from .lightrag_engine import (  # noqa: F401
     rag_query_sync,
     rag_retrieve,
     run_coro_blocking,
+    warm_up_embedder_async,
 )
 
 __all__ = [
