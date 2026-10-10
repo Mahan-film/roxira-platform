@@ -117,6 +117,7 @@ from output_apps.generated_modules.smartjudge.fast_path import (
 )
 from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
+from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 # W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
@@ -1494,7 +1495,7 @@ async def interactive_consult(payload: dict = Body(...)):
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     laws, precedents = await aquery_knowledge_graph(user_text, limit=5)
 
-    # Opt-in (SMARTJUDGE_PROMPT_LIBRARY=1): competence questions get up to 3 extra
+    # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
     # targeted retrieval queries, merged and de-duplicated by title.
     use_prompt_library = _prompt_library.prompt_library_enabled()
     detected_domains: list = []
@@ -1513,10 +1514,10 @@ async def interactive_consult(payload: dict = Body(...)):
                             and r.get("title") not in known:
                         known.add(r.get("title"))
                         rows.append(r)
-        if _chat_safety.is_grounded(laws, precedents):
-            # real hits exist: drop placeholder rows so they never mix in
-            laws = [r for r in laws if str((r or {}).get("match_level") or "") != "FALLBACK"]
-            precedents = [r for r in precedents if str((r or {}).get("match_level") or "") != "FALLBACK"]
+    # Always (flag-independent): placeholder FALLBACK rows and low-relevance rows never
+    # ground the model or reach the client.
+    laws = _source_filter.filter_relevant(laws)
+    precedents = _source_filter.filter_relevant(precedents)
 
     # اگر سشن وجود ندارد یک گفتگوی جدید باز شود
     if not conv_id:
@@ -1553,22 +1554,19 @@ async def interactive_consult(payload: dict = Body(...)):
 
     if OPENROUTER_API_KEY or _use_llm_router():
         try:
-            system_msg = (
-                "شما «قاضی هوشمند» در مکالمه صوتی زنده هستید. "
-                "دستور اکید کاربر: پاسخ باید فوق‌العاده کوتاه، مختصر، مفید و حداکثر در یک یا دو جمله بیان شود (زیر ۲۵ کلمه). "
-                "به هیچ عنوان توضیحات طولانی، مقدمه‌چینی یا مواد اضافی نگو. "
-                "اگر کاربر سلام کرد، فقط بگو: سلام و درود، در خدمت شما هستم؛ بفرمایید. "
-                "اگر سوال درباره رأی وحدت رویه پرسید، فقط شماره رأی و موضوع کلیدی آن را در یک جمله بگو. "
-                "پاسخ باید صریح، بی‌درنگ و کاملاً خلاصه باشد."
-            )
-            context_text = ""
+            is_voice = bool(payload.get("is_voice_mode"))
             # FALLBACK rows are fixed placeholders, not corpus hits: never feed them as grounding.
             grounded = _chat_safety.is_grounded(laws, precedents)
-            system_msg += " " + _chat_safety.LATIN_DIGITS_INSTRUCTION
-            if not grounded:
-                system_msg += " " + _chat_safety.GENERAL_KNOWLEDGE_INSTRUCTION
-            if use_prompt_library and not payload.get("is_voice_mode"):
+            if is_voice:
+                system_msg = _prompt_library.VOICE_SYSTEM_PROMPT
+                system_msg += " " + _chat_safety.LATIN_DIGITS_INSTRUCTION
+                if not grounded:
+                    system_msg += " " + _chat_safety.GENERAL_KNOWLEDGE_INSTRUCTION
+            elif use_prompt_library:
                 system_msg = _prompt_library.build_system_prompt(detected_domains, grounded, user_text)
+            else:
+                system_msg = _prompt_library.build_text_prompt_basic(grounded)
+            context_text = ""
             if grounded and laws:
                 law_lines = "\n".join([f"- {l.get('title')}: {l.get('summary', '')}" for l in laws[:5]])
                 context_text += f"\nمواد قانونی استخراج‌شده از پایگاه دانش:\n{law_lines}"
@@ -1582,7 +1580,6 @@ async def interactive_consult(payload: dict = Body(...)):
                 messages_payload.extend(history_messages[-8:])
             messages_payload.append({"role": "user", "content": user_text})
 
-            is_voice = bool(payload.get("is_voice_mode"))
             chosen_model = cfg.get("voice_model", "deepseek/deepseek-v4.1-flash") if is_voice else cfg.get("primary_model", "deepseek/deepseek-v4.1-flash")
             chosen_max_tokens = 60 if is_voice else 1500
 
@@ -1661,6 +1658,8 @@ async def interactive_consult(payload: dict = Body(...)):
     # Placeholder FALLBACK rows never leave the server.
     if not _chat_safety.is_grounded(laws, precedents):
         laws, precedents = [], []
+    else:
+        laws, precedents = _source_filter.select_displayed(reply_msg, laws, precedents)
     prob = derive_success_probability(user_text)
 
     # ذخیره پیام کاربر و پاسخ سیستم در دیتابیس

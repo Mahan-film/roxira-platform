@@ -133,7 +133,19 @@ def expand_competence_queries(text: str) -> list[str]:
 
 
 def prompt_library_enabled() -> bool:
-    return os.environ.get(ENV_FLAG, "").strip().lower() in ("1", "true", "yes", "on")
+    """Default ON for text chat; ``SMARTJUDGE_PROMPT_LIBRARY=0`` (false/no/off) disables."""
+    return os.environ.get(ENV_FLAG, "").strip().lower() not in ("0", "false", "no", "off")
+
+
+# Live-voice prompt: ultra short spoken answers. Never used for text chat.
+VOICE_SYSTEM_PROMPT = (
+    "شما «قاضی هوشمند» در مکالمه صوتی زنده هستید. "
+    "دستور اکید کاربر: پاسخ باید فوق‌العاده کوتاه، مختصر، مفید و حداکثر در یک یا دو جمله بیان شود (زیر ۲۵ کلمه). "
+    "به هیچ عنوان توضیحات طولانی، مقدمه‌چینی یا مواد اضافی نگو. "
+    "اگر کاربر سلام کرد، فقط بگو: سلام و درود، در خدمت شما هستم؛ بفرمایید. "
+    "اگر سوال درباره رأی وحدت رویه پرسید، فقط شماره رأی و موضوع کلیدی آن را در یک جمله بگو. "
+    "پاسخ باید صریح، بی‌درنگ و کاملاً خلاصه باشد."
+)
 
 
 _ROLE = (
@@ -149,7 +161,26 @@ _GROUNDING_RULES = (
 
 _UNGROUNDED_RULES = (
     "در پایگاه دانش مستند مرتبطی یافت نشد؛ فقط به‌صورت کلی به اصول و نهادهای حقوقی اشاره کن، "
-    "هیچ شماره‌ای برای ماده یا رأی ذکر نکن و پاسخ را رد نکن."
+    "هیچ شماره‌ای برای ماده یا رأی ذکر نکن، صریحاً بنویس که مستند این موضوع در منابع یافت نشد "
+    "و کاربر را به مشورت با وکیل ارجاع بده."
+)
+
+# Text-chat answer contract (structured Persian, grounded only in retrieved context).
+_TEXT_STRUCTURE = (
+    "ساختار پاسخ متنی الزامی است و باید دقیقاً با این چهار عنوان بیاید: "
+    "«خلاصه پاسخ» (۱ تا ۳ جمله)؛ "
+    "«مبنای قانونی» (شمارهٔ ماده همراه با نام قانون، فقط از مواد بازیابی‌شده)؛ "
+    "«نکات عملی» (مهلت‌ها، مرجع، گام بعدی)؛ "
+    "«هشدار مشورتی» (این پاسخ مشاورهٔ قطعی نیست و باید با وکیل یا مرجع صالح تأیید شود)."
+)
+
+_TEXT_GROUNDING_RULES = (
+    "قواعد اتکا به منبع: پاسخ را فقط بر مواد بازیابی‌شدهٔ همین پیام بنا کن. "
+    "هر ادعای حقوقی (مجازات، مهلت، سهم، شرایط) که در مواد بازیابی‌شده پشتوانه ندارد را نگو؛ "
+    "به‌جای آن بنویس «این مورد در منابع بازیابی‌شده یافت نشد» و کاربر را به مشورت با وکیل ارجاع بده. "
+    "هرگز شمارهٔ ماده، نام قانون، شمارهٔ رأی یا تاریخ نساز و شمارهٔ ماده را از حافظه ننویس. "
+    "اگر چند نسخه یا اصلاحیهٔ یک حکم بازیابی شده، آخرین اصلاحیه را مبنا قرار بده و نسخهٔ منسوخ را "
+    "به‌عنوان حکم جاری بیان نکن؛ اگر از جاری بودن مطمئن نیستی، همین را صریحاً بگو."
 )
 
 _LIMITS = (
@@ -215,7 +246,8 @@ def _courts_guidance(user_text: str) -> str:
 def build_system_prompt(domains: list[dict[str, Any]], grounded: bool, user_text: str) -> str:
     """Compose the structured Persian system prompt. Pure and deterministic."""
     parts: list[str] = [_ROLE]
-    parts.append(_GROUNDING_RULES if grounded else _UNGROUNDED_RULES)
+    parts.append((_GROUNDING_RULES + " " + _TEXT_GROUNDING_RULES) if grounded else _UNGROUNDED_RULES)
+    parts.append(_TEXT_STRUCTURE)
     parts.append(_cs.LATIN_DIGITS_INSTRUCTION)
     case_domains = _case_domains(domains)
     if _is_competence(domains):
@@ -231,3 +263,15 @@ def build_system_prompt(domains: list[dict[str, Any]], grounded: bool, user_text
         parts.append(guidance)
     parts.append(_LIMITS)
     return "\n".join(parts)
+
+
+def build_text_prompt_basic(grounded: bool) -> str:
+    """Text-chat prompt used when the library is disabled (flag=0): same grounding
+    contract and answer structure, but no domain templates or court guidance."""
+    return "\n".join([
+        _ROLE,
+        (_GROUNDING_RULES + " " + _TEXT_GROUNDING_RULES) if grounded else _UNGROUNDED_RULES,
+        _TEXT_STRUCTURE,
+        _cs.LATIN_DIGITS_INSTRUCTION,
+        _LIMITS,
+    ])

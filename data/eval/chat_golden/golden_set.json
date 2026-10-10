@@ -1,0 +1,78 @@
+{
+  "_meta": {
+    "purpose": "Golden set for Smart Judge TEXT chat legal correctness (QA 2026-10-09, bugs B5/B6).",
+    "type": "integration eval: calls the live /consult endpoint and therefore LLMs; NOT run in unit CI.",
+    "run": "python3 scripts/eval_chat_golden.py --base-url https://<host> (needs network); --validate checks this file offline.",
+    "status": "DRAFT. Every fact marked verify=TO-VERIFY has NOT been checked by a lawyer; do not treat as ground truth until it is.",
+    "matching": "must_mention: each item is a list of alternative substrings (any one matches, after digit/ZWNJ normalisation). must_not_mention: regexes that must NOT appear."
+  },
+  "cases": [
+    {
+      "id": "cheque-bounced-penalty",
+      "question": "اگر چک برگشت بخورد صادرکننده چه مجازاتی دارد؟",
+      "must_mention": [{"fact": "bounced-cheque remedies are enforcement/ban on cheque books, not ordinary imprisonment", "any_of": ["ممنوعیت", "دسته چک", "اجرای ثبت", "اجرائیه"], "verify": "TO-VERIFY"}],
+      "must_not_mention": [{"pattern": "حبس\\s*(از)?\\s*(شش|6)\\s*ماه\\s*تا\\s*(دو|2)\\s*سال", "reason": "Imprisonment for an ordinary bounced cheque removed by the 1397 amendment of قانون صدور چک", "verify": "TO-VERIFY"}]
+    },
+    {
+      "id": "fraud-penalty",
+      "question": "مجازات کلاهبرداری چیست؟",
+      "must_mention": [{"fact": "1 to 7 years imprisonment (ماده 1 قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری)", "any_of": ["یک تا هفت سال", "1 تا 7 سال", "یک سال تا هفت سال", "تشدید مجازات"], "verify": "TO-VERIFY"}],
+      "must_not_mention": [{"pattern": "ماده\\s*36\\s*(قانون مجازات اسلامی|ق\\.?\\s*م\\.?\\s*ا)", "reason": "ماده 36 ق.م.ا is publication of verdict, not the fraud penalty", "verify": "TO-VERIFY"}]
+    },
+    {
+      "id": "appeal-deadline",
+      "question": "مهلت تجدیدنظرخواهی از رأی دادگاه بدوی چقدر است؟",
+      "must_mention": [
+        {"fact": "20 days for residents", "any_of": ["20 روز", "بیست روز", "۲۰ روز"], "verify": "TO-VERIFY"},
+        {"fact": "2 months for residents abroad", "any_of": ["2 ماه", "دو ماه", "۲ ماه"], "verify": "TO-VERIFY"},
+        {"fact": "ماده 336 ق.آ.د.م", "any_of": ["ماده 336"], "verify": "TO-VERIFY"}
+      ],
+      "must_not_mention": []
+    },
+    {
+      "id": "default-judgment-objection",
+      "question": "مهلت واخواهی از رأی غیابی چقدر است؟",
+      "must_mention": [
+        {"fact": "20 days / 2 months abroad", "any_of": ["20 روز", "بیست روز"], "verify": "TO-VERIFY"},
+        {"fact": "ماده 306 ق.آ.د.م", "any_of": ["ماده 306"], "verify": "TO-VERIFY"}
+      ],
+      "must_not_mention": []
+    },
+    {
+      "id": "inheritance-wife-no-child",
+      "question": "سهم الارث همسر (زن) از شوهر بدون فرزند چقدر است؟",
+      "must_mention": [{"fact": "wife inherits 1/4 when no child", "any_of": ["یک چهارم", "1/4", "ربع"], "verify": "TO-VERIFY"}],
+      "must_not_mention": [{"pattern": "یک هشتم|1/8", "reason": "1/8 applies only when there is a child", "verify": "TO-VERIFY"}]
+    },
+    {
+      "id": "inheritance-wife-with-child",
+      "question": "سهم الارث همسر (زن) از شوهر وقتی فرزند دارند چقدر است؟",
+      "must_mention": [{"fact": "wife inherits 1/8 when there is a child", "any_of": ["یک هشتم", "1/8"], "verify": "TO-VERIFY"}],
+      "must_not_mention": []
+    },
+    {
+      "id": "custody-after-7",
+      "question": "حضانت فرزند بعد از هفت سالگی با کیست؟",
+      "must_mention": [{"fact": "after age 7 the court decides by the child's best interest (post-amendment)", "any_of": ["مصلحت", "دادگاه"], "verify": "TO-VERIFY"}],
+      "must_not_mention": [{"pattern": "(بعد از|پس از) (هفت|7) سالگی[^.]{0,30}با پدر (است|می‌باشد|می باشد)\\s*[.،]?$", "reason": "Pre-amendment automatic rule stated as current law", "verify": "TO-VERIFY"}]
+    },
+    {
+      "id": "no-fallback-article",
+      "question": "مهلت اعتراض به قرار منع تعقیب چقدر است؟",
+      "must_mention": [],
+      "must_not_mention": [{"pattern": "ماده\\s*1082", "reason": "Placeholder FALLBACK article must never appear for unrelated questions", "verify": "TO-VERIFY"}]
+    },
+    {
+      "id": "lease-termination-grounds",
+      "question": "موجر در چه شرایطی می‌تواند تخلیه ملک اجاره‌ای را بخواهد؟",
+      "must_mention": [{"fact": "answer is structured and ends with an advisory warning", "any_of": ["وکیل", "مشاوره"], "verify": "TO-VERIFY"}],
+      "must_not_mention": []
+    },
+    {
+      "id": "unknown-article-honesty",
+      "question": "ماده 99999 قانون مدنی چه می‌گوید؟",
+      "must_mention": [{"fact": "admits not found / refers to lawyer instead of inventing", "any_of": ["یافت نشد", "تأییدنشده", "وکیل"], "verify": "TO-VERIFY"}],
+      "must_not_mention": []
+    }
+  ]
+}
