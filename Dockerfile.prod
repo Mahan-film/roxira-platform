@@ -1,3 +1,38 @@
+# syntax=docker/dockerfile:1
+# ---- builder: compilers + pip install into an isolated venv ----------------
+FROM python:3.11-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# CPU-only torch/torchvision FIRST, from the PyTorch CPU index only (no
+# nvidia-*/CUDA wheels; prod host is CPU-only). Later installs see torch as
+# already satisfied and do not replace it with a CUDA build from PyPI.
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+
+RUN pip install psycopg fastapi uvicorn pydantic python-docx pymupdf redis httpx langgraph sentence-transformers sqlalchemy python-multipart "pydantic[email]" faster-whisper
+# موتور پردازش اسناد (Docs/PDF/تصویر → Markdown): چیدمان، جدول و OCR چندزبانه
+RUN pip install docling
+# موتور گراف دانش حقوقی (LightRAG): موجودیت/رابطه + بازیابی برداری ترکیبی
+RUN pip install lightrag-hku==1.5.7 openai==3.22.1
+# TTS مسیر آبشاری صدای زنده (smartjudge_live_voice.py): edge-tts هرگز اینجا
+# نصب نشده بود (W20 diagnosis). google-genai برای مسیر اختیاری
+# VOICE_REALTIME_PROVIDER=gemini (پیش‌فرض خاموش، docs/W20_realtime_voice.md).
+RUN pip install edge-tts google-genai
+
+# Fail the build if a CUDA torch slipped in.
+RUN python -c "import torch; assert torch.version.cuda is None, torch.version.cuda" \
+    && ! pip list 2>/dev/null | grep -i '^nvidia-'
+
+# ---- runtime: no compilers, only the venv + app code -----------------------
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -5,24 +40,14 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+ENV PATH="/opt/venv/bin:$PATH"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
+    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir psycopg fastapi uvicorn pydantic python-docx pymupdf redis httpx langgraph sentence-transformers sqlalchemy python-multipart "pydantic[email]" faster-whisper
-# موتور پردازش اسناد (Docs/PDF/تصویر → Markdown): چیدمان، جدول و OCR چندزبانه
-RUN pip install --no-cache-dir docling
-# موتور گراف دانش حقوقی (LightRAG): موجودیت/رابطه + بازیابی برداری ترکیبی
-RUN pip install --no-cache-dir lightrag-hku==1.5.7 openai==3.22.1
-# TTS مسیر آبشاری صدای زنده (smartjudge_live_voice.py): edge-tts هرگز اینجا
-# نصب نشده بود (W20 diagnosis) -- یعنی هر پاسخ صوتی از ابتدا و بی‌صدا شکست
-# می‌خورد. google-genai برای مسیر اختیاری VOICE_REALTIME_PROVIDER=gemini
-# (پیش‌فرض خاموش، docs/W20_realtime_voice.md) است.
-RUN pip install --no-cache-dir edge-tts google-genai
+COPY --from=builder /opt/venv /opt/venv
 
 COPY output_apps /app/output_apps
 COPY src /app/src
@@ -30,10 +55,8 @@ COPY run_unified_server.py /app/run_unified_server.py
 # W24 (issue #72): config/models.yaml is the model registry's single source
 # of truth (output_apps/generated_modules/smartjudge/model_registry.py). It
 # was never COPYed into the prod image, so every product-runtime call fell
-# back to llm_router.py's hardcoded _FALLBACK_TIER_MODELS constant instead
-# ("model_registry unavailable ... cannot read /app/config/models.yaml" in
-# prod logs). Ship it so the registry (and its owner-set model priorities)
-# actually take effect in production.
+# back to llm_router.py's hardcoded _FALLBACK_TIER_MODELS constant instead.
+# Ship it so the registry (and its owner-set model priorities) take effect.
 COPY config/models.yaml /app/config/models.yaml
 
 EXPOSE 8000
