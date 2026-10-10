@@ -38,10 +38,7 @@ import { WebAuthnService } from './services/webauthn.service';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>(
-          'JWT_SECRET',
-          'roxira_enterprise_super_secure_jwt_secret_key_2026',
-        ),
+        secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
           expiresIn: config.get<string>(
             'JWT_EXPIRES_IN',
@@ -61,6 +58,6 @@ import { WebAuthnService } from './services/webauthn.service';
     JwtAuthGuard,
     redisClientProvider,
   ],
-  exports: [AuthService, WebAuthnService],
+  exports: [AuthService, WebAuthnService, JwtModule],
 })
 export class AuthModule {}

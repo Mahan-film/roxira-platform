@@ -17,11 +17,14 @@ export const OTP_REDIS_PREFIX = 'roxira:auth:otp:';
 /** حداکثر تلاش ناموفق برای هر کد پیش از ابطال آن (ضد Brute-Force). */
 export const OTP_MAX_ATTEMPTS = 5;
 
-/** توکن دسترسی JWT — پیش‌فرض ۷ روز اعتبار. */
-export const JWT_DEFAULT_EXPIRES_IN = '7d';
+/** توکن دسترسی JWT — پیش‌فرض ۱ روز اعتبار (Refresh ندارد؛ پس از انقضا ورود مجدد). */
+export const JWT_DEFAULT_EXPIRES_IN = '1d';
 
-/** اعتبار پیش‌فرض توکن دسترسی بر حسب ثانیه (۷ روز) — برای بازگرداندن به کلاینت. */
-export const JWT_DEFAULT_EXPIRES_IN_SECONDS = 604800;
+/** اعتبار پیش‌فرض توکن دسترسی بر حسب ثانیه (۱ روز) — برای بازگرداندن به کلاینت. */
+export const JWT_DEFAULT_EXPIRES_IN_SECONDS = 86400;
+
+/** محدودیت سخت‌گیرانه مسیرهای ورود (@Throttle): ۵ درخواست در دقیقه برای هر IP. */
+export const AUTH_THROTTLE = { ttl: 60_000, limit: 5 } as const;
 
 /** قالب پیش‌فرض کاوه‌نگار برای دامنه قاضی هوشمند. */
 export const KAVENEGAR_TEMPLATE_GHAZI_DEFAULT = 'ghazi-verify';

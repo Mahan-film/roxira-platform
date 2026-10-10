@@ -1,3 +1,4 @@
+import { Public } from '../../auth/decorators/public.decorator';
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import {
@@ -14,6 +15,7 @@ import { CurrencyService } from '../services/currency.service';
  * از طریق Swagger تولید و مستند شده است (Rule #4 — Contract-First).
  */
 @ApiTags('Currency - نرخ ارز و تسویه بین‌المللی')
+@Public()
 @Controller('enterprise-hub/currency')
 export class CurrencyController {
   constructor(private readonly currencyService: CurrencyService) {}

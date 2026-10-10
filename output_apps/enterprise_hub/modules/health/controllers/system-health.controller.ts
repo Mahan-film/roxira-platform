@@ -1,3 +1,4 @@
+import { Public } from '../../auth/decorators/public.decorator';
 import { Controller, Get, Version, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SystemHealthResponseDto } from '../dto/system-health.dto';
@@ -12,6 +13,7 @@ import { SystemHealthService } from '../services/system-health.service';
  * SystemHealthService است (Rule #2 و Rule #3 — AGENTS.md).
  */
 @ApiTags('Health - پایش سلامت سیستم')
+@Public()
 @Controller('health')
 export class SystemHealthController {
   constructor(private readonly systemHealthService: SystemHealthService) {}

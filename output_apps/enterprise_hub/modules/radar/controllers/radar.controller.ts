@@ -20,6 +20,8 @@ import {
   TriggerScoutDto,
 } from '../dto/radar.dto';
 import { RadarService } from '../services/radar.service';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { UserRole } from '../../auth/enums/user-role.enum';
 
 /**
  * کنترلر پنل متمرکز فرماندهی رادار فناوری.
@@ -30,6 +32,7 @@ import { RadarService } from '../services/radar.service';
  * (Rule #2 و Rule #3 — AGENTS.md).
  */
 @ApiTags('Radar - رادار فناوری و ازدحام ایجنت‌ها')
+@Roles(UserRole.ADMIN)
 @Controller({ path: 'enterprise-hub/radar', version: ['1', VERSION_NEUTRAL] })
 export class RadarController {
   constructor(private readonly radarService: RadarService) {}

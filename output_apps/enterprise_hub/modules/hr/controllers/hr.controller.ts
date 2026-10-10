@@ -33,6 +33,8 @@ import {
 import { QueryEmployeeDto, QueryPayslipDto } from '../dto/query-hr.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
 import { HrService } from '../services/hr.service';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { UserRole } from '../../auth/enums/user-role.enum';
 
 /**
  * کنترلر منابع انسانی و حقوق و دستمزد.
@@ -40,6 +42,7 @@ import { HrService } from '../services/hr.service';
  * پایگاه‌داده در این لایه وجود ندارد (Rule #3 — AGENTS.md).
  */
 @ApiTags('HR - منابع انسانی و حقوق و دستمزد')
+@Roles(UserRole.ADMIN)
 @Controller('enterprise-hub/hr')
 export class HrController {
   constructor(private readonly hrService: HrService) {}

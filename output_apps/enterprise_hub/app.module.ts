@@ -3,6 +3,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import * as path from 'path';
+import {
+  GLOBAL_GUARD_PROVIDERS,
+  globalThrottlerModule,
+} from './security/global-guards';
 import { DamagesModule } from './modules/damages/damages.module';
 import { InvoicingModule } from './modules/invoicing/invoicing.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
@@ -16,7 +20,9 @@ import { HealthModule } from './modules/health/health.module';
 import { RadarModule } from './modules/radar/radar.module';
 
 @Module({
+  providers: GLOBAL_GUARD_PROVIDERS,
   imports: [
+    globalThrottlerModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')],

@@ -24,6 +24,8 @@ import {
 } from '../dto/query-journal-entry.dto';
 import { TrialBalanceResponseDto } from '../dto/trial-balance-response.dto';
 import { AccountingService } from '../services/accounting.service';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { UserRole } from '../../auth/enums/user-role.enum';
 
 /**
  * کنترلر دفتر کل و حسابداری دوطرفه.
@@ -31,6 +33,7 @@ import { AccountingService } from '../services/accounting.service';
  * پایگاه‌داده در این لایه وجود ندارد (Rule #3 — AGENTS.md).
  */
 @ApiTags('Accounting - حسابداری و دفتر روزنامه')
+@Roles(UserRole.ADMIN)
 @Controller('enterprise-hub/accounting')
 export class AccountingController {
   constructor(private readonly accountingService: AccountingService) {}

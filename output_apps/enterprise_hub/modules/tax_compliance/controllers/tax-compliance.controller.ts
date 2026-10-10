@@ -20,6 +20,8 @@ import {
   TaxSignatureDetailResponseDto,
 } from '../dto/tax-signature-response.dto';
 import { TaxComplianceService } from '../services/tax-compliance.service';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { UserRole } from '../../auth/enums/user-role.enum';
 
 /**
  * کنترلر «تطبیق سامانه مودیان و امضای الکترونیک صورتحساب‌ها».
@@ -29,6 +31,7 @@ import { TaxComplianceService } from '../services/tax-compliance.service';
  * (Rule #3 - AGENTS.md).
  */
 @ApiTags('Tax Compliance - سامانه مودیان و امضای الکترونیک')
+@Roles(UserRole.ADMIN)
 @Controller('enterprise-hub/tax-compliance')
 export class TaxComplianceController {
   constructor(private readonly taxComplianceService: TaxComplianceService) {}

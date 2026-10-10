@@ -1,15 +1,18 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   HttpCode,
   HttpStatus,
   Post,
   Req,
-  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { AUTH_THROTTLE } from '../constants/auth.constants';
+import { Public } from '../decorators/public.decorator';
 import {
   AuthSessionDto,
   AuthUserDto,
@@ -26,10 +29,7 @@ import {
   WebAuthnRegistrationVerifyRequestDto,
   WebAuthnRegistrationVerifyResponseDto,
 } from '../dto/webauthn.dto';
-import {
-  AuthenticatedRequest,
-  JwtAuthGuard,
-} from '../guards/jwt-auth.guard';
+import { AuthenticatedRequest } from '../guards/jwt-auth.guard';
 import { AuthService } from '../services/auth.service';
 import {
   PasskeySummary,
@@ -55,6 +55,15 @@ export class AuthController {
     private readonly webAuthnService: WebAuthnService,
   ) {}
 
+  /** ثبت Passkey فقط برای شماره همراه خودِ کاربر احراز‌هویت‌شده مجاز است. */
+  private assertOwnPhone(request: AuthenticatedRequest, phone: string): void {
+    if (!request.user?.phone || request.user.phone !== phone) {
+      throw new ForbiddenException('ثبت Passkey فقط برای حساب خودتان مجاز است.');
+    }
+  }
+
+  @Public()
+  @Throttle({ default: AUTH_THROTTLE })
   @Post('send-otp')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -71,6 +80,8 @@ export class AuthController {
     return this.authService.sendOtp(dto, host);
   }
 
+  @Public()
+  @Throttle({ default: AUTH_THROTTLE })
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -88,7 +99,7 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'دریافت سشن کاربر جاری (نیازمند توکن Bearer)' })
   @ApiResponse({ status: HttpStatus.OK, type: AuthUserDto })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'توکن نامعتبر' })
@@ -108,9 +119,11 @@ export class AuthController {
     type: WebAuthnRegistrationOptionsResponseDto,
   })
   async webauthnRegistrationOptions(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: WebAuthnRegistrationOptionsRequestDto,
     @Headers('host') host?: string,
   ): Promise<WebAuthnRegistrationOptionsResponseDto> {
+    this.assertOwnPhone(request, dto.phone);
     const domain = this.authService.resolveServiceDomain(undefined, host);
     return this.webAuthnService.generateRegistrationOptions(dto, domain);
   }
@@ -128,11 +141,15 @@ export class AuthController {
   })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'چالش نامعتبر' })
   async webauthnRegistrationVerify(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: WebAuthnRegistrationVerifyRequestDto,
   ): Promise<WebAuthnRegistrationVerifyResponseDto> {
+    this.assertOwnPhone(request, dto.phone);
     return this.webAuthnService.verifyRegistration(dto);
   }
 
+  @Public()
+  @Throttle({ default: AUTH_THROTTLE })
   @Post('webauthn/authentication/options')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -150,6 +167,8 @@ export class AuthController {
     return this.webAuthnService.generateAuthenticationOptions(dto);
   }
 
+  @Public()
+  @Throttle({ default: AUTH_THROTTLE })
   @Post('webauthn/authentication/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -166,7 +185,7 @@ export class AuthController {
   }
 
   @Get('webauthn/credentials')
-  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'فهرست Passkeyهای ثبت‌شده کاربر جاری' })
   async webauthnCredentials(
     @Req() request: AuthenticatedRequest,

@@ -95,6 +95,25 @@ function buildUrl(path: string, searchParams?: RequestOptions["searchParams"]): 
 }
 
 /**
+ * توکن دسترسی سشن ذخیره‌شده (کلید مشترک با auth-client). از آنجا که
+ * بک‌اند NestJS اکنون همه مسیرها را (جز مسیرهای @Public) پشت گارد JWT
+ * سراسری دارد، توکن در صورت وجود به همه درخواست‌ها پیوست می‌شود.
+ */
+function readStoredAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem("roxira.auth.session");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { accessToken?: unknown; expiresAt?: unknown };
+    if (typeof parsed.accessToken !== "string") return null;
+    if (typeof parsed.expiresAt === "number" && parsed.expiresAt < Date.now()) return null;
+    return parsed.accessToken;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * اجرای یک درخواست HTTP تایپ‌سیف به بک‌اند NestJS از طریق پروکسی
  * Next.js. در صورت پاسخ ناموفق، `ApiClientError` با جزئیات دقیق
  * پیام‌های اعتبارسنجی class-validator پرتاب می‌شود.
@@ -105,9 +124,14 @@ export async function apiRequest<TResponse>(
 ): Promise<TResponse> {
   const url = buildUrl(path, options.searchParams);
 
+  const headers: Record<string, string> = {};
+  if (options.body) headers["Content-Type"] = "application/json";
+  const token = readStoredAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   const response = await fetch(url, {
     method: options.method ?? "GET",
-    headers: options.body ? { "Content-Type": "application/json" } : undefined,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
     body: options.body ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
     cache: "no-store",
