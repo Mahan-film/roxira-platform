@@ -96,6 +96,7 @@ export function ChatShell() {
   const [isLiveAudioOpen, setIsLiveAudioOpen] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [weakConnection, setWeakConnection] = useState(false);
+  const [guestNotice, setGuestNotice] = useState(false);
   const recoveredRef = useRef(false);
   const { getAccessToken, isAuthenticated, openLogin, logout } = useAuth();
   const recordingTimerRef = useRef<number | null>(null);
@@ -319,6 +320,7 @@ export function ChatShell() {
     const requestId = requestIdIn ?? newRequestId();
     setMessages(baseMsgs);
     setIsLoading(true);
+    if (isAuthenticated) setGuestNotice(false);
     savePending(textToSend, requestId);
 
     const finish = (msg: ChatMessage) => setMessages([...baseMsgs, msg]);
@@ -349,6 +351,11 @@ export function ChatShell() {
           setMessages(baseMsgs);
         },
         onRetry: () => setWeakConnection(true),
+        // Stale token: drop it silently; streamChat repeats the request once as a guest.
+        onAuthExpired: () => {
+          logout();
+          setGuestNotice(true);
+        },
       });
       setWeakConnection(false);
 
@@ -374,7 +381,7 @@ export function ChatShell() {
       setWeakConnection(false);
       if (err instanceof ChatHttpError) {
         const failure = failureFromResponse(err.status, err.body);
-        if (failure.kind === "auth") handleSessionExpired();
+        if (failure.kind === "auth") logout(); // never open the login modal automatically
         if (!failure.retryable) clearPending();
         finish(errorBubble(failure, textToSend, requestId));
       } else {
@@ -559,6 +566,25 @@ export function ChatShell() {
             );
           })}
         </div>
+
+        {guestNotice && !isAuthenticated && (
+          <p className="ap-notice text-center" role="status">
+            نشست شما منقضی شده؛ پاسخ با حساب مهمان داده شد —{" "}
+            <button
+              type="button"
+              className="ap-link underline"
+              onClick={() =>
+                openLogin({
+                  serviceDomain: "GHAZI",
+                  title: "ورود به قاضی هوشمند",
+                  description: "کد تأیید به شمارهٔ همراه شما پیامک می‌شود.",
+                })
+              }
+            >
+              برای ادامه با حساب خود وارد شوید
+            </button>
+          </p>
+        )}
 
         {/* وضعیت زنده ضبط صدا */}
         {recordingStatus && (

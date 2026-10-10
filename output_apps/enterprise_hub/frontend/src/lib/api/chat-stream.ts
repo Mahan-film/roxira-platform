@@ -16,7 +16,11 @@ import {
   JUDGE_CHAT_PATH,
   RetryTimeoutError,
   fetchWithRetry,
+  hasAuthHeader,
+  isStreamFailed,
+  markStreamFailed,
   reportClientError,
+  withoutAuthHeader,
 } from "./judge-chat-client";
 
 /** No byte from the stream within this time => give up on streaming and use /chat. */
@@ -89,6 +93,11 @@ export interface StreamChatOptions {
   onReset?: () => void;
   /** Called before each /chat fallback retry pause. */
   onRetry?: (attempt: number) => void;
+  /**
+   * Called once when the server answers 401 to a request that carried a token. The request is
+   * then repeated ONCE without Authorization (anonymous FREE chat) with the same request_id.
+   */
+  onAuthExpired?: () => void;
   baseUrl?: string;
 }
 
@@ -121,6 +130,21 @@ async function chatFallback(opts: StreamChatOptions): Promise<ChatDoneBody> {
 }
 
 export async function streamChat(opts: StreamChatOptions): Promise<ChatDoneBody> {
+  try {
+    return await streamChatOnce(opts);
+  } catch (e) {
+    if (e instanceof ChatHttpError && e.status === 401 && hasAuthHeader(opts.headers)) {
+      opts.onAuthExpired?.();
+      opts.onReset?.();
+      return streamChatOnce({ ...opts, headers: withoutAuthHeader(opts.headers) });
+    }
+    throw e;
+  }
+}
+
+async function streamChatOnce(opts: StreamChatOptions): Promise<ChatDoneBody> {
+  // Streaming already failed earlier in this session: go straight to /chat (with retries).
+  if (isStreamFailed()) return chatFallback(opts);
   const base = opts.baseUrl ?? JUDGE_CHAT_PATH.replace(/\/chat$/, "");
   const requestId = opts.payload.request_id;
   const started = Date.now();
@@ -198,6 +222,8 @@ export async function streamChat(opts: StreamChatOptions): Promise<ChatDoneBody>
       request_id: requestId,
       elapsed_ms: Date.now() - started,
     });
+    // A network-level failure (not an HTTP answer) means streaming is unusable on this link.
+    if (!(e instanceof ChatHttpError)) markStreamFailed();
     if (gotByte) opts.onReset?.();
     return chatFallback(opts);
   } finally {

@@ -175,6 +175,21 @@ export function saveStoredSession(session: StoredAuthSession): void {
   }
 }
 
+/** True when `token` is a 3-part JWT whose `exp` (if present) is still in the future. Unverified decode. */
+export function isUsableJwt(token: unknown): boolean {
+  if (typeof token !== "string") return false;
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts.some((p) => !p)) return false;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = JSON.parse(atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")));
+    if (json && typeof json.exp === "number" && json.exp * 1000 < Date.now()) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** بارگذاری سشن ذخیره‌شده؛ سشن منقضی پاک می‌شود. */
 export function loadStoredSession(): StoredAuthSession | null {
   if (typeof window === "undefined") return null;
@@ -183,6 +198,10 @@ export function loadStoredSession(): StoredAuthSession | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredAuthSession;
     if (!parsed?.accessToken || !parsed?.user) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    if (!isUsableJwt(parsed.accessToken)) {
       window.localStorage.removeItem(STORAGE_KEY);
       return null;
     }

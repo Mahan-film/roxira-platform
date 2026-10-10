@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 /** Minimum wait before the user may request another code. */
 const RESEND_COOLDOWN_SECONDS = 60;
 /** Dev-only OTP echo box; never rendered in production builds. */
+const NETWORK_ERROR_COPY = "اتصال به سرور برقرار نشد. اینترنت خود را بررسی کنید یا چند لحظه بعد دوباره تلاش کنید.";
 const SHOW_DEV_CODE = process.env.NODE_ENV !== "production";
 
 function toUserRole(role: string | null | undefined): UserRole {
@@ -76,6 +77,8 @@ export function LoginModal({
   const [devCode, setDevCode] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
   const [smsDelivered, setSmsDelivered] = useState<boolean | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [networkFailed, setNetworkFailed] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -86,6 +89,8 @@ export function LoginModal({
     setDevCode(null);
     setResendIn(0);
     setSmsDelivered(null);
+    setRetrying(false);
+    setNetworkFailed(false);
   }, [open]);
 
   useEffect(() => {
@@ -115,30 +120,41 @@ export function LoginModal({
     setError(null);
     setNotice(null);
     setDevCode(null);
+    setNetworkFailed(false);
+    setRetrying(false);
     try {
-      const response = await sendJudgeOtp(targetPhone);
+      const response = await sendJudgeOtp(targetPhone, { onRetry: () => setRetrying(true) });
 
       // پاسخ موفق → انتقال قطعی رابط به حالت ورود کد تأیید
       setPhone(targetPhone);
       setStep("code");
       setCode("");
-      setResendIn(RESEND_COOLDOWN_SECONDS);
+      setResendIn(
+        response.alreadySent && response.retryAfter
+          ? Math.min(response.retryAfter, RESEND_COOLDOWN_SECONDS)
+          : RESEND_COOLDOWN_SECONDS,
+      );
       setSmsDelivered(response.deliveryConfirmed);
       setDevCode(SHOW_DEV_CODE ? response.devCode : null);
       const validMinutes = Math.max(1, Math.round((response.expiresIn || 180) / 60));
       setNotice(
-        response.deliveryConfirmed
+        response.alreadySent
+          ? "کد تأیید پیش‌تر ارسال شده است؛ کد پیامک‌شده را وارد کنید."
+          : response.deliveryConfirmed
           ? `کد تأیید ارسال شد. تا ${validMinutes.toLocaleString("fa-IR")} دقیقه اعتبار دارد. برای ارسال مجدد ۶۰ ثانیه صبر کنید.`
           : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، چند لحظه بعد دوباره درخواست کنید.",
       );
     } catch (err) {
       if (err instanceof JudgeAuthError) {
         setError(err.details);
+        setNetworkFailed(err.statusCode === 0);
       } else {
-        setError(["ارتباط با سرور برقرار نشد. لطفاً دوباره تلاش کنید."]);
+        setError([NETWORK_ERROR_COPY]);
+        setNetworkFailed(true);
       }
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
   }, []);
 
@@ -166,8 +182,10 @@ export function LoginModal({
       }
       setLoading(true);
       setError(null);
+      setNetworkFailed(false);
+      setRetrying(false);
       try {
-        const session = await verifyJudgeOtp(phone, cleanCode);
+        const session = await verifyJudgeOtp(phone, cleanCode, { onRetry: () => setRetrying(true) });
         onAuthenticated({
           tokenType: session.tokenType,
           accessToken: session.accessToken,
@@ -187,11 +205,13 @@ export function LoginModal({
       } catch (err) {
         if (err instanceof JudgeAuthError) {
           setError(err.details);
+          setNetworkFailed(err.statusCode === 0);
         } else {
           setError(["تأیید کد ناموفق بود. لطفاً دوباره تلاش کنید."]);
         }
       } finally {
         setLoading(false);
+        setRetrying(false);
       }
     },
     [code, onAuthenticated, onClose, phone, serviceDomain],
@@ -266,6 +286,17 @@ export function LoginModal({
               </div>
 
               {error && <ErrorBox errors={error} />}
+              {error && networkFailed && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                  onClick={() => void requestCode(normalizePhone(phone))}
+                  className="h-10 w-full border-white/10 bg-transparent text-slate-200"
+                >
+                  تلاش دوباره
+                </Button>
+              )}
 
               <Button
                 type="submit"
@@ -275,7 +306,7 @@ export function LoginModal({
                 {loading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    در حال ارسال کد...
+                    {retrying ? "اتصال ضعیف است؛ در حال تلاش دوباره…" : "در حال ارسال کد..."}
                   </>
                 ) : (
                   <>
@@ -357,6 +388,16 @@ export function LoginModal({
               )}
 
               {error && <ErrorBox errors={error} />}
+              {error && networkFailed && (
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={loading || code.length !== 5}
+                  className="h-10 w-full border-white/10 bg-transparent text-slate-200"
+                >
+                  تلاش دوباره
+                </Button>
+              )}
 
               <Button
                 type="submit"
@@ -366,7 +407,7 @@ export function LoginModal({
                 {loading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    در حال تأیید...
+                    {retrying ? "اتصال ضعیف است؛ در حال تلاش دوباره…" : "در حال تأیید..."}
                   </>
                 ) : (
                   <>

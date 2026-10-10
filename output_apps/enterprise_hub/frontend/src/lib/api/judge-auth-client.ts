@@ -21,6 +21,14 @@
  *                 "expires_in":...,"user":{...}}
  */
 
+import { newRequestId, reportClientError, sleep, waitUntilUsable } from "./judge-chat-client";
+
+/** Per-attempt timeout of one auth call. */
+export const AUTH_TIMEOUT_MS = 20_000;
+/** Max attempts for a network-failing auth call, with these pauses between them. */
+export const AUTH_MAX_ATTEMPTS = 3;
+const AUTH_BACKOFF_MS = [1000, 3000];
+
 /** مسیر قطعی و تنها مسیر مجاز برای ارسال کد یک‌بارمصرف. */
 export const JUDGE_SEND_OTP_PATH = "/api/v1/apps/judge/auth/send-otp";
 
@@ -114,6 +122,10 @@ export interface JudgeOtpSent {
   deliveryConfirmed: boolean;
   /** کد صادرشده — تنها زمانی که درگاه پیامک در دسترس نبوده است. */
   devCode: string | null;
+  /** True when a retry got 429: the first attempt had already sent the code. */
+  alreadySent?: boolean;
+  /** Remaining resend cooldown in seconds (from the 429 `retry_after`), if known. */
+  retryAfter?: number | null;
 }
 
 /** کاربر بازگشتی از موتور قاضی. */
@@ -136,7 +148,7 @@ export interface JudgeAuthSession {
 
 /** پیام‌های پیش‌فرض فارسی بر پایهٔ کد وضعیت (تا هرگز پیام مبهم نمایش داده نشود). */
 const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
-  0: "ارتباط با سرور قاضی هوشمند برقرار نشد. اتصال اینترنت را بررسی و دوباره تلاش کنید.",
+  0: "اتصال به سرور برقرار نشد. اینترنت خود را بررسی کنید یا چند لحظه بعد دوباره تلاش کنید.",
   400: "درخواست نامعتبر است. شماره همراه و کد تأیید را بازبینی کنید.",
   413: "درخواست بیش از حد بزرگ است.",
   422: "اطلاعات واردشده معتبر نیست. شماره همراه و کد تأیید را بازبینی کنید.",
@@ -197,27 +209,86 @@ interface JudgePostResult {
   status: number;
   body: Record<string, unknown> | null;
   fallbackDetails: string[];
+  retryAfter?: number | null;
+  /** True when this response came from attempt 2 or later. */
+  retried?: boolean;
 }
 
-/** اجرای امن یک درخواست POST JSON — هرگز استثنای خام پرتاب نمی‌کند. */
+export interface PostOptions {
+  signal?: AbortSignal;
+  /** Called before each pause when a network error forces another attempt. */
+  onRetry?: (attempt: number) => void;
+  /** A 429 on attempt >= 2 means attempt 1 reached the server (send-otp cooldown). */
+  retry429IsSuccess?: boolean;
+}
+
+function retryAfterSeconds(response: Response, parsed: unknown): number | null {
+  const candidates: unknown[] = [response.headers.get("Retry-After")];
+  if (parsed && typeof parsed === "object") {
+    const rec = parsed as Record<string, unknown>;
+    candidates.push(rec.retry_after, rec.retryAfter);
+    if (rec.detail && typeof rec.detail === "object") {
+      candidates.push((rec.detail as Record<string, unknown>).retry_after);
+    }
+  }
+  for (const c of candidates) {
+    const n = Number(c);
+    if (c !== null && c !== undefined && c !== "" && Number.isFinite(n) && n > 0) return Math.ceil(n);
+  }
+  return null;
+}
+
+/** اجرای امن یک درخواست POST JSON با تلاش مجدد روی خطای شبکه — هرگز استثنای خام پرتاب نمی‌کند. */
 async function postJson(
   path: string,
   payload: Record<string, unknown>,
-  signal?: AbortSignal,
+  opts: PostOptions = {},
 ): Promise<JudgePostResult> {
-  let response: Response;
-  try {
-    response = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-      signal,
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new JudgeAuthError(0, ["درخواست لغو شد."]);
+  const requestId = newRequestId();
+  const started = Date.now();
+  let response: Response | null = null;
+  let attemptsUsed = 0;
+  for (let attempt = 1; attempt <= AUTH_MAX_ATTEMPTS; attempt += 1) {
+    attemptsUsed = attempt;
+    const controller = new AbortController();
+    let timedOut = false;
+    const onCallerAbort = () => controller.abort();
+    opts.signal?.addEventListener("abort", onCallerAbort);
+    if (opts.signal?.aborted) controller.abort();
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, AUTH_TIMEOUT_MS);
+    try {
+      response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      break;
+    } catch (error) {
+      if (!timedOut && error instanceof DOMException && error.name === "AbortError") {
+        throw new JudgeAuthError(0, ["درخواست لغو شد."]);
+      }
+      // Never carries phone, code, token or message text.
+      reportClientError({
+        kind: "network",
+        message: `${path.split("/").pop()} attempt ${attempt}: ${timedOut ? "timeout" : error instanceof Error ? error.name : "Error"}`,
+        request_id: requestId,
+        elapsed_ms: Date.now() - started,
+      });
+    } finally {
+      window.clearTimeout(timer);
+      opts.signal?.removeEventListener("abort", onCallerAbort);
     }
+    if (attempt >= AUTH_MAX_ATTEMPTS) break;
+    opts.onRetry?.(attempt);
+    await waitUntilUsable(60_000);
+    await sleep(AUTH_BACKOFF_MS[Math.min(attempt - 1, AUTH_BACKOFF_MS.length - 1)]);
+  }
+  if (!response) {
     return { ok: false, status: 0, body: null, fallbackDetails: [STATUS_FALLBACK_MESSAGES[0]] };
   }
 
@@ -237,6 +308,8 @@ async function postJson(
       status: response.status,
       body: null,
       fallbackDetails: extractErrorMessages(parsed, response.status),
+      retryAfter: retryAfterSeconds(response, parsed),
+      retried: attemptsUsed > 1,
     };
   }
 
@@ -264,7 +337,7 @@ function asString(value: unknown): string | null {
  */
 export async function sendJudgeOtp(
   rawPhone: string,
-  signal?: AbortSignal,
+  opts: PostOptions = {},
 ): Promise<JudgeOtpSent> {
   const phone = normalizePhone(rawPhone);
 
@@ -274,7 +347,19 @@ export async function sendJudgeOtp(
     ]);
   }
 
-  const result = await postJson(JUDGE_SEND_OTP_PATH, { phone }, signal);
+  const result = await postJson(JUDGE_SEND_OTP_PATH, { phone }, opts);
+  if (!result.ok && result.status === 429 && result.retried) {
+    // The first attempt reached the server (60 s per-phone cooldown): the code is already sent.
+    return {
+      status: "success",
+      message: "کد تأیید ارسال شده است.",
+      expiresIn: 180,
+      deliveryConfirmed: true,
+      devCode: null,
+      alreadySent: true,
+      retryAfter: result.retryAfter ?? null,
+    };
+  }
   if (!result.ok) throw new JudgeAuthError(result.status, result.fallbackDetails);
 
   const body = result.body as Record<string, unknown>;
@@ -297,7 +382,7 @@ export async function sendJudgeOtp(
 export async function verifyJudgeOtp(
   rawPhone: string,
   rawCode: string,
-  signal?: AbortSignal,
+  opts: PostOptions = {},
 ): Promise<JudgeAuthSession> {
   const phone = normalizePhone(rawPhone);
   const code = normalizeOtpCode(rawCode);
@@ -309,7 +394,7 @@ export async function verifyJudgeOtp(
     throw new JudgeAuthError(400, ["کد تأیید باید حداقل ۴ رقم باشد."]);
   }
 
-  const result = await postJson(JUDGE_VERIFY_OTP_PATH, { phone, code }, signal);
+  const result = await postJson(JUDGE_VERIFY_OTP_PATH, { phone, code }, opts);
   if (!result.ok) throw new JudgeAuthError(result.status, result.fallbackDetails);
 
   const body = result.body as Record<string, unknown>;

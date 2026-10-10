@@ -25,6 +25,39 @@ const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 /** Maximum length of one voice recording. */
 export const MAX_RECORDING_MS = 120_000;
 
+/** True when the header map carries a Bearer token. */
+export function hasAuthHeader(headers: Record<string, string> | undefined): boolean {
+  return Boolean(headers && Object.keys(headers).some((k) => k.toLowerCase() === "authorization"));
+}
+
+/** Copy of `headers` without Authorization (anonymous retry after a stale-token 401). */
+export function withoutAuthHeader(headers: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers ?? {})) {
+    if (k.toLowerCase() !== "authorization") out[k] = v;
+  }
+  return out;
+}
+
+const STREAM_FAILED_KEY = "judge_stream_failed";
+
+/** Remember (for this tab session) that /chat/stream is unreachable, so later messages use /chat. */
+export function markStreamFailed(): void {
+  try {
+    window.sessionStorage.setItem(STREAM_FAILED_KEY, "1");
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function isStreamFailed(): boolean {
+  try {
+    return window.sessionStorage.getItem(STREAM_FAILED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** Authorization header for a stored access token (empty for anonymous users). */
 export function authHeaders(token: string | null | undefined): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -241,10 +274,10 @@ export class RetryTimeoutError extends Error {
   }
 }
 
-const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+export const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 /** Resolve once the tab is visible and online again (or after a safety cap). */
-function waitUntilUsable(capMs: number): Promise<void> {
+export function waitUntilUsable(capMs: number): Promise<void> {
   const usable = () => document.visibilityState !== "hidden" && navigator.onLine !== false;
   if (usable()) return Promise.resolve();
   return new Promise((resolve) => {
