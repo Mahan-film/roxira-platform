@@ -181,3 +181,19 @@ def test_payment_requires_auth(client):
     assert client.post(f"{BASE}/payment/initiate", json={"plan": "monthly_vip"}).status_code == 401
     ok = client.post(f"{BASE}/payment/initiate", json={"plan": "monthly_vip"}, headers=_auth())
     assert ok.status_code == 200 and ok.json()["amount_toman"] == 490000
+
+
+def test_anonymous_replay_survives_client_ip_change(client, counted):
+    a = client.post(f"{BASE}/chat", json={"message": "q", "request_id": RID}, headers={"X-Real-IP": "1.2.3.4"})
+    b = client.post(f"{BASE}/chat", json={"message": "q", "request_id": RID}, headers={"X-Real-IP": "2a01:db8::1"})
+    assert b.headers["x-idempotent-replay"] == "1" and a.json() == b.json() and counted["n"] == 1
+    c = client.post(f"{BASE}/chat", json={"message": "other", "request_id": RID}, headers={"X-Real-IP": "5.6.7.8"})
+    assert "x-idempotent-replay" not in c.headers and counted["n"] == 2
+
+
+def test_authenticated_replay_isolated_by_phone_not_ip(client, counted):
+    client.post(f"{BASE}/chat", json={"message": "q", "request_id": RID}, headers={**_auth(PHONE), "X-Real-IP": "1.1.1.1"})
+    same = client.post(f"{BASE}/chat", json={"message": "q", "request_id": RID}, headers={**_auth(PHONE), "X-Real-IP": "9.9.9.9"})
+    other = client.post(f"{BASE}/chat", json={"message": "q", "request_id": RID}, headers={**_auth(OTHER), "X-Real-IP": "1.1.1.1"})
+    assert same.headers["x-idempotent-replay"] == "1" and "x-idempotent-replay" not in other.headers
+    assert counted["n"] == 2

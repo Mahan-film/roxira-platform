@@ -1562,10 +1562,9 @@ async def _consult_idempotent(payload: dict, request, user: chat_auth.CurrentUse
     ``IDEM_WAIT_SECONDS``) instead of recomputing. Replays skip the rate limiter, so a
     retry is never charged twice. Errors are never cached.
     """
-    if request is not None:
-        identity = f"ip:{chat_auth.request_ip(request)}" if not user.authenticated else f"p:{user.phone}"
-    else:
-        identity = f"p:{user.phone}" if user.authenticated else "ip:direct"
+    # Anonymous callers share one identity: a reconnecting mobile client often gets a new IP,
+    # and the unguessable client UUID is the key. Rate limits stay per IP elsewhere.
+    identity = f"p:{user.phone}" if user.authenticated else "anon"
     message = payload.get("message", "")
     res_key, lock_key = chat_auth.idem_keys(request_id, identity, message if isinstance(message, str) else str(message))
 
@@ -3354,6 +3353,7 @@ async def health_check():
         "service": "smartjudge",
         "version": "4.5.0",
         "connected": True,
+        "chat_store": await asyncio.to_thread(chat_auth.store_backend),
         "documents_processor": {
             "docling_available": _DOC_DOCLING_AVAILABLE,
             "endpoint": "/api/v1/apps/judge/documents/convert",

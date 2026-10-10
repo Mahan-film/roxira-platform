@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import threading
 import time
 from collections import OrderedDict
@@ -137,12 +138,39 @@ def _get_redis() -> Any:
     try:
         import redis  # type: ignore
 
-        _redis_client = redis.Redis.from_url(
+        client = redis.Redis.from_url(
             url, socket_timeout=0.5, socket_connect_timeout=0.5, decode_responses=True
         )
-    except Exception:  # package missing or bad URL: in-process fallback
+        client.ping()  # fail now (once) so the startup log tells the truth
+        _redis_client = client
+    except Exception as exc:  # package missing, bad URL or unreachable: in-process fallback
         _redis_client = None
+        print(f"[CHAT-STORE] WARNING redis configured but unusable ({type(exc).__name__}); "
+              "falling back to per-process memory", file=sys.stderr)
+    _log_backend()
     return _redis_client
+
+
+def store_backend() -> str:
+    """Non-sensitive: ``redis`` while a client is active, else ``memory``."""
+    _get_redis()
+    return "redis" if _redis_client is not None else "memory"
+
+
+_backend_logged = False
+
+
+def _log_backend() -> None:
+    global _backend_logged
+    if _backend_logged:
+        return
+    _backend_logged = True
+    backend = "redis" if _redis_client is not None else "memory"
+    print(f"[CHAT-STORE] backend={backend}", file=sys.stderr)
+    workers = _int_env("WEB_CONCURRENCY", 1)
+    if backend == "memory" and workers > 1:
+        print(f"[CHAT-STORE] WARNING {workers} workers share no state: rate limits, OTP and "
+              "idempotent replay are per worker. Configure REDIS_URL or REDIS_HOST.", file=sys.stderr)
 
 
 def _redis_failed() -> None:
