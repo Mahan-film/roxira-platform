@@ -79,7 +79,43 @@ LIGHTRAG_WORKING_DIR = os.environ.get("LIGHTRAG_WORKING_DIR", "/data/lightrag/sm
 # بازیابی به‌صورت خودکار و بی‌خطا روی مجموعهٔ برداری Qdrant انجام می‌شود.
 QDRANT_HOST = os.environ.get("QDRANT_HOST", "roxira_qdrant_prod")
 QDRANT_PORT = os.environ.get("QDRANT_PORT", "6333")
-QDRANT_FALLBACK_COLLECTION = os.environ.get("LIGHTRAG_QDRANT_COLLECTION", "iran_laws_bge_m3")
+# Default is ``iran_laws_v2``: 5083 articles embedded with BAAI/bge-m3 (the same model
+# the query embedder uses) and a superset of the 17 laws in ``iran_laws_mistral_v1``.
+# ``iran_laws_mistral_v1`` vectors are NOT bge-m3 vectors (measured cosine(bge(text),
+# stored) ~ 0.0 on prod 2026-10-10), so querying it with the bge-m3 embedder returns
+# near-random neighbours even though the dimension (1024) matches. Pairing is therefore
+# explicit: collection -> embedder, see ``_COLLECTION_EMBEDDERS``.
+QDRANT_DEFAULT_COLLECTION = "iran_laws_v2"
+_COLLECTION_EMBEDDERS = {
+    "iran_laws_v2": "BAAI/bge-m3",
+    "iran_laws_bge_m3": "BAAI/bge-m3",
+    "iran_laws_mistral_v1": "mistral-embed",  # not loadable here (no Mistral embed client)
+}
+
+
+def _resolve_collection(env_value: str, embed_model: str) -> str:
+    """Return a collection whose known embedder matches the query embedder.
+
+    A known-mismatched collection (e.g. ``iran_laws_mistral_v1`` with bge-m3 queries) is
+    replaced by ``LIGHTRAG_QDRANT_BGE_COLLECTION`` (default ``iran_laws_v2``) with a loud
+    warning, unless ``LIGHTRAG_QDRANT_ALLOW_EMBED_MISMATCH=1``.
+    """
+    name = (env_value or "").strip() or QDRANT_DEFAULT_COLLECTION
+    wanted = _COLLECTION_EMBEDDERS.get(name)
+    if wanted and wanted != embed_model and os.environ.get("LIGHTRAG_QDRANT_ALLOW_EMBED_MISMATCH") != "1":
+        replacement = os.environ.get("LIGHTRAG_QDRANT_BGE_COLLECTION", QDRANT_DEFAULT_COLLECTION)
+        logger.warning(
+            "Qdrant collection %s was built with %s but the query embedder is %s; using %s instead",
+            name, wanted, embed_model, replacement,
+        )
+        return replacement
+    return name
+
+
+QDRANT_FALLBACK_COLLECTION = _resolve_collection(
+    os.environ.get("LIGHTRAG_QDRANT_COLLECTION", ""),
+    os.environ.get("LIGHTRAG_QDRANT_EMBED_MODEL", "BAAI/bge-m3"),
+)
 QDRANT_FALLBACK_TIMEOUT = float(os.environ.get("LIGHTRAG_QDRANT_TIMEOUT", "4"))
 # کش منفی کوتاه: اگر همهٔ میزبان‌های Qdrant پاسخ ندادند، تا این مدت دوباره کاوش
 # نمی‌کنیم تا مسیر پرس‌وجوی صوتی/بلادرنگ به‌خاطر سرویس خواب‌رفته کند نشود.
@@ -307,6 +343,7 @@ _PAYLOAD_TEXT_KEYS = (
     "law_name",
 )
 _TOKEN_RE = re.compile(r"[\w\u0600-\u06FF]+", re.UNICODE)
+from . import retrieval_boost as _rb  # noqa: E402  (pure helpers, no circular import)
 _ENACTED_DESPITE_TITLE = (
     "لایحه اصلاحی قانون تجارت",
     "لایحه قانونی اصلاح قسمتی از قانون تجارت",
@@ -364,7 +401,8 @@ def normalize_digits(text: str) -> str:
 
 
 def _tokens(text: str) -> set:
-    return {token.lower() for token in _TOKEN_RE.findall(text or "") if len(token) > 1}
+    # normalised (ي/ك, hamza, ZWNJ, digits) and stop-word free; see retrieval_boost.
+    return _rb.tokens(text)
 
 
 def _payload_to_row(
@@ -402,6 +440,9 @@ def _payload_to_row(
         "match_level": match_level,
         "source": f"qdrant:{QDRANT_FALLBACK_COLLECTION}",
         "score": score,
+        # cosine similarity of the vector hit (None for scroll/exact/boost rows); used by
+        # source_filter so a strong semantic hit is not dropped by the token cutoff.
+        "vector_score": payload.get("_vector_score"),
         # مسیر مستقیم و قابل‌اتکای شمارهٔ ماده برای مصرف‌کننده‌های پایین‌دست
         # (مثل eval_legal_rag.py) که نباید همیشه با regex متن را بکاوند.
         "article_no": article_no,
@@ -423,12 +464,23 @@ def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -
         if payload.get("is_active") is False:  # قانون منسوخ هرگز بازیابی نمی‌شود
             continue
         text = _payload_text(payload)
-        overlap = len(tokens & _tokens(text)) if tokens else 0
+        overlap = _rb.lexical_overlap(query, text) if tokens else 0
         scored.append((overlap, -index, payload, text))
-    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    lexical_order = sorted(scored, key=lambda item: (item[0], item[1]), reverse=True)
+
+    # Hybrid: fuse the vector order (input order = cosine rank) with the lexical order
+    # by RRF so neither a lexical coincidence nor a weak embedding alone decides.
+    by_key = {id(item[2]): item for item in scored}
+    vector_keys = [id(item[2]) for item in sorted(scored, key=lambda i: i[1], reverse=True)]
+    lexical_keys = [id(item[2]) for item in lexical_order]
+    has_vec = any(item[2].get("_vector_score") is not None for item in scored)
+    fused = (
+        _rb.rrf_merge([(1.0, vector_keys), (0.5, lexical_keys)]) if has_vec else lexical_keys
+    )
 
     rows: List[Dict[str, Any]] = []
-    for overlap, _, payload, _text in scored[: max(1, limit)]:
+    for key in fused[: max(1, limit)]:
+        overlap, _, payload, _text = by_key[key]
         rows.append(_payload_to_row(payload, score=overlap))
     return rows
 
@@ -642,7 +694,7 @@ async def _qdrant_vector_search_httpx(
                 return None
             points = (payload or {}).get("result") or []
             rows = [
-                p.get("payload")
+                {**p["payload"], "_vector_score": p.get("score")}
                 for p in points
                 if isinstance(p, dict) and isinstance(p.get("payload"), dict)
             ]
@@ -1121,6 +1173,49 @@ async def exact_article_lookup(
     return [_payload_to_row(p, match_level="QDRANT_EXACT") for p in selected]
 
 
+QDRANT_KEYWORD_BOOST_ENABLED = os.environ.get("LIGHTRAG_KEYWORD_BOOST", "1") != "0"
+_BOOST_PER_RULE = 3
+
+
+async def keyword_boost_laws(
+    query: str, active_only: Optional[bool] = None
+) -> List[Dict[str, Any]]:
+    """Retrieval boost for common topics (appeal deadlines, cheque, lease, custody, ...).
+
+    For every ``retrieval_boost.KEYWORD_RULES`` entry fired by ``query`` with a concrete
+    article list, scroll those ``article_no`` values by payload filter, keep only rows of
+    the named law(s) and return the best few (query-token overlap, then article order) as
+    ``KEYWORD_BOOST`` rows. These rows are corpus text found by a lookup hint; the map
+    itself is never emitted as answer text. Never raises.
+    """
+    rules = [r for r in _rb.keyword_targets(query) if r.articles]
+    if not rules or not QDRANT_KEYWORD_BOOST_ENABLED:
+        return []
+    out: List[Dict[str, Any]] = []
+    for rule in rules:
+        point_filter = _exact_article_point_filter(None, [str(n) for n in rule.articles], active_only=active_only)
+        try:
+            payloads = _only_active(await _scroll_by_point_filter(point_filter, 40 * len(rule.articles)))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("keyword boost scroll failed: %s", exc)
+            continue
+        cands = [p for p in payloads if _rb.law_matches(p.get("law_name"), rule.law_fragments)]
+        def _order_key(p: Dict[str, Any]) -> Tuple[int, int, int]:
+            try:
+                no = int(str(_payload_article_no(p) or "0").split("-")[0])
+            except ValueError:
+                no = 0
+            return (0 if no in rule.priority else 1, -_rb.lexical_overlap(query, _payload_text(p)), no)
+
+        for p in _dedupe_article_payloads(sorted(cands, key=_order_key), _BOOST_PER_RULE + len(rule.priority)):
+            out.append(
+                _payload_to_row(
+                    p, match_level="KEYWORD_BOOST", score=_rb.lexical_overlap(query, _payload_text(p))
+                )
+            )
+    return out
+
+
 async def qdrant_fallback_laws(
     query: str, limit: int = 5, active_only: Optional[bool] = None
 ) -> List[Dict[str, Any]]:
@@ -1146,11 +1241,13 @@ async def qdrant_fallback_laws(
     # پیش‌قدم قطعی (W25-1): «ماده N قانون X» را با فیلتر payload پیدا کن تا
     # جست‌وجوی برداری اشتباهاً مادهٔ دیگری (مثلاً ۱۰۱۰ برای ۱۰) را برنگرداند.
     # exact lookup and vector search are independent: run them concurrently.
-    exact_res, rest_res = await asyncio.gather(
+    exact_res, rest_res, boost_res = await asyncio.gather(
         exact_article_lookup(text, limit=desired, active_only=active_only),
         _qdrant_vector_or_scroll_laws(text, desired, active_only),
+        keyword_boost_laws(text, active_only=active_only),
         return_exceptions=True,
     )
+    boost_rows = [] if isinstance(boost_res, BaseException) else list(boost_res or [])
     if isinstance(exact_res, BaseException):
         logger.debug("exact article lookup failed: %s", exact_res)
         exact_rows = None
@@ -1159,6 +1256,25 @@ async def qdrant_fallback_laws(
     if isinstance(rest_res, BaseException):
         raise rest_res
     rest = rest_res
+    if boost_rows:
+        # hybrid merge: weighted RRF over [vector/lexical order, keyword-boost order]; the
+        # boosted rows are real corpus articles, so they compete on rank, not by fiat.
+        rows_by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for row in list(rest) + boost_rows:
+            rows_by_key.setdefault((str(row.get("law_name") or ""), str(row.get("article_no") or "")), row)
+        keyed = lambda rows: [(str(r.get("law_name") or ""), str(r.get("article_no") or "")) for r in rows]  # noqa: E731
+        order = _rb.rrf_merge([(1.0, keyed(rest)), (1.2, keyed(boost_rows))])
+        # a row that is in both lists keeps the boost label so the cutoff trusts it
+        boosted_keys = set(keyed(boost_rows))
+        rest = []
+        for key in order:
+            row = rows_by_key[key]
+            if key in boosted_keys and row.get("match_level") != "KEYWORD_BOOST":
+                row = {**row, "match_level": "KEYWORD_BOOST"}
+            rest.append(row)
+        rest = rest[: max(desired, 4)]
+        if not exact_rows:
+            _qdrant_failed_at = 0.0
     if not exact_rows:
         return rest
     # ردیف‌های دقیق اول، سپس نتایج معمول تا سقف limit (یکتا بر اساس قانون+ماده).

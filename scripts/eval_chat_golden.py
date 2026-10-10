@@ -9,6 +9,9 @@ Plugs into the data/eval/ harness next to scripts/eval_ruling_drafts.py.
     python3 scripts/eval_chat_golden.py --validate                 # offline: file shape only
     python3 scripts/eval_chat_golden.py --base-url http://127.0.0.1:8000
     python3 scripts/eval_chat_golden.py --offline-answers answers.json   # {id: reply}
+    python3 scripts/eval_chat_golden.py --retrieval-only                 # no LLM: retrieval recall
+        # needs Qdrant + the query embedder; read-only (search/scroll only). On the server:
+        # docker exec roxira_app_prod python scripts/eval_chat_golden.py --retrieval-only
 
 Every fact marked TO-VERIFY is unreviewed by a lawyer. No secrets or model ids here.
 """
@@ -64,6 +67,55 @@ def score_case(case: dict, reply: str) -> dict:
             "missing": missing, "forbidden": forbidden}
 
 
+DEFAULT_RETRIEVAL_SET = ROOT / "data" / "eval" / "chat_golden" / "retrieval_golden.json"
+
+
+def _rnorm(text: str) -> str:
+    from output_apps.generated_modules.smartjudge.legal_graph.retrieval_boost import normalize_text
+
+    return normalize_text(text)
+
+
+def retrieval_hit(case: dict, rows: list) -> bool:
+    """True when a retrieved row is from an expected law and (if given) an expected article."""
+    laws = [_rnorm(x) for x in case.get("law_any", [])]
+    wanted = {str(n) for n in case.get("articles", [])}
+    for row in rows:
+        name = _rnorm(row.get("law_name") or row.get("title"))
+        if not any(law in name for law in laws):
+            continue
+        no = str(row.get("article_no") or "").split("-")[0]
+        if not wanted or no in wanted:
+            return True
+    return False
+
+
+def run_retrieval(set_path: Path, top_k: int = 5) -> int:
+    """Retrieval-only eval: no LLM, only Qdrant search/scroll (read-only)."""
+    import asyncio
+
+    sys.path.insert(0, str(ROOT))
+    from output_apps.generated_modules.smartjudge import source_filter
+    from output_apps.generated_modules.smartjudge.legal_graph import lightrag_engine as eng
+
+    cases = json.loads(set_path.read_text(encoding="utf-8"))["cases"]
+    print(f"collection={eng.QDRANT_FALLBACK_COLLECTION} embedder={eng.QDRANT_EMBED_MODEL_NAME}")
+    scored = hits = 0
+    for c in cases:
+        rows = asyncio.run(eng.qdrant_fallback_laws(c["question"], limit=top_k))
+        kept = source_filter.filter_relevant(rows)
+        raw_ok, kept_ok = retrieval_hit(c, rows), retrieval_hit(c, kept)
+        gap = bool(c.get("corpus_gap"))
+        if not gap:
+            scored += 1
+            hits += kept_ok
+        tag = "GAP " if gap else ("PASS" if kept_ok else "FAIL")
+        got = "; ".join(f"{r.get('law_name')}#{r.get('article_no')}" for r in kept[:top_k])
+        print(f"{tag} {c['id']} raw={raw_ok} after_filter={kept_ok} :: {got}")
+    print(f"retrieval recall@{top_k} (after relevance filter): {hits}/{scored}")
+    return 0 if hits == scored else 1
+
+
 def ask(base_url: str, question: str) -> str:
     req = urllib.request.Request(
         base_url.rstrip("/") + "/api/v1/apps/judge/chat",
@@ -80,7 +132,11 @@ def main() -> int:
     ap.add_argument("--validate", action="store_true")
     ap.add_argument("--base-url")
     ap.add_argument("--offline-answers")
+    ap.add_argument("--retrieval-only", action="store_true", help="check expected articles are retrieved; no LLM")
+    ap.add_argument("--retrieval-set", default=str(DEFAULT_RETRIEVAL_SET))
     args = ap.parse_args()
+    if args.retrieval_only:
+        return run_retrieval(Path(args.retrieval_set))
     cases = load(Path(args.set))
     errs = validate(cases)
     if errs or args.validate:

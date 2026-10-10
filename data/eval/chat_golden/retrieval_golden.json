@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "purpose": "Retrieval-only golden set: does the consult retrieval path surface the expected article? No LLM involved.",
+    "run": "python3 scripts/eval_chat_golden.py --retrieval-only   (needs Qdrant + the bge-m3 embedder; on the server: docker exec roxira_app_prod python scripts/eval_chat_golden.py --retrieval-only)",
+    "matching": "A case passes when any returned row has a law_name containing one of law_any (after Persian normalisation) AND an article_no in articles (empty articles = any article of that law). corpus_gap cases are reported but excluded from recall.",
+    "status": "DRAFT, article numbers TO-VERIFY by a lawyer."
+  },
+  "cases": [
+    {"id": "appeal-deadline", "question": "مهلت تجدیدنظرخواهی از رأی دادگاه حقوقی چقدر است؟", "law_any": ["آیین دادرسی مدنی", "آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], "articles": [336]},
+    {"id": "appeal-deadline-spaced", "question": "مهلت تجدید نظر خواهی چند روز است", "law_any": ["آیین دادرسی مدنی", "آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], "articles": [336]},
+    {"id": "default-objection", "question": "مهلت واخواهی نسبت به رأی غیابی چقدر است؟", "law_any": ["آیین دادرسی مدنی", "آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], "articles": [303, 304, 305, 306]},
+    {"id": "exact-article", "question": "ماده ۳۳۶ آیین دادرسی مدنی چه می‌گوید؟", "law_any": ["آیین دادرسی مدنی", "آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], "articles": [336]},
+    {"id": "cheque-bounced", "question": "اگر چک برگشت بخورد چه باید کرد؟", "law_any": ["صدور چک"], "articles": []},
+    {"id": "lease-eviction", "question": "موجر چه زمانی می‌تواند مستأجر را تخلیه کند؟", "law_any": ["روابط موجر و مستأجر", "روابط موجر و مستاجر"], "articles": []},
+    {"id": "custody", "question": "حضانت فرزند بعد از طلاق با کیست؟", "law_any": ["قانون مدنی", "حمایت خانواده"], "articles": [1168, 1169, 1170, 1171, 1172, 1173]},
+    {"id": "inheritance", "question": "سهم الارث دختر و پسر چقدر است؟", "law_any": ["قانون مدنی"], "articles": [861, 862, 863, 864, 865, 866, 867, 868, 869, 870, 871, 872, 873, 874, 875, 876, 877, 878, 879, 880, 881, 882, 883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 893, 894, 895, 896, 897, 898, 899, 900, 901, 902, 903, 904, 905, 906, 907, 908, 909, 910, 911, 912, 913, 914, 915, 916, 917, 918, 919, 920, 921, 922, 923, 924, 925, 926, 927, 928, 929, 930, 931, 932, 933, 934, 935, 936, 937, 938, 939, 940, 941, 942, 943, 944, 945, 946, 947, 948, 949]},
+    {"id": "dowry", "question": "مهریه عندالمطالبه یعنی چه و چگونه وصول می‌شود؟", "law_any": ["قانون مدنی", "نحوه اجرای محکومیت"], "articles": []},
+    {"id": "civil-article-10", "question": "ماده ۱۰ قانون مدنی", "law_any": ["قانون مدنی"], "articles": [10]},
+    {"id": "fraud-penalty", "question": "مجازات کلاهبرداری چیست؟", "law_any": ["کلاهبرداری", "ارتشا"], "articles": [1], "corpus_gap": true, "note": "قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری is not in iran_laws_v2 / iran_laws_mistral_v1 (2026-10-10)"}
+  ]
+}

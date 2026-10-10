@@ -10,6 +10,12 @@ Score distribution: lexical Qdrant rows carry ``score`` = number of query tokens
 found in the article text (integer, 0..N). Rows from the SQL retriever carry no
 score and are kept (they match by exact article/precedent number). Default cutoff
 is 2 overlapping tokens; tune with ``SMARTJUDGE_MIN_SOURCE_SCORE``.
+
+Vector hits additionally carry ``vector_score`` (cosine). A row passes if its token score
+>= cutoff OR ``vector_score`` >= ``SMARTJUDGE_MIN_VECTOR_SCORE`` (default 0.55) OR it is an
+exact-article / keyword-boost row (see ``legal_graph.retrieval_boost.is_relevant``). This
+stops a correct article being dropped only because the question says "تجدیدنظرخواهی" and the
+article says "تجدیدنظر" (token overlap 1).
 """
 
 from __future__ import annotations
@@ -17,6 +23,8 @@ from __future__ import annotations
 import os
 import re
 from typing import Any, Iterable, List, Optional
+
+from output_apps.generated_modules.smartjudge.legal_graph import retrieval_boost as _rb
 
 ENV_MIN_SCORE = "SMARTJUDGE_MIN_SOURCE_SCORE"
 DEFAULT_MIN_SCORE = 2.0
@@ -60,8 +68,7 @@ def filter_relevant(rows: Optional[Iterable[Any]], min_score: Optional[float] = 
     for r in strip_placeholders(rows):
         if str(r.get("match_level") or "") == "HIGH_DOCTRINE":
             continue
-        score = r.get("score")
-        if isinstance(score, (int, float)) and not isinstance(score, bool) and score < cutoff:
+        if not _rb.is_relevant(r, cutoff):
             continue
         out.append(r)
     return out
