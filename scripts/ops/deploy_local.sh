@@ -45,7 +45,20 @@ log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 die() { log "ERROR: $*" >&2; exit 1; }
 usage() { sed -n '2,14p' "$0" >&2; exit 2; }
 
-rsh() { ssh "${SSH_OPTS[@]}" "$SSH_HOST" "$@"; }
+# ssh -n: stdin from /dev/null. Without it, ssh drains the script's stdin and swallows the
+# typed confirmation. No rsh call pipes local data in, so none needs the real stdin.
+rsh() { ssh -n "${SSH_OPTS[@]}" "$SSH_HOST" "$@"; }
+
+# Human confirmation. Reads the controlling terminal so piped or ssh input cannot answer it;
+# stdin is used only when there is no terminal at all. The caller compares CONFIRM_INPUT.
+confirm_read() {  # confirm_read <prompt>
+  CONFIRM_INPUT=""
+  if { : </dev/tty; } 2>/dev/null; then
+    read -r -p "$1" CONFIRM_INPUT </dev/tty || true
+  else
+    read -r -p "$1" CONFIRM_INPUT || true
+  fi
+}
 rgit() { rsh "cd '$REMOTE_DIR' && git $*"; }
 rcompose() { rsh "cd '$REMOTE_DIR' && docker compose -f $COMPOSE $*"; }
 
@@ -241,9 +254,8 @@ cmd_deploy() {
   done
   if [ "$yes" != "--yes" ]; then log "dry-run only. Re-run with --yes to execute."; return 0; fi
 
-  local typed
-  read -r -p "Type the short commit SHA ($TARGET_SHORT) to confirm: " typed
-  [ "$typed" = "$TARGET_SHORT" ] || die "SHA mismatch; aborting"
+  confirm_read "Type the short commit SHA ($TARGET_SHORT) to confirm: "
+  [ "$CONFIRM_INPUT" = "$TARGET_SHORT" ] || die "SHA mismatch; aborting"
   compute_services
   local svcs="${SERVICES[*]:-}"
 
@@ -277,6 +289,9 @@ cmd_deploy() {
   log "waiting 20s for services to settle"; sleep 20
   if smoke_test; then
     log "deploy OK: $TARGET_SHORT"
+    local svc_list="${svcs:-none}"; svc_list="${svc_list// /,}"
+    printf 'DEPLOYED %s services=%s smoke=ok\n' "$TARGET_SHORT" "$svc_list"
+    echo "rollback to ${DEPLOYED_SHA:0:8}: scripts/ops/deploy_local.sh rollback --yes"
   else
     log "smoke test FAILED; rolling back automatically"
     do_rollback_remote || die "AUTO-ROLLBACK FAILED; manual attention needed"
@@ -356,9 +371,8 @@ cmd_migrate() {
   [ "$APPLIED_OK" = 1 ] || die "cannot read the migrations table on the server; refusing to guess what is pending"
   if [ "${#PENDING[@]}" -eq 0 ]; then log "no pending migrations; nothing to do"; return 0; fi
 
-  local typed
-  read -r -p "This changes the PRODUCTION DATABASE. Type the short commit SHA ($TARGET_SHORT) to confirm: " typed
-  [ "$typed" = "$TARGET_SHORT" ] || die "SHA mismatch; aborting"
+  confirm_read "This changes the PRODUCTION DATABASE. Type the short commit SHA ($TARGET_SHORT) to confirm: "
+  [ "$CONFIRM_INPUT" = "$TARGET_SHORT" ] || die "SHA mismatch; aborting"
 
   log "preflight + one-off image build ($MIGRATE_IMAGE)"
   rsh "set -euo pipefail; cd '$REMOTE_DIR'
@@ -424,9 +438,9 @@ cmd_migrate_rollback() {
   echo "  $(restore_cmd "$dump")"
   log "stop writers first if you can: docker compose -f $COMPOSE stop $BACKEND_CONTAINER"
   if [ "$yes" != "--yes" ]; then log "dry-run: pass --yes to restore"; return 0; fi
-  local typed base; base="${dump##*/}"
-  read -r -p "This OVERWRITES the PRODUCTION DATABASE. Type the dump file name ($base) to confirm: " typed
-  [ "$typed" = "$base" ] || die "name mismatch; aborting"
+  local base; base="${dump##*/}"
+  confirm_read "This OVERWRITES the PRODUCTION DATABASE. Type the dump file name ($base) to confirm: "
+  [ "$CONFIRM_INPUT" = "$base" ] || die "name mismatch; aborting"
   rsh "set -euo pipefail; docker exec -i $PG_CONTAINER pg_restore -U $DB_USER -d $DB_NAME --clean --if-exists --no-owner --single-transaction < '$dump'" \
     || die "restore failed; manual attention needed"
   log "restore OK from $dump"

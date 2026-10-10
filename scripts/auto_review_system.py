@@ -36,6 +36,9 @@ ALLOW_RESTART = os.getenv("AUTO_REVIEW_ALLOW_RESTART", "0") == "1"
 ALLOW_OTP_DISPATCH = os.getenv("AUTO_REVIEW_OTP_DISPATCH", "0") == "1"
 
 APP_URL = os.getenv("AUTO_REVIEW_APP_URL", "http://127.0.0.1")  # روی هاست از طریق nginx؛ داخل کانتینر قابل override به :8000
+# nginx routes by Host; a catch-all that answers 444 to unknown Host values would drop a bare-IP
+# request, so every app call sends the public host explicitly.
+APP_HOST_HEADER = os.getenv("AUTO_REVIEW_HOST_HEADER", "roxira.ir")
 PG_HOST = os.getenv("POSTGRES_HOST", "localhost")
 PG_PORT = os.getenv("POSTGRES_PORT", "5432")
 PG_USER = os.getenv("POSTGRES_USER", "enterprise_admin")
@@ -66,8 +69,15 @@ def log(level: str, msg: str) -> None:
     print(line)
 
 
+def _app_host_headers(url: str) -> dict:
+    """Host header only for calls to our own app (never to external APIs such as openrouter.ai)."""
+    if APP_HOST_HEADER and url.startswith(APP_URL + "/"):
+        return {"Host": APP_HOST_HEADER}
+    return {}
+
+
 def http_get(url: str, timeout: float = 8.0):
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    req = urllib.request.Request(url, headers={"Accept": "application/json", **_app_host_headers(url)})
     t0 = time.monotonic()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -84,7 +94,7 @@ def http_get(url: str, timeout: float = 8.0):
 
 
 def http_post_json(url: str, payload: dict, timeout: float = 60.0, headers: dict = None):
-    all_headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    all_headers = {"Content-Type": "application/json", "Accept": "application/json", **_app_host_headers(url)}
     if headers:
         all_headers.update(headers)
     req = urllib.request.Request(
