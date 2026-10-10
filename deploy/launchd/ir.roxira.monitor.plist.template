@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ir.roxira.monitor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>__REPO__/scripts/ops/monitor/synthetic_check.py</string>
+    <string>--once</string>
+    <string>--state</string>
+    <string>__HOME__/.roxira-monitor/state.json</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MONITOR_CHECK_DISK</key><string>0</string>
+    <key>MONITOR_CHAT_INTERVAL_MIN</key><string>30</string>
+    <key>BACKUP_SMTP_USER</key><string>__SET_ME__</string>
+    <key>BACKUP_SMTP_PASS</key><string>__SET_ME__</string>
+    <key>BACKUP_NOTIFY_TO</key><string>__SET_ME__</string>
+  </dict>
+  <key>StartInterval</key><integer>600</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>__HOME__/.roxira-monitor/out.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.roxira-monitor/err.log</string>
+</dict>
+</plist>

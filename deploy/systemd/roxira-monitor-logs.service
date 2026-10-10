@@ -1,0 +1,16 @@
+[Unit]
+Description=Roxira log watch (5xx, client errors, chat latency)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/roxira/monitor.env
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/monitor/log_watch.py
+# Exit 1 just means "a check is failing"; the alert is the e-mail, not the unit state.
+SuccessExitStatus=0 1
+StateDirectory=roxira-monitor
+User=root
+Nice=10
+TimeoutStartSec=300

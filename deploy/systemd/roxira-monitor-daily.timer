@@ -1,0 +1,9 @@
+[Unit]
+Description=Run roxira-monitor-daily.service at 07:00 Tehran time
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 Asia/Tehran
+Persistent=true
+
+[Install]
+WantedBy=timers.target
