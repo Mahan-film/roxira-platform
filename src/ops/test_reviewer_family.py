@@ -58,8 +58,8 @@ def _write(tmp_path, executor, reviewer):
     return p
 
 
-def test_main_fails_on_shared_family(crf, tmp_path, capsys):
-    reg = _write(tmp_path, ["deepseek/a"], ["anthropic/b", "deepseek/c"])
+def test_main_fails_when_no_reviewer_differs_from_executor(crf, tmp_path, capsys):
+    reg = _write(tmp_path, ["deepseek/a"], ["deepseek/c", "deepseek/d"])
     assert crf.main(["--registry", str(reg)]) == 1
     assert "FINDING" in capsys.readouterr().out
 
@@ -67,6 +67,15 @@ def test_main_fails_on_shared_family(crf, tmp_path, capsys):
 def test_main_passes_on_different_families(crf, tmp_path):
     reg = _write(tmp_path, ["deepseek/a"], ["anthropic/b", "google/c"])
     assert crf.main(["--registry", str(reg)]) == 0
+
+
+def test_main_passes_with_one_different_family_among_same_family(crf, tmp_path, capsys):
+    # Owner policy: a free non-DeepSeek reviewer first, DeepSeek fallback after it.
+    reg = _write(tmp_path, ["deepseek/a"], ["qwen/free:free", "deepseek/c"])
+    assert crf.main(["--registry", str(reg)]) == 0
+    out = capsys.readouterr().out
+    assert "note: reviewer deepseek/c" in out
+    assert "FINDING" not in out
 
 
 def test_main_missing_registry_is_error(crf, tmp_path):

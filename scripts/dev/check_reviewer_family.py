@@ -2,9 +2,13 @@
 """Check that config/models.yaml `executor` and `reviewer` are different model families.
 
 A reviewer from the same vendor as the executor shares its blind spots (see
-docs/research/AUTONOMY_AND_SAFETY_2026-10.md). Exits 1 when any executor model
-and any reviewer model share a family, 0 otherwise, 2 on a registry error.
-Stdlib + pyyaml only; reads the registry through model_registry.py.
+docs/research/AUTONOMY_AND_SAFETY_2026-10.md). The rule: the reviewer list must
+contain at least one model from a different family than the executor's primary
+(first) model. Reviewer entries that share the executor's family are listed as
+notes (the owner's priority order keeps DeepSeek in the reviewer fallback chain),
+not failures. Exits 1 when no reviewer model differs from the executor primary,
+0 otherwise, 2 on a registry error. Stdlib + pyyaml only; reads the registry
+through model_registry.py.
 
 Usage: python3 scripts/dev/check_reviewer_family.py [--registry PATH.yaml]
 """
@@ -74,12 +78,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print(f"executor: {', '.join(executor) or '(none)'}")
     print(f"reviewer: {', '.join(reviewer) or '(none)'}")
-    overlaps = find_overlaps(executor, reviewer)
-    if overlaps:
-        for e, r in overlaps:
-            print(f"FINDING: reviewer {r} is the same family as executor {e} ({family(e)})")
+    if not executor or not reviewer:
+        print("FINDING: executor or reviewer role has no models")
         return 1
-    print("ok: reviewer and executor are in different model families")
+    primary = executor[0]
+    different = [r for r in reviewer if not same_family(primary, r)]
+    for e, r in find_overlaps([primary], reviewer):
+        print(f"note: reviewer {r} is the same family as executor primary {e} ({family(e)})")
+    if not different:
+        print(f"FINDING: no reviewer model differs from executor primary {primary} ({family(primary)})")
+        return 1
+    print(f"ok: reviewer has a model in a different family from executor primary {primary}")
     return 0
 
 

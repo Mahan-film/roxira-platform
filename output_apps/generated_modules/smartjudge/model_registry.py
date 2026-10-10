@@ -16,14 +16,42 @@ parses a YAML file that is checked into the repo.
 from __future__ import annotations
 
 import functools
+import logging
 import pathlib
+import re
 from typing import Any
 
 REGISTRY_PATH = pathlib.Path(__file__).resolve().parents[3] / "config" / "models.yaml"
 
+logger = logging.getLogger(__name__)
+
+# Owner policy (2026-10-10): Gemini Pro is forbidden everywhere. Matches
+# gemini-2.5-pro, gemini-3.1-pro, "Gemini Pro", etc. Flash ids do not match.
+_FORBIDDEN_ID_RE = re.compile(r"gemini[-_ .]*[0-9.]*[-_ ]*pro", re.IGNORECASE)
+
 
 class ModelRegistryError(RuntimeError):
     """Raised when config/models.yaml is missing or malformed."""
+
+
+def is_forbidden_model_id(model_id: str) -> bool:
+    """True for ids the owner policy bans from every role (Gemini Pro)."""
+    return bool(_FORBIDDEN_ID_RE.search(str(model_id)))
+
+
+def _drop_forbidden(role: str, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    kept: list[dict[str, Any]] = []
+    for entry in entries:
+        model_id = str(entry.get("id", ""))
+        if model_id and is_forbidden_model_id(model_id):
+            logger.warning(
+                "skipping forbidden model id %r in role %r (owner policy: Gemini Pro is banned)",
+                model_id,
+                role,
+            )
+            continue
+        kept.append(entry)
+    return kept
 
 
 @functools.lru_cache(maxsize=1)
@@ -77,7 +105,8 @@ def role_models(role: str, path: pathlib.Path | None = None) -> list[str]:
     role_data = roles(path).get(role)
     if role_data is None:
         raise ModelRegistryError(f"unknown role {role!r} in config/models.yaml")
-    return [m["id"] for m in role_data.get("models", []) if m.get("id")]
+    entries = [m for m in role_data.get("models", []) if m.get("id")]
+    return [m["id"] for m in _drop_forbidden(role, entries)]
 
 
 def role_entries(role: str, path: pathlib.Path | None = None) -> list[dict[str, Any]]:
@@ -85,7 +114,31 @@ def role_entries(role: str, path: pathlib.Path | None = None) -> list[dict[str, 
     role_data = roles(path).get(role)
     if role_data is None:
         raise ModelRegistryError(f"unknown role {role!r} in config/models.yaml")
-    return list(role_data.get("models", []))
+    return _drop_forbidden(role, list(role_data.get("models", [])))
+
+
+def _is_free_tier_id(model_id: str) -> bool:
+    return model_id.endswith(":free") or model_id == "openrouter/free"
+
+
+def models_for(role: str, sensitive: bool, path: pathlib.Path | None = None) -> list[str]:
+    """Ordered model ids for one call, filtered by data sensitivity.
+
+    sensitive=True means the payload carries customer/case data (AGENTS.md §4).
+    Then every entry marked ``public_code_only: true`` is dropped, and so is any
+    ``:free`` / ``openrouter/free`` id even when it is not marked (a `:free` model
+    may log or train on prompts). sensitive=False returns the same list as
+    role_models(). Use this, not role_models(), at any call site that sends case data.
+    """
+    ids: list[str] = []
+    for entry in role_entries(role, path):
+        model_id = str(entry.get("id", ""))
+        if not model_id:
+            continue
+        if sensitive and (entry.get("public_code_only") is True or _is_free_tier_id(model_id)):
+            continue
+        ids.append(model_id)
+    return ids
 
 
 def data_policy(role: str, path: pathlib.Path | None = None) -> str:

@@ -138,17 +138,77 @@ def test_customer_data_never_routes_to_free_tier():
     assert model_registry.data_policy("free", real_path) == "non_sensitive_only"
 
 
-def test_reviewer_is_a_different_model_family_from_executor():
-    """W12 spec: reviewer must not share a model family with executor."""
+def test_reviewer_has_a_different_model_family_from_executor_primary():
+    """W12 spec, relaxed 2026-10-10: the reviewer list must contain at least one
+    model from a different family than the executor primary. DeepSeek stays in
+    the reviewer fallback chain by owner priority order."""
     real_path = (
         Path(__file__).resolve().parents[1] / "config" / "models.yaml"
     )
     def family(model_id: str) -> str:
         return model_id.split("/", 1)[0]
 
-    executor_families = {family(m) for m in model_registry.role_models("executor", real_path)}
-    reviewer_families = {family(m) for m in model_registry.role_models("reviewer", real_path)}
-    assert not executor_families & reviewer_families
+    executor = model_registry.role_models("executor", real_path)
+    reviewer = model_registry.role_models("reviewer", real_path)
+    assert any(family(m) != family(executor[0]) for m in reviewer)
+
+
+# --- 2026-10-10 owner policy: Gemini Pro ban, :free only for public code -----
+
+def test_no_role_contains_a_gemini_pro_id():
+    """Owner policy (2026-10-10): Gemini Pro is forbidden everywhere."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    # Read the raw YAML: role_models() already skips forbidden ids, so using it here
+    # would pass even if config/models.yaml still listed one.
+    for role, role_data in model_registry.roles(real_path).items():
+        for entry in (role_data or {}).get("models", []) or []:
+            model_id = str(entry.get("id", ""))
+            assert not model_registry.is_forbidden_model_id(model_id), (role, model_id)
+
+
+def test_gemini_pro_ids_are_skipped_at_load_time(tmp_path, caplog):
+    path = tmp_path / "models.yaml"
+    path.write_text(
+        textwrap.dedent(
+            """\
+            schema_version: 1
+            roles:
+              cheap:
+                data_policy: standard
+                models:
+                  - id: google/gemini-2.5-pro
+                    price_per_1m: { in: 1, out: 1 }
+                  - id: google/gemini-3.1-flash-lite
+                    price_per_1m: { in: 0.25, out: 1.50 }
+            """
+        ),
+        encoding="utf-8",
+    )
+    with caplog.at_level("WARNING"):
+        assert model_registry.role_models("cheap", path) == ["google/gemini-3.1-flash-lite"]
+    assert "gemini" in caplog.text.lower()
+
+
+def test_no_sensitive_role_contains_a_free_model():
+    """Owner policy + AGENTS.md §4: `:free` ids may only appear in non-sensitive roles.
+    Sensitive roles carry customer/case data (chat, legal drafts, voice)."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    sensitive = ("cheap", "strong", "stt", "tts", "voice_realtime")
+
+    def is_free_model(model_id: str) -> bool:
+        return model_id.endswith(":free") or model_id == "openrouter/free"
+
+    for role in sensitive:
+        models = model_registry.role_models(role, real_path)
+        assert not any(is_free_model(m) for m in models), role
+
+
+def test_free_reviewer_entries_are_marked_public_code_only():
+    """A `:free` reviewer entry may only see public-repo code/docs."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    for entry in model_registry.role_entries("reviewer", real_path):
+        if entry["id"].endswith(":free"):
+            assert entry.get("public_code_only") is True, entry["id"]
 
 
 # --- W24 (cost-optimized product-runtime models, docs/STATE.md) ------------
@@ -199,3 +259,81 @@ def test_no_product_runtime_role_routes_case_data_to_a_free_model():
         models = model_registry.role_models(role, real_path)
         assert not any(is_free_model(m) for m in models), role
         assert model_registry.data_policy(role, real_path) == "standard"
+
+
+# --- runtime guard: models_for(role, sensitive) ----------------------------
+
+def test_models_for_non_sensitive_matches_role_models(sample_registry):
+    assert model_registry.models_for("free", False, sample_registry) == [
+        "vendor-a/model-1:free",
+        "vendor-b/model-2:free",
+    ]
+    assert model_registry.models_for("cheap", False, sample_registry) == ["vendor-c/model-3"]
+
+
+def test_models_for_sensitive_drops_public_code_only_and_free_ids(tmp_path):
+    path = tmp_path / "models.yaml"
+    path.write_text(
+        textwrap.dedent(
+            """\
+            schema_version: 1
+            roles:
+              reviewer:
+                data_policy: standard
+                models:
+                  - id: vendor-a/public-only:free
+                    price_per_1m: { in: 0, out: 0 }
+                    public_code_only: true
+                  - id: vendor-b/unmarked:free
+                    price_per_1m: { in: 0, out: 0 }
+                  - id: openrouter/free
+                    price_per_1m: { in: 0, out: 0 }
+                  - id: vendor-c/paid
+                    price_per_1m: { in: 0.3, out: 1.0 }
+                  - id: vendor-d/paid-2
+                    price_per_1m: { in: 0.3, out: 1.0 }
+            """
+        ),
+        encoding="utf-8",
+    )
+    assert model_registry.models_for("reviewer", True, path) == ["vendor-c/paid", "vendor-d/paid-2"]
+    assert model_registry.models_for("reviewer", False, path) == [
+        "vendor-a/public-only:free",
+        "vendor-b/unmarked:free",
+        "openrouter/free",
+        "vendor-c/paid",
+        "vendor-d/paid-2",
+    ]
+
+
+def test_models_for_sensitive_real_reviewer_has_no_public_code_only_entry():
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    public_only = {
+        e["id"] for e in model_registry.role_entries("reviewer", real_path)
+        if e.get("public_code_only") is True
+    }
+    assert public_only, "expected the reviewer role to carry a public_code_only entry"
+    sensitive = model_registry.models_for("reviewer", True, real_path)
+    assert not public_only & set(sensitive)
+    assert not any(m.endswith(":free") for m in sensitive)
+    assert model_registry.models_for("reviewer", False, real_path) == model_registry.role_models(
+        "reviewer", real_path
+    )
+
+
+def test_models_for_unknown_role_raises(sample_registry):
+    with pytest.raises(model_registry.ModelRegistryError):
+        model_registry.models_for("does-not-exist", True, sample_registry)
+
+
+def test_every_free_entry_outside_free_role_is_public_code_only():
+    """Extends the reviewer check: any `:free` id in a non-`free` role (reviewer,
+    builder roles, product tiers) must carry public_code_only: true."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    for role, role_data in model_registry.roles(real_path).items():
+        if role == "free":
+            continue
+        for entry in (role_data or {}).get("models", []) or []:
+            model_id = str(entry.get("id", ""))
+            if model_id.endswith(":free") or model_id == "openrouter/free":
+                assert entry.get("public_code_only") is True, (role, model_id)

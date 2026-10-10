@@ -32,7 +32,7 @@ def call_live_model(prompt: str, system_prompt: str = "", task_type: str = "gemi
         LIVE_MODELS["deepseek_fast"],
         LIVE_MODELS["deepseek_fallback"],
         "google/gemini-3.7-flash",
-        "google/gemini-2.5-pro",
+        "deepseek/deepseek-v4.1-flash",  # replaces gemini-2.5-pro (owner policy 2026-10-10: no Gemini Pro)
         LIVE_MODELS["coding_engine"],
         LIVE_MODELS["deep_reasoning"]
     ]

@@ -76,7 +76,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | executor | deepseek/deepseek-v4.1-flash, deepseek/deepseek-v4-flash-0731, deepseek/deepseek-v4-flash |
 | free | qwen/qwen3.8-27b:free, google/gemma-4-31b-it:free, nvidia/nemotron-3-super-120b-a12b:free, openrouter/free |
 | mechanical | google/gemini-3.1-flash-lite, anthropic/claude-haiku-4.5 |
-| reviewer | anthropic/claude-sonnet-5, google/gemini-3.8-flash, qwen/qwen3-coder |
+| reviewer | qwen/qwen3.8-27b:free, deepseek/deepseek-v4.1-flash, qwen/qwen3-coder |
 | strong | deepseek/deepseek-v4-pro, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
 | stt | openai/whisper-large-v3-turbo, openai/gpt-audio |
 | tts | edge-tts:fa-IR-FaridNeural |
