@@ -6262,3 +6262,299 @@ async def draft_indictment(request: Request, body: IndictmentDraftRequest):
         file=sys.stderr,
     )
     return _finalize_indictment_response(result, request_id)
+
+
+# ------------------------------------------------------------------------------
+# POST /draft-assist: conversational drafting (چت‌محور). Stateless per turn.
+#   action=assist   -> extract fields from the conversation (+ case files) -> need_info | ready
+#   action=check    -> no LLM: recompute missing fields from hand-edited known_fields
+#   action=generate -> draft from the confirmed fields (or revise a previous draft)
+# ruling/indictment are VIP-only (same rule as /drafts/ruling and /drafts/indictment).
+# Logs carry ids, type and status only; never message text or party names.
+# ------------------------------------------------------------------------------
+try:
+    from . import draft_assistant as _draft_assistant
+except ImportError:
+    from output_apps.generated_modules.smartjudge import draft_assistant as _draft_assistant
+
+from typing import Dict as _Dict, Union as _Union
+
+from pydantic import field_validator as _field_validator
+
+_DRAFT_EXTRACT_TIMEOUT_S = 45.0
+_DRAFT_GENERATE_TIMEOUT_S = 90.0
+_DRAFT_CACHEABLE = {
+    _draft_assistant.STATUS_NEED_INFO,
+    _draft_assistant.STATUS_READY,
+    _draft_assistant.STATUS_DRAFT,
+    _draft_assistant.STATUS_INSUFFICIENT,
+}
+MSG_DRAFT_LLM_UNAVAILABLE = "سرویس تنظیم پیش‌نویس موقتاً در دسترس نیست؛ لطفاً چند لحظه بعد دوباره تلاش کنید."
+MSG_DRAFT_BAD_INPUT = "اطلاعات ارسالی برای تنظیم پیش‌نویس معتبر نیست."
+
+
+class DraftAssistMessage(_BaseModel):
+    model_config = _ConfigDict(extra="forbid")
+
+    role: _Literal["user", "assistant"]
+    content: str = _Field(..., max_length=_draft_assistant.MAX_MESSAGE_CHARS)
+
+
+class DraftReviseBody(_BaseModel):
+    model_config = _ConfigDict(extra="forbid")
+
+    instruction: str = _Field(..., min_length=1, max_length=_draft_assistant.MAX_INSTRUCTION_CHARS)
+    previous_draft: str = _Field(..., min_length=1, max_length=_draft_assistant.MAX_PREVIOUS_DRAFT_CHARS)
+
+
+class DraftAssistRequest(_BaseModel):
+    model_config = _ConfigDict(extra="forbid")
+
+    action: _Literal["assist", "check", "generate"] = "assist"
+    draft_type: Optional[_Literal["defense", "petition", "complaint", "notice", "ruling", "indictment"]] = None
+    messages: List[DraftAssistMessage] = _Field(default_factory=list, max_length=40)
+    case_file_ids: List[str] = _Field(default_factory=list, max_length=5)
+    known_fields: _Dict[str, _Union[str, List[str]]] = _Field(default_factory=dict)
+    skip_fields: List[str] = _Field(default_factory=list, max_length=12)
+    revise: Optional[DraftReviseBody] = None
+    request_id: Optional[str] = _Field(None, max_length=64)
+
+    @_field_validator("known_fields")
+    @classmethod
+    def _bounded_known_fields(cls, value):
+        if len(value) > 20:
+            raise ValueError("too many fields")
+        total = sum(len(v) if isinstance(v, str) else sum(len(i) for i in v) for v in value.values())
+        if total > 60000:
+            raise ValueError("fields too large")
+        return value
+
+
+def _draft_upsell_response(draft_type: str, request_id: Optional[str]) -> JSONResponse:
+    """403 with VIP_REQUIRED_FRAME (same frame as /drafts/ruling) plus a Persian upsell message."""
+    title = _draft_assistant.SCHEMAS[draft_type]["title_fa"]
+    content = dict(VIP_REQUIRED_FRAME)
+    content.update(
+        status=_draft_assistant.STATUS_VIP_REQUIRED,
+        draft_type=draft_type,
+        message=_draft_assistant.VIP_UPSELL_FA.format(title=title),
+        request_id=request_id,
+    )
+    return JSONResponse(status_code=403, content=content)
+
+
+async def _draft_complete(tier: str, system: str, user: str, *, feature: str, max_tokens: int) -> str:
+    """One LLM call through the central router. Case data => sensitive=True (never a :free model).
+
+    Works whether or not LLM_ROUTER_ENABLED is set (that flag only gates the chat migration):
+    llm_router.complete needs only OPENROUTER_API_KEY and the registry's role models.
+    """
+    if _llm_router is None:
+        raise RuntimeError("llm router unavailable")
+    extract = feature == "draft_extract"
+    messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": user}]
+    routed = await _llm_router.complete(
+        tier,
+        messages,
+        sensitive=True,
+        tenant="smartjudge",
+        feature=feature,
+        timeout=_DRAFT_EXTRACT_TIMEOUT_S if extract else _DRAFT_GENERATE_TIMEOUT_S,
+        max_retries=1,
+        temperature=0.0 if extract else 0.2,
+        max_tokens=max_tokens,
+    )
+    return routed.content
+
+
+async def _draft_structured(kind: str, fields: dict, skipped: list) -> dict:
+    """ruling / indictment through the existing pure cores (same retrieval + citation guard)."""
+    loop = asyncio.get_running_loop()
+
+    def _bridge(coro):
+        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_RULING_TIMEOUT_SECONDS)
+
+    def _llm(prompt):
+        return _bridge(_draft_complete("strong", "", prompt, feature=f"{kind}_draft", max_tokens=4000))
+
+    def _verify(text):
+        return _bridge(_guard_citations(text, use_qdrant=True))
+
+    if kind == "ruling":
+        case = _ruling_draft.RulingCase(**_draft_assistant.ruling_case_kwargs(fields, skipped))
+
+        def _retrieve(c):
+            return _bridge(_ruling_retrieve_laws((c.claims + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]))
+
+        return await asyncio.to_thread(
+            _ruling_draft.generate_ruling_draft, case, retrieve=_retrieve, call_llm=_llm, verify_citations=_verify
+        )
+    case = _indictment_draft.IndictmentCase(**_draft_assistant.indictment_case_kwargs(fields, skipped))
+
+    def _retrieve_i(c):
+        return _bridge(_ruling_retrieve_laws(((c.charges_hint or "") + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]))
+
+    return await asyncio.to_thread(
+        _indictment_draft.generate_indictment_draft,
+        case,
+        retrieve=_retrieve_i,
+        call_llm=_llm,
+        verify_citations=_verify,
+    )
+
+
+def _draft_finalize(draft_type: str, body: dict, fields: dict, request_id: Optional[str]) -> dict:
+    md = str(body.get("draft_markdown") or "")
+    if not md.startswith(">") and AI_DRAFT_DISCLAIMER not in md:
+        md = f"> {AI_DRAFT_DISCLAIMER}\n\n{md}"
+    out = {
+        "status": _draft_assistant.STATUS_DRAFT,
+        "draft_type": draft_type,
+        "title": _draft_assistant.SCHEMAS[draft_type]["title_fa"],
+        "draft_markdown": md,
+        "citations": body.get("citations") or [],
+        "fields_used": fields,
+        "warnings": body.get("warnings") or [],
+        "request_id": request_id,
+    }
+    out.update(build_ai_draft_metadata(md))
+    return out
+
+
+async def _draft_assist_core(body: DraftAssistRequest, draft_type: str, messages: list,
+                             request: Request, user: chat_auth.CurrentUser, request_id: Optional[str],
+                             tier: str):
+    uses_llm = body.action != "check"
+    if uses_llm:  # replays never reach this point, so a retry is not charged twice
+        if user.authenticated:
+            ok, left = await chat_auth.acheck_limit(
+                "draft-auth", _hashed_user_ref(user.phone) or "-", int(_env_num("SMARTJUDGE_DRAFT_AUTH_HOURLY", 120))
+            )
+        else:
+            ok, left = await chat_auth.acheck_limit(
+                "draft-anon", chat_auth.request_ip(request), int(_env_num("SMARTJUDGE_DRAFT_ANON_HOURLY", 15))
+            )
+        if not ok:
+            return chat_auth.rate_limited(left, label="ERROR", anonymous=not user.authenticated)
+
+    records: list = []
+    if body.action == "assist" and body.case_file_ids:
+        try:
+            ids = _case_files.parse_case_file_ids(body.case_file_ids)
+            if ids:
+                if not user.authenticated:
+                    return chat_auth.error_json(401, _case_files.MSG_LOGIN_REQUIRED, code="AUTH_REQUIRED",
+                                                label="ERROR", headers={"WWW-Authenticate": "Bearer"})
+                records = await asyncio.to_thread(_case_files.load_all_owned, ids, user.phone)
+        except _case_files.CaseFileError as exc:
+            return _casefile_error(exc)
+
+    async def _llm(tier, system, user_prompt, *, feature, max_tokens):
+        return await _draft_complete(tier, system, user_prompt, feature=feature, max_tokens=max_tokens)
+
+    try:
+        state = await _draft_assistant.run_assist(
+            draft_type, messages, records, body.known_fields, body.skip_fields,
+            call_llm=_llm, extract=(body.action == "assist"),
+        )
+    except _draft_assistant.DraftLLMError:
+        return chat_auth.error_json(503, MSG_DRAFT_LLM_UNAVAILABLE, code="LLM_UNAVAILABLE", label="ERROR")
+
+    if body.action != "generate" or state["missing"]:
+        out = _draft_assistant.assist_response(draft_type, state)
+        out["request_id"] = request_id
+        return out
+
+    fields, skipped = state["fields"], state["skipped"]
+    try:
+        if draft_type in _draft_assistant.VIP_ONLY_TYPES:
+            result = _draft_assistant.structured_to_response(
+                draft_type, await _draft_structured(draft_type, fields, skipped)
+            )
+        else:
+            router_tier = ROUTER_TIER_BY_PLAN["VIP" if _is_vip_tier(tier) else "FREE"]
+            revise = body.revise.model_dump() if body.revise else None
+            result = {"status": _draft_assistant.STATUS_DRAFT, **await _draft_assistant.generate_generic_draft(
+                draft_type, fields, skipped, call_llm=_llm, retrieve=_ruling_retrieve_laws,
+                verify=lambda text: _guard_citations(text, use_qdrant=True), tier=router_tier, revise=revise,
+            )}
+    except _draft_assistant.DraftLLMError:
+        return chat_auth.error_json(503, MSG_DRAFT_LLM_UNAVAILABLE, code="LLM_UNAVAILABLE", label="ERROR")
+    except ValueError:  # core rejected a field (length etc.)
+        return chat_auth.error_json(422, MSG_DRAFT_BAD_INPUT, code="BAD_DRAFT_INPUT", label="ERROR")
+    except Exception as exc:  # noqa: BLE001 - never leak provider/case text
+        print(f"[SMARTJUDGE][DRAFT-ASSIST-ERR] request_id={request_id} {type(exc).__name__}", file=sys.stderr)
+        return chat_auth.error_json(503, MSG_DRAFT_LLM_UNAVAILABLE, code="LLM_UNAVAILABLE", label="ERROR")
+    if result.get("status") != _draft_assistant.STATUS_DRAFT:
+        return {
+            "status": _draft_assistant.STATUS_INSUFFICIENT,
+            "draft_type": draft_type,
+            "message": "اطلاعات برای تنظیم این پیش‌نویس کافی نیست؛ جزئیات بیشتری بنویسید.",
+            "missing_information": result.get("missing_information") or [],
+            "request_id": request_id,
+        }
+    return _draft_finalize(draft_type, result, fields, request_id)
+
+
+@router.post("/draft-assist")
+async def draft_assist(request: Request, body: DraftAssistRequest,
+                       user: chat_auth.CurrentUser = Depends(get_current_user)):
+    """Guided, chat-based drafting: ask only for what is missing, then draft."""
+    denied = chat_auth.deny_if_invalid(user, label="ERROR")
+    if denied is not None:
+        return denied
+    request_id = chat_auth.extract_request_id({"request_id": body.request_id}, request.headers)
+    messages = _draft_assistant.clean_messages([m.model_dump() for m in body.messages])
+    draft_type = body.draft_type
+    if draft_type is None:
+        last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+        draft_type = _draft_assistant.detect_draft_type(last_user)
+        if draft_type is None:
+            return {"status": _draft_assistant.STATUS_NOT_DRAFT, "request_id": request_id}
+    # Same entitlement check as /drafts/ruling: only the signed bearer token counts.
+    tier = await asyncio.to_thread(_resolve_subscription_tier, payload=None, request=request)
+    if draft_type in _draft_assistant.VIP_ONLY_TYPES and not _is_vip_tier(tier):
+        return _draft_upsell_response(draft_type, request_id)
+
+    t0 = time.perf_counter()
+    result = None
+    try:
+        if not request_id:
+            result = await _draft_assist_core(body, draft_type, messages, request, user, request_id, tier)
+        else:
+            identity = f"p:{user.phone}" if user.authenticated else "anon"
+            fingerprint = _draft_assistant.request_fingerprint(
+                body.action, draft_type, messages, body.known_fields, body.skip_fields,
+                body.case_file_ids, body.revise.model_dump() if body.revise else None,
+            )
+            res_key, lock_key = chat_auth.idem_keys(request_id, identity, "draft:" + fingerprint)
+            deadline = time.monotonic() + chat_auth.IDEM_WAIT_SECONDS
+            while True:
+                cached = await asyncio.to_thread(chat_auth.idem_get, res_key)
+                if cached is not None:
+                    result = JSONResponse(cached, headers={"X-Idempotent-Replay": "1"})
+                    break
+                if await asyncio.to_thread(chat_auth.idem_claim, lock_key):
+                    try:
+                        result = await _draft_assist_core(body, draft_type, messages, request, user, request_id, tier)
+                        if isinstance(result, dict) and result.get("status") in _DRAFT_CACHEABLE:
+                            try:
+                                await asyncio.to_thread(chat_auth.idem_store, res_key, result)
+                            except Exception as exc:  # best effort
+                                print(f"[DRAFT-IDEM-STORE-FAIL] {type(exc).__name__}", file=sys.stderr)
+                    finally:
+                        await asyncio.to_thread(chat_auth.idem_release, lock_key)
+                    break
+                if time.monotonic() >= deadline:
+                    result = await _draft_assist_core(body, draft_type, messages, request, user, request_id, tier)
+                    break
+                await asyncio.sleep(chat_auth.IDEM_POLL_SECONDS)
+    finally:
+        status = result.get("status") if isinstance(result, dict) else getattr(result, "status_code", "-")
+        print(
+            f"[SMARTJUDGE][DRAFT-ASSIST] request_id={request_id or '-'} type={draft_type} action={body.action} "
+            f"status={status} ms={round((time.perf_counter() - t0) * 1000)} "
+            f"tier={'VIP' if _is_vip_tier(tier) else 'FREE'}",
+            file=sys.stderr,
+        )
+    return result

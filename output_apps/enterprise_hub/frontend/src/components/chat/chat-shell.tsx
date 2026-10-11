@@ -21,12 +21,22 @@ import {
 import {
   COMPETENCE_NOTE,
   DISCLAIMER_LINE,
-  DRAFT_ACTIONS,
-  DRAFT_PAGES,
+  GUIDED_DRAFT_CHIPS,
   STARTER_GROUPS,
+  detectDraftIntent,
   findDraftAction,
-  type DraftActionKey,
+  type DraftType,
 } from "@/lib/chat-actions";
+import { VipGate } from "@/components/draft/vip-gate";
+import {
+  DraftAssistError,
+  draftAssist,
+  type DraftAssistRequest,
+  type DraftAssistResponse,
+  type DraftFields,
+  type DraftResult,
+} from "@/lib/api/draft-assist-client";
+import { DraftInfoCard, DraftResultCard, type DraftSession } from "./draft-cards";
 import { MicHint, useMicHint } from "./chat-onboarding";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 import { ChatHttpError, streamChat } from "@/lib/api/chat-stream";
@@ -103,14 +113,65 @@ type ChatMessage = {
   retryPrompt?: string;
   /** Idempotency id of the failed question; a manual retry reuses it. */
   retryRequestId?: string;
+  /** Finished draft rendered as a result card under this bubble. */
+  draftResult?: DraftResult;
+  /** Feature name: render the VIP lock card (real prices + login/upgrade) under this bubble. */
+  vipGate?: string;
 };
 
-const ACTION_ICONS: Record<DraftActionKey, typeof FileText> = {
+const CHIP_ICONS: Record<DraftType, typeof FileText> = {
+  ruling: Gavel,
+  indictment: FileSignature,
   defense: FileText,
   petition: Gavel,
   complaint: AlertTriangle,
   notice: FileSignature,
 };
+
+const LIST_DRAFT_FIELDS = new Set(["evidence", "law_hints"]);
+const DRAFT_FILES_PROMPT = "اسناد پرونده را پیوست کردم؛ اطلاعات لازم را از آن‌ها استخراج کن.";
+
+/** Turn a server answer into the session shown by the «اطلاعات پرونده» card. */
+type DraftRunOpts = {
+  action: DraftAssistRequest["action"];
+  type?: DraftType;
+  base: ChatMessage[];
+  prev: DraftSession | null;
+  edits: DraftFields;
+  skipped?: string[];
+  silent?: boolean;
+  intro?: boolean;
+  revise?: DraftAssistRequest["revise"];
+  fallbackText?: string;
+};
+
+function sessionFromResponse(data: DraftAssistResponse, prev: DraftSession | null, edits: DraftFields): DraftSession {
+  const type = (data.draft_type ?? prev?.type) as DraftType;
+  const missing = data.missing ?? [];
+  return {
+    type,
+    title: data.title ?? prev?.title ?? "",
+    meta: data.field_meta ?? prev?.meta ?? [],
+    fields: data.fields ?? {},
+    edits,
+    sources: data.field_sources ?? {},
+    missing,
+    skipped: data.skipped ?? [],
+    choices: data.choices ?? [],
+    courtOptions: data.court_options ?? prev?.courtOptions ?? [],
+    courtName: data.court_name ?? "",
+    skipLabel: data.skip_label ?? prev?.skipLabel ?? "نمی‌دانم",
+    formUrl: data.form_url ?? prev?.formUrl ?? null,
+    status: missing.length ? "collecting" : "ready",
+  };
+}
+
+function toDraftHistory(msgs: { role: string; content: string; isError?: boolean }[]) {
+  return msgs
+    .filter((m) => !m.isError && m.content.trim())
+    .map((m) => ({ role: (m.role === "user" ? "user" : "assistant") as "user" | "assistant", content: m.content.slice(0, 6000) }))
+    .slice(-30);
+}
 
 function statutoryLabel(item: StatutoryItem): string {
   if (typeof item === "string") return item;
@@ -144,6 +205,8 @@ export function ChatShell() {
   const [ctxOpen, setCtxOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [micFocused, setMicFocused] = useState(false);
+  const [draft, setDraft] = useState<DraftSession | null>(null);
+  const [reviseIdx, setReviseIdx] = useState<number | null>(null);
   const plusRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -159,6 +222,13 @@ export function ChatShell() {
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const busyRef = useRef(false);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const draftRef = useRef<DraftSession | null>(null);
+  const pendingCheckRef = useRef<DraftRunOpts | null>(null);
+  const startDraftRef = useRef<(type: DraftType) => Promise<boolean>>(async () => false);
+
+  messagesRef.current = messages;
+  draftRef.current = draft;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -169,15 +239,9 @@ export function ChatShell() {
   }, [messages, isLoading]);
 
   // /chat?draft=defense|petition|complaint|notice (links from the header menu)
-  // pre-fill the composer; the user reviews and sends it.
+  // starts the guided drafting conversation.
   const searchParams = useSearchParams();
   const draftParam = searchParams.get("draft");
-  const [appliedDraft, setAppliedDraft] = useState<string | null>(null);
-  if (draftParam !== appliedDraft) {
-    setAppliedDraft(draftParam);
-    const action = findDraftAction(draftParam);
-    if (action) setInputPrompt(action.prompt);
-  }
 
   const showVoiceError = (message: string) => {
     setRecordingStatus(message);
@@ -547,10 +611,214 @@ export function ChatShell() {
     }
   };
 
+  // ---- تنظیم پیش‌نویس در گفتگو (draft-assist) ----
+  const caseIds = (): string[] =>
+    Array.from(new Set([...contextRef.current.map((f) => f.fileId), ...readyFileIds])).slice(-MAX_CASE_FILES_PER_CHAT);
+
+  /**
+   * One request to /draft-assist and the matching UI update. `silent` = card refresh only (no spinner,
+   * no new bubble). Returns false when the server says the text is not a draft request.
+   */
+  const runDraft = async (opts: DraftRunOpts): Promise<boolean> => {
+    if (busyRef.current) {
+      // A card refresh must not be lost: remember the latest one and run it when the current call ends.
+      if (opts.silent && opts.action === "check") pendingCheckRef.current = opts;
+      return false;
+    }
+    busyRef.current = true;
+    if (!opts.silent) setIsLoading(true);
+    if (!opts.silent) setMessages(opts.base);
+    let notDraft = false;
+    try {
+     run: {
+      const known = opts.action === "assist" ? opts.edits : { ...(opts.prev?.fields ?? {}), ...opts.edits };
+      const data = await draftAssist(
+        {
+          action: opts.action,
+          draft_type: opts.type ?? opts.prev?.type,
+          messages: toDraftHistory(opts.base),
+          case_file_ids: caseIds(),
+          known_fields: known,
+          skip_fields: opts.skipped ?? opts.prev?.skipped ?? [],
+          ...(opts.revise ? { revise: opts.revise } : {}),
+        },
+        {
+          token: getAccessToken(),
+          onAuthExpired: () => {
+            logout();
+            setGuestNotice(true);
+          },
+        },
+      );
+      if (data.status === "not_draft") {
+        notDraft = true;
+        break run; // leave the try so `finally` runs, then fall back to the normal chat below
+      }
+      if (data.status === "vip_required") {
+        const label = GUIDED_DRAFT_CHIPS.find((c) => c.key === data.draft_type)?.label ?? "این پیش‌نویس";
+        setDraft(null);
+        setMessages([...opts.base, { role: "assistant", content: data.message ?? "", vipGate: label }]);
+        return true;
+      }
+      if (data.status === "draft") {
+        const title = data.title ?? opts.prev?.title ?? "";
+        setDraft((d) => (d ? { ...d, status: "done" } : d));
+        setMessages([
+          ...opts.base,
+          {
+            role: "assistant",
+            content: `پیش‌نویس «${title}» تنظیم شد. می‌توانید آن را کپی، دانلود یا با «اصلاح کن» ویرایش کنید.`,
+            draftResult: {
+              draft_type: (data.draft_type ?? opts.prev?.type) as DraftType,
+              title,
+              draft_markdown: data.draft_markdown ?? "",
+              citations: data.citations ?? [],
+              warnings: data.warnings ?? [],
+              disclaimer: data.disclaimer,
+            },
+          },
+        ]);
+        return true;
+      }
+      if (data.status === "insufficient") {
+        setDraft((d) => (d ? { ...d, status: d.missing.length ? "collecting" : "ready" } : d));
+        setMessages([...opts.base, { role: "assistant", content: data.message ?? "اطلاعات برای تنظیم پیش‌نویس کافی نیست." }]);
+        return true;
+      }
+      const next = sessionFromResponse(data, opts.prev, opts.edits);
+      setDraft(next);
+      if (opts.silent) return true;
+      const text =
+        data.status === "need_info"
+          ? [opts.intro ? data.intro : "", data.question].filter(Boolean).join("\n\n")
+          : [opts.intro ? data.intro : "", data.message].filter(Boolean).join("\n\n");
+      setMessages([...opts.base, { role: "assistant", content: text }]);
+      if (opts.action === "generate" && opts.revise) {
+        // need_info while revising: the previous draft stays in the conversation; keep it revisable.
+        const idx = opts.base.map((m) => !!m.draftResult).lastIndexOf(true);
+        if (idx >= 0) setReviseIdx(idx);
+      }
+     }
+    } catch (err) {
+      const failure = err instanceof DraftAssistError ? err.failure : null;
+      if (failure?.kind === "auth") logout();
+      setDraft((d) => (d && d.status === "generating" ? { ...d, status: d.missing.length ? "collecting" : "ready" } : d));
+      // A failed card refresh stays quiet: its `base` may be older than the visible conversation.
+      if (!opts.silent) {
+        setMessages([
+          ...opts.base,
+          { role: "assistant", content: failure?.message ?? "تنظیم پیش‌نویس انجام نشد؛ دوباره تلاش کنید.", isError: true },
+        ]);
+      }
+    } finally {
+      busyRef.current = false;
+      setIsLoading(false);
+      const pending = pendingCheckRef.current;
+      if (pending && !notDraft) {
+        pendingCheckRef.current = null;
+        // latest pending check, built from the newest draft state
+        const latest = draftRef.current;
+        window.setTimeout(() => void runDraft(latest ? { ...pending, base: messagesRef.current, prev: latest, edits: latest.edits, skipped: latest.skipped } : { ...pending, base: messagesRef.current }), 0);
+      }
+    }
+    if (notDraft && opts.fallbackText) await sendChat(opts.fallbackText, opts.base);
+    return true;
+  };
+
+  const startDraft = async (type: DraftType): Promise<boolean> => {
+    if (busyRef.current) return false;
+    setReviseIdx(null);
+    // Always the newest history (this also runs from a timer after the first render).
+    const base = messagesRef.current;
+    const hasContext = base.some((m) => m.role === "user") || caseIds().length > 0;
+    // Without context a cheap "check" call is enough (it still enforces the VIP rule before any typing).
+    return runDraft({ action: hasContext ? "assist" : "check", type, base, prev: null, edits: {}, intro: true });
+  };
+  startDraftRef.current = startDraft;
+
+  const sendDraftTurn = async (userMsg: ChatMessage): Promise<boolean> => {
+    if (!draft) return true;
+    return runDraft({ action: "assist", base: [...messages, userMsg], prev: draft, edits: draft.edits });
+  };
+
+  const editDraftField = (key: string, raw: string) => {
+    const draft = draftRef.current;
+    if (!draft) return;
+    const value = raw.trim();
+    const edits = { ...draft.edits };
+    const fields = { ...draft.fields };
+    if (!value) {
+      delete edits[key];
+      delete fields[key];
+    } else {
+      const v = LIST_DRAFT_FIELDS.has(key) ? value.split("\n").map((x) => x.trim()).filter(Boolean) : value;
+      edits[key] = v;
+      fields[key] = v;
+    }
+    const prev = { ...draft, edits, fields, skipped: draft.skipped.filter((k) => k !== key) };
+    draftRef.current = prev;
+    setDraft(prev);
+    void runDraft({ action: "check", base: messagesRef.current, prev, edits, skipped: prev.skipped, silent: true });
+  };
+
+  const chooseCourt = (value: string, label: string) => {
+    if (!draft) return;
+    const edits = { ...draft.edits, court_type: value };
+    const prev = { ...draft, edits, fields: { ...draft.fields, court_type: value } };
+    void runDraft({ action: "check", base: [...messages, { role: "user", content: label }], prev, edits });
+  };
+
+  const skipDraftField = (key: string, label: string) => {
+    if (!draft) return;
+    const skipped = [...draft.skipped, key];
+    void runDraft({
+      action: "check",
+      base: [...messages, { role: "user", content: `${label}: نمی‌دانم` }],
+      prev: draft,
+      edits: draft.edits,
+      skipped,
+    });
+  };
+
+  const generateDraft = async (revise?: DraftAssistRequest["revise"], base?: ChatMessage[]): Promise<boolean> => {
+    if (!draft) return true;
+    if (busyRef.current) return false;
+    setDraft({ ...draft, status: "generating" });
+    const ok = await runDraft({ action: "generate", base: base ?? messages, prev: draft, edits: draft.edits, revise });
+    if (!ok) setDraft((d) => (d && d.status === "generating" ? { ...d, status: d.missing.length ? "collecting" : "ready" } : d));
+    return ok;
+  };
+
+  const exitDraft = () => {
+    setDraft(null);
+    setReviseIdx(null);
+  };
+
+  useEffect(() => {
+    const action = findDraftAction(draftParam);
+    if (!action) return;
+    const t = window.setTimeout(() => void startDraftRef.current(action.key), 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftParam]);
+
   const handleSendMessage = async (customPrompt?: string) => {
-    const textToSend = customPrompt || inputPrompt || (readyFileIds.length ? DEFAULT_CASE_PROMPT : "");
-    if (!textToSend || !textToSend.trim() || isLoading || busyRef.current || uploading) return;
+    const textToSend =
+      customPrompt || inputPrompt || (readyFileIds.length ? (draft ? DRAFT_FILES_PROMPT : DEFAULT_CASE_PROMPT) : "");
+    if (!textToSend || !textToSend.trim() || isLoading || uploading) return;
     if (textToSend.length > MAX_CHAT_CHARS) return;
+    if (busyRef.current) {
+      // Only a silent card refresh can be running here (isLoading is false): wait for it instead of dropping the text.
+      for (let i = 0; i < 40 && busyRef.current; i++) await new Promise((r) => setTimeout(r, 200));
+      if (busyRef.current) {
+        showVoiceError("در حال به‌روزرسانی اطلاعات هستیم؛ چند لحظه بعد دوباره ارسال کنید.");
+        return; // the text stays in the composer
+      }
+    }
+    const restoreText = () => {
+      if (!customPrompt) setInputPrompt(textToSend);
+      showVoiceError("پیام ارسال نشد چون درخواست قبلی هنوز در حال انجام است؛ دوباره ارسال کنید.");
+    };
 
     // Ready attachments move into this message and into the conversation context
     // (max 5, most recent); failed chips stay in the composer for retry.
@@ -563,10 +831,43 @@ export function ChatShell() {
       setAttachments((prev) => prev.filter((a) => !sent.includes(a)));
     }
     setInputPrompt("");
-    await sendChat(textToSend, [
-      ...messages,
-      { role: "user", content: textToSend, ...(sent.length ? { files: sent.map((a) => a.name) } : {}) },
-    ]);
+    const userMsg: ChatMessage = {
+      role: "user",
+      content: textToSend,
+      ...(sent.length ? { files: sent.map((a) => a.name) } : {}),
+    };
+    const previous = reviseIdx !== null ? messages[reviseIdx]?.draftResult : undefined;
+    if (previous && draft) {
+      // «اصلاح کن»: the typed text is an edit instruction for the finished draft.
+      setReviseIdx(null);
+      const ok = await generateDraft(
+        { instruction: textToSend.slice(0, 1500), previous_draft: previous.draft_markdown.slice(0, 30000) },
+        [...messages, userMsg],
+      );
+      if (!ok) {
+        setReviseIdx(reviseIdx);
+        restoreText();
+      }
+      return;
+    }
+    if (draft) {
+      if (!(await sendDraftTurn(userMsg))) restoreText();
+      return;
+    }
+    if (!customPrompt && detectDraftIntent(textToSend)) {
+      // The server re-checks the intent; `not_draft` falls back to the normal chat answer.
+      const ok = await runDraft({
+        action: "assist",
+        base: [...messages, userMsg],
+        prev: null,
+        edits: {},
+        intro: true,
+        fallbackText: textToSend,
+      });
+      if (!ok) restoreText();
+      return;
+    }
+    await sendChat(textToSend, [...messages, userMsg]);
   };
 
   const removeContextFile = (f: ContextFile) => {
@@ -698,6 +999,25 @@ export function ChatShell() {
                 </div>
               )}
 
+              {msg.vipGate && (
+                <div className="mt-3">
+                  <VipGate feature={msg.vipGate}>
+                    <p className="ap-notice">اشتراک شما فعال است؛ دوباره روی همان پیش‌نویس بزنید.</p>
+                  </VipGate>
+                </div>
+              )}
+
+              {msg.draftResult && (
+                <DraftResultCard
+                  result={msg.draftResult}
+                  busy={isLoading || !draft}
+                  onRevise={() => {
+                    setReviseIdx(idx);
+                    textareaRef.current?.focus();
+                  }}
+                />
+              )}
+
               {msg.role === "assistant" && msg.statutory_basis && msg.statutory_basis.length > 0 && (
                 <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--ap-line)" }}>
                   <div className="mb-1.5 text-sm font-semibold ap-link">مستندات</div>
@@ -725,6 +1045,36 @@ export function ChatShell() {
               </span>
             </div>
           </div>
+        )}
+
+        {draft && (
+          <>
+            <DraftInfoCard
+              session={draft}
+              busy={isLoading}
+              onEdit={editDraftField}
+              onGenerate={() => void generateDraft()}
+              onExit={exitDraft}
+            />
+            {draft.status === "collecting" && !isLoading && draft.missing.length > 0 && (
+              <div className="ap-chip-row" role="group" aria-label="پاسخ سریع">
+                {draft.missing.slice(0, 2).some((m) => m.key === "court_type") &&
+                  draft.choices.map((c) => (
+                    <button key={c.value} type="button" className="ap-chip ap-chip-link" onClick={() => chooseCourt(c.value, c.label)}>
+                      {c.label}
+                    </button>
+                  ))}
+                {draft.missing
+                  .slice(0, 2)
+                  .filter((m) => m.skippable)
+                  .map((m) => (
+                    <button key={m.key} type="button" className="ap-chip" onClick={() => skipDraftField(m.key, m.label)}>
+                      {m.label}: {draft.skipLabel}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* پرسش‌های نمونه، گروه‌بندی‌شده، در ناحیه خالی پیام‌ها */}
@@ -766,18 +1116,12 @@ export function ChatShell() {
         {/* اقدامات حقوقی: چت‌محور + پیوند به صفحه‌های اختصاصی */}
         <div className="ap-chip-row scroll-fade-x max-w-full min-w-0 touch-pan-x" role="group" aria-label="اقدامات حقوقی">
           <span className="ap-notice whitespace-nowrap font-semibold">اقدامات حقوقی</span>
-          {DRAFT_PAGES.map((page) => (
-            <Link key={page.href} href={page.href} className="ap-chip ap-chip-link">
-              <FileText className="size-4" aria-hidden="true" />
-              <span>{page.label}</span>
-            </Link>
-          ))}
-          {DRAFT_ACTIONS.map((action) => {
-            const Icon = ACTION_ICONS[action.key];
+          {GUIDED_DRAFT_CHIPS.map((chip) => {
+            const Icon = CHIP_ICONS[chip.key];
             return (
-              <button key={action.key} type="button" onClick={() => handleSendMessage(action.prompt)} className="ap-chip">
+              <button key={chip.key} type="button" onClick={() => void startDraft(chip.key)} disabled={isLoading} className="ap-chip">
                 <Icon className="size-4 ap-chip-icon" aria-hidden="true" />
-                <span>{action.label}</span>
+                <span>{chip.label}</span>
               </button>
             );
           })}
@@ -879,6 +1223,14 @@ export function ChatShell() {
               </div>
             )}
           </div>
+        )}
+        {reviseIdx !== null && (
+          <p className="ap-notice flex items-center gap-2" role="status">
+            <span>دستور اصلاح را بنویسید (مثلاً: «کوتاه‌تر کن» یا «لحن رسمی‌تر»).</span>
+            <button type="button" className="ap-link underline" onClick={() => setReviseIdx(null)}>
+              انصراف
+            </button>
+          </p>
         )}
         {micHint.show && micFocused && !isVoiceRecording && <MicHint onDismiss={micHint.markUsed} />}
 

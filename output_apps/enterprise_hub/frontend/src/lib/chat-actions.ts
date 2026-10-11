@@ -126,3 +126,55 @@ export const COMPETENCE_NOTE =
 
 export const DISCLAIMER_LINE =
   "پاسخ‌ها مشاوره حقوقی رسمی نیستند و پیش از اقدام باید توسط وکیل بازبینی شوند.";
+
+/* ------------------------- conversational drafting ------------------------- */
+
+export type DraftType = "defense" | "petition" | "complaint" | "notice" | "ruling" | "indictment";
+
+/** Chips that start the guided in-chat drafting flow (ruling / indictment are VIP-only, enforced by the server). */
+export const GUIDED_DRAFT_CHIPS: { key: DraftType; label: string }[] = [
+  { key: "ruling", label: "پیش‌نویس رأی" },
+  { key: "indictment", label: "کیفرخواست" },
+  { key: "defense", label: "لایحه دفاعیه" },
+  { key: "petition", label: "دادخواست حقوقی" },
+  { key: "complaint", label: "شکواییه کیفری" },
+  { key: "notice", label: "اظهارنامه رسمی" },
+];
+
+function normaliseFa(text: string): string {
+  return text
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/‌/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+const TYPE_PATTERNS: [DraftType, RegExp][] = [
+  ["indictment", /کیفر\s*خواست/],
+  ["ruling", /پیش\s*نویس\s*(?:یک\s*)?(?:رأی|رای)|(?:رأی|رای)\s*(?:بنویس|تنظیم)/],
+  ["defense", /لایحه|دفاعیه/],
+  ["petition", /دادخواست/],
+  ["complaint", /شکواییه|شکوائیه|شکایت\s*نامه/],
+  ["notice", /اظهار\s*نامه/],
+];
+const REQUEST_RE =
+  /می\s*خوا(?:ه|م)|میخوا|بنویس|تنظیم|تدوین|آماده\s*کن|درست\s*کن|بساز|نیاز\s*دارم|لازم\s*دارم|کمک\s*کن|پیش\s*نویس|بنویسید|بنویسی/;
+const INFO_RE = /چیست|چیه|چگونه|چطور|چه\s*فرق|فرق|تفاوت|شرایط|هزینه|چند\s*روز|مهلت|آیا|چرا/;
+const WRITE_RE = /بنویس|تنظیم\s*کن|تدوین\s*کن|آماده\s*کن|درست\s*کن|بساز|می\s*خوا(?:ه|م)|میخوا/;
+
+/**
+ * Cheap client-side hint that a normal chat message asks for a draft («یه لایحه دفاعیه می‌خوام»).
+ * Mirrors draft_assistant.detect_draft_type; the server re-checks and answers `not_draft` otherwise.
+ */
+export function detectDraftIntent(text: string): DraftType | null {
+  const value = normaliseFa(text);
+  if (!value) return null;
+  const found = TYPE_PATTERNS.find(([, re]) => re.test(value));
+  if (!found || !REQUEST_RE.test(value)) return null;
+  if (INFO_RE.test(value) && !WRITE_RE.test(value)) return null;
+  return found[0];
+}
