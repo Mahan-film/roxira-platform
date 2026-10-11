@@ -224,6 +224,22 @@ def incr(key: str, window_s: int) -> tuple[int, int]:
         return int(item[0]), max(1, int(item[1] - _now()))
 
 
+def decr(key: str) -> None:
+    """Undo one ``incr`` (refund); never goes below zero."""
+    client = _get_redis()
+    if client is not None:
+        try:
+            if int(client.decr(key)) < 0:
+                client.set(key, 0, keepttl=True)
+            return
+        except Exception:
+            _redis_failed()
+    with _mem_lock:
+        item = _mem_get(key)
+        if item is not None:
+            item[0] = max(0, int(item[0]) - 1)
+
+
 def ttl(key: str) -> int:
     """Seconds left on ``key`` (0 when absent)."""
     client = _get_redis()

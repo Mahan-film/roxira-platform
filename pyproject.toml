@@ -55,6 +55,8 @@ documents = [
     "docling>=2.5.0",
     "pymupdf>=1.24.0",
     "python-docx>=1.1.0",
+    "pillow>=10.0",
+    "pillow-heif>=0.18",
 ]
 
 # ── گراف دانش حقوقی (هستهٔ SmartJudge) ──────────────────────────────────────

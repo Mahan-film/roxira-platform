@@ -118,6 +118,7 @@ from output_apps.generated_modules.smartjudge.fast_path import (
 from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
 from output_apps.generated_modules.smartjudge import chat_fast as _chat_fast
 from output_apps.generated_modules.smartjudge import chat_auth
+from output_apps.generated_modules.smartjudge import case_files as _case_files
 from output_apps.generated_modules.smartjudge import voice_stt as _voice_stt
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
@@ -180,7 +181,7 @@ import struct
 import asyncio
 import contextvars
 from typing import Optional, List, Any
-from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile, Depends
+from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile, Depends, Form
 from fastapi.responses import JSONResponse, StreamingResponse, Response
 from pydantic import field_validator as _field_validator
 from pydantic import BaseModel as _BaseModel, ConfigDict as _ConfigDict
@@ -1824,8 +1825,20 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     selected_tier = "VIP" if tier == "VIP" else "FREE"
     cfg = OPENROUTER_TIERS[selected_tier]
 
+    # پرونده‌های بارگذاری‌شده: فقط متعلق به همین کاربر (در غیر این صورت 404 یکسان)
+    case_records: list = []
+    try:
+        case_ids = _case_files.parse_case_file_ids(payload.get("case_file_ids"))
+        if case_ids:
+            if not user.authenticated:
+                return chat_auth.error_json(401, _case_files.MSG_LOGIN_REQUIRED, code="AUTH_REQUIRED", label="ERROR",
+                                            headers={"WWW-Authenticate": "Bearer"})
+            case_records = await asyncio.to_thread(_case_files.load_all_owned, case_ids, phone)
+    except _case_files.CaseFileError as exc:
+        return _casefile_error(exc)
+
     # تشخیص هوشمند تست میکروفون و احوالپرسی (پاسخ بلادرنگ بدون فراخوانی بی‌مورد مواد قانونی)
-    kind = classify_fast_path(user_text)
+    kind = None if case_records else classify_fast_path(user_text)
 
     if kind == "identity":
         return {
@@ -1884,7 +1897,10 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     _t_retrieval = time.perf_counter()
-    laws, precedents = await aquery_knowledge_graph(user_text, limit=5)
+    retrieval_query = user_text
+    if case_records:  # widen law retrieval with the document's own subject matter
+        retrieval_query = (user_text + "\n" + _case_files.retrieval_hint(case_records)).strip()
+    laws, precedents = await aquery_knowledge_graph(retrieval_query, limit=5)
 
     # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
     # targeted retrieval queries, merged and de-duplicated by title.
@@ -1982,10 +1998,17 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                     precedents, top_k=max(2, CHAT_CTX_TOPK - 1), summary_chars=CHAT_CTX_CHARS)
 
             prompt_system_content = (system_msg + "\n" + context_text) if context_text else system_msg
+            user_prompt = user_text
+            if case_records and not is_voice:
+                # Untrusted document text goes in the USER turn inside nonce-delimited blocks;
+                # the system turn only carries the "treat it as data" rules.
+                sys_add, doc_block = _case_files.build_prompt_parts(case_records)
+                prompt_system_content += sys_add
+                user_prompt = user_text + "\n\n" + doc_block
             messages_payload = [{"role": "system", "content": prompt_system_content}]
             if history_messages:
                 messages_payload.extend(history_messages[-8:])
-            messages_payload.append({"role": "user", "content": user_text})
+            messages_payload.append({"role": "user", "content": user_prompt})
 
             is_voice = bool(payload.get("is_voice_mode"))
             chosen_max_tokens = 60 if is_voice else CHAT_MAX_TOKENS
@@ -2058,7 +2081,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 with conn.cursor() as cur:
                     cur.execute(
                         "INSERT INTO chat_messages (conversation_id, role, content, metadata) VALUES (%s, %s, %s, %s::jsonb);",
-                        (conv_id, "user", user_text, json.dumps({}))
+                        (conv_id, "user", user_text,
+                         json.dumps({"case_file_ids": [r["id"] for r in case_records]} if case_records else {}))
                     )
                     meta_res = {"probability": prob, "draft": draft, "laws": laws, "precedents": precedents}
                     cur.execute(
@@ -2734,6 +2758,90 @@ async def _resolve_case_text(request: Request) -> tuple:
         payload.get("extracted_text") or payload.get("text_content") or payload.get("case_text") or ""
     ).strip()
     return text, str(payload.get("doc_type") or "RULING"), [], None
+
+
+_CASEFILE_SEM: Optional[asyncio.Semaphore] = None
+
+
+def _casefile_sem() -> asyncio.Semaphore:
+    """At most 2 case files are extracted/OCR'd at once per worker (RAM and cost guard)."""
+    global _CASEFILE_SEM
+    if _CASEFILE_SEM is None:
+        _CASEFILE_SEM = asyncio.Semaphore(2)
+    return _CASEFILE_SEM
+
+
+def _casefile_error(exc: "_case_files.CaseFileError") -> JSONResponse:
+    return chat_auth.error_json(exc.status_code, exc.message, code=exc.code, label="ERROR")
+
+
+async def _read_upload_capped(upload: UploadFile, limit: int) -> Optional[bytes]:
+    """Read at most ``limit`` bytes; None when the upload is larger (never buffers more)."""
+    buf = bytearray()
+    while True:
+        chunk = await upload.read(1024 * 1024)
+        if not chunk:
+            return bytes(buf)
+        buf.extend(chunk)
+        if len(buf) > limit:
+            return None
+
+
+@router.post("/case-files")
+async def upload_case_file(request: Request, file: UploadFile = File(...),
+                           conversation_id: Optional[str] = Form(default=None),
+                           user: chat_auth.CurrentUser = Depends(get_current_user)):
+    """Upload one case document (PDF/JPG/PNG/HEIC/WEBP/DOCX/TXT) for the chat to analyse.
+
+    Login required. The raw file is processed in memory and discarded; only the extracted
+    text is kept (owner-bound, expires after CASEFILE_RETENTION_DAYS).
+    Returns ``{file_id, pages, chars, ocr_used, warnings}``.
+    """
+    denied = chat_auth.deny_if_invalid(user, label="ERROR")
+    if denied is not None:
+        return denied
+    if not user.authenticated:
+        return chat_auth.error_json(401, _case_files.MSG_LOGIN_REQUIRED, code="AUTH_REQUIRED", label="ERROR",
+                                    headers={"WWW-Authenticate": "Bearer"})
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > _case_files.MAX_FILE_BYTES + 512 * 1024:
+        return _casefile_error(_case_files.CaseFileError(_case_files.MSG_TOO_LARGE, 413, "FILE_TOO_LARGE"))
+    parsed_conv = None
+    if conversation_id:
+        parsed_conv = _parse_conversation_id(conversation_id)
+        try:
+            owned = bool(parsed_conv) and await asyncio.to_thread(_conversation_owned_by, parsed_conv, user.phone)
+        except Exception as e:
+            print("[SMARTJUDGE][CONV-OWNER-ERR]", type(e).__name__, file=sys.stderr)
+            return _chat_internal_error()
+        if not owned:
+            return chat_auth.error_json(404, chat_auth.MSG_NOT_FOUND, code="NOT_FOUND", label="ERROR")
+    data = await _read_upload_capped(file, _case_files.MAX_FILE_BYTES)
+    if data is None:
+        return _casefile_error(_case_files.CaseFileError(_case_files.MSG_TOO_LARGE, 413, "FILE_TOO_LARGE"))
+    try:
+        async with _casefile_sem():
+            body = await _case_files.process_upload(data, file.filename, user.phone, user.tier, parsed_conv)
+    except _case_files.CaseFileError as exc:
+        return _casefile_error(exc)
+    except Exception as exc:  # noqa: BLE001 - never leak parser internals
+        print(f"[SMARTJUDGE][CASEFILE-ERR] {type(exc).__name__}", file=sys.stderr)
+        return _chat_internal_error()
+    finally:
+        data = None
+    return {"status": "SUCCESS", **body}
+
+
+@router.delete("/case-files/{file_id}")
+async def delete_case_file(file_id: str, user: chat_auth.CurrentUser = Depends(get_current_user)):
+    """Remove an uploaded case file's stored text (owner only; others get 404)."""
+    denied = chat_auth.require_auth(user, label="ERROR")
+    if denied is not None:
+        return denied
+    ok = await asyncio.to_thread(_case_files.delete_owned, file_id, user.phone)
+    if not ok:
+        return chat_auth.error_json(404, _case_files.MSG_NOT_FOUND, code="NOT_FOUND", label="ERROR")
+    return {"status": "SUCCESS"}
 
 
 @router.post("/documents/convert")

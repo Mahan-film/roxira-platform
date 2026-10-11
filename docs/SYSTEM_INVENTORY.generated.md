@@ -81,4 +81,5 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | strong | deepseek/deepseek-v4-pro, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
 | stt | openai/whisper-large-v3, openai/whisper-large-v3-turbo, openai/gpt-audio |
 | tts | edge-tts:fa-IR-FaridNeural |
+| vision | google/gemini-3.8-flash |
 | voice_realtime | gemini-3.8-live, gemini-3.1-flash-live-preview |

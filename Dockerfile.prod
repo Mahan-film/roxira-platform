@@ -21,6 +21,8 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 t
 RUN pip install psycopg fastapi uvicorn pydantic python-docx pymupdf redis httpx langgraph sentence-transformers sqlalchemy python-multipart "pydantic[email]" faster-whisper
 # موتور پردازش اسناد (Docs/PDF/تصویر → Markdown): چیدمان، جدول و OCR چندزبانه
 RUN pip install docling
+# Case-file upload (case_files.py): HEIC phone photos + explicit Pillow.
+RUN pip install pillow pillow-heif
 # موتور گراف دانش حقوقی (LightRAG): موجودیت/رابطه + بازیابی برداری ترکیبی
 RUN pip install lightrag-hku==1.5.7 openai==3.22.1
 # TTS مسیر آبشاری صدای زنده (smartjudge_live_voice.py): edge-tts هرگز اینجا
@@ -45,6 +47,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    tesseract-ocr \
+    tesseract-ocr-fas \
+    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv

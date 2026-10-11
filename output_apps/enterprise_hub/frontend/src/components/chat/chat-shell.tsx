@@ -7,12 +7,16 @@ import {
   FileSignature,
   FileText,
   Gavel,
+  Camera,
   Info,
+  Loader2,
   Mic,
+  Paperclip,
   Phone,
   RotateCw,
   Send,
   Square,
+  X,
 } from "lucide-react";
 import {
   COMPETENCE_NOTE,
@@ -26,6 +30,15 @@ import {
 import { ChatTipCard, MicHint, useMicHint } from "./chat-onboarding";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 import { ChatHttpError, streamChat } from "@/lib/api/chat-stream";
+import {
+  CASE_FILE_ACCEPT,
+  CASE_FILE_PRIVACY_NOTICE,
+  CaseFileError,
+  MAX_CASE_FILES_PER_CHAT,
+  deleteCaseFile,
+  uploadCaseFile,
+  validateCaseFile,
+} from "@/lib/api/case-files-client";
 import { LegalStreamingText } from "./legal-streaming-text";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
@@ -55,6 +68,21 @@ import {
 type StatutoryItem =
   | string
   | { title?: string; category?: string; article?: string; law?: string; law_name?: string; article_no?: string | number; number?: string | number };
+
+type Attachment = {
+  localId: string;
+  name: string;
+  status: "uploading" | "ready" | "error";
+  fileId?: string;
+  pages?: number;
+  ocrUsed?: boolean;
+  warning?: string;
+  error?: string;
+  /** Kept only while uploading/failed so "retry" can resend it; dropped once ready. */
+  file?: File;
+};
+
+const DEFAULT_CASE_PROMPT = "این پرونده را بررسی و تحلیل حقوقی کن.";
 
 type ChatMessage = {
   role: string;
@@ -103,6 +131,10 @@ export function ChatShell() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [weakConnection, setWeakConnection] = useState(false);
   const [guestNotice, setGuestNotice] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachNotice, setAttachNotice] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const micHint = useMicHint();
   const recoveredRef = useRef(false);
   const { getAccessToken, isAuthenticated, openLogin, logout } = useAuth();
@@ -314,6 +346,94 @@ export function ChatShell() {
     }
   };
 
+  // ---- پیوست پرونده (PDF / تصویر / DOCX / TXT) ----
+  const patchAttachment = (localId: string, patch: Partial<Attachment>) =>
+    setAttachments((prev) => prev.map((a) => (a.localId === localId ? { ...a, ...patch } : a)));
+
+  const askLoginForUpload = () => {
+    setAttachNotice("برای بارگذاری پرونده وارد شوید");
+    openLogin({
+      serviceDomain: "GHAZI",
+      title: "ورود به قاضی هوشمند",
+      description: "برای بارگذاری پرونده وارد شوید؛ کد تأیید به شمارهٔ همراه شما پیامک می‌شود.",
+    });
+  };
+
+  const openFilePicker = (camera: boolean) => {
+    if (!isAuthenticated) {
+      askLoginForUpload();
+      return;
+    }
+    setAttachNotice("");
+    (camera ? cameraInputRef : fileInputRef).current?.click();
+  };
+
+  const startUpload = async (localId: string, file: File) => {
+    patchAttachment(localId, { status: "uploading", error: undefined, file });
+    try {
+      const result = await uploadCaseFile(file, {
+        token: getAccessToken(),
+        conversationId: conversationId || undefined,
+        onRetry: () => setAttachNotice("اتصال ضعیف است؛ در حال تلاش دوباره…"),
+      });
+      setAttachNotice("");
+      patchAttachment(localId, {
+        status: "ready",
+        fileId: result.file_id,
+        pages: result.pages,
+        ocrUsed: result.ocr_used,
+        warning: result.warnings?.[0],
+        file: undefined,
+      });
+    } catch (err) {
+      const e = err instanceof CaseFileError ? err : null;
+      if (e?.status === 401) {
+        logout();
+        setAttachments((prev) => prev.filter((a) => a.localId !== localId));
+        askLoginForUpload();
+        return;
+      }
+      // Validation/limit errors are final; network/timeout/OCR failures can be retried.
+      const retryable = !e || e.status === 0 || e.status >= 500 || e.code === "OCR_FAILED";
+      patchAttachment(localId, {
+        status: "error",
+        error: e?.message ?? "بارگذاری فایل انجام نشد؛ لطفاً دوباره تلاش کنید.",
+        file: retryable ? file : undefined,
+      });
+    }
+  };
+
+  const handleFilesPicked = (list: FileList | null) => {
+    const picked = Array.from(list ?? []);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (!picked.length) return;
+    let room = MAX_CASE_FILES_PER_CHAT - attachments.length;
+    for (const file of picked) {
+      const invalid = validateCaseFile(file);
+      const localId = newRequestId();
+      if (invalid) {
+        setAttachments((prev) => [...prev, { localId, name: file.name, status: "error", error: invalid }]);
+        continue;
+      }
+      if (room <= 0) {
+        setAttachNotice(`حداکثر ${MAX_CASE_FILES_PER_CHAT.toLocaleString("fa-IR")} فایل را می‌توان همزمان پیوست کرد.`);
+        break;
+      }
+      room -= 1;
+      setAttachments((prev) => [...prev, { localId, name: file.name, status: "uploading" }]);
+      void startUpload(localId, file);
+    }
+  };
+
+  const removeAttachment = (att: Attachment) => {
+    setAttachments((prev) => prev.filter((a) => a.localId !== att.localId));
+    if (att.fileId) void deleteCaseFile(att.fileId, getAccessToken());
+  };
+
+  const uploading = attachments.some((a) => a.status === "uploading");
+  const readyFileIds = attachments.filter((a) => a.status === "ready" && a.fileId).map((a) => a.fileId as string);
+
   const errorBubble = (failure: ChatFailure, prompt: string, requestId: string): ChatMessage => ({
     role: "assistant",
     content: failure.message,
@@ -358,6 +478,7 @@ export function ChatShell() {
           message: textToSend,
           conversation_id: conversationId || undefined,
           request_id: requestId,
+          ...(readyFileIds.length ? { case_file_ids: readyFileIds } : {}),
         },
         onDelta: (piece) => {
           streamed += piece;
@@ -414,8 +535,8 @@ export function ChatShell() {
   };
 
   const handleSendMessage = async (customPrompt?: string) => {
-    const textToSend = customPrompt || inputPrompt;
-    if (!textToSend || !textToSend.trim() || isLoading || busyRef.current) return;
+    const textToSend = customPrompt || inputPrompt || (readyFileIds.length ? DEFAULT_CASE_PROMPT : "");
+    if (!textToSend || !textToSend.trim() || isLoading || busyRef.current || uploading) return;
     if (textToSend.length > MAX_CHAT_CHARS) return;
 
     setInputPrompt("");
@@ -622,10 +743,89 @@ export function ChatShell() {
           </div>
         )}
 
+        {/* چیپ‌های فایل‌های پیوست‌شده */}
+        {attachments.length > 0 && (
+          <ul className="flex flex-wrap gap-2" aria-label="فایل‌های پیوست‌شده">
+            {attachments.map((att) => (
+              <li
+                key={att.localId}
+                className="ap-chip max-w-full"
+                style={att.status === "error" ? { color: "var(--ap-danger)" } : undefined}
+                title={att.warning}
+              >
+                {att.status === "uploading" ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : att.status === "error" ? (
+                  <AlertTriangle className="size-4" aria-hidden="true" />
+                ) : (
+                  <FileText className="size-4" aria-hidden="true" />
+                )}
+                <span className="truncate max-w-[12rem]" dir="auto">{att.name}</span>
+                <span className="ap-muted text-xs whitespace-nowrap" role={att.status === "error" ? "alert" : "status"}>
+                  {att.status === "uploading"
+                    ? "در حال بارگذاری و خواندن…"
+                    : att.status === "error"
+                    ? att.error
+                    : `${(att.pages ?? 1).toLocaleString("fa-IR")} صفحه${att.ocrUsed ? " (OCR)" : ""}`}
+                </span>
+                {att.status === "error" && att.file && (
+                  <button
+                    type="button"
+                    onClick={() => void startUpload(att.localId, att.file as File)}
+                    aria-label={`تلاش مجدد برای ${att.name}`}
+                    className="ap-link underline text-xs"
+                  >
+                    تلاش مجدد
+                  </button>
+                )}
+                <button type="button" onClick={() => removeAttachment(att)} aria-label={`حذف ${att.name}`}>
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         {micHint.show && !isVoiceRecording && <MicHint onDismiss={micHint.markUsed} />}
 
         {/* جعبه ارسال پیام و دکمه‌های صوتی */}
         <div className="ap-composer">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={CASE_FILE_ACCEPT}
+            multiple
+            hidden
+            data-testid="case-file-input"
+            onChange={(e) => handleFilesPicked(e.target.files)}
+          />
+          {/* موبایل: مستقیماً دوربین را باز می‌کند (در دسکتاپ مانند انتخاب فایل است) */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            data-testid="case-camera-input"
+            onChange={(e) => handleFilesPicked(e.target.files)}
+          />
+          <button
+            type="button"
+            onClick={() => openFilePicker(false)}
+            className="ap-iconbtn"
+            aria-label="پیوست پرونده"
+            title="پیوست پرونده (PDF، تصویر، DOCX، TXT)"
+          >
+            <Paperclip className="size-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => openFilePicker(true)}
+            className="ap-iconbtn"
+            aria-label="عکس گرفتن از سند"
+            title="عکس گرفتن از سند"
+          >
+            <Camera className="size-5" aria-hidden="true" />
+          </button>
           <input
             type="text"
             aria-label="پیام شما"
@@ -666,11 +866,16 @@ export function ChatShell() {
           </button>
 
           {/* دکمه ارسال پیام */}
-          <button type="button" onClick={() => handleSendMessage()} disabled={isLoading || overLimit} className="ap-btn">
+          <button type="button" onClick={() => handleSendMessage()} disabled={isLoading || overLimit || uploading} className="ap-btn">
             <span>ارسال</span>
             <Send className="size-4 -scale-x-100" aria-hidden="true" />
           </button>
         </div>
+
+        {attachNotice && (
+          <p className="ap-notice text-center" role="status">{attachNotice}</p>
+        )}
+        <p className="ap-notice text-center">{CASE_FILE_PRIVACY_NOTICE}</p>
 
         {(inputPrompt.length > MAX_CHAT_CHARS * 0.8 || overLimit) && (
           <div

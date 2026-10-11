@@ -187,6 +187,18 @@ roles:
           docs/research/TECH_CURRENCY_2026-09.md. scripts/check_models.py
           skips this id (it will never appear in GET /api/v1/models).
 
+  vision:
+    description: >
+      Persian OCR of scanned/photographed case files (case_files.py). Receives
+      customer case data, so only paid models (never :free); requests also send
+      provider.data_collection=deny. Gemini Pro is banned by owner policy.
+    data_policy: standard
+    models:
+      # Same id the legacy documents/document_processor.py vision tier already
+      # defaulted to (VISION_OCR_MODEL), now registered here.
+      - id: google/gemini-3.8-flash
+        price_per_1m: { in: 0.75, out: 3.75 }
+
   voice_realtime:
     description: >
       W20 (docs/W20_realtime_voice.md): optional native speech-to-speech
