@@ -9,6 +9,9 @@
 #                                                   # is verified; atomic, previous file kept as .bak-STAMP)
 #   add --replace to overwrite an existing non-empty value (a timestamped backup of .env is always made)
 #
+# The server backup goes to $ENV_BACKUP_DIR (default /root/env-backups, mode 700; files 600), OUTSIDE
+# the git checkout, so the server tree stays clean and deploy_local.sh is not blocked by it.
+#
 # The value travels over ssh stdin only (never on a command line), the server file keeps its
 # permissions, and only variable NAMES and value LENGTHS are printed. L4: owner-only.
 set -euo pipefail
@@ -16,6 +19,7 @@ set -euo pipefail
 SSH_HOST="${DEPLOY_SSH_HOST:-5.75.200.67}"
 REMOTE_DIR="${DEPLOY_REMOTE_DIR:-/opt/roxira_platform}"
 ENV_FILE="$REMOTE_DIR/.env"
+ENV_BACKUP_DIR="${DEPLOY_ENV_BACKUP_DIR:-/root/env-backups}"   # outside the git tree
 LOCAL_ENV="${ROXIRA_LOCAL_ENV:-$HOME/Secrets/roxira/roxira.env}"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 
@@ -105,8 +109,10 @@ if [ -n "$existing_len" ] && [ "$existing_len" != "0" ] && [ "$REPLACE" != "1" ]
 fi
 
 stamp="$(date +%Y%m%d%H%M%S)"
-rsh "cp -p '$ENV_FILE' '$ENV_FILE.bak-$stamp'" || die "could not back up the server .env"
-log "backed up the server .env to .env.bak-$stamp"
+backup="$ENV_BACKUP_DIR/server.env.bak-$stamp"
+rsh "set -e; mkdir -p -m 700 '$ENV_BACKUP_DIR'; chmod 700 '$ENV_BACKUP_DIR'; cp -p '$ENV_FILE' '$backup'; chmod 600 '$backup'" \
+  || die "could not back up the server .env to $ENV_BACKUP_DIR"
+log "backed up the server .env to $backup (mode 600, outside the repo; value not shown)"
 
 # Remove an old/empty line for this name, keep inode+permissions (cat >), then append the new line.
 rsh "grep -v '^${NAME}=' '$ENV_FILE' > '$ENV_FILE.new' && cat '$ENV_FILE.new' > '$ENV_FILE' && rm -f '$ENV_FILE.new'" \

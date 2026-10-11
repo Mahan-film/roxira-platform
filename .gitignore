@@ -1,6 +1,9 @@
 # Environment & Secrets
 .env
 *.env
+# Stray env backups (for example .env.bak-STAMP) must never make the tree dirty
+.env.bak*
+.env.*.bak*
 *.pem
 *.key
 *.cert

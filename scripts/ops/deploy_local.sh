@@ -252,12 +252,25 @@ cmd_deploy() {
   for v in $REQUIRED_ENV; do
     grep -qx "$v" <<<"$names" || die "required env name $v is missing on the server .env"
   done
+  local dirty
+  dirty="$(rgit status --short | tr -d '\r')" || die "cannot read the server git status"
+  if [ -n "$dirty" ]; then
+    log "WARNING: server working tree is NOT clean; deploy --yes will refuse. Offending paths (status + name only):"
+    printf '%s\n' "$dirty"
+  fi
   if [ "$yes" != "--yes" ]; then log "dry-run only. Re-run with --yes to execute."; return 0; fi
 
   confirm_read "Type the short commit SHA ($TARGET_SHORT) to confirm: "
   [ "$CONFIRM_INPUT" = "$TARGET_SHORT" ] || die "SHA mismatch; aborting"
   compute_services
   local svcs="${SERVICES[*]:-}"
+
+  # Refuse early with the offending paths named. Nothing is deleted or moved here.
+  dirty="$(rgit status --short | tr -d '\r')" || die "cannot read the server git status"
+  if [ -n "$dirty" ]; then
+    printf '%s\n' "$dirty" >&2
+    die "server working tree is not clean; the paths above block deploy (status + name only). Nothing was changed. Move them out of $REMOTE_DIR yourself (for example .env backups go to /root/env-backups/), then retry"
+  fi
 
   rsh "set -euo pipefail; cd '$REMOTE_DIR'
     [ -z \"\$(git status --porcelain)\" ] || { echo 'server working tree not clean' >&2; exit 1; }

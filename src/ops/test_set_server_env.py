@@ -67,6 +67,7 @@ def _run_generate(tmp_path, local_text, server_text, extra_args=(), fail_append=
     env.update(
         PATH=f"{bin_dir}:{env['PATH']}",
         DEPLOY_REMOTE_DIR=str(remote),
+        DEPLOY_ENV_BACKUP_DIR=str(tmp_path / "server-backups"),
         ROXIRA_LOCAL_ENV=str(local),
     )
     if fail_append:
@@ -116,3 +117,20 @@ def test_generate_failure_after_generation_leaves_local_unchanged(tmp_path):
     assert result.returncode == 1
     assert local.read_bytes() == local_text.encode()
     assert list(local.parent.glob("*.bak-*")) == []
+
+
+def test_generate_server_backup_lands_outside_repo_dir(tmp_path):
+    # The server backup must never sit in the git checkout (it made the server tree dirty).
+    result, _local, server = _run_generate(
+        tmp_path, "MY_TOKEN=oldlocal\n", "A=b\nMY_TOKEN=serverval\n", extra_args=("--replace",)
+    )
+    assert result.returncode == 0, result.stderr
+    assert list(server.parent.glob(".env.bak*")) == []
+    backup_dir = tmp_path / "server-backups"
+    assert (backup_dir.stat().st_mode & 0o777) == 0o700
+    backups = list(backup_dir.glob("server.env.bak-*"))
+    assert len(backups) == 1
+    assert (backups[0].stat().st_mode & 0o777) == 0o600
+    assert backups[0].read_text(encoding="utf-8") == "A=b\nMY_TOKEN=serverval\n"
+    assert str(backups[0]) in result.stdout
+    assert "serverval" not in result.stdout + result.stderr
