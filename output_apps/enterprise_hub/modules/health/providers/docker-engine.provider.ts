@@ -9,16 +9,17 @@ import { DockerEngineClient } from './docker-engine.client';
 /**
  * Provider کلاینت Docker Engine.
  *
- * مسیر سوکت از متغیر محیطی DOCKER_SOCKET_PATH خوانده می‌شود؛ در
- * docker-compose.prod.yml سوکت میزبان به‌صورت read-only داخل کانتینر
- * roxira_enterprise_backend mount شده است.
+ * ابتدا DOCKER_HOST (مثلاً tcp://docker-socket-proxy:2375، پراکسی فقط‌خواندنی
+ * در docker-compose.prod.yml) و در غیاب آن DOCKER_SOCKET_PATH خوانده می‌شود.
  */
 export const dockerEngineClientProvider: Provider = {
   provide: DOCKER_ENGINE_CLIENT,
   inject: [ConfigService],
   useFactory: (config: ConfigService): DockerEngineClient => {
+    const dockerHost = config.get<string>('DOCKER_HOST', '').trim();
     return new DockerEngineClient(
-      config.get<string>('DOCKER_SOCKET_PATH', DOCKER_SOCKET_PATH_DEFAULT),
+      dockerHost ||
+        config.get<string>('DOCKER_SOCKET_PATH', DOCKER_SOCKET_PATH_DEFAULT),
     );
   },
 };

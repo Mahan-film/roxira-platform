@@ -70,7 +70,7 @@ database_snapshots/
 *.snapshot
 repomix-output.xml
 
-# generated on the server by scripts/ops/nginx (never commit) — lands before PR #527
+# generated on the server by scripts/ops/nginx (never commit)
 nginx/generated/*
 !nginx/generated/.keep.conf
 nginx/ssl-default/

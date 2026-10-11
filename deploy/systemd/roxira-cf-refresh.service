@@ -1,0 +1,21 @@
+# Refresh Cloudflare ranges: nginx real-IP include + origin firewall allowlist.
+# Install (as root, on the server) -- see docs/infra/CLOUDFLARE_ORIGIN_LOCKDOWN.md:
+#   cp deploy/systemd/roxira-cf-refresh.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now roxira-cf-refresh.timer
+# Only enable AFTER a manual `cloudflare_only.sh --apply` has been verified.
+[Unit]
+Description=Refresh Cloudflare IP ranges (nginx real-IP + origin firewall)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+# Real-IP include first (atomic write, nginx -t before reload). NO '-' prefix: if the
+# refresh fails (download, validation or nginx -t) the unit stops here and the
+# firewall step is skipped, so rules are never rebuilt from a half-validated
+# range set. The previous firewall rules and the committed nginx baseline stay in
+# force; the timer retries on its next run. cloudflare_only.sh additionally
+# validates the ranges itself (CIDR syntax, >=10 IPv4 and >=5 IPv6) before --apply.
+ExecStart=/opt/roxira_platform/scripts/ops/nginx/update_cloudflare_ips.sh --reload
+ExecStart=/opt/roxira_platform/scripts/ops/firewall/cloudflare_only.sh --apply

@@ -12,7 +12,6 @@ services:
     env_file:
       - .env
     volumes:
-      - /usr/bin/docker:/usr/bin/docker:ro
       - ./src:/app/src
       - ./output_apps:/app/output_apps
       - ./run_unified_server.py:/app/run_unified_server.py
@@ -70,7 +69,7 @@ services:
       - roxira_net
 
   postgres_prod:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     container_name: roxira_postgres_prod
     restart: always
     environment:
@@ -101,7 +100,7 @@ services:
   # می‌شوند تا تعداد اتصال واقعی به Postgres کنترل شود.
   # ------------------------------------------------------------------
   pgbouncer_prod:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer:latest@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd
     container_name: roxira_pgbouncer
     restart: always
     environment:
@@ -141,7 +140,7 @@ services:
       - roxira_net
 
   redis_prod:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     container_name: roxira_redis_prod
     restart: always
     ports:
@@ -163,7 +162,7 @@ services:
       - roxira_net
 
   qdrant_prod:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc
     container_name: roxira_qdrant_prod
     restart: always
     ports:
@@ -213,27 +212,39 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-roxira.net}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Roxira International}
       - WEBAUTHN_ORIGINS=${WEBAUTHN_ORIGINS:-https://roxira.net,https://www.roxira.net,http://localhost:3001}
-      # System Health — دسترسی read-only به Docker Engine برای پایش کانتینرها
-      - DOCKER_SOCKET_PATH=/var/run/docker.sock
+      # System Health — فقط از طریق docker-socket-proxy (GET /containers/* ؛ بدون POST).
+      # سوکت خام Docker دیگر داخل این کانتینر mount نمی‌شود (audit finding 5).
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
       # Tech Radar — ریشه پروژه برای اجرای زنده اسکریپت‌های پایتونی و خواندن گزارش‌ها
       - RADAR_PROJECT_ROOT=/opt/roxira_platform
       - PYTHON_BIN=python3
       - PYTHONPATH=/opt/roxira_platform
+      - PYTHONDONTWRITEBYTECODE=1
+      - HOME=/tmp
+    # non-root (nestjs = uid 100 / gid 101 in the image), no capabilities,
+    # read-only root filesystem. Host prerequisite for the radar write paths below:
+    #   chown 100:101 TECH_RADAR_REPORT.md TECH_RADAR_REPORT.json; install -d -o 100 -g 101 data/tech_radar
+    user: "100:101"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
-      # سوکت Docker به‌صورت read-only برای اندپوینت GET /health/system
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      # ریشه پروژه جهت اجرای زنده tech_radar.py و parallel_swarm_runner.py و
-      # دسترسی به TECH_RADAR_REPORT.md/.json (اندپوینت‌های رادار فناوری)
-      - ./:/opt/roxira_platform
-    group_add:
-      # گروه سوکت Docker روی میزبان (getent group docker)
-      - "${DOCKER_GID:-988}"
+      # ریشه پروژه فقط‌خواندنی؛ فقط مسیرهایی که رادار باید بنویسد rw هستند.
+      - ./:/opt/roxira_platform:ro
+      - ./TECH_RADAR_REPORT.md:/opt/roxira_platform/TECH_RADAR_REPORT.md
+      - ./TECH_RADAR_REPORT.json:/opt/roxira_platform/TECH_RADAR_REPORT.json
+      - ./data/tech_radar:/opt/roxira_platform/data/tech_radar
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
       - postgres_prod
       - redis_prod
       - pgbouncer_prod
+      - docker-socket-proxy
     # Healthcheck comes from output_apps/enterprise_hub/Dockerfile (curl /docs);
     # not redefined here so it stays in sync with the image.
     logging:
@@ -243,6 +254,55 @@ services:
         max-file: "3"
     networks:
       - roxira_net
+      - docker_proxy_net
+
+  # ------------------------------------------------------------------
+  # Read-only Docker API proxy for the System Health endpoint. Only
+  # GET /containers/* is allowed; every write verb is blocked (POST=0), so a
+  # compromised backend can no longer start privileged containers.
+  # Reachable only from docker_proxy_net (internal: no host ports, no egress).
+  # ------------------------------------------------------------------
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: roxira_docker_socket_proxy
+    restart: always
+    environment:
+      CONTAINERS: 1
+      POST: 0
+      AUTH: 0
+      BUILD: 0
+      COMMIT: 0
+      CONFIGS: 0
+      DISTRIBUTION: 0
+      EVENTS: 0
+      EXEC: 0
+      IMAGES: 0
+      INFO: 0
+      NETWORKS: 0
+      NODES: 0
+      PING: 0
+      PLUGINS: 0
+      SECRETS: 0
+      SERVICES: 0
+      SESSION: 0
+      SWARM: 0
+      SYSTEM: 0
+      TASKS: 0
+      VERSION: 0
+      VOLUMES: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    networks:
+      - docker_proxy_net
 
   roxira_enterprise_frontend:
     build:
@@ -274,7 +334,7 @@ services:
       - roxira_net
 
   nginx_gateway:
-    image: nginx:alpine
+    image: nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
     container_name: roxira_nginx_prod
     restart: always
     ports:
@@ -282,6 +342,12 @@ services:
       - "443:443"
     volumes:
       - ./output_apps/nginx_config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./output_apps/nginx_config/snippets:/etc/nginx/snippets:ro
+      # Cloudflare real-IP: committed baseline + generated/ (update_cloudflare_ips.sh)
+      - ./nginx/cloudflare_params.conf:/etc/nginx/cloudflare/cloudflare_params.conf:ro
+      - ./nginx/generated:/etc/nginx/cloudflare/generated:ro
+      # self-signed cert for the catch-all default_server (gen_snakeoil_cert.sh)
+      - ./nginx/ssl-default:/etc/nginx/ssl-default:ro
       # vhostهای سندباکسهای خودکار (Software Foundry) — ephemeral_runner.py
       # فایلها را روی هاست در /opt/roxira_platform/nginx/sandboxes میسازد و
       # این مانت آنها را در دسترس nginx -t / nginx -s reload قرار میدهد.
@@ -302,7 +368,9 @@ services:
       # curl (not busybox wget) ships in nginx:alpine. No -f: a 502 from a
       # down upstream still proves nginx itself answers; only a refused/timed
       # out connection should flip this unhealthy.
-      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      # Probes the container-loopback listener (127.0.0.1:8081): the public :80
+      # default_server now answers 444 to anything but real hostnames.
+      test: ["CMD-SHELL", "curl -sf -o /dev/null http://127.0.0.1:8081/nginx-health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -318,6 +386,10 @@ services:
 networks:
   roxira_net:
     driver: bridge
+  # backend <-> docker-socket-proxy only; internal = no published ports, no egress
+  docker_proxy_net:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres_data:

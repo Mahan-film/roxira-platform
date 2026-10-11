@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly Cloudflare range refresh (also re-applies rules after reboot)
+
+[Timer]
+# DOCKER-USER rules are not persistent across reboots: re-apply shortly after boot.
+OnBootSec=3min
+OnCalendar=weekly
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
