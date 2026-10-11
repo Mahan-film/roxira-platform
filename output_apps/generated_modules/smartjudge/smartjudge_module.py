@@ -6027,8 +6027,8 @@ async def _ruling_retrieve_laws(query: str) -> list:
 
 
 async def _ruling_complete(prompt: str) -> str:
-    if not _use_llm_router():
-        raise RuntimeError("llm router disabled")
+    # VIP-only drafting always goes through the router (like /draft-assist); the
+    # LLM_ROUTER_ENABLED flag gates only the legacy chat call sites.
     routed = await _llm_router.complete(
         _RULING_MODEL_TIER,
         [{"role": "user", "content": prompt}],
@@ -6178,8 +6178,8 @@ class IndictmentDraftRequest(_BaseModel):
 
 
 async def _indictment_complete(prompt: str) -> str:
-    if not _use_llm_router():
-        raise RuntimeError("llm router disabled")
+    # VIP-only drafting always goes through the router (like /draft-assist); the
+    # LLM_ROUTER_ENABLED flag gates only the legacy chat call sites.
     routed = await _llm_router.complete(
         _RULING_MODEL_TIER,
         [{"role": "user", "content": prompt}],
