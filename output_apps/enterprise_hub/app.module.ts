@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
+import * as fs from 'fs';
 import * as path from 'path';
 import {
   GLOBAL_GUARD_PROVIDERS,
@@ -19,13 +20,27 @@ import { CurrencyModule } from './modules/currency/currency.module';
 import { HealthModule } from './modules/health/health.module';
 import { RadarModule } from './modules/radar/radar.module';
 
+const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
+  (file) => {
+    try {
+      fs.accessSync(file, fs.constants.R_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+);
+
 @Module({
   providers: GLOBAL_GUARD_PROVIDERS,
   imports: [
     globalThrottlerModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')],
+      // In production the container runs non-root and gets its env from compose `env_file`;
+      // the host .env is root-only (600), so only load files that are actually readable.
+      envFilePath: ENV_FILES,
+      ignoreEnvFile: ENV_FILES.length === 0,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
