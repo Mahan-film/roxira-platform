@@ -11,7 +11,7 @@
 # and the script exits non-zero so a human can decide.
 set -euo pipefail
 
-ROOT="${PREP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+ROOT="${PREP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)}"
 OWNER="${BACKEND_OWNER:-100:101}"
 APPLY=0
 case "${1:-}" in

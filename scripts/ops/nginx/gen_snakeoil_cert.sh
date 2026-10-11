@@ -7,7 +7,7 @@
 #   nginx/ssl-default/snakeoil.crt  nginx/ssl-default/snakeoil.key
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)"
 OUT="${SNAKEOIL_DIR:-$ROOT/nginx/ssl-default}"
 FORCE=0
 [[ "${1:-}" == "--force" ]] && FORCE=1

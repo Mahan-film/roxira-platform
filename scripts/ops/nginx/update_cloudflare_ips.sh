@@ -14,7 +14,7 @@
 # fails the previous include is restored (or removed) and nginx is NOT reloaded.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)"
 OUT_DIR="${CF_REALIP_DIR:-$ROOT/nginx/generated}"
 OUT="$OUT_DIR/cloudflare_real_ip.conf"
 NGINX_CONTAINER="${NGINX_CONTAINER:-roxira_nginx_prod}"
