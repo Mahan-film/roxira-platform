@@ -1,0 +1,17 @@
+[Unit]
+Description=Roxira Smart Judge self-improvement: daily golden eval, question mining and improvement report (read-only, proposals only)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/roxira/monitor.env
+EnvironmentFile=-/etc/roxira/selfimprove.env
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/selfimprove/daily.py
+# Exit 1 just means "a check is failing"; the alert is the e-mail, not the unit state.
+SuccessExitStatus=0 1
+StateDirectory=roxira-selfimprove
+User=root
+Nice=15
+TimeoutStartSec=1500

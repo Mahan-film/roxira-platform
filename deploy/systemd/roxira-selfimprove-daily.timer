@@ -1,0 +1,9 @@
+[Unit]
+Description=Run roxira-selfimprove-daily.service at 04:00 Tehran time
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 Asia/Tehran
+Persistent=true
+
+[Install]
+WantedBy=timers.target

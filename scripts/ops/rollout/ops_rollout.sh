@@ -10,6 +10,7 @@
 #                    pass the age PUBLIC key (age1...) as an argument
 #   install-backup   install backup systemd units, enable timers, run one backup, show the status file
 #   install-monitor  install roxira-monitor-* units, enable timers, synthetic_check --once (dry, then real)
+#   install-selfimprove  install roxira-selfimprove-* units + timers, run one hourly check (dry)
 #   test-mail        send one test email via scripts/ops/backup/notify_email.py
 #   prep-nginx       snakeoil cert + nginx/generated + backend mounts (needs the files from PR #527)
 #   status           timers, last backup status, disk, last monitor result
@@ -33,9 +34,9 @@ act() { if [ "$APPLY" = 1 ]; then "$@"; else printf '[dry-run] %s\n' "$*"; fi; }
 for a in "$@"; do
   case "$a" in
     --apply) APPLY=1 ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     age1*) AGE_ARG="$a" ;;
-    install-tools|setup-notify|install-backup|install-monitor|test-mail|prep-nginx|status) SUB="$a" ;;
+    install-tools|setup-notify|install-backup|install-monitor|install-selfimprove|test-mail|prep-nginx|status) SUB="$a" ;;
     *) die "unknown argument: $a (see --help)" ;;
   esac
 done
@@ -165,6 +166,27 @@ sub_install_monitor() {
   fi
 }
 
+sub_install_selfimprove() {
+  local units=() f
+  for f in "$ROOT"/deploy/systemd/roxira-selfimprove-*; do [ -e "$f" ] && units+=("$(basename "$f")"); done
+  if [ "${#units[@]}" -eq 0 ] || [ ! -f "$ROOT/scripts/ops/selfimprove/hourly.py" ]; then
+    say "skip: self-improvement files are not in this checkout; git pull first"; return 0
+  fi
+  [ -r "$ETC/monitor.env" ] || [ "$APPLY" = 0 ] || die "$ETC/monitor.env missing: run setup-notify first"
+  act install -d -m 755 /var/lib/roxira-selfimprove
+  if [ ! -f "$ETC/selfimprove.env" ]; then
+    act install -m 600 "$ROOT/deploy/selfimprove/selfimprove.env.example" "$ETC/selfimprove.env"
+    say "  created $ETC/selfimprove.env from the example: set OPENROUTER_API_KEY there to enable LLM topic hints"
+  fi
+  enable_units "${units[@]}"
+  if [ "$APPLY" = 1 ]; then
+    ( set -a; . "$ETC/monitor.env"; [ -r "$ETC/selfimprove.env" ] && . "$ETC/selfimprove.env"; set +a
+      python3 "$ROOT/scripts/ops/selfimprove/hourly.py" --dry-run || true )
+  else
+    say "[dry-run] would run hourly.py --dry-run once"
+  fi
+}
+
 sub_test_mail() {
   local body rc=0
   body="$(mktemp "${TMPDIR:-/tmp}/rollout.XXXXXX")"
@@ -220,6 +242,7 @@ case "$SUB" in
   setup-notify) sub_setup_notify ;;
   install-backup) sub_install_backup ;;
   install-monitor) sub_install_monitor ;;
+  install-selfimprove) sub_install_selfimprove ;;
   test-mail) sub_test_mail ;;
   prep-nginx) sub_prep_nginx ;;
   status) sub_status ;;
