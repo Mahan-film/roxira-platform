@@ -42,6 +42,7 @@ const DOMAIN_ROUTES: Record<SeoDomain, SitemapRoute[]> = {
     { path: "/", changeFrequency: "daily", priority: 1.0 },
     { path: "/chat", changeFrequency: "daily", priority: 0.9 },
     { path: "/services", changeFrequency: "weekly", priority: 0.8 },
+    { path: "/guide", changeFrequency: "monthly", priority: 0.7 },
     { path: "/about", changeFrequency: "monthly", priority: 0.7 },
     { path: "/technology", changeFrequency: "monthly", priority: 0.7 },
     { path: "/coverage", changeFrequency: "weekly", priority: 0.6 },

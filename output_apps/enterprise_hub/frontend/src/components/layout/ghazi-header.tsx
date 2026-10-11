@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CircleHelp,
   Coins,
   LogOut,
   Menu,
@@ -36,6 +37,7 @@ const DRAFT_LINKS: NavDest[] = [
 ];
 
 const INFO_LINKS: NavDest[] = [
+  { href: "/guide", label: "راهنمای استفاده" },
   { href: "/about", label: "درباره سامانه" },
   { href: "/contact", label: "تماس با ما" },
   { href: "/terms", label: "قوانین و مقررات" },
@@ -180,6 +182,9 @@ export function GhaziHeader() {
           </nav>
 
           <div className="ap-header-end">
+            <Link href="/guide" className="ap-iconbtn" aria-label="راهنمای استفاده" title="راهنمای استفاده">
+              <CircleHelp className="size-5" aria-hidden="true" />
+            </Link>
             {!isAuthenticated && (
               <button type="button" className="ap-btn" onClick={handleOpenAuth}>
                 <span>ورود</span>

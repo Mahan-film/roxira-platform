@@ -23,6 +23,7 @@ import {
   findDraftAction,
   type DraftActionKey,
 } from "@/lib/chat-actions";
+import { ChatTipCard, MicHint, useMicHint } from "./chat-onboarding";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 import { ChatHttpError, streamChat } from "@/lib/api/chat-stream";
 import { LegalStreamingText } from "./legal-streaming-text";
@@ -102,6 +103,7 @@ export function ChatShell() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [weakConnection, setWeakConnection] = useState(false);
   const [guestNotice, setGuestNotice] = useState(false);
+  const micHint = useMicHint();
   const recoveredRef = useRef(false);
   const { getAccessToken, isAuthenticated, openLogin, logout } = useAuth();
   const recordingTimerRef = useRef<number | null>(null);
@@ -148,6 +150,7 @@ export function ChatShell() {
   // تبدیل گفتار به متن (STT): ضبط مستقیم صدا و ارسال آن به موتور سرور.
   // هیچ وابستگی‌ای به Web Speech API مرورگر وجود ندارد (سازگار با Safari فارسی).
   const toggleVoiceRecording = async () => {
+    micHint.markUsed();
     if (isVoiceRecording) {
       // توقف ضبط صوت و ارسال فایل به سرور
       if (recordingTimerRef.current) {
@@ -447,6 +450,8 @@ export function ChatShell() {
     <div className="flex flex-col h-full w-full max-w-[var(--ap-content-max)] mx-auto overflow-hidden">
       {/* ناحیه اسکرول پیام‌ها */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 space-y-4">
+        <ChatTipCard />
+
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`ap-bubble ${msg.role === "user" ? "ap-bubble-user" : "ap-bubble-ai"}`}>
@@ -538,6 +543,12 @@ export function ChatShell() {
         {showExamples && (
           <section className="space-y-5 pt-2" aria-label="پرسش‌های نمونه">
             <p className="ap-notice">{COMPETENCE_NOTE}</p>
+            <p className="ap-notice">
+              پرسش خوب شامل واقعیت‌ها، تاریخ، شهر، نوع مرجع و خواسته شماست —{" "}
+              <Link href="/guide#good-question" className="ap-link underline">
+                نمونه‌ها در راهنما
+              </Link>
+            </p>
             {STARTER_GROUPS.map((group) => (
               <div key={group.title}>
                 <h2 className="ap-group-title">{group.title}</h2>
@@ -610,6 +621,8 @@ export function ChatShell() {
             <span style={{ color: "var(--ap-text)" }}>{recordingStatus}</span>
           </div>
         )}
+
+        {micHint.show && !isVoiceRecording && <MicHint onDismiss={micHint.markUsed} />}
 
         {/* جعبه ارسال پیام و دکمه‌های صوتی */}
         <div className="ap-composer">

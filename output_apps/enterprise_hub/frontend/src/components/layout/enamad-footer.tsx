@@ -58,6 +58,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
               <span className="text-foreground font-bold block text-xs">خدمات و ماژول‌ها</span>
               <ul className="space-y-1.5 text-[11px] text-muted-foreground">
                 <li><Link href="/chat" className="hover:text-amber-400 transition-colors">گفتگوی دادرسی و تحلیل ادله</Link></li>
+                <li><Link href="/guide" className="hover:text-amber-400 transition-colors">راهنمای استفاده</Link></li>
                 <li><Link href="/draft-ruling" className="hover:text-amber-400 transition-colors">پیش‌نویس غیررسمی رأی (VIP)</Link></li>
                 <li><Link href="/draft-indictment" className="hover:text-amber-400 transition-colors">پیش‌نویس غیررسمی کیفرخواست (VIP)</Link></li>
                 <li><Link href="/services" className="hover:text-amber-400 transition-colors">طرح‌های اشتراک و مقایسه VIP</Link></li>
@@ -92,6 +93,8 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-muted-foreground">
             <span>© کلیه حقوق مادی و معنوی متعلق به سامانه هوشمند «قاضی هوشمند» است.</span>
             <div className="flex items-center gap-3">
+              <Link href="/guide" className="hover:underline">راهنمای استفاده</Link>
+              <span>•</span>
               <Link href="/terms" className="hover:underline">شرایط استفاده</Link>
               <span>•</span>
               <Link href="/privacy" className="hover:underline">حفظ محرمانگی پرونده‌ها</Link>
