@@ -1,0 +1,128 @@
+{
+ "_meta": {
+  "purpose": "Golden cases for the laws added by the 2026-10-11 corpus audit (2 or more per law). Run with: python3 scripts/eval_chat_golden.py --retrieval-only --retrieval-set data/eval/chat_golden/retrieval_golden_new_laws.json",
+  "status": "DRAFT, article numbers TO-VERIFY by a lawyer. Expected to FAIL on iran_laws_v2 (laws absent) and pass on iran_laws_v3 if ingest succeeded; lease1376 cases test the 1403-amended text. Constitution/cyber numbering follows the source pages (cyber law articles 729-783 as in Book 5).",
+  "matching": "same as retrieval_golden.json"
+ },
+ "cases": [
+  {
+   "id": "const-home-job",
+   "question": "آیا مسکن و شغل افراد از تعرض مصون است؟",
+   "law_any": [
+    "قانون اساسی"
+   ],
+   "articles": [
+    22
+   ]
+  },
+  {
+   "id": "const-president-term",
+   "question": "مدت ریاست جمهوری چند سال است و چند دوره متوالی می‌شود؟",
+   "law_any": [
+    "قانون اساسی"
+   ],
+   "articles": [
+    114
+   ]
+  },
+  {
+   "id": "const-judge-fatwa",
+   "question": "اگر قانونی برای موضوع دعوا نباشد قاضی چه باید بکند؟",
+   "law_any": [
+    "قانون اساسی"
+   ],
+   "articles": [
+    167
+   ]
+  },
+  {
+   "id": "fraud-penalty",
+   "question": "مجازات کلاهبرداری چیست؟",
+   "law_any": [
+    "کلاهبرداری",
+    "ارتشا"
+   ],
+   "articles": [
+    1
+   ]
+  },
+  {
+   "id": "bribery-penalty",
+   "question": "مجازات رشوه‌گیرنده و رشوه‌دهنده چیست؟",
+   "law_any": [
+    "ارتشاء",
+    "ارتشا"
+   ],
+   "articles": [
+    3
+   ]
+  },
+  {
+   "id": "cyber-unauthorized-access",
+   "question": "مجازات دسترسی غیرمجاز به سامانه رایانه‌ای چیست؟",
+   "law_any": [
+    "جرایم رایانه"
+   ],
+   "articles": [
+    729
+   ]
+  },
+  {
+   "id": "cyber-computer-fraud",
+   "question": "کلاهبرداری رایانه‌ای چه مجازاتی دارد؟",
+   "law_any": [
+    "جرایم رایانه"
+   ],
+   "articles": [
+    741
+   ]
+  },
+  {
+   "id": "lease1356-eviction",
+   "question": "موجر در چه مواردی می‌تواند درخواست فسخ یا تخلیه ملک کند؟",
+   "law_any": [
+    "روابط موجر و مستاجر",
+    "روابط موجر و مستأجر"
+   ],
+   "articles": [
+    14,
+    15
+   ]
+  },
+  {
+   "id": "lease1356-goodwill",
+   "question": "حق کسب و پیشه مستأجر محل تجاری چگونه تعیین می‌شود؟",
+   "law_any": [
+    "روابط موجر و مستاجر",
+    "روابط موجر و مستأجر"
+   ],
+   "articles": [
+    18,
+    19,
+    28
+   ]
+  },
+  {
+   "id": "lease1376-registration",
+   "question": "ثبت قرارداد اجاره در سامانه و قرض‌الحسنه چگونه است؟",
+   "law_any": [
+    "روابط موجر و مستاجر",
+    "روابط موجر و مستأجر"
+   ],
+   "articles": [
+    2
+   ]
+  },
+  {
+   "id": "lease1376-eviction-after-term",
+   "question": "بعد از پایان مدت اجاره تخلیه چگونه انجام می‌شود؟",
+   "law_any": [
+    "روابط موجر و مستاجر",
+    "روابط موجر و مستأجر"
+   ],
+   "articles": [
+    3
+   ]
+  }
+ ]
+}

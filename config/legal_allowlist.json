@@ -1,5 +1,5 @@
 {
-  "_comment": "Allowlist of laws the local ingest pipeline (scripts/legal/ingest_pipeline.py) may write. Source: docs/research/LEGAL_CORPUS_GAP_AUDIT_2026-10.md sections 2-4 (present + staged checklist). Names are compared after normalisation (ZWNJ, Arabic letters/digits, hamza). Adding a law needs lawyer/owner review. All entries are enacted laws; a bill is never allowed when an enacted law exists.",
+  "_comment": "Allowlist of laws the local ingest pipeline (scripts/legal/ingest_pipeline.py) may write. Source: docs/research/LEGAL_CORPUS_GAP_AUDIT_2026-10.md sections 2-4 (present + staged checklist). Names are compared after normalisation (ZWNJ, Arabic letters/digits, hamza). Adding a law needs lawyer/owner review. Status proposed = added 2026-10-11 by the corpus audit, pending that review. All entries are enacted laws; a bill is never allowed when an enacted law exists.",
   "schema_version": 1,
   "laws": [
     {"name": "قانون مدنی", "status": "present", "enacted": true},
@@ -26,6 +26,14 @@
     {"name": "قانون اصلاح قانون صدور چک (۱۳۹۷)", "status": "staged", "enacted": true},
     {"name": "قانون روابط موجر و مستأجر ۱۳۶۲", "status": "staged", "enacted": true},
     {"name": "قانون روابط موجر و مستاجر ۱۳۷۶", "status": "staged", "enacted": true},
-    {"name": "قانون اصلاح قانون صدور چک (۱۴۰۰)", "status": "staged", "enacted": true}
+    {"name": "قانون اصلاح قانون صدور چک (۱۴۰۰)", "status": "staged", "enacted": true},
+{"name": "قانون اساسی جمهوری اسلامی ایران", "status": "proposed", "enacted": true},
+    {"name": "قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری", "status": "proposed", "enacted": true},
+    {"name": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)", "status": "proposed", "enacted": true},
+    {"name": "قانون جرایم رایانه‌ای", "status": "proposed", "enacted": true},
+    {"name": "قانون روابط موجر و مستاجر ۱۳۵۶", "status": "proposed", "enacted": true},
+    {"name": "قانون مبارزه با قاچاق کالا و ارز", "status": "proposed", "enacted": true},
+    {"name": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه", "status": "proposed", "enacted": true},
+    {"name": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری", "status": "proposed", "enacted": true}
   ]
 }

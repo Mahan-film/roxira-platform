@@ -64,6 +64,13 @@ NAMESPACE = uuid.UUID("b3a1f0d2-5c7e-4a8b-9d61-0e4f2a7c9b15")
 ARTICLE_NO_RE = re.compile(r"^\d+(-[a-z]+)?$")
 REPEALED_STATUSES = frozenset({"REPEALED", "INVALID", "ABROGATED", "CANCELLED", "CANCELED"})
 BILL_STATUSES = frozenset({"BILL", "DRAFT"})
+# Allowlist entries with this status are unreviewed; excluded unless explicitly allowed.
+PROPOSED_STATUS = "proposed"
+ALLOW_PROPOSED_ENV = "LEGAL_ALLOW_PROPOSED"
+ALLOW_PROPOSED_HELP = (
+    "include allowlist entries with status 'proposed' (pending lawyer review); asserts the owner "
+    "accepts their unofficial/secondary sources. Same as env LEGAL_ALLOW_PROPOSED=1"
+)
 
 HttpFn = Callable[[str, str, dict | None], tuple[int, dict]]
 EmbedFn = Callable[[list[str]], list[list[float]]]
@@ -139,11 +146,18 @@ def load_rows(path: Path) -> tuple[list[dict], int]:
     return rows, bad
 
 
-def load_allowlist(path: Path = DEFAULT_ALLOWLIST) -> dict[str, bool]:
-    """Map normalised law name -> enacted flag."""
+def load_allowlist(path: Path = DEFAULT_ALLOWLIST, allow_proposed: bool | None = None) -> dict[str, bool]:
+    """Map normalised law name -> enacted flag.
+
+    Entries with ``"status": "proposed"`` (pending lawyer review) are excluded unless
+    ``allow_proposed`` is True or env ``LEGAL_ALLOW_PROPOSED=1``.
+    """
+    include_proposed = bool(allow_proposed) or os.environ.get(ALLOW_PROPOSED_ENV) == "1"
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     return {
-        norm_name(item["name"]): bool(item.get("enacted", True)) for item in data.get("laws", [])
+        norm_name(item["name"]): bool(item.get("enacted", True))
+        for item in data.get("laws", [])
+        if include_proposed or str(item.get("status", "")).lower() != PROPOSED_STATUS
     }
 
 
@@ -423,6 +437,7 @@ def main(
         p = sub.add_parser(name)
         p.add_argument("jsonl", type=Path)
         p.add_argument("--allowlist", type=Path, default=DEFAULT_ALLOWLIST)
+        p.add_argument("--allow-proposed", action="store_true", help=ALLOW_PROPOSED_HELP)
         if name in ("plan", "apply"):
             p.add_argument("--batch", type=int, default=64, help="rows per batch")
         if name == "apply":
@@ -449,7 +464,7 @@ def main(
                 return 1
             return 0
         rows, bad = load_rows(args.jsonl)
-        allowlist = load_allowlist(args.allowlist)
+        allowlist = load_allowlist(args.allowlist, allow_proposed=args.allow_proposed)
         if args.cmd == "validate":
             report = validate_rows(rows, allowlist)
             report["unparsable_lines"] = bad

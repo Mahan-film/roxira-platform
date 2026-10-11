@@ -241,3 +241,75 @@ def test_eval_runs_via_injected_runner(monkeypatch):
     assert out == {"collection": "local_test"}
     with pytest.raises(ip.Refusal, match="not found"):
         ip.run_eval("missing", "http://127.0.0.1:6333", http=http, runner=lambda c: {})
+
+
+PROPOSED_NAME = "قانون جرایم رایانه‌ای"
+
+
+@pytest.fixture
+def allow_file(tmp_path):
+    f = tmp_path / "allow.json"
+    f.write_text(
+        json.dumps(
+            {
+                "laws": [
+                    {"name": "قانون کار", "status": "present", "enacted": True},
+                    {"name": PROPOSED_NAME, "status": "proposed", "enacted": True},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return f
+
+
+@pytest.fixture
+def no_proposed_env(monkeypatch):
+    monkeypatch.delenv("LEGAL_ALLOW_PROPOSED", raising=False)
+
+
+def test_proposed_excluded_from_allowlist_by_default(allow_file, no_proposed_env):
+    allow = ip.load_allowlist(allow_file)
+    assert ip.norm_name("قانون کار") in allow
+    assert ip.norm_name(PROPOSED_NAME) not in allow
+
+
+def test_proposed_included_with_flag_or_env(allow_file, monkeypatch):
+    monkeypatch.delenv("LEGAL_ALLOW_PROPOSED", raising=False)
+    assert ip.norm_name(PROPOSED_NAME) in ip.load_allowlist(allow_file, allow_proposed=True)
+    monkeypatch.setenv("LEGAL_ALLOW_PROPOSED", "1")
+    assert ip.norm_name(PROPOSED_NAME) in ip.load_allowlist(allow_file)
+    assert ip.norm_name(PROPOSED_NAME) in ip.load_allowlist(allow_file, allow_proposed=None)
+    monkeypatch.setenv("LEGAL_ALLOW_PROPOSED", "0")
+    assert ip.norm_name(PROPOSED_NAME) not in ip.load_allowlist(allow_file)
+
+
+def test_proposed_rows_blocked_by_gate_unless_allowed(allow_file, no_proposed_env):
+    rows = [row("1", law=PROPOSED_NAME)]
+    blocked = ip.validate_rows(rows, ip.load_allowlist(allow_file))
+    assert blocked["gate_counts"]["not_in_allowlist"] == 1 and not blocked["ok"]
+    ok = ip.validate_rows(rows, ip.load_allowlist(allow_file, allow_proposed=True))
+    assert ok["ok"]
+
+
+def test_cli_allow_proposed_flag(tmp_path, allow_file, no_proposed_env, capsys):
+    f = tmp_path / "rows.jsonl"
+    f.write_text(json.dumps(row("1", law=PROPOSED_NAME), ensure_ascii=False), encoding="utf-8")
+    assert ip.main(["validate", str(f), "--allowlist", str(allow_file)]) == 3
+    assert json.loads(capsys.readouterr().out)["gate_counts"]["not_in_allowlist"] == 1
+    assert ip.main(["validate", str(f), "--allowlist", str(allow_file), "--allow-proposed"]) == 0
+    assert ip.main(["plan", str(f), "--batch", "1", "--allowlist", str(allow_file)]) == 0
+    assert ip.main(["plan", str(f), "--batch", "1", "--allowlist", str(allow_file), "--allow-proposed"]) == 0
+
+
+def test_shipped_allowlist_proposed_entries_gated(no_proposed_env):
+    default = ip.load_allowlist()
+    full = ip.load_allowlist(allow_proposed=True)
+    proposed = [
+        ip.norm_name(i["name"])
+        for i in json.loads(ip.DEFAULT_ALLOWLIST.read_text(encoding="utf-8"))["laws"]
+        if i.get("status") == "proposed"
+    ]
+    assert proposed, "expected proposed entries in config/legal_allowlist.json"
+    assert not any(name in default for name in proposed)
+    assert all(name in full for name in proposed)

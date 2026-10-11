@@ -1,0 +1,256 @@
+{
+  "_comment": "Targets for the 2026-10-11 corpus gap fill (docs/legal/CORPUS_AUDIT_2026-10-11.md). Same schema and allow-list as config/ekhtebar_laws.json; use with fetch_laws.py --config. Which exact instrument is meant is a lawyer decision. Output is source_tier unofficial/UNVERIFIED unless a primary source (rc.majlis.ir) is used via scripts/legal/fetch_rc_majlis.py.",
+  "schema_version": 1,
+  "allowed_domains": [
+    "ekhtebar.ir",
+    "qavanin.ir",
+    "rc.majlis.ir",
+    "fa.wikisource.org"
+  ],
+  "laws": [
+    {
+      "id": "constitution",
+      "title_fa": "قانون اساسی جمهوری اسلامی ایران",
+      "query_fa": "قانون اساسی جمهوری اسلامی ایران",
+      "topic": "constitutional",
+      "priority": 1,
+      "sources": {
+        "wikisource": {
+          "title": "قانون اساسی جمهوری اسلامی ایران (مصوب ۱۳۶۸)"
+        },
+        "order": [
+          "wikisource"
+        ]
+      },
+      "stage": {
+        "law_name": "قانون اساسی جمهوری اسلامی ایران",
+        "law_type": "CONSTITUTIONAL",
+        "category": "CONSTITUTIONAL",
+        "marker": "asl",
+        "approval_date": "1368-05-06",
+        "source_tier": "secondary",
+        "source_label": "fa.wikisource.org (text of the Guardian Council site, 1368 revision)",
+        "article_range": [
+          1,
+          177
+        ],
+        "scope_tags": [
+          "constitution"
+        ]
+      }
+    },
+    {
+      "id": "bribery_fraud_1367",
+      "title_fa": "قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری",
+      "query_fa": "قانون تشدید مجازات مرتکبین ارتشاء اختلاس و کلاهبرداری",
+      "topic": "criminal",
+      "priority": 1,
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%aa%d8%b4%d8%af%db%8c%d8%af-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d9%85%d8%b1%d8%aa%da%a9%d8%a8%db%8c%d9%86-%d8%a7%d8%b1%d8%aa%d8%b4%d8%a7%d8%a1%d8%8c-%d8%a7%d8%ae/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      },
+      "stage": {
+        "law_name": "قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری",
+        "law_type": "CRIMINAL",
+        "category": "CRIMINAL",
+        "approval_date": "1367-09-15",
+        "source_label": "ekhtebar.ir",
+        "scope_tags": [
+          "criminal",
+          "fraud",
+          "bribery"
+        ]
+      }
+    },
+    {
+      "id": "taazirat_1375",
+      "title_fa": "قانون مجازات اسلامی (کتاب پنجم تعزیرات)",
+      "query_fa": "قانون مجازات اسلامی کتاب پنجم تعزیرات",
+      "topic": "criminal",
+      "priority": 1,
+      "stage": {
+        "law_name": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+        "law_type": "CRIMINAL",
+        "category": "CRIMINAL",
+        "approval_date": "1375-03-02",
+        "source_label": "ekhtebar.ir (per-article pages)",
+        "article_range": [
+          498,
+          728
+        ],
+        "scope_tags": [
+          "criminal",
+          "ta'zirat"
+        ]
+      }
+    },
+    {
+      "id": "cybercrime",
+      "title_fa": "قانون جرایم رایانه‌ای",
+      "query_fa": "قانون جرایم رایانه‌ای",
+      "topic": "criminal-cyber",
+      "priority": 1,
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%ac%d8%b1%d8%a7%db%8c%d9%85-%d8%b1%d8%a7%db%8c%d8%a7%d9%86%d9%87-%d8%a7%db%8c-%d9%88-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d9%85%d8%b5%d8%a7%d8%af%db%8c%d9%82-%d9%85%d8%ad/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      },
+      "stage": {
+        "law_name": "قانون جرایم رایانه‌ای",
+        "law_type": "CRIMINAL",
+        "category": "CRIMINAL",
+        "approval_date": "1388-03-05",
+        "source_label": "ekhtebar.ir",
+        "repealed_numbers": [
+          756,
+          757,
+          758,
+          759,
+          760,
+          761,
+          762,
+          763,
+          764,
+          765,
+          766,
+          767,
+          768,
+          769,
+          770,
+          771,
+          772,
+          773,
+          774,
+          775,
+          776,
+          777,
+          778,
+          779
+        ],
+        "article_range": [
+          729,
+          783
+        ],
+        "scope_tags": [
+          "criminal",
+          "cyber"
+        ]
+      }
+    },
+    {
+      "id": "smuggling_goods_currency",
+      "title_fa": "قانون مبارزه با قاچاق کالا و ارز",
+      "query_fa": "قانون مبارزه با قاچاق کالا و ارز",
+      "topic": "criminal-economic",
+      "priority": 2
+    },
+    {
+      "id": "third_party_insurance_1395",
+      "title_fa": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه",
+      "query_fa": "قانون بیمه اجباری شخص ثالث ۱۳۹۵",
+      "topic": "insurance",
+      "priority": 2
+    },
+    {
+      "id": "admin_justice_court",
+      "title_fa": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری",
+      "query_fa": "قانون دیوان عدالت اداری",
+      "topic": "administrative",
+      "priority": 2
+    },
+    {
+      "id": "landlord_tenant_1356",
+      "title_fa": "قانون روابط موجر و مستأجر ۱۳۵۶",
+      "query_fa": "قانون روابط موجر و مستأجر ۱۳۵۶",
+      "topic": "civil",
+      "priority": 2,
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%d9%82%d9%88%d8%a7%d9%86%db%8c%d9%86-%d9%88-%d9%85%d9%82%d8%b1%d8%b1%d8%a7%d8%aa-%d8%b1%d9%88%d8%a7%d8%a8%d8%b7-%d9%85%d9%88%d8%ac%d8%b1-%d9%88-%d9%85%d8%b3%d8%aa%d8%a7%d8%ac%d8%b1/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      },
+      "stage": {
+        "law_name": "قانون روابط موجر و مستاجر ۱۳۵۶",
+        "law_type": "CIVIL",
+        "category": "CIVIL",
+        "source_label": "ekhtebar.ir",
+        "scope_tags": [
+          "lease"
+        ]
+      }
+    },
+    {
+      "id": "landlord_tenant_1376",
+      "title_fa": "قانون روابط موجر و مستأجر ۱۳۷۶",
+      "query_fa": "قانون روابط موجر و مستأجر ۱۳۷۶",
+      "topic": "civil",
+      "priority": 3,
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/28246-2/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      },
+      "stage": {
+        "law_name": "قانون روابط موجر و مستاجر ۱۳۷۶",
+        "law_type": "CIVIL",
+        "category": "CIVIL",
+        "approval_date": "1376-06-05",
+        "source_label": "ekhtebar.ir",
+        "scope_tags": [
+          "lease"
+        ]
+      }
+    },
+    {
+      "id": "cheque_amend_1397",
+      "title_fa": "قانون اصلاح قانون صدور چک (۱۳۹۷)",
+      "query_fa": "قانون اصلاح قانون صدور چک ۱۳۹۷",
+      "topic": "commerce-cheque",
+      "priority": 1,
+      "audit_only": true,
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%a7%d8%b5%d9%84%d8%a7%d8%ad-%d9%82%d8%a7%d9%86%d9%88%d9%86-%da%86%da%a9-%d9%85%d8%b5%d9%88%d8%a8-13-%d8%a2%d8%a8%d8%a7%d9%86-1397/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      }
+    },
+    {
+      "id": "cheque_amend_1400",
+      "title_fa": "قانون اصلاح قانون صدور چک (۱۴۰۰)",
+      "query_fa": "قانون اصلاح قانون صدور چک ۱۴۰۰",
+      "topic": "commerce-cheque",
+      "priority": 1,
+      "audit_only": true,
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%a7%d8%b5%d9%84%d8%a7%d8%ad-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%b5%d8%af%d9%88%d8%b1-%da%86%da%a9/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      }
+    }
+  ]
+}

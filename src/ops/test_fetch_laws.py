@@ -485,3 +485,38 @@ def test_out_inside_repo_refused(capsys):
     rc = fl.main(["--out", str(ROOT / "data" / "x"), "--dry-run"], transport=FakeNet())
     assert rc == 2
     assert "outside the repository" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------- pinned page hints (2026-10-11 corpus audit)
+def test_pinned_ekhtebar_url_skips_search_and_prefer_html_skips_pdf(tmp_path):
+    page = (
+        "<html><body><article><div class='entry-content'>"
+        + body_text(3)
+        + "<a href='/wp-content/uploads/law.pdf'>pdf</a></div></article></body></html>"
+    )
+    net = FakeNet({"www.ekhtebar.ir": lambda pq: (200, page)})
+    pinned = dict(
+        law(),
+        sources={
+            "ekhtebar": {"url": "https://www.ekhtebar.ir/the-law/", "prefer": "html"},
+            "order": ["ekhtebar"],
+        },
+    )
+    run([pinned], tmp_path, make_ctx(net))
+    e = entry(tmp_path)
+    assert e["status"] == "done" and e["kind"] == "text" and e["source"] == "ekhtebar"
+    assert not any("?s=" in u for u in net.hits("www.ekhtebar.ir"))  # no site search
+    assert not any(u.endswith(".pdf") for u in net.calls)  # PDF link ignored
+
+
+def test_pinned_wikisource_title_uses_html_page_not_api(tmp_path):
+    page = f"<html><body><div class='mw-parser-output'>{body_text(3)}</div></body></html>"
+    net = FakeNet({"fa.wikisource.org": lambda pq: (200, page)})
+    pinned = dict(
+        law(), sources={"wikisource": {"title": "قانون آزمایشی"}, "order": ["wikisource"]}
+    )
+    run([pinned], tmp_path, make_ctx(net))
+    e = entry(tmp_path)
+    assert e["status"] == "done" and e["source"] == "wikisource"
+    assert all("/w/api.php" not in u for u in net.calls)  # robots disallow the API for us
+    assert any("/wiki/" in u for u in net.hits("fa.wikisource.org"))

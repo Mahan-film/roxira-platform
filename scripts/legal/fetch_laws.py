@@ -364,6 +364,9 @@ class EkhtebarSource(Source):
 
     def locate(self, law, ctx):
         h = ctx.hints(law, "ekhtebar")
+        pinned = h.get("url")
+        if pinned:  # owner/auditor-verified page: skip the (weakly ranked) site search
+            return [{"url": pinned, "title": law["title_fa"], "score": 1.0, "reasons": []}]
         url = f"{fe.BASE_URL}/?s={quote(h.get('query') or law['query_fa'])}"
         _, _, body, final = ctx.get(url)
         cands = fe.search_candidates(body.decode("utf-8", "replace"), final, law["title_fa"])
@@ -375,7 +378,8 @@ class EkhtebarSource(Source):
     def download(self, cand, law, ctx):
         _, _, body, final = ctx.get(cand["url"])
         html = body.decode("utf-8", "replace")
-        for pdf_url in fe.find_pdf_links(html, final):
+        pdf_links = [] if ctx.hints(law, "ekhtebar").get("prefer") == "html" else fe.find_pdf_links(html, final)
+        for pdf_url in pdf_links:
             try:
                 _, _, pbody, pfinal = ctx.get(pdf_url)
             except StepFailure:
@@ -414,6 +418,10 @@ class WikisourceSource(Source):
     def locate(self, law, ctx):
         h = ctx.hints(law, "wikisource")
         q = h.get("query") or law["query_fa"]
+        pinned = h.get("title")
+        if pinned:  # verified page title: skip search. Plain /wiki/ HTML (robots allow it; /w/api.php is disallowed)
+            page = f"{WIKISOURCE}/wiki/{quote(pinned.replace(' ', '_'))}"
+            return [{"url": page, "page_url": page, "title": pinned, "score": 1.0, "reasons": [], "html_page": True}]
         url = (
             f"{WIKISOURCE}/w/api.php?action=query&list=search&format=json&srlimit=8"
             f"&srnamespace=0&srsearch={quote(q)}"
@@ -443,6 +451,12 @@ class WikisourceSource(Source):
         return [mark_low(c, ctx.threshold) for c in cands[:5]]
 
     def download(self, cand, law, ctx):
+        if cand.get("html_page"):
+            _, _, body, final = ctx.get(cand["url"])
+            text = fe.extract_text(body.decode("utf-8", "replace"))
+            if len(text) < MIN_TEXT_CHARS:
+                raise SoftFailure(None, "text_too_short_or_empty")
+            return {"kind": "text", "data": text.encode("utf-8"), "text": text, "final_url": final}
         _, _, body, _ = ctx.get(cand["url"])
         try:
             data = json.loads(body.decode("utf-8", "replace"))["parse"]["text"]
