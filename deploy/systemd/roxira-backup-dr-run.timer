@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira DR backup hourly (RPO 1h)
+
+[Timer]
+OnCalendar=*-*-* *:07:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

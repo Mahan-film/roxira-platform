@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira DR backup daily status email
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/roxira_platform/scripts/ops/backup/server_backup.sh report
+TimeoutStartSec=10min

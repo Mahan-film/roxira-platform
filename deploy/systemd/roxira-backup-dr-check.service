@@ -1,0 +1,11 @@
+[Unit]
+Description=Roxira DR backup weekly restic check (5% data subset)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/roxira_platform/scripts/ops/backup/server_backup.sh check
+Nice=15
+TimeoutStartSec=6h

@@ -1,0 +1,14 @@
+[Unit]
+Description=Roxira DR backup (dump + restic)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/opt/roxira_platform/scripts/ops/backup/server_backup.sh run
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=3h
