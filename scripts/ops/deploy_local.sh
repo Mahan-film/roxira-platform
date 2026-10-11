@@ -117,6 +117,8 @@ missing_env() {
 }
 
 http_code() { curl -s -o /dev/null -m 15 -w '%{http_code}' "$1" || true; }
+# Final status after following redirects (Cloudflare may redirect a domain, e.g. roxira.net -> roxira.ir).
+http_code_final() { curl -sL --max-redirs 5 -o /dev/null -m 20 -w '%{http_code}' "$1" || true; }
 
 smoke_test() {
   local ok=0 d code body status routers
@@ -128,7 +130,7 @@ smoke_test() {
   routers="$(printf '%s' "$body" | python3 -c 'import sys,json;r=json.load(sys.stdin).get("loaded_routers");print(len(r) if hasattr(r,"__len__") else r)' 2>/dev/null || true)"
   if [ "$status" = "ONLINE" ]; then log "smoke ok: status ONLINE, routers=$routers"; else log "smoke FAIL: status='$status'"; ok=1; fi
   for d in $DOMAINS; do
-    code="$(http_code "https://$d/admin")"
+    code="$(http_code_final "https://$d/admin")"
     if [ "$code" = "404" ]; then log "smoke ok: $d/admin 404"; else log "smoke FAIL: $d/admin $code (want 404)"; ok=1; fi
   done
   code="$(http_code "https://$CHAT_DOMAIN/chat")"
@@ -151,7 +153,7 @@ cmd_check() {
   log "docker compose ps:"; rcompose ps --format '"table {{.Name}}\t{{.Status}}"' || true
   local d
   for d in $DOMAINS; do
-    log "$d /admin -> $(http_code "https://$d/admin") (want 404)"
+    log "$d /admin -> $(http_code_final "https://$d/admin") (want 404 after redirects)"
   done
   log "files changed deployed..origin/main:"
   if [ -n "$CHANGED" ]; then printf '%s\n' "$CHANGED"; else echo "(none)"; fi
