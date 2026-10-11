@@ -105,7 +105,8 @@ def format_alerts(alerts, host: str, title: str) -> tuple[str, str]:
 def send_email(subject: str, body: str, dry_run: bool = False) -> bool:
     """Send via SMTP using BACKUP_SMTP_USER / BACKUP_SMTP_PASS / BACKUP_NOTIFY_TO."""
     user = os.environ.get("BACKUP_SMTP_USER", "")
-    password = os.environ.get("BACKUP_SMTP_PASS", "")
+    # Gmail App Passwords are shown with spaces; strip all whitespace before login.
+    password = "".join(os.environ.get("BACKUP_SMTP_PASS", "").split())
     to = os.environ.get("BACKUP_NOTIFY_TO", "")
     if dry_run:
         print(f"[dry-run] would send email to={'<set>' if to else '<unset>'}\n"
