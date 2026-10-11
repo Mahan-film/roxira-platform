@@ -83,3 +83,57 @@ def test_upstreams_and_proxy_targets_preserved():
     for target in ["http://$judge_backend", "http://$frontend_backend",
                    "http://$enterprise_backend"]:
         assert target in content, target
+
+
+def _locations(content):
+    """Yield (prefix, body) for every simple prefix `location /x/ {` block."""
+    for m in re.finditer(r"(?m)^\s*location\s+(/[^\s{]*)\s*\{", content):
+        depth = 0
+        for i in range(m.end() - 1, len(content)):
+            if content[i] == "{":
+                depth += 1
+            elif content[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    yield m.group(1), content[m.end():i]
+                    break
+
+
+def _upstream_path(body, request_path):
+    """Simulate `rewrite ... break;` + `proxy_pass` for a prefix location."""
+    path = request_path
+    for pattern, repl in re.findall(r"rewrite\s+(\S+)\s+(\S+)\s+break;", body):
+        mt = re.match(pattern, path)
+        if mt:
+            path = re.sub(pattern, repl.replace("$1", r"\1"), path)
+            break
+    pp = re.search(r"proxy_pass\s+http://(\S+?)(/\S*)?;", body)
+    uri = pp.group(2)
+    # Static URI: nginx substitutes the matched prefix; variable host: URI is
+    # used verbatim and the request path is lost (the live bug).
+    assert uri is None or "$" not in pp.group(1), "variable proxy_pass with URI"
+    return path
+
+
+def test_no_variable_proxy_pass_with_uri():
+    for m in re.finditer(r"proxy_pass\s+http://(\S+?)(/\S*)?;", _read()):
+        if "$" in m.group(1):
+            assert m.group(2) is None, m.group(0)
+
+
+def test_backend_hub_and_judge_paths_are_mapped_once():
+    cases = {
+        "/api/backend/": [
+            ("/api/backend/accounting", "/v1/accounting"),
+            ("/api/backend/enterprise-hub/x/y", "/v1/enterprise-hub/x/y"),
+        ],
+        "/enterprise-hub/": [("/enterprise-hub/ping", "/v1/enterprise-hub/ping")],
+        "/api/judge/": [("/api/judge/analyze", "/api/v1/apps/judge/analyze")],
+    }
+    locs = list(_locations(_read()))
+    for prefix, items in cases.items():
+        bodies = [b for p, b in locs if p == prefix]
+        assert bodies, prefix
+        for body in bodies:
+            for req, want in items:
+                assert _upstream_path(body, req) == want

@@ -43,7 +43,10 @@ def env_f(name: str, default: float) -> float:
 
 def http(url: str, timeout: float, data: bytes | None = None, headers: dict | None = None):
     """Return (status, body_bytes, elapsed_s). status 0 on transport error."""
-    req = urllib.request.Request(url, data=data, headers=headers or {}, method="POST" if data else "GET")
+    # Cloudflare blocks the default "Python-urllib" User-Agent with 403.
+    hdrs = {"User-Agent": "RoxiraMonitor/1.0 (+https://roxira.ir)"}
+    hdrs.update(headers or {})
+    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST" if data else "GET")
     start = time.monotonic()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
