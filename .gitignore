@@ -69,3 +69,8 @@ database_snapshots/
 *.tar.gz
 *.snapshot
 repomix-output.xml
+
+# generated on the server by scripts/ops/nginx (never commit) — lands before PR #527
+nginx/generated/*
+!nginx/generated/.keep.conf
+nginx/ssl-default/
