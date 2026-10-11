@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
-import { liveVoiceUrl } from '@/lib/api/judge-chat-client';
+import { liveVoiceUrl, micFailure, reportVoiceError } from '@/lib/api/judge-chat-client';
 import { Phone, PhoneOff, Mic, Volume2, AlertCircle, Send } from 'lucide-react';
 
 interface LiveVoiceModalProps {
@@ -16,8 +16,10 @@ interface LiveVoiceModalProps {
 
 export const unlockSafariAudio = () => {};
 
+const nowMs = () => Date.now();
+
 export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose }) => {
-  const { getAccessToken } = useAuth();
+  const { getAccessToken, logout } = useAuth();
   const [sessionState, setSessionState] = useState<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
   const [transcription, setTranscription] = useState<string>('');
   const [assistantReply, setAssistantReply] = useState<string>('');
@@ -30,6 +32,13 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const stateRef = useRef<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Reconnect bookkeeping: the call survives a dropped socket (mobile networks) without
+  // re-asking for the microphone; `userEndedRef` distinguishes "hang up" from "network died".
+  const userEndedRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectsRef = useRef(0);
+  const sessionStartedAtRef = useRef(0);
+  const connectRef = useRef<((useToken: boolean) => void) | null>(null);
 
   // Playback queue: sentence-chunk (VOICE_STREAM_TTS) and Gemini-live audio
   // both arrive as several `agent_audio_stream` messages per turn. The old
@@ -71,7 +80,9 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       // message (e.g. a raw-PCM decode failure, or a websocket hiccup)
       // that would otherwise leave the mic permanently off -- this is the
       // main "does not automatically continue listening" failure mode.
-      const timeoutMs = newState === 'THINKING' ? 9000 : 15000;
+      // The server needs up to ~15 s for the LLM plus up to ~12 s for TTS; a reply read aloud
+      // can run well past 15 s, so SPEAKING must not cut it off.
+      const timeoutMs = newState === 'THINKING' ? 45000 : 120000;
       watchdogTimerRef.current = setTimeout(() => {
         if (stateRef.current === newState) {
           audioQueueRef.current = [];
@@ -187,17 +198,39 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   };
 
   const startSession = async () => {
+    // Must run inside the click that started the call: iOS Safari only lets an
+    // AudioContext make sound if it was created/resumed from a user gesture.
+    if (audioContextRef.current || socketRef.current) cleanupSession(true); // drop a half-reconnected call
+    userEndedRef.current = false;
+    reconnectsRef.current = 0;
+    sessionStartedAtRef.current = nowMs();
     try {
       setErrorMessage(null);
       setTranscription('');
       setAssistantReply('');
 
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.WebSocket) {
+        reportVoiceError('unsupported', 'live: no mediaDevices/WebSocket');
+        setErrorMessage('مرورگر شما از مکالمه صوتی زنده پشتیبانی نمی‌کند. Safari یا Chrome را به‌روز کنید.');
+        return;
+      }
+
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const audioCtx = new AudioCtx();
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume();
-      }
       audioContextRef.current = audioCtx;
+      if (audioCtx.state !== 'running') {
+        await audioCtx.resume().catch(() => undefined);
+      }
+      try {
+        // Silent one-sample buffer: the classic iOS "unlock" so later TTS playback is allowed.
+        const silent = audioCtx.createBuffer(1, 1, 22050);
+        const unlock = audioCtx.createBufferSource();
+        unlock.buffer = silent;
+        unlock.connect(audioCtx.destination);
+        unlock.start(0);
+      } catch {
+        /* non-fatal */
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -209,6 +242,9 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       });
       streamRef.current = stream;
 
+      if (!audioCtx.audioWorklet) {
+        throw new Error('AudioWorklet unsupported');
+      }
       await audioCtx.audioWorklet.addModule(`/worklets/pcm-processor.js?v=${Date.now()}`);
 
       const source = audioCtx.createMediaStreamSource(stream);
@@ -217,23 +253,20 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       });
       workletNodeRef.current = worklet;
 
-      const wsUrl = liveVoiceUrl(getAccessToken());
-      const ws = new WebSocket(wsUrl);
-      socketRef.current = ws;
-
       worklet.port.onmessage = (event) => {
         const data = event.data;
         if (!data) return;
 
         if (stateRef.current !== 'LISTENING') return;
+        const ws = socketRef.current;
 
         if (data.event === 'SPEECH_END') {
-          if (ws.readyState === WebSocket.OPEN) {
+          if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'commit' }));
             transitionState('THINKING');
           }
         } else if (data.event === 'PCM_DATA' && data.buffer) {
-          if (ws.readyState === WebSocket.OPEN) {
+          if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(data.buffer);
           }
         }
@@ -241,60 +274,134 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
       source.connect(worklet);
 
-      ws.onopen = () => {
-        transitionState('LISTENING');
-      };
-
-      ws.onmessage = async (event) => {
-        try {
-          const res = JSON.parse(event.data);
-          if (res.event === 'user_transcription' || res.type === 'TRANSCRIPT') {
-            setTranscription(res.text || '');
-          } else if (res.event === 'agent_text_response' || res.type === 'ANSWER_TEXT') {
-            setAssistantReply(res.text || '');
-          } else if (res.event === 'agent_audio_stream' || res.type === 'AUDIO_STREAM') {
-            const b64 = res.audio_data;
-            if (b64) {
-              enqueueAudio(b64, res.mime);
-            }
-          } else if (res.event === 'turn_complete') {
-            // Don't cut playback short: if audio is still queued/playing
-            // (streaming TTS sentence chunks, or a multi-chunk Gemini
-            // reply), wait for the queue to actually drain before re-
-            // arming the mic -- pumpAudioQueue() does that once
-            // turnCompletePendingRef is set. If nothing is playing (e.g.
-            // TTS failed and produced no audio at all), go straight back
-            // to LISTENING so the conversation keeps moving.
-            if (isPlayingRef.current || audioQueueRef.current.length > 0) {
-              turnCompletePendingRef.current = true;
-            } else {
-              transitionState('LISTENING');
-            }
-          } else if (res.event === 'error' || res.type === 'ERROR') {
-            setErrorMessage(res.message || 'خطای سرور.');
-          }
-        } catch (e) {
-          console.error('WS parse error:', e);
-        }
-      };
-
-      ws.onerror = () => {
-        setErrorMessage('خطای برقراری ارتباط وب‌سوکت.');
-        cleanupSession();
-      };
-
-      ws.onclose = () => {
-        cleanupSession();
-      };
-
+      connectRef.current = connectSocket;
+      connectSocket(true);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'دسترسی به میکروفون میسر نشد.';
-      setErrorMessage(msg);
-      cleanupSession();
+      const failure = micFailure(err);
+      const detail = err instanceof Error ? err.name || err.message : 'unknown';
+      reportVoiceError(`live_${failure.kind}`, detail);
+      setErrorMessage(failure.message);
+      cleanupSession(true);
     }
   };
 
-  const cleanupSession = () => {
+  // Opens (or re-opens) the websocket. `useToken=false` is the silent guest fallback used
+  // when the server rejects a stale token with close code 4401.
+  const connectSocket = (useToken: boolean) => {
+    if (userEndedRef.current || !audioContextRef.current) return; // call was closed: never reopen
+    const token = useToken ? getAccessToken() : null;
+    const ws = new WebSocket(liveVoiceUrl(token));
+    socketRef.current = ws;
+    let opened = false;
+    let serverMessage: string | null = null;
+    const connectTimer = setTimeout(() => {
+      if (!opened) {
+        try { ws.close(); } catch { /* ignore */ }
+      }
+    }, 12000);
+
+    ws.onopen = () => {
+      opened = true;
+      clearTimeout(connectTimer);
+      reconnectsRef.current = 0;
+      setErrorMessage(null);
+      transitionState('LISTENING');
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        const res = JSON.parse(event.data);
+        if (res.event === 'ping') {
+          return;
+        } else if (res.event === 'user_transcription' || res.type === 'TRANSCRIPT') {
+          setErrorMessage(null);
+          setTranscription(res.text || '');
+        } else if (res.event === 'agent_text_response' || res.type === 'ANSWER_TEXT') {
+          setAssistantReply(res.text || '');
+        } else if (res.event === 'agent_audio_stream' || res.type === 'AUDIO_STREAM') {
+          const b64 = res.audio_data;
+          if (b64) {
+            enqueueAudio(b64, res.mime);
+          }
+        } else if (res.event === 'turn_complete') {
+          // Don't cut playback short: if audio is still queued/playing
+          // (streaming TTS sentence chunks, or a multi-chunk Gemini
+          // reply), wait for the queue to actually drain before re-
+          // arming the mic -- pumpAudioQueue() does that once
+          // turnCompletePendingRef is set. If nothing is playing (e.g.
+          // TTS failed and produced no audio at all), go straight back
+          // to LISTENING so the conversation keeps moving.
+          if (isPlayingRef.current || audioQueueRef.current.length > 0) {
+            turnCompletePendingRef.current = true;
+          } else {
+            transitionState('LISTENING');
+          }
+        } else if (res.event === 'notice' || res.type === 'NOTICE') {
+          // Non-fatal (no speech heard, TTS down...): show it, keep the call.
+          setErrorMessage(res.message || null);
+        } else if (res.event === 'error' || res.type === 'ERROR') {
+          serverMessage = res.message || 'خطای سرور.';
+          setErrorMessage(serverMessage);
+        }
+      } catch (e) {
+        console.error('WS parse error:', e);
+      }
+    };
+
+    ws.onerror = () => {
+      // onclose always follows; it decides between reconnect and giving up.
+      reportVoiceError('ws_error', opened ? 'error after open' : 'error before open');
+    };
+
+    ws.onclose = (ev) => {
+      clearTimeout(connectTimer);
+      if (socketRef.current !== ws) return; // superseded or already cleaned up
+      socketRef.current = null;
+      if (userEndedRef.current) return;
+
+      if (ev.code === 4401) {
+        // Stale token. Same silent guest fallback as the text chat: no login modal.
+        reportVoiceError('ws_4401', 'stale token, retrying as guest');
+        if (useToken) {
+          logout();
+          connectSocket(false);
+          return;
+        }
+      }
+      if (ev.code === 4429) {
+        reportVoiceError('ws_4429', 'rate limited');
+        setErrorMessage(serverMessage || 'تعداد درخواست‌های صوتی بیش از حد مجاز است. بعداً دوباره تلاش کنید.');
+        cleanupSession(true);
+        return;
+      }
+
+      reportVoiceError('ws_closed', `code=${ev.code} opened=${opened} after_ms=${nowMs() - sessionStartedAtRef.current}`);
+      if (reconnectsRef.current < 3 && navigator.onLine !== false) {
+        reconnectsRef.current += 1;
+        const attempt = reconnectsRef.current;
+        setErrorMessage('اتصال قطع شد؛ در حال اتصال دوباره…');
+        transitionState('IDLE');
+        audioQueueRef.current = [];
+        isPlayingRef.current = false;
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          if (!userEndedRef.current && audioContextRef.current) connectRef.current?.(useToken);
+        }, 800 * attempt);
+        return;
+      }
+      setErrorMessage(serverMessage || 'ارتباط صوتی قطع شد. اینترنت را بررسی کنید و دوباره تماس بگیرید.');
+      cleanupSession(true);
+    };
+  };
+
+  const cleanupSession = (fromError = false) => {
+    if (!fromError) userEndedRef.current = true;
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    connectRef.current = null;
     if (watchdogTimerRef.current) {
       clearTimeout(watchdogTimerRef.current);
       watchdogTimerRef.current = null;
@@ -321,8 +428,9 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       streamRef.current = null;
     }
     if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
+      const ws = socketRef.current;
+      socketRef.current = null; // detach first so onclose does not trigger a reconnect
+      try { ws.close(); } catch (e) {}
     }
     setSessionState('IDLE');
   };
@@ -342,7 +450,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
               <p className="text-[11px] text-slate-400">متصل به قوانین، آراء وحدت رویه و مقررات هیئت وزیران</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer">
+          <button onClick={() => { cleanupSession(); onClose(); }} className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer">
             ✕
           </button>
         </div>
@@ -412,7 +520,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
             </button>
           ) : (
             <button
-              onClick={cleanupSession}
+              onClick={() => cleanupSession()}
               className="flex items-center gap-2 px-8 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 font-bold rounded-2xl transition active:scale-95 cursor-pointer"
             >
               <PhoneOff className="w-5 h-5" />

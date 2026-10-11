@@ -110,6 +110,17 @@ roles:
     description: Speech-to-text for the voice pipeline (Persian/Farsi required).
     data_policy: standard
     models:
+      - id: openai/whisper-large-v3
+        price_per_1m: null
+        catalogue_listed: false
+        note: >
+          Primary since 2026-10-11 (docs/ops/VOICE_DIAGNOSIS_2026-10-11.md). This is the
+          id the website mic button has used successfully in production for weeks
+          (docker logs: `STT-SUCCESS-JSON openai/whisper-large-v3`, HTTP 200, ~2 s for a
+          clean Persian clip, m4a and webm both accepted). Like the turbo entry below it
+          is not in GET /api/v1/models (separate transcriptions endpoint), hence
+          catalogue_listed: false. The live-voice socket used to start with turbo, which
+          answered 429 on 2026-09-24, so every live turn paid a failed call first.
       - id: openai/whisper-large-v3-turbo
         price_per_1m: null
         catalogue_listed: false

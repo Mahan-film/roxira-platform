@@ -28,21 +28,26 @@ import { ChatHttpError, streamChat } from "@/lib/api/chat-stream";
 import { LegalStreamingText } from "./legal-streaming-text";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
-  CHAT_TIMEOUT_MS,
   EMPTY_FAILURE,
   JUDGE_TRANSCRIBE_PATH,
   MAX_CHAT_CHARS,
   MAX_RECORDING_MS,
   NETWORK_FAILURE,
   RetryTimeoutError,
+  STT_TIMEOUT_MS,
   TIMEOUT_FAILURE,
+  audioExtForType,
   authHeaders,
   clearPending,
   failureFromResponse,
   fetchWithRetry,
   loadPending,
+  micFailure,
   newRequestId,
+  pickRecorderMimeType,
+  reportVoiceError,
   savePending,
+  withoutAuthHeader,
   type ChatFailure,
 } from "@/lib/api/judge-chat-client";
 
@@ -133,16 +138,6 @@ export function ChatShell() {
     statusClearRef.current = window.setTimeout(() => setRecordingStatus(""), 8000);
   };
 
-  // نشست منقضی/نامعتبر: پاک‌سازی سشن و باز کردن مودال ورود
-  const handleSessionExpired = () => {
-    logout();
-    openLogin({
-      serviceDomain: "GHAZI",
-      title: "ورود مجدد",
-      description: "نشست شما منقضی شده است. برای ادامه دوباره وارد شوید.",
-    });
-  };
-
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) window.clearTimeout(recordingTimerRef.current);
@@ -166,29 +161,31 @@ export function ChatShell() {
       return;
     }
 
+    let stream: MediaStream | null = null;
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
         // بدون alert مسدودکننده: پیام وضعیت درون‌خطی
-        setRecordingStatus("مرورگر شما از ورودی میکروفون پشتیبانی نمی‌کند.");
+        reportVoiceError("unsupported", "no mediaDevices/MediaRecorder");
+        showVoiceError("مرورگر شما از ضبط صدا پشتیبانی نمی‌کند. لطفاً Safari یا Chrome را به‌روز کنید یا پیام را تایپ کنید.");
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       streamRef.current = stream;
 
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : MediaRecorder.isTypeSupported("audio/mp4")
-        ? "audio/mp4"
-        : "";
+      // Safari/iOS: audio/mp4 (AAC)؛ Chrome/Android: audio/webm (opus)
+      const mimeType = pickRecorderMimeType((t) => MediaRecorder.isTypeSupported(t), navigator.userAgent || "");
 
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
+
+      recorder.onerror = () => {
+        reportVoiceError("recorder", "MediaRecorder error");
+        showVoiceError("ضبط صدا با خطا متوقف شد. دوباره تلاش کنید.");
+      };
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -216,43 +213,53 @@ export function ChatShell() {
         const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
         audioChunksRef.current = [];
 
-        if (audioBlob.size === 0) {
-          showVoiceError("صدایی ضبط نشد. میکروفون را بررسی کنید و دوباره تلاش کنید.");
+        if (audioBlob.size < 1500) {
+          reportVoiceError("empty_audio", `size=${audioBlob.size} type=${blobType}`);
+          showVoiceError(
+            audioBlob.size === 0
+              ? "صدایی ضبط نشد. میکروفون را بررسی کنید و دوباره تلاش کنید."
+              : "ضبط خیلی کوتاه بود. دکمه را نگه دارید و کمی بیشتر صحبت کنید.",
+          );
           return;
         }
 
         // صوت ضبط‌شده همیشه مستقیماً به‌صورت multipart/form-data به موتور STT فرستاده می‌شود
+        const requestId = newRequestId();
+        const startedAt = Date.now();
         try {
           setRecordingStatus("در حال تبدیل گفتار به متن...");
-          const ext = /mp4|m4a|aac/i.test(blobType)
-            ? "m4a"
-            : /ogg/i.test(blobType)
-            ? "ogg"
-            : /wav/i.test(blobType)
-            ? "wav"
-            : "webm";
           const formData = new FormData();
-          formData.append("file", audioBlob, `speech.${ext}`);
+          formData.append("file", audioBlob, `speech.${audioExtForType(blobType)}`);
 
-          const res = await fetchWithRetry(
-            JUDGE_TRANSCRIBE_PATH,
-            { method: "POST", headers: authHeaders(getAccessToken()), body: formData },
-            {
-              maxAttempts: 2,
-              timeoutMs: CHAT_TIMEOUT_MS,
-              retryOnGatewayStatus: false,
-              requestId: newRequestId(),
-              onRetry: () => setRecordingStatus("اتصال ضعیف است؛ در حال تلاش دوباره…"),
-            },
-          );
+          const send = (headers: Record<string, string>) =>
+            fetchWithRetry(
+              JUDGE_TRANSCRIBE_PATH,
+              { method: "POST", headers, body: formData },
+              {
+                maxAttempts: 2,
+                timeoutMs: STT_TIMEOUT_MS,
+                retryOnGatewayStatus: false,
+                requestId,
+                onRetry: () => setRecordingStatus("اتصال ضعیف است؛ در حال تلاش دوباره…"),
+              },
+            );
 
-          if (res.status === 401) {
-            handleSessionExpired();
-            showVoiceError("نشست شما منقضی شده است. لطفاً دوباره وارد شوید.");
-            return;
+          const headers = authHeaders(getAccessToken());
+          let res = await send(headers);
+          if (res.status === 401 && Object.keys(headers).length > 0) {
+            // Stale token: same silent guest fallback as the text chat (no login modal).
+            logout();
+            setGuestNotice(true);
+            res = await send(withoutAuthHeader(headers));
           }
+
           if (res.status === 429) {
             showVoiceError("تعداد درخواست‌ها بیش از حد مجاز است. چند دقیقه بعد دوباره تلاش کنید.");
+            return;
+          }
+          if (res.status === 413) {
+            reportVoiceError("stt_http", "HTTP 413", requestId, startedAt);
+            showVoiceError("فایل صوتی خیلی بزرگ است. پیام کوتاه‌تری ضبط کنید.");
             return;
           }
           const data = res.ok ? await res.json().catch(() => null) : null;
@@ -261,13 +268,19 @@ export function ChatShell() {
             setInputPrompt(transcript.slice(0, MAX_CHAT_CHARS));
             setRecordingStatus("");
           } else if (!res.ok) {
+            reportVoiceError("stt_http", `HTTP ${res.status}`, requestId, startedAt);
             showVoiceError("تبدیل گفتار به متن انجام نشد. لطفاً دوباره تلاش کنید یا پیام را تایپ کنید.");
           } else {
             showVoiceError("گفتار شما تشخیص داده نشد. واضح‌تر و نزدیک‌تر به میکروفون صحبت کنید.");
           }
         } catch (err) {
           console.warn("Transcribe-audio request failed:", err);
-          showVoiceError("ارتباط با سرور برقرار نشد. لطفاً دوباره تلاش کنید.");
+          // fetchWithRetry already reported each failed attempt (kind network/timeout).
+          showVoiceError(
+            err instanceof RetryTimeoutError
+              ? "پردازش صدا بیش از حد طول کشید. پیام کوتاه‌تری ضبط کنید یا تایپ کنید."
+              : "ارتباط با سرور برقرار نشد. اینترنت را بررسی کنید و دوباره تلاش کنید.",
+          );
         }
       };
 
@@ -290,7 +303,11 @@ export function ChatShell() {
     } catch (err) {
       console.warn("Mic error:", err);
       setIsVoiceRecording(false);
-      setRecordingStatus("دسترسی به میکروفون تایید نشد. لطفاً در نوار آدرس مرورگر دسترسی را مجاز بفرمایید.");
+      stream?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      const failure = micFailure(err);
+      reportVoiceError(failure.kind, err instanceof Error ? err.name : "unknown");
+      showVoiceError(failure.message);
     }
   };
 

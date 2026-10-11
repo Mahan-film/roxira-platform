@@ -92,6 +92,20 @@ def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
 
 async def _transcribe_audio_payload_impl(audio_bytes: bytes, audio_fmt: str = "wav") -> str:
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    # Shared chain (config/models.yaml `stt`, whisper-large-v3 first, 429-aware, time-boxed).
+    try:
+        from output_apps.generated_modules.smartjudge import voice_stt
+
+        fmt0 = "wav" if audio_fmt not in ("wav", "m4a", "webm", "mp3", "ogg") else audio_fmt
+        res = await voice_stt.transcribe(
+            audio_bytes, fmt0, api_key=openrouter_key, local_fallback=None, budget_s=20.0
+        )
+        if res.text:
+            return sanitize_transcription(res.text)
+        if res.reachable:
+            return ""  # provider answered: silence, do not run the legacy fallbacks
+    except Exception as e:
+        print(f"[STT-WARN] shared chain: {e}", file=sys.stderr)
     if openrouter_key:
         try:
             b64_data = base64.b64encode(audio_bytes).decode("utf-8")
@@ -193,7 +207,7 @@ async def _analyze_legal_query_impl(query_text: str) -> str:
     try:
         loop = asyncio.get_running_loop()
         def _fetch():
-            with urllib.request.urlopen(req, timeout=5.5) as resp:
+            with urllib.request.urlopen(req, timeout=15.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return data["choices"][0]["message"]["content"]
         raw = await loop.run_in_executor(None, _fetch)
@@ -267,7 +281,7 @@ async def analyze_legal_query_streaming(query_text: str, on_sentence) -> str:
 
         buf = ""
         emitted_count = 0
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:
             async with client.stream(
                 "POST",
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -347,7 +361,7 @@ async def synthesize_speech_persian(text: str) -> str:
                         first_byte_ms = sw.elapsed_ms()
                     buf.extend(chunk["data"])
             return base64.b64encode(buf).decode("utf-8")
-        return await asyncio.wait_for(_stream(), timeout=2.8)
+        return await asyncio.wait_for(_stream(), timeout=12.0)
     except Exception as e:
         # Was a bare `except Exception: return ""` with no logging (W20
         # diagnosis): a missing/broken edge-tts install failed 100% of turns
@@ -415,6 +429,32 @@ async def judge_stt_api(request: Request, file: UploadFile = File(None), audio: 
     text = await transcribe_audio_payload(content, fmt)
     return {"text": text, "transcription": text}
 
+MSG_NO_SPEECH = "صدایی تشخیص داده نشد. کمی بلندتر و نزدیک‌تر به میکروفون صحبت کنید."
+MSG_TTS_DOWN = "پخش صدا ممکن نشد؛ پاسخ به‌صورت متن نمایش داده می‌شود."
+MSG_TURN_FAILED = "خطا در پردازش گفتار. لطفاً دوباره صحبت کنید."
+KEEPALIVE_SECONDS = 25.0
+MAX_PCM_BYTES = 16000 * 2 * 60  # 60 s of 16 kHz mono Int16
+
+
+async def _notice(websocket: WebSocket, code: str, message: str) -> None:
+    """Non-fatal, user-visible notice (the client keeps the call open)."""
+    await websocket.send_text(json.dumps(
+        {"event": "notice", "type": "NOTICE", "code": code, "message": message}, ensure_ascii=False))
+
+
+async def _keepalive(websocket: WebSocket) -> None:
+    """Traffic every 25 s so Cloudflare / mobile carriers do not drop an idle socket
+    (the browser sends nothing while the assistant thinks or speaks)."""
+    try:
+        while True:
+            await asyncio.sleep(KEEPALIVE_SECONDS)
+            await websocket.send_text(json.dumps({"event": "ping"}))
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        return
+
+
 @router.websocket("/live-voice")
 async def live_voice_websocket(websocket: WebSocket):
     # Token via ?token= (browsers cannot set WS headers); anonymous callers get a strict
@@ -443,6 +483,7 @@ async def live_voice_websocket(websocket: WebSocket):
         return
 
     pcm_accumulator = bytearray()
+    keepalive = asyncio.create_task(_keepalive(websocket))
 
     try:
         while True:
@@ -452,6 +493,8 @@ async def live_voice_websocket(websocket: WebSocket):
 
             if "bytes" in message and message["bytes"]:
                 pcm_accumulator.extend(message["bytes"])
+                if len(pcm_accumulator) > MAX_PCM_BYTES:  # long silence: keep the newest 60 s
+                    del pcm_accumulator[:len(pcm_accumulator) - MAX_PCM_BYTES]
                 continue
 
             if "text" in message and message["text"]:
@@ -477,6 +520,7 @@ async def live_voice_websocket(websocket: WebSocket):
                             user_text = await transcribe_audio_payload(wav_data, "wav")
 
                             if not user_text or len(user_text.strip()) < 2 or user_text in HALLUCINATIONS:
+                                await _notice(websocket, "NO_SPEECH", MSG_NO_SPEECH)
                                 await websocket.send_text(json.dumps({"event": "turn_complete"}))
                                 return
 
@@ -509,6 +553,7 @@ async def live_voice_websocket(websocket: WebSocket):
                                     "text": reply_text
                                 }))
                                 if not sent_any:
+                                    await _notice(websocket, "TTS_UNAVAILABLE", MSG_TTS_DOWN)
                                     await websocket.send_text(json.dumps({"event": "turn_complete"}))
                             else:
                                 reply_text = await analyze_legal_query(user_text)
@@ -526,10 +571,16 @@ async def live_voice_websocket(websocket: WebSocket):
                                         "audio_data": audio_b64
                                     }))
                                 else:
+                                    await _notice(websocket, "TTS_UNAVAILABLE", MSG_TTS_DOWN)
                                     await websocket.send_text(json.dumps({"event": "turn_complete"}))
 
-                        except Exception:
-                            await websocket.send_text(json.dumps({"event": "turn_complete"}))
+                        except Exception as turn_exc:
+                            print(f"[WS-TURN-ERR] {type(turn_exc).__name__}: {turn_exc}", file=sys.stderr)
+                            try:
+                                await _notice(websocket, "TURN_FAILED", MSG_TURN_FAILED)
+                                await websocket.send_text(json.dumps({"event": "turn_complete"}))
+                            except Exception:
+                                pass  # socket already closed
                         finally:
                             log_voice_timing(
                                 "turn",
@@ -543,3 +594,5 @@ async def live_voice_websocket(websocket: WebSocket):
         pass
     except Exception as exc:
         print(f"[WS-ERR] {exc}", file=sys.stderr)
+    finally:
+        keepalive.cancel()

@@ -118,6 +118,7 @@ from output_apps.generated_modules.smartjudge.fast_path import (
 from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
 from output_apps.generated_modules.smartjudge import chat_fast as _chat_fast
 from output_apps.generated_modules.smartjudge import chat_auth
+from output_apps.generated_modules.smartjudge import voice_stt as _voice_stt
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.ecosystem_core.src.billing import payment_orders
@@ -3424,181 +3425,26 @@ def _extract_openrouter_text(data: dict) -> str:
     return ""
 
 
-_local_whisper_model = None
-
-def _get_local_whisper_instance():
-    global _local_whisper_model
-    if _local_whisper_model is None:
-        try:
-            from faster_whisper import WhisperModel
-            _local_whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
-        except Exception as e:
-            _local_whisper_model = False
-    return _local_whisper_model if _local_whisper_model else None
+async def _transcribe_with_status(audio_bytes: bytes, audio_format: str):
+    """STT with a hard time budget (see voice_stt.py). Returns a ``voice_stt.SttResult``."""
+    assembly_keys = [k.strip() for k in _load_env_var("ASSEMBLYAI_API_KEYS").split(",") if k.strip()]
+    return await _voice_stt.transcribe(
+        audio_bytes,
+        _normalize_audio_format(audio_format),
+        api_key=OPENROUTER_API_KEY,
+        assembly_keys=assembly_keys,
+    )
 
 
 async def _openrouter_transcribe(model: str, audio_bytes: bytes, audio_format: str, language: str = "fa") -> str:
-    """تبدیل دقیق گفتار فارسی به متن با پشتیبانی چندلایه: OpenRouter STT -> AssemblyAI Pool -> faster-whisper."""
+    """Persian STT text (OpenRouter Whisper chain -> AssemblyAI -> local faster-whisper); "" on failure.
+
+    ``model`` is kept for call-site compatibility; the chain comes from config/models.yaml (`stt`).
+    """
     if not audio_bytes:
         return ""
-
-    ext = _normalize_audio_format(audio_format)
-    mime_map = {
-        "wav": "audio/wav",
-        "m4a": "audio/mp4",
-        "mp4": "audio/mp4",
-        "webm": "audio/webm",
-        "mp3": "audio/mpeg",
-        "ogg": "audio/ogg",
-        "aac": "audio/aac",
-    }
-    upload_mime = mime_map.get(ext, "audio/mp4")
-
-    # ۱. لایه نخست: سرویس OpenRouter STT با مدل‌های پایدار Whisper Large V3 و Whisper-1
-    if OPENROUTER_API_KEY:
-        headers_auth = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "HTTP-Referer": "https://ghazihoushmand.ir",
-            "X-Title": "Roxira SmartJudge",
-        }
-        b64_audio = base64.b64encode(audio_bytes).decode("ascii")
-        candidate_models = ["openai/whisper-large-v3", "openai/whisper-1"]
-
-        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0)) as client:
-            # روش ۱-الف: درخواست استاندارد JSON Base64
-            for target_model in candidate_models:
-                try:
-                    payload_json = {
-                        "model": target_model,
-                        "input_audio": {
-                            "data": b64_audio,
-                            "format": ext
-                        },
-                        "language": "fa"
-                    }
-                    resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, json=payload_json, headers=headers_auth)
-                    if resp.status_code == 200:
-                        text_out = _extract_openrouter_text(resp.json())
-                        if text_out and len(text_out.strip()) >= 1:
-                            print(f"[SMARTJUDGE][STT-SUCCESS-JSON] {target_model}: {text_out[:60]}")
-                            return text_out.strip()
-                except Exception as exc:
-                    print(f"[SMARTJUDGE][STT-FAIL-JSON] {target_model}: {exc}", file=sys.stderr)
-
-            # روش ۱-ب: درخواست چندبخشی Multipart/Form-Data
-            for target_model in candidate_models:
-                try:
-                    files = {"file": (f"speech.{ext}", audio_bytes, upload_mime)}
-                    data_form = {"model": target_model, "language": "fa", "prompt": "درخواست و دادخواست حقوقی، ماده قانون، دادگاه، رای وحدت رویه، سرقفلی"}
-                    resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, data=data_form, files=files, headers=headers_auth)
-                    if resp.status_code == 200:
-                        text_out = _extract_openrouter_text(resp.json())
-                        if text_out and len(text_out.strip()) >= 1:
-                            print(f"[SMARTJUDGE][STT-SUCCESS-MULTIPART] {target_model}: {text_out[:60]}")
-                            return text_out.strip()
-                except Exception as exc:
-                    print(f"[SMARTJUDGE][STT-FAIL-MULTIPART] {target_model}: {exc}", file=sys.stderr)
-
-    # ۲. لایه دوم: استخر چندکلیدی AssemblyAI فارسی
-    assembly_keys = [k.strip() for k in _load_env_var("ASSEMBLYAI_API_KEYS").split(",") if k.strip()]
-    if assembly_keys:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0)) as client:
-            for a_key in assembly_keys:
-                try:
-                    up_resp = await client.post(
-                        "https://api.assemblyai.com/v2/upload",
-                        content=audio_bytes,
-                        headers={"authorization": a_key}
-                    )
-                    if up_resp.status_code == 200:
-                        up_url = up_resp.json().get("upload_url")
-                        if up_url:
-                            trans_resp = await client.post(
-                                "https://api.assemblyai.com/v2/transcript",
-                                json={"audio_url": up_url, "language_code": "fa"},
-                                headers={"authorization": a_key}
-                            )
-                            if trans_resp.status_code == 200:
-                                tid = trans_resp.json().get("id")
-                                for _ in range(12):
-                                    await asyncio.sleep(0.8)
-                                    poll_resp = await client.get(
-                                        f"https://api.assemblyai.com/v2/transcript/{tid}",
-                                        headers={"authorization": a_key}
-                                    )
-                                    if poll_resp.status_code == 200:
-                                        pdata = poll_resp.json()
-                                        if pdata.get("status") == "completed":
-                                            atxt = (pdata.get("text") or "").strip()
-                                            if atxt:
-                                                print(f"[SMARTJUDGE][STT-ASSEMBLY-SUCCESS] {atxt[:60]}")
-                                                return atxt
-                                        elif pdata.get("status") == "error":
-                                            break
-                except Exception as exc:
-                    print(f"[SMARTJUDGE][STT-ASSEMBLY-FAIL] {exc}", file=sys.stderr)
-
-    # ۳. لایه سوم: مدل آفلاین محلی faster-whisper در صورت وجود
-    whisper_local = _get_local_whisper_instance()
-    if whisper_local:
-        try:
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as tmp:
-                tmp.write(audio_bytes)
-                tmp_path = tmp.name
-            segments, _ = whisper_local.transcribe(tmp_path, language="fa", beam_size=2)
-            transcribed_local = " ".join([s.text for s in segments]).strip()
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-            if transcribed_local:
-                print(f"[SMARTJUDGE][STT-LOCAL-SUCCESS] {transcribed_local[:60]}")
-                return transcribed_local
-        except Exception as exc:
-            print(f"[SMARTJUDGE][STT-LOCAL-FAIL] {exc}", file=sys.stderr)
-
-    return ""
-
-    ext = _normalize_audio_format(audio_format)
-    mime_map = {
-        "wav": "audio/wav",
-        "m4a": "audio/mp4",
-        "mp4": "audio/mp4",
-        "webm": "audio/webm",
-        "mp3": "audio/mpeg",
-        "ogg": "audio/ogg",
-        "aac": "audio/aac",
-    }
-    upload_mime = mime_map.get(ext, "audio/mp4")
-
-    headers_auth = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "https://ghazihoushmand.ir",
-        "X-Title": "Roxira SmartJudge",
-    }
-
-    # نام مدل‌های معتبر جهت تبدیل گفتار
-    stt_models = [model] if model else []
-    for m in ["deepgram/nova-3", "openai/whisper-large-v3-turbo", "google/chirp-3"]:
-        if m not in stt_models:
-            stt_models.append(m)
-
-    async with httpx.AsyncClient(timeout=httpx.Timeout(4.0, connect=1.5)) as client:
-        for target_model in stt_models:
-            try:
-                files = {"file": (f"speech.{ext}", audio_bytes, upload_mime)}
-                data_form = {"model": target_model, "language": "fa", "prompt": "درخواست و دادخواست حقوقی، ماده قانون، دادگاه، رای وحدت رویه، سرقفلی"}
-                resp = await client.post(OPENROUTER_TRANSCRIPTION_URL, data=data_form, files=files, headers=headers_auth)
-                if resp.status_code == 200:
-                    text_out = _extract_openrouter_text(resp.json())
-                    if text_out and len(text_out.strip()) >= 1:
-                        print(f"[SMARTJUDGE][STT-SUCCESS] {target_model}: {text_out[:60]}")
-                        return text_out.strip()
-            except Exception as exc:
-                print(f"[SMARTJUDGE][STT-FAIL] {target_model}: {exc}", file=sys.stderr)
-
-    return ""
+    result = await _transcribe_with_status(audio_bytes, audio_format)
+    return result.text
 
 
 class _AudioTooLarge(ValueError):
@@ -3666,22 +3512,25 @@ async def transcribe_audio(request: Request, user: chat_auth.CurrentUser = Depen
 
     audio_format = _detect_audio_format(mime_type)
 
-    try:
-        transcribed = await _openrouter_transcribe("deepgram/nova-3", audio_bytes, audio_format)
-        if transcribed and len(transcribed.strip()) >= 1:
-            try:
-                from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
-                transcribed = repair_legal_phonetics(transcribed)
-            except Exception:
-                pass
-            return {"status": "success", "text": transcribed, "transcript": transcribed}
-    except Exception as exc:
-        print(f"[SMARTJUDGE][STT-FAIL] {exc}", file=sys.stderr)
-
+    result = await _transcribe_with_status(audio_bytes, audio_format)
+    transcribed = (result.text or "").strip()
+    if transcribed:
+        try:
+            from output_apps.generated_modules.smartjudge.legal_phonetics import repair_legal_phonetics
+            transcribed = repair_legal_phonetics(transcribed)
+        except Exception:
+            pass
+        return {"status": "success", "text": transcribed, "transcript": transcribed}
+    if result.reachable:
+        # A provider answered but heard no speech: not a server error.
+        return {"status": "success", "text": "", "transcript": "", "code": "NO_SPEECH"}
+    print(f"[SMARTJUDGE][STT-UNAVAILABLE] {result.error}", file=sys.stderr)
     return JSONResponse(
-        {"status": "error", "message": "تبدیل گفتار ناموفق بود."},
+        {"status": "error", "code": "STT_UNAVAILABLE", "message": "تبدیل گفتار ناموفق بود."},
         status_code=502,
     )
+
+
 @router.post("/speak")
 async def generate_speech(request: Request, payload: dict = Body(...),
                           user: chat_auth.CurrentUser = Depends(get_current_user)):
@@ -3700,21 +3549,34 @@ async def generate_speech(request: Request, payload: dict = Body(...),
     clean_text = re.sub(r"[*#_`>\[\]\(\)\n]", " ", text).strip()
     clean_text = " ".join(clean_text.split())[:1200]
 
-    # ۱. موتور پرچمدار و فوق‌العاده باکیفیت Microsoft Neural TTS (صدای رسمی و شیوای فرید/دیلارام)
+    # Microsoft Neural TTS (edge-tts). Reachability from the server is fine but latency varies
+    # (1-5 s), so: hard timeout per attempt, one retry, a fallback voice, a real Content-Length
+    # (iOS Safari is picky about chunked audio) and a machine-readable error code.
     try:
         import edge_tts
-        voice = "fa-IR-FaridNeural"
+    except Exception as exc:
+        print(f"[SMARTJUDGE][EDGE-TTS-IMPORT] {exc}", file=sys.stderr)
+        return JSONResponse({"status": "error", "code": "TTS_UNAVAILABLE", "message": "سرویس صوت در دسترس نیست"}, status_code=502)
+
+    async def _synth(voice: str) -> bytes:
         communicate = edge_tts.Communicate(clean_text, voice, rate="+22%")
-        audio_buffer = bytearray()
+        buf = bytearray()
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
-                audio_buffer.extend(chunk["data"])
-        if len(audio_buffer) > 200:
-            return StreamingResponse(io.BytesIO(bytes(audio_buffer)), media_type="audio/mpeg")
-    except Exception as exc:
-        print(f"[SMARTJUDGE][EDGE-TTS-EXC] {exc}", file=sys.stderr)
+                buf.extend(chunk["data"])
+        return bytes(buf)
 
-    return JSONResponse({"status": "error", "message": "سرویس صوت در دسترس نیست"}, status_code=502)
+    # Farid twice on purpose (one retry for a transient failure), then Dilara as fallback voice.
+    for voice in ("fa-IR-FaridNeural", "fa-IR-FaridNeural", "fa-IR-DilaraNeural"):
+        try:
+            audio = await asyncio.wait_for(_synth(voice), timeout=20.0)
+            if len(audio) > 200:
+                return Response(content=audio, media_type="audio/mpeg",
+                                headers={"Cache-Control": "no-store"})
+        except Exception as exc:
+            print(f"[SMARTJUDGE][EDGE-TTS-EXC] {voice} {type(exc).__name__}: {exc}", file=sys.stderr)
+
+    return JSONResponse({"status": "error", "code": "TTS_UNAVAILABLE", "message": "سرویس صوت در دسترس نیست"}, status_code=502)
 
 
 

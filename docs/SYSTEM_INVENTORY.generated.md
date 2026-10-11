@@ -78,6 +78,6 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | mechanical | google/gemini-3.1-flash-lite, anthropic/claude-haiku-4.5 |
 | reviewer | qwen/qwen3.8-27b:free, deepseek/deepseek-v4.1-flash, qwen/qwen3-coder |
 | strong | deepseek/deepseek-v4-pro, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
-| stt | openai/whisper-large-v3-turbo, openai/gpt-audio |
+| stt | openai/whisper-large-v3, openai/whisper-large-v3-turbo, openai/gpt-audio |
 | tts | edge-tts:fa-IR-FaridNeural |
 | voice_realtime | gemini-3.8-live, gemini-3.1-flash-live-preview |

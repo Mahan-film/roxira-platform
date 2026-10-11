@@ -24,6 +24,8 @@ export const PENDING_TTL_MS = 10 * 60_000;
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 /** Maximum length of one voice recording. */
 export const MAX_RECORDING_MS = 120_000;
+/** Client timeout for ONE speech-to-text upload (server budget is 80 s, see voice_stt.py). */
+export const STT_TIMEOUT_MS = 100_000;
 
 /** True when the header map carries a Bearer token. */
 export function hasAuthHeader(headers: Record<string, string> | undefined): boolean {
@@ -350,4 +352,75 @@ export async function fetchWithRetry(
   }
   if (lastError instanceof Response) return lastError;
   throw lastError ?? new TypeError("Failed to fetch");
+}
+
+/* ------------------------------- voice helpers ------------------------------ */
+
+/** Report a voice failure (kind is always prefixed `voice_`). Never carries audio or text. */
+export function reportVoiceError(kind: string, message: string, requestId?: string, startedAt?: number): void {
+  reportClientError({
+    kind: `voice_${kind}`,
+    message,
+    request_id: requestId ?? newRequestId(),
+    elapsed_ms: startedAt ? Date.now() - startedAt : 0,
+  });
+}
+
+/** True for Safari / any iOS browser (WebKit): its MediaRecorder is happiest with audio/mp4. */
+export function isAppleWebKit(ua: string): boolean {
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  return /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Android|Edg|OPR|Firefox|FxiOS/i.test(ua);
+}
+
+/**
+ * Best MediaRecorder container for this browser: mp4/AAC on WebKit, webm/opus on Chrome and
+ * Firefox, with the other as fallback. Returns "" to let the browser choose.
+ */
+export function pickRecorderMimeType(isSupported: (type: string) => boolean, ua: string): string {
+  const webm = ["audio/webm;codecs=opus", "audio/webm"];
+  const mp4 = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/aac"];
+  const ogg = ["audio/ogg;codecs=opus"];
+  const order = isAppleWebKit(ua) ? [...mp4, ...webm, ...ogg] : [...webm, ...ogg, ...mp4];
+  for (const type of order) {
+    try {
+      if (isSupported(type)) return type;
+    } catch {
+      /* isTypeSupported can throw on odd browsers */
+    }
+  }
+  return "";
+}
+
+/** File extension the server maps to a decoder format for a recorded Blob type. */
+export function audioExtForType(blobType: string): string {
+  if (/mp4|m4a|aac/i.test(blobType)) return "m4a";
+  if (/ogg|opus/i.test(blobType) && !/webm/i.test(blobType)) return "ogg";
+  if (/wav/i.test(blobType)) return "wav";
+  return "webm";
+}
+
+export interface MicFailure {
+  kind: string;
+  message: string;
+}
+
+/** Persian message + report kind for a getUserMedia / MediaRecorder failure. */
+export function micFailure(err: unknown): MicFailure {
+  const name = err instanceof Error ? err.name : "";
+  if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {
+    return {
+      kind: "mic_denied",
+      message: "دسترسی به میکروفون مسدود است. در تنظیمات مرورگر (آیکن قفل کنار آدرس) میکروفون را برای این سایت مجاز کنید و دوباره تلاش کنید.",
+    };
+  }
+  if (name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError") {
+    return { kind: "mic_missing", message: "میکروفونی روی این دستگاه پیدا نشد." };
+  }
+  if (name === "NotReadableError" || name === "AbortError" || name === "TrackStartError") {
+    return {
+      kind: "mic_busy",
+      message: "میکروفون در اختیار برنامه دیگری است (مثلاً تماس تلفنی). آن را ببندید و دوباره تلاش کنید.",
+    };
+  }
+  return { kind: "mic_error", message: "راه‌اندازی میکروفون ناموفق بود. صفحه را دوباره بارگذاری کنید و تلاش کنید." };
 }

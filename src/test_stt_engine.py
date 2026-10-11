@@ -75,8 +75,18 @@ def test_chain_falls_back_to_default_when_registry_raises():
 
 def test_chain_falls_back_to_default_when_registry_import_fails():
     # Simulates PyYAML not being installed / the module not existing.
-    with patch.dict(sys.modules, {"output_apps.generated_modules.smartjudge.model_registry": None}):
-        assert stt_engine._stt_model_chain() == stt_engine._DEFAULT_STT_CHAIN
+    # The package attribute set by an earlier import would short-circuit `from pkg import mod`,
+    # so drop it too (this test used to pass only because the real stt role equalled the default).
+    import importlib
+
+    pkg = importlib.import_module("output_apps.generated_modules.smartjudge")
+    saved = pkg.__dict__.pop("model_registry", None)
+    try:
+        with patch.dict(sys.modules, {"output_apps.generated_modules.smartjudge.model_registry": None}):
+            assert stt_engine._stt_model_chain() == stt_engine._DEFAULT_STT_CHAIN
+    finally:
+        if saved is not None:
+            pkg.model_registry = saved
 
 
 def test_chain_falls_back_to_default_when_registry_returns_empty():
