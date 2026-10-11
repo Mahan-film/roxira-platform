@@ -22,6 +22,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json tsconfig.json ./
 COPY main.ts app.module.ts ./
 COPY modules ./modules
+COPY security ./security
 
 RUN npm run build
 
