@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
+import { loadCoverageTotals } from "@/lib/coverage";
 import { SubscriptionCta } from "@/components/judge/subscription/subscription-cta";
 
 const SERVICES_TITLE = "محصولات، خدمات و تعرفه اشتراک | سامانه هوشمند قاضی هوشمند";
@@ -23,6 +24,7 @@ export const metadata: Metadata = {
 };
 
 export default function ServicesPage() {
+  const coverage = loadCoverageTotals();
   return (
     <div className="dark glass-app-bg flex flex-col min-h-screen text-foreground font-sans" dir="rtl">
       <GhaziHeader />
@@ -38,7 +40,7 @@ export default function ServicesPage() {
             خدمات حقوقی مبتنی بر هوش مصنوعی و پلن‌های کاربری
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            سامانه قاضی هوشمند با پیاده‌سازی معماری پیشرفته Dual-Level GraphRAG، امکان استعلام مواد قانونی، تحلیل ادله اثبات دعوا و انشای لوایح دادرسی را برای کلیه مراجعین فراهم آورده است. پوشش فعلی قوانین محدود به ۸ قانون است؛ فهرست دقیق را در{" "}
+            سامانه قاضی هوشمند امکان استعلام مواد قانونی، تحلیل ادله و تهیه پیش‌نویس لوایح را فراهم می‌کند. پوشش فعلی قوانین محدود به {coverage.laws.toLocaleString("fa-IR")} قانون است؛ فهرست دقیق را در{" "}
             <Link href="/coverage" className="text-amber-400 hover:underline">صفحه پوشش قوانین</Link> ببینید.
           </p>
         </section>
@@ -121,7 +123,7 @@ export default function ServicesPage() {
               <div>
                 <h3 className="text-xl font-bold text-amber-400">اشتراک نامحدود VIP</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  بسته گسترده‌تر هوش مصنوعی دادرسی قضایی (پوشش قوانین محدود به ۸ قانون؛ جزئیات در صفحه پوشش قوانین) برای وکلا، کارشناسان و مراجعین ویژه
+                  بسته گسترده‌تر هوش مصنوعی دادرسی قضایی (پوشش قوانین محدود به {coverage.laws.toLocaleString("fa-IR")} قانون؛ جزئیات در صفحه پوشش قوانین) برای وکلا، کارشناسان و مراجعین ویژه
                 </p>
               </div>
 
@@ -140,11 +142,11 @@ export default function ServicesPage() {
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>
-                  <span><strong>موتورهای استدلال عمیق:</strong> اتصال به پیشرفته‌ترین مدل‌های نسل جدید هوش مصنوعی (Claude 5 Sonnet, DeepSeek V4.1 Reasoning, Gemini 3.8 Flash)</span>
+                  <span><strong>مدل‌های زبانی قوی‌تر:</strong> استفاده از مدل‌های دقیق‌تر برای پاسخ‌های مفصل</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>
-                  <span><strong>تطبیق بلادرنگ با آراء وحدت رویه:</strong> ممیزی ادله با آخرین احکام هیأت عمومی دیوان عالی</span>
+                  <span><strong>بررسی ادله:</strong> ارزیابی اولیه ادله پرونده با استناد به مواد قانونی بازیابی‌شده</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>

@@ -1,5 +1,6 @@
 "use client";
 
+import { VipGate } from "@/components/draft/vip-gate";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Loader2, Plus, Scale, Trash2 } from "lucide-react";
@@ -122,6 +123,7 @@ export function DraftIndictmentClient() {
           </p>
         </header>
 
+        <VipGate feature="پیش‌نویس کیفرخواست">
         <form onSubmit={submit} className="no-print pb-12" noValidate aria-busy={loading}>
           <div className="grid gap-4 md:grid-cols-2">
             {(
@@ -313,6 +315,7 @@ export function DraftIndictmentClient() {
             )}
           </div>
         </form>
+        </VipGate>
 
         {result && (
           <section id="result" tabIndex={-1} aria-label="نتیجه پیش‌نویس" className="ap-section pt-0 outline-none">

@@ -155,7 +155,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 <input
                   type="tel"
                   dir="ltr"
-                  placeholder="09129367796"
+                  placeholder="۰۹۱۲xxxxxxx"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full rounded-2xl border border-slate-700 bg-slate-900/90 px-4 py-3 text-center font-mono text-base text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"

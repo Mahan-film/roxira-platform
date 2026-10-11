@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PortalMobileNav } from "@/components/layout/portal-mobile-nav";
 import {
   ArrowLeft,
   Boxes,
@@ -102,13 +103,21 @@ const PRICING_TIERS: PricingTier[] = [
       "بیلد و استقرار خودکار روی Docker",
       "دسترسی API و میز کنترل",
     ],
-    cta: { href: "/admin/mission-control", label: "ورود به میز کنترل" },
+    cta: { href: "/contact", label: "درخواست دمو" },
     cardClass: "border-white/10 bg-white/[0.03]",
     iconClass: "border-violet-400/25 bg-violet-400/10 text-violet-300",
     checkClass: "text-violet-300",
     ctaClass:
       "border border-white/15 bg-white/5 text-slate-100 hover:border-violet-400/40 hover:text-white",
   },
+];
+
+const PORTAL_NAV = [
+  { href: "/accounting", label: "حسابداری" },
+  { href: "/invoicing", label: "مالیات و صورتحساب" },
+  { href: "/inventory", label: "انبار و ERP" },
+  { href: "/crm", label: "CRM" },
+  { href: "/contact", label: "تماس و دمو" },
 ];
 
 export default function HomePage() {
@@ -138,18 +147,21 @@ export default function HomePage() {
             <Link href="/crm" className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
               CRM
             </Link>
-            <Link href="/admin/mission-control" className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
-              کارخانه نرم‌افزار
+            <Link href="/contact" className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
+              تماس و دمو
             </Link>
           </nav>
 
-          <Link
-            href="/admin/mission-control"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
-          >
-            <Sparkles className="size-3.5" />
-            اجرای کارخانه نرم‌افزار
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/contact"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
+            >
+              <Sparkles className="size-3.5" />
+              درخواست دمو
+            </Link>
+            <PortalMobileNav links={PORTAL_NAV} />
+          </div>
         </div>
       </header>
 
@@ -178,11 +190,11 @@ export default function HomePage() {
                 سامانه انطباق مالیاتی
               </Link>
               <Link
-                href="/admin/mission-control"
+                href="/contact"
                 className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-xs font-bold text-slate-200 transition-colors hover:border-indigo-400/40 hover:text-white"
               >
                 <Cpu className="size-4" />
-                کارخانه نرم‌افزار خودمختار
+                درخواست دمو
               </Link>
             </div>
           </div>
@@ -222,10 +234,10 @@ export default function HomePage() {
                 محیط ایزوله Docker بیلد و اجرا می‌کند و مسیر سرویس را به‌صورت خودکار ثبت می‌نماید.
               </p>
               <Link
-                href="/admin/mission-control"
+                href="/contact"
                 className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-400/10 px-3 py-1.5 text-[11px] font-semibold text-violet-200 transition-colors hover:bg-violet-400/20"
               >
-                میز کنترل و اجرای ساخت
+                درخواست دمو
                 <ArrowLeft className="size-3.5" />
               </Link>
             </article>

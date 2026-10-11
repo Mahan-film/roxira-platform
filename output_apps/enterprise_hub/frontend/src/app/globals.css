@@ -299,7 +299,7 @@
   --ap-danger: #ff453a;
   --ap-ok: #30d158;
   --ap-nav-bg: rgb(22 22 23 / 0.8);
-  --ap-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", var(--font-vazirmatn), "Vazirmatn", system-ui, sans-serif;
+  --ap-font: var(--font-vazirmatn), "Vazirmatn", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --ap-hero-size: clamp(2.5rem, 7vw, 5rem);
   --ap-hero-weight: 600;
   --ap-hero-tracking: -0.015em;
@@ -322,7 +322,8 @@
   --ap-content-max: 880px;
   --ap-gap: 16px;
   --ap-small-size: 14px;
-  --ap-tiny-size: 12px;
+  --ap-tiny-size: 13px;
+  --ap-field-border: rgb(255 255 255 / 0.5);
   background: var(--ap-bg);
   color: var(--ap-text);
   font-family: var(--ap-font);
@@ -346,6 +347,7 @@
     --ap-accent-soft: rgb(0 113 227 / 0.12);
     --ap-menu-bg: #ffffff;
     --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.16);
+    --ap-field-border: rgb(0 0 0 / 0.5);
   }
 }
 .ap-theme[data-theme="light"] {
@@ -364,6 +366,7 @@
   --ap-accent-soft: rgb(0 113 227 / 0.12);
   --ap-menu-bg: #ffffff;
   --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.16);
+  --ap-field-border: rgb(0 0 0 / 0.5);
 }
 .ap-theme .ap-hero {
   font-size: var(--ap-hero-size);
@@ -384,7 +387,7 @@
 .ap-theme .ap-input {
   width: 100%; min-height: 44px; padding: 10px 14px;
   background: var(--ap-surface-2); color: var(--ap-text);
-  border: 1px solid transparent; border-radius: 12px; font: inherit;
+  border: 1px solid var(--ap-field-border); border-radius: 12px; font: inherit;
 }
 .ap-theme .ap-input[aria-invalid="true"] { border-color: var(--ap-danger); }
 .ap-theme .ap-btn {
@@ -475,15 +478,30 @@
 .ap-theme .ap-bubble-user { background: var(--ap-accent); color: var(--ap-accent-text); }
 .ap-theme .ap-bubble-ai { background: var(--ap-surface); color: var(--ap-text); border: 1px solid var(--ap-line); }
 .ap-theme .ap-composer {
-  display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: var(--ap-radius-card);
-  background: var(--ap-surface); border: 1px solid var(--ap-line);
+  display: flex; align-items: flex-end; gap: 4px; padding: 4px; border-radius: var(--ap-radius-card);
+  background: var(--ap-surface); border: 1px solid var(--ap-field-border);
 }
 .ap-theme .ap-composer:focus-within { outline: 2px solid var(--ap-accent); outline-offset: 2px; }
-.ap-theme .ap-composer input {
-  flex: 1; min-width: 0; min-height: var(--ap-touch); padding: 0 12px; background: transparent;
-  border: 0; outline: none; color: var(--ap-text); font: inherit; font-size: 16px;
+.ap-theme .ap-composer textarea {
+  flex: 1; min-width: 0; min-height: 40px; max-height: 146px; padding: 8px 8px; background: transparent; resize: none;
+  border: 0; outline: none; color: var(--ap-text); font: inherit; font-size: 16px; line-height: 26px; overflow-y: auto;
 }
-.ap-theme .ap-composer input::placeholder { color: var(--ap-text-muted); }
+.ap-theme .ap-composer .ap-iconbtn { width: 40px; height: 40px; }
+.ap-theme .ap-composer .ap-send { min-height: 40px; min-width: 40px; padding: 0 10px; }
+.ap-theme .ap-send-label { display: none; }
+.ap-theme .ap-only-narrow { display: flex; }
+.ap-theme .ap-hide-narrow { display: none; }
+@media (min-width: 420px) {
+  .ap-theme .ap-composer { gap: 8px; padding: 6px; }
+  .ap-theme .ap-composer .ap-iconbtn { width: var(--ap-touch); height: var(--ap-touch); }
+  .ap-theme .ap-composer .ap-send { min-height: 44px; padding: 0 18px; }
+  .ap-theme .ap-send-label { display: inline; }
+  .ap-theme .ap-only-narrow { display: none; }
+  .ap-theme .ap-hide-narrow { display: inline-flex; }
+}
+.ap-theme .ap-attach-row { margin: 0; padding: 0; list-style: none; max-height: 56px; overflow-y: hidden; }
+.ap-theme .ap-chip-sm { min-height: 32px; padding: 0 10px; gap: 6px; font-size: 13px; }
+.ap-theme .ap-composer textarea::placeholder { color: var(--ap-text-muted); }
 .ap-theme .ap-disclaimer {
   display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-radius: var(--ap-radius-input);
   background: var(--ap-accent-soft); color: var(--ap-text); font-size: var(--ap-tiny-size); line-height: 1.7;

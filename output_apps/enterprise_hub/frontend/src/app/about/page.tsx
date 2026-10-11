@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
+import { loadCoverageTotals } from "@/lib/coverage";
 
 const ABOUT_TITLE = "درباره ما | سامانه هوشمند قاضی هوشمند";
 const ABOUT_DESCRIPTION =
@@ -22,6 +23,7 @@ export const metadata: Metadata = {
 };
 
 export default function AboutPage() {
+  const coverage = loadCoverageTotals();
   return (
     <div className="dark glass-app-bg flex flex-col min-h-screen text-foreground font-sans" dir="rtl">
       <GhaziHeader />
@@ -49,7 +51,7 @@ export default function AboutPage() {
             </div>
             <h3 className="font-bold text-base text-white">پایگاه دانش جامع و تنقیح‌شده</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              اتصال بلادرنگ به بیش از ۵٬۱۸۴ گره حقوقی شامل قانون مدنی، مجازات اسلامی، آیین دادرسی مدنی و کیفری، قانون دادگاه‌های صلح ۱۴۰۲ و کلیه آراء وحدت رویه دیوان عالی کشور.
+              پایگاه فعلی شامل {coverage.laws.toLocaleString("fa-IR")} قانون و {coverage.articles.toLocaleString("fa-IR")} ماده است. فهرست دقیق و تاریخ آخرین اصلاح هر قانون در صفحه پوشش قوانین آمده است.
             </p>
           </div>
 
@@ -57,9 +59,9 @@ export default function AboutPage() {
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-lg">
               ⚡
             </div>
-            <h3 className="font-bold text-base text-white">معماری پیشرفته Dual-Level GraphRAG</h3>
+            <h3 className="font-bold text-base text-white">بازیابی از متن قانون</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              تلفیق جستجوی برداری متراکم با گراف روابط مواد قانونی در پایگاه داده جهت تفکیک دقیق استثنائات، مواد منسوخ و مراجع صالح رسیدگی با کمترین زمان پاسخ‌دهی.
+              پیش از پاسخ، مواد مرتبط از پایگاه قوانین بازیابی می‌شود تا پاسخ بر متن قانون تکیه کند. پاسخ‌ها ممکن است خطا داشته باشند.
             </p>
           </div>
 
@@ -82,10 +84,10 @@ export default function AboutPage() {
           </h2>
           <div className="text-xs sm:text-sm text-slate-300 leading-relaxed space-y-4">
             <p>
-              در دنیای پیچیده دعاوی حقوقی و کیفری، اشراف به آخرین تغییرات قوانین (نظیر صلاحیت‌های انحصاری دادگاه صلح یا قواعد جدید قانون صدور چک) و آراء وحدت رویه لازم‌الاتباع، نقشی تعیین‌کننده در سرنوشت پرونده‌ها دارد. سامانه قاضی هوشمند با به‌کارگیری قوی‌ترین موتورهای پردازش متن و استدلال عمیق، امکان تحلیل چندجانبه مستندات پرونده را در کسری از دقیقه میسر می‌سازد.
+              در دنیای پیچیده دعاوی حقوقی و کیفری، اشراف به آخرین تغییرات قوانین (نظیر صلاحیت‌های انحصاری دادگاه صلح یا قواعد جدید قانون صدور چک) و آراء وحدت رویه لازم‌الاتباع، نقشی تعیین‌کننده در سرنوشت پرونده‌ها دارد. سامانه قاضی هوشمند با استفاده از مدل‌های زبانی، تحلیل اولیه مستندات پرونده را سریع‌تر می‌کند؛ نتیجه جایگزین نظر وکیل نیست.
             </p>
             <p>
-              توسعه این سامانه توسط پژوهشگران حوزه هوش مصنوعی و حقوق ایران با مدیریت آقای ماهان محمدی صورت پذیرفته است. کلیه زیرساخت‌ها بر بستر سرورهای اختصاصی پرسرعت مستقر بوده و حفظ صددرصدی حریم خصوصی و محرمانگی داده‌های پرونده‌های مراجعین، خط قرمز بنیادین سامانه است.
+              توسعه این سامانه توسط پژوهشگران حوزه هوش مصنوعی و حقوق ایران با مدیریت آقای ماهان محمدی صورت پذیرفته است. کلیه زیرساخت‌ها بر بستر سرورهای اختصاصی پرسرعت مستقر بوده و حفظ حریم خصوصی داده‌های پرونده برای ما اهمیت دارد؛ جزئیات در صفحه حریم خصوصی آمده است.
             </p>
           </div>
 

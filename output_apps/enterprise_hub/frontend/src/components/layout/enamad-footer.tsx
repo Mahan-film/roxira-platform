@@ -18,7 +18,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
       {compact ? (
         /* نسخه فشرده تک‌خطی مخصوص /chat و /judge: فقط نقطه وضعیت + نماد اینماد.
            سایر پیوندها در منوی همبرگری هدر موجودند. */
-        <div className="max-w-6xl mx-auto px-4 py-1.5 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <div className="max-w-6xl mx-auto px-4 py-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex min-w-0 items-center gap-2">
             <span className="w-2 h-2 shrink-0 rounded-full bg-emerald-500 animate-pulse" />
             <span className="truncate font-medium text-foreground/80">قاضی هوشمند | دستیار تخصصی دادرسی و ادله</span>
@@ -45,9 +45,9 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
                 <span className="font-bold text-foreground text-sm">سامانه هوشمند قاضی هوشمند</span>
               </div>
               <p className="text-muted-foreground text-xs leading-relaxed max-w-md">
-                اولین پلتفرم بومی پردازش زبان حقوقی، استخراج ادله اثبات دعوی و انشای لوایح مستند به 5,184 گره تنقیح‌شده قوانین و آرای دیوان عالی کشور بر پایه معماری Dual-Level GraphRAG.
+                دستیار حقوقی فارسی برای تحلیل پرونده و تنظیم پیش‌نویس. پاسخ‌ها بر پایه‌ی متن مواد قانونی بازیابی‌شده‌اند و ممکن است خطا داشته باشند.
               </p>
-              <div className="pt-1 flex items-center gap-2 text-muted-foreground text-[11px]">
+              <div className="pt-1 flex items-center gap-2 text-muted-foreground text-xs">
                 <span>پشتیبانی شبانه‌روزی:</span>
                 <a href="tel:09129367796" className="text-amber-400 font-mono font-bold hover:underline">09129367796</a>
               </div>
@@ -56,13 +56,13 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
             {/* ستون 2: دسترسی سریع و بکلینک‌ها */}
             <div className="space-y-2">
               <span className="text-foreground font-bold block text-xs">خدمات و ماژول‌ها</span>
-              <ul className="space-y-1.5 text-[11px] text-muted-foreground">
+              <ul className="space-y-1.5 text-xs text-muted-foreground">
                 <li><Link href="/chat" className="hover:text-amber-400 transition-colors">گفتگوی دادرسی و تحلیل ادله</Link></li>
                 <li><Link href="/guide" className="hover:text-amber-400 transition-colors">راهنمای استفاده</Link></li>
                 <li><Link href="/draft-ruling" className="hover:text-amber-400 transition-colors">پیش‌نویس غیررسمی رأی (VIP)</Link></li>
                 <li><Link href="/draft-indictment" className="hover:text-amber-400 transition-colors">پیش‌نویس غیررسمی کیفرخواست (VIP)</Link></li>
                 <li><Link href="/services" className="hover:text-amber-400 transition-colors">طرح‌های اشتراک و مقایسه VIP</Link></li>
-                <li><Link href="/technology" className="hover:text-amber-400 transition-colors">معماری فنی و گراف دانش RAG</Link></li>
+                <li><Link href="/technology" className="hover:text-amber-400 transition-colors">فناوری و منابع</Link></li>
                 <li><Link href="/laws" className="hover:text-amber-400 transition-colors">پایگاه مواد و تنقیح قوانین</Link></li>
                 <li><Link href="/coverage" className="hover:text-amber-400 transition-colors">پوشش قوانین</Link></li>
                 <li><Link href="/precedents" className="hover:text-amber-400 transition-colors">آرای وحدت رویه دیوان عالی</Link></li>
@@ -72,7 +72,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
             {/* ستون 3: بخش حقوقی و اینماد رسمی */}
             <div className="space-y-3">
               <span className="text-foreground font-bold block text-xs">اعتبار قانونی و مجوزها</span>
-              <ul className="space-y-1.5 text-[11px] text-muted-foreground">
+              <ul className="space-y-1.5 text-xs text-muted-foreground">
                 <li><Link href="/about" className="hover:text-amber-400 transition-colors">درباره سامانه و مدیریت</Link></li>
                 <li><Link href="/contact" className="hover:text-amber-400 transition-colors">تماس با پشتیبانی رسمی</Link></li>
                 <li><Link href="/terms" className="hover:text-amber-400 transition-colors">قوانین، مقررات و سلب مسئولیت</Link></li>
@@ -82,7 +82,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
               {/* نشان تایید اینماد — کامپوننت مشترک EnamadBadge (اینماد قاضی هوشمند، شناسه 7491439) */}
               <div className="pt-1">
                 <EnamadBadge domain="ghazi" />
-                <div className="mt-2 text-right text-[10px]">
+                <div className="mt-2 text-right text-xs">
                   <span className="block font-bold text-foreground/90">نماد اعتماد الکترونیکی</span>
                   <span className="font-mono text-muted-foreground">شناسه: 7491439</span>
                 </div>
@@ -90,7 +90,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
             <span>© کلیه حقوق مادی و معنوی متعلق به سامانه هوشمند «قاضی هوشمند» است.</span>
             <div className="flex items-center gap-3">
               <Link href="/guide" className="hover:underline">راهنمای استفاده</Link>

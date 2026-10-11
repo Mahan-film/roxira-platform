@@ -237,12 +237,12 @@ export function LoginModal({
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#0B111F] text-slate-100 shadow-2xl shadow-black/50">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/30">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-[#0071e3] text-white">
               <Lock className="size-4" />
             </span>
             <div>
               <h2 className="text-sm font-bold text-white">{title}</h2>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-xs text-slate-400">
                 {serviceDomain === "ROXIRA" ? "پورتال سازمانی روکسیرا" : "قاضی هوشمند"}
               </p>
             </div>
@@ -272,7 +272,7 @@ export function LoginModal({
                     id="auth-phone"
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
-                    placeholder="09xxxxxxxxx"
+                    placeholder="۰۹۱۲xxxxxxx"
                     inputMode="numeric"
                     autoComplete="tel"
                     autoFocus
@@ -280,8 +280,8 @@ export function LoginModal({
                     className="h-11 border-white/10 bg-black/30 pr-10 text-left text-slate-100 placeholder:text-slate-600"
                   />
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  ارقام فارسی و عربی نیز پذیرفته می‌شوند (نمونه: ۰۹۱۲۹۳۶۷۷۹۶).
+                <p className="text-xs text-slate-500">
+                  ارقام فارسی و عربی نیز پذیرفته می‌شوند (مثال: ۰۹۱۲xxxxxxx).
                 </p>
               </div>
 
@@ -301,7 +301,7 @@ export function LoginModal({
               <Button
                 type="submit"
                 disabled={loading}
-                className="h-11 w-full bg-gradient-to-l from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/30 hover:opacity-95"
+                className="h-11 w-full bg-[#0071e3] text-white hover:bg-[#0077ed]"
               >
                 {loading ? (
                   <>
@@ -327,7 +327,7 @@ export function LoginModal({
                   setNotice(null);
                   setDevCode(null);
                 }}
-                className="inline-flex items-center gap-1 text-[11px] text-slate-400 transition-colors hover:text-white"
+                className="inline-flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-white"
               >
                 <ArrowRight className="size-3.5" />
                 ویرایش شماره {phone}
@@ -350,7 +350,7 @@ export function LoginModal({
                   dir="ltr"
                   className="h-12 border-white/10 bg-black/30 text-center font-mono text-2xl tracking-[0.5em] text-slate-100 placeholder:text-slate-700"
                 />
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">
                     {resendIn > 0
                       ? `ارسال مجدد تا ${resendIn} ثانیه`
@@ -368,14 +368,14 @@ export function LoginModal({
               </div>
 
               {notice && (
-                <p className="flex items-start gap-1.5 rounded-lg bg-indigo-500/10 px-3 py-2 text-[11px] text-indigo-200">
+                <p className="flex items-start gap-1.5 rounded-lg bg-indigo-500/10 px-3 py-2 text-xs text-indigo-200">
                   <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
                   {notice}
                 </p>
               )}
 
               {smsDelivered === false && (
-                <p className="text-[11px] text-amber-300/90">
+                <p className="text-xs text-amber-300/90">
                   ارسال پیامک از درگاه تأیید نشد؛ در صورت امکان چند لحظه بعد دوباره
                   درخواست کنید.
                 </p>
@@ -402,7 +402,7 @@ export function LoginModal({
               <Button
                 type="submit"
                 disabled={loading || code.length !== 5}
-                className="h-11 w-full bg-gradient-to-l from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/30 hover:opacity-95"
+                className="h-11 w-full bg-[#0071e3] text-white hover:bg-[#0077ed]"
               >
                 {loading ? (
                   <>
@@ -419,7 +419,7 @@ export function LoginModal({
             </form>
           )}
 
-          <p className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-500">
             <ShieldCheck className="size-3" />
             احراز هویت امن با کد یک‌بارمصرف
           </p>

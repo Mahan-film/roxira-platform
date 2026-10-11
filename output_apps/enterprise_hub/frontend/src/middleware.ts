@@ -25,7 +25,26 @@ const ROXIRA_ONLY_PATHS = [
   "/inventory",
   "/crm",
   "/docs",
+  "/hr",
+  "/radar",
+  "/admin",
 ];
+
+/** مسیرهای «قاضی هوشمند» که روی دامنه‌های روکسیرا سرو نمی‌شوند (نشت برند). */
+const GHAZI_ONLY_PATHS = [
+  "/about",
+  "/services",
+  "/technology",
+  "/laws",
+  "/precedents",
+  "/coverage",
+  "/lawyers",
+  "/support",
+];
+
+function hasPrefix(pathname: string, base: string): boolean {
+  return pathname === base || pathname.startsWith(base + "/");
+}
 
 type ServiceDomain = "ghazi" | "roxira_ir" | "roxira_net";
 
@@ -58,8 +77,18 @@ export function middleware(request: NextRequest) {
     // مسیرهای پورتال سازمانی در دامنه قاضی معنا ندارند؛ به همان مسیر روی
     // roxira.ir هدایت می‌شویم (نه صرفاً ریشه) تا کاربر روی صفحه درخواستی
     // فرود بیاید، نه صفحه اصلی یک سایت دیگر.
-    if (ROXIRA_ONLY_PATHS.some((path) => pathname.startsWith(path))) {
+    if (ROXIRA_ONLY_PATHS.some((path) => hasPrefix(pathname, path))) {
       return NextResponse.redirect(new URL(pathname + request.nextUrl.search, "https://roxira.ir"));
+    }
+    // پورتال انگلیسی روکسیرا روی دامنه قاضی معنا ندارد
+    if (hasPrefix(pathname, "/en")) {
+      return NextResponse.redirect(new URL("https://roxira.net/en"));
+    }
+    // /contact روی دامنه قاضی = کارت پشتیبانی قاضی هوشمند (فرم فروش فقط روی roxira.ir)
+    if (pathname === "/contact") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/support";
+      return NextResponse.rewrite(url);
     }
     // ریشه دامنه قاضی = رابط چت هوشمند حقوقی
     if (pathname === "/" || pathname === "/judge") {
@@ -73,6 +102,10 @@ export function middleware(request: NextRequest) {
   // قاضی هوشمند فقط روی دامنه اختصاصی خودش سرو می‌شود
   if (pathname === "/chat" || pathname === "/judge" || pathname === "/guide" || pathname === "/draft-ruling" || pathname === "/draft-indictment") {
     return redirectGhazi();
+  }
+
+  if (GHAZI_ONLY_PATHS.some((path) => hasPrefix(pathname, path))) {
+    return NextResponse.redirect(new URL(pathname + request.nextUrl.search, "https://ghazihoushmand.ir"));
   }
 
   if (domain === "roxira_net") {
@@ -103,12 +136,21 @@ export const config = {
     "/accounting",
     "/inventory",
     "/crm",
-    "/about",
+    "/about/:path*",
     "/terms",
     "/privacy",
-    "/services",
-    "/technology",
-    "/contact",
+    "/services/:path*",
+    "/technology/:path*",
+    "/contact/:path*",
     "/docs",
+    "/hr/:path*",
+    "/radar/:path*",
+    "/admin/:path*",
+    "/en/:path*",
+    "/laws/:path*",
+    "/precedents/:path*",
+    "/coverage/:path*",
+    "/lawyers/:path*",
+    "/support/:path*",
   ],
 };

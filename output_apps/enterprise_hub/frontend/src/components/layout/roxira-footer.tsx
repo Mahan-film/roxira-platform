@@ -8,8 +8,7 @@ const PLATFORM_LINKS = [
   { href: "/invoicing", label: "انطباق مالیاتی (سامانه مودیان)" },
   { href: "/inventory", label: "انبارداری و ERP" },
   { href: "/crm", label: "مدیریت مشتریان (CRM)" },
-  { href: "/admin/mission-control", label: "کارخانه نرم‌افزار خودمختار" },
-  { href: "/admin/mission-control", label: "میز کنترل (Mission Control)" },
+  { href: "/contact", label: "درخواست دمو" },
   { href: "/docs", label: "مستندات وب‌سرویس و API" },
 ];
 
@@ -17,7 +16,7 @@ const MODULES = [
   { href: "/accounting", label: "دفتر کل و گزارش‌های مالی", icon: Layers },
   { href: "/invoicing", label: "صورتحساب و امضای الکترونیک", icon: FileCheck2 },
   { href: "/inventory", label: "موجودی و بهای تمام‌شده", icon: Boxes },
-  { href: "/admin/mission-control", label: "ساخت و استقرار ماژول", icon: Cpu },
+  { href: "/contact", label: "درخواست دمو و استقرار", icon: Cpu },
 ];
 
 /**

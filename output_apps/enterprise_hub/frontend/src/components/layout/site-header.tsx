@@ -5,14 +5,15 @@ import { LogIn, LogOut, UserRound } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { inferServiceDomain } from "@/lib/api/auth-client";
+import { PortalMobileNav } from "@/components/layout/portal-mobile-nav";
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/accounting", label: "حسابداری" },
   { href: "/invoicing", label: "انطباق مالیاتی" },
   { href: "/inventory", label: "انبار و ERP" },
   { href: "/crm", label: "CRM" },
-  { href: "/admin/mission-control", label: "کارخانه و میز کنترل" },
   { href: "/docs", label: "مستندات API" },
+  { href: "/contact", label: "تماس و دمو" },
 ];
 
 export function SiteHeader() {
@@ -53,6 +54,8 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
+
+        <PortalMobileNav links={NAV_LINKS} />
 
         {!isLoading && isAuthenticated && user ? (
           <div className="flex items-center gap-2">

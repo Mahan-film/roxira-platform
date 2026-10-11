@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CircleHelp,
-  Coins,
   LogOut,
   Menu,
   Scale,
@@ -14,30 +13,13 @@ import {
 import { useAuth } from "@/components/auth/auth-provider";
 import { SubscriptionModal } from "@/components/judge/subscription/subscription-modal";
 import { ApDropdown } from "@/components/layout/ap-dropdown";
-import { DRAFT_ACTIONS, DRAFT_PAGES, draftActionHref } from "@/lib/chat-actions";
 
 interface NavDest {
   href: string;
   label: string;
-  /** "/damages" is not served on the Ghazi domain (middleware redirects to roxira.ir):
-   *  a plain <a> avoids Next client navigation hitting a cross-origin RSC fetch. */
-  external?: boolean;
 }
 
-const MAIN_LINKS: NavDest[] = [
-  { href: "/chat", label: "گفتگوی حقوقی" },
-  { href: "/damages", label: "محاسبه‌گر خسارت", external: true },
-  { href: "/services", label: "محصولات و اشتراک" },
-  { href: "/technology", label: "تکنولوژی" },
-];
-
-const DRAFT_LINKS: NavDest[] = [
-  ...DRAFT_PAGES.map((p) => ({ href: p.href, label: p.label })),
-  ...DRAFT_ACTIONS.map((a) => ({ href: draftActionHref(a.key), label: a.label })),
-];
-
 const INFO_LINKS: NavDest[] = [
-  { href: "/guide", label: "راهنمای استفاده" },
   { href: "/about", label: "درباره سامانه" },
   { href: "/contact", label: "تماس با ما" },
   { href: "/terms", label: "قوانین و مقررات" },
@@ -63,11 +45,7 @@ function DestLink({
     "aria-current": current ? ("page" as const) : undefined,
     onClick: onNavigate,
   };
-  return dest.external ? (
-    <a href={dest.href} {...common}>
-      {dest.label}
-    </a>
-  ) : (
+  return (
     <Link href={dest.href} {...common}>
       {dest.label}
     </Link>
@@ -79,6 +57,7 @@ export function GhaziHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const { isAuthenticated, openLogin, logout, accessToken, user } = useAuth();
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const handleOpenAuth = () => {
     openLogin({
@@ -88,59 +67,32 @@ export function GhaziHeader() {
     });
   };
 
-  const draftsActive = pathname.startsWith("/draft-");
   const closeMobile = () => setMobileOpen(false);
 
   const accountSection = (close: () => void, role?: "menuitem") => (
     <>
-      {isAuthenticated ? (
-        <>
-          <div className="ap-menu-label">حساب کاربری</div>
-          <div className="ap-menuitem" style={{ cursor: "default" }}>
-            <Coins className="size-4" aria-hidden="true" />
-            <span>توکن باقی‌مانده: 0</span>
-          </div>
-          <button
-            type="button"
-            role={role}
-            className="ap-menuitem"
-            onClick={() => {
-              close();
-              setTopUpOpen(true);
-            }}
-          >
-            افزایش موجودی
-          </button>
-          <button
-            type="button"
-            role={role}
-            className="ap-menuitem"
-            data-danger="true"
-            onClick={() => {
-              close();
-              logout();
-            }}
-          >
-            <LogOut className="size-4" aria-hidden="true" />
-            <span>خروج از حساب کاربری</span>
-          </button>
-        </>
-      ) : (
+      <div className="ap-menu-label">{isAuthenticated ? "وارد شده‌اید" : "وارد نشده‌اید"}</div>
+      {isAuthenticated && user?.phone && (
+        <div className="ap-menuitem" style={{ cursor: "default" }} dir="ltr">
+          {user.phone}
+        </div>
+      )}
+      {isAuthenticated && (
         <button
           type="button"
           role={role}
           className="ap-menuitem"
+          data-danger="true"
           onClick={() => {
             close();
-            handleOpenAuth();
+            logout();
           }}
         >
-          <User className="size-4" aria-hidden="true" />
-          <span>ورود با پیامک (OTP)</span>
+          <LogOut className="size-4" aria-hidden="true" />
+          <span>خروج از حساب کاربری</span>
         </button>
       )}
       <div className="ap-menu-sep" role="separator" />
-      <div className="ap-menu-label">اطلاعات</div>
       {INFO_LINKS.map((d) => (
         <DestLink key={d.href} dest={d} className="ap-menuitem" role={role} current={pathname === d.href} onNavigate={close} />
       ))}
@@ -160,25 +112,10 @@ export function GhaziHeader() {
 
           {/* Desktop primary navigation */}
           <nav className="ap-nav-list" aria-label="ناوبری اصلی">
-            <DestLink dest={MAIN_LINKS[0]} className="ap-navlink" current={pathname === "/chat"} />
-            <ApDropdown label="پیش‌نویس‌ها" active={draftsActive}>
-              {(close) => (
-                <>
-                  <div className="ap-menu-label">صفحه‌های اختصاصی</div>
-                  {DRAFT_LINKS.slice(0, DRAFT_PAGES.length).map((d) => (
-                    <DestLink key={d.href} dest={d} className="ap-menuitem" role="menuitem" current={pathname === d.href} onNavigate={close} />
-                  ))}
-                  <div className="ap-menu-sep" role="separator" />
-                  <div className="ap-menu-label">در گفتگو</div>
-                  {DRAFT_LINKS.slice(DRAFT_PAGES.length).map((d) => (
-                    <DestLink key={d.href} dest={d} className="ap-menuitem" role="menuitem" current={false} onNavigate={close} />
-                  ))}
-                </>
-              )}
-            </ApDropdown>
-            {MAIN_LINKS.slice(1).map((d) => (
-              <DestLink key={d.href} dest={d} className="ap-navlink" current={pathname === d.href} />
-            ))}
+            <DestLink dest={{ href: "/chat", label: "گفتگوی حقوقی" }} className="ap-navlink" current={pathname === "/chat"} />
+            <button type="button" className="ap-navlink" onClick={() => setTopUpOpen(true)}>
+              اشتراک
+            </button>
           </nav>
 
           <div className="ap-header-end">
@@ -212,29 +149,32 @@ export function GhaziHeader() {
           </div>
         </div>
 
-        {/* Mobile / tablet panel: everything grouped, no horizontal scrolling bar */}
+        {/* Mobile / tablet panel: four items; account details expand on demand */}
         {mobileOpen && (
           <div className="ap-mobile-panel ap-only-mobile">
-            <DestLink dest={MAIN_LINKS[0]} className="ap-menuitem" current={pathname === "/chat"} onNavigate={closeMobile} />
-            <div className="ap-menu-label">پیش‌نویس‌ها</div>
-            {DRAFT_LINKS.map((d) => (
-              <DestLink key={d.href} dest={d} className="ap-menuitem" current={pathname === d.href} onNavigate={closeMobile} />
-            ))}
-            <div className="ap-menu-sep" role="separator" />
-            {MAIN_LINKS.slice(1).map((d) => (
-              <DestLink key={d.href} dest={d} className="ap-menuitem" current={pathname === d.href} onNavigate={closeMobile} />
-            ))}
-            <div className="ap-menu-sep" role="separator" />
-            {accountSection(closeMobile)}
-            <div className="ap-menu-sep" role="separator" />
-            <div className="ap-menuitem" style={{ cursor: "default" }}>
-              <span>
-                مرکز تماس:{" "}
-                <a href="tel:09129367796" className="ap-link" dir="ltr">
-                  09129367796
-                </a>
-              </span>
-            </div>
+            <DestLink dest={{ href: "/chat", label: "چت" }} className="ap-menuitem" current={pathname === "/chat"} onNavigate={closeMobile} />
+            <DestLink dest={{ href: "/guide", label: "راهنما" }} className="ap-menuitem" current={pathname === "/guide"} onNavigate={closeMobile} />
+            <button
+              type="button"
+              className="ap-menuitem"
+              onClick={() => {
+                closeMobile();
+                setTopUpOpen(true);
+              }}
+            >
+              اشتراک
+            </button>
+            <button
+              type="button"
+              className="ap-menuitem"
+              aria-expanded={accountOpen}
+              onClick={() => setAccountOpen((v) => !v)}
+            >
+              <User className="size-4" aria-hidden="true" />
+              <span>حساب</span>
+              <span className="ap-muted ms-auto text-[13px]">{isAuthenticated ? "وارد شده‌اید" : "مهمان"}</span>
+            </button>
+            {accountOpen && accountSection(closeMobile)}
           </div>
         )}
       </header>
@@ -243,7 +183,6 @@ export function GhaziHeader() {
       <SubscriptionModal
         isOpen={topUpOpen}
         onClose={() => setTopUpOpen(false)}
-        currentPlan="عادی"
         accessToken={accessToken}
         phone={user?.phone}
       />

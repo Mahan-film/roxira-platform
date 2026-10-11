@@ -8,11 +8,11 @@ import {
   FileText,
   Gavel,
   Camera,
-  Info,
   Loader2,
   Mic,
   Paperclip,
   Phone,
+  Plus,
   RotateCw,
   Send,
   Square,
@@ -27,7 +27,7 @@ import {
   findDraftAction,
   type DraftActionKey,
 } from "@/lib/chat-actions";
-import { ChatTipCard, MicHint, useMicHint } from "./chat-onboarding";
+import { MicHint, useMicHint } from "./chat-onboarding";
 import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
 import { ChatHttpError, streamChat } from "@/lib/api/chat-stream";
 import {
@@ -82,11 +82,17 @@ type Attachment = {
   file?: File;
 };
 
-const DEFAULT_CASE_PROMPT = "این پرونده را بررسی و تحلیل حقوقی کن.";
+const DEFAULT_CASE_PROMPT = "این مدارک را بررسی کن: خلاصه، نکات حقوقی مهم، و اقدام بعدی پیشنهادی";
+
+/** Files already sent in this conversation; the most recent ones are re-sent with every follow-up. */
+type ContextFile = { fileId: string; name: string; pages?: number };
+const MAX_CONTEXT_FILES = 5;
 
 type ChatMessage = {
   role: string;
   content: string;
+  /** Names of the case files sent together with this user message. */
+  files?: string[];
   draft?: string;
   probability?: string;
   statutory_basis?: StatutoryItem[];
@@ -133,6 +139,13 @@ export function ChatShell() {
   const [guestNotice, setGuestNotice] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachNotice, setAttachNotice] = useState("");
+  const [contextFiles, setContextFiles] = useState<ContextFile[]>([]);
+  const contextRef = useRef<ContextFile[]>([]);
+  const [ctxOpen, setCtxOpen] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [micFocused, setMicFocused] = useState(false);
+  const plusRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const micHint = useMicHint();
@@ -478,7 +491,7 @@ export function ChatShell() {
           message: textToSend,
           conversation_id: conversationId || undefined,
           request_id: requestId,
-          ...(readyFileIds.length ? { case_file_ids: readyFileIds } : {}),
+          ...(contextRef.current.length ? { case_file_ids: contextRef.current.map((f) => f.fileId) } : {}),
         },
         onDelta: (piece) => {
           streamed += piece;
@@ -539,8 +552,28 @@ export function ChatShell() {
     if (!textToSend || !textToSend.trim() || isLoading || busyRef.current || uploading) return;
     if (textToSend.length > MAX_CHAT_CHARS) return;
 
+    // Ready attachments move into this message and into the conversation context
+    // (max 5, most recent); failed chips stay in the composer for retry.
+    const sent = attachments.filter((a) => a.status === "ready" && a.fileId);
+    if (sent.length) {
+      const added: ContextFile[] = sent.map((a) => ({ fileId: a.fileId as string, name: a.name, pages: a.pages }));
+      const merged = [...contextRef.current.filter((c) => !added.some((n) => n.fileId === c.fileId)), ...added].slice(-MAX_CONTEXT_FILES);
+      contextRef.current = merged;
+      setContextFiles(merged);
+      setAttachments((prev) => prev.filter((a) => !sent.includes(a)));
+    }
     setInputPrompt("");
-    await sendChat(textToSend, [...messages, { role: "user", content: textToSend }]);
+    await sendChat(textToSend, [
+      ...messages,
+      { role: "user", content: textToSend, ...(sent.length ? { files: sent.map((a) => a.name) } : {}) },
+    ]);
+  };
+
+  const removeContextFile = (f: ContextFile) => {
+    contextRef.current = contextRef.current.filter((c) => c.fileId !== f.fileId);
+    setContextFiles(contextRef.current);
+    if (contextRef.current.length === 0) setCtxOpen(false);
+    void deleteCaseFile(f.fileId, getAccessToken());
   };
 
   // تلاش مجدد: حباب خطا حذف و همان پرسش بدون تکرار پیام کاربر دوباره ارسال می‌شود
@@ -564,15 +597,40 @@ export function ChatShell() {
   }, [isAuthenticated]);
 
   const overLimit = inputPrompt.length > MAX_CHAT_CHARS;
+  // Guests see the login nudge only after the first real answer.
+  const hasAnswer = messages.some((m, i) => i > 0 && m.role === "assistant" && !m.isError);
+
+  // Auto-grow the composer between 1 and 5 lines.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 5 * 26 + 16)}px`;
+  }, [inputPrompt]);
+
+  // Close the "+" menu on outside press / Escape.
+  useEffect(() => {
+    if (!plusOpen) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (plusRef.current && !plusRef.current.contains(e.target as Node)) setPlusOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPlusOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [plusOpen]);
 
   const showExamples = !isLoading && !messages.some((msg) => msg.role === "user");
 
   return (
     <div className="flex flex-col h-full w-full max-w-[var(--ap-content-max)] mx-auto overflow-hidden">
       {/* ناحیه اسکرول پیام‌ها */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 space-y-4">
-        <ChatTipCard />
-
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 space-y-4" role="log" aria-live="polite" aria-label="گفتگو">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`ap-bubble ${msg.role === "user" ? "ap-bubble-user" : "ap-bubble-ai"}`}>
@@ -606,6 +664,15 @@ export function ChatShell() {
                 >
                   {msg.content}
                 </div>
+              )}
+
+              {msg.files && msg.files.length > 0 && (
+                <p className="mt-2 flex items-center gap-1.5 text-[13px] opacity-90" dir="auto">
+                  <Paperclip className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 break-words">
+                    {msg.files.length.toLocaleString("fa-IR")} فایل: {msg.files.join("، ")}
+                  </span>
+                </p>
               )}
 
               {msg.isError && msg.retryPrompt && (
@@ -695,7 +762,7 @@ export function ChatShell() {
       </div>
 
       {/* ناحیه ورودی داک‌شده در پایین */}
-      <div className="shrink-0 space-y-2 px-4 pb-2 pt-2 sm:space-y-3 sm:px-6 sm:pb-3 sm:pt-3" style={{ borderTop: "1px solid var(--ap-line)" }}>
+      <div className="shrink-0 space-y-1.5 px-3 pb-2 pt-2 sm:space-y-3 sm:px-6 sm:pb-3 sm:pt-3" style={{ borderTop: "1px solid var(--ap-line)" }}>
         {/* اقدامات حقوقی: چت‌محور + پیوند به صفحه‌های اختصاصی */}
         <div className="ap-chip-row scroll-fade-x max-w-full min-w-0 touch-pan-x" role="group" aria-label="اقدامات حقوقی">
           <span className="ap-notice whitespace-nowrap font-semibold">اقدامات حقوقی</span>
@@ -743,49 +810,77 @@ export function ChatShell() {
           </div>
         )}
 
-        {/* چیپ‌های فایل‌های پیوست‌شده */}
-        {attachments.length > 0 && (
-          <ul className="flex flex-wrap gap-2" aria-label="فایل‌های پیوست‌شده">
-            {attachments.map((att) => (
-              <li
-                key={att.localId}
-                className="ap-chip max-w-full"
-                style={att.status === "error" ? { color: "var(--ap-danger)" } : undefined}
-                title={att.warning}
-              >
-                {att.status === "uploading" ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                ) : att.status === "error" ? (
-                  <AlertTriangle className="size-4" aria-hidden="true" />
-                ) : (
-                  <FileText className="size-4" aria-hidden="true" />
-                )}
-                <span className="truncate max-w-[12rem]" dir="auto">{att.name}</span>
-                <span className="ap-muted text-xs whitespace-nowrap" role={att.status === "error" ? "alert" : "status"}>
-                  {att.status === "uploading"
-                    ? "در حال بارگذاری و خواندن…"
-                    : att.status === "error"
-                    ? att.error
-                    : `${(att.pages ?? 1).toLocaleString("fa-IR")} صفحه${att.ocrUsed ? " (OCR)" : ""}`}
-                </span>
-                {att.status === "error" && att.file && (
+        {/* فایل‌ها: یک ردیف فشرده و اسکرول‌پذیر افقی (حداکثر ~۵۶ پیکسل) */}
+        {(attachments.length > 0 || contextFiles.length > 0) && (
+          <div className="relative">
+            <ul className="ap-chip-row ap-attach-row" aria-label="فایل‌های پیوست‌شده">
+              {contextFiles.length > 0 && (
+                <li className="shrink-0">
                   <button
                     type="button"
-                    onClick={() => void startUpload(att.localId, att.file as File)}
-                    aria-label={`تلاش مجدد برای ${att.name}`}
-                    className="ap-link underline text-xs"
+                    className="ap-chip ap-chip-sm ap-chip-link"
+                    aria-expanded={ctxOpen}
+                    onClick={() => setCtxOpen((v) => !v)}
                   >
-                    تلاش مجدد
+                    <Paperclip className="size-3.5" aria-hidden="true" />
+                    <span>پرونده‌های این گفتگو ({contextFiles.length.toLocaleString("fa-IR")})</span>
                   </button>
-                )}
-                <button type="button" onClick={() => removeAttachment(att)} aria-label={`حذف ${att.name}`}>
-                  <X className="size-4" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
+                </li>
+              )}
+              {attachments.map((att) => (
+                <li
+                  key={att.localId}
+                  className="ap-chip ap-chip-sm"
+                  style={att.status === "error" ? { color: "var(--ap-danger)" } : undefined}
+                  title={att.warning ?? att.name}
+                >
+                  {att.status === "uploading" ? (
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                  ) : att.status === "error" ? (
+                    <AlertTriangle className="size-3.5" aria-hidden="true" />
+                  ) : (
+                    <FileText className="size-3.5" aria-hidden="true" />
+                  )}
+                  <span className="truncate max-w-[7.5rem]" dir="auto">{att.name}</span>
+                  <span className="ap-muted whitespace-nowrap" role={att.status === "error" ? "alert" : "status"}>
+                    {att.status === "uploading"
+                      ? "در حال بارگذاری…"
+                      : att.status === "error"
+                      ? att.error
+                      : `${(att.pages ?? 1).toLocaleString("fa-IR")} صفحه${att.ocrUsed ? " · OCR" : ""}`}
+                  </span>
+                  {att.status === "error" && att.file && (
+                    <button
+                      type="button"
+                      onClick={() => void startUpload(att.localId, att.file as File)}
+                      aria-label={`تلاش مجدد برای ${att.name}`}
+                      className="ap-link underline"
+                    >
+                      تلاش مجدد
+                    </button>
+                  )}
+                  <button type="button" onClick={() => removeAttachment(att)} aria-label={`حذف ${att.name}`}>
+                    <X className="size-3.5" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {ctxOpen && contextFiles.length > 0 && (
+              <div className="ap-menu" style={{ top: "auto", bottom: "calc(100% + 6px)", maxHeight: "40vh", overflowY: "auto" }} role="group" aria-label="پرونده‌های این گفتگو">
+                <div className="ap-menu-label">این فایل‌ها در پرسش‌های بعدی هم استفاده می‌شوند</div>
+                {contextFiles.map((f) => (
+                  <div key={f.fileId} className="ap-menuitem" style={{ cursor: "default" }}>
+                    <span className="min-w-0 flex-1 truncate" dir="auto">{f.name}</span>
+                    <button type="button" className="ap-link underline" onClick={() => removeContextFile(f)} aria-label={`حذف ${f.name} از پرونده‌های گفتگو`}>
+                      حذف
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
-        {micHint.show && !isVoiceRecording && <MicHint onDismiss={micHint.markUsed} />}
+        {micHint.show && micFocused && !isVoiceRecording && <MicHint onDismiss={micHint.markUsed} />}
 
         {/* جعبه ارسال پیام و دکمه‌های صوتی */}
         <div className="ap-composer">
@@ -808,38 +903,85 @@ export function ChatShell() {
             data-testid="case-camera-input"
             onChange={(e) => handleFilesPicked(e.target.files)}
           />
-          <button
-            type="button"
-            onClick={() => openFilePicker(false)}
-            className="ap-iconbtn"
-            aria-label="پیوست پرونده"
-            title="پیوست پرونده (PDF، تصویر، DOCX، TXT)"
-          >
-            <Paperclip className="size-5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => openFilePicker(true)}
-            className="ap-iconbtn"
-            aria-label="عکس گرفتن از سند"
-            title="عکس گرفتن از سند"
-          >
-            <Camera className="size-5" aria-hidden="true" />
-          </button>
-          <input
-            type="text"
+          <div className="ap-dropdown" ref={plusRef}>
+            <button
+              type="button"
+              className="ap-iconbtn"
+              aria-haspopup="menu"
+              aria-expanded={plusOpen}
+              aria-label="پیوست و ابزارها"
+              title="پیوست پرونده، عکس سند"
+              onClick={() => setPlusOpen((v) => !v)}
+            >
+              <Plus className="size-5" aria-hidden="true" />
+            </button>
+            {plusOpen && (
+              <div className="ap-menu" role="menu" style={{ top: "auto", bottom: "calc(100% + 8px)" }}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ap-menuitem"
+                  onClick={() => {
+                    setPlusOpen(false);
+                    openFilePicker(false);
+                  }}
+                >
+                  <Paperclip className="size-4" aria-hidden="true" />
+                  <span>پیوست پرونده (PDF، تصویر، DOCX، TXT)</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ap-menuitem"
+                  onClick={() => {
+                    setPlusOpen(false);
+                    openFilePicker(true);
+                  }}
+                >
+                  <Camera className="size-4" aria-hidden="true" />
+                  <span>عکس گرفتن از سند</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ap-menuitem ap-only-narrow"
+                  onClick={() => {
+                    setPlusOpen(false);
+                    unlockSafariAudio();
+                    setIsLiveAudioOpen(true);
+                  }}
+                >
+                  <Phone className="size-4" aria-hidden="true" />
+                  <span>مکالمه صوتی زنده</span>
+                </button>
+              </div>
+            )}
+          </div>
+          <textarea
+            ref={textareaRef}
+            rows={1}
             aria-label="پیام شما"
             placeholder="پیام خود را بنویسید..."
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             aria-invalid={overLimit}
-            onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+            enterKeyHint="enter"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || e.shiftKey) return;
+              // IME composition (Persian/CJK keyboards): Enter confirms the candidate, never sends.
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              // Touch devices: Enter is a newline, the send button sends.
+              if (window.matchMedia("(pointer: coarse)").matches) return;
+              e.preventDefault();
+              void handleSendMessage();
+            }}
           />
 
           {/* دکمه تبدیل گفتار به متن (Voice STT) */}
           <button
             type="button"
             onClick={toggleVoiceRecording}
+            onFocus={() => setMicFocused(true)}
             className={`ap-iconbtn ${isVoiceRecording ? "animate-pulse" : ""}`}
             data-active={isVoiceRecording}
             aria-label={isVoiceRecording ? "اتمام ضبط" : "تبدیل گفتار به متن"}
@@ -849,7 +991,7 @@ export function ChatShell() {
             {isVoiceRecording ? <Square className="size-4" aria-hidden="true" /> : <Mic className="size-5" aria-hidden="true" />}
           </button>
 
-          {/* دکمه تماس صوتی زنده */}
+          {/* دکمه تماس صوتی زنده (روی صفحه‌های باریک داخل منوی +) */}
           <button
             type="button"
             onClick={() => {
@@ -858,7 +1000,7 @@ export function ChatShell() {
               unlockSafariAudio();
               setIsLiveAudioOpen(true);
             }}
-            className="ap-iconbtn"
+            className="ap-iconbtn ap-hide-narrow"
             aria-label="مکالمه صوتی زنده"
             title="مکالمه صوتی زنده"
           >
@@ -866,8 +1008,15 @@ export function ChatShell() {
           </button>
 
           {/* دکمه ارسال پیام */}
-          <button type="button" onClick={() => handleSendMessage()} disabled={isLoading || overLimit || uploading} className="ap-btn">
-            <span>ارسال</span>
+          <button
+            type="button"
+            onClick={() => handleSendMessage()}
+            disabled={isLoading || overLimit || uploading}
+            className="ap-btn ap-send"
+            aria-label="ارسال"
+            title={uploading ? "تا پایان بارگذاری فایل‌ها صبر کنید" : "ارسال"}
+          >
+            <span className="ap-send-label">ارسال</span>
             <Send className="size-4 -scale-x-100" aria-hidden="true" />
           </button>
         </div>
@@ -875,7 +1024,10 @@ export function ChatShell() {
         {attachNotice && (
           <p className="ap-notice text-center" role="status">{attachNotice}</p>
         )}
-        <p className="ap-notice text-center">{CASE_FILE_PRIVACY_NOTICE}</p>
+        {uploading && (
+          <p className="ap-notice text-center" role="status">تا پایان بارگذاری فایل‌ها، ارسال غیرفعال است.</p>
+        )}
+        {attachments.length > 0 && <p className="ap-notice text-center">{CASE_FILE_PRIVACY_NOTICE}</p>}
 
         {(inputPrompt.length > MAX_CHAT_CHARS * 0.8 || overLimit) && (
           <div
@@ -888,7 +1040,8 @@ export function ChatShell() {
           </div>
         )}
 
-        {!isAuthenticated && (
+        {/* ورود: فقط پس از اولین پاسخ برای مهمان */}
+        {!isAuthenticated && hasAnswer && (
           <p className="ap-notice text-center">
             <button
               type="button"
@@ -906,10 +1059,12 @@ export function ChatShell() {
           </p>
         )}
 
-        {/* سلب مسئولیت حقوقی دائمی، پررنگ زیر جعبهٔ پیام */}
-        <p className="ap-disclaimer" role="note">
-          <Info className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
-          <span>{DISCLAIMER_LINE}</span>
+        {/* یک خط: سلب مسئولیت (فقط یک بار) + پیوند راهنما */}
+        <p className="ap-notice text-center" role="note">
+          {DISCLAIMER_LINE}{" "}
+          <Link href="/guide" className="ap-link underline">
+            راهنما و دامنهٔ پوشش
+          </Link>
         </p>
       </div>
 

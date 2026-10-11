@@ -43,9 +43,6 @@ const REAL_PLAN_COPY: Record<BackendPlanType, RealPlanCard> = {
   },
 };
 
-// این سه گزینه هنوز به هیچ plan_type واقعی در سرور (get_calculated_pricing)
-// وصل نیستند؛ به‌جای شبیه‌سازی یک خرید موفق قلابی، فقط «به‌زودی» نمایش داده
-// می‌شوند تا کاربر گمراه نشود.
 /** Top-level helper (outside the component) so the redirect isn't seen by
  * the React Compiler lint rule as an in-render mutation of a global. */
 const PAYMENT_HOSTS = new Set(["gateway.zibal.ir"]);
@@ -62,16 +59,10 @@ function redirectToPaymentUrl(url: string): boolean {
   }
 }
 
-const COMING_SOON_TOKEN_PACKS = [
-  { id: "pack-100k", label: "بسته ۱۰۰٬۰۰۰ توکن", tokens: 100000 },
-  { id: "pack-500k", label: "بسته ۵۰۰٬۰۰۰ توکن", tokens: 500000 },
-  { id: "pack-2m", label: "بسته ۲٬۰۰۰٬۰۰۰ توکن", tokens: 2000000 },
-];
-
 export function SubscriptionModal({
   isOpen,
   onClose,
-  currentPlan = "عادی",
+  currentPlan,
   accessToken,
   phone,
   onInvoiceIssued,
@@ -173,7 +164,7 @@ export function SubscriptionModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="خرید اشتراک و شارژ توکن"
+      aria-label="اشتراک"
       onClick={onClose}
       className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
       dir="rtl"
@@ -185,10 +176,12 @@ export function SubscriptionModal({
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <Coins className="size-4 text-amber-300" />
-            <h3 className="text-sm font-bold text-foreground">اشتراک و شارژ توکن</h3>
-            <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-              طرح فعلی: {currentPlan}
-            </span>
+            <h3 className="text-sm font-bold text-foreground">اشتراک</h3>
+            {currentPlan && (
+              <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                طرح فعلی: {currentPlan}
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -215,14 +208,14 @@ export function SubscriptionModal({
                 inputMode="numeric"
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               />
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
+              <p className="mt-1.5 text-[13px] text-muted-foreground">
                 وارد نبوده‌اید؛ برای فعال‌سازی بدون ورود، یک شماره همراه ایرانی معتبر لازم است.
               </p>
             </div>
           )}
 
           {pricingError && (
-            <p className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-[11px] text-destructive">
+            <p className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-[13px] text-destructive">
               {pricingError}
             </p>
           )}
@@ -250,9 +243,9 @@ export function SubscriptionModal({
                     ) : (
                       <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     )}
-                    {server && <span className="pb-1 text-[11px] text-muted-foreground">تومان</span>}
+                    {server && <span className="pb-1 text-[13px] text-muted-foreground">تومان</span>}
                   </div>
-                  <p className="mt-2 flex-1 text-[11px] leading-relaxed text-muted-foreground">
+                  <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
                     {copy.description}
                   </p>
                   <button
@@ -273,48 +266,18 @@ export function SubscriptionModal({
             })}
           </div>
 
-          <div className="mt-6">
-            <h4 className="flex items-center gap-2 text-xs font-bold text-foreground">
-              <Coins className="size-3.5 text-amber-300" />
-              بسته‌های شارژ توکن
-            </h4>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              بسته‌های شارژ توکن هنوز به درگاه پرداخت وصل نشده‌اند و به‌زودی فعال می‌شوند.
-            </p>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {COMING_SOON_TOKEN_PACKS.map((pack) => (
-                <article
-                  key={pack.id}
-                  className="flex flex-col rounded-2xl border border-border bg-muted/30 p-4 opacity-70"
-                >
-                  <span className="text-xs font-semibold text-foreground">{pack.label}</span>
-                  <span className="mt-2 text-[11px] text-muted-foreground">
-                    {formatPersianNumber(pack.tokens)} توکن
-                  </span>
-                  <button
-                    type="button"
-                    disabled
-                    className="mt-4 cursor-not-allowed rounded-xl border border-border bg-background px-3 py-2 text-[11px] font-semibold text-muted-foreground"
-                  >
-                    به‌زودی
-                  </button>
-                </article>
-              ))}
-            </div>
-          </div>
-
           {notice && (
-            <p className="mt-6 rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-4 text-[11px] leading-relaxed text-emerald-300">
+            <p className="mt-6 rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-4 text-[13px] leading-relaxed text-emerald-300">
               {notice}
             </p>
           )}
           {error && (
-            <p className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-[11px] leading-relaxed text-destructive">
+            <p className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-[13px] leading-relaxed text-destructive">
               {error}
             </p>
           )}
 
-          <p className="mt-6 rounded-2xl border border-border bg-muted/30 p-4 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-6 rounded-2xl border border-border bg-muted/30 p-4 text-[13px] leading-relaxed text-muted-foreground">
             مبلغ نهایی همیشه به تومان و بر اساس ماتریس قیمت لحظه‌ای سرور محاسبه می‌شود؛ هیچ مبلغی
             در مرورگر شما ساخته نمی‌شود.
           </p>
