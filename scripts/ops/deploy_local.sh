@@ -116,16 +116,33 @@ missing_env() {
   comm -23 <(env_names_needed) <(env_names_server)
 }
 
-http_code() { curl -s -o /dev/null -m 15 -w '%{http_code}' "$1" || true; }
+# Smoke checks run FROM THE SERVER (still through the public domain / Cloudflare), so the
+# result does not depend on the operator's network: from an Iranian IP without VPN,
+# Cloudflare geo-redirects roxira.net and the checks fail although the site is fine.
+SMOKE_UA="RoxiraDeploy/1.0"
+http_code() { rsh "curl -s -o /dev/null -m 15 -A '$SMOKE_UA' -w '%{http_code}' $(printf '%q' "$1")" || true; }
 # Final status after following redirects (Cloudflare may redirect a domain, e.g. roxira.net -> roxira.ir).
-http_code_final() { curl -sL --max-redirs 5 -o /dev/null -m 20 -w '%{http_code}' "$1" || true; }
+http_code_final() { rsh "curl -sL --max-redirs 5 -o /dev/null -m 20 -A '$SMOKE_UA' -w '%{http_code}' $(printf '%q' "$1")" || true; }
+http_body() { rsh "curl -s -m 15 -A '$SMOKE_UA' $(printf '%q' "$1")" || true; }
+
+# The app warms its embedder on start; wait (bounded) until /health answers 200.
+wait_ready() {
+  local i code=""
+  for i in $(seq 1 30); do
+    code="$(http_code "https://$CHAT_DOMAIN/health")"
+    [ "$code" = "200" ] && { log "ready after $((i*3))s"; return 0; }
+    sleep 3
+  done
+  log "not ready after 90s (last /health $code)"
+}
 
 smoke_test() {
   local ok=0 d code body status routers
+  wait_ready
   # /health is served only on the Smart Judge host (the other hosts route it elsewhere: 404 is normal).
   code="$(http_code "https://$CHAT_DOMAIN/health")"
   if [ "$code" = "200" ]; then log "smoke ok: $CHAT_DOMAIN/health 200"; else log "smoke FAIL: $CHAT_DOMAIN/health $code"; ok=1; fi
-  body="$(curl -s -m 15 "https://$CHAT_DOMAIN/health" || true)"
+  body="$(http_body "https://$CHAT_DOMAIN/health")"
   status="$(printf '%s' "$body" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))' 2>/dev/null || true)"
   routers="$(printf '%s' "$body" | python3 -c 'import sys,json;r=json.load(sys.stdin).get("loaded_routers");print(len(r) if hasattr(r,"__len__") else r)' 2>/dev/null || true)"
   if [ "$status" = "ONLINE" ]; then log "smoke ok: status ONLINE, routers=$routers"; else log "smoke FAIL: status='$status'"; ok=1; fi
