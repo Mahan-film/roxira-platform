@@ -18,7 +18,7 @@
 #   check     restic check --read-data-subset=5% on every repository     [weekly timer]
 #   bundle    build the age-encrypted config bundle only (prints its path)
 #   offsite   age-encrypt DB dumps + configs + corpus JSONL, split into <=17 MB parts, mail them (docs/ops/BACKUP_EMAIL.md)
-#   --self-test-prune DIR [KEEP]   run only prune_sets against DIR (used by the unit test; touches nothing else)
+#   --self-test-prune DIR [HOURLY [DAILY]]   run only prune_sets against DIR (used by the unit test; touches nothing else)
 #
 # Configuration: env file /etc/roxira/backup.env (names documented in deploy/backup/backup.env.example).
 # Secrets: restic password file (RESTIC_PASSWORD_FILE, root-only), SMTP app password, S3 keys - env only.
@@ -31,9 +31,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE=""
 SELF_TEST_DIR=""
 SELF_TEST_KEEP=3
+SELF_TEST_DAILY=0
 if [ "${1:-}" = "--self-test-prune" ]; then
   SELF_TEST_DIR="${2:?--self-test-prune needs a directory}"
   SELF_TEST_KEEP="${3:-3}"
+  SELF_TEST_DAILY="${4:-0}"
   set --
 fi
 for arg in "$@"; do
@@ -52,7 +54,11 @@ REPO_DIR="${ROXIRA_REPO_DIR:-/opt/roxira_platform}"
 LOCAL_DIR="${BACKUP_LOCAL_DIR:-/opt/roxira_backups/dr}"
 STAGE="$LOCAL_DIR/stage"
 SETS_DIR="$LOCAL_DIR/sets"
-KEEP_LOCAL_SETS="${BACKUP_KEEP_LOCAL_SETS:-3}"
+# Local retention (docs/ops/BACKUP_RETENTION.md): newest KEEP_HOURLY sets + the newest set of each of the
+# KEEP_DAILY latest UTC days. BACKUP_KEEP_LOCAL_SETS is the old name of KEEP_HOURLY (still honoured).
+KEEP_HOURLY="${BACKUP_KEEP_HOURLY:-${BACKUP_KEEP_LOCAL_SETS:-6}}"
+KEEP_DAILY="${BACKUP_KEEP_DAILY:-3}"
+MIN_FREE_GB="${BACKUP_MIN_FREE_GB:-15}"   # below this: keep only the newest set and send an alert
 STATE_DIR="${BACKUP_STATE_DIR:-/var/lib/roxira-backup}"
 STATUS_FILE="$STATE_DIR/status.env"
 CHECK_FILE="$STATE_DIR/check.env"   # written only by mode_check; status.env is rewritten hourly by mode_run
@@ -82,24 +88,25 @@ stamp() { date -u '+%Y%m%dT%H%M%SZ'; }
 STATUS_TMP=""
 status_set() { [ -n "$STATUS_TMP" ] && printf "%s='%s'\n" "$1" "${2//\'/}" >>"$STATUS_TMP" || true; }
 
-# prune_sets <keep>: delete only the oldest local sets beyond <keep>; never the target of `latest`,
-# never anything whose name is not a timestamp directory. No bulk deletes.
+# prune_sets <hourly> <daily>: delete local sets outside the retention window (selection logic lives in
+# retention.py, unit-tested offline). Never the target of `latest`, never anything whose name is not a
+# timestamp directory. No bulk deletes: one validated directory at a time.
 prune_sets() {
-  local keep="$1" latest_target="" d n=0
+  local hourly="$1" daily="${2:-0}" latest_target="" d name
   [ -d "$SETS_DIR" ] || return 0
   latest_target="$(readlink -f "$SETS_DIR/latest" 2>/dev/null || true)"
-  # timestamp names sort lexicographically; newest first
-  while IFS= read -r d; do
-    n=$((n + 1))
-    [ "$n" -gt "$keep" ] || continue
+  while IFS= read -r name; do
+    [[ "$name" =~ ^20[0-9]{6}T[0-9]{6}Z$ ]] || continue
+    d="$SETS_DIR/$name"
+    [ -d "$d" ] && [ ! -L "$d" ] || continue
     [ "$(readlink -f "$d")" = "$latest_target" ] && continue
     run rm -rf -- "$d"
-  done < <(find "$SETS_DIR" -mindepth 1 -maxdepth 1 -type d -name '20[0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z' 2>/dev/null | sort -r)
+  done < <(python3 "$SCRIPT_DIR/retention.py" "$SETS_DIR" --hourly "$hourly" --daily "$daily")
 }
 
 if [ -n "$SELF_TEST_DIR" ]; then
   SETS_DIR="$SELF_TEST_DIR"
-  prune_sets "$SELF_TEST_KEEP"
+  prune_sets "$SELF_TEST_KEEP" "$SELF_TEST_DAILY"
   exit 0
 fi
 
@@ -335,7 +342,7 @@ mode_run() {
   log "disk usage of backup filesystem: ${pct}% (warn ${DISK_WARN}, abort ${DISK_ABORT})"
   if [ "$pct" -ge "$DISK_ABORT" ]; then
     # free space first by dropping only the oldest local sets (keep the newest one); refuse to stage if still above the abort threshold
-    prune_sets 1
+    prune_sets 1 0
     pct="$(disk_pct "$(dirname "$LOCAL_DIR")")"
     if [ "$pct" -ge "$DISK_ABORT" ]; then
       status_set LAST_RESULT FAIL; status_set LAST_ERROR "disk ${pct}% >= ${DISK_ABORT}%, staging refused"
@@ -345,8 +352,20 @@ mode_run() {
     fi
   elif [ "$pct" -ge "$DISK_WARN" ]; then
     WARNS+=("disk usage ${pct}% >= ${DISK_WARN}%")
-    KEEP_LOCAL_SETS=1
+    KEEP_HOURLY=1; KEEP_DAILY=0
     alert "disk ${pct}%" "Disk usage on the backup filesystem is ${pct}% (threshold ${DISK_WARN}%). Local backup sets reduced to 1."
+  fi
+  # Absolute free-space floor (BACKUP_MIN_FREE_GB): keep only the newest set, free space now, alert.
+  local free_now
+  free_now="$(free_gb "$(dirname "$LOCAL_DIR")" 2>/dev/null || true)"
+  case "$free_now" in ''|*[!0-9]*) free_now="" ;; esac  # only a clean integer is compared
+  status_set FREE_GB "${free_now:-unknown}"
+  log "free space on backup filesystem: ${free_now:-unknown} GB (floor ${MIN_FREE_GB} GB)"
+  if [ -n "$free_now" ] && [ "$free_now" -lt "$MIN_FREE_GB" ]; then
+    KEEP_HOURLY=1; KEEP_DAILY=0
+    WARNS+=("free disk ${free_now} GB < ${MIN_FREE_GB} GB; local sets reduced to the newest one")
+    prune_sets 1 0
+    alert "low disk: ${free_now} GB free" "Free space is ${free_now} GB, below BACKUP_MIN_FREE_GB=${MIN_FREE_GB}. Only the newest local backup set is kept. Free space on the server (docker prune, scripts/ops/backup/prune_legacy_backups.sh)."
   fi
 
   step "2/6 stage dumps"
@@ -362,13 +381,13 @@ mode_run() {
     status_set STAGE_BYTES "$(du -sb "$STAGE" | cut -f1)"
   fi
 
-  step "3/6 local rotation (hardlinked sets, newest ${KEEP_LOCAL_SETS})"
+  step "3/6 local rotation (hardlinked sets: ${KEEP_HOURLY} hourly + ${KEEP_DAILY} daily)"
   if [ "${#FAILS[@]}" -eq 0 ]; then
     run mkdir -p "$SETS_DIR"
     run cp -al "$STAGE" "$SETS_DIR/$started"
     if [ "$DRY_RUN" != "1" ]; then
       ln -sfn "$SETS_DIR/$started" "$SETS_DIR/latest"
-      prune_sets "$KEEP_LOCAL_SETS"
+      prune_sets "$KEEP_HOURLY" "$KEEP_DAILY"
     fi
   else
     warn "dump failures present; not rotating a local set from a partial stage"

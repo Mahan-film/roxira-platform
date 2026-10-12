@@ -28,3 +28,15 @@ systemctl disable --now roxira-backup.timer
 rm /etc/systemd/system/roxira-backup.service /etc/systemd/system/roxira-backup.timer
 systemctl daemon-reload
 ```
+
+## `roxira-docker-prune.service` + `roxira-docker-prune.timer`
+
+Weekly `docker builder prune -f --filter until=168h` and `docker image prune -f` (dangling
+images only, never `-a`, so the `:prev` rollback images stay). Owner approval needed to install:
+
+```bash
+cp deploy/systemd/roxira-docker-prune.service deploy/systemd/roxira-docker-prune.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now roxira-docker-prune.timer
+systemctl list-timers roxira-docker-prune.timer
+```

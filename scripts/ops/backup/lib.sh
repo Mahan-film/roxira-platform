@@ -84,6 +84,11 @@ disk_pct() {
   { df -P "$1" 2>/dev/null || true; } | awk 'NR==2 {gsub("%","",$5); print $5+0}'
 }
 
+# free_gb <path>: integer GiB available on the filesystem holding <path>.
+free_gb() {
+  { df -Pk "$1" 2>/dev/null || true; } | awk 'NR==2 {print int($4/1048576)}'
+}
+
 # human <bytes>
 human() {
   awk -v b="${1:-0}" 'BEGIN{split("B KiB MiB GiB TiB",u," ");i=1;while(b>=1024&&i<5){b/=1024;i++}printf "%.1f %s",b,u[i]}'

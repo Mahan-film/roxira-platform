@@ -29,6 +29,14 @@ QDRANT_STORAGE_PATH="${QDRANT_STORAGE_PATH:-/qdrant/storage}"
 
 LOCK_FILE="${ROXIRA_BACKUP_LOCK:-/var/lock/roxira_backup.lock}"
 
+# RETIRED: superseded by the DR system (scripts/ops/backup/server_backup.sh, docs/ops/BACKUP_RETENTION.md).
+# While this flag file exists the hourly cron entry is a harmless no-op. Reversible: delete the file.
+LEGACY_DISABLE_FLAG="${ROXIRA_LEGACY_BACKUP_DISABLE_FLAG:-/etc/roxira/legacy_backup.disabled}"
+if [ -e "$LEGACY_DISABLE_FLAG" ]; then
+  printf '[%s] legacy backup disabled by %s; nothing to do\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$LEGACY_DISABLE_FLAG"
+  exit 0
+fi
+
 DATE="$(date +%Y%m%d_%H%M%S)"
 PG_TARGET="${BACKUP_DIR}/postgres_${DATE}.sql.gz"
 QDRANT_TARGET="${BACKUP_DIR}/qdrant_${DATE}.tar.gz"

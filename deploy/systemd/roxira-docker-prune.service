@@ -1,0 +1,14 @@
+[Unit]
+Description=Roxira weekly Docker cleanup (build cache older than 7 days + dangling images)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+# Never use -a / --all: tagged images (including the :prev rollback images) must stay.
+ExecStart=/usr/bin/docker builder prune -f --filter until=168h
+ExecStart=/usr/bin/docker image prune -f
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=30min

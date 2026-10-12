@@ -1,0 +1,11 @@
+[Unit]
+Description=Run roxira-docker-prune.service weekly
+
+[Timer]
+# Sunday 05:15 UTC, after the weekly restic check (04:30) and before the daily report (06:30).
+OnCalendar=Sun *-*-* 05:15:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
