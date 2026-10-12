@@ -345,6 +345,7 @@ _PAYLOAD_TEXT_KEYS = (
 )
 _TOKEN_RE = re.compile(r"[\w\u0600-\u06FF]+", re.UNICODE)
 from . import retrieval_boost as _rb  # noqa: E402  (pure helpers, no circular import)
+from .. import reranker as _reranker  # noqa: E402  (optional cross-encoder, flag-gated, never raises)
 _ENACTED_DESPITE_TITLE = (
     "لایحه اصلاحی قانون تجارت",
     "لایحه قانونی اصلاح قسمتی از قانون تجارت",
@@ -1218,6 +1219,18 @@ async def keyword_boost_laws(
 
 
 async def qdrant_fallback_laws(
+    query: str, limit: int = 5, active_only: Optional[bool] = None
+) -> List[Dict[str, Any]]:
+    """Hybrid legal retrieval; with SMARTJUDGE_RERANKER=local the top-N candidates are
+    rescored by a cross-encoder and cut to ``limit`` (the single rerank wiring point)."""
+    if not _reranker.enabled():
+        return await _qdrant_fallback_laws_impl(query, limit, active_only)
+    want = max(1, int(limit))
+    rows = await _qdrant_fallback_laws_impl(query, _reranker.candidate_count(want), active_only)
+    return await _reranker.arerank(query, rows, top_k=want)
+
+
+async def _qdrant_fallback_laws_impl(
     query: str, limit: int = 5, active_only: Optional[bool] = None
 ) -> List[Dict[str, Any]]:
     """

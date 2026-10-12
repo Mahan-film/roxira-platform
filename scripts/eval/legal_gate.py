@@ -11,7 +11,7 @@ Modes (all checks are deterministic, no LLM judge):
   retrieval  NO LLM, 0 USD. Is the expected article in the top-k of the served corpus?
              Reuses the retrieval path of scripts/eval_chat_golden.py (Qdrant search +
              source_filter). Needs Qdrant + the query embedder, so run it on the server:
-               docker run ... python3 scripts/eval/legal_gate.py retrieval
+               docker run ... python3 scripts/eval/legal_gate.py retrieval [--rerank]
   answer     calls the live chat endpoint; checks must_include, must_not_include, the cited
              article in statutory_basis and latency. PAID path: needs --confirm-spend, has a
              hard cost cap (default and maximum 0.05 USD) and reads the bearer token from the
@@ -124,11 +124,19 @@ def hit_rank(case: dict, rows: Iterable[dict]) -> Optional[int]:
 Retriever = Callable[[str, int], Tuple[List[dict], List[dict]]]
 
 
-def engine_retriever() -> Tuple[Retriever, Dict[str, str]]:
-    """Real retriever: same Qdrant search + relevance filter as eval_chat_golden.run_retrieval."""
+def engine_retriever(rerank: bool = False) -> Tuple[Retriever, Dict[str, str]]:
+    """Real retriever: same Qdrant search + relevance filter as eval_chat_golden.run_retrieval.
+
+    ``rerank=True`` turns the cross-encoder flag on for this process only (SMARTJUDGE_RERANKER=local,
+    generous timeout so a slow CPU never silently falls back) and loads the model up front; if the
+    model cannot load the run aborts instead of reporting un-reranked numbers as reranked ones.
+    """
     import asyncio
 
     sys.path.insert(0, str(ROOT))
+    os.environ["SMARTJUDGE_RERANKER"] = "local" if rerank else "off"
+    if rerank:
+        os.environ.setdefault("SMARTJUDGE_RERANKER_TIMEOUT_MS", "60000")
     from output_apps.generated_modules.smartjudge import source_filter
     from output_apps.generated_modules.smartjudge.legal_graph import lightrag_engine as eng
 
@@ -136,7 +144,17 @@ def engine_retriever() -> Tuple[Retriever, Dict[str, str]]:
         rows = asyncio.run(eng.qdrant_fallback_laws(question, limit=k))
         return rows, source_filter.filter_relevant(rows)
 
-    return retrieve, {"collection": str(eng.QDRANT_FALLBACK_COLLECTION), "embedder": str(eng.QDRANT_EMBED_MODEL_NAME)}
+    meta = {"collection": str(eng.QDRANT_FALLBACK_COLLECTION), "embedder": str(eng.QDRANT_EMBED_MODEL_NAME),
+            "reranker": "off"}
+    if rerank:
+        from output_apps.generated_modules.smartjudge import reranker as rr
+
+        if rr._load() is None:  # noqa: SLF001 - fail loudly rather than mislabel the run
+            raise SystemExit("--rerank: reranker model failed to load (is sentence-transformers installed "
+                             "and the model cached/downloadable?)")
+        meta["reranker"] = os.getenv("SMARTJUDGE_RERANKER_MODEL", "").strip() or rr.DEFAULT_MODEL
+        meta["reranker_top_n"] = str(rr.top_n())
+    return retrieve, meta
 
 
 def _rate(num: int, den: int) -> Optional[float]:
@@ -437,7 +455,7 @@ def _emit(report: dict, args: argparse.Namespace) -> None:
 
 def cmd_retrieval(args: argparse.Namespace) -> int:
     cases = _select(args)
-    retriever, meta = engine_retriever()
+    retriever, meta = engine_retriever(rerank=bool(getattr(args, "rerank", False)))
     report = retrieval_report(run_retrieval(cases, retriever), meta)
     _emit(report, args)
     return 0
@@ -520,6 +538,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     r = sub.add_parser("retrieval", help="no LLM, 0 USD")
     common(r)
+    r.add_argument("--rerank", action="store_true",
+                   help="enable the local cross-encoder reranker (SMARTJUDGE_RERANKER=local) for this run; "
+                        "default is off, so the baseline numbers are unchanged")
     r.set_defaults(fn=cmd_retrieval)
     a = sub.add_parser("answer", help="PAID: live chat endpoint, capped")
     common(a)
