@@ -38,7 +38,10 @@ import {
 } from "@/lib/api/draft-assist-client";
 import { DraftInfoCard, DraftResultCard, type DraftSession } from "./draft-cards";
 import { MicHint, useMicHint } from "./chat-onboarding";
-import { LiveVoiceModal, unlockSafariAudio } from "./live-voice-modal";
+import dynamic from "next/dynamic";
+
+// Loaded only when the user opens a live call (keeps the first load small).
+const LiveVoiceModal = dynamic(() => import("./live-voice-modal").then((m) => m.LiveVoiceModal), { ssr: false });
 import { ChatHttpError, streamChat } from "@/lib/api/chat-stream";
 import {
   CASE_FILE_ACCEPT,
@@ -1403,7 +1406,6 @@ export function ChatShell() {
                   className="ap-menuitem ap-only-narrow"
                   onClick={() => {
                     setPlusOpen(false);
-                    unlockSafariAudio();
                     setIsLiveAudioOpen(true);
                   }}
                 >
@@ -1451,9 +1453,6 @@ export function ChatShell() {
           <button
             type="button"
             onClick={() => {
-              // Safari: unlock audio inside the real user gesture, so the whole
-              // voice session (every later TTS turn) is allowed to make sound.
-              unlockSafariAudio();
               setIsLiveAudioOpen(true);
             }}
             className="ap-iconbtn ap-hide-narrow"
@@ -1523,6 +1522,7 @@ export function ChatShell() {
 
 
       {/* مدال مکالمه صوتی زنده با همگام‌سازی کامل به صفحه چت */}
+      {isLiveAudioOpen && (
       <LiveVoiceModal
         isOpen={isLiveAudioOpen}
         onClose={() => setIsLiveAudioOpen(false)}
@@ -1544,6 +1544,7 @@ export function ChatShell() {
           handleSendMessage(prompt);
         }}
       />
+      )}
     </div>
   );
 }

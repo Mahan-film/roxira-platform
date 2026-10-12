@@ -11,7 +11,12 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
-import { SubscriptionModal } from "@/components/judge/subscription/subscription-modal";
+import dynamic from "next/dynamic";
+
+const SubscriptionModal = dynamic(
+  () => import("@/components/judge/subscription/subscription-modal").then((m) => m.SubscriptionModal),
+  { ssr: false },
+);
 import { ApDropdown } from "@/components/layout/ap-dropdown";
 
 interface NavDest {
@@ -180,12 +185,14 @@ export function GhaziHeader() {
       </header>
 
       {/* Rendered outside the header: its backdrop-filter would trap a fixed overlay. */}
-      <SubscriptionModal
-        isOpen={topUpOpen}
-        onClose={() => setTopUpOpen(false)}
-        accessToken={accessToken}
-        phone={user?.phone}
-      />
+      {topUpOpen && (
+        <SubscriptionModal
+          isOpen={topUpOpen}
+          onClose={() => setTopUpOpen(false)}
+          accessToken={accessToken}
+          phone={user?.phone}
+        />
+      )}
     </>
   );
 }

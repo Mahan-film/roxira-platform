@@ -402,6 +402,15 @@
   outline: 2px solid var(--ap-accent); outline-offset: 2px;
 }
 
+/* Skip link: visible only on keyboard focus. */
+.ap-theme .ap-skip-link {
+  position: absolute; inset-inline-start: 8px; top: -48px; z-index: 100;
+  padding: 8px 14px; border-radius: 8px; font-size: 14px;
+  background: var(--ap-accent); color: var(--ap-accent-text);
+}
+.ap-theme .ap-skip-link:focus { top: 8px; }
+.ap-theme main:focus { outline: none; }
+
 /* ---- Shell components (header, chat). Tokens only; no hard-coded colours. ---- */
 .ap-theme { min-width: 0; }
 .ap-theme.ap-header {
