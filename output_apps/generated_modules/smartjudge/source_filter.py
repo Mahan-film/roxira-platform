@@ -33,7 +33,7 @@ UNCITED_TOP_N = 3
 
 _DIGIT_TRANS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 _ARTICLE_RE = re.compile(r"ماده\s*(?:ی|ٔ)?\s*(\d+)")
-_PREC_RE = re.compile(r"(?:رأی|رای|وحدت\s*رویه)[^\d]{0,30}(\d+)")
+_PREC_RE = re.compile(r"(?:رأی|رای|وحدت\s*رویه|دادنامه)[^\d]{0,30}(\d+)")
 
 
 def _norm(text: Any) -> str:

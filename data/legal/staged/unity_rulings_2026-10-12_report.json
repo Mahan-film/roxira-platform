@@ -1,0 +1,231 @@
+{
+ "fetched_at": "2026-10-12T13:44:17+00:00",
+ "categories": {
+  "247": {
+   "posts": 904,
+   "rows": 612,
+   "by_type": {
+    "unity_supreme_court": 612
+   },
+   "skipped": {
+    "news_or_commentary": 94,
+    "duplicate_post_id": 196
+   },
+   "skipped_title_samples": [
+    "صدور دو رای وحدت رویه جدید/ حق مطالبه بهای ملک که در طرح شهرداری قرار گرفته و از ناحیه مالک به شخص د",
+    "صدور یک رای وحدت رویه با موضوع: عدم صدور حکم ممنوع الخروجی برای اشخاصی که بدون قصد قاچاق اقدام به وا",
+    "صدور رای وحدت رویه درخصوص تعیین مرجع صالح برای رسیدگی به بزه تغییر غیرمجاز کاربری اراضی زراعی و باغه",
+    "نگاهی به رای وحدت رویه 878 دیوان عالی کشور درخصوص تخلف واردکنندگان کالا از جهت تاخیر در انجام تعهدات",
+    "صدور یک رای وحدت رویه درباره تخلف واردکنندگان کالا از جهت تاخیر در انجام تعهدات ارزی",
+    "شرحی بر رای وحدت رویه 877 دیوان عالی کشور در خصوص تعلق خسارت ناشی از کاهش ارزش دین به بستانکاران",
+    "صدور یک رای وحدت رویه در خصوص تعلق خسارت تاخیر تادیه به مطالبات بستانکاران برای ایام بعد از تاریخ تو",
+    "آرای وحدت رویه هیات عمومی دیوان عالی کشور سال 1404"
+   ],
+   "duplicates": [
+    {
+     "key": "unity_supreme_court:59:1359/12/09",
+     "kept_post": 139141,
+     "dropped_posts": [
+      139139
+     ]
+    },
+    {
+     "key": "unity_supreme_court:762:1396/08/02",
+     "kept_post": 35189,
+     "dropped_posts": [
+      138437
+     ]
+    }
+   ],
+   "date_range_iso": [
+    "1944-10-19",
+    "2026-09-08"
+   ],
+   "missing_date": 0,
+   "missing_holding": 0,
+   "with_law_refs": 532
+  },
+  "794": {
+   "posts": 1625,
+   "rows": 1119,
+   "by_type": {
+    "admin_court_annulment": 929,
+    "admin_court_unity": 190
+   },
+   "skipped": {
+    "duplicate_post_id": 289,
+    "no_decision_header": 198
+   },
+   "skipped_title_samples": [
+    "ابطال ماده 20 آیین نامه اجرایی قانون الحاق موادی به قانون ساماندهی و حمایت از تولید و عرضه مسکن",
+    "رویه قضایی شعب دیوان عدالت اداری در خصوص مطالبه مالیات ناشی از شناسایی تراکنش بانکی",
+    "ابطال مقرره ممنوعیت خرید تعهدات خدمت رایگان دانش آموختگان علوم پزشکی",
+    "رای وحدت رویه دیوان عدالت اداری با موضوع: قابل استماع بودن دعوای مستقل «احراز وقوع تخلف» بدون طرح خو",
+    "عدم ابطال شرط سنی 28 سال از شرایط خاص پذیرش مقطع کارشناسی ارشد دانشگاه علوم قضایی سال 1404",
+    "عدم ابطال بند مربوط به منابع درس متون فقه از دفترچه آزمون مرکز وکلای قوه قضاییه 1403",
+    "رای مهم دیوان عدالت اداری: پذیرش صلاحیت نظارتی دیوان نسبت به آراء صادره از هیات داوری سازمان بورس و ",
+    "ابطال بخشنامه سازمان ثبت اسناد و املاک کشور در خصوص وکالت نامه های کلی"
+   ],
+   "duplicates": [
+    {
+     "key": "admin_court_unity:2346:1400/08/18",
+     "kept_post": 66590,
+     "dropped_posts": [
+      67780
+     ]
+    },
+    {
+     "key": "admin_court_annulment:1665:1400/07/20",
+     "kept_post": 63671,
+     "dropped_posts": [
+      62910
+     ]
+    },
+    {
+     "key": "admin_court_annulment:1138:1400/04/05",
+     "kept_post": 60054,
+     "dropped_posts": [
+      63534
+     ]
+    },
+    {
+     "key": "admin_court_annulment:491:1400/03/18",
+     "kept_post": 62522,
+     "dropped_posts": [
+      58799
+     ]
+    },
+    {
+     "key": "admin_court_annulment:3328:1398/11/29",
+     "kept_post": 50698,
+     "dropped_posts": [
+      61437
+     ]
+    },
+    {
+     "key": "admin_court_annulment:929:1391/12/14",
+     "kept_post": 2570,
+     "dropped_posts": [
+      61900
+     ]
+    },
+    {
+     "key": "admin_court_unity:1742:1399/11/18",
+     "kept_post": 57304,
+     "dropped_posts": [
+      55834
+     ]
+    },
+    {
+     "key": "admin_court_unity:1745:1399/11/18",
+     "kept_post": 57006,
+     "dropped_posts": [
+      55839
+     ]
+    },
+    {
+     "key": "admin_court_unity:554:1399/04/17",
+     "kept_post": 52568,
+     "dropped_posts": [
+      52101
+     ]
+    },
+    {
+     "key": "admin_court_annulment:2750:1398/09/19",
+     "kept_post": 49147,
+     "dropped_posts": [
+      50415
+     ]
+    },
+    {
+     "key": "admin_court_annulment:19:1397/01/21",
+     "kept_post": 38555,
+     "dropped_posts": [
+      75874
+     ]
+    },
+    {
+     "key": "admin_court_annulment:1893:1397/10/04",
+     "kept_post": 45494,
+     "dropped_posts": [
+      44639
+     ]
+    },
+    {
+     "key": "admin_court_annulment:1058:1396/10/26",
+     "kept_post": 37317,
+     "dropped_posts": [
+      37092
+     ]
+    },
+    {
+     "key": "admin_court_annulment:783:1396/08/16",
+     "kept_post": 35710,
+     "dropped_posts": [
+      35357
+     ]
+    },
+    {
+     "key": "admin_court_annulment:815:1396/08/23",
+     "kept_post": 35715,
+     "dropped_posts": [
+      35681
+     ]
+    },
+    {
+     "key": "admin_court_annulment:562:1396/06/14",
+     "kept_post": 33955,
+     "dropped_posts": [
+      33602
+     ]
+    },
+    {
+     "key": "admin_court_annulment:406:1396/05/03",
+     "kept_post": 32389,
+     "dropped_posts": [
+      31915
+     ]
+    },
+    {
+     "key": "admin_court_annulment:2:1395/11/05",
+     "kept_post": 27519,
+     "dropped_posts": [
+      27528
+     ]
+    },
+    {
+     "key": "admin_court_unity:817:1395/10/14",
+     "kept_post": 27033,
+     "dropped_posts": [
+      27316
+     ]
+    }
+   ],
+   "date_range_iso": [
+    "1990-09-24",
+    "2026-08-11"
+   ],
+   "missing_date": 0,
+   "missing_holding": 0,
+   "with_law_refs": 1117
+  }
+ },
+ "validate": {
+  "unity": {
+   "rows": 612,
+   "missing_fields": [],
+   "duplicate_ids": [],
+   "html_junk": [],
+   "no_date": [],
+   "bad_host": []
+  },
+  "admin": {
+   "rows": 1119,
+   "missing_fields": [],
+   "duplicate_ids": [],
+   "html_junk": [],
+   "no_date": [],
+   "bad_host": []
+  }
+ }
+}

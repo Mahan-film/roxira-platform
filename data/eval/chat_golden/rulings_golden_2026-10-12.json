@@ -1,0 +1,198 @@
+{
+ "_meta": {
+  "purpose": "Retrieval golden cases for judicial practice (unity rulings + Administrative Court General Board rulings). Run on the server against the new collection: LIGHTRAG_QDRANT_COLLECTION=iran_rulings_v1 python3 scripts/eval_chat_golden.py --retrieval-only --retrieval-set data/eval/chat_golden/rulings_golden_2026-10-12.json (done by scripts/legal/build_rulings_collection_on_server.sh).",
+  "status": "DRAFT. Built from the text fetched from ekhtebar.ir (unofficial copy); every must_include phrase is a verbatim substring of the fetched ruling text (checked offline in scripts/legal/tests/test_unity_rulings.py). Questions are paraphrases for retrieval; lawyer must verify before treating as ground truth.",
+  "matching": "same as retrieval_golden.json: law_any matches the pseudo law_name (آرای وحدت رویه دیوان عالی کشور / آرای هیئت عمومی دیوان عدالت اداری), articles = ruling number (dadnameh number for the Administrative Court). date and must_include are for offline verification and answer checks."
+ },
+ "cases": [
+  {
+   "id": "unity-882-municipal-plan-price",
+   "question": "اگر ملکی در طرح تملک شهرداری قرار گرفته و بعد از اجرای طرح به شخص ثالث منتقل شده باشد، چه کسی مستحق دریافت بهای ملک است؟",
+   "law_any": [
+    "آرای وحدت رویه دیوان عالی کشور"
+   ],
+   "articles": [
+    882
+   ],
+   "date": "1405/06/17",
+   "must_include": [
+    "مالک استحقاق دریافت بهای ملک",
+    "به نرخ روز",
+    "ماده واحده قانون نحوه تقویم ابنیه"
+   ],
+   "source_url": "https://www.ekhtebar.ir/رای-وحدت-رویه-۸۸۲-هیات-عمومی-دیوان-عالی/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "unity-881-weapon-license",
+   "question": "آیا سلاح شکاری که پروانه آن منقضی شده و تمدید نشده است ضبط می‌شود؟",
+   "law_any": [
+    "آرای وحدت رویه دیوان عالی کشور"
+   ],
+   "articles": [
+    881
+   ],
+   "date": "1405/06/17",
+   "must_include": [
+    "صدور حکم بر ضبط سلاح ناظر به مواردی است که سلاح کشف شده، فاقد پروانه حمل باشد",
+    "جزای نقدی در حق صندوق دولت"
+   ],
+   "source_url": "https://www.ekhtebar.ir/رأی-وحدت-رویه-شماره-۸۸۱-هیأت-عمومی-دیوا/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "unity-812-cheque-delay-damages",
+   "question": "مبدأ محاسبه خسارت تأخیر تأدیه وجه چک از چه تاریخی است؟",
+   "law_any": [
+    "آرای وحدت رویه دیوان عالی کشور"
+   ],
+   "articles": [
+    812
+   ],
+   "date": "1400/04/01",
+   "must_include": [
+    "مبدا محاسبه خسارت تاخیر تادیه بر مبنای نرخ تورم، تاریخ چک است",
+    "ماده ۳ قانون صدور چک"
+   ],
+   "source_url": "https://www.ekhtebar.ir/رای-وحدت-رویه-شماره-۸۱۲-۱۴۰۰-۴-۱-هیئت-عم/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "unity-813-repentance-tazir",
+   "question": "توبه محکوم قبل از قطعیت حکم در جرایم تعزیری چه اثری دارد؟",
+   "law_any": [
+    "آرای وحدت رویه دیوان عالی کشور"
+   ],
+   "articles": [
+    813
+   ],
+   "date": "1400/05/19",
+   "must_include": [
+    "اثر توبه در جرایم تعزیری",
+    "بعد از قطعیت حکم، موضوع از شمول این مقررات خارج است"
+   ],
+   "source_url": "https://www.ekhtebar.ir/رای-وحدت-رویه-شماره-۸۱۳-۱۴۰۰-۵-۱۹-هیئت/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "unity-878-currency-violation",
+   "question": "تخلف واردکنندگان کالا از تعهدات ارزی جرم قاچاق ارز است یا صرفا تخلف؟",
+   "law_any": [
+    "آرای وحدت رویه دیوان عالی کشور"
+   ],
+   "articles": [
+    878
+   ],
+   "date": "1405/03/26",
+   "must_include": [
+    "ماده ۲ مکرر قانون مبارزه با قاچاق کالا و ارز",
+    "صرفاً تخلف محسوب کرده است"
+   ],
+   "source_url": "https://www.ekhtebar.ir/رای-وحدت-رویه-شماره-۸۷۸-1405-03-26-هیات-عمومی/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "unity-877-bankruptcy-inflation",
+   "question": "در ورشکستگی، افزایش ارزش دارایی‌ها بر اثر تورم چه تأثیری بر مطالبات و خسارت بستانکاران دارد؟",
+   "law_any": [
+    "آرای وحدت رویه دیوان عالی کشور"
+   ],
+   "articles": [
+    877
+   ],
+   "date": "1405/03/12",
+   "must_include": [
+    "مطابق ماده ۴۲۱ قانون تجارت",
+    "قروض مؤجل با رعایت تخفیفات مقتضیه نسبت به مدت، به قروض حال مبدل می‌شود"
+   ],
+   "source_url": "https://www.ekhtebar.ir/رای-وحدت-رویه-شماره-۸۷۷-۱۴۰۵-۳-۱۲-هیات-ع/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "unity-879-peace-court-demolition",
+   "question": "آیا دادگاه صلح می‌تواند در جرم تغییر کاربری اراضی زراعی حکم به قلع‌وقمع بنا بدهد؟",
+   "law_any": [
+    "آرای وحدت رویه دیوان عالی کشور"
+   ],
+   "articles": [
+    879
+   ],
+   "date": "1405/04/09",
+   "must_include": [
+    "صلاحیت دادگاه صلح در امور کیفری محدود به جنبه عمومی و خصوصی",
+    "قلع‌وقمع بناء"
+   ],
+   "source_url": "https://www.ekhtebar.ir/رای-وحدت-رویه-شماره-۸۷۹-هیات-عمومی-دیوا/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "adl-877266-guard-officer-leave",
+   "question": "آیا می‌توان مرخصی استحقاقی و استعلاجی را دلیل غیرموجه برای عدم حضور در نوبت افسر نگهبانی دانست؟",
+   "law_any": [
+    "آرای هیئت عمومی دیوان عدالت اداری"
+   ],
+   "articles": [
+    140531390000877266
+   ],
+   "date": "1405/04/09",
+   "must_include": [
+    "مرخصی استحقاقی و استعلاجی",
+    "قانون مقرّرات استخدامی سپاه پاسداران انقلاب اسلامی",
+    "ابطال می شود"
+   ],
+   "source_url": "https://www.ekhtebar.ir/ابطال-مقرره-عدم-پذیرش-مرخصی-استحقاقی-و/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "adl-877299-tax-dispute-14-days",
+   "question": "آیا بخشنامه می‌تواند مهلت چهارده روزه برای صدور رأی هیئت حل اختلاف مالیاتی تعیین کند؟",
+   "law_any": [
+    "آرای هیئت عمومی دیوان عدالت اداری"
+   ],
+   "articles": [
+    140531390000877299
+   ],
+   "date": "1405/04/09",
+   "must_include": [
+    "تبصره 2 ماده 244 قانون مالیات های مستقیم",
+    "مهلت سه روز برای انشاء رأی"
+   ],
+   "source_url": "https://www.ekhtebar.ir/ابطال-مقرره-تعیین-مهلت-۱۴-روزه-برای-صدو/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "adl-747251-mining-bylaw-ad-costs",
+   "question": "آیا وزارتخانه می‌تواند هزینه آگهی مزایده را در آیین‌نامه معادن از برنده مزایده دریافت کند؟",
+   "law_any": [
+    "آرای هیئت عمومی دیوان عدالت اداری"
+   ],
+   "articles": [
+    140531390000747251
+   ],
+   "date": "1405/03/26",
+   "must_include": [
+    "ماده 4 قانون تنظیم بخشی از مقرّرات مالی دولت",
+    "ابطال تبصره (یک) ماده 72 آیین نامه اجرایی قانون معادن"
+   ],
+   "source_url": "https://www.ekhtebar.ir/ابطال-تبصره-یک-ماده-۷۲-آییننامه-اجرا/",
+   "verify": "TO-VERIFY"
+  },
+  {
+   "id": "adl-471794-engineering-council-jurisdiction",
+   "question": "آیا دیوان عدالت اداری صلاحیت رسیدگی به آرای شوراهای انتظامی نظام مهندسی ساختمان را دارد؟",
+   "law_any": [
+    "آرای هیئت عمومی دیوان عدالت اداری"
+   ],
+   "articles": [
+    140531390000471794
+   ],
+   "date": "1405/02/29",
+   "must_include": [
+    "شوراهای بدوی و تجدیدنظر انتظامی سازمان نظام مهندسی",
+    "اعلام تعارض در آرای شعب دیوان عدالت اداری"
+   ],
+   "source_url": "https://www.ekhtebar.ir/رای-وحدت-رویه-هیات-عمومی-دیوان-عدالت-ا-23/",
+   "verify": "TO-VERIFY"
+  }
+ ]
+}

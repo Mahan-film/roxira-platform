@@ -90,6 +90,7 @@ _COLLECTION_EMBEDDERS = {
     "iran_laws_v2": "BAAI/bge-m3",
     "iran_laws_v3": "BAAI/bge-m3",  # v2 vectors copied as-is + new laws embedded with bge-m3 (2026-10-11 audit)
     "iran_laws_bge_m3": "BAAI/bge-m3",
+    "iran_rulings_v1": "BAAI/bge-m3",  # unity + Administrative Court board rulings (ekhtebar), see rulings_retrieval.py
     "iran_laws_mistral_v1": "mistral-embed",  # not loadable here (no Mistral embed client)
 }
 

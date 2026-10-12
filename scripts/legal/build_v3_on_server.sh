@@ -223,12 +223,12 @@ read by service enterprise_app / container roxira_app_prod):
   grep -q '^LIGHTRAG_QDRANT_COLLECTION=' .env \
     && sed -i 's/^LIGHTRAG_QDRANT_COLLECTION=.*/LIGHTRAG_QDRANT_COLLECTION=iran_laws_v3/' .env \
     || echo 'LIGHTRAG_QDRANT_COLLECTION=iran_laws_v3' >> .env
-  docker compose -f docker-compose.prod.yml up -d --force-recreate enterprise_app
+  docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate enterprise_app
 
 Rollback (v2 is untouched):
   cd /opt/roxira_platform
   sed -i 's/^LIGHTRAG_QDRANT_COLLECTION=.*/LIGHTRAG_QDRANT_COLLECTION=iran_laws_v2/' .env
-  docker compose -f docker-compose.prod.yml up -d --force-recreate enterprise_app
+  docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate enterprise_app
 TXT
 echo
 echo "done / پایان. $SRC untouched; serving not switched."
