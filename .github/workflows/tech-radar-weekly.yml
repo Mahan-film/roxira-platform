@@ -1,5 +1,12 @@
 name: Tech radar weekly
 
+# RETIRED (2026-10-12): GitHub Actions is OFF for this repo, so the schedule below never ran, and the
+# $1.50 cap was far above our budget. The radar now runs on the production server from a systemd timer
+# (deploy/systemd/roxira-radar.timer -> scripts/ops/radar/radar.py, hard cap 0.05 USD per run, weekly report
+# in /var/lib/roxira-radar/reports/REPORT_<date>.md, e-mail digest, append-only docs/radar/DECISIONS.md).
+# The cron trigger is commented out; workflow_dispatch is kept only so the old project-brief path can still
+# be run by hand if Actions is ever re-enabled.
+
 # Issue #93 (split from #92, part 1/3): a weekly technology-radar pass on
 # GitHub Actions. It reuses the existing W9 research entry point
 # (src/automation/tech_radar.py --project-brief, the same path
@@ -25,8 +32,8 @@ name: Tech radar weekly
 # render or post a report.
 
 on:
-  schedule:
-    - cron: "0 5 * * 1" # Mondays 05:00 UTC
+  # schedule:
+  #   - cron: "0 5 * * 1" # Mondays 05:00 UTC  (replaced by the server timer, see header)
   workflow_dispatch:
     inputs:
       idea:

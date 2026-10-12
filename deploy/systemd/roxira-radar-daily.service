@@ -1,0 +1,16 @@
+[Unit]
+Description=Roxira tech radar daily check: new releases of tools we already use, OpenRouter price changes (no LLM)
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/roxira/monitor.env
+EnvironmentFile=-/etc/roxira/selfimprove.env
+EnvironmentFile=-/etc/roxira/radar.env
+WorkingDirectory=/opt/roxira_platform
+Environment=RADAR_MAX_USD=0.05
+Environment=RADAR_STATE_DIR=/var/lib/roxira-radar
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/radar/radar.py --mode daily --no-llm
+StateDirectory=roxira-radar
+User=root
+Nice=15
+TimeoutStartSec=300

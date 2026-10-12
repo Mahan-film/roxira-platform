@@ -1,3 +1,5 @@
+# SUPERSEDED 2026-10-12 by deploy/systemd/roxira-radar.{service,timer} (scripts/ops/radar/radar.py).
+# Kept for history only; do not install this file.
 # PROPOSED replacement for /etc/systemd/system/roxira-radar.service
 # (W9 live-run readiness, docs/STRATEGY.md W9 row / §8).
 #

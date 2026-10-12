@@ -1,0 +1,10 @@
+[Unit]
+Description=Run roxira-radar.service weekly (Monday 05:30 Tehran time)
+
+[Timer]
+OnCalendar=Mon *-*-* 05:30:00 Asia/Tehran
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=Roxira tech radar: weekly scan of new repos, tools, models and papers (proposals only, hard cap 0.05 USD per run)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# SMTP (BACKUP_SMTP_*) and OPENROUTER_API_KEY come from the same env files the self-improvement loop uses.
+EnvironmentFile=/etc/roxira/monitor.env
+EnvironmentFile=-/etc/roxira/selfimprove.env
+# Optional: GITHUB_TOKEN (higher API limits), RADAR_GH_REPO, RADAR_GH_ISSUES=0 to disable issue creation.
+EnvironmentFile=-/etc/roxira/radar.env
+WorkingDirectory=/opt/roxira_platform
+Environment=RADAR_MAX_USD=0.05
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/radar/radar.py --mode weekly
+StateDirectory=roxira-radar
+Environment=RADAR_STATE_DIR=/var/lib/roxira-radar
+User=root
+Nice=15
+# The radar only reads public endpoints and writes docs/radar/REPORT_<date>.md + a state file.
+TimeoutStartSec=900

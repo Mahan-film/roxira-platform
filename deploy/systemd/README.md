@@ -29,6 +29,12 @@ rm /etc/systemd/system/roxira-backup.service /etc/systemd/system/roxira-backup.t
 systemctl daemon-reload
 ```
 
+## `roxira-radar.*` and `roxira-radar-daily.*`
+
+Weekly tech radar (Monday 05:30 Tehran) and a daily no-LLM release check (05:00) running
+`scripts/ops/radar/radar.py`. Hard cap 0.05 USD per run. Proposals only. Print the owner install
+commands with `scripts/ops/radar/install.sh` (it changes nothing). See `docs/radar/README.md`.
+
 ## `roxira-docker-prune.service` + `roxira-docker-prune.timer`
 
 Weekly `docker builder prune -f --filter until=168h` and `docker image prune -f` (dangling
