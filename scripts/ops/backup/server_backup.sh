@@ -17,6 +17,7 @@
 #   report    daily status email; on the bundle weekday also attach the age-encrypted config bundle
 #   check     restic check --read-data-subset=5% on every repository     [weekly timer]
 #   bundle    build the age-encrypted config bundle only (prints its path)
+#   offsite   age-encrypt DB dumps + configs + corpus JSONL, split into <=17 MB parts, mail them (docs/ops/BACKUP_EMAIL.md)
 #   --self-test-prune DIR [KEEP]   run only prune_sets against DIR (used by the unit test; touches nothing else)
 #
 # Configuration: env file /etc/roxira/backup.env (names documented in deploy/backup/backup.env.example).
@@ -39,11 +40,11 @@ for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
-    init|run|report|check|bundle) MODE="$arg" ;;
+    init|run|report|check|bundle|offsite) MODE="$arg" ;;
     *) die "unknown argument: $arg" ;;
   esac
 done
-[ -n "$MODE" ] || [ -n "$SELF_TEST_DIR" ] || die "mode required: init|run|report|check|bundle (see --help)"
+[ -n "$MODE" ] || [ -n "$SELF_TEST_DIR" ] || die "mode required: init|run|report|check|bundle|offsite (see --help)"
 
 [ -n "$SELF_TEST_DIR" ] || load_env
 
@@ -62,6 +63,8 @@ ALERT_COOLDOWN_MIN="${BACKUP_ALERT_COOLDOWN_MIN:-360}"
 PRUNE_HOUR_UTC="${BACKUP_PRUNE_HOUR_UTC:-03}"
 BUNDLE_DOW="${BACKUP_BUNDLE_DOW:-7}"          # 1=Mon .. 7=Sun
 BUNDLE_MAX_BYTES="${BACKUP_BUNDLE_MAX_BYTES:-20971520}"
+EMAIL_OFFSITE="${BACKUP_EMAIL_OFFSITE:-off}"     # off | daily | weekly (weekly uses BUNDLE_DOW)
+EMAIL_EXTRA_PATHS="${BACKUP_EMAIL_EXTRA_PATHS:-}"  # space-separated extra paths (e.g. the staged legal-corpus JSONL dir)
 PG_CONTAINERS="${BACKUP_PG_CONTAINERS:-roxira_postgres_prod roxira_twenty_db}"
 QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6333}"
 REDIS_CONTAINER="${BACKUP_REDIS_CONTAINER:-roxira_redis_prod}"
@@ -458,41 +461,66 @@ mode_bundle() {
   echo "$out"
 }
 
-mode_report() {
-  local body subject result attach=()
-  body="$(mktemp)"
-  # shellcheck disable=SC1090
-  [ -r "$STATUS_FILE" ] && . "$STATUS_FILE"
-  # shellcheck disable=SC1090
-  [ -r "$CHECK_FILE" ] && . "$CHECK_FILE"
-  result="${LAST_RESULT:-UNKNOWN}"
-  local pct age_min=""
-  pct="$(disk_pct "$(dirname "$LOCAL_DIR")")"
-  if [ -r "$STATUS_FILE" ]; then age_min="$(( ( $(date +%s) - $(stat -c %Y "$STATUS_FILE") ) / 60 ))"; fi
-  {
-    echo "Roxira backup daily report - $(hostname) - $(date -u)"
-    echo
-    echo "last run result : ${result}"
-    echo "last OK         : ${LAST_OK:-never}"
-    echo "status age      : ${age_min:-?} min (hourly timer; > 120 means the timer stopped)"
-    echo "duration        : ${DURATION_S:-?} s"
-    echo "staged size     : $(human "${STAGE_BYTES:-0}")"
-    echo "disk used       : ${pct:-?}% (alert at ${DISK_WARN}%)"
-    echo "mode            : ${BACKUP_MODE:-unknown}"
-    echo "snapshot sftp   : ${SNAP_sftp:-n/a}  added ${ADDED_sftp:-n/a}"
-    echo "snapshot s3     : ${SNAP_s3:-n/a}  added ${ADDED_s3:-n/a}"
-    echo "last check      : ${CHECK_RESULT:-never} (${CHECK_AT:-n/a})"
-    echo "warnings        : ${WARNINGS:-none}"
-    echo "last error      : ${LAST_ERROR:-none}"
-  } >"$body"
-  subject="[roxira-backup] daily report: ${result}"
-  [ "$result" = "OK" ] || subject="[roxira-backup] daily report: ATTENTION ${result}"
-  if [ "$(date -u +%u)" = "$BUNDLE_DOW" ] || [ "${FORCE_BUNDLE:-0}" = "1" ]; then
-    local b
-    if b="$(mode_bundle)"; then attach+=("$b"); echo "attached: $(basename "$b") (age-encrypted config bundle)" >>"$body"; fi
+mode_offsite() {
+  # Encrypt (age, owner public key) a tar of: latest Postgres dumps, configs, extra paths; split; mail the parts.
+  local day work payload latest out rc=0 list=() p
+  day="$(date -u +%F)"
+  work="$STATE_DIR/offsite"
+  payload="$work/roxira-offsite-$day.tar.age"
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] tar latest pg dumps + configs + BACKUP_EMAIL_EXTRA_PATHS | age -r \$BACKUP_AGE_RECIPIENT -> $payload"
+    echo "[dry-run] email_offsite.py offsite --input $payload (caps: BACKUP_EMAIL_PART_MB/MAX_MAILS/MAX_DAY_MB)"
+    return 0
   fi
-  send_mail "$subject" "$body" "${attach[@]}"
-  rm -f "$body"
+  [ -n "${BACKUP_AGE_RECIPIENT:-}" ] || { warn "BACKUP_AGE_RECIPIENT unset; offsite skipped"; return 1; }
+  command -v age >/dev/null || { warn "age not installed; offsite skipped"; return 1; }
+  latest="$(readlink -f "$SETS_DIR/latest" 2>/dev/null || true)"
+  [ -d "$latest" ] || { warn "no local set to mail"; return 1; }
+  mkdir -p "$work"; chmod 700 "$work"
+  find "$work" -maxdepth 1 -type f -mtime +2 -delete 2>/dev/null || true
+  for p in "$latest/pg" "$REPO_DIR/.env" "$REPO_DIR/docker/research-stack/.env" "$REPO_DIR/docker-compose.prod.yml" \
+    "$REPO_DIR/docker/research-stack/docker-compose.yml" "$REPO_DIR/nginx.conf" /etc/nginx/conf.d /etc/roxira/backup.env $EMAIL_EXTRA_PATHS; do
+    [ -e "$p" ] && list+=("$p")
+  done
+  tar -czf - --warning=no-file-changed "${list[@]}" 2>/dev/null | age -r "$BACKUP_AGE_RECIPIENT" -o "$payload"
+  python3 "$SCRIPT_DIR/email_offsite.py" offsite --input "$payload" --work-dir "$work/parts" \
+    --state-file "$STATE_DIR/email_day.json" || rc=$?
+  # Normal runs write the manifest under parts/, the OVER_CAP path writes it in $work.
+  cp -f "$work/parts/offsite-manifest-$day.json" "$work/manifest-last.json" 2>/dev/null \
+    || cp -f "$work/offsite-manifest-$day.json" "$work/manifest-last.json" 2>/dev/null || true
+  rm -f "$payload"
+  return "$rc"
+}
+
+mode_report() {
+  local date_s out_dir pct rc=0 extra=()
+  date_s="$(date -u +%F)"
+  out_dir="$STATE_DIR/report"
+  pct="$(disk_pct "$(dirname "$LOCAL_DIR")")"
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] email_offsite.py report -> backup-report-$date_s.md + manifest-$date_s.json (+ config bundle weekly, offsite mode=$EMAIL_OFFSITE)"
+    return 0
+  fi
+  mkdir -p "$out_dir"
+  local do_off=0
+  case "$EMAIL_OFFSITE" in
+    daily) do_off=1 ;;
+    weekly) [ "$(date -u +%u)" = "$BUNDLE_DOW" ] && do_off=1 ;;
+  esac
+  [ "${FORCE_OFFSITE:-0}" = "1" ] && do_off=1
+  rm -f "$STATE_DIR/offsite/manifest-last.json"
+  if [ "$do_off" = 1 ]; then
+    mode_offsite || warn "offsite e-mail did not complete (rc=$?); the report says so"
+  elif [ "$(date -u +%u)" = "$BUNDLE_DOW" ] || [ "${FORCE_BUNDLE:-0}" = "1" ]; then
+    local b
+    if b="$(mode_bundle)"; then extra+=(--attach "$b"); fi
+  fi
+  local off_args=()
+  [ -f "$STATE_DIR/offsite/manifest-last.json" ] && off_args=(--offsite-manifest "$STATE_DIR/offsite/manifest-last.json")
+  python3 "$SCRIPT_DIR/email_offsite.py" report --status-env "$STATUS_FILE" --check-env "$CHECK_FILE" \
+    --sets-dir "$SETS_DIR" --out-dir "$out_dir" --date "$date_s" --host "$(hostname)" --disk-pct "${pct:-0}" \
+    ${off_args[@]+"${off_args[@]}"} ${extra[@]+"${extra[@]}"} || rc=$?
+  [ "$rc" = 0 ] || warn "report email not sent (rc=$rc)"
 }
 
 mode_check() {
@@ -522,4 +550,5 @@ case "$MODE" in
   report) mode_report ;;
   check) mode_check ;;
   bundle) mode_bundle ;;
+  offsite) mode_offsite ;;
 esac
