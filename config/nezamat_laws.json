@@ -1,0 +1,369 @@
+{
+ "_comment": "nezamat.ir coverage batch 1 (2026-10-13). Post ids are WordPress REST ids on nezamat.ir (valid = not in category 327 'نامعتبر'). Same schema as corpus_fill_laws.json 'stage' blocks. Status: proposed, unofficial, lawyer review pending.",
+ "schema_version": 1,
+ "source": "nezamat",
+ "laws": [
+  {
+   "id": "sanf_1382",
+   "title_fa": "قانون نظام صنفی کشور",
+   "query_fa": "قانون نظام صنفی کشور",
+   "topic": "licensing",
+   "priority": 1,
+   "sources": {
+    "nezamat": {
+     "post_id": 32005
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 15711
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_sanf_1382",
+    "law_name": "قانون نظام صنفی کشور",
+    "law_type": "COMMERCIAL",
+    "category": "GUILD_LICENSING",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "guild",
+     "licensing",
+     "business"
+    ]
+   }
+  },
+  {
+   "id": "business_env_1390",
+   "title_fa": "قانون بهبود مستمر محیط کسب و کار",
+   "query_fa": "قانون بهبود مستمر محیط کسب و کار",
+   "topic": "licensing",
+   "priority": 2,
+   "sources": {
+    "nezamat": {
+     "post_id": 27579
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 11092
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_business_env_1390",
+    "law_name": "قانون بهبود مستمر محیط کسب و کار",
+    "law_type": "COMMERCIAL",
+    "category": "BUSINESS_ENVIRONMENT",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "business",
+     "licensing"
+    ]
+   }
+  },
+  {
+   "id": "article44_1387",
+   "title_fa": "قانون اجرای سیاست‌های کلی اصل چهل و چهارم (44) قانون اساسی",
+   "query_fa": "قانون اجرای سیاست های کلی اصل ۴۴",
+   "topic": "licensing",
+   "priority": 3,
+   "sources": {
+    "nezamat": {
+     "post_id": 29178
+    },
+    "order": [
+     "nezamat"
+    ]
+   },
+   "stage": {
+    "law_id": "nezamat_article44_1387",
+    "law_name": "قانون اجرای سیاست‌های کلی اصل چهل و چهارم (44) قانون اساسی",
+    "law_type": "COMMERCIAL",
+    "category": "PRIVATISATION",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "article44",
+     "privatisation",
+     "competition"
+    ]
+   }
+  },
+  {
+   "id": "licensing_1400",
+   "title_fa": "قانون تسهیل صدور مجوزهای کسب و کار",
+   "query_fa": "قانون تسهیل صدور مجوزهای کسب و کار",
+   "topic": "licensing",
+   "priority": 4,
+   "sources": {
+    "nezamat": {
+     "post_id": 20487
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 69128
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_licensing_1400",
+    "law_name": "قانون تسهیل صدور مجوزهای کسب و کار",
+    "law_type": "COMMERCIAL",
+    "category": "LICENSING",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "licensing",
+     "mojavez",
+     "business"
+    ],
+    "sequential": true
+   }
+  },
+  {
+   "id": "direct_tax_1366",
+   "title_fa": "قانون مالیات‌های مستقیم",
+   "query_fa": "قانون مالیات های مستقیم",
+   "topic": "tax",
+   "priority": 5,
+   "sources": {
+    "nezamat": {
+     "post_id": 37918
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 18988
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_direct_tax_1366",
+    "law_name": "قانون مالیات‌های مستقیم",
+    "law_type": "TAX",
+    "category": "TAX",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "tax",
+     "income-tax"
+    ]
+   }
+  },
+  {
+   "id": "vat_1400",
+   "title_fa": "قانون مالیات بر ارزش افزوده",
+   "query_fa": "قانون مالیات بر ارزش افزوده",
+   "topic": "tax",
+   "priority": 6,
+   "sources": {
+    "nezamat": {
+     "post_id": 22119
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 58934
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_vat_1400",
+    "law_name": "قانون مالیات بر ارزش افزوده",
+    "law_type": "TAX",
+    "category": "TAX",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "tax",
+     "vat"
+    ]
+   }
+  },
+  {
+   "id": "commerce_1311",
+   "title_fa": "قانون تجارت",
+   "query_fa": "قانون تجارت",
+   "topic": "commercial",
+   "priority": 7,
+   "sources": {
+    "nezamat": {
+     "post_id": 48933
+    },
+    "order": [
+     "nezamat"
+    ],
+    "local": {
+     "file": "data/legal/dotic_articles_2026-09-22.jsonl",
+     "law_name": "قانون تجارت"
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_commerce_1311",
+    "law_name": "قانون تجارت",
+    "law_type": "COMMERCIAL",
+    "category": "COMMERCIAL",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "commerce",
+     "companies",
+     "bills-of-exchange"
+    ]
+   }
+  },
+  {
+   "id": "monetary_banking_1351",
+   "title_fa": "قانون پولی و بانکی کشور",
+   "query_fa": "قانون پولی و بانکی کشور",
+   "topic": "banking",
+   "priority": 8,
+   "sources": {
+    "nezamat": {
+     "post_id": 44860
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 15612
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_monetary_banking_1351",
+    "law_name": "قانون پولی و بانکی کشور",
+    "law_type": "BANKING",
+    "category": "BANKING",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "banking",
+     "central-bank"
+    ]
+   }
+  },
+  {
+   "id": "ecommerce_1382",
+   "title_fa": "قانون تجارت الکترونیکی",
+   "query_fa": "قانون تجارت الکترونیکی",
+   "topic": "commercial",
+   "priority": 9,
+   "sources": {
+    "nezamat": {
+     "post_id": 32181
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 18266
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_ecommerce_1382",
+    "law_name": "قانون تجارت الکترونیکی",
+    "law_type": "COMMERCIAL",
+    "category": "E_COMMERCE",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "e-commerce",
+     "consumer"
+    ]
+   }
+  },
+  {
+   "id": "consumer_1388",
+   "title_fa": "قانون حمایت از حقوق مصرف‌کنندگان",
+   "query_fa": "قانون حمایت از حقوق مصرف کنندگان",
+   "topic": "consumer",
+   "priority": 10,
+   "sources": {
+    "nezamat": {
+     "post_id": 28474
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 11962
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_consumer_1388",
+    "law_name": "قانون حمایت از حقوق مصرف‌کنندگان",
+    "law_type": "COMMERCIAL",
+    "category": "CONSUMER",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "consumer"
+    ]
+   }
+  },
+  {
+   "id": "central_bank_1402",
+   "title_fa": "قانون بانک مرکزی جمهوری اسلامی ایران",
+   "query_fa": "قانون بانک مرکزی",
+   "topic": "banking",
+   "priority": 11,
+   "sources": {
+    "nezamat": {
+     "post_id": 17364
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 89688
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_central_bank_1402",
+    "law_name": "قانون بانک مرکزی جمهوری اسلامی ایران",
+    "law_type": "BANKING",
+    "category": "BANKING",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "banking",
+     "central-bank"
+    ]
+   }
+  },
+  {
+   "id": "aml_1386",
+   "title_fa": "قانون مبارزه با پولشویی",
+   "query_fa": "قانون مبارزه با پولشویی",
+   "topic": "banking",
+   "priority": 12,
+   "sources": {
+    "nezamat": {
+     "post_id": 29410
+    },
+    "order": [
+     "nezamat"
+    ],
+    "ekhtebar": {
+     "post_id": 347
+    }
+   },
+   "stage": {
+    "law_id": "nezamat_aml_1386",
+    "law_name": "قانون مبارزه با پولشویی",
+    "law_type": "BANKING",
+    "category": "AML",
+    "source_tier": "unofficial",
+    "source_label": "nezamat.ir",
+    "scope_tags": [
+     "aml",
+     "banking"
+    ]
+   }
+  }
+ ]
+}

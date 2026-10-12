@@ -177,3 +177,16 @@ the plist `EnvironmentVariables`; placeholders left as `__SET_ME__` skip mailing
   warnings (amended/repealed) and golden cases; 24 h staleness alert; scp helper; daily e-mail wired to the server report.
 - **P2**: time-aware retrieval, repealed-article answers from a small `iran_law_changes` collection, per-ministry
   issuer rules and category discovery, optional Iranian VPS runner, dashboard of pending approvals.
+
+## Update 2026-10-13: additional sources (nezamat.ir, qavanin.ir)
+
+The "ekhtebar.ir is the only source" rule is superseded: the owner approved **nezamat.ir** and **qavanin.ir** as well
+(still unofficial, still `proposed`). Details and measurements: `docs/legal/COVERAGE_PLAN_2026-10-13.md`.
+
+* **nezamat.ir** is implemented, opt-in: `LAW_WATCH_SOURCES=ekhtebar,nezamat` or `--sources`. Own cursor
+  (`nezamat_cursor_modified`) and items file (`items_nezamat.jsonl`); polls all posts (about 3/day) with
+  `modified_after`; issuer categories map to act kinds (`NEZAMAT_CATEGORY_HINTS`); category 327 `نامعتبر` marks an
+  instrument invalid and raises a `recheck_corpus_text` action. Change ids are `nezamat:<post_id>`.
+* **qavanin.ir** is approved but sits behind an ArvanCloud JavaScript challenge, so it is not polled and `Fetcher` still
+  refuses it. It becomes a third source only through a legitimate path (API/bulk export, or an allow-listed fetcher).
+* The digest header now reads "ekhtebar.ir and, when enabled, nezamat.ir".

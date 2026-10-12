@@ -1,0 +1,509 @@
+{
+  "generated_by": "scripts/legal/fetch_nezamat_wp.py",
+  "status": "proposed",
+  "laws": {
+    "sanf_1382": {
+      "rows": 102,
+      "repealed_excluded": 0,
+      "approval_date": "1382-12-24",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 11,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 102,
+        "first": 1,
+        "last": 96,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "business_env_1390": {
+      "rows": 31,
+      "repealed_excluded": 0,
+      "approval_date": "1390-11-16",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 6,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 31,
+        "first": 1,
+        "last": 31,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "article44_1387": {
+      "rows": 92,
+      "repealed_excluded": 0,
+      "approval_date": "1387-03-25",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 24,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 92,
+        "first": 1,
+        "last": 92,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "licensing_1400": {
+      "rows": 5,
+      "repealed_excluded": 0,
+      "approval_date": "1400-12-24",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 3,
+      "skipped_markers": 4,
+      "analysis": {
+        "articles": 5,
+        "first": 1,
+        "last": 5,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "direct_tax_1366": {
+      "rows": 256,
+      "repealed_excluded": 36,
+      "approval_date": "1366-12-03",
+      "removed_notes": 40,
+      "removed_vs_active_conflicts": [
+        "ماده 124",
+        "ماده 3",
+        "ماده 40",
+        "ماده 41",
+        "ماده 42",
+        "ماده 43"
+      ],
+      "pointers_dropped": 33,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 258,
+        "first": 1,
+        "last": 282,
+        "missing_numbers": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          23,
+          35,
+          36,
+          37,
+          58,
+          60,
+          62,
+          73,
+          79,
+          129,
+          135,
+          140,
+          158,
+          222,
+          223,
+          224,
+          225,
+          234,
+          236,
+          241,
+          260
+        ],
+        "duplicate_keys": [
+          "244|ماده 244",
+          "251|ماده 251"
+        ],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "vat_1400": {
+      "rows": 57,
+      "repealed_excluded": 0,
+      "approval_date": "1400-03-02",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 8,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 57,
+        "first": 1,
+        "last": 57,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "commerce_1311": {
+      "rows": 524,
+      "repealed_excluded": 76,
+      "approval_date": "1311-02-13",
+      "removed_notes": 102,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 1,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 527,
+        "first": 1,
+        "last": 600,
+        "missing_numbers": [
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93
+        ],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "monetary_banking_1351": {
+      "rows": 15,
+      "repealed_excluded": 30,
+      "approval_date": "1351-04-18",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 2,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 45,
+        "first": 1,
+        "last": 45,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "ecommerce_1382": {
+      "rows": 81,
+      "repealed_excluded": 0,
+      "approval_date": "1382-10-17",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 4,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 81,
+        "first": 1,
+        "last": 81,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "consumer_1388": {
+      "rows": 18,
+      "repealed_excluded": 4,
+      "approval_date": "1388-07-15",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 3,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 22,
+        "first": 1,
+        "last": 22,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "central_bank_1402": {
+      "rows": 67,
+      "repealed_excluded": 0,
+      "approval_date": "1402-03-30",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 0,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 67,
+        "first": 1,
+        "last": 67,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    },
+    "aml_1386": {
+      "rows": 15,
+      "repealed_excluded": 0,
+      "approval_date": "1386-11-02",
+      "removed_notes": 0,
+      "removed_vs_active_conflicts": [],
+      "pointers_dropped": 2,
+      "skipped_markers": 0,
+      "analysis": {
+        "articles": 15,
+        "first": 1,
+        "last": 14,
+        "missing_numbers": [],
+        "duplicate_keys": [],
+        "order_regressions": 0,
+        "empty_bodies": [],
+        "dropped_previous_version_lines": 0
+      },
+      "gates": {
+        "ok": true,
+        "gate_counts": {
+          "missing_fields": 0,
+          "bad_article_no": 0,
+          "missing_source_tier": 0,
+          "invalid_source_tier": 0,
+          "repealed": 0,
+          "duplicates": 0,
+          "bill_with_enacted_law": 0,
+          "not_in_allowlist": 0
+        }
+      }
+    }
+  }
+}

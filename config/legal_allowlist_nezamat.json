@@ -1,0 +1,66 @@
+{
+ "_comment": "Allowlist additions for the nezamat.ir coverage batch (2026-10-13). All proposed: pending lawyer/owner review. Kept separate from config/legal_allowlist.json (merge by the hub).",
+ "schema_version": 1,
+ "laws": [
+  {
+   "name": "قانون نظام صنفی کشور",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون بهبود مستمر محیط کسب و کار",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون اجرای سیاست‌های کلی اصل چهل و چهارم (44) قانون اساسی",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون تسهیل صدور مجوزهای کسب و کار",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون مالیات‌های مستقیم",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون مالیات بر ارزش افزوده",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون تجارت",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون پولی و بانکی کشور",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون تجارت الکترونیکی",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون حمایت از حقوق مصرف‌کنندگان",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون بانک مرکزی جمهوری اسلامی ایران",
+   "status": "proposed",
+   "enacted": true
+  },
+  {
+   "name": "قانون مبارزه با پولشویی",
+   "status": "proposed",
+   "enacted": true
+  }
+ ]
+}

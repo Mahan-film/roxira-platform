@@ -245,3 +245,95 @@ def test_text_and_sha_travel_together_and_llm_upgrade_needs_body(tmp_path, monke
     it = item("اصلاح مقررات سازمان", [127])  # no body
     out = lw.llm_classify(lw.classify_item(it, LAWS), it, http_post=post)
     assert out["needs_review"] is True and out["proposed_actions"] == [] and out["text_sha256"] is None
+
+
+# ----------------------------------------------------------------------------- nezamat.ir source (opt-in)
+def nz_item(title, cats, text="", fresh=True, pid=11, modified="2999-01-01T01:00:00"):
+    return {"post_id": pid, "source": "nezamat", "title": title, "categories": cats, "text": text, "excerpt": "",
+            "fresh": fresh, "date": "2999-01-01T00:00:00", "modified": modified,
+            "link": f"https://nezamat.ir/post-{pid}/", "text_sha256": "x"}
+
+
+def test_sources_switch_default_env_and_cli(monkeypatch):
+    monkeypatch.delenv("LAW_WATCH_SOURCES", raising=False)
+    assert lw.enabled_sources(lw.argparse.Namespace()) == ("ekhtebar",)
+    monkeypatch.setenv("LAW_WATCH_SOURCES", "ekhtebar, Nezamat ,qavanin")
+    assert lw.enabled_sources(None) == ("ekhtebar", "nezamat")  # qavanin (JS challenge) is ignored
+    assert lw.enabled_sources(lw.argparse.Namespace(sources="nezamat")) == ("nezamat",)
+    assert lw.enabled_sources(lw.argparse.Namespace(sources="bogus")) == ("ekhtebar",)
+
+
+def test_nezamat_classification_uses_its_own_categories_and_ids():
+    r = lw.classify_item(nz_item("تصویب‌نامه در خصوص تمدید مهلت اظهارنامه مالیات بر درآمد ماده (۱۰۰) قانون مالیات‌های مستقیم", [124]),
+                         LAWS + ["قانون مالیات‌های مستقیم"])
+    assert r["change_id"] == "nezamat:11" and r["source"] == "nezamat.ir" and r["change_type"] == "cabinet_decision"
+    assert "nezamat_categories" in r and "ekhtebar_categories" not in r
+    ann = lw.classify_item(nz_item("رأی شماره ۱ هیئت عمومی دیوان عدالت اداری: ابطال بند ۳ بخشنامه مالیاتی", [116]), LAWS)
+    assert ann["change_type"] == "annulment" and ann["effect"] == "annuls"
+    # ekhtebar's bill category id (1890) means nothing on nezamat
+    assert lw.classify_item(nz_item("قانون اصلاح ماده ۱۰ قانون مدنی", [1890]), LAWS)["change_type"] != "bill"
+    # but the same id on ekhtebar still does
+    assert lw.classify_item(item("قانون اصلاح قانون مدنی", [1890]), LAWS)["change_type"] == "bill"
+
+
+def test_nezamat_invalid_flag_triggers_recheck_and_blocks_ingest():
+    r = lw.classify_item(nz_item("قانون اصلاح ماده ۱۰ قانون مدنی", [130, 327], text="ماده ۱۰ ..."), LAWS)
+    assert r["nezamat_invalid"] is True and r["ingest_eligible"] is False
+    acts = r["proposed_actions"]
+    assert acts[-1]["action"] == "recheck_corpus_text" and acts[-1]["law_names"] == ["قانون مدنی"]
+    assert all(a["action"] != "review_new_text" for a in acts)
+    ok = lw.classify_item(nz_item("قانون اصلاح ماده ۱۰ قانون مدنی", [130]), LAWS)
+    assert "nezamat_invalid" not in ok
+
+
+def test_nezamat_poll_classify_roundtrip_offline(tmp_path, monkeypatch):
+    monkeypatch.setattr(lw, "STATE_DIR", tmp_path / "state")
+    posts = [
+        {"id": 21, "date": "2999-01-01T00:00:00", "modified": "2999-01-01T01:00:00", "link": "https://nezamat.ir/a/",
+         "title": {"rendered": "تصویب‌نامه در خصوص اصلاح ماده ۵ قانون مدنی"}, "excerpt": {"rendered": ""}, "categories": [124]},
+        {"id": 22, "date": "2999-01-01T00:00:00", "modified": "2999-01-01T02:00:00", "link": "https://nezamat.ir/b/",
+         "title": {"rendered": "قانون قدیمی"}, "excerpt": {"rendered": ""}, "categories": [130, 327]},
+    ]
+    calls = []
+
+    def transport(url):
+        calls.append(url)
+        if "/posts/21?" in url or "/posts/22?" in url:
+            return json.dumps({"content": {"rendered": "<p>ماده ۵ اصلاح شد</p>"}}).encode(), {}
+        return json.dumps(posts if "page=1" in url else []).encode(), {}
+
+    f = lw.Fetcher(transport=transport, delay=0, sleep=lambda s: None)
+    args = lw.argparse.Namespace(since_days=30, max_pages=5, no_text=False)
+    assert lw.cmd_poll_nezamat(args, f) == 0
+    assert all(c.startswith("https://nezamat.ir/") for c in calls) and "categories=" not in calls[0]
+    st = json.loads((tmp_path / "state" / "state.json").read_text())
+    assert st["nezamat_cursor_modified"] == "2999-01-01T02:00:00" and "cursor_modified" not in st
+    assert lw.cmd_classify(lw.argparse.Namespace(llm=False)) == 0
+    ch = {c["change_id"]: c for c in lw.read_jsonl(tmp_path / "state" / "changes.jsonl")}
+    assert ch["nezamat:21"]["change_type"] == "cabinet_decision" and ch["nezamat:22"].get("nezamat_invalid")
+    # a second poll with the same data adds nothing and keeps the cursor
+    f2 = lw.Fetcher(transport=transport, delay=0, sleep=lambda s: None)
+    assert lw.cmd_poll_nezamat(lw.argparse.Namespace(since_days=None, max_pages=5, no_text=False), f2) == 0
+    assert len(lw.read_jsonl(tmp_path / "state" / "items_nezamat.jsonl")) == 2
+
+
+def test_nezamat_offline_keeps_cursor(tmp_path, monkeypatch):
+    monkeypatch.setattr(lw, "STATE_DIR", tmp_path / "state")
+
+    def down(url):
+        raise ConnectionError("down")
+
+    f = lw.Fetcher(transport=down, delay=0, sleep=lambda s: None)
+    assert lw.cmd_poll_nezamat(lw.argparse.Namespace(since_days=3, max_pages=2, no_text=True), f) == 3
+    assert "nezamat_cursor_modified" not in json.loads((tmp_path / "state" / "state.json").read_text())
+
+
+def test_fetcher_still_refuses_qavanin_and_other_hosts():
+    f = lw.Fetcher(transport=lambda u: (b"", {}), delay=0, sleep=lambda s: None)
+    for bad in ("https://qavanin.ir/", "https://www.qavanin.ir/x", "https://rc.majlis.ir/x"):
+        try:
+            f.get(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+    f.get("https://nezamat.ir/wp-json/wp/v2/posts")  # allowed now

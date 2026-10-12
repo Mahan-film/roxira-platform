@@ -1,0 +1,412 @@
+[
+  {
+    "law": "قانون نظام صنفی کشور",
+    "law_id": "nezamat_sanf_1382",
+    "article": "ماده 39",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون نظام صنفی کشور",
+    "law_id": "nezamat_sanf_1382",
+    "article": "ماده 20",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون نظام صنفی کشور",
+    "law_id": "nezamat_sanf_1382",
+    "article": "ماده 48",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون نظام صنفی کشور",
+    "law_id": "nezamat_sanf_1382",
+    "article": "ماده 80",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون نظام صنفی کشور",
+    "law_id": "nezamat_sanf_1382",
+    "article": "ماده 7",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون بهبود مستمر محیط کسب و کار",
+    "law_id": "nezamat_business_env_1390",
+    "article": "ماده 3",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون بهبود مستمر محیط کسب و کار",
+    "law_id": "nezamat_business_env_1390",
+    "article": "ماده 27",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون بهبود مستمر محیط کسب و کار",
+    "law_id": "nezamat_business_env_1390",
+    "article": "ماده 18",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون بهبود مستمر محیط کسب و کار",
+    "law_id": "nezamat_business_env_1390",
+    "article": "ماده 4",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون بهبود مستمر محیط کسب و کار",
+    "law_id": "nezamat_business_env_1390",
+    "article": "ماده 12",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون اجرای سیاست‌های کلی اصل چهل و چهارم (44) قانون اساسی",
+    "law_id": "nezamat_article44_1387",
+    "article": "ماده 75",
+    "result": "no_other_source"
+  },
+  {
+    "law": "قانون اجرای سیاست‌های کلی اصل چهل و چهارم (44) قانون اساسی",
+    "law_id": "nezamat_article44_1387",
+    "article": "ماده 8",
+    "result": "no_other_source"
+  },
+  {
+    "law": "قانون اجرای سیاست‌های کلی اصل چهل و چهارم (44) قانون اساسی",
+    "law_id": "nezamat_article44_1387",
+    "article": "ماده 65",
+    "result": "no_other_source"
+  },
+  {
+    "law": "قانون اجرای سیاست‌های کلی اصل چهل و چهارم (44) قانون اساسی",
+    "law_id": "nezamat_article44_1387",
+    "article": "ماده 28",
+    "result": "no_other_source"
+  },
+  {
+    "law": "قانون اجرای سیاست‌های کلی اصل چهل و چهارم (44) قانون اساسی",
+    "law_id": "nezamat_article44_1387",
+    "article": "ماده 5",
+    "result": "no_other_source"
+  },
+  {
+    "law": "قانون تسهیل صدور مجوزهای کسب و کار",
+    "law_id": "nezamat_licensing_1400",
+    "article": "ماده 1",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تسهیل صدور مجوزهای کسب و کار",
+    "law_id": "nezamat_licensing_1400",
+    "article": "ماده 4",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تسهیل صدور مجوزهای کسب و کار",
+    "law_id": "nezamat_licensing_1400",
+    "article": "ماده 2",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تسهیل صدور مجوزهای کسب و کار",
+    "law_id": "nezamat_licensing_1400",
+    "article": "ماده 5",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تسهیل صدور مجوزهای کسب و کار",
+    "law_id": "nezamat_licensing_1400",
+    "article": "ماده 3",
+    "similarity": 0.6167,
+    "result": "MISMATCH"
+  },
+  {
+    "law": "قانون مالیات‌های مستقیم",
+    "law_id": "nezamat_direct_tax_1366",
+    "article": "ماده 64",
+    "result": "missing_in_other"
+  },
+  {
+    "law": "قانون مالیات‌های مستقیم",
+    "law_id": "nezamat_direct_tax_1366",
+    "article": "ماده 244",
+    "result": "missing_in_other"
+  },
+  {
+    "law": "قانون مالیات‌های مستقیم",
+    "law_id": "nezamat_direct_tax_1366",
+    "article": "ماده 46",
+    "result": "missing_in_other"
+  },
+  {
+    "law": "قانون مالیات‌های مستقیم",
+    "law_id": "nezamat_direct_tax_1366",
+    "article": "ماده 83",
+    "result": "missing_in_other"
+  },
+  {
+    "law": "قانون مالیات‌های مستقیم",
+    "law_id": "nezamat_direct_tax_1366",
+    "article": "ماده 136",
+    "result": "missing_in_other"
+  },
+  {
+    "law": "قانون مالیات بر ارزش افزوده",
+    "law_id": "nezamat_vat_1400",
+    "article": "ماده 41",
+    "similarity": 0.9963,
+    "result": "match"
+  },
+  {
+    "law": "قانون مالیات بر ارزش افزوده",
+    "law_id": "nezamat_vat_1400",
+    "article": "ماده 38",
+    "similarity": 0.9982,
+    "result": "match"
+  },
+  {
+    "law": "قانون مالیات بر ارزش افزوده",
+    "law_id": "nezamat_vat_1400",
+    "article": "ماده 4",
+    "similarity": 0.9943,
+    "result": "match"
+  },
+  {
+    "law": "قانون مالیات بر ارزش افزوده",
+    "law_id": "nezamat_vat_1400",
+    "article": "ماده 37",
+    "similarity": 0.9914,
+    "result": "match"
+  },
+  {
+    "law": "قانون مالیات بر ارزش افزوده",
+    "law_id": "nezamat_vat_1400",
+    "article": "ماده 26",
+    "similarity": 0.9964,
+    "result": "match"
+  },
+  {
+    "law": "قانون تجارت",
+    "law_id": "nezamat_commerce_1311",
+    "article": "ماده 124",
+    "similarity": 0.9848,
+    "result": "match"
+  },
+  {
+    "law": "قانون تجارت",
+    "law_id": "nezamat_commerce_1311",
+    "article": "ماده 300",
+    "similarity": 0.9856,
+    "result": "match"
+  },
+  {
+    "law": "قانون تجارت",
+    "law_id": "nezamat_commerce_1311",
+    "article": "ماده 121",
+    "similarity": 0.9256,
+    "result": "minor_diff"
+  },
+  {
+    "law": "قانون تجارت",
+    "law_id": "nezamat_commerce_1311",
+    "article": "ماده 210",
+    "similarity": 0.9658,
+    "result": "minor_diff"
+  },
+  {
+    "law": "قانون تجارت",
+    "law_id": "nezamat_commerce_1311",
+    "article": "ماده 372",
+    "similarity": 0.9895,
+    "result": "match"
+  },
+  {
+    "law": "قانون پولی و بانکی کشور",
+    "law_id": "nezamat_monetary_banking_1351",
+    "article": "ماده 32",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون پولی و بانکی کشور",
+    "law_id": "nezamat_monetary_banking_1351",
+    "article": "ماده 28",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون پولی و بانکی کشور",
+    "law_id": "nezamat_monetary_banking_1351",
+    "article": "ماده 34",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون پولی و بانکی کشور",
+    "law_id": "nezamat_monetary_banking_1351",
+    "article": "ماده 27",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون پولی و بانکی کشور",
+    "law_id": "nezamat_monetary_banking_1351",
+    "article": "ماده 35",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تجارت الکترونیکی",
+    "law_id": "nezamat_ecommerce_1382",
+    "article": "ماده 40",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تجارت الکترونیکی",
+    "law_id": "nezamat_ecommerce_1382",
+    "article": "ماده 72",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تجارت الکترونیکی",
+    "law_id": "nezamat_ecommerce_1382",
+    "article": "ماده 24",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تجارت الکترونیکی",
+    "law_id": "nezamat_ecommerce_1382",
+    "article": "ماده 14",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون تجارت الکترونیکی",
+    "law_id": "nezamat_ecommerce_1382",
+    "article": "ماده 75",
+    "similarity": 0.8766,
+    "result": "MISMATCH"
+  },
+  {
+    "law": "قانون حمایت از حقوق مصرف‌کنندگان",
+    "law_id": "nezamat_consumer_1388",
+    "article": "ماده 7",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون حمایت از حقوق مصرف‌کنندگان",
+    "law_id": "nezamat_consumer_1388",
+    "article": "ماده 12",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون حمایت از حقوق مصرف‌کنندگان",
+    "law_id": "nezamat_consumer_1388",
+    "article": "ماده 4",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون حمایت از حقوق مصرف‌کنندگان",
+    "law_id": "nezamat_consumer_1388",
+    "article": "ماده 9",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون حمایت از حقوق مصرف‌کنندگان",
+    "law_id": "nezamat_consumer_1388",
+    "article": "ماده 20",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون بانک مرکزی جمهوری اسلامی ایران",
+    "law_id": "nezamat_central_bank_1402",
+    "article": "ماده 9",
+    "similarity": 0.9795,
+    "result": "match"
+  },
+  {
+    "law": "قانون بانک مرکزی جمهوری اسلامی ایران",
+    "law_id": "nezamat_central_bank_1402",
+    "article": "ماده 8",
+    "similarity": 0.9978,
+    "result": "match"
+  },
+  {
+    "law": "قانون بانک مرکزی جمهوری اسلامی ایران",
+    "law_id": "nezamat_central_bank_1402",
+    "article": "ماده 27",
+    "similarity": 0.9967,
+    "result": "match"
+  },
+  {
+    "law": "قانون بانک مرکزی جمهوری اسلامی ایران",
+    "law_id": "nezamat_central_bank_1402",
+    "article": "ماده 64",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون بانک مرکزی جمهوری اسلامی ایران",
+    "law_id": "nezamat_central_bank_1402",
+    "article": "ماده 55",
+    "similarity": 0.9932,
+    "result": "match"
+  },
+  {
+    "law": "قانون مبارزه با پولشویی",
+    "law_id": "nezamat_aml_1386",
+    "article": "ماده 12",
+    "similarity": 1.0,
+    "result": "match"
+  },
+  {
+    "law": "قانون مبارزه با پولشویی",
+    "law_id": "nezamat_aml_1386",
+    "article": "ماده 6",
+    "similarity": 0.9965,
+    "result": "match"
+  },
+  {
+    "law": "قانون مبارزه با پولشویی",
+    "law_id": "nezamat_aml_1386",
+    "article": "ماده 7 مکرر",
+    "similarity": 0.9989,
+    "result": "match"
+  },
+  {
+    "law": "قانون مبارزه با پولشویی",
+    "law_id": "nezamat_aml_1386",
+    "article": "ماده 9",
+    "similarity": 0.9978,
+    "result": "match"
+  },
+  {
+    "law": "قانون مبارزه با پولشویی",
+    "law_id": "nezamat_aml_1386",
+    "article": "ماده 14",
+    "similarity": 0.9921,
+    "result": "match"
+  }
+]

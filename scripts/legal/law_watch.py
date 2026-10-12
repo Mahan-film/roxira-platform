@@ -8,7 +8,10 @@ Subcommands (see docs/legal/LAW_WATCH_DESIGN.md):
   digest    write a Markdown summary of the latest changes (optionally e-mail it)
   run       poll + classify + stage + digest (what launchd calls)
 
-Rules: only www.ekhtebar.ir / ekhtebar.ir is contacted (plus openrouter.ai for the optional LLM step),
+Sources: ekhtebar.ir (default) and nezamat.ir (opt-in: env LAW_WATCH_SOURCES=ekhtebar,nezamat or --sources). qavanin.ir is
+approved but sits behind a JS challenge (ArvanCloud), so it is NOT polled and the Fetcher still refuses it.
+
+Rules: only www.ekhtebar.ir / ekhtebar.ir (and nezamat.ir / www.nezamat.ir when enabled) is contacted (plus openrouter.ai for the optional LLM step),
 >= 2 s between requests, no paid LLM in the fetch path, state lives in ~/.roxira/law_watch/ (outside the
 repo). Output never modifies anything under data/ except creating a new staged file. Stdlib (+certifi if present).
 """
@@ -36,7 +39,12 @@ from urllib.parse import urlencode, urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "https://www.ekhtebar.ir"
-ALLOWED_HOSTS = frozenset({"www.ekhtebar.ir", "ekhtebar.ir"})
+NEZAMAT_BASE = "https://nezamat.ir"
+ALLOWED_HOSTS = frozenset({"www.ekhtebar.ir", "ekhtebar.ir", "nezamat.ir", "www.nezamat.ir"})
+SOURCES_ENV = "LAW_WATCH_SOURCES"
+DEFAULT_SOURCES = ("ekhtebar",)
+KNOWN_SOURCES = ("ekhtebar", "nezamat")
+NEZAMAT_INVALID_CATEGORY = 327  # «نامعتبر»: nezamat's own "no longer valid" flag
 USER_AGENT = "RoxiraLegalResearchBot/1.0 (owner-run, low-rate, 1 req/2s; contact: roxira-platform owner)"
 MIN_DELAY = 2.0
 PER_PAGE = 20
@@ -73,6 +81,33 @@ CATEGORY_HINTS: dict[int, tuple[str, str]] = {
     4701: ("news", "اخبار مجمع تشخیص مصلحت"),
 }
 POLL_CATEGORIES = sorted(CATEGORY_HINTS)
+
+# nezamat.ir category id -> (change type hint, bucket). Verified live 2026-10-13 via /wp-json/wp/v2/categories (182 terms).
+# nezamat categories are ISSUING BODIES (parent 73 «مقامات») or SUBJECTS (parent 329 «موضوعات»), not document kinds, so the
+# hint is the typical kind of act that body issues; the title rules in classify_item still decide first.
+NEZAMAT_CATEGORY_HINTS: dict[int, tuple[str, str]] = {
+    130: ("law_text", "مجلس شورای اسلامی"), 133: ("law_text", "مجمع تشخیص مصلحت نظام"), 132: ("resolution", "کمیسیون مجلس"),
+    124: ("resolution", "هیئت وزیران"), 126: ("resolution", "کمیسیون هیات دولت"), 119: ("resolution", "رییس جمهور"),
+    123: ("circular", "معاون رییس جمهور"), 125: ("circular", "دبیر هیات دولت"),
+    116: ("annulment", "هیأت عمومی دیوان عدالت اداری"), 377: ("annulment", "هیأت تخصصی دیوان عدالت اداری"),
+    115: ("unity_ruling", "هیأت عمومی دیوان عالی کشور"),
+    113: ("regulation", "رییس قوه قضاییه"), 114: ("regulation", "معاون رییس قوه قضاییه"), 117: ("regulation", "شورای عالی قضایی"),
+    280: ("advisory_opinion", "اداره کل حقوقی قوه قضاییه"), 129: ("advisory_opinion", "شورای نگهبان"),
+    263: ("regulation", "شورای عالی اداری"), 235: ("regulation", "شورای عالی شهرسازی و معماری"),
+    267: ("regulation", "شورای عالی اجرای سیاست‌های اصل ۴۴"), 239: ("regulation", "هیأت مقررات‌زدایی و بهبود محیط کسب و کار"),
+    292: ("regulation", "شورای عالی بیمه"), 312: ("regulation", "شورای پول و اعتبار"), 350: ("regulation", "شورای عالی کار"),
+    295: ("regulation", "شورای اقتصاد"), 311: ("regulation", "شورای عالی استاندارد"), 322: ("regulation", "شورای عالی مناطق آزاد"),
+    290: ("regulation", "کمیسیون تنظیم مقررات ارتباطات"), 301: ("regulation", "شورای رقابت"), 307: ("regulation", "شورای عالی رفاه"),
+    271: ("circular", "سازمان امور مالیاتی کشور"), 278: ("circular", "وزارت صنعت، معدن و تجارت"),
+    281: ("circular", "بانک مرکزی"), 323: ("circular", "بیمه مرکزی"), 238: ("circular", "وزارت امور اقتصادی و دارایی"),
+    236: ("circular", "وزارت تعاون، کار و رفاه اجتماعی"), 272: ("circular", "سازمان ثبت اسناد و املاک کشور"),
+    296: ("circular", "سازمان تامین اجتماعی"), 264: ("circular", "کانون وکلای دادگستری"), 273: ("circular", "وزارت کشور"),
+    268: ("circular", "وزارت بهداشت"), 270: ("circular", "وزارت راه و شهرسازی"), 237: ("circular", "وزارت جهاد کشاورزی"),
+    286: ("circular", "سازمان اداری و استخدامی"), 287: ("circular", "سازمان برنامه و بودجه"), 360: ("circular", "ستاد مبارزه با قاچاق"),
+    110: ("policy", "رهبر انقلاب"), 107: ("policy", "امام خمینی"),
+    81: ("law_text", "هیئت وزیران (پهلوی)"),
+}
+NEZAMAT_POLL_CATEGORIES: list[int] = []  # empty = poll ALL posts (about 3 per day); add ids here to narrow it
 
 # change types that can alter the corpus (everything else is digest-only unless it links to a law)
 LEGAL_TYPES = {"new_law", "amendment", "repeal", "annulment", "unity_ruling", "cabinet_decision",
@@ -210,10 +245,10 @@ def wants_body(it: dict) -> bool:
 MAX_BODY_RETRIES = 20
 
 
-def fetch_text(fetcher: Fetcher, post_id: int) -> str | None:
+def fetch_text(fetcher: Fetcher, post_id: int, base: str = BASE) -> str | None:
     """Full body of one post (fetched only for non-news items; list responses stay small and reliable)."""
     try:
-        body, _ = fetcher.get(f"{BASE}/wp-json/wp/v2/posts/{post_id}?_fields=content")
+        body, _ = fetcher.get(f"{base}/wp-json/wp/v2/posts/{post_id}?_fields=content")
         return strip_html(json.loads(body).get("content", {}).get("rendered", ""))
     except (ConnectionError, ValueError, urllib.error.HTTPError):
         return None  # failure (distinct from an empty body, which is "")
@@ -320,6 +355,99 @@ def cmd_poll(args, fetcher: Fetcher | None = None) -> int:
     return 0 if ok else 3
 
 
+# ----------------------------------------------------------------------------- nezamat.ir poll (opt-in source)
+def enabled_sources(args=None) -> tuple[str, ...]:
+    """Config switch: --sources a,b > env LAW_WATCH_SOURCES > default (ekhtebar only). Unknown names are ignored."""
+    raw = getattr(args, "sources", None) or os.environ.get(SOURCES_ENV) or ",".join(DEFAULT_SOURCES)
+    got = tuple(x for x in (t.strip().lower() for t in raw.split(",")) if x in KNOWN_SOURCES)
+    return got or DEFAULT_SOURCES
+
+
+def build_nezamat_posts_url(modified_after: str, page: int) -> str:
+    q = {"per_page": PER_PAGE, "page": page, "orderby": "modified", "order": "asc", "modified_after": modified_after,
+         "_fields": "id,date,modified,link,title,excerpt,categories"}  # fmt: skip
+    if NEZAMAT_POLL_CATEGORIES:
+        q["categories"] = ",".join(map(str, NEZAMAT_POLL_CATEGORIES))
+    return f"{NEZAMAT_BASE}/wp-json/wp/v2/posts?{urlencode(q)}"
+
+
+def nezamat_wants_body(it: dict) -> bool:
+    cats = it.get("categories", [])
+    return any(NEZAMAT_CATEGORY_HINTS.get(c, ("", ""))[0] != "news" for c in cats) or NEZAMAT_INVALID_CATEGORY in cats
+
+
+def cmd_poll_nezamat(args, fetcher: Fetcher | None = None) -> int:
+    """Same cursor semantics as cmd_poll (pages ordered by `modified`, cursor advances per processed page, dedupe by
+    id + modified) but against nezamat.ir, with its own cursor (state.json: nezamat_cursor_modified) and items file
+    (items_nezamat.jsonl, every item tagged source=nezamat). nezamat has about 3 posts/day, so a poll is 1-2 requests."""
+    fetcher = fetcher or Fetcher()
+    state = load_json(_p("state.json"), {})
+    if args.since_days is not None or not state.get("nezamat_cursor_modified"):
+        days = args.since_days if args.since_days is not None else 30
+        cursor = (dt.datetime.now() - dt.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+    else:
+        cursor = state["nezamat_cursor_modified"]
+    window_start = cursor
+    items = {i["post_id"]: i for i in read_jsonl(_p("items_nezamat.jsonl"))}
+    new = edited = pages = 0
+    last_processed = None
+    caught_up = ok = False
+    try:
+        page, cap = 1, (getattr(args, "max_pages", None) or MAX_PAGES_PER_RUN)
+        while page <= cap:
+            try:
+                body, _ = fetcher.get(build_nezamat_posts_url(_minus_one_second(cursor), page))
+            except urllib.error.HTTPError as e:
+                if e.code == 400:
+                    caught_up = True
+                    break
+                raise
+            posts = json.loads(body)
+            pages += 1
+            if not posts:
+                caught_up = True
+                break
+            for p in posts:
+                it = item_from_post(p)
+                it["source"] = "nezamat"
+                old = items.get(it["post_id"])
+                if it["modified"] and (last_processed is None or it["modified"] > last_processed):
+                    last_processed = it["modified"]
+                if old is None:
+                    it["first_seen"], it["revisions"] = _now(), 1
+                    new += 1
+                elif old.get("modified") != it["modified"]:
+                    it["first_seen"] = old.get("first_seen", _now())
+                    it["revisions"] = int(old.get("revisions", 1)) + 1
+                    it["is_edit"] = True
+                    edited += 1
+                else:
+                    continue
+                if not getattr(args, "no_text", False) and nezamat_wants_body(it):
+                    _apply_body(it, fetch_text(fetcher, it["post_id"], NEZAMAT_BASE))
+                it["fresh"] = bool(it.get("date") and it["date"] >= window_start)
+                it["classified"] = False
+                items[it["post_id"]] = it
+            if len(posts) < PER_PAGE:
+                caught_up = True
+                break
+            page += 1
+        ok = True
+    except (ConnectionError, ValueError, OSError) as e:
+        print(f"poll[nezamat]: not reachable ({e}); cursor kept, will catch up next run")
+    write_jsonl(_p("items_nezamat.jsonl"), sorted(items.values(), key=lambda i: i.get("modified") or ""))
+    state = load_json(_p("state.json"), {})  # re-read: the ekhtebar poll may have written it meanwhile
+    if last_processed:
+        state["nezamat_cursor_modified"] = last_processed
+    elif ok and not state.get("nezamat_cursor_modified"):
+        state["nezamat_cursor_modified"] = cursor
+    state.update({"nezamat_last_poll": _now(), "nezamat_last_poll_ok": ok, "nezamat_caught_up": caught_up})
+    save_json(_p("state.json"), state)
+    print(f"poll[nezamat]: ok={ok} caught_up={caught_up} pages={pages} new={new} edited={edited} "
+          f"requests={fetcher.requests} cursor={state.get('nezamat_cursor_modified')}")
+    return 0 if ok else 3
+
+
 def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -408,7 +536,9 @@ def classify_item(it: dict, law_names: list[str] | None = None) -> dict:
     title = norm(it.get("title", ""))
     body = norm(it.get("text", ""))
     cats = it.get("categories", [])
-    hints = [CATEGORY_HINTS[c][0] for c in cats if c in CATEGORY_HINTS]
+    source = it.get("source", "ekhtebar")
+    hint_map = NEZAMAT_CATEGORY_HINTS if source == "nezamat" else CATEGORY_HINTS
+    hints = [hint_map[c][0] for c in cats if c in hint_map]
     hint_set = set(hints)
     signals: list[str] = []
     ctype, effect = "other", "informs"
@@ -419,9 +549,9 @@ def classify_item(it: dict, law_names: list[str] | None = None) -> dict:
     elif re.match(r"^نظریه", title):
         ctype = "advisory_opinion"
         signals.append("advisory-title")
-    elif 1890 in cats or re.match(r"^(طرح|لایحه(?! قانونی))", title) or "پیش نویس" in title:
+    elif (source == "ekhtebar" and 1890 in cats) or re.match(r"^(طرح|لایحه(?! قانونی))", title) or "پیش نویس" in title:
         ctype = "bill"
-        signals.append("bill-cat" if 1890 in cats else "bill-title")
+        signals.append("bill-cat" if (source == "ekhtebar" and 1890 in cats) else "bill-title")
     elif ANNUL_RE.search(title):
         ctype, effect = "annulment", "annuls"
         signals.append("annul")
@@ -484,10 +614,10 @@ def classify_item(it: dict, law_names: list[str] | None = None) -> dict:
     conf = "high" if (signals and refs and not ambiguous) else ("medium" if signals and not ambiguous else "low")
     rec = {
         "record_type": "law_change", "schema_version": SCHEMA_VERSION,
-        "change_id": f"ekhtebar:{it['post_id']}", "source": "ekhtebar.ir", "source_tier": "unofficial",
+        "change_id": f"{source}:{it['post_id']}", "source": f"{source}.ir", "source_tier": "unofficial",
         "status": "proposed", "source_url": it.get("link"), "title": it.get("title"),
         "published_at": it.get("date"), "modified_at": it.get("modified"), "is_edit": bool(it.get("is_edit")),
-        "ekhtebar_categories": cats, "change_type": ctype, "effect": effect, "issuer": issuer,
+        f"{source}_categories": cats, "change_type": ctype, "effect": effect, "issuer": issuer,
         "approval_date": approval, "law_refs": refs, "target_law_raw": raw_target, "fresh": it.get("fresh", True), "classification": {"method": "rules", "confidence": conf, "signals": signals},
         "needs_llm": bool(ambiguous), "excerpt": it.get("excerpt", ""),
         # text and text_sha256 travel together: kept for legal types, absent/None for the rest
@@ -500,6 +630,14 @@ def classify_item(it: dict, law_names: list[str] | None = None) -> dict:
         rec["classification"]["signals"].append("page-edited-not-new")
     rec["proposed_actions"] = proposed_actions(rec) if it.get("fresh", True) else (
         [{"action": "recheck_corpus_text", "change_id": rec["change_id"]}] if rec["change_type"] in LEGAL_TYPES else [])
+    if source == "nezamat" and NEZAMAT_INVALID_CATEGORY in cats:
+        # nezamat tags instruments that are no longer valid with category 327. A post that carries it (new, or an
+        # older one edited into it) means: do not answer from this text, and re-check anything we hold from it.
+        rec["nezamat_invalid"], rec["ingest_eligible"] = True, False
+        rec["classification"]["signals"].append("nezamat-invalid-flag")
+        rec["proposed_actions"] = [a for a in rec["proposed_actions"] if a.get("action") != "review_new_text"] + [
+            {"action": "recheck_corpus_text", "change_id": rec["change_id"], "reason": "nezamat marks this instrument invalid",
+             "law_names": [r["law_name"] for r in rec["law_refs"]]}]
     return rec
 
 
@@ -600,7 +738,20 @@ def _openrouter_post(body: dict, key: str) -> dict:
 
 
 def cmd_classify(args) -> int:
-    items = read_jsonl(_p("items.jsonl"))
+    done = llm_used = 0
+    changes = {}
+    for fname in ("items.jsonl", "items_nezamat.jsonl"):
+        if fname == "items_nezamat.jsonl" and not _p(fname).exists():
+            continue
+        d, u = _classify_file(args, fname)
+        done, llm_used = done + d, llm_used + u
+    changes = {c["change_id"] + "@" + str(c.get("modified_at")): c for c in read_jsonl(_p("changes.jsonl"))}
+    print(f"classify: {done} items classified, llm_calls={llm_used}, needs_llm_left={sum(1 for c in changes.values() if c['needs_llm'])}")
+    return 0
+
+
+def _classify_file(args, fname: str) -> tuple[int, int]:
+    items = read_jsonl(_p(fname))
     changes = {c["change_id"] + "@" + str(c.get("modified_at")): c for c in read_jsonl(_p("changes.jsonl"))}
     names = load_law_names()
     done = llm_used = 0
@@ -619,10 +770,9 @@ def cmd_classify(args) -> int:
         changes[rec["change_id"] + "@" + str(rec["modified_at"])] = rec
         it["classified"] = True
         done += 1
-    write_jsonl(_p("items.jsonl"), items)
+    write_jsonl(_p(fname), items)
     write_jsonl(_p("changes.jsonl"), list(changes.values()))
-    print(f"classify: {done} items classified, llm_calls={llm_used}, needs_llm_left={sum(1 for c in changes.values() if c['needs_llm'])}")
-    return 0
+    return done, llm_used
 
 
 # ----------------------------------------------------------------------------- stage / digest
@@ -664,7 +814,7 @@ TYPE_FA = {"new_law": "قانون جدید", "amendment": "اصلاحیه", "rep
 def render_digest(changes: list[dict], day: str) -> str:
     cnt = Counter(c["change_type"] for c in changes)
     L = [f"# Law watch digest {day} / خلاصه تغییرات قوانین", "",
-         "_Source: ekhtebar.ir only (unofficial). All items are proposals; nothing is ingested without approval. "
+         "_Sources: ekhtebar.ir and, when enabled, nezamat.ir (both unofficial). All items are proposals; nothing is ingested without approval. "
          "منبع غیررسمی؛ نیازمند تأیید وکیل._", "", f"Total: {len(changes)}", ""]
     L += ["| type | count |", "|---|---|"] + [f"| {k} ({TYPE_FA.get(k, k)}) | {v} |" for k, v in cnt.most_common()]
     for ctype in ("repeal", "annulment", "amendment", "new_law", "cabinet_decision", "unity_ruling", "regulation",
@@ -733,8 +883,21 @@ def cmd_digest(args) -> int:
     return 0
 
 
+def cmd_poll_all(args) -> int:
+    """`poll` subcommand: every enabled source (default: ekhtebar only, exactly the old behaviour)."""
+    srcs = enabled_sources(args)
+    rc = cmd_poll(args) if "ekhtebar" in srcs else 0
+    if "nezamat" in srcs:
+        rc = rc or cmd_poll_nezamat(args)
+    return rc
+
+
 def cmd_run(args) -> int:
-    rc = cmd_poll(args)
+    srcs = enabled_sources(args)
+    rc = cmd_poll(args) if "ekhtebar" in srcs else 0
+    if "nezamat" in srcs:
+        rc2 = cmd_poll_nezamat(args)
+        rc = rc or rc2
     cmd_classify(args)
     cmd_stage(args)
     args.days = 1
@@ -747,6 +910,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     pp, pc, ps, pd, pr = (sub.add_parser(n) for n in ("poll", "classify", "stage", "digest", "run"))
     for p in (pp, pr):
+        p.add_argument("--sources", default=None, help=f"comma list of {','.join(KNOWN_SOURCES)} (default: env {SOURCES_ENV} or ekhtebar)")
         p.add_argument("--since-days", type=int, default=None, help="ignore the cursor and start N days back")
         p.add_argument("--max-pages", type=int, default=None)
         p.add_argument("--no-text", action="store_true", help="skip per-post body fetch (titles/excerpts only)")
@@ -759,7 +923,7 @@ def main(argv=None) -> int:
         p.add_argument("--dry-run", action="store_true")
     pd.add_argument("--days", type=int, default=1)
     args = ap.parse_args(argv)
-    return {"poll": cmd_poll, "classify": cmd_classify, "stage": cmd_stage, "digest": cmd_digest, "run": cmd_run}[args.cmd](args)
+    return {"poll": cmd_poll_all, "classify": cmd_classify, "stage": cmd_stage, "digest": cmd_digest, "run": cmd_run}[args.cmd](args)
 
 
 if __name__ == "__main__":
