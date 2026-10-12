@@ -144,6 +144,21 @@ done; done
 settings.) Switch only if v3 does not lose any case that v2 passes and the new-law cases pass. The existing
 `retrieval_golden.json` marks `fraud-penalty` as `corpus_gap`; the new file lists it as a normal case.
 
+### One-command v3 build
+
+`scripts/legal/build_v3_on_server.sh` runs the whole of this section on the server: preflight (clean tree in
+`/opt/roxira_platform`, containers up, v2 present, v3 absent, disk space), a v2 snapshot, the v2 -> v3 copy, then each
+staged file in order (`corpus_fill_2026-10-11`, `..._replace_lease1376`, `corpus_fill_2026-10-12_ekhtebar`; never
+`*.repealed.jsonl`) as dry run then real apply, and the retrieval-only comparison table for v2 and v3. It never touches
+v2 and never switches serving; it prints the switch and rollback commands without running them.
+
+```bash
+ssh 5.75.200.67 && cd /opt/roxira_platform && git fetch && git checkout <the merged commit>   # owner approval
+bash scripts/legal/build_v3_on_server.sh --dry-run    # validate + copy dry run only, no writes
+bash scripts/legal/build_v3_on_server.sh              # snapshot, build, apply, evaluate
+bash scripts/legal/build_v3_on_server.sh --rebuild    # delete ONLY v3 (type its name to confirm) and rebuild
+```
+
 ### Switch and rollback
 
 The engine picks the collection from env `LIGHTRAG_QDRANT_COLLECTION` (default `iran_laws_v2`); `iran_laws_v3` is now in
