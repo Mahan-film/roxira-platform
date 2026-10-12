@@ -45,9 +45,12 @@ import {
   CASE_FILE_PRIVACY_NOTICE,
   CaseFileError,
   MAX_CASE_FILES_PER_CHAT,
+  MAX_CONCURRENT_UPLOADS,
   deleteCaseFile,
+  prepareImageForUpload,
   uploadCaseFile,
   validateCaseFile,
+  watchCaseFile,
 } from "@/lib/api/case-files-client";
 import { LegalStreamingText } from "./legal-streaming-text";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -82,13 +85,18 @@ type StatutoryItem =
 type Attachment = {
   localId: string;
   name: string;
-  status: "uploading" | "ready" | "error";
+  /** uploading = bytes on the wire (or queued); processing = server is reading it in the background. */
+  status: "uploading" | "processing" | "ready" | "error";
   fileId?: string;
+  /** Upload percentage 0-100 while `uploading`; undefined = waiting in the queue / preparing. */
+  progress?: number;
+  /** Server progress text while `processing` (e.g. "در حال خواندن صفحه ۱۴ از ۴۰"). */
+  statusText?: string;
   pages?: number;
   ocrUsed?: boolean;
   warning?: string;
   error?: string;
-  /** Kept only while uploading/failed so "retry" can resend it; dropped once ready. */
+  /** Kept only until ready so "retry" can resend it. */
   file?: File;
 };
 
@@ -445,39 +453,120 @@ export function ChatShell() {
     (camera ? cameraInputRef : fileInputRef).current?.click();
   };
 
-  const startUpload = async (localId: string, file: File) => {
-    patchAttachment(localId, { status: "uploading", error: undefined, file });
-    try {
-      const result = await uploadCaseFile(file, {
-        token: getAccessToken(),
-        conversationId: conversationId || undefined,
-        onRetry: () => setAttachNotice("اتصال ضعیف است؛ در حال تلاش دوباره…"),
-      });
-      setAttachNotice("");
-      patchAttachment(localId, {
-        status: "ready",
-        fileId: result.file_id,
-        pages: result.pages,
-        ocrUsed: result.ocr_used,
-        warning: result.warnings?.[0],
-        file: undefined,
-      });
-    } catch (err) {
-      const e = err instanceof CaseFileError ? err : null;
-      if (e?.status === 401) {
-        logout();
-        setAttachments((prev) => prev.filter((a) => a.localId !== localId));
-        askLoginForUpload();
-        return;
-      }
-      // Validation/limit errors are final; network/timeout/OCR failures can be retried.
-      const retryable = !e || e.status === 0 || e.status >= 500 || e.code === "OCR_FAILED";
-      patchAttachment(localId, {
-        status: "error",
-        error: e?.message ?? "بارگذاری فایل انجام نشد؛ لطفاً دوباره تلاش کنید.",
-        file: retryable ? file : undefined,
+  // At most MAX_CONCURRENT_UPLOADS transfers at once (phone uplinks); the rest wait in the queue.
+  // Server-side reading (polling) does not hold a slot.
+  const uploadQueueRef = useRef<Array<() => Promise<void>>>([]);
+  const activeUploadsRef = useRef(0);
+  const watchersRef = useRef<Map<string, AbortController>>(new Map());
+  const removedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const watchers = watchersRef.current;
+    return () => watchers.forEach((c) => c.abort());
+  }, []);
+
+  const pumpUploads = () => {
+    while (activeUploadsRef.current < MAX_CONCURRENT_UPLOADS && uploadQueueRef.current.length) {
+      const job = uploadQueueRef.current.shift() as () => Promise<void>;
+      activeUploadsRef.current += 1;
+      void job().finally(() => {
+        activeUploadsRef.current -= 1;
+        pumpUploads();
       });
     }
+  };
+
+  const failAttachment = (localId: string, err: unknown, file: File | undefined) => {
+    const e = err instanceof CaseFileError ? err : null;
+    if (e?.code === "ABORTED") return;
+    if (e?.status === 401) {
+      logout();
+      setAttachments((prev) => prev.filter((a) => a.localId !== localId));
+      askLoginForUpload();
+      return;
+    }
+    // Validation/limit errors are final; network/timeout/server failures can be retried by hand.
+    const retryable = !e || e.status === 0 || e.status === 429 || e.status >= 500 || e.code === "OCR_FAILED";
+    patchAttachment(localId, {
+      status: "error",
+      error: e?.message ?? "بارگذاری فایل انجام نشد؛ لطفاً دوباره تلاش کنید.",
+      progress: undefined,
+      statusText: undefined,
+      file: retryable ? file : undefined,
+    });
+  };
+
+  const watchProcessing = async (localId: string, fileId: string, file: File) => {
+    const ctrl = new AbortController();
+    watchersRef.current.set(localId, ctrl);
+    try {
+      const st = await watchCaseFile(fileId, {
+        token: getAccessToken,
+        signal: ctrl.signal,
+        onUpdate: (u) => {
+          if (u.status === "processing") patchAttachment(localId, { statusText: u.message });
+        },
+      });
+      if (st.status === "ready") {
+        patchAttachment(localId, {
+          status: "ready",
+          pages: st.pages || st.pages_total || undefined,
+          ocrUsed: st.ocr_used,
+          warning: st.warnings?.[0],
+          statusText: undefined,
+          file: undefined,
+        });
+      } else {
+        patchAttachment(localId, {
+          status: "error",
+          error: st.message || "پردازش فایل ناموفق بود؛ دوباره تلاش کنید.",
+          statusText: undefined,
+          fileId: undefined,
+          file,
+        });
+      }
+    } catch (err) {
+      failAttachment(localId, err, file);
+    } finally {
+      watchersRef.current.delete(localId);
+    }
+  };
+
+  const runUpload = async (localId: string, original: File) => {
+    if (removedRef.current.has(localId)) return;
+    const ctrl = new AbortController();
+    watchersRef.current.set(localId, ctrl);
+    try {
+      patchAttachment(localId, { status: "uploading", progress: 0, error: undefined, file: original });
+      const prepared = await prepareImageForUpload(original);
+      const invalid = validateCaseFile(prepared);
+      if (invalid) throw new CaseFileError(invalid, 400, "CLIENT_INVALID");
+      const accepted = await uploadCaseFile(prepared, {
+        token: getAccessToken(),
+        conversationId: conversationId || undefined,
+        signal: ctrl.signal,
+        onProgress: (p) => patchAttachment(localId, { progress: p }),
+      });
+      setAttachNotice("ارسال کامل شد؛ می‌توانید گفتگو را ادامه دهید، پردازش در پس‌زمینه انجام می‌شود.");
+      patchAttachment(localId, {
+        status: "processing",
+        fileId: accepted.id,
+        progress: undefined,
+        statusText: undefined,
+        file: prepared,
+      });
+      watchersRef.current.delete(localId);
+      void watchProcessing(localId, accepted.id, prepared); // does not hold an upload slot
+    } catch (err) {
+      watchersRef.current.delete(localId);
+      failAttachment(localId, err, original);
+    }
+  };
+
+  const startUpload = (localId: string, file: File) => {
+    patchAttachment(localId, { status: "uploading", progress: undefined, error: undefined, file });
+    uploadQueueRef.current.push(() => runUpload(localId, file));
+    pumpUploads();
   };
 
   const handleFilesPicked = (list: FileList | null) => {
@@ -499,16 +588,24 @@ export function ChatShell() {
       }
       room -= 1;
       setAttachments((prev) => [...prev, { localId, name: file.name, status: "uploading" }]);
-      void startUpload(localId, file);
+      startUpload(localId, file);
     }
   };
 
   const removeAttachment = (att: Attachment) => {
+    watchersRef.current.get(att.localId)?.abort();
+    watchersRef.current.delete(att.localId);
+    removedRef.current.add(att.localId); // a still-queued upload checks this and never starts
     setAttachments((prev) => prev.filter((a) => a.localId !== att.localId));
-    if (att.fileId) void deleteCaseFile(att.fileId, getAccessToken());
+    if (att.fileId) {
+      contextRef.current = contextRef.current.filter((c) => c.fileId !== att.fileId);
+      setContextFiles(contextRef.current);
+      void deleteCaseFile(att.fileId, getAccessToken());
+    }
   };
 
-  const uploading = attachments.some((a) => a.status === "uploading");
+  /** Still being read on the server: the composer stays usable, the answer uses the ready pages. */
+  const processingFileIds = attachments.filter((a) => a.status === "processing" && a.fileId).map((a) => a.fileId as string);
   const readyFileIds = attachments.filter((a) => a.status === "ready" && a.fileId).map((a) => a.fileId as string);
 
   const errorBubble = (failure: ChatFailure, prompt: string, requestId: string): ChatMessage => ({
@@ -613,7 +710,7 @@ export function ChatShell() {
 
   // ---- تنظیم پیش‌نویس در گفتگو (draft-assist) ----
   const caseIds = (): string[] =>
-    Array.from(new Set([...contextRef.current.map((f) => f.fileId), ...readyFileIds])).slice(-MAX_CASE_FILES_PER_CHAT);
+    Array.from(new Set([...contextRef.current.map((f) => f.fileId), ...readyFileIds, ...processingFileIds])).slice(-MAX_CASE_FILES_PER_CHAT);
 
   /**
    * One request to /draft-assist and the matching UI update. `silent` = card refresh only (no spinner,
@@ -805,7 +902,7 @@ export function ChatShell() {
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend =
       customPrompt || inputPrompt || (readyFileIds.length ? (draft ? DRAFT_FILES_PROMPT : DEFAULT_CASE_PROMPT) : "");
-    if (!textToSend || !textToSend.trim() || isLoading || uploading) return;
+    if (!textToSend || !textToSend.trim() || isLoading) return;
     if (textToSend.length > MAX_CHAT_CHARS) return;
     if (busyRef.current) {
       // Only a silent card refresh can be running here (isLoading is false): wait for it instead of dropping the text.
@@ -823,12 +920,15 @@ export function ChatShell() {
     // Ready attachments move into this message and into the conversation context
     // (max 5, most recent); failed chips stay in the composer for retry.
     const sent = attachments.filter((a) => a.status === "ready" && a.fileId);
-    if (sent.length) {
-      const added: ContextFile[] = sent.map((a) => ({ fileId: a.fileId as string, name: a.name, pages: a.pages }));
+    // Files still being read join the context too (the server answers from the ready pages and says
+    // which file is pending) but their chips stay so the progress remains visible.
+    const pending = attachments.filter((a) => a.status === "processing" && a.fileId);
+    if (sent.length || pending.length) {
+      const added: ContextFile[] = [...sent, ...pending].map((a) => ({ fileId: a.fileId as string, name: a.name, pages: a.pages }));
       const merged = [...contextRef.current.filter((c) => !added.some((n) => n.fileId === c.fileId)), ...added].slice(-MAX_CONTEXT_FILES);
       contextRef.current = merged;
       setContextFiles(merged);
-      setAttachments((prev) => prev.filter((a) => !sent.includes(a)));
+      if (sent.length) setAttachments((prev) => prev.filter((a) => !sent.includes(a)));
     }
     setInputPrompt("");
     const userMsg: ChatMessage = {
@@ -1178,7 +1278,7 @@ export function ChatShell() {
                   style={att.status === "error" ? { color: "var(--ap-danger)" } : undefined}
                   title={att.warning ?? att.name}
                 >
-                  {att.status === "uploading" ? (
+                  {att.status === "uploading" || att.status === "processing" ? (
                     <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                   ) : att.status === "error" ? (
                     <AlertTriangle className="size-3.5" aria-hidden="true" />
@@ -1188,7 +1288,11 @@ export function ChatShell() {
                   <span className="truncate max-w-[7.5rem]" dir="auto">{att.name}</span>
                   <span className="ap-muted whitespace-nowrap" role={att.status === "error" ? "alert" : "status"}>
                     {att.status === "uploading"
-                      ? "در حال بارگذاری…"
+                      ? att.progress === undefined
+                        ? "در صف ارسال…"
+                        : `در حال ارسال ${att.progress.toLocaleString("fa-IR")}٪`
+                      : att.status === "processing"
+                      ? att.statusText ?? "در حال خواندن فایل…"
                       : att.status === "error"
                       ? att.error
                       : `${(att.pages ?? 1).toLocaleString("fa-IR")} صفحه${att.ocrUsed ? " · OCR" : ""}`}
@@ -1363,10 +1467,10 @@ export function ChatShell() {
           <button
             type="button"
             onClick={() => handleSendMessage()}
-            disabled={isLoading || overLimit || uploading}
+            disabled={isLoading || overLimit}
             className="ap-btn ap-send"
             aria-label="ارسال"
-            title={uploading ? "تا پایان بارگذاری فایل‌ها صبر کنید" : "ارسال"}
+            title="ارسال"
           >
             <span className="ap-send-label">ارسال</span>
             <Send className="size-4 -scale-x-100" aria-hidden="true" />
@@ -1375,9 +1479,6 @@ export function ChatShell() {
 
         {attachNotice && (
           <p className="ap-notice text-center" role="status">{attachNotice}</p>
-        )}
-        {uploading && (
-          <p className="ap-notice text-center" role="status">تا پایان بارگذاری فایل‌ها، ارسال غیرفعال است.</p>
         )}
         {attachments.length > 0 && <p className="ap-notice text-center">{CASE_FILE_PRIVACY_NOTICE}</p>}
 

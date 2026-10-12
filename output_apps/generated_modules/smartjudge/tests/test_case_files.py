@@ -6,6 +6,8 @@ tests use TXT uploads and always run.
 """
 import asyncio
 import io
+import threading
+import time
 import zipfile
 
 import pytest
@@ -26,10 +28,19 @@ def run(coro):
     return asyncio.run(coro)
 
 
+_OPEN_CLIENTS: list = []
+
+
 @pytest.fixture(autouse=True)
 def _clean_store():
     chat_auth.reset_for_tests()
+    mod._CASEFILE_SEM = None
+    cf._ACTIVE.clear()
     yield
+    for client in _OPEN_CLIENTS:  # leaving the context stops the loop that runs background jobs
+        client.__exit__(None, None, None)
+    _OPEN_CLIENTS.clear()
+    cf._ACTIVE.clear()
     chat_auth.reset_for_tests()
 
 
@@ -60,7 +71,36 @@ def _client(user=None, with_router=None, monkeypatch=None):
         return holder["user"] or chat_auth.ANONYMOUS
 
     app.dependency_overrides[mod.get_current_user] = current
-    return TestClient(app), holder
+    # Entered client: one long-lived event loop, so the background extraction task survives the request.
+    client = TestClient(app)
+    client.__enter__()
+    _OPEN_CLIENTS.append(client)
+    return client, holder
+
+
+def wait_status(c, fid, until=("ready", "failed"), timeout=10.0):
+    """Poll the status endpoint like the frontend does."""
+    deadline = time.time() + timeout
+    while True:
+        r = c.get(f"{UP}/{fid}/status")
+        assert r.status_code == 200, r.text
+        if r.json()["status"] in until or time.time() > deadline:
+            return r.json()
+        time.sleep(0.02)
+
+
+def _quota_count(phone):
+    n, _ = chat_auth.incr(cf._quota_key(phone), 60)
+    chat_auth.decr(cf._quota_key(phone))
+    return n - 1
+
+
+def upload_ready(c, files=None):
+    r = c.post(UP, files=files or _txt())
+    assert r.status_code == 202, r.text
+    st = wait_status(c, r.json()["id"])
+    assert st["status"] == "ready", st
+    return r.json()["id"]
 
 
 def _txt(text=PERSIAN):
@@ -142,7 +182,7 @@ def test_validate_upload_size_and_empty(monkeypatch):
     monkeypatch.setattr(cf, "MAX_FILE_BYTES", 100)
     with pytest.raises(cf.CaseFileError) as e:
         cf.validate_upload(b"%PDF-" + b"0" * 200)
-    assert e.value.status_code == 413 and "۱۵" in e.value.message
+    assert e.value.status_code == 413 and "مگابایت" in e.value.message
     with pytest.raises(cf.CaseFileError) as e:
         cf.validate_upload(b"MZ" + b"\x00" * 10)
     assert e.value.status_code == 415
@@ -159,7 +199,8 @@ def test_pdf_page_limit(monkeypatch, fake_llm):
     monkeypatch.setattr(cf, "MAX_PAGES", 3)
     with pytest.raises(cf.CaseFileError) as e:
         run(cf.extract(_pdf_bytes(pages=4), "pdf"))
-    assert e.value.code == "TOO_MANY_PAGES" and "۳۰" in e.value.message
+    assert e.value.code == "TOO_MANY_PAGES" and "۴" in e.value.message and "۳" in e.value.message
+    assert fake_llm == []  # rejected on open: no page was rendered or OCR'd
 
 
 def test_scanned_pdf_uses_ocr(fake_llm):
@@ -242,14 +283,16 @@ def test_invalid_token_is_401():
     assert c.post(UP, files=_txt()).status_code == 401
 
 
-def test_upload_returns_contract_and_stores_only_text(fake_llm):
+def test_upload_returns_202_then_ready_and_stores_only_text(fake_llm):
     c, _ = _client(_user())
     r = c.post(UP, files=_txt())
     body = r.json()
-    assert r.status_code == 200, body
-    assert set(["file_id", "pages", "chars", "ocr_used", "warnings"]) <= set(body)
-    assert body["ocr_used"] is False and body["chars"] == len(cf.normalize_text(PERSIAN))
+    assert r.status_code == 202, body
+    assert body["status"] == "processing" and body["id"] == body["file_id"] and body["ok"] is True
+    st = wait_status(c, body["id"])
+    assert st["status"] == "ready" and st["pages_done"] == st["pages_total"] >= 1
     rec = chat_auth.kv_get("casefile:" + body["file_id"])
+    assert rec["chars"] == len(cf.normalize_text(PERSIAN)) and rec["ocr_used"] is False
     assert rec["text"] == cf.normalize_text(PERSIAN)
     assert "09120000001" not in str(rec)  # owner is stored hashed
     assert not any(k in rec for k in ("raw", "bytes", "content"))
@@ -268,16 +311,16 @@ def test_daily_limits_free_and_vip(monkeypatch, fake_llm):
     monkeypatch.setattr(cf, "DAILY_LIMIT_FREE", 2)
     monkeypatch.setattr(cf, "DAILY_LIMIT_VIP", 4)
     c, holder = _client(_user())
-    assert [c.post(UP, files=_txt()).status_code for _ in range(3)] == [200, 200, 429]
+    assert [c.post(UP, files=_txt()).status_code for _ in range(3)] == [202, 202, 429]
     holder["user"] = _user("09120000002", "VIP")
     codes = [c.post(UP, files=_txt()).status_code for _ in range(5)]
-    assert codes == [200, 200, 200, 200, 429]
+    assert codes == [202, 202, 202, 202, 429]
     assert "سقف" in c.post(UP, files=_txt()).json()["message"]
 
 
 def test_other_users_file_is_404_and_cannot_be_deleted(fake_llm):
     c, holder = _client(_user("09120000001"))
-    fid = c.post(UP, files=_txt()).json()["file_id"]
+    fid = upload_ready(c)
     holder["user"] = _user("09120000002")
     assert cf.load_owned(fid, "09120000002") is None
     assert c.delete(f"{UP}/{fid}").status_code == 404
@@ -290,9 +333,8 @@ def test_other_users_file_is_404_and_cannot_be_deleted(fake_llm):
 def test_long_document_is_summarised_with_cheap_model(monkeypatch, fake_llm):
     monkeypatch.setattr(cf, "PROMPT_TOTAL_CHARS", 3000)
     c, _ = _client(_user())
-    r = c.post(UP, files=_txt("ماده و بند. " * 1500))
-    assert r.status_code == 200
-    rec = chat_auth.kv_get("casefile:" + r.json()["file_id"])
+    fid = upload_ready(c, _txt("ماده و بند. " * 1500))
+    rec = chat_auth.kv_get("casefile:" + fid)
     assert rec["summary"].startswith("خلاصه")
     assert fake_llm and all(role == "cheap" for role, _ in fake_llm)
     # the summariser is told the chunk is data, not instructions
@@ -345,7 +387,7 @@ def chat(monkeypatch, fake_llm):
 
 def test_prompt_wraps_document_as_untrusted_and_keeps_it_out_of_system(chat):
     c, holder, seen = chat
-    fid = c.post(UP, files=_txt(PERSIAN + INJECTION)).json()["file_id"]
+    fid = upload_ready(c, _txt(PERSIAN + INJECTION))
     r = c.post(f"{BASE}/chat", json={"message": "این پرونده را تحلیل کن", "case_file_ids": [fid]})
     assert r.status_code == 200, r.text
     system, user_msg = seen["messages"][0]["content"], seen["messages"][-1]["content"]
@@ -366,7 +408,7 @@ def test_prompt_wraps_document_as_untrusted_and_keeps_it_out_of_system(chat):
 
 def test_chat_with_other_users_file_id_is_404(chat):
     c, holder, seen = chat
-    fid = c.post(UP, files=_txt()).json()["file_id"]
+    fid = upload_ready(c)
     holder["user"] = _user("09120000099")
     r = c.post(f"{BASE}/chat", json={"message": "تحلیل کن", "case_file_ids": [fid]})
     assert r.status_code == 404 and r.json()["message"] == cf.MSG_NOT_FOUND
@@ -386,7 +428,7 @@ def test_chat_case_file_id_validation_and_login(chat):
 
 def test_case_files_do_not_hit_greeting_fast_path_and_widen_retrieval(chat):
     c, holder, seen = chat
-    fid = c.post(UP, files=_txt()).json()["file_id"]
+    fid = upload_ready(c)
     r = c.post(f"{BASE}/chat", json={"message": "سلام", "case_file_ids": [fid]})
     assert r.status_code == 200
     assert "messages" in seen  # went to the model instead of the canned greeting
@@ -396,7 +438,7 @@ def test_case_files_do_not_hit_greeting_fast_path_and_widen_retrieval(chat):
 def test_long_document_prompt_uses_summary_within_budget(chat, monkeypatch):
     c, holder, seen = chat
     monkeypatch.setattr(cf, "PROMPT_TOTAL_CHARS", 3000)
-    fid = c.post(UP, files=_txt("ماده و بند. " * 1500)).json()["file_id"]
+    fid = upload_ready(c, _txt("ماده و بند. " * 1500))
     c.post(f"{BASE}/chat", json={"message": "تحلیل کن", "case_file_ids": [fid]})
     user_msg = seen["messages"][-1]["content"]
     assert "خلاصه خودکار" in user_msg and len(user_msg) < 3000 + 1200
@@ -416,8 +458,14 @@ def test_failed_uploads_do_not_consume_daily_quota(monkeypatch):
     png = {"file": ("scan.png", _png_bytes(), "image/png")}
     for _ in range(4):  # OCR_FAILED four times: more than the limit
         r = c.post(UP, files=png)
-        assert r.status_code == 422 and r.json()["code"] == "OCR_FAILED"
-    assert [c.post(UP, files=_txt()).status_code for _ in range(3)] == [200, 200, 429]
+        assert r.status_code == 202
+        st = wait_status(c, r.json()["id"])
+        assert st["status"] == "failed" and "واضح" in st["message"]
+        deadline = time.time() + 5  # the refund lands right after the failed state is written
+        while _quota_count("09120000001") != 0 and time.time() < deadline:
+            time.sleep(0.02)
+        assert _quota_count("09120000001") == 0
+    assert [c.post(UP, files=_txt()).status_code for _ in range(3)] == [202, 202, 429]
 
 
 def test_scanned_pdf_with_every_page_unreadable_is_ocr_failed(monkeypatch):
@@ -462,7 +510,7 @@ def test_oversized_chunked_body_without_content_length_is_413(monkeypatch):
         yield f"\r\n--{boundary}--\r\n".encode()
 
     r = c.post(UP, content=body(), headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
-    assert r.status_code == 413 and "۱۵" in r.json()["message"]
+    assert r.status_code == 413 and "مگابایت" in r.json()["message"]
 
 
 def test_openrouter_empty_200_fails_that_model_only(monkeypatch):
@@ -503,3 +551,210 @@ def test_openrouter_retries_when_reasoning_is_mandatory(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
     out = run(cf._openrouter_chat("cheap", [{"role": "user", "content": "x"}], 100))
     assert out == "خلاصه" and seen == [{"enabled": False}, {"effort": "minimal"}]
+
+
+# ---------------------------------------------------------------- async lifecycle (P0)
+def _fake_extract(monkeypatch, gate=None, fail=None, pages=2):
+    """Replace extract() with an offline fake that reports per-page progress."""
+    async def fake(data, kind, progress=None):
+        await progress(0, pages)
+        if gate is not None:
+            await asyncio.to_thread(gate.wait, 10)
+        if fail is not None:
+            raise fail
+        await progress(1, pages)
+        return cf.Extracted("خواهان مبلغ پانصد میلیون ریال مطالبه می‌کند. " * 3, pages, True, [])
+
+    monkeypatch.setattr(cf, "extract", fake)
+
+
+def test_status_lifecycle_processing_then_ready(monkeypatch, fake_llm):
+    gate = threading.Event()
+    _fake_extract(monkeypatch, gate=gate)
+    c, _ = _client(_user())
+    t0 = time.time()
+    r = c.post(UP, files=_txt())
+    assert r.status_code == 202 and time.time() - t0 < 2  # returns before extraction finishes
+    fid = r.json()["id"]
+    assert r.json()["status"] == "processing"
+    st = wait_status(c, fid, until=("processing",))
+    deadline = time.time() + 5
+    while st["pages_total"] == 0 and time.time() < deadline:
+        time.sleep(0.02)
+        st = wait_status(c, fid, until=("processing",))
+    assert st["status"] == "processing" and st["pages_total"] == 2 and st["pages_done"] == 0
+    assert st["message"] == "در حال خواندن صفحه ۱ از ۲"
+    gate.set()
+    st = wait_status(c, fid)
+    assert st["status"] == "ready" and st["pages_done"] == st["pages_total"] == 2
+    rec = chat_auth.kv_get("casefile:" + fid)
+    assert rec["status"] == "ready" and "پانصد میلیون" in rec["text"]
+
+
+def test_extraction_failure_marks_failed_and_refunds_quota(monkeypatch, fake_llm):
+    _fake_extract(monkeypatch, fail=cf.CaseFileError(cf.MSG_OCR_FAILED, 422, "OCR_FAILED"))
+    c, _ = _client(_user())
+    fid = c.post(UP, files=_txt()).json()["id"]
+    st = wait_status(c, fid)
+    assert st["status"] == "failed" and st["retry"] is True and st["message"] == cf.MSG_OCR_FAILED
+    assert chat_auth.kv_get("casefile:" + fid)["text"] == ""
+    deadline = time.time() + 5
+    while _quota_count("09120000001") != 0 and time.time() < deadline:
+        time.sleep(0.02)
+    assert _quota_count("09120000001") == 0
+
+
+def test_unexpected_exception_is_failed_without_leaking_internals(monkeypatch, fake_llm):
+    _fake_extract(monkeypatch, fail=RuntimeError("secret parser detail /srv/x"))
+    c, _ = _client(_user())
+    st = wait_status(c, c.post(UP, files=_txt()).json()["id"])
+    assert st["status"] == "failed" and "secret" not in st["message"] and st["message"] == cf.MSG_PROCESSING_FAILED
+
+
+def test_status_is_owner_only_and_404_matches_missing(fake_llm):
+    c, holder = _client(_user("09120000001"))
+    fid = upload_ready(c)
+    missing = c.get(f"{UP}/8d6d4b0e-6a1c-4c1c-9d0a-000000000001/status")
+    holder["user"] = _user("09120000002")
+    other = c.get(f"{UP}/{fid}/status")
+    assert other.status_code == missing.status_code == 404
+    assert other.json() == missing.json()
+    assert c.get(f"{UP}/not-a-uuid/status").status_code == 404
+    holder["user"] = None
+    assert c.get(f"{UP}/{fid}/status").status_code == 401
+
+
+def test_pdf_over_page_limit_is_rejected_at_upload_before_any_work(monkeypatch, fake_llm):
+    monkeypatch.setattr(cf, "MAX_PAGES", 3)
+    c, _ = _client(_user())
+    r = c.post(UP, files={"file": ("big.pdf", _pdf_bytes(pages=4, image_only=True), "application/pdf")})
+    assert r.status_code == 413 and r.json()["code"] == "TOO_MANY_PAGES"
+    assert "۴" in r.json()["message"] and "۳" in r.json()["message"]
+    assert fake_llm == [] and _quota_count("09120000001") == 0  # no OCR, no quota used
+
+
+def test_scanned_pdf_reports_per_page_progress(fake_llm):
+    seen = []
+
+    async def progress(done, total):
+        seen.append((done, total))
+
+    res = run(cf.extract(_pdf_bytes(pages=3, image_only=True), "pdf", progress))
+    assert res.ocr_used and seen[0] == (0, 3) and seen[-1] == (3, 3)
+    assert [d for d, _ in seen] == sorted(d for d, _ in seen)
+
+
+def test_stale_processing_record_becomes_failed_with_retry_hint(fake_llm):
+    c, _ = _client(_user())
+    old = int(time.time()) - cf.STALE_AFTER_S - 30
+
+    def make(fid, updated):
+        chat_auth.kv_set("casefile:" + fid, {
+            "id": fid, "owner": cf.owner_hash("09120000001"), "name": "x.pdf", "status": "processing",
+            "pages_done": 3, "pages_total": 40, "created_at": updated, "updated_at": updated,
+            "quota_key": cf._quota_key("09120000001"), "text": "", "summary": ""}, 3600)
+
+    stale, fresh, alive = (str(__import__("uuid").uuid4()) for _ in range(3))
+    make(stale, old)
+    make(fresh, int(time.time()))
+    make(alive, old)
+    cf._ACTIVE.add(alive)  # owned by a live task of this process: never declared stale
+    st = c.get(f"{UP}/{stale}/status").json()
+    assert st["status"] == "failed" and st["retry"] is True and st["message"] == cf.MSG_STALE
+    assert chat_auth.kv_get("casefile:" + stale)["status"] == "failed"
+    assert c.get(f"{UP}/{fresh}/status").json()["status"] == "processing"
+    assert c.get(f"{UP}/{alive}/status").json()["status"] == "processing"
+
+
+def test_chat_with_still_processing_file_uses_ready_ones_and_never_errors(chat):
+    c, holder, seen = chat
+    ready = upload_ready(c)
+    pending = str(__import__("uuid").uuid4())
+    now = int(time.time())
+    chat_auth.kv_set("casefile:" + pending, {
+        "id": pending, "owner": cf.owner_hash("09120000001"), "name": "scan40.pdf", "status": "processing",
+        "pages_done": 14, "pages_total": 40, "created_at": now, "updated_at": now,
+        "text": "", "summary": ""}, 3600)
+    cf._ACTIVE.add(pending)
+    r = c.post(f"{BASE}/chat", json={"message": "تحلیل کن", "case_file_ids": [ready, pending]})
+    assert r.status_code == 200, r.text
+    user_msg = seen["messages"][-1]["content"]
+    assert "پانصد میلیون" in user_msg and "BEGIN_USER_DOCUMENT_" in user_msg
+    assert "scan40.pdf" in user_msg and "هنوز در حال خواندن" in user_msg and "۱۴ از ۴۰" in user_msg
+    # only-processing selection still answers (no document block, just the note)
+    seen.clear()
+    r = c.post(f"{BASE}/chat", json={"message": "تحلیل کن", "case_file_ids": [pending]})
+    assert r.status_code == 200, r.text
+    assert "BEGIN_USER_DOCUMENT_" not in seen["messages"][-1]["content"]
+    assert "scan40.pdf" in seen["messages"][-1]["content"]
+
+
+# ---------------------------------------------------------------- review fixes: races
+def _processing_record(fid, phone="09120000001", age=0):
+    t = int(time.time()) - age
+    chat_auth.kv_set("casefile:" + fid, {
+        "id": fid, "owner": cf.owner_hash(phone), "name": "x.pdf", "status": "processing",
+        "pages_done": 1, "pages_total": 5, "created_at": t, "updated_at": t,
+        "quota_key": cf._quota_key(phone), "text": "", "summary": ""}, 3600)
+
+
+def test_terminal_status_is_sticky_against_late_heartbeat_and_progress():
+    fid = str(__import__("uuid").uuid4())
+    _processing_record(fid)
+    cf._update_record(fid, status="ready", text="متن", pages=5, pages_done=5, pages_total=5)
+    late = cf._update_record(fid, pages_done=2, pages_total=3, stage_message="x")  # late progress
+    assert late["status"] == "ready"
+    stored = chat_auth.kv_get("casefile:" + fid)
+    assert stored["status"] == "ready" and stored["pages_done"] == 5 and "stage_message" not in stored
+    # a failed record is just as sticky
+    fid2 = str(__import__("uuid").uuid4())
+    _processing_record(fid2)
+    cf._update_record(fid2, status="failed", error="e")
+    assert cf._update_record(fid2)["status"] == "failed"
+
+
+def test_heartbeat_stops_once_status_is_terminal(monkeypatch):
+    fid = str(__import__("uuid").uuid4())
+    _processing_record(fid)
+    monkeypatch.setattr(cf, "HEARTBEAT_S", 0.01)
+    cf._update_record(fid, status="ready")
+    run(asyncio.wait_for(cf._heartbeat(fid), timeout=2))  # returns instead of looping forever
+
+
+def test_progress_total_is_monotonic():
+    fid = str(__import__("uuid").uuid4())
+    _processing_record(fid)
+    cf._update_record(fid, pages_done=2, pages_total=3)
+    assert chat_auth.kv_get("casefile:" + fid)["pages_total"] == 5
+
+
+def test_concurrent_reconcile_releases_quota_once():
+    phone = "09120000001"
+    fid = str(__import__("uuid").uuid4())
+    _processing_record(fid, age=cf.STALE_AFTER_S + 60)
+    chat_auth.incr(cf._quota_key(phone), 3600)
+    chat_auth.incr(cf._quota_key(phone), 3600)  # two slots in use
+    snapshot = chat_auth.kv_get("casefile:" + fid)
+    barrier = threading.Barrier(8)
+
+    def go():
+        barrier.wait()
+        cf._reconcile(dict(snapshot))
+
+    threads = [threading.Thread(target=go) for _ in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert chat_auth.kv_get("casefile:" + fid)["status"] == "failed"
+    assert _quota_count(phone) == 1  # exactly one refund
+
+
+def test_reconcile_tolerates_store_errors(monkeypatch):
+    fid = str(__import__("uuid").uuid4())
+    _processing_record(fid, age=cf.STALE_AFTER_S + 60)
+    rec = chat_auth.kv_get("casefile:" + fid)
+
+    def boom(*a, **k):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(chat_auth, "kv_get", boom)
+    assert cf._reconcile(dict(rec)) == rec  # no exception, record returned as-is

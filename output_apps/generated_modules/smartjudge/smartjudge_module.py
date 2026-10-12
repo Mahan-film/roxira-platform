@@ -2793,9 +2793,10 @@ async def upload_case_file(request: Request, file: UploadFile = File(...),
                            user: chat_auth.CurrentUser = Depends(get_current_user)):
     """Upload one case document (PDF/JPG/PNG/HEIC/WEBP/DOCX/TXT) for the chat to analyse.
 
-    Login required. The raw file is processed in memory and discarded; only the extracted
-    text is kept (owner-bound, expires after CASEFILE_RETENTION_DAYS).
-    Returns ``{file_id, pages, chars, ocr_used, warnings}``.
+    Login required. Returns 202 ``{id, status: "processing"}`` as soon as the bytes are
+    validated; extraction runs in the background (poll ``GET /case-files/{id}/status``). The raw
+    file is held in memory only and discarded; only the extracted text is kept (owner-bound,
+    expires after CASEFILE_RETENTION_DAYS).
     """
     denied = chat_auth.deny_if_invalid(user, label="ERROR")
     if denied is not None:
@@ -2805,7 +2806,7 @@ async def upload_case_file(request: Request, file: UploadFile = File(...),
                                     headers={"WWW-Authenticate": "Bearer"})
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > _case_files.MAX_FILE_BYTES + 512 * 1024:
-        return _casefile_error(_case_files.CaseFileError(_case_files.MSG_TOO_LARGE, 413, "FILE_TOO_LARGE"))
+        return _casefile_error(_case_files.CaseFileError(_case_files.msg_too_large(), 413, "FILE_TOO_LARGE"))
     parsed_conv = None
     if conversation_id:
         parsed_conv = _parse_conversation_id(conversation_id)
@@ -2818,10 +2819,10 @@ async def upload_case_file(request: Request, file: UploadFile = File(...),
             return chat_auth.error_json(404, chat_auth.MSG_NOT_FOUND, code="NOT_FOUND", label="ERROR")
     data = await _read_upload_capped(file, _case_files.MAX_FILE_BYTES)
     if data is None:
-        return _casefile_error(_case_files.CaseFileError(_case_files.MSG_TOO_LARGE, 413, "FILE_TOO_LARGE"))
+        return _casefile_error(_case_files.CaseFileError(_case_files.msg_too_large(), 413, "FILE_TOO_LARGE"))
     try:
-        async with _casefile_sem():
-            body = await _case_files.process_upload(data, file.filename, user.phone, user.tier, parsed_conv)
+        body = await _case_files.start_upload(data, file.filename, user.phone, user.tier, parsed_conv,
+                                              sem=_casefile_sem())
     except _case_files.CaseFileError as exc:
         return _casefile_error(exc)
     except Exception as exc:  # noqa: BLE001 - never leak parser internals
@@ -2829,7 +2830,22 @@ async def upload_case_file(request: Request, file: UploadFile = File(...),
         return _chat_internal_error()
     finally:
         data = None
-    return {"status": "SUCCESS", **body}
+    return JSONResponse(status_code=202, content=body)
+
+
+@router.get("/case-files/{file_id}/status")
+async def case_file_status(file_id: str, user: chat_auth.CurrentUser = Depends(get_current_user)):
+    """Progress of a case file: ``{id, status: processing|ready|failed, pages_done, pages_total, message}``.
+
+    Owner only; another user's id answers the same 404 as a missing one.
+    """
+    denied = chat_auth.require_auth(user, label="ERROR")
+    if denied is not None:
+        return denied
+    view = await asyncio.to_thread(_case_files.get_status, file_id, user.phone)
+    if view is None:
+        return chat_auth.error_json(404, _case_files.MSG_NOT_FOUND, code="NOT_FOUND", label="ERROR")
+    return view
 
 
 @router.delete("/case-files/{file_id}")
