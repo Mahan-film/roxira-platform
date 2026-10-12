@@ -4,6 +4,7 @@
 # ssh config (alias or host in DEPLOY_SSH_HOST). Never prints secret values.
 #
 # Usage:
+#   scripts/ops/deploy_local.sh eval-baseline [--yes]   # retrieval gate on the server; --yes stores the baseline
 #   scripts/ops/deploy_local.sh check
 #   scripts/ops/deploy_local.sh plan
 #   scripts/ops/deploy_local.sh deploy [--yes]     # dry-run unless --yes
@@ -155,6 +156,29 @@ smoke_test() {
   code="$(http_code "https://$CHAT_DOMAIN$API_PATH")"
   if [ "$code" = "200" ]; then log "smoke ok: GET $API_PATH 200"; else log "smoke FAIL: GET $API_PATH $code"; ok=1; fi
   return "$ok"
+}
+
+# Non-blocking retrieval accuracy gate (docs/legal/LAWYER_REVIEW_GATE_FA.md). Runs the retrieval-only
+# eval (no LLM, 0 USD) on the SERVER in a one-off container next to Qdrant, same pattern as
+# scripts/legal/build_v3_on_server.sh step 4, and compares retrieval@5 with the stored baseline.
+# It only reports: a failure or a drop never blocks or rolls back a deploy.
+GATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../eval" && pwd)"
+GATE_BASELINE="${DEPLOY_EVAL_BASELINE:-$GATE_DIR/../../data/eval/chat_golden/legal_gate_baseline.json}"
+gate_retrieval_json() {  # prints the 'LEGAL_GATE_JSON {...}' line from the server
+  rsh "cd '$REMOTE_DIR' && IMG=\$(docker inspect -f '{{.Config.Image}}' roxira_app_prod) &&
+    COLL=\$(docker exec roxira_app_prod printenv LIGHTRAG_QDRANT_COLLECTION || true) &&
+    timeout 600 docker run --rm --network container:roxira_qdrant_prod --volumes-from roxira_app_prod \\
+      -v '$REMOTE_DIR:/repo:ro' -w /repo -e QDRANT_HOST=127.0.0.1 -e QDRANT_PORT=6333 -e PYTHONDONTWRITEBYTECODE=1 \\
+      \${COLL:+-e LIGHTRAG_QDRANT_COLLECTION=\$COLL} \$IMG python3 scripts/eval/legal_gate.py retrieval --json 2>/dev/null |
+    grep '^LEGAL_GATE_JSON '"
+}
+eval_gate_report() {
+  [ "${DEPLOY_EVAL_GATE:-1}" = "1" ] || return 0
+  local out line
+  out="$(gate_retrieval_json)" || { log "legal gate: retrieval run failed or timed out (non-blocking)"; return 0; }
+  [ -n "$out" ] || { log "legal gate: WARNING the eval produced no report line (script missing or crashed; non-blocking)"; return 0; }
+  printf '%s\n' "$out" | python3 "$GATE_DIR/legal_gate.py" compare --baseline "$GATE_BASELINE" --current - |
+    while IFS= read -r line; do log "$line"; done || true
 }
 
 check_freeze() {
@@ -320,6 +344,7 @@ cmd_deploy() {
 
   log "waiting 20s for services to settle"; sleep 20
   if smoke_test; then
+    eval_gate_report || true
     log "deploy OK: $TARGET_SHORT"
     local svc_list="${svcs:-none}"; svc_list="${svc_list// /,}"
     printf 'DEPLOYED %s services=%s smoke=ok\n' "$TARGET_SHORT" "$svc_list"
@@ -478,6 +503,17 @@ cmd_migrate_rollback() {
   log "restore OK from $dump"
 }
 
+cmd_eval_baseline() {
+  local out; out="$(gate_retrieval_json)" || die "retrieval gate run failed on the server (is scripts/eval/legal_gate.py deployed there?)"
+  if [ "${1:-}" = "--yes" ]; then
+    printf '%s\n' "$out" | python3 "$GATE_DIR/legal_gate.py" capture --out "$GATE_BASELINE"
+    echo "commit it: git add data/eval/chat_golden/legal_gate_baseline.json"
+  else
+    printf '%s\n' "$out" | python3 "$GATE_DIR/legal_gate.py" compare --baseline "$GATE_BASELINE" --current -
+    echo "dry run: nothing written. Re-run with --yes to store this run as the baseline."
+  fi
+}
+
 [ "$#" -ge 1 ] || usage
 sub="$1"; shift
 case "$sub" in
@@ -487,5 +523,6 @@ case "$sub" in
   rollback) cmd_rollback "${1:-}" ;;
   migrate) cmd_migrate "${1:-}" ;;
   migrate-rollback) cmd_migrate_rollback "${1:-}" "${2:-}" ;;
+  eval-baseline) cmd_eval_baseline "${1:-}" ;;
   *) usage ;;
 esac

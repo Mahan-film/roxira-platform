@@ -104,3 +104,17 @@ failure leaves the local file untouched). Use it for `ADMIN_HEALTH_KEY`. Contain
 only when they are (re)started, so run it BEFORE `deploy`.
 
 Required before the first deploy of the Oct-2026 changes: `ADMIN_HEALTH_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+
+## Retrieval accuracy gate (non-blocking)
+
+After a successful smoke test, `deploy` runs `scripts/eval/legal_gate.py retrieval` on the server (a one-off
+container beside Qdrant, no LLM, 0 USD) and prints `retrieval@5` for the 70 questions of
+`data/eval/chat_golden/legal_gate_2026-10-12.json`. It logs a `WARNING` when retrieval@5 is more than 5 points below
+`data/eval/chat_golden/legal_gate_baseline.json`. It never blocks or rolls back a deploy; `DEPLOY_EVAL_GATE=0` skips it.
+
+Capture or refresh the baseline (needs the gate script already deployed to the server):
+
+    scripts/ops/deploy_local.sh eval-baseline          # dry run: prints the comparison
+    scripts/ops/deploy_local.sh eval-baseline --yes    # writes the baseline file locally; commit it
+
+Questions are `draft_needs_lawyer` until reviewed (docs/legal/LAWYER_REVIEW_GATE_FA.md).
