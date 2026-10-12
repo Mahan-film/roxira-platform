@@ -1,104 +1,4 @@
 
-async def _execute_parallel_legal_discovery(query: str, top_k: int = 4) -> dict:
-    """استعلام هم‌زمان و موازی از ۳ منبع: قوانین مصوب، احکام قضایی، و جستجوی زنده مراجع وبی"""
-    import asyncio, httpx, urllib.parse, json
-
-    statutes_results = []
-    precedents_results = []
-    web_live_results = []
-
-    async def _fetch_qdrant(collection_name: str, limit: int = 3):
-        hosts = [os.getenv("QDRANT_HOST", "roxira_qdrant_prod"), "127.0.0.1", "localhost"]
-        port = os.getenv("QDRANT_PORT", "6333")
-        for h in hosts:
-            try:
-                url = f"http://{h}:{port}/collections/{collection_name}/points/scroll"
-                payload = {"limit": limit, "with_payload": True}
-                async with httpx.AsyncClient(timeout=4.0) as client:
-                    r = await client.post(url, json=payload)
-                    if r.status_code == 200:
-                        return r.json().get("result", {}).get("points", [])
-            except Exception:
-                continue
-        return []
-
-    async def _fetch_searxng(q: str, limit: int = 4):
-        searx_urls = [
-            os.getenv("SEARXNG_INTERNAL_URL", "http://research-stack-searxng-1:8080"),
-            "http://172.17.0.1:8888",
-            "http://127.0.0.1:8888"
-        ]
-        headers = {"User-Agent": "RoxiraSmartJudgeAgent/2.0 (Legal Parallel Engine)"}
-        for base_url in searx_urls:
-            try:
-                params = {
-                    "q": f"{q} سایت سامane قوانین یا روزنامه رسمی یا دیوان عالی",
-                    "format": "json",
-                    "language": "fa"
-                }
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    resp = await client.get(f"{base_url}/search", params=params, headers=headers)
-                    if resp.status_code == 200:
-                        items = resp.json().get("results", [])
-                        return [{"title": x.get("title"), "snippet": x.get("content"), "url": x.get("url")} for x in items[:limit]]
-            except Exception:
-                continue
-        return []
-
-    # اجرای هم‌زمان و غیرمسدودکننده ۳ شاخه
-    t1 = asyncio.create_task(_fetch_qdrant(os.getenv("LEGAL_COLLECTION_NAME", "iran_laws_mistral_v1"), top_k))
-    t2 = asyncio.create_task(_fetch_qdrant(os.getenv("JUDICIAL_PRECEDENTS_COLLECTION", "judicial_precedents"), top_k))
-    t3 = asyncio.create_task(_fetch_searxng(query, top_k))
-
-    statutes_results, precedents_results, web_live_results = await asyncio.gather(t1, t2, t3, return_exceptions=True)
-
-    return {
-        "statutes": statutes_results if isinstance(statutes_results, list) else [],
-        "precedents": precedents_results if isinstance(precedents_results, list) else [],
-        "live_web": web_live_results if isinstance(web_live_results, list) else []
-    }
-
-
-
-async def _fetch_live_legal_web_fallback(query: str, limit: int = 4) -> list:
-    """جستجوی زنده در پایگاه‌های حقوقی معتبر (سامانه قوانین، روزنامه رسمی، اختبار) از طریق SearXNG"""
-    import urllib.parse, httpx
-    searx_urls = [
-        os.getenv("SEARXNG_INTERNAL_URL", "http://research-stack-searxng-1:8080"),
-        "http://127.0.0.1:8888",
-        "http://5.75.200.67:8888"
-    ]
-    headers = {"User-Agent": "RoxiraSmartJudgeAgent/2.0 (Legal Intelligence Engine)"}
-    
-    for base_url in searx_urls:
-        try:
-            params = {
-                "q": f"{query} سایت سامانه ملی قوانین یا روزنامه رسمی یا دیوان عالی",
-                "format": "json",
-                "language": "fa"
-            }
-            async with httpx.AsyncClient(timeout=6.0) as client:
-                resp = await client.get(f"{base_url}/search", params=params, headers=headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results = data.get("results", [])
-                    extracted = []
-                    for item in results[:limit]:
-                        extracted.append({
-                            "title": item.get("title", ""),
-                            "text": item.get("content", ""),
-                            "url": item.get("url", ""),
-                            "source": "جستجوی زنده مراجع و پرتال‌های قضایی"
-                        })
-                    if extracted:
-                        print(f"[SMARTJUDGE][WEB-FALLBACK] استخراج {len(extracted)} منبع زنده برای: {query[:40]}")
-                        return extracted
-        except Exception:
-            continue
-    return []
-
-
-
 import io, wave
 
 from output_apps.ecosystem_core.src.factory.smartjudge_live_voice import router as live_voice_router
@@ -521,6 +421,41 @@ async def get_current_user(request: Request) -> chat_auth.CurrentUser:
     """
     # the tier lookup may touch Postgres (cached): keep it off the event loop
     return await asyncio.to_thread(chat_auth.authenticate, request.headers)
+
+
+# ADR-2026-10-12: ekhtebar.ir is the sole legal source; its text is unofficial tier.
+LEGAL_SOURCE_DISCLOSURE = {"source": "ekhtebar.ir", "tier": "unofficial"}
+
+
+def _admin_phones() -> set:
+    """Phones allowed on admin routes: ``SMARTJUDGE_ADMIN_PHONES`` (comma separated), empty by default."""
+    raw = os.environ.get("SMARTJUDGE_ADMIN_PHONES", "")
+    return {normalize_phone(x.strip()) for x in raw.split(",") if x.strip()}
+
+
+_ADMIN_HOURLY_LIMIT = 30
+_TELEPHONY_HOURLY_LIMIT = 30
+
+
+async def admin_gate(user: chat_auth.CurrentUser) -> Optional[JSONResponse]:
+    """None when ``user`` may use admin routes, else the 401/403/429 response.
+
+    Needs a verified bearer token whose phone is in ``SMARTJUDGE_ADMIN_PHONES``;
+    admin routes share an hourly per-phone limit.
+    """
+    denied = chat_auth.deny_if_invalid(user) or chat_auth.require_auth(user)
+    if denied is not None:
+        return denied
+    if user.phone not in _admin_phones():
+        return chat_auth.error_json(403, "دسترسی مجاز نیست.", code="FORBIDDEN")
+    ok, left = await chat_auth.acheck_limit("admin", user.phone, _ADMIN_HOURLY_LIMIT)
+    if not ok:
+        return chat_auth.rate_limited(left)
+    return None
+
+
+def _gone_response() -> JSONResponse:
+    return chat_auth.error_json(410, "این مسیر حذف شده است.", code="GONE")
 
 
 def _resolve_subscription_tier(payload: Optional[dict] = None,
@@ -2110,6 +2045,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         "defense_draft": draft,
         "statutory_basis": _chat_fast.trim_sources(laws),
         "unified_precedents": _chat_fast.trim_sources(precedents),
+        "source_disclosure": dict(LEGAL_SOURCE_DISCLOSURE),
         "model_assigned": routed_model or cfg["primary_model"],
         "tier": selected_tier,
         "latency_ms": round((time.time() - t0) * 1000, 2)
@@ -2642,6 +2578,9 @@ async def create_telephony_session(payload: dict = Body(default=None),
     denied = chat_auth.require_auth(user)
     if denied is not None:
         return denied
+    ok, left = await chat_auth.acheck_limit("telephony", user.phone, _TELEPHONY_HOURLY_LIMIT)
+    if not ok:
+        return chat_auth.rate_limited(left)
     phone = user.phone  # from the token only
     call_id = f"CALL-{int(time.time())}-{str(uuid.uuid4())[:4]}"
     
@@ -2861,41 +2800,9 @@ async def delete_case_file(file_id: str, user: chat_auth.CurrentUser = Depends(g
 
 
 @router.post("/documents/convert")
-async def convert_documents_endpoint(files: List[UploadFile] = File(...)):
-    """
-    تبدیل اسناد پیوست (PDF، Word، تصویر دادنامه/چک، متنی) به Markdown ساختاریافته.
-
-    خروجی منطبق بر قرارداد فرانت‌اند (`ParsedDocumentMeta`):
-      filename, format, method, markdown, char_count, ocr_used, warnings
-
-    معماری سه‌لایه: Docling (pip install docling) → استخراج بومی → OCR بینایی OpenRouter.
-    """
-    if _convert_documents is None:
-        return JSONResponse(
-            {"status": "ERROR", "message": "پکیج پردازشی اسناد بارگذاری نشده است."}, status_code=503
-        )
-
-    payloads = []
-    for upload in files or []:
-        payloads.append((upload.filename or "unnamed", await upload.read()))
-
-    try:
-        documents = await _convert_documents(payloads)
-    except _DocumentProcessingError as exc:
-        return JSONResponse({"status": "ERROR", "message": exc.message}, status_code=exc.status_code)
-
-    metas = [document.to_meta() for document in documents]
-    return {
-        "status": "SUCCESS",
-        "document_count": len(metas),
-        "total_chars": sum(meta["char_count"] for meta in metas),
-        "ocr_documents": sum(1 for meta in metas if meta["ocr_used"]),
-        "docling_available": _DOC_DOCLING_AVAILABLE,
-        "engine": "docling" if _DOC_DOCLING_AVAILABLE else "native-fallback",
-        "install_hint": "pip install docling",
-        "source_documents": metas,
-        "combined_markdown": _combine_documents_markdown(documents) if _combine_documents_markdown else "",
-    }
+async def convert_documents_endpoint():
+    """Removed: unauthenticated, no frontend caller. Use the authenticated /case-files upload."""
+    return _gone_response()
 
 
 @router.get("/legal-graph/health")
@@ -2905,11 +2812,15 @@ async def legal_graph_health():
 
 
 @router.post("/legal-graph/ingest")
-async def legal_graph_ingest(payload: dict = Body(...)):
+async def legal_graph_ingest(payload: dict = Body(...),
+                             user: chat_auth.CurrentUser = Depends(get_current_user)):
     """
-    درج مواد قانونی/آرای وحدت رویه/دکترین در گراف دانش LightRAG.
+    درج مواد قانونی/آرای وحدت رویه/دکترین در گراف دانش LightRAG (فقط ادمین).
     ورودی: {"texts": ["...", "..."]}
     """
+    denied = await admin_gate(user)
+    if denied is not None:
+        return denied
     if not _LIGHTRAG_AVAILABLE:
         return JSONResponse(
             {"status": "UNAVAILABLE", "message": "موتور LightRAG نصب نیست.", "install_hint": "pip install lightrag-hku"},
@@ -3402,44 +3313,11 @@ async def create_zibal_invoice(request: Request, payload: dict = Body(...)):
 # پردازش مستقیم متن استخراج‌شده از اسناد و دادنامه‌ها (Vision OCR Ingest)
 # ------------------------------------------------------------------------------
 @router.post("/documents/analyze-ocr")
-async def analyze_ocr_document(request: Request):
-    """
-    تحلیل ساختاریافته دادنامه، قرارداد یا چک و استخراج ادله دفاعی.
+async def analyze_ocr_document():
+    """Removed: unauthenticated, no frontend caller. Use /analyze-document-text or /case-files."""
+    return _gone_response()
 
-    ورودی: JSON `{text_content|case_text, doc_type}` یا multipart/form-data با پیوست فایل.
-    """
-    text_content, doc_type, source_documents, error = await _resolve_case_text(request)
-    if error is not None:
-        return error
-    text_content = (text_content or "").strip()
 
-    if not text_content:
-        return JSONResponse(
-            {
-                "status": "ERROR",
-                "message": "محتوای متنی سند یا حداقل یک فایل پیوست الزامی است.",
-            },
-            status_code=400,
-        )
-
-    laws, precedents = await aquery_knowledge_graph(text_content, limit=4)
-
-    return {
-        "status": "SUCCESS",
-        "doc_type": doc_type,
-        "extracted_summary": text_content[:200] + "...",
-        "statutory_basis": laws,
-        "unified_precedents": precedents,
-        "recommended_defense": "استناد به آرای هیأت عمومی استخراج‌شده و ثبت دادخواست تجدیدنظر / فرجام‌خواهی",
-        "model_assigned": OPENROUTER_TIERS["VIP"]["primary_model"],
-        "source_documents": source_documents,
-        "ocr_used": any(meta.get("ocr_used") for meta in source_documents),
-        "docling_available": _DOC_DOCLING_AVAILABLE,
-    }
-
-# ------------------------------------------------------------------------------
-# شبیه‌ساز خودکار تست پرونده‌ها و پایش کیفیت پاسخ‌دهی (QA Simulation)
-# ------------------------------------------------------------------------------
 @router.get("/system/simulation-qa")
 async def run_simulation_qa():
     """شبیه‌سازی خودکار استعلام حقوقی برای ارزیابی دقت و تاخیر مدل‌ها"""
@@ -5904,22 +5782,9 @@ async def verify_auth_otp(payload: dict = Body(...), request: Request = None):
 # اتصال یکپارچه Twenty CRM و صف انتشار شبکه‌های اجتماعی (Postiz Hook)
 # ==============================================================================
 @router.post("/crm/sync-case")
-async def sync_case_to_crm(payload: dict = Body(...)):
-    case_title = payload.get("title", "پرونده حقوقی جدید")
-    phone = payload.get("phone", "ناشناس")
-    summary = payload.get("summary", "")
-    
-    # ساخت لید و پرونده سازمانی در ساختار Twenty CRM
-    deal_record = {
-        "id": f"deal_{uuid.uuid4().hex[:8]}",
-        "name": f"[{phone}] {case_title}",
-        "stage": "QUALIFIED",
-        "amount": 275000,
-        "notes": summary,
-        "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
-    }
-    print(f"[TWENTY-CRM-SYNC] Case Synced: {deal_record['name']}", file=sys.stderr)
-    return {"status": "success", "synced": True, "crm_deal": deal_record}
+async def sync_case_to_crm():
+    """Removed: a stub that echoed unauthenticated input; no caller."""
+    return _gone_response()
 
 @router.get("/marketing/campaign-queue")
 async def get_marketing_queue():
@@ -5942,7 +5807,10 @@ async def get_marketing_queue():
 from fastapi.responses import Response, JSONResponse
 
 @router.get("/admin/export-dataset")
-async def export_chat_dataset(admin_key: str = ""):
+async def export_chat_dataset(user: chat_auth.CurrentUser = Depends(get_current_user)):
+    denied = await admin_gate(user)
+    if denied is not None:
+        return denied
     # ساخت رکوردهای استاندارد آموزشی بر اساس آخرین قوانین و استعلامات حقوقی
     sample_dataset = [
         {"prompt": "شرایط صدور اجراییه چک صیادی چیست؟", "completion": "طبق ماده ۲۳ اصلاحی قانون صدور چک، با گواهی عدم پرداخت و ثبت در سامانه صیاد، مستقیماً از دادگاه بدون رسیدگی ماهوی اجراییه صادر می‌شود."},

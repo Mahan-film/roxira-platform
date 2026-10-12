@@ -582,7 +582,31 @@ async def forgot_password(req: ForgotPasswordRequest, request: Request):
 # ─────────────────────────────────────────────────────────────────────────────
 # ۵) ورود با گوگل — Google OAuth 2.0
 # ─────────────────────────────────────────────────────────────────────────────
-_GOOGLE_STATES: Dict[str, float] = {}
+_OAUTH_STATE_TTL_SECONDS = 300
+_OAUTH_STATE_PREFIX = "oauth:google:state:"
+
+
+def _issue_oauth_state() -> str:
+    """Random single-use state, kept in Redis/KV (in-process fallback) for a short time."""
+    from output_apps.generated_modules.smartjudge import chat_auth
+    state = secrets.token_urlsafe(24)
+    chat_auth.kv_set(_OAUTH_STATE_PREFIX + state, state, _OAUTH_STATE_TTL_SECONDS)
+    return state
+
+
+def _consume_oauth_state(state: Optional[str]) -> bool:
+    """True once for a state this server issued and that has not expired or been used."""
+    if not state or len(state) > 128:
+        return False
+    from output_apps.generated_modules.smartjudge import chat_auth
+    stored = chat_auth.kv_get(_OAUTH_STATE_PREFIX + state)
+    if not isinstance(stored, str) or not hmac.compare_digest(stored.encode(), state.encode()):
+        return False
+    # atomic claim: only the first caller to count this state wins (replay / race safe)
+    digest = hashlib.sha256(state.encode()).hexdigest()
+    count, _ = chat_auth.incr(_OAUTH_STATE_PREFIX + "used:" + digest, _OAUTH_STATE_TTL_SECONDS)
+    chat_auth.kv_delete(_OAUTH_STATE_PREFIX + state)
+    return count == 1
 
 
 def _require_google_config() -> None:
@@ -596,8 +620,7 @@ async def google_auth_url(request: Request):
     redirect_uri = GOOGLE_REDIRECT_URI or (
         f"{str(request.base_url).rstrip('/')}/api/v1/auth/google/callback"
     )
-    state = secrets.token_urlsafe(24)
-    _GOOGLE_STATES[state] = time.time() + 600
+    state = _issue_oauth_state()
 
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
         "client_id": GOOGLE_CLIENT_ID,
@@ -666,8 +689,8 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
     """
     _require_google_config()
 
-    if state and state in _GOOGLE_STATES:
-        _GOOGLE_STATES.pop(state, None)
+    if not _consume_oauth_state(state):
+        raise HTTPException(status_code=400, detail="پارامتر state نامعتبر، منقضی یا استفاده‌شده است.")
 
     if not code:
         raise HTTPException(status_code=400, detail="کد authorization از گوگل دریافت نشد.")
@@ -698,7 +721,8 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
     app_url = f"{str(request.base_url).rstrip('/')}/app"
     resp = RedirectResponse(url=app_url, status_code=302)
     resp.set_cookie(
-        key="roxira_jwt", value=jwt_token, httponly=False, samesite="lax", max_age=JWT_TTL_SECONDS
+        key="roxira_jwt", value=jwt_token, httponly=True, secure=True, samesite="lax",
+        max_age=JWT_TTL_SECONDS
     )
     # برای اینکه SPA بتواند توکن را بخواند
     resp.headers["X-Auth-Token"] = jwt_token
