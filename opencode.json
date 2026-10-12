@@ -1,7 +1,7 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "//": "W12 model registry. Model ids come from config/models.yaml's `executor` role (docs/STRATEGY.md §3, W12 row) — see output_apps/generated_modules/smartjudge/model_registry.py for the loader. Wired into .github/workflows/agent-task.yml via agent_runner.py's run_opencode(), which calls `opencode run --agent build --model <executor id>`. `ask` permissions are never used here: OpenCode runs non-interactively in CI (no terminal to answer a prompt), so an `ask` entry would hang until AGENT_TASK_TIMEOUT_SECS kills the run. Every permission below is explicit allow or deny.",
-  "//providers": "Keys come ONLY from the environment via {env:NAME} (see docs/ops/OPENCODE_KEYS.md); never write a key here. enabled_providers is a global allowlist (it cannot be set per agent): Groq returned 403 for the owner so it is excluded. The `free` agent is kept off customer data by its read-only tools plus its :free model id, not by this list. No model ids are added here; sambanova has an empty model list until config/models.yaml gains SambaNova ids.",
+  "//providers": "Keys come ONLY from the environment via {env:NAME} (see docs/ops/OPENCODE_KEYS.md); never write a key here. enabled_providers is a global allowlist (it cannot be set per agent): Groq returned 403 for the owner so it is excluded. The `free` agent is kept off customer data by its read-only tools plus its :free model id, not by this list. FREE-TIER PROVIDERS (mistral free Codestral tier, sambanova, omniroute scraped/free combos) are PUBLIC-CODE-ONLY: never send customer or case data to them (docs/factory/ROUTING.md). openrouter is the only paid, standard-data-policy provider here. sambanova model ids below were listed live by GET /v1/models on 2026-10-12 (they are provider ids, not config/models.yaml roles). Cerebras is NOT configured: CEREBRAS_API_KEY is empty in roxira.env (checked 2026-10-12); add a provider once a key is set. omniroute reads OMNIROUTE_API_KEY (the global ~/.config/opencode config uses the alias OMNIROUTE_OPENCODE_KEY; scripts/dev/rx and dispatch_opencode.sh export it from OMNIROUTE_API_KEY).",
   "enabled_providers": ["pool", "openrouter", "mistral", "sambanova", "omniroute"],
   "provider": {
     "openrouter": {
@@ -16,21 +16,27 @@
     },
     "sambanova": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "SambaNova",
+      "name": "SambaNova (free tier, PUBLIC CODE ONLY)",
       "options": {
         "baseURL": "https://api.sambanova.ai/v1",
         "apiKey": "{env:SAMBANOVA_API_KEY}"
       },
-      "models": {}
+      "models": {
+        "DeepSeek-V3.2": { "name": "DeepSeek V3.2 (SambaNova, public code only)" },
+        "gpt-oss-120b": { "name": "gpt-oss-120b (SambaNova, public code only)" },
+        "Meta-Llama-3.3-70B-Instruct": { "name": "Llama 3.3 70B (SambaNova, public code only)" }
+      }
     },
     "omniroute": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "OmniRoute (local gateway)",
+      "name": "OmniRoute (local gateway, scraped/free providers: PUBLIC CODE ONLY)",
       "options": {
         "baseURL": "{env:OMNIROUTE_BASE_URL}",
         "apiKey": "{env:OMNIROUTE_API_KEY}"
       },
-      "models": {}
+      "models": {
+        "team-coding": { "name": "Approved Mistral/Groq combo (public code only)" }
+      }
     }
   },
   "agent": {
@@ -63,7 +69,7 @@
       }
     },
     "free": {
-      "description": "Mechanical/non-sensitive chores only (formatting checks, doc typo scans, renaming). Read-only, same as `plan`. Must NEVER receive customer or case data: this model is config/models.yaml's `free` role, a non_sensitive_only, logs-or-trains-on-prompts provider (docs/STRATEGY.md §3b).",
+      "description": "PUBLIC-CODE-ONLY free tier. Mechanical/non-sensitive chores only (formatting checks, doc typo scans, renaming). Read-only, same as `plan`. Must NEVER receive customer or case data: this model is config/models.yaml's `free` role, a non_sensitive_only, logs-or-trains-on-prompts provider (docs/STRATEGY.md §3b).",
       "model": "openrouter/qwen/qwen3.8-27b:free",
       "tools": {
         "write": false,

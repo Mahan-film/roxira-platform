@@ -54,6 +54,7 @@ SIMPLE = [
     ("GROQ", "GROQ_API_KEY", "GET", "https://api.groq.com/openai/v1/models", _bearer, None),
     # UNSURE: SambaNova /v1/models auth behaviour (OpenAI-compatible, expected Bearer).
     ("SAMBANOVA", "SAMBANOVA_API_KEY", "GET", "https://api.sambanova.ai/v1/models", _bearer, None),
+    ("CEREBRAS", "CEREBRAS_API_KEY", "GET", "https://api.cerebras.ai/v1/models", _bearer, None),
     (
         "BRAVE",
         "BRAVE_SEARCH_API_KEY",

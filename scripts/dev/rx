@@ -68,7 +68,29 @@ gh() {
 }
 
 [ $# -ge 1 ] || { echo "usage: rx <issue> [model] [base-branch]"; exit 2; }
-n=$1; model=${2:-codex}; base=${3:-main}
+n=$1; model=${2:-dsflash}; base=${3:-main}
+here=${0:A:h}
+# Keys come from the environment only. OMNIROUTE_OPENCODE_KEY is the alias the global opencode config reads.
+[ -f ~/Secrets/roxira/roxira.env ] && { set -a; . ~/Secrets/roxira/roxira.env; set +a; }
+export OMNIROUTE_OPENCODE_KEY=${OMNIROUTE_OPENCODE_KEY:-${OMNIROUTE_API_KEY:-}}
+# Map a chain alias to an opencode provider/model. The dsflash id comes from config/models.yaml (executor role).
+worker_for() {
+  case "$1" in
+    dsflash) python3 "$here/model_for.py" executor --prefix openrouter ;;
+    team) echo omniroute/team-coding ;;
+    codex) echo codex ;;
+    *) echo "pool/$1" ;;
+  esac
+}
+run_worker() { # run_worker <alias> <prompt>: output appended to $log
+  local a=$1 p=$2 w; w=$(worker_for "$a") || return 1
+  if [ "$a" = codex ]; then codex exec --sandbox workspace-write "$p" < /dev/null >> "$log" 2>&1
+  elif [ "$a" = team ]; then
+    ( [[ -f ~/.config/omniroute.env ]] && { set -a; . ~/.config/omniroute.env; set +a; }
+      export OMNIROUTE_OPENCODE_KEY=${OMNIROUTE_OPENCODE_KEY:-${OMNIROUTE_API_KEY:-}}
+      opencode run -m "$w" "$p" < /dev/null >> "$log" 2>&1 )
+  else opencode run -m "$w" "$p" < /dev/null >> "$log" 2>&1; fi
+}
 timeout_secs=${RX_TIMEOUT_SECS:-900}
 repo=~/Developer/roxira-platform; wt=~/Developer/rx-wt/$n; br=issue-$n
 mkdir -p ~/rx-logs; log=~/rx-logs/$n.log; : > "$log"
@@ -91,44 +113,30 @@ $body
 
 Rules: edit only files this task needs; never run pytest on src/ or the repo root; never write secrets; model ids only in config/models.yaml; do NOT run git or gh (the wrapper commits). Do not start subagents. Do not read data files under data/. Do not call a shell/bash tool (it does not exist). Before you finish, re-read every file you wrote and check every name you use is imported or defined. Write the code with your edit/write tools now; do not only describe it. Stop when the change is complete."
 
-# Fallback chain: start from the given model, then the following ones (max 2 attempts).
-chain=(codex dsflash dspro codestral)
+# Fallback chain: DeepSeek V4.1 Flash (OpenRouter, id from config/models.yaml), then Codestral
+# (Mistral free tier via LiteLLM: public code only), then OmniRoute team-coding. `codex` is NOT in
+# the default chain (unverified/exhausted); request it explicitly with `rx <issue> codex`.
+chain=(dsflash codestral team)
 if (( ${chain[(Ie)$model]} )); then
   models=(${chain[${chain[(Ie)$model]},-1]})
 else
-  models=($model codex)
+  models=($model dsflash)
 fi
-models=(${models[1,2]})
+models=(${models[1,${RX_MAX_ATTEMPTS:-3}]})
 
 used=""
 for m in $models; do
-  if [ "$m" = codex ]; then
-    if ! command -v codex >/dev/null 2>&1; then
-      echo "rx: codex command not installed; skipping"
-      continue
-    fi
-    worker=codex
-  else
-    worker=pool/$m
+  if [ "$m" = codex ] && ! command -v codex >/dev/null 2>&1; then
+    echo "rx: codex command not installed; skipping"
+    continue
   fi
+  worker=$(worker_for "$m") || { echo "rx: cannot resolve model for $m; skipping"; continue; }
   echo "rx: #$n trying $worker"
   echo "==== rx attempt: $worker ====" >> "$log"
   rc=0
   timeout_marker=${TMPDIR:-/tmp}/rx-timeout-$$-$m
   rm -f "$timeout_marker"
-  if [ "$m" = codex ]; then
-    codex exec --sandbox workspace-write "$prompt" < /dev/null >> "$log" 2>&1 &
-  elif [[ "$m" == "team" ]]; then
-    worker=omniroute/team-coding
-    (
-      if [[ -f ~/.config/omniroute.env ]]; then
-        set -a; . ~/.config/omniroute.env; set +a
-      fi
-      opencode run -m omniroute/team-coding "$prompt" < /dev/null >> "$log" 2>&1
-    ) &
-  else
-    opencode run -m pool/$m "$prompt" < /dev/null >> "$log" 2>&1 &
-  fi
+  run_worker "$m" "$prompt" &
   worker_pid=$!
   (
     sleep "$timeout_secs"
@@ -153,7 +161,7 @@ for m in $models; do
 done
 echo "---- rx #$n summary (full log: $log) ----"; tail -n 10 "$log" | cut -c1-170
 if [ -z "$(git status --porcelain)" ]; then echo "rx: no changes for #$n"; exit 1; fi
-if [ "$used" = codex ]; then worker=codex; else worker=pool/$used; fi
+worker=$(worker_for "$used")
 echo "rx: result produced by $worker"
 model=$used
 
@@ -167,18 +175,7 @@ if [ ${#pyfiles} -gt 0 ]; then
         echo "$ruff_out" | tee -a "$log"
         echo "rx: ruff gate failed for #$n; attempting repair round"
         repair_prompt="$prompt\n\nYour previous change failed this lint check. Fix ONLY these errors; an undefined name means a missing import or a typo. Re-read every file you changed and make sure every name is imported or defined.\n\n$(echo "$ruff_out" | head -n 60)"
-        if [ "$model" = codex ]; then
-          codex exec --sandbox workspace-write "$repair_prompt" < /dev/null >> "$log" 2>&1
-        elif [[ "$model" == "team" ]]; then
-          (
-            if [[ -f ~/.config/omniroute.env ]]; then
-              set -a; . ~/.config/omniroute.env; set +a
-            fi
-            opencode run -m omniroute/team-coding "$repair_prompt" < /dev/null >> "$log" 2>&1
-          )
-        else
-          opencode run -m pool/$model "$repair_prompt" < /dev/null >> "$log" 2>&1
-        fi
+        run_worker "$model" "$repair_prompt" || true
         if [ -n "$(git status --porcelain)" ]; then
           if ! ruff_out=$(python3 -m ruff check --select F821,F811,E9 $pyfiles 2>&1); then
             echo "$ruff_out" | tee -a "$log"
@@ -204,4 +201,4 @@ git commit -q -m "$title (closes #$n)"
 retry git -c http.version=HTTP/1.1 push -q -u origin $br
 retry gh pr create --repo Mahan-film/roxira-platform --base main --head $br --title "$title" --body "Closes #$n
 
-Implemented by OpenCode (pool/$model) via rx."
+Implemented by OpenCode ($worker) via rx."

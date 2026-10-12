@@ -13,7 +13,9 @@
 # Options:
 #   -w DIR     git worktree to run in (required; must NOT be the main branch checkout)
 #   -p TEXT    task prompt (or -F FILE to read it from a file)
-#   -m MODEL   provider/model (default: openrouter/deepseek/deepseek-v4.1-flash)
+#   -m MODEL   provider/model (default: openrouter/<config/models.yaml executor primary>)
+#   -R ROLE    take the model from a config/models.yaml role instead (executor, mechanical,
+#              cheap, free), via scripts/dev/model_for.py; a free role implies --public rules
 #              others: pool/dsflash, pool/codestral (LiteLLM key pool, may route to free tiers: needs --public),
 #                      omniroute/<id> (local gateway)
 #   -a AGENT   opencode agent (default: build; repo opencode.json defines
@@ -30,19 +32,23 @@
 #          never printed.
 set -uo pipefail
 
-MODEL="openrouter/deepseek/deepseek-v4.1-flash"; AGENT="build"; TMO=600
+HERE="$(cd "$(dirname "$0")" && pwd)"
+MODEL=""; ROLE="executor"; AGENT="build"; TMO=600
 WT=""; PROMPT=""; PFILE=""; OUT="${TMPDIR:-/tmp}/dispatch_opencode"; PUBLIC=0; DRY=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     -w) WT="$2"; shift 2;; -p) PROMPT="$2"; shift 2;; -F) PFILE="$2"; shift 2;;
-    -m) MODEL="$2"; shift 2;; -a) AGENT="$2"; shift 2;; -t) TMO="$2"; shift 2;;
+    -m) MODEL="$2"; shift 2;; -R) ROLE="$2"; shift 2;; -a) AGENT="$2"; shift 2;; -t) TMO="$2"; shift 2;;
     -o) OUT="$2"; shift 2;; --public) PUBLIC=1; shift;; --dry-run) DRY=1; shift;;
-    -h|--help) sed -n '2,32p' "$0"; exit 0;;
+    -h|--help) sed -n '2,34p' "$0"; exit 0;;
     *) echo "unknown arg: $1" >&2; exit 2;;
   esac
 done
 
+if [ -z "$MODEL" ]; then
+  MODEL="$(python3 "$HERE/model_for.py" "$ROLE" --prefix openrouter)" || { echo "cannot resolve model for role '$ROLE' from config/models.yaml" >&2; exit 2; }
+fi
 [ -n "$WT" ] || { echo "-w <worktree> is required" >&2; exit 2; }
 [ -n "$PFILE" ] && PROMPT="$(cat "$PFILE")"
 [ -n "$PROMPT" ] || { echo "-p <prompt> or -F <file> is required" >&2; exit 2; }
@@ -62,7 +68,8 @@ if [ -f "$ENV_FILE" ]; then set -a; . "$ENV_FILE"; set +a; fi
 case "$MODEL" in
   openrouter/*) [ -n "${OPENROUTER_API_KEY:-}" ] || { echo "OPENROUTER_API_KEY not set" >&2; exit 2; };;
   mistral/*)    [ -n "${MISTRAL_API_KEY:-}" ] || { echo "MISTRAL_API_KEY not set" >&2; exit 2; };;
-  omniroute/*)  [ -n "${OMNIROUTE_API_KEY:-}" ] || { echo "OMNIROUTE_API_KEY not set" >&2; exit 2; }
+  omniroute/*)  export OMNIROUTE_OPENCODE_KEY="${OMNIROUTE_OPENCODE_KEY:-${OMNIROUTE_API_KEY:-}}"  # alias used by the global opencode config
+                [ -n "${OMNIROUTE_API_KEY:-}" ] || { echo "OMNIROUTE_API_KEY not set" >&2; exit 2; }
                 export OMNIROUTE_BASE_URL="${OMNIROUTE_BASE_URL:-http://127.0.0.1:20128/v1}";;
 esac
 
