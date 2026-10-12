@@ -162,8 +162,15 @@ smoke_test() {
 # eval (no LLM, 0 USD) on the SERVER in a one-off container next to Qdrant, same pattern as
 # scripts/legal/build_v3_on_server.sh step 4, and compares retrieval@5 with the stored baseline.
 # It only reports: a failure or a drop never blocks or rolls back a deploy.
-GATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../eval" && pwd)"
-GATE_BASELINE="${DEPLOY_EVAL_BASELINE:-$GATE_DIR/../../data/eval/chat_golden/legal_gate_baseline.json}"
+# The deploy script is usually run from a /tmp copy (git show ... > /tmp/deploy_local.sh), so never
+# resolve the gate relative to the script. The scorer comes from origin/main (fetched by every deploy);
+# the baseline from DEPLOY_EVAL_BASELINE or the local checkout.
+gate_script() {  # prints a path to legal_gate.py extracted from origin/main, or fails
+  local f; f="$(mktemp "${TMPDIR:-/tmp}/legal_gate.XXXXXX")" || return 1  # no suffix: BSD mktemp needs trailing Xs
+  git show origin/main:scripts/eval/legal_gate.py >"$f" 2>/dev/null || { rm -f "$f"; return 1; }
+  printf '%s\n' "$f"
+}
+GATE_BASELINE="${DEPLOY_EVAL_BASELINE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)/data/eval/chat_golden/legal_gate_baseline.json}"
 gate_retrieval_json() {  # prints the 'LEGAL_GATE_JSON {...}' line from the server
   rsh "cd '$REMOTE_DIR' && IMG=\$(docker inspect -f '{{.Config.Image}}' roxira_app_prod) &&
     COLL=\$(docker exec roxira_app_prod printenv LIGHTRAG_QDRANT_COLLECTION || true) &&
@@ -177,7 +184,8 @@ eval_gate_report() {
   local out line
   out="$(gate_retrieval_json)" || { log "legal gate: retrieval run failed or timed out (non-blocking)"; return 0; }
   [ -n "$out" ] || { log "legal gate: WARNING the eval produced no report line (script missing or crashed; non-blocking)"; return 0; }
-  printf '%s\n' "$out" | python3 "$GATE_DIR/legal_gate.py" compare --baseline "$GATE_BASELINE" --current - |
+  local gs; gs="$(gate_script)" || { log "legal gate: scorer not found on origin/main (non-blocking)"; return 0; }
+  printf '%s\n' "$out" | python3 "$gs" compare --baseline "$GATE_BASELINE" --current - |
     while IFS= read -r line; do log "$line"; done || true
 }
 
@@ -506,10 +514,12 @@ cmd_migrate_rollback() {
 cmd_eval_baseline() {
   local out; out="$(gate_retrieval_json)" || die "retrieval gate run failed on the server (is scripts/eval/legal_gate.py deployed there?)"
   if [ "${1:-}" = "--yes" ]; then
-    printf '%s\n' "$out" | python3 "$GATE_DIR/legal_gate.py" capture --out "$GATE_BASELINE"
+    local gs; gs="$(gate_script)" || die "legal gate scorer not found on origin/main"
+    printf '%s\n' "$out" | python3 "$gs" capture --out "$GATE_BASELINE"
     echo "commit it: git add data/eval/chat_golden/legal_gate_baseline.json"
   else
-    printf '%s\n' "$out" | python3 "$GATE_DIR/legal_gate.py" compare --baseline "$GATE_BASELINE" --current -
+    local gc; gc="$(gate_script)" || die "legal gate scorer not found on origin/main"
+    printf '%s\n' "$out" | python3 "$gc" compare --baseline "$GATE_BASELINE" --current -
     echo "dry run: nothing written. Re-run with --yes to store this run as the baseline."
   fi
 }
