@@ -165,10 +165,13 @@ smoke_test() {
 # The deploy script is usually run from a /tmp copy (git show ... > /tmp/deploy_local.sh), so never
 # resolve the gate relative to the script. The scorer comes from origin/main (fetched by every deploy);
 # the baseline from DEPLOY_EVAL_BASELINE or the local checkout.
-gate_script() {  # prints a path to legal_gate.py extracted from origin/main, or fails
-  local f; f="$(mktemp "${TMPDIR:-/tmp}/legal_gate.XXXXXX")" || return 1  # no suffix: BSD mktemp needs trailing Xs
-  git show origin/main:scripts/eval/legal_gate.py >"$f" 2>/dev/null || { rm -f "$f"; return 1; }
-  printf '%s\n' "$f"
+gate_script() {  # extracts the scorer + its sibling eval_chat_golden.py from origin/main into a temp tree; prints legal_gate.py path
+  local d; d="$(mktemp -d "${TMPDIR:-/tmp}/legal_gate.XXXXXX")" || return 1
+  mkdir -p "$d/scripts/eval" &&
+    git show origin/main:scripts/eval/legal_gate.py >"$d/scripts/eval/legal_gate.py" 2>/dev/null &&
+    git show origin/main:scripts/eval_chat_golden.py >"$d/scripts/eval_chat_golden.py" 2>/dev/null ||
+    return 1  # the temp dir is left in TMPDIR; the OS cleans it
+  printf '%s\n' "$d/scripts/eval/legal_gate.py"
 }
 GATE_BASELINE="${DEPLOY_EVAL_BASELINE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)/data/eval/chat_golden/legal_gate_baseline.json}"
 gate_retrieval_json() {  # prints the 'LEGAL_GATE_JSON {...}' line from the server
