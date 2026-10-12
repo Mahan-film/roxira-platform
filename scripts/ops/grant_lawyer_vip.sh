@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# OWNER POLICY (2026-10-13): lawyers pay like every user. Use this ONLY for lawyers who work
+# for/with Roxira, on the owner's explicit decision. Never as a public free-VIP programme.
 # Owner-run: grant VIP to ONE phone AFTER you verified the lawyer's licence on the bar association
 # (کانون وکلا) website. Never run from automation: the grant is always a manual owner decision.
 #
