@@ -53,6 +53,7 @@ HARD_COST_CAP_USD = 0.05
 CHAT_PATH = "/api/v1/apps/judge/chat"
 # text_verified: checked mechanically against the staged article text (verified_by auto:article_text).
 # needs_lawyer: depends on interpretation, validity or adjustable figures (needs_lawyer_reason).
+# lawyer_verified: the lawyer answered (field lawyer_answer is required); lawyer_rejected: case dropped from scoring.
 STATUSES = ("draft_needs_lawyer", "text_verified", "needs_lawyer", "lawyer_verified", "lawyer_rejected")
 
 
@@ -105,6 +106,8 @@ def validate(cases: Sequence[dict]) -> List[str]:
             errs.append(f"{cid}: held_out must be a bool")
         if c.get("status") not in STATUSES:
             errs.append(f"{cid}: unknown status {c.get('status')}")
+        if c.get("status") == "lawyer_verified" and not str(c.get("lawyer_answer") or "").strip():
+            errs.append(f"{cid}: lawyer_verified needs a lawyer_answer")
     return errs
 
 
@@ -336,8 +339,8 @@ def render_markdown(report: dict) -> str:
     mode = report["mode"]
     L.append(f"# Legal gate report ({mode}) {report['generated']}")
     L.append("")
-    L.append("Question set: expectations are text_verified against the article text or still needs_lawyer; "
-             "none is lawyer_verified yet.")
+    L.append("Question set: expectations are text_verified against the article text, lawyer_verified "
+             "(field lawyer_answer) or still needs_lawyer.")
     meta = report.get("meta") or {}
     if meta:
         L.append("")
@@ -413,7 +416,7 @@ def compare(baseline: Optional[dict], current: dict, warn_drop: float = 5.0) -> 
     lines = [f"legal gate: retrieval@5 = {_pct(cur)} on {n} questions "
              f"(dev {_pct(current['summary']['dev']['kept'].get('recall@5'))}, "
              f"held-out {_pct(current['summary']['held_out']['kept'].get('recall@5'))}); "
-             f"questions are text_verified / needs_lawyer"]
+             f"questions are text_verified / lawyer_verified / needs_lawyer"]
     if baseline is None:
         lines.append("legal gate: no baseline file; capture one with: scripts/ops/deploy_local.sh eval-baseline")
         return lines, False

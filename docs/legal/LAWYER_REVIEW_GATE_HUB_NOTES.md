@@ -65,3 +65,45 @@ Not touched by me: `config/jurisdiction_rules.yaml` itself, ADR status, anything
 `data/eval/chat_golden/legal_gate_2026-10-12.json`, `scripts/eval/legal_gate.py`, `scripts/eval/tests/test_legal_gate.py`,
 `docs/legal/LAWYER_REVIEW_GATE_FA.md`, `docs/legal/LAWYER_REVIEW_GATE_FA.html`, this file.
 `docs/ops/DEPLOY_LOCAL.md` still mentions the old status wording (not edited).
+
+## Lawyer answers of 2026-10-13 (sheet items 1-9) and how they are applied
+
+Item 10 (law-watch approvals) is unanswered and stays open. Status counts in the question file after this change:
+5 `lawyer_verified` (field `lawyer_answer`, `lawyer_answered_at`), `lg-soc-76` and `lg-adm-19` still `needs_lawyer`.
+`legal_gate.py validate` now requires a `lawyer_answer` on every `lawyer_verified` case.
+
+| Item | Answer | Applied as |
+| --- | --- | --- |
+| 1 source | ekhtebar accepted, labelled unofficial | ADR `ADR-2026-10-12-ekhtebar-sole-source.md` set to accepted; nezamat.ir recorded as second owner-approved source (owner, 2026-10-13) |
+| 2 implicit repeal | keep the article, show a warning | corpus payload field `repeal_status: "implicit_contested"` (carried by `lightrag_engine._payload_to_row`, kept in `statutory_basis` by `chat_fast._KEEP_FIELDS`); `legal_notes.finalize_reply` appends `REPEAL_WARNING_FA` when a displayed row has it. No row carries the flag yet: set it at ingest for the articles the lawyer names (the lawyer gave no list). `is_active: false` (explicit repeal) still excludes a row |
+| 3 appeal / cassation | old 3M (art 331) and 20M (art 367) rial thresholds changed with the 1402 law; above 100M toman the general civil court is competent | `config/jurisdiction_rules.yaml`: `civil_appeal_nisab`, `civil_cassation_nisab` -> `superseded` (new allowed status in `jurisdiction_rules.py`, never used for suggestions). `peace_court_appealable_over` stays `needs_lawyer` (the answer gives no appealability figure) |
+| 4 adjustable numbers | peace-court ceiling is 1,000,000,000 rials now | `peace_court_monetary` stays `confirmed`, note updated; `lg-dsp-12` -> `lawyer_verified`. The administrative-court fee part of item 4 (`lg-adm-19`) was not covered by the answer as relayed: left `needs_lawyer` |
+| 5 rent laws | each of 1356/1362/1376 governs places within its own scope; picking one is a legal judgment | `legal_notes.LEASE_ADDENDUM` (prompt) + `lease_reply_ok` check + fixed `LEASE_NOTICE_FA` appended when the reply lacks the "depends on contract date and type" statement; `lg-l56-10`, `lg-l56-11`, `lg-l62-7` -> `lawyer_verified` (article text is correct for its own law) |
+| 6 mahr | art 22 (110 coins) in force and relevant only to imprisonment; paying 110 coins ends prison for the rest; unpaid instalments within the 110 keep imprisonment | prompt fact `legal_notes.MAHR_FACT`, injected when the question is about mahr or coins plus imprisonment; `lg-fam-22` -> `lawyer_verified`. Chosen over a corpus note row because a note is not a statute (must not enter statutory_basis or the citation guard), a row needs a Qdrant re-embed and only surfaces by chance, while a trigger-based fact is deterministic and testable offline |
+| 7 social security art 76 | no definite answer | `lg-soc-76` stays `needs_lawyer` (field `lawyer_note`); retirement/pension questions get `SOCIAL_SECURITY_DISCLAIMER_FA` (check with the social security organisation) |
+| 8 lawyer verification | verify the licence on the bar association (کانون وکلا) site; free subscription for lawyers is fine | see below |
+| 9 privacy and terms | the lawyer reviews only the ambiguous items | see below |
+
+Limits: the fixed lines are appended to the final `reply` of `/consult` and `/chat` (the non-streamed final body and the stored
+message); tokens already streamed are not rewritten. Other answer paths (fast path, early returns, voice) are not covered.
+The lease check is a marker check (reply must mention dependence on date and type of contract); it cannot detect a reply that
+wrongly asserts one law, which is why the prompt forbids it and the notice is appended whenever the marker is missing.
+
+### Lawyer onboarding (item 8)
+
+Sign-ups on `/lawyers` are stored by `POST /api/v1/apps/judge/lawyers/pilot-onboarding` as `PENDING_REVIEW` (KV key
+`lawyer_pilot:req:<id>`, 90 days). Nothing is granted automatically; the page copy now says so. Owner flow:
+1. Look up the licence number on the bar association site (کانون وکلا).
+2. If valid, grant VIP to the phone: `scripts/ops/grant_lawyer_vip.sh 09xxxxxxxxx` (dry run), then add `--apply`
+   (`--days N`, default 30; `--revoke` ends it). It upserts `user_entitlements` (the table `_entitlement_tier` reads), key
+   `sha256("smartjudge:<phone>")[:16]`, over ssh, no restart. The other VIP mechanism, env `VIP_PHONE_ALLOWLIST`, needs a
+   container restart and is not used for this.
+3. Tell the lawyer by phone/SMS. Unverified requests are simply left to expire.
+Not tested against the production database (needs the owner's ssh); the dry run was checked locally. The script assumes the
+Postgres container (`roxira_postgres_prod`) has `POSTGRES_USER` and `POSTGRES_DB` in its environment.
+
+### Privacy and terms (item 9)
+
+Per the lawyer, only the ambiguous items of the privacy and terms pages go to her/him for review; the rest (processors named,
+SMS provider, payment gateway, 7-day file retention) is published as drafted. When editing those pages, list the ambiguous
+clauses in the PR description so they can be sent as a short sheet.

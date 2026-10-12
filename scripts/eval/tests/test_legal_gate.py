@@ -19,6 +19,14 @@ def case(cid="c1", law=CHEQUE, arts=("12",), must=("سفید امضاء",), held
             "difficulty": "easy", "held_out": held, "status": "draft_needs_lawyer"}
 
 
+def test_validate_requires_lawyer_answer_for_lawyer_verified():
+    c = case()
+    c["status"] = "lawyer_verified"
+    assert any("lawyer_answer" in e for e in lg.validate([c]))
+    c["lawyer_answer"] = "ok"
+    assert not lg.validate([c])
+
+
 def row(law, no):
     return {"law_name": law, "article_no": no}
 
@@ -29,7 +37,12 @@ def test_question_file_shape():
     assert len(cases) == 70
     assert sum(c["held_out"] for c in cases) == 20
     assert not lg.validate(cases)
-    assert {c["status"] for c in cases} <= {"text_verified", "needs_lawyer"}
+    assert {c["status"] for c in cases} <= {"text_verified", "needs_lawyer", "lawyer_verified"}
+    # lawyer answers of 2026-10-13: items 4/5/6 verified, social security (item 7) still open
+    by_id = {c["id"]: c for c in cases}
+    for cid in ("lg-dsp-12", "lg-l56-10", "lg-l56-11", "lg-l62-7", "lg-fam-22"):
+        assert by_id[cid]["status"] == "lawyer_verified" and by_id[cid]["lawyer_answer"]
+    assert by_id["lg-soc-76"]["status"] == "needs_lawyer" and by_id["lg-soc-76"]["needs_lawyer_reason"]
     assert all(c.get("verified_by") == "auto:article_text" for c in cases if c["status"] == "text_verified")
     assert all(c.get("needs_lawyer_reason") for c in cases if c["status"] == "needs_lawyer")
     assert len({c["id"] for c in cases}) == 70

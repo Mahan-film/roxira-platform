@@ -1,5 +1,6 @@
 schema_version: 1
 checked_at: "2026-10-12"
+# status: confirmed | needs_lawyer | superseded (superseded = kept for history, never used for suggestions)
 # Optional keys used by jurisdiction_rules.suggest_court (all data-driven, nothing hardcoded in code):
 #   court_key        court_catalog key the rule points to
 #   above_court_key  court for amounts ABOVE threshold_rials (monetary rules)
@@ -20,8 +21,9 @@ rules:
     above_confidence: medium
     source_url: "https://rc.majlis.ir/fa/law/show/1787453"
     # Verified in corpus: art. 12 band 1 "دعاوی مالی تا نصاب یک میلیارد (1,000,000,000) ریال" (inclusive, "تا").
+    # Lawyer answer 2026-10-13 (gate item 4): the current ceiling is 1,000,000,000 rials (100M toman).
     status: confirmed
-    note: "Adjustable every 3 years by the Head of the Judiciary; no new amount announced as of 2026-09-30"
+    note: "Adjustable every 3 years by the Head of the Judiciary. Lawyer confirmed 2026-10-13 that the current ceiling is 1,000,000,000 rials; above it the general civil court has jurisdiction"
   - id: peace_court_appealable_over
     forum: "دادگاه صلح"
     matter: "قابلیت تجدیدنظر آرای مالی"
@@ -29,9 +31,10 @@ rules:
     legal_basis: "قانون شوراهای حل اختلاف مصوب ۱۴۰۲، تبصره ۵ ماده ۱۲"
     source_url: "https://rc.majlis.ir/fa/law/show/1787453"
     # Text verified in corpus: note 5, item alef "خواسته بیشتر از نصف نصاب" (strictly greater than half).
-    # needs_lawyer: only the interaction question below is open; this value is not used for court suggestions.
+    # needs_lawyer: the lawyer's 2026-10-13 answer (gate item 3) states the first-instance rule (above 100M toman
+    # = general civil court) but does not give an appealability figure, so this stays open. Not used for court suggestions.
     status: needs_lawyer
-    note: "Interaction with article 368 of the civil procedure code and unification ruling 873 is an open question"
+    note: "Interaction with article 368 of the civil procedure code and unification ruling 873 is an open question; lawyer answer of 2026-10-13 did not set an appealability figure"
   - id: civil_appeal_nisab
     forum: "دادگاه تجدیدنظر استان"
     matter: "دعاوی مالی"
@@ -39,17 +42,19 @@ rules:
     legal_basis: "قانون آیین دادرسی مدنی ۱۳۷۹، ماده ۳۳۱ بند الف"
     source_url: "https://rc.majlis.ir/fa/law/show/93305"
     # Text verified in corpus: art. 331 alef "خواسته یا ارزش آن از سه میلیون ریال متجاوز باشد".
-    # needs_lawyer: whether this nisab still applies after the 1402 law. Not used for court suggestions.
-    status: needs_lawyer
-    note: "Text unchanged; practical effect after the 1402 law to be confirmed"
+    # superseded (lawyer answer 2026-10-13, gate item 3): the old 3,000,000 rial appeal threshold was changed in
+    # practice by the 1402 peace-court law. Not used for court suggestions.
+    status: superseded
+    note: "Superseded: lawyer (2026-10-13) said the old 3M rial appeal threshold of art 331 was changed by the 1402 peace-court law; above 100M toman (1,000,000,000 rials) the general civil court has first-instance jurisdiction. The article text in the corpus is unchanged"
   - id: civil_cassation_nisab
     forum: "دیوان عالی کشور"
     matter: "فرجام‌خواهی احکام مالی"
     threshold_rials: 20000000
     legal_basis: "قانون آیین دادرسی مدنی ۱۳۷۹، ماده ۳۶۷"
     source_url: "https://rc.majlis.ir/fa/law/show/93305"
-    status: needs_lawyer
-    note: "Text unchanged; practical effect after the 1402 law to be confirmed"
+    # superseded (lawyer answer 2026-10-13, gate item 3). Not used for court suggestions.
+    status: superseded
+    note: "Superseded: lawyer (2026-10-13) said the old 20M rial cassation threshold of art 367 was changed by the 1402 peace-court law; above 100M toman (1,000,000,000 rials) the general civil court has first-instance jurisdiction. The article text in the corpus is unchanged"
   - id: criminal_court_2_general
     forum: "دادگاه کیفری دو"
     matter: "صلاحیت ذاتی جرایم"

@@ -21,6 +21,7 @@ from output_apps.generated_modules.smartjudge import chat_auth
 from output_apps.generated_modules.smartjudge import case_files as _case_files
 from output_apps.generated_modules.smartjudge import answer_escalation as _answer_escalation
 from output_apps.generated_modules.smartjudge import voice_stt as _voice_stt
+from output_apps.generated_modules.smartjudge import legal_notes as _legal_notes
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.generated_modules.smartjudge import rulings_retrieval as _rulings
@@ -1797,8 +1798,11 @@ def _court_suggestion_for_chat(user_text: str, payload: dict) -> tuple:
         for m in history[-7:-1]:
             if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
                 earlier.append(m["content"][:2000])
+    combined = "\n".join(earlier + [user_text])
+    if not _jurisdiction_rules.is_personal_matter(combined):
+        return None, None  # general / doctrinal competence question: the normal answer runs
     try:
-        result = _jurisdiction_rules.suggest_court("\n".join(earlier + [user_text]))
+        result = _jurisdiction_rules.suggest_court(combined)
         return result["court_suggestion"], result["missing"]
     except Exception as exc:  # noqa: BLE001 - a rules problem must never break chat
         print(f"[SMARTJUDGE][COURT-SUGGEST-FAIL] {type(exc).__name__}", file=sys.stderr)
@@ -2047,7 +2051,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             elif use_prompt_library:
                 system_msg = _prompt_library.build_system_prompt(detected_domains, grounded, user_text)
             else:
-                system_msg = _prompt_library.build_text_prompt_basic(grounded)
+                system_msg = _prompt_library.build_text_prompt_basic(grounded, user_text)
             context_text = ""
             if grounded and laws:
                 context_text += "\nمواد قانونی استخراج‌شده از پایگاه دانش:\n" + _chat_fast.context_lines(
@@ -2060,6 +2064,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 context_text += _rulings.context_block(ruling_rows, top_k=3, summary_chars=CHAT_CTX_CHARS)
 
             prompt_system_content = (system_msg + "\n" + context_text) if context_text else system_msg
+            if court_suggestion and not is_voice:
+                prompt_system_content += "\n" + _jurisdiction_rules.prompt_fact(court_suggestion)
             user_prompt = user_text
             if case_records and not is_voice:
                 # Untrusted document text goes in the USER turn inside nonce-delimited blocks;
@@ -2150,6 +2156,11 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     prob = derive_success_probability(user_text)
     # B1: page-level sources, only pages that were in the prompt AND that the model cited.
     case_file_refs = _case_files.extract_case_file_refs(reply_msg, case_records) if case_records else []
+
+    # Lawyer answers 2026-10-13: fixed warnings/disclaimers (implicit repeal, lease regimes, retirement).
+    # Appended LAST: after the citation guard, escalation, select_displayed and case_file_refs have read the reply.
+    reply_msg = _chat_safety.to_latin_digits(
+        _legal_notes.finalize_reply(reply_msg, user_text, list(laws) + list(precedents)))
 
     # ذخیره پیام کاربر و پاسخ سیستم در دیتابیس (فقط کاربر لاگین‌شده؛ ناشناس ذخیره نمی‌شود).
     # خارج از مسیر پاسخ: ذخیره در نخ پس‌زمینه انجام می‌شود تا کاربر منتظر آن نماند.

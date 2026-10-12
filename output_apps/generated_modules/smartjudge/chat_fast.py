@@ -70,7 +70,7 @@ def sse_frame(event: str, data: Any) -> str:
 # ---------------------------------------------------------------------------
 # Payload / prompt trimming
 # ---------------------------------------------------------------------------
-_KEEP_FIELDS = ("title", "category", "law_name", "article_no", "number", "subject", "binding_effect", "match_level")
+_KEEP_FIELDS = ("title", "category", "law_name", "article_no", "number", "subject", "binding_effect", "match_level", "repeal_status")
 
 
 def _short(text: Any, limit: int) -> str:

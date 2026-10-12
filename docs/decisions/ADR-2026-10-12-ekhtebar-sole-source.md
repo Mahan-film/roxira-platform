@@ -1,8 +1,8 @@
 # ADR 2026-10-12: ekhtebar.ir is the sole legal source (unofficial tier)
 
-Status: proposed (stays proposed until the owner and the lawyer both acknowledge it)
+Status: accepted (owner 2026-10-12; lawyer accepted 2026-10-13, sheet item 1: ekhtebar.ir as the source, labelled as an unofficial source)
 Date: 2026-10-12
-Deciders: owner (decision given 2026-10-12); lawyer acknowledgement pending
+Deciders: owner (decision given 2026-10-12); lawyer acknowledged 2026-10-13
 
 ## Context
 
@@ -25,6 +25,14 @@ policy. They are deleted in this change.
 2. All of that text is labelled `unofficial` tier until a lawyer signs off per law.
 3. No open-web legal search in the product (no SearXNG or other web fallback in answer paths).
 4. This knowingly departs from lawyer rule R-B.
+
+## Update 2026-10-13
+
+- The lawyer answered sheet item 1: ekhtebar.ir as the source is accepted, with the label «unofficial source»
+  (`source_disclosure.tier = "unofficial"`). This supersedes the R-B departure noted below.
+- nezamat.ir is a second owner-approved source (owner, 2026-10-13). Rows from it must carry
+  `source_tier: "unofficial"` too until a lawyer promotes the law. Open-web legal search stays banned (point 3).
+- The follow-up "lawyer and owner acknowledge" is done.
 
 ## Trade-off against R-B
 
@@ -51,4 +59,3 @@ reputational risk, and the lawyer has said it is not acceptable without a record
 
 - Show the tier in the UI sources block and the coverage page (frontend).
 - Add the one-line source/tier text to `source_filter.select_displayed` output if the UI needs it.
-- Lawyer and owner acknowledge this ADR; then change status to accepted, or revert to R-B.

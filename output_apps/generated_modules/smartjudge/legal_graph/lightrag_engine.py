@@ -430,7 +430,7 @@ def _payload_to_row(
         or (f"سند حقوقی {raw_id}" if raw_id else "سند حقوقی")
     )
     article_no = _payload_article_no(payload)
-    return {
+    row = {
         "title": str(title),
         "category": str(
             payload.get("category")
@@ -455,6 +455,11 @@ def _payload_to_row(
             for enacted_name in _ENACTED_DESPITE_TITLE
         ),
     }
+    # Lawyer answer 2026-10-13 (item 2): implicitly repealed / contested articles stay in the corpus
+    # and are flagged so the answer can carry a warning (see legal_notes.py).
+    if payload.get("repeal_status"):
+        row["repeal_status"] = str(payload["repeal_status"])
+    return row
 
 
 def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -> List[Dict[str, Any]]:

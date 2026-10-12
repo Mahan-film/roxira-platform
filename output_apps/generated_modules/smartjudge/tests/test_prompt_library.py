@@ -117,9 +117,10 @@ def test_query_expansion_cap_and_dedup(pl):
 
 def test_flag_off_unchanged_system_prompt(env):
     c, seen, mp = env
-    mp.delenv("SMARTJUDGE_PROMPT_LIBRARY", raising=False)
+    mp.setenv("SMARTJUDGE_PROMPT_LIBRARY", "0")  # the default is ON since the library shipped
     c.post(URL, json={"message": COMP, "conversation_id": "x"})
-    assert "فوق‌العاده کوتاه" in seen["system"]
+    # stale expectation: the old ultra-short wording now exists only in the voice prompt
+    assert "قاضی هوشمند" in seen["system"] and "فوق‌العاده کوتاه" not in seen["system"]
     assert seen["queries"] == [COMP]
 
 
@@ -130,3 +131,37 @@ def test_flag_on_uses_library_and_expands(env):
     assert "فوق‌العاده کوتاه" not in seen["system"]
     assert "قاعدهٔ حاکم" in seen["system"]
     assert 2 <= len(seen["queries"]) <= 4
+
+
+def test_court_suggestion_fact_in_system_prompt(env):
+    c, seen, mp = env
+    c.post(URL, json={"message": "از او ۵۰۰ میلیون تومان طلب دارم، کدام دادگاه صالح است؟", "conversation_id": "x"})
+    assert "قاعدهٔ صلاحیت (قطعی" in seen["system"] and "دادگاه" in seen["system"]
+
+
+def test_no_court_fact_without_suggestion(env):
+    c, seen, mp = env
+    c.post(URL, json={"message": COMP, "conversation_id": "x"})
+    assert "قاعدهٔ صلاحیت (قطعی" not in seen["system"]
+
+
+def test_repeal_warning_survives_to_the_final_reply(env):
+    """End to end through _consult_core: retrieval row flagged implicit_contested -> warning in reply."""
+    c, seen, mp = env
+    mod = importlib.import_module("output_apps.generated_modules.smartjudge.smartjudge_module")
+    from output_apps.generated_modules.smartjudge import legal_notes
+
+    row = {"title": "قانون اجرای احکام مدنی - ماده 5", "category": "قانون اجرای احکام مدنی",
+           "summary": "اجرای حکم مدنی محکوم به مال", "match_level": "HIGH_EXACT", "score": 9,
+           "vector_score": 0.9, "article_no": "5", "law_name": "قانون اجرای احکام مدنی",
+           "repeal_status": "implicit_contested"}
+
+    async def kg(query, limit=5, meta_out=None):
+        return [dict(row)], []
+
+    mp.setattr(mod, "aquery_knowledge_graph", kg)
+    r = c.post(URL, json={"message": "اجرای حکم مدنی محکوم به مال چگونه است؟", "conversation_id": "x"})
+    body = r.json()
+    assert body["status"] == "SUCCESS"
+    assert body["statutory_basis"] and body["statutory_basis"][0]["repeal_status"] == "implicit_contested"
+    assert legal_notes.REPEAL_WARNING_FA in body["reply"]

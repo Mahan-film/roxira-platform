@@ -3,7 +3,7 @@
   "purpose": "Objective accuracy gate for Smart Judge legal answers (docs/STRATEGY_GAP_2026-10-12.md section 4 item 4 / L1). 70 questions: 50 dev + 20 held_out=true. Each question was written from a real article row of the corpus served as iran_laws_v3.",
   "corpus": "iran_laws_v3 = data/legal/phase1_canonical.jsonl (v2 laws) + data/legal/staged/corpus_fill_2026-10-11*.jsonl + corpus_fill_2026-10-12_ekhtebar.jsonl. Only ekhtebar.ir is used as the legal web source (unofficial tier); the constitution comes from the staged wikisource file.",
   "generated": "2026-10-12",
-  "status": "text_verified = every must_include phrase and the quoted article text were checked mechanically against the staged corpus text (verified_by auto:article_text); needs_lawyer = depends on interpretation, validity or adjustable figures, see needs_lawyer_reason; lawyer_verified / lawyer_rejected are set only after the lawyer answers. Review sheet: docs/legal/LAWYER_REVIEW_GATE_FA.md",
+  "status": "text_verified = every must_include phrase and the quoted article text were checked mechanically against the staged corpus text (verified_by auto:article_text); needs_lawyer = depends on interpretation, validity or adjustable figures, see needs_lawyer_reason; lawyer_verified (field lawyer_answer, lawyer_answered_at) / lawyer_rejected are set only after the lawyer answers; 2026-10-13 answers applied to items 4, 5, 6 (lg-adm-19 and lg-soc-76 stay needs_lawyer). Review sheet: docs/legal/LAWYER_REVIEW_GATE_FA.md",
   "run_retrieval": "python3 scripts/eval/legal_gate.py retrieval   (no LLM, 0 USD; needs Qdrant + embedder, run on the server)",
   "run_answer": "python3 scripts/eval/legal_gate.py answer --base-url URL --confirm-spend   (calls the live chat endpoint, hard cost cap)",
   "fields": {
@@ -1526,7 +1526,7 @@
    "category": "lease",
    "difficulty": "medium",
    "held_out": false,
-   "status": "needs_lawyer",
+   "status": "lawyer_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_landlord_tenant_1356",
@@ -1538,7 +1538,8 @@
     "article_label": "ماده 11",
     "quote": "دفا‌تر اسناد رسمی مکلفند علاوه بر نکاتی که به موجب قوانین و مقررات باید رعایت شود نکات زیر را در اجاره‌نامه تصریح بنمایند: 1- شغل موجر و مستأجر و اقامتگاه موجر "
    },
-   "needs_lawyer_reason": "قوانین موجر و مستأجر ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر قراردادهای متفاوتی حاکم‌اند؛ باید روشن شود این ماده بر کدام قراردادها اعمال می‌شود."
+   "lawyer_answer": "هر یک از قوانین ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر اماکن در دامنهٔ خودش حاکم است؛ انتخاب قانون حاکم نظر حقوقی است و به تاریخ و نوع قرارداد بستگی دارد (بند ۵، ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
   },
   {
    "id": "lg-l56-10",
@@ -1570,7 +1571,7 @@
    "category": "lease",
    "difficulty": "medium",
    "held_out": true,
-   "status": "needs_lawyer",
+   "status": "lawyer_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_landlord_tenant_1356",
@@ -1582,7 +1583,8 @@
     "article_label": "ماده 10",
     "quote": "مستأجر نمی‌تواند منافع مورد اجاره را کلا یا جزا یا به نحو اشاعه به غیر انتقال دهد یا واگذار نماید مگر اینکه کتبا این اختیار به او داده ‌شده باشد. ‌هر‌گاه مستأجر"
    },
-   "needs_lawyer_reason": "قوانین موجر و مستأجر ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر قراردادهای متفاوتی حاکم‌اند؛ باید روشن شود این ماده بر کدام قراردادها اعمال می‌شود."
+   "lawyer_answer": "هر یک از قوانین ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر اماکن در دامنهٔ خودش حاکم است؛ انتخاب قانون حاکم نظر حقوقی است و به تاریخ و نوع قرارداد بستگی دارد (بند ۵، ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
   },
   {
    "id": "lg-l76-3",
@@ -1749,7 +1751,7 @@
    "category": "lease",
    "difficulty": "hard",
    "held_out": false,
-   "status": "needs_lawyer",
+   "status": "lawyer_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -1761,7 +1763,8 @@
     "article_label": "ماده 7",
     "quote": "هر گاه مستأجر به علت انقضاء مدت اجاره یا در موارد فسخ اجاره مورد اجاره را تخلیه کند و موجر از تحویل گرفتن آن امتناع کند مستأجر‌می‌تواند به دادگاه محل وقوع ملک م"
    },
-   "needs_lawyer_reason": "قوانین موجر و مستأجر ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر قراردادهای متفاوتی حاکم‌اند؛ باید روشن شود این ماده بر کدام قراردادها اعمال می‌شود."
+   "lawyer_answer": "هر یک از قوانین ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر اماکن در دامنهٔ خودش حاکم است؛ انتخاب قانون حاکم نظر حقوقی است و به تاریخ و نوع قرارداد بستگی دارد (بند ۵، ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
   },
   {
    "id": "lg-chk-12",
@@ -2391,7 +2394,8 @@
     "article_label": "ماده 76",
     "quote": "مشمولین این قانون در صورت حائزبودن شرایط زیر حق استفاده از مستمری بازنشستگی را خواهند داشت. 1- حداقل ده سال حق بیمه مقرر را قبل از تاریخ تقاضای بازنشستگی پرداخت"
    },
-   "needs_lawyer_reason": "ماده ۷۶ تنها یکی از مسیرهای بازنشستگی است و سن و سابقه ممکن است با قوانین و آیین‌نامه‌های بعدی تغییر کرده باشد."
+   "needs_lawyer_reason": "ماده ۷۶ تنها یکی از مسیرهای بازنشستگی است و سن و سابقه ممکن است با قوانین و آیین‌نامه‌های بعدی تغییر کرده باشد.",
+   "lawyer_note": "وکیل پاسخ قطعی ندارد (بند ۷، ۲۰۲۶-۱۰-۱۳)؛ پاسخ‌های بازنشستگی تذکر استعلام از سازمان تأمین اجتماعی دارند."
   },
   {
    "id": "lg-soc-4",
@@ -2467,7 +2471,7 @@
    "category": "family",
    "difficulty": "medium",
    "held_out": false,
-   "status": "needs_lawyer",
+   "status": "lawyer_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2479,7 +2483,8 @@
     "article_label": "ماده 22",
     "quote": "ـ هرگاه مهریه در زمان وقوع عقد تا یکصد و ده سکّه تمام بهارآزادی یا معادل آن باشد، وصول آن مشمول مقررات ماده (۲) قانون اجرای محکومیت های مالی است. چنانچه مهریه، "
    },
-   "needs_lawyer_reason": "سقف ۱۱۰ سکه موضوع طرح اصلاحی مجلس است؛ اعتبار فعلی و رابطه‌اش با قانون ۱۴۰۰ باید تأیید شود."
+   "lawyer_answer": "ماده ۲۲ قانون حمایت خانواده (۱۱۰ سکه) در حال حاضر معتبر است و فقط به حبس مربوط است: با پرداخت ۱۱۰ سکه برای باقی‌مانده حبس نیست؛ اقساط پرداخت‌نشده در محدودهٔ ۱۱۰ سکه حبس را حفظ می‌کند (بند ۶، ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
   },
   {
    "id": "lg-fam-27",
@@ -2645,7 +2650,7 @@
    "category": "civil procedure",
    "difficulty": "medium",
    "held_out": false,
-   "status": "needs_lawyer",
+   "status": "lawyer_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2657,7 +2662,8 @@
     "article_label": "ماده 12",
     "quote": "۱ـ دعاوی مالی تا نصاب یک ­ میلیارد (۱.۰۰۰.۰۰۰.۰۰۰) ریال تبصره ـ رئیس قوه قضائیه می‏تواند نصاب مذکور در این بند را هر سه سال یک بار با رعایت تناسب تغییر شاخص سال"
    },
-   "needs_lawyer_reason": "نصاب یک میلیارد ریال را رئیس قوه قضاییه هر سه سال تعدیل می‌کند؛ نصاب جاری باید تأیید شود."
+   "lawyer_answer": "سقف فعلی دعاوی مالی دادگاه صلح همان یک میلیارد ریال (۱۰۰ میلیون تومان) است؛ بالاتر از آن دادگاه عمومی صالح است (بند ۴ برگهٔ وکیل، پاسخ ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
   },
   {
    "id": "lg-liab-1",

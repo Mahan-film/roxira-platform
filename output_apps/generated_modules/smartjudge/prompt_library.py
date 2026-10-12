@@ -17,6 +17,7 @@ from typing import Any
 
 from output_apps.generated_modules.smartjudge import chat_safety as _cs
 from output_apps.generated_modules.smartjudge import court_catalog as _cc
+from output_apps.generated_modules.smartjudge import legal_notes as _ln
 
 ENV_FLAG = "SMARTJUDGE_PROMPT_LIBRARY"
 MAX_EXTRA_QUERIES = 3
@@ -261,11 +262,12 @@ def build_system_prompt(domains: list[dict[str, Any]], grounded: bool, user_text
     guidance = _courts_guidance(user_text)
     if guidance:
         parts.append(guidance)
+    parts.extend(_ln.prompt_addenda(user_text))  # lawyer answers 2026-10-13 (lease regimes, mahr fact)
     parts.append(_LIMITS)
     return "\n".join(parts)
 
 
-def build_text_prompt_basic(grounded: bool) -> str:
+def build_text_prompt_basic(grounded: bool, user_text: str = "") -> str:
     """Text-chat prompt used when the library is disabled (flag=0): same grounding
     contract and answer structure, but no domain templates or court guidance."""
     return "\n".join([
@@ -273,5 +275,6 @@ def build_text_prompt_basic(grounded: bool) -> str:
         (_GROUNDING_RULES + " " + _TEXT_GROUNDING_RULES) if grounded else _UNGROUNDED_RULES,
         _TEXT_STRUCTURE,
         _cs.LATIN_DIGITS_INSTRUCTION,
+        *_ln.prompt_addenda(user_text),
         _LIMITS,
     ])

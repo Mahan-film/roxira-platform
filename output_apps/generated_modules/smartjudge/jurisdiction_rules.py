@@ -26,7 +26,7 @@ _REQUIRED_KEYS = {
     "status",
     "note",
 }
-_ALLOWED_STATUSES = {"confirmed", "needs_lawyer"}
+_ALLOWED_STATUSES = {"confirmed", "needs_lawyer", "superseded"}
 _ALLOWED_CONFIDENCE = {"high", "medium", "low"}
 _OPTIONAL_STR_KEYS = ("court_key", "above_court_key", "basis_article", "confidence", "above_confidence")
 _THRESHOLD_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
@@ -147,6 +147,34 @@ def is_court_question(text: str) -> bool:
     return bool(_COURT_QUESTION_RE.search(_norm(text)))
 
 
+# First-person / personal-case cues: the user asks where to file THEIR OWN matter.
+_PERSONAL_RE = re.compile(
+    r"(?:شکایت|دادخواست|دعوا|دعوی|طرح\s+دعوا|اقامه)\s+(?:را\s+)?(?:کنم|بدهم|ببرم|کنیم|بکنم|بدم)"
+    r"|کجا\s+(?:باید\s+)?(?:شکایت|دادخواست|طرح|دعوا|اقامه|برم|بروم|مراجعه)"
+    r"|دعوا(?:ی|ي)\s+من|دعوایم|دعوام|پرونده\s*(?:ام|م\b)|پرونده\s+من"
+    r"|طلب\s+دارم|طلبکارم|بدهکارم|از\s+\S+\s+شکایت|از\s+(?:او|وی|ایشان|همسرم|شوهرم|کارفرما\S*|مستاجر\S*|موجر\S*)\s+.*(?:شکایت|طلب)"
+    r"|به\s+من\s+بدهکار"
+)
+
+
+_CLAIM_CUE_RE = re.compile(
+    r"مطالبه|طلب|بدهی|بدهکار|بستانکار|خسارت|چک\s+برگشتی|برگشت\s+خورد|پس\s+نداد|نپرداخت|وجه\s+(?:من|ما)"
+)
+
+
+def is_personal_matter(text: str) -> bool:
+    """True when the text describes the user's own matter: a first-person cue, or a stated
+    amount together with a claim/debt cue. An amount alone is not enough.
+
+    General or doctrinal competence questions («حد نصاب ۵۰۰ میلیون تومان برای دادگاه صلح چقدر است؟»)
+    return False.
+    """
+    t = _norm(text)
+    if _PERSONAL_RE.search(t):
+        return True
+    return extract_amount_rials(t) is not None and bool(_CLAIM_CUE_RE.search(t))
+
+
 def extract_amount_rials(*texts: str) -> int | None:
     """Largest money amount with an explicit unit (ریال/تومان), in rials; None if none is stated.
 
@@ -241,3 +269,15 @@ def chip_text(suggestion: dict[str, Any]) -> str:
     basis = suggestion.get("basis_article")
     base = f"دادگاه پیشنهادی: {suggestion['court']}"
     return f"{base} (بر اساس {basis}) — درست است؟" if basis else f"{base} — درست است؟"
+
+
+def prompt_fact(suggestion: dict[str, Any] | None) -> str:
+    """System-prompt fact line for an applied rule ('' when there is no suggestion)."""
+    if not suggestion:
+        return ""
+    basis = suggestion.get("basis_article")
+    by = f" بر اساس {basis}" if basis else ""
+    return (
+        f"قاعدهٔ صلاحیت (قطعی، از تنظیمات تأییدشده): دادگاه {suggestion['court']}{by}؛ "
+        "این را صریح در پاسخ بیاور و نگو که ماده‌ای پیدا نشد."
+    )

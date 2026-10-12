@@ -238,3 +238,22 @@ def test_threshold_parsing_rejects_garbage(tmp_path, raw):
     )
     with pytest.raises(ValueError):
         jr.load_rules(path)
+
+
+def test_lawyer_answers_2026_10_13_in_yaml():
+    """Gate item 3/4: old appeal and cassation nisabs superseded, peace ceiling confirmed, appealability still open."""
+    assert rule("peace_court_monetary")["status"] == "confirmed"
+    assert rule("peace_court_monetary")["threshold_rials"] == LIMIT
+    for rid in ("civil_appeal_nisab", "civil_cassation_nisab"):
+        assert rule(rid)["status"] == "superseded"
+        assert "2026-10-13" in rule(rid)["note"] and "1402" in rule(rid)["note"]
+    assert rule("peace_court_appealable_over")["status"] == "needs_lawyer"
+    confirmed = {r["id"] for r in jr.confirmed_rules()}
+    assert "civil_appeal_nisab" not in confirmed and "civil_cassation_nisab" not in confirmed
+
+
+def test_personal_matter_needs_cue_not_amount_alone():
+    assert not jr.is_personal_matter("حد نصاب ۵۰۰ میلیون تومان برای دادگاه صلح چقدر است؟")
+    assert jr.is_personal_matter("۲۰ میلیون تومان از کسی طلب دارم کجا شکایت کنم")
+    assert jr.is_personal_matter("مطالبه ۲۰ میلیون تومان خسارت، کدام دادگاه صالح است؟")
+    assert not jr.is_personal_matter("صلاحیت دادگاه صلح چیست؟")
