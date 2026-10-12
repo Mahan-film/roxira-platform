@@ -63,6 +63,8 @@ COPY run_unified_server.py /app/run_unified_server.py
 # back to llm_router.py's hardcoded _FALLBACK_TIER_MODELS constant instead.
 # Ship it so the registry (and its owner-set model priorities) take effect.
 COPY config/models.yaml /app/config/models.yaml
+# Court suggestion rules (jurisdiction_rules.py); missing file made court questions 500 (#581).
+COPY config/jurisdiction_rules.yaml /app/config/jurisdiction_rules.yaml
 
 EXPOSE 8000
 

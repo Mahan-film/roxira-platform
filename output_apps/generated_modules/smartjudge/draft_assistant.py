@@ -556,9 +556,12 @@ def apply_court_rules(
     allowed = allowed_courts(draft_type)
     if not allowed:
         return fields, sources, None
-    result = _jr.suggest_court(
-        str(fields.get("facts", "")), str(fields.get("claims", "")), str(fields.get("amounts", ""))
-    )["court_suggestion"]
+    try:
+        result = _jr.suggest_court(
+            str(fields.get("facts", "")), str(fields.get("claims", "")), str(fields.get("amounts", ""))
+        )["court_suggestion"]
+    except Exception:  # noqa: BLE001 - a rules problem must never break drafting
+        return fields, sources, None
     if not result or result["court_key"] not in allowed:
         return fields, sources, None
     fields = dict(fields)

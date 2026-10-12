@@ -1797,8 +1797,12 @@ def _court_suggestion_for_chat(user_text: str, payload: dict) -> tuple:
         for m in history[-7:-1]:
             if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
                 earlier.append(m["content"][:2000])
-    result = _jurisdiction_rules.suggest_court("\n".join(earlier + [user_text]))
-    return result["court_suggestion"], result["missing"]
+    try:
+        result = _jurisdiction_rules.suggest_court("\n".join(earlier + [user_text]))
+        return result["court_suggestion"], result["missing"]
+    except Exception as exc:  # noqa: BLE001 - a rules problem must never break chat
+        print(f"[SMARTJUDGE][COURT-SUGGEST-FAIL] {type(exc).__name__}", file=sys.stderr)
+        return None, None
 
 
 def _consult_body(*, conv_id, reply, prob, draft, laws, precedents, court_suggestion,
