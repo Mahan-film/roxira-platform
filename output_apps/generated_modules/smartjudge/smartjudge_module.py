@@ -3363,18 +3363,28 @@ async def calculate_damages(payload: dict = Body(...)):
 # پورتال اختصاصی ثبت‌نام وکلای پایلوت و کانون وکلا
 # ------------------------------------------------------------------------------
 @router.post("/lawyers/pilot-onboarding")
-async def pilot_lawyer_onboarding(payload: dict = Body(...)):
-    """ثبت‌نام و اعطای اشتراک هدیه VIP به وکلای دادگستری جهت تست و ارزیابی سیستم"""
-    full_name = payload.get("full_name", "")
-    bar_license_no = payload.get("license_no", "")
-    phone = payload.get("phone", "")
-    
+async def pilot_lawyer_onboarding(request: Request, payload: dict = Body(...)):
+    """Lawyer pilot sign-up request. Nothing is granted automatically: the licence is not
+    verified here, so the request is stored for manual review (90 days) and the reply says so."""
+    full_name = str(payload.get("full_name", "") or "").strip()[:120]
+    bar_license_no = str(payload.get("license_no", "") or "").strip()[:40]
+    phone = str(payload.get("phone", "") or "").strip()[:20]
+    if not full_name or not bar_license_no or not phone:
+        return JSONResponse(status_code=400, content={"status": "INVALID", "message": "نام، شماره پروانه و شماره تماس لازم است."})
+    ip = chat_auth.client_ip(request.headers, request.client.host if request.client else None)
+    count, _ = await asyncio.to_thread(chat_auth.incr, f"lawyer_pilot:rl:{ip}", 3600)
+    if count > 5:
+        return JSONResponse(status_code=429, content={"status": "RATE_LIMITED", "message": "تعداد درخواست‌ها زیاد است؛ کمی بعد دوباره تلاش کنید."})
+    req_id = secrets.token_hex(8)
+    record = {"id": req_id, "full_name": full_name, "license_no": bar_license_no, "phone": phone,
+              "created_at": int(time.time()), "status": "PENDING_REVIEW"}
+    await asyncio.to_thread(chat_auth.kv_set, f"lawyer_pilot:req:{req_id}", record, 90 * 24 * 3600)
+    print(f"[SMARTJUDGE][LAWYER-PILOT] new request id={req_id}", file=sys.stderr)  # no personal data in logs
     return {
-        "status": "APPROVED",
-        "full_name": full_name,
-        "license_verified": True,
-        "gift_plan": "VIP_UNLIMITED_1_MONTH",
-        "welcome_message": f"همکار گرامی جناب وکیل {full_name}؛ دسترسی ویژه یک‌ماهه جهت تنظیم لوایح و تست سیستم فعال گردید."
+        "status": "PENDING_REVIEW",
+        "request_id": req_id,
+        "license_verified": False,
+        "welcome_message": f"درخواست شما ثبت شد ({full_name}). پس از بررسی شماره پروانه، نتیجه از طریق همین شماره تماس اطلاع داده می‌شود.",
     }
 # ------------------------------------------------------------------------------
 # موتور یکپارچه پرداخت: زرین‌پال، زیبال (Zibal) و پرداخت بین‌المللی تتر (USDT)

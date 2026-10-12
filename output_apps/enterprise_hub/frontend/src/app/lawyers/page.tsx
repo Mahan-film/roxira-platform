@@ -55,7 +55,7 @@ export default function LawyersPilotPage() {
               <span>⚖️</span> عضویت در فاز پایلوت وکلای دادگستری
             </h1>
             <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
-              با ثبت شماره پروانه وکالت، دسترسی **۱ ماهه نامحدود VIP** جهت تنظیم لوایح تخصصی با مدل‌های پیشرفته، ارزیابی اعاده دادرسی و مشاوره صوتی هوشمند به شما اعطا می‌گردد.
+              وکلای دادگستری می‌توانند برای همکاری در فاز آزمایشی درخواست دهند. پس از بررسی شماره پروانه، با شما تماس گرفته می‌شود و در صورت تأیید، دسترسی آزمایشی VIP فعال می‌شود.
             </p>
           </div>
 
@@ -107,7 +107,7 @@ export default function LawyersPilotPage() {
                 disabled={loading}
                 className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2"
               >
-                {loading ? "در حال اعتبارسنجی پروانه..." : "🎁 فعال‌سازی فوری اشتراک ۱ ماهه VIP"}
+                {loading ? "در حال ثبت درخواست..." : "ثبت درخواست همکاری"}
               </button>
             </form>
           ) : (
@@ -116,13 +116,13 @@ export default function LawyersPilotPage() {
                 <span>✅</span> {status.welcome_message}
               </div>
               <p className="text-xs text-zinc-300">
-                طرح {status.gift_plan} برای شماره شما ثبت شد. اکنون می‌توانید با مراجعه به صفحه اصلی از امکانات VIP بهره‌مند شوید.
+                تا زمان تأیید، می‌توانید از امکانات رایگان قاضی هوشمند استفاده کنید.
               </p>
               <Link
                 href="/"
                 className="block w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-center rounded-xl text-sm font-bold transition shadow-lg"
               >
-                🚀 ورود به کنسول تخصصی تنظیم لایحه
+                بازگشت به قاضی هوشمند
               </Link>
             </div>
           )}
