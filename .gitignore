@@ -74,3 +74,4 @@ repomix-output.xml
 nginx/generated/*
 !nginx/generated/.keep.conf
 nginx/ssl-default/
+.venv-crawl/

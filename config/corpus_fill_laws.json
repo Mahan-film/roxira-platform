@@ -1,5 +1,5 @@
 {
-  "_comment": "Targets for the 2026-10-11 corpus gap fill (docs/legal/CORPUS_AUDIT_2026-10-11.md). Same schema and allow-list as config/ekhtebar_laws.json; use with fetch_laws.py --config. Which exact instrument is meant is a lawyer decision. Output is source_tier unofficial/UNVERIFIED unless a primary source (rc.majlis.ir) is used via scripts/legal/fetch_rc_majlis.py.",
+  "_comment": "Targets for the 2026-10-11 corpus gap fill (docs/legal/CORPUS_AUDIT_2026-10-11.md). Same schema and allow-list as config/ekhtebar_laws.json; use with fetch_laws.py --config. Which exact instrument is meant is a lawyer decision. Output is source_tier unofficial/UNVERIFIED unless a primary source (rc.majlis.ir) is used via scripts/legal/fetch_rc_majlis.py. The four 2026-10-12 laws (taazirat_1375, admin_justice_court, third_party_insurance_1395, smuggling_goods_currency) are fetched from ekhtebar.ir ONLY (owner's sole accepted source) with scripts/legal/fetch_ekhtebar_wp.py.",
   "schema_version": 1,
   "allowed_domains": [
     "ekhtebar.ir",
@@ -78,7 +78,7 @@
         "law_type": "CRIMINAL",
         "category": "CRIMINAL",
         "approval_date": "1375-03-02",
-        "source_label": "ekhtebar.ir (per-article pages)",
+        "source_label": "ekhtebar.ir",
         "article_range": [
           498,
           728
@@ -86,6 +86,15 @@
         "scope_tags": [
           "criminal",
           "ta'zirat"
+        ]
+      },
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%D9%83%D8%AA%D8%A7%D8%A8-%D9%BE%D9%86%D8%AC%D9%85-%D9%82%D8%A7%D9%86%D9%88%D9%86-%D9%85%D8%AC%D8%A7%D8%B2%D8%A7%D8%AA-%D8%A7%D8%B3%D9%84%D8%A7%D9%85%D9%8A-%E2%80%8C-%D8%AA%D8%B9%D8%B2%D9%8A%D8%B1/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
         ]
       }
     },
@@ -151,21 +160,84 @@
       "title_fa": "قانون مبارزه با قاچاق کالا و ارز",
       "query_fa": "قانون مبارزه با قاچاق کالا و ارز",
       "topic": "criminal-economic",
-      "priority": 2
+      "priority": 2,
+      "stage": {
+        "law_name": "قانون مبارزه با قاچاق کالا و ارز",
+        "law_type": "CRIMINAL",
+        "category": "CRIMINAL",
+        "approval_date": "1392-10-03",
+        "source_label": "ekhtebar.ir",
+        "scope_tags": [
+          "criminal",
+          "smuggling",
+          "customs",
+          "currency"
+        ]
+      },
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%a8%d8%a7%d8%b1%d8%b2%d9%87-%d8%a8%d8%a7-%d9%82%d8%a7%da%86%d8%a7%d9%82-%da%a9%d8%a7%d9%84%d8%a7-%d9%88-%d8%a7%d8%b1%d8%b2-%d9%85%d8%b5%d9%88%d8%a8-1392/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      }
     },
     {
       "id": "third_party_insurance_1395",
       "title_fa": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه",
       "query_fa": "قانون بیمه اجباری شخص ثالث ۱۳۹۵",
       "topic": "insurance",
-      "priority": 2
+      "priority": 2,
+      "stage": {
+        "law_name": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه",
+        "law_type": "INSURANCE",
+        "category": "INSURANCE",
+        "approval_date": "1395-02-20",
+        "source_label": "ekhtebar.ir",
+        "scope_tags": [
+          "insurance",
+          "third-party",
+          "traffic"
+        ]
+      },
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%a8%db%8c%d9%85%d9%87-%d8%a7%d8%ac%d8%a8%d8%a7%d8%b1%db%8c-%d8%ae%d8%b3%d8%a7%d8%b1%d8%a7%d8%aa-%d9%88%d8%a7%d8%b1%d8%af%d8%b4%d8%af%d9%87-%d8%a8%d9%87-%d8%b4%d8%ae/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      }
     },
     {
       "id": "admin_justice_court",
       "title_fa": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری",
       "query_fa": "قانون دیوان عدالت اداری",
       "topic": "administrative",
-      "priority": 2
+      "priority": 2,
+      "stage": {
+        "law_name": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری",
+        "law_type": "ADMINISTRATIVE",
+        "category": "ADMINISTRATIVE",
+        "approval_date": "1392-03-25",
+        "source_label": "ekhtebar.ir",
+        "scope_tags": [
+          "administrative",
+          "administrative-justice"
+        ]
+      },
+      "sources": {
+        "ekhtebar": {
+          "url": "https://www.ekhtebar.ir/%D9%82%D8%A7%D9%86%D9%88%D9%86-%D8%AF%DB%8C%D9%88%D8%A7%D9%86-%D8%B9%D8%AF%D8%A7%D9%84%D8%AA-%D8%A7%D8%AF%D8%A7%D8%B1%DB%8C-%DB%B1%DB%B4%DB%B0%DB%B2/",
+          "prefer": "html"
+        },
+        "order": [
+          "ekhtebar"
+        ]
+      }
     },
     {
       "id": "landlord_tenant_1356",

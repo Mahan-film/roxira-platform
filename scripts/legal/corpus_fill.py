@@ -525,7 +525,31 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--last", type=int, required=True)
     f.add_argument("--slug-template", default=DEFAULT_SLUG)
     f.add_argument("--delay", type=float, default=3.0)
+    fl_ = sub.add_parser(
+        "fetch-laws",
+        help="fetch whole law pages: default engine ekhtebar (scripts/legal/fetch_ekhtebar_wp.py, owner's only accepted "
+        "source); crawl4ai is optional (other sites)",
+    )
+    fl_.add_argument("--engine", choices=("ekhtebar", "http", "crawl4ai"), default="ekhtebar")
+    fl_.add_argument("--out", type=Path, required=True)
+    fl_.add_argument("--only", nargs="*")
     args = ap.parse_args(argv)
+    if args.cmd == "fetch-laws":
+        if args.engine == "http":
+            print("engine http = scripts/legal/fetch_laws.py --config config/corpus_fill_laws.json --out DIR")
+            return 2
+        extra = ["--only", *args.only] if args.only else []
+        if args.engine == "ekhtebar":
+            spec = importlib.util.spec_from_file_location("fetch_ekhtebar_wp", ROOT / "scripts/legal/fetch_ekhtebar_wp.py")
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["fetch_ekhtebar_wp"] = mod
+            spec.loader.exec_module(mod)
+            return mod.main(["fetch", "--raw-dir", str(args.out), *extra])
+        spec = importlib.util.spec_from_file_location("corpus_crawl4ai", ROOT / "scripts/legal/corpus_crawl4ai.py")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["corpus_crawl4ai"] = mod
+        spec.loader.exec_module(mod)
+        return mod.main(["fetch", "--out", str(args.out), *extra])
     if args.cmd == "stage":
         summary = run_stage(
             args.fetched,

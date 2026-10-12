@@ -1,0 +1,124 @@
+{
+ "_meta": {
+  "purpose": "Golden cases for the four laws staged from ekhtebar.ir on 2026-10-12 (scripts/legal/fetch_ekhtebar_wp.py): Book 5 تعزیرات, دیوان عدالت اداری, بیمه شخص ثالث 1395, قاچاق کالا و ارز.",
+  "run": "python3 scripts/eval_chat_golden.py --retrieval-only --retrieval-set data/eval/chat_golden/retrieval_golden_crawl_2026-10-12.json",
+  "matching": "same as retrieval_golden.json (empty articles = any article of that law)",
+  "status": "Article numbers VERIFIED against the staged ekhtebar.ir text (data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl, fetched 2026-10-12); the exact article checked is quoted in each case's verified_against. Still unofficial source: a lawyer must confirm the legal reading. Corrections: third-party-mandatory was [1] from memory, the obligation to insure is ماده 2 (ماده 1 is definitions); admin-court-deadline and the other previously-empty cases now carry the verified articles. Expected to FAIL until the laws are ingested (iran_laws_v3)."
+ },
+ "cases": [
+  {
+   "id": "taazirat-insult",
+   "question": "مجازات توهین به دیگران چیست؟",
+   "law_any": [
+    "تعزیرات"
+   ],
+   "articles": [
+    608
+   ],
+   "verified_against": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "quote": "ماده 608: «توهین به افراد از قبیل فحاشی و استعمال الفاظ رکیک چنانچه موجب حد قذف نباشد جزای نقدی درجه شش خواهد بود.»"
+   }
+  },
+  {
+   "id": "taazirat-defamation",
+   "question": "مجازات افترا و نسبت دادن جرم به دیگری بدون اثبات چیست؟",
+   "law_any": [
+    "تعزیرات"
+   ],
+   "articles": [
+    697
+   ],
+   "verified_against": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "quote": "ماده 697: «هرکس به وسیله اوراق چاپی یا خطی یا به وسیله درج در روزنامه ... به کسی امری را صریحا نسبت دهد ... که مطابق قانون آن امر جرم محسوب می‌شود و نتواند صحت آن اسناد را ثابت کند ... جزای نقدی درجه شش»"
+   }
+  },
+  {
+   "id": "taazirat-any-theft",
+   "question": "مجازات سرقت تعزیری و خیانت در امانت در کتاب تعزیرات چیست؟",
+   "law_any": [
+    "تعزیرات"
+   ],
+   "articles": [
+    661,
+    674
+   ],
+   "verified_against": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "quote": "ماده 661: «در سایر موارد که سرقت مقرون به شرایط مذکور در مواد فوق نباشد مجازات مرتکب، حبس از سه ماه و یک روز تا دو سال و تا (74) ضربه شلاق»؛ ماده 674: «... به عنوان اجاره یا امانت یا رهن ... آن‌ها را به ضرر مالکین ... استعمال یا تصاحب یا تلف یا مفقود نماید به حبس از سه ماه تا یک سال و شش ماه»"
+   }
+  },
+  {
+   "id": "admin-court-jurisdiction",
+   "question": "صلاحیت دیوان عدالت اداری برای رسیدگی به شکایت از تصمیمات دستگاه‌های دولتی چیست؟",
+   "law_any": [
+    "دیوان عدالت اداری"
+   ],
+   "articles": [
+    10
+   ],
+   "verified_against": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "quote": "ماده 10: «صلاحیت و حدود اختیارات دیوان به قرار زیر است: 1- رسیدگی به شکایات و تظلمات و اعتراضات اشخاص حقیقی یا حقوقی از: الف- تصمیمات و اقدامات واحدهای دولتی ...»"
+   }
+  },
+  {
+   "id": "admin-court-deadline",
+   "question": "مهلت شکایت به دیوان عدالت اداری چقدر است؟",
+   "law_any": [
+    "دیوان عدالت اداری"
+   ],
+   "articles": [
+    16
+   ],
+   "verified_against": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "quote": "ماده 16 تبصره 3 (الحاقی 1402/2/10): «... تصمیمات و اقدامات دستگاه‌ها و مأمورین موضوع بندهای (1) و (3) ماده (10) ... ظرف شش ماه از تاریخ ابلاغ به اشخاص مقیم داخل کشور و یکسال برای اشخاص مقیم خارج از کشور قابل شکایت در دیوان»؛ تبصره 2: مهلت بند (2) ماده 10 سه ماه (داخل) و شش ماه (خارج)"
+   }
+  },
+  {
+   "id": "third-party-mandatory",
+   "question": "آیا بیمه شخص ثالث برای وسایل نقلیه اجباری است؟",
+   "law_any": [
+    "بیمه اجباری خسارات"
+   ],
+   "articles": [
+    2
+   ],
+   "verified_against": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "quote": "ماده 2: «کلیه دارندگان وسایل نقلیه موضوع این قانون ... مکلفند وسایل نقلیه خود را در قبال خسارت بدنی و مالی که در اثر حوادث وسایل نقلیه مذکور به اشخاص ثالث وارد می‌شود ... بیمه کنند.» (ماده 1 فقط تعاریف است)"
+   }
+  },
+  {
+   "id": "third-party-blood-money",
+   "question": "دیه خسارت بدنی در حادثه رانندگی را بیمه شخص ثالث پوشش می‌دهد؟",
+   "law_any": [
+    "بیمه اجباری خسارات"
+   ],
+   "articles": [
+    1,
+    8
+   ],
+   "verified_against": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "quote": "ماده 1 بند الف: «خسارت بدنی: هر نوع دیه یا ارش ناشی از هر نوع صدمه به بدن ... دیه فوت و هزینه معالجه ...»؛ ماده 8: «حداقل مبلغ بیمه ... در بخش خسارت بدنی معادل حداقل ریالی دیه یک مرد مسلمان در ماه‌های حرام ...»"
+   }
+  },
+  {
+   "id": "smuggling-definition",
+   "question": "قاچاق کالا و ارز در قانون چگونه تعریف شده و مجازات آن چیست؟",
+   "law_any": [
+    "قاچاق کالا و ارز"
+   ],
+   "articles": [
+    1
+   ],
+   "verified_against": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "quote": "ماده 1 بند الف: «قاچاق کالا و ارز: هر فعل یا ترک فعلی است که موجب نقض تشریفات قانونی مربوط به ورود و خروج کالا و ارز گردد و بر اساس این قانون و یا سایر قوانین، قاچاق محسوب و برای آن مجازات تعیین شده باشد ...» (مجازات‌ها در مواد بعدی؛ ماده 1 به‌تنهایی تعریف است)"
+   }
+  }
+ ]
+}
