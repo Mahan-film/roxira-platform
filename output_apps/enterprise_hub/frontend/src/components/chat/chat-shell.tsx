@@ -38,6 +38,8 @@ import {
 } from "@/lib/api/draft-assist-client";
 import { DraftInfoCard, DraftResultCard, type DraftSession } from "./draft-cards";
 import { MicHint, useMicHint } from "./chat-onboarding";
+import { ChatHistory } from "./chat-history";
+import type { StoredConversation } from "@/lib/api/conversations-client";
 import dynamic from "next/dynamic";
 
 // Loaded only when the user opens a live call (keeps the first load small).
@@ -129,6 +131,8 @@ type ChatMessage = {
   /** Feature name: render the VIP lock card (real prices + login/upgrade) under this bubble. */
   vipGate?: string;
 };
+
+const INITIAL_GREETING = "سلام. شرح پرونده یا پرسش حقوقی خود را بنویسید، یا با میکروفون بگویید.";
 
 const CHIP_ICONS: Record<DraftType, typeof FileText> = {
   ruling: Gavel,
@@ -894,6 +898,35 @@ export function ChatShell() {
     setReviseIdx(null);
   };
 
+  // History drawer: swap in a saved conversation (messages + up to 5 case files) or a blank one.
+  const resetForConversation = (id: string, msgs: ChatMessage[], files: ContextFile[]) => {
+    setDraft(null);
+    setReviseIdx(null);
+    setAttachments([]);
+    setInputPrompt("");
+    setGuestNotice(false);
+    setCtxOpen(false);
+    contextRef.current = files.slice(-MAX_CONTEXT_FILES);
+    setContextFiles(contextRef.current);
+    setConversationId(id);
+    setMessages(msgs);
+  };
+  const restoreConversation = (id: string, conv: StoredConversation) =>
+    resetForConversation(
+      id,
+      conv.messages.length
+        ? conv.messages.map((m) => ({
+            role: m.role,
+            content: m.text,
+            ...(m.draft ? { draft: m.draft } : {}),
+            ...(m.probability ? { probability: m.probability } : {}),
+          }))
+        : [{ role: "assistant", content: INITIAL_GREETING }],
+      conv.caseFiles.map((f) => ({ fileId: f.id, name: f.name, pages: f.pages || undefined })),
+    );
+  const startNewConversation = () =>
+    resetForConversation("", [{ role: "assistant", content: INITIAL_GREETING }], []);
+
   useEffect(() => {
     const action = findDraftAction(draftParam);
     if (!action) return;
@@ -1033,6 +1066,13 @@ export function ChatShell() {
 
   return (
     <div className="flex flex-col h-full w-full max-w-[var(--ap-content-max)] mx-auto overflow-hidden">
+      <ChatHistory
+        activeId={conversationId}
+        busy={isLoading || draft?.status === "generating" || attachments.some((a) => a.status === "uploading" || a.status === "processing")}
+        hasUnsaved={Boolean(inputPrompt.trim()) || draft !== null || attachments.length > 0}
+        onRestore={restoreConversation}
+        onNew={startNewConversation}
+      />
       {/* ناحیه اسکرول پیام‌ها */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 space-y-4" role="log" aria-live="polite" aria-label="گفتگو">
         {messages.map((msg, idx) => (

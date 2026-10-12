@@ -1424,6 +1424,51 @@ async def create_new_conversation(payload: dict = Body(default=None),
         return _chat_internal_error()
     return {"status": "SUCCESS", "id": conv_id, "title": title}
 
+def _stored_message_view(role: str, content: str, metadata) -> dict:
+    """One stored chat_messages row in the single response shape of GET /conversations/{id}/messages.
+
+    /chat stores ``{"case_file_ids": [...]}`` in the user row's metadata and
+    ``{probability, draft, laws, precedents}`` in the assistant row's metadata.
+    """
+    if isinstance(metadata, dict):
+        meta = metadata
+    else:
+        try:
+            meta = json.loads(metadata or "{}")
+        except (TypeError, ValueError):
+            meta = {}
+    if not isinstance(meta, dict):
+        meta = {}
+    return {
+        "role": role,
+        "text": content,
+        "probability": meta.get("probability"),
+        "draft": meta.get("draft"),
+        "laws": meta.get("laws", []),
+        "precedents": meta.get("precedents", []),
+        "case_file_ids": meta.get("case_file_ids", []) if role == "user" else [],
+    }
+
+
+def _restorable_case_files(messages: list, phone: Optional[str]) -> list:
+    """Case files of the latest user turn that still exist for ``phone`` (max 5, ready or processing).
+
+    Files expire after the retention window and are owner-checked, so a restored chat only
+    re-attaches ids the next /chat call will accept (an unknown id there answers 404).
+    """
+    ids: list = []
+    for m in reversed(messages):
+        if m.get("role") == "user" and m.get("case_file_ids"):
+            ids = list(m["case_file_ids"])
+            break
+    out: list = []
+    for fid in ids[: _case_files.MAX_FILES_PER_CHAT]:
+        view = _case_files.get_status(fid, phone)
+        if view and view.get("status") in ("ready", "processing"):
+            out.append({"id": view["id"], "name": view.get("name") or "", "pages": view.get("pages") or 0})
+    return out
+
+
 # دریافت پیام‌های یک گفتگو (فقط مالک؛ در غیر این صورت 404)
 @router.get("/conversations/{conv_id}/messages")
 async def get_conversation_messages(conv_id: str, user: chat_auth.CurrentUser = Depends(get_current_user)):
@@ -1447,15 +1492,7 @@ async def get_conversation_messages(conv_id: str, user: chat_auth.CurrentUser = 
                     (parsed_id,)
                 )
                 for r in cur.fetchall():
-                    meta = r[2] if isinstance(r[2], dict) else json.loads(r[2] or "{}")
-                    out.append({
-                        "role": r[0],
-                        "text": r[1],
-                        "probability": meta.get("probability"),
-                        "draft": meta.get("draft"),
-                        "laws": meta.get("laws", []),
-                        "precedents": meta.get("precedents", [])
-                    })
+                    out.append(_stored_message_view(r[0], r[1], r[2]))
         return out
 
     try:
@@ -1463,10 +1500,11 @@ async def get_conversation_messages(conv_id: str, user: chat_auth.CurrentUser = 
         if loaded is None:
             return not_found
         messages = loaded
+        case_files = await asyncio.to_thread(_restorable_case_files, messages, user.phone)
     except Exception as e:
         print("[SMARTJUDGE][CONV-MSG-ERR]", type(e).__name__, file=sys.stderr)
         return _chat_internal_error()
-    return {"status": "SUCCESS", "messages": messages}
+    return {"status": "SUCCESS", "messages": messages, "case_files": case_files}
 
 
 def derive_success_probability(user_text: str) -> Optional[str]:
