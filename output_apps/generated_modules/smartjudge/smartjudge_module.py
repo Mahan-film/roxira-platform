@@ -26,6 +26,7 @@ from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 # W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
 # see output_apps/ecosystem_core/src/billing/pricing_service.py.
+from output_apps.generated_modules.smartjudge.plan_limits import get_plan_limits
 from output_apps.ecosystem_core.src.billing.pricing_service import (
     get_calculated_pricing,
 )
@@ -3297,7 +3298,9 @@ async def create_crypto_invoice(payload: dict = Body(...)):
 async def get_pricing_matrix():
     return {
         "status": "SUCCESS",
-        "plans": get_calculated_pricing()
+        "plans": get_calculated_pricing(),
+        # One source of truth for what each tier includes (shown on /plans).
+        "limits": get_plan_limits(),
     }
 
 # W17: این مسیر قبلاً هم stub بود (track_id/payment_url جعلی، بدون تماس با

@@ -109,7 +109,7 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
               {vipMonthlyPrice != null ? formatPersianNumber(vipMonthlyPrice) : "..."}{" "}
               <span className="text-xs font-normal text-muted-foreground">تومان</span>
             </div>
-            <p className="text-xs text-muted-foreground">دسترسی نامحدود به تحلیل پرونده‌ها، مدل‌های Claude و Gemini و مشاوره صوتی</p>
+            <p className="text-xs text-muted-foreground">پیش‌نویس رأی و کیفرخواست و سقف بالاتر بارگذاری فایل؛ جزئیات در صفحهٔ اشتراک و قیمت‌ها</p>
           </div>
         </div>
 

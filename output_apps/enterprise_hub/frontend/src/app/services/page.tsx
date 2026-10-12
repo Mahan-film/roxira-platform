@@ -7,7 +7,7 @@ import { SubscriptionCta } from "@/components/judge/subscription/subscription-ct
 
 const SERVICES_TITLE = "محصولات، خدمات و تعرفه اشتراک | سامانه هوشمند قاضی هوشمند";
 const SERVICES_DESCRIPTION =
-  "آشنایی با محصولات، خدمات تخصصی و مقایسه طرح رایگان با اشتراک نامحدود VIP در سامانه هوشمند قاضی هوشمند.";
+  "آشنایی با محصولات، خدمات تخصصی و مقایسه طرح رایگان با اشتراک VIP در سامانه هوشمند قاضی هوشمند.";
 
 export const metadata: Metadata = {
   title: SERVICES_TITLE,
@@ -41,7 +41,7 @@ export default function ServicesPage() {
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
             سامانه قاضی هوشمند امکان استعلام مواد قانونی، تحلیل ادله و تهیه پیش‌نویس لوایح را فراهم می‌کند. پوشش فعلی قوانین محدود به {coverage.laws.toLocaleString("fa-IR")} قانون است؛ فهرست دقیق را در{" "}
-            <Link href="/coverage" className="text-amber-400 hover:underline">صفحه پوشش قوانین</Link> ببینید.
+            <Link href="/coverage" className="text-amber-400 hover:underline">صفحه پوشش قوانین</Link> ببینید. قیمت‌ها و سقف استفادهٔ هر طرح در <Link href="/plans" className="text-amber-400 hover:underline">صفحهٔ اشتراک</Link> آمده است.
           </p>
         </section>
 
@@ -82,15 +82,7 @@ export default function ServicesPage() {
                 </li>
                 <li className="flex items-center gap-2.5 text-slate-500">
                   <span className="text-rose-400 font-bold">✕</span>
-                  <span>مکالمه زنده صوتی (Live Voice Call)</span>
-                </li>
-                <li className="flex items-center gap-2.5 text-slate-500">
-                  <span className="text-rose-400 font-bold">✕</span>
                   <span>انشای تخصصی لوایح اعاده دادرسی دیوان عالی (ماده ۴۷۴)</span>
-                </li>
-                <li className="flex items-center gap-2.5 text-slate-500">
-                  <span className="text-rose-400 font-bold">✕</span>
-                  <span>استدلال عمیق با قوی‌ترین مدل‌های هوش مصنوعی بین‌المللی</span>
                 </li>
               </ul>
             </div>
@@ -115,34 +107,26 @@ export default function ServicesPage() {
             <div className="relative space-y-4 pt-2">
               <div className="flex items-center justify-between">
                 <span className="px-3 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-full border border-amber-500/30">
-                  VIP UNLIMITED
+                  VIP
                 </span>
-                <span className="text-xs text-emerald-400 font-medium">سهمیه نامحدود</span>
+                <span className="text-xs text-slate-400 font-medium">سقف بالاتر بارگذاری فایل</span>
               </div>
 
               <div>
-                <h3 className="text-xl font-bold text-amber-400">اشتراک نامحدود VIP</h3>
+                <h3 className="text-xl font-bold text-amber-400">اشتراک VIP</h3>
                 <p className="text-xs text-slate-400 mt-1">
                   بسته گسترده‌تر هوش مصنوعی دادرسی قضایی (پوشش قوانین محدود به {coverage.laws.toLocaleString("fa-IR")} قانون؛ جزئیات در صفحه پوشش قوانین) برای وکلا، کارشناسان و مراجعین ویژه
                 </p>
               </div>
 
               <div className="text-2xl font-extrabold text-white">
-                دسترسی اختصاصی <span className="text-xs font-normal text-amber-400/80">/ نامحدود</span>
+                قیمت و سقف‌ها در <Link href="/plans" className="underline text-amber-400">صفحهٔ اشتراک</Link>
               </div>
 
               <ul className="space-y-3 pt-4 border-t border-slate-800/80 text-xs text-slate-200">
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>
                   <span><strong>انشای کامل لوایح قضایی:</strong> دادخواست‌ها، اعاده دادرسی ۴۷۴ ق.آ.د.ک و ۴۲۶ ق.آ.د.م</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <span className="text-amber-400 font-bold">✓</span>
-                  <span><strong>مکالمه صوتی زنده (Live Voice Call):</strong> تعامل بدون تاخیر با امکان مکالمه مستقیم</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <span className="text-amber-400 font-bold">✓</span>
-                  <span><strong>مدل‌های زبانی قوی‌تر:</strong> استفاده از مدل‌های دقیق‌تر برای پاسخ‌های مفصل</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>

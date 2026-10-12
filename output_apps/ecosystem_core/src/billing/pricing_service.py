@@ -32,7 +32,7 @@ BASE_PLANS_TOMAN: dict[str, dict[str, object]] = {
         "default_toman": 63_000,
     },
     "VIP_MONTHLY_PRO": {
-        "name": "اشتراک ماهانه نامحدود VIP وکلا و مراجعین",
+        "name": "اشتراک ماهانه VIP",
         "default_toman": 490_000,
     },
     "DIASPORA_SPECIAL": {

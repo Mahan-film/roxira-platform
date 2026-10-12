@@ -38,8 +38,8 @@ const REAL_PLAN_COPY: Record<BackendPlanType, RealPlanCard> = {
   },
   VIP_MONTHLY_PRO: {
     planType: "VIP_MONTHLY_PRO",
-    label: "اشتراک ماهانه نامحدود VIP",
-    description: "دسترسی نامحدود به تحلیل پرونده، پیش‌نویس لوایح و مشاوره هوشمند برای یک ماه.",
+    label: "اشتراک ماهانه VIP",
+    description: "یک ماه دسترسی به پیش‌نویس رأی و کیفرخواست و سقف بالاتر بارگذاری فایل. جزئیات در صفحهٔ اشتراک و قیمت‌ها.",
   },
 };
 

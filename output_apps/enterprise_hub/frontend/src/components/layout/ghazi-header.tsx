@@ -11,12 +11,6 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
-import dynamic from "next/dynamic";
-
-const SubscriptionModal = dynamic(
-  () => import("@/components/judge/subscription/subscription-modal").then((m) => m.SubscriptionModal),
-  { ssr: false },
-);
 import { ApDropdown } from "@/components/layout/ap-dropdown";
 
 interface NavDest {
@@ -60,8 +54,7 @@ function DestLink({
 export function GhaziHeader() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [topUpOpen, setTopUpOpen] = useState(false);
-  const { isAuthenticated, openLogin, logout, accessToken, user } = useAuth();
+  const { isAuthenticated, openLogin, logout, user } = useAuth();
   const [accountOpen, setAccountOpen] = useState(false);
 
   const handleOpenAuth = () => {
@@ -118,9 +111,7 @@ export function GhaziHeader() {
           {/* Desktop primary navigation */}
           <nav className="ap-nav-list" aria-label="ناوبری اصلی">
             <DestLink dest={{ href: "/chat", label: "گفتگوی حقوقی" }} className="ap-navlink" current={pathname === "/chat"} />
-            <button type="button" className="ap-navlink" onClick={() => setTopUpOpen(true)}>
-              اشتراک
-            </button>
+            <DestLink dest={{ href: "/plans", label: "اشتراک" }} className="ap-navlink" current={pathname === "/plans"} />
           </nav>
 
           <div className="ap-header-end">
@@ -159,16 +150,7 @@ export function GhaziHeader() {
           <div className="ap-mobile-panel ap-only-mobile">
             <DestLink dest={{ href: "/chat", label: "چت" }} className="ap-menuitem" current={pathname === "/chat"} onNavigate={closeMobile} />
             <DestLink dest={{ href: "/guide", label: "راهنما" }} className="ap-menuitem" current={pathname === "/guide"} onNavigate={closeMobile} />
-            <button
-              type="button"
-              className="ap-menuitem"
-              onClick={() => {
-                closeMobile();
-                setTopUpOpen(true);
-              }}
-            >
-              اشتراک
-            </button>
+            <DestLink dest={{ href: "/plans", label: "اشتراک" }} className="ap-menuitem" current={pathname === "/plans"} onNavigate={closeMobile} />
             <button
               type="button"
               className="ap-menuitem"
@@ -183,16 +165,6 @@ export function GhaziHeader() {
           </div>
         )}
       </header>
-
-      {/* Rendered outside the header: its backdrop-filter would trap a fixed overlay. */}
-      {topUpOpen && (
-        <SubscriptionModal
-          isOpen={topUpOpen}
-          onClose={() => setTopUpOpen(false)}
-          accessToken={accessToken}
-          phone={user?.phone}
-        />
-      )}
     </>
   );
 }

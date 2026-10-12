@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { Lock } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -87,6 +88,10 @@ export function VipGate({ children, feature }: { children: ReactNode; feature: s
         </button>
       </div>
       <p className="mt-4 text-[13px]">
+        <Link href="/plans" className="ap-link underline">
+          مقایسهٔ امکانات و قیمت‌ها
+        </Link>
+        <span className="ap-muted"> · </span>
         <button type="button" className="ap-link underline" onClick={() => setForceOpen(true)}>
           اشتراک فعال دارم؛ نمایش فرم
         </button>
