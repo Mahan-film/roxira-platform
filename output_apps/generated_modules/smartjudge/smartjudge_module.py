@@ -19,6 +19,7 @@ from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
 from output_apps.generated_modules.smartjudge import chat_fast as _chat_fast
 from output_apps.generated_modules.smartjudge import chat_auth
 from output_apps.generated_modules.smartjudge import case_files as _case_files
+from output_apps.generated_modules.smartjudge import answer_escalation as _answer_escalation
 from output_apps.generated_modules.smartjudge import voice_stt as _voice_stt
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
@@ -1989,8 +1990,9 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             temperature = 0.2 if is_voice else 0.3
             if _use_llm_router():
                 # Case text is customer legal data: sensitive=True keeps it off :free endpoints.
+                router_tier = ROUTER_TIER_BY_PLAN.get(selected_tier, "cheap")
                 routed = await _llm_router.complete(
-                    ROUTER_TIER_BY_PLAN.get(selected_tier, "cheap"),
+                    router_tier,
                     messages_payload,
                     sensitive=True,
                     tenant="smartjudge",
@@ -2003,6 +2005,19 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 )
                 reply_msg = routed.content
                 routed_model = routed.model or None
+                if not is_voice and _answer_escalation.enabled():
+                    # B3: flag-gated, one strong-tier re-ask on a deterministic quality trigger.
+                    esc = await _answer_escalation.maybe_escalate(
+                        reply=reply_msg, messages=messages_payload, user_text=user_text,
+                        grounded=grounded, has_case_files=bool(case_records), plan=selected_tier,
+                        first_tier=router_tier, case_records=case_records,
+                        guard=lambda t: _guard_citations(t, use_qdrant=True),
+                        complete=_llm_router.complete, user_ref=_hashed_user_ref(phone),
+                        timeout=30.0, max_retries=1, temperature=temperature,
+                        max_tokens=chosen_max_tokens,
+                    )
+                    reply_msg = esc.reply
+                    routed_model = esc.model or routed_model
                 if stream_cb and reply_msg:
                     await stream_cb(_chat_safety.to_latin_digits(reply_msg))
             else:
@@ -2046,6 +2061,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     else:
         laws, precedents = _source_filter.select_displayed(reply_msg, laws, precedents)
     prob = derive_success_probability(user_text)
+    # B1: page-level sources, only pages that were in the prompt AND that the model cited.
+    case_file_refs = _case_files.extract_case_file_refs(reply_msg, case_records) if case_records else []
 
     # ذخیره پیام کاربر و پاسخ سیستم در دیتابیس (فقط کاربر لاگین‌شده؛ ناشناس ذخیره نمی‌شود).
     # خارج از مسیر پاسخ: ذخیره در نخ پس‌زمینه انجام می‌شود تا کاربر منتظر آن نماند.
@@ -2058,7 +2075,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                         (conv_id, "user", user_text,
                          json.dumps({"case_file_ids": [r["id"] for r in case_records]} if case_records else {}))
                     )
-                    meta_res = {"probability": prob, "draft": draft, "laws": laws, "precedents": precedents}
+                    meta_res = {"probability": prob, "draft": draft, "laws": laws, "precedents": precedents,
+                                "case_file_refs": case_file_refs}
                     cur.execute(
                         "INSERT INTO chat_messages (conversation_id, role, content, metadata) VALUES (%s, %s, %s, %s::jsonb);",
                         (conv_id, "assistant", reply_msg, json.dumps(meta_res, ensure_ascii=False))
@@ -2085,6 +2103,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         "statutory_basis": _chat_fast.trim_sources(laws),
         "unified_precedents": _chat_fast.trim_sources(precedents),
         "source_disclosure": dict(LEGAL_SOURCE_DISCLOSURE),
+        "case_file_refs": case_file_refs,
         "model_assigned": routed_model or cfg["primary_model"],
         "tier": selected_tier,
         "latency_ms": round((time.time() - t0) * 1000, 2)

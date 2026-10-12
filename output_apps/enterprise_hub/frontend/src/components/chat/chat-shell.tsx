@@ -58,6 +58,7 @@ import {
   watchCaseFile,
 } from "@/lib/api/case-files-client";
 import { LegalStreamingText } from "./legal-streaming-text";
+import { CaseFileRefChips, parseCaseFileRefs, type CaseFileRef } from "./case-file-refs";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   EMPTY_FAILURE,
@@ -119,6 +120,8 @@ type ChatMessage = {
   draft?: string;
   probability?: string;
   statutory_basis?: StatutoryItem[];
+  /** Page-level sources from uploaded case files. */
+  case_file_refs?: CaseFileRef[];
   /** Typewriter animation still running for this (fresh) answer. */
   animating?: boolean;
   /** Error bubble; `retryPrompt` is the user text to resend. */
@@ -696,6 +699,7 @@ export function ChatShell() {
         draft: data.defense_draft,
         probability: data.success_probability,
         statutory_basis: Array.isArray(data.statutory_basis) ? (data.statutory_basis as StatutoryItem[]) : undefined,
+        case_file_refs: parseCaseFileRefs(data.case_file_refs),
         // text already streamed live: no typewriter replay
         animating: !streamed,
       });
@@ -1160,6 +1164,8 @@ export function ChatShell() {
                   }}
                 />
               )}
+
+              {msg.role === "assistant" && msg.case_file_refs && <CaseFileRefChips refs={msg.case_file_refs} />}
 
               {msg.role === "assistant" && msg.statutory_basis && msg.statutory_basis.length > 0 && (
                 <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--ap-line)" }}>
