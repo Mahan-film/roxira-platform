@@ -475,7 +475,7 @@ def test_openrouter_empty_200_fails_that_model_only(monkeypatch):
         import json as _j
         body = _j.loads(request.content)
         asked.append(body["model"])
-        assert body["provider"] == {"data_collection": "deny"} and body["reasoning"] == {"enabled": False}
+        assert body["provider"] == {"data_collection": "deny"} and body["reasoning"] == {"effort": "minimal"}
         text = "" if body["model"] == "m/one" else "متن"
         return httpx.Response(200, json={"choices": [{"message": {"content": text}}]})
 
@@ -483,3 +483,23 @@ def test_openrouter_empty_200_fails_that_model_only(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
     out = run(cf._openrouter_chat("vision", [{"role": "user", "content": "x"}], 100))
     assert out == "متن" and asked == ["m/one", "m/two"]
+
+
+def test_openrouter_retries_when_reasoning_is_mandatory(monkeypatch):
+    import httpx
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-real")
+    monkeypatch.setattr(cf.model_registry, "models_for", lambda role, sensitive: ["m/one"])
+    seen = []
+
+    def handler(request):
+        import json as _j
+        body = _j.loads(request.content)
+        seen.append(body["reasoning"])
+        if body["reasoning"] == {"enabled": False}:
+            return httpx.Response(400, json={"error": {"message": "Reasoning is mandatory for this endpoint and cannot be disabled."}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "خلاصه"}}]})
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    out = run(cf._openrouter_chat("cheap", [{"role": "user", "content": "x"}], 100))
+    assert out == "خلاصه" and seen == [{"enabled": False}, {"effort": "minimal"}]

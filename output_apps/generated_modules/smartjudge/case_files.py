@@ -227,6 +227,15 @@ def _chat_url() -> str:
 LLMCall = Callable[[str, List[dict], int], Awaitable[str]]
 
 
+_REASONING_MANDATORY = "reasoning is mandatory"
+_MIN_REASONING = {"effort": "minimal"}
+
+
+def _reasoning_for(role: str) -> dict:
+    """Vision OCR models reject ``enabled: False`` (HTTP 400), so they get minimal effort."""
+    return dict(_MIN_REASONING) if role == "vision" else {"enabled": False}
+
+
 async def _openrouter_chat(role: str, messages: List[dict], max_tokens: int) -> str:
     """Try each registry model for ``role`` (sensitive=True). '' when all fail."""
     try:
@@ -247,15 +256,17 @@ async def _openrouter_chat(role: str, messages: List[dict], max_tokens: int) -> 
                     "messages": messages,
                     "temperature": 0.0,
                     "max_tokens": max_tokens,
-                    "reasoning": {"enabled": False},
+                    "reasoning": _reasoning_for(role),
                     "provider": {"data_collection": "deny"},
                 }
+                headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                           "HTTP-Referer": "https://ghazihoushmand.ir", "X-Title": "Roxira SmartJudge"}
                 try:
-                    resp = await client.post(
-                        _chat_url(), json=body,
-                        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
-                                 "HTTP-Referer": "https://ghazihoushmand.ir", "X-Title": "Roxira SmartJudge"},
-                    )
+                    resp = await client.post(_chat_url(), json=body, headers=headers)
+                    if resp.status_code == 400 and _REASONING_MANDATORY in resp.text.lower() and body["reasoning"] != _MIN_REASONING:
+                        # Some models (e.g. Gemini 3.x Flash) cannot turn reasoning off: retry at minimal effort.
+                        body["reasoning"] = _MIN_REASONING
+                        resp = await client.post(_chat_url(), json=body, headers=headers)
                 except httpx.HTTPError as exc:
                     print(f"[CASEFILE][LLM] {role} {type(exc).__name__}", file=sys.stderr)
                     break
