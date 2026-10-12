@@ -178,6 +178,7 @@ function sessionFromResponse(data: DraftAssistResponse, prev: DraftSession | nul
     choices: data.choices ?? [],
     courtOptions: data.court_options ?? prev?.courtOptions ?? [],
     courtName: data.court_name ?? "",
+    courtSuggestion: data.court_suggestion ?? null,
     skipLabel: data.skip_label ?? prev?.skipLabel ?? "نمی‌دانم",
     formUrl: data.form_url ?? prev?.formUrl ?? null,
     status: missing.length ? "collecting" : "ready",
@@ -1202,6 +1203,7 @@ export function ChatShell() {
               session={draft}
               busy={isLoading}
               onEdit={editDraftField}
+              onConfirmCourt={(key) => editDraftField("court_type", key)}
               onGenerate={() => void generateDraft()}
               onExit={exitDraft}
             />

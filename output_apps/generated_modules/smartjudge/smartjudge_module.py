@@ -1758,6 +1758,58 @@ def _llm_unavailable_response() -> JSONResponse:
     return JSONResponse(_chat_fast.llm_unavailable_body(), status_code=503, headers={"Retry-After": "30"})
 
 
+MSG_COURT_NEED_AMOUNT = (
+    "برای تعیین دادگاه صالح، مبلغ خواسته را همراه با واحد (ریال یا تومان) بفرمایید."
+)
+MSG_COURT_NEED_TYPE = (
+    "برای تعیین دادگاه صالح، بفرمایید موضوع دعوا یا شکایت چیست "
+    "(مثلاً مطالبه وجه، چک، مهریه، اخراج از کار یا یک جرم مشخص) و اگر مالی است، مبلغ آن چقدر است؟"
+)
+
+
+def _court_suggestion_for_chat(user_text: str, payload: dict) -> tuple:
+    """Deterministic (court_suggestion, missing) for «کدام دادگاه صالح است / کجا شکایت کنم».
+
+    Uses the rules in config/jurisdiction_rules.yaml plus the amount or claim type found in this
+    message and the user's earlier messages. Not a court question -> (None, None).
+    """
+    if not _jurisdiction_rules.is_court_question(user_text):
+        return None, None
+    earlier = []
+    history = payload.get("messages")
+    if isinstance(history, list):
+        for m in history[-7:-1]:
+            if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
+                earlier.append(m["content"][:2000])
+    result = _jurisdiction_rules.suggest_court("\n".join(earlier + [user_text]))
+    return result["court_suggestion"], result["missing"]
+
+
+def _consult_body(*, conv_id, reply, prob, draft, laws, precedents, court_suggestion,
+                  case_file_refs, model, tier, t0, **extra) -> dict:
+    """The one builder for the /chat success body (normal and early-return paths share its keys)."""
+    body = {
+        "status": "SUCCESS",
+        "conversation_id": conv_id,
+        "reply": reply,
+        "success_probability": prob,
+        "defense_draft": draft,
+        "statutory_basis": _chat_fast.trim_sources(laws),
+        "unified_precedents": _chat_fast.trim_sources(precedents),
+        "source_disclosure": dict(LEGAL_SOURCE_DISCLOSURE),
+        "court_suggestion": (
+            {k: court_suggestion[k] for k in ("court", "basis_article", "confidence", "court_key", "rule_id")}
+            if court_suggestion else None
+        ),
+        "case_file_refs": case_file_refs,
+        "model_assigned": model,
+        "tier": tier,
+        "latency_ms": round((time.time() - t0) * 1000, 2),
+    }
+    body.update(extra)
+    return body
+
+
 async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, stream_cb=None):
     t0 = time.time()
     # Identity and tier come ONLY from the verified bearer token. Body fields
@@ -1870,6 +1922,15 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             "latency_ms": round((time.time() - t0) * 1000, 2)
         }
     
+    court_suggestion, court_missing = _court_suggestion_for_chat(user_text, payload)
+    if court_missing and not case_records:
+        return _consult_body(
+            conv_id=conv_id or str(uuid.uuid4()),
+            reply=MSG_COURT_NEED_AMOUNT if court_missing == "amount" else MSG_COURT_NEED_TYPE,
+            prob=None, draft=None, laws=[], precedents=[], court_suggestion=None, case_file_refs=[],
+            model=cfg["primary_model"], tier=selected_tier, t0=t0, clarification_needed=court_missing,
+        )
+
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     _t_retrieval = time.perf_counter()
     retrieval_query = user_text
@@ -2094,20 +2155,11 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         _BG_TASKS.add(_persist_task)
         _persist_task.add_done_callback(_BG_TASKS.discard)
 
-    return {
-        "status": "SUCCESS",
-        "conversation_id": conv_id,
-        "reply": reply_msg,
-        "success_probability": prob,
-        "defense_draft": draft,
-        "statutory_basis": _chat_fast.trim_sources(laws),
-        "unified_precedents": _chat_fast.trim_sources(precedents),
-        "source_disclosure": dict(LEGAL_SOURCE_DISCLOSURE),
-        "case_file_refs": case_file_refs,
-        "model_assigned": routed_model or cfg["primary_model"],
-        "tier": selected_tier,
-        "latency_ms": round((time.time() - t0) * 1000, 2)
-    }
+    return _consult_body(
+        conv_id=conv_id, reply=reply_msg, prob=prob, draft=draft, laws=laws, precedents=precedents,
+        court_suggestion=court_suggestion, case_file_refs=case_file_refs,
+        model=routed_model or cfg["primary_model"], tier=selected_tier, t0=t0,
+    )
 
 
 
@@ -6076,8 +6128,10 @@ async def draft_ruling(request: Request, body: RulingDraftRequest):
 try:
     from . import court_catalog as _court_catalog
     from . import indictment_draft as _indictment_draft
+    from . import jurisdiction_rules as _jurisdiction_rules
 except ImportError:
     from output_apps.generated_modules.smartjudge import court_catalog as _court_catalog
+    from output_apps.generated_modules.smartjudge import jurisdiction_rules as _jurisdiction_rules
     from output_apps.generated_modules.smartjudge import indictment_draft as _indictment_draft
 
 

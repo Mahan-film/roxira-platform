@@ -35,10 +35,12 @@ from typing import Any
 try:
     from . import case_files as _case_files
     from . import court_catalog as _courts
+    from . import jurisdiction_rules as _jr
     from . import ruling_draft as _rd
 except ImportError:  # pragma: no cover - flat import fallback
     from output_apps.generated_modules.smartjudge import case_files as _case_files
     from output_apps.generated_modules.smartjudge import court_catalog as _courts
+    from output_apps.generated_modules.smartjudge import jurisdiction_rules as _jr
     from output_apps.generated_modules.smartjudge import ruling_draft as _rd
 
 # ---------------------------------------------------------------- constants
@@ -541,6 +543,36 @@ def resolve_court(
     return fields, sources, choices
 
 
+def apply_court_rules(
+    draft_type: str, fields: dict[str, Any], sources: dict[str, str]
+) -> tuple[dict[str, Any], dict[str, str], dict[str, Any] | None]:
+    """Data-driven competent-court suggestion (config/jurisdiction_rules.yaml).
+
+    Returns (fields, sources, court_suggestion). The rule result replaces a court the system
+    only guessed (never one the user wrote) and stays editable (source ``suggested``). The
+    suggestion is returned for the confirm chip only while it matches the court in ``fields``.
+    Unknown amount/type -> nothing is suggested and nothing is blocked.
+    """
+    allowed = allowed_courts(draft_type)
+    if not allowed:
+        return fields, sources, None
+    result = _jr.suggest_court(
+        str(fields.get("facts", "")), str(fields.get("claims", "")), str(fields.get("amounts", ""))
+    )["court_suggestion"]
+    if not result or result["court_key"] not in allowed:
+        return fields, sources, None
+    fields = dict(fields)
+    sources = dict(sources)
+    if sources.get("court_type") != "user":
+        fields["court_type"] = result["court_key"]
+        sources["court_type"] = "suggested"
+    if fields.get("court_type") != result["court_key"]:
+        return fields, sources, None
+    result = dict(result)
+    result["chip_text"] = _jr.chip_text(result)
+    return fields, sources, result
+
+
 _MONEY_RE = re.compile(
     r"ریال|تومان|مبلغ|وجه|چک|مهریه|خسارت|مطالبه|بدهی|قرض|وام|اجاره|سکه|میلیون|میلیارد"
 )
@@ -771,8 +803,10 @@ async def run_assist(
         mention = fields.pop("_court_mention", "")
     fields.update(user_fields)  # the user's own edits always win
     fields, sources, choices = resolve_court(draft_type, fields, mention)
+    fields, sources, court_suggestion = apply_court_rules(draft_type, fields, sources)
     missing = compute_missing(draft_type, fields, skipped)
     return {
+        "court_suggestion": court_suggestion,
         "fields": fields,
         "field_sources": sources,
         "missing": missing,
@@ -800,6 +834,7 @@ def assist_response(draft_type: str, state: dict[str, Any]) -> dict[str, Any]:
         "form_url": SCHEMAS[draft_type]["form_url"],
         "court_name": court_name(fields.get("court_type")),
         "court_options": court_options(draft_type),
+        "court_suggestion": state.get("court_suggestion"),
     }
     if missing:
         labels = SCHEMAS[draft_type]["labels"]

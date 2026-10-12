@@ -36,6 +36,14 @@ export interface Choice {
   label: string;
 }
 
+export interface CourtSuggestion {
+  court: string;
+  court_key: string;
+  basis_article?: string | null;
+  confidence: "high" | "medium" | "low";
+  chip_text?: string;
+}
+
 export interface MissingField {
   key: string;
   label: string;
@@ -66,6 +74,7 @@ export interface DraftAssistResponse {
   choices?: Choice[];
   court_options?: Choice[];
   court_name?: string;
+  court_suggestion?: CourtSuggestion | null;
   skip_label?: string;
   form_url?: string | null;
   // draft

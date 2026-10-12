@@ -1,12 +1,25 @@
 schema_version: 1
-checked_at: "2026-09-30"
+checked_at: "2026-10-12"
+# Optional keys used by jurisdiction_rules.suggest_court (all data-driven, nothing hardcoded in code):
+#   court_key        court_catalog key the rule points to
+#   above_court_key  court for amounts ABOVE threshold_rials (monetary rules)
+#   basis_article    short citation shown to the user in the confirm chip
+#   confidence       high | medium | low  (confidence of a suggestion produced by this rule)
+#   above_confidence confidence when the amount is above the threshold
+# Verified 2026-10-12 against data/legal/dotic_articles_2026-09-22.jsonl (article text in the corpus).
 rules:
   - id: peace_court_monetary
     forum: "دادگاه صلح"
     matter: "دعاوی مالی"
     threshold_rials: 1000000000
-    legal_basis: "قانون شوراهای حل اختلاف مصوب ۱۴۰۲، ماده ۱۲ بند ۱ و تبصره آن"
+    legal_basis: "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، ماده ۱۲ بند ۱ و تبصره آن"
+    basis_article: "ماده ۱۲ قانون شوراهای حل اختلاف و دادگاه‌های صلح (بند ۱)"
+    court_key: peace
+    above_court_key: general_civil
+    confidence: high
+    above_confidence: medium
     source_url: "https://rc.majlis.ir/fa/law/show/1787453"
+    # Verified in corpus: art. 12 band 1 "دعاوی مالی تا نصاب یک میلیارد (1,000,000,000) ریال" (inclusive, "تا").
     status: confirmed
     note: "Adjustable every 3 years by the Head of the Judiciary; no new amount announced as of 2026-09-30"
   - id: peace_court_appealable_over
@@ -15,6 +28,8 @@ rules:
     threshold_rials: 500000000
     legal_basis: "قانون شوراهای حل اختلاف مصوب ۱۴۰۲، تبصره ۵ ماده ۱۲"
     source_url: "https://rc.majlis.ir/fa/law/show/1787453"
+    # Text verified in corpus: note 5, item alef "خواسته بیشتر از نصف نصاب" (strictly greater than half).
+    # needs_lawyer: only the interaction question below is open; this value is not used for court suggestions.
     status: needs_lawyer
     note: "Interaction with article 368 of the civil procedure code and unification ruling 873 is an open question"
   - id: civil_appeal_nisab
@@ -23,6 +38,8 @@ rules:
     threshold_rials: 3000000
     legal_basis: "قانون آیین دادرسی مدنی ۱۳۷۹، ماده ۳۳۱ بند الف"
     source_url: "https://rc.majlis.ir/fa/law/show/93305"
+    # Text verified in corpus: art. 331 alef "خواسته یا ارزش آن از سه میلیون ریال متجاوز باشد".
+    # needs_lawyer: whether this nisab still applies after the 1402 law. Not used for court suggestions.
     status: needs_lawyer
     note: "Text unchanged; practical effect after the 1402 law to be confirmed"
   - id: civil_cassation_nisab
@@ -33,11 +50,39 @@ rules:
     source_url: "https://rc.majlis.ir/fa/law/show/93305"
     status: needs_lawyer
     note: "Text unchanged; practical effect after the 1402 law to be confirmed"
-  - id: criminal_courts_1_2
-    forum: "دادگاه کیفری یک و دو"
+  - id: criminal_court_2_general
+    forum: "دادگاه کیفری دو"
     matter: "صلاحیت ذاتی جرایم"
     threshold_rials: null
-    legal_basis: "قانون آیین دادرسی کیفری ۱۳۹۲، مواد ۳۰۱ و ۳۰۲"
+    legal_basis: "قانون آیین دادرسی کیفری ۱۳۹۲، ماده ۳۰۱"
+    basis_article: "ماده ۳۰۱ قانون آیین دادرسی کیفری"
+    court_key: criminal_2
+    confidence: low
     source_url: null
-    status: needs_lawyer
-    note: "Article numbers to be verified against the official text before use"
+    # Verified in corpus: art. 301 "دادگاه کیفری دو صلاحیت رسیدگی به تمام جرایم را دارد، مگر ... مرجع دیگر".
+    status: confirmed
+    note: "Which of criminal 1/2 applies depends on the punishment degree, which keywords cannot tell; confidence stays low"
+  - id: criminal_court_1
+    forum: "دادگاه کیفری یک"
+    matter: "صلاحیت ذاتی جرایم مهم"
+    threshold_rials: null
+    legal_basis: "قانون آیین دادرسی کیفری ۱۳۹۲، ماده ۳۰۲"
+    basis_article: "ماده ۳۰۲ قانون آیین دادرسی کیفری"
+    court_key: criminal_1
+    confidence: low
+    source_url: null
+    # Verified in corpus: art. 302 (death, life imprisonment, degree 3 and above, political/press crimes ...).
+    status: confirmed
+    note: "Degree of punishment decides; confidence stays low"
+  - id: revolution_court
+    forum: "دادگاه انقلاب"
+    matter: "جرایم امنیتی و مواد مخدر"
+    threshold_rials: null
+    legal_basis: "قانون آیین دادرسی کیفری ۱۳۹۲، ماده ۳۰۳"
+    basis_article: "ماده ۳۰۳ قانون آیین دادرسی کیفری"
+    court_key: revolution
+    confidence: medium
+    source_url: null
+    # Verified in corpus: art. 303 (security crimes, narcotics, arms smuggling, ...).
+    status: confirmed
+    note: ""

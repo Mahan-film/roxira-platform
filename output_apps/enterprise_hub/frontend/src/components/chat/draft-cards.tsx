@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Check, Copy, Download, FileText, Pencil, Printer, Sparkles, X } from "lucide-react";
 import { DISCLAIMER_LINE } from "@/lib/chat-actions";
 import type { DraftType } from "@/lib/chat-actions";
-import type { Choice, DraftFields, DraftResult, FieldMeta } from "@/lib/api/draft-assist-client";
+import type { Choice, CourtSuggestion, DraftFields, DraftResult, FieldMeta } from "@/lib/api/draft-assist-client";
 import { buildDocx, downloadBlob, inlineSpans, markdownToHtml, parseMarkdown, printHtml } from "@/lib/draft-markdown";
 
 /** State of the guided drafting conversation (lives in ChatShell). */
@@ -22,6 +22,8 @@ export interface DraftSession {
   choices: Choice[];
   courtOptions: Choice[];
   courtName: string;
+  /** Rule-based competent-court suggestion with its legal basis (null when unknown). */
+  courtSuggestion: CourtSuggestion | null;
   skipLabel: string;
   formUrl?: string | null;
   status: "collecting" | "ready" | "generating" | "done";
@@ -43,14 +45,19 @@ export function DraftInfoCard(props: {
   session: DraftSession;
   busy: boolean;
   onEdit: (key: string, value: string) => void;
+  onConfirmCourt: (courtKey: string) => void;
   onGenerate: () => void;
   onExit: () => void;
 }) {
-  const { session, busy, onEdit, onGenerate, onExit } = props;
+  const { session, busy, onEdit, onConfirmCourt, onGenerate, onExit } = props;
   const [editing, setEditing] = useState<string | null>(null);
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(true);
   const missingKeys = new Set(session.missing.map((m) => m.key));
+  // Show the chip only while the court in the card is still the unconfirmed suggestion.
+  const suggestion = session.courtSuggestion;
+  const showCourtChip =
+    !!suggestion && !session.edits.court_type && session.fields.court_type === suggestion.court_key;
 
   const startEdit = (meta: FieldMeta) => {
     setEditing(meta.key);
@@ -77,6 +84,29 @@ export function DraftInfoCard(props: {
       {open && (
         <>
           <p className="ap-notice mt-1">روی هر مورد بزنید تا اصلاح شود. موارد ستاره‌دار برای تنظیم پیش‌نویس لازم‌اند.</p>
+          {showCourtChip && suggestion && (
+            <div className="ap-notice mt-2 flex flex-wrap items-center gap-2" data-testid="court-suggestion-chip">
+              <span>
+                {suggestion.chip_text ??
+                  `دادگاه پیشنهادی: ${suggestion.court}${suggestion.basis_article ? ` (بر اساس ${suggestion.basis_article})` : ""} — درست است؟`}
+              </span>
+              <button type="button" className="ap-chip" disabled={busy} onClick={() => onConfirmCourt(suggestion.court_key)}>
+                <Check className="size-4" aria-hidden="true" />
+                <span>درست است</span>
+              </button>
+              <button
+                type="button"
+                className="ap-chip"
+                onClick={() => {
+                  const meta = session.meta.find((m) => m.key === "court_type");
+                  if (meta) startEdit(meta);
+                }}
+              >
+                <Pencil className="size-4" aria-hidden="true" />
+                <span>تغییر</span>
+              </button>
+            </div>
+          )}
           <ul className="mt-2 space-y-1.5">
             {session.meta.map((meta) => {
               const shown = displayValue(session, meta);
