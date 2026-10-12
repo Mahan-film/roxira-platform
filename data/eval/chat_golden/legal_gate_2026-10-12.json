@@ -3,7 +3,7 @@
   "purpose": "Objective accuracy gate for Smart Judge legal answers (docs/STRATEGY_GAP_2026-10-12.md section 4 item 4 / L1). 70 questions: 50 dev + 20 held_out=true. Each question was written from a real article row of the corpus served as iran_laws_v3.",
   "corpus": "iran_laws_v3 = data/legal/phase1_canonical.jsonl (v2 laws) + data/legal/staged/corpus_fill_2026-10-11*.jsonl + corpus_fill_2026-10-12_ekhtebar.jsonl. Only ekhtebar.ir is used as the legal web source (unofficial tier); the constitution comes from the staged wikisource file.",
   "generated": "2026-10-12",
-  "status": "draft_needs_lawyer: every case is unreviewed by a lawyer. Review sheet: docs/legal/LAWYER_REVIEW_GATE_FA.md. A case is trustworthy only after status is changed to lawyer_verified.",
+  "status": "text_verified = every must_include phrase and the quoted article text were checked mechanically against the staged corpus text (verified_by auto:article_text); needs_lawyer = depends on interpretation, validity or adjustable figures, see needs_lawyer_reason; lawyer_verified / lawyer_rejected are set only after the lawyer answers. Review sheet: docs/legal/LAWYER_REVIEW_GATE_FA.md",
   "run_retrieval": "python3 scripts/eval/legal_gate.py retrieval   (no LLM, 0 USD; needs Qdrant + embedder, run on the server)",
   "run_answer": "python3 scripts/eval/legal_gate.py answer --base-url URL --confirm-spend   (calls the live chat endpoint, hard cost cap)",
   "fields": {
@@ -48,7 +48,7 @@
    "category": "criminal",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_taazirat_1375",
@@ -59,7 +59,8 @@
    "verified_against": {
     "article_label": "ماده 618",
     "quote": "هر‌کس با هیاهو و جنجال یا حرکات غیرمتعارف یا تعرض به افراد موجب اخلال نظم و آسایش و آرامش عمومی گردد یا مردم را از کسب و کار باز دارد به حبس از سه ماه تا یک سال"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-taz-669",
@@ -92,7 +93,7 @@
    "category": "criminal",
    "difficulty": "easy",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_taazirat_1375",
@@ -103,7 +104,9 @@
    "verified_against": {
     "article_label": "ماده 669",
     "quote": "هر‌گاه کسی دیگری را به هر نحو تهدید به قتل یا ضررهای نفسی یا شرفی یا مالی و یا به افشای سری نسبت به خود یا بستگان او نماید، اعم از این‌که به این و‌اسطه تقاضای و"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
   },
   {
    "id": "lg-taz-674",
@@ -135,7 +138,7 @@
    "category": "criminal",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_taazirat_1375",
@@ -146,7 +149,9 @@
    "verified_against": {
     "article_label": "ماده 674",
     "quote": "هر‌گاه اموال منقول یا غیرمنقول یا نوشته‌هایی از قبیل سفته و چک و قبض و نظایر آن به عنوان اجاره یا امانت یا رهن یا برای و‌کالت یا هر کار با اجرت یا بی‌اجرت به کس"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
   },
   {
    "id": "lg-taz-694",
@@ -178,7 +183,7 @@
    "category": "criminal",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_taazirat_1375",
@@ -189,7 +194,9 @@
    "verified_against": {
     "article_label": "ماده 694",
     "quote": "هر‌کس در منزل یا مسکن دیگری به عنف یا تهدید وارد شود به مجازات از سه ماه تا یک سال و شش ماه حبس محکوم خواهد شد و در صورتی که مرتکبین دو نفر یا بیشتر بوده و لااق"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
   },
   {
    "id": "lg-taz-719",
@@ -222,7 +229,7 @@
    "category": "criminal",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_taazirat_1375",
@@ -233,7 +240,8 @@
    "verified_against": {
     "article_label": "ماده 719",
     "quote": "هر‌گاه مصدوم احتیاج به کمک فوری داشته و راننده با وجود امکان رساندن مصدوم به مراکز درمانی و یا استمداد از مأمورین انتظامی از این کار خودداری کند و یا به منظور ف"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-taz-657",
@@ -265,7 +273,7 @@
    "category": "criminal",
    "difficulty": "easy",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_taazirat_1375",
@@ -276,7 +284,9 @@
    "verified_against": {
     "article_label": "ماده 657",
     "quote": "هر‌کس مرتکب ربودن مال دیگری از طریق کیف زنی، جیب‌بری و امثال آن شود به حبس از یک تا پنج سال و تا (74) ضربه شلاق محکوم خواهد شد."
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
   },
   {
    "id": "lg-taz-651",
@@ -308,7 +318,7 @@
    "category": "criminal",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_taazirat_1375",
@@ -319,7 +329,8 @@
    "verified_against": {
     "article_label": "ماده 651",
     "quote": "هر‌گاه سرقت جامع شرایط حد نباشد ولی مقرون به تمام پنج شرط ذیل باشد مرتکب از پنج تا بیست سال حبس و تا (74) ضربه شلاق محکوم می‌گردد: 1- سرقت در شب واقع شده باشد. "
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-taz-608",
@@ -351,7 +362,7 @@
    "category": "criminal",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_taazirat_1375",
@@ -362,7 +373,9 @@
    "verified_against": {
     "article_label": "ماده 608",
     "quote": "توهین به افراد از قبیل فحاشی و استعمال الفاظ رکیک چنانچه موجب حد قذف نباشد جزای نقدی درجه شش خواهد بود. نظر مجلس: از نظر مقررات کیفری اهانت و توهین و… عبارت است"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
   },
   {
    "id": "lg-adm-19",
@@ -395,7 +408,7 @@
    "category": "admin court",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "needs_lawyer",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_admin_justice_court",
@@ -406,7 +419,8 @@
    "verified_against": {
     "article_label": "ماده 19",
     "quote": "هزینه دادرسی در شعب بدوی دیوان، دویست‌هزار (200/000) ریال و در شعب تجدیدنظر چهارصد هزار (400/000) ریال است. تبصره- مبلغ مذکور در این ماده به تناسب نرخ تورم اعلا"
-   }
+   },
+   "needs_lawyer_reason": "مبلغ هزینه دادرسی طبق تبصرهٔ همین ماده بر اساس تورم تعدیل می‌شود؛ مبلغ جاری باید تأیید شود."
   },
   {
    "id": "lg-adm-30",
@@ -439,7 +453,7 @@
    "category": "admin court",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_admin_justice_court",
@@ -450,7 +464,8 @@
    "verified_against": {
     "article_label": "ماده 30",
     "quote": "طرف شکایت موظف است ظرف یک ماه از تاریخ ابلاغ، نسبت به ارسال پاسخ اقدام کند. عدم وصول پاسخ، مانع رسیدگی نیست و شعبه با توجه به مدارک موجود، به پرونده رسیدگی و مب"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-adm-65",
@@ -483,7 +498,7 @@
    "category": "admin court",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_admin_justice_court",
@@ -494,7 +509,8 @@
    "verified_against": {
     "article_label": "ماده 65",
     "quote": "کلیه آراء شعب بدوی دیوان به درخواست یکی از طرفین یا وکیل یا قائم‌مقام و یا نماینده قانونی آنها، قابل تجدیدنظرخواهی در شعب تجدیدنظر است. مهلت تجدیدنظرخواهی برای "
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-adm-99",
@@ -526,7 +542,7 @@
    "category": "admin court",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_admin_justice_court",
@@ -537,7 +553,8 @@
    "verified_against": {
     "article_label": "ماده 99",
     "quote": "مهلت تقدیم دادخواست اعاده دادرسی به شرح زیر است: 1- در مورد بندهای «الف» تا «پ» ماده (98) این قانون، بیست روز از تاریخ ابلاغ رأی شعبه 2- درخصوص بندهای «ت» تا «ج"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-ins-2",
@@ -570,7 +587,7 @@
    "category": "insurance",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_third_party_insurance_1395",
@@ -581,7 +598,8 @@
    "verified_against": {
     "article_label": "ماده 2",
     "quote": "کلیه دارندگان وسایل نقلیه موضوع این قانون اعم از اینکه اشخاص حقیقی یا حقوقی باشند مکلفند وسایل نقلیه خود را در قبال خسارت بدنی و مالی که در اثر حوادث وسایل نقلی"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-ins-8",
@@ -614,7 +632,7 @@
    "category": "insurance",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_third_party_insurance_1395",
@@ -625,7 +643,8 @@
    "verified_against": {
     "article_label": "ماده 8",
     "quote": "حداقل مبلغ بیمه موضوع این قانون در بخش خسارت بدنی معادل حداقل ریالی دیه یک مرد مسلمان در ماه‌های حرام با رعایت تبصره ماده (9) این قانون است و در هر حال بیمه‌گذا"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-ins-14",
@@ -657,7 +676,7 @@
    "category": "insurance",
    "difficulty": "hard",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_third_party_insurance_1395",
@@ -668,7 +687,8 @@
    "verified_against": {
     "article_label": "ماده 14",
     "quote": "در حوادث رانندگی منجر به جرح یا فوت که به استناد گزارش کارشناس تصادفات راهنمایی و رانندگی یا پلیس‌راه، علت اصلی وقوع تصادف یکی از تخلفات رانندگی حادثه‌ساز باشد،"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-ins-61",
@@ -701,7 +721,7 @@
    "category": "insurance",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_third_party_insurance_1395",
@@ -712,7 +732,8 @@
    "verified_against": {
     "article_label": "ماده 61",
     "quote": "هر کس با انجام اعمال متقلبانه مانند صحنه‌سازی صوری تصادف، تعویض خودرو یا ایجاد خسارت عمدی، وجوهی را بابت خسارت دریافت کند، به حبس تعزیری درجه شش و جزای نقدی معا"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-ins-4",
@@ -744,7 +765,7 @@
    "category": "insurance",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_third_party_insurance_1395",
@@ -755,7 +776,8 @@
    "verified_against": {
     "article_label": "ماده 4",
     "quote": "در صورت وقوع حادثه و ایجاد خسارت بدنی یا مالی برای شخص ثالث: الف- در صورتی که وسیله نقلیه مسبب حادثه، دارای بیمه‌نامه موضوع این قانون باشد. جبران خسارت‌های وارد"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-smg-18",
@@ -787,7 +809,7 @@
    "category": "smuggling",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_smuggling_goods_currency",
@@ -798,7 +820,8 @@
    "verified_against": {
     "article_label": "ماده 18",
     "quote": "هر شخص که مرتکب قاچاق کالا و ارز و حمل و یا نگهداری آن شود، علاوه بر ضبط کالا یا ارز، به جریمه‌های نقدی زیر محکوم می‌شود: الف- کالای مجاز: جریمه نقدی یک تا دو ب"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-smg-21",
@@ -831,7 +854,7 @@
    "category": "smuggling",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_smuggling_goods_currency",
@@ -842,7 +865,9 @@
    "verified_against": {
     "article_label": "ماده 21",
     "quote": "در صورتی که ارزش کالای قاچاق و یا ارز مکشوفه موضوع ماده (18) این قانون، برابر تشخیص اولیه دستگاه کاشف معادل پنجاه میلیون (50/000/000) ریال یا کمتر باشد با قید د"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1400-11-10 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
   },
   {
    "id": "lg-smg-22",
@@ -874,7 +899,7 @@
    "category": "smuggling",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_smuggling_goods_currency",
@@ -885,7 +910,8 @@
    "verified_against": {
     "article_label": "ماده 22",
     "quote": "هر‌کس مرتکب قاچاق کالای ممنوع گردد یا کالای ممنوع قاچاق را نگهداری یا حمل نماید یا بفروشد، علاوه بر ضبط کالا به شرح زیر و مواد (23) و (24) مجازات می‌شود: الف- د"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-smg-34",
@@ -918,7 +944,7 @@
    "category": "smuggling",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_smuggling_goods_currency",
@@ -929,7 +955,8 @@
    "verified_against": {
     "article_label": "ماده 34",
     "quote": "در صورتی که شخص حامل یا مالک کالا و یا ارز قاچاق، در مواجهه با مأموران کاشف به هر نحوی مقابله یا مقاومت نماید، اگر عمل مذکور از مصادیق دست بردن به سلاح و سلب ام"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-smg-52",
@@ -961,7 +988,7 @@
    "category": "smuggling",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
     "law_id": "corpus_fill_smuggling_goods_currency",
@@ -972,7 +999,9 @@
    "verified_against": {
     "article_label": "ماده 52",
     "quote": "متهمانی که به منظور رد اتهام جرایم یا تخلفات موضوع این قانون به اسناد مثبته گمرکی استناد می‌کنند، مکلفند ظرف ده روز از زمان ابلاغ احضاریه یا جلب در مرجع رسیدگی‌"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1400-11-10 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
   },
   {
    "id": "lg-cyb-729",
@@ -1004,7 +1033,7 @@
    "category": "cyber",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_cybercrime",
@@ -1015,7 +1044,9 @@
    "verified_against": {
     "article_label": "ماده 729",
     "quote": "هرکس به طور غیرمجاز به داده‌ها یا سامانه‌های رایانه‌ای یا مخابراتی که به وسیله تدابیر امنیتی حفاظت شده است دسترسی یابد، به حبس از نود و یک روز تا یک سال یا جزای"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "جزای نقدی این ماده در ۱۴۰۳/۰۴/۰۴ توسط هیئت وزیران تعدیل شده و یادداشت تعدیل در متن ماده در پایگاه هست (مطابق ekhtebar.ir)؛ عبارت‌های الزامی فقط مدت حبس‌اند."
   },
   {
    "id": "lg-cyb-736",
@@ -1047,7 +1078,7 @@
    "category": "cyber",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_cybercrime",
@@ -1058,7 +1089,9 @@
    "verified_against": {
     "article_label": "ماده 736",
     "quote": "هر کس به طور غیرمجاز داده‌های دیگری را از سامانه‌های رایانه‌ای یا مخابراتی یا حامل‌های داده حذف یا تخریب یا مختل یا غیرقابل پردازش کند به حبس از شش ماه تا دو سا"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "جزای نقدی این ماده در ۱۴۰۳/۰۴/۰۴ توسط هیئت وزیران تعدیل شده و یادداشت تعدیل در متن ماده در پایگاه هست (مطابق ekhtebar.ir)؛ عبارت‌های الزامی فقط مدت حبس‌اند."
   },
   {
    "id": "lg-cyb-741",
@@ -1091,7 +1124,7 @@
    "category": "cyber",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_cybercrime",
@@ -1102,7 +1135,9 @@
    "verified_against": {
     "article_label": "ماده 741",
     "quote": "هرکس به طور غیرمجاز از سامانه‌های رایانه‌ای یا مخابراتی با ارتکاب اعمالی از قبیل وارد کردن، تغییر، محو، ایجاد یا متوقف کردن داده‌ها یا مختل کردن سامانه، وجه یا "
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "جزای نقدی این ماده در ۱۴۰۳/۰۴/۰۴ توسط هیئت وزیران تعدیل شده و یادداشت تعدیل در متن ماده در پایگاه هست (مطابق ekhtebar.ir)؛ عبارت‌های الزامی فقط مدت حبس‌اند."
   },
   {
    "id": "lg-cyb-746",
@@ -1134,7 +1169,7 @@
    "category": "cyber",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_cybercrime",
@@ -1145,7 +1180,9 @@
    "verified_against": {
     "article_label": "ماده 746",
     "quote": "هر کس به قصد اضرار به غیر یا تشویش اذهان عمومی یا مقامات رسمی به وسیله سامانه رایانه‌ای یا مخابراتی اکاذیبی را منتشر نماید یا در دسترس دیگران قرار دهد یا با هما"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "جزای نقدی این ماده در ۱۴۰۳/۰۴/۰۴ توسط هیئت وزیران تعدیل شده و یادداشت تعدیل در متن ماده در پایگاه هست (مطابق ekhtebar.ir)؛ عبارت‌های الزامی فقط مدت حبس‌اند."
   },
   {
    "id": "lg-brb-4",
@@ -1178,7 +1215,7 @@
    "category": "criminal",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_bribery_fraud_1367",
@@ -1189,7 +1226,8 @@
    "verified_against": {
     "article_label": "ماده 4",
     "quote": "کسانی که با تشکیل یا رهبری شبکه چند نفری به امر ارتشاء و اختلاس و کلاهبرداری مبادرت ورزند علاوه بر ضبط کلیه اموال منقول و غیرمنقولی که از طریق رشوه کسب کرده‌اند"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-brb-3",
@@ -1222,7 +1260,7 @@
    "category": "criminal",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_bribery_fraud_1367",
@@ -1233,7 +1271,8 @@
    "verified_against": {
     "article_label": "ماده 3",
     "quote": "هر یک از مستخدمین و مامورین دولتی اعم از قضایی و اداری یا شوراها یا شهرداری‌ها یا نهادهای انقلابی و به طور کلی قوای سه‌گانه و همچنین نیروهای مسلح یا شرکت‌های دو"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-con-37",
@@ -1266,7 +1305,7 @@
    "category": "constitution",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_constitution",
@@ -1277,7 +1316,8 @@
    "verified_against": {
     "article_label": "اصل 37",
     "quote": "اصل، برائت است و هیچ‌کس از نظر قانون مجرم شناخته نمی‌شود، مگر این که جرم او در دادگاه صالح ثابت گردد."
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-con-35",
@@ -1309,7 +1349,7 @@
    "category": "constitution",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_constitution",
@@ -1320,7 +1360,8 @@
    "verified_against": {
     "article_label": "اصل 35",
     "quote": "در همه دادگاه‌ها طرفین دعوی حق دارند برای خود وکیل انتخاب نمایند و اگر توانایی انتخاب وکیل را نداشته باشند باید برای آنها امکانات تعیین وکیل فراهم گردد."
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-con-34",
@@ -1352,7 +1393,7 @@
    "category": "constitution",
    "difficulty": "easy",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_constitution",
@@ -1363,7 +1404,8 @@
    "verified_against": {
     "article_label": "اصل 34",
     "quote": "دادخواهی حق مسلم هر فرد است و هر کس می‌تواند به منظور دادخواهی به دادگاه‌های صالح رجوع نماید. همه افراد ملت حق دارند این گونه دادگاه‌ها را در دسترس داشته باشند "
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-con-167",
@@ -1395,7 +1437,7 @@
    "category": "constitution",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_constitution",
@@ -1406,7 +1448,8 @@
    "verified_against": {
     "article_label": "اصل 167",
     "quote": "قاضی موظف است کوشش کند حکم هر دعوا را در قوانین مدونه بیابد و اگر نیابد با استناد به منابع معتبر اسلامی یا فتاوای معتبر، حکم قضیه را صادر نماید و نمی‌تواند به ب"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-con-168",
@@ -1439,7 +1482,7 @@
    "category": "constitution",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_constitution",
@@ -1450,7 +1493,8 @@
    "verified_against": {
     "article_label": "اصل 168",
     "quote": "رسیدگی به جرائم سیاسی و مطبوعاتی علنی است و با حضور هیئت منصفه در محاکم دادگستری صورت می‌گیرد. نحوه انتخاب، شرایط، اختیارات هیئت منصفه و تعریف جرم سیاسی را قانو"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-l56-11",
@@ -1482,7 +1526,7 @@
    "category": "lease",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "needs_lawyer",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_landlord_tenant_1356",
@@ -1493,7 +1537,8 @@
    "verified_against": {
     "article_label": "ماده 11",
     "quote": "دفا‌تر اسناد رسمی مکلفند علاوه بر نکاتی که به موجب قوانین و مقررات باید رعایت شود نکات زیر را در اجاره‌نامه تصریح بنمایند: 1- شغل موجر و مستأجر و اقامتگاه موجر "
-   }
+   },
+   "needs_lawyer_reason": "قوانین موجر و مستأجر ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر قراردادهای متفاوتی حاکم‌اند؛ باید روشن شود این ماده بر کدام قراردادها اعمال می‌شود."
   },
   {
    "id": "lg-l56-10",
@@ -1525,7 +1570,7 @@
    "category": "lease",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "needs_lawyer",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
     "law_id": "corpus_fill_landlord_tenant_1356",
@@ -1536,7 +1581,8 @@
    "verified_against": {
     "article_label": "ماده 10",
     "quote": "مستأجر نمی‌تواند منافع مورد اجاره را کلا یا جزا یا به نحو اشاعه به غیر انتقال دهد یا واگذار نماید مگر اینکه کتبا این اختیار به او داده ‌شده باشد. ‌هر‌گاه مستأجر"
-   }
+   },
+   "needs_lawyer_reason": "قوانین موجر و مستأجر ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر قراردادهای متفاوتی حاکم‌اند؛ باید روشن شود این ماده بر کدام قراردادها اعمال می‌شود."
   },
   {
    "id": "lg-l76-3",
@@ -1568,7 +1614,7 @@
    "category": "lease",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11_replace_lease1376.jsonl",
     "law_id": "corpus_fill_landlord_tenant_1376",
@@ -1579,7 +1625,8 @@
    "verified_against": {
     "article_label": "ماده 3",
     "quote": "پس از انقضای مدت اجاره بنا به تقاضای موجر یا قائم‌مقام قانونی وی تخلیه عین مستأجره در اجاره با سند رسمی توسط دوایر اجرای ثبت ظرف یک هفته و در اجاره با سند عادی "
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-l76-4",
@@ -1612,7 +1659,7 @@
    "category": "lease",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11_replace_lease1376.jsonl",
     "law_id": "corpus_fill_landlord_tenant_1376",
@@ -1623,7 +1670,8 @@
    "verified_against": {
     "article_label": "ماده 4",
     "quote": "در صورتی که موجر مبلغی به عنوان ودیعه یا تضمین یا قرض‌الحسنه و یا سند تعهدآور و مشابه آن از مستأجر دریافت کرده باشد تخلیه و تحویل مورد اجاره به موجر موکول به اس"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-l76-2",
@@ -1656,7 +1704,7 @@
    "category": "lease",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/staged/corpus_fill_2026-10-11_replace_lease1376.jsonl",
     "law_id": "corpus_fill_landlord_tenant_1376",
@@ -1667,7 +1715,9 @@
    "verified_against": {
     "article_label": "ماده 2",
     "quote": "در کلیه قراردادهای اجاره باید مدت و مبلغ اجاره و مبلغ قرض‌الحسنه، تصریح و در سامانه‌های ثبت الکترونیک اسناد یا ثبت معاملات املاک و مستغلات کشور ثبت شود و پس از "
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده ۲ در ۱۴۰۳/۰۲/۱۰ اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
   },
   {
    "id": "lg-l62-7",
@@ -1699,7 +1749,7 @@
    "category": "lease",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "needs_lawyer",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -1710,7 +1760,8 @@
    "verified_against": {
     "article_label": "ماده 7",
     "quote": "هر گاه مستأجر به علت انقضاء مدت اجاره یا در موارد فسخ اجاره مورد اجاره را تخلیه کند و موجر از تحویل گرفتن آن امتناع کند مستأجر‌می‌تواند به دادگاه محل وقوع ملک م"
-   }
+   },
+   "needs_lawyer_reason": "قوانین موجر و مستأجر ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر قراردادهای متفاوتی حاکم‌اند؛ باید روشن شود این ماده بر کدام قراردادها اعمال می‌شود."
   },
   {
    "id": "lg-chk-12",
@@ -1743,7 +1794,7 @@
    "category": "commercial",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -1754,7 +1805,9 @@
    "verified_against": {
     "article_label": "ماده 12",
     "quote": "در موارد زیر صادرکننده چک از نظر این قانون قابل تعقیب کیفری نیست. 1 - در صورتی که ثابت شود چک سفید امضاء داده شده باشد. 2 - هرگاه در متن چک وصول وجه آن منوط به "
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "قانون اصلاح ۱۳۹۷ فقط مواد ۴، ۵، ۶، ۲۱، ۲۳ و ۲۴ را تغییر داده و به ماده ۱۲ دست نزده است (متن قانون ۱۳۹۷ در پایگاه)."
   },
   {
    "id": "lg-chk-13",
@@ -1786,7 +1839,7 @@
    "category": "commercial",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -1797,7 +1850,9 @@
    "verified_against": {
     "article_label": "ماده 13",
     "quote": "در صورتی که صادرکننده چک یا ذینفع یا قائم‌مقام قانونی آنها با تصریح به اینکه چک مفقود یا سرقت یا جعل شده و یا از طریق‌کلاهبرداری یا خیانت در امانت یا جرائم دیگر"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "قانون اصلاح ۱۳۹۷ فقط مواد ۴، ۵، ۶، ۲۱، ۲۳ و ۲۴ را تغییر داده و به ماده ۱۳ دست نزده است (متن قانون ۱۳۹۷ در پایگاه)."
   },
   {
    "id": "lg-c97-4",
@@ -1830,7 +1885,7 @@
    "category": "commercial",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -1841,7 +1896,9 @@
    "verified_against": {
     "article_label": "ماده 4",
     "quote": "ماده۵ مکررـ بعد از ثبت غیرقابل پرداخت بودن یا کسری مبلغ چک در سامانه یکپارچه بانک مرکزی، این سامانه مراتب را به صورت برخط به تمام بانک ها و مؤسسات اعتباری اطلاع"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "قانون اصلاح ۱۴۰۰ به ماده ۵ مکرر دست نزده است (متن قانون ۱۴۰۰ در پایگاه)."
   },
   {
    "id": "lg-c97-8",
@@ -1874,7 +1931,7 @@
    "category": "commercial",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -1885,7 +1942,9 @@
    "verified_against": {
     "article_label": "ماده 8",
     "quote": "ماده۲۱ مکررـ بانک مرکزی مکلف است ظرف مدت دوسال پس از لازم الاجراء شدن این قانون در مورد اشخاص ورشکسته، معسر از پرداخت محکومٌ به یا دارای چک برگشتی رفع سوءاثر نش"
-   }
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "قانون اصلاح ۱۴۰۰ فقط تبصره ۱ ماده ۲۱ مکرر را تغییر داده؛ فهرست افراد ممنوع از دسته‌چک همان متن اصلی است."
   },
   {
    "id": "lg-cpr-48",
@@ -1918,7 +1977,7 @@
    "category": "civil procedure",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -1929,7 +1988,8 @@
    "verified_against": {
     "article_label": "ماده 48",
     "quote": "شروع رسیدگی در دادگاه مستلزم تقدیم دادخواست می‌باشد. دادخواست به دفتر دادگاه صالح و در نقاطی که دادگاه دارای شعب متعدد‌است به‌دفتر شعبه اول تسلیم می‌گردد."
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-cpr-84",
@@ -1961,7 +2021,7 @@
    "category": "civil procedure",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -1972,7 +2032,8 @@
    "verified_against": {
     "article_label": "ماده 84",
     "quote": "در موارد زیر خوانده می‌تواند ضمن پاسخ نسبت به ماهیت دعوا ایراد کند: 1 - دادگاه صلاحیت نداشته باشد. 2 - دعوا بین همان اشخاص در همان دادگاه یا دادگاه هم عرض دیگری"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-cpr-336",
@@ -2005,7 +2066,7 @@
    "category": "civil procedure",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2016,11 +2077,12 @@
    "verified_against": {
     "article_label": "ماده 336",
     "quote": "مهلت درخواست تجدیدنظر اصحاب دعوا، برای اشخاص مقیم ایران بیست روز و برای اشخاص مقیم خارج از کشور دوماه از تاریخ‌ابلاغ یا انقضای مدت واخواهی است."
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-cpr-346",
-   "question": "بعد از ثبت دادخواست، خوانده چند روز برای پاسخ فرصت دارد؟",
+   "question": "در مرحلهٔ تجدیدنظر، پس از ارسال نسخهٔ دادخواست تجدیدنظر برای طرف دعوا، او چند روز برای پاسخ فرصت دارد؟",
    "expected_law": "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی",
    "expected_articles": [
     "346"
@@ -2048,7 +2110,7 @@
    "category": "civil procedure",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2059,7 +2121,9 @@
    "verified_against": {
     "article_label": "ماده 346",
     "quote": "مدیر دفتر دادگاه بدوی ظرف دو روز از تاریخ وصول دادخواست و ضمائم آن و یا پس از رفع نقص، یک نسخه از دادخواست و‌پیوست‌های آن را برای طرف دعوا می‌فرستد که ظرف ده رو"
-   }
+   },
+   "question_fix": "question reworded 2026-10-12: article 346 is the appeal-stage reply period, not the first-instance one",
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-exe-34",
@@ -2091,7 +2155,7 @@
    "category": "civil procedure",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2102,7 +2166,8 @@
    "verified_against": {
     "article_label": "ماده 34",
     "quote": "همین که اجراییه به محکوم‌علیه ابلاغ شد محکوم‌علیه مکلف است ظرف ده روز مفاد آن را به موقع اجرا بگذارد یا ترتیبی برای پرداخت‌محکوم به بدهد یا مالی معرفی کند که اج"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-exe-2",
@@ -2135,7 +2200,7 @@
    "category": "civil procedure",
    "difficulty": "easy",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2146,7 +2211,8 @@
    "verified_against": {
     "article_label": "ماده 2",
     "quote": "احکام دادگاههای دادگستری وقتی به موقع اجرا گذارده می‌شود که به محکوم‌علیه یا وکیل یا قائم‌مقام قانونی او ابلاغ شده و محکوم‌له یا‌نماینده و یا قائم‌مقام قانونی ا"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-fin-3",
@@ -2179,7 +2245,7 @@
    "category": "civil procedure",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2190,7 +2256,8 @@
    "verified_against": {
     "article_label": "ماده 3",
     "quote": "ـ اگر استیفای محکومٌ به از طرق مذکور در این قانون ممکن نگردد محکومٌ علیه به تقاضای محکومٌ له تا زمان اجرای حکم یا پذیرفته شدن ادعای اعسار او یا جلب رضایت محکومٌ"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-reg-46",
@@ -2222,7 +2289,7 @@
    "category": "registration",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2233,7 +2300,8 @@
    "verified_against": {
     "article_label": "ماده 46",
     "quote": "ثبت اسناد اختیاری است مگر در موارد ذیل: 1) کلیه عقود و معاملات راجع به عین یا منافع املاکی که قبلاً در دفتر املاک ثبت شده باشد. 2) کلیه معاملات راجع به حقوقی که"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-reg-48",
@@ -2265,7 +2333,7 @@
    "category": "registration",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2276,7 +2344,8 @@
    "verified_against": {
     "article_label": "ماده 48",
     "quote": "سندی که مطابق مواد فوق باید به ثبت برسد و به ثبت نرسیده در هیچ یک از ادارات و محاکم پذیرفته نخواهد شد."
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-soc-76",
@@ -2310,7 +2379,7 @@
    "category": "social security",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "needs_lawyer",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2321,7 +2390,8 @@
    "verified_against": {
     "article_label": "ماده 76",
     "quote": "مشمولین این قانون در صورت حائزبودن شرایط زیر حق استفاده از مستمری بازنشستگی را خواهند داشت. 1- حداقل ده سال حق بیمه مقرر را قبل از تاریخ تقاضای بازنشستگی پرداخت"
-   }
+   },
+   "needs_lawyer_reason": "ماده ۷۶ تنها یکی از مسیرهای بازنشستگی است و سن و سابقه ممکن است با قوانین و آیین‌نامه‌های بعدی تغییر کرده باشد."
   },
   {
    "id": "lg-soc-4",
@@ -2353,7 +2423,7 @@
    "category": "social security",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2364,7 +2434,8 @@
    "verified_against": {
     "article_label": "ماده 4",
     "quote": "الف - افرادی که به هر عنوان در مقابل دریافت مزد یا حقوق کار می‌کنند. ب - صاحبان حرف و مشاغل آزاد. ج - دریافت‌کنندگان مستمریهای بازنشستگی، ازکارافتادگی و فوت. تب"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-fam-22",
@@ -2396,7 +2467,7 @@
    "category": "family",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "needs_lawyer",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2407,7 +2478,8 @@
    "verified_against": {
     "article_label": "ماده 22",
     "quote": "ـ هرگاه مهریه در زمان وقوع عقد تا یکصد و ده سکّه تمام بهارآزادی یا معادل آن باشد، وصول آن مشمول مقررات ماده (۲) قانون اجرای محکومیت های مالی است. چنانچه مهریه، "
-   }
+   },
+   "needs_lawyer_reason": "سقف ۱۱۰ سکه موضوع طرح اصلاحی مجلس است؛ اعتبار فعلی و رابطه‌اش با قانون ۱۴۰۰ باید تأیید شود."
   },
   {
    "id": "lg-fam-27",
@@ -2440,7 +2512,7 @@
    "category": "family",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2451,7 +2523,8 @@
    "verified_against": {
     "article_label": "ماده 27",
     "quote": "ـ در کلیه موارد درخواست طلاق، به جز طلاق توافقی، دادگاه باید به منظور ایجاد صلح و سازش موضوع را به داوری ارجاع کند. دادگاه در این موارد باید با توجه به نظر داور"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-fam-28",
@@ -2484,7 +2557,7 @@
    "category": "family",
    "difficulty": "hard",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2495,7 +2568,8 @@
    "verified_against": {
     "article_label": "ماده 28",
     "quote": "ـ پس از صدور قرار ارجاع امر به داوری، هریک از زوجین مکلفند ظرف یک هفته از تاریخ ابلاغ یک نفر از اقارب متأهل خود را که حداقل سی سال داشته و آشنا به مسائل شرعی و "
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-fam-24",
@@ -2527,7 +2601,7 @@
    "category": "family",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2538,7 +2612,8 @@
    "verified_against": {
     "article_label": "ماده 24",
     "quote": "ـ ثبت طلاق و سایر موارد انحلال نکاح و نیز اعلام بطلان نکاح یا طلاق در دفاتر رسمی ازدواج و طلاق حسب مورد پس از صدور گواهی عدم امکان سازش یا حکم مربوط از سوی دادگ"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-dsp-12",
@@ -2570,7 +2645,7 @@
    "category": "civil procedure",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "needs_lawyer",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2581,7 +2656,8 @@
    "verified_against": {
     "article_label": "ماده 12",
     "quote": "۱ـ دعاوی مالی تا نصاب یک ­ میلیارد (۱.۰۰۰.۰۰۰.۰۰۰) ریال تبصره ـ رئیس قوه قضائیه می‏تواند نصاب مذکور در این بند را هر سه سال یک بار با رعایت تناسب تغییر شاخص سال"
-   }
+   },
+   "needs_lawyer_reason": "نصاب یک میلیارد ریال را رئیس قوه قضاییه هر سه سال تعدیل می‌کند؛ نصاب جاری باید تأیید شود."
   },
   {
    "id": "lg-liab-1",
@@ -2613,7 +2689,7 @@
    "category": "civil",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2624,7 +2700,8 @@
    "verified_against": {
     "article_label": "ماده 1",
     "quote": "هر کس بدون مجوز قانونی عمداً یا در نتیجه بی‌احتیاطی به جان یا سلامتی یا مال یا آزادی یا حیثیت یا شهرت تجارتی یا به هر حق دیگر‌که به موجب قانون برای افراد ایجاد "
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-liab-12",
@@ -2657,7 +2734,7 @@
    "category": "civil",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2668,7 +2745,8 @@
    "verified_against": {
     "article_label": "ماده 12",
     "quote": "کارفرمایانی که مشمول قانون کار هستند مسئول جبران خساراتی می‌باشند که از طرف کارکنان اداری و یا کارگران آنان در حین انجام کار یا‌به مناسبت آن وارد شده است مگر ای"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-liab-4",
@@ -2700,7 +2778,7 @@
    "category": "civil",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2711,7 +2789,8 @@
    "verified_against": {
     "article_label": "ماده 4",
     "quote": "دادگاه می‌تواند میزان خسارت را در مورد زیر تخفیف دهد: 1 - هر گاه پس از وقوع خسارت واردکننده زیان به نحو مؤثری به زیان‌دیده کمک و مساعدت کرده باشد. 2 - هر گاه وق"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-crt-3",
@@ -2743,7 +2822,7 @@
    "category": "civil procedure",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2754,7 +2833,8 @@
    "verified_against": {
     "article_label": "ماده 3",
     "quote": "با تأسیس دادگاه‌های عمومی در هر حوزه قضایی رسیدگی به کلیه امور مدنی و جزایی و امور حسبیه با لحاظ قلمرو محلی با دادگاه‌های‌مزبور خواهد بود. تبصره 1 - حوزه قضایی "
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-red-3",
@@ -2786,7 +2866,7 @@
    "category": "criminal",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2797,7 +2877,8 @@
    "verified_against": {
     "article_label": "ماده 3",
     "quote": "ـ یک تبصره به شرح زیر به عنوان تبصره (۶) به ماده (۱۹) قانون مجازات اسلامی مصوب ۱۳۹۲/۲/۱ الحاق می شود: تبصره۶ ـ تمام حبس­های ابد غیرحدی مقرر در قانون به حبس درجه"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-lab-7",
@@ -2829,7 +2910,7 @@
    "category": "labor",
    "difficulty": "easy",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2840,7 +2921,8 @@
    "verified_against": {
     "article_label": "ماده 7",
     "quote": "قرارداد کار عبارت است از قرارداد کتبی یا شفاهی که به موجب آن کارگر در قبال دریافت حق‌السعی کاری را برای مدت موقت یا مدت غیر‌موقت برای کارفرما انجام می‌دهد. تبصر"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-lab-27",
@@ -2873,7 +2955,7 @@
    "category": "labor",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2884,7 +2966,8 @@
    "verified_against": {
     "article_label": "ماده 27",
     "quote": "هر گاه کارگر در انجام وظائف محوله قصور ورزد و یا آیین‌نامه‌های انضباطی کارگاه را پس از تذکرات کتبی نقض نماید کارفرما حق دارد در‌صورت اعلام نظر مثبت شورای اسلامی"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-lab-41",
@@ -2916,7 +2999,7 @@
    "category": "labor",
    "difficulty": "medium",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2927,7 +3010,8 @@
    "verified_against": {
     "article_label": "ماده 41",
     "quote": "شورای عالی کار همه ساله موظف است، میزان حداقل مزد کارگران را برای نقاط مختلف کشور و یا صنایع مختلف با توجه به معیارهای‌ذیل تعیین نماید: 1 - حداقل مزد کارگران با"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-lab-51",
@@ -2960,7 +3044,7 @@
    "category": "labor",
    "difficulty": "medium",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -2971,7 +3055,8 @@
    "verified_against": {
     "article_label": "ماده 51",
     "quote": "ساعت کار در این قانون مدت زمانی است که کارگر نیرو یا وقت خود را به منظور انجام کار در اختیار کارفرما قرار می‌دهد. به غیر از‌مواردی که در این قانون مستثنی شده اس"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-lab-56",
@@ -3004,7 +3089,7 @@
    "category": "labor",
    "difficulty": "hard",
    "held_out": false,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -3015,7 +3100,8 @@
    "verified_against": {
     "article_label": "ماده 56",
     "quote": "کارگری که در طول ماه به طور نوبتی کار می‌کند و نوبتهای کار وی در صبح و عصر واقع می‌شود 10% و چنانچه نوبتهای در صبح و عصر‌و شب قرار گیرد، 15% و در صورتی که نوبته"
-   }
+   },
+   "verified_by": "auto:article_text"
   },
   {
    "id": "lg-lab-64",
@@ -3048,7 +3134,7 @@
    "category": "labor",
    "difficulty": "easy",
    "held_out": true,
-   "status": "draft_needs_lawyer",
+   "status": "text_verified",
    "source": {
     "file": "data/legal/phase1_canonical.jsonl",
     "law_id": null,
@@ -3059,7 +3145,8 @@
    "verified_against": {
     "article_label": "ماده 64",
     "quote": "مرخصی استحقاقی سالانه کارگران با استفاده از مزد و احتساب چهار روز جمعه، جمعاً یک ماه است. سایر روزهای تعطیل جزء ایام‌مرخصی محسوب نخواهد شد. برای کار کمتر از یک "
-   }
+   },
+   "verified_by": "auto:article_text"
   }
  ]
 }

@@ -29,7 +29,9 @@ def test_question_file_shape():
     assert len(cases) == 70
     assert sum(c["held_out"] for c in cases) == 20
     assert not lg.validate(cases)
-    assert {c["status"] for c in cases} == {"draft_needs_lawyer"}
+    assert {c["status"] for c in cases} <= {"text_verified", "needs_lawyer"}
+    assert all(c.get("verified_by") == "auto:article_text" for c in cases if c["status"] == "text_verified")
+    assert all(c.get("needs_lawyer_reason") for c in cases if c["status"] == "needs_lawyer")
     assert len({c["id"] for c in cases}) == 70
     laws = {c["expected_law"] for c in cases}
     for needle in ("تعزیرات", "دیوان عدالت اداری", "شخص ثالث", "قاچاق کالا و ارز"):

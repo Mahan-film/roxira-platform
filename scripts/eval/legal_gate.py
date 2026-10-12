@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """Objective accuracy gate for Smart Judge legal answers (STRATEGY_GAP_2026-10-12 L1).
 
-Question set: data/eval/chat_golden/legal_gate_2026-10-12.json (70 cases, 20 held out, all
-status draft_needs_lawyer until a lawyer signs; see docs/legal/LAWYER_REVIEW_GATE_FA.md).
+Question set: data/eval/chat_golden/legal_gate_2026-10-12.json (70 cases, 20 held out;
+status text_verified = article text checked mechanically, needs_lawyer = waits for the lawyer; see
+docs/legal/LAWYER_REVIEW_GATE_FA.md).
 
 Modes (all checks are deterministic, no LLM judge):
 
@@ -50,6 +51,9 @@ MARKER = "LEGAL_GATE_JSON"
 KS = (1, 3, 5, 10)
 HARD_COST_CAP_USD = 0.05
 CHAT_PATH = "/api/v1/apps/judge/chat"
+# text_verified: checked mechanically against the staged article text (verified_by auto:article_text).
+# needs_lawyer: depends on interpretation, validity or adjustable figures (needs_lawyer_reason).
+STATUSES = ("draft_needs_lawyer", "text_verified", "needs_lawyer", "lawyer_verified", "lawyer_rejected")
 
 
 def _load_chat_golden():
@@ -99,7 +103,7 @@ def validate(cases: Sequence[dict]) -> List[str]:
             errs.append(f"{cid}: no must_include")
         if not isinstance(c.get("held_out"), bool):
             errs.append(f"{cid}: held_out must be a bool")
-        if c.get("status") not in ("draft_needs_lawyer", "lawyer_verified", "lawyer_rejected"):
+        if c.get("status") not in STATUSES:
             errs.append(f"{cid}: unknown status {c.get('status')}")
     return errs
 
@@ -332,8 +336,8 @@ def render_markdown(report: dict) -> str:
     mode = report["mode"]
     L.append(f"# Legal gate report ({mode}) {report['generated']}")
     L.append("")
-    L.append("Status of the question set: draft_needs_lawyer. Numbers measure the system against "
-             "draft expectations, not lawyer-verified truth.")
+    L.append("Question set: expectations are text_verified against the article text or still needs_lawyer; "
+             "none is lawyer_verified yet.")
     meta = report.get("meta") or {}
     if meta:
         L.append("")
@@ -409,7 +413,7 @@ def compare(baseline: Optional[dict], current: dict, warn_drop: float = 5.0) -> 
     lines = [f"legal gate: retrieval@5 = {_pct(cur)} on {n} questions "
              f"(dev {_pct(current['summary']['dev']['kept'].get('recall@5'))}, "
              f"held-out {_pct(current['summary']['held_out']['kept'].get('recall@5'))}); "
-             f"questions are draft_needs_lawyer"]
+             f"questions are text_verified / needs_lawyer"]
     if baseline is None:
         lines.append("legal gate: no baseline file; capture one with: scripts/ops/deploy_local.sh eval-baseline")
         return lines, False
