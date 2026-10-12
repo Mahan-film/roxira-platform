@@ -325,3 +325,43 @@ roles:
         price_per_1m: { in: 0.25, out: 1.50 }
       - id: anthropic/claude-haiku-4.5
         price_per_1m: { in: 1.00, out: 5.00 }
+
+  # ---- Server-side agent runner (scripts/infra/server_agents, docs/ops/SERVER_AGENTS.md) ----
+  # Read by setup.sh (renders /etc/roxira/opencode-agents.json) and run_task.sh (alias -> model).
+  # `alias` is the name given to run_task.sh --model; `provider` is the OpenCode provider id.
+  # Groq ids are NOT in OpenRouter's catalogue (catalogue_listed: false); setup.sh checks them against
+  # Groq's own GET /openai/v1/models when GROQ_API_KEY is present. Cost policy: Groq free tier first,
+  # DeepSeek Flash second, :free only for public code (agent_runner_public).
+  agent_runner:
+    description: >
+      Routine coding tasks run on the production server by OpenCode with a cheap or free-tier
+      model instead of Claude tokens. Order = cost policy.
+    data_policy: standard
+    models:
+      - id: openai/gpt-oss-120b
+        alias: groq-strong
+        provider: groq
+        price_per_1m: { in: 0.15, out: 0.60 }
+        catalogue_listed: false
+      - id: openai/gpt-oss-20b
+        alias: groq-fast
+        provider: groq
+        price_per_1m: null
+        catalogue_listed: false
+        note: Groq production model; price not re-verified here. Free tier has daily token limits.
+      - id: deepseek/deepseek-v4.1-flash
+        alias: ds-flash
+        provider: openrouter
+        price_per_1m: { in: 0.30, out: 1.20 }
+
+  agent_runner_public:
+    description: >
+      Same runner, free OpenRouter model. PUBLIC CODE ONLY: providers may log or train on prompts.
+      run_task.sh refuses it unless --public is given.
+    data_policy: non_sensitive_only
+    models:
+      - id: qwen/qwen3.8-27b:free
+        alias: free-public
+        provider: openrouter
+        price_per_1m: { in: 0, out: 0 }
+        public_code_only: true

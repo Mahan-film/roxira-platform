@@ -37,6 +37,8 @@
 #   --no-http              do not open 80/443 in ufw
 #   --enable-timers        enable the backup/monitor/selfimprove/docker-prune timers (NOT cf-refresh)
 #   --skip-docker          skip step 5
+#   --agents               also run scripts/infra/server_agents/setup.sh --skip-keys (low-cost agent runner, docs/ops/SERVER_AGENTS.md);
+#                          keys come later: GROQ_API_KEY(_2,_3) via scripts/ops/set_server_env.sh, then setup.sh + run_task.sh --smoke
 #
 # Secrets: this script never reads, prints or writes a secret value. Key material is only counted.
 # Not run by CI. Review with:  bash -n bootstrap_new_server.sh && shellcheck bootstrap_new_server.sh
@@ -58,6 +60,7 @@ NO_SWAP=0
 OPEN_HTTP=1
 ENABLE_TIMERS=0
 SKIP_DOCKER=0
+SETUP_AGENTS=0
 APP_DIR=/opt/roxira_platform
 
 while [ $# -gt 0 ]; do
@@ -78,6 +81,7 @@ while [ $# -gt 0 ]; do
     --no-http) OPEN_HTTP=0; shift ;;
     --enable-timers) ENABLE_TIMERS=1; shift ;;
     --skip-docker) SKIP_DOCKER=1; shift ;;
+    --agents) SETUP_AGENTS=1; shift ;;
     -h | --help) sed -n '2,43p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -445,6 +449,22 @@ else
   run systemctl daemon-reload
   if [ "$ENABLE_TIMERS" = 1 ]; then
     for t in "${TIMERS[@]}"; do [ -f "/etc/systemd/system/$t" ] && try systemctl enable --now "$t"; done
+  fi
+fi
+
+# ---------------------------------------------------------------- 9b server-side agent runner (opt-in: --agents)
+step "9b/10 server-side agent runner (opt-in: --agents)"
+if [ "$SETUP_AGENTS" != 1 ]; then
+  log "skipped. Later: $APP_DIR/scripts/infra/server_agents/setup.sh (docs/ops/SERVER_AGENTS.md)"
+elif [ ! -x "$APP_DIR/scripts/infra/server_agents/setup.sh" ] && [ ! -x "$REPO_DIR/scripts/infra/server_agents/setup.sh" ]; then
+  warn "server_agents/setup.sh not found (clone the repo first). Skipped."
+else
+  AGENTS_SETUP="$APP_DIR/scripts/infra/server_agents/setup.sh"
+  [ -x "$AGENTS_SETUP" ] || AGENTS_SETUP="$REPO_DIR/scripts/infra/server_agents/setup.sh"
+  if [ "$DRY_RUN" = 1 ]; then
+    log "[dry-run] $AGENTS_SETUP --skip-keys --repo-dir $APP_DIR   (then add GROQ_API_KEY* to $APP_DIR/.env and run run_task.sh --smoke)"
+  else
+    try "$AGENTS_SETUP" --skip-keys --repo-dir "$APP_DIR"
   fi
 fi
 
