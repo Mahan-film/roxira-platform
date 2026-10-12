@@ -8,7 +8,7 @@ Inventory basis: `docs/infra/INFRA_MAP_2026-10-09.md`, `docs/research/BEST_PRACT
 | Target | Value | How it is met |
 |---|---|---|
 | RPO (max data loss) | 1 hour | hourly timer `roxira-backup-dr-run.timer`, offsite push each run |
-| RTO (time to recover) | under 4 hours | `bootstrap_new_server.sh` + `restore.sh --full`; data set is small (about 0.3 GB of DB/vector data) so restore time is dominated by apt/docker install and DNS |
+| RTO (time to recover) | under 4 hours | `scripts/infra/bootstrap_new_server.sh --restore` (= bootstrap + `restore.sh --full`); data set is small (about 0.3 GB of DB/vector data) so restore time is dominated by apt/docker install and DNS |
 | Copies | 3-2-1 | live server + server-local dump sets + Mac (daily pull into an encrypted restic repo); optional Cloudflare R2 as the off-site third. A Hetzner Storage Box is supported but not required (see section 11) |
 | Encryption | at rest everywhere | restic AES-256 repos; config bundle by age; local server dumps are plain on the server disk (same trust as the DB itself) |
 
@@ -56,7 +56,7 @@ Files (all in this PR):
 | `scripts/ops/backup/lib.sh` | shared helpers, restic repo selection (credentials only exported in subshells) |
 | `scripts/ops/backup/notify_email.py` | SMTP sender (smtplib, STARTTLS), attachment size guard |
 | `scripts/ops/backup/restore.sh` | drill (scratch dir) or `--full` restore |
-| `scripts/ops/bootstrap_new_server.sh` | fresh Ubuntu 24.04 to hardened host + restore |
+| `scripts/infra/bootstrap_new_server.sh` | fresh Ubuntu/Debian to hardened host; `--restore` also clones and runs `restore.sh --full` (`scripts/ops/bootstrap_new_server.sh` is a stub that forwards here) |
 | `scripts/ops/backup/mac_pull.sh`, `install_mac_pull.sh`, `deploy/launchd/ir.roxira.backup-pull.plist.template` | Mac copy |
 | `deploy/systemd/roxira-backup-dr-{run,report,check}.{service,timer}` | schedules |
 | `deploy/backup/backup.env.example` | env variable NAMES only |
@@ -109,8 +109,8 @@ One-time: `brew install restic`; put `restic-dr.pass` (a new password for the lo
 ### 8.2 "Server is gone" (unplanned)
 1. Order a new Hetzner server (Ubuntu 24.04), same region/arch if possible (aarch64 images matter: `qdrant/qdrant`, app images rebuild).
 2. From the Mac copy to the new host: `/etc/roxira/restic.pass`, `/etc/roxira/backup.env`, the Storage Box key (to `BACKUP_SB_KEY`), your ssh public key in `/root/.ssh/authorized_keys`.
-3. `curl -fsSL https://raw.githubusercontent.com/Mahan-film/roxira-platform/main/scripts/ops/bootstrap_new_server.sh -o bootstrap.sh; bash bootstrap.sh --dry-run`, then `bash bootstrap.sh` (the repo is cloned by the script; if the repo is private, scp the script instead).
-4. If the Storage Box is also lost: use the Mac repo (`restic -r ~/Backups/roxira-dr/restic restore`) and rsync the tree to the new host, then copy the repo directory (`~/Backups/roxira-dr/restic`) to the new host, set `BACKUP_LOCAL_REPO` to it in `/etc/roxira/backup.env` and run `restore.sh --full --repo local` (note the Mac repo password may differ: point `RESTIC_PASSWORD_FILE` at it). Run `bootstrap_new_server.sh --skip-restore` first for the host hardening.
+3. `curl -fsSL https://raw.githubusercontent.com/Mahan-film/roxira-platform/main/scripts/infra/bootstrap_new_server.sh -o bootstrap.sh; bash bootstrap.sh --dry-run --restore`, then `bash bootstrap.sh --restore` (add `--i-have-key-access` only on the final run, after testing key login from a second terminal) (the repo is cloned by the script; if the repo is private, scp the script instead).
+4. If the Storage Box is also lost: use the Mac repo (`restic -r ~/Backups/roxira-dr/restic restore`) and rsync the tree to the new host, then copy the repo directory (`~/Backups/roxira-dr/restic`) to the new host, set `BACKUP_LOCAL_REPO` to it in `/etc/roxira/backup.env` and run `restore.sh --full --repo local` (note the Mac repo password may differ: point `RESTIC_PASSWORD_FILE` at it). Run `bootstrap_new_server.sh` without `--restore` first for the host hardening.
 5. DNS: Cloudflare A/AAAA to the new IP; verify TLS; run `server_backup.sh run`; confirm the report email.
 6. Review `docs/ops` security items (3x-ui panel ports) before reopening the firewall.
 

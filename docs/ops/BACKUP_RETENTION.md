@@ -61,7 +61,7 @@ keep copying a stale one, so unload it once `mac_pull.sh` works.
    (see `docs/ops/DISASTER_RECOVERY.md` section 7).
 3. From e-mail (Postgres + configs only): save all attachments of one mail series in a folder, then
    `scripts/ops/backup/restore_from_email.sh --dir <folder> --key ~/Secrets/roxira/backup-age.key --out ./restored`.
-4. Full new server: `scripts/ops/bootstrap_new_server.sh` then `restore.sh --full` (DISASTER_RECOVERY.md).
+4. Full new server: `scripts/infra/bootstrap_new_server.sh --restore` (bootstrap + `restore.sh --full`) (DISASTER_RECOVERY.md).
 
 ## Weekly Docker cleanup
 

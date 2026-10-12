@@ -272,6 +272,7 @@ backup_paths() {
     "$REPO_DIR/.env" "$REPO_DIR/docker/research-stack/.env" "$REPO_DIR/.env.example" \
     "$REPO_DIR/docker-compose.prod.yml" "$REPO_DIR/docker-compose.modern-stack.yml" \
     "$REPO_DIR/docker/research-stack/docker-compose.yml" \
+    "$REPO_DIR/twenty_data/server" \
     "$REPO_DIR/nginx" "$REPO_DIR/nginx.conf" "$REPO_DIR/nginx_split.conf" \
     /etc/nginx /etc/letsencrypt \
     /var/spool/cron/crontabs /etc/cron.d \
