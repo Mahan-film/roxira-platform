@@ -90,7 +90,8 @@ providers:
     litellm_prefix: gemini
     keys: [GEMINI_API_KEY]
     models:
-      - {id: gemini-2.5-flash}   # Flash only; Pro is banned by owner policy.
+      - {id: gemini-flash-latest}   # Flash only; Pro is banned by owner policy. verified 200 on 2026-10-13
+      - {id: gemini-3.7-flash}      # verified 200 on 2026-10-13
     limits: {rpm: 10, tpm: 250000, rpd: 250, status: unverified}
 
   openrouter-free:
