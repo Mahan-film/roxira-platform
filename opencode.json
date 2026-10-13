@@ -191,6 +191,7 @@
           "ssh*": "deny",
           "scp*": "deny",
           "*5.75.200.67*": "deny",
+          "*roxira-prod*": "deny",
           "*DROP *": "deny",
           "*drop *": "deny",
           "*DELETE FROM*": "deny",

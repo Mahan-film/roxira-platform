@@ -132,7 +132,7 @@ roles:
           scripts/check_models.py to skip the live-catalogue check for this
           entry (like the edge-tts: tts entry below) instead of reporting it
           MISSING, because production evidence says it is not actually gone:
-          docker logs on 5.75.200.67 (roxira_app_prod, 2026-09-24 22:53 UTC)
+          docker logs on the prod server (roxira_app_prod, 2026-09-24 22:53 UTC)
           show this id executing against OpenRouter's *separate*
           `/api/v1/audio/transcriptions` endpoint and getting back HTTP 429
           (rate-limited), not 404/model-not-found -- i.e. OpenRouter's
@@ -150,7 +150,7 @@ roles:
           `faster-whisper large-v3-turbo` (same weights; Persian is in
           Whisper's 99-language set per
           docs/research/TECH_CURRENCY_2026-09.md's STT section) directly on
-          5.75.200.67 -- removes the OpenRouter network hop and per-call cost,
+          the prod server -- removes the OpenRouter network hop and per-call cost,
           likely *lower* latency, but needs a deploy step (CPU/GPU sizing,
           model download, a code path change) the owner must approve; not
           done here.
@@ -209,7 +209,7 @@ roles:
       scripts/check_models.py skips these ids (Gemini Live models are not in
       OpenRouter's GET /api/v1/models catalogue); ids were instead confirmed
       live 2026-09-26 via a read-only `client.models.list()` call from
-      5.75.200.67 against the real GEMINI_API_KEY now in that server's .env.
+      the prod server against the real GEMINI_API_KEY now in that server's .env.
     data_policy: standard
     models:
       - id: gemini-3.8-live

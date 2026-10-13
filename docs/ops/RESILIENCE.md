@@ -1,6 +1,6 @@
 # Resilience / self-healing (W23)
 
-Audited read-only against production (`5.75.200.67`, `/opt/roxira_platform`) on
+Audited read-only against production (`91.107.248.99`, `/opt/roxira_platform`) on
 2026-09-28. Scope: what happens when a container crashes, a deploy goes bad,
 or the site goes down, and how fast we find out and recover.
 
@@ -163,7 +163,7 @@ standard Ubuntu/Roxira infra, nothing dangerous observed.
 ### وقتی سایت پایین است (چک‌های ۱۵ دقیقه‌ای `uptime.yml` شکست خورده)
 1. ایشو با برچسب `incident` را در گیت‌هاب باز کنید — لینک اجرای Actions که
    شکست خورده در متن ایشو هست.
-2. با `ssh 5.75.200.67` وارد شوید و وضعیت کانتینرها را ببینید:
+2. با `ssh roxira-prod` وارد شوید و وضعیت کانتینرها را ببینید:
    `docker ps --format 'table {{.Names}}\t{{.Status}}'`
    هر سرویسی که `(unhealthy)` یا `Restarting` نشان می‌دهد را با
    `docker logs --tail 100 <name>` بررسی کنید.

@@ -15,7 +15,7 @@
 # See docs/ops/DEPLOY_LOCAL.md. L4: owner-only (CODEOWNERS /scripts/ops/).
 set -euo pipefail
 
-SSH_HOST="${DEPLOY_SSH_HOST:-5.75.200.67}"
+SSH_HOST="${DEPLOY_SSH_HOST:-${ROXIRA_HOST:-roxira-prod}}"
 REMOTE_DIR="${DEPLOY_REMOTE_DIR:-/opt/roxira_platform}"
 STATE_DIR="${DEPLOY_STATE_DIR:-/root/deploy-state}"   # outside the git tree
 COMPOSE="docker-compose.prod.yml"

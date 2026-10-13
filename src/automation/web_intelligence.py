@@ -145,7 +145,7 @@ class KeyPool:
 
 class TavilySearchClient:
     API_KEY_ENV = "TAVILY_API_KEYS"
-    # Production `.env` on 5.75.200.67 uses this name instead (confirmed by a
+    # Production `.env` on the prod server uses this name instead (confirmed by a
     # live W9 run 2026-09-24) — see provider_base.get_env_var_any.
     API_KEY_ENV_ALIASES = ("TAVILY_API_KEYS", "TAVILY_KEYS")
 
@@ -293,7 +293,7 @@ class ExaSearchClient:
 
 class BraveSearchClient:
     API_KEY_ENV = "BRAVE_SEARCH_API_KEY"
-    # Production `.env` on 5.75.200.67 uses this name instead (confirmed by a
+    # Production `.env` on the prod server uses this name instead (confirmed by a
     # live W9 run 2026-09-24, per docs/STRATEGY.md §6 "known facts") — without
     # this fallback, .configured is silently False on the server and Brave
     # never runs (a real instance of the "missing keys" degraded-run gap,

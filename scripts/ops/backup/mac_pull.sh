@@ -10,7 +10,7 @@
 #
 # Usage: mac_pull.sh [--dry-run]
 # Config: ~/Secrets/roxira/backup-pull.env (names only below; file mode 600, never in git)
-#   ROXIRA_HOST (default 5.75.200.67), RESTIC_DR_PASSWORD_FILE (default ~/Secrets/roxira/restic-dr.pass),
+#   ROXIRA_HOST (default roxira-prod, an ssh alias), RESTIC_DR_PASSWORD_FILE (default ~/Secrets/roxira/restic-dr.pass),
 #   SB_REMOTE_PASSWORD_FILE (default same file: the server repo password), BACKUP_SB_USER, BACKUP_SB_HOST,
 #   BACKUP_SB_PORT (23), BACKUP_SB_KEY (~/Secrets/roxira/storagebox_backup), BACKUP_SB_PATH (roxira-restic)
 #   MAC_PULL_MODE (auto|rsync|copy), MAC_PULL_MAX_AGE_H (rsync mode: fail if the server set is older, default 6),
@@ -28,7 +28,7 @@ if [ -r "$CONF" ]; then
   . "$CONF"
   set +a
 fi
-HOST="${ROXIRA_HOST:-5.75.200.67}"
+HOST="${ROXIRA_HOST:-roxira-prod}"
 DEST="${ROXIRA_DR_DIR:-$HOME/Backups/roxira-dr}"
 LOCAL_REPO="$DEST/restic"
 LOG="$DEST/pull.log"

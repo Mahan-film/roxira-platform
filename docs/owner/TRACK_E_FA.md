@@ -99,17 +99,17 @@ scripts/ops/set_server_env.sh LLM_USAGE_LOG_PATH --replace
 مقدار: `/opt/roxira_platform/data/llm_usage.jsonl` (همان مسیر `.env.example`؛ پوشه‌ی `./data` در compose به کانتینر وصل است).
 ۲) اعمال (ری‌استارت کانتینر برنامه؛ طبق قانون پروژه فقط با تأیید شما و بهتر است hub همراه باشد):
 ```bash
-ssh root@5.75.200.67 'cd /opt/roxira_platform && docker compose -f docker-compose.prod.yml up -d --no-deps enterprise_app'
+ssh roxira-prod 'cd /opt/roxira_platform && docker compose -f docker-compose.prod.yml up -d --no-deps enterprise_app'
 ```
 انتظار: کانتینر دوباره ساخته و `Up` می‌شود. بعد در سایت یک پرسش بفرستید.
 ۳) تأیید ثبت لاگ (خط‌های بدون متن پرسش، فقط شمارش و هزینه):
 ```bash
-ssh root@5.75.200.67 'wc -l /opt/roxira_platform/data/llm_usage.jsonl && tail -n 1 /opt/roxira_platform/data/llm_usage.jsonl | cut -c1-300'
+ssh roxira-prod 'wc -l /opt/roxira_platform/data/llm_usage.jsonl && tail -n 1 /opt/roxira_platform/data/llm_usage.jsonl | cut -c1-300'
 ```
 انتظار: شمارنده بالا می‌رود و آخرین خط فیلدهای مدل/توکن/هزینه دارد. اگر فایل نبود: hub لاگ کانتینر را می‌خواند.
 ۴) خلاصه‌ی روزانه از خود روتر:
 ```bash
-ssh root@5.75.200.67 'cd /opt/roxira_platform && LLM_USAGE_LOG_PATH=data/llm_usage.jsonl python3 -m output_apps.generated_modules.smartjudge.llm_router summary --days 1'
+ssh roxira-prod 'cd /opt/roxira_platform && LLM_USAGE_LOG_PATH=data/llm_usage.jsonl python3 -m output_apps.generated_modules.smartjudge.llm_router summary --days 1'
 ```
 (اگر روی میزبان وابستگی کم بود، از داخل کانتینر `docker exec` اجرا کنید؛ این را hub انجام می‌دهد.)
 
@@ -117,7 +117,7 @@ ssh root@5.75.200.67 'cd /opt/roxira_platform && LLM_USAGE_LOG_PATH=data/llm_usa
 اسکریپت `scripts/cost_report.py` فایل‌های لاگ را جمع می‌کند و گزارش فارسی می‌دهد.
 ۱) (هفته‌ای یک بار) لاگ محصول را بکشید:
 ```bash
-mkdir -p ~/RoxiraCost && scp root@5.75.200.67:/opt/roxira_platform/data/llm_usage.jsonl ~/RoxiraCost/product.jsonl
+mkdir -p ~/RoxiraCost && scp roxira-prod:/opt/roxira_platform/data/llm_usage.jsonl ~/RoxiraCost/product.jsonl
 ```
 ۲) گزارش:
 ```bash

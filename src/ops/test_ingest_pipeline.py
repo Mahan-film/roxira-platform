@@ -79,7 +79,7 @@ def run_apply(rows, http, collection="local_test", **kw):
 @pytest.mark.parametrize(
     "url",
     [
-        "http://5.75.200.67:6333",
+        "http://91.107.248.99:6333",
         "http://roxira_qdrant_prod:6333",
         "http://localhost.evil.com:6333",
         "http://127.0.0.1.evil.com:6333",
@@ -103,7 +103,7 @@ def test_local_urls_allowed(url):
 
 def test_eval_refuses_non_local():
     with pytest.raises(ip.Refusal):
-        ip.run_eval("c", "http://5.75.200.67:6333", http=FakeQdrant(), runner=lambda c: {})
+        ip.run_eval("c", "http://91.107.248.99:6333", http=FakeQdrant(), runner=lambda c: {})
 
 
 def test_valid_rows_apply_and_report(monkeypatch):
@@ -213,7 +213,7 @@ def test_cli_validate_plan_and_no_text_leak(tmp_path, capsys):
                 "apply",
                 str(f),
                 "--qdrant",
-                "http://5.75.200.67:6333",
+                "http://91.107.248.99:6333",
                 "--collection",
                 "x",
                 "--allowlist",

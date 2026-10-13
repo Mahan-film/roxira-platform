@@ -12,7 +12,7 @@
 - مهاجرت باید بعد از (۲) تا (۴) باشد، نه قبل.
 
 ## ۳. پیش‌نیازها
-- دسترسی Cloudflare (سه دامنه: `ghazihoushmand.ir`، `roxira.ir`، `roxira.net`)، سرور `5.75.200.67`، Docker Desktop روشن روی مک.
+- دسترسی Cloudflare (سه دامنه: `ghazihoushmand.ir`، `roxira.ir`، `roxira.net`)، سرور `91.107.248.99`، Docker Desktop روشن روی مک.
 - نصب ابزار: `brew install restic hcloud` (فعلاً روی مک نصب نیستند؛ gitleaks، age، gh، docker هستند).
 - برای مهاجرت: حساب Hetzner و یک API token (Console > Project > Security > API tokens؛ آن را در چت نفرستید).
 - یک هارد/فلش خارجی برای نسخه‌ی دوم.
@@ -43,7 +43,7 @@ curl -sI https://ghazihoushmand.ir/ | grep -i -E "alt-svc|cf-cache-status"
 انتظار: خط `alt-svc` با h3 دیگر دیده نشود (ممکن است چند دقیقه طول بکشد).
 ۸) تست از دید ایران: در مرورگر `https://check-host.net/check-http` را باز کنید، آدرس `https://ghazihoushmand.ir` را بدهید و فقط نودهای Iran را انتخاب کنید. انتظار: وضعیت 200 برای همه‌ی نودها. روی `roxira.ir` و `roxira.net` هم تکرار کنید.
 ۹) در پنل IRNIC تاریخ انقضای `roxira.ir` و `ghazihoushmand.ir` را ببینید؛ دامنه‌ی منقضی از داخل ایران فیلتر می‌شود.
-۱۰) اگر هنوز از ایران باز نشد: از خود شبکه‌ی ایران این دو را اجرا کنید و خروجی را به hub بدهید: `curl -sv https://ghazihoushmand.ir/ -o /dev/null --http1.1` و همان با `-k https://5.75.200.67` (با این می‌فهمیم مشکل مسیر Cloudflare است یا آی‌پی سرور).
+۱۰) اگر هنوز از ایران باز نشد: از خود شبکه‌ی ایران این دو را اجرا کنید و خروجی را به hub بدهید: `curl -sv https://ghazihoushmand.ir/ -o /dev/null --http1.1` و همان با `-k https://91.107.248.99` (با این می‌فهمیم مشکل مسیر Cloudflare است یا آی‌پی سرور).
 
 ### D3. تمرین بازیابی ثبت‌شده (۳۰ دقیقه، فقط روی مک)
 متن کامل در `docs/ops/RESTORE_DRILL.md`؛ اینجا خلاصه‌ی اجرایی است. هرگز روی سرور تولید اجرا نشود.

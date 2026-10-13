@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run ONE routine coding task on the server with a cheap/free model (OpenCode), in an isolated git worktree.
-# Hub usage:  ssh 5.75.200.67 '/opt/roxira_platform/scripts/infra/server_agents/run_task.sh --model groq-strong \
+# Hub usage:  ssh roxira-prod '/opt/roxira_platform/scripts/infra/server_agents/run_task.sh --model groq-strong \
 #                --task-file /tmp/t.md --scope docs/ops/ --push'
 #
 #   run_task.sh (--task TEXT | --task-file FILE) [--model ALIAS] [--scope PATH]... [--public] [--push]

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Prints the owner commands to install the tech radar timers on the production server.
 # It changes NOTHING and runs nothing: copy the printed block into an SSH session
-# (AGENTS.md: ask the owner before changing files on 5.75.200.67).
+# (AGENTS.md: ask the owner before changing files on the prod server).
 set -euo pipefail
 cat <<'CMDS'
 # 1. On the Mac: make sure the PR with the radar is merged, then on the server:
-ssh 5.75.200.67
+ssh roxira-prod
 cd /opt/roxira_platform && git pull --ff-only
 
 # 2. Optional env file (only needed for a GitHub token or to turn issue creation off):

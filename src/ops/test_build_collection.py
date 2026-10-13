@@ -96,7 +96,7 @@ def test_refuses_existing_target_same_name_and_non_local():
     with pytest.raises(bc.Refusal):
         bc.build("src", "src", "http://127.0.0.1:6333", http=FakeQdrant(pts(1)))
     with pytest.raises(bc.Refusal):
-        bc.build("src", "dst", "http://5.75.200.67:6333", http=FakeQdrant(pts(1)))
+        bc.build("src", "dst", "http://91.107.248.99:6333", http=FakeQdrant(pts(1)))
     with pytest.raises(bc.Refusal):
         bc.build("nope", "dst", "http://127.0.0.1:6333", http=FakeQdrant(pts(1)))
 

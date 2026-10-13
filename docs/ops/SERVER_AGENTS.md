@@ -16,10 +16,10 @@ scripts/ops/set_server_env.sh GROQ_API_KEY
 scripts/ops/set_server_env.sh GROQ_API_KEY_2
 scripts/ops/set_server_env.sh GROQ_API_KEY_3
 # b) get the scripts onto the server (after the PR is merged), then run setup. -t is needed for the hidden prompt:
-ssh 5.75.200.67 'git -C /opt/roxira_platform pull --ff-only'
-ssh -t 5.75.200.67 '/opt/roxira_platform/scripts/infra/server_agents/setup.sh'          # add --dry-run first if you like
+ssh roxira-prod 'git -C /opt/roxira_platform pull --ff-only'
+ssh -t roxira-prod '/opt/roxira_platform/scripts/infra/server_agents/setup.sh'          # add --dry-run first if you like
 # c) verification (calls the model once, throwaway worktree, nothing pushed):
-ssh 5.75.200.67 '/opt/roxira_platform/scripts/infra/server_agents/run_task.sh --smoke'
+ssh roxira-prod '/opt/roxira_platform/scripts/infra/server_agents/run_task.sh --smoke'
 ```
 
 Expected: `SMOKE PASS: groq-fast created exactly docs/agents/SMOKE.md (one line)` and a JSON line with `"smoke_ok": true`.
@@ -33,8 +33,8 @@ read from `/opt/roxira_platform/.env` (names only, never printed). The global `/
 ## 2. How the hub dispatches a task
 
 ```bash
-ssh 5.75.200.67 'cat > /tmp/task.md' < task.md        # or --task "text"
-ssh 5.75.200.67 '/opt/roxira_platform/scripts/infra/server_agents/run_task.sh \
+ssh roxira-prod 'cat > /tmp/task.md' < task.md        # or --task "text"
+ssh roxira-prod '/opt/roxira_platform/scripts/infra/server_agents/run_task.sh \
     --model groq-strong --task-file /tmp/task.md --scope docs/ops/ --scope scripts/infra/ --push' | tail -n 1
 ```
 

@@ -111,7 +111,7 @@ interface DeploymentTarget {
 }
 
 const DEPLOYMENT_TARGETS: DeploymentTarget[] = [
-  { id: "primary", name: "Primary Node", detail: "Hetzner Core: 5.75.200.67", host: "5.75.200.67" },
+  { id: "primary", name: "Primary Node", detail: "Hetzner Core (production)", host: "primary-node" },
   { id: "fleet", name: "Auto-Scale Remote Worker", detail: "Ephemeral Fleet", host: "ephemeral-fleet" },
 ];
 

@@ -40,7 +40,7 @@ case $choice in
     git commit -m "$msg"
     git push origin main
     echo "🚀 اعمال تغییرات روی سرور..."
-    ssh root@5.75.200.67 "cd /opt/roxira_platform && git pull origin main && docker compose -f docker-compose.prod.yml restart enterprise_app roxira_enterprise_frontend"
+    ssh "${ROXIRA_HOST:-roxira-prod}" "cd /opt/roxira_platform && git pull origin main && docker compose -f docker-compose.prod.yml restart enterprise_app roxira_enterprise_frontend"
     echo "✅ سامانه با موفقیت همگام شد."
     ;;
   *)

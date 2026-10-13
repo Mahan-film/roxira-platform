@@ -19,7 +19,7 @@
 # status PENDING_REVIEW); nothing about them grants access.
 set -euo pipefail
 
-SSH_HOST="${DEPLOY_SSH_HOST:-5.75.200.67}"
+SSH_HOST="${DEPLOY_SSH_HOST:-${ROXIRA_HOST:-roxira-prod}}"
 PG_CONTAINER="${ROXIRA_PG_CONTAINER:-roxira_postgres_prod}"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 

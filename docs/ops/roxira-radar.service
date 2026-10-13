@@ -30,7 +30,7 @@
 #
 # To install (only after owner approval — this is deploy activity, not part
 # of this LOCAL-ONLY PR):
-#   ssh 5.75.200.67
+#   ssh roxira-prod
 #   cp docs/ops/roxira-radar.service /etc/systemd/system/roxira-radar.service
 #   cp docs/ops/roxira-radar.timer   /etc/systemd/system/roxira-radar.timer
 #   systemctl daemon-reload

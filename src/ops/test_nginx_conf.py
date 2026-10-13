@@ -97,7 +97,8 @@ def test_catch_all_default_server_drops_unknown_hosts():
     catch = [s for s in _blocks(content, "server") if "listen 80 default_server;" in s]
     assert len(catch) == 1
     assert "return 444;" in catch[0]
-    assert "5.75.200.67" not in re.sub(r"#[^\n]*", "", content)
+    code = re.sub(r"#[^\n]*", "", content)
+    assert "5.75.200.67" not in code and "91.107.248.99" not in code
 
 
 def test_auth_routes_rate_limited():

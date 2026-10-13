@@ -1,0 +1,14 @@
+# Roxira ssh aliases. Install with scripts/ops/install_ssh_alias.sh (dry-run by default).
+# A server move needs ONE change: the HostName of `roxira-prod`.
+# Scripts read ROXIRA_HOST (default: roxira-prod).
+
+Host roxira-prod
+    HostName 91.107.248.99
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+
+# Old server (5.75.200.67), kept until decommission.
+Host roxira-old
+    HostName 5.75.200.67
+    User root
+    IdentityFile ~/.ssh/id_ed25519

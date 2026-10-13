@@ -90,13 +90,13 @@ scripts/ops/preview.sh gc
 - **کاندید آرشیو (بدون هیچ ارجاعی در کد):** `apply_2026_modern_pipeline.py`، `audit_system_state.py`، `auto_migrate_db.py`، `auto_system_journalist.py`، `autonomous_agent_factory.py`، `autonomous_agent_watcher.py`، `autonomous_master_daemon.py`، `batch_build_all_modules.py`، `bulk_legal_ingestion.py`، `chaos_swarm_orchestrator.py`، `comprehensive_system_audit.py`، `context_guard.py`، `generate_handover.py`، `ingest_full_precedents.py`، `inject_latest_precedents_2026.py`، `master_autonomous_runner.py`، `master_swarm_orchestrator.py`، `migrate_with_db_detection.py`، `openrouter_agent_bridge.py`، `populate_empty_collections.py`، `sync_qdrant_fixed.py`، `sync_qdrant_rest.py`. همچنین `get-pip.py` (۲ مگابایت) و فایل‌های `TECH_RADAR_*` و handover.
 ۱) روی سرور فقط بخوانید که چیزی از این‌ها واقعاً اجرا نمی‌شود (هیچ تغییری نمی‌دهد):
 ```bash
-ssh root@5.75.200.67 'systemctl list-units --type=service --state=running --no-pager | grep -i -E "roxira|factory|autonomous|swarm"'
+ssh roxira-prod 'systemctl list-units --type=service --state=running --no-pager | grep -i -E "roxira|factory|autonomous|swarm"'
 ```
 ```bash
-ssh root@5.75.200.67 'crontab -l; ls /etc/cron.d'
+ssh roxira-prod 'crontab -l; ls /etc/cron.d'
 ```
 ```bash
-ssh root@5.75.200.67 'ss -tulnp | grep 8005'
+ssh roxira-prod 'ss -tulnp | grep 8005'
 ```
 ۲) هر اسمی از فهرست کاندید که در خروجی بالا آمد را از کاندیدها خط بزنید.
 ۳) تصمیم نهایی را به hub بدهید: «این فهرست را به `archive/legacy_root/` منتقل کن». انتقال با `git mv` فایل‌به‌فایل در یک PR بازبینی‌شده انجام می‌شود (هیچ حذفی؛ تاریخچه می‌ماند) و `local_ci` را می‌گذراند.

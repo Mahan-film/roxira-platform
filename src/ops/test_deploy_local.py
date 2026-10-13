@@ -6,7 +6,6 @@ import re
 import subprocess
 from pathlib import Path
 
-PROD_IP = "5.75.200.67"
 
 
 def script_path() -> Path:
@@ -36,4 +35,4 @@ def test_script_text_has_no_password_or_foreign_ip() -> None:
     text = script_path().read_text(encoding="utf-8")
     assert "password" not in text.lower()
     ips = set(re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", text))
-    assert ips <= {PROD_IP}
+    assert ips <= {"127.0.0.1"}  # host comes from the ROXIRA_HOST ssh alias, never a literal IP

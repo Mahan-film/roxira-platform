@@ -9,4 +9,4 @@
 - Never read `repomix-output.xml`, `database_snapshots/`, `*.sql` or `*.tar.gz`.
 - Use the codebase-memory MCP for structural questions before opening files.
 - Secrets: read from the environment only. Never write a real key or a default key into code.
-- Production server: `ssh 5.75.200.67`, repo at `/opt/roxira_platform`. Inspect freely. Ask before restarting containers or changing files there.
+- Production server: `ssh roxira-prod` (= 91.107.248.99, srv1.roxira.net; alias from `scripts/ops/ssh_config.example`, installed by `scripts/ops/install_ssh_alias.sh`), repo at `/opt/roxira_platform`. The old server 5.75.200.67 (`ssh roxira-old`) is kept until decommission. Inspect freely. Ask before restarting containers or changing files there.

@@ -16,7 +16,7 @@
 # permissions, and only variable NAMES and value LENGTHS are printed. L4: owner-only.
 set -euo pipefail
 
-SSH_HOST="${DEPLOY_SSH_HOST:-5.75.200.67}"
+SSH_HOST="${DEPLOY_SSH_HOST:-${ROXIRA_HOST:-roxira-prod}}"
 REMOTE_DIR="${DEPLOY_REMOTE_DIR:-/opt/roxira_platform}"
 ENV_FILE="$REMOTE_DIR/.env"
 ENV_BACKUP_DIR="${DEPLOY_ENV_BACKUP_DIR:-/root/env-backups}"   # outside the git tree

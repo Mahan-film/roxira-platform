@@ -55,7 +55,7 @@ http {
 
     server {
         listen 80;
-        server_name ghazihoushmand.ir www.ghazihoushmand.ir roxira.ir www.roxira.ir 5.75.200.67;
+        server_name ghazihoushmand.ir www.ghazihoushmand.ir roxira.ir www.roxira.ir;
 
         # ۱. پروکسی اندپوینت‌های بک‌اند و وب‌سرویس‌ها
         location /api/ {

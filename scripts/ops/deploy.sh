@@ -2,7 +2,7 @@
 # Deploy named services on the production host, with an automatic rollback
 # to the previous image if the post-deploy healthcheck does not pass.
 #
-# Run this ON the production host (5.75.200.67), inside /opt/roxira_platform,
+# Run this ON the production host (roxira-prod), inside /opt/roxira_platform,
 # as root. It does not ssh anywhere itself.
 #
 # Usage:

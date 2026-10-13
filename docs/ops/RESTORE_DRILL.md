@@ -2,14 +2,14 @@
 
 Restore the latest off-site backups into **throwaway containers on the owner's
 Mac** to prove they are complete and restorable. This is a rehearsal: it never
-touches production (`5.75.200.67`) and never writes to a production database or
+touches production (`91.107.248.99`) and never writes to a production database or
 volume. Docs-only companion to `docs/ops/RESILIENCE.md` §3 (the same commands,
 expanded into a repeatable drill).
 
 ## خلاصهٔ فارسی
 
 - این رانبوک برای **تمرین بازیابی** است، نه بازیابی واقعی. هرگز روی سرور
-  تولید (`5.75.200.67`) اجرا نمی‌شود.
+  تولید (`91.107.248.99`) اجرا نمی‌شود.
 - بکاپ‌های آفلاین روی مک مالک در `~/RoxiraBackups/<تاریخ>/` هستند و هر روز با
   `scripts/ops/pull_backups_to_mac.sh` (لانچ‌دی) کشیده می‌شوند. آن اسکریپت فقط
   می‌خواند و روی سرور چیزی نمی‌نویسد.

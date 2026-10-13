@@ -2,11 +2,11 @@
 
 Complements `docs/SYSTEM_MAP.md` (what exists) and `docs/STATE.md` (current state). This file is **how**: commands that were tested, and the traps found while testing them. Updated 2026-10-01. Secrets are referred to by name only.
 
-## 1. Deploying to prod (`5.75.200.67`, repo `/opt/roxira_platform`)
+## 1. Deploying to prod (`91.107.248.99`, repo `/opt/roxira_platform`)
 - Prod is a git checkout. `scripts/ops/deploy.sh <service>` requires a **clean working tree**, fast-forwards `main`, builds and recreates only the named service, waits for health, then refreshes nginx. It rolls back automatically on failure.
 - Services: `enterprise_app` (Python AI core, `roxira_app_prod`), `roxira_enterprise_frontend` (Next.js), `roxira_enterprise_backend` (NestJS). `output_apps/` is bind-mounted into `roxira_app_prod`, so a `git pull` alone puts new Python on disk while the old process keeps running: always run `deploy.sh`.
 - **Long builds: run detached.** The frontend image build takes minutes and an interactive ssh session was dropped by the remote host twice. Use:
-  `ssh 5.75.200.67 'cd /opt/roxira_platform && nohup scripts/ops/deploy.sh roxira_enterprise_frontend > /root/deploy-frontend.log 2>&1 &'`
+  `ssh roxira-prod 'cd /opt/roxira_platform && nohup scripts/ops/deploy.sh roxira_enterprise_frontend > /root/deploy-frontend.log 2>&1 &'`
   then read `tail /root/deploy-frontend.log` until `deploy OK`.
 - Untracked files (for example `.env.bak.*`) block the deploy. Move them to `/root/env-backups/`.
 - Verify after every deploy: container `healthy`, `https://ghazihoushmand.ir/health` 200, the changed page (for example `/coverage`) 200, and an exact lookup such as «ماده ۱۰ قانون مدنی».

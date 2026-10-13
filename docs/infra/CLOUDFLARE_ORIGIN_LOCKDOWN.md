@@ -1,7 +1,7 @@
 # Cloudflare origin lockdown and infra hardening runbook
 
 Covers security audit 2026-10-09 findings 2 (nginx part), 5, 6, 7 (nginx part), 8 (headers).
-Server: `5.75.200.67`, repo `/opt/roxira_platform`. All commands run as root on the server.
+Server: `91.107.248.99`, repo `/opt/roxira_platform`. All commands run as root on the server.
 
 ## What changed in the repo
 
@@ -99,7 +99,7 @@ Verify (from the server, via the origin):
 docker exec roxira_nginx_prod nginx -t
 docker inspect -f '{{.State.Health.Status}}' roxira_nginx_prod                         # healthy
 curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1/                           # 000 / empty reply (444)
-curl -s  -o /dev/null -w '%{http_code}\n' -H 'Host: 5.75.200.67' http://127.0.0.1/     # 000 / empty reply
+curl -s  -o /dev/null -w '%{http_code}\n' -H 'Host: 91.107.248.99' http://127.0.0.1/     # 000 / empty reply
 curl -sk --resolve roxira.ir:443:127.0.0.1 -o /dev/null -w '%{http_code}\n' https://roxira.ir/        # 200
 for p in /docs /docs/ /docs-json /redoc /openapi.json; do curl -sk --resolve roxira.net:443:127.0.0.1 -o /dev/null -w "$p %{http_code}\n" https://roxira.net$p; done   # all 404
 curl -sI https://roxira.ir/ | grep -i strict-transport      # max-age=15552000; includeSubDomains
@@ -124,11 +124,11 @@ scripts/ops/firewall/cloudflare_only.sh --status
 ```
 Verify from your Mac (not Cloudflare):
 ```bash
-curl -sk --max-time 8 -o /dev/null -w '%{http_code}\n' https://5.75.200.67/                 # timeout (000)
-curl -s  --max-time 8 -o /dev/null -w '%{http_code}\n' -H 'Host: roxira.ir' http://5.75.200.67/   # timeout (000)
+curl -sk --max-time 8 -o /dev/null -w '%{http_code}\n' https://91.107.248.99/                 # timeout (000)
+curl -s  --max-time 8 -o /dev/null -w '%{http_code}\n' -H 'Host: roxira.ir' http://91.107.248.99/   # timeout (000)
 curl -s -o /dev/null -w '%{http_code}\n' https://roxira.ir/                                  # 200 via Cloudflare
-nc -z -w3 5.75.200.67 22 && echo ssh-open
-nc -z -w3 5.75.200.67 8443 && echo xray-open                                                # unchanged
+nc -z -w3 91.107.248.99 22 && echo ssh-open
+nc -z -w3 91.107.248.99 8443 && echo xray-open                                                # unchanged
 ```
 From the server: `ufw status | grep -E '^(22|8443)'` still present; `iptables -S DOCKER-USER | head`.
 The script never edits the ufw rules for 22, 8443, 2053/2096, 60000:61000/udp or 8005.
@@ -164,5 +164,5 @@ Cloudflare IP allowlisting still lets any other Cloudflare customer reach the or
    ```
    The catch-all server needs `ssl_verify_client off;` so its 444 is not preceded by a handshake failure. Certbot's HTTP-01 on port 80 is not affected; if renewals ever use TLS-ALPN, exempt them.
 4. `docker exec roxira_nginx_prod nginx -t && docker exec roxira_nginx_prod nginx -s reload`
-5. Verify: via Cloudflare returns 200; `curl -sk --resolve roxira.ir:443:5.75.200.67 https://roxira.ir/` returns 400 "No required SSL certificate was sent".
+5. Verify: via Cloudflare returns 200; `curl -sk --resolve roxira.ir:443:91.107.248.99 https://roxira.ir/` returns 400 "No required SSL certificate was sent".
 6. Rollback: remove the two directives and reload, or switch the zone toggle off. Do not enable while any non-Cloudflare client (monitoring, health pingers, the Mac backup pull) hits 443 directly.

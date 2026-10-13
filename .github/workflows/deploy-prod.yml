@@ -13,7 +13,7 @@ name: Deploy prod
 #
 # Owner-only setup (once), see docs/OPERATIONS_RUNBOOK.md "Automatic deploy":
 #   secrets in the `production` environment: PROD_DEPLOY_KEY (private ed25519 key),
-#   PROD_KNOWN_HOSTS (output of `ssh-keyscan -t ed25519 5.75.200.67`); variable PROD_HOST.
+#   PROD_KNOWN_HOSTS (output of `ssh-keyscan -t ed25519 <PROD_HOST>`); variable PROD_HOST.
 #
 # Platform independence: nothing here is GitHub-specific except the trigger. The server side
 # (scripts/ops/ci-deploy.sh) can be driven by any runner or by a local timer.

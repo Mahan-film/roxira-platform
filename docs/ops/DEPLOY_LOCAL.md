@@ -1,7 +1,7 @@
 # Local deploy (`scripts/ops/deploy_local.sh`)
 
 GitHub Actions is off, so the owner deploys from the Mac. The script uses only
-your existing ssh config (`DEPLOY_SSH_HOST`, default `5.75.200.67`) and never
+your existing ssh config (`DEPLOY_SSH_HOST`, default `$ROXIRA_HOST`, itself defaulting to the `roxira-prod` alias) and never
 prints secret values (env checks print variable NAMES only).
 
 ## دستورات دقیق به ترتیب

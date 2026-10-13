@@ -41,7 +41,7 @@ The selection logic is pure Python (`retention.py`, tests in `test_retention.py`
 
 ## Retiring the legacy hourly job
 
-Source: root's crontab on 5.75.200.67, line `0 * * * * /opt/roxira_platform/scripts/auto_backup_daemon.sh >> /var/log/roxira_backup.log 2>&1`
+Source: root's crontab on 91.107.248.99, line `0 * * * * /opt/roxira_platform/scripts/auto_backup_daemon.sh >> /var/log/roxira_backup.log 2>&1`
 (documented in `docs/infra/INFRA_MAP_2026-10-09.md`; it is not a systemd timer, and the repo's `roxira-backup.timer`
 is not installed). Its own 7-day `find -mtime +7` prune apparently did not hold the 190 files, so do not rely on it.
 It covered only `enterprise_db` plus a live tar of the Qdrant directory; the DR system covers the same data better

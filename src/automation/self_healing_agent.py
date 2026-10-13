@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 import json
 import httpx
@@ -7,7 +8,7 @@ import pathlib
 import subprocess
 from typing import Dict, Any
 
-SERVER_HEALTH_URL = "http://5.75.200.67/"
+SERVER_HEALTH_URL = os.environ.get("ROXIRA_HEALTH_URL", "https://ghazihoushmand.ir/")
 OPENROUTER_API_KEY = "" # از .env بارگذاری می‌شود
 
 ENV_FILE = pathlib.Path.cwd() / ".env"

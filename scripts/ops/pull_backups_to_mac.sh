@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-HOST="${ROXIRA_HOST:-5.75.200.67}"
+HOST="${ROXIRA_HOST:-roxira-prod}"
 DEST="${ROXIRA_BACKUP_DEST:-$HOME/RoxiraBackups}"
 KEEP_DAYS="${ROXIRA_KEEP_DAYS:-30}"
 REMOTE_DIR="/opt/roxira_backups"

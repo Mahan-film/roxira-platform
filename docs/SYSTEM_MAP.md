@@ -11,14 +11,14 @@ the derivable facts (compose, nginx, workflows, versions, model ids) are in `doc
 | Roxira OS | roxira.net, roxira.ir (+www) | Multi-tenant enterprise SaaS (tax/Moadian, accounting, ERP, CRM); Smart Judge runs on it | nginx -> frontend/backend |
 | Other names | roxirad.ir, roxirad.net | Appear only in `nginx_split.conf`, NOT in the live config (see below) | UNVERIFIED whether DNS points here |
 
-- Live nginx config is the compose mount `output_apps/nginx_config/nginx.conf` (server_names: ghazihoushmand.ir, roxira.ir, roxira.net, 5.75.200.67, localhost + www). `nginx.conf`, `nginx_split.conf`, `production_bundle/nginx/nginx.conf` at repo root/bundle are older variants.
+- Live nginx config is the compose mount `output_apps/nginx_config/nginx.conf` (server_names: ghazihoushmand.ir, roxira.ir, roxira.net, localhost + www). `nginx.conf`, `nginx_split.conf`, `production_bundle/nginx/nginx.conf` at repo root/bundle are older variants.
 - Priority (STRATEGY §1): Smart Judge earns revenue; Roxira OS is the platform. Reliability of Smart Judge comes first.
 - Owner-facing FAQ in Persian: `docs/OWNER_GUIDE_FA.md`.
 
 ## 2. Production server
 | Item | Value |
 | --- | --- |
-| Host | `5.75.200.67` (ssh), Ubuntu, kernel 6.8.0-139, disk 150G (61% used), RAM 15G |
+| Host | `roxira-prod` = `91.107.248.99` (srv1.roxira.net, Ubuntu 26.04 arm64; old host 5.75.200.67 until decommission) |
 | Repo | `/opt/roxira_platform`; deployed commit 64478f3 on 2026-09-30 |
 | Drift | main is ahead: #135, #149, #150, #151 and later are merged but NOT deployed |
 | Exposed ports | 22, 80, 443 only (ufw; `roxira-docker-firewall.service` blocks 6432/3000/4000/4001 on eth0). Compose publishes app ports on 127.0.0.1 only |

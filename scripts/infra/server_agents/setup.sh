@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Owner-run, once, ON THE SERVER (or: ssh -t 5.75.200.67 /opt/roxira_platform/scripts/infra/server_agents/setup.sh).
+# Owner-run, once, ON THE SERVER (or: ssh -t roxira-prod /opt/roxira_platform/scripts/infra/server_agents/setup.sh).
 # Prepares the low-cost server-side agent runner (docs/ops/SERVER_AGENTS.md). Idempotent; --dry-run changes nothing.
 #
 #   setup.sh [--dry-run] [--skip-keys] [--replace-keys] [--no-clone] [--no-verify]
