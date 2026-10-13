@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared helpers for the Roxira emergency VPN scripts. Source, do not execute.
 # Secrets are never echoed except by explicit "link" output to stdout.
-ETC="${ROXIRA_VPN_ETC:-/etc/roxira/vpn}"
+ETC="${ROXIRA_VPN_ETC:-/etc/xray-vpn}"   # not under /etc/roxira (0700 root): the xray-vpn user must traverse it
 XRAY_BIN="${XRAY_BIN:-xray}"
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE="${ROXIRA_VPN_TEMPLATE:-$LIB_DIR/config.json.tpl}"
