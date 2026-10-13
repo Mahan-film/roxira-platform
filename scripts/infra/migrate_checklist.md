@@ -48,13 +48,15 @@ export NEW=<IP-جدید>     # بعد از مرحله ۳ مقدار بگیرید
 
 ## رازها و ریپو (بدون چاپ مقدار)
 
-- [ ] ۱۰. کپی فایل‌های `/etc/roxira` (از طریق مک، بدون نمایش):
+- [ ] ۱۰. بکاپ روی هر دو سرور در حالت محلی است (`BACKUP_ALLOW_LOCAL_ONLY`؛ ریستیک لازم نیست). آخرین ست محلی را مستقیم از قدیم به جدید بریزید (ssh به ssh؛ ست حاوی `.env` و دامپ‌هاست و روی دیسک مک نمی‌نشیند؛ ابتدا dry-run، ست قدیمی‌تر از ۲ ساعت رد می‌شود مگر `--allow-old`):
   ```bash
-  ssh root@$OLD 'cat /etc/roxira/backup.env' | ssh root@$NEW 'umask 077; cat > /etc/roxira/backup.env'
-  scp ~/Secrets/roxira/restic-dr.pass root@$NEW:/etc/roxira/restic.pass
-  rsync -a ~/Backups/roxira-dr/restic/ root@$NEW:/var/lib/roxira/mac-repo/
-  ssh root@$NEW "printf 'BACKUP_LOCAL_REPO=/var/lib/roxira/mac-repo\n' >> /etc/roxira/backup.env; chmod 600 /etc/roxira/*; ls -l /etc/roxira"
+  ssh root@$OLD '/opt/roxira_platform/scripts/ops/backup/server_backup.sh run'   # ست تازه (اختیاری ولی بهتر)
+  bash scripts/infra/migrate_pull_set.sh
+  bash scripts/infra/migrate_pull_set.sh --apply
+  export SET=/var/lib/roxira/incoming-set/<ts-چاپ‌شده>
+  ssh root@$NEW "ls $SET; ls -ld $SET"
   ```
+  فایل `/etc/roxira/backup.env` در خود ست هست و ریستور آن را می‌گذارد؛ نیازی به کپی دستی یا رمز restic نیست.
 - [ ] ۱۱. کلید deploy تازه و clone (فقط کلید عمومی منتقل می‌شود):
   ```bash
   ssh root@$NEW 'ssh-keygen -t ed25519 -N "" -f /root/.ssh/roxira_deploy -C roxira-2-deploy >/dev/null; cat /root/.ssh/roxira_deploy.pub' > /tmp/roxira-2.pub
@@ -66,9 +68,9 @@ export NEW=<IP-جدید>     # بعد از مرحله ۳ مقدار بگیرید
 
 ## ریستور آزمایشی و build (چند روز قبل از قطع)
 
-- [ ] ۱۳. drill (فقط استخراج و بررسی، چیزی اعمال نمی‌شود):
+- [ ] ۱۳. drill (فقط باز کردن ست در scratch و بررسی دامپ‌ها؛ چیزی اعمال نمی‌شود):
   ```bash
-  ssh root@$NEW 'cd /opt/roxira_platform && scripts/ops/backup/restore.sh --dry-run --repo local && scripts/ops/backup/restore.sh --repo local --scratch /var/tmp/restore-1'
+  ssh root@$NEW "cd /opt/roxira_platform && scripts/ops/backup/restore.sh --from-set $SET --dry-run && scripts/ops/backup/restore.sh --from-set $SET --scratch /var/tmp/restore-1"
   ```
 - [ ] ۱۴. `.env` را از scratch بگذارید و ایمیج‌ها را build کنید (۱۵ تا ۳۰ دقیقه):
   ```bash
@@ -76,13 +78,15 @@ export NEW=<IP-جدید>     # بعد از مرحله ۳ مقدار بگیرید
   cd /opt/roxira_platform && scripts/ops/nginx/gen_snakeoil_cert.sh && scripts/ops/nginx/update_cloudflare_ips.sh && scripts/ops/prep_backend_mounts.sh --apply
   docker compose -f docker-compose.prod.yml config -q && docker compose -f docker-compose.prod.yml build'
   ```
-- [ ] ۱۵. ریستور کامل (ابتدا dry-run را بخوانید):
+- [ ] ۱۵. ریستور کامل از ست محلی (ابتدا dry-run را بخوانید). اگر شبکه نبود: `docker network create roxira_mesh`. اسکریپت دامپ‌های Postgres را پیش از ریستور راستی‌آزمایی می‌کند، همه‌ی collectionهای Qdrant را با API آپلود snapshot برمی‌گرداند و جدول «تعداد نقطه‌ی انتظار/واقعی» را چاپ می‌کند (کد خروج ۴ = اختلاف تعداد، ۳ = ریستور ناقص):
   ```bash
-  ssh root@$NEW 'cd /opt/roxira_platform && scripts/ops/backup/restore.sh --repo local --full --dry-run'
-  ssh root@$NEW 'cd /opt/roxira_platform && scripts/ops/backup/restore.sh --repo local --full --yes --scratch /var/tmp/restore-1'
+  ssh root@$NEW 'docker network inspect roxira_mesh >/dev/null 2>&1 || docker network create roxira_mesh'
+  ssh root@$NEW "cd /opt/roxira_platform && scripts/ops/backup/restore.sh --from-set $SET --full --dry-run"
+  ssh root@$NEW "cd /opt/roxira_platform && scripts/ops/backup/restore.sh --from-set $SET --full --yes --scratch /var/tmp/restore-1"
   ssh root@$NEW 'ufw reload; systemctl stop "roxira-*.timer"; systemctl is-active cron; ufw status numbered'   # cron باید inactive باشد
   ssh root@$NEW true    # از ترمینال دوم: هنوز وارد می‌شوید؟
   ```
+  (Redis و حجم certbot_web در ست هست ولی ریستور خودکار ندارد؛ Redis کش است.)
 - [ ] ۱۶. شمارش نقطه‌های Qdrant در قدیم و جدید باید برابر باشد:
   ```bash
   for H in $OLD $NEW; do echo "== $H"; ssh root@$H 'curl -s localhost:6333/collections | jq -r ".result.collections[].name" | sort | while read c; do printf "%s %s\n" "$c" "$(curl -s localhost:6333/collections/$c | jq .result.points_count)"; done'; done
@@ -106,12 +110,13 @@ export NEW=<IP-جدید>     # بعد از مرحله ۳ مقدار بگیرید
   ssh root@$OLD 'systemctl stop cron; systemctl stop "roxira-*.timer"; cd /opt/roxira_platform && docker compose -f docker-compose.prod.yml stop roxira_enterprise_frontend roxira_enterprise_backend enterprise_app nginx_gateway; docker stop roxira_twenty_crm'
   ssh root@$OLD '/opt/roxira_platform/scripts/ops/backup/server_backup.sh run'
   ```
-- [ ] ۲۱. انتقال به جدید و ریستور دلتا:
+- [ ] ۲۱. انتقال ست نهایی (بعد از توقف نوشتن در مرحله ۲۰، ست همان `run` است) و ریستور دلتا:
   ```bash
-  bash scripts/ops/backup/mac_pull.sh && rsync -a ~/Backups/roxira-dr/restic/ root@$NEW:/var/lib/roxira/mac-repo/
-  ssh root@$NEW 'cd /opt/roxira_platform && scripts/ops/backup/restore.sh --repo local --full --yes'
+  bash scripts/infra/migrate_pull_set.sh && bash scripts/infra/migrate_pull_set.sh --apply
+  export SET2=/var/lib/roxira/incoming-set/<ts-جدید>
+  ssh root@$NEW "cd /opt/roxira_platform && scripts/ops/backup/restore.sh --from-set $SET2 --full --yes --scratch /var/tmp/restore-2"
   ```
-  دوباره مرحله ۱۶ را اجرا کنید (تعداد برابر).
+  دوباره مرحله ۱۶ را اجرا کنید (تعداد برابر؛ جدول خود اسکریپت هم باید همه OK باشد).
 - [ ] ۲۲. کارهای cron نگه‌داشته‌شده و تایمرها را بعد از مرور روی جدید فعال کنید:
   ```bash
   ssh root@$NEW 'cd /opt/roxira_platform && scripts/ops/backup/restore.sh --apply-cron --dry-run'   # فهرست را بخوانید

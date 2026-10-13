@@ -6,6 +6,9 @@
 #
 # Usage: restore.sh [--dry-run] [--repo sftp|s3|local] [--snapshot latest|<id>] [--scratch DIR] [--full] [--yes]
 #                   [--cron hold|apply|skip]      (default hold)  [--from-step N]  (resume at step 5-7, needs --full --scratch DIR)
+#        restore.sh --from-set DIR [--full ...]   restore from a LOCAL backup set (BACKUP_ALLOW_LOCAL_ONLY mode:
+#                   /opt/roxira_backups/dr/sets/<ts>, or a copy at /var/lib/roxira/incoming-set/<ts>) instead of
+#                   restic. Steps 1-2 are replaced by scripts/ops/backup/set_to_scratch.sh; steps 3-7 are unchanged.
 #        restore.sh --apply-cron [--dry-run] [--yes]   activate the held cron jobs after you reviewed them
 #
 # Cron safety: the backup holds the OLD host's crontabs and /etc/cron.d (daily marketing campaign, crawlers, mesh
@@ -17,7 +20,8 @@
 #
 # Needs /etc/roxira/backup.env and the restic password file (copy them from the owner's Mac/password
 # manager onto a fresh host first; they are never stored in the repo or in the backup itself).
-# Exit codes: 0 ok, 3 = PARTIAL restore (some Postgres databases skipped), other = failure.
+# Exit codes: 0 ok, 3 = PARTIAL restore (some Postgres databases skipped), 4 = Qdrant point counts differ from
+# collection_info.json (restore itself finished), other = failure.
 #--end-help--
 set -euo pipefail
 
@@ -35,9 +39,12 @@ APPLY_CRON=0
 FROM_STEP=1
 RESTORED_PG=""
 SKIPPED_PG=""
+FROM_SET=""
+QDRANT_BAD=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
+    --from-set) FROM_SET="${2:?--from-set needs a set directory}"; shift 2 ;;
     --repo) REPO_CHOICE="${2:?}"; shift 2 ;;
     --snapshot) SNAPSHOT="${2:?}"; shift 2 ;;
     --scratch) SCRATCH="${2:?}"; shift 2 ;;
@@ -53,7 +60,13 @@ done
 
 case "$FROM_STEP" in 1|5|6|7) ;; *) die "--from-step must be 5, 6 or 7 (got '$FROM_STEP')" ;; esac
 case "$CRON_MODE" in hold|apply|skip) ;; *) die "--cron must be hold, apply or skip" ;; esac
-load_env
+if [ -n "$FROM_SET" ]; then
+  # Local-set mode has no restic; /etc/roxira/backup.env may not exist yet on a fresh host (it is restored in step 4).
+  if [ -r "$BACKUP_ENV_FILE" ]; then load_env; else warn "env file $BACKUP_ENV_FILE not readable (local-set mode continues without it)"; fi
+else
+  load_env
+fi
+if [ -n "$FROM_SET" ]; then RESUME_SRC="--from-set $FROM_SET"; else RESUME_SRC="--repo $REPO_CHOICE"; fi
 REPO_DIR="${ROXIRA_REPO_DIR:-/opt/roxira_platform}"
 COMPOSE_FILE="${RESTORE_COMPOSE_FILE:-$REPO_DIR/docker-compose.prod.yml}"
 DB_SERVICES="${RESTORE_DB_SERVICES:-postgres_prod}"
@@ -108,7 +121,30 @@ if [ "$FULL" = 1 ] && [ "$DRY_RUN" != 1 ] && [ "$ASSUME_YES" != 1 ]; then
   [ "$reply" = "restore" ] || die "aborted"
 fi
 
+# verify_pg_dump <container> <file>: non-empty + custom-format magic ("PGDMP"); then pg_restore -l in the container
+# when it runs, else with a host pg_restore, else magic-only (a fresh host has no running Postgres at step 3).
+verify_pg_dump() {
+  local c="$1" f="$2"
+  [ -s "$f" ] || return 1
+  [ "$(head -c 5 "$f" 2>/dev/null)" = "PGDMP" ] || return 1
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$c"; then
+    docker exec -i "$c" pg_restore -l <"$f" >/dev/null 2>&1
+  elif command -v pg_restore >/dev/null 2>&1; then
+    pg_restore -l "$f" >/dev/null 2>&1
+  else
+    return 0
+  fi
+}
+
 if [ "$FROM_STEP" -le 4 ]; then
+if [ -n "$FROM_SET" ]; then
+  step "1/7 preflight (local set $FROM_SET, scratch $SCRATCH)"
+  [ -d "$FROM_SET" ] || die "--from-set: $FROM_SET is not a directory"
+  step "2/7 unpack local set -> scratch (set_to_scratch.sh)"
+  adapter_args=()
+  [ "$DRY_RUN" = 1 ] && adapter_args+=(--dry-run)
+  "$SCRIPT_DIR/set_to_scratch.sh" ${adapter_args[@]+"${adapter_args[@]}"} "$FROM_SET" "$SCRATCH" "$STAGE_REL"
+else
 step "1/7 preflight (restic, repo '$REPO_CHOICE', snapshot '$SNAPSHOT', scratch $SCRATCH)"
 if [ "$DRY_RUN" != 1 ]; then
   command -v restic >/dev/null || die "restic missing (apt-get install -y restic)"
@@ -121,6 +157,7 @@ fi
 step "2/7 restic restore -> scratch"
 run mkdir -p "$SCRATCH"
 run restic_on "$REPO_CHOICE" restore "$SNAPSHOT" --target "$SCRATCH"
+fi
 
 step "3/7 verify dumps in scratch"
 if [ "$DRY_RUN" = 1 ]; then
@@ -131,7 +168,7 @@ else
   for f in "$SRC"/pg/*/*.dump; do
     [ -e "$f" ] || continue
     c="$(basename "$(dirname "$f")")"
-    if docker exec -i "$c" pg_restore -l <"$f" >/dev/null 2>&1; then echo "ok  $f"; else echo "BAD $f"; bad=1; fi
+    if verify_pg_dump "$c" "$f"; then echo "ok  $f"; else echo "BAD $f"; bad=1; fi
   done
   while IFS= read -r q; do if [ -s "$q" ]; then echo "ok  $q"; else echo "BAD $q"; bad=1; fi; done < <(find "$SRC/qdrant" -name '*.snapshot' 2>/dev/null)
   [ "$bad" = 0 ] || warn "some dumps failed verification (pg checks need the container running)"
@@ -241,6 +278,9 @@ for c in $PG_CONTAINERS; do
     [ -e "$f" ] || continue
     db="$(basename "$f" .dump)"
     if ! [[ "$db" =~ ^[A-Za-z0-9_]+$ ]]; then warn "skipping dump with unsafe database name: $f"; continue; fi
+    if ! verify_pg_dump "$c" "$f"; then
+      warn "dump failed verification, NOT restoring: $f"; SKIPPED_PG="${SKIPPED_PG:-} $c/$db"; continue
+    fi
     # $DB / $POSTGRES_USER are expanded inside the container from its environment, never spliced into the script text.
     if ! docker exec -e "DB=$db" "$c" sh -c 'psql -U "$POSTGRES_USER" -d postgres -Atc "select 1 from pg_database where datname='"'"'$DB'"'"'" | grep -q 1 || createdb -U "$POSTGRES_USER" "$DB"'; then
       warn "could not create database $db in $c; skipped"; SKIPPED_PG="${SKIPPED_PG:-} $c/$db"; continue
@@ -268,15 +308,38 @@ else
   fi
 fi # FROM_STEP -le 5
 
+# qdrant_verify_table: compare live points_count with the backup's collection_info.json for every collection.
+qdrant_verify_table() {
+  command -v jq >/dev/null 2>&1 || { warn "jq missing: cannot verify Qdrant point counts"; return 0; }
+  local d c exp act st
+  printf '\n%-44s %12s %12s  %s\n' collection expected actual status
+  for d in "$SRC"/qdrant/*/; do
+    [ -d "$d" ] || continue
+    c="$(basename "$d")"
+    exp="$(jq -r '.result.points_count // empty' "$d/collection_info.json" 2>/dev/null || true)"
+    act=""
+    for _ in 1 2 3 4 5; do
+      act="$(curl -fsS "${key[@]}" "$QDRANT_URL/collections/$c" 2>/dev/null | jq -r '.result.points_count // empty' 2>/dev/null || true)"
+      if [ -n "$exp" ] && [ "$act" = "$exp" ]; then break; fi
+      sleep 2
+    done
+    if [ -z "$exp" ] || [ -z "$act" ]; then st="UNKNOWN"
+    elif [ "$exp" = "$act" ]; then st="OK"
+    else st="MISMATCH"; QDRANT_BAD=1; fi
+    printf '%-44s %12s %12s  %s\n' "$c" "${exp:--}" "${act:--}" "$st"
+  done
+}
+
 if [ "$FROM_STEP" -le 6 ]; then
 step "6/7 start Qdrant and upload collection snapshots"
 if [ "$DRY_RUN" = 1 ]; then
   echo "[dry-run] docker compose -f $COMPOSE_FILE up -d $QDRANT_SERVICE"
   echo "[dry-run] for each $SRC/qdrant/<collection>/*.snapshot: POST $QDRANT_URL/collections/<c>/snapshots/upload?priority=snapshot"
+  echo "[dry-run] then compare points_count of every collection with $SRC/qdrant/<c>/collection_info.json and print a table"
 else
   resume_hint() {
     warn "Already done: files placed (step 4); Postgres restored:${RESTORED_PG:- none}; skipped:${SKIPPED_PG:- none}. Qdrant NOT restored."
-    warn "Fix the cause, then resume with:  $0 --repo $REPO_CHOICE --full --yes --scratch $SCRATCH --from-step 6"
+    warn "Fix the cause, then resume with:  $0 $RESUME_SRC --full --yes --scratch $SCRATCH --from-step 6"
   }
   docker compose -f "$COMPOSE_FILE" up -d "$QDRANT_SERVICE" || { resume_hint; die "compose could not start '$QDRANT_SERVICE' (see docker compose -f $COMPOSE_FILE config --services)"; }
   qready=0
@@ -295,6 +358,7 @@ else
       warn "qdrant upload failed for $c"
     fi
   done
+  qdrant_verify_table
 fi
 
 fi # FROM_STEP -le 6
@@ -319,9 +383,13 @@ if [ -n "$SKIPPED_PG" ]; then
   echo "################################################################" >&2
   warn "Postgres restore SKIPPED for:${SKIPPED_PG}"
   warn "Restored:${RESTORED_PG:- none}. Start the missing container(s), restore their dumps from $SRC/pg/<container>/, or re-run:"
-  warn "  $0 --repo $REPO_CHOICE --full --yes --scratch $SCRATCH --from-step 5"
+  warn "  $0 $RESUME_SRC --full --yes --scratch $SCRATCH --from-step 5"
   [ "$CRON_MODE" != hold ] || warn "Held cron jobs are NOT active: $0 --apply-cron (after review)"
   exit 3
+fi
+if [ "$QDRANT_BAD" = 1 ]; then
+  warn "Qdrant point counts differ from collection_info.json (see table above); investigate before cutover"
+  exit 4
 fi
 echo "Restore complete (cron: mode '$CRON_MODE'). Next: DNS checklist in docs/ops/DISASTER_RECOVERY.md, then delete $SCRATCH."
 [ "$CRON_MODE" != hold ] || echo "Held cron jobs are NOT active. Review the list above, then: $0 --apply-cron"

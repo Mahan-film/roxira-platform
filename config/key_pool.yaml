@@ -1,0 +1,138 @@
+# Roxira LLM key pool: ONE free-first, OpenAI-compatible gateway for every agent and project.
+# Single source of truth for providers, key env-var NAMES, limits and model groups.
+#   - scripts/infra/key_pool/render_litellm.py renders the LiteLLM proxy config from this file.
+#   - scripts/dev/llm_pool.py reads the same file and calls providers directly (no gateway needed).
+# NEVER put a key value here: only env var names. Model ids come from config/models.yaml
+# (role/alias references below) wherever the registry has them. Provider-native ids that are NOT
+# OpenRouter catalogue ids (Cerebras, SambaNova, Mistral, Gemini, Groq extras) cannot live in
+# models.yaml (scripts/check_models.py diffs it against OpenRouter), so they are listed here
+# as `id:` and every one of them is marked unverified until checked against the provider's list.
+#
+# Model spec forms (under a provider's `models:`):
+#   {role: free, take: 2}                 first N ids of a models.yaml role
+#   {role: agent_runner, alias: groq-strong}   one entry picked by its alias in models.yaml
+#   {id: some-native-id}                  provider-native id (unverified)
+#
+# Limits are per KEY per model. `status: unverified` = written from memory of the provider's
+# public docs; re-check before trusting them for capacity planning. The gateway also adapts
+# at runtime: a 429 puts that deployment in cooldown and traffic moves to the next one.
+#
+# DATA POLICY (AGENTS.md section 4):
+#   data_policy: may_log   free tiers and anything whose terms we have not confirmed. Public code,
+#                          docs and dev chatter only. NEVER customer or case data.
+#   data_policy: no_train  paid API terms with no training on prompts (still: send customer data
+#                          only with provider.data_collection=deny, set via extra_body below).
+#   Groq/Cerebras/SambaNova/Mistral/Gemini are conservatively marked may_log until the owner has
+#   read their terms; promote one to no_train here only after that.
+#
+# GROUPS (the "model" name callers send to the gateway):
+#   agent-free  code/docs/dev tasks only. Tries free providers first, paid DeepSeek Flash last.
+#               Never send customer/case data to this group.
+#   private     customer/case data. `require` makes the renderer and the client REFUSE to build the
+#               group if it contains a may_log provider, a free-tier provider or a :free model id.
+#               Today that leaves only OpenRouter paid DeepSeek (+ data_collection=deny).
+
+schema_version: 1
+checked_at: "2026-10-13"
+
+gateway:
+  # LiteLLM proxy, docker, bound to 127.0.0.1 only. Port 4000 is reserved for gateways (AGENTS.md section 7).
+  # Tag pinned; unverified from this machine: `install.sh --apply` runs `docker pull` and stops if it is wrong.
+  image: ghcr.io/berriai/litellm:main-v1.77.7-stable
+  host: 127.0.0.1
+  port: 4000
+  master_key_env: KEYPOOL_MASTER_KEY   # callers send it as the OpenAI api key; set with set_server_env.sh --generate
+  router:
+    routing_strategy: simple-shuffle   # shuffles among deployments of the SAME `order` (the Groq keys)
+    num_retries: 3
+    retry_after: 1
+    timeout: 60
+    cooldown_time: 60                  # seconds a deployment sits out after a 429 / failure
+    allowed_fails: 1
+    enable_pre_call_checks: true
+
+providers:
+  groq:
+    tier: free
+    data_policy: may_log
+    base_url: https://api.groq.com/openai/v1
+    litellm_prefix: groq
+    keys: [GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEY_3]   # every set key is its own deployment
+    models:
+      - {role: agent_runner, alias: groq-strong}   # openai/gpt-oss-120b
+      - {role: agent_runner, alias: groq-fast}     # openai/gpt-oss-20b
+    limits: {rpm: 30, tpm: 8000, rpd: 1000, status: unverified}
+
+  cerebras:
+    tier: free
+    data_policy: may_log
+    base_url: https://api.cerebras.ai/v1
+    litellm_prefix: cerebras
+    keys: [CEREBRAS_API_KEY]
+    models:
+      - {id: gpt-oss-120b}   # unverified native id
+    limits: {rpm: 30, tpm: 60000, rpd: 14400, status: unverified}
+
+  sambanova:
+    tier: free
+    data_policy: may_log
+    base_url: https://api.sambanova.ai/v1
+    litellm_prefix: sambanova
+    keys: [SAMBANOVA_API_KEY]
+    models:
+      - {id: gpt-oss-120b}   # unverified native id
+    limits: {rpm: 20, tpm: 100000, rpd: unverified, status: unverified}
+
+  mistral:
+    tier: free
+    data_policy: may_log   # free "Experiment" plan may train on prompts
+    base_url: https://api.mistral.ai/v1
+    litellm_prefix: mistral
+    keys: [MISTRAL_API_KEY]
+    models:
+      - {id: mistral-small-latest}   # unverified native id
+    limits: {rpm: 60, tpm: 500000, rpd: unverified, status: unverified}
+
+  gemini:
+    tier: free
+    data_policy: may_log   # Google free tier content is used to improve products
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    litellm_prefix: gemini
+    keys: [GEMINI_API_KEY]
+    models:
+      - {id: gemini-flash-latest}   # Flash only; Pro is banned by owner policy. unverified id
+    limits: {rpm: 10, tpm: 250000, rpd: 250, status: unverified}
+
+  openrouter-free:
+    tier: free
+    data_policy: may_log
+    base_url: https://openrouter.ai/api/v1
+    litellm_prefix: openrouter
+    keys_any: [OPENROUTER_API_KEY_AGENTS, OPENROUTER_API_KEY]   # first one that is set
+    models:
+      - {role: free, take: 3}   # :free ids from models.yaml
+    limits: {rpm: 20, tpm: unverified, rpd: 50, status: unverified}   # rpd 50 without credit, ~1000 with $10 credit
+    note: Blocked from Iranian IPs without a VPN; the Mac client skips it quickly when it fails.
+
+  openrouter-paid:
+    tier: paid
+    data_policy: no_train
+    base_url: https://openrouter.ai/api/v1
+    litellm_prefix: openrouter
+    keys_any: [OPENROUTER_API_KEY_AGENTS, OPENROUTER_API_KEY]
+    models:
+      - {role: cheap, take: 2}   # deepseek/deepseek-v4.1-flash, then v4-flash-0731
+    limits: {rpm: 200, tpm: unverified, rpd: unlimited, status: unverified}
+    extra_body:
+      provider: {data_collection: deny, allow_fallbacks: true}
+
+groups:
+  agent-free:
+    description: Code, docs and dev tasks only. Free providers first, paid DeepSeek Flash as last resort.
+    providers: [groq, cerebras, sambanova, mistral, gemini, openrouter-free, openrouter-paid]
+  private:
+    description: Customer or case data. No free tier, no may_log provider, no :free model id.
+    providers: [openrouter-paid]
+    require:
+      data_policy: no_train
+      forbid_free: true

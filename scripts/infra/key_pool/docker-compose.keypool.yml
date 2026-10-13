@@ -1,0 +1,23 @@
+# LiteLLM key-pool gateway. Bound to 127.0.0.1:4000 ONLY (port 4000 is reserved for gateways).
+# No secrets here: install.sh writes generated/keypool.env (mode 600, only the key NAMES in
+# config/key_pool.yaml, copied from the server .env) and generated/litellm.config.yaml.
+# Start via install.sh --apply, not by hand. Image tag comes from config/key_pool.yaml.
+services:
+  keypool:
+    image: ${KEYPOOL_IMAGE:?set by install.sh}
+    container_name: roxira_keypool
+    restart: unless-stopped
+    env_file: ./generated/keypool.env
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    volumes:
+      - ./generated/litellm.config.yaml:/app/config.yaml:ro
+    ports:
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=4)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+    read_only: false
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]

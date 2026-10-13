@@ -5,6 +5,8 @@
 #
 #   run_task.sh (--task TEXT | --task-file FILE) [--model ALIAS] [--scope PATH]... [--public] [--push]
 #               [--timeout SECS] [--slug WORD] [--cleanup] [--dry-run]
+#   --gateway   route through the key-pool gateway (group agent-free, URL from $AGENT_GATEWAY_URL, default
+#               http://127.0.0.1:4000/v1, key KEYPOOL_MASTER_KEY). Free providers may log: needs --public.
 #   run_task.sh --smoke [--model ALIAS]      verification run (throwaway worktree, nothing pushed)
 #   run_task.sh --list                       agent/* branches known to the agents' clone
 #
@@ -30,7 +32,8 @@ BASE_REF="refs/remotes/origin/main"
 
 TASK="" TASK_FILE="" MODEL_ALIAS="" TIMEOUT=900 SLUG="" PUSH=0 PUBLIC=0 CLEANUP=0 DRY=0 SMOKE=0 LIST=0
 SCOPES=()
-NO_FALLBACK=0
+NO_FALLBACK=0 GATEWAY=0
+AGENT_GATEWAY_URL="${AGENT_GATEWAY_URL:-http://127.0.0.1:4000/v1}"
 REPO_ENV="${ROXIRA_REPO_ENV:-/opt/roxira_platform/.env}"
 
 log() { printf '[agent-run] %s\n' "$*" >&2; }
@@ -51,7 +54,8 @@ while [ $# -gt 0 ]; do
     --smoke) SMOKE=1 ;;
     --list) LIST=1 ;;
     --no-fallback) NO_FALLBACK=1 ;;
-    -h | --help) sed -n '2,19p' "$0"; exit 0 ;;
+    --gateway) GATEWAY=1 ;;
+    -h | --help) sed -n '2,21p' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -104,6 +108,9 @@ resolve_alias() { # alias -> MODEL_REF PUBLIC_ONLY KEYVAR (empty MODEL_REF when 
   case "$MODEL_REF" in *:free | openrouter/free) PUBLIC_ONLY=1 ;; esac
 }
 resolve_alias "$MODEL_ALIAS"
+if [ "$GATEWAY" = 1 ]; then   # key-pool gateway replaces the alias; agent-free may route to free tiers
+  MODEL_ALIAS=gateway MODEL_REF="keypool/agent-free" PUBLIC_ONLY=1 KEYVAR=KEYPOOL_MASTER_KEY
+fi
 [ -n "$MODEL_REF" ] || die "unknown model alias '$MODEL_ALIAS' (groq-fast, groq-strong, ds-flash, free-public)"
 if [ "$PUBLIC_ONLY" = 1 ] && [ "$PUBLIC" != 1 ]; then
   die "$MODEL_ALIAS is a :free-tier model (providers may log/train on prompts). Public code only: pass --public to confirm."
@@ -145,7 +152,7 @@ LOG="$STATE/logs/${BRANCH#agent/}.log"
 # ---- permission/config overlay ---------------------------------------------
 make_overlay() { # prints the JSON handed to OPENCODE_CONFIG_CONTENT
   OV_CONFIG="$CONFIG" OV_MODEL="$MODEL_REF" OV_SCOPES="$(printf '%s\n' ${SCOPE_ARGS[@]+"${SCOPE_ARGS[@]}"})" \
-    OV_DENY="$(printf '%s\n' "${DENY_GLOBS[@]}")" OV_WT="$WT" python3 - <<'PY'
+    OV_DENY="$(printf '%s\n' "${DENY_GLOBS[@]}")" OV_WT="$WT" OV_GW="$GATEWAY" OV_GW_URL="$AGENT_GATEWAY_URL" python3 - <<'PY'
 import json, os
 cfg = {}
 p = os.environ["OV_CONFIG"]
@@ -174,6 +181,11 @@ for c in ["cat *.env*", "cat /*", "cat ~*", "cat *../*", "head /*", "tail /*", "
           "* ~/*", "*curl *", "*wget *", "*ssh *", "*scp *", "*nc *", "*git commit*", "*git push*", "*git checkout*",
           "*git reset*", "*git clean*", "*git remote*", "*git config*", "*rm *", "*sudo *", "*chmod *", "*chown *"]:
     bash[c] = "deny"
+if os.environ["OV_GW"] == "1":   # key-pool gateway as one OpenAI-compatible provider; key via env, never inline
+    cfg.setdefault("provider", {})["keypool"] = {
+        "npm": "@ai-sdk/openai-compatible", "name": "keypool",
+        "options": {"baseURL": os.environ["OV_GW_URL"], "apiKey": "{env:KEYPOOL_MASTER_KEY}"},
+        "models": {"agent-free": {"name": "agent-free"}}}
 cfg["model"] = os.environ["OV_MODEL"]
 cfg["small_model"] = os.environ["OV_MODEL"]   # titles etc. must not go to a different (default) provider
 cfg["permission"] = {"edit": edit, "read": read, "bash": bash, "webfetch": "deny", "websearch": "deny",
@@ -206,7 +218,7 @@ command -v "$OPENCODE_BIN" >/dev/null || die "$OPENCODE_BIN not found"
 # Keys: parsed (never sourced), whitelisted NAMES only, never printed. Sources, first value wins:
 # the environment, then /etc/roxira/agents.env, then the server .env (GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEY_3 set by
 # scripts/ops/set_server_env.sh). The prod OPENROUTER_API_KEY is deliberately NOT read.
-KEY_NAMES=(GROQ_API_KEY GROQ_API_KEY_2 GROQ_API_KEY_3 OPENROUTER_API_KEY_AGENTS)
+KEY_NAMES=(GROQ_API_KEY GROQ_API_KEY_2 GROQ_API_KEY_3 OPENROUTER_API_KEY_AGENTS KEYPOOL_MASTER_KEY)
 for f in "$ENV_FILE" "$REPO_ENV"; do
   [ -r "$f" ] || continue
   while IFS= read -r line; do
@@ -227,6 +239,7 @@ else
 fi
 unset GROQ_API_KEY   # exported again per attempt, one key at a time; spare keys are never exported
 export OPENROUTER_API_KEY_AGENTS="${OPENROUTER_API_KEY_AGENTS:-}"
+if [ "$GATEWAY" = 1 ]; then export KEYPOOL_MASTER_KEY; else unset KEYPOOL_MASTER_KEY; fi
 [ -r "$CONFIG" ] || die "$CONFIG missing: run setup.sh"
 
 START=$SECONDS
