@@ -186,6 +186,9 @@ if os.environ["OV_GW"] == "1":   # key-pool gateway as one OpenAI-compatible pro
         "npm": "@ai-sdk/openai-compatible", "name": "keypool",
         "options": {"baseURL": os.environ["OV_GW_URL"], "apiKey": "{env:KEYPOOL_MASTER_KEY}"},
         "models": {"agent-free": {"name": "agent-free"}}}
+    ep = cfg.get("enabled_providers")
+    if isinstance(ep, list) and "keypool" not in ep:   # base config whitelists providers; add the gateway
+        cfg["enabled_providers"] = ep + ["keypool"]
 cfg["model"] = os.environ["OV_MODEL"]
 cfg["small_model"] = os.environ["OV_MODEL"]   # titles etc. must not go to a different (default) provider
 cfg["permission"] = {"edit": edit, "read": read, "bash": bash, "webfetch": "deny", "websearch": "deny",
