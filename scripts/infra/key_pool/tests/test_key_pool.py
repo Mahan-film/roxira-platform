@@ -17,7 +17,7 @@ import llm_pool
 import render_litellm
 
 FAKE_ENV = {n: "fake-" + n.lower() for n in [
-    "GROQ_API_KEY", "GROQ_API_KEY_2", "GROQ_API_KEY_3", "CEREBRAS_API_KEY", "SAMBANOVA_API_KEY",
+    "GROQ_API_KEY", "GROQ_API_KEY_2", "GROQ_API_KEY_3", "SAMBANOVA_API_KEY",
     "MISTRAL_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "KEYPOOL_MASTER_KEY"]}
 
 
@@ -80,7 +80,7 @@ def _post_factory(script):
 
 
 def test_client_rotates_on_429_and_5xx_then_succeeds():
-    post, calls = _post_factory({"api.groq.com": 429, "api.cerebras.ai": 503, "api.sambanova.ai": 0})
+    post, calls = _post_factory({"api.groq.com": 429, "api.sambanova.ai": 503})
     text, used = llm_pool.chat([{"role": "user", "content": "hi"}], "agent-free", pool=pool(), env=FAKE_ENV,
                                post=post, rng=random.Random(1))
     assert text == "hello" and used.startswith("mistral/")
@@ -100,7 +100,7 @@ def test_client_cooldown_skips_failed_provider():
 
 def test_client_all_fail_raises():
     post, _ = _post_factory({h: 429 for h in [
-        "api.groq.com", "api.cerebras.ai", "api.sambanova.ai", "api.mistral.ai",
+        "api.groq.com", "api.sambanova.ai", "api.mistral.ai",
         "generativelanguage.googleapis.com", "openrouter.ai"]})
     with pytest.raises(RuntimeError, match="all providers failed"):
         llm_pool.chat([{"role": "user", "content": "x"}], pool=pool(), env=FAKE_ENV, post=post)

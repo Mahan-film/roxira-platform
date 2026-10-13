@@ -6,7 +6,7 @@ listed in `key_pool.yaml` and marked unverified.
 
 ## How it works
 - Groups (the "model" name you send): `agent-free` and `private`.
-  - `agent-free`: code/docs/dev only. Order: Groq (every set key, shuffled) -> Cerebras -> SambaNova -> Mistral
+  - `agent-free`: code/docs/dev only. Order: Groq (every set key, shuffled) -> SambaNova -> Mistral
     -> Gemini Flash -> OpenRouter `:free` -> OpenRouter paid DeepSeek Flash (last resort).
   - `private`: customer/case data. Only `no_train` paid providers (today: OpenRouter DeepSeek with
     `data_collection=deny`). The renderer and client refuse to build it if a free or `may_log` provider gets in.
@@ -23,7 +23,6 @@ listed in `key_pool.yaml` and marked unverified.
 ## Owner commands
 ```bash
 # missing keys on the server (hidden prompt, or --from-local to copy from the Mac)
-bash scripts/ops/set_server_env.sh CEREBRAS_API_KEY
 bash scripts/ops/set_server_env.sh SAMBANOVA_API_KEY
 bash scripts/ops/set_server_env.sh MISTRAL_API_KEY
 bash scripts/ops/set_server_env.sh KEYPOOL_MASTER_KEY --generate   # gateway password (required)
@@ -32,8 +31,9 @@ bash scripts/infra/key_pool/install.sh            # dry-run: shows key NAMES fou
 bash scripts/infra/key_pool/install.sh --apply    # writes generated/, pulls image, compose up
 bash scripts/infra/key_pool/health.sh             # ok / 429 / fail per provider and per group
 ```
-`install.sh` refuses if port 4000 is busy. The image tag in `gateway.image` is unverified: if `docker pull`
-fails, fix the tag in `key_pool.yaml` and re-run.
+`install.sh` refuses if port 4000 is busy. `--apply` writes the config, brings the stack up and, if the
+`roxira_keypool` container already exists, restarts it so the changed config is loaded. The image tag in
+`gateway.image` is unverified: if `docker pull` fails, fix the tag in `key_pool.yaml` and re-run.
 
 ## Add a key or provider
 - Extra key for an existing provider: add its env var name to the provider's `keys:` list, set it with

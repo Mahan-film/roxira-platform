@@ -4,7 +4,7 @@
 #   - scripts/dev/llm_pool.py reads the same file and calls providers directly (no gateway needed).
 # NEVER put a key value here: only env var names. Model ids come from config/models.yaml
 # (role/alias references below) wherever the registry has them. Provider-native ids that are NOT
-# OpenRouter catalogue ids (Cerebras, SambaNova, Mistral, Gemini, Groq extras) cannot live in
+# OpenRouter catalogue ids (SambaNova, Mistral, Gemini, Groq extras) cannot live in
 # models.yaml (scripts/check_models.py diffs it against OpenRouter), so they are listed here
 # as `id:` and every one of them is marked unverified until checked against the provider's list.
 #
@@ -22,7 +22,7 @@
 #                          docs and dev chatter only. NEVER customer or case data.
 #   data_policy: no_train  paid API terms with no training on prompts (still: send customer data
 #                          only with provider.data_collection=deny, set via extra_body below).
-#   Groq/Cerebras/SambaNova/Mistral/Gemini are conservatively marked may_log until the owner has
+#   Groq/SambaNova/Mistral/Gemini are conservatively marked may_log until the owner has
 #   read their terms; promote one to no_train here only after that.
 #
 # GROUPS (the "model" name callers send to the gateway):
@@ -63,16 +63,6 @@ providers:
       - {role: agent_runner, alias: groq-fast}     # openai/gpt-oss-20b
     limits: {rpm: 30, tpm: 8000, rpd: 1000, status: unverified}
 
-  cerebras:
-    tier: free
-    data_policy: may_log
-    base_url: https://api.cerebras.ai/v1
-    litellm_prefix: cerebras
-    keys: [CEREBRAS_API_KEY]
-    models:
-      - {id: gpt-oss-120b}   # unverified native id
-    limits: {rpm: 30, tpm: 60000, rpd: 14400, status: unverified}
-
   sambanova:
     tier: free
     data_policy: may_log
@@ -100,7 +90,7 @@ providers:
     litellm_prefix: gemini
     keys: [GEMINI_API_KEY]
     models:
-      - {id: gemini-flash-latest}   # Flash only; Pro is banned by owner policy. unverified id
+      - {id: gemini-2.5-flash}   # Flash only; Pro is banned by owner policy.
     limits: {rpm: 10, tpm: 250000, rpd: 250, status: unverified}
 
   openrouter-free:
@@ -110,7 +100,10 @@ providers:
     litellm_prefix: openrouter
     keys_any: [OPENROUTER_API_KEY_AGENTS, OPENROUTER_API_KEY]   # first one that is set
     models:
-      - {role: free, take: 3}   # :free ids from models.yaml
+      - {id: "google/gemma-4-31b-it:free"}
+      - {id: "nvidia/nemotron-3-super-120b-a12b:free"}
+      - {id: "nvidia/nemotron-3-ultra-550b-a55b:free"}
+      - {id: "poolside/laguna-s-2.1:free"}
     limits: {rpm: 20, tpm: unverified, rpd: 50, status: unverified}   # rpd 50 without credit, ~1000 with $10 credit
     note: Blocked from Iranian IPs without a VPN; the Mac client skips it quickly when it fails.
 
@@ -129,7 +122,7 @@ providers:
 groups:
   agent-free:
     description: Code, docs and dev tasks only. Free providers first, paid DeepSeek Flash as last resort.
-    providers: [groq, cerebras, sambanova, mistral, gemini, openrouter-free, openrouter-paid]
+    providers: [groq, sambanova, mistral, gemini, openrouter-free, openrouter-paid]
   private:
     description: Customer or case data. No free tier, no may_log provider, no :free model id.
     providers: [openrouter-paid]

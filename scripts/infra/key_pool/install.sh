@@ -57,4 +57,8 @@ chmod 600 "$GEN/keypool.env"
 export KEYPOOL_IMAGE="$IMAGE"
 docker pull "$IMAGE" >/dev/null || die "docker pull $IMAGE failed: fix gateway.image in config/key_pool.yaml"
 docker compose -f "$HERE/docker-compose.keypool.yml" -p roxira-keypool up -d
+if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx roxira_keypool; then
+  docker restart roxira_keypool >/dev/null
+  log "restarted roxira_keypool to load the new config"
+fi
 log "up. Check: bash $HERE/health.sh"
