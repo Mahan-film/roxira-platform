@@ -53,11 +53,11 @@ render_config() {
   tpl="${tpl//__PORT__/$PORT}"; tpl="${tpl//__DEST__/$DEST}"; tpl="${tpl//__SNI__/$SNI}"
   tpl="${tpl//__PRIVATE_KEY__/$priv}"; tpl="${tpl//__SHORT_IDS__/$sids}"; tpl="${tpl//__CLIENTS__/$clients}"
   umask 077
-  printf '%s\n' "$tpl" >"$ETC/config.json.new"
-  if [ "${ROXIRA_VPN_SKIP_ROOT:-0}" != 1 ]; then chown root:xray-vpn "$ETC/config.json.new"; fi
-  chmod 640 "$ETC/config.json.new"
-  "$XRAY_BIN" run -test -c "$ETC/config.json.new" >/dev/null 2>&1 || { rm -f "$ETC/config.json.new"; die "xray rejected rendered config (not applied)"; }
-  mv "$ETC/config.json.new" "$ETC/config.json"
+  printf '%s\n' "$tpl" >"$ETC/config.new.json"
+  if [ "${ROXIRA_VPN_SKIP_ROOT:-0}" != 1 ]; then chown root:xray-vpn "$ETC/config.new.json"; fi
+  chmod 640 "$ETC/config.new.json"
+  "$XRAY_BIN" run -test -c "$ETC/config.new.json" >/dev/null 2>&1 || { rm -f "$ETC/config.new.json"; die "xray rejected rendered config (not applied)"; }
+  mv "$ETC/config.new.json" "$ETC/config.json"
 }
 
 restart_xray() { systemctl restart xray-vpn.service; }
