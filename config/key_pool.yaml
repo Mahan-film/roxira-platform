@@ -120,13 +120,25 @@ providers:
     extra_body:
       provider: {data_collection: deny, allow_fallbacks: true}
 
+  openrouter-private:
+    tier: paid
+    data_policy: no_train
+    base_url: https://openrouter.ai/api/v1
+    litellm_prefix: openrouter
+    keys: [OPENROUTER_API_KEY]   # prod key only; the _AGENTS workspace allows data-training endpoints
+    models:
+      - {role: cheap, take: 2}   # deepseek/deepseek-v4.1-flash, then v4-flash-0731
+    limits: {rpm: 200, tpm: unverified, rpd: unlimited, status: unverified}
+    extra_body:
+      provider: {data_collection: deny, allow_fallbacks: true}
+
 groups:
   agent-free:
     description: Code, docs and dev tasks only. Free providers first, paid DeepSeek Flash as last resort.
     providers: [groq, sambanova, mistral, gemini, openrouter-free, openrouter-paid]
   private:
     description: Customer or case data. No free tier, no may_log provider, no :free model id.
-    providers: [openrouter-paid]
+    providers: [openrouter-private]
     require:
       data_policy: no_train
       forbid_free: true

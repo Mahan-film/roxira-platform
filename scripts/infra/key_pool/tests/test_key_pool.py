@@ -56,6 +56,13 @@ def test_private_group_has_no_free_or_may_log():
         assert not d.model.endswith(":free") and d.model != "openrouter/free"
 
 
+def test_private_render_uses_prod_key_only():
+    cfg = render_litellm.render(pool(), set(FAKE_ENV))
+    priv = [m for m in cfg["model_list"] if m["model_name"] == "private"]
+    assert priv
+    assert all(m["litellm_params"]["api_key"] == "os.environ/OPENROUTER_API_KEY" for m in priv)
+
+
 def test_private_group_refuses_bad_config():
     p = pool()
     p["groups"]["private"]["providers"] = ["openrouter-free"]
