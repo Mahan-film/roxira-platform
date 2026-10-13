@@ -18,7 +18,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # already satisfied and do not replace it with a CUDA build from PyPI.
 RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
 
-RUN pip install psycopg fastapi uvicorn pydantic python-docx pymupdf redis httpx langgraph sentence-transformers sqlalchemy python-multipart "pydantic[email]" faster-whisper
+RUN pip install psycopg==3.3.6 fastapi==0.143.0 uvicorn==0.54.0 pydantic python-docx pymupdf redis==8.1.0 httpx langgraph==1.2.15 sentence-transformers==6.1.0 sqlalchemy==2.1.4 python-multipart "pydantic[email]" faster-whisper==1.2.1
 # موتور پردازش اسناد (Docs/PDF/تصویر → Markdown): چیدمان، جدول و OCR چندزبانه
 RUN pip install docling
 # Case-file upload (case_files.py): HEIC phone photos + explicit Pillow.
