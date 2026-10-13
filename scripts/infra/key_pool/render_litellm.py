@@ -19,9 +19,17 @@ import yaml
 def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
     gw = pool.get("gateway", {})
     model_list = []
+    fallbacks = []
     for group in pool["groups"]:
-        for d in kc.group_deployments(pool, group, names, models_path):
-            params = {"model": d.litellm_model, "api_key": f"os.environ/{d.key_env}", "order": d.order}
+        deps = kc.group_deployments(pool, group, names, models_path)
+        # Free first: when a group mixes tiers, paid deployments move to "<group>-paid",
+        # reached only through a router fallback (providers reject an "order" param).
+        split = any(d.tier == "paid" for d in deps) and any(d.tier != "paid" for d in deps)
+        if split:
+            fallbacks.append({group: [f"{group}-paid"]})
+        for d in deps:
+            name = f"{group}-paid" if split and d.tier == "paid" else group
+            params = {"model": d.litellm_model, "api_key": f"os.environ/{d.key_env}"}
             if d.rpm:
                 params["rpm"] = d.rpm
             if d.tpm:
@@ -29,11 +37,13 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
             if d.extra_body:
                 params["extra_body"] = d.extra_body
             model_list.append({
-                "model_name": group,
+                "model_name": name,
                 "litellm_params": params,
                 "model_info": {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy},
             })
     router = dict(gw.get("router", {}))
+    if fallbacks:
+        router["fallbacks"] = router.get("fallbacks", []) + fallbacks
     return {
         "model_list": model_list,
         "router_settings": router,

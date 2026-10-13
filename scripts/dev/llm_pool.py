@@ -49,6 +49,8 @@ def default_post(url: str, headers: dict[str, str], body: dict[str, Any], timeou
         socket.create_connection((host, port), timeout=min(5.0, timeout)).close()
     except OSError:
         return 0, None
+    # Some providers sit behind Cloudflare, which rejects the default Python-urllib agent (error 1010).
+    headers = {"User-Agent": "roxira-keypool/1.0", **headers}
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

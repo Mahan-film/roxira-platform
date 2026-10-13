@@ -32,11 +32,13 @@ def test_render_shape_and_no_secret_values():
     assert cfg["general_settings"]["master_key"] == "os.environ/KEYPOOL_MASTER_KEY"
     ag = [m for m in cfg["model_list"] if m["model_name"] == "agent-free"]
     groq = [m for m in ag if m["litellm_params"]["model"].startswith("groq/openai/gpt-oss-120b")]
-    assert len(groq) == 3 and len({m["litellm_params"]["order"] for m in groq}) == 1
+    assert len(groq) == 3
     assert all(m["litellm_params"]["api_key"].startswith("os.environ/") for m in ag)
-    orders = [m["litellm_params"]["order"] for m in ag]
-    assert orders == sorted(orders)
-    assert ag[-1]["litellm_params"]["model"].startswith("openrouter/deepseek/")  # paid last
+    assert all("order" not in m["litellm_params"] for m in cfg["model_list"])  # providers reject it
+    assert all(m["model_info"]["tier"] == "free" for m in ag)  # paid only via fallback
+    paid = [m for m in cfg["model_list"] if m["model_name"] == "agent-free-paid"]
+    assert paid and all(m["litellm_params"]["model"].startswith("openrouter/deepseek/") for m in paid)
+    assert {"agent-free": ["agent-free-paid"]} in cfg["router_settings"]["fallbacks"]
     assert cfg["router_settings"]["routing_strategy"] == "simple-shuffle"
 
 
