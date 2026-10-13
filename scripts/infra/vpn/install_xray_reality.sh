@@ -86,6 +86,22 @@ SystemCallArchitectures=native
 WantedBy=multi-user.target
 UNIT
 ufw allow "$PORT/tcp" comment 'roxira-vpn xray reality' >/dev/null
+# BBR + fq and larger TCP buffers: much better throughput on lossy Iran<->EU paths (cubic stalls).
+modprobe tcp_bbr 2>/dev/null && echo tcp_bbr >/etc/modules-load.d/roxira-bbr.conf
+cat >/etc/sysctl.d/91-roxira-net.conf <<'SYSCTL'
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+net.ipv4.tcp_fastopen=3
+net.ipv4.tcp_mtu_probing=1
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+net.ipv4.tcp_rmem=4096 131072 16777216
+net.ipv4.tcp_wmem=4096 65536 16777216
+net.ipv4.tcp_keepalive_time=300
+net.ipv4.tcp_keepalive_intvl=30
+net.ipv4.tcp_keepalive_probes=5
+SYSCTL
+sysctl -q --system || true
 systemctl daemon-reload; systemctl enable --now xray-vpn.service
 sleep 1; systemctl is-active --quiet xray-vpn.service || die "service failed to start; see: journalctl -u xray-vpn -n 20"
 log "installed. Share links follow on stdout ONLY (do not redirect to a log file):"
