@@ -94,11 +94,11 @@ function toSitemapEntry(entry: PublicSitemapEntry): MetadataRoute.Sitemap[number
   };
 }
 
-export default async function sitemap({
-  id,
-}: {
-  id: number;
+export default async function sitemap(props: {
+  id: Promise<string | number> | string | number;
 }): Promise<MetadataRoute.Sitemap> {
+  // Next.js 16 passes the generateSitemaps id as a Promise<string>.
+  const id = Number(await props.id) || 0;
   const headerList = await headers();
   const domain = resolveSeoDomain(headerList.get("host"));
   const origin = SITE_ORIGINS[domain];
