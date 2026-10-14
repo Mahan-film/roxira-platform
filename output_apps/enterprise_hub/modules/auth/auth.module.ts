@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   JWT_DEFAULT_EXPIRES_IN,
 } from './constants/auth.constants';
+import { TenantsModule } from '../tenants/tenants.module';
 import { AuthController } from './controllers/auth.controller';
 import { UserEntity } from './entities/user.entity';
 import { PasskeyCredentialEntity } from './entities/passkey-credential.entity';
@@ -34,6 +35,7 @@ import { WebAuthnService } from './services/webauthn.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([UserEntity, PasskeyCredentialEntity]),
+    TenantsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

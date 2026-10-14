@@ -26,6 +26,8 @@ import { UserEntity } from '../entities/user.entity';
 import { AuthServiceDomain } from '../enums/auth-service.enum';
 import { RedisClient } from '../providers/redis.provider';
 import { AuthRepository } from '../repositories/auth.repository';
+import { TenantRole } from '../../tenants/enums/tenant-role.enum';
+import { TenantsService } from '../../tenants/services/tenants.service';
 import { KavenegarService } from './kavenegar.service';
 
 interface OtpRecord {
@@ -40,6 +42,8 @@ interface JwtPayload {
   phone: string;
   role: string;
   domain: AuthServiceDomain;
+  tenantId: string | null;
+  tenantRole: string | null;
 }
 
 /**
@@ -63,6 +67,7 @@ export class AuthService {
     private readonly kavenegarService: KavenegarService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly tenantsService: TenantsService,
     @Inject(REDIS_CLIENT) private readonly redis: RedisClient,
   ) {}
 
@@ -187,11 +192,35 @@ export class AuthService {
       record.domain ?? domain,
     );
 
+    await this.applyOrganizationOnboarding(user, dto.organizationName);
+
     const session = await this.issueSessionForUser(user);
 
     this.logger.log(`[AUTH] ورود موفق | phone=${phone} | userId=${user.id}`);
 
     return session;
+  }
+
+  /**
+   * ثبت‌اولیه سازمان برای کاربر بدون مستأجر.
+   *
+   * اگر کاربر هنوز به هیچ سازمانی متصل نباشد و نام سازمان داده شده باشد،
+   * سازمان جدید ساخته و کاربر به‌عنوان `OWNER` به آن متصل می‌شود. در صورت
+   * داشتن مستأجر، نام سازمان نادیده گرفته می‌شود. نقش سراسری کاربر هرگز
+   * `UserRole.ADMIN` نمی‌شود؛ اختیارات سازمانی فقط از `tenant_role` می‌آید.
+   */
+  private async applyOrganizationOnboarding(
+    user: UserEntity,
+    organizationName?: string,
+  ): Promise<void> {
+    if (user.tenantId || !organizationName) {
+      return;
+    }
+
+    const tenant = await this.tenantsService.create(organizationName);
+    user.tenantId = tenant.id;
+    user.tenantRole = TenantRole.OWNER;
+    await this.authRepository.save(user);
   }
 
   /**
@@ -205,6 +234,8 @@ export class AuthService {
       phone: user.phone,
       role: user.role,
       domain: user.serviceDomain,
+      tenantId: user.tenantId ?? null,
+      tenantRole: user.tenantRole ?? null,
     };
 
     const accessToken = await this.jwtService.signAsync(payload);

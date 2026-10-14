@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsOptional, Matches } from 'class-validator';
+import { IsEnum, IsOptional, IsString, Length, Matches } from 'class-validator';
 import { IR_MOBILE_REGEX, OTP_CODE_LENGTH } from '../constants/auth.constants';
 import { AuthServiceDomain } from '../enums/auth-service.enum';
 import { normalizeIranianMobile } from '../utils/phone.util';
@@ -36,4 +36,19 @@ export class VerifyOtpDto {
   @IsOptional()
   @IsEnum(AuthServiceDomain)
   serviceDomain?: AuthServiceDomain;
+
+  @ApiPropertyOptional({
+    description:
+      'نام سازمان برای ثبت‌اولیه. فقط زمانی اعمال می‌شود که کاربر هنوز به هیچ سازمانی متصل نباشد.',
+    example: 'شرکت توسعه فناوری پارس',
+    minLength: 2,
+    maxLength: 150,
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsOptional()
+  @IsString()
+  @Length(2, 150)
+  organizationName?: string;
 }

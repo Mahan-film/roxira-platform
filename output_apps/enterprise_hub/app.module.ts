@@ -14,6 +14,7 @@ import { AccountingModule } from './modules/accounting/accounting.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { CrmModule } from './modules/crm/crm.module';
+import { TenantsModule } from './modules/tenants/tenants.module';
 import { TaxComplianceModule } from './modules/tax_compliance/tax-compliance.module';
 import { HrModule } from './modules/hr/hr.module';
 import { CurrencyModule } from './modules/currency/currency.module';
@@ -71,6 +72,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     InvoicingModule,
     AccountingModule,
     AuthModule,
+    TenantsModule,
     InventoryModule,
     CrmModule,
     TaxComplianceModule,

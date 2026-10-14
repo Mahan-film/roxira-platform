@@ -10,7 +10,6 @@ import {
   Post,
   Query,
   Req,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -18,6 +17,7 @@ import {
   AuthenticatedRequest,
   JwtAuthGuard,
 } from '../../auth/guards/jwt-auth.guard';
+import { requireTenantId } from '../../tenants/tenant-context';
 import { AddLeadNoteDto } from '../dto/add-lead-note.dto';
 import {
   ContactMessageResponseDto,
@@ -59,11 +59,7 @@ export class CrmController {
 
   /** استخراج شناسه مستأجر از کاربر تأییدشده روی Request (هرگز از ورودی). */
   private tenantIdOf(request: AuthenticatedRequest): string {
-    const tenantId = request.user?.sub;
-    if (!tenantId) {
-      throw new UnauthorizedException('شناسه مستأجر در توکن یافت نشد.');
-    }
-    return tenantId;
+    return requireTenantId(request);
   }
 
   // ---------------------------------------------------------------------------

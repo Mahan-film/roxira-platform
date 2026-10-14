@@ -20,6 +20,7 @@ import { PipelineStage } from '../enums/crm.enums';
  * (Rule #3 - AGENTS.md: Repository Pattern).
  */
 @Entity({ name: 'crm_leads' })
+@Index('IDX_crm_leads_tenant_email', ['tenantId', 'email'], { unique: true })
 export class CrmLeadEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -31,7 +32,6 @@ export class CrmLeadEntity {
   @Column({ type: 'varchar', length: 120, name: 'full_name' })
   fullName: string;
 
-  @Index({ unique: true })
   @Column({ type: 'varchar', length: 120 })
   email: string;
 

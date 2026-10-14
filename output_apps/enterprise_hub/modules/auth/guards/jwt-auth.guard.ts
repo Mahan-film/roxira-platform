@@ -16,6 +16,13 @@ export interface JwtPayload {
   phone: string;
   role: string;
   domain: AuthServiceDomain;
+  /**
+   * شناسه سازمان کاربر یا null. اختیاری است تا توکن‌های قدیمی که این claim را
+   * ندارند همچنان معتبر بمانند و در آن‌ها مقدار null در نظر گرفته شود.
+   */
+  tenantId?: string | null;
+  /** نقش کاربر درون سازمان یا null (برای توکن‌های قدیمی: null). */
+  tenantRole?: string | null;
   iat?: number;
   exp?: number;
 }
