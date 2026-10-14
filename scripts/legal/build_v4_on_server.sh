@@ -108,10 +108,18 @@ MERGED=/work/merged.jsonl
 # python helper inside the app image, sharing Qdrant's network namespace (127.0.0.1:6333 = Qdrant)
 IMG=$(docker inspect -f '{{.Config.Image}}' "$APP")
 EXTRA_ENV=()
+# Shared embedding service (roxira_embeddings): when EMBEDDING_URL is set on the host, pass
+# it through so the ingest helper embeds over HTTP instead of loading a local bge-m3. The
+# helper shares Qdrant's network namespace on roxira_net, so the TEI service is reachable
+# by its compose service name.
+EMBED_ENV=()
+if [ -n "${EMBEDDING_URL:-}" ]; then
+  EMBED_ENV=(-e "EMBEDDING_URL=${EMBEDDING_URL_IN_CONTAINER:-http://roxira_embeddings:80}")
+fi
 run() {
   docker run --rm --network "container:$QDR" --volumes-from "$APP" \
     -v "$REPO:/repo:ro" -v "$WORK:/work" -w /repo -e QDRANT_HOST=127.0.0.1 -e QDRANT_PORT=6333 \
-    "${EXTRA_ENV[@]}" "$IMG" python3 "$@"
+    "${EMBED_ENV[@]}" "${EXTRA_ENV[@]}" "$IMG" python3 "$@"
 }
 run_step() { # description, then command args; stops on first failure
   local desc=$1

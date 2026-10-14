@@ -32,6 +32,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -60,6 +61,12 @@ REQUIRED_FIELDS = (
 # env LIGHTRAG_QDRANT_EMBED_MODEL, default BAAI/bge-m3, normalised, unnamed cosine vector.
 EMBED_MODEL_ENV = "LIGHTRAG_QDRANT_EMBED_MODEL"
 DEFAULT_EMBED_MODEL = "BAAI/bge-m3"
+# With env EMBEDDING_URL set (the shared HuggingFace TEI service), embeddings come over
+# HTTP and no local BAAI/bge-m3 copy is loaded; unset keeps the sentence-transformers path.
+EMBEDDING_URL_ENV = "EMBEDDING_URL"
+EMBED_HTTP_BATCH_SIZE = 16
+EMBED_HTTP_TIMEOUT = 30
+EMBED_HTTP_RETRIES = 2
 NAMESPACE = uuid.UUID("b3a1f0d2-5c7e-4a8b-9d61-0e4f2a7c9b15")
 ARTICLE_NO_RE = re.compile(r"^\d+(-[a-z]+)?$")
 REPEALED_STATUSES = frozenset({"REPEALED", "INVALID", "ABROGATED", "CANCELLED", "CANCELED"})
@@ -298,8 +305,54 @@ def default_http(method: str, url: str, body: dict | None = None) -> tuple[int, 
             return exc.code, {}
 
 
+def embedding_url() -> str:
+    """Address of the shared embedding service (no trailing slash); empty means off."""
+    return os.environ.get(EMBEDDING_URL_ENV, "").strip().rstrip("/")
+
+
+def _embed_post_json(url: str, payload: dict, timeout: float) -> object:
+    """POST a JSON body and return the parsed response (mocked in tests)."""
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8") or "[]")
+
+
+def _embed_http(texts: list[str]) -> list[list[float]]:
+    """Embed texts via the shared TEI service: batches of <=16, two retries each."""
+    url = f"{embedding_url()}/embed"
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), EMBED_HTTP_BATCH_SIZE):
+        chunk = list(texts[start : start + EMBED_HTTP_BATCH_SIZE])
+        payload = {"inputs": chunk, "normalize": True}
+        result: object = None
+        last_exc: BaseException | None = None
+        for attempt in range(EMBED_HTTP_RETRIES + 1):
+            try:
+                result = _embed_post_json(url, payload, EMBED_HTTP_TIMEOUT)
+                break
+            except Exception as exc:  # noqa: BLE001 - retried below, then refused
+                last_exc = exc
+                if attempt < EMBED_HTTP_RETRIES:
+                    time.sleep(min(2.0**attempt, 5.0))
+        if result is None:
+            raise Refusal(f"embedding service request failed: {last_exc}") from last_exc
+        vectors.extend([[float(x) for x in v] for v in result])
+    return vectors
+
+
 def default_embed(texts: list[str]) -> list[list[float]]:
-    """Same model/normalisation as the app's Qdrant vector path (needs sentence_transformers)."""
+    """Same model/normalisation as the app's Qdrant vector path.
+
+    With env ``EMBEDDING_URL`` set, embeddings come from the shared TEI service and no
+    local BAAI/bge-m3 is loaded; otherwise it uses sentence_transformers (must be installed).
+    """
+    if embedding_url():
+        return _embed_http(texts)
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:  # pragma: no cover - environment dependent

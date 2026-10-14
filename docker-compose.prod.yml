@@ -27,6 +27,8 @@ services:
       - REDIS_PORT=6379
       - QDRANT_HOST=qdrant_prod
       - QDRANT_PORT=6333
+      # سرویس مشترک embedding (TEI / BAAI/bge-m3) — یک نسخه برای اپ و اسکریپت‌های ساخت
+      - EMBEDDING_URL=http://roxira_embeddings:80
       # sms.ir (Fast/Verify) — سرویس ارسال کد تأیید (از .env مقداردهی می‌شود)
       - SMS_IR_API_KEY=${SMS_IR_API_KEY:?set SMS_IR_API_KEY in .env}
       - SMS_IR_TEMPLATE_ID=${SMS_IR_TEMPLATE_ID:-000000}
@@ -50,10 +52,16 @@ services:
       - JWT_TTL_SECONDS=${JWT_TTL_SECONDS:-}
       - VIP_PHONE_ALLOWLIST=${VIP_PHONE_ALLOWLIST:-}
     depends_on:
-      - postgres_prod
-      - redis_prod
-      - qdrant_prod
-      - pgbouncer_prod
+      postgres_prod:
+        condition: service_started
+      redis_prod:
+        condition: service_started
+      qdrant_prod:
+        condition: service_started
+      pgbouncer_prod:
+        condition: service_started
+      roxira_embeddings:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
       interval: 15s
@@ -178,6 +186,32 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    networks:
+      - roxira_net
+
+  # سرویس مشترک embedding (HuggingFace TEI) — اپ و اسکریپت‌های ساخت قوانین
+  # بردارهای BAAI/bge-m3 را از این‌جا می‌گیرند و دیگر نسخهٔ محلی ۲.۴ گیگابایتی
+  # را بار نمی‌کنند. فقط داخل roxira_net در دسترس است (بدون پورت روی هاست).
+  roxira_embeddings:
+    # cpu-arm64-1.9, pinned 2026-10-14
+    image: ghcr.io/huggingface/text-embeddings-inference@sha256:798cd7615e060a72ccbdf19aa0ada52289c6a0147490195bafaece6ce04d70f1
+    container_name: roxira_embeddings
+    restart: unless-stopped
+    command: --model-id BAAI/bge-m3 --max-batch-tokens 2048 --max-client-batch-size 16 --max-concurrent-requests 8
+    volumes:
+      - /var/lib/roxira/tei-cache:/data
+    mem_limit: 3500m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     logging:
       driver: json-file
       options:

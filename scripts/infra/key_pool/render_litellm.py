@@ -29,17 +29,23 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
             fallbacks.append({group: [f"{group}-paid"]})
         for d in deps:
             name = f"{group}-paid" if split and d.tier == "paid" else group
-            params = {"model": d.litellm_model, "api_key": f"os.environ/{d.key_env}"}
+            api_key = "none" if d.keyless else f"os.environ/{d.key_env}"
+            params = {"model": d.litellm_model, "api_key": api_key}
+            if d.api_base:
+                params["api_base"] = d.api_base
             if d.rpm:
                 params["rpm"] = d.rpm
             if d.tpm:
                 params["tpm"] = d.tpm
             if d.extra_body:
                 params["extra_body"] = d.extra_body
+            info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
+            if d.mode:
+                info["mode"] = d.mode
             model_list.append({
                 "model_name": name,
                 "litellm_params": params,
-                "model_info": {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy},
+                "model_info": info,
             })
     router = dict(gw.get("router", {}))
     if fallbacks:

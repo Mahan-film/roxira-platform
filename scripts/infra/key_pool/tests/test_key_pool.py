@@ -44,8 +44,29 @@ def test_render_shape_and_no_secret_values():
 
 def test_render_skips_providers_without_keys():
     cfg = render_litellm.render(pool(), {"GROQ_API_KEY", "KEYPOOL_MASTER_KEY"})
-    models = {m["litellm_params"]["model"].split("/")[0] for m in cfg["model_list"]}
+    models = {m["litellm_params"]["model"].split("/")[0]
+              for m in cfg["model_list"] if m["model_name"] != "embeddings"}
     assert models == {"groq"}
+
+
+def test_embeddings_group_renders_local_tei_without_secret():
+    cfg = render_litellm.render(pool(), set(FAKE_ENV))
+    emb = [m for m in cfg["model_list"] if m["model_name"] == "embeddings"]
+    assert len(emb) == 1
+    params = emb[0]["litellm_params"]
+    assert params["model"] == "openai/bge-m3"
+    assert params["api_base"] == "http://roxira_embeddings:80/v1"
+    assert params["api_key"] == "none"
+    assert "os.environ" not in str(params)
+    assert emb[0]["model_info"]["mode"] == "embedding"
+    assert "fake-" not in str(cfg)
+
+
+def test_agent_free_and_private_exclude_local_tei():
+    for group in ("agent-free", "private"):
+        deps = kc.group_deployments(pool(), group, set(FAKE_ENV))
+        assert deps
+        assert all(d.provider != "local-tei" for d in deps)
 
 
 def test_private_group_has_no_free_or_may_log():

@@ -132,6 +132,18 @@ providers:
     extra_body:
       provider: {data_collection: deny, allow_fallbacks: true}
 
+  local-tei:
+    # Shared local TEI container `roxira_embeddings`, OpenAI-compatible at /v1 with BAAI/bge-m3.
+    # No key at all: rendered with api_key "none" and always available. Local host => prompts
+    # never leave the machine, so this is the one free provider that can be data_policy no_train.
+    tier: free
+    data_policy: no_train
+    base_url: http://roxira_embeddings:80/v1
+    api_base: http://roxira_embeddings:80/v1   # LiteLLM needs the explicit base for the openai prefix
+    litellm_prefix: openai
+    models:
+      - {id: bge-m3, mode: embedding}
+
 groups:
   agent-free:
     description: Code, docs and dev tasks only. Free providers first, paid DeepSeek Flash as last resort.
@@ -142,3 +154,6 @@ groups:
     require:
       data_policy: no_train
       forbid_free: true
+  embeddings:
+    description: Embeddings only, served by the shared local TEI (BAAI/bge-m3). No external call.
+    providers: [local-tei]

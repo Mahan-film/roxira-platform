@@ -152,6 +152,16 @@ QDRANT_VECTOR_TOPK = int(os.environ.get("LIGHTRAG_QDRANT_VECTOR_TOPK", "20"))
 # مبنی بر استفاده از جست‌وجوی برداری واقعی هر جا ابعاد سازگار باشد.
 QDRANT_VECTOR_SEARCH_ENABLED = os.environ.get("LIGHTRAG_QDRANT_VECTOR_SEARCH_ENABLED", "1") != "0"
 
+# ── سرویس مشترک embedding (HuggingFace TEI) ─────────────────────────────────
+# وقتی ``EMBEDDING_URL`` تنظیم است، بردارهای پرس‌وجو از سرویس مشترک TEI گرفته
+# می‌شوند (همان BAAI/bge-m3، نرمال‌شده، cosine 1.0) و دیگر هیچ نسخهٔ محلی
+# sentence-transformers / BAAI/bge-m3 در این فرایند بارگذاری نمی‌شود. در نبود
+# این متغیر، مسیر فعلی sentence-transformers دست‌نخورده باقی می‌ماند.
+EMBEDDING_URL_ENV = "EMBEDDING_URL"
+EMBEDDING_HTTP_BATCH_SIZE = int(os.environ.get("EMBEDDING_HTTP_BATCH_SIZE", "16"))
+EMBEDDING_HTTP_TIMEOUT = float(os.environ.get("EMBEDDING_HTTP_TIMEOUT", "30"))
+EMBEDDING_HTTP_RETRIES = int(os.environ.get("EMBEDDING_HTTP_RETRIES", "2"))
+
 _rag_lock = threading.Lock()
 _rag_instance: Any = None
 _rag_init_error: Optional[str] = None
@@ -581,6 +591,48 @@ except Exception:  # noqa: BLE001 - never block engine import
 _embed_cache = _chat_fast.TTLCache(ttl=600.0, max_entries=512) if _chat_fast else None
 
 
+def embedding_url() -> str:
+    """آدرس سرویس مشترک embedding از محیط (بدون اسلش انتهایی)؛ تهی یعنی خاموش."""
+    return os.environ.get(EMBEDDING_URL_ENV, "").strip().rstrip("/")
+
+
+def _embed_post_json(url: str, payload: Dict[str, Any], timeout: float) -> Any:
+    """POST یک JSON و بازگرداندن پاسخ پارس‌شده (urllib؛ در تست‌ها mock می‌شود)."""
+    import urllib.request
+
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8") or "[]")
+
+
+def _embed_texts_http(texts: List[str]) -> List[List[float]]:
+    """embed چند متن از سرویس مشترک TEI: دسته‌های حداکثر ۱۶تایی، ۲ تلاش مجدد."""
+    url = f"{embedding_url()}/embed"
+    vectors: List[List[float]] = []
+    for start in range(0, len(texts), EMBEDDING_HTTP_BATCH_SIZE):
+        chunk = list(texts[start : start + EMBEDDING_HTTP_BATCH_SIZE])
+        payload = {"inputs": chunk, "normalize": True}
+        result: Any = None
+        last_exc: Optional[BaseException] = None
+        for attempt in range(EMBEDDING_HTTP_RETRIES + 1):
+            try:
+                result = _embed_post_json(url, payload, EMBEDDING_HTTP_TIMEOUT)
+                break
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                if attempt < EMBEDDING_HTTP_RETRIES:
+                    time.sleep(min(2.0**attempt, 5.0))
+        if result is None:
+            raise last_exc or RuntimeError("embedding service returned no result")
+        vectors.extend([[float(x) for x in vector] for vector in result])
+    return vectors
+
+
 def warm_up_embedder() -> bool:
     """Load the embedder and run one encode so the first user request is not cold."""
     return _embed_query_sync("warm up") is not None
@@ -591,11 +643,27 @@ async def warm_up_embedder_async() -> bool:
 
 
 def _embed_query_sync(text: str) -> Optional[List[float]]:
-    """رشته را با مدل بارگذاری‌شده embed می‌کند؛ در نبود مدل/شکست، ``None``."""
+    """رشته را embed می‌کند؛ در نبود مدل/سرویس یا شکست، ``None``.
+
+    با ``EMBEDDING_URL`` از سرویس مشترک TEI گرفته می‌شود (بدون بارگذاری مدل محلی)؛
+    در غیر این صورت دقیقاً مسیر فعلی sentence-transformers اجرا می‌شود.
+    """
     if _embed_cache is not None:
         hit = _embed_cache.get(text)
         if hit is not None:
             return list(hit)
+    if embedding_url():
+        try:
+            t0 = time.perf_counter()
+            result = _embed_texts_http([text])[0]
+            if _chat_fast is not None:
+                _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
+            if _embed_cache is not None:
+                _embed_cache.set(text, result)
+            return result
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Shared embedding service failed -> scroll fallback: %s", exc)
+            return None
     model = _get_query_embedder()
     if model is None:
         return None

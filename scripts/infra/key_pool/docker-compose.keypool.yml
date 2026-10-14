@@ -21,3 +21,14 @@ services:
     read_only: false
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    networks:
+      # default = this project's own bridge (roxira-keypool_default), where roxira_research finds us.
+      - default
+      # shared prod bridge: reach the local TEI embeddings container `roxira_embeddings`
+      # by name (docker-compose.prod.yml project -> roxira_platform_roxira_net).
+      - roxira_net
+
+networks:
+  roxira_net:
+    external: true
+    name: roxira_platform_roxira_net

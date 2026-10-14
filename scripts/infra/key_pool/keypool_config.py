@@ -17,6 +17,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_POOL = ROOT / "config" / "key_pool.yaml"
 _SMARTJUDGE = ROOT / "output_apps" / "generated_modules" / "smartjudge"
 
+# Sentinel key_env for providers that need no key (e.g. the local TEI embeddings
+# service). The renderer writes `api_key: "none"` for it instead of os.environ/.
+NO_KEY = "none"
+
 
 class PoolError(ValueError):
     pass
@@ -33,9 +37,15 @@ class Deployment:
     key_env: str
     model: str
     order: int
+    mode: str | None = None
+    api_base: str | None = None
     rpm: int | None = None
     tpm: int | None = None
     extra_body: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def keyless(self) -> bool:
+        return self.key_env == NO_KEY
 
     @property
     def free_model(self) -> bool:
@@ -70,34 +80,52 @@ def _num(v: Any) -> int | None:
     return v if isinstance(v, int) and not isinstance(v, bool) else None
 
 
-def resolve_models(specs: list[dict[str, Any]], models_path: pathlib.Path | None = None) -> list[str]:
-    ids: list[str] = []
+def resolve_model_specs(
+    specs: list[dict[str, Any]], models_path: pathlib.Path | None = None
+) -> list[tuple[str, dict[str, Any]]]:
+    """(model id, spec) pairs in order, first occurrence wins (dedup by id)."""
+    out: list[tuple[str, dict[str, Any]]] = []
+    seen: set[str] = set()
     for spec in specs:
         if "id" in spec:
-            ids.append(str(spec["id"]))
+            got = [str(spec["id"])]
         elif "role" in spec and "alias" in spec:
             entries = _registry().role_entries(spec["role"], models_path)
-            hit = [e["id"] for e in entries if e.get("alias") == spec["alias"]]
-            if not hit:
+            got = [e["id"] for e in entries if e.get("alias") == spec["alias"]][:1]
+            if not got:
                 raise PoolError(f"no alias {spec['alias']!r} in models.yaml role {spec['role']!r}")
-            ids.append(hit[0])
         elif "role" in spec:
-            got = _registry().role_models(spec["role"], models_path)
-            ids.extend(got[: int(spec.get("take", len(got)))])
+            all_ids = _registry().role_models(spec["role"], models_path)
+            got = all_ids[: int(spec.get("take", len(all_ids)))]
         else:
             raise PoolError(f"bad model spec {spec!r}")
-    return [i for n, i in enumerate(ids) if i not in ids[:n]]
+        for mid in got:
+            if mid not in seen:
+                seen.add(mid)
+                out.append((mid, spec))
+    return out
+
+
+def resolve_models(specs: list[dict[str, Any]], models_path: pathlib.Path | None = None) -> list[str]:
+    return [mid for mid, _ in resolve_model_specs(specs, models_path)]
 
 
 def provider_keys(prov: dict[str, Any], names: set[str] | None) -> list[str]:
-    """Key env-var NAMES to use. names=None means 'assume all are set' (offline render/tests)."""
-    if "keys" in prov:
-        return [k for k in prov["keys"] if names is None or k in names]
-    any_of = prov.get("keys_any", [])
-    for k in any_of:
-        if names is None or k in names:
-            return [k]
-    return []
+    """Key env-var NAMES to use. names=None means 'assume all are set' (offline render/tests).
+
+    A provider with no `keys`/`keys_any` (or only empty ones) needs no key at all: it is
+    always available and gets the NO_KEY sentinel.
+    """
+    explicit = list(prov.get("keys", []))
+    if explicit:
+        return [k for k in explicit if names is None or k in names]
+    any_of = list(prov.get("keys_any", []))
+    if any_of:
+        for k in any_of:
+            if names is None or k in names:
+                return [k]
+        return []
+    return [NO_KEY]
 
 
 def validate_group(name: str, group: dict[str, Any], deps: list[Deployment]) -> None:
@@ -128,7 +156,8 @@ def group_deployments(
             raise PoolError(f"group {group}: unknown provider {pname!r}")
         keys = provider_keys(prov, names)
         lim = prov.get("limits", {})
-        for model in resolve_models(prov["models"], models_path):
+        api_base = prov.get("api_base")
+        for model, spec in resolve_model_specs(prov["models"], models_path):
             if not keys:
                 continue
             order += 1
@@ -137,7 +166,8 @@ def group_deployments(
                     Deployment(
                         group=group, provider=pname, tier=prov["tier"], data_policy=prov["data_policy"],
                         base_url=prov["base_url"], litellm_prefix=prov["litellm_prefix"], key_env=k,
-                        model=model, order=order, rpm=_num(lim.get("rpm")), tpm=_num(lim.get("tpm")),
+                        model=model, order=order, mode=spec.get("mode"), api_base=api_base,
+                        rpm=_num(lim.get("rpm")), tpm=_num(lim.get("tpm")),
                         extra_body=dict(prov.get("extra_body") or {}),
                     )
                 )
