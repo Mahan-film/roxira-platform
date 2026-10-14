@@ -33,6 +33,16 @@ export const GUIDE_SLUGS = [
   "bounced-cheque-criminal-vs-civil",
   "late-payment-damages-cbi-formula",
   "asset-seizure-tamin-khasteh-guide",
+  "labor-complaint-insurance-seniority",
+  "employee-eidi-sanavat-leave-calculation",
+  "unlawful-dismissal-difference-guide",
+  "promissory-note-execution-guarantor",
+  "bounced-cheque-bad-record-removal",
+  "immediate-lease-eviction-two-witnesses",
+  "internet-fraud-fata-reporting",
+  "breach-of-trust-crime-punishment",
+  "company-directors-cheque-debt-liability",
+  "work-accident-employer-insurance-liability",
 ] as const;
 
 export type GuideSlug = (typeof GUIDE_SLUGS)[number];
