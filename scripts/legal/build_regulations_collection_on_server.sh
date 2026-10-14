@@ -84,18 +84,34 @@ echo "disk free: ${free_gb} GB (min ${MIN_FREE_GB})"
 
 IMG=$(docker inspect -f '{{.Config.Image}}' "$APP")
 EXTRA_ENV=()
-# Shared embedding service (roxira_embeddings): when EMBEDDING_URL is set on the host, pass
-# it through so the ingest helper embeds over HTTP instead of loading a local bge-m3. The
-# helper shares Qdrant's network namespace on roxira_net, so the TEI service is reachable
-# by its compose service name.
-EMBED_ENV=()
+# Shared embedding service (roxira_embeddings): embed over HTTP with the single bge-m3 copy
+# instead of loading a local 2.4 GB model. An explicit EMBEDDING_URL from the host wins;
+# otherwise a running roxira_embeddings container is used automatically. The helper joins
+# Qdrant's network namespace (--network container:$QDR), which is roxira_net, so it is on the
+# network roxira_embeddings is on; we enable TEI only when the two share a network. TEI keeps
+# no model in-process, so the build container is capped at --memory 2g.
+EMBED_ARGS=()
 if [ -n "${EMBEDDING_URL:-}" ]; then
-  EMBED_ENV=(-e "EMBEDDING_URL=${EMBEDDING_URL_IN_CONTAINER:-http://roxira_embeddings:80}")
+  EMBED_ARGS=(-e "EMBEDDING_URL=${EMBEDDING_URL_IN_CONTAINER:-http://roxira_embeddings:80}" --memory 2g)
+  echo "embedding source: shared TEI service (EMBEDDING_URL from the host) / سرویس مشترک embedding"
+elif docker ps --format '{{.Names}}' | grep -qx roxira_embeddings; then
+  emb_net=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' roxira_embeddings 2>/dev/null || true)
+  qdr_net=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$QDR" 2>/dev/null || true)
+  shared=""
+  for n in $emb_net; do case " $qdr_net " in *" $n "*) shared=1 ;; esac; done
+  if [ -n "$shared" ]; then
+    EMBED_ARGS=(-e "EMBEDDING_URL=http://roxira_embeddings:80" --memory 2g)
+    echo "embedding source: shared TEI service http://roxira_embeddings:80 (auto-detected) / سرویس مشترک embedding"
+  else
+    echo "embedding source: local BAAI/bge-m3 (roxira_embeddings is not on $QDR's network) / مدل محلی"
+  fi
+else
+  echo "embedding source: local BAAI/bge-m3 (no EMBEDDING_URL, roxira_embeddings absent) / مدل محلی"
 fi
 run() { # python helper in the app image, sharing Qdrant's network namespace (127.0.0.1:6333 = Qdrant)
   docker run --rm --network "container:$QDR" --volumes-from "$APP" \
     -v "$REPO:/repo:ro" -w /repo -e QDRANT_HOST=127.0.0.1 -e QDRANT_PORT=6333 \
-    "${EMBED_ENV[@]}" "${EXTRA_ENV[@]}" "$IMG" python3 "$@"
+    "${EMBED_ARGS[@]}" "${EXTRA_ENV[@]}" "$IMG" python3 "$@"
 }
 run_step() {
   local desc=$1
