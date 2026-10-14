@@ -369,6 +369,9 @@ def dotic_matches(title: str) -> bool:
 
 def make_row(source: str, url: str, doc_id: str, title: str, doc_type: str,
              number: str | None, date: str | None, issuer: str | None, text: str) -> dict:
+    body = _norm(text)
+    if source != "rcmajlis":
+        body = body[:MAX_TEXT_CHARS]
     return {
         "source": source,
         "source_tier": SOURCE_TIER,
@@ -379,7 +382,7 @@ def make_row(source: str, url: str, doc_id: str, title: str, doc_type: str,
         "number": number or None,
         "date": date or None,
         "issuer": issuer or None,
-        "text": _norm(text)[:MAX_TEXT_CHARS],
+        "text": body,
         "fetched_at": _now(),
         "staging_status": "proposed",
         "needs_review": True,

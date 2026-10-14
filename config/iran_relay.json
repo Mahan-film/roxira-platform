@@ -1,4 +1,4 @@
 {
   "_comment": "Iran relay on-Mac job (scripts/legal/iran_relay.py). Add rcmajlis.ir law ids to rc_law_ids (numeric id from https://rc.majlis.ir/fa/law/show/<id>); the Mac job fetches each id once and stages it. taxreg and dotic need no configuration. Leave the list empty to skip the rc.majlis source.",
-  "rc_law_ids": []
+  "rc_law_ids": ["801835", "94011", "866380"]
 }

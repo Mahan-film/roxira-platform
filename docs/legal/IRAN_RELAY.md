@@ -18,7 +18,9 @@ only after the hub merges that PR **and** a later collection build/eval approves
 | `scripts/legal/relay/ir.roxira.iranrelay.plist.template` | launchd agent, `StartInterval` 43200 (12 h): runs `iran_relay.py run` then `relay_publish.sh` |
 | `scripts/legal/relay/install_mac.sh` | renders/installs the agent (dry-run by default; `--yes` installs and loads) |
 | `config/iran_relay.json` | `rc_law_ids`: the list of `rc.majlis.ir/fa/law/show/<id>` ids to fetch (empty by default; add ids over time) |
+| `scripts/legal/split_rc_law_articles.py` | split the FULL `rcmajlis` relay rows into one staged row per article (see below) |
 | `scripts/legal/tests/test_iran_relay.py` | offline tests (fixtures + monkeypatched fetch, no network) |
+| `scripts/legal/tests/test_split_rc_law_articles.py` | offline tests for the article splitter (inline fixture, no network) |
 
 ## Sources (all allow crawling in robots.txt)
 
@@ -82,6 +84,37 @@ Tests (offline, no network):
 python3 -m pytest -q scripts/legal/tests/test_iran_relay.py
 ```
 
+## Staging rc.majlis laws as articles (v6)
+
+The `rc_law_ids` in `config/iran_relay.json` are whole laws (100k-200k chars). The relay row for
+`source: "rcmajlis"` therefore keeps the **FULL** text (taxreg/dotic stay clipped at
+`MAX_TEXT_CHARS=20000`). Split that row into one row per article before building:
+
+```bash
+# 1. on the Mac (Iranian IP): fetch the configured law ids -> one row per law
+python3 scripts/legal/iran_relay.py run
+
+# 2. peek at the split, without writing (article counts per law)
+python3 scripts/legal/split_rc_law_articles.py \
+  data/legal/staged/iran_relay_<date>.jsonl --dry-run
+
+# 3. split the rcmajlis rows into article rows (cover letter dropped; هر تبصره با مادهٔ خود می‌ماند)
+python3 scripts/legal/split_rc_law_articles.py \
+  data/legal/staged/iran_relay_<date>.jsonl \
+  --out data/legal/staged/rc_laws_<date>.jsonl
+
+# 4. build/eval v6 from v3 + the new file, on the server
+#    the new file is already listed in FILES of build_v4_on_server.sh
+#    (update the date, or pass BUILD_FILES="... rc_laws_<date>.jsonl")
+cd /opt/roxira_platform
+DST=iran_laws_v6 bash scripts/legal/build_v4_on_server.sh --rebuild
+```
+
+`split_rc_law_articles.py` writes the `data/legal/phase1_canonical.jsonl` schema (`law_type`
+`"STATUTE"`, `status` `"VALID"`, `source_tier` `"official"`, `source` `"rc.majlis.ir relay"`), one
+row per «ماده N» / «ماده N مکرر». Add the law names to `config/legal_allowlist.json` first, or the
+build's validate gate will block them (`not_in_allowlist`).
+
 ---
 
 ## یادداشت فارسی برای مالک
@@ -96,3 +129,11 @@ python3 -m pytest -q scripts/legal/tests/test_iran_relay.py
   می‌کند و بعد در ساخت/ارزیابی بعدی مجموعه تصمیم گرفته می‌شود. تا آن مرحله هیچ سندی به تولید نمی‌رود.
 * شناسهٔ قوانین `rc.majlis.ir` را برای جمع‌آوری دستی در فایل `config/iran_relay.json` و کلید
   `rc_law_ids` اضافه کنید.
+
+### Which law ids are configured (2026-10-15)
+
+`801835` customs affairs 1390, `94011` guild system 1382, `866380` guild amendment 1392 (text of the amending law
+itself; its «ماده N» rows are the amended articles of the 1382 law).
+**Direct taxes 1366 (`91488`) is deliberately not listed:** rc.majlis.ir serves the original 1366 text (e.g. article 131
+still has the 4% rate replaced in 1394), so it would give wrong answers. It needs a consolidated, amended source first.
+The 1403 guild amendment has no rc.majlis.ir id yet.
