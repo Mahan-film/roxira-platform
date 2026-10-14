@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Loader2, Search, UsersRound } from "lucide-react";
+import Link from "next/link";
+import { FileSpreadsheet, Loader2, Search, UsersRound } from "lucide-react";
 
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { CrmStats, PipelineBreakdown } from "@/components/crm/crm-stats";
@@ -135,6 +136,13 @@ export default function CrmPage() {
               /enterprise-hub/crm
             </code>
           </p>
+          <Link
+            href="/crm/import"
+            className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3.5 py-2 text-xs font-bold text-indigo-300 transition-colors hover:bg-indigo-500/20"
+          >
+            <FileSpreadsheet className="size-4" />
+            ورود اطلاعات از نرم‌افزار دیگر
+          </Link>
         </div>
 
         {errorMessage && (

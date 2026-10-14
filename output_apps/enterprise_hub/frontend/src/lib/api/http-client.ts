@@ -79,6 +79,17 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+/** ساخت `ApiClientError` از یک پاسخ ناموفق (مشترک بین JSON و multipart). */
+async function toApiError(response: Response): Promise<ApiClientError> {
+  let errorBody: Partial<NestValidationErrorBody> = {};
+  try {
+    errorBody = (await response.json()) as Partial<NestValidationErrorBody>;
+  } catch {
+    errorBody = { message: response.statusText };
+  }
+  return new ApiClientError(response.status, errorBody);
+}
+
 function buildUrl(path: string, searchParams?: RequestOptions["searchParams"]): string {
   const query = new URLSearchParams();
 
@@ -138,13 +149,40 @@ export async function apiRequest<TResponse>(
   });
 
   if (!response.ok) {
-    let errorBody: Partial<NestValidationErrorBody> = {};
-    try {
-      errorBody = (await response.json()) as Partial<NestValidationErrorBody>;
-    } catch {
-      errorBody = { message: response.statusText };
-    }
-    throw new ApiClientError(response.status, errorBody);
+    throw await toApiError(response);
+  }
+
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
+
+  return (await response.json()) as TResponse;
+}
+
+/**
+ * ارسال `multipart/form-data` (بارگذاری فایل) با همان منطق توکن و خطای
+ * `apiRequest`. هدر Content-Type عمداً تنظیم نمی‌شود تا مرورگر boundary را
+ * خودش اضافه کند.
+ */
+export async function apiUpload<TResponse>(
+  path: string,
+  formData: FormData,
+  signal?: AbortSignal,
+): Promise<TResponse> {
+  const headers: Record<string, string> = {};
+  const token = readStoredAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(path, {
+    method: "POST",
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    body: formData,
+    signal,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw await toApiError(response);
   }
 
   if (response.status === 204) {

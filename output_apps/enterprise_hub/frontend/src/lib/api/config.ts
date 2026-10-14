@@ -24,6 +24,9 @@ export const INVENTORY_RESOURCE_PATH = "enterprise-hub/inventory";
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر CRM (مدیریت مشتریان و پایپ‌لاین) در NestJS */
 export const CRM_RESOURCE_PATH = "enterprise-hub/crm";
 
+/** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر ورود داده (AI-assisted data import) در NestJS */
+export const DATA_IMPORT_RESOURCE_PATH = "enterprise-hub/data-import";
+
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Auth (احراز هویت پیامکی) در NestJS */
 export const AUTH_RESOURCE_PATH = "auth";
 

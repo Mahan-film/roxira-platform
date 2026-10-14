@@ -47,6 +47,40 @@ export class CrmRepository {
     return this.leads.save(entity);
   }
 
+  /**
+   * درج گروهی سرنخ‌ها در یک فراخوان (برای مهاجرت داده).
+   *
+   * همه ردیف‌ها با `tenantId` فراخوان می‌نشینند؛ در ورودی خالی، بدون کوئری
+   * آرایه خالی برمی‌گردد.
+   */
+  async createLeads(
+    tenantId: string,
+    dataList: Partial<CrmLeadEntity>[],
+  ): Promise<CrmLeadEntity[]> {
+    if (dataList.length === 0) {
+      return [];
+    }
+    const entities = dataList.map((data) =>
+      this.leads.create({ ...data, tenantId }),
+    );
+    return this.leads.save(entities);
+  }
+
+  /** مجموعه رایانامه‌های موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
+  async findLeadEmails(
+    tenantId: string,
+    emails: string[],
+  ): Promise<string[]> {
+    if (emails.length === 0) {
+      return [];
+    }
+    const rows = await this.leads.find({
+      where: { tenantId, email: In(emails) },
+      select: { email: true },
+    });
+    return rows.map((row) => row.email);
+  }
+
   async saveLead(
     tenantId: string,
     entity: CrmLeadEntity,

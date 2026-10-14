@@ -43,6 +43,6 @@ import { CrmService } from './services/crm.service';
   ],
   controllers: [CrmController],
   providers: [CrmService, CrmRepository, JwtAuthGuard],
-  exports: [CrmService],
+  exports: [CrmService, CrmRepository],
 })
 export class CrmModule {}
