@@ -87,8 +87,12 @@ export class InvoicingService {
    * ایجاد صورتحساب جدید همراه با محاسبه آنی مالیات ۹٪ و جلوگیری از
    * شماره صورتحساب تکراری.
    */
-  async create(dto: CreateInvoiceDto): Promise<InvoiceResponseDto> {
+  async create(
+    tenantId: string,
+    dto: CreateInvoiceDto,
+  ): Promise<InvoiceResponseDto> {
     const existing = await this.invoicingRepository.findByTaxInvoiceNumber(
+      tenantId,
       dto.taxInvoiceNumber,
     );
 
@@ -119,7 +123,7 @@ export class InvoicingService {
     const roundedTotalTax = this.round(totalTax);
     const roundedFinalPayable = this.round(finalPayable);
 
-    const saved = await this.invoicingRepository.create({
+    const saved = await this.invoicingRepository.create(tenantId, {
       taxInvoiceNumber: dto.taxInvoiceNumber,
       sellerInfo: dto.sellerInfo,
       buyerInfo: dto.buyerInfo,
@@ -149,7 +153,10 @@ export class InvoicingService {
     return this.toResponseDto(saved);
   }
 
-  async findAll(query: QueryInvoiceDto): Promise<{
+  async findAll(
+    tenantId: string,
+    query: QueryInvoiceDto,
+  ): Promise<{
     data: InvoiceResponseDto[];
     total: number;
     page: number;
@@ -157,7 +164,7 @@ export class InvoicingService {
   }> {
     const { page, limit, status, taxInvoiceNumber, currency } = query;
 
-    const where: FindOptionsWhere<InvoiceEntity> = {};
+    const where: FindOptionsWhere<InvoiceEntity> = { tenantId };
     if (status) {
       where.status = status;
     }
@@ -168,12 +175,15 @@ export class InvoicingService {
       where.currency = currency;
     }
 
-    const [entities, total] = await this.invoicingRepository.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [entities, total] = await this.invoicingRepository.findAndCount(
+      tenantId,
+      {
+        where,
+        order: { createdAt: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      },
+    );
 
     return {
       data: entities.map((entity) => this.toResponseDto(entity)),
@@ -183,8 +193,8 @@ export class InvoicingService {
     };
   }
 
-  async findOne(id: string): Promise<InvoiceResponseDto> {
-    const entity = await this.invoicingRepository.findById(id);
+  async findOne(tenantId: string, id: string): Promise<InvoiceResponseDto> {
+    const entity = await this.invoicingRepository.findById(tenantId, id);
 
     if (!entity) {
       throw new NotFoundException(`صورتحساب با شناسه ${id} یافت نشد.`);
@@ -196,8 +206,8 @@ export class InvoicingService {
   /**
    * ابطال صورتحساب. صورتحساب ابطال‌شده قابل ابطال مجدد نیست.
    */
-  async cancel(id: string): Promise<InvoiceResponseDto> {
-    const entity = await this.invoicingRepository.findById(id);
+  async cancel(tenantId: string, id: string): Promise<InvoiceResponseDto> {
+    const entity = await this.invoicingRepository.findById(tenantId, id);
 
     if (!entity) {
       throw new NotFoundException(`صورتحساب با شناسه ${id} یافت نشد.`);
@@ -208,7 +218,7 @@ export class InvoicingService {
     }
 
     entity.status = InvoiceStatus.CANCELLED;
-    const saved = await this.invoicingRepository.save(entity);
+    const saved = await this.invoicingRepository.save(tenantId, entity);
 
     return this.toResponseDto(saved);
   }

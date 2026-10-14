@@ -307,8 +307,11 @@ export class TaxComplianceService implements OnModuleInit {
   }
 
   /** امضای الکترونیک یک صورتحساب و تولید بسته مالیاتی. */
-  async signInvoice(dto: SignInvoiceDto): Promise<TaxSignatureDetailResponseDto> {
-    const invoice = await this.invoicingService.findOne(dto.invoiceId);
+  async signInvoice(
+    tenantId: string,
+    dto: SignInvoiceDto,
+  ): Promise<TaxSignatureDetailResponseDto> {
+    const invoice = await this.invoicingService.findOne(tenantId, dto.invoiceId);
 
     const existing = await this.taxComplianceRepository.findSignatureByInvoiceId(
       invoice.id,

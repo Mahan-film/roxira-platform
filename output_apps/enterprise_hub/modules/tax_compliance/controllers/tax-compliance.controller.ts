@@ -8,8 +8,11 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
+import { requireTenantId } from '../../tenants/tenant-context';
 import { GenerateCsrDto } from '../dto/generate-csr.dto';
 import { GenerateKeyPairDto } from '../dto/generate-key-pair.dto';
 import { QueryTaxSignatureDto } from '../dto/query-tax-signature.dto';
@@ -95,9 +98,13 @@ export class TaxComplianceController {
     description: 'صورتحساب قبلاً امضا شده است',
   })
   async signInvoice(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: SignInvoiceDto,
   ): Promise<TaxSignatureDetailResponseDto> {
-    return this.taxComplianceService.signInvoice(dto);
+    return this.taxComplianceService.signInvoice(
+      requireTenantId(request),
+      dto,
+    );
   }
 
   @Get('signatures')

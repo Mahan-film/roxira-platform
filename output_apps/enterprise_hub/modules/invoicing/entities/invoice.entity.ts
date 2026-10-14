@@ -41,11 +41,19 @@ export interface InvoiceItem {
  * فقط از طریق InvoicingRepository قابل دسترسی است (Rule #3 - AGENTS.md).
  */
 @Entity({ name: 'invoices' })
+@Index('IDX_invoices_tenant_taxInvoiceNumber', ['tenantId', 'taxInvoiceNumber'], {
+  unique: true,
+})
+@Index('IDX_invoices_tenant_createdAt', ['tenantId', 'createdAt'])
+@Index('IDX_invoices_tenant_status', ['tenantId', 'status'])
 export class InvoiceEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک صورتحساب (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 64 })
   taxInvoiceNumber: string;
 
