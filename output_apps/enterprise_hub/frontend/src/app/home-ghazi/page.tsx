@@ -95,6 +95,9 @@ export default function HomeGhaziPage() {
             <Link href="/laws" className="transition-colors hover:text-blue-900 dark:hover:text-amber-400">
               مجموعه قوانین
             </Link>
+            <Link href="/regulations" className="transition-colors hover:text-blue-900 dark:hover:text-amber-400">
+              بخشنامه‌ها
+            </Link>
             <Link href="/guide" className="transition-colors hover:text-blue-900 dark:hover:text-amber-400">
               راهنمای استفاده
             </Link>

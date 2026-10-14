@@ -8,6 +8,10 @@ import {
   listPublicLaws,
   type PublicSitemapEntry,
 } from "@/lib/seo/laws-public";
+import {
+  listPublicRegulations,
+  listRegulationSitemapEntries,
+} from "@/lib/seo/regulations-public";
 import { GUIDE_SLUGS } from "@/lib/guides";
 
 type SitemapRoute = {
@@ -77,9 +81,37 @@ const GHAZI_DOMAIN: SeoDomain = "ghazihoushmand.ir";
 export const dynamic = "force-dynamic";
 
 export async function generateSitemaps(): Promise<Array<{ id: number }>> {
-  const { total } = await listLawSitemapEntries(0, 1);
+  const { total: lawsTotal } = await listLawSitemapEntries(0, 1);
+  const { total: regulationsTotal } = await listRegulationSitemapEntries(0, 1);
+  const total = lawsTotal + regulationsTotal;
   const chunkCount = Math.max(1, Math.ceil(total / LAWS_PER_SITEMAP));
   return Array.from({ length: chunkCount }, (_, id) => ({ id }));
+}
+
+/**
+ * ورودی‌های قوانین و مقررات را در یک دنبالهٔ مشترک می‌چیند و برش
+ * ``[offset, offset+limit)`` را برمی‌گرداند تا صفحه‌بندی نقشه سایت از سقف
+ * ۵۰۰۰ URL در هر قطعه فراتر نرود.
+ */
+async function combinedSitemapEntries(
+  offset: number,
+  limit: number,
+): Promise<PublicSitemapEntry[]> {
+  const { total: lawsTotal } = await listLawSitemapEntries(0, 1);
+  const entries: PublicSitemapEntry[] = [];
+  if (offset < lawsTotal) {
+    const laws = await listLawSitemapEntries(offset, limit);
+    entries.push(...laws.entries);
+  }
+  const remaining = limit - entries.length;
+  if (remaining > 0) {
+    const regulations = await listRegulationSitemapEntries(
+      Math.max(0, offset - lawsTotal),
+      remaining,
+    );
+    entries.push(...regulations.entries);
+  }
+  return entries;
 }
 
 function toSitemapEntry(entry: PublicSitemapEntry): MetadataRoute.Sitemap[number] {
@@ -118,15 +150,25 @@ export default async function sitemap(props: {
   }
 
   if (id > 0) {
-    const chunk = await listLawSitemapEntries(id * LAWS_PER_SITEMAP, LAWS_PER_SITEMAP);
-    return chunk.entries.map(toSitemapEntry);
+    const chunk = await combinedSitemapEntries(id * LAWS_PER_SITEMAP, LAWS_PER_SITEMAP);
+    return chunk.map(toSitemapEntry);
   }
 
   const laws = await listPublicLaws();
+  const regulations = await listPublicRegulations(undefined, 0, LAWS_PER_SITEMAP);
   const lawRoutes: MetadataRoute.Sitemap = [
     { url: `${origin}/laws`, lastModified, changeFrequency: "weekly", priority: 0.8 },
     ...laws.map((law) => ({
       url: `${origin}/laws/${encodeURIComponent(law.slug)}`,
+      lastModified,
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    })),
+  ];
+  const regulationRoute: MetadataRoute.Sitemap = [
+    { url: `${origin}/regulations`, lastModified, changeFrequency: "weekly", priority: 0.8 },
+    ...regulations.items.map((regulation) => ({
+      url: `${origin}/regulations/${encodeURIComponent(regulation.slug)}`,
       lastModified,
       changeFrequency: "monthly" as const,
       priority: 0.6,
@@ -138,6 +180,12 @@ export default async function sitemap(props: {
     changeFrequency: "monthly" as const,
     priority: 0.6,
   }));
-  const firstChunk = await listLawSitemapEntries(0, LAWS_PER_SITEMAP);
-  return [...staticRoutes, ...guideRoutes, ...lawRoutes, ...firstChunk.entries.map(toSitemapEntry)];
+  const firstChunk = await combinedSitemapEntries(0, LAWS_PER_SITEMAP);
+  return [
+    ...staticRoutes,
+    ...guideRoutes,
+    ...lawRoutes,
+    ...regulationRoute,
+    ...firstChunk.map(toSitemapEntry),
+  ];
 }

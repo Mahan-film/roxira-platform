@@ -33,6 +33,12 @@ export function LegalPageShell({ children }: { children: React.ReactNode }) {
               مواد قانونی
             </Link>
             <Link
+              href="/regulations"
+              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              بخشنامه‌ها
+            </Link>
+            <Link
               href="/precedents"
               className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
             >

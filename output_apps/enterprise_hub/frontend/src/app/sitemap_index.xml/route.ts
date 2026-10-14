@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 
 import { SITE_ORIGINS, resolveSeoDomain } from "@/lib/seo/site-domains";
 import { LAWS_PER_SITEMAP, listLawSitemapEntries } from "@/lib/seo/laws-public";
+import { listRegulationSitemapEntries } from "@/lib/seo/regulations-public";
 
 export const revalidate = 86400;
 
@@ -12,8 +13,9 @@ export async function GET(): Promise<Response> {
   const origin = SITE_ORIGINS[domain];
   let chunks = 1;
   if (domain === "ghazihoushmand.ir") {
-    const { total } = await listLawSitemapEntries(0, 1);
-    chunks = Math.max(1, Math.ceil(total / LAWS_PER_SITEMAP));
+    const { total: lawsTotal } = await listLawSitemapEntries(0, 1);
+    const { total: regulationsTotal } = await listRegulationSitemapEntries(0, 1);
+    chunks = Math.max(1, Math.ceil((lawsTotal + regulationsTotal) / LAWS_PER_SITEMAP));
   }
   const now = new Date().toISOString();
   const items = Array.from(
