@@ -8,6 +8,7 @@ import {
   listPublicLaws,
   type PublicSitemapEntry,
 } from "@/lib/seo/laws-public";
+import { GUIDE_SLUGS } from "@/lib/guides";
 
 type SitemapRoute = {
   path: string;
@@ -49,6 +50,7 @@ const DOMAIN_ROUTES: Record<SeoDomain, SitemapRoute[]> = {
     { path: "/chat", changeFrequency: "daily", priority: 0.9 },
     { path: "/services", changeFrequency: "weekly", priority: 0.8 },
     { path: "/guide", changeFrequency: "monthly", priority: 0.7 },
+    { path: "/guides", changeFrequency: "weekly", priority: 0.7 },
     { path: "/about", changeFrequency: "monthly", priority: 0.7 },
     { path: "/technology", changeFrequency: "monthly", priority: 0.7 },
     { path: "/coverage", changeFrequency: "weekly", priority: 0.6 },
@@ -130,6 +132,12 @@ export default async function sitemap(props: {
       priority: 0.6,
     })),
   ];
+  const guideRoutes: MetadataRoute.Sitemap = GUIDE_SLUGS.map((slug) => ({
+    url: `${origin}/guides/${encodeURIComponent(slug)}`,
+    lastModified,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  }));
   const firstChunk = await listLawSitemapEntries(0, LAWS_PER_SITEMAP);
-  return [...staticRoutes, ...lawRoutes, ...firstChunk.entries.map(toSitemapEntry)];
+  return [...staticRoutes, ...guideRoutes, ...lawRoutes, ...firstChunk.entries.map(toSitemapEntry)];
 }

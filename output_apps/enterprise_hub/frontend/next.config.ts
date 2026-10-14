@@ -34,6 +34,14 @@ const nextConfig: NextConfig = {
   // می‌کند و نیاز به نصب کامل node_modules در ایمیج نهایی را حذف می‌کند.
   output: "standalone",
 
+  // راهنماهای حقوقی در زمان رندر (ISR) از فایل‌های content/guides خوانده
+  // می‌شوند؛ این قانون تضمین می‌کند فایل‌های مارک‌داون در خروجی standalone
+  // نیز حضور داشته باشند تا بازتولید صفحه‌ها در runtime شکست نخورد.
+  outputFileTracingIncludes: {
+    "/guides": ["./content/guides/**/*.md"],
+    "/guides/[slug]": ["./content/guides/**/*.md"],
+  },
+
   // ریشه پروژه را صریحاً به همین پوشه (frontend) محدود می‌کند تا با
   // package-lock.json موجود در enterprise_hub/ (لایه NestJS) اشتباه
   // گرفته نشود (دو لایه مجزا طبق بند ۱ AGENTS.md).
