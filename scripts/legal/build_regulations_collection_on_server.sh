@@ -23,7 +23,7 @@ MIN_FREE_GB=${MIN_FREE_GB:-3}
 STAGED=data/legal/staged
 FILES=(
   "$STAGED/deregulation_board_2026-10-13.jsonl"
-  "$STAGED/circulars_2026-10-13.jsonl"
+  "$STAGED/cbi_circulars_2026-10-14.jsonl"
 )
 GOLDEN=data/eval/chat_golden/regulations_golden_2026-10-13.json
 
