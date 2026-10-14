@@ -22,6 +22,17 @@ export const GUIDE_SLUGS = [
   "commercial-lease-eviction-sarghofli",
   "limited-liability-company-registration",
   "consumer-rights-ecommerce-law",
+  "mutual-divorce-steps-documents",
+  "child-custody-after-age-seven",
+  "past-alimony-calculation-tamkin",
+  "inheritance-division-children-spouse",
+  "mahr-claim-after-spouse-death",
+  "dowry-recovery-with-without-list",
+  "marriage-annulment-fraud-tadlis",
+  "marital-labor-compensation-ojrat",
+  "bounced-cheque-criminal-vs-civil",
+  "late-payment-damages-cbi-formula",
+  "asset-seizure-tamin-khasteh-guide",
 ] as const;
 
 export type GuideSlug = (typeof GUIDE_SLUGS)[number];
