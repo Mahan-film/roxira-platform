@@ -13,6 +13,7 @@ const PHONE_RE = /^[0-9+\-\s]{7,20}$/;
 
 interface EnterpriseSalesFormProps {
   source?: string;
+  submitLabel?: string;
 }
 
 interface FormState {

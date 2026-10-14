@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PortalMobileNav } from "@/components/layout/portal-mobile-nav";
 import {
@@ -5,32 +6,85 @@ import {
   Boxes,
   Building2,
   Cpu,
-  FileCheck2,
+  ExternalLink,
   Layers,
-  Radar,
   ReceiptText,
-  ServerCog,
   ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
 
-const MODULES = [
-  { href: "/accounting", label: "حسابداری", hint: "دفتر کل دوطرفه و گزارش‌های مالی", icon: Layers },
-  { href: "/invoicing", label: "صورتحساب", hint: "صدور و امضای الکترونیک", icon: ReceiptText },
-  { href: "/inventory", label: "انبارداری", hint: "موجودی و بهای تمام‌شده FIFO", icon: Boxes },
-  { href: "/crm", label: "مدیریت مشتریان", hint: "سرنخ‌ها و پایپ‌لاین فروش", icon: Users },
-  { href: "/hr", label: "منابع انسانی", hint: "کارکنان و دستمزد", icon: Building2 },
-  { href: "/radar", label: "رادار فناوری", hint: "پایش فناوری و ایجنت‌ها", icon: Radar },
+const HOME_TITLE = "روکسیرا | زیرساخت نرم‌افزارهای سازمانی و هوش مصنوعی";
+const HOME_DESCRIPTION =
+  "توسعه راهکارهای سازمانی CRM، ERP، حسابداری، اتصال به سامانه مؤدیان و کارخانه نرم‌افزار هوش مصنوعی در روکسیرا. مشاهده قاضی هوشمند و پیش‌ثبت‌نام.";
+
+export const metadata: Metadata = {
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  alternates: { canonical: "https://roxira.ir/" },
+  openGraph: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    url: "https://roxira.ir/",
+    siteName: "روکسیرا",
+    locale: "fa_IR",
+    type: "website",
+  },
+};
+
+const ENTERPRISE_MODULES = [
+  {
+    icon: Users,
+    title: "مدیریت ارتباط با مشتری و فروش (CRM)",
+    badge: "در حال توسعه",
+    description: "یکپارچه‌سازی چرخه پیگیری سرنخ‌های فروش و پرونده مشتریان.",
+    href: "/crm",
+  },
+  {
+    icon: Layers,
+    title: "برنامه‌ریزی منابع سازمان، حسابداری و انبار (ERP)",
+    badge: "در حال توسعه",
+    description:
+      "مدیریت اسناد حسابداری، صدور فاکتور، کنترل موجودی انبار و فرآیندهای منابع انسانی.",
+    href: "/accounting",
+  },
+  {
+    icon: ReceiptText,
+    title: "رابط ارسال صورتحساب الکترونیکی سامانه مؤدیان",
+    badge: "به‌زودی",
+    description:
+      "آماده‌سازی، اعتبارسنجی اقلام اطلاعاتی و ارسال مستقیم صورتحساب‌های الکترونیکی به کارپوشه مالیاتی.",
+    href: "/invoicing",
+  },
+  {
+    icon: Cpu,
+    title: "کارخانه نرم‌افزار هوش مصنوعی (AI Software Factory)",
+    badge: "در حال توسعه",
+    description: "طراحی و تولید نرم‌افزارهای سفارشی درون‌سازمانی به کمک هوش مصنوعی.",
+    href: "/contact",
+  },
 ];
 
 const PORTAL_NAV = [
-  { href: "/accounting", label: "حسابداری" },
-  { href: "/invoicing", label: "مالیات و صورتحساب" },
-  { href: "/inventory", label: "انبار و ERP" },
-  { href: "/crm", label: "CRM" },
-  { href: "/contact", label: "تماس و دمو" },
+  { href: "/#ghazi", label: "قاضی هوشمند" },
+  { href: "/#modules", label: "ماژول‌های سازمانی" },
+  { href: "/contact", label: "پیش‌ثبت‌نام و تماس" },
 ];
+
+function StatusBadge({ tone, children }: { tone: "active" | "pending"; children: React.ReactNode }) {
+  const toneClass =
+    tone === "active"
+      ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+      : "border-amber-400/30 bg-amber-400/10 text-amber-300";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${toneClass}`}
+    >
+      <span className="size-1.5 rounded-full bg-current" />
+      {children}
+    </span>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -42,25 +96,31 @@ export default function HomePage() {
               R
             </span>
             <span className="flex flex-col leading-tight">
-              <span className="text-sm font-bold text-white">رکسایرا</span>
+              <span className="text-sm font-bold text-white">روکسیرا</span>
               <span className="font-mono text-[10px] text-slate-500" dir="ltr">
-                Roxira Enterprise OS
+                Roxira
               </span>
             </span>
           </Link>
 
           <nav className="hidden items-center gap-1 text-sm md:flex">
-            <Link href="/accounting" className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
-              حسابداری
+            <Link
+              href="/#ghazi"
+              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              قاضی هوشمند
             </Link>
-            <Link href="/invoicing" className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
-              مالیات و صورتحساب
+            <Link
+              href="/#modules"
+              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              ماژول‌های سازمانی
             </Link>
-            <Link href="/crm" className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
-              CRM
-            </Link>
-            <Link href="/contact" className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
-              تماس و دمو
+            <Link
+              href="/contact"
+              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              تماس
             </Link>
           </nav>
 
@@ -70,7 +130,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
             >
               <Sparkles className="size-3.5" />
-              درخواست دمو
+              پیش‌ثبت‌نام
             </Link>
             <PortalMobileNav links={PORTAL_NAV} />
           </div>
@@ -82,153 +142,126 @@ export default function HomePage() {
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_45%_at_50%_0%,rgba(99,102,241,0.14),transparent_70%)]" />
           <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6">
             <span className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 font-mono text-[11px] font-semibold text-indigo-300">
-              <ServerCog className="size-3.5" />
-              ROXIRA ENTERPRISE OS
+              <Building2 className="size-3.5" />
+              ROXIRA
             </span>
             <h1 className="mt-6 max-w-3xl text-3xl font-black leading-tight text-white sm:text-4xl">
-              زیرساخت ابری یکپارچه سازمانی، کارخانه نرم‌افزار خودمختار و انطباق مالیاتی
+              نسل نوین نرم‌افزارهای یکپارچه کسب‌وکار و راهکارهای تخصصی هوش مصنوعی
             </h1>
             <p className="mt-5 max-w-2xl text-sm leading-relaxed text-slate-400">
-              رکسایرا پورتال سازمانی یکپارچه‌ای است که ماژول‌های مالی، انبار، فروش و منابع
-              انسانی را با کارخانه نرم‌افزار خودمختار و سامانه انطباق مالیاتی (مودیان) در یک
-              بستر امن و مقیاس‌پذیر ترکیب می‌کند.
+              روکسیرا زیرساخت‌های نرم‌افزاری مدیریت کسب‌وکار—از حسابداری، انبارداری و CRM تا
+              اتصال مستقیم به سامانه مؤدیان—را در کنار کارخانه تولید نرم‌افزار مبتنی بر هوش
+              مصنوعی برای سازمان‌های ایرانی طراحی و مهندسی می‌کند.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
-                href="/invoicing"
+                href="/contact"
                 className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-xs font-bold text-slate-950 transition-transform hover:-translate-y-0.5"
               >
-                <FileCheck2 className="size-4" />
-                سامانه انطباق مالیاتی
+                <Sparkles className="size-4" />
+                پیش‌ثبت‌نام راهکارهای سازمانی
               </Link>
-              <Link
-                href="/contact"
+              <a
+                href="https://ghazihoushmand.ir"
                 className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-xs font-bold text-slate-200 transition-colors hover:border-indigo-400/40 hover:text-white"
               >
-                <Cpu className="size-4" />
-                درخواست دمو
-              </Link>
+                <ExternalLink className="size-4" />
+                ورود به سامانه قاضی هوشمند
+              </a>
             </div>
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            <article className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-              <span className="flex size-10 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/10 text-indigo-300">
-                <Building2 className="size-5" />
+        <section id="ghazi" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:px-6">
+          <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.04] p-6 sm:p-8">
+            <div className="flex flex-wrap items-center gap-3">
+              <StatusBadge tone="active">محصول فعال</StatusBadge>
+              <h2 className="text-lg font-black text-white sm:text-xl">
+                قاضی هوشمند؛ نخستین محصول عملیاتی روکسیرا در اکوسیستم هوش مصنوعی حقوقی
+              </h2>
+            </div>
+            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-slate-300">
+              پیش از عرضه عمومی مجموعه نرم‌افزارهای سازمانی، روکسیرا توانمندی فنی خود در پردازش
+              زبان طبیعی فارسی و مهندسی پایگاه‌های دانش ساختاریافته را در قالب سامانه قاضی
+              هوشمند به بهره‌برداری رسانده است تا امکان جستجوی دقیق در متون تنقیح‌شده قوانین
+              ایران و دریافت مشاوره مستند به مواد قانونی فراهم گردد.
+            </p>
+            <a
+              href="https://ghazihoushmand.ir"
+              className="mt-6 inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-2.5 text-xs font-bold text-emerald-200 transition-colors hover:bg-emerald-400/20"
+            >
+              مشاهده و استفاده از قاضی هوشمند
+              <span className="font-mono text-[10px] opacity-70" dir="ltr">
+                ghazihoushmand.ir
               </span>
-              <h2 className="mt-4 text-base font-bold text-white">Roxira Enterprise OS</h2>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                هسته سازمانی ماژولار شامل حسابداری دوطرفه، انبارداری، مدیریت مشتریان و منابع
-                انسانی؛ با معماری Controller-Service-Repository و API نسخه‌بندی‌شده.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Link href="/accounting" className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-slate-300 transition-colors hover:border-indigo-400/40 hover:text-white">
-                  حسابداری
-                </Link>
-                <Link href="/inventory" className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-slate-300 transition-colors hover:border-indigo-400/40 hover:text-white">
-                  انبارداری
-                </Link>
-                <Link href="/hr" className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-slate-300 transition-colors hover:border-indigo-400/40 hover:text-white">
-                  منابع انسانی
-                </Link>
-              </div>
-            </article>
-
-            <article className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-              <span className="flex size-10 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-400/10 text-violet-300">
-                <Cpu className="size-5" />
-              </span>
-              <h2 className="mt-4 text-base font-bold text-white">Autonomous Software Foundry</h2>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                کارخانه نرم‌افزار خودمختار که از یک پرامپت، ماژول‌های سازمانی را می‌سازد، در
-                محیط ایزوله Docker بیلد و اجرا می‌کند و مسیر سرویس را به‌صورت خودکار ثبت می‌نماید.
-              </p>
-              <Link
-                href="/contact"
-                className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-400/10 px-3 py-1.5 text-[11px] font-semibold text-violet-200 transition-colors hover:bg-violet-400/20"
-              >
-                درخواست دمو
-                <ArrowLeft className="size-3.5" />
-              </Link>
-            </article>
-
-            <article className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-              <span className="flex size-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
-                <FileCheck2 className="size-5" />
-              </span>
-              <h2 className="mt-4 text-base font-bold text-white">Tax Compliance ERP</h2>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                ابزار انطباق مالیاتی: صدور صورتحساب الکترونیکی، امضای دیجیتال و تولید
-                بسته مالیاتی آماده ارسال به‌صورت یکپارچه با ماژول مالی (اتصال به سامانه مودیان هنوز فعال نیست).
-              </p>
-              <Link
-                href="/invoicing"
-                className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-200 transition-colors hover:bg-emerald-400/20"
-              >
-                سامانه انطباق مالیاتی
-                <ArrowLeft className="size-3.5" />
-              </Link>
-            </article>
+            </a>
           </div>
         </section>
 
-        <section className="border-t border-white/10 bg-white/[0.015]">
-          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+        <section id="modules" className="border-t border-white/10 bg-white/[0.015]">
+          <div className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:px-6">
             <div className="flex items-center gap-2">
               <Layers className="size-4 text-indigo-300" />
-              <h2 className="text-lg font-bold text-white">ماژول‌های یکپارچه پورتال سازمانی</h2>
+              <h2 className="text-lg font-bold text-white">
+                اکوسیستم یکپارچه مدیریت کسب‌وکار (در مرحله پیش‌ثبت‌نام)
+              </h2>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              هر ماژول مستقل، مقیاس‌پذیر و از طریق وب‌سرویس‌های نسخه‌بندی‌شده قابل اتصال است.
+              ماژول‌های سازمانی روکسیرا در حال توسعه هستند و از طریق پیش‌ثبت‌نام قابل دسترسی
+              خواهند بود.
             </p>
 
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {MODULES.map((module) => {
+            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {ENTERPRISE_MODULES.map((module) => {
                 const Icon = module.icon;
                 return (
-                  <Link
-                    key={module.href}
-                    href={module.href}
-                    className="group flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4 transition-colors hover:border-indigo-400/40 hover:bg-slate-900/70"
+                  <div
+                    key={module.title}
+                    className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900/40 p-5"
                   >
-                    <span className="flex size-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300">
-                      <Icon className="size-4" />
-                    </span>
-                    <span className="flex flex-col">
-                      <span className="text-sm font-semibold text-slate-100 group-hover:text-white">
-                        {module.label}
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="flex size-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300">
+                        <Icon className="size-5" />
                       </span>
-                      <span className="mt-0.5 text-[11px] text-slate-500">{module.hint}</span>
-                    </span>
-                  </Link>
+                      <StatusBadge tone="pending">{module.badge}</StatusBadge>
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-100">{module.title}</h3>
+                    <p className="text-xs leading-relaxed text-slate-400">
+                      {module.description}
+                    </p>
+                    <Link
+                      href={module.href}
+                      className="mt-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-300 transition-colors hover:text-indigo-200"
+                    >
+                      اطلاعات بیشتر
+                      <ArrowLeft className="size-3.5" />
+                    </Link>
+                  </div>
                 );
               })}
             </div>
           </div>
         </section>
 
-        <section id="early-access" className="border-t border-white/10 bg-white/[0.015]">
+        <section className="border-t border-white/10 bg-white/[0.015]">
           <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6">
             <span className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 font-mono text-[11px] font-semibold text-indigo-300">
               <Sparkles className="size-3.5" />
-              EARLY ACCESS
+              PRE-REGISTRATION
             </span>
             <h2 className="mt-5 text-2xl font-black text-white sm:text-3xl">
-              پیش‌ثبت‌نام و درخواست همکاری
+              ثبت درخواست همکاری و رزرو نوبت بهره‌برداری آزمایشی
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-400">
-              ماژول‌های رکسایرا برای حسابداری، انبارداری، مدیریت مشتریان (CRM)، منابع انسانی و
-              محاسبه خسارت تأخیر تأدیه در مرحله دسترسی اولیه (Early Access) هستند. سازمان‌ها
-              می‌توانند برای دریافت دمو و درخواست دسترسی اولیه با ما همکاری کنند.
+              برای ورود به فهرست انتظار نسخه سازمانی و هماهنگی بهره‌برداری آزمایشی، درخواست خود
+              را ثبت کنید. کارشناس روکسیرا برای هماهنگی با شما تماس می‌گیرد.
             </p>
             <div className="mt-8 flex justify-center">
               <Link
-                href="/contact?source=home-early-access"
+                href="/contact?source=home-pre-registration"
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
               >
-                درخواست دمو و دسترسی اولیه
+                پیش‌ثبت‌نام و درخواست همکاری
                 <ArrowLeft className="size-4" />
               </Link>
             </div>
@@ -240,7 +273,7 @@ export default function HomePage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-3 px-4 py-6 text-center text-[11px] text-slate-500 sm:flex-row sm:px-6 sm:text-right">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="size-3 text-emerald-400" />
-            رکسایرا — زیرساخت سازمانی، کارخانه نرم‌افزار و انطباق مالیاتی
+            روکسیرا — نرم‌افزارهای سازمانی و هوش مصنوعی کاربردی
           </span>
           <span className="font-mono" dir="ltr">
             © 1405 Roxira · roxira.ir
