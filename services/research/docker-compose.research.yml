@@ -1,0 +1,67 @@
+# Self-hosted deep-research API (roxira-research), no UI.
+# PUBLIC research questions ONLY: never send customer/case data — the key-pool
+# `agent-free` group may route to free models that log or train on prompts
+# (AGENTS.md section 4). See docs/infra/RESEARCH_SERVICE.md.
+#
+# Start with install.sh (dry-run by default), not by hand. It passes
+# --env-file /opt/roxira_platform/.env so the ${...} interpolation below works.
+services:
+  roxira_research:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: roxira_research
+    restart: unless-stopped
+    env_file:
+      - /opt/roxira_platform/.env
+    environment:
+      # All LLM traffic goes through the key-pool gateway; group names are model
+      # names. OPENAI_API_KEY is the gateway master key, never a provider key.
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://roxira_keypool:4000/v1}
+      OPENAI_API_KEY: ${KEYPOOL_MASTER_KEY:?set KEYPOOL_MASTER_KEY in /opt/roxira_platform/.env}
+      FAST_LLM: ${FAST_LLM:-openai:agent-free}
+      SMART_LLM: ${SMART_LLM:-openai:agent-free}
+      STRATEGIC_LLM: ${STRATEGIC_LLM:-openai:agent-free}
+      # Embeddings: the key-pool group "embeddings" proxies to the shared local TEI
+      # (BAAI/bge-m3 on roxira_embeddings) — no external call, no cost.
+      EMBEDDING: ${EMBEDDING:-openai:embeddings}
+      RETRIEVER: ${RETRIEVER:-searx}
+      SEARX_URL: ${SEARX_URL:-http://research-stack-searxng-1:8080}
+      SCRAPER: ${SCRAPER:-bs}
+      MAX_ITERATIONS: ${MAX_ITERATIONS:-3}
+      LANGUAGE: ${LANGUAGE:-persian}
+      # Optional bearer token for POST /research; empty means no auth.
+      RESEARCH_TOKEN: ${RESEARCH_TOKEN:-}
+    ports:
+      - "127.0.0.1:8090:8000"
+    mem_limit: 1g
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - keypool
+      - research
+
+networks:
+  # Default bridge of the key-pool compose project (`-p roxira-keypool` in
+  # scripts/infra/key_pool/install.sh); container `roxira_keypool` resolves here.
+  keypool:
+    external: true
+    name: roxira-keypool_default
+  # Network declared by docker/research-stack/docker-compose.yml; its SearXNG
+  # container `research-stack-searxng-1` listens on internal port 8080.
+  research:
+    external: true
+    name: research
