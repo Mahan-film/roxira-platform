@@ -38,6 +38,24 @@ import { cn } from "@/lib/utils";
 const RESEND_COOLDOWN_SECONDS = 60;
 /** Dev-only OTP echo box; never rendered in production builds. */
 const NETWORK_ERROR_COPY = "اتصال به سرور برقرار نشد. اینترنت خود را بررسی کنید یا چند لحظه بعد دوباره تلاش کنید.";
+
+/**
+ * Retry a NestJS auth call on network failures only (Safari "Load failed",
+ * dropped mobile/VPN connections), like the Smart Judge client does. HTTP
+ * errors (ApiClientError) are real answers from the server and are not retried.
+ */
+async function withNetworkRetry<T>(call: () => Promise<T>, onRetry: () => void): Promise<T> {
+  const attempts = 3;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await call();
+    } catch (err) {
+      if (err instanceof ApiClientError || attempt >= attempts) throw err;
+      onRetry();
+      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+    }
+  }
+}
 const SHOW_DEV_CODE = process.env.NODE_ENV !== "production";
 
 function toUserRole(role: string | null | undefined): UserRole {
@@ -141,10 +159,10 @@ export function LoginModal({
       try {
         if (isEnterprise) {
           // پورتال سازمانی: مسیر NestJS (`/api/backend/auth/send-otp`)
-          const response = await sendEnterpriseOtp({
+          const response = await withNetworkRetry(() => sendEnterpriseOtp({
             phone: targetPhone,
             serviceDomain: "ROXIRA",
-          });
+          }), () => setRetrying(true));
           setPhone(targetPhone);
           setStep("code");
           setCode("");
@@ -234,12 +252,12 @@ export function LoginModal({
       try {
         if (isEnterprise) {
           const trimmedOrganization = organizationName.trim();
-          const session = await verifyEnterpriseOtp({
+          const session = await withNetworkRetry(() => verifyEnterpriseOtp({
             phone,
             code: cleanCode,
             serviceDomain: "ROXIRA",
             organizationName: trimmedOrganization || undefined,
-          });
+          }), () => setRetrying(true));
           onAuthenticated(session);
           onClose();
           return;
@@ -269,7 +287,9 @@ export function LoginModal({
           setError(err.details);
           setNetworkFailed(err.statusCode === 0);
         } else {
-          setError(["تأیید کد ناموفق بود. لطفاً دوباره تلاش کنید."]);
+          // fetch() rejects only on network failure: the code was not checked.
+          setError([NETWORK_ERROR_COPY]);
+          setNetworkFailed(true);
         }
       } finally {
         setLoading(false);
