@@ -33,7 +33,7 @@ FILES=(
 )
 # BUILD_FILES="a.jsonl b.jsonl" replaces the list above (same order rule: lowest priority first).
 if [ -n "${BUILD_FILES:-}" ]; then read -r -a FILES <<<"$BUILD_FILES"; fi
-SETS=(retrieval_golden retrieval_golden_new_laws retrieval_golden_crawl_2026-10-12)
+SETS=(retrieval_golden retrieval_golden_new_laws retrieval_golden_crawl_2026-10-12 retrieval_golden_rc_laws_2026-10-15)
 
 DRY=0 REBUILD=0
 for arg in "$@"; do

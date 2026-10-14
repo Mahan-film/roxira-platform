@@ -250,6 +250,18 @@
       "status": "proposed",
       "enacted": true,
       "source_batch": "qavanin-2026-10-13"
+    },
+    {
+      "name": "قانون امور گمرکی",
+      "status": "proposed",
+      "enacted": true,
+      "source_batch": "rc-majlis-relay-2026-10-15"
+    },
+    {
+      "name": "قانون اصلاح قانون نظام صنفی کشور",
+      "status": "proposed",
+      "enacted": true,
+      "source_batch": "rc-majlis-relay-2026-10-15"
     }
   ]
 }

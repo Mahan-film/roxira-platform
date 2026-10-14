@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "purpose": "Retrieval golden for the rc.majlis.ir relay laws (customs affairs 1390, guild system 1382). Run with: python3 scripts/eval_chat_golden.py --retrieval-only --retrieval-set data/eval/chat_golden/retrieval_golden_rc_laws_2026-10-15.json",
+    "status": "Hub-written 2026-10-15; each article number checked against data/legal/staged/rc_laws_2026-10-15.jsonl. Expected to fail on iran_laws_v5 (laws absent) and pass on iran_laws_v6.",
+    "matching": "same as retrieval_golden.json"
+  },
+  "cases": [
+    {"id": "customs-agency-role", "question": "گمرک جمهوری اسلامی ایران زیر نظر کدام وزارتخانه است و چه نقشی دارد؟", "law_any": ["امور گمرکی"], "articles": [2]},
+    {"id": "customs-export-value", "question": "ارزش گمرکی کالای صادراتی چگونه محاسبه می‌شود؟", "law_any": ["امور گمرکی"], "articles": [16]},
+    {"id": "customs-smuggling-cases", "question": "چه مواردی قاچاق گمرکی محسوب می‌شود؟", "law_any": ["امور گمرکی"], "articles": [113]},
+    {"id": "customs-discrepancy-before-clearance", "question": "اگر قبل از ترخیص کالا مغایرتی کشف شود که به دولت زیان مالی بزند، چه جریمه‌ای دارد؟", "law_any": ["امور گمرکی"], "articles": [108]},
+    {"id": "guild-license-required", "question": "آیا قبل از راه‌اندازی مغازه باید پروانه کسب بگیرم؟", "law_any": ["نظام صنفی"], "articles": [12]},
+    {"id": "guild-seal-without-license", "question": "مغازه‌ای که پروانه کسب ندارد پلمب می‌شود؟ چه مهلتی می‌دهند؟", "law_any": ["نظام صنفی"], "articles": [27]},
+    {"id": "guild-price-label", "question": "جریمه نصب نکردن برچسب قیمت روی کالا در قانون نظام صنفی چیست؟", "law_any": ["نظام صنفی"], "articles": [65]},
+    {"id": "guild-lottery-sale", "question": "فروش کالا از طریق قرعه‌کشی توسط واحد صنفی مجاز است؟", "law_any": ["نظام صنفی"], "articles": [69]}
+  ]
+}

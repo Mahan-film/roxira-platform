@@ -78,3 +78,13 @@ def test_rcmajlis_text_is_not_clipped_but_taxreg_is():
     tx = ir.make_row("taxreg", "u", "d", "t", "law", None, None, None, long)
     assert len(rc["text"]) == ir.MAX_TEXT_CHARS + 5000
     assert len(tx["text"]) == ir.MAX_TEXT_CHARS
+
+
+def test_annotate_amendments_marks_base_articles():
+    base = {"law_name": "قانون نظام صنفی کشور", "article_no": "8", "text": "ماده 8 قانون نظام صنفی کشور: متن قدیم"}
+    other = {"law_name": "قانون نظام صنفی کشور", "article_no": "9", "text": "ماده 9 قانون نظام صنفی کشور: متن"}
+    item = {"law_name": "قانون اصلاح قانون نظام صنفی کشور", "article_no": "6", "approval_date": "1392/06/12",
+            "text": "ماده 6 قانون اصلاح قانون نظام صنفی کشور: ماده (۸) قانون به شرح زیر اصلاح می شود: متن نو"}
+    assert srla.annotate_amendments([base, other, item]) == 1
+    assert base["amended_on"] == "1392/06/12" and "ماده 6 قانون اصلاح" in base["text"]
+    assert "amended_by" not in other

@@ -94,6 +94,51 @@ def load_rows(path: Path) -> list[dict]:
     return rows
 
 
+_AMENDING_PREFIX = "قانون اصلاح "
+# «ماده (۸) قانون ... اصلاح/حذف/الحاق»: which article of the base law an amendment item changes.
+_AMENDED_REF_RE = re.compile(
+    rf"ماده\s*\(?\s*(?P<num>[{_DIGITS}]+)\s*\)?\s*(?:مکرر\s*)?(?:قانون|به\s*قانون)?[^.]{{0,60}}?(?:اصلاح|حذف|الحاق|اضافه)"
+)
+_TO_LATIN = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def annotate_amendments(rows: list[dict]) -> int:
+    """Mark base-law articles changed by an amending law in the same batch («قانون اصلاح <base>»).
+
+    Amendment items are numbered on their own (item 6 may rewrite article 8 of the base law), so a base row keeps
+    its original text but gets ``amended_on``/``amended_by`` and a note that points to the amending item; the model
+    then cites the amended text. Returns the number of annotated base rows.
+    """
+    by_law: dict[str, dict[str, dict]] = {}
+    for r in rows:
+        by_law.setdefault(r["law_name"], {})[str(r["article_no"])] = r
+    marked = 0
+    for law, items in by_law.items():
+        if not law.startswith(_AMENDING_PREFIX):
+            continue
+        base = by_law.get("قانون " + law[len(_AMENDING_PREFIX):]) or by_law.get(law[len(_AMENDING_PREFIX):])
+        if not base:
+            continue
+        for item in items.values():
+            body = item["text"].split(":", 1)[-1]
+            for m in _AMENDED_REF_RE.finditer(body):
+                target = base.get(m.group("num").translate(_TO_LATIN))
+                if target is None:
+                    continue
+                refs = target.setdefault("amended_by", [])
+                label = f"ماده {item['article_no']} {law}"
+                if label in refs:
+                    continue
+                refs.append(label)
+                target["amended_on"] = item.get("approval_date")
+                if "[توجه:" not in target["text"]:
+                    marked += 1
+                    target["text"] += f" [توجه: این ماده یا تبصره‌های آن با {label} مصوب {item.get('approval_date')} اصلاح شده است؛ متن اصلاحی را مبنا قرار دهید.]"
+                else:
+                    target["text"] = target["text"][:-1] + f"؛ نیز {label}]"
+    return marked
+
+
 def cmd_split(args) -> int:
     per_law: list[tuple[str, int]] = []
     out: list[dict] = []
@@ -103,6 +148,9 @@ def cmd_split(args) -> int:
         law_rows, _ = build_rows(relay)
         per_law.append((_norm(relay.get("title")), len(law_rows)))
         out.extend(law_rows)
+    marked = annotate_amendments(out)
+    if marked:
+        print(f"annotated {marked} base-law articles changed by an amending law in this batch")
     if args.dry_run:
         for name, n in per_law:
             print(f"{n:5d}  {name}")
