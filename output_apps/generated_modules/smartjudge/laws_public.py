@@ -4,6 +4,8 @@ The serving Qdrant collection already holds the statute chunks. On the first
 request this module scrolls the whole collection (``with_vector=false``, page
 512) into an in-memory index, merges the chunks of each ``(law_id, article_no)``
 by ``chunk_index``, and caches the result for 6 hours behind an ``asyncio.Lock``.
+Points without a ``law_id`` but with a ``law_name`` are grouped under a stable
+slug derived from the normalised name.
 
 Only public fields are ever returned; internal ingestion metadata
 (``content_hash``, ``ingest_pipeline``, ``review_reasons``, ``fetched_at``) never
@@ -12,6 +14,7 @@ leaves this module. No LLM is ever called.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
 import time
@@ -63,6 +66,18 @@ def article_slug(article_no: Any) -> str:
     return _slugify(str(article_no or "").translate(_DIGIT_MAP))
 
 
+def _normalise_law_name(value: Any) -> str:
+    """Normalise a Persian law name: Arabic ي/ك -> Persian ی/ک, drop ZWNJ, collapse spaces."""
+    text = str(value or "").replace("ي", "ی").replace("ك", "ک").replace("\u200c", "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _derived_law_slug(normalised_name: str) -> str:
+    """Stable fallback slug for points lacking ``law_id``: ``law-`` + 12 hex of sha1."""
+    digest = hashlib.sha1(normalised_name.encode("utf-8")).hexdigest()
+    return f"law-{digest[:12]}"
+
+
 def _article_order_key(slug: str) -> tuple:
     """Natural article order: numeric part first, then any ``-suffix``."""
     match = re.match(r"^(\d+)(?:-(\d+))?", slug)
@@ -78,12 +93,19 @@ def _build_index(payloads: List[Any]) -> dict:
         if not isinstance(payload, dict):
             continue
         law_id = str(payload.get("law_id") or "").strip()
-        if not law_id:
+        law_name = _normalise_law_name(payload.get("law_name"))
+        if not law_id and not law_name:
             continue
-        law = laws.get(law_id)
+        if law_id:
+            key = law_id
+            slug = law_slug(law_id)
+        else:
+            key = _derived_law_slug(law_name)
+            slug = key
+        law = laws.get(key)
         if law is None:
             law = {
-                "slug": law_slug(law_id),
+                "slug": slug,
                 "name": str(payload.get("law_name") or law_id),
                 "law_type": payload.get("law_type"),
                 "approval_date": payload.get("approval_date"),
@@ -91,7 +113,7 @@ def _build_index(payloads: List[Any]) -> dict:
                 "source_url": payload.get("source_url"),
                 "articles": {},
             }
-            laws[law_id] = law
+            laws[key] = law
         elif not law["name"] and payload.get("law_name"):
             law["name"] = str(payload["law_name"])
 
