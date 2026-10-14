@@ -26,6 +26,7 @@ import {
 } from '../dto/preview-response.dto';
 import { buildFallbackMapping } from '../mapping/lead-field-synonyms';
 import { ParsedCsv, parseCsv } from '../parsers/csv.parser';
+import { parseXlsx } from '../parsers/xlsx.parser';
 import {
   DataImportRepository,
   ImportLeadData,
@@ -51,7 +52,7 @@ interface ValidatedRow {
 /**
  * سرویس ورود داده با کمک هوش مصنوعی (MVP سرنخ‌های CRM).
  *
- * - `preview`: فایل CSV را تجزیه می‌کند، نمونه‌ای محدود (۵ ردیف/۴۰ نویسه) به
+ * - `preview`: فایل CSV یا XLSX را تجزیه می‌کند، نمونه‌ای محدود (۵ ردیف/۴۰ نویسه) به
  *   مدل می‌دهد و نگاشت پیشنهادی را با نگاشت قطعی مترادف‌ها پشتیبان‌سازی می‌کند.
  * - `commit`: هر ردیف را با قواعد `CreateLeadDto` اعتبارسنجی کرده، تکراری‌های
  *   (مستأجر، رایانامه) را رد و بقیه را گروهی درج می‌کند.
@@ -85,6 +86,26 @@ export class DataImportService {
     }
   }
 
+  /** تجزیه XLSX با تبدیل خطا به پاسخ ۴۰۰ فارسی. */
+  private parseXlsxOrThrow(buffer: Buffer): ParsedCsv {
+    try {
+      return parseXlsx(buffer);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'خطا در تجزیه فایل اکسل.',
+      );
+    }
+  }
+
+  /** تشخیص فایل XLSX بر پایه پسوند یا MIME type. */
+  private isXlsxFile(file: UploadedFilePayload): boolean {
+    const extension = path.extname(file.originalname ?? '').toLowerCase();
+    if (extension === '.xlsx') {
+      return true;
+    }
+    return (file.mimetype ?? '').toLowerCase().includes('spreadsheetml');
+  }
+
   /** پیش‌نمایش فایل و نگاشت پیشنهادی ستون‌ها. */
   async preview(
     tenantId: string,
@@ -95,20 +116,18 @@ export class DataImportService {
     }
 
     const extension = path.extname(file.originalname ?? '').toLowerCase();
-    if (extension === '.xlsx') {
-      throw new BadRequestException(
-        'پردازش فایل اکسل (XLSX) در این نسخه پشتیبانی نمی‌شود؛ لطفاً فایل CSV بارگذاری کنید.',
-      );
-    }
     if (
       !ALLOWED_UPLOAD_EXTENSIONS.includes(
         extension as (typeof ALLOWED_UPLOAD_EXTENSIONS)[number],
-      )
+      ) &&
+      !(file.mimetype ?? '').toLowerCase().includes('spreadsheetml')
     ) {
       throw new BadRequestException('فقط فایل‌های CSV و XLSX پذیرفته می‌شوند.');
     }
 
-    const parsed = this.parseCsvOrThrow(file.buffer.toString('utf8'));
+    const parsed = this.isXlsxFile(file)
+      ? this.parseXlsxOrThrow(file.buffer)
+      : this.parseCsvOrThrow(file.buffer.toString('utf8'));
 
     if (parsed.rows.length > MAX_IMPORT_ROWS) {
       throw new BadRequestException(

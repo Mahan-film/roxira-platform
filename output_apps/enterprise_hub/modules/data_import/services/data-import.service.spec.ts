@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
+import { deflateRawSync } from 'zlib';
 import { DataImportService, UploadedFilePayload } from './data-import.service';
 import { OpenRouterMappingService } from './openrouter-mapping.service';
 import { UploadStoreService, StoredUpload } from './upload-store.service';
@@ -58,6 +59,79 @@ function csvFile(content: string, name = 'leads.csv'): UploadedFilePayload {
   };
 }
 
+/** ساخت کمینه آرشیو ZIP برای تست بارگذاری XLSX (بدون وابستگی خارجی). */
+function makeZip(files: Array<{ name: string; data: Buffer }>): Buffer {
+  const localChunks: Buffer[] = [];
+  const centralChunks: Buffer[] = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const name = Buffer.from(file.name, 'utf8');
+    const compressed = deflateRawSync(file.data);
+
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt16LE(8, 8);
+    local.writeUInt32LE(0, 14);
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(file.data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    localChunks.push(local, name, compressed);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt16LE(8, 10);
+    central.writeUInt32LE(compressed.length, 20);
+    central.writeUInt32LE(file.data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    centralChunks.push(central, name);
+
+    offset += local.length + name.length + compressed.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralChunks);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(files.length, 8);
+  eocd.writeUInt16LE(files.length, 10);
+  eocd.writeUInt32LE(centralDirectory.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+
+  return Buffer.concat([...localChunks, centralDirectory, eocd]);
+}
+
+function xlsxFile(name = 'leads.xlsx'): UploadedFilePayload {
+  const namespace =
+    'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const sheet = Buffer.from(
+    `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${namespace}"><sheetData>` +
+      '<row r="1">' +
+      '<c r="A1" t="inlineStr"><is><t>name</t></is></c>' +
+      '<c r="B1" t="inlineStr"><is><t>email</t></is></c>' +
+      '</row>' +
+      '<row r="2">' +
+      '<c r="A2" t="inlineStr"><is><t>Sara</t></is></c>' +
+      '<c r="B2" t="inlineStr"><is><t>sara@x.com</t></is></c>' +
+      '</row>' +
+      '</sheetData></worksheet>',
+    'utf8',
+  );
+  const buffer = makeZip([{ name: 'xl/worksheets/sheet1.xml', data: sheet }]);
+  return {
+    originalname: name,
+    mimetype:
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    size: buffer.length,
+    buffer,
+  };
+}
+
 function storedUpload(
   headers: string[],
   rows: string[][],
@@ -105,11 +179,37 @@ describe('DataImportService.preview', () => {
     expect(result.mapping).toEqual({ name: 'fullName' });
   });
 
-  it('rejects XLSX uploads with a clear message (CSV-only build)', async () => {
+  it('parses a valid XLSX upload in preview', async () => {
+    const { service, openRouter, uploadStore } = makeService();
+    openRouter.proposeMapping.mockRejectedValue(new Error('llm down'));
+
+    const result = await service.preview('tenant-1', xlsxFile());
+
+    expect(result.mappingSource).toBe('fallback');
+    expect(result.headers).toEqual(['name', 'email']);
+    expect(result.sampleRows).toEqual([['Sara', 'sara@x.com']]);
+    expect(result.totalRows).toBe(1);
+    expect(uploadStore.save).toHaveBeenCalledWith(
+      'tenant-1',
+      expect.any(String),
+      expect.objectContaining({ headers: ['name', 'email'] }),
+    );
+  });
+
+  it('rejects a malformed .xlsx upload', async () => {
     const { service } = makeService();
     await expect(
       service.preview('tenant-1', csvFile('a,b\n1,2', 'leads.xlsx')),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('detects XLSX by mimetype even without an .xlsx extension', async () => {
+    const { service, openRouter } = makeService();
+    openRouter.proposeMapping.mockResolvedValue({});
+
+    const result = await service.preview('tenant-1', xlsxFile('export.dat'));
+
+    expect(result.headers).toEqual(['name', 'email']);
   });
 
   it('rejects a missing file', async () => {

@@ -194,8 +194,8 @@ export default function CrmImportPage() {
                 بارگذاری فایل
               </CardTitle>
               <CardDescription>
-                فقط فایل CSV تا ۵ مگابایت و حداکثر ۵۰۰۰ ردیف پشتیبانی می‌شود.
-                (پردازش فایل XLSX در این نسخه فعال نیست.)
+                فقط فایل CSV یا Excel (xlsx) تا ۵ مگابایت و حداکثر ۵۰۰۰ ردیف
+                پشتیبانی می‌شود.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
