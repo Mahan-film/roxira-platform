@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { Loader2, Search, UsersRound } from "lucide-react";
 
+import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { CrmStats, PipelineBreakdown } from "@/components/crm/crm-stats";
 import { KanbanBoard } from "@/components/crm/kanban-board";
 import { LeadDetailPanel } from "@/components/crm/lead-detail-panel";
@@ -118,6 +119,7 @@ export default function CrmPage() {
   }, [pipeline, search]);
 
   return (
+    <EnterpriseRouteGuard>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -191,5 +193,6 @@ export default function CrmPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </EnterpriseRouteGuard>
   );
 }

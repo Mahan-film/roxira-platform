@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { BookOpenCheck, Layers, ShieldCheck, Sparkles } from "lucide-react";
 
+import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { AccountingStats } from "@/components/accounting/accounting-stats";
 import { AccountLedgerPanel } from "@/components/accounting/account-ledger-panel";
 import { JournalEntriesTable } from "@/components/accounting/journal-entries-table";
@@ -67,6 +68,7 @@ export default function AccountingPage() {
   }
 
   return (
+    <EnterpriseRouteGuard requireAdmin>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -154,5 +156,6 @@ export default function AccountingPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </EnterpriseRouteGuard>
   );
 }

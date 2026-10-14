@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { InvoiceForm } from "@/components/invoicing/invoice-form";
 import { InvoiceHistoryTable } from "@/components/invoicing/invoice-history-table";
 import { TaxCompliancePanel } from "@/components/invoicing/tax-compliance-panel";
@@ -28,6 +29,7 @@ export default function InvoicingPage() {
   const [activeTab, setActiveTab] = useState<InvoicingTab>("invoices");
 
   return (
+    <EnterpriseRouteGuard>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -96,5 +98,6 @@ export default function InvoicingPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </EnterpriseRouteGuard>
   );
 }

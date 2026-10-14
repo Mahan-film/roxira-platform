@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { Layers, Search, Sparkles, TriangleAlert, Warehouse } from "lucide-react";
 
+import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { FifoValuationReport } from "@/components/inventory/fifo-valuation-report";
 import { InventoryAdminPanel } from "@/components/inventory/inventory-admin-panel";
 import { InventoryStats } from "@/components/inventory/inventory-stats";
@@ -102,6 +103,7 @@ export default function InventoryPage() {
   const lowStockCount = valuation?.lowStockCount ?? 0;
 
   return (
+    <EnterpriseRouteGuard>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -237,5 +239,6 @@ export default function InventoryPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </EnterpriseRouteGuard>
   );
 }

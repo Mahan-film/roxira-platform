@@ -1,3 +1,4 @@
+import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RoxiraFooter } from "@/components/layout/roxira-footer";
 import { DamageCalculatorSection } from "@/components/damages/damage-calculator-section";
@@ -5,6 +6,7 @@ import { DamageHistoryTable } from "@/components/damages/damage-history-table";
 
 export default function DamagesHistoryPage() {
   return (
+    <EnterpriseRouteGuard>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6">
@@ -30,5 +32,6 @@ export default function DamagesHistoryPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </EnterpriseRouteGuard>
   );
 }
