@@ -3,14 +3,14 @@ import { NextResponse, type NextRequest } from "next/server";
 /**
  * تفکیک دامنه‌ای لایه UI/UX:
  *
- *   • ghazihoushmand.ir  → سامانه قاضی هوشمند (تجربه چت‌محور در ریشه)
+ *   • ghazihoushmand.ir  → سامانه قاضی هوشمند (صفحه فرود عمومی در ریشه)
  *   • roxira.ir          → پورتال خدمات سازمانی روکسیرا (فارسی، RTL)
  *   • roxira.net         → Roxira International B2B Hub (انگلیسی، LTR)
  *
  * یک اپلیکیشن Next.js مشترک، بر اساس Hostname سه تجربه کاملاً مجزا ارائه
- * می‌دهد؛ ریشه دامنه قاضی به `/chat` و ریشه دامنه بین‌المللی به `/en`
- * بازنویسی (rewrite) می‌شود و مسیرهای اختصاصی هر دامنه از دامنه مقابل به
- * مقصد صحیح هدایت می‌گردند.
+ * می‌دهد؛ ریشه دامنه قاضی به `/home-ghazi` (و `/judge` به `/chat`) و ریشه
+ * دامنه بین‌المللی به `/en` بازنویسی (rewrite) می‌شود و مسیرهای اختصاصی هر
+ * دامنه از دامنه مقابل به مقصد صحیح هدایت می‌گردند.
  */
 
 const GHAZI_HOSTS = ["ghazihoushmand.ir", "www.ghazihoushmand.ir"];
@@ -32,6 +32,7 @@ const ROXIRA_ONLY_PATHS = [
 
 /** مسیرهای «قاضی هوشمند» که روی دامنه‌های روکسیرا سرو نمی‌شوند (نشت برند). */
 const GHAZI_ONLY_PATHS = [
+  "/home-ghazi",
   "/about",
   "/services",
   "/technology",
@@ -90,8 +91,17 @@ export function middleware(request: NextRequest) {
       url.pathname = "/support";
       return NextResponse.rewrite(url);
     }
-    // ریشه دامنه قاضی = رابط چت هوشمند حقوقی
-    if (pathname === "/" || pathname === "/judge") {
+    // ریشه دامنه قاضی = صفحه فرود عمومی (Landing) و /judge = رابط چت حقوقی
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/home-ghazi";
+      return NextResponse.rewrite(url);
+    }
+    // نسخه متعارف صفحه فرود فقط ریشه دامنه است (جلوگیری از محتوای تکراری)
+    if (pathname === "/home-ghazi") {
+      return NextResponse.redirect(new URL("/", request.nextUrl));
+    }
+    if (pathname === "/judge") {
       const url = request.nextUrl.clone();
       url.pathname = "/chat";
       return NextResponse.rewrite(url);
@@ -126,6 +136,7 @@ export const config = {
   matcher: [
     "/",
     "/en",
+    "/home-ghazi",
     "/chat",
     "/guide",
     "/judge",
