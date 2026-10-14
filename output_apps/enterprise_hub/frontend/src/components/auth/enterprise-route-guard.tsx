@@ -66,8 +66,16 @@ export function EnterpriseRouteGuard({
       <div className="dark flex min-h-full flex-1 flex-col items-center justify-center gap-3 bg-background px-4 py-16 text-center text-foreground">
         <ShieldAlert className="size-8 text-rose-500" aria-hidden="true" />
         <p className="text-sm font-semibold text-rose-300">
-          دسترسی به این بخش فقط برای مدیر سازمان است.
+          دسترسی به این بخش فقط برای مدیر سامانه است.
         </p>
+        <p className="max-w-md text-xs leading-6 text-muted-foreground">
+          این ماژول هنوز به‌صورت جداشده برای هر سازمان آماده نشده است؛ تا آن زمان فقط مدیر سامانه
+          روکسیرا به آن دسترسی دارد. اگر مدیر هستید، یک بار از حساب خارج و دوباره وارد شوید تا
+          دسترسی جدید اعمال شود. برای درخواست دسترسی با پشتیبانی تماس بگیرید.
+        </p>
+        <a href="/team" className="text-xs font-bold text-indigo-400 hover:underline">
+          مدیریت سازمان و اعضا
+        </a>
       </div>
     );
   }
