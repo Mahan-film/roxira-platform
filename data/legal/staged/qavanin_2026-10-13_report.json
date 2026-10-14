@@ -1,0 +1,17 @@
+{
+  "ecommerce": {
+    "rows": 81,
+    "repealed_rows": 0,
+    "qavanin_ids": "15700719202226051269",
+    "duplicate_keys": [],
+    "needs_review": 17
+  },
+  "direct_tax": {
+    "rows": 0,
+    "repealed_rows": 0,
+    "qavanin_ids": "892583840653829785",
+    "duplicate_keys": [],
+    "needs_review": 0,
+    "error": "no_articles_found (PDF has no text layer for the law body?)"
+  }
+}
