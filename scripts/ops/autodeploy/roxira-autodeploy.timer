@@ -1,0 +1,12 @@
+# Runs the server-side auto-deploy every 5 minutes. Persistent=true catches up a run
+# that was missed while the server was down. See docs/ops/AUTODEPLOY.md.
+[Unit]
+Description=Run Roxira server-side auto-deploy every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

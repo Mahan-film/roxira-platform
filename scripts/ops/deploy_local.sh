@@ -24,6 +24,9 @@ CHAT_DOMAIN="${DEPLOY_CHAT_DOMAIN:-ghazihoushmand.ir}"
 API_PATH="${DEPLOY_SMOKE_API_PATH:-/api/v1/apps/judge/pricing/plans}"
 REQUIRED_ENV="GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ADMIN_HEALTH_KEY JWT_SECRET KAVENEGAR_API_KEY"
 FREEZE_FILE=".deploy-freeze"
+# Owner opt-in marker for the server-side autodeploy timer. Only read by
+# confirm_read() below; see docs/ops/AUTODEPLOY.md.
+AUTO_CONFIRM_MARKER="${DEPLOY_AUTO_CONFIRM_MARKER:-/etc/roxira/autodeploy.enabled}"
 PG_CONTAINER="roxira_postgres_prod"
 BACKEND_CONTAINER="roxira_enterprise_backend"
 DB_USER="enterprise_admin"          # same literals as docker-compose.prod.yml
@@ -48,12 +51,31 @@ usage() { sed -n '2,14p' "$0" >&2; exit 2; }
 
 # ssh -n: stdin from /dev/null. Without it, ssh drains the script's stdin and swallows the
 # typed confirmation. No rsh call pipes local data in, so none needs the real stdin.
-rsh() { ssh -n "${SSH_OPTS[@]}" "$SSH_HOST" "$@"; }
+# DEPLOY_SSH_HOST=local runs the command ON THIS HOST with `bash -c` instead of ssh; that is
+# how the server-side autodeploy timer reuses this script (it then runs as root on the server).
+rsh() {
+  if [ "$SSH_HOST" = "local" ]; then
+    bash -c "$*" </dev/null
+  else
+    ssh -n "${SSH_OPTS[@]}" "$SSH_HOST" "$@"
+  fi
+}
 
 # Human confirmation. Reads the controlling terminal so piped or ssh input cannot answer it;
 # stdin is used only when there is no terminal at all. The caller compares CONFIRM_INPUT.
+# The ONE automatic path is the server-side autodeploy timer: it may answer from
+# DEPLOY_AUTO_CONFIRM, but only when it runs as root ON the server (DEPLOY_SSH_HOST=local)
+# and the owner opted in via the marker file. Everywhere else the answer is still typed.
 confirm_read() {  # confirm_read <prompt>
   CONFIRM_INPUT=""
+  if [ -n "${DEPLOY_AUTO_CONFIRM:-}" ] \
+    && [ "$SSH_HOST" = "local" ] \
+    && [ "$(id -u)" = "0" ] \
+    && [ -e "$AUTO_CONFIRM_MARKER" ]; then
+    CONFIRM_INPUT="$DEPLOY_AUTO_CONFIRM"
+    log "auto-confirmed by autodeploy"
+    return 0
+  fi
   if { : </dev/tty; } 2>/dev/null; then
     read -r -p "$1" CONFIRM_INPUT </dev/tty || true
   else

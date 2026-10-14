@@ -1,0 +1,18 @@
+# Server-side fully-automatic deploy (owner decision 2026-10-14). Installed by
+# scripts/ops/autodeploy/install.sh; does nothing until /etc/roxira/autodeploy.enabled
+# exists. It runs as root so it can drive docker + the deploy script on the server.
+# See docs/ops/AUTODEPLOY.md.
+[Unit]
+Description=Roxira auto-deploy (server-side, fully automatic)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/bin/bash /opt/roxira_platform/scripts/ops/autodeploy/autodeploy.sh
+Nice=10
+TimeoutStartSec=3600
+
+[Install]
+WantedBy=multi-user.target
