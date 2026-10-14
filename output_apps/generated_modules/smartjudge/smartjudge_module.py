@@ -25,6 +25,7 @@ from output_apps.generated_modules.smartjudge import legal_notes as _legal_notes
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.generated_modules.smartjudge import rulings_retrieval as _rulings
+from output_apps.generated_modules.smartjudge import laws_public as _laws_public
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 # W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
@@ -5988,6 +5989,7 @@ async def export_chat_dataset(user: chat_auth.CurrentUser = Depends(get_current_
     )
 
 router.include_router(live_voice_router)
+router.include_router(_laws_public.router)
 
 # W17: the Zibal router is mounted once, directly on the root app, in
 # run_unified_server.py. It is intentionally NOT included on `router` here —
