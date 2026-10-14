@@ -64,9 +64,9 @@ DEFAULT_EMBED_MODEL = "BAAI/bge-m3"
 # With env EMBEDDING_URL set (the shared HuggingFace TEI service), embeddings come over
 # HTTP and no local BAAI/bge-m3 copy is loaded; unset keeps the sentence-transformers path.
 EMBEDDING_URL_ENV = "EMBEDDING_URL"
-EMBED_HTTP_BATCH_SIZE = 16
+EMBED_HTTP_BATCH_SIZE = 8   # TEI runs with --max-concurrent-requests 8 (permits are per input)
 EMBED_HTTP_TIMEOUT = 30
-EMBED_HTTP_RETRIES = 2
+EMBED_HTTP_RETRIES = 6   # TEI answers 429 while chat traffic holds permits; back off and retry
 NAMESPACE = uuid.UUID("b3a1f0d2-5c7e-4a8b-9d61-0e4f2a7c9b15")
 ARTICLE_NO_RE = re.compile(r"^\d+(-[a-z]+)?$")
 REPEALED_STATUSES = frozenset({"REPEALED", "INVALID", "ABROGATED", "CANCELLED", "CANCELED"})
@@ -323,7 +323,7 @@ def _embed_post_json(url: str, payload: dict, timeout: float) -> object:
 
 
 def _embed_http(texts: list[str]) -> list[list[float]]:
-    """Embed texts via the shared TEI service: batches of <=16, two retries each."""
+    """Embed texts via the shared TEI service: batches of <=8, six retries each (backoff up to 15 s)."""
     url = f"{embedding_url()}/embed"
     vectors: list[list[float]] = []
     for start in range(0, len(texts), EMBED_HTTP_BATCH_SIZE):
@@ -338,7 +338,7 @@ def _embed_http(texts: list[str]) -> list[list[float]]:
             except Exception as exc:  # noqa: BLE001 - retried below, then refused
                 last_exc = exc
                 if attempt < EMBED_HTTP_RETRIES:
-                    time.sleep(min(2.0**attempt, 5.0))
+                    time.sleep(min(2.0**attempt, 15.0))
         if result is None:
             raise Refusal(f"embedding service request failed: {last_exc}") from last_exc
         vectors.extend([[float(x) for x in v] for v in result])

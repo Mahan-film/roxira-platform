@@ -7,6 +7,14 @@ Honest status of every plan / strategy / workstream in the repo, checked against
 Status vocabulary (fixed, no others used): **done** · **partial** · **not started** · **dropped**.
 Anything I could not confirm from a file or PR is marked **«نیازمند بررسی»**.
 
+
+> **Hub corrections (2026-10-14, evening): the agent read some stale docs. Current facts override rows below:**
+> - Production moved to srv1 (91.107.248.99) on 2026-10-13/14. The tree is clean and deploys are automatic: the systemd timer `roxira-autodeploy` (#633) ships every merged commit with backup, migrate, smoke tests and auto-rollback. Top-10 items 1–2 (reconcile prod, #527 rollout) are therefore **done/obsolete** for the new server.
+> - A legal gate exists in every deploy: retrieval@5 is 85.7% on 70 questions. It is not lawyer-verified yet, so item 4 is **partial**, not "not started".
+> - Tenant isolation is at wave 0.5: tenants, members API, /team page (#627, #629).
+> - Research service: live, with searx + tavily (#634). Iranian government sites refuse the foreign server IP; it needs an Iranian egress.
+> - Model tiers in the key pool: strong/light free tiers, paid DeepSeek last (#637).
+
 ## خلاصهٔ فارسی برای مالک
 
 قاضی هوشمند از نظر «محصول» جلوتر از هر چیز دیگری است: چت استریمی، پرامپت زمین‌دار، جست‌وجوی دقیق
