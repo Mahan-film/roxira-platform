@@ -1,23 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CheckCircle2, Cpu, FileCheck2, Loader2, Send } from "lucide-react";
+import { CheckCircle2, Loader2, Send } from "lucide-react";
 
-type TierId = "starter" | "business" | "foundry";
 type SubmitStatus = "idle" | "submitting" | "success" | "error";
-
-interface TierOption {
-  id: TierId;
-  name: string;
-  tagline: string;
-  icon: typeof FileCheck2;
-}
-
-const TIERS: TierOption[] = [
-  { id: "starter", name: "Starter", tagline: "انطباق مالیاتی (سامانه مودیان)", icon: FileCheck2 },
-  { id: "business", name: "Business", tagline: "ERP و حسابداری یکپارچه", icon: Building2 },
-  { id: "foundry", name: "Foundry Developer", tagline: "کارخانه نرم‌افزار خودمختار", icon: Cpu },
-];
 
 const INQUIRY_ENDPOINT =
   process.env.NEXT_PUBLIC_SALES_INQUIRY_ENDPOINT ?? "/api/v1/enterprise/inquiry";
@@ -25,15 +11,20 @@ const INQUIRY_ENDPOINT =
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const PHONE_RE = /^[0-9+\-\s]{7,20}$/;
 
+interface EnterpriseSalesFormProps {
+  source?: string;
+}
+
 interface FormState {
+  name: string;
   company: string;
   phone: string;
   email: string;
-  tier: TierId;
-  notes: string;
+  message: string;
 }
 
 interface FormErrors {
+  name?: string;
   company?: string;
   phone?: string;
   email?: string;
@@ -41,6 +32,7 @@ interface FormErrors {
 
 function validate(form: FormState): FormErrors {
   const errors: FormErrors = {};
+  if (form.name.trim().length < 2) errors.name = "نام و نام خانوادگی را وارد کنید.";
   if (form.company.trim().length < 2) errors.company = "نام شرکت را وارد کنید.";
   if (!PHONE_RE.test(form.phone.trim())) errors.phone = "شماره تماس معتبر وارد کنید.";
   if (!EMAIL_RE.test(form.email.trim())) errors.email = "ایمیل سازمانی معتبر وارد کنید.";
@@ -48,14 +40,14 @@ function validate(form: FormState): FormErrors {
 }
 
 const EMPTY_FORM: FormState = {
+  name: "",
   company: "",
   phone: "",
   email: "",
-  tier: "starter",
-  notes: "",
+  message: "",
 };
 
-export function EnterpriseSalesForm() {
+export function EnterpriseSalesForm({ source }: EnterpriseSalesFormProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
   const [status, setStatus] = useState<SubmitStatus>("idle");
@@ -85,7 +77,14 @@ export function EnterpriseSalesForm() {
       const res = await fetch(INQUIRY_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, source: "enterprise-demo" }),
+        body: JSON.stringify({
+          name: form.name.trim(),
+          company: form.company.trim(),
+          phone: form.phone.trim(),
+          email: form.email.trim(),
+          message: form.message.trim(),
+          source: source ?? "enterprise-demo",
+        }),
       });
       const data = (await res.json().catch(() => null)) as
         | { reference?: string; error?: string }
@@ -115,9 +114,9 @@ export function EnterpriseSalesForm() {
         <span className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-300">
           <CheckCircle2 className="size-6" />
         </span>
-        <h2 className="mt-4 text-lg font-black text-white">درخواست دموی سازمانی ثبت شد</h2>
+        <h2 className="mt-4 text-lg font-black text-white">درخواست شما ثبت شد</h2>
         <p className="mt-2 text-xs leading-relaxed text-slate-400">
-          کارشناس فروش سازمانی رکسایرا در اولین فرصت کاری با شما تماس می‌گیرد.
+          کارشناس رکسایرا در اولین فرصت کاری برای هماهنگی دمو و دسترسی اولیه با شما تماس می‌گیرد.
         </p>
         <p className="mt-4 inline-block rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2 font-mono text-xs text-slate-200">
           کد پیگیری: {reference}
@@ -141,44 +140,23 @@ export function EnterpriseSalesForm() {
       noValidate
       className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:p-8"
     >
-      <fieldset disabled={submitting}>
-        <legend className="text-xs font-bold text-slate-300">طرح مورد نظر</legend>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {TIERS.map((tier) => {
-            const Icon = tier.icon;
-            const active = form.tier === tier.id;
-            return (
-              <button
-                key={tier.id}
-                type="button"
-                onClick={() => update("tier", tier.id)}
-                aria-pressed={active}
-                className={`flex flex-col items-start gap-2 rounded-2xl border p-4 text-right transition-colors disabled:opacity-60 ${
-                  active
-                    ? "border-indigo-400/50 bg-indigo-500/10"
-                    : "border-white/10 bg-slate-950/40 hover:border-white/20"
-                }`}
-              >
-                <span
-                  className={`flex size-9 items-center justify-center rounded-xl border ${
-                    active
-                      ? "border-indigo-400/40 bg-indigo-400/10 text-indigo-300"
-                      : "border-white/10 bg-white/5 text-slate-400"
-                  }`}
-                >
-                  <Icon className="size-4" />
-                </span>
-                <span className={`text-sm font-bold ${active ? "text-white" : "text-slate-200"}`}>
-                  {tier.name}
-                </span>
-                <span className="text-[11px] leading-relaxed text-slate-500">{tier.tagline}</span>
-              </button>
-            );
-          })}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label htmlFor="name" className="text-xs font-semibold text-slate-300">
+            نام و نام خانوادگی
+          </label>
+          <input
+            id="name"
+            type="text"
+            value={form.name}
+            disabled={submitting}
+            onChange={(event) => update("name", event.target.value)}
+            placeholder="مثال: سارا محمدی"
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
+          />
+          {errors.name && <p className="mt-1.5 text-[11px] text-rose-400">{errors.name}</p>}
         </div>
-      </fieldset>
 
-      <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label htmlFor="company" className="text-xs font-semibold text-slate-300">
             نام شرکت
@@ -230,15 +208,15 @@ export function EnterpriseSalesForm() {
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="notes" className="text-xs font-semibold text-slate-300">
+          <label htmlFor="message" className="text-xs font-semibold text-slate-300">
             توضیحات (اختیاری)
           </label>
           <textarea
-            id="notes"
+            id="message"
             rows={3}
-            value={form.notes}
+            value={form.message}
             disabled={submitting}
-            onChange={(event) => update("notes", event.target.value)}
+            onChange={(event) => update("message", event.target.value)}
             placeholder="اندازه سازمان، ماژول‌های مورد نیاز و بازه زمانی مدنظر"
             className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
           />
@@ -265,7 +243,7 @@ export function EnterpriseSalesForm() {
         ) : (
           <>
             <Send className="size-4" />
-            درخواست دموی سازمانی
+            درخواست دمو و دسترسی اولیه
           </>
         )}
       </button>

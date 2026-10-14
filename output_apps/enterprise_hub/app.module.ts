@@ -19,6 +19,7 @@ import { HrModule } from './modules/hr/hr.module';
 import { CurrencyModule } from './modules/currency/currency.module';
 import { HealthModule } from './modules/health/health.module';
 import { RadarModule } from './modules/radar/radar.module';
+import { InquiriesModule } from './modules/inquiries/inquiries.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
   (file) => {
@@ -77,6 +78,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     CurrencyModule,
     HealthModule,
     RadarModule,
+    InquiriesModule,
   ],
 })
 export class AppModule {}

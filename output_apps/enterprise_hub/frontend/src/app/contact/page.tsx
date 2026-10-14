@@ -26,7 +26,15 @@ const COVERAGE = [
   { icon: Cpu, label: "کارخانه نرم‌افزار خودمختار" },
 ];
 
-export default function ContactPage() {
+interface ContactPageProps {
+  searchParams?: Promise<{ source?: string | string[] }>;
+}
+
+export default async function ContactPage({ searchParams }: ContactPageProps) {
+  const params = (await searchParams) ?? {};
+  const rawSource = params.source;
+  const source = Array.isArray(rawSource) ? rawSource[0] : rawSource;
+
   return (
     <div dir="rtl" className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
       <SiteHeader />
@@ -43,8 +51,9 @@ export default function ContactPage() {
               درخواست دموی سازمانی و استعلام فروش
             </h1>
             <p className="mt-5 max-w-2xl text-sm leading-relaxed text-slate-400">
-              طرح مورد نظر خود را انتخاب کنید و اطلاعات شرکت را ثبت نمایید؛ کارشناس فروش سازمانی
-              رکسایرا برای هماهنگی دموی اختصاصی و ارائه پیشنهاد با شما تماس می‌گیرد.
+              برای دریافت دموی اختصاصی و درخواست دسترسی اولیه (Early Access) به ماژول‌های
+              رکسایرا، اطلاعات سازمان خود را ثبت نمایید؛ کارشناس رکسایرا برای هماهنگی با شما
+              تماس می‌گیرد.
             </p>
           </div>
         </section>
@@ -52,7 +61,7 @@ export default function ContactPage() {
         <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <EnterpriseSalesForm />
+              <EnterpriseSalesForm source={source} />
             </div>
 
             <aside className="space-y-6">
