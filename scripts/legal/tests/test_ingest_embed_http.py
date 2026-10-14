@@ -50,7 +50,7 @@ def test_default_embed_batches_and_sends_normalize(monkeypatch):
     monkeypatch.setattr(ip, "_embed_post_json", _fake_post(calls))
     vectors = ip.default_embed([f"t{i}" for i in range(20)])
     assert len(vectors) == 20
-    assert [len(call[1]["inputs"]) for call in calls] == [8, 8, 4]
+    assert [len(call[1]["inputs"]) for call in calls] == [4, 4, 4, 4, 4]
     assert all(call[1]["normalize"] is True for call in calls)
     assert all(call[0] == "http://roxira_embeddings:80/embed" for call in calls)
     assert all(call[2] == 30 for call in calls)
