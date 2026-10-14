@@ -1,7 +1,7 @@
 use_default_settings: true
 
 server:
-  limiter: true
+  limiter: false   # internal-only instance (no host port); the limiter 429s our own research service
   public_instance: false
   image_proxy: false
 
