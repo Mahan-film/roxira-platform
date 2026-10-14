@@ -1,4 +1,4 @@
-> **Last update: 2026-10-15 (hub handoff). Older pictures: `docs/STRATEGY_STATUS_2026-10-14.md` (status of every plan), `docs/STRATEGY_GAP_2026-10-12.md`. Then `docs/SYSTEM_MAP.md`; `docs/STRATEGY.md` only as needed.**
+> **Last update: 2026-10-15. NEW CHAT? Read `docs/HANDOFF_2026-10-15.md` first (complete context), then this file. Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
 
 # Current state (read this first)
 
