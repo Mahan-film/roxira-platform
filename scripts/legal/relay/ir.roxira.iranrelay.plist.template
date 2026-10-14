@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Rendered by scripts/legal/relay/install_mac.sh. Runs the Iran relay every 12 h from the checkout
+     __REPO__ (output goes to __REPO__/data/legal/staged), then publishes new staged files as a PR. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ir.roxira.iranrelay</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>__PYTHON__ -I __REPO__/scripts/legal/iran_relay.py run; /bin/bash __REPO__/scripts/legal/relay_publish.sh __REPO__</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartInterval</key><integer>43200</integer>
+  <key>RunAtLoad</key><false/>
+  <key>Nice</key><integer>10</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>__HOME__/.roxira/iran_relay/out.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.roxira/iran_relay/err.log</string>
+</dict>
+</plist>
