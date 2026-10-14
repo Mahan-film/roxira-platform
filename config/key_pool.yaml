@@ -89,9 +89,12 @@ providers:
     data_policy: may_log   # free "Experiment" plan may train on prompts
     base_url: https://api.mistral.ai/v1
     litellm_prefix: mistral
-    keys: [MISTRAL_API_KEY]
-    models:
-      - {id: mistral-small-latest}   # unverified native id
+    keys: [MISTRAL_API_KEY, MISTRAL_API_KEY_2, MISTRAL_API_KEY_3, MISTRAL_API_KEY_4]   # every set key is its own deployment
+    models:   # ids verified with GET /v1/models (function_calling) on 2026-10-14
+      - {id: mistral-medium-latest}
+      - {id: mistral-code-latest}
+      - {id: mistral-small-latest}
+      - {id: ministral-8b-latest}
     limits: {rpm: 60, tpm: 500000, rpd: unverified, status: unverified}
 
   gemini:
@@ -158,10 +161,11 @@ providers:
 groups:
   agent-strong-free:
     description: Strong models for code, docs and dev tasks. Free providers only, paid DeepSeek Flash as last resort.
-    providers: [groq, sambanova, gemini, openrouter-free]
+    providers: [groq, sambanova, mistral, gemini, openrouter-free]
     models:                            # restrict each provider to the strong tier
       groq: [{role: agent_runner, alias: groq-strong}]
       sambanova: [{id: gpt-oss-120b}]
+      mistral: [{id: mistral-medium-latest}, {id: mistral-code-latest}]
       gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
     fallback: [agent-free-paid]
@@ -171,7 +175,7 @@ groups:
     providers: [groq, mistral, openrouter-free]
     models:
       groq: [{role: agent_runner, alias: groq-fast}]
-      mistral: [{id: mistral-small-latest}]
+      mistral: [{id: mistral-small-latest}, {id: ministral-8b-latest}]
       openrouter-free:
         - {id: "google/gemma-4-31b-it:free"}
         - {id: "nvidia/nemotron-3-super-120b-a12b:free"}
@@ -180,10 +184,11 @@ groups:
 
   agent-free:   # backward-compatible alias of agent-strong-free (same deployments, same fallback)
     description: Alias of agent-strong-free kept for callers that still ask for `agent-free`.
-    providers: [groq, sambanova, gemini, openrouter-free]
+    providers: [groq, sambanova, mistral, gemini, openrouter-free]
     models:
       groq: [{role: agent_runner, alias: groq-strong}]
       sambanova: [{id: gpt-oss-120b}]
+      mistral: [{id: mistral-medium-latest}, {id: mistral-code-latest}]
       gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
     fallback: [agent-free-paid]

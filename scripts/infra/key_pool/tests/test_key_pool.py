@@ -152,7 +152,7 @@ def _post_factory(script):
 
 
 def test_client_rotates_on_429_and_5xx_then_succeeds():
-    post, calls = _post_factory({"api.groq.com": 429, "api.sambanova.ai": 503})
+    post, calls = _post_factory({"api.groq.com": 429, "api.sambanova.ai": 503, "api.mistral.ai": 429})
     text, used = llm_pool.chat([{"role": "user", "content": "hi"}], "agent-strong-free", pool=pool(), env=FAKE_ENV,
                                post=post, rng=random.Random(1))
     assert text == "hello" and used.startswith("gemini/")
