@@ -32,6 +32,8 @@ import html
 import json
 import os
 import re
+import ssl
+import subprocess
 import sys
 import time
 import urllib.error
@@ -218,6 +220,19 @@ def fetch_url(url: str, timeout: float = TIMEOUT) -> tuple[int, bytes]:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return int(getattr(r, "status", 0) or 0), r.read()
+    except urllib.error.URLError as e:
+        if isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError) and os.path.exists(SYSTEM_CURL):
+            # Some Iranian sites send an incomplete chain that Python's bundled CA store cannot
+            # verify; macOS /usr/bin/curl verifies against the system keychain. Verification
+            # stays ON (no -k): we only switch to the OS trust store.
+            return _fetch_with_system_curl(url, timeout)
+        if isinstance(e, urllib.error.HTTPError):
+            try:
+                body = e.read()
+            except Exception:
+                body = b""
+            return int(e.code), body
+        raise
     except urllib.error.HTTPError as e:
         try:
             body = e.read()
@@ -225,6 +240,23 @@ def fetch_url(url: str, timeout: float = TIMEOUT) -> tuple[int, bytes]:
             body = b""
         return int(e.code), body
 
+
+
+SYSTEM_CURL = "/usr/bin/curl"
+
+
+def _fetch_with_system_curl(url: str, timeout: float) -> tuple[int, bytes]:
+    """GET via the OS curl (system trust store, certificate verification kept on)."""
+    marker = b"\n__ROXIRA_HTTP_STATUS__:"
+    out = subprocess.run(
+        [SYSTEM_CURL, "-sS", "-L", "--max-time", str(int(timeout)), "-A", USER_AGENT,
+         "-w", marker.decode() + "%{http_code}", url],
+        capture_output=True, timeout=timeout + 5, check=False,
+    )
+    if out.returncode != 0:
+        raise urllib.error.URLError(f"curl exit {out.returncode}: {out.stderr.decode(errors='replace')[:120]}")
+    body, _, code = out.stdout.rpartition(marker)
+    return int(code or 0), body
 
 class Fetcher:
     """Polite GET (>= MIN_DELAY between requests); the transport is injectable for tests."""
