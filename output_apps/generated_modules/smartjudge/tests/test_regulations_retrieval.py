@@ -96,3 +96,17 @@ def test_retrieve_regulations_off_by_default(monkeypatch):
 
     assert asyncio.run(reg.retrieve_regulations(
         "پرسش", embed=lambda t: [0.1], search=search, embedder_name="BAAI/bge-m3")) == []
+
+
+def test_split_context_and_public_view():
+    row = {"category": "REGULATION", "title": "نظرات حقوقی 7/1403/667", "issuer": "اداره حقوقی",
+           "number": "7/1403/667", "date": "1403/12/12", "summary": "متن " * 50, "source_url": "u",
+           "source_tier": "official", "doc_type": "other"}
+    other = {"kind": "precedent", "title": "رای 1"}
+    regs, others = reg.split_regulations([other, row])
+    assert regs == [row] and others == [other]
+    block = reg.context_block(regs)
+    assert "7/1403/667" in block and "1403/12/12" in block and reg.BLOCK_TITLE in block
+    assert reg.context_block([]) == ""
+    view = reg.public_view(regs)
+    assert view[0]["number"] == "7/1403/667" and "summary" not in view[0]

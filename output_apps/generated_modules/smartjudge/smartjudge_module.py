@@ -25,6 +25,7 @@ from output_apps.generated_modules.smartjudge import legal_notes as _legal_notes
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.generated_modules.smartjudge import rulings_retrieval as _rulings
+from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
 from output_apps.generated_modules.smartjudge import laws_public as _laws_public
 from output_apps.generated_modules.smartjudge import regulations_public as _regulations_public
 from output_apps.ecosystem_core.src.billing import payment_orders
@@ -952,13 +953,16 @@ async def _aquery_knowledge_graph_uncached(query_text: str, limit: int = 3, meta
 
     # رویه قضایی (آرای وحدت رویه و هیئت عمومی دیوان عدالت اداری): فقط با SMARTJUDGE_RULINGS_COLLECTION، موازی با قوانین.
     rulings_task = asyncio.ensure_future(_rulings.retrieve_rulings(query_text)) if _rulings.enabled() else None
+    # بخشنامه‌ها و مقررات: فقط با SMARTJUDGE_REGULATIONS_COLLECTION، موازی با قوانین.
+    regs_task = asyncio.ensure_future(_regs.retrieve_regulations(query_text)) if _regs.enabled() else None
     try:
         retrieval, sql_result, lr_exc, sql_exc = await _chat_fast.parallel_retrieve(
             _qdrant_branch, _sql_branch if _dual_retrieve is not None else None
         )
     except BaseException:
-        if rulings_task is not None and not rulings_task.done():
-            rulings_task.cancel()  # never leave the parallel rulings search pending
+        for task in (rulings_task, regs_task):
+            if task is not None and not task.done():
+                task.cancel()  # never leave a parallel search pending
         raise
     if lr_exc is not None:  # تنزل به لایهٔ SQL
         print(f"[SMARTJUDGE][LIGHTRAG-FAIL] {type(lr_exc).__name__}: {lr_exc}", file=sys.stderr)
@@ -1017,6 +1021,14 @@ async def _aquery_knowledge_graph_uncached(query_text: str, limit: int = 3, meta
             print(f"[SMARTJUDGE][RULINGS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
             ruling_rows = []
         precedents = _rulings.merge_rulings(precedents, ruling_rows)
+
+    if regs_task is not None:
+        try:
+            reg_rows = await regs_task
+        except Exception as exc:  # pragma: no cover - defensive; retrieve_regulations already swallows errors
+            print(f"[SMARTJUDGE][REGULATIONS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+            reg_rows = []
+        precedents = list(precedents or []) + [r for r in reg_rows if r not in (precedents or [])]
 
     if meta_out is not None:
         meta_out.update(
@@ -1862,9 +1874,11 @@ def _consult_body(*, conv_id, reply, prob, draft, laws, precedents, court_sugges
         "defense_draft": draft,
         "statutory_basis": _chat_fast.trim_sources(laws),
         "unified_precedents": _chat_fast.trim_sources(
-            [r for r in precedents if not _rulings.is_ruling(r)] if _rulings.enabled() else precedents),
+            [r for r in precedents if not _rulings.is_ruling(r) and not _regs.is_regulation(r)]),
         **({"judicial_practice": _rulings.public_view([r for r in precedents if _rulings.is_ruling(r)])}
            if _rulings.enabled() else {}),
+        **({"regulations": _regs.public_view([r for r in precedents if _regs.is_regulation(r)])}
+           if _regs.enabled() else {}),
         "source_disclosure": dict(LEGAL_SOURCE_DISCLOSURE),
         "court_suggestion": (
             {k: court_suggestion[k] for k in ("court", "basis_article", "confidence", "court_key", "rule_id")}
@@ -2098,12 +2112,15 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             if grounded and laws:
                 context_text += "\nمواد قانونی استخراج‌شده از پایگاه دانش:\n" + _chat_fast.context_lines(
                     laws, top_k=CHAT_CTX_TOPK, summary_chars=CHAT_CTX_CHARS)
-            ruling_rows, other_precedents = _rulings.split_rulings(precedents)
+            reg_rows, non_reg_precedents = _regs.split_regulations(precedents)
+            ruling_rows, other_precedents = _rulings.split_rulings(non_reg_precedents)
             if grounded and other_precedents:
                 context_text += "\nآرای وحدت رویه و رویه قضایی دیوان عالی کشور:\n" + _chat_fast.context_lines(
                     other_precedents, top_k=max(2, CHAT_CTX_TOPK - 1), summary_chars=CHAT_CTX_CHARS)
             if grounded and ruling_rows:
                 context_text += _rulings.context_block(ruling_rows, top_k=3, summary_chars=CHAT_CTX_CHARS)
+            if grounded and reg_rows:
+                context_text += _regs.context_block(reg_rows, top_k=3, summary_chars=CHAT_CTX_CHARS)
 
             prompt_system_content = (system_msg + "\n" + context_text) if context_text else system_msg
             if court_suggestion and not is_voice:
@@ -2196,7 +2213,10 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     if not _chat_safety.is_grounded(laws, precedents):
         laws, precedents = [], []
     else:
+        # Regulations are shown in their own block (numbers like 7/1403/667 do not fit the article matcher).
+        shown_regs, precedents = _regs.split_regulations(precedents)
         laws, precedents = _source_filter.select_displayed(reply_msg, laws, precedents)
+        precedents = list(precedents) + shown_regs
     prob = derive_success_probability(user_text)
     # B1: page-level sources, only pages that were in the prompt AND that the model cited.
     case_file_refs = _case_files.extract_case_file_refs(reply_msg, case_records) if case_records else []

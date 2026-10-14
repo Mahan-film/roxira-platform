@@ -5,7 +5,7 @@ Qdrant collection (``iran_regulations_v1``, built by scripts/legal/build_regulat
 deregulation-board and CBI-circular staged files, bge-m3 vectors like ``iran_laws_v3`` / ``iran_rulings_v1``) the
 regulation hits are searched and returned in the existing *precedent* row shape, so callers can reuse the same
 filters. They are labelled (``kind="regulation"``, ``category="REGULATION"``) so they stay separate from statutory
-articles. This hook is **not wired into the chat flow yet**.
+articles. Wired into chat by smartjudge_module (own prompt block and the ``regulations`` response field).
 
 Pure helpers (no I/O) are unit-tested offline; ``retrieve_regulations`` takes injectable ``embed``/``search``
 callables. Regulations are an unofficial copy; ``source_tier`` travels in the row.
@@ -123,6 +123,51 @@ def hits_to_rows(payloads: Sequence[Dict[str, Any]], *, cutoff: Optional[float] 
 
 def is_regulation(row: Any) -> bool:
     return isinstance(row, dict) and str(row.get("category") or "") == CATEGORY
+
+
+BLOCK_TITLE = "بخشنامه‌ها و مقررات"
+
+
+def split_regulations(rows: Optional[Sequence[Any]]) -> tuple:
+    """(regulations, everything else) preserving order."""
+    regs, others = [], []
+    for r in rows or []:
+        (regs if is_regulation(r) else others).append(r)
+    return regs, others
+
+
+def _short(text: Any, limit: int) -> str:
+    s = " ".join(str(text or "").split())
+    return s if len(s) <= limit else s[: max(0, limit - 1)].rstrip() + "…"
+
+
+def context_block(rows: Optional[Sequence[Any]], *, top_k: int = 3, summary_chars: int = 500) -> str:
+    """Prompt text for the separate «بخشنامه‌ها و مقررات» block; each line carries issuer, number and date."""
+    lines = []
+    for r in list(rows or [])[:top_k]:
+        if not isinstance(r, dict):
+            continue
+        meta = "، ".join(x for x in (r.get("issuer"), f"شماره {r['number']}" if r.get("number") else "",
+                                      f"تاریخ {r['date']}" if r.get("date") else "") if x)
+        lines.append(f"- {r.get('title')} ({meta}): {_short(r.get('summary'), summary_chars)}")
+    if not lines:
+        return ""
+    return (f"\n{BLOCK_TITLE} (بخشنامه، نظر یا مصوبه اجرایی است نه قانون؛ شماره، تاریخ و مرجع صادرکننده را هنگام "
+            "استناد ذکر کن و آن را جایگزین متن قانون نکن):\n" + "\n".join(lines))
+
+
+def public_view(rows: Optional[Sequence[Any]], *, max_rows: int = 3, excerpt_chars: int = 240) -> List[Dict[str, Any]]:
+    """Response form of the regulations block: title, issuer, number, date, short excerpt, source link."""
+    out = []
+    for r in list(rows or [])[:max_rows]:
+        if not isinstance(r, dict):
+            continue
+        out.append({
+            "title": r.get("title"), "issuer": r.get("issuer"), "number": r.get("number"), "date": r.get("date"),
+            "doc_type": r.get("doc_type"), "excerpt": _short(r.get("summary"), excerpt_chars),
+            "source_url": r.get("source_url"), "source_tier": r.get("source_tier"),
+        })
+    return out
 
 
 # ----------------------------------------------------------------------------- retrieval
