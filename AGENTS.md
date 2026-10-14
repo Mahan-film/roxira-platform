@@ -27,8 +27,11 @@ it in `config/models.yaml`.
 - Every new Postgres table needs an ownership/tenant column, with access checks enforced in
   the NestJS repository layer — never trust a client-supplied tenant id alone.
 - Migrations only land via reviewed PRs. No direct migration on the production database.
-- Customer/case data never goes to a `:free`-tier model (`config/models.yaml`'s `free` role
-  and the `free` agent in `opencode.json`) — those providers may log or train on prompts.
+- Free models first, paid as fallback (owner decision 2026-10-14). All current customers are test
+  accounts and the data is not confidential, so `:free` / may-log providers MAY be used for product
+  and customer data too: route free tiers first, paid models only when the free ones fail or hit a
+  limit. Revisit this rule (and the privacy page) before onboarding real paying customers with
+  confidential data. Never send secrets/keys to any model.
 - Subagent roles for this repo are defined in `.claude/agents/` (`implementer`, `tester`,
   `reviewer`); use them instead of re-deriving the same scope/model split ad hoc.
 
