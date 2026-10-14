@@ -8,7 +8,11 @@ import { FindOptionsWhere, ILike } from 'typeorm';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
 import { CurrencyService } from '../../currency/services/currency.service';
-import { BALANCE_TOLERANCE, MONEY_SCALE } from '../constants/accounting.constants';
+import {
+  BALANCE_TOLERANCE,
+  DEFAULT_CHART_OF_ACCOUNTS,
+  MONEY_SCALE,
+} from '../constants/accounting.constants';
 import { AccountLedgerResponseDto } from '../dto/account-ledger-response.dto';
 import { AccountResponseDto } from '../dto/account-response.dto';
 import { CreateAccountDto } from '../dto/create-account.dto';
@@ -158,20 +162,51 @@ export class AccountingService {
     };
   }
 
-  async listAccounts(): Promise<AccountResponseDto[]> {
-    const accounts = await this.accountingRepository.findAllAccounts();
+  /**
+   * بذرگذاری تنبل دفتر کل پیش‌فرض برای یک مستأجر در نخستین استفاده.
+   *
+   * جایگزین بذرگذاری سراسری قبلی در Migration شده است تا هر سازمان دفتر کل
+   * مستقل خود را داشته باشد؛ هیچ ردیفی برای سازمان دیگر ساخته نمی‌شود.
+   */
+  private async ensureDefaultAccounts(tenantId: string): Promise<void> {
+    const count = await this.accountingRepository.countAccounts(tenantId);
+    if (count > 0) {
+      return;
+    }
+    await this.accountingRepository.createAccounts(
+      tenantId,
+      DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
+        code: account.code,
+        name: account.name,
+        accountType: account.accountType,
+        currency: Currency.IRR,
+        balance: 0,
+      })),
+    );
+  }
+
+  async listAccounts(tenantId: string): Promise<AccountResponseDto[]> {
+    await this.ensureDefaultAccounts(tenantId);
+    const accounts = await this.accountingRepository.findAllAccounts(tenantId);
     return accounts.map((account) => this.toAccountDto(account));
   }
 
-  async createAccount(dto: CreateAccountDto): Promise<AccountResponseDto> {
-    const existing = await this.accountingRepository.findAccountByCode(dto.code);
+  async createAccount(
+    tenantId: string,
+    dto: CreateAccountDto,
+  ): Promise<AccountResponseDto> {
+    await this.ensureDefaultAccounts(tenantId);
+    const existing = await this.accountingRepository.findAccountByCode(
+      tenantId,
+      dto.code,
+    );
     if (existing) {
       throw new ConflictException(
         `حسابی با کد ${dto.code} قبلاً در دفتر کل ثبت شده است.`,
       );
     }
 
-    const created = await this.accountingRepository.createAccount({
+    const created = await this.accountingRepository.createAccount(tenantId, {
       code: dto.code,
       name: dto.name,
       accountType: dto.accountType,
@@ -188,8 +223,11 @@ export class AccountingService {
    * شماره سند یکتا و تمام کدهای حساب موجود.
    */
   async createJournalEntry(
+    tenantId: string,
     dto: CreateJournalEntryDto,
   ): Promise<JournalEntryResponseDto> {
+    await this.ensureDefaultAccounts(tenantId);
+
     const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
 
     const totalDebit = this.round(
@@ -210,6 +248,7 @@ export class AccountingService {
     }
 
     const existing = await this.accountingRepository.findEntryByNumber(
+      tenantId,
       dto.entryNumber,
     );
     if (existing) {
@@ -221,8 +260,10 @@ export class AccountingService {
     const uniqueCodes = Array.from(
       new Set(normalizedLines.map((line) => line.accountCode)),
     );
-    const accounts =
-      await this.accountingRepository.findAccountsByCodes(uniqueCodes);
+    const accounts = await this.accountingRepository.findAccountsByCodes(
+      tenantId,
+      uniqueCodes,
+    );
     const accountByCode = new Map(accounts.map((account) => [account.code, account]));
 
     const missingCodes = uniqueCodes.filter((code) => !accountByCode.has(code));
@@ -251,6 +292,7 @@ export class AccountingService {
     }));
 
     const saved = await this.accountingRepository.persistJournalEntry(
+      tenantId,
       {
         entryNumber: dto.entryNumber,
         date: dto.date ? new Date(dto.date) : new Date(),
@@ -264,6 +306,7 @@ export class AccountingService {
   }
 
   async findAllJournalEntries(
+    tenantId: string,
     query: QueryJournalEntryDto,
   ): Promise<PaginatedJournalEntryResponseDto> {
     const { page, limit, status, entryNumber } = query;
@@ -277,7 +320,7 @@ export class AccountingService {
     }
 
     const [entities, total] =
-      await this.accountingRepository.findAndCountEntries({
+      await this.accountingRepository.findAndCountEntries(tenantId, {
         where,
         order: { date: 'DESC', id: 'DESC' },
         relations: { lines: true },
@@ -293,8 +336,11 @@ export class AccountingService {
     };
   }
 
-  async findOneJournalEntry(id: number): Promise<JournalEntryResponseDto> {
-    const entity = await this.accountingRepository.findEntryById(id);
+  async findOneJournalEntry(
+    tenantId: string,
+    id: number,
+  ): Promise<JournalEntryResponseDto> {
+    const entity = await this.accountingRepository.findEntryById(tenantId, id);
     if (!entity) {
       throw new NotFoundException(`سند حسابداری با شناسه ${id} یافت نشد.`);
     }
@@ -305,10 +351,11 @@ export class AccountingService {
    * تراز آزمایشی (Trial Balance): جمع بدهکار/بستانکار هر حساب مستقیماً از
    * سطرهای اسناد؛ حساب بدون گردش نیز با مانده صفر نمایش داده می‌شود.
    */
-  async getTrialBalance(): Promise<TrialBalanceResponseDto> {
+  async getTrialBalance(tenantId: string): Promise<TrialBalanceResponseDto> {
+    await this.ensureDefaultAccounts(tenantId);
     const [accounts, rawRows] = await Promise.all([
-      this.accountingRepository.findAllAccounts(),
-      this.accountingRepository.getTrialBalance(),
+      this.accountingRepository.findAllAccounts(tenantId),
+      this.accountingRepository.getTrialBalance(tenantId),
     ]);
 
     const aggregate = new Map(
@@ -389,15 +436,23 @@ export class AccountingService {
    * گردش حساب (Account Ledger) به همراه مانده افتتاح/اختتام و مانده تجمعی.
    */
   async getAccountLedger(
+    tenantId: string,
     code: string,
     query: QueryAccountLedgerDto,
   ): Promise<AccountLedgerResponseDto> {
-    const account = await this.accountingRepository.findAccountByCode(code);
+    await this.ensureDefaultAccounts(tenantId);
+    const account = await this.accountingRepository.findAccountByCode(
+      tenantId,
+      code,
+    );
     if (!account) {
       throw new NotFoundException(`حساب با کد ${code} یافت نشد.`);
     }
 
-    const rawRows = await this.accountingRepository.getAccountLedger(account.id);
+    const rawRows = await this.accountingRepository.getAccountLedger(
+      tenantId,
+      account.id,
+    );
     const fromDate = query.fromDate ? new Date(query.fromDate) : undefined;
     const toDate = query.toDate ? new Date(query.toDate) : undefined;
 

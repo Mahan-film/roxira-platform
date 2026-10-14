@@ -23,7 +23,11 @@ import { EmployeeEntity } from './employee.entity';
  * حسابداری است که هنگام صدور فیش ثبت می‌شود.
  */
 @Entity({ name: 'hr_payslips' })
-@Unique('UQ_hr_payslips_employee_period', [
+@Index('IDX_hr_payslips_tenant_payslip_number', ['tenantId', 'payslipNumber'], {
+  unique: true,
+})
+@Unique('UQ_hr_payslips_tenant_employee_period', [
+  'tenantId',
   'employeeId',
   'periodYear',
   'periodMonth',
@@ -32,7 +36,10 @@ export class PayslipEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک فیش حقوقی (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 64, name: 'payslip_number' })
   payslipNumber: string;
 

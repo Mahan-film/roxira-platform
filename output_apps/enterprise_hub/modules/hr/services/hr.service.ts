@@ -180,19 +180,22 @@ export class HrService {
   // کارگزینی پرسنل
   // ---------------------------------------------------------------------------
 
-  private async generateEmployeeNumber(): Promise<string> {
-    let sequence = (await this.hrRepository.countEmployees()) + 1;
+  private async generateEmployeeNumber(tenantId: string): Promise<string> {
+    let sequence = (await this.hrRepository.countEmployees(tenantId)) + 1;
     let candidate = `${EMPLOYEE_NUMBER_PREFIX}-${this.pad(sequence, 6)}`;
-    while (await this.hrRepository.findEmployeeByNumber(candidate)) {
+    while (await this.hrRepository.findEmployeeByNumber(tenantId, candidate)) {
       sequence += 1;
       candidate = `${EMPLOYEE_NUMBER_PREFIX}-${this.pad(sequence, 6)}`;
     }
     return candidate;
   }
 
-  async createEmployee(dto: CreateEmployeeDto): Promise<EmployeeResponseDto> {
+  async createEmployee(
+    tenantId: string,
+    dto: CreateEmployeeDto,
+  ): Promise<EmployeeResponseDto> {
     const existingNationalId =
-      await this.hrRepository.findEmployeeByNationalId(dto.nationalId);
+      await this.hrRepository.findEmployeeByNationalId(tenantId, dto.nationalId);
     if (existingNationalId) {
       throw new ConflictException(
         `کارمندی با کد ملی ${dto.nationalId} قبلاً ثبت شده است.`,
@@ -200,17 +203,17 @@ export class HrService {
     }
 
     const employeeNumber =
-      dto.employeeNumber ?? (await this.generateEmployeeNumber());
+      dto.employeeNumber ?? (await this.generateEmployeeNumber(tenantId));
 
     const existingNumber =
-      await this.hrRepository.findEmployeeByNumber(employeeNumber);
+      await this.hrRepository.findEmployeeByNumber(tenantId, employeeNumber);
     if (existingNumber) {
       throw new ConflictException(
         `کد پرسنلی ${employeeNumber} قبلاً استفاده شده است.`,
       );
     }
 
-    const created = await this.hrRepository.createEmployee({
+    const created = await this.hrRepository.createEmployee(tenantId, {
       employeeNumber,
       firstName: dto.firstName,
       lastName: dto.lastName,
@@ -236,13 +239,14 @@ export class HrService {
   }
 
   async listEmployees(
+    tenantId: string,
     query: QueryEmployeeDto,
   ): Promise<PaginatedEmployeeResponseDto> {
     const { page, limit, search, status, department } = query;
 
     const baseConditions = search
-      ? HrRepository.buildEmployeeSearchWhere(search)
-      : [{} as FindOptionsWhere<EmployeeEntity>];
+      ? HrRepository.buildEmployeeSearchWhere(tenantId, search)
+      : [{ tenantId } as FindOptionsWhere<EmployeeEntity>];
 
     const where = baseConditions.map((condition) => ({
       ...condition,
@@ -250,12 +254,15 @@ export class HrService {
       ...(department ? { department } : {}),
     }));
 
-    const [entities, total] = await this.hrRepository.findAndCountEmployees({
-      where,
-      order: { createdAt: 'DESC', id: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [entities, total] = await this.hrRepository.findAndCountEmployees(
+      tenantId,
+      {
+        where,
+        order: { createdAt: 'DESC', id: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      },
+    );
 
     return {
       data: entities.map((entity) => this.toEmployeeDto(entity)),
@@ -265,8 +272,11 @@ export class HrService {
     };
   }
 
-  async findOneEmployee(id: number): Promise<EmployeeResponseDto> {
-    const entity = await this.hrRepository.findEmployeeById(id);
+  async findOneEmployee(
+    tenantId: string,
+    id: number,
+  ): Promise<EmployeeResponseDto> {
+    const entity = await this.hrRepository.findEmployeeById(tenantId, id);
     if (!entity) {
       throw new NotFoundException(`کارمند با شناسه ${id} یافت نشد.`);
     }
@@ -274,16 +284,18 @@ export class HrService {
   }
 
   async updateEmployee(
+    tenantId: string,
     id: number,
     dto: UpdateEmployeeDto,
   ): Promise<EmployeeResponseDto> {
-    const entity = await this.hrRepository.findEmployeeById(id);
+    const entity = await this.hrRepository.findEmployeeById(tenantId, id);
     if (!entity) {
       throw new NotFoundException(`کارمند با شناسه ${id} یافت نشد.`);
     }
 
     if (dto.nationalId && dto.nationalId !== entity.nationalId) {
       const clash = await this.hrRepository.findEmployeeByNationalId(
+        tenantId,
         dto.nationalId,
       );
       if (clash) {
@@ -295,6 +307,7 @@ export class HrService {
 
     if (dto.employeeNumber && dto.employeeNumber !== entity.employeeNumber) {
       const clash = await this.hrRepository.findEmployeeByNumber(
+        tenantId,
         dto.employeeNumber,
       );
       if (clash) {
@@ -329,7 +342,7 @@ export class HrService {
       updatedAt: new Date(),
     });
 
-    const saved = await this.hrRepository.saveEmployee(entity);
+    const saved = await this.hrRepository.saveEmployee(tenantId, entity);
     return this.toEmployeeDto(saved);
   }
 
@@ -338,9 +351,13 @@ export class HrService {
   // ---------------------------------------------------------------------------
 
   async createContract(
+    tenantId: string,
     dto: CreateContractDto,
   ): Promise<ContractResponseDto> {
-    const employee = await this.hrRepository.findEmployeeById(dto.employeeId);
+    const employee = await this.hrRepository.findEmployeeById(
+      tenantId,
+      dto.employeeId,
+    );
     if (!employee) {
       throw new NotFoundException(
         `کارمند با شناسه ${dto.employeeId} یافت نشد.`,
@@ -352,6 +369,7 @@ export class HrService {
       `${CONTRACT_NUMBER_PREFIX}-${dto.employeeId}-${Date.now()}`;
 
     const existing = await this.hrRepository.findContractByNumber(
+      tenantId,
       contractNumber,
     );
     if (existing) {
@@ -366,7 +384,7 @@ export class HrService {
       );
     }
 
-    const contract = await this.hrRepository.createContract({
+    const contract = await this.hrRepository.createContract(tenantId, {
       contractNumber,
       employeeId: employee.id,
       contractType: dto.contractType ?? undefined,
@@ -395,18 +413,22 @@ export class HrService {
   }
 
   async listContracts(
+    tenantId: string,
     employeeId?: number,
   ): Promise<ContractResponseDto[]> {
-    const [entities] = await this.hrRepository.findAndCountContracts({
-      where: employeeId ? { employeeId } : {},
+    const [entities] = await this.hrRepository.findAndCountContracts(tenantId, {
+      where: employeeId ? { employeeId, tenantId } : { tenantId },
       relations: { employee: true },
       order: { startDate: 'DESC', id: 'DESC' },
     });
     return entities.map((entity) => this.toContractDto(entity));
   }
 
-  async findOneContract(id: number): Promise<ContractResponseDto> {
-    const entity = await this.hrRepository.findContractById(id);
+  async findOneContract(
+    tenantId: string,
+    id: number,
+  ): Promise<ContractResponseDto> {
+    const entity = await this.hrRepository.findContractById(tenantId, id);
     if (!entity) {
       throw new NotFoundException(`قرارداد با شناسه ${id} یافت نشد.`);
     }
@@ -510,11 +532,15 @@ export class HrService {
    * فعال کارمند (`employeeId`).
    */
   private async resolveContract(
+    tenantId: string,
     contractId?: number,
     employeeId?: number,
   ): Promise<{ contract: EmploymentContractEntity; employee: EmployeeEntity }> {
     if (contractId) {
-      const contract = await this.hrRepository.findContractById(contractId);
+      const contract = await this.hrRepository.findContractById(
+        tenantId,
+        contractId,
+      );
       if (!contract) {
         throw new NotFoundException(
           `قرارداد با شناسه ${contractId} یافت نشد.`,
@@ -522,7 +548,7 @@ export class HrService {
       }
       const employee =
         contract.employee ??
-        (await this.hrRepository.findEmployeeById(contract.employeeId));
+        (await this.hrRepository.findEmployeeById(tenantId, contract.employeeId));
       if (!employee) {
         throw new NotFoundException('کارمند مرتبط با قرارداد یافت نشد.');
       }
@@ -530,14 +556,19 @@ export class HrService {
     }
 
     if (employeeId) {
-      const employee = await this.hrRepository.findEmployeeById(employeeId);
+      const employee = await this.hrRepository.findEmployeeById(
+        tenantId,
+        employeeId,
+      );
       if (!employee) {
         throw new NotFoundException(
           `کارمند با شناسه ${employeeId} یافت نشد.`,
         );
       }
-      const contract =
-        await this.hrRepository.findActiveContractByEmployee(employeeId);
+      const contract = await this.hrRepository.findActiveContractByEmployee(
+        tenantId,
+        employeeId,
+      );
       if (!contract) {
         throw new BadRequestException(
           `قرارداد فعالی برای کارمند ${employeeId} یافت نشد.`,
@@ -552,9 +583,11 @@ export class HrService {
   }
 
   async calculatePayroll(
+    tenantId: string,
     dto: CalculatePayrollDto,
   ): Promise<PayrollCalculationResponseDto> {
     const { contract, employee } = await this.resolveContract(
+      tenantId,
       dto.contractId,
       dto.employeeId,
     );
@@ -575,13 +608,18 @@ export class HrService {
   // صدور فیش حقوقی و ثبت سند خودکار
   // ---------------------------------------------------------------------------
 
-  async issuePayslip(dto: IssuePayslipDto): Promise<PayslipResponseDto> {
+  async issuePayslip(
+    tenantId: string,
+    dto: IssuePayslipDto,
+  ): Promise<PayslipResponseDto> {
     const { contract, employee } = await this.resolveContract(
+      tenantId,
       dto.contractId,
       dto.employeeId,
     );
 
     const existing = await this.hrRepository.findPayslipByPeriod(
+      tenantId,
       employee.id,
       dto.periodYear,
       dto.periodMonth,
@@ -640,17 +678,20 @@ export class HrService {
       });
     }
 
-    const journalEntry = await this.accountingService.createJournalEntry({
-      entryNumber,
-      date: new Date().toISOString(),
-      description: `سند خودکار حقوق ${dto.periodYear}/${this.pad(
-        dto.periodMonth,
-        2,
-      )} — ${employee.firstName} ${employee.lastName} (${payslipNumber})`,
-      lines,
-    });
+    const journalEntry = await this.accountingService.createJournalEntry(
+      tenantId,
+      {
+        entryNumber,
+        date: new Date().toISOString(),
+        description: `سند خودکار حقوق ${dto.periodYear}/${this.pad(
+          dto.periodMonth,
+          2,
+        )} — ${employee.firstName} ${employee.lastName} (${payslipNumber})`,
+        lines,
+      },
+    );
 
-    const saved = await this.hrRepository.createPayslip({
+    const saved = await this.hrRepository.createPayslip(tenantId, {
       payslipNumber,
       employeeId: employee.id,
       contractId: contract.id,
@@ -678,11 +719,12 @@ export class HrService {
   }
 
   async listPayslips(
+    tenantId: string,
     query: QueryPayslipDto,
   ): Promise<PaginatedPayslipResponseDto> {
     const { page, limit, employeeId, periodYear, periodMonth } = query;
 
-    const where: FindOptionsWhere<PayslipEntity> = {};
+    const where: FindOptionsWhere<PayslipEntity> = { tenantId };
     if (employeeId) {
       where.employeeId = employeeId;
     }
@@ -693,13 +735,16 @@ export class HrService {
       where.periodMonth = periodMonth;
     }
 
-    const [entities, total] = await this.hrRepository.findAndCountPayslips({
-      where,
-      relations: { employee: true },
-      order: { periodYear: 'DESC', periodMonth: 'DESC', id: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [entities, total] = await this.hrRepository.findAndCountPayslips(
+      tenantId,
+      {
+        where,
+        relations: { employee: true },
+        order: { periodYear: 'DESC', periodMonth: 'DESC', id: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      },
+    );
 
     return {
       data: entities.map((entity) => this.toPayslipDto(entity)),
@@ -709,8 +754,11 @@ export class HrService {
     };
   }
 
-  async findOnePayslip(id: number): Promise<PayslipResponseDto> {
-    const entity = await this.hrRepository.findPayslipById(id);
+  async findOnePayslip(
+    tenantId: string,
+    id: number,
+  ): Promise<PayslipResponseDto> {
+    const entity = await this.hrRepository.findPayslipById(tenantId, id);
     if (!entity) {
       throw new NotFoundException(`فیش حقوقی با شناسه ${id} یافت نشد.`);
     }
@@ -721,7 +769,7 @@ export class HrService {
   // آمار تحلیلی
   // ---------------------------------------------------------------------------
 
-  async getStats(): Promise<HrStatsResponseDto> {
+  async getStats(tenantId: string): Promise<HrStatsResponseDto> {
     const [
       totalEmployees,
       activeEmployees,
@@ -730,12 +778,18 @@ export class HrService {
       contractAggregate,
       payslipAggregate,
     ] = await Promise.all([
-      this.hrRepository.countEmployees(),
-      this.hrRepository.countEmployeesByStatus(EmployeeStatus.ACTIVE),
-      this.hrRepository.countEmployeesByStatus(EmployeeStatus.ON_LEAVE),
-      this.hrRepository.countEmployeesByStatus(EmployeeStatus.TERMINATED),
-      this.hrRepository.aggregateActiveContracts(),
-      this.hrRepository.aggregatePayslips(),
+      this.hrRepository.countEmployees(tenantId),
+      this.hrRepository.countEmployeesByStatus(tenantId, EmployeeStatus.ACTIVE),
+      this.hrRepository.countEmployeesByStatus(
+        tenantId,
+        EmployeeStatus.ON_LEAVE,
+      ),
+      this.hrRepository.countEmployeesByStatus(
+        tenantId,
+        EmployeeStatus.TERMINATED,
+      ),
+      this.hrRepository.aggregateActiveContracts(tenantId),
+      this.hrRepository.aggregatePayslips(tenantId),
     ]);
 
     const totalPayslips = Number(payslipAggregate.count);

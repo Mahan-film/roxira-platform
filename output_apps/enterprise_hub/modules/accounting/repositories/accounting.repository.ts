@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, FindManyOptions, ILike, Repository } from 'typeorm';
+import {
+  DataSource,
+  FindManyOptions,
+  FindOptionsWhere,
+  ILike,
+  Repository,
+} from 'typeorm';
 import { JournalEntryStatus } from '../enums/accounting.enum';
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
@@ -58,52 +64,85 @@ export class AccountingRepository {
     private readonly dataSource: DataSource,
   ) {}
 
-  async findAllAccounts(): Promise<ChartOfAccountEntity[]> {
-    return this.accounts.find({ order: { code: 'ASC' } });
+  async findAllAccounts(tenantId: string): Promise<ChartOfAccountEntity[]> {
+    return this.accounts.find({ where: { tenantId }, order: { code: 'ASC' } });
   }
 
-  async findAccountByCode(code: string): Promise<ChartOfAccountEntity | null> {
-    return this.accounts.findOne({ where: { code } });
+  async findAccountByCode(
+    tenantId: string,
+    code: string,
+  ): Promise<ChartOfAccountEntity | null> {
+    return this.accounts.findOne({ where: { code, tenantId } });
   }
 
-  async findAccountsByCodes(codes: string[]): Promise<ChartOfAccountEntity[]> {
+  async findAccountsByCodes(
+    tenantId: string,
+    codes: string[],
+  ): Promise<ChartOfAccountEntity[]> {
     if (codes.length === 0) {
       return [];
     }
-    return this.accounts.find({ where: codes.map((code) => ({ code })) });
+    return this.accounts.find({
+      where: codes.map((code) => ({ code, tenantId })),
+    });
+  }
+
+  async countAccounts(tenantId: string): Promise<number> {
+    return this.accounts.count({ where: { tenantId } });
   }
 
   async createAccount(
+    tenantId: string,
     data: Partial<ChartOfAccountEntity>,
   ): Promise<ChartOfAccountEntity> {
-    const entity = this.accounts.create(data);
+    const entity = this.accounts.create({ ...data, tenantId });
     return this.accounts.save(entity);
   }
 
-  async findEntryByNumber(
-    entryNumber: string,
-  ): Promise<JournalEntryEntity | null> {
-    return this.entries.findOne({ where: { entryNumber } });
+  async createAccounts(
+    tenantId: string,
+    data: Partial<ChartOfAccountEntity>[],
+  ): Promise<ChartOfAccountEntity[]> {
+    const entities = data.map((item) =>
+      this.accounts.create({ ...item, tenantId }),
+    );
+    return this.accounts.save(entities);
   }
 
-  async findEntryById(id: number): Promise<JournalEntryEntity | null> {
+  async findEntryByNumber(
+    tenantId: string,
+    entryNumber: string,
+  ): Promise<JournalEntryEntity | null> {
+    return this.entries.findOne({ where: { entryNumber, tenantId } });
+  }
+
+  async findEntryById(
+    tenantId: string,
+    id: number,
+  ): Promise<JournalEntryEntity | null> {
     return this.entries.findOne({
-      where: { id },
+      where: { id, tenantId },
       relations: { lines: true },
     });
   }
 
   async findAndCountEntries(
+    tenantId: string,
     options: FindManyOptions<JournalEntryEntity>,
   ): Promise<[JournalEntryEntity[], number]> {
-    return this.entries.findAndCount(options);
+    const where = (options.where ?? {}) as FindOptionsWhere<JournalEntryEntity>;
+    return this.entries.findAndCount({
+      ...options,
+      where: { ...where, tenantId },
+    });
   }
 
   async searchEntriesByNumber(
+    tenantId: string,
     entryNumber: string,
   ): Promise<JournalEntryEntity[]> {
     return this.entries.find({
-      where: { entryNumber: ILike(`%${entryNumber}%`) },
+      where: { entryNumber: ILike(`%${entryNumber}%`), tenantId },
       order: { date: 'DESC' },
       relations: { lines: true },
     });
@@ -114,6 +153,7 @@ export class AccountingRepository {
    * در صورت بروز هر خطا، کل عملیات Rollback می‌شود تا دفاتر هرگز ناتراز نشوند.
    */
   async persistJournalEntry(
+    tenantId: string,
     header: {
       entryNumber: string;
       date: Date;
@@ -124,6 +164,7 @@ export class AccountingRepository {
   ): Promise<JournalEntryEntity> {
     return this.dataSource.transaction(async (manager) => {
       const headerEntity = manager.create(JournalEntryEntity, {
+        tenantId,
         entryNumber: header.entryNumber,
         date: header.date,
         description: header.description,
@@ -133,6 +174,7 @@ export class AccountingRepository {
 
       for (const line of lineInputs) {
         const lineEntity = manager.create(JournalEntryLineEntity, {
+          tenantId,
           journalEntryId: savedHeader.id,
           accountId: line.accountId,
           debit: line.debit,
@@ -141,17 +183,18 @@ export class AccountingRepository {
         });
         await manager.save(lineEntity);
 
-        // مانده حساب با علامت بدهکار-مثبت نگهداری می‌شود.
+        // مانده حساب با علامت بدهکار-مثبت نگهداری می‌شود؛ قید مستأجر ضامن
+        // آن است که فقط مانده حساب همین سازمان تغییر کند.
         await manager.increment(
           ChartOfAccountEntity,
-          { id: line.accountId },
+          { id: line.accountId, tenantId },
           'balance',
           line.debit - line.credit,
         );
       }
 
       const persisted = await manager.findOne(JournalEntryEntity, {
-        where: { id: savedHeader.id },
+        where: { id: savedHeader.id, tenantId },
         relations: { lines: true },
       });
       return persisted as JournalEntryEntity;
@@ -161,7 +204,7 @@ export class AccountingRepository {
   /**
    * تراز آزمایشی: جمع بدهکار/بستانکار هر حساب به‌صورت مستقیم از سطرهای اسناد.
    */
-  async getTrialBalance(): Promise<TrialBalanceRawRow[]> {
+  async getTrialBalance(tenantId: string): Promise<TrialBalanceRawRow[]> {
     return this.lines
       .createQueryBuilder('line')
       .innerJoin('line.account', 'account')
@@ -170,6 +213,7 @@ export class AccountingRepository {
       .addSelect('account.accountType', 'accountType')
       .addSelect('COALESCE(SUM(line.debit), 0)', 'totalDebit')
       .addSelect('COALESCE(SUM(line.credit), 0)', 'totalCredit')
+      .where('line.tenantId = :tenantId', { tenantId })
       .groupBy('account.code')
       .addGroupBy('account.name')
       .addGroupBy('account.accountType')
@@ -181,6 +225,7 @@ export class AccountingRepository {
    * گردش حساب یک کد مشخص به همراه اطلاعات سند، مرتب بر اساس تاریخ و شناسه.
    */
   async getAccountLedger(
+    tenantId: string,
     accountId: number,
     fromDate?: Date,
     toDate?: Date,
@@ -196,7 +241,8 @@ export class AccountingRepository {
       .addSelect('line.description', 'lineDescription')
       .addSelect('line.debit', 'debit')
       .addSelect('line.credit', 'credit')
-      .where('line.accountId = :accountId', { accountId })
+      .where('line.tenantId = :tenantId', { tenantId })
+      .andWhere('line.accountId = :accountId', { accountId })
       .orderBy('entry.date', 'ASC')
       .addOrderBy('line.id', 'ASC');
 

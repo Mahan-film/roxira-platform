@@ -12,9 +12,18 @@ import { DamageCalculationMethod } from '../enums/calculation-method.enum';
  * فقط از طریق DamagesRepository قابل دسترسی است (Rule #3 - AGENTS.md).
  */
 @Entity({ name: 'damage_calculations' })
+@Index('IDX_damage_calculations_tenant_contractReferenceNumber', [
+  'tenantId',
+  'contractReferenceNumber',
+])
+@Index('IDX_damage_calculations_tenant_createdAt', ['tenantId', 'createdAt'])
 export class DamageCalculationEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /** شناسه سازمان مالک رکورد (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
 
   @Column({ type: 'decimal', precision: 18, scale: 2 })
   principalAmount: number;
@@ -40,7 +49,6 @@ export class DamageCalculationEntity {
   @Column({ type: 'varchar', length: 512 })
   legalBasis: string;
 
-  @Index()
   @Column({ type: 'varchar', length: 64, nullable: true })
   contractReferenceNumber?: string;
 

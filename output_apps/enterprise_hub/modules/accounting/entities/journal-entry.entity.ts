@@ -16,11 +16,21 @@ import { JournalEntryLineEntity } from './journal-entry-line.entity';
  * با cascade برقرار است.
  */
 @Entity({ name: 'fin_journal_entries' })
+@Index('IDX_fin_journal_entries_tenant_entry_number', [
+  'tenantId',
+  'entryNumber',
+], {
+  unique: true,
+})
+@Index('IDX_fin_journal_entries_tenant_date', ['tenantId', 'date'])
 export class JournalEntryEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک سند (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 64, name: 'entry_number' })
   entryNumber: string;
 

@@ -21,9 +21,22 @@ import {
  * (Rule #3 - AGENTS.md: Repository Pattern).
  */
 @Entity({ name: 'inventory_fifo_batches' })
+@Index('IDX_inventory_fifo_batches_tenant_sku_received', [
+  'tenantId',
+  'sku',
+  'receivedDate',
+])
+@Index('IDX_inventory_fifo_batches_tenant_warehouse', [
+  'tenantId',
+  'warehouseId',
+])
 export class FifoBatchEntity {
   @PrimaryGeneratedColumn()
   id: number;
+
+  /** شناسه سازمان مالک دسته (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
 
   @Index()
   @Column({ type: 'varchar', length: 100 })

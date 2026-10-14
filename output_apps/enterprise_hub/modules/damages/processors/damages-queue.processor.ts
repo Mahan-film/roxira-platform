@@ -6,6 +6,7 @@ import { DamagesService } from '../services/damages.service';
 import { DAMAGES_BULK_JOB_NAME, DAMAGES_QUEUE_NAME } from '../constants/damages.constants';
 
 interface BulkDamageJobPayload {
+  tenantId: string;
   items: CreateDamageCalculationDto[];
 }
 
@@ -27,13 +28,22 @@ export class DamagesQueueProcessor extends WorkerHost {
       return { processed: 0, failed: 0 };
     }
 
-    const { items } = job.data;
+    const { tenantId, items } = job.data;
+
+    // Fail-closed: بدون شناسه مستأجر معتبر هرگز رکوردی ثبت نمی‌شود (§4.4).
+    if (typeof tenantId !== 'string' || tenantId.trim().length === 0) {
+      this.logger.error(
+        'Bulk damages job rejected: payload is missing a valid tenantId.',
+      );
+      return { processed: 0, failed: 0 };
+    }
+
     let processed = 0;
     let failed = 0;
 
     for (const item of items) {
       try {
-        await this.damagesService.calculateAndPersist(item);
+        await this.damagesService.calculateAndPersist(tenantId, item);
         processed += 1;
       } catch (error) {
         failed += 1;

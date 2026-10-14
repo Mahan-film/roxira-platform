@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import {
   createHash,
@@ -64,27 +63,11 @@ interface GeneratedRsaKeyPair {
  * لایه دسترسی به پایگاه‌داده است (Rule #3 - AGENTS.md).
  */
 @Injectable()
-export class TaxComplianceService implements OnModuleInit {
+export class TaxComplianceService {
   constructor(
     private readonly taxComplianceRepository: TaxComplianceRepository,
     private readonly invoicingService: InvoicingService,
   ) {}
-
-  /**
-   * در اولین راه‌اندازی ماژول، در صورت نبود کلید فعال یک زوج‌کلید RSA
-   * مالیاتی تولید و ذخیره می‌شود تا امضای صورتحساب‌ها همواره ممکن باشد.
-   */
-  async onModuleInit(): Promise<void> {
-    try {
-      const activeKey = await this.taxComplianceRepository.findActiveKey();
-      if (!activeKey) {
-        await this.generateAndPersistKey(RSA_MODULUS_LENGTH, undefined);
-      }
-    } catch {
-      // عدم دسترسی موقت به پایگاه‌داده نباید بالا آمدن سرویس را متوقف کند؛
-      // کلید در نخستین فراخوانی امضا به‌صورت تنبل (Lazy) ساخته می‌شود.
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // ابزارهای رمزنگاری
@@ -138,9 +121,10 @@ export class TaxComplianceService implements OnModuleInit {
   }
 
   /**
-   * تولید و ذخیره یک زوج‌کلید RSA جدید به‌عنوان کلید فعال مالیاتی.
+   * تولید و ذخیره یک زوج‌کلید RSA جدید به‌عنوان کلید فعال مالیاتی «همان سازمان».
    */
   private async generateAndPersistKey(
+    tenantId: string,
     modulusLength: number,
     subject?: CsrSubject,
   ): Promise<TaxSigningKeyEntity> {
@@ -152,9 +136,9 @@ export class TaxComplianceService implements OnModuleInit {
       ? createCertificateRequest(subject, publicKey, privateKey)
       : null;
 
-    await this.taxComplianceRepository.deactivateAllKeys();
+    await this.taxComplianceRepository.deactivateAllKeys(tenantId);
 
-    return this.taxComplianceRepository.createKey({
+    return this.taxComplianceRepository.createKey(tenantId, {
       keyId,
       publicKeyPem: publicKey,
       privateKeyPem: privateKey,
@@ -166,46 +150,60 @@ export class TaxComplianceService implements OnModuleInit {
     });
   }
 
-  /** دریافت کلید فعال؛ در صورت نبود، کلید جدید تولید می‌شود. */
-  private async getActiveKey(): Promise<TaxSigningKeyEntity> {
-    const key = await this.taxComplianceRepository.findActiveKey();
+  /**
+   * دریافت کلید فعال سازمان؛ در صورت نبود، کلید جدید «برای همان سازمان»
+   * به‌صورت تنبل (Lazy) تولید می‌شود. هیچ راه‌اندازی سراسری در onModuleInit
+   * وجود ندارد (Risk R5 — جداسازی مستأجر).
+   */
+  private async getActiveKey(tenantId: string): Promise<TaxSigningKeyEntity> {
+    const key = await this.taxComplianceRepository.findActiveKey(tenantId);
     if (key) {
       return key;
     }
-    return this.generateAndPersistKey(RSA_MODULUS_LENGTH, undefined);
+    return this.generateAndPersistKey(tenantId, RSA_MODULUS_LENGTH, undefined);
   }
 
-  /** دریافت کلید فعال همراه با کلید خصوصی برای عملیات امضا. */
-  private async getActiveKeyWithPrivate(): Promise<TaxSigningKeyEntity> {
-    const key = await this.taxComplianceRepository.findActiveKeyWithPrivate();
+  /** دریافت کلید فعال سازمان همراه با کلید خصوصی برای عملیات امضا. */
+  private async getActiveKeyWithPrivate(
+    tenantId: string,
+  ): Promise<TaxSigningKeyEntity> {
+    const key =
+      await this.taxComplianceRepository.findActiveKeyWithPrivate(tenantId);
     if (key) {
       return key;
     }
-    return this.generateAndPersistKey(RSA_MODULUS_LENGTH, undefined);
+    return this.generateAndPersistKey(tenantId, RSA_MODULUS_LENGTH, undefined);
   }
 
   // ---------------------------------------------------------------------------
   // کلید مالیاتی و CSR
   // ---------------------------------------------------------------------------
 
-  /** تولید زوج‌کلید RSA جدید (به‌همراه CSR اختیاری). */
-  async generateKeyPair(dto: GenerateKeyPairDto): Promise<SigningKeyResponseDto> {
+  /** تولید زوج‌کلید RSA جدید (به‌همراه CSR اختیاری) برای سازمان. */
+  async generateKeyPair(
+    tenantId: string,
+    dto: GenerateKeyPairDto,
+  ): Promise<SigningKeyResponseDto> {
     const modulusLength = dto.modulusLength ?? RSA_MODULUS_LENGTH;
     const saved = await this.generateAndPersistKey(
+      tenantId,
       modulusLength,
       dto.subject as CsrSubject | undefined,
     );
     return this.toSigningKeyResponse(saved);
   }
 
-  /** اطلاعات عمومی کلید فعال مالیاتی. */
-  async getActiveSigningKey(): Promise<SigningKeyResponseDto> {
-    const key = await this.getActiveKey();
+  /** اطلاعات عمومی کلید فعال مالیاتی سازمان. */
+  async getActiveSigningKey(tenantId: string): Promise<SigningKeyResponseDto> {
+    const key = await this.getActiveKey(tenantId);
     return this.toSigningKeyResponse(key);
   }
 
-  /** تولید درخواست امضای گواهی (CSR) با کلید داده‌شده یا کلید فعال. */
-  async generateCertificateRequest(dto: GenerateCsrDto): Promise<{
+  /** تولید درخواست امضای گواهی (CSR) با کلید داده‌شده یا کلید فعال سازمان. */
+  async generateCertificateRequest(
+    tenantId: string,
+    dto: GenerateCsrDto,
+  ): Promise<{
     keyId: string | null;
     keyFingerprint: string;
     certificateRequestPem: string;
@@ -231,7 +229,7 @@ export class TaxComplianceService implements OnModuleInit {
       };
     }
 
-    const activeKey = await this.getActiveKeyWithPrivate();
+    const activeKey = await this.getActiveKeyWithPrivate(tenantId);
     const certificateRequestPem = createCertificateRequest(
       dto.subject as CsrSubject,
       activeKey.publicKeyPem,
@@ -239,7 +237,7 @@ export class TaxComplianceService implements OnModuleInit {
     );
 
     activeKey.certificateRequestPem = certificateRequestPem;
-    await this.taxComplianceRepository.saveKey(activeKey);
+    await this.taxComplianceRepository.saveKey(tenantId, activeKey);
 
     return {
       keyId: activeKey.keyId,
@@ -314,6 +312,7 @@ export class TaxComplianceService implements OnModuleInit {
     const invoice = await this.invoicingService.findOne(tenantId, dto.invoiceId);
 
     const existing = await this.taxComplianceRepository.findSignatureByInvoiceId(
+      tenantId,
       invoice.id,
     );
     if (existing) {
@@ -340,7 +339,7 @@ export class TaxComplianceService implements OnModuleInit {
       keyId = this.buildKeyId(this.computeKeyFingerprint(publicKeyPem));
       privateKeyPem = dto.privateKeyPem;
     } else {
-      const activeKey = await this.getActiveKeyWithPrivate();
+      const activeKey = await this.getActiveKeyWithPrivate(tenantId);
       privateKeyPem = activeKey.privateKeyPem;
       publicKeyPem = activeKey.publicKeyPem;
       keyId = activeKey.keyId;
@@ -394,7 +393,7 @@ export class TaxComplianceService implements OnModuleInit {
       },
     };
 
-    const saved = await this.taxComplianceRepository.createSignature({
+    const saved = await this.taxComplianceRepository.createSignature(tenantId, {
       invoiceId: invoice.id,
       taxInvoiceNumber: invoice.taxInvoiceNumber,
       taxId,
@@ -425,8 +424,14 @@ export class TaxComplianceService implements OnModuleInit {
    * روی همان `SIGNED` باقی می‌ماند و وضعیت `PREPARED` تنها در پاسخ API/UI
    * ارائه می‌شود (نگاه کنید به `toResponse`).
    */
-  async submitSignature(id: string): Promise<TaxSignatureDetailResponseDto> {
-    const signature = await this.taxComplianceRepository.findSignatureById(id);
+  async submitSignature(
+    tenantId: string,
+    id: string,
+  ): Promise<TaxSignatureDetailResponseDto> {
+    const signature = await this.taxComplianceRepository.findSignatureById(
+      tenantId,
+      id,
+    );
     if (!signature) {
       throw new NotFoundException(`بسته مالیاتی با شناسه ${id} یافت نشد.`);
     }
@@ -439,7 +444,10 @@ export class TaxComplianceService implements OnModuleInit {
 
     signature.referenceNumber = this.generateLocalReferenceNumber();
     signature.errorMessage = null;
-    const saved = await this.taxComplianceRepository.saveSignature(signature);
+    const saved = await this.taxComplianceRepository.saveSignature(
+      tenantId,
+      signature,
+    );
 
     return this.toDetailResponse(saved);
   }
@@ -459,13 +467,14 @@ export class TaxComplianceService implements OnModuleInit {
     return `${TAX_SUBMISSION_REFERENCE_PREFIX}-${datePart}-${randomPart}`;
   }
 
-  /** فهرست صفحه‌بندی‌شده بسته‌های امضاشده. */
+  /** فهرست صفحه‌بندی‌شده بسته‌های امضاشده «همان سازمان». */
   async findAll(
+    tenantId: string,
     query: QueryTaxSignatureDto,
   ): Promise<PaginatedTaxSignaturesResponseDto> {
     const { page, limit, status, taxInvoiceNumber, invoiceId, taxId } = query;
 
-    const where: FindOptionsWhere<TaxInvoiceSignatureEntity> = {};
+    const where: FindOptionsWhere<TaxInvoiceSignatureEntity> = { tenantId };
     if (status) {
       if (status === TaxSubmissionStatus.PREPARED) {
         // وضعیت PREPARED در پایگاه‌داده ذخیره نمی‌شود (بدون Migration)؛
@@ -488,12 +497,15 @@ export class TaxComplianceService implements OnModuleInit {
       where.taxId = ILike(`%${taxId}%`);
     }
 
-    const [entities, total] = await this.taxComplianceRepository.findSignaturesAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [entities, total] = await this.taxComplianceRepository.findSignaturesAndCount(
+      tenantId,
+      {
+        where,
+        order: { createdAt: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      },
+    );
 
     return {
       data: entities.map((entity) => this.toResponse(entity)),
@@ -503,9 +515,15 @@ export class TaxComplianceService implements OnModuleInit {
     };
   }
 
-  /** دریافت جزئیات یک بسته امضاشده. */
-  async findOne(id: string): Promise<TaxSignatureDetailResponseDto> {
-    const entity = await this.taxComplianceRepository.findSignatureById(id);
+  /** دریافت جزئیات یک بسته امضاشده سازمان. */
+  async findOne(
+    tenantId: string,
+    id: string,
+  ): Promise<TaxSignatureDetailResponseDto> {
+    const entity = await this.taxComplianceRepository.findSignatureById(
+      tenantId,
+      id,
+    );
     if (!entity) {
       throw new NotFoundException(`بسته مالیاتی با شناسه ${id} یافت نشد.`);
     }
@@ -513,27 +531,42 @@ export class TaxComplianceService implements OnModuleInit {
   }
 
   /** دریافت بسته کامل JSON برای دانلود. */
-  async getSignedPacket(id: string): Promise<Record<string, unknown>> {
-    const entity = await this.taxComplianceRepository.findSignatureById(id);
+  async getSignedPacket(
+    tenantId: string,
+    id: string,
+  ): Promise<Record<string, unknown>> {
+    const entity = await this.taxComplianceRepository.findSignatureById(
+      tenantId,
+      id,
+    );
     if (!entity) {
       throw new NotFoundException(`بسته مالیاتی با شناسه ${id} یافت نشد.`);
     }
     return entity.signedPacket;
   }
 
-  /** راستی‌آزمایی صحت امضای JWS یک بسته. */
-  async verifySignature(id: string): Promise<{
+  /** راستی‌آزمایی صحت امضای JWS یک بسته سازمان. */
+  async verifySignature(
+    tenantId: string,
+    id: string,
+  ): Promise<{
     valid: boolean;
     keyId: string;
     taxId: string;
     checkedAt: string;
   }> {
-    const entity = await this.taxComplianceRepository.findSignatureById(id);
+    const entity = await this.taxComplianceRepository.findSignatureById(
+      tenantId,
+      id,
+    );
     if (!entity) {
       throw new NotFoundException(`بسته مالیاتی با شناسه ${id} یافت نشد.`);
     }
 
-    const key = await this.taxComplianceRepository.findKeyById(entity.keyId);
+    const key = await this.taxComplianceRepository.findKeyById(
+      tenantId,
+      entity.keyId,
+    );
     const valid = key ? verifyJws(entity.jwsSignature, key.publicKeyPem) : false;
 
     return {

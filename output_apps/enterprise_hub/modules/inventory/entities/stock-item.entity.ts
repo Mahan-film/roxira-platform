@@ -17,11 +17,18 @@ import {
  * (Rule #3 - AGENTS.md: Repository Pattern).
  */
 @Entity({ name: 'erp_stock_items' })
+@Index('IDX_erp_stock_items_tenant_sku', ['tenantId', 'sku'], {
+  unique: true,
+})
+@Index('IDX_erp_stock_items_tenant_barcode', ['tenantId', 'barcode'])
 export class StockItemEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک کالا (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 64 })
   sku: string;
 

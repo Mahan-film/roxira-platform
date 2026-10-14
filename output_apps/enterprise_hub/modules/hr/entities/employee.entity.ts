@@ -20,11 +20,21 @@ import { PayslipEntity } from './payslip.entity';
  * (Rule #3 - AGENTS.md: Repository Pattern).
  */
 @Entity({ name: 'hr_employees' })
+@Index('IDX_hr_employees_tenant_employee_number', ['tenantId', 'employeeNumber'], {
+  unique: true,
+})
+@Index('IDX_hr_employees_tenant_national_id', ['tenantId', 'nationalId'], {
+  unique: true,
+})
+@Index('IDX_hr_employees_tenant_created_at', ['tenantId', 'createdAt'])
 export class EmployeeEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک پرونده کارمند (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 32, name: 'employee_number' })
   employeeNumber: string;
 
@@ -36,7 +46,6 @@ export class EmployeeEntity {
   @Column({ type: 'varchar', length: 64, name: 'last_name' })
   lastName: string;
 
-  @Index({ unique: true })
   @Column({ type: 'varchar', length: 20, name: 'national_id' })
   nationalId: string;
 

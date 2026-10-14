@@ -9,8 +9,19 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
+import {
+  requireTenantAdmin,
+  requireTenantId,
+} from '../../tenants/tenant-context';
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
 import { CreateWarehouseDto } from '../dto/create-warehouse.dto';
 import { FifoBatchResponseDto } from '../dto/fifo-batch-response.dto';
@@ -33,11 +44,23 @@ import { InventoryService } from '../services/inventory.service';
  * فقط مسیریابی، اعتبارسنجی DTO و تبدیل نوع پارامترها انجام می‌شود؛ هیچ منطق
  * کسب‌وکار یا دسترسی مستقیم به پایگاه‌داده در این لایه وجود ندارد
  * (Rule #3 - AGENTS.md).
+ *
+ * شناسه مستأجر «تنها» از claim تأییدشده JWT خوانده می‌شود (`requireTenantId`)
+ * و دسترسی مدیریتی با `requireTenantAdmin` بررسی می‌شود؛ هرگز از بدنه/کوئری/هدر
+ * درخواست (Rule #4 - AGENTS.md). احراز هویت از طریق گارد سراسری JwtAuthGuard
+ * اعمال می‌شود.
  */
 @ApiTags('Inventory - انبارداری و FIFO')
+@ApiBearerAuth()
 @Controller('enterprise-hub/inventory')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
+
+  /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
+  private tenantIdOf(request: AuthenticatedRequest): string {
+    requireTenantAdmin(request);
+    return requireTenantId(request);
+  }
 
   // ---------------------------------------------------------------------------
   // انبارها
@@ -49,16 +72,19 @@ export class InventoryController {
   @ApiResponse({ status: HttpStatus.CREATED, type: WarehouseResponseDto })
   @ApiResponse({ status: HttpStatus.CONFLICT, description: 'نام انبار تکراری است' })
   async createWarehouse(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: CreateWarehouseDto,
   ): Promise<WarehouseResponseDto> {
-    return this.inventoryService.createWarehouse(dto);
+    return this.inventoryService.createWarehouse(this.tenantIdOf(request), dto);
   }
 
   @Get('warehouses')
   @ApiOperation({ summary: 'فهرست انبارهای سازمانی' })
   @ApiResponse({ status: HttpStatus.OK, type: [WarehouseResponseDto] })
-  async listWarehouses(): Promise<WarehouseResponseDto[]> {
-    return this.inventoryService.listWarehouses();
+  async listWarehouses(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<WarehouseResponseDto[]> {
+    return this.inventoryService.listWarehouses(this.tenantIdOf(request));
   }
 
   @Get('warehouses/:id/stock')
@@ -66,9 +92,13 @@ export class InventoryController {
   @ApiResponse({ status: HttpStatus.OK, type: WarehouseStockResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'انبار یافت نشد' })
   async getWarehouseStock(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<WarehouseStockResponseDto> {
-    return this.inventoryService.getWarehouseStock(id);
+    return this.inventoryService.getWarehouseStock(
+      this.tenantIdOf(request),
+      id,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -81,16 +111,20 @@ export class InventoryController {
   @ApiResponse({ status: HttpStatus.CREATED, type: StockItemResponseDto })
   @ApiResponse({ status: HttpStatus.CONFLICT, description: 'شناسه کالا تکراری است' })
   async createStockItem(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: CreateStockItemDto,
   ): Promise<StockItemResponseDto> {
-    return this.inventoryService.createStockItem(dto);
+    return this.inventoryService.createStockItem(this.tenantIdOf(request), dto);
   }
 
   @Get('items')
   @ApiOperation({ summary: 'فهرست کالاهای انبار همراه با هشدار کسری' })
   @ApiResponse({ status: HttpStatus.OK })
-  async listStockItems(@Query() query: QueryStockItemDto) {
-    return this.inventoryService.listStockItems(query);
+  async listStockItems(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryStockItemDto,
+  ) {
+    return this.inventoryService.listStockItems(this.tenantIdOf(request), query);
   }
 
   @Get('items/:id')
@@ -98,9 +132,10 @@ export class InventoryController {
   @ApiResponse({ status: HttpStatus.OK, type: StockItemResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'کالا یافت نشد' })
   async getStockItem(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<StockItemResponseDto> {
-    return this.inventoryService.getStockItem(id);
+    return this.inventoryService.getStockItem(this.tenantIdOf(request), id);
   }
 
   @Patch('items/:id')
@@ -108,10 +143,15 @@ export class InventoryController {
   @ApiResponse({ status: HttpStatus.OK, type: StockItemResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'کالا یافت نشد' })
   async updateStockItem(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateStockItemDto,
   ): Promise<StockItemResponseDto> {
-    return this.inventoryService.updateStockItem(id, dto);
+    return this.inventoryService.updateStockItem(
+      this.tenantIdOf(request),
+      id,
+      dto,
+    );
   }
 
   @Get('items/:sku/batches')
@@ -119,9 +159,13 @@ export class InventoryController {
   @ApiResponse({ status: HttpStatus.OK, type: [FifoBatchResponseDto] })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'کالا یافت نشد' })
   async getStockItemBatches(
+    @Req() request: AuthenticatedRequest,
     @Param('sku') sku: string,
   ): Promise<FifoBatchResponseDto[]> {
-    return this.inventoryService.getStockItemBatches(sku);
+    return this.inventoryService.getStockItemBatches(
+      this.tenantIdOf(request),
+      sku,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -138,9 +182,10 @@ export class InventoryController {
   @ApiResponse({ status: HttpStatus.CREATED, type: StockMovementResultDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'کالا یا انبار یافت نشد' })
   async receiveStock(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: InboundStockDto,
   ): Promise<StockMovementResultDto> {
-    return this.inventoryService.receiveStock(dto);
+    return this.inventoryService.receiveStock(this.tenantIdOf(request), dto);
   }
 
   @Post('movements/outbound')
@@ -154,9 +199,10 @@ export class InventoryController {
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'موجودی کافی نیست' })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'کالا یافت نشد' })
   async issueStock(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: OutboundStockDto,
   ): Promise<StockMovementResultDto> {
-    return this.inventoryService.issueStock(dto);
+    return this.inventoryService.issueStock(this.tenantIdOf(request), dto);
   }
 
   // ---------------------------------------------------------------------------
@@ -166,7 +212,9 @@ export class InventoryController {
   @Get('valuation')
   @ApiOperation({ summary: 'گزارش ارزش موجودی انبارها بر پایه FIFO' })
   @ApiResponse({ status: HttpStatus.OK, type: FifoValuationResponseDto })
-  async getFifoValuation(): Promise<FifoValuationResponseDto> {
-    return this.inventoryService.getFifoValuation();
+  async getFifoValuation(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<FifoValuationResponseDto> {
+    return this.inventoryService.getFifoValuation(this.tenantIdOf(request));
   }
 }

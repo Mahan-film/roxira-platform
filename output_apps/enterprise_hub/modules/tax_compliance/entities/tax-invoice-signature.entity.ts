@@ -13,18 +13,30 @@ import { TaxSubmissionStatus } from '../enums/tax-compliance.enum';
  *
  * هر صورتحساب صادرشده دقیقاً یک بسته امضاشده دارد که شامل شناسه یکتای
  * مالیاتی ۲۲ رقمی (TaxID)، هش داده صورتحساب، امضای دیجیتال JWS و بسته
- * کامل ارسالی به سامانه مودیان است. `invoiceId` به‌صورت یکتا ایندکس می‌شود
- * تا از امضای دوباره یک صورتحساب جلوگیری شود.
+ * کامل ارسالی به سامانه مودیان است. `invoiceId` به‌صورت یکتای ترکیبی
+ * `(tenant_id, invoice_id)` ایندکس می‌شود تا از امضای دوباره یک صورتحساب
+ * در همان سازمان جلوگیری شود، بدون آنکه دو سازمان بر سر شماره‌ها تصادم کنند.
  *
  * تنها از طریق TaxComplianceRepository قابل دسترسی است
  * (Rule #3 - AGENTS.md: Repository Pattern).
  */
 @Entity({ name: 'tax_invoice_signatures' })
+@Index('IDX_tax_invoice_signatures_tenant_invoice_id', ['tenantId', 'invoiceId'], {
+  unique: true,
+})
+@Index('IDX_tax_invoice_signatures_tenant_tax_id', ['tenantId', 'taxId'], {
+  unique: true,
+})
+@Index('IDX_tax_invoice_signatures_tenant_created_at', ['tenantId', 'createdAt'])
+@Index('IDX_tax_invoice_signatures_tenant_status', ['tenantId', 'status'])
 export class TaxInvoiceSignatureEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک بسته امضاشده (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'uuid', name: 'invoice_id' })
   invoiceId: string;
 
@@ -32,7 +44,6 @@ export class TaxInvoiceSignatureEntity {
   @Column({ type: 'varchar', length: 64, name: 'tax_invoice_number' })
   taxInvoiceNumber: string;
 
-  @Index({ unique: true })
   @Column({ type: 'varchar', length: 32, name: 'tax_id' })
   taxId: string;
 

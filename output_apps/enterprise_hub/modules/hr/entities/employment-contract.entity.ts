@@ -23,11 +23,23 @@ import { EmployeeEntity } from './employee.entity';
  * تنها از طریق HrRepository قابل دسترسی است.
  */
 @Entity({ name: 'hr_employment_contracts' })
+@Index(
+  'IDX_hr_employment_contracts_tenant_contract_number',
+  ['tenantId', 'contractNumber'],
+  { unique: true },
+)
+@Index('IDX_hr_employment_contracts_tenant_employee_id', [
+  'tenantId',
+  'employeeId',
+])
 export class EmploymentContractEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک قرارداد (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 64, name: 'contract_number' })
   contractNumber: string;
 

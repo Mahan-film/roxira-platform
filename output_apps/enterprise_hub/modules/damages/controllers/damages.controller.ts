@@ -8,12 +8,19 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
+import {
+  requireTenantAdmin,
+  requireTenantId,
+} from '../../tenants/tenant-context';
 import {
   CreateBulkDamageCalculationDto,
   CreateDamageCalculationDto,
@@ -26,11 +33,23 @@ import { DamagesService } from '../services/damages.service';
  * کنترلر ماژول خسارت تاخیر تادیه.
  * فقط مسیریابی و اعتبارسنجی HTTP انجام می‌دهد؛ هیچ منطق کسب‌وکار یا
  * دسترسی مستقیم به پایگاه‌داده در این لایه وجود ندارد (Rule #3 - AGENTS.md).
+ *
+ * شناسه مستأجر «تنها» از claim تأییدشده JWT خوانده می‌شود (`requireTenantId`)
+ * و دسترسی مدیریتی با `requireTenantAdmin` بررسی می‌شود؛ هرگز از بدنه/کوئری/هدر
+ * درخواست (Rule #4 - AGENTS.md). احراز هویت از طریق گارد سراسری JwtAuthGuard
+ * اعمال می‌شود.
  */
 @ApiTags('Damages - خسارت تاخیر تادیه')
+@ApiBearerAuth()
 @Controller('enterprise-hub/damages')
 export class DamagesController {
   constructor(private readonly damagesService: DamagesService) {}
+
+  /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
+  private tenantIdOf(request: AuthenticatedRequest): string {
+    requireTenantAdmin(request);
+    return requireTenantId(request);
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -42,9 +61,10 @@ export class DamagesController {
   @ApiResponse({ status: HttpStatus.CREATED, type: DamageCalculationResponseDto })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'ورودی نامعتبر' })
   async create(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: CreateDamageCalculationDto,
   ): Promise<DamageCalculationResponseDto> {
-    return this.damagesService.calculateAndPersist(dto);
+    return this.damagesService.calculateAndPersist(this.tenantIdOf(request), dto);
   }
 
   @Post('bulk')
@@ -56,16 +76,23 @@ export class DamagesController {
   })
   @ApiResponse({ status: HttpStatus.ACCEPTED, description: 'درخواست در صف پردازش قرار گرفت' })
   async createBulk(
+    @Req() request: AuthenticatedRequest,
     @Body() dto: CreateBulkDamageCalculationDto,
   ): Promise<{ jobId: string; itemCount: number }> {
-    return this.damagesService.enqueueBulkCalculation(dto.items);
+    return this.damagesService.enqueueBulkCalculation(
+      this.tenantIdOf(request),
+      dto.items,
+    );
   }
 
   @Get()
   @ApiOperation({ summary: 'فهرست رکوردهای محاسبه‌شده به همراه صفحه‌بندی' })
   @ApiResponse({ status: HttpStatus.OK })
-  async findAll(@Query() query: QueryDamageCalculationDto) {
-    return this.damagesService.findAll(query);
+  async findAll(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryDamageCalculationDto,
+  ) {
+    return this.damagesService.findAll(this.tenantIdOf(request), query);
   }
 
   @Get(':id')
@@ -73,8 +100,9 @@ export class DamagesController {
   @ApiResponse({ status: HttpStatus.OK, type: DamageCalculationResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'رکورد یافت نشد' })
   async findOne(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<DamageCalculationResponseDto> {
-    return this.damagesService.findOne(id);
+    return this.damagesService.findOne(this.tenantIdOf(request), id);
   }
 }

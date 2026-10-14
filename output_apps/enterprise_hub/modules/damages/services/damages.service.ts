@@ -114,13 +114,14 @@ export class DamagesService {
    * محاسبه و ثبت فوری (Synchronous) یک رکورد خسارت تاخیر تادیه.
    */
   async calculateAndPersist(
+    tenantId: string,
     dto: CreateDamageCalculationDto,
   ): Promise<DamageCalculationResponseDto> {
     const delayedDays = this.calculateDelayedDays(dto.dueDate, dto.paymentDate);
     const { damageAmount, legalBasis } = this.computeDamageAmount(dto, delayedDays);
     const totalPayable = Math.round((dto.principalAmount + damageAmount) * 100) / 100;
 
-    const saved = await this.damagesRepository.create({
+    const saved = await this.damagesRepository.create(tenantId, {
       principalAmount: dto.principalAmount,
       dueDate: dto.dueDate,
       paymentDate: dto.paymentDate,
@@ -138,25 +139,36 @@ export class DamagesService {
   /**
    * ثبت درخواست محاسبه دسته‌ای در صف BullMQ/Redis (Rule #5 - AGENTS.md:
    * Zero Hardware Waste - پردازش ناهمزمان برای جلوگیری از بلاک شدن Event Loop).
+   *
+   * `tenantId` معتبر (برگرفته از توکن کاربر، نه بدنه درخواست) در پیلود Job قرار
+   * می‌گیرد تا پردازشگر بدون بافت مستأجر هرگز رکوردی ثبت نکند (§4.4).
    */
   async enqueueBulkCalculation(
+    tenantId: string,
     items: CreateDamageCalculationDto[],
   ): Promise<{ jobId: string; itemCount: number }> {
-    const job = await this.damagesQueue.add(DAMAGES_BULK_JOB_NAME, { items });
+    const job = await this.damagesQueue.add(DAMAGES_BULK_JOB_NAME, {
+      tenantId,
+      items,
+    });
     return { jobId: job.id as string, itemCount: items.length };
   }
 
   async findAll(
+    tenantId: string,
     query: QueryDamageCalculationDto,
   ): Promise<{ data: DamageCalculationResponseDto[]; total: number; page: number; limit: number }> {
     const { page, limit, contractReferenceNumber } = query;
 
-    const [entities, total] = await this.damagesRepository.findAndCount({
-      where: contractReferenceNumber ? { contractReferenceNumber } : {},
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [entities, total] = await this.damagesRepository.findAndCount(
+      tenantId,
+      {
+        where: contractReferenceNumber ? { contractReferenceNumber } : {},
+        order: { createdAt: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      },
+    );
 
     return {
       data: entities.map((entity) => this.toResponseDto(entity)),
@@ -166,8 +178,8 @@ export class DamagesService {
     };
   }
 
-  async findOne(id: string): Promise<DamageCalculationResponseDto> {
-    const entity = await this.damagesRepository.findById(id);
+  async findOne(tenantId: string, id: string): Promise<DamageCalculationResponseDto> {
+    const entity = await this.damagesRepository.findById(tenantId, id);
 
     if (!entity) {
       throw new NotFoundException(`رکورد محاسبه با شناسه ${id} یافت نشد.`);

@@ -10,11 +10,17 @@ import { JournalEntryLineEntity } from './journal-entry-line.entity';
  * ستون‌ها بدون هیچ Migration تخریبی نگاشت شده است (Rule #4 AGENTS.md).
  */
 @Entity({ name: 'fin_chart_of_accounts' })
+@Index('IDX_fin_chart_of_accounts_tenant_code', ['tenantId', 'code'], {
+  unique: true,
+})
 export class ChartOfAccountEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک حساب (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 32 })
   code: string;
 

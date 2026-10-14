@@ -51,39 +51,81 @@ export class HrRepository {
   // کارمندان (Employees)
   // ---------------------------------------------------------------------------
 
-  async countEmployees(): Promise<number> {
-    return this.employees.count();
+  async countEmployees(tenantId: string): Promise<number> {
+    return this.employees.count({ where: { tenantId } });
   }
 
-  async createEmployee(data: Partial<EmployeeEntity>): Promise<EmployeeEntity> {
-    const entity = this.employees.create(data);
+  async createEmployee(
+    tenantId: string,
+    data: Partial<EmployeeEntity>,
+  ): Promise<EmployeeEntity> {
+    const entity = this.employees.create({ ...data, tenantId });
     return this.employees.save(entity);
   }
 
-  async saveEmployee(entity: EmployeeEntity): Promise<EmployeeEntity> {
-    return this.employees.save(entity);
+  async saveEmployee(
+    tenantId: string,
+    entity: EmployeeEntity,
+  ): Promise<EmployeeEntity> {
+    // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
+    await this.employees.update(
+      { id: entity.id, tenantId },
+      {
+        employeeNumber: entity.employeeNumber,
+        firstName: entity.firstName,
+        lastName: entity.lastName,
+        nationalId: entity.nationalId,
+        fatherName: entity.fatherName,
+        birthDate: entity.birthDate,
+        gender: entity.gender,
+        mobile: entity.mobile,
+        email: entity.email,
+        jobTitle: entity.jobTitle,
+        department: entity.department,
+        maritalStatus: entity.maritalStatus,
+        dependants: entity.dependants,
+        status: entity.status,
+        hireDate: entity.hireDate,
+        terminationDate: entity.terminationDate,
+        bankAccountNumber: entity.bankAccountNumber,
+        updatedAt: entity.updatedAt,
+      },
+    );
+    entity.tenantId = tenantId;
+    return entity;
   }
 
-  async findEmployeeById(id: number): Promise<EmployeeEntity | null> {
-    return this.employees.findOne({ where: { id } });
+  async findEmployeeById(
+    tenantId: string,
+    id: number,
+  ): Promise<EmployeeEntity | null> {
+    return this.employees.findOne({ where: { id, tenantId } });
   }
 
   async findEmployeeByNationalId(
+    tenantId: string,
     nationalId: string,
   ): Promise<EmployeeEntity | null> {
-    return this.employees.findOne({ where: { nationalId } });
+    return this.employees.findOne({ where: { nationalId, tenantId } });
   }
 
   async findEmployeeByNumber(
+    tenantId: string,
     employeeNumber: string,
   ): Promise<EmployeeEntity | null> {
-    return this.employees.findOne({ where: { employeeNumber } });
+    return this.employees.findOne({ where: { employeeNumber, tenantId } });
   }
 
   async findAndCountEmployees(
+    tenantId: string,
     options: FindManyOptions<EmployeeEntity>,
   ): Promise<[EmployeeEntity[], number]> {
-    return this.employees.findAndCount(options);
+    const { where, ...rest } = options;
+    const scoped: FindOptionsWhere<EmployeeEntity> | FindOptionsWhere<EmployeeEntity>[] =
+      Array.isArray(where)
+        ? where.map((condition) => ({ ...condition, tenantId }))
+        : { ...(where ?? {}), tenantId };
+    return this.employees.findAndCount({ ...rest, where: scoped });
   }
 
   // ---------------------------------------------------------------------------
@@ -91,63 +133,82 @@ export class HrRepository {
   // ---------------------------------------------------------------------------
 
   async createContract(
+    tenantId: string,
     data: Partial<EmploymentContractEntity>,
   ): Promise<EmploymentContractEntity> {
-    const entity = this.contracts.create(data);
+    const entity = this.contracts.create({ ...data, tenantId });
     return this.contracts.save(entity);
   }
 
-  async findContractById(id: number): Promise<EmploymentContractEntity | null> {
+  async findContractById(
+    tenantId: string,
+    id: number,
+  ): Promise<EmploymentContractEntity | null> {
     return this.contracts.findOne({
-      where: { id },
+      where: { id, tenantId },
       relations: { employee: true },
     });
   }
 
   async findContractByNumber(
+    tenantId: string,
     contractNumber: string,
   ): Promise<EmploymentContractEntity | null> {
-    return this.contracts.findOne({ where: { contractNumber } });
+    return this.contracts.findOne({ where: { contractNumber, tenantId } });
   }
 
   /**
    * آخرین قرارداد فعال کارمند (بر اساس تاریخ شروع نزولی).
    */
   async findActiveContractByEmployee(
+    tenantId: string,
     employeeId: number,
   ): Promise<EmploymentContractEntity | null> {
     return this.contracts.findOne({
-      where: { employeeId, status: ContractStatus.ACTIVE },
+      where: { employeeId, status: ContractStatus.ACTIVE, tenantId },
       relations: { employee: true },
       order: { startDate: 'DESC', id: 'DESC' },
     });
   }
 
   async findAndCountContracts(
+    tenantId: string,
     options: FindManyOptions<EmploymentContractEntity>,
   ): Promise<[EmploymentContractEntity[], number]> {
-    return this.contracts.findAndCount(options);
+    const { where, ...rest } = options;
+    const scoped:
+      | FindOptionsWhere<EmploymentContractEntity>
+      | FindOptionsWhere<EmploymentContractEntity>[] = Array.isArray(where)
+      ? where.map((condition) => ({ ...condition, tenantId }))
+      : { ...(where ?? {}), tenantId };
+    return this.contracts.findAndCount({ ...rest, where: scoped });
   }
 
-  async countActiveContracts(): Promise<number> {
+  async countActiveContracts(tenantId: string): Promise<number> {
     return this.contracts.count({
-      where: { status: ContractStatus.ACTIVE },
+      where: { status: ContractStatus.ACTIVE, tenantId },
     });
   }
 
-  async countEmployeesByStatus(status: EmployeeStatus): Promise<number> {
-    return this.employees.count({ where: { status } });
+  async countEmployeesByStatus(
+    tenantId: string,
+    status: EmployeeStatus,
+  ): Promise<number> {
+    return this.employees.count({ where: { status, tenantId } });
   }
 
   /**
    * تجمیع جمع حقوق پایه قراردادهای فعال.
    */
-  async aggregateActiveContracts(): Promise<ActiveContractAggregate> {
+  async aggregateActiveContracts(
+    tenantId: string,
+  ): Promise<ActiveContractAggregate> {
     const raw = await this.contracts
       .createQueryBuilder('contract')
       .select('COUNT(contract.id)', 'count')
       .addSelect('COALESCE(SUM(contract.baseSalary), 0)', 'totalBaseSalary')
       .where('contract.status = :status', { status: ContractStatus.ACTIVE })
+      .andWhere('contract.tenantId = :tenantId', { tenantId })
       .getRawOne<ActiveContractAggregate>();
     return raw ?? { count: '0', totalBaseSalary: '0' };
   }
@@ -157,43 +218,84 @@ export class HrRepository {
   // ---------------------------------------------------------------------------
 
   async createPayslip(
+    tenantId: string,
     data: Partial<PayslipEntity>,
   ): Promise<PayslipEntity> {
-    const entity = this.payslips.create(data);
+    const entity = this.payslips.create({ ...data, tenantId });
     return this.payslips.save(entity);
   }
 
-  async findPayslipById(id: number): Promise<PayslipEntity | null> {
+  async findPayslipById(
+    tenantId: string,
+    id: number,
+  ): Promise<PayslipEntity | null> {
     return this.payslips.findOne({
-      where: { id },
+      where: { id, tenantId },
       relations: { employee: true },
     });
   }
 
   async findPayslipByPeriod(
+    tenantId: string,
     employeeId: number,
     periodYear: number,
     periodMonth: number,
   ): Promise<PayslipEntity | null> {
     return this.payslips.findOne({
-      where: { employeeId, periodYear, periodMonth },
+      where: { employeeId, periodYear, periodMonth, tenantId },
     });
   }
 
   async findAndCountPayslips(
+    tenantId: string,
     options: FindManyOptions<PayslipEntity>,
   ): Promise<[PayslipEntity[], number]> {
-    return this.payslips.findAndCount(options);
+    const { where, ...rest } = options;
+    const scoped: FindOptionsWhere<PayslipEntity> | FindOptionsWhere<PayslipEntity>[] =
+      Array.isArray(where)
+        ? where.map((condition) => ({ ...condition, tenantId }))
+        : { ...(where ?? {}), tenantId };
+    return this.payslips.findAndCount({ ...rest, where: scoped });
   }
 
-  async savePayslip(entity: PayslipEntity): Promise<PayslipEntity> {
-    return this.payslips.save(entity);
+  async savePayslip(
+    tenantId: string,
+    entity: PayslipEntity,
+  ): Promise<PayslipEntity> {
+    // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
+    await this.payslips.update(
+      { id: entity.id, tenantId },
+      {
+        payslipNumber: entity.payslipNumber,
+        employeeId: entity.employeeId,
+        contractId: entity.contractId,
+        periodYear: entity.periodYear,
+        periodMonth: entity.periodMonth,
+        baseSalary: entity.baseSalary,
+        housingAllowance: entity.housingAllowance,
+        foodAllowance: entity.foodAllowance,
+        childAllowance: entity.childAllowance,
+        overtimeAmount: entity.overtimeAmount,
+        grossPay: entity.grossPay,
+        insuranceDeduction: entity.insuranceDeduction,
+        incomeTax: entity.incomeTax,
+        otherDeductions: entity.otherDeductions,
+        netPay: entity.netPay,
+        status: entity.status,
+        journalEntryId: entity.journalEntryId,
+        journalEntryNumber: entity.journalEntryNumber,
+        issuedAt: entity.issuedAt,
+        updatedAt: entity.updatedAt,
+      },
+    );
+    entity.tenantId = tenantId;
+    return entity;
   }
 
   /**
    * تجمیع تحلیلی فیش‌های حقوقی برای کارت‌های بنتو.
    */
-  async aggregatePayslips(): Promise<PayslipAggregate> {
+  async aggregatePayslips(tenantId: string): Promise<PayslipAggregate> {
     const raw = await this.payslips
       .createQueryBuilder('payslip')
       .select('COUNT(payslip.id)', 'count')
@@ -208,6 +310,7 @@ export class HrRepository {
         'COALESCE(SUM(payslip.otherDeductions), 0)',
         'totalOtherDeductions',
       )
+      .where('payslip.tenantId = :tenantId', { tenantId })
       .getRawOne<PayslipAggregate>();
     return (
       raw ?? {
@@ -223,14 +326,15 @@ export class HrRepository {
 
   /** ساخت شرط جست‌وجوی کارمند بر اساس نام/کد پرسنلی/کد ملی */
   static buildEmployeeSearchWhere(
+    tenantId: string,
     search: string,
   ): FindOptionsWhere<EmployeeEntity>[] {
     const term = `%${search}%`;
     return [
-      { firstName: ILike(term) },
-      { lastName: ILike(term) },
-      { employeeNumber: ILike(term) },
-      { nationalId: ILike(term) },
+      { tenantId, firstName: ILike(term) },
+      { tenantId, lastName: ILike(term) },
+      { tenantId, employeeNumber: ILike(term) },
+      { tenantId, nationalId: ILike(term) },
     ];
   }
 }

@@ -21,11 +21,22 @@ import {
  * (Rule #3 - AGENTS.md: Repository Pattern).
  */
 @Entity({ name: 'tax_signing_keys' })
+@Index('IDX_tax_signing_keys_tenant_key_id', ['tenantId', 'keyId'], {
+  unique: true,
+})
+@Index('IDX_tax_signing_keys_tenant_created_at', ['tenantId', 'createdAt'])
+@Index('IDX_tax_signing_keys_tenant_active', ['tenantId'], {
+  unique: true,
+  where: '"is_active"',
+})
 export class TaxSigningKeyEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک کلید (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 96, name: 'key_id' })
   keyId: string;
 

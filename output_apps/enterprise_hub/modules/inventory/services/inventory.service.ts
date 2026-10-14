@@ -126,34 +126,46 @@ export class InventoryService {
   // ---------------------------------------------------------------------------
 
   async createWarehouse(
+    tenantId: string,
     dto: CreateWarehouseDto,
   ): Promise<WarehouseResponseDto> {
     const existing = await this.inventoryRepository.findWarehouseByName(
+      tenantId,
       dto.name,
     );
     if (existing) {
       throw new ConflictException(`انباری با نام ${dto.name} قبلاً ثبت شده است.`);
     }
 
-    const created = await this.inventoryRepository.createWarehouse({
+    const created = await this.inventoryRepository.createWarehouse(tenantId, {
       name: dto.name,
       locationCode: dto.locationCode,
     });
     return this.toWarehouseResponse(created);
   }
 
-  async listWarehouses(): Promise<WarehouseResponseDto[]> {
-    const warehouses = await this.inventoryRepository.findAllWarehouses();
+  async listWarehouses(tenantId: string): Promise<WarehouseResponseDto[]> {
+    const warehouses =
+      await this.inventoryRepository.findAllWarehouses(tenantId);
     return warehouses.map((warehouse) => this.toWarehouseResponse(warehouse));
   }
 
-  async getWarehouseStock(id: number): Promise<WarehouseStockResponseDto> {
-    const warehouse = await this.inventoryRepository.findWarehouseById(id);
+  async getWarehouseStock(
+    tenantId: string,
+    id: number,
+  ): Promise<WarehouseStockResponseDto> {
+    const warehouse = await this.inventoryRepository.findWarehouseById(
+      tenantId,
+      id,
+    );
     if (!warehouse) {
       throw new NotFoundException(`انبار با شناسه ${id} یافت نشد.`);
     }
 
-    const rawRows = await this.inventoryRepository.getWarehouseStock(id);
+    const rawRows = await this.inventoryRepository.getWarehouseStock(
+      tenantId,
+      id,
+    );
     const rows: WarehouseStockRowDto[] = rawRows.map((row) => ({
       sku: row.sku,
       name: row.name,
@@ -179,16 +191,20 @@ export class InventoryService {
   // ---------------------------------------------------------------------------
 
   async createStockItem(
+    tenantId: string,
     dto: CreateStockItemDto,
   ): Promise<StockItemResponseDto> {
-    const existing = await this.inventoryRepository.findStockItemBySku(dto.sku);
+    const existing = await this.inventoryRepository.findStockItemBySku(
+      tenantId,
+      dto.sku,
+    );
     if (existing) {
       throw new ConflictException(
         `کالایی با شناسه ${dto.sku} قبلاً در فهرست انبار ثبت شده است.`,
       );
     }
 
-    const created = await this.inventoryRepository.createStockItem({
+    const created = await this.inventoryRepository.createStockItem(tenantId, {
       sku: dto.sku,
       barcode: dto.barcode,
       name: dto.name,
@@ -201,10 +217,14 @@ export class InventoryService {
   }
 
   async updateStockItem(
+    tenantId: string,
     id: number,
     dto: UpdateStockItemDto,
   ): Promise<StockItemResponseDto> {
-    const entity = await this.inventoryRepository.findStockItemById(id);
+    const entity = await this.inventoryRepository.findStockItemById(
+      tenantId,
+      id,
+    );
     if (!entity) {
       throw new NotFoundException(`کالای با شناسه ${id} یافت نشد.`);
     }
@@ -222,44 +242,60 @@ export class InventoryService {
       entity.minQuantity = this.roundQuantity(dto.minQuantity);
     }
 
-    const saved = await this.inventoryRepository.saveStockItem(entity);
-    const valuation = await this.computeItemValuationMap();
+    const saved = await this.inventoryRepository.saveStockItem(tenantId, entity);
+    const valuation = await this.computeItemValuationMap(tenantId);
     return this.toStockItemResponse(saved, valuation.get(saved.sku) ?? 0);
   }
 
-  async getStockItem(id: number): Promise<StockItemResponseDto> {
-    const entity = await this.inventoryRepository.findStockItemById(id);
+  async getStockItem(
+    tenantId: string,
+    id: number,
+  ): Promise<StockItemResponseDto> {
+    const entity = await this.inventoryRepository.findStockItemById(
+      tenantId,
+      id,
+    );
     if (!entity) {
       throw new NotFoundException(`کالای با شناسه ${id} یافت نشد.`);
     }
-    const valuation = await this.computeItemValuationMap();
+    const valuation = await this.computeItemValuationMap(tenantId);
     return this.toStockItemResponse(entity, valuation.get(entity.sku) ?? 0);
   }
 
-  async getStockItemBySku(sku: string): Promise<StockItemResponseDto> {
-    const entity = await this.inventoryRepository.findStockItemBySku(sku);
+  async getStockItemBySku(
+    tenantId: string,
+    sku: string,
+  ): Promise<StockItemResponseDto> {
+    const entity = await this.inventoryRepository.findStockItemBySku(
+      tenantId,
+      sku,
+    );
     if (!entity) {
       throw new NotFoundException(`کالایی با شناسه ${sku} یافت نشد.`);
     }
-    const valuation = await this.computeItemValuationMap();
+    const valuation = await this.computeItemValuationMap(tenantId);
     return this.toStockItemResponse(entity, valuation.get(entity.sku) ?? 0);
   }
 
-  async listStockItems(query: QueryStockItemDto): Promise<{
+  async listStockItems(
+    tenantId: string,
+    query: QueryStockItemDto,
+  ): Promise<{
     data: StockItemResponseDto[];
     total: number;
     page: number;
     limit: number;
     lowStockCount: number;
   }> {
-    const [entities, total] = await this.inventoryRepository.findStockItemsAndCount({
-      search: query.search,
-      lowStockOnly: query.lowStockOnly ?? false,
-      skip: (query.page - 1) * query.limit,
-      take: query.limit,
-    });
+    const [entities, total] =
+      await this.inventoryRepository.findStockItemsAndCount(tenantId, {
+        search: query.search,
+        lowStockOnly: query.lowStockOnly ?? false,
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      });
 
-    const valuation = await this.computeItemValuationMap();
+    const valuation = await this.computeItemValuationMap(tenantId);
     const data = entities.map((entity) =>
       this.toStockItemResponse(entity, valuation.get(entity.sku) ?? 0),
     );
@@ -273,15 +309,21 @@ export class InventoryService {
     };
   }
 
-  async getStockItemBatches(sku: string): Promise<FifoBatchResponseDto[]> {
-    const item = await this.inventoryRepository.findStockItemBySku(sku);
+  async getStockItemBatches(
+    tenantId: string,
+    sku: string,
+  ): Promise<FifoBatchResponseDto[]> {
+    const item = await this.inventoryRepository.findStockItemBySku(
+      tenantId,
+      sku,
+    );
     if (!item) {
       throw new NotFoundException(`کالایی با شناسه ${sku} یافت نشد.`);
     }
 
     const [batches, warehouses] = await Promise.all([
-      this.inventoryRepository.findBatchesBySku(sku),
-      this.inventoryRepository.findAllWarehouses(),
+      this.inventoryRepository.findBatchesBySku(tenantId, sku),
+      this.inventoryRepository.findAllWarehouses(tenantId),
     ]);
     const warehouseNames = new Map(
       warehouses.map((warehouse) => [warehouse.id, warehouse.name]),
@@ -302,12 +344,13 @@ export class InventoryService {
   // ---------------------------------------------------------------------------
 
   async receiveStock(
+    tenantId: string,
     dto: InboundStockDto,
   ): Promise<StockMovementResultDto> {
     const batchNumber = dto.batchNumber ?? this.generateBatchNumber(dto.sku);
 
     try {
-      const result = await this.inventoryRepository.persistInbound({
+      const result = await this.inventoryRepository.persistInbound(tenantId, {
         sku: dto.sku,
         quantity: dto.quantity,
         unitPurchaseCost: dto.unitPurchaseCost,
@@ -344,9 +387,12 @@ export class InventoryService {
     }
   }
 
-  async issueStock(dto: OutboundStockDto): Promise<StockMovementResultDto> {
+  async issueStock(
+    tenantId: string,
+    dto: OutboundStockDto,
+  ): Promise<StockMovementResultDto> {
     try {
-      const result = await this.inventoryRepository.persistOutbound({
+      const result = await this.inventoryRepository.persistOutbound(tenantId, {
         sku: dto.sku,
         quantity: dto.quantity,
         warehouseId: dto.warehouseId ?? null,
@@ -382,10 +428,12 @@ export class InventoryService {
   // ارزش‌گذاری موجودی بر پایه FIFO
   // ---------------------------------------------------------------------------
 
-  async getFifoValuation(): Promise<FifoValuationResponseDto> {
+  async getFifoValuation(
+    tenantId: string,
+  ): Promise<FifoValuationResponseDto> {
     const [items, aggregates] = await Promise.all([
-      this.inventoryRepository.findAllStockItems(),
-      this.inventoryRepository.getBatchAggregates(),
+      this.inventoryRepository.findAllStockItems(tenantId),
+      this.inventoryRepository.getBatchAggregates(tenantId),
     ]);
 
     const aggregateBySku = new Map(
@@ -433,8 +481,11 @@ export class InventoryService {
   }
 
   /** نگاشت SKU به ارزش موجودی FIFO برای غنی‌سازی خروجی کالاها. */
-  private async computeItemValuationMap(): Promise<Map<string, number>> {
-    const aggregates = await this.inventoryRepository.getBatchAggregates();
+  private async computeItemValuationMap(
+    tenantId: string,
+  ): Promise<Map<string, number>> {
+    const aggregates =
+      await this.inventoryRepository.getBatchAggregates(tenantId);
     return new Map(
       aggregates.map((row) => [row.sku, Number(row.fifoValue)]),
     );

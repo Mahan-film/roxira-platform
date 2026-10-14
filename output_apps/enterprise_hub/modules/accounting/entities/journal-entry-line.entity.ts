@@ -17,9 +17,18 @@ import { JournalEntryEntity } from './journal-entry.entity';
  * که از طریق Migration ایجاد می‌گردد.
  */
 @Entity({ name: 'fin_journal_entry_lines' })
+@Index('IDX_fin_journal_entry_lines_tenant_account', ['tenantId', 'accountId'])
+@Index('IDX_fin_journal_entry_lines_tenant_entry', [
+  'tenantId',
+  'journalEntryId',
+])
 export class JournalEntryLineEntity {
   @PrimaryGeneratedColumn()
   id: number;
+
+  /** شناسه سازمان مالک سطر (denormalised برای فیلتر بدون join). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
 
   @Index()
   @Column({ type: 'integer', name: 'journal_entry_id' })

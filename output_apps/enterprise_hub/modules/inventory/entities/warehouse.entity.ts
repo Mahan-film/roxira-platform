@@ -13,11 +13,17 @@ import {
  * (Rule #3 - AGENTS.md: Repository Pattern).
  */
 @Entity({ name: 'erp_warehouses' })
+@Index('IDX_erp_warehouses_tenant_name', ['tenantId', 'name'], {
+  unique: true,
+})
 export class WarehouseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
+  /** شناسه سازمان مالک انبار (تنها از توکن تأییدشده JWT). */
+  @Column({ type: 'uuid', name: 'tenant_id' })
+  tenantId: string;
+
   @Column({ type: 'varchar', length: 100 })
   name: string;
 
