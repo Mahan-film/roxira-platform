@@ -28,7 +28,7 @@ echo "repo:     $REPO"
 echo "python:   $PY"
 echo "template: $TEMPLATE"
 echo "target:   $DEST"
-echo "schedule: every 12 h (StartInterval 43200), VPN must be OFF for at least one run per interval"
+echo "schedule: Sat-Thu 09:30 and 11:00 Tehran time (gov sites open in office hours); VPN must be OFF then"
 echo
 
 if [ "${1:-}" != "--yes" ]; then

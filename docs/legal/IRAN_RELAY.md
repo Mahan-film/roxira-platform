@@ -67,7 +67,7 @@ rm -f ~/Library/LaunchAgents/ir.roxira.iranrelay.plist
 
 ## Runbook
 
-1. **The Mac must be on, and the VPN OFF for at least one run every 12 h.** With the VPN on, the
+1. **The Mac must be on, and the VPN OFF for at least one run in Iranian office hours (Sat-Thu 09:30 and 11:00 Tehran time).** With the VPN on, the
    sites are unreachable; the run then skips them and exits 0, and the next run catches up (state
    is kept, nothing is lost).
 2. The job stages new rows and opens a PR titled `data(legal): relay batch <date> (N files)`.
