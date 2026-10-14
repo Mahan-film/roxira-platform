@@ -193,6 +193,17 @@ groups:
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
     fallback: [agent-free-paid]
 
+  product-free:   # Smart Judge chat (owner decision 2026-10-14: free first). Only models that return a clean
+                  # final answer in `content`; providers seen leaking reasoning text (sambanova gpt-oss,
+                  # OpenRouter :free reasoning models) are excluded.
+    description: Product chat answers. Clean-output free models first, paid DeepSeek Flash as fallback.
+    providers: [groq, gemini, mistral]
+    models:
+      groq: [{role: agent_runner, alias: groq-strong}]
+      gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
+      mistral: [{id: mistral-medium-latest}]
+    fallback: [agent-free-paid]
+
   agent-free-paid:
     description: Paid DeepSeek Flash only. Shared last-resort fallback for the free agent groups.
     providers: [openrouter-paid]

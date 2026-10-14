@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 logger = logging.getLogger("llm_gateway")
 
@@ -72,3 +73,30 @@ def headers() -> dict[str, str]:
 def log_served(path: str, model_name: str | None) -> None:
     """INFO: which path served an answer. Never logs prompts or keys."""
     logger.info("llm answer served path=%s model=%s", path, model_name or "-")
+
+
+_PERSIAN = re.compile(r"[؀-ۿ]")
+_LATIN = re.compile(r"[A-Za-z]")
+_HEADING = re.compile(r"^\s*(?:#+\s*|\*\*\s*)?(?:خلاصه|پاسخ|مبنای قانونی)")
+
+
+def strip_leaked_reasoning(text: str) -> str:
+    """Drop an English "thinking" preamble some free models put before the Persian answer.
+
+    Only removes text that comes BEFORE a Persian heading line (خلاصه / پاسخ / مبنای قانونی)
+    and is mostly Latin letters, e.g. "Need answer in Persian, structured four headings ...".
+    Anything else is returned unchanged.
+    """
+    if not text:
+        return text
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if _HEADING.match(line):
+            if i == 0:
+                return text
+            prefix = "\n".join(lines[:i])
+            latin, persian = len(_LATIN.findall(prefix)), len(_PERSIAN.findall(prefix))
+            if latin > 20 and latin > 2 * persian:
+                return "\n".join(lines[i:]).strip()
+            return text
+    return text

@@ -2162,6 +2162,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 outcome, llm_failed_kind = await _llm_stream_answer(
                     messages_payload, selected_tier, is_voice, chosen_max_tokens, temperature, _emit)
                 reply_msg = (outcome.text or "").strip()
+                if _llm_gateway is not None:  # some free models prepend English reasoning text
+                    reply_msg = _llm_gateway.strip_leaked_reasoning(reply_msg)
                 routed_model = outcome.model
                 bucket = _chat_timing.get()
                 if bucket is not None and outcome.ttft_ms is not None:

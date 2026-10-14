@@ -180,3 +180,19 @@ def test_stream_gateway_error_falls_back_to_direct(monkeypatch):
     assert outcome.model == m._FREE_PRIMARY
     assert calls[0] == {"model": "agent-strong-free", "gateway": True, "key": GW_KEY}
     assert calls[1] == {"model": m._FREE_PRIMARY, "gateway": False, "key": DIRECT_KEY}
+
+
+def test_strip_leaked_reasoning_drops_english_preamble():
+    from output_apps.generated_modules.smartjudge import llm_gateway as g
+    leaked = "Need answer in Persian, structured four headings. User asks: مستأجر چند روز\nWe should cite the law.\n**خلاصه پاسخ**\nده روز."
+    assert g.strip_leaked_reasoning(leaked) == "**خلاصه پاسخ**\nده روز."
+
+
+def test_strip_leaked_reasoning_keeps_clean_and_persian_intro():
+    from output_apps.generated_modules.smartjudge import llm_gateway as g
+    clean = "**خلاصه پاسخ**\nده روز."
+    assert g.strip_leaked_reasoning(clean) == clean
+    persian_intro = "با سلام، در پاسخ به پرسش شما:\n## خلاصه پاسخ\nده روز."
+    assert g.strip_leaked_reasoning(persian_intro) == persian_intro
+    no_heading = "Answer without heading"
+    assert g.strip_leaked_reasoning(no_heading) == no_heading
