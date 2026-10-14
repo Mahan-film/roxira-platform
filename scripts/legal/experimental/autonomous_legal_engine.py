@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Autonomous Legal Intelligence and Knowledge Ingestion Engine.
 
+EXPERIMENTAL: this module is not wired into the ingestion pipeline. The
+repeal/amendment relations it detects are proposals only and need review.
+
 Core engine for the Autonomous AI Software Factory & Smart Judge platform.
 Automates:
   1. Ingestion of raw legal documents (laws, CBI circulars, deregulation rulings).
@@ -50,6 +53,7 @@ EXPLICIT_REPEAL_TRIGGERS = [
     r"نسخ\s+صریح",
     r"بلااثر\s+می‌?شود",
     r"از\s+تاریخ\s+لازم‌?الاجرا\s+شدن\s+این\s+قانون،?\s+ماده\s+([۰-۹0-9]+)\s+.*?لغو",
+    "ملغی\u200c?الاثر\\s+می\u200c?گردد",
 ]
 
 AMENDMENT_TRIGGERS = [
