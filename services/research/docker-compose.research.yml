@@ -25,7 +25,7 @@ services:
       # Embeddings: the key-pool group "embeddings" proxies to the shared local TEI
       # (BAAI/bge-m3 on roxira_embeddings) — no external call, no cost.
       EMBEDDING: ${EMBEDDING:-openai:embeddings}
-      RETRIEVER: ${RETRIEVER:-searx}
+      RETRIEVER: ${RETRIEVER:-searx,tavily}   # tavily dropped at request time when TAVILY_KEYS is empty
       SEARX_URL: ${SEARX_URL:-http://research-stack-searxng-1:8080}
       SCRAPER: ${SCRAPER:-bs}
       MAX_ITERATIONS: ${MAX_ITERATIONS:-3}

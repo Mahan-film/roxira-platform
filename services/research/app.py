@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import itertools
 import logging
 import os
 import secrets
@@ -27,6 +28,13 @@ logger = logging.getLogger("roxira_research")
 
 MAX_CONCURRENT_JOBS = 2
 JOB_TIMEOUT_S = 900
+
+# Retrievers tried in order; the local SearXNG is first because it is free.
+# "tavily"/"exa" are dropped at request time when no key is configured.
+DEFAULT_RETRIEVERS = "searx,tavily"
+
+# Round-robin cursor over TAVILY_KEYS (module state; the key itself is never logged).
+_tavily_rotation = itertools.count()
 
 # Short API language codes mapped to the names the researcher's prompt layer uses.
 _LANGUAGE_NAMES = {"fa": "persian", "en": "english", "ar": "arabic"}
@@ -51,6 +59,7 @@ class ResearchRequest(BaseModel):
     tone: str | None = None
     max_sources: int | None = Field(default=None, ge=1, le=20)
     language: str = "fa"
+    query_domains: list[str] | None = Field(default=None, max_length=50)
 
 
 class Source(BaseModel):
@@ -88,14 +97,68 @@ def _filter_kwargs(factory: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in kwargs.items() if k in params}
 
 
+def _split_csv(value: str | None) -> list[str]:
+    """Parse a comma-separated env value into a de-duplicated, order-preserving list."""
+    if not value:
+        return []
+    items: list[str] = []
+    for raw in value.split(","):
+        name = raw.strip()
+        if name and name not in items:
+            items.append(name)
+    return items
+
+
+def _pick_tavily_key(keys: list[str]) -> str | None:
+    """Return the next Tavily key (round-robin); None when the list is empty."""
+    if not keys:
+        return None
+    return keys[next(_tavily_rotation) % len(keys)]
+
+
+def _build_retriever_list(
+    retriever_env: str | None, tavily_keys: list[str], exa_key: str | None
+) -> list[str]:
+    """Filter the configured retrievers to those whose credentials are available.
+
+    searx is always kept (local, free); tavily/exa are dropped when no key is set.
+    """
+    requested = _split_csv(retriever_env) or _split_csv(DEFAULT_RETRIEVERS)
+    available: list[str] = []
+    for name in requested:
+        lowered = name.lower()
+        if lowered == "tavily" and not tavily_keys:
+            continue
+        if lowered == "exa" and not (exa_key and exa_key.strip()):
+            continue
+        available.append(name)
+    return available or ["searx"]
+
+
+def _configure_retrievers() -> list[str]:
+    """Set TAVILY_API_KEY (rotated) and RETRIEVER for the next researcher call."""
+    tavily_keys = _split_csv(os.environ.get("TAVILY_KEYS"))
+    key = _pick_tavily_key(tavily_keys)
+    if key is not None:
+        os.environ["TAVILY_API_KEY"] = key
+    exa_key = os.environ.get("EXA_API_KEY")
+    retrievers = _build_retriever_list(os.environ.get("RETRIEVER"), tavily_keys, exa_key)
+    os.environ["RETRIEVER"] = ",".join(retrievers)
+    logger.info("retrievers=%s", ",".join(retrievers))
+    return retrievers
+
+
 def _build_researcher(request: ResearchRequest) -> Any:
     if GPTResearcher is None:
         raise HTTPException(status_code=503, detail="gpt-researcher is not installed")
     if request.language:
         os.environ["LANGUAGE"] = _LANGUAGE_NAMES.get(request.language.lower(), request.language)
+    _configure_retrievers()
     kwargs: dict[str, Any] = {"query": request.query, "report_type": request.report_type}
     if request.tone:
         kwargs["tone"] = request.tone
+    if request.query_domains:
+        kwargs["query_domains"] = request.query_domains
     return GPTResearcher(**_filter_kwargs(GPTResearcher, kwargs))
 
 
