@@ -30,8 +30,6 @@ FILES=(
   "$STAGED/coverage_nezamat_2026-10-13.jsonl"
   "$STAGED/qavanin_2026-10-13.jsonl"
   "$STAGED/qavanin_laws_2026-10-13.jsonl"
-  "$STAGED/deregulation_board_2026-10-13.jsonl"
-  "$STAGED/circulars_2026-10-13.jsonl"
 )
 SETS=(retrieval_golden retrieval_golden_new_laws retrieval_golden_crawl_2026-10-12)
 

@@ -21,8 +21,7 @@ bash scripts/legal/build_v4_on_server.sh --rebuild  # delete ONLY iran_laws_v4 (
 4. `data/legal/staged/coverage_nezamat_2026-10-13.jsonl`
 5. `data/legal/staged/qavanin_2026-10-13.jsonl`
 6. `data/legal/staged/qavanin_laws_2026-10-13.jsonl`
-7. `data/legal/staged/deregulation_board_2026-10-13.jsonl`
-8. `data/legal/staged/circulars_2026-10-13.jsonl`
+Deregulation-board items and CBI circulars use a different row schema (session/doc chunks, not law articles); they go to a separate collection (iran_regulations_v1), not into iran_laws_v4.
 
 `*.repealed.jsonl` side files are never included (the script refuses them explicitly).
 
