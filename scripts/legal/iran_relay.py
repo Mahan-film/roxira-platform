@@ -37,6 +37,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
@@ -214,8 +215,17 @@ def _sleep(seconds: float) -> None:  # patched in tests
     time.sleep(seconds)
 
 
+
+def _iri_to_uri(url: str) -> str:
+    """Percent-encode non-ASCII path/query characters (dotic links contain Persian slugs)."""
+    parts = urllib.parse.urlsplit(url)
+    path = urllib.parse.quote(parts.path, safe="/%:@!$&'()*+,;=-._~")
+    query = urllib.parse.quote(parts.query, safe="=&%:@!$'()*+,;/?-._~")
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc.encode("idna").decode("ascii"), path, query, parts.fragment))
+
 def fetch_url(url: str, timeout: float = TIMEOUT) -> tuple[int, bytes]:
     """GET one URL. Returns (status, body). Network errors propagate to the caller."""
+    url = _iri_to_uri(url)
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Encoding": "identity"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

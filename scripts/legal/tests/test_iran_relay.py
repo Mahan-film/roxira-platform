@@ -185,3 +185,10 @@ def test_challenged_source_is_skipped(tmp_path, monkeypatch):
     args = ir.argparse.Namespace(max_per_source=2)
     assert ir.cmd_run(args) == 0
     assert not list((tmp_path / "staged").glob("*.jsonl"))
+
+
+def test_iri_to_uri_encodes_persian_slug():
+    url = "http://dotic.ir/news/21589/پیش-نویس-بخشنامه?x=۱"
+    out = ir._iri_to_uri(url)
+    assert out.isascii() and out.startswith("http://dotic.ir/news/21589/%D9%BE")
+    assert ir._iri_to_uri("https://rc.majlis.ir/fa/law/show/1860542") == "https://rc.majlis.ir/fa/law/show/1860542"
