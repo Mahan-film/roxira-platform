@@ -25,7 +25,8 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 4. **Moadian live integration** (`docs/research/MOADIAN_REQUIREMENTS_2026-10-14.md` §7 gaps: official wire format, token/send/inquiry, per-tenant keys).
 5. **AI Software Factory MVP** (`docs/factory/AI_SOFTWARE_FACTORY_PRODUCT_PLAN_2026-10-14.md`, M1–M6, 26–40 days; tenancy M0 is done). Owner decision pending: shared app shell (recommended) vs app per customer.
 6. AI data import for accounting/inventory/HR/invoices (`docs/factory/AI_DATA_IMPORT_PLAN.md`), dotic full-text parsing, dependency-bump batch (#413 #414 #519–521 #535–538) with a full build, review #345 #389 #392 #432.
-7. Ops: LLM observability (Langfuse or LiteLLM logs → cost per answer), Qdrant cleanup of unused collections (keep v3 + v5), external uptime check, privacy page accuracy, old server 5.75.200.67 decommission (owner OK).
+7. **Solo-factory review** (`docs/research/SOLO_FACTORY_REVIEW_2026-10-15.md`): agents `control-bot` (Telegram/Bale alerts + /status /cost /freeze), `cost-log` (LiteLLM per-call cost JSONL + `cost_report.py`), `mutation` (weekly mutmut) dispatched 2026-10-15; DMARC missing on all three domains (needs a Cloudflare DNS token or manual TXT). Camoufox/anti-bot evasion refused.
+8. Ops: LLM observability (Langfuse or LiteLLM logs → cost per answer), Qdrant cleanup of unused collections (keep v3 + v5), external uptime check, privacy page accuracy, old server 5.75.200.67 decommission (owner OK).
 
 ## Known issues
 - Anonymous chat limit 10/hour/IP (`CHAT_ANON_HOURLY_LIMIT`): spread QA runs (server 127.0.0.1:8000, server public IP, Mac).
