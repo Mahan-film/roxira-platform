@@ -3,6 +3,8 @@ import localFont from "next/font/local";
 import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { JsonLd } from "@/components/seo/json-ld";
+import { buildBrandJsonLd } from "@/lib/seo/laws-schema";
 
 /**
  * فونت فارسی اصلی رابط کاربری (Vazirmatn) — self-host شده (next/font/local) تا
@@ -66,7 +68,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { isEnglish } = await getHostInfo();
+  const { isEnglish, isGhazi } = await getHostInfo();
 
   return (
     <html
@@ -75,6 +77,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`h-full antialiased ${vazirmatn.variable}`}
     >
       <body className="min-h-full flex flex-col font-sans">
+        {isGhazi ? <JsonLd id="ghazi-brand-jsonld" data={buildBrandJsonLd()} /> : null}
         <AuthProvider>
           {children}
         </AuthProvider>
