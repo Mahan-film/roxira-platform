@@ -14,7 +14,7 @@
 set -euo pipefail
 
 SRC=iran_laws_v3
-DST=iran_laws_v4
+DST=${DST:-iran_laws_v4}   # override, e.g. DST=iran_laws_v5
 QDRANT=${QDRANT_URL:-http://127.0.0.1:6333}
 REPO=/opt/roxira_platform
 APP=roxira_app_prod
@@ -31,6 +31,8 @@ FILES=(
   "$STAGED/qavanin_2026-10-13.jsonl"
   "$STAGED/qavanin_laws_2026-10-13.jsonl"
 )
+# BUILD_FILES="a.jsonl b.jsonl" replaces the list above (same order rule: lowest priority first).
+if [ -n "${BUILD_FILES:-}" ]; then read -r -a FILES <<<"$BUILD_FILES"; fi
 SETS=(retrieval_golden retrieval_golden_new_laws retrieval_golden_crawl_2026-10-12)
 
 DRY=0 REBUILD=0
@@ -173,7 +175,7 @@ if [ "$V4_EXISTS" = 1 ]; then
     "$DST" "$(count "$DST")" "$SRC" >/dev/tty
   read -r answer </dev/tty
   [ "$answer" = "$DST" ] || die "confirmation mismatch; nothing deleted / تأیید نادرست؛ چیزی حذف نشد"
-  curl -fsS -X DELETE "$QDRANT/collections/iran_laws_v4" >/dev/null ||
+  curl -fsS -X DELETE "$QDRANT/collections/$DST" >/dev/null ||
     die "delete of $DST failed; $SRC is untouched, $DST may be partial / حذف $DST ناموفق؛ $SRC دست‌نخورده، $DST ممکن است ناقص باشد"
   echo "deleted $DST"
 fi
@@ -190,7 +192,7 @@ if [ "$DRY" = 1 ]; then
   echo "[dry-run] done / پایان اجرای آزمایشی"
   exit 0
 fi
-REBUILD_CMD="bash scripts/legal/build_v4_on_server.sh --rebuild"
+REBUILD_CMD="DST=$DST bash scripts/legal/build_v4_on_server.sh --rebuild"
 run scripts/legal/build_collection.py --src "$SRC" --dst "$DST" --drop-law "$LEASE_LAW" ||
   die "copy failed; $SRC is untouched, $DST may be partial. Re-run: $REBUILD_CMD / کپی ناموفق؛ $SRC دست‌نخورده، $DST ناقص است"
 got=""
