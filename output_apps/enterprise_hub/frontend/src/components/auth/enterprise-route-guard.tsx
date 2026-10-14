@@ -20,11 +20,28 @@ interface EnterpriseRouteGuardProps {
  * حالت عدم احراز هویت پیام همراه دکمهٔ ورود و در نبود نقش مدیر پیام محدودیت
  * نمایش داده می‌شود.
  */
+/**
+ * Organisation role from the JWT claims (UX only; the backend enforces access with
+ * requireTenantAdmin). Every enterprise module is tenant-isolated now, so a tenant OWNER
+ * may open the admin pages of their own organisation.
+ */
+function tenantRoleOf(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const part = token.split(".")[1] ?? "";
+    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+    const claims = JSON.parse(json) as { tenantRole?: unknown };
+    return typeof claims.tenantRole === "string" ? claims.tenantRole : null;
+  } catch {
+    return null;
+  }
+}
+
 export function EnterpriseRouteGuard({
   children,
   requireAdmin = false,
 }: EnterpriseRouteGuardProps) {
-  const { isAuthenticated, isLoading, user, openLogin } = useAuth();
+  const { isAuthenticated, isLoading, user, accessToken, openLogin } = useAuth();
 
   if (isLoading) {
     return (
@@ -61,16 +78,15 @@ export function EnterpriseRouteGuard({
     );
   }
 
-  if (requireAdmin && user?.role !== "ADMIN") {
+  if (requireAdmin && user?.role !== "ADMIN" && tenantRoleOf(accessToken) !== "OWNER") {
     return (
       <div className="dark flex min-h-full flex-1 flex-col items-center justify-center gap-3 bg-background px-4 py-16 text-center text-foreground">
         <ShieldAlert className="size-8 text-rose-500" aria-hidden="true" />
         <p className="text-sm font-semibold text-rose-300">
-          دسترسی به این بخش فقط برای مدیر سامانه است.
+          دسترسی به این بخش فقط برای مدیر سامانه یا مالک سازمان است.
         </p>
         <p className="max-w-md text-xs leading-6 text-muted-foreground">
-          این ماژول هنوز به‌صورت جداشده برای هر سازمان آماده نشده است؛ تا آن زمان فقط مدیر سامانه
-          روکسیرا به آن دسترسی دارد. اگر مدیر هستید، یک بار از حساب خارج و دوباره وارد شوید تا
+          داده‌های هر سازمان جداست و این بخش برای مالک سازمان و مدیر سامانه باز است. اگر مالک یا مدیر هستید، یک بار از حساب خارج و دوباره وارد شوید تا
           دسترسی جدید اعمال شود. برای درخواست دسترسی با پشتیبانی تماس بگیرید.
         </p>
         <a href="/team" className="text-xs font-bold text-indigo-400 hover:underline">
