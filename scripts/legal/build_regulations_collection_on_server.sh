@@ -7,12 +7,16 @@
 #   --dry-run  preflight + validate + ingest dry-run only; nothing is written.
 #   --rebuild  delete ONLY iran_regulations_v1 (after typing its name on /dev/tty) and build it again.
 #
+#   DST=iran_regulations_v2 and BUILD_FILES="file1.jsonl file2.jsonl" override the destination and the input list
+#   (like scripts/legal/build_v4_on_server.sh); running with no env keeps the v1 behaviour. Embeddings use the shared
+#   TEI service (EMBEDDING_URL) with an ingest batch of BATCH (default 4, the TEI per-request limit).
+#
 # Never touches iran_laws_v2/v3 or iran_rulings_v1 (only reads their point counts). Never switches serving: the flag
 # SMARTJUDGE_REGULATIONS_COLLECTION stays unset until the owner runs the printed command. Never prints env values.
 # Design: output_apps/generated_modules/smartjudge/regulations_retrieval.py.
 set -euo pipefail
 
-DST=iran_regulations_v1
+DST=${DST:-iran_regulations_v1}   # override, e.g. DST=iran_regulations_v2
 LAWS=iran_laws_v3
 RULINGS=iran_rulings_v1
 QDRANT=${QDRANT_URL:-http://127.0.0.1:6333}
@@ -20,19 +24,24 @@ REPO=/opt/roxira_platform
 APP=roxira_app_prod
 QDR=roxira_qdrant_prod
 MIN_FREE_GB=${MIN_FREE_GB:-3}
+# TEI (the shared EMBEDDING_URL service) accepts at most 4 inputs per request; keep the ingest batch <= 4.
+BATCH=${BATCH:-4}
 STAGED=data/legal/staged
 FILES=(
   "$STAGED/deregulation_board_2026-10-13.jsonl"
   "$STAGED/cbi_circulars_2026-10-14.jsonl"
 )
-GOLDEN=data/eval/chat_golden/regulations_golden_2026-10-13.json
+# BUILD_FILES="a.jsonl b.jsonl" replaces the list above (lowest priority first). Add the relay rows, e.g.
+#   BUILD_FILES="$STAGED/cbi_circulars_2026-10-14.jsonl $STAGED/iran_relay_2026-10-14.jsonl"
+if [ -n "${BUILD_FILES:-}" ]; then read -r -a FILES <<<"$BUILD_FILES"; fi
+GOLDEN=${GOLDEN:-scripts/legal/eval/regulations_golden_2026-10-15.json}
 
 DRY=0 REBUILD=0
 for arg in "$@"; do
   case $arg in
     --dry-run) DRY=1 ;;
     --rebuild) REBUILD=1 ;;
-    -h|--help) sed -n 2,12p "$0"; exit 0 ;;
+    -h|--help) sed -n 2,16p "$0"; exit 0 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
@@ -58,7 +67,7 @@ echo "git: clean at $(git rev-parse --short HEAD)"
 for c in "$APP" "$QDR"; do
   [ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null || true)" = true ] || die "container $c is not running / کانتینر $c بالا نیست"
 done
-for f in "${FILES[@]}" scripts/legal/ingest_regulations.py scripts/legal/ingest_pipeline.py; do
+for f in "${FILES[@]}" scripts/legal/ingest_regulations.py scripts/legal/ingest_pipeline.py scripts/legal/eval_regulations.py; do
   [ -f "$f" ] || die "missing file $f / فایل وجود ندارد (git pull / checkout the merged commit)"
 done
 LAW_COUNT=$(count "$LAWS")
@@ -122,7 +131,7 @@ run_step() {
 
 step "Validate staged files / اعتبارسنجی فایل‌ها (no writes)"
 run_step "validate regulations" scripts/legal/ingest_regulations.py validate "${FILES[@]}"
-run_step "apply dry run" scripts/legal/ingest_regulations.py apply "${FILES[@]}" --collection "$DST" --allow-existing --dry-run
+run_step "apply dry run" scripts/legal/ingest_regulations.py apply "${FILES[@]}" --collection "$DST" --batch "$BATCH" --allow-existing --dry-run
 if [ "$DRY" = 1 ]; then
   echo "[dry-run] stopping before any write. Planned: create $DST (bge-m3, 1024-d, cosine), snapshot it"
   exit 0
@@ -137,7 +146,7 @@ if [ "$EXISTS" = 1 ]; then
   curl -fsS -X DELETE "$QDRANT/collections/$DST" >/dev/null || die "delete of $DST failed"
   echo "deleted $DST"
 fi
-run_step "apply (embeds with bge-m3, writes $DST)" scripts/legal/ingest_regulations.py apply "${FILES[@]}" --collection "$DST"
+run_step "apply (embeds with bge-m3, writes $DST)" scripts/legal/ingest_regulations.py apply "${FILES[@]}" --collection "$DST" --batch "$BATCH"
 got=$(count "$DST")
 echo "$DST points: $got"
 [ -n "$got" ] && [ "$got" -gt 0 ] || die "$DST is empty after the build"
@@ -148,35 +157,31 @@ snap=$(curl -fsS -X POST "$QDRANT/collections/$DST/snapshots" |
   python3 -c 'import sys,json;print(json.load(sys.stdin)["result"]["name"])') || die "snapshot of $DST failed"
 echo "snapshot: $snap  (stored in $QDR:/qdrant/storage/snapshots/$DST/)"
 
-# ---------------------------------------------------------------- 4. eval (optional: no regulations golden yet)
+# ---------------------------------------------------------------- 4. eval
 step "4. Retrieval-only eval (no LLM, no cost) / ارزیابی بازیابی"
 if [ -f "$GOLDEN" ]; then
   OUT=$(mktemp -d)
-  EXTRA_ENV=(-e "LIGHTRAG_QDRANT_COLLECTION=$DST")
-  run scripts/eval_chat_golden.py --retrieval-only --retrieval-set "$GOLDEN" >"$OUT/regulations.txt" 2>"$OUT/regulations.err" || true
+  run scripts/legal/eval_regulations.py "$DST" --set "$GOLDEN" >"$OUT/regulations.txt" 2>"$OUT/regulations.err" || true
   [ -s "$OUT/regulations.txt" ] || die "eval produced no output (see $OUT/regulations.err)"
   grep -q "^collection=$DST " "$OUT/regulations.txt" || die "eval used another collection than $DST (embedder guard?) see $OUT/regulations.txt"
   cat "$OUT/regulations.txt"
-  EXTRA_ENV=()
   echo "raw eval output: $OUT"
 else
-  echo "no golden set yet ($GOLDEN); skipping retrieval eval. The law/rulings goldens do not cover regulations."
+  echo "no golden set yet ($GOLDEN); skipping retrieval eval. Set GOLDEN=<path> to point at one."
 fi
 
 # ---------------------------------------------------------------- 5. switch / rollback
 step "5. Switch and rollback (NOT executed) / فعال‌سازی و بازگشت (اجرا نشد)"
-cat <<'TXT'
+cat <<TXT
 Switch on (owner approval needed; flag read by service enterprise_app / container roxira_app_prod; unset = off):
   cd /opt/roxira_platform
   cp .env /root/env-backups/.env.before-regulations && chmod 600 /root/env-backups/.env.before-regulations
-  grep -q '^SMARTJUDGE_REGULATIONS_COLLECTION=' .env \
-    && sed -i 's/^SMARTJUDGE_REGULATIONS_COLLECTION=.*/SMARTJUDGE_REGULATIONS_COLLECTION=iran_regulations_v1/' .env \
-    || echo 'SMARTJUDGE_REGULATIONS_COLLECTION=iran_regulations_v1' >> .env
+  grep -q '^SMARTJUDGE_REGULATIONS_COLLECTION=' .env && sed -i "s/^SMARTJUDGE_REGULATIONS_COLLECTION=.*/SMARTJUDGE_REGULATIONS_COLLECTION=$DST/" .env || echo "SMARTJUDGE_REGULATIONS_COLLECTION=$DST" >> .env
   docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate enterprise_app
 
 Rollback (the law/rulings collections are untouched; the flag alone controls regulations):
   cd /opt/roxira_platform
-  sed -i 's/^SMARTJUDGE_REGULATIONS_COLLECTION=.*/SMARTJUDGE_REGULATIONS_COLLECTION=/' .env
+  sed -i "s/^SMARTJUDGE_REGULATIONS_COLLECTION=.*/SMARTJUDGE_REGULATIONS_COLLECTION=/" .env
   docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate enterprise_app
 TXT
 echo

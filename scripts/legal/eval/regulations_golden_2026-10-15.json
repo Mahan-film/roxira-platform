@@ -1,0 +1,140 @@
+{
+  "_meta": {
+    "purpose": "Retrieval-only golden set for the regulations collection (CBI circulars + relay taxreg rows). Run with scripts/legal/eval_regulations.py (called by scripts/legal/build_regulations_collection_on_server.sh step 4); the hub moves this file to data/eval later.",
+    "run": "python3 scripts/legal/eval_regulations.py iran_regulations_v2 --set scripts/legal/eval/regulations_golden_2026-10-15.json",
+    "matching": "A case passes when any of the top-5 payloads has a matching ref/number or doc_id (or a payload title containing the expected title). recall@5 = passing cases / total cases.",
+    "status": "text_verified: every question is answerable from the staged CBI circulars (data/legal/staged/cbi_circulars_2026-10-14.jsonl) or the relay taxreg rows (data/legal/staged/iran_relay_2026-10-14.jsonl), and every must_include is a verbatim substring of that staged text. Lawyer review still recommended before serving."
+  },
+  "cases": [
+    {
+      "id": "cbi-03-101819-excess-assets",
+      "question": "واگذاری اموال مازاد مؤسسات اعتباری، علاوه بر مزایده، از چه روش‌های دیگری مجاز شده است؟",
+      "doc_id": "cbi_03_101819",
+      "number": "03/101819",
+      "title": "دستورالعمل نحوه واگذاری اموال مازاد مؤسسات اعتباری",
+      "must_include": [
+        "واگذاری از طریق سازوکارهای بازار سرمایه",
+        "تعیین سایر روش‌های واگذاری علاوه بر مزایده"
+      ],
+      "source": "data/legal/staged/cbi_circulars_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "cbi-03-78405-large-exposures",
+      "question": "بازنگری «دستورالعمل تسهیلات و تعهدات کلان» با چه هدفی در دستور کار بانک مرکزی قرار گرفت؟",
+      "doc_id": "cbi_03_78405",
+      "number": "03/78405",
+      "title": "دستورالعمل تسهیلات و تعهدات کلان مؤسسات اعتباری",
+      "must_include": [
+        "دستورالعمل تسهیلات و تعهدات کلان",
+        "الزامات گزارشگری تعیین شده در قانون مذکور"
+      ],
+      "source": "data/legal/staged/cbi_circulars_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "cbi-05-23268-related-parties",
+      "question": "نسخه اصلاحی «دستورالعمل تسهیلات و تعهدات اشخاص مرتبط» در کدام جلسه هیأت عالی بانک مرکزی تصویب شد؟",
+      "doc_id": "cbi_05_23268",
+      "number": "05/23268",
+      "title": "دستورالعمل تسهیلات و تعهدات اشخاص مرتبط",
+      "must_include": [
+        "دستورالعمل تسهیلات و تعهدات اشخاص مرتبط",
+        "تعریف اشخاص مرتبط و الزامات گزارشگری"
+      ],
+      "source": "data/legal/staged/cbi_circulars_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "cbi-05-77971-tourist-rial-card",
+      "question": "کارت ریالی گردشگری برای چه اشخاصی و در اجرای کدام قانون تدوین شده است؟",
+      "doc_id": "cbi_05_77971",
+      "number": "05/77971",
+      "title": "دستورالعمل ناظر بر نحوه فروش کارت ریالی گردشگری",
+      "must_include": [
+        "دستورالعمل نحوه صدور کارت ریالی برای گردشگران و سایر اشخاص حقیقی خارجی غیرمقیم",
+        "کارت گردشگری به اشخاص حقیقی خارجی غیرمقیم"
+      ],
+      "source": "data/legal/staged/cbi_circulars_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "cbi-05-98361-reserve-ratio-step2",
+      "question": "در مرحله دوم اعلام افزایش نسبت سپرده قانونی، این نسبت برای بانک‌ها و مؤسسات اعتباری چقدر تغییر کرد؟",
+      "doc_id": "cbi_05_98361",
+      "number": "05/98361",
+      "title": "اعلام افزایش نسبت سپرده قانونی",
+      "must_include": [
+        "مرحله دوم افزایش نسبت مورد اشاره",
+        "نسبت مزبور در مرحله اول"
+      ],
+      "source": "data/legal/staged/cbi_circulars_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "cbi-05-21416-fx-translation-year-end",
+      "question": "الگوی تسعیر ارز برای گزارشگری مالی پایان سال ۱۴۰۴ با چه هدفی ابلاغ شده است؟",
+      "doc_id": "cbi_05_21416",
+      "number": "05/21416",
+      "title": "تعیین نرخ و نحوه تسعیر اقلام پولی دارایی‌ها و بدهی‌های ارزی موسسات اعتباری برای گزارشگری مالی پایان سال ۱۴۰۴",
+      "must_include": [
+        "شفافیت در گزارشگری مالی",
+        "تعیین الگوی مناسب تسعیر ارز و نحوه برخورد با سود حاصل از آن"
+      ],
+      "source": "data/legal/staged/cbi_circulars_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "taxreg-200-1405-45-deadline",
+      "question": "مهلت تسلیم اظهارنامه مالیات بر درآمد صاحبان مشاغل برای عملکرد سال ۱۴۰۴ تا چه تاریخی تمدید شد؟",
+      "doc_id": "taxreg:txs5000151727",
+      "number": "200/1405/45",
+      "title": "بخشنامه 200/1405/45",
+      "must_include": [
+        "مهلت تسلیم اظهارنامه مالیات بر درآمد صاحبان مشاغل",
+        "پرداخت مالیات متعلق بابت عملکرد سال 1404 تا تاریخ 1405/08/30"
+      ],
+      "source": "data/legal/staged/iran_relay_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "taxreg-200-1405-54-tobacco-vat",
+      "question": "هیأت عمومی شورای عالی مالیاتی درباره مالیات بر ارزش افزوده تنباکوی فرآوری نشده چه نظری داشت؟",
+      "doc_id": "taxreg:txs5000152160",
+      "number": "200/1405/54",
+      "title": "بخشنامه 200/1405/54",
+      "must_include": [
+        "بررسی ابهام راجع به مالیات بر ارزش افزوده تنباکوی فرآوری نشده",
+        "هیأت عمومی شورای عالی مالیاتی"
+      ],
+      "source": "data/legal/staged/iran_relay_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "taxreg-200-1405-46-audit",
+      "question": "دستورالعمل 200/1405/46 پیرو کدام دستورالعمل و در خصوص کدام پرونده‌های مالیاتی صادر شد؟",
+      "doc_id": "taxreg:txs5000151792",
+      "number": "200/1405/46",
+      "title": "دستورالعمل 200/1405/46",
+      "must_include": [
+        "پیرو دستورالعمل شماره 200/28372/د مورخ 1403/04/24",
+        "مربوط به سنوات 1398 تا 1403"
+      ],
+      "source": "data/legal/staged/iran_relay_2026-10-14.jsonl",
+      "status": "text_verified"
+    },
+    {
+      "id": "taxreg-7-1403-667-court-fees",
+      "question": "هزینه دادرسی دعاوی مالی غیرمنقول و خلع ید از اعیان غیرمنقول بر چه مأخذی تعیین می‌شود؟",
+      "doc_id": "taxreg:txs5000102292",
+      "number": "7/1403/667",
+      "title": "نظرات حقوقی 7/1403/667",
+      "must_include": [
+        "هزینه دادرسی باید مطابق ارزش معاملاتی املاک تعیین شود",
+        "جزء «ج» بند 12 ماده 3 قانون وصول برخی از درآمدهای دولت"
+      ],
+      "source": "data/legal/staged/iran_relay_2026-10-14.jsonl",
+      "status": "text_verified"
+    }
+  ]
+}
