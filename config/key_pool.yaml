@@ -51,10 +51,10 @@ gateway:
   port: 4000
   master_key_env: KEYPOOL_MASTER_KEY   # callers send it as the OpenAI api key; set with set_server_env.sh --generate
   router:
-    # usage-based-routing-v2 spreads load by TPM/RPM across the deployments of a group (the 3 Groq
-    # keys), so a strong group no longer picks anything at random. Per-deployment rpm/tpm come from
-    # each provider's `limits` below.
-    routing_strategy: usage-based-routing-v2
+    # simple-shuffle picks among a group's deployments weighted by their rpm/tpm (from each
+    # provider's `limits`), so the three Groq keys share the load. usage-based-routing-v2 was tried
+    # and made every group answer "No deployments available" on this LiteLLM build: do not use it.
+    routing_strategy: simple-shuffle   # usage-based-routing-v2 broke every group on this LiteLLM build (2026-10-14): "No deployments available"
     num_retries: 2
     retry_after: 1
     timeout: 60
