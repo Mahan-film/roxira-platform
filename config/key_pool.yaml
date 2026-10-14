@@ -25,12 +25,20 @@
 #   Groq/SambaNova/Mistral/Gemini are conservatively marked may_log until the owner has
 #   read their terms; promote one to no_train here only after that.
 #
-# GROUPS (the "model" name callers send to the gateway):
-#   agent-free  code/docs/dev tasks only. Tries free providers first, paid DeepSeek Flash last.
-#               Never send customer/case data to this group.
-#   private     customer/case data. `require` makes the renderer and the client REFUSE to build the
-#               group if it contains a may_log provider, a free-tier provider or a :free model id.
-#               Today that leaves only OpenRouter paid DeepSeek (+ data_collection=deny).
+# GROUPS (the "model" name callers send to the gateway). Groups are split by MODEL TIER so a
+# simple-shuffle mix of strong and weak models never happens: strong agents always get a strong
+# model, light agents a cheap one. Each group may restrict which models a provider contributes
+# via a `models:` map (provider name -> model specs); a provider missing from the map keeps all
+# its models. `fallback:` is the ordered list of groups the router tries when the group fails.
+#   agent-strong-free  strong models only (groq gpt-oss-120b, sambanova gpt-oss-120b, Gemini Flash
+#                      x2, nemotron-ultra :free). Falls back to agent-free-paid.
+#   agent-light-free   cheap models only (groq gpt-oss-20b, mistral-small, gemma-4 :free,
+#                      nemotron-super :free, laguna :free). Falls back to agent-strong-free then paid.
+#   agent-free         backward-compatible alias of agent-strong-free (same deployments).
+#   agent-free-paid    paid DeepSeek Flash only; the shared last-resort fallback for the free groups.
+#   private            customer/case data. `require` makes the renderer and the client REFUSE to build the
+#                      group if it contains a may_log provider, a free-tier provider or a :free model id.
+#                      Today that leaves only OpenRouter paid DeepSeek (+ data_collection=deny).
 
 schema_version: 1
 checked_at: "2026-10-13"
@@ -43,12 +51,15 @@ gateway:
   port: 4000
   master_key_env: KEYPOOL_MASTER_KEY   # callers send it as the OpenAI api key; set with set_server_env.sh --generate
   router:
-    routing_strategy: simple-shuffle   # shuffles among deployments of the SAME `order` (the Groq keys)
-    num_retries: 3
+    # usage-based-routing-v2 spreads load by TPM/RPM across the deployments of a group (the 3 Groq
+    # keys), so a strong group no longer picks anything at random. Per-deployment rpm/tpm come from
+    # each provider's `limits` below.
+    routing_strategy: usage-based-routing-v2
+    num_retries: 2
     retry_after: 1
     timeout: 60
     cooldown_time: 60                  # seconds a deployment sits out after a 429 / failure
-    allowed_fails: 1
+    allowed_fails: 3
     enable_pre_call_checks: true
 
 providers:
@@ -145,9 +156,42 @@ providers:
       - {id: bge-m3, mode: embedding}
 
 groups:
-  agent-free:
-    description: Code, docs and dev tasks only. Free providers first, paid DeepSeek Flash as last resort.
-    providers: [groq, sambanova, mistral, gemini, openrouter-free, openrouter-paid]
+  agent-strong-free:
+    description: Strong models for code, docs and dev tasks. Free providers only, paid DeepSeek Flash as last resort.
+    providers: [groq, sambanova, gemini, openrouter-free]
+    models:                            # restrict each provider to the strong tier
+      groq: [{role: agent_runner, alias: groq-strong}]
+      sambanova: [{id: gpt-oss-120b}]
+      gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
+      openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
+    fallback: [agent-free-paid]
+
+  agent-light-free:
+    description: Cheap models for light code, docs and dev tasks. Free providers only, falls back to strong then paid.
+    providers: [groq, mistral, openrouter-free]
+    models:
+      groq: [{role: agent_runner, alias: groq-fast}]
+      mistral: [{id: mistral-small-latest}]
+      openrouter-free:
+        - {id: "google/gemma-4-31b-it:free"}
+        - {id: "nvidia/nemotron-3-super-120b-a12b:free"}
+        - {id: "poolside/laguna-s-2.1:free"}
+    fallback: [agent-strong-free, agent-free-paid]
+
+  agent-free:   # backward-compatible alias of agent-strong-free (same deployments, same fallback)
+    description: Alias of agent-strong-free kept for callers that still ask for `agent-free`.
+    providers: [groq, sambanova, gemini, openrouter-free]
+    models:
+      groq: [{role: agent_runner, alias: groq-strong}]
+      sambanova: [{id: gpt-oss-120b}]
+      gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
+      openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
+    fallback: [agent-free-paid]
+
+  agent-free-paid:
+    description: Paid DeepSeek Flash only. Shared last-resort fallback for the free agent groups.
+    providers: [openrouter-paid]
+
   private:
     description: Customer or case data. No free tier, no may_log provider, no :free model id.
     providers: [openrouter-private]

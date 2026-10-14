@@ -30,16 +30,60 @@ def test_render_shape_and_no_secret_values():
     text = str(cfg)
     assert "fake-" not in text
     assert cfg["general_settings"]["master_key"] == "os.environ/KEYPOOL_MASTER_KEY"
-    ag = [m for m in cfg["model_list"] if m["model_name"] == "agent-free"]
-    groq = [m for m in ag if m["litellm_params"]["model"].startswith("groq/openai/gpt-oss-120b")]
+    strong = [m for m in cfg["model_list"] if m["model_name"] == "agent-strong-free"]
+    groq = [m for m in strong if m["litellm_params"]["model"].startswith("groq/openai/gpt-oss-120b")]
     assert len(groq) == 3
-    assert all(m["litellm_params"]["api_key"].startswith("os.environ/") for m in ag)
+    assert all(m["litellm_params"]["api_key"].startswith("os.environ/") for m in strong)
     assert all("order" not in m["litellm_params"] for m in cfg["model_list"])  # providers reject it
-    assert all(m["model_info"]["tier"] == "free" for m in ag)  # paid only via fallback
+    assert all(m["model_info"]["tier"] == "free" for m in strong)  # paid only via fallback
+    light = [m for m in cfg["model_list"] if m["model_name"] == "agent-light-free"]
+    assert light and all(m["model_info"]["tier"] == "free" for m in light)
     paid = [m for m in cfg["model_list"] if m["model_name"] == "agent-free-paid"]
     assert paid and all(m["litellm_params"]["model"].startswith("openrouter/deepseek/") for m in paid)
-    assert {"agent-free": ["agent-free-paid"]} in cfg["router_settings"]["fallbacks"]
-    assert cfg["router_settings"]["routing_strategy"] == "simple-shuffle"
+    fb = {k: v for f in cfg["router_settings"]["fallbacks"] for k, v in f.items()}
+    assert fb["agent-strong-free"] == ["agent-free-paid"]
+    assert fb["agent-light-free"] == ["agent-strong-free", "agent-free-paid"]
+    assert fb["agent-free"] == ["agent-free-paid"]
+    assert cfg["router_settings"]["routing_strategy"] == "usage-based-routing-v2"
+
+
+def test_strong_and_light_tiers_do_not_mix_models():
+    cfg = render_litellm.render(pool(), set(FAKE_ENV))
+
+    def models(name):
+        return {m["litellm_params"]["model"] for m in cfg["model_list"] if m["model_name"] == name}
+
+    strong, light = models("agent-strong-free"), models("agent-light-free")
+    assert strong.isdisjoint(light)
+    assert "groq/openai/gpt-oss-120b" in strong and "groq/openai/gpt-oss-20b" in light
+    assert "sambanova/gpt-oss-120b" in strong
+    assert "gemini/gemini-flash-latest" in strong and "gemini/gemini-3.7-flash" in strong
+    assert "mistral/mistral-small-latest" in light
+    assert any(m.endswith("nemotron-3-ultra-550b-a55b:free") for m in strong)
+    assert any(m.endswith("nemotron-3-super-120b-a12b:free") for m in light)
+    assert any(m.endswith("gemma-4-31b-it:free") for m in light)
+    assert any(m.endswith("laguna-s-2.1:free") for m in light)
+
+
+def test_agent_free_is_strong_alias():
+    cfg = render_litellm.render(pool(), set(FAKE_ENV))
+
+    def models(name):
+        return sorted(m["litellm_params"]["model"] for m in cfg["model_list"] if m["model_name"] == name)
+
+    assert models("agent-free") == models("agent-strong-free")
+
+
+def test_render_router_settings_and_per_key_limits():
+    cfg = render_litellm.render(pool(), set(FAKE_ENV))
+    router = cfg["router_settings"]
+    assert router["routing_strategy"] == "usage-based-routing-v2"
+    assert (router["num_retries"], router["allowed_fails"], router["cooldown_time"]) == (2, 3, 60)
+    groq = [m for m in cfg["model_list"]
+            if m["model_name"] == "agent-strong-free"
+            and m["litellm_params"]["model"] == "groq/openai/gpt-oss-120b"]
+    assert len(groq) == 3
+    assert all(m["litellm_params"].get("rpm") == 30 and m["litellm_params"].get("tpm") == 8000 for m in groq)
 
 
 def test_render_skips_providers_without_keys():
@@ -109,11 +153,11 @@ def _post_factory(script):
 
 def test_client_rotates_on_429_and_5xx_then_succeeds():
     post, calls = _post_factory({"api.groq.com": 429, "api.sambanova.ai": 503})
-    text, used = llm_pool.chat([{"role": "user", "content": "hi"}], "agent-free", pool=pool(), env=FAKE_ENV,
+    text, used = llm_pool.chat([{"role": "user", "content": "hi"}], "agent-strong-free", pool=pool(), env=FAKE_ENV,
                                post=post, rng=random.Random(1))
-    assert text == "hello" and used.startswith("mistral/")
+    assert text == "hello" and used.startswith("gemini/")
     hosts = [u.split("/")[2] for u, _ in calls]
-    assert hosts[0] == "api.groq.com" and "api.mistral.ai" in hosts
+    assert hosts[0] == "api.groq.com" and "generativelanguage.googleapis.com" in hosts
 
 
 def test_client_cooldown_skips_failed_provider():

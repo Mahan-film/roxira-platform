@@ -21,11 +21,16 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
     model_list = []
     fallbacks = []
     for group in pool["groups"]:
+        g = pool["groups"][group]
         deps = kc.group_deployments(pool, group, names, models_path)
-        # Free first: when a group mixes tiers, paid deployments move to "<group>-paid",
-        # reached only through a router fallback (providers reject an "order" param).
-        split = any(d.tier == "paid" for d in deps) and any(d.tier != "paid" for d in deps)
-        if split:
+        # Explicit `fallback:` (tier groups) wins. Otherwise keep the legacy behaviour: a group that
+        # mixes tiers moves its paid deployments to "<group>-paid", reached only through a router
+        # fallback (providers reject an "order" param).
+        explicit = g.get("fallback")
+        split = not explicit and any(d.tier == "paid" for d in deps) and any(d.tier != "paid" for d in deps)
+        if explicit:
+            fallbacks.append({group: list(explicit)})
+        elif split:
             fallbacks.append({group: [f"{group}-paid"]})
         for d in deps:
             name = f"{group}-paid" if split and d.tier == "paid" else group

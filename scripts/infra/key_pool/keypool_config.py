@@ -144,10 +144,15 @@ def validate_group(name: str, group: dict[str, Any], deps: list[Deployment]) -> 
 def group_deployments(
     pool: dict[str, Any], group: str, names: set[str] | None = None, models_path: pathlib.Path | None = None
 ) -> list[Deployment]:
-    """Ordered deployments of a group. `order` rises provider by provider; keys of one model share it."""
+    """Ordered deployments of a group. `order` rises provider by provider; keys of one model share it.
+
+    A group may carry a `models:` map (provider name -> model specs) to restrict which models each
+    provider contributes (strong vs light tiers); a provider missing from the map keeps all its models.
+    """
     if group not in pool["groups"]:
         raise PoolError(f"unknown group {group!r}")
     g = pool["groups"][group]
+    select = g.get("models") or {}
     out: list[Deployment] = []
     order = 0
     for pname in g["providers"]:
@@ -157,7 +162,7 @@ def group_deployments(
         keys = provider_keys(prov, names)
         lim = prov.get("limits", {})
         api_base = prov.get("api_base")
-        for model, spec in resolve_model_specs(prov["models"], models_path):
+        for model, spec in resolve_model_specs(select.get(pname, prov["models"]), models_path):
             if not keys:
                 continue
             order += 1

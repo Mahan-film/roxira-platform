@@ -4,8 +4,9 @@
 #                --task-file /tmp/t.md --scope docs/ops/ --push'
 #
 #   run_task.sh (--task TEXT | --task-file FILE) [--model ALIAS] [--scope PATH]... [--public] [--push]
-#               [--timeout SECS] [--slug WORD] [--cleanup] [--dry-run]
-#   --gateway   route through the key-pool gateway (group agent-free, URL from $AGENT_GATEWAY_URL, default
+#               [--timeout SECS] [--slug WORD] [--cleanup] [--dry-run] [--gateway] [--tier light|strong]
+#   --gateway   route through the key-pool gateway: --tier strong (default) -> group agent-strong-free,
+#               --tier light -> agent-light-free. URL from $AGENT_GATEWAY_URL (default
 #               http://127.0.0.1:4000/v1, key KEYPOOL_MASTER_KEY). Free providers may log: needs --public.
 #   run_task.sh --smoke [--model ALIAS]      verification run (throwaway worktree, nothing pushed)
 #   run_task.sh --list                       agent/* branches known to the agents' clone
@@ -32,7 +33,7 @@ BASE_REF="refs/remotes/origin/main"
 
 TASK="" TASK_FILE="" MODEL_ALIAS="" TIMEOUT=900 SLUG="" PUSH=0 PUBLIC=0 CLEANUP=0 DRY=0 SMOKE=0 LIST=0
 SCOPES=()
-NO_FALLBACK=0 GATEWAY=0
+NO_FALLBACK=0 GATEWAY=0 TIER=""
 AGENT_GATEWAY_URL="${AGENT_GATEWAY_URL:-http://127.0.0.1:4000/v1}"
 REPO_ENV="${ROXIRA_REPO_ENV:-/opt/roxira_platform/.env}"
 
@@ -55,6 +56,7 @@ while [ $# -gt 0 ]; do
     --list) LIST=1 ;;
     --no-fallback) NO_FALLBACK=1 ;;
     --gateway) GATEWAY=1 ;;
+    --tier) TIER="${2?--tier needs light or strong}"; shift ;;
     -h | --help) sed -n '2,21p' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
@@ -108,8 +110,14 @@ resolve_alias() { # alias -> MODEL_REF PUBLIC_ONLY KEYVAR (empty MODEL_REF when 
   case "$MODEL_REF" in *:free | openrouter/free) PUBLIC_ONLY=1 ;; esac
 }
 resolve_alias "$MODEL_ALIAS"
-if [ "$GATEWAY" = 1 ]; then   # key-pool gateway replaces the alias; agent-free may route to free tiers
-  MODEL_ALIAS=gateway MODEL_REF="keypool/agent-free" PUBLIC_ONLY=1 KEYVAR=KEYPOOL_MASTER_KEY
+case "$TIER" in '' | light | strong) ;; *) die "--tier must be light or strong" ;; esac
+if [ "$GATEWAY" = 1 ] || [ -n "$TIER" ]; then   # key-pool gateway; --tier picks the model tier group
+  GATEWAY=1
+  case "$TIER" in
+    light) MODEL_REF="keypool/agent-light-free" ;;
+    *) MODEL_REF="keypool/agent-strong-free" ;;   # default, and --tier strong
+  esac
+  MODEL_ALIAS=gateway PUBLIC_ONLY=1 KEYVAR=KEYPOOL_MASTER_KEY
 fi
 [ -n "$MODEL_REF" ] || die "unknown model alias '$MODEL_ALIAS' (groq-fast, groq-strong, ds-flash, free-public)"
 if [ "$PUBLIC_ONLY" = 1 ] && [ "$PUBLIC" != 1 ]; then
@@ -185,7 +193,11 @@ if os.environ["OV_GW"] == "1":   # key-pool gateway as one OpenAI-compatible pro
     cfg.setdefault("provider", {})["keypool"] = {
         "npm": "@ai-sdk/openai-compatible", "name": "keypool",
         "options": {"baseURL": os.environ["OV_GW_URL"], "apiKey": "{env:KEYPOOL_MASTER_KEY}"},
-        "models": {"agent-free": {"name": "agent-free"}}}
+        "models": {
+            "agent-free": {"name": "agent-free"},
+            "agent-strong-free": {"name": "agent-strong-free"},
+            "agent-light-free": {"name": "agent-light-free"},
+        }}
     ep = cfg.get("enabled_providers")
     if isinstance(ep, list) and "keypool" not in ep:   # base config whitelists providers; add the gateway
         cfg["enabled_providers"] = ep + ["keypool"]
