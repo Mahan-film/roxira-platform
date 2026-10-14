@@ -19,3 +19,17 @@
 | 5 | `05_competitor_geo_research.md` | هیچ | `competitor_geo_report.md` | پژوهش وب و جمع‌بندی بلند |
 
 بعد از هر کار به هاب بگو «کار N تمام شد». هاب فایل را از `~/Downloads/gemini_out/` برمی‌دارد، اعتبارسنجی می‌کند و وارد می‌کند.
+
+## دور دوم (۱۴۰۵/۰۷/۲۲): از Gemini معمولی با اشتراک Pro استفاده کن، نه Antigravity
+
+وضعیت دور اول: کارهای ۱، ۳، ۴ و ۵ انجام و وارد سیستم شده‌اند. کار ۲ هنوز مانده است.
+
+| # | فایل پرامپت | پیوست | خروجی | حالت Gemini |
+|---|---|---|---|---|
+| 2 | `02_three_laws_extract.md` | PDF یا متن کپی‌شده قانون امور گمرکی، نظام صنفی، مالیات‌های مستقیم + آیین‌نامه ۲/۱۵۳۳۰۴ | `laws_customs_guild_tax.jsonl` | معمولی (هر قانون در یک چت جدا) |
+| 6 | `06_more_legal_guides.md` | `competitor_geo_report.md` | `seo_guides/*.md` (هر بار ۱۰ راهنما) | معمولی، ۴ بار (batch 2 تا 5) |
+| 7 | `07_roxira_portal_copy.md` | اسکرین‌شات صفحه‌های roxira.ir | `roxira/roxira_copy_fa.md` و … | معمولی |
+| 8 | `08_roxira_market_moadian_research.md` | هیچ | `roxira/roxira_market.md` و `roxira/moadian_requirements.md` | Deep Research |
+
+نکته: از Gemini بخواه خروجی را **به‌صورت فایل قابل دانلود** بدهد، نه چسبیده در چت. متن چسبیده در چت معمولاً خط‌های شکسته دارد.
+Gemini معمولی به پوشه‌های Mac دسترسی ندارد. فایل را دانلود کن و در `~/Downloads/gemini_out/` بگذار. **هرگز در `roxira-lawwatch` یا پوشه ریپو ننویس.**
