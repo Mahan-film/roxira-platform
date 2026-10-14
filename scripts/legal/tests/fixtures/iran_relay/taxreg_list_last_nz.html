@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" type="image/png" href="uploads/e9f5e3a1c45e3c80184c70be8d5286dc.jpg" />
+    <title>سامانه جامع مقررات مالیاتی</title>
+
+	<script src="/client/template/base/js/jquery.min.js?t=14041220.2"></script>
+	
+						
+		<script type="text/javascript" src="/client/template/base/js/noty.min.js?t=14041220.2"></script>
+			<link href="/client/template/base/pikaday/pikaday.min.css?t=14041220.2" rel="stylesheet" type="text/css" />
+	<script type="text/javascript" src="/client/template/base/pikaday/pikaday.min.js?t=14041220.2"></script>
+					
+		
+	
+	<link href="uploads/pg_bps5000021502.css?t=14041220.2" rel="stylesheet" type="text/css" /><link href="uploads/pg_bps5000021545.css?t=14041220.2" rel="stylesheet" type="text/css" /><link href="uploads/pg_bps5000021860.css?t=14041220.2" rel="stylesheet" type="text/css" />	<link href="uploads/pg_bps5000021500.css?t=14041220.2" rel="stylesheet" type="text/css" />		
+</head>
+<div style="display:none" id="hide" ></div>
+<body dir="rtl" id="center_box" 
+		class="  " 
+		style=""	
+		>
+	
+<div class="flex flex-col" style="min-height:100vh;" >
+	<main class="relative flex-1">
+		<img src="/uploads/875821a7717f93b1fa2bbf40507317df.png" class="absolute left-0 top-0 z-[-1]"/>
+		<img src="/uploads/9aaa203a06467c4ba020da7da1c6b724.png" class="absolute right-0 bottom-0 z-[-1]"/>
+		<div id="sidebar" class="fixed sm:hidden top-0 right-0 h-full w-3/4 bg-white shadow-lg transform translate-x-full transition-transform duration-300 ease-in-out" style="z-index:999" > 
+			<img src="/uploads/9aaa203a06467c4ba020da7da1c6b724.png" class="absolute right-0 bottom-0 z-[-1]"/>	
+			<div class="p-4"> 
+				<div class="flex mb-4  pb-4 border-b-2 border-gray-300 " >	
+					 <img class="max-lg:w-[56px] " src="/uploads/93a4e5eeb8d100ddeb27e03a82981fcd.png"/>
+					 <button id="close-btn" class="absolute top-4 left-4 text-gray-600 hover:text-black">
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"> 
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /> 
+						</svg> 
+					</button>
+				</div>
+				<ul class="space-y-5"> 
+					<li><a href="lws3?act=usable_qh" class="block px-2 py-1 hover:bg-gray-100"> قوانین </a></li> 
+					<li><a href="lws3?act=usable_mq" class="block px-2 py-1 hover:bg-gray-100"> مقررات </a></li> 
+					<li><a href="lws3?act=last_ry" class="block px-2 py-1 hover:bg-gray-100"> آرای دیوان عدالت اداری </a></li> 
+					<li><a href="lws3?act=last_nz" class="block px-2 py-1 hover:bg-gray-100"> نظرات اداره حقوقی قوه قضائیه </a></li> 
+					<!--
+					<li><a href="lws3?act=usable_mk" class="block px-2 py-1 hover:bg-gray-100"> مکاتبات مهم درون سازمانی </a></li> 
+					<li><a href="lws3?act=usable_kw" class="block px-2 py-1 hover:bg-gray-100"> واژگان و اصطلاحات مالیاتی </a></li> 
+					--!>
+					<li><a href="lwrg" class="block px-2 py-1 hover:bg-gray-100"> روش گردآوری اطلاعات </a></li> 
+					<li><a href="lwhp" class="block px-2 py-1 hover:bg-gray-100"> راهنمای استفاده از سایت </a></li> 
+				</ul> 
+			</div>
+		</div>
+		<div class="lg:container m-auto pt-10 px-4 sm:px-8 lg:px-0">
+
+			<div class="m-auto relative flex items-center">
+			  <button id="menu-btn" class="text-white sm:hidden"> 
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path stroke="#292D32" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /> </svg> 
+			  </button>
+			  <img class="m-auto max-lg:w-[56px]" src="/uploads/93a4e5eeb8d100ddeb27e03a82981fcd.png"/>
+			  <div class="flex flex-col gap-2 absolute left-0 hidden lg:block ">
+				<a class="flex bg-[#E4F7EA] h-fit px-2 py-1 lg:py-1 lg:px-2 rounded-lg  cursor-pointer items-center lg:w-auto w-[40px]" href="lwrg">
+
+				  <svg width="24" height="24" 
+                  class="lg:w-6 lg:h-4 w-4 h-4 mx-auto"
+				  viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+					<path d="M10.7499 2.45007C11.4499 1.86007 12.5799 1.86007 13.2599 2.45007L14.8399 3.80007C15.1399 4.05007 15.7099 4.26007 16.1099 4.26007H17.8099C18.8699 4.26007 19.7399 5.13007 19.7399 6.19007V7.89007C19.7399 8.29007 19.9499 8.85007 20.1999 9.15007L21.5499 10.7301C22.1399 11.4301 22.1399 12.5601 21.5499 13.2401L20.1999 14.8201C19.9499 15.1201 19.7399 15.6801 19.7399 16.0801V17.7801C19.7399 18.8401 18.8699 19.7101 17.8099 19.7101H16.1099C15.7099 19.7101 15.1499 19.9201 14.8499 20.1701L13.2699 21.5201C12.5699 22.1101 11.4399 22.1101 10.7599 21.5201L9.17988 20.1701C8.87988 19.9201 8.30988 19.7101 7.91988 19.7101H6.16988C5.10988 19.7101 4.23988 18.8401 4.23988 17.7801V16.0701C4.23988 15.6801 4.03988 15.1101 3.78988 14.8201L2.43988 13.2301C1.85988 12.5401 1.85988 11.4201 2.43988 10.7301L3.78988 9.14007C4.03988 8.84007 4.23988 8.28007 4.23988 7.89007V6.20007C4.23988 5.14007 5.10988 4.27007 6.16988 4.27007H7.89988C8.29988 4.27007 8.85988 4.06007 9.15988 3.81007L10.7499 2.45007Z" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+					<g opacity="0.4">
+					<path d="M12 8.12988V12.9599" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+					<path d="M11.9941 16H12.0031" stroke="#292D32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+					</g>
+				  </svg>
+				  <p class="text-xs font-medium mr-2">روش گردآوری اطلاعات</p>
+				</a>
+
+				<a class="flex bg-[#E4F7EA] h-fit px-2 py-1 lg:py-1 lg:px-2 rounded-lg cursor-pointer  lg:w-auto w-[40px] items-center lg:mt-2" href="lwhp" >
+				  <svg width="24" height="24" viewBox="0 0 24 24" 
+                  class="lg:w-6 lg:h-4 w-4 h-4 mx-auto"
+				  fill="none" xmlns="http://www.w3.org/2000/svg">
+				  <path d="M10.7499 2.45007C11.4499 1.86007 12.5799 1.86007 13.2599 2.45007L14.8399 3.80007C15.1399 4.05007 15.7099 4.26007 16.1099 4.26007H17.8099C18.8699 4.26007 19.7399 5.13007 19.7399 6.19007V7.89007C19.7399 8.29007 19.9499 8.85007 20.1999 9.15007L21.5499 10.7301C22.1399 11.4301 22.1399 12.5601 21.5499 13.2401L20.1999 14.8201C19.9499 15.1201 19.7399 15.6801 19.7399 16.0801V17.7801C19.7399 18.8401 18.8699 19.7101 17.8099 19.7101H16.1099C15.7099 19.7101 15.1499 19.9201 14.8499 20.1701L13.2699 21.5201C12.5699 22.1101 11.4399 22.1101 10.7599 21.5201L9.17988 20.1701C8.87988 19.9201 8.30988 19.7101 7.91988 19.7101H6.16988C5.10988 19.7101 4.23988 18.8401 4.23988 17.7801V16.0701C4.23988 15.6801 4.03988 15.1101 3.78988 14.8201L2.43988 13.2301C1.85988 12.5401 1.85988 11.4201 2.43988 10.7301L3.78988 9.14007C4.03988 8.84007 4.23988 8.28007 4.23988 7.89007V6.20007C4.23988 5.14007 5.10988 4.27007 6.16988 4.27007H7.89988C8.29988 4.27007 8.85988 4.06007 9.15988 3.81007L10.7499 2.45007Z" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+				  <path opacity="0.4" d="M11.9998 13.3599V13.1499C11.9998 12.4699 12.4198 12.1099 12.8398 11.8199C13.2498 11.5399 13.6598 11.1799 13.6598 10.5199C13.6598 9.5999 12.9198 8.85986 11.9998 8.85986C11.0798 8.85986 10.3398 9.5999 10.3398 10.5199" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+				  <path opacity="0.4" d="M11.9955 15.75H12.0045" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+				  </svg>
+				  <p class="text-xs font-medium mr-2 hidden lg:block">راهنمای استفاده از سایت</p>
+				</a>
+
+			  </div>
+			</div>
+
+			<form class="mt-10 lg:w-4/5 m-auto  bg-gradient-to-r from-[#1054810D] to-[#005F271A] border border-gray-300 rounded-lg p-5 sm:bg-none sm:border-none" method="get" action="lwse">
+			  <input type="hidden" name="act" value="nz" /> 
+			  <input type="hidden" name="textin" value="s281010103" /> 
+			  <label for="search" class="mb-2 text-sm font-medium text-gray-900 sr-only dark:text-white">جستجو</label>
+			  <div class="relative">
+				<div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none"> <i class="fa fa-search text-gray-400 font-light"></i></div>
+				<input type="search" class="block w-full p-3 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg outline-none shadow-md" placeholder="جستجو در نظرات" required  name="s281009734"  id="s281009734"   />
+			  </div>
+
+			  <div class="mt-5 gap-3 lg:gap-6 lg:flex max-lg:flex-wrap">
+				<div class="flex gap-3" >
+					<label class="flex items-center mb-4">
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010108"  />
+					  <span class="ms-2 text-sm font-medium text-gray-500">متن</span>
+					</label>
+
+					<label class="flex items-center mb-4">
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="s281010109[]" value="s281010107"  checked />
+					  <span class="ms-2 text-sm font-medium text-gray-500">عنوان</span>
+					</label>
+				
+					<label class=" flex items-center mb-4 ms_num " style="" >
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="s281010109[]" value="s5000017587" checked   />
+					  <span class="ms-2 text-sm font-medium text-gray-500">شماره مصوبه</span>
+					</label>
+				</div>
+				<div class="flex flex-1 gap-2 lg:justify-end flex" >
+					<label class="flex items-center mb-4">
+					  <input type="radio" class="is_ty_ms w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="act" value="qh"   checked />
+					  <span class="ms-2 text-sm font-medium text-gray-500">قوانین</span>
+					</label>
+
+					<label class="flex items-center mb-4">
+					  <input type="radio" class="is_ty_ms w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="act" value="mq"    />
+					  <span class="ms-2 text-sm font-medium text-gray-500">مقررات</span>
+					</label>
+
+					<label class=" flex items-center mb-4">
+					  <input type="radio" class="is_ty_ms w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="act" value="ry"   />
+					  <span class="ms-2 text-sm font-medium text-gray-500">آرا</span>
+					</label>				
+					<label class=" flex items-center mb-4">
+					  <input type="radio" class="is_ty_ms w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="act" value="nz"  checked />
+					  <span class="ms-2 text-sm font-medium text-gray-500">نظرات</span>
+					</label>
+					<!--
+					<label class=" flex items-center mb-4">
+					  <input type="radio" class="is_ty_ms w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="act" value="mk"   />
+					  <span class="ms-2 text-sm font-medium text-gray-500">مکاتبات</span>
+					</label>
+					
+					<label class=" flex items-center mb-4">
+					  <input type="radio" class="is_ty_ms w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="act" value="kw"   />
+					  <span class="ms-2 text-sm font-medium text-gray-500">واژگان</span>
+					</label>
+					--!>
+					<label class=" flex items-center mb-4">
+					  <input type="radio" class="is_ty_ms w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="act" value="all"   />
+					  <span class="ms-2 text-sm font-medium text-gray-500">همه</span>
+					</label>
+				</div>	
+				<div class="flex gap-3 sm:justify-end" >
+					<a id="myBtn" 
+					class="text-[#005F27] border border-[#005F27] focus:outline-none
+					 font-medium rounded-lg text-xs sm:text-base sm:px-4 sm:py-2 font-medium
+					  cursor-pointer max-sm:w-[110px] max-sm:h-7 max-sm:mr-auto
+					  text-center content-center">جستجو پیشرفته</a>
+					<button type="submit"  target="_blank" class="cursor-pointer text-white bg-[#005F27] hover:bg-green-800 focus:outline-none font-medium rounded-lg sm:text-base text-xs
+					 sm:px-4 sm:py-2 hover:bg-[] max-sm:w-[64px] max-sm:h-7 "> جستجو</button>
+				</div>
+			  </div>
+			</form>
+			<div class="sm:hidden relative options bg-gradient-to-r from-[#1054810D] to-[#005F271A] mt-5   selected"> 
+				<!-- نمایش انتخاب شده --> 
+				<div class="p-3 border border-gray-300 rounded-lg  cursor-pointer selected-box flex justify-between font-bold text-lg text-green-900">  </div> 
+				
+				<!-- گزینه‌ها --> 
+				<ul class="flex flex-col absolute mt-2 w-full border rounded shadow bg-white hidden options-box" style="z-index:2;" > 
+					 <a class="tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm px-4 py-2 " href="?act=usable_qh">
+						<i class="fa fa-bullseye ml-2 text-xs"></i>پرکاربردترین قوانین
+					  </a>
+					  <a class=" tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm px-4 py-2 " href="?act=usable_mq">
+						<i class="fa fa-bullseye ml-2 text-xs"></i>پرکاربردترین مقررات
+					  </a>
+					  <a class="tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm px-4 py-2 " href="?act=last_mq" >
+						<i class="fa fa-bullseye ml-2 text-xs"></i> آخرین مقررات
+					  </a>
+					  <a class="tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm px-4 py-2  " href="?act=last_ry" >
+						<i class="fa fa-bullseye ml-2 text-xs"></i>آرای دیوان عدالت اداری
+					  </a>
+					  <a class="tablinks active font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm px-4 py-2"  href="?act=last_nz" >
+						<i class="fa fa-bullseye ml-2 text-xs"></i>نظرات اداره حقوقی قوه قضائیه
+					  </a> 
+					 <!--
+					  <a class="tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm px-4 py-2" href="?act=usable_kw" >
+						<i class="fa fa-bullseye ml-2 text-xs"></i>واژگان و اصطلاحات مالیاتی
+					  </a> 
+					  <a class="tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm px-4 py-2" href="?act=usable_mk" >
+						<i class="fa fa-bullseye ml-2 text-xs"></i>مکاتبات مهم درون سازمانی
+					  </a>
+					--!>
+				</ul>				
+			</div>
+			
+			<div  class="hidden sm:block tab  mt-5 lg:mt-16 border-b-2 border-gray-100 w-full lg:box-content p-4 max-lg:h-[65px] max-lg:justify-start lg:gap-0 gap-0.5 mb-3 lg:mb-0 overflow-auto lg:overflow-hidden lg:justify-self-center max-lg:flex-nowrap max-lg:whitespace-nowrap">
+			  <a class="tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm lg:text-base lg:float-start lg:px-4 lg:pb-3 px-3 pb-2 " href="?act=usable_qh">
+				<i class="fa fa-bullseye ml-2 text-xs"></i>پرکاربردترین قوانین
+			  </a>
+			  <a class=" tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27]  text-sm lg:text-base lg:float-start lg:px-4 lg:pb-3 px-3 pb-2" href="?act=usable_mq">
+				<i class="fa fa-bullseye ml-2 text-xs"></i>پرکاربردترین مقررات
+			  </a>
+			  <a class="tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27]  text-sm lg:text-base lg:float-start lg:px-4 lg:pb-3 px-3 pb-2"
+				 href="?act=last_mq"
+			  >
+				<i class="fa fa-bullseye ml-2 text-xs"></i> آخرین مقررات
+			  </a>
+			  <a class="tablinks  font-medium border-b-2 border-gray-100   text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] text-sm lg:text-base lg:float-start lg:px-4 lg:pb-3 px-3 pb-2 "
+				 href="?act=last_ry"
+			  >
+				<i class="fa fa-bullseye ml-2 text-xs"></i>آرای دیوان عدالت اداری
+			  </a>
+			  <a class="tablinks active font-medium border-b-2 border-gray-100  text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27]  text-sm lg:text-base lg:float-start lg:px-4 lg:pb-3 px-3 pb-2"
+				 href="?act=last_nz"
+			  >
+				<i class="fa fa-bullseye ml-2 text-xs"></i>نظرات اداره حقوقی قوه قضائیه
+			  </a> 
+			 <!--
+			 <a class="tablinks  font-medium border-b-2 border-gray-100  text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27]  text-sm lg:text-base lg:float-start lg:px-4 lg:pb-3 px-3 pb-2"
+				 href="?act=usable_kw"
+			  >
+				<i class="fa fa-bullseye ml-2 text-xs"></i>واژگان و اصطلاحات مالیاتی
+			  </a> 
+			  <a class="tablinks  font-medium border-b-2 border-gray-100  text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27]  text-sm lg:text-base lg:float-start lg:px-4 lg:pb-3 px-3 pb-2"
+				 href="?act=usable_mk"
+			  >
+				<i class="fa fa-bullseye ml-2 text-xs"></i>مکاتبات مهم درون سازمانی
+			  </a>
+			 --> 
+			</div>
+
+			<div>
+			  <div  class="bg-gradient-to-r from-[#1054810D] to-[#005F271A]   mt-5 border border-gray-300 rounded-lg p-5">
+				<div class="flex gap-2 items-center text-[#005F27] justify-end cursor-pointer">
+				  				  				  				  				  <a class=" font-normal" href="lwse?act=nz" >مشاهده همه نظرات</a>				  <!--
+				  				  				  --!>
+				  <i class="fa fa-long-arrow-left"></i>
+				</div>
+				<div class="bg-white p-2 mt-5 rounded-lg sm:bg-transparent sm:p-0 sm:m-0" >
+						
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102292&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به تبصره 3 ماده 64 اصلاحی قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی.....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/12/12</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به تبصره 3 ماده 64 اصلاحی قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی" >راجع به تبصره 3 ماده 64 اصلاحی قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/667</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102294&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به تبصره 3 ماده 64 قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی.....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/11/27</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به تبصره 3 ماده 64 قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی" >راجع به تبصره 3 ماده 64 قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/552</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102293&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به ماده 169 مکرر قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی.....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/11/27</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به ماده 169 مکرر قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی" >راجع به ماده 169 مکرر قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1402/949</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102295&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به تبصره 2 ماده یک قانون الزام به ثبت رسمی معاملات اموال غیر منقول مصوب 1403(ماده 59 قانون مالیاتهای مستقیم).....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/11/21</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به تبصره 2 ماده یک قانون الزام به ثبت رسمی معاملات اموال غیر منقول مصوب 1403(ماده 59 قانون مالیاتهای مستقیم)" >راجع به تبصره 2 ماده یک قانون الزام به ثبت رسمی معاملات اموال غیر منقول مصوب 1403(ماده 59 قانون مالیاتهای مستقیم)</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/977</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102296&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به مواد 1 و 3 قانون الزام به ثبت رسمی معاملات اموال غیر منقول مصوب 1403(ماده 59 قانون مالیاتهای مستقیم).....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/11/07</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به مواد 1 و 3 قانون الزام به ثبت رسمی معاملات اموال غیر منقول مصوب 1403(ماده 59 قانون مالیاتهای مستقیم)" >راجع به مواد 1 و 3 قانون الزام به ثبت رسمی معاملات اموال غیر منقول مصوب 1403(ماده 59 قانون مالیاتهای مستقیم)</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/424</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102299&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به تبصره یک ماده 103 قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی.....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/10/17</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به تبصره یک ماده 103 قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی" >راجع به تبصره یک ماده 103 قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/848</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102300&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به ماده 187 و تبصره 9 ماده 169 مکرر قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی.....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/10/12</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به ماده 187 و تبصره 9 ماده 169 مکرر قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی" >راجع به ماده 187 و تبصره 9 ماده 169 مکرر قانون مالیات‌های مستقیم مصوب 1366 با اصلاحات و الحاقات بعدی</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/349</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102319&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به قانون استفساریه در خصوص تأثیر ماده 173 قانون مالیات‌های مستقیم بر ماده 111 قانون شرکت‌های تعاونی مصوب 1372.....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/08/01</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به قانون استفساریه در خصوص تأثیر ماده 173 قانون مالیات‌های مستقیم بر ماده 111 قانون شرکت‌های تعاونی مصوب 1372" >راجع به قانون استفساریه در خصوص تأثیر ماده 173 قانون مالیات‌های مستقیم بر ماده 111 قانون شرکت‌های تعاونی مصوب 1372</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/499</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102310&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به بند 7 ماده 274 قانون مالیات‌های مستقیم اصلاحی 1394</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/07/08</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به بند 7 ماده 274 قانون مالیات‌های مستقیم اصلاحی 1394" >راجع به بند 7 ماده 274 قانون مالیات‌های مستقیم اصلاحی 1394</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/452</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+											<a class="flex bg-white rounded-lg px-2 mt-4 cursor-pointer" href="lwvi?lid=txs5000102320&ty=nz" >
+							<!--<div class="sm:hidden truncate text-s280965215-600 mb-2" >راجع به ماده 9 آیین‌نامه تعرفه حق‌الوکاله، حق‌المشاوره و هزینه سفر وکلای دادگستری مصوب 1398/12/28.....</div> -->
+							<div class="flex gap-4 items-center sm:min-h-[64px] flex-1" >
+								<div class="flex  gap-2 items-center hidden sm:flex">
+									<svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4.45446 6.24472L4.45411 6.24555C4.32715 6.54481 4.54417 6.88249 4.8735 6.88249H11.1335C11.4653 6.88249 11.6789 6.53583 11.5529 6.23888L11.5525 6.23805C11.2699 5.58542 10.7467 5.07426 10.0293 4.82483V4.38671C10.0293 4.04575 9.74779 3.76426 9.40683 3.76426C9.06587 3.76426 8.78438 4.04575 8.78438 4.38671V4.65759H7.22261V4.38671C7.22261 4.04575 6.94112 3.76426 6.60016 3.76426C6.2592 3.76426 5.97771 4.04575 5.97771 4.38671V4.83149C5.26029 5.08092 4.73704 5.59209 4.45446 6.24472ZM1.45595 8.00004C1.45595 4.38767 4.38779 1.45582 8.00016 1.45582C11.6125 1.45582 14.5444 4.38767 14.5444 8.00004C14.5444 11.6124 11.6125 14.5443 8.00016 14.5443C4.38779 14.5443 1.45595 11.6124 1.45595 8.00004ZM9.00016 12.2358C9.86447 12.2358 10.5641 11.9239 11.0473 11.4143C11.5296 10.9057 11.7893 10.2078 11.7893 9.44671V7.76004C11.7893 7.50575 11.5878 7.30426 11.3335 7.30426H4.66683C4.41254 7.30426 4.21105 7.50575 4.21105 7.76004V9.44671C4.21105 10.2078 4.47072 10.9057 4.95298 11.4143C5.43618 11.9239 6.13586 12.2358 7.00016 12.2358H9.00016Z" fill="#005F27" stroke="#7A869A" stroke-width="0.244898"/>
+									</svg>
+									<p class="text-xs text-gray-400 hidden lg:block">تاریخ صدور: 1403/06/24</p>
+									<img src="/uploads/40186cfdbdbb7ec3d22863addbcb6742.png" class="max-lg:h-[70px]"/>
+								</div>
+								<div class="flex sm:items-center flex-col lg:flex-row gap-2 flex-1">       
+									<div class="sm:items-center flex-1">
+										<div class="text-sm font-bold flex " > 
+											<span class=" text-s280965215-600 lw_tooltip" data-tooltip="راجع به ماده 9 آیین‌نامه تعرفه حق‌الوکاله، حق‌المشاوره و هزینه سفر وکلای دادگستری مصوب 1398/12/28" >راجع به ماده 9 آیین‌نامه تعرفه حق‌الوکاله، حق‌المشاوره و هزینه سفر وکلای دادگستری مصوب 1398/12/28</span> 
+																					</div>
+										<div class="hidden sm:flex  gap-2 items-center" >
+											<svg class="max-sm:hidden" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M6.185 1.07504L10.685 2.87503C10.86 2.94503 11 3.15503 11 3.34003V5.00003C11 5.27503 10.775 5.50003 10.5 5.50003H1.5C1.225 5.50003 1 5.27503 1 5.00003V3.34003C1 3.15503 1.14 2.94503 1.315 2.87503L5.815 1.07504C5.915 1.03504 6.085 1.03504 6.185 1.07504Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M11 11H1V9.5C1 9.225 1.225 9 1.5 9H10.5C10.775 9 11 9.225 11 9.5V11Z" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M2 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M4 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M8 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M10 9V5.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M0.5 11H11.5" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+												<path d="M6 4.25C6.41421 4.25 6.75 3.91421 6.75 3.5C6.75 3.08579 6.41421 2.75 6 2.75C5.58579 2.75 5.25 3.08579 5.25 3.5C5.25 3.91421 5.58579 4.25 6 4.25Z" fill="#7A869A" stroke="#7A869A" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+											</svg>
+											<p class="text-xs text-gray-400 pt-1"><span class="max-sm:hidden" >مرجع صدور : </span>اداره حقوقی قوه قضائیه </p>
+										</div>
+									</div>
+
+									<div class="flex  gap-2 items-center text-sm text-gray-900 font-normal max-sm:justify-between">
+										<p class="hidden sm:block">شماره مصوبه:</p>
+										<p class="sm:hidden text-gray-400">اداره حقوقی قوه قضائیه</p>
+										<p class="max-sm:text-gray-400">7/1403/89</p>
+									</div>
+									
+								</div>
+							</div>
+						</a>
+													</div>	
+			   </div>
+			</div>
+		</div>
+
+		<div id="myModal" class="hidden fixed z-10 pt-20 max-lg:px-4 left-0 top-0 w-full h-full overflow-auto bg-gray-900 bg-opacity-40">
+		  <div class="rounded-lg bg-white m-auto p-5 border lg:w-3/5 ">
+			<div class="flex">
+			  <p class="text-[#005F27] text-lg flex-1 font-extrabold">جستجوی پیشرفته</p>
+			  <span id="close" class="text-gray-500 float-start text-2xl font-bold  hover:text-gray-900 cursor-pointer">&times;</span>
+			</div>
+
+			<div class="tab overflow-hidden mt-8 border-b border-gray-100 box-content p-1">
+			  <button class="tablinksModal active border-b-2 border-gray-100 text-sm text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] float-start px-4 pb-3" 
+				onclick="openTabsModal(event, 'tab6')">قوانین
+			  </button>
+
+			  <button class="tablinksModal border-b-2 border-gray-100 text-sm text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] float-start px-4 pb-3"
+				onclick="openTabsModal(event, 'tab7')">مقررات
+			  </button>
+
+			  <button class="tablinksModal border-b-2 border-gray-100 text-sm text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] float-start px-4 pb-3"
+				onclick="openTabsModal(event, 'tab8')">آرا
+			  </button>
+
+			  <button class="tablinksModal border-b-2 border-gray-100 text-sm text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] float-start px-4 pb-3" 
+				onclick="openTabsModal(event, 'tab9')">نظرات
+			  </button>
+			   <button class="tablinksModal border-b-2 border-gray-100 text-sm text-gray-700 border-opacity-0 hover:text-[#005F27] hover:font-bold hover:border-[#005F27] float-start px-4 pb-3" 
+				onclick="openTabsModal(event, 'tab10')">همه
+			  </button>
+			</div>
+			<div class="bg-gradient-to-r from-[#1054810D] to-[#005F271A] rounded-lg p-5 mt-4">
+				<p class="text-[#005F27] text-sm flex-1 font-extrabold">درختواره موضوعی </p>
+
+				<!--
+				<div class="relative mt-5">
+				  <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+					<i class="fa fa-search text-gray-400 font-light"></i>
+				  </div>
+				  <input type="search" class="block w-full p-1 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="اینجا بنویسید" name="s281009734"  />
+				</div>
+				-->
+				<div class="border-b-2 border-[#005F27] mt-5"></div>
+				<div tg_code="bps5000021601" ></div>
+		    </div>
+			<div id="tab6" class="tabcontentModal">
+				<form class="border rounded-lg border-gray-300 p-3 mt-4 serch_form"  method="get" action="lwse" >
+					<input type="hidden" name="act" id="act" value="qh" /> 
+					<input type="hidden" name="bps5000021601" id="bps5000021601" value="" class="tree_mz" /> 
+					<div class="flex gap-2 select-group">
+					  <p class="text-base flex-1 text-semibold">جستجو براساس:</p>
+					  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+						 <input type="radio" class="hidden" name="textin" value="s281010103" checked />
+						<p class="text-xs px-2">بخشی از عبارت</p>
+					  </label>
+					  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+						 <input type="radio" class="hidden" name="textin" value="s281010102" />
+						<p class="text-xs px-2">عین عبارت</p>
+					  </label>
+					</div>
+
+					<div class="relative mt-2">
+						<div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+							<i class="fa fa-search text-gray-400 font-light"></i>
+						</div>
+						<input type="search" id="" class="block w-full p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="اینجا بنویسید"  name="s281009734" />
+					</div>
+
+					<div class="flex gap-5 mt-2 flex-col lg:flex-row">
+						<p class="text-base font-medium">جستجو براساس:</p>
+						<div class="flex gap-5">
+							<label class="flex items-center mb-2">
+								<input  type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010108" checked  />
+								<span  class="ms-2 text-sm font-medium text-gray-900">متن</span>
+							</label>
+							<label class="flex items-center mb-2">
+								<input  type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010107" checked  />
+								<span  class="ms-2 text-sm font-medium text-gray-900">عنوان</span>
+							</label>
+						</div>
+					</div>
+
+					<div class="mt-5 flex gap-10 flex-col lg:flex-row items-center">
+						<div class="max-lg:w-full">
+							<p class="text-sm">تاریخ  تصویب</p>
+							<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+								<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+									<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010038" />
+									<span clear_code="s281010038" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+								</div>
+								<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+									<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010039" />
+									<span clear_code="s281010039" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+								</div>
+							</div>
+						</div>
+						<div class="max-lg:w-full">
+							<p class="text-sm">تاریخ لازم الاجرا</p>
+							<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+								<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+									<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ"  inp_code="s281010046" />
+									<span clear_code="s281010046" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+								</div>
+								<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+									<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]"  placeholder="تا تاریخ" inp_code="s281010051"  />
+									<span clear_code="s281010051" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="flex gap-5 mt-8 flex-col sm:flex-row">
+						<p class="text-base text-semibold">جستجوی در قوانین :</p>
+						<div class="flex gap-2 max-sm:justify-start">
+						<label class="flex items-center mb-4">
+							<input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="all_s281010055" id="all_s281010055" value="1" />
+							<span class="ms-2 text-sm font-medium text-gray-900">معتبر</span>
+						</label>
+						<label class="flex items-center mb-4">
+							<input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965216"/>
+							<span class="ms-2 text-sm font-medium text-gray-900">غیر معتبر</span>
+						</label>
+						</div>
+					</div>
+					<div class="all_s281010055 hidden" >
+						<div class="flex sm:gap-5  flex-col sm:flex-row" >
+							<label class="flex items-center mb-4">
+								<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965215" />
+								<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دائمی)</span>
+							</label>
+							<label class="flex items-center mb-4">
+								<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965218" />
+								<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دائمی- دارای تغییرات یا الحاقات)</span>
+							</label>
+						</div>
+						<div class="flex sm:gap-5  flex-col sm:flex-row" >
+							<label class="flex items-center mb-4">
+								<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280971619" />
+								<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دارای زمان‌بندی)</span>
+							</label>
+							<label class="flex items-center mb-4">
+								<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s281010065" />
+								<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دارای زمان‌بندی، دارای تغییرات یا الحاقات)</span>
+							</label>
+							
+						</div>
+					</div>
+					<div class="mt-8 flex gap-5 flex-col lg:flex-row">
+						<p class="text-base text-semibold">جستجو بر اساس مرجع وضع:</p>
+						<div class="relative flex-1">
+							 <select  class="w-full p-2 text-sm font-medium text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="انتخاب یک یا چند مرجع" inp_code="bps5000021543" multiple ></select>
+						</div>
+					</div>
+					<div class="justify-self-end mt-5">
+						<button type="submit" class="text-white bg-[#005F27] hover:bg-green-800 focus:outline-none font-medium rounded-lg text-sm px-4 py-2">اعمال تغییرات</button>
+					</div>
+				</form>
+			</div>
+
+			<div id="tab7" class="tabcontentModal hidden">
+				<form  class="border rounded-lg border-gray-300 p-3 mt-4 serch_form"  method="get" action="lwse"  target="_blank">
+					<input type="hidden" name="act" id="act" value="mq" /> 
+					<input type="hidden" name="bps5000021601" id="bps5000021601" value="" class="tree_mz" /> 
+					<div class="flex gap-2 select-group">
+					  <p class="text-base flex-1 text-semibold">جستجو براساس:</p>
+					  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+						 <input type="radio" class="hidden" name="textin" value="s281010103" checked />
+						<p class="text-xs px-2">بخشی از عبارت</p>
+					  </label>
+					  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+						 <input type="radio" class="hidden" name="textin" value="s281010102" />
+						<p class="text-xs px-2">عین عبارت</p>
+					  </label>
+					</div>
+
+
+					<div class="relative mt-2">
+					  <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+						<i class="fa fa-search text-gray-400 font-light"></i>
+					  </div>
+					  <input type="search"  class="block w-full p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="اینجا بنویسید"  name="s281009734" />
+					</div>
+
+					<div class="flex gap-5 mt-2 flex-col lg:flex-row">
+						<p class="text-base font-medium">جستجو در:</p>
+						<div class="flex gap-5">
+						<label class="flex items-center">
+							<input  type="checkbox"  class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010108" checked  />
+							<span  class="ms-2 text-sm font-medium text-gray-900">متن</span>
+						</label>
+						<label class="flex items-center">
+							<input  type="checkbox"  class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010107" checked  />
+							<span  class="ms-2 text-sm font-medium text-gray-900">عنوان</span>
+						</label>
+						<label class="flex items-center">
+						  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="s281010109[]" value="s5000017587" checked  />
+						  <span class="ms-2 text-sm font-medium text-gray-900">شماره مقرره</span>
+						</label>
+						</div>
+
+					</div>
+
+					<div class="mt-8 flex gap-5 flex-col lg:flex-row">
+					<div class="max-lg:w-full">
+						<p class="text-sm">تاریخ  تصویب</p>
+						<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010038" />
+								<span clear_code="s281010038" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010039" />
+								<span clear_code="s281010039" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+						</div>
+					  </div>
+					  <div class="max-lg:w-full">
+						<p class="text-sm">تاریخ صدور</p>
+						<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center  max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010042" />
+								<span clear_code="s281010042" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center  max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010043" />
+								<span clear_code="s281010043" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+						</div>
+					  </div>
+					  
+					</div>
+					<div>
+						<div class="max-lg:w-full">
+							<p class="text-sm">تاریخ لازم الاجرا</p>
+							<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+								<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+									<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010046" />
+									<span clear_code="s281010046" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+									
+								</div>
+								<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+									<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010051" />
+									<span clear_code="s281010051" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+									
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="flex gap-5 mt-8 flex-col sm:flex-row">
+						<p class="text-base text-semibold">جستجوی در احکام:</p>
+						<div class="flex gap-2 max-sm:justify-start">
+						<label class="flex items-center mb-4">
+							<input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="all_s281010055" id="all_s281010055"  value="1" />
+							<span class="ms-2 text-sm font-medium text-gray-900">معتبر</span>
+						</label>
+						<label class="flex items-center mb-4">
+							<input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965216"/>
+							<span class="ms-2 text-sm font-medium text-gray-900">غیر معتبر</span>
+						</label>
+						</div>
+					</div>
+					<div class="all_s281010055 hidden" >
+						<div class="flex sm:gap-5  flex-col sm:flex-row" >
+							<label class="flex items-center mb-4">
+								<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965215" />
+								<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دائمی)</span>
+							</label>
+							<label class="flex items-center mb-4">
+								<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965218" />
+								<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دائمی- دارای تغییرات یا الحاقات)</span>
+							</label>
+						</div>
+						<div class="flex sm:gap-5  flex-col sm:flex-row" >
+							<label class="flex items-center mb-4">
+								<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280971619" />
+								<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دارای زمان‌بندی)</span>
+							</label>
+							<label class="flex items-center mb-4">
+								<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s281010065" />
+								<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دارای زمان‌بندی، دارای تغییرات یا الحاقات)</span>
+							</label>
+							
+						</div>
+					</div>	
+					<div class="mt-8 flex gap-5 flex-col lg:flex-row">
+						<p class="text-base text-semibold">جستجو بر اساس مرجع وضع:</p>
+						<div class="relative flex-1">
+							<select  class="w-full p-2 text-sm font-medium text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="انتخاب یک یا چند مرجع" inp_code="bps5000070696" multiple ></select>
+						</div>
+					</div>
+					<div class="justify-self-end mt-5">
+						<button type="submit" class="text-white bg-[#005F27] hover:bg-green-800 focus:outline-none font-medium rounded-lg text-sm px-4 py-2">اعمال تغییرات</button>
+					</div>
+				
+				</form>
+			</div>
+			
+			<div id="tab8" class="tabcontentModal hidden">
+			  <form class="border rounded-lg border-gray-300 p-3 mt-4"  method="get" action="lwse" target="_blank" >
+				<input type="hidden" name="act" id="act" value="ry" /> 
+				<input type="hidden" name="bps5000021601" id="bps5000021601" value="" class="tree_mz" /> 
+				<div class="flex gap-2 select-group">
+				  <p class="text-base flex-1 text-semibold">جستجو براساس:</p>
+				  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+					 <input type="radio" class="hidden" name="textin" value="s281010103" checked />
+					<p class="text-xs px-2">بخشی از عبارت</p>
+				  </label>
+				  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+					 <input type="radio" class="hidden" name="textin" value="s281010102" />
+					<p class="text-xs px-2">عین عبارت</p>
+				  </label>
+				</div>	
+		  
+				<div class="relative mt-2">
+					<div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none" ><i class="fa fa-search text-gray-400 font-light"></i> </div>
+					<input type="search" class="block w-full p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="اینجا بنویسید"  name="s281009734"/>
+				</div>
+		  
+				<div class="flex gap-5 mt-2 flex-col lg:flex-row">
+					<p class="text-base font-medium">جستجو در:</p>
+					<div class="flex gap-5"> 
+
+
+					<label class="flex items-center">
+						<input  type="checkbox"  class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010108" checked  />
+						<span  class="ms-2 text-sm font-medium text-gray-900">متن</span>
+					</label>
+					<label class="flex items-center">
+						<input  type="checkbox"  class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010107" checked  />
+						<span  class="ms-2 text-sm font-medium text-gray-900">عنوان</span>
+					</label>
+					<label class="flex items-center">
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="s281010109[]" value="s5000017587" checked  />
+					  <span class="ms-2 text-sm font-medium text-gray-900">شماره رای</span>
+					</label>
+					</div>
+
+				</div>
+		  
+				<div class="mt-8 flex gap-5 flex-col lg:flex-row">
+				<div class="max-lg:w-full">
+						<p class="text-sm">تاریخ  صدور</p>
+						<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+							<div class="border border-gray-300 rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:rounded-lg  max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010038" />
+								<span clear_code="s281010038" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010039" />
+								<span clear_code="s281010039" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+						</div>
+					</div>
+
+					<div class="max-lg:w-full">
+						<p class="text-sm">تاریخ لازم الاجرا</p>
+						<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+							<div class="border border-gray-300 rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:rounded-lg  max-lg:justify-between ">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010046" />
+								<span clear_code="s281010046" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+							<div class="border border-gray-300 rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:rounded-lg  max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010051" />
+								<span clear_code="s281010051" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="flex gap-5 mt-8 flex-col sm:flex-row">
+					<p class="text-base text-semibold">جستجوی در آرا :</p>
+					<div class="flex gap-2 max-sm:justify-start">
+					<label class="flex items-center mb-4">
+						<input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="all_s281010055" id="all_s281010055"  value="1" />
+						<span class="ms-2 text-sm font-medium text-gray-900">معتبر</span>
+					</label>
+					<label class="flex items-center mb-4">
+						<input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965216"/>
+						<span class="ms-2 text-sm font-medium text-gray-900">غیر معتبر</span>
+					</label>
+					</div>
+				</div>
+				<div class="all_s281010055 hidden" >
+					<div class="flex sm:gap-5  flex-col sm:flex-row" >
+						<label class="flex items-center mb-4">
+							<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965215" />
+							<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دائمی)</span>
+						</label>
+						<label class="flex items-center mb-4">
+							<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280965218" />
+							<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دائمی- دارای تغییرات یا الحاقات)</span>
+						</label>
+					</div>
+					<div class="flex sm:gap-5  flex-col sm:flex-row" >
+						<label class="flex items-center mb-4">
+							<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s280971619" />
+							<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دارای زمان‌بندی)</span>
+						</label>
+						<label class="flex items-center mb-4">
+							<input type="checkbox" class="vl_s281010055 w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010055[]" value="s281010065" />
+							<span class="ms-2 text-sm font-medium text-gray-900">معتبر (دارای زمان‌بندی، دارای تغییرات یا الحاقات)</span>
+						</label>
+						
+					</div>
+				</div>	
+				<div class="mt-8 flex gap-5 flex-col lg:flex-row">
+					<p class="text-base text-semibold">جستجو بر اساس مرجع وضع:</p>
+					<div class="relative flex-1">
+						<select  class="w-full p-2 text-sm font-medium text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="انتخاب یک یا چند مرجع" inp_code="bps5000070697" multiple ></select>
+					</div>
+				</div>
+				<div class="justify-self-end mt-5">
+					<button type="submit" class="text-white bg-[#005F27] hover:bg-green-800 focus:outline-none font-medium rounded-lg text-sm px-4 py-2">اعمال تغییرات</button>
+				</div>
+			  </form>
+			</div>
+
+			<div id="tab9" class="tabcontentModal hidden">
+			  <form class="border rounded-lg border-gray-300 p-3 mt-4"  method="get" action="lwse" target="_blank" >
+				<input type="hidden" name="act" id="act" value="nz" /> 
+				<input type="hidden" name="bps5000021601" id="bps5000021601" value="" class="tree_mz" /> 
+				<div class="flex gap-2 select-group">
+				  <p class="text-base flex-1 text-semibold">جستجو براساس:</p>
+				  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+					 <input type="radio" class="hidden" name="textin" value="s281010103" checked />
+					<p class="text-xs px-2">بخشی از عبارت</p>
+				  </label>
+				  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+					 <input type="radio" class="hidden" name="textin" value="s281010102" />
+					<p class="text-xs px-2">عین عبارت</p>
+				  </label>
+				</div>
+
+				<div class="relative mt-2">
+				  <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+					<i class="fa fa-search text-gray-400 font-light"></i>
+				  </div>
+				  <input type="search"  class="block w-full p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="اینجا بنویسید" name="s281009734" />
+				</div>
+		  
+				<div class="flex gap-5 mt-2 flex-col lg:flex-row">
+					<p class="text-base text-semibold">جستجو در:</p>
+					<div class="flex gap-5">  
+					<label class="flex items-center">
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010108" checked  />
+					  <span for="default-checkbox" class="ms-2 text-sm font-medium text-gray-900">متن</span>
+					</label>
+					<label class="flex items-center">
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010107" checked  />
+					  <span class="ms-2 text-sm font-medium text-gray-900">عنوان</span>
+					</label>
+					<label class="flex items-center">
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]"  name="s281010109[]" value="s5000017587" checked  />
+					  <span class="ms-2 text-sm font-medium text-gray-900">شماره نظریه</span>
+					</label>
+					</div>
+				</div>
+		  
+				<div class="mt-8 flex gap-5 flex-col lg:flex-row">
+					<div class="max-lg:w-full">
+						<p class="text-sm">تاریخ  صدور</p>
+						<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010038" />
+								<span clear_code="s281010038" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010039" />
+								<span clear_code="s281010039" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+							</div>
+						</div>
+					</div>
+
+					<div class="max-lg:w-full">
+						<p class="text-sm">تاریخ لازم الاجرا</p>
+						<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010046" />
+								<span clear_code="s281010046" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between" >
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010051" />
+								<span clear_code="s281010051" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+							</div>
+						</div>
+					</div>
+				</div>
+				
+				<div class="mt-8 flex gap-5 flex-col lg:flex-row">
+					<p class="text-base text-semibold">جستجو بر اساس مرجع وضع:</p>
+					<div class="relative flex-1">
+						<select  class="w-full p-2 text-sm font-medium text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="انتخاب یک یا چند مرجع" inp_code="bps5000070698" multiple  ></select>
+					</div>
+				</div>
+				<div class="justify-self-end mt-5">
+					<button type="submit" class="text-white bg-[#005F27] hover:bg-green-800 focus:outline-none font-medium rounded-lg text-sm px-4 py-2">اعمال تغییرات</button>
+				</div>
+			  </form>
+			</div>
+			
+			<div id="tab10" class="tabcontentModal hidden">
+			  <form class="border rounded-lg border-gray-300 p-3 mt-4"  method="get" action="lwse" target="_blank" >
+				<input type="hidden" name="act" id="act" value="all" /> 
+				<input type="hidden" name="bps5000021601" id="bps5000021601" value="" class="tree_mz" /> 
+				<div class="flex gap-2 select-group">
+				  <p class="text-base flex-1 text-semibold">جستجو براساس:</p>
+				  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+					 <input type="radio" class="hidden" name="textin" value="s281010103" checked />
+					<p class="text-xs px-2">بخشی از عبارت</p>
+				  </label>
+				  <label class="border border-gray-200 bg-gray-100 rounded-lg content-center cursor-pointer">
+					 <input type="radio" class="hidden" name="textin" value="s281010102" />
+					<p class="text-xs px-2">عین عبارت</p>
+				  </label>
+				</div>
+
+				<div class="relative mt-2">
+				  <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+					<i class="fa fa-search text-gray-400 font-light"></i>
+				  </div>
+				  <input type="search"  class="block w-full p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg outline-none" placeholder="اینجا بنویسید" name="s281009734" />
+				</div>
+		  
+				<div class="flex gap-5 mt-2 flex-col sm:flex-row">
+					<p class="text-base text-semibold">جستجو در:</p>
+					<div class="flex gap-5">  
+					<label class="flex items-center">
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010108" checked />
+					  <span for="default-checkbox" class="ms-2 text-sm font-medium text-gray-900">متن</span>
+					</label>
+					<label class="flex items-center">
+					  <input type="checkbox" class="w-4 h-4 text-green-600 bg-gray-100 border-gray-100 rounded rounded-lg focus:outline-none focus:rounded-lg focus:bg-[#005F27]" name="s281010109[]" value="s281010107" checked  />
+					  <span class="ms-2 text-sm font-medium text-gray-900">عنوان</span>
+					</label>
+					</div>
+				</div>
+		  
+				<div class="mt-8 flex gap-5 flex-col lg:flex-row">
+					<div class="max-lg:w-full">
+						<p class="text-sm">تاریخ  صدور</p>
+						<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010038" />
+								<span clear_code="s281010038" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010039" />
+								<span clear_code="s281010039" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+							</div>
+						</div>
+					</div>
+
+					<div class="max-lg:w-full">
+						<p class="text-sm">تاریخ لازم الاجرا</p>
+						<div class="flex mt-2 text-gray-400 max-lg:w-full max-lg:flex-col max-lg:gap-2">
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-r-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between">
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="از تاریخ" inp_code="s281010046" />
+								<span clear_code="s281010046" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+								
+							</div>
+							<div class="border border-gray-300 max-lg:rounded-lg rounded-l-lg flex px-2 py-1 ps-4 items-center max-lg:justify-between" >
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M14 6.66671H1.99997M10.6666 1.33337V4.00004M5.3333 1.33337V4.00004M5.19997 14.6667H10.8C11.9201 14.6667 12.4801 14.6667 12.908 14.4487C13.2843 14.257 13.5902 13.951 13.782 13.5747C14 13.1469 14 12.5868 14 11.4667V5.86671C14 4.7466 14 4.18655 13.782 3.75873C13.5902 3.3824 13.2843 3.07644 12.908 2.88469C12.4801 2.66671 11.9201 2.66671 10.8 2.66671H5.19997C4.07986 2.66671 3.51981 2.66671 3.09199 2.88469C2.71566 3.07644 2.4097 3.3824 2.21796 3.75873C1.99997 4.18655 1.99997 4.7466 1.99997 5.86671V11.4667C1.99997 12.5868 1.99997 13.1469 2.21796 13.5747C2.4097 13.951 2.71566 14.257 3.09199 14.4487C3.51981 14.6667 4.07986 14.6667 5.19997 14.6667Z" stroke="#C1C7D0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<input type="text" class="text-sm px-2 font-medium w-24 text-[#005F27]" placeholder="تا تاریخ" inp_code="s281010051" />
+								<span clear_code="s281010051" ><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 128 128"><path stroke="#1F1F1F" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" d="M46 46L82 82M81 46L46 82"/></svg></span>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="justify-self-end mt-5">
+					<button type="submit" class="text-white bg-[#005F27] hover:bg-green-800 focus:outline-none font-medium rounded-lg text-sm px-4 py-2">اعمال تغییرات</button>
+				</div>
+			  </form>
+			</div>
+		  </div>
+		</div>
+		<button id="scrollTopBtn" onclick="scrollToTop(0);">&#8593;</button>
+	</main>
+	<footer class="bg-gradient-to-r from-[#10548166] to-[#005F27CC] mt-5 p-2 text-white justify-items-center">
+	  <p>تمامی حقوق این وبسایت متعلق به سازمان امور مالیاتی است.</p>
+	</footer>
+	<script>
+		$('document').ready(function(){
+			$(".is_ty_ms").change(function() {
+				if($(this).val() != "qh" && $(this).val() != "all" && $(this).val() != "kw"){
+					$(".ms_num").show();	
+					$(".ms_num input[type=checkbox]").prop("disabled", false);	
+				}else{
+					$(".ms_num").hide();	
+					$(".ms_num input[type=checkbox]").prop("disabled", true);	
+				}
+				let lng = {"qh" : "قوانین"  , "mq" : "مقررات"  , "ry" : "آرا"  , "nz" : "نظرات", "kw" : "واژگان", "mk" : "مکاتبات", "all" : "همه" };
+				$("input#s281009734").attr({"placeholder":"جستجو در "+ lng[$(this).val()]||""});
+			});
+			$(".is_ty_ms:checked").change();
+			$("input[name=all_s281010055]").change(function(){
+				let ch = $(this).prop("checked");
+				let $fm = $(this).parents("form:eq(0)");
+				$(".vl_s281010055" , $fm).prop({"checked" : ch});
+				if(ch){
+					$(".all_s281010055" , $fm).show();
+				}else{
+					$(".all_s281010055" , $fm).hide();
+				}
+			});
+			
+			const selected = $(".selected-box"); 
+			$('.options-box>.active').each(function(){
+				$(".selected-box" , $(this).parents('.selected')).html($(this).text() + '<span class="ml-2">▼</span>');
+			});
+			selected.click(function(e){
+				e.stopPropagation(); 
+				$('.options-box' , $(this).parent()).toggleClass("hidden"); 
+			});
+			document.addEventListener("click", (e) => { 
+				$('.options-box').addClass("hidden");
+			});
+
+
+			const menuBtn = document.getElementById("menu-btn"); 
+			const closeBtn = document.getElementById("close-btn"); 
+			const sidebar = document.getElementById("sidebar"); 
+			menuBtn.addEventListener("click", () => { sidebar.classList.toggle("translate-x-full");  });
+			closeBtn.addEventListener("click", () => { sidebar.classList.toggle("translate-x-full");  });
+		});
+	</script>	
+</div></body>
+<script language="javascript" src="client/template/lim/bpms/all.js?t=14041220.2" type="text/javascript" ></script>
+ <script language="javascript" src="/uploads/pg_bps5000021501.js?t=14041220.2" type="text/javascript"  charset="UTF-8"></script>  <script language="javascript" src="/uploads/pg_bps5000021544.js?t=14041220.2" type="text/javascript"  charset="UTF-8"></script>  <script language="javascript" src="/uploads/pg_bps5000021504.js?t=14041220.2" type="text/javascript"  charset="UTF-8" ></script> <script>
+	var _page_info = {"_id":"bps5000021503","80034148":{"t":1748754411000,"v":["","s280941448"]},"80037475":{"v":1},"80040722":{"v":1},"80042282":{"v":1},"80037475_t":{"j":{"y":"1404","m":"03","d":"11"},"v":1748754411000},"80037475_u":{"p":"","v":"ff66fad75cfdcd291bfb38de2e059336"},"__fids":{"v":["80037475","80040722","80042282"]},"__fils":{"v":["e9f5e3a1c45e3c80184c70be8d5286dc.jpg"]},"__t":{"v":1775211189000},"_cb":{"v":"ff66fad75cfdcd291bfb38de2e059336"},"_cf":{"v":"80037475"},"_cp":{"v":""},"_css_":{"t":1748754411000,"v":"bps5000021500"},"_csses_":{"t":1748754411000,"v":["bps5000021502","bps5000021545","bps5000021860"]},"_ct":{"j":{"y":"1403","m":"12","d":"02"},"v":1740056647000},"_jses_":{"t":1748754411000,"v":["bps5000021501","bps5000021544"]},"_lg_tmpl_":{"t":1748754411000,"v":"bps5000021505"},"_tmpl_":{"t":1748754411000,"v":"bps5000021505"},"login":{"t":1748754411000,"v":"-1"},"na":{"t":1748754411000,"v":"lws3"},"path":{"n":4,"t":1748754411000,"v":"0_1_80040059_"},"pcode":{"t":1748754411000,"v":"80040059"},"ph":{"n":"5f01fcfdf2a610594fa53fe55fdbb765.jpg","t":1748754411000,"v":"e9f5e3a1c45e3c80184c70be8d5286dc.jpg"},"plugin":{"t":1748754411000,"v":["s80095160","s80095162"]},"prog":{"t":1748754411000,"v":["s280941452"]},"s280680664":{"t":1748754411000,"v":["mz_db=doc","mz_ty=s280835146","doc_ty=s80512502","mz_code=@ret>tree_info>_id>v@"]},"s80095146":{"t":1748754411000,"v":"s80095147"},"sdb":{"t":1748754411000,"v":"doc"},"ti":{"t":1748754411000,"v":"\u0633\u0627\u0645\u0627\u0646\u0647 \u062c\u0627\u0645\u0639 \u0645\u0642\u0631\u0631\u0627\u062a \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"},"tmp":{"t":1748754411000,"v":"_null_"},"ty":{"t":1748754411000,"v":"19"},"_js_":{"t":1748754411000,"v":"bps5000021504"},"80040722_t":{"j":{"y":"1403","m":"12","d":"04"},"v":1740201763000},"80040722_u":{"p":"","v":"ff66fad75cfdcd291bfb38de2e059336"},"s280668466":{"t":1740201763000,"v":"_v"},"80042282_t":{"j":{"y":"1405","m":"01","d":"14"},"v":1775211189000},"80042282_u":{"p":"","v":"ff66fad75cfdcd291bfb38de2e059336"},"__t__":1789459420000};
+	var page_json = [{"error":false,"act":"addForm","data":{"qs":[{"_id":"lws3","na":{"t":1748754411000,"v":"lws3"},"pcode":{"t":1748754411000,"v":"80040059"},"ph":{"n":"5f01fcfdf2a610594fa53fe55fdbb765.jpg","t":1748754411000,"v":"e9f5e3a1c45e3c80184c70be8d5286dc.jpg"},"ti":{"t":1748754411000,"v":"\u0633\u0627\u0645\u0627\u0646\u0647 \u062c\u0627\u0645\u0639 \u0645\u0642\u0631\u0631\u0627\u062a \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"},"tmp":{"t":1748754411000,"v":"_null_"},"ty":{"t":1748754411000,"v":"19"},"sec_id":"WnE4U2dJS2U4eXhkekRDLzcwTitnb0JTbUI3ZGZyd2h5ZURVLzkzSjdhTHRBckNBamVBenUvMEZjeXVuWUlXUGVsMU1YcHI5U0IxdmRsTmk4aytxaUE9PQ","#id":"bps5000021503"},{"_id":"bps5000021507","pcode":{"t":1740070795000,"v":"bps5000021503"},"ti":{"t":1740070795000,"v":"usable"},"#id":"bps5000021507"},{"_id":"bps5000021536","pcode":{"t":1740124245000,"v":"bps5000021503"},"ti":{"t":1740124245000,"v":"\u0633\u0648\u0627\u0644\u0627\u062a \u06af\u0632\u06cc\u0646\u0647 \u062f\u0627\u0631"},"ty":{"t":1740124245000,"v":"1"},"cls":{"t":1740124245000,"v":["hidden"]},"#id":"bps5000021536"},{"_id":"bps5000021513","ord":{"t":1740071157000,"v":1},"pcode":{"t":1740071157000,"v":"bps5000021503"},"sty":{"t":1740071157000,"v":"1000022068"},"ti":{"t":1740071157000,"v":"\u0644\u06cc\u0633\u062a \u0645\u0642\u0631\u0631\u0647"},"ty":{"t":1740071157000,"v":"3"},"vty":{"t":1740071157000,"v":"2"},"f_send":{"t":1724653316000,"v":"lw=s281010862"},"s80054641":{"t":1724653316000,"v":"_form_"},"#id":"bps5000021513"},{"_id":"bps5000021527","ord":{"t":1740116292000,"v":1},"pcode":{"t":1740116292000,"v":"bps5000021503"},"sty":{"t":1740116292000,"v":"1000022068"},"ti":{"t":1740116292000,"v":"\u0644\u06cc\u0633\u062a \u0642\u0648\u0627\u0646\u06cc\u0646"},"ty":{"t":1740116292000,"v":"3"},"vty":{"t":1740116292000,"v":"2"},"#id":"bps5000021527"},{"_id":"bps5000075526","ord":{"t":1770992166000,"v":1},"pcode":{"t":1770992166000,"v":"bps5000021503"},"sty":{"t":1770992166000,"v":"1000022068"},"ti":{"t":1770992166000,"v":"\u0644\u06cc\u0633\u062a \u0648\u0627\u0698\u06af\u0627\u0646"},"ty":{"t":1770992166000,"v":"3"},"vty":{"t":1770992166000,"v":"2"},"#id":"bps5000075526"},{"_id":"ti","na":{"t":1786173793000,"v":"ti"},"pcode":{"t":1786173793000,"v":"bps5000021513"},"sty":{"t":1786173793000,"v":"50"},"ti":{"t":1786173793000,"v":"\u0639\u0646\u0648\u0627\u0646"},"ty":{"t":1786173793000,"v":"2"},"vty":{"t":1786173793000,"v":"2"},"#id":"bps5000021514"},{"_id":"s80510388","pcode":{"t":1724650955000,"v":"bps5000021513"},"sty":{"t":1724650955000,"v":"54"},"ti":{"t":1724650955000,"v":"\u0646\u0648\u0639 \u0645\u0642\u0631\u0631\u0647"},"ty":{"t":1724650955000,"v":"2"},"vty":{"t":1724650955000,"v":"2"},"na":{"t":1724650955000,"v":"s80510388"},"#id":"bps5000021515"},{"_id":"s280956645","pcode":{"t":1724650949000,"v":"bps5000021513"},"sty":{"t":1724650949000,"v":"54"},"ti":{"t":1724650949000,"v":"\u0645\u0631\u062c\u0639 \u0635\u0627\u062f\u0631\u06a9\u0646\u0646\u062f\u0647"},"ty":{"t":1724650949000,"v":"2"},"vty":{"t":1724650949000,"v":"2"},"na":{"t":1724650949000,"v":"s280956645"},"#id":"bps5000021516"},{"_id":"s80512757","pcode":{"t":1724650972000,"v":"bps5000021513"},"sty":{"t":1724650972000,"v":"50"},"ti":{"t":1724650972000,"v":"\u0634\u0645\u0627\u0631\u0647 \u0627\u0628\u0644\u0627\u063a\u06cc\u0647"},"ty":{"t":1724650972000,"v":"2"},"vty":{"t":1724650972000,"v":"2"},"na":{"t":1724650972000,"v":"s80512757"},"#id":"bps5000021517"},{"_id":"_id","pcode":{"t":1724650914000,"v":"bps5000021513"},"sty":{"t":1724650914000,"v":"50"},"ti":{"t":1724650914000,"v":"\u0634\u0646\u0627\u0633\u0647"},"ty":{"t":1724650914000,"v":"2"},"vty":{"t":1724650914000,"v":"2"},"na":{"t":1724650914000,"v":"_id"},"#id":"bps5000021518"},{"_id":"fr","na":{"t":1723928332000,"v":"fr"},"pcode":{"t":1723928332000,"v":"bps5000021513"},"sty":{"t":1723928332000,"v":"50"},"ti":{"t":1723928332000,"v":"\u0635\u0641\u062d\u0647"},"ty":{"t":1723928332000,"v":"2"},"value":{"t":1723928332000,"v":"@data>fr:'1'@"},"vty":{"t":1723928332000,"v":"2"},"#id":"bps5000021520"},{"_id":"tt","na":{"t":1726981092000,"v":"tt"},"pcode":{"t":1726981092000,"v":"bps5000021513"},"sty":{"t":1726981092000,"v":"52"},"ti":{"t":1726981092000,"v":"\u062a\u0627\u0631\u06cc\u062e"},"ty":{"t":1726981092000,"v":"2"},"vty":{"t":1726981092000,"v":"2"},"#id":"bps5000021524"},{"_id":"mty","na":{"t":1740805395000,"v":"mty"},"pcode":{"t":1740805395000,"v":"bps5000021513"},"sty":{"t":1740805395000,"v":"50"},"ti":{"t":1740805395000,"v":"\u0646\u0648\u0639"},"ty":{"t":1740805395000,"v":"2"},"value":{"t":1740805395000,"v":"@_inp>ty@"},"vty":{"t":1740805395000,"v":"2"},"#id":"bps5000021823"},{"_id":"bps5000021696","na":{"t":1740632310000,"v":"bps5000021696"},"pcode":{"t":1740632310000,"v":"bps5000021513"},"sty":{"t":1740632310000,"v":"50"},"ti":{"t":1740632310000,"v":"\u0622\u062e\u0631\u06cc\u0646 \u0627\u0635\u0644\u0627\u062d"},"ty":{"t":1740632310000,"v":"2"},"vty":{"t":1740632310000,"v":"2"},"#id":"bps5000026812"},{"_id":"stcl","cast":{"t":1769328199000,"v":["s280965216=red","s281010065=yellow","s280971619=yellow"]},"na":{"t":1769328199000,"v":"stcl"},"pcode":{"t":1769328199000,"v":"bps5000021513"},"sty":{"t":1769328199000,"v":"50"},"ti":{"t":1769328199000,"v":"\u0648\u0636\u0639\u06cc\u062a"},"ty":{"t":1769328199000,"v":"2"},"vty":{"t":1769328199000,"v":"2"},"parse":1,"#id":"bps5000070979"},{"_id":"ti","na":{"t":1786173804000,"v":"ti"},"pcode":{"t":1786173804000,"v":"bps5000021527"},"sty":{"t":1786173804000,"v":"50"},"ti":{"t":1786173804000,"v":"\u0639\u0646\u0648\u0627\u0646"},"ty":{"t":1786173804000,"v":"2"},"vty":{"t":1786173804000,"v":"2"},"#id":"bps5000021528"},{"_id":"tt","na":{"t":1740116911000,"v":"tt"},"pcode":{"t":1740116911000,"v":"bps5000021527"},"sty":{"t":1740116911000,"v":"52"},"ti":{"t":1740116911000,"v":"\u062a\u0627\u0631\u06cc\u062e"},"ty":{"t":1740116911000,"v":"2"},"vty":{"t":1740116911000,"v":"2"},"#id":"bps5000021529"},{"_id":"s280956645","pcode":{"t":1740116900000,"v":"bps5000021527"},"sty":{"t":1740116900000,"v":"54"},"ti":{"t":1740116900000,"v":"\u0645\u0631\u062c\u0639 \u0635\u0627\u062f\u0631\u06a9\u0646\u0646\u062f\u0647"},"ty":{"t":1740116900000,"v":"2"},"vty":{"t":1740116900000,"v":"2"},"na":{"t":1740116900000,"v":"s280956645"},"#id":"bps5000021531"},{"_id":"_id","pcode":{"t":1724650914000,"v":"bps5000021527"},"sty":{"t":1724650914000,"v":"50"},"ti":{"t":1724650914000,"v":"\u0634\u0646\u0627\u0633\u0647"},"ty":{"t":1724650914000,"v":"2"},"vty":{"t":1724650914000,"v":"2"},"na":{"t":1724650914000,"v":"_id"},"#id":"bps5000021532"},{"_id":"fr","na":{"t":1723928332000,"v":"fr"},"pcode":{"t":1723928332000,"v":"bps5000021527"},"sty":{"t":1723928332000,"v":"50"},"ti":{"t":1723928332000,"v":"\u0635\u0641\u062d\u0647"},"ty":{"t":1723928332000,"v":"2"},"value":{"t":1723928332000,"v":"@data>fr:'1'@"},"vty":{"t":1723928332000,"v":"2"},"#id":"bps5000021533"},{"_id":"mty","na":{"t":1740805395000,"v":"mty"},"pcode":{"t":1740805395000,"v":"bps5000021527"},"sty":{"t":1740805395000,"v":"50"},"ti":{"t":1740805395000,"v":"\u0646\u0648\u0639"},"ty":{"t":1740805395000,"v":"2"},"value":{"t":1740805395000,"v":"@_inp>ty@"},"vty":{"t":1740805395000,"v":"2"},"#id":"bps5000021824"},{"_id":"bps5000021696","na":{"t":1748864438000,"v":"bps5000021696"},"pcode":{"t":1748864438000,"v":"bps5000021527"},"sty":{"t":1748864438000,"v":"50"},"ti":{"t":1748864438000,"v":"\u0622\u062e\u0631\u06cc\u0646 \u0627\u0635\u0644\u0627\u062d"},"ty":{"t":1748864438000,"v":"2"},"vty":{"t":1748864438000,"v":"2"},"#id":"bps5000026821"},{"_id":"stcl","cast":{"t":1769328199000,"v":["s280965216=red","s281010065=yellow","s280971619=yellow"]},"na":{"t":1769328199000,"v":"stcl"},"pcode":{"t":1769328199000,"v":"bps5000021527"},"sty":{"t":1769328199000,"v":"50"},"ti":{"t":1769328199000,"v":"\u0648\u0636\u0639\u06cc\u062a"},"ty":{"t":1769328199000,"v":"2"},"vty":{"t":1769328199000,"v":"2"},"parse":1,"#id":"bps5000070978"},{"_id":"bps5000021543","pcode":{"t":1768895826000,"v":"bps5000021536"},"sty":{"t":1768895826000,"v":"10"},"ti":{"t":1768895826000,"v":"\u0645\u0631\u0627\u062c\u0639 \u0635\u062f\u0648\u0631 \u0642\u0627\u0646\u0648\u0646"},"ty":{"t":1768895826000,"v":"3"},"vty":{"t":1768895826000,"v":"4"},"cdb":{"t":1768895826000,"v":"base"},"dset":{"t":1768895826000,"v":"bps5000069863"},"value":{"t":1768895826000,"v":"@data>bps5000021543@"},"eve":{"_twh_":[{"snd":null,"src":"$(\"input\" , _item).prop('checked', true);","whr":null,"ord":1}]},"__ds__":"bps5000069863","#id":"bps5000021543"},{"_id":"bps5000021546","pcode":{"t":1740134469000,"v":"bps5000021536"},"ti":{"t":1740134469000,"v":"\u062a\u0627\u0631\u06cc\u062e \u062a\u0635\u0648\u06cc\u0628"},"ty":{"t":1740134469000,"v":"1"},"#id":"bps5000021546"},{"_id":"bps5000021549","pcode":{"t":1740134473000,"v":"bps5000021536"},"ti":{"t":1740134473000,"v":"\u062a\u0627\u0631\u06cc\u062e \u0635\u062f\u0648\u0631"},"ty":{"t":1740134473000,"v":"1"},"#id":"bps5000021549"},{"_id":"bps5000021552","pcode":{"t":1740134477000,"v":"bps5000021536"},"ti":{"t":1740134477000,"v":"\u062a\u0627\u0631\u06cc\u062e \u0644\u0627\u0632\u0645 \u0627\u0644\u0627\u062c\u0631\u0627"},"ty":{"t":1740134477000,"v":"1"},"#id":"bps5000021552"},{"_id":"bps5000070696","cdb":{"t":1768895924000,"v":"base"},"dset":{"t":1768895924000,"v":"s281010076"},"pcode":{"t":1768895924000,"v":"bps5000021536"},"sty":{"t":1768895924000,"v":"10"},"ti":{"t":1768895924000,"v":"\u0645\u0631\u0627\u062c\u0639 \u0635\u062f\u0648\u0631 \u0645\u0642\u0631\u0631\u0647"},"ty":{"t":1768895924000,"v":"3"},"value":{"t":1768895924000,"v":"@data>bps5000070696@"},"vty":{"t":1768895924000,"v":"4"},"__ds__":"s281010076","#id":"bps5000070696"},{"_id":"bps5000070697","cdb":{"t":1768895943000,"v":"base"},"dset":{"t":1768895943000,"v":"bps5000069864"},"pcode":{"t":1768895943000,"v":"bps5000021536"},"sty":{"t":1768895943000,"v":"10"},"ti":{"t":1768895943000,"v":"\u0645\u0631\u0627\u062c\u0639 \u0635\u062f\u0648\u0631 \u0631\u0627\u06cc"},"ty":{"t":1768895943000,"v":"3"},"value":{"t":1768895943000,"v":"@data>bps5000070697@"},"vty":{"t":1768895943000,"v":"4"},"__ds__":"bps5000069864","#id":"bps5000070697"},{"_id":"bps5000070698","cdb":{"t":1768895976000,"v":"base"},"dset":{"t":1768895976000,"v":"bps5000069865"},"pcode":{"t":1768895976000,"v":"bps5000021536"},"sty":{"t":1768895976000,"v":"10"},"ti":{"t":1768895976000,"v":"\u0645\u0631\u0627\u062c\u0639 \u0635\u062f\u0648\u0631 \u0646\u0638\u0631"},"ty":{"t":1768895976000,"v":"3"},"value":{"t":1768895976000,"v":"@data>bps5000070698@"},"vty":{"t":1768895976000,"v":"4"},"__ds__":"bps5000069865","#id":"bps5000070698"},{"_id":"bps5000021601","cdb":{"t":1770969862000,"v":"doc"},"font_icon":{"t":1770969862000,"v":"icon-tree6"},"ord":{"t":1770969862000,"v":2},"pcode":{"t":1770969862000,"v":"bps5000021536"},"size":{"t":1770969862000,"v":12},"sty":{"t":1770969862000,"v":"17"},"ti":{"t":1770969862000,"v":"\u0645\u0648\u0636\u0648\u0639\u0627\u062a"},"ty":{"t":1770969862000,"v":"3"},"vty":{"t":1770969862000,"v":"2"},"s80054640":{"t":1723942665000,"v":"_this_"},"s80125313":{"t":1770969862000,"v":"<div class=\"collapse collapse-arrow li_tree \">\r\n  <div class=\"collapse-title flex items-center\"> \r\n\t\t<input type=\"checkbox\" class=\"inp px-2 mx-1\" \/>\r\n\t\t<div class=\"text-xs  flex items-center flex-1 load\" >\t\r\n\t\t\t@ti@\r\n\t\t<\/div>\t\r\n  <\/div>\r\n  <div class=\"collapse-content flex flex-col gap-1 sub\"><\/div>\r\n<\/div>"},"send":{"t":1723942665000,"v":["rid"]},"htm_tmp":{"t":1770969862000,"v":"<div class=\"item\" ><input class=\"my_input\"  type=\"hidden\"\/> <ul class=\"w-100 sub_tree_box tree_menu sub\" ><\/ul><\/div>"},"na":{"t":1770969862000,"v":"bps5000021601"},"s80054695":{"t":1770969862000,"v":["tree-full-view"]},"parse":1,"q_has_val":false,"eve":{"_res_":[{"snd":null,"src":"let vl = _item.val();\r\n$('.tree_mz[type=hidden]').val(vl);","whr":null,"ord":1}]},"#id":"bps5000021559"},{"_id":"s281010038","pcode":{"v":"bps5000021546","t":1740309977000},"sty":{"v":"13","t":1740309977000},"ti":{"v":"\u062a\u0627\u0631\u06cc\u062e \u062a\u0635\u0648\u06cc\u0628 \u0627\u0632","t":1740309977000},"ty":{"v":"3","t":1740309977000},"vty":{"v":"2","t":1740309977000},"plch":{"t":1740309977000,"v":"1285\/01\/01"},"na":{"v":"s281010038","t":1740309977000},"value":{"t":1740309977000,"v":"@data>s281010038@"},"parse":1,"#id":"bps5000021547"},{"_id":"s281010039","pcode":{"t":1740137910000,"v":"bps5000021546"},"plch":{"t":1740137910000,"v":"\u067e\u0627\u06cc\u0627\u0646"},"sty":{"t":1740137910000,"v":"13"},"ti":{"t":1740137910000,"v":"\u062a\u0627\u0631\u06cc\u062e \u062a\u0635\u0648\u06cc\u0628 \u062a\u0627"},"ty":{"t":1740137910000,"v":"3"},"vty":{"t":1740137910000,"v":"2"},"na":{"v":"s281010039","t":1740137910000},"#id":"bps5000021548"},{"_id":"s281010042","pcode":{"v":"bps5000021549","t":1740137902000},"sty":{"v":"13","t":1740137902000},"ti":{"v":"\u062a\u0627\u0631\u06cc\u062e \u0635\u062f\u0648\u0631 \u0627\u0632","t":1740137902000},"ty":{"v":"3","t":1740137902000},"vty":{"v":"2","t":1740137902000},"plch":{"t":1740137902000,"v":"1285\/01\/01"},"na":{"v":"s281010042","t":1740137902000},"#id":"bps5000021550"},{"_id":"s281010043","pcode":{"t":1740137867000,"v":"bps5000021549"},"plch":{"t":1740137867000,"v":"\u067e\u0627\u06cc\u0627\u0646"},"sty":{"t":1740137867000,"v":"13"},"ti":{"t":1740137867000,"v":"\u062a\u0627\u0631\u06cc\u062e \u0635\u062f\u0648\u0631 \u062a\u0627"},"ty":{"t":1740137867000,"v":"3"},"vty":{"t":1740137867000,"v":"2"},"na":{"v":"s281010043","t":1740137867000},"#id":"bps5000021551"},{"_id":"s281010046","pcode":{"v":"bps5000021552","t":1740137884000},"sty":{"v":"13","t":1740137884000},"ti":{"v":"\u062a\u0627\u0631\u06cc\u062e \u0634\u0631\u0648\u0639 \u0627\u0639\u062a\u0628\u0627\u0631 \u0627\u0632","t":1740137884000},"ty":{"v":"3","t":1740137884000},"vty":{"v":"2","t":1740137884000},"plch":{"t":1740137884000,"v":"1285\/01\/01"},"na":{"v":"s281010046","t":1740137884000},"#id":"bps5000021553"},{"_id":"s281010051","pcode":{"t":1740137876000,"v":"bps5000021552"},"plch":{"t":1740137876000,"v":"\u067e\u0627\u06cc\u0627\u0646"},"sty":{"t":1740137876000,"v":"13"},"ti":{"t":1740137876000,"v":"\u062a\u0627\u0631\u06cc\u062e \u0634\u0631\u0648\u0639 \u0627\u0639\u062a\u0628\u0627\u0631 \u062a\u0627"},"ty":{"t":1740137876000,"v":"3"},"vty":{"t":1740137876000,"v":"2"},"na":{"v":"s281010051","t":1740137876000},"#id":"bps5000021554"},{"_id":"mty","na":{"t":1740805395000,"v":"mty"},"pcode":{"t":1740805395000,"v":"bps5000075526"},"sty":{"t":1740805395000,"v":"50"},"ti":{"t":1740805395000,"v":"\u0646\u0648\u0639"},"ty":{"t":1740805395000,"v":"2"},"value":{"t":1740805395000,"v":"@_inp>ty@"},"vty":{"t":1740805395000,"v":"2"},"#id":"bps5000075529"},{"_id":"fr","na":{"t":1723928332000,"v":"fr"},"pcode":{"t":1723928332000,"v":"bps5000075526"},"sty":{"t":1723928332000,"v":"50"},"ti":{"t":1723928332000,"v":"\u0635\u0641\u062d\u0647"},"ty":{"t":1723928332000,"v":"2"},"value":{"t":1723928332000,"v":"@data>fr:'1'@"},"vty":{"t":1723928332000,"v":"2"},"#id":"bps5000075530"},{"_id":"_id","pcode":{"t":1724650914000,"v":"bps5000075526"},"sty":{"t":1724650914000,"v":"50"},"ti":{"t":1724650914000,"v":"\u0634\u0646\u0627\u0633\u0647"},"ty":{"t":1724650914000,"v":"2"},"vty":{"t":1724650914000,"v":"2"},"na":{"t":1724650914000,"v":"_id"},"#id":"bps5000075531"},{"_id":"ti","na":{"t":1786173810000,"v":"ti"},"pcode":{"t":1786173810000,"v":"bps5000075526"},"sty":{"t":1786173810000,"v":"50"},"ti":{"t":1786173810000,"v":"\u0639\u0646\u0648\u0627\u0646"},"ty":{"t":1786173810000,"v":"2"},"vty":{"t":1786173810000,"v":"2"},"#id":"bps5000075532"},{"_id":"des","na":{"t":1770992621000,"v":"des"},"pcode":{"t":1770992621000,"v":"bps5000075526"},"sty":{"t":1770992621000,"v":"50"},"ti":{"t":1770992621000,"v":"\u062a\u06cc\u062a\u0631"},"ty":{"t":1770992621000,"v":"2"},"vty":{"t":1770992621000,"v":"2"},"#id":"bps5000075533"}],"ds":{"bps5000069863":[{"_id":"txs5000103748","pcode":{"t":1742976172000,"v":"bps5000069863"},"ti":{"t":1742976172000,"v":"\u0634\u0648\u0631\u0627\u064a \u0627\u0646\u0642\u0644\u0627\u0628 \u062c\u0645\u0647\u0648\u0631\u064a \u0627\u0633\u0644\u0627\u0645\u064a \u0627\u064a\u0631\u0627\u0646"}},{"_id":"txs5000102557","pcode":{"t":1742195638000,"v":"bps5000069863"},"ti":{"t":1742195638000,"v":"\u0645\u062c\u0644\u0633 \u0634\u0648\u0631\u0627\u06cc \u0645\u0644\u06cc"}},{"_id":"txs5000130763","pcode":{"t":1769323477000,"v":"bps5000069863"},"ti":{"t":1769323477000,"v":"\u0647\u0645\u0647 \u067e\u0631\u0633\u06cc"}},{"_id":"txs5000103710","pcode":{"t":1742887161000,"v":"bps5000069863"},"ti":{"t":1742887161000,"v":"\u06a9\u0645\u06cc\u0633\u06cc\u0648\u0646\u0647\u0627\u06cc \u0645\u0634\u062a\u0631\u06a9 \u0645\u062c\u0644\u0633\u06cc\u0646"}},{"_id":"txs5000089663","ord":{"t":1730792004000,"v":1},"pcode":{"t":1730792004000,"v":"bps5000069863"},"ti":{"t":1730792004000,"v":"\u0645\u062c\u0644\u0633 \u0634\u0648\u0631\u0627\u06cc \u0627\u0633\u0644\u0627\u0645\u06cc"}},{"_id":"s281010093","ord":{"t":1723883356000,"v":2},"pcode":{"t":1723883356000,"v":"bps5000069863"},"ti":{"t":1723883356000,"v":"\u0631\u0647\u0628\u0631\u06cc"}},{"_id":"s281010090","ord":{"t":1723883211000,"v":2},"pcode":{"t":1723883211000,"v":"bps5000069863"},"ti":{"t":1723883211000,"v":"\u0634\u0648\u0631\u0627\u06cc \u0639\u0627\u0644\u06cc \u0627\u0645\u0646\u06cc\u062a \u0645\u0644\u06cc"}},{"_id":"s281010089","ord":{"t":1723883202000,"v":2},"pcode":{"t":1723883202000,"v":"bps5000069863"},"ti":{"t":1723883202000,"v":"\u0634\u0648\u0631\u0627\u06cc \u0639\u0627\u0644\u06cc \u0641\u0636\u0627\u06cc \u0645\u062c\u0627\u0632\u06cc"}},{"_id":"s281010087","ord":{"t":1723883186000,"v":2},"pcode":{"t":1723883186000,"v":"bps5000069863"},"ti":{"t":1723883186000,"v":"\u0634\u0648\u0631\u0627\u06cc \u0639\u0627\u0644\u06cc \u0647\u0645\u0627\u0647\u0646\u06af\u06cc \u0627\u0642\u062a\u0635\u0627\u062f\u06cc \u0633\u0631\u0627\u0646 \u0642\u0648\u0627"}},{"_id":"s281010088","ord":{"t":1723883195000,"v":2},"pcode":{"t":1723883195000,"v":"bps5000069863"},"ti":{"t":1723883195000,"v":"\u0645\u062c\u0645\u0639 \u062a\u0634\u062e\u06cc\u0635 \u0645\u0635\u0644\u062d\u062a \u0646\u0638\u0627\u0645"}},{"_id":"bps5000069866","ord":{"t":1723883292000,"v":6},"pcode":{"t":1723883266000,"v":"bps5000069863"},"ti":{"t":1723883292000,"v":"\u0633\u0627\u06cc\u0631 \u0645\u0631\u0627\u062c\u0639"},"na":{"v":"s281010092"}}],"bps5000069864":[{"_id":"txs5000132863","pcode":{"t":1770098804000,"v":"bps5000069864"},"ti":{"t":1770098804000,"v":"\u0647\u06cc\u0623\u062a \u062a\u062e\u0635\u0635\u06cc \u0627\u062f\u0627\u0631\u06cc \u0648 \u0627\u0645\u0648\u0631 \u0639\u0645\u0648\u0645\u06cc \u062f\u06cc\u0648\u0627\u0646 \u0639\u062f\u0627\u0644\u062a \u0627\u062f\u0627\u0631\u06cc"}},{"_id":"txs5000132865","pcode":{"t":1770098861000,"v":"bps5000069864"},"ti":{"t":1770098861000,"v":"\u0647\u06cc\u0623\u062a \u062a\u062e\u0635\u0635\u06cc \u0634\u0648\u0631\u0627\u0647\u0627\u06cc \u0627\u0633\u0644\u0627\u0645\u06cc \u062f\u06cc\u0648\u0627\u0646 \u0639\u062f\u0627\u0644\u062a \u0627\u062f\u0627\u0631\u06cc"}},{"_id":"txs5000089315","pcode":{"t":1727865943000,"v":"bps5000069864"},"ti":{"t":1770098877000,"v":"\u0647\u06cc\u0623\u062a \u0639\u0645\u0648\u0645\u06cc \u062f\u06cc\u0648\u0627\u0646 \u0639\u062f\u0627\u0644\u062a \u0627\u062f\u0627\u0631\u06cc"}},{"_id":"s281010085","ord":{"t":1723883167000,"v":2},"pcode":{"t":1723883167000,"v":"bps5000069864"},"ti":{"t":1723883167000,"v":"\u062f\u06cc\u0648\u0627\u0646 \u0639\u0627\u0644\u06cc \u06a9\u0634\u0648\u0631"}},{"_id":"s281010084","ord":{"t":1723883158000,"v":2},"pcode":{"t":1723883158000,"v":"bps5000069864"},"ti":{"t":1723883158000,"v":"\u062f\u06cc\u0648\u0627\u0646 \u0639\u062f\u0627\u0644\u062a \u0627\u062f\u0627\u0631\u06cc"}},{"_id":"bps5000069867","ord":{"t":1723883292000,"v":6},"pcode":{"t":1723883266000,"v":"bps5000069864"},"ti":{"t":1723883292000,"v":"\u0633\u0627\u06cc\u0631 \u0645\u0631\u0627\u062c\u0639"},"na":{"v":"s281010092"}},{"_id":"txs5000138585","ord":{"t":1778479861000,"v":8},"pcode":{"t":1778479861000,"v":"bps5000069864"},"ti":{"t":1778479861000,"v":"\u0647\u06cc\u0623\u062a \u062a\u062e\u0635\u0635\u06cc \u0635\u0646\u0627\u06cc\u0639 \u0648 \u0628\u0627\u0632\u0631\u06af\u0627\u0646\u06cc \u062f\u06cc\u0648\u0627\u0646 \u0639\u062f\u0627\u0644\u062a \u0627\u062f\u0627\u0631\u06cc"}},{"_id":"txs5000089658","ord":{"t":1730616748000,"v":10},"pcode":{"t":1730616748000,"v":"bps5000069864"},"ti":{"t":1730616748000,"v":"\u0647\u06cc\u0623\u062a \u062a\u062e\u0635\u0635\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc\u060c \u0628\u0627\u0646\u06a9\u06cc \u062f\u06cc\u0648\u0627\u0646 \u0639\u062f\u0627\u0644\u062a \u0627\u062f\u0627\u0631\u06cc"}}],"bps5000069865":[{"_id":"bps5000069868","ord":{"t":1723883292000,"v":6},"pcode":{"t":1723883266000,"v":"bps5000069865"},"ti":{"t":1723883292000,"v":"\u0633\u0627\u06cc\u0631 \u0645\u0631\u0627\u062c\u0639"},"na":{"v":"s281010092"}},{"_id":"bps5000022570","ord":{"t":1741678938000,"v":19},"pcode":{"t":1741678938000,"v":"bps5000069865"},"ti":{"t":1741678938000,"v":"\u0627\u062f\u0627\u0631\u0647 \u062d\u0642\u0648\u0642\u06cc \u0642\u0648\u0647 \u0642\u0636\u0627\u0626\u06cc\u0647"}}],"s281010076":[{"_id":"txs5000149831","pcode":{"t":1784448401000,"v":"s281010076"},"ti":{"t":1784448401000,"v":"-"}},{"_id":"txs5000089246","pcode":{"t":1726561117000,"v":"s281010076"},"ti":{"t":1726561117000,"v":"\u062f\u0627\u062f\u0633\u062a\u0627\u0646 \u0627\u0646\u062a\u0638\u0627\u0645\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000120975","pcode":{"t":1765689150000,"v":"s281010076"},"ti":{"t":1765689150000,"v":"\u062f\u0628\u06cc\u0631 \u0647\u06cc\u0623\u062a \u062f\u0648\u0644\u062a"}},{"_id":"txs5000104149","pcode":{"t":1744626139000,"v":"s281010076"},"ti":{"t":1744626139000,"v":"\u0631\u0626\u06cc\u0633 \u0645\u0631\u06a9\u0632 \u0627\u0637\u0644\u0627\u0639\u0627\u062a \u0645\u0627\u0644\u06cc"}},{"_id":"txs5000089248","pcode":{"t":1729931838000,"v":"s281010076"},"ti":{"t":1729931838000,"v":"\u0631\u0626\u06cc\u0633 \u0645\u0631\u06a9\u0632 \u062a\u0646\u0638\u06cc\u0645 \u0645\u0642\u0631\u0631\u0627\u062a\u060c \u0646\u0638\u0627\u0645 \u067e\u0627\u06cc\u0627\u0646\u0647\u200c\u0647\u0627\u06cc \u0641\u0631\u0648\u0634\u06af\u0627\u0647\u06cc \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u0645\u0648\u062f\u06cc\u0627\u0646"}},{"_id":"txs5000089247","pcode":{"t":1726561205000,"v":"s281010076"},"ti":{"t":1726561205000,"v":"\u0631\u0626\u06cc\u0633 \u0645\u0631\u06a9\u0632 \u062f\u0627\u062f\u0631\u0633\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000089245","pcode":{"t":1729664316000,"v":"s281010076"},"ti":{"t":1729664316000,"v":"\u0631\u0626\u06cc\u0633 \u0645\u0631\u06a9\u0632 \u0639\u0627\u0644\u06cc \u062f\u0627\u062f\u062e\u0648\u0627\u0647\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc \u0648 \u062a\u0634\u062e\u06cc\u0635 \u0635\u0644\u0627\u062d\u06cc\u062a \u062d\u0631\u0641\u0647\u200c\u0627\u06cc"}},{"_id":"s281010079","pcode":{"t":1726984165000,"v":"s281010076"},"ti":{"t":1726984165000,"v":"\u0631\u0626\u06cc\u0633 \u06a9\u0644 \u0633\u0627\u0632\u0645\u0627\u0646 \u0627\u0645\u0648\u0631 \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc \u06a9\u0634\u0648\u0631"}},{"_id":"txs5000089244","pcode":{"t":1726560895000,"v":"s281010076"},"ti":{"t":1726560895000,"v":"\u0634\u0648\u0631\u0627\u06cc \u0639\u0627\u0644\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000089243","pcode":{"t":1726560527000,"v":"s281010076"},"ti":{"t":1726560527000,"v":"\u0645\u062f\u06cc\u0631\u0627\u0646 \u06a9\u0644"}},{"_id":"txs5000089255","pcode":{"t":1726566668000,"v":"s281010076"},"ti":{"t":1726566668000,"v":"\u0645\u0634\u0627\u0648\u0631 \u0631\u06cc\u06cc\u0633 \u06a9\u0644"}},{"_id":"txs5000089273","pcode":{"t":1726568891000,"v":"s281010076"},"ti":{"t":1726568891000,"v":"\u0645\u0639\u0627\u0648\u0646 \u0627\u0645\u0648\u0631 \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc \u062a\u0647\u0631\u0627\u0646"}},{"_id":"txs5000089276","pcode":{"t":1726569252000,"v":"s281010076"},"ti":{"t":1726569252000,"v":"\u0645\u0639\u0627\u0648\u0646 \u062a\u0648\u0633\u0639\u0647 \u0645\u062f\u06cc\u0631\u06cc\u062a \u0648 \u0645\u0646\u0627\u0628\u0639"}},{"_id":"txs5000089266","pcode":{"t":1726568076000,"v":"s281010076"},"ti":{"t":1726568076000,"v":"\u0645\u0639\u0627\u0648\u0646 \u062d\u0642\u0648\u0642\u06cc \u0648 \u0641\u0646\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000089260","pcode":{"t":1726567573000,"v":"s281010076"},"ti":{"t":1726567573000,"v":"\u0645\u0639\u0627\u0648\u0646 \u062f\u0631\u0622\u0645\u062f\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000089269","pcode":{"t":1726568344000,"v":"s281010076"},"ti":{"t":1726568344000,"v":"\u0645\u0639\u0627\u0648\u0646 \u062f\u0631\u0622\u0645\u062f\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc \u0648\u0632\u0627\u0631\u062a \u0627\u0642\u062a\u0635\u0627\u062f (\u067e\u06cc\u0634 \u0627\u0632 \u062a\u0634\u06a9\u06cc\u0644 \u0633\u0627\u0632\u0645\u0627\u0646)"}},{"_id":"txs5000089290","pcode":{"t":1726570972000,"v":"s281010076"},"ti":{"t":1726570972000,"v":"\u0645\u0639\u0627\u0648\u0646 \u062f\u0631\u0622\u0645\u062f\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc \u0648\u0632\u0627\u0631\u062a \u0627\u0642\u062a\u0635\u0627\u062f \u0628\u0647 \u0647\u0645\u0631\u0627\u0647 \u0633\u0627\u06cc\u0631 \u0645\u0631\u0627\u062c\u0639"}},{"_id":"txs5000089277","pcode":{"t":1726569363000,"v":"s281010076"},"ti":{"t":1726569363000,"v":"\u0645\u0639\u0627\u0648\u0646 \u0639\u0645\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000089274","pcode":{"t":1729664333000,"v":"s281010076"},"ti":{"t":1729664333000,"v":"\u0645\u0639\u0627\u0648\u0646 \u0641\u0646\u0627\u0648\u0631\u06cc\u200c\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000089263","pcode":{"t":1726567792000,"v":"s281010076"},"ti":{"t":1726567792000,"v":"\u0645\u0639\u0627\u0648\u0646 \u0641\u0646\u06cc \u0648 \u062d\u0642\u0648\u0642\u06cc"}},{"_id":"txs5000089271","pcode":{"t":1726568519000,"v":"s281010076"},"ti":{"t":1726568519000,"v":"\u0645\u0639\u0627\u0648\u0646 \u0645\u0627\u0644\u06cc\u0627\u062a \u0628\u0631 \u0627\u0631\u0632\u0634 \u0627\u0641\u0632\u0648\u062f\u0647"}},{"_id":"txs5000089257","pcode":{"t":1729664342000,"v":"s281010076"},"ti":{"t":1729664342000,"v":"\u0645\u0639\u0627\u0648\u0646 \u0645\u0627\u0644\u06cc\u0627\u062a\u200c\u0647\u0627\u06cc \u0645\u0633\u062a\u0642\u06cc\u0645"}},{"_id":"txs5000089287","pcode":{"t":1726570736000,"v":"s281010076"},"ti":{"t":1726570736000,"v":"\u0645\u0639\u0627\u0648\u0646 \u0648\u0632\u06cc\u0631 \u0627\u0645\u0648\u0631 \u0627\u0642\u062a\u0635\u0627\u062f\u06cc \u0648 \u062f\u0627\u0631\u0627\u06cc\u06cc"}},{"_id":"txs5000089275","pcode":{"t":1729664355000,"v":"s281010076"},"ti":{"t":1729664355000,"v":"\u0645\u0639\u0627\u0648\u0646 \u067e\u0698\u0648\u0647\u0634\u060c \u0628\u0631\u0646\u0627\u0645\u0647\u200c\u0631\u06cc\u0632\u06cc \u0648 \u0627\u0645\u0648\u0631 \u0628\u06cc\u0646\u200c\u0627\u0644\u0645\u0644\u0644"}},{"_id":"txs5000149829","pcode":{"t":1784448180000,"v":"s281010076"},"ti":{"t":1784448354000,"v":"\u0646\u062f\u0627\u0631\u062f"}},{"_id":"s281010077","pcode":{"t":1723882916000,"v":"s281010076"},"ti":{"t":1769509046000,"v":"\u0647\u06cc\u0626\u062a \u0648\u0632\u06cc\u0631\u0627\u0646"}},{"_id":"txs5000089252","pcode":{"t":1726563060000,"v":"s281010076"},"ti":{"t":1726563060000,"v":"\u0648\u0632\u06cc\u0631 \u0627\u0645\u0648\u0631 \u0627\u0642\u062a\u0635\u0627\u062f\u06cc \u0648 \u062f\u0627\u0631\u0627\u06cc\u06cc"}},{"_id":"txs5000124265","pcode":{"t":1767515186000,"v":"s281010076"},"ti":{"t":1767515186000,"v":"\u0648\u0632\u06cc\u0631 \u0631\u0627\u0647 \u0648 \u0634\u0647\u0631\u0633\u0627\u0632\u06cc"}},{"_id":"s281010078","pcode":{"t":1723883053000,"v":"s281010076"},"ti":{"t":1723883053000,"v":"\u0648\u0632\u06cc\u0631 \u06cc\u0627 \u0686\u0646\u062f \u0648\u0632\u06cc\u0631"}},{"_id":"txs5000127438","pcode":{"t":1768283305000,"v":"s281010076"},"ti":{"t":1768283305000,"v":"\u0648\u0632\u06cc\u0631\u0627\u0646 \u0639\u0636\u0648 \u06a9\u0627\u0631\u06af\u0631\u0648\u0647 \u062a\u0636\u0645\u06cc\u0646 \u0627\u0645\u0646\u06cc\u062a \u063a\u0630\u0627\u06cc\u06cc \u0648 \u0628\u0647\u0628\u0648\u062f \u0645\u0639\u06cc\u0634\u062a \u0645\u0631\u062f\u0645"}},{"_id":"txs5000089253","pcode":{"t":1726563089000,"v":"s281010076"},"ti":{"t":1726563089000,"v":"\u0686\u0646\u062f \u0648\u0632\u06cc\u0631"}},{"_id":"txs5000089249","ord":{"t":1726562126000,"v":0},"pcode":{"t":1726562126000,"v":"s281010076"},"ti":{"t":1726562126000,"v":"\u0631\u0626\u06cc\u0633 \u06a9\u0644 \u0633\u0627\u0632\u0645\u0627\u0646 \u0627\u0645\u0648\u0631 \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc \u06a9\u0634\u0648\u0631 \u0628\u0647 \u0647\u0645\u0631\u0627\u0647 \u0633\u0627\u06cc\u0631 \u0645\u0631\u0627\u062c\u0639"}},{"_id":"s281010086","ord":{"t":1723883176000,"v":2},"pcode":{"t":1723883176000,"v":"s281010076"},"ti":{"t":1723883176000,"v":"\u062f\u06cc\u0648\u0627\u0646 \u0645\u062d\u0627\u0633\u0628\u0627\u062a"}},{"_id":"s281010081","ord":{"t":1723883123000,"v":2},"pcode":{"t":1723883123000,"v":"s281010076"},"ti":{"t":1723883123000,"v":"\u0631\u0626\u06cc\u0633 \u0642\u0648\u0647 \u0642\u0636\u0627\u06cc\u06cc\u0647"}},{"_id":"s281010080","ord":{"t":1723883106000,"v":2},"pcode":{"t":1723883106000,"v":"s281010076"},"ti":{"t":1723883106000,"v":"\u0631\u0626\u06cc\u0633 \u0645\u062c\u0644\u0633 \u0634\u0648\u0631\u0627\u06cc \u0627\u0633\u0644\u0627\u0645\u06cc"}},{"_id":"s281010082","ord":{"t":1723883135000,"v":2},"pcode":{"t":1723883135000,"v":"s281010076"},"ti":{"t":1723883135000,"v":"\u0631\u0626\u06cc\u0633 \u06a9\u0644 \u0633\u0627\u0632\u0645\u0627\u0646 \u0627\u0645\u0648\u0631 \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc \u0628\u0647 \u0647\u0645\u0631\u0627\u0647 \u0645\u0631\u062c\u0639 \u062f\u06cc\u06af\u0631"}},{"_id":"s281010083","ord":{"t":1723883144000,"v":2},"pcode":{"t":1723883144000,"v":"s281010076"},"ti":{"t":1723883144000,"v":"\u0633\u0627\u06cc\u0631 \u0645\u0631\u0627\u062c\u0639 \u062f\u0631\u0648\u0646 \u0633\u0627\u0632\u0645\u0627\u0646\u06cc \u0628\u062c\u0632 \u0631\u0626\u06cc\u0633 \u06a9\u0644"}},{"_id":"s281010091","ord":{"t":1723883250000,"v":2},"pcode":{"t":1723883250000,"v":"s281010076"},"ti":{"t":1723883250000,"v":"\u06a9\u0627\u0631\u06af\u0631\u0648\u0647 \u0631\u0627\u0647\u0628\u0631\u06cc \u062e\u062f\u0645\u0627\u062a \u062f\u0648\u0644\u062a \u0627\u0644\u06a9\u062a\u0631\u0648\u0646\u06cc\u06a9"}},{"_id":"s281010092","ord":{"t":1723883292000,"v":6},"pcode":{"t":1723883266000,"v":"s281010076"},"ti":{"t":1723883292000,"v":"\u0633\u0627\u06cc\u0631 \u0645\u0631\u0627\u062c\u0639"}},{"_id":"txs5000089654","ord":{"t":1730534531000,"v":10},"pcode":{"t":1730534531000,"v":"s281010076"},"ti":{"t":1730534531000,"v":"\u0645\u062f\u06cc\u0631\u06a9\u0644 \u062f\u0641\u062a\u0631 \u0648\u0632\u0627\u0631\u062a\u06cc"}},{"_id":"txs5000114962","ord":{"t":1759900586000,"v":10},"pcode":{"t":1759900586000,"v":"s281010076"},"ti":{"t":1759900586000,"v":"\u0645\u0639\u0627\u0648\u0646 \u0627\u0648\u0644 \u0631\u0626\u06cc\u0633 \u062c\u0645\u0647\u0648\u0631"}},{"_id":"txs5000103954","ord":{"t":1744000864000,"v":18},"pcode":{"t":1744000864000,"v":"s281010076"},"ti":{"t":1744000864000,"v":"\u0631\u0626\u06cc\u0633 \u0645\u0631\u06a9\u0632 \u0628\u0627\u0632\u0631\u0633\u06cc\u060c \u0645\u0628\u0627\u0631\u0632\u0647 \u0628\u0627 \u0641\u0631\u0627\u0631 \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc \u0648 \u067e\u0648\u0644\u0634\u0648\u06cc\u06cc"}},{"_id":"txs5000107028","ord":{"t":1748667990000,"v":20},"pcode":{"t":1747561569000,"v":"s281010076"},"ti":{"t":1748667990000,"v":"\u0633\u0627\u0632\u0645\u0627\u0646 \u062d\u0633\u0627\u0628\u0631\u0633\u06cc"}},{"_id":"txs5000091102","ord":{"t":1748667997000,"v":21},"pcode":{"t":1736660186000,"v":"s281010076"},"ti":{"t":1748667997000,"v":"\u0633\u0627\u0632\u0645\u0627\u0646 \u0628\u0631\u0646\u0627\u0645\u0647 \u0648 \u0628\u0648\u062f\u062c\u0647 \u06a9\u0634\u0648\u0631"}},{"_id":"txs5000108105","ord":{"t":1748668020000,"v":22},"pcode":{"t":1748668020000,"v":"s281010076"},"ti":{"t":1748668020000,"v":"\u0631\u0626\u06cc\u0633 \u0634\u0648\u0631\u0627\u06cc \u0639\u0627\u0644\u06cc \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000126580","ord":{"t":1768115420000,"v":23},"pcode":{"t":1768115420000,"v":"s281010076"},"ti":{"t":1768115420000,"v":"\u0645\u062f\u06cc\u0631\u06a9\u0644 \u062f\u0641\u062a\u0631 \u0645\u0642\u0631\u0631\u0627\u062a \u0635\u0627\u062f\u0631\u0627\u062a \u0648 \u0648\u0627\u0631\u062f\u0627\u062a \u0633\u0627\u0632\u0645\u0627\u0646 \u062a\u0648\u0633\u0639\u0647 \u062a\u062c\u0627\u0631\u062a \u0627\u06cc\u0631\u0627\u0646"}},{"_id":"txs5000111554","ord":{"t":1756811971000,"v":23},"pcode":{"t":1753700695000,"v":"s281010076"},"ti":{"t":1756811971000,"v":"\u0645\u0639\u0627\u0648\u0646 \u062a\u062d\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f \u0646\u0638\u0627\u0645 \u0645\u0627\u0644\u06cc\u0627\u062a\u06cc"}},{"_id":"txs5000152276","ord":{"t":1791963022000,"v":30},"pcode":{"t":1791963022000,"v":"s281010076"},"ti":{"t":1791963022000,"v":"\u0633\u062a\u0627\u062f \u0647\u0645\u0627\u0647\u0646\u06af\u06cc \u0645\u0628\u0627\u0631\u0632\u0647 \u0628\u0627 \u0645\u0641\u0627\u0633\u062f \u0627\u0642\u062a\u0635\u0627\u062f\u06cc"}},{"_id":"txs5000124264","ord":{"t":1767515171000,"v":100},"pcode":{"t":1767515171000,"v":"s281010076"},"ti":{"t":1767515171000,"v":"\u0648\u0632\u06cc\u0631 \u06a9\u0634\u0648\u0631"}}]},"tmpls":[],"vals":{"bps5000021543":{"v":null},"bps5000070696":{"v":null},"bps5000070697":{"v":null},"bps5000070698":{"v":null},"s281010038":{"v":null,"fjd":"1405\/07\/22"}},"_db":"doc"},"for_id":"WUVWUEpNRnhVL1QyeVJhR2hKemhwSWRuU09LWXd6azNGa1JXQWVYblEzZlZoamlwVGsySUNIbCszRWlnSk5LUHUvalM1YWoxYmEyQkxTZGd0NytiNExORGFXTFJZZUo4MWFHYUg5M1A5RTRFOUUyZ2wyeU4rQzJlL09Ua0Z1bUtka2padm1iTU5qUjUrQWY4aGEzTDVOdS8xeHMxRWNZb2NobksyUnh5UlRxekV4d2xjOSswZUZoQmpCRVVpTzhMMUFuVlQ2WU1BdXdxY0h0OEZ4cVBoVWsyOG9KbWpyMCt0R00xanFBTWtyZVp3NUxyS0o4VFVNMm9XVUNFdW9SVmVOd3g5UkhjVUE3LzlCOXFmMkcvYW4xT3VDTVE2SytnVFJkcUpHbFBERVlmRUpxajUzRE1ZSlQ0TEJtL2JISVZaQ2tDUlMxL0FjNXJQWE1XMkVEcVJkclZiNXhEOURSYVVRZzc2SEJBLy9FPQ","fid":"WnE4U2dJS2U4eXhkekRDLzcwTitnb0JTbUI3ZGZyd2h5ZURVLzkzSjdhTHRBckNBamVBenUvMEZjeXVuWUlXUGVsMU1YcHI5U0IxdmRsTmk4aytxaUE9PQ","_prid":1879049544414459,"replace":false,"target_id":"body"}];
+	$(document).ready(function(){
+		default_processMe_callback('init' , page_json , _page_info['_id'] , $('#center_box') , {"set_prm_target" : true});
+	});
+</script>
+</html>
