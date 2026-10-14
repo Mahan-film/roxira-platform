@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { JsonLd } from "@/components/seo/json-ld";
+import { PwaRegister } from "@/components/pwa/pwa-register";
 import { buildBrandJsonLd } from "@/lib/seo/laws-schema";
 
 /**
@@ -78,6 +79,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <body className="min-h-full flex flex-col font-sans">
         {isGhazi ? <JsonLd id="ghazi-brand-jsonld" data={buildBrandJsonLd()} /> : null}
+        {isGhazi ? <PwaRegister /> : null}
         <AuthProvider>
           {children}
         </AuthProvider>
