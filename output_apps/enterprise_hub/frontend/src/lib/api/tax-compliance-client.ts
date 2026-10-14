@@ -90,7 +90,7 @@ export async function downloadTaxPacket(
 }
 
 /**
- * ارسال بسته امضاشده به سامانه مودیان و ثبت شماره مرجع.
+ * آماده‌سازی محلی بسته امضاشده و تولید شناسه داخلی (اتصال به سامانه مودیان فعال نیست).
  * منطبق با `TaxComplianceController.submit`
  * (POST /enterprise-hub/tax-compliance/signatures/:id/submit).
  */

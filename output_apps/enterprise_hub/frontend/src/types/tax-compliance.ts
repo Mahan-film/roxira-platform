@@ -6,6 +6,7 @@
 
 export enum TaxSubmissionStatus {
   SIGNED = "SIGNED",
+  PREPARED = "PREPARED",
   SENT = "SENT",
   ACCEPTED = "ACCEPTED",
   REJECTED = "REJECTED",
@@ -13,6 +14,8 @@ export enum TaxSubmissionStatus {
 
 export const TAX_SUBMISSION_STATUS_LABELS: Record<TaxSubmissionStatus, string> = {
   [TaxSubmissionStatus.SIGNED]: "امضاشده (در انتظار ارسال)",
+  [TaxSubmissionStatus.PREPARED]:
+    "آماده ارسال — اتصال به سامانه مودیان فعال نیست",
   [TaxSubmissionStatus.SENT]: "ارسال‌شده (در انتظار پذیرش)",
   [TaxSubmissionStatus.ACCEPTED]: "پذیرفته‌شده توسط مودیان",
   [TaxSubmissionStatus.REJECTED]: "ردشده توسط مودیان",

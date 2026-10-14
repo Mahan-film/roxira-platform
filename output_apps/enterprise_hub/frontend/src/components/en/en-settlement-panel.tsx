@@ -164,7 +164,7 @@ export function EnSettlementPanel() {
           </li>
           <li className="flex items-center justify-between py-2.5">
             <span className="text-muted-foreground">Applied rate source</span>
-            <span className="font-mono">Central FX feed</span>
+            <span className="font-mono">Reference rates (not live)</span>
           </li>
         </ul>
 
@@ -175,8 +175,8 @@ export function EnSettlementPanel() {
           </span>
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground">
-          Invoice: {formatCurrency(amount, selected)} · converted at the live
-          Roxira reference rate.
+          Invoice: {formatCurrency(amount, selected)} · converted at the Roxira
+          reference rate (not live).
         </p>
       </div>
     </div>

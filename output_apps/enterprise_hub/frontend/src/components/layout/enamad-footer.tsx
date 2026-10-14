@@ -48,7 +48,7 @@ export function EnamadFooter({ compact = false }: EnamadFooterProps) {
                 دستیار حقوقی فارسی برای تحلیل پرونده و تنظیم پیش‌نویس. پاسخ‌ها بر پایه‌ی متن مواد قانونی بازیابی‌شده‌اند و ممکن است خطا داشته باشند.
               </p>
               <div className="pt-1 flex items-center gap-2 text-muted-foreground text-xs">
-                <span>پشتیبانی شبانه‌روزی:</span>
+                <span>پشتیبانی:</span>
                 <a href="tel:09129367796" className="text-amber-400 font-mono font-bold hover:underline">09129367796</a>
               </div>
             </div>

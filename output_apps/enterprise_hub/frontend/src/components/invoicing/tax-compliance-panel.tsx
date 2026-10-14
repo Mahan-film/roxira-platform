@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
-  BadgeCheckIcon,
   ClockIcon,
   DownloadIcon,
   KeyRoundIcon,
@@ -193,7 +192,7 @@ export function TaxCompliancePanel({ refreshKey = 0 }: TaxCompliancePanelProps) 
     try {
       const detail = await submitTaxSignature(signature.id);
       setSuccessMessage(
-        `بسته ${signature.taxInvoiceNumber} به سامانه مودیان ارسال و پذیرفته شد. شماره مرجع: ${detail.referenceNumber ?? "—"}`,
+        `بسته ${signature.taxInvoiceNumber} آماده ارسال است — اتصال به سامانه مودیان هنوز فعال نشده. شناسه داخلی: ${detail.referenceNumber ?? "—"}`,
       );
       refresh();
     } catch (error) {
@@ -261,8 +260,8 @@ export function TaxCompliancePanel({ refreshKey = 0 }: TaxCompliancePanelProps) 
     return {
       signed: values.filter((item) => item.status === TaxSubmissionStatus.SIGNED)
         .length,
-      accepted: values.filter(
-        (item) => item.status === TaxSubmissionStatus.ACCEPTED,
+      prepared: values.filter(
+        (item) => item.status === TaxSubmissionStatus.PREPARED,
       ).length,
       rejected: values.filter(
         (item) => item.status === TaxSubmissionStatus.REJECTED,
@@ -298,10 +297,10 @@ export function TaxCompliancePanel({ refreshKey = 0 }: TaxCompliancePanelProps) 
         <Card size="sm">
           <CardHeader>
             <CardDescription className="flex items-center gap-1">
-              <BadgeCheckIcon className="size-3.5" /> پذیرفته‌شده توسط مودیان
+              <SendIcon className="size-3.5" /> آماده ارسال (اتصال فعال نیست)
             </CardDescription>
-            <CardTitle className="text-2xl text-emerald-600 dark:text-emerald-400">
-              {stats.accepted.toLocaleString("fa-IR")}
+            <CardTitle className="text-2xl text-amber-600 dark:text-amber-400">
+              {stats.prepared.toLocaleString("fa-IR")}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -358,8 +357,8 @@ export function TaxCompliancePanel({ refreshKey = 0 }: TaxCompliancePanelProps) 
               <SelectItem value={TaxSubmissionStatus.SENT}>
                 {TAX_SUBMISSION_STATUS_LABELS[TaxSubmissionStatus.SENT]}
               </SelectItem>
-              <SelectItem value={TaxSubmissionStatus.ACCEPTED}>
-                {TAX_SUBMISSION_STATUS_LABELS[TaxSubmissionStatus.ACCEPTED]}
+              <SelectItem value={TaxSubmissionStatus.PREPARED}>
+                {TAX_SUBMISSION_STATUS_LABELS[TaxSubmissionStatus.PREPARED]}
               </SelectItem>
               <SelectItem value={TaxSubmissionStatus.REJECTED}>
                 {TAX_SUBMISSION_STATUS_LABELS[TaxSubmissionStatus.REJECTED]}
@@ -476,7 +475,7 @@ export function TaxCompliancePanel({ refreshKey = 0 }: TaxCompliancePanelProps) 
                             onClick={() => handleSubmit(signature)}
                           >
                             <SendIcon />
-                            ارسال به مودیان
+                            آماده‌سازی بسته ارسال
                           </Button>
                         )}
 

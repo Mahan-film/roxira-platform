@@ -11,6 +11,12 @@ export enum Currency {
   IRR = "IRR",
 }
 
+/**
+ * فهرست ارزهای پشتیبانی‌شده — منبع واحد شمارش در رابط کاربری.
+ * باید با `SUPPORTED_CURRENCIES` در بک‌اند هم‌گام بماند.
+ */
+export const SUPPORTED_CURRENCIES: Currency[] = Object.values(Currency);
+
 export interface CurrencyMetadata {
   code: Currency;
   name: string;

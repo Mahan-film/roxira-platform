@@ -11,7 +11,7 @@ import {
   createPublicKey,
   generateKeyPair as generateKeyPairCallback,
 } from 'crypto';
-import { FindOptionsWhere, ILike } from 'typeorm';
+import { FindOptionsWhere, ILike, IsNull, Not } from 'typeorm';
 import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
 import {
@@ -411,9 +411,16 @@ export class TaxComplianceService implements OnModuleInit {
   }
 
   /**
-   * ارسال بسته امضاشده به سامانه مودیان و ثبت شماره مرجع پذیرش.
-   * (در محیط واقعی این مرحله از طریق وب‌سرویس رسمی انجام می‌شود؛ در این
-   * پیاده‌سازی، چرخه پذیرش به‌صورت بومی شبیه‌سازی و ثبت می‌گردد.)
+   * آماده‌سازی محلی بسته امضاشده برای ارسال به سامانه مودیان.
+   *
+   * در این نسخه هیچ ارسالی به سامانه مودیان انجام نمی‌شود و اتصال به
+   * وب‌سرویس رسمی هنوز فعال نیست؛ بنابراین وضعیت «پذیرفته‌شده» هرگز ثبت
+   * نمی‌گردد. بسته به‌صورت محلی آماده و یک شناسه داخلی برای آن تولید می‌شود.
+   *
+   * برای حفظ سازگاری با enum فعلی پایگاه‌داده (افزودن مقدار جدید به enum
+   * نیازمند Migration است و Migration جدیدی اضافه نشده)، مقدار ذخیره‌شده
+   * روی همان `SIGNED` باقی می‌ماند و وضعیت `PREPARED` تنها در پاسخ API/UI
+   * ارائه می‌شود (نگاه کنید به `toResponse`).
    */
   async submitSignature(id: string): Promise<TaxSignatureDetailResponseDto> {
     const signature = await this.taxComplianceRepository.findSignatureById(id);
@@ -421,19 +428,20 @@ export class TaxComplianceService implements OnModuleInit {
       throw new NotFoundException(`بسته مالیاتی با شناسه ${id} یافت نشد.`);
     }
 
-    if (signature.status === TaxSubmissionStatus.ACCEPTED) {
-      throw new ConflictException('این بسته قبلاً توسط سامانه مودیان پذیرفته شده است.');
+    if (signature.referenceNumber) {
+      throw new ConflictException(
+        'این بسته قبلاً به‌صورت محلی آماده ارسال شده است.',
+      );
     }
 
-    signature.status = TaxSubmissionStatus.ACCEPTED;
-    signature.referenceNumber = this.generateReferenceNumber();
+    signature.referenceNumber = this.generateLocalReferenceNumber();
     signature.errorMessage = null;
     const saved = await this.taxComplianceRepository.saveSignature(signature);
 
     return this.toDetailResponse(saved);
   }
 
-  private generateReferenceNumber(): string {
+  private generateLocalReferenceNumber(): string {
     const now = new Date();
     const datePart = [
       now.getUTCFullYear(),
@@ -456,7 +464,16 @@ export class TaxComplianceService implements OnModuleInit {
 
     const where: FindOptionsWhere<TaxInvoiceSignatureEntity> = {};
     if (status) {
-      where.status = status;
+      if (status === TaxSubmissionStatus.PREPARED) {
+        // وضعیت PREPARED در پایگاه‌داده ذخیره نمی‌شود (بدون Migration)؛
+        // رکوردهای آماده‌شده با وجود شناسه داخلی قابل تشخیص‌اند.
+        where.referenceNumber = Not(IsNull());
+      } else if (status === TaxSubmissionStatus.SIGNED) {
+        where.status = TaxSubmissionStatus.SIGNED;
+        where.referenceNumber = IsNull();
+      } else {
+        where.status = status;
+      }
     }
     if (taxInvoiceNumber) {
       where.taxInvoiceNumber = ILike(`%${taxInvoiceNumber}%`);
@@ -547,7 +564,9 @@ export class TaxComplianceService implements OnModuleInit {
       jwsSignature: entity.jwsSignature,
       keyId: entity.keyId,
       keyFingerprint: entity.keyFingerprint,
-      status: entity.status,
+      status: entity.referenceNumber
+        ? TaxSubmissionStatus.PREPARED
+        : entity.status,
       referenceNumber: entity.referenceNumber,
       errorMessage: entity.errorMessage,
       qrCodePayload: this.extractQrCode(entity),

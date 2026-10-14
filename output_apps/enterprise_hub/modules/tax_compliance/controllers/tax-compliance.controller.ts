@@ -142,13 +142,14 @@ export class TaxComplianceController {
   @Post('signatures/:id/submit')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'ارسال بسته امضاشده به سامانه مودیان و ثبت شماره مرجع',
+    summary:
+      'آماده‌سازی محلی بسته امضاشده و تولید شناسه داخلی (اتصال به سامانه مودیان فعال نیست)',
   })
   @ApiResponse({ status: HttpStatus.OK, type: TaxSignatureDetailResponseDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'بسته یافت نشد' })
   @ApiResponse({
     status: HttpStatus.CONFLICT,
-    description: 'بسته قبلاً پذیرفته شده است',
+    description: 'بسته قبلاً به‌صورت محلی آماده ارسال شده است',
   })
   async submit(
     @Param('id', ParseUUIDPipe) id: string,

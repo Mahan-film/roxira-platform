@@ -36,8 +36,8 @@ export const TAX_AUTHORITY_VERIFY_BASE_URL = 'https://moadian.gov.ir/verify';
 /** پیشوند شناسه یکتای کلید امضا. */
 export const SIGNING_KEY_ID_PREFIX = 'ROXIRA-TAX-KEY';
 
-/** پیشوند شماره مرجع ارسال بسته به سامانه مودیان. */
-export const TAX_SUBMISSION_REFERENCE_PREFIX = 'MDN';
+/** پیشوند «شناسه داخلی» تولیدشده محلی هنگام آماده‌سازی بسته برای ارسال. */
+export const TAX_SUBMISSION_REFERENCE_PREFIX = 'LOCAL';
 
 /** مقدار پیش‌فرض صفحه‌بندی فهرست امضاها. */
 export const TAX_SIGNATURE_PAGE_SIZE_DEFAULT = 20;

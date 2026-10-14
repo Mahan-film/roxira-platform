@@ -134,11 +134,11 @@ export default function ServicesPage() {
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>
-                  <span><strong>محاسبات رسمی:</strong> تاخیر تادیه بر اساس شاخص بانک مرکزی و اجرای مستقیم چک صیادی (ماده ۲۳)</span>
+                  <span><strong>محاسبات رسمی:</strong> تاخیر تادیه بر اساس شاخص بانک مرکزی</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="text-amber-400 font-bold">✓</span>
-                  <span><strong>پشتیبانی اولویت‌دار اختصاصی ۲۴ ساعته</strong></span>
+                  <span><strong>پشتیبانی از طریق فرم تماس</strong></span>
                 </li>
               </ul>
             </div>
@@ -199,10 +199,9 @@ export default function ServicesPage() {
             <span>دارای نماد اعتماد الکترونیکی معتبر از وزارت صنعت، معدن و تجارت (کد ۷۴۹۱۴۳۹)</span>
           </div>
           <div>
-            <span>پشتیبانی شبانه‌روزی: </span>
-            <a href="tel:09129367796" className="text-amber-400 font-mono font-bold hover:underline">
-              09129367796
-            </a>
+            <Link href="/support" className="text-amber-400 font-bold hover:underline">
+              پشتیبانی از طریق فرم تماس
+            </Link>
           </div>
         </section>
       </main>

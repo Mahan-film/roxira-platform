@@ -82,9 +82,9 @@ const API_GROUPS: ApiGroup[] = [
         id: "tax-submit",
         method: "POST",
         path: "/api/backend/enterprise-hub/tax-compliance/signatures/{id}/submit",
-        summary: "ارسال بسته امضاشده به سامانه مودیان و ثبت شماره مرجع",
+        summary: "آماده‌سازی محلی بسته امضاشده (اتصال به سامانه مودیان فعال نیست)",
         auth: true,
-        responseExample: '{\n  "id": "sig_01HZY",\n  "status": "SUBMITTED",\n  "referenceNumber": "A1B2C3D4"\n}',
+        responseExample: '{\n  "id": "sig_01HZY",\n  "status": "PREPARED",\n  "referenceNumber": "LOCAL-20261014-A1B2C3D4"\n}',
       },
       {
         id: "tax-verify",

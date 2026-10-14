@@ -106,10 +106,10 @@ export default function ContactPage() {
               <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/[0.05] p-6">
                 <span className="flex items-center gap-2 text-xs font-bold text-emerald-300">
                   <Clock className="size-4" />
-                  زمان پاسخ‌گویی
+                  پاسخ‌گویی
                 </span>
                 <p className="mt-2 text-xs leading-relaxed text-slate-300">
-                  درخواست‌های سازمانی معمولاً در کمتر از یک روز کاری بررسی و پاسخ داده می‌شوند.
+                  درخواست‌های سازمانی پس از ثبت بررسی می‌شوند و در صورت نیاز کارشناس فروش با شما تماس می‌گیرد.
                 </p>
               </div>
             </aside>

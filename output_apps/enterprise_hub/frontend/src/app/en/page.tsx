@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { PasskeyLoginButton } from "@/components/en/passkey-login-button";
 import { EnSettlementPanel } from "@/components/en/en-settlement-panel";
+import { SUPPORTED_CURRENCIES } from "@/types/currency";
 
 const MODULES: {
   icon: LucideIcon;
@@ -84,21 +85,21 @@ const MODULES: {
 const TRUST = [
   {
     icon: Server,
-    title: "High availability",
+    title: "Service monitoring",
     description:
-      "Multi-layer cloud architecture with read/write pooling, continuous monitoring and 24/7 uptime for mission-critical workloads.",
+      "Continuous monitoring of the enterprise services with read/write pooling for database workloads.",
   },
   {
     icon: BadgeCheck,
-    title: "Regulatory compliance",
+    title: "Regulatory alignment",
     description:
-      "Invoices and settlement records align with electronic tax reporting and cross-border documentary requirements.",
+      "Invoices and settlement records are structured for electronic tax reporting.",
   },
   {
     icon: Lock,
     title: "Data protection",
     description:
-      "TLS transport, scoped access control and encryption at rest for corporate documents and financial records.",
+      "HTTPS transport everywhere and scoped, role-based access control for enterprise data.",
   },
 ];
 
@@ -199,10 +200,13 @@ export default function InternationalPortal() {
 
             <dl className="mt-6 grid w-full max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4">
               {[
-                { value: "7+", label: "Currencies supported" },
+                {
+                  value: SUPPORTED_CURRENCIES.length.toLocaleString("en-US"),
+                  label: "Currencies supported",
+                },
                 { value: "REST", label: "OpenAPI 3 contracts" },
-                { value: "24/7", label: "Service availability" },
-                { value: "TLS 1.3", label: "Encrypted transport" },
+                { value: "HTTPS", label: "Encrypted transport" },
+                { value: "JWT", label: "Scoped API access" },
               ].map((stat) => (
                 <div key={stat.label} className="bg-card px-3 py-4">
                   <dt className="text-lg font-black text-indigo-300">
@@ -358,15 +362,15 @@ curl -X POST \\
           <div className="mb-8 flex flex-col gap-2">
             <span className="inline-flex w-fit items-center gap-1.5 text-xs font-bold text-emerald-300">
               <Sparkles className="size-4" />
-              Live multi-currency settlement
+              Multi-currency reference rates
             </span>
             <h2 className="text-2xl font-black tracking-tight sm:text-3xl">
               Multi-currency connection for global trade
             </h2>
             <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Switch the settlement currency and preview live conversions for
-              USD, EUR, AED and IRR. The same reference rates power invoice and
-              general-ledger calculations across the platform.
+              Switch the settlement currency and preview reference conversions for
+              USD, EUR, AED and IRR. These reference rates (not live) also power
+              invoice and general-ledger calculations across the platform.
             </p>
           </div>
 

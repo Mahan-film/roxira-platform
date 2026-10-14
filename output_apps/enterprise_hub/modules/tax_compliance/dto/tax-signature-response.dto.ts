@@ -38,7 +38,10 @@ export class TaxSignatureResponseDto {
   @ApiProperty({ enum: TaxSubmissionStatus, description: 'وضعیت ارسال مالیاتی' })
   status: TaxSubmissionStatus;
 
-  @ApiPropertyOptional({ description: 'شماره مرجع پذیرش سامانه مودیان' })
+  @ApiPropertyOptional({
+    description:
+      'شناسه داخلی تولیدشده به‌صورت محلی (اتصال به سامانه مودیان فعال نیست)',
+  })
   referenceNumber: string | null;
 
   @ApiPropertyOptional({ description: 'پیام خطا در صورت رد شدن بسته' })
