@@ -564,6 +564,24 @@ except ImportError:
         print(f"[SMARTJUDGE][LLM-ROUTER] unavailable: {_router_import_exc}", file=sys.stderr)
         _llm_router = None
 
+# Free-first key-pool gateway (AGENTS.md section 4, owner decision 2026-10-14):
+# SMARTJUDGE_LLM_GATEWAY routes chat/answer calls to the LiteLLM key pool with
+# free models first and paid DeepSeek as fallback. Empty (default) = unchanged.
+try:
+    from . import llm_gateway as _llm_gateway
+except ImportError:
+    try:
+        from output_apps.generated_modules.smartjudge import llm_gateway as _llm_gateway
+    except Exception as _gateway_import_exc:  # noqa: BLE001 - never block server boot
+        print(f"[SMARTJUDGE][LLM-GATEWAY] unavailable: {_gateway_import_exc}", file=sys.stderr)
+        _llm_gateway = None
+
+
+def _gateway_ready() -> bool:
+    """True when the free-first key-pool gateway is configured (URL + master key)."""
+    return _llm_gateway is not None and _llm_gateway.configured()
+
+
 # Subscription plan -> router tier. VIP maps to the registry's `strong` role
 # (DeepSeek V4 Pro first, W24), FREE maps to `cheap` (DeepSeek V4.1 Flash
 # first, LLM_TIER_CHEAP default) -- see OPENROUTER_TIERS above.
@@ -1702,9 +1720,10 @@ def _reasoning_body(model: str) -> Optional[dict]:
     return {"enabled": True, "effort": "low"}
 
 
-def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature: float, usage_out: dict):
+def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature: float, usage_out: dict,
+                      *, gateway: bool = False):
     async def opener(model: str):
-        if _is_free_model_id(model):  # case data must never reach a :free model
+        if not gateway and _is_free_model_id(model):  # direct path: case data never reaches a :free model
             raise _chat_fast.LLMProviderError(None, model, "free model refused")
         body = {
             "model": model, "messages": messages, "stream": True,
@@ -1714,13 +1733,18 @@ def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature
         reasoning = _reasoning_body(model)
         if reasoning is not None:
             body["reasoning"] = reasoning
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://ghazihoushmand.ir",
-            "X-Title": "Roxira SmartJudge",
-        }
-        async with _llm_http_client().stream("POST", OPENROUTER_CHAT_URL, json=body, headers=headers) as resp:
+        if gateway:
+            url = _llm_gateway.chat_completions_url()
+            headers = _llm_gateway.headers()
+        else:
+            url = OPENROUTER_CHAT_URL
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://ghazihoushmand.ir",
+                "X-Title": "Roxira SmartJudge",
+            }
+        async with _llm_http_client().stream("POST", url, json=body, headers=headers) as resp:
             if resp.status_code >= 400:
                 raw = (await resp.aread())[:200].decode("utf-8", errors="replace")
                 raise _chat_fast.LLMProviderError(resp.status_code, model, raw)
@@ -1749,6 +1773,20 @@ def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature
 async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool, max_tokens: int,
                              temperature: float, on_delta=None):
     """Returns (StreamOutcome, failure_kind). Empty outcome.text means every provider failed."""
+    # Free-first key-pool gateway (SMARTJUDGE_LLM_GATEWAY), if configured. A
+    # failure here (network/5xx/timeout) falls back to the direct path below.
+    if _gateway_ready():
+        gw_outcome = await _chat_fast.stream_with_fallback(
+            [(_llm_gateway.model(), CHAT_TTFT_FAST_S)],
+            _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, {}, gateway=True),
+            on_delta, total_timeout=CHAT_LLM_TOTAL_S,
+        )
+        if gw_outcome.text:
+            _llm_gateway.log_served("gateway", gw_outcome.model)
+            return gw_outcome, "ok"
+        print(f"[LLM-UNAVAILABLE] provider=key-pool-gateway status=None "
+              f"model={_llm_gateway.model()} kind=gateway_fallback", file=sys.stderr)
+
     plan = _chat_model_plan(selected_tier, is_voice)
     keys = _llm_api_keys()
     outcome = _chat_fast.StreamOutcome()
@@ -1760,6 +1798,8 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
             total_timeout=CHAT_LLM_TOTAL_S,
         )
         if outcome.text:
+            if _llm_gateway is not None:
+                _llm_gateway.log_served("direct", outcome.model)
             return outcome, "ok"
         kinds = [k for _, _, k in outcome.failures]
         kind = next((k for k in ("quota", "auth", "upstream", "timeout") if k in kinds), "error")
@@ -2039,7 +2079,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
     _t_llm = time.perf_counter()
     llm_failed_kind = None
-    if OPENROUTER_API_KEY or _llm_api_keys() or _use_llm_router():
+    if OPENROUTER_API_KEY or _llm_api_keys() or _use_llm_router() or _gateway_ready():
         try:
             is_voice = bool(payload.get("is_voice_mode"))
             # FALLBACK rows are fixed placeholders, not corpus hits: never feed them as grounding.
@@ -3777,10 +3817,22 @@ def _apply_cache_control(msgs: List[dict]) -> List[dict]:
     return msgs
 
 
-async def _openrouter_stream(model: str, messages: List[dict], usage_out: Optional[dict] = None):
-    """استریم توکن‌به‌توکن از OpenRouter برای یک مدل مشخص (async generator)."""
-    if not OPENROUTER_API_KEY:
-        raise RuntimeError("OPENROUTER_API_KEY پیکربندی نشده است")
+async def _openrouter_stream(model: str, messages: List[dict], usage_out: Optional[dict] = None,
+                             *, gateway: bool = False):
+    """استریم توکن‌به‌توکن؛ مسیر مستقیم OpenRouter یا gateway آزاد-اول (async generator)."""
+    if gateway:
+        url = _llm_gateway.chat_completions_url()
+        headers = _llm_gateway.headers()
+    else:
+        if not OPENROUTER_API_KEY:
+            raise RuntimeError("OPENROUTER_API_KEY پیکربندی نشده است")
+        url = OPENROUTER_CHAT_URL
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://ghazihoushmand.ir",
+            "X-Title": "Roxira SmartJudge",
+        }
     body = {
         "model": model,
         "messages": [_system_message()] + _apply_cache_control(messages),
@@ -3788,15 +3840,9 @@ async def _openrouter_stream(model: str, messages: List[dict], usage_out: Option
         "temperature": 0.3,
         "usage": {"include": True},
     }
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://ghazihoushmand.ir",
-        "X-Title": "Roxira SmartJudge",
-    }
     timeout = httpx.Timeout(120.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream("POST", OPENROUTER_CHAT_URL, json=body, headers=headers) as resp:
+        async with client.stream("POST", url, json=body, headers=headers) as resp:
             if resp.status_code >= 400:
                 raw = (await resp.aread())[:300].decode("utf-8", errors="replace")
                 raise RuntimeError(f"{model} -> HTTP {resp.status_code}: {raw}")
@@ -4142,10 +4188,15 @@ async def chat_stream(request: Request, payload: dict = Body(default=None)):
             return
 
         last_error = None
-        for model in (cfg["primary_model"], cfg["fallback_model"]):
+        attempts = []
+        if _gateway_ready():  # free-first key-pool gateway first, direct models as fallback
+            attempts.append((_llm_gateway.model(), True))
+        attempts += [(cfg["primary_model"], False), (cfg["fallback_model"], False)]
+        for model, via_gateway in attempts:
             usage_out: dict = {}
+            stream_kwargs = {"gateway": True} if via_gateway else {}
             try:
-                async for chunk in _openrouter_stream(model, messages, usage_out):
+                async for chunk in _openrouter_stream(model, messages, usage_out, **stream_kwargs):
                     yield _sse_frame("delta", {"content": _chat_safety.to_latin_digits(chunk)})
                 # chat-stream does no corpus retrieval: every answer is ungrounded.
                 yield _sse_frame("notice", {
@@ -4154,9 +4205,12 @@ async def chat_stream(request: Request, payload: dict = Body(default=None)):
                 })
                 yield _sse_frame("delta", {"content": "\n\n" + _chat_safety.CHAT_DISCLAIMER})
                 details = (usage_out.get("prompt_tokens_details") or {})
+                if _llm_gateway is not None:
+                    _llm_gateway.log_served("gateway" if via_gateway else "direct", model)
                 yield _sse_frame("done", {
                     "model": model,
-                    "fallback_used": model != cfg["primary_model"],
+                    "path": "gateway" if via_gateway else "direct",
+                    "fallback_used": (not via_gateway) and model != cfg["primary_model"],
                     "usage": usage_out or None,
                     "cache": {
                         "prompt_tokens": usage_out.get("prompt_tokens"),

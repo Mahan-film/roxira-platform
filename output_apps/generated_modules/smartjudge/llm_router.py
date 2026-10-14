@@ -53,7 +53,7 @@ from typing import Any
 
 import httpx
 
-from . import model_registry
+from . import llm_gateway, model_registry
 
 log = logging.getLogger("llm_router")
 usage_log = logging.getLogger("llm_router.usage")
@@ -453,11 +453,19 @@ async def _post_with_retries(
     fail_fast_on_429: bool,
     timeout: float | None,
     max_retries: int | None,
+    url: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], int]:
-    """POST to /chat/completions. Returns (json, attempts) or raises _CallFailed."""
-    url = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-    url += "/chat/completions"
-    headers = _headers()
+    """POST to /chat/completions. Returns (json, attempts) or raises _CallFailed.
+
+    ``url``/``headers`` default to the direct OpenRouter endpoint and key; the
+    free-first key-pool gateway (llm_gateway.py) passes its own endpoint/headers.
+    """
+    if url is None:
+        base = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+        url = f"{base}/chat/completions"
+    if headers is None:
+        headers = _headers()
     if max_retries is None:
         max_retries = int(_env_float("LLM_MAX_RETRIES", 2))
     post_kw: dict[str, Any] = {}
@@ -503,12 +511,15 @@ async def _post_with_reasoning_fallback(
     fail_fast_on_429: bool,
     timeout: float | None,
     max_retries: int | None,
+    url: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], int]:
     """POST, and if a provider rejects the ``reasoning`` field (HTTP 400) retry
     once with it stripped. Returns (json, attempts), including the rejected try."""
     try:
         return await _post_with_retries(
-            body, fail_fast_on_429=fail_fast_on_429, timeout=timeout, max_retries=max_retries
+            body, fail_fast_on_429=fail_fast_on_429, timeout=timeout, max_retries=max_retries,
+            url=url, headers=headers,
         )
     except _CallFailed as exc:
         if exc.status != 400 or "reasoning" not in body:
@@ -516,7 +527,8 @@ async def _post_with_reasoning_fallback(
         log.warning("provider rejected the reasoning field (HTTP 400); retrying once without it")
         stripped = {k: v for k, v in body.items() if k != "reasoning"}
         data, attempts = await _post_with_retries(
-            stripped, fail_fast_on_429=fail_fast_on_429, timeout=timeout, max_retries=max_retries
+            stripped, fail_fast_on_429=fail_fast_on_429, timeout=timeout, max_retries=max_retries,
+            url=url, headers=headers,
         )
         return data, attempts + 1
 
@@ -570,6 +582,40 @@ async def complete(
             _log_usage_background(_usage_record(base, result, models, t0, "ok", None))
             return result
 
+    # Free-first key-pool gateway (AGENTS.md section 4). When configured, the
+    # request goes there first with a single group model; any failure (network,
+    # 5xx, timeout, bad key) falls back to the direct OpenRouter path below.
+    if llm_gateway.configured():
+        gw_body: dict[str, Any] = {
+            k: v for k, v in params.items() if k not in ("models", "provider")
+        }
+        gw_body["model"] = llm_gateway.model()
+        gw_body["messages"] = messages
+        reasoning = reasoning_param(tier)
+        if reasoning is not None:
+            gw_body["reasoning"] = reasoning
+        try:
+            data, attempts = await _post_with_reasoning_fallback(
+                gw_body, fail_fast_on_429=False, timeout=timeout, max_retries=max_retries,
+                url=llm_gateway.chat_completions_url(), headers=llm_gateway.headers(),
+            )
+        except _CallFailed as exc:
+            log.warning(
+                "key-pool gateway call failed (model=%s status=%s); falling back to direct OpenRouter",
+                llm_gateway.model(), exc.status,
+            )
+        else:
+            result = _parse_result(data, tier, attempts)
+            llm_gateway.log_served("gateway", result.model or llm_gateway.model())
+            _log_usage_background(
+                _usage_record(base, result, [llm_gateway.model()], t0, "ok", 200)
+            )
+            if key and result.content:
+                cached = asdict(result)
+                cached.pop("raw", None)
+                await _cache_set(key, cached)
+            return result
+
     total_attempts = 0
     while True:
         body: dict[str, Any] = {**params, "models": models, "messages": messages}
@@ -598,6 +644,7 @@ async def complete(
         break
 
     result = _parse_result(data, tier, total_attempts)
+    llm_gateway.log_served("direct", result.model)
     _log_usage_background(_usage_record(base, result, models, t0, "ok", 200))
     if key and result.content:
         cached = asdict(result)

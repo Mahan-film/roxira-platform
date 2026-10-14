@@ -38,6 +38,14 @@ services:
       - KAVENEGAR_TEMPLATE_ROXIRA=${KAVENEGAR_TEMPLATE_ROXIRA:-roxira-verify}
       # OpenRouter API Key — موتور دادرسی، استنتاج هوش مصنوعی و پیاده‌سازی صوت
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in .env}
+      # Free-first LLM key-pool gateway (AGENTS.md section 4, 2026-10-14). An
+      # empty base URL keeps today's direct-OpenRouter behaviour; when set,
+      # chat/answer calls go to the LiteLLM gateway with KEYPOOL_MASTER_KEY as
+      # the OpenAI api key and the group model below (free models first, paid
+      # DeepSeek fallback). The gateway container resolves on roxira-keypool_default.
+      - SMARTJUDGE_LLM_GATEWAY=${SMARTJUDGE_LLM_GATEWAY:-}
+      - SMARTJUDGE_LLM_GATEWAY_MODEL=${SMARTJUDGE_LLM_GATEWAY_MODEL:-agent-strong-free}
+      - KEYPOOL_MASTER_KEY=${KEYPOOL_MASTER_KEY:-}
       # Kira AI — موتور استدلال سنگین قضایی و Fallback Engine بدون هزینه
       - KIRA_BASE_URL=${KIRA_BASE_URL:-https://kiraai.vn/api/v1}
       - KIRA_API_KEY=${KIRA_API_KEY:?set KIRA_API_KEY in .env}
@@ -75,6 +83,7 @@ services:
         max-file: "3"
     networks:
       - roxira_net
+      - keypool
 
   postgres_prod:
     image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
@@ -425,6 +434,11 @@ networks:
   docker_proxy_net:
     driver: bridge
     internal: true
+  # Default bridge of the key-pool compose project (`-p roxira-keypool` in
+  # scripts/infra/key_pool/install.sh); container `roxira_keypool` resolves here.
+  keypool:
+    external: true
+    name: roxira-keypool_default
 
 volumes:
   postgres_data:
