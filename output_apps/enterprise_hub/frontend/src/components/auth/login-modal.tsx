@@ -16,7 +16,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AuthServiceDomain, AuthSession, UserRole } from "@/lib/api/auth-client";
+import {
+  type AuthServiceDomain,
+  type AuthSession,
+  type UserRole,
+  sendOtp as sendEnterpriseOtp,
+  verifyOtp as verifyEnterpriseOtp,
+} from "@/lib/api/auth-client";
+import { ApiClientError } from "@/lib/api/http-client";
 import {
   JudgeAuthError,
   isValidIranianMobile,
@@ -54,11 +61,14 @@ interface LoginModalProps {
  *   ۱) ورود شماره همراه ایران (09xxxxxxxxx) و ارسال کد ۵ رقمی
  *   ۲) ورود کد و صدور سشن JWT
  *
- * نکتهٔ حیاتی: فراخوانی‌ها مستقیماً و «فقط» از طریق
- * `judge-auth-client` به مسیر `/api/v1/apps/judge/auth/send-otp` انجام
- * می‌شود؛ شماره همراه پیش از ارسال نرمال‌سازی می‌گردد (ارقام فارسی/عربی →
- * ASCII) و پس از دریافت پاسخ موفق، مرحلهٔ رابط به‌صورت خودکار به ورود کد
- * منتقل می‌شود.
+ * نکتهٔ حیاتی مسیرها:
+ *   • دامنهٔ قاضی هوشمند (`GHAZI`) → از `judge-auth-client` به مسیر قطعی
+ *     `/api/v1/apps/judge/auth/send-otp` (موتور پایتون).
+ *   • پورتال سازمانی روکسیرا (`ROXIRA`) → از `auth-client` به مسیر NestJS
+ *     `/api/backend/auth/...`؛ در این حالت فیلد اختیاری «نام سازمان» نیز
+ *     به‌عنوان `organizationName` در verify-otp ارسال می‌شود.
+ * شماره همراه پیش از ارسال نرمال‌سازی می‌گردد و پس از پاسخ موفق، مرحلهٔ
+ * رابط به‌صورت خودکار به ورود کد منتقل می‌شود.
  */
 export function LoginModal({
   open,
@@ -79,6 +89,10 @@ export function LoginModal({
   const [smsDelivered, setSmsDelivered] = useState<boolean | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [networkFailed, setNetworkFailed] = useState(false);
+  const [organizationName, setOrganizationName] = useState("");
+
+  /** ورود از پورتال سازمانی روکسیرا (نه قاضی هوشمند) — مسیر NestJS فعال می‌شود. */
+  const isEnterprise = serviceDomain === "ROXIRA";
 
   useEffect(() => {
     if (!open) return;
@@ -91,6 +105,7 @@ export function LoginModal({
     setSmsDelivered(null);
     setRetrying(false);
     setNetworkFailed(false);
+    setOrganizationName("");
   }, [open]);
 
   useEffect(() => {
@@ -115,48 +130,80 @@ export function LoginModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleClose, open]);
 
-  const requestCode = useCallback(async (targetPhone: string) => {
-    setLoading(true);
-    setError(null);
-    setNotice(null);
-    setDevCode(null);
-    setNetworkFailed(false);
-    setRetrying(false);
-    try {
-      const response = await sendJudgeOtp(targetPhone, { onRetry: () => setRetrying(true) });
-
-      // پاسخ موفق → انتقال قطعی رابط به حالت ورود کد تأیید
-      setPhone(targetPhone);
-      setStep("code");
-      setCode("");
-      setResendIn(
-        response.alreadySent && response.retryAfter
-          ? Math.min(response.retryAfter, RESEND_COOLDOWN_SECONDS)
-          : RESEND_COOLDOWN_SECONDS,
-      );
-      setSmsDelivered(response.deliveryConfirmed);
-      setDevCode(SHOW_DEV_CODE ? response.devCode : null);
-      const validMinutes = Math.max(1, Math.round((response.expiresIn || 180) / 60));
-      setNotice(
-        response.alreadySent
-          ? "کد تأیید پیش‌تر ارسال شده است؛ کد پیامک‌شده را وارد کنید."
-          : response.deliveryConfirmed
-          ? `کد تأیید ارسال شد. تا ${validMinutes.toLocaleString("fa-IR")} دقیقه اعتبار دارد. برای ارسال مجدد ۶۰ ثانیه صبر کنید.`
-          : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، چند لحظه بعد دوباره درخواست کنید.",
-      );
-    } catch (err) {
-      if (err instanceof JudgeAuthError) {
-        setError(err.details);
-        setNetworkFailed(err.statusCode === 0);
-      } else {
-        setError([NETWORK_ERROR_COPY]);
-        setNetworkFailed(true);
-      }
-    } finally {
-      setLoading(false);
+  const requestCode = useCallback(
+    async (targetPhone: string) => {
+      setLoading(true);
+      setError(null);
+      setNotice(null);
+      setDevCode(null);
+      setNetworkFailed(false);
       setRetrying(false);
-    }
-  }, []);
+      try {
+        if (isEnterprise) {
+          // پورتال سازمانی: مسیر NestJS (`/api/backend/auth/send-otp`)
+          const response = await sendEnterpriseOtp({
+            phone: targetPhone,
+            serviceDomain: "ROXIRA",
+          });
+          setPhone(targetPhone);
+          setStep("code");
+          setCode("");
+          setResendIn(RESEND_COOLDOWN_SECONDS);
+          setSmsDelivered(response.smsDelivered);
+          setDevCode(null);
+          const validMinutes = Math.max(
+            1,
+            Math.round((response.expiresIn || 120) / 60),
+          );
+          setNotice(
+            response.smsDelivered
+              ? `کد تأیید ارسال شد. تا ${validMinutes.toLocaleString("fa-IR")} دقیقه اعتبار دارد. برای ارسال مجدد ۶۰ ثانیه صبر کنید.`
+              : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، چند لحظه بعد دوباره درخواست کنید.",
+          );
+          return;
+        }
+
+        const response = await sendJudgeOtp(targetPhone, {
+          onRetry: () => setRetrying(true),
+        });
+
+        // پاسخ موفق → انتقال قطعی رابط به حالت ورود کد تأیید
+        setPhone(targetPhone);
+        setStep("code");
+        setCode("");
+        setResendIn(
+          response.alreadySent && response.retryAfter
+            ? Math.min(response.retryAfter, RESEND_COOLDOWN_SECONDS)
+            : RESEND_COOLDOWN_SECONDS,
+        );
+        setSmsDelivered(response.deliveryConfirmed);
+        setDevCode(SHOW_DEV_CODE ? response.devCode : null);
+        const validMinutes = Math.max(
+          1,
+          Math.round((response.expiresIn || 180) / 60),
+        );
+        setNotice(
+          response.alreadySent
+            ? "کد تأیید پیش‌تر ارسال شده است؛ کد پیامک‌شده را وارد کنید."
+            : response.deliveryConfirmed
+              ? `کد تأیید ارسال شد. تا ${validMinutes.toLocaleString("fa-IR")} دقیقه اعتبار دارد. برای ارسال مجدد ۶۰ ثانیه صبر کنید.`
+              : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، چند لحظه بعد دوباره درخواست کنید.",
+        );
+      } catch (err) {
+        if (err instanceof JudgeAuthError || err instanceof ApiClientError) {
+          setError(err.details);
+          setNetworkFailed(err.statusCode === 0);
+        } else {
+          setError([NETWORK_ERROR_COPY]);
+          setNetworkFailed(true);
+        }
+      } finally {
+        setLoading(false);
+        setRetrying(false);
+      }
+    },
+    [isEnterprise],
+  );
 
   const handleSend = useCallback(
     async (event: React.FormEvent) => {
@@ -185,7 +232,22 @@ export function LoginModal({
       setNetworkFailed(false);
       setRetrying(false);
       try {
-        const session = await verifyJudgeOtp(phone, cleanCode, { onRetry: () => setRetrying(true) });
+        if (isEnterprise) {
+          const trimmedOrganization = organizationName.trim();
+          const session = await verifyEnterpriseOtp({
+            phone,
+            code: cleanCode,
+            serviceDomain: "ROXIRA",
+            organizationName: trimmedOrganization || undefined,
+          });
+          onAuthenticated(session);
+          onClose();
+          return;
+        }
+
+        const session = await verifyJudgeOtp(phone, cleanCode, {
+          onRetry: () => setRetrying(true),
+        });
         onAuthenticated({
           tokenType: session.tokenType,
           accessToken: session.accessToken,
@@ -203,7 +265,7 @@ export function LoginModal({
         });
         onClose();
       } catch (err) {
-        if (err instanceof JudgeAuthError) {
+        if (err instanceof JudgeAuthError || err instanceof ApiClientError) {
           setError(err.details);
           setNetworkFailed(err.statusCode === 0);
         } else {
@@ -214,7 +276,15 @@ export function LoginModal({
         setRetrying(false);
       }
     },
-    [code, onAuthenticated, onClose, phone, serviceDomain],
+    [
+      code,
+      isEnterprise,
+      onAuthenticated,
+      onClose,
+      organizationName,
+      phone,
+      serviceDomain,
+    ],
   );
 
   if (!open) return null;
@@ -284,6 +354,25 @@ export function LoginModal({
                   ارقام فارسی و عربی نیز پذیرفته می‌شوند (مثال: ۰۹۱۲xxxxxxx).
                 </p>
               </div>
+
+              {isEnterprise && (
+                <div className="space-y-2">
+                  <Label htmlFor="auth-organization" className="text-slate-300">
+                    نام سازمان (برای ثبت سازمان جدید)
+                  </Label>
+                  <Input
+                    id="auth-organization"
+                    value={organizationName}
+                    onChange={(event) => setOrganizationName(event.target.value)}
+                    placeholder="مثلاً شرکت توسعه فناوری پارس"
+                    maxLength={150}
+                    className="h-11 border-white/10 bg-black/30 text-slate-100 placeholder:text-slate-600"
+                  />
+                  <p className="text-xs text-slate-500">
+                    اختیاری؛ تنها اگر برای نخستین بار سازمانی ثبت می‌کنید آن را وارد کنید.
+                  </p>
+                </div>
+              )}
 
               {error && <ErrorBox errors={error} />}
               {error && networkFailed && (

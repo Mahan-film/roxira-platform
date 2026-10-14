@@ -27,6 +27,9 @@ export const CRM_RESOURCE_PATH = "enterprise-hub/crm";
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Auth (احراز هویت پیامکی) در NestJS */
 export const AUTH_RESOURCE_PATH = "auth";
 
+/** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Tenants (سازمان و اعضا) در NestJS */
+export const TENANTS_RESOURCE_PATH = "tenants";
+
 /** مسیر پایه‌ی نسخه‌بندی‌شده کنترلر Tax Compliance (سامانه مودیان) در NestJS */
 export const TAX_COMPLIANCE_RESOURCE_PATH = "enterprise-hub/tax-compliance";
 

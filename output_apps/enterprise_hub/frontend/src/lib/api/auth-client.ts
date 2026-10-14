@@ -58,6 +58,8 @@ export interface VerifyOtpPayload {
   phone: string;
   code: string;
   serviceDomain?: AuthServiceDomain;
+  /** نام سازمان برای ثبت‌اولیه (فقط اگر کاربر عضو هیچ سازمانی نباشد). */
+  organizationName?: string;
 }
 
 const AUTH_ENDPOINT = `${API_PROXY_BASE_PATH}/${AUTH_RESOURCE_PATH}`;
@@ -111,6 +113,7 @@ export async function verifyOtp(
       phone: payload.phone,
       code: payload.code,
       serviceDomain: payload.serviceDomain ?? inferServiceDomain(),
+      organizationName: payload.organizationName,
     },
     signal,
   });

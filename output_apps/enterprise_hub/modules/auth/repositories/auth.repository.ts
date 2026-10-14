@@ -24,6 +24,17 @@ export class AuthRepository {
     return this.repository.findOne({ where: { id } });
   }
 
+  /**
+   * فهرست کاربران یک سازمان (مستأجر). فقط کاربران همان `tenantId` بازگردانده
+   * می‌شوند؛ جداسازی مستأجر در سطح کوئری تضمین می‌شود (Rule #4 - AGENTS.md).
+   */
+  async findByTenantId(tenantId: string): Promise<UserEntity[]> {
+    return this.repository.find({
+      where: { tenantId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   async create(data: Partial<UserEntity>): Promise<UserEntity> {
     const entity = this.repository.create(data);
     return this.repository.save(entity);

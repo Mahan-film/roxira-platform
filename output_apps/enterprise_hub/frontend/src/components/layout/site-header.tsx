@@ -12,6 +12,7 @@ const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/invoicing", label: "انطباق مالیاتی" },
   { href: "/inventory", label: "انبار و ERP" },
   { href: "/crm", label: "CRM" },
+  { href: "/team", label: "سازمان و اعضا" },
   { href: "/docs", label: "مستندات API" },
   { href: "/contact", label: "تماس و دمو" },
 ];

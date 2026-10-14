@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
+import { TenantRole } from './enums/tenant-role.enum';
 
 /**
  * استخراج اجباری شناسه مستأجر از کاربر احراز‌هویت‌شده روی Request.
@@ -14,4 +15,16 @@ export function requireTenantId(request: AuthenticatedRequest): string {
     throw new ForbiddenException('حساب شما به هیچ سازمانی متصل نیست.');
   }
   return tenantId;
+}
+
+/**
+ * الزام نقش «مالک سازمان» برای عملیات مدیریت اعضا.
+ *
+ * نقش سازمانی فقط از claim تأییدشده JWT خوانده می‌شود (`tenantRole`) و کاملاً
+ * مستقل از `UserRole` سراسری است. کاربر بدون نقش OWNER با ۴۰۳ رد می‌شود.
+ */
+export function requireTenantOwner(request: AuthenticatedRequest): void {
+  if (request.user?.tenantRole !== TenantRole.OWNER) {
+    throw new ForbiddenException('فقط مالک سازمان مجاز است.');
+  }
 }
