@@ -81,12 +81,12 @@ export const dynamic = "force-dynamic";
 
 async function sitemapUrls(domain: SeoDomain, origin: string): Promise<string | string[]> {
   if (domain !== GHAZI_DOMAIN) {
-    return `${origin}/sitemap.xml`;
+    return `${origin}/sitemap_index.xml`;
   }
   const { total } = await listLawSitemapEntries(0, 1);
   const chunkCount = Math.max(1, Math.ceil(total / LAWS_PER_SITEMAP));
   return [
-    `${origin}/sitemap.xml`,
+    `${origin}/sitemap_index.xml`,
     ...Array.from({ length: chunkCount }, (_, id) => `${origin}/sitemap/${id}.xml`),
   ];
 }
