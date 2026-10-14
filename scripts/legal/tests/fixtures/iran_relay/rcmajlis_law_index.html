@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="/assets/scss/bootstrap.css?v=1.2">
+
+<link rel="stylesheet" href="/assets/css/fonts.css?v=1.2">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css?v=1.4">
+<link rel="stylesheet" href="/assets/js/plugins/persian_datepicker/persian-datepicker.min.css?v=1.5">
+<link rel="stylesheet" href="/assets/js/plugins/swiffy_slider/swiffy_slider.css?v=1.2">
+
+
+
+<link rel="stylesheet" href="/assets/js/plugins/swiffy_slider/swiffy_slider.css?v=1.1">
+<script src="/assets/js/plugins/swiffy_slider/swiffy-slider.min.js?v=1.1" defer></script>
+<link rel="stylesheet" href="/assets/scss/custom.css?v=2.13">
+
+
+
+<meta name="keywords" content="قوانین و مقررات;سامانه قوانین" />
+<meta name="description" content="مجلس شورای اسلامی از نخستين دوره، برای كارشناسی طرح‌ها و لوايح، از مشورت موردی كارشناسان استفاده مي‌كرد. در عين حال‌، اساس كار برفهم شخصی و توان علمی خود نمايندگان متكی بود؛ لكن از اواخر سال 1371 به دستور هيأت رئيسه محترم مجلس، نهادی مستقل‌، دائمی و سازمان يافته به نام «مركز پژوهش‌های مجلس شورای اسلامی» برای ارائه خدمات مستمر كارشناسی و مطالعاتی در كنار مجلس قرار گرفت. مراحل قانونی تأسيس اين مركز در پاييز سال 1374 به انجام رسيد." />
+<link rel="icon"  href="/favicon.ico" type="image/ico"  sizes="16x16"/>
+<title>مرکز پژوهشها - قوانین و مقررات</title>
+
+</head>
+<body onkeydown="keyPress(event)">
+ <header id="header" class="bg-primary" style="z-index: 100;
+/* background-color: rgba(5,66,95,0.9) !important; */
+background-color: rgba(10,10,10,0.9) !important;
+
+">
+    <div class="container-xxl h-100 d-flex align-items-center justify-content-center">
+        <div class="d-flex w-100 align-items-center justify-content-between">
+            <div class="sidebar-icon me-3" onclick="showSideNav()">
+                    <span>
+                        <img src="/assets/img/header/list.svg" alt="">
+                    </span>
+            </div>
+            <div class="logo"><a href="/fa"><img src="/assets/img/header/logo.png" alt="لوگوی مرکز پژوهش های مجلس شورای اسلامی" ></a></div>
+            <div class="nav ms-auto">
+                <nav class="me-2 d-flex" >
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa" class="d-inline-block">برگ نخست</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa/report" class="d-inline-block">گزارش‌های کارشناسی</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa/news" class="d-inline-block">اخبار</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa/legal_draft" class="d-inline-block">طرح ها و لوایح</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa/law/search" class="d-inline-block">قوانین و مقررات</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://lib.majles.ir/" class="d-inline-block">کتابخانه تخصصی</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa/news?tag=گزارش%20تصویری" class="d-inline-block">گزارش تصویری</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa/news?tag=چند%20رسانه%20ای" class="d-inline-block">چند رسانه ای</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa/content/about_research_center_fa" class="d-inline-block">درباره ما</a>
+                                            </div>
+                                    <div class="nav-dropdown">
+                        <a href="https://rc.majlis.ir/fa/content/contact_research_center_fa" class="d-inline-block">تماس با ما</a>
+                                            </div>
+                                </nav>
+            </div>
+            <div class="d-flex ms-3">
+                <div class="px-1 betasearch betasearch-header">
+                    <a href="https://rc.majlis.ir/redirect/100" >
+                        <span class="d-inline-block px-1">
+                        اخذ نظرات نخبگان
+                        </span>
+                    </a>
+                </div>
+                <div class="lang px-1">
+                    <div>
+                        <a href="/fa" class="active">فا</a><a href="/en" style="color: #05425f !important;">EN</a>
+                    </div>
+                </div>
+                <div class="search px-1">
+                        <span style="cursor: pointer;" onclick="document.getElementById('modalSearch').classList.add('modal-show')">
+                            <i class="fa fa-search" aria-hidden="true"></i>
+                        </span>
+                </div>
+                <div class="more px-1 position-relative" id="more">
+                    <!-- <div class="connector" style="width: 38px;height: 52px;left: 0px;top: -5px;position: absolute; z-index: 101;">
+                    </div> -->
+                    <span class="position-relative" style="z-index: 102!important;">
+                            <i class="fa fa-ellipsis-v" aria-hidden="true"></i>
+                        </span>
+                    <div class="connector" style="width: 38px;height: 52px;left: 0px;top: -5px;position: absolute; z-index: 101;">
+                    </div>
+
+                    <div class="more-dropdown position-absolute text-dark" style="z-index:100;display: none;background-color: white; width: 300px;left: 0;top: 40px;border-radius: 8px; max-height: 800px;overflow-y:auto;box-shadow: rgb(171 171 171) 1px 1px 8px 1px, rgb(171 171 171) 1px 1px 4px">
+                        <ul class="items">
+                                                    <li class="item">
+                                <div>مرکز پژوهش ها</div>
+                                <ul>
+                                                                    <li><a href="https://rc.majlis.ir/fa/content/about_research_center_fa" class="d-block">درباره ما</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/content/contact_research_center_fa" class="d-block">تماس با ما</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/content/research_center_chart" class="d-block">ساختار سازمانی</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/department" class="d-block">دفاتر</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/report" class="d-block">گزارش‌های کارشناسی</a></li>
+                                                                    <li><a href="https://andishkadeh.mrc.ir" class="d-block"> اندیشکده‌های حکمرانی استانی</a></li>
+                                                                    <li><a href="http://book.mrc.ir" class="d-block">سامانه نشر علمی (کتاب)</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/news" class="d-block">اخبار</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/news?tag=گزارش تصویری" class="d-block">گزارش تصویری</a></li>
+                                                                    <li><a href="https://nashr.majles.ir/" class="d-block">فصلنامه های مجلس و راهبرد</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_book" class="d-block">کتب</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_ebook" class="d-block">کتب الکترونیکی</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_pdf" class="d-block">پژوهش نامه</a></li>
+                                                                </ul>
+                            </li>
+                                                    <li class="item">
+                                <div>سامانه قوانین</div>
+                                <ul>
+                                                                    <li><a href="https://rc.majlis.ir/fa/legal_draft" class="d-block">طرح ها و لوایح</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/law/search" class="d-block">قوانین و مقررات</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/content/iran_constitution" class="d-block">قانون اساسی ایران</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/law/show/132299" class="d-block">سیاست های کلی نظام</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/law/show/132295" class="d-block">سند چشم انداز</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/law/today_in_history" class="d-block">تقویم تاریخ قوانین</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/content/law_cd" class="d-block">سامانه قوانین و مقررات</a></li>
+                                                                </ul>
+                            </li>
+                                                    <li class="item">
+                                <div>مجلس شورای اسلامی</div>
+                                <ul>
+                                                                    <li><a href="https://rc.majlis.ir/fa/content/about_parliament" class="d-block">مجلس شورای اسلامی</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/parliament/parliament_chairman" class="d-block">ریاست مجلس</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/parliament_member" class="d-block">نمایندگان</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/parliament_commission" class="d-block">کمیسیون ها</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/agenda" class="d-block">دستور جلسه</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/content/interior_rule" class="d-block">آئین نامه داخلی</a></li>
+                                                                    <li><a href="https://rc.majlis.ir/fa/content/public_contact" class="d-block">ارتباطات مردمی</a></li>
+                                                                </ul>
+                            </li>
+                                                </ul>
+                        
+
+
+                        <div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidenav text-white">
+        <span class="close" onclick="hideSideNav()"><i class="fa fa-times"></i></span>
+        <div class="sidenav-logo">
+            <img src="/assets/img/header/logo.png" alt="" >
+        </div>
+        <div class="mt-4 betasearch" style="padding: 0 28px;">
+            <a href="https://rc.majlis.ir/redirect/100">
+                <span class="d-inline-block px-1">
+                            اخذ نظرات نخبگان
+                        </span>
+            </a>
+        </div>
+        <nav class="sidenav-nav">
+            <div class="menu-item" href="#">منوی اصلی</div>
+            <div class="sub-menu-items">
+                                    <a href="https://rc.majlis.ir/fa">برگ نخست</a>
+                                    <a href="https://rc.majlis.ir/fa/report">گزارش‌های کارشناسی</a>
+                                    <a href="https://rc.majlis.ir/fa/news">اخبار</a>
+                                    <a href="https://rc.majlis.ir/fa/legal_draft">طرح ها و لوایح</a>
+                                    <a href="https://rc.majlis.ir/fa/law/search">قوانین و مقررات</a>
+                                    <a href="https://lib.majles.ir/">کتابخانه تخصصی</a>
+                                    <a href="https://rc.majlis.ir/fa/news?tag=گزارش%20تصویری">گزارش تصویری</a>
+                                    <a href="https://rc.majlis.ir/fa/news?tag=چند%20رسانه%20ای">چند رسانه ای</a>
+                                    <a href="https://rc.majlis.ir/fa/content/about_research_center_fa">درباره ما</a>
+                                    <a href="https://rc.majlis.ir/fa/content/contact_research_center_fa">تماس با ما</a>
+                            </div>
+
+                            <div class="menu-item" href="#">مرکز پژوهش ها</div>
+                <div class="sub-menu-items">
+                                            <a href="https://rc.majlis.ir/fa/content/about_research_center_fa">درباره ما</a>
+                                            <a href="https://rc.majlis.ir/fa/content/contact_research_center_fa">تماس با ما</a>
+                                            <a href="https://rc.majlis.ir/fa/content/research_center_chart">ساختار سازمانی</a>
+                                            <a href="https://rc.majlis.ir/fa/department">دفاتر</a>
+                                            <a href="https://rc.majlis.ir/fa/report">گزارش‌های کارشناسی</a>
+                                            <a href="https://andishkadeh.mrc.ir"> اندیشکده‌های حکمرانی استانی</a>
+                                            <a href="http://book.mrc.ir">سامانه نشر علمی (کتاب)</a>
+                                            <a href="https://rc.majlis.ir/fa/news">اخبار</a>
+                                            <a href="https://rc.majlis.ir/fa/news?tag=گزارش تصویری">گزارش تصویری</a>
+                                            <a href="https://nashr.majles.ir/">فصلنامه های مجلس و راهبرد</a>
+                                            <a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_book">کتب</a>
+                                            <a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_ebook">کتب الکترونیکی</a>
+                                            <a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_pdf">پژوهش نامه</a>
+                                    </div>
+
+                            <div class="menu-item" href="#">سامانه قوانین</div>
+                <div class="sub-menu-items">
+                                            <a href="https://rc.majlis.ir/fa/legal_draft">طرح ها و لوایح</a>
+                                            <a href="https://rc.majlis.ir/fa/law/search">قوانین و مقررات</a>
+                                            <a href="https://rc.majlis.ir/fa/content/iran_constitution">قانون اساسی ایران</a>
+                                            <a href="https://rc.majlis.ir/fa/law/show/132299">سیاست های کلی نظام</a>
+                                            <a href="https://rc.majlis.ir/fa/law/show/132295">سند چشم انداز</a>
+                                            <a href="https://rc.majlis.ir/fa/law/today_in_history">تقویم تاریخ قوانین</a>
+                                            <a href="https://rc.majlis.ir/fa/content/law_cd">سامانه قوانین و مقررات</a>
+                                    </div>
+
+                            <div class="menu-item" href="#">مجلس شورای اسلامی</div>
+                <div class="sub-menu-items">
+                                            <a href="https://rc.majlis.ir/fa/content/about_parliament">مجلس شورای اسلامی</a>
+                                            <a href="https://rc.majlis.ir/fa/parliament/parliament_chairman">ریاست مجلس</a>
+                                            <a href="https://rc.majlis.ir/fa/parliament_member">نمایندگان</a>
+                                            <a href="https://rc.majlis.ir/fa/parliament_commission">کمیسیون ها</a>
+                                            <a href="https://rc.majlis.ir/fa/agenda">دستور جلسه</a>
+                                            <a href="https://rc.majlis.ir/fa/content/interior_rule">آئین نامه داخلی</a>
+                                            <a href="https://rc.majlis.ir/fa/content/public_contact">ارتباطات مردمی</a>
+                                    </div>
+
+            
+
+
+        </nav>
+
+        <footer style="position: absolute;bottom: 0;right: 0;left: 0;">
+
+
+
+
+
+
+
+            <p class="text-center" style="font-size: 10px;">حق کپی رایت متعلق به مرکزپژوهش های مجلس شورای اسلامی است.</p>
+        </footer>
+    </div>
+</header>
+<div style="height: 70px;"></div>
+
+
+
+<main>
+    
+<main>
+<section  style="background-image: url('/assets/img/law/header.jpg');height: 300px;background-size: cover;">
+        <div style="width: 100%;height: 100%;background-color: rgba(43, 18, 18, 0.459);">
+             <!--? breadcrumbs-->
+            <div class="d-flex align-items-center py-2" style="background-color: white;">
+    <div class="container-xxl">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <!-- <li class="breadcrumb-item"><span>مسیر شما: </span> </li> -->
+                <li class="breadcrumb-item"><a href="/fa">برگ نخست</a></li>
+                                                <li class="breadcrumb-item">قوانین و مقررات</li>
+                                            </ol>
+        </nav>
+    </div>
+</div>
+
+
+            <!--? breadcrumbs-->
+            <div class="container-xxl" style="padding-top: 100px;">
+                <h5 class="text-white" style="font-size: 30px;">
+                    قوانین و مقررات
+                </h5>
+            </div>
+        </div>
+</section>
+
+        <section id="legalDrafts" class="container-xxl mt-4">
+            <div class="row">
+                <div class="col-12 col-lg-3 d-block d-lg-none mb-3" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#filterModal">
+                    <div class="p-3 filter">
+                        <div class="text-primary">فیلترها <span><img src="/assets/img/global/filter_logo.svg" style="width: 25px;height: 25px;position: relative; top:-5px" alt=""></span></div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-9">
+
+                    <div class="row">
+                        <div class="col-12 mb-3" id="reportHeader">
+                            <div class="text-white d-flex justify-content-between align-items-center" style="background-color: #05425f;height: 50px;border-radius: 2px;">
+                                <p class="mb-0 pe-3 all">همه</p>
+                                <p class="mb-0 ps-2 persian-num">تعداد رکورد ها:   61419   </p>
+                                <p class="mb-0 me-auto sort">مرتب سازی شده: <span class="px-4"><img src="/assets/img/global/order_by.svg" alt=""></span></p>
+                            </div>
+                        </div>
+
+
+                                                                        <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1860542</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1860542" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >تصویب نامه های شورای عالی اداری از تاریخ 1403/10/26 تا تاریخ 1405/4/23 </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/10/26)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1860542" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1859503</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1859503" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >تصویب نامه در خصوص الحاق وزیر نیرو به ترکیب شورای هماهنگی اجرای سیاست های کلی توسعه دریامحور و توسعه سواحل مکران </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/10/03)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1859503" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1862791</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1862791" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >آیین نامه نحوه ارائه خدمات الکترونیک قضایی به ایرانیان خارج از کشور </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/06/30)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1862791" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1862740</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1862740" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >نظریه رئیس مجلس شورای اسلامی موضوع صدر ماده واحده و تبصره (4) الحاقی به « قانون نحوه اجراء اصول هشتاد و پنجم (85) و یکصد و سی و هشتم (138) قانون اساسی جمهوری اسلامی ایران» </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/06/29)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1862740" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1862789</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1862789" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >مصوبات نود و ششمین جلسه کارگروه تعامل پذیری دولت الکترونیکی کشور </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/06/21)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1862789" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1862899</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1862899" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >رأی وحدت رویه شماره 882 هیأت عمومی دیوان عالی کشور </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/06/17)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1862899" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1862898</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1862898" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >رأی وحدت رویه شماره 881 هیأت عمومی دیوان عالی کشور </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/06/17)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1862898" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1861849</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1861849" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >نظریه رئیس مجلس شورای اسلامی موضوع صدر ماده واحده و تبصره (4) الحاقی به « قانون نحوه اجراء اصول هشتاد و پنجم (85) و یکصد و سی و هشتم (138) قانون اساسی جمهوری اسلامی ایران» </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/06/14)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1861849" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1862300</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1862300" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >تصویب نامه درخصوص تمدید مهلت تسلیم اظهارنامه های مالیات بر درآمد مشاغل و پرداخت مالیات متعلق موضوع ماده (100) قانون مالیات های مستقیم </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/06/11)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1862300" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                <div class="col-12 mb-3 item">
+                            <div class="card card-body p-0 border-0 d-flex flex-row">
+                                <div class="ratio ratio-1x1 img">
+                                    <div class="p-lg-5"  style="position:absolute;">
+                                        <div class="ratio ratio-1x1 " style="background-image: url('/assets/img/law/item_background.jpg');background-size: 100% 100%;">
+
+                                                <div class="d-flex flex-column justify-content-center  align-items-center text-primary">
+                                                    <p class="mb-0 mt-2">شماره</p>
+                                                    <p class="font-weight-bold persian-num" style="font-size: 20px;">1862296</p>
+                                                </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 d-flex flex-column justify-content-between w-100">
+                                    <div>
+                                        <a href="https://rc.majlis.ir/fa/law/show/1862296" style="color: rgb(33, 37, 41);text-decoration: none;">
+                                            <h2 class="title" style="line-height: 1.6 ;font-size: 14px;text-align: justify;" >تصویب نامه درخصوص نسخ صریح مصوبات هیئت وزیران از تاریخ 1329/1/1 تا 1329/12/30 </h2>
+                                        </a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-auto footer">
+                                        <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ تصویب</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;" class="persian-num">(1405/06/11)</span></span>
+                                        </div>
+                                        <!-- <div class="date text-primary d-block align-items-center">
+                                            <span class="pe-2"><span>تاریخ ابلاغیه</span> &nbsp;&nbsp;<span style="font-size:14px;font-weight: bold;persian-num">()</span></span>
+                                        </div> -->
+                                        <div>
+                                            <a href="https://rc.majlis.ir/fa/law/show/1862296" class="more btn btn-primary btn-sm px-4 py-2">مشاهده</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                
+
+                        <nav>
+<ul class="pagination custom-pagination  justify-content-center">
+
+
+
+
+
+
+
+                <li class="page-item "><a class="page-link  number   active  persian-num" href="https://rc.majlis.ir/fa/law?page=1">1</a></li>
+                <li class="page-item "><a class="page-link  number   persian-num" href="https://rc.majlis.ir/fa/law?page=2">2</a></li>
+                <li class="page-item "><a class="page-link  number   persian-num" href="https://rc.majlis.ir/fa/law?page=3">3</a></li>
+                <li class="page-item "><a class="page-link  number   persian-num" href="https://rc.majlis.ir/fa/law?page=4">4</a></li>
+        
+
+
+        <div class="align-self-center px-1">
+            <p class="py-2 px-1 mb-0">...</p>
+        </div>
+
+
+
+
+
+
+
+                <li class="page-item "><a class="page-link  number   persian-num" href="https://rc.majlis.ir/fa/law?page=6141">6141</a></li>
+                <li class="page-item "><a class="page-link  number   persian-num" href="https://rc.majlis.ir/fa/law?page=6142">6142</a></li>
+        
+        <li class="page-item">
+            <a class="page-link prev" href="https://rc.majlis.ir/fa/law?page=2" aria-label="Next">
+            <span><i class="fa fa-caret-left"></i></span>
+        </a>
+        </li>
+
+
+
+
+
+</ul>
+</nav>
+
+
+
+
+
+
+                    </div>
+                </div>
+                <div class="col-12 col-lg-3 d-none d-lg-block">
+                    <div class="p-3 filter">
+                        <div class="text-primary">فیلترها <span><img src="/assets/img/global/filter_logo.svg" style="width: 25px;height: 25px;position: relative; top:-5px" alt=""></span></div>
+                        <img src="/assets/img/global/seperator.svg" alt="" class="w-100">
+                        <div class="px-2" data-content="filter-content" data-source>
+                            <form action="" autocomplete="off">
+                                <div class="input-text-search mb-0 mt-3">
+                                    <input type="text" placeholder="کلیدواژه" value="" id="keyword" name="keyword">
+                                    <i class="fa fa-search" style="color: #05425f; position: absolute;top: 10px; left: 8px;"></i>
+                                </div>
+                                <div class="comment pe-2 my-1" style="color: gray;">در</div>
+                                <div class="input-select-box-search mb-3">
+                                    <select class="form-sleect" name="only_title">
+                                        <option  value="1">عنوان</option>
+                                        <option  value="0">عنوان و متن</option>
+                                    </select>
+                                </div>
+                                <div class="comment my-2">مرجع تصویب</div>
+                                <div class="input-select-box-search mb-3">
+                                    <select class="form-sleect" name="lu_approve_reference">
+                                        <option value="">همه</option>
+                                                                                    <option  value="lar42">کارگروه تعامل  پذیری دولت الکترونیکی</option>
+                                                                                    <option  value="lar41">سازمان نظام پزشکی جمهوری اسلامی ایران</option>
+                                                                                    <option  value="lar40">اداره کل تدوین قوانین مجلس</option>
+                                                                                    <option  value="lar39">مرکز ملی  شورای رقابت</option>
+                                                                                    <option  value="lar37">وزارت ارتباطات و فناوری اطلاعات</option>
+                                                                                    <option  value="lar36">بنیاد مسکن انقلاب اسلامی</option>
+                                                                                    <option  value="lar35">انجمن آثار و مفاخر فرهنگی</option>
+                                                                                    <option  value="lar34">مصوبات شورای عالی علوم، تحقیقات و فناوری</option>
+                                                                                    <option  value="lar33">سازمان برنامه و بودجه کشور</option>
+                                                                                    <option  value="lar32">مصوبات سازمان حفاظت و محیط زیست</option>
+                                                                                    <option  value="lar31">مصوبات وزارت راه و شهرسازی</option>
+                                                                                    <option  value="lar30">مصوبات شورای عالی سازمان فرهنگ و ارتباطات اسلامی </option>
+                                                                                    <option  value="lar29">مصوبات شورای شهر تهران </option>
+                                                                                    <option  value="lar28">سازمان مدیریت برنامه ریزی کشور</option>
+                                                                                    <option  value="lar27">هیات عمومی دیوان عالی کشور</option>
+                                                                                    <option  value="lar26">مصوبات هیات عمومی دیوان عدالت اداری</option>
+                                                                                    <option  value="lar25">مصوبات ستاد کل نیروهای مسلح</option>
+                                                                                    <option  value="lar24">مصوبات کمیته سازمان پدافند غیرعامل کشور</option>
+                                                                                    <option  value="lar23">مصوبات شورای عالی هماهنگی ترافیک شهرهای کشور</option>
+                                                                                    <option  value="lar22">مصوبات وزارت تعاون، کار و رفاه اجتماعی</option>
+                                                                                    <option  value="lar21">دبیر هیات دولت</option>
+                                                                                    <option  value="lar20">مصوبات شورای عالی پول و اعتبار</option>
+                                                                                    <option  value="lar19">مصوبات شورای عالی فضای مجازی</option>
+                                                                                    <option  value="lar18">مصوبات و نظریات شورای نگهبان</option>
+                                                                                    <option  value="lar17">مصوبات شورای عالی آموزش و پرورش</option>
+                                                                                    <option  value="lar16">مصوبات شورای عالی میراث فرهنگی و گردشگری</option>
+                                                                                    <option  value="lar15">مصوبات شورای عالی شهرسازی و معماری ایران</option>
+                                                                                    <option  value="lar14">قانون اساسی کشور ها</option>
+                                                                                    <option  value="lar13">آیین نامه داخلی مجلس</option>
+                                                                                    <option  value="lar12">مصوبات شورای عالی اداری</option>
+                                                                                    <option  value="lar11">مصوبات کمیسیون تنظیم مقررات ارتباطات</option>
+                                                                                    <option  value="lar10">مصوبات شورای اقتصاد و دارایی</option>
+                                                                                    <option  value="lar9">مصوبات قوه قضاییه</option>
+                                                                                    <option  value="lar8">مصوبات هیات وزیران</option>
+                                                                                    <option  value="lar7">آرای وحدت رویه دیوان عدالت اداری</option>
+                                                                                    <option  value="lar6">آرای وحدت رویه دیوان عالی کشور</option>
+                                                                                    <option  value="lar5">مصوبات شورای عالی انقلاب فرهنگی</option>
+                                                                                    <option  value="lar4">مصوبات مجمع تشخیص مصلحت نظام</option>
+                                                                                    <option  value="lar3">مصوبات شورای انقلاب</option>
+                                                                                    <option  value="lar2">مصوبات مجلس شورا</option>
+                                                                                    <option  value="lar1">قانون اساسی جمهوری اسلامی ایران، سیاست های کلی نظام و سند چشم انداز</option>
+                                                                                    <option  value="lar44">هیات های تخصصی دیوان عدالت اداری</option>
+                                                                                    <option  value="lar43">وزارت امور اقتصاد و دارایی</option>
+                                                                            </select>
+                                </div>
+
+                                <div class="comment my-2">تاریخ تصویب</div>
+                                <div class="input-text-search mb-3">
+                                    <input type="text" placeholder="از تاریخ" id="fromAppDate" name="from_app_date" value="">
+                                    <img src="/assets/img/global/calendar.svg" alt="" style="position: absolute;top: 10px; left: 8px;">
+                                </div>
+                                <div class="input-text-search mb-3">
+                                    <input type="text" placeholder="تا تاریخ" id="toAppDate" name="to_app_date" value="">
+                                    <img src="/assets/img/global/calendar.svg" alt="" style="position: absolute;top: 10px; left: 8px;">
+                                </div>
+
+                                <div class="comment my-2">تاریخ ابلاغیه</div>
+                                <div class="input-text-search mb-3">
+                                    <input type="text" placeholder="از تاریخ" id="fromCommuniqueDate" name="from_communique_date" value="">
+                                    <img src="/assets/img/global/calendar.svg" alt="" style="position: absolute;top: 10px; left: 8px;">
+                                </div>
+                                <div class="input-text-search mb-3">
+                                    <input type="text" placeholder="تا تاریخ" id="toCommuniqueDate" name="to_communique_date" value="">
+                                    <img src="/assets/img/global/calendar.svg" alt="" style="position: absolute;top: 10px; left: 8px;">
+                                </div>
+
+                                <div class="comment my-2">شماره، اجلاسیه، شش ماهه:</div>
+                                <div class="input-text-search mb-3 ">
+                                    <input type="text" placeholder="شماره" name="communique_no" value="">
+                                </div>
+
+                                <div class="input-select-box-search mb-3" name="lu_parliament_year" id="lu_parliament_year">
+                                    <select class="form-sleect" name="lu_parliament_year" id="luParliamentYear">
+                                        <option  selected="selected"    value="">همه</option>
+                                        <option   value="1">اول</option>
+                                        <option   value="2">دوم</option>
+                                        <option   value="3">سوم</option>
+                                        <option   value="4">چهارم</option>
+                                    </select>
+                                </div>
+
+                                <div class="input-select-box-search mb-3">
+                                    <select class="form-sleect" name="lu_biannual" id="luBiannual">
+                                        <option  selected="selected"   value="">همه</option>
+                                        <option  value="1">اول</option>
+                                        <option  value="2">دوم</option>
+                                    </select>
+                                </div>
+
+
+                                <div class="comment my-2">ترتیب نمایش:</div>
+
+                                <div class="input-select-box-search mb-3">
+                                    <select class="form-sleect" name="o">
+                                        <option value="1" >نزدیک به نتیجه جستجو</option>
+                                        <option value=""  selected="selected"   >تاریخ تصویب</option>
+                                        <option value="2"  >تاریخ ابلاغیه</option>
+                                    </select>
+                                </div>
+
+                                <div class="input-select-box-search mb-3">
+                                    <select class="form-sleect" name="ot" >
+                                        <option  value="d" selected="">زیاد ← کم</option>
+                                        <option  value="a">کم ← زیاد</option>
+                                    </select>
+                                </div>
+
+                                <div class="mt-5">
+                                    <button class="btn btn-primary d-block w-100">جستجو</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+<!-- Modal For Filter-->
+<div class="modal fade" id="filterModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-body" style="background-color: #E7F2F8;">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" style="position: absolute;left: 10px;top: 10px;"></button>
+                <div data-content="filter-content" data-destination>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</main>
+<footer id="footer" class="mt-5">
+    <div class="header d-flex justify-content-center align-items-end">
+        <img class="" src="/assets/img/footer/eslimi.png" alt="">
+    </div>
+    <div class="container-xxl text-white px-5 px-xxl-0">
+        <div class="row">
+
+                        <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-4">
+                <h4 class="mb-4">مرکز پژوهش ها</h4>
+                <ul class="list">
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/content/about_research_center_fa" class="opacity-6 text-white">درباره ما</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/content/contact_research_center_fa" class="opacity-6 text-white">تماس با ما</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/content/research_center_chart" class="opacity-6 text-white">ساختار سازمانی</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/department" class="opacity-6 text-white">دفاتر</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/report" class="opacity-6 text-white">گزارش‌های کارشناسی</a>
+                    </li>
+                                        <li>
+                        <a href="https://andishkadeh.mrc.ir" class="opacity-6 text-white"> اندیشکده‌های حکمرانی استانی</a>
+                    </li>
+                                        <li>
+                        <a href="http://book.mrc.ir" class="opacity-6 text-white">سامانه نشر علمی (کتاب)</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/news" class="opacity-6 text-white">اخبار</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/news?tag=گزارش تصویری" class="opacity-6 text-white">گزارش تصویری</a>
+                    </li>
+                                        <li>
+                        <a href="https://nashr.majles.ir/" class="opacity-6 text-white">فصلنامه های مجلس و راهبرد</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_book" class="opacity-6 text-white">کتب</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_ebook" class="opacity-6 text-white">کتب الکترونیکی</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/book_pub?lu_type=bp_pdf" class="opacity-6 text-white">پژوهش نامه</a>
+                    </li>
+                                    </ul>
+
+
+            </div>
+                        <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-4">
+                <h4 class="mb-4">سامانه قوانین</h4>
+                <ul class="list">
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/legal_draft" class="opacity-6 text-white">طرح ها و لوایح</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/law/search" class="opacity-6 text-white">قوانین و مقررات</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/content/iran_constitution" class="opacity-6 text-white">قانون اساسی ایران</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/law/show/132299" class="opacity-6 text-white">سیاست های کلی نظام</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/law/show/132295" class="opacity-6 text-white">سند چشم انداز</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/law/today_in_history" class="opacity-6 text-white">تقویم تاریخ قوانین</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/content/law_cd" class="opacity-6 text-white">سامانه قوانین و مقررات</a>
+                    </li>
+                                    </ul>
+
+
+            </div>
+                        <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-4">
+                <h4 class="mb-4">مجلس شورای اسلامی</h4>
+                <ul class="list">
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/content/about_parliament" class="opacity-6 text-white">مجلس شورای اسلامی</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/parliament/parliament_chairman" class="opacity-6 text-white">ریاست مجلس</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/parliament_member" class="opacity-6 text-white">نمایندگان</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/parliament_commission" class="opacity-6 text-white">کمیسیون ها</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/agenda" class="opacity-6 text-white">دستور جلسه</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/content/interior_rule" class="opacity-6 text-white">آئین نامه داخلی</a>
+                    </li>
+                                        <li>
+                        <a href="https://rc.majlis.ir/fa/content/public_contact" class="opacity-6 text-white">ارتباطات مردمی</a>
+                    </li>
+                                    </ul>
+
+
+            </div>
+                        <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-4 persian-num">
+                <h4 class="mb-4">راه‌های ارتباطی</h4>
+                <ul class="list">
+                    <li><p>آدرس مرکز: تهران خیابان پاسداران، روبروی پارک نیاوران(ضلع جنوبی)، پلاک 802</p></li>
+                    <li><p>کد پستی : 1954731113</p></li>
+                    <li><p>صندوق پستی : 15875-5855</p></li>
+                    <li><p>پست الکترونیک: mrc@majles.ir</p></li>
+                    <li><p>تلفن : 75183000</p></li>
+                    <li><p>نمابر : 22819951</p></li>
+                </ul>
+            </div>
+        </div>
+
+
+
+
+
+
+
+
+        <div class="row copyright text-center">
+            <p>حق کپی رایت متعلق به مرکز پژوهش های مجلس شورای اسلامی می باشد.</p>   
+        </div>
+    </div>
+</footer>
+<section id="modalSearch">
+    <div class="container-xxl position-relative">
+        <span class="close-btn" onclick="document.getElementById('modalSearch').classList.remove('modal-show');">&times;</span>
+        <div class="d-flex justify-content-center pt-5">
+            <div class=" input-container position-relative">
+                <input type="text"  id="input_seaerch">
+                <i class="fa fa-search magnify"></i>
+                <div id="loading_ajax_search" class="sp sp-circle serch_txt d-none"></div>
+            </div>
+        </div>
+        <div class="mt-3 desktop-categories">
+            <!-- <p class="active">همه <span class="count">10</span></p> -->
+            <!-- <p>گزارشات <span class="count">1</span></p>
+            <p>قانون <span class="count">5</span></p> -->
+            <p>گزارشات <span class="count"><input class=""  type="checkbox" name="report" id="report"></span></p>
+            <p>قانون <span class="count"><input class=""  type="checkbox" name="law" id="law"></span></p>
+            <p>طرح و لایحه <span class="count"><input class=""  type="checkbox" name="legal" id="legal"></span></p>
+            <p>دستور جلسات <span class="count"><input class=""  type="checkbox" name="agenda" id="agenda"></span></p>
+            <p>اخبار <span class="count"><input class=""  type="checkbox" name="news" id="news"></span></p>
+
+            <!-- <p>دستور جلسات <span class="count">3</span></p>
+            <p>اخبار <span class="count">1</span></p> -->
+        </div>
+        <div class="results mt-2">
+            <table class="table table-striped">
+                <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">عنوان</th>
+                    <th scope="col">تاریخ</th>
+                    <th scope="col">نوع</th>
+                </tr>
+                </thead>
+                <tbody id="result">
+                <!-- <tr>
+                    <td scope="row">1</td>
+                    <td>رأی شماره ۱۵۳هیأت عمومی دیوان عدالت اداری با موضوع: بند ۳ مصوبه مورخ ۱۳۹۸/۱۰/۲۱ شورای عالی شهرسازی و معماری</td>
+                    <td>1401/02/17</td>
+                    <td>قانون</td>
+                </tr> -->
+
+
+
+                </tbody>
+            </table>
+            <!-- <nav>
+                <ul class="pagination pagination-sm justify-content-center">
+                    <li class="page-item">
+                        <a class="page-link next" href="#" aria-label="Previous">
+                            <span><i class="fa fa-caret-right"></i></span>
+                        </a>
+                    </li>
+                    <li class="page-item"><a class="page-link number" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link number" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link number active" href="#">3</a></li>
+                    <li class="page-item">
+                        <a class="page-link prev" href="#" aria-label="Next">
+                            <span><i class="fa fa-caret-left"></i></span>
+                        </a>
+                    </li>
+                </ul>
+            </nav> -->
+        </div>
+    </div>
+    <script>
+
+        function keyPress (e) {
+            if(e.key === "Escape") {
+                document.getElementById('modalSearch').classList.remove('modal-show');
+            }
+        }
+    </script>
+</section>
+ <section id="tv">
+     <div class="container-xxl position-relative" style="z-index: 10;">
+         <span class="close-btn" onclick="document.getElementById('tv').classList.remove('modal-show');">&times;</span>
+
+
+
+
+     </div>
+     <input type="hidden" id="list_video" value="">
+          <script>
+
+         function keyPress (e) {
+             if(e.key === "Escape") {
+                 document.getElementById('modalSearch').classList.remove('modal-show');
+             }
+         }
+     </script>
+ </section>
+ <!--begin::social buttons-->
+ <div class="social-wrapper">
+     <a href="https://eitaa.com/rcmajles_ir" rel="noopener noreferrer nofollow" target="_blank"><span>ایتا</span> <img src="/assets/img/social/eitaa-white.svg"></a>
+     <a href="https://ble.ir/rcmajles_ir" rel="noopener noreferrer nofollow" target="_blank"><span>بله</span> <img src="/assets/img/social/bale-white.svg"></a>
+     <a href="https://virasty.com/Rcmajlis_ir" rel="noopener noreferrer nofollow" target="_blank"><span>ویراستی</span> <img src="/assets/img/social/virasti-white.svg"></a>
+     <a href="https://ble.ir/rcmajles_ir" rel="noopener noreferrer nofollow" target="_blank" onclick="event.preventDefault(); document.getElementById('tv').classList.add('modal-show');showTv()"><span>تلویزیون</span> <img src="/assets/img/social/television-white.svg"></a>
+     <a href="https://www.aparat.com/rcmajlis.ir" rel="noopener noreferrer nofollow" target="_blank"><span>آپارات</span> <img src="/assets/img/social/aparat.svg"></a>
+ </div>
+ <!--end::social buttons-->
+
+<script src="/assets/js/popper.min.js"></script>
+<script src="/assets/js/bootstrap.min.js"></script>
+<script src="/assets/js/jquery-3.6.0.min.js"></script>
+
+
+
+
+ <script>
+     //side nav
+     function showSideNav(){
+         const sideNav=document.getElementsByClassName('sidenav')[0];
+         sideNav.classList.add('sidenav-show');
+
+         //add side nav wrapper
+         let sidenavWrapper=document.createElement('div');
+         sidenavWrapper.className='sidenav-wrapper';
+         sideNav.parentNode.insertBefore(sidenavWrapper, sideNav.nextSibling);
+
+         document.getElementsByClassName('sidenav-wrapper')[0].addEventListener("click", function(){
+             hideSideNav()
+         })
+     }
+     // showSideNav()
+
+     function hideSideNav(){
+         const sideNav=document.getElementsByClassName('sidenav')[0];
+         sideNav.classList.remove('sidenav-show');
+
+         //remove side nav wrapper
+         const sidenavWrapper=document.getElementsByClassName('sidenav-wrapper')[0];
+         sidenavWrapper.remove()
+     }
+
+     // sidenav-nav
+     // menu-item
+     // sub-menu-items
+
+     function sideMenuClearActive(){
+         const mainItems=document.querySelectorAll('.sidenav-nav .menu-item');
+         let count=mainItems.length
+         if(count>0)
+             for(i=0;i<count;i++) mainItems[i].classList.remove('active');
+     }
+
+
+     document.querySelectorAll(".sidenav-nav .menu-item").forEach(element => {
+
+         element.addEventListener("click", function(){
+
+             if(this.classList.contains('active')==false)
+             {
+                 sideMenuClearActive();
+                 this.classList.add('active');
+             }
+             else{
+                 this.classList.remove('active')
+             }
+             // console.log(this.nextSibling.nextSibling)
+         })
+     })
+ </script>
+
+
+<script>
+    function moreDropdownClearActive(){
+        const items=document.querySelectorAll('.more-dropdown .item div');
+        let count=items.length
+        if(count>0)
+            for(i=0;i<count;i++) items[i].classList.remove('active');
+    }
+
+    document.querySelector('#more').addEventListener("mouseleave", function(){
+        moreDropdownClearActive();
+    });
+
+    document.querySelectorAll(".more-dropdown .item div").forEach(element => {
+        element.addEventListener("click", function(){
+
+            if(this.classList.contains('active')==false)
+            {
+                moreDropdownClearActive();
+                this.classList.add('active');
+            }
+            else{
+                this.classList.remove('active')
+            }
+            // console.log(this.nextSibling.nextSibling)
+        })
+    })
+</script>
+
+
+ <script>
+     $(document).ready(function(){
+         persian={0:'۰',1:'۱',2:'۲',3:'۳',4:'۴',5:'۵',6:'۶',7:'۷',8:'۸',9:'۹'};
+         function traverse(el){
+             if(el.nodeType==3){
+                 var list=el.data.match(/[0-9]/g);
+                 if(list!=null && list.length!=0){
+                     for(var i=0;i<list.length;i++)
+                         el.data=el.data.replace(list[i],persian[list[i]]);
+                 }
+             }
+             for(var i=0;i<el.childNodes.length;i++){
+                 traverse(el.childNodes[i]);
+             }
+         }
+         for (let i=0;i<document.getElementsByClassName('persian-num').length;i++){
+             traverse(document.getElementsByClassName('persian-num')[i]);
+         }
+
+        //set off indicator to first slider
+         setTimeout(function (){
+             for(let i=0;i<document.querySelectorAll('.slider-indicators button:last-child').length;i++) {
+                 document.querySelectorAll('.slider-indicators button:last-child')[i].click();
+             }
+         }, 2000);
+
+     });
+ </script>
+    <script>
+        function keyPress (e) {
+            if(e.key === "Escape") {
+                document.getElementById('modalSearch').classList.remove('modal-show');
+            }
+        }
+    </script>
+
+
+    <!-- <script src="/assets/js/jquery-3.6.0.min.js"></script> -->
+
+    <script>
+        $('[data-content=filter-content][data-destination]').html($('[data-content=filter-content][data-source]').html());
+    </script>
+
+    <script>
+        $(document).ready(function() {
+            let dateFormat={
+                format: 'YYYY/MM/DD',
+                initialValue: false,
+                calendar:{
+                    persian: {
+                        locale: 'fa'
+                    }
+                },
+                toolbox: {
+                    enabled: true,
+                    calendarSwitch: {
+                        enabled: false,
+                        format: "MMMM"
+                    }
+                },
+                autoClose:true,
+            }
+
+
+            $("[name=from_app_date]").pDatepicker(dateFormat);
+            $("[name=to_app_date]").pDatepicker(dateFormat);
+            $("[name=from_communique_date]").pDatepicker(dateFormat);
+            $("[name=to_communique_date]").pDatepicker(dateFormat);
+        });
+    </script>
+     <!-- scroll script -->
+ <script>
+     document.addEventListener('scroll', function () {
+
+         if(window.scrollY<800){
+             document.getElementById('header').style.height='70px';
+
+
+             for(let i=0;i<document.querySelectorAll('#header nav .nav-dropdown .details').length;i++){
+                 document.querySelectorAll('#header nav .nav-dropdown .details')[i].style.top='70px';
+             }
+
+             for(let i=0;i<document.querySelectorAll('#header nav .nav-dropdown>a').length;i++){
+                 document.querySelectorAll('#header nav .nav-dropdown>a')[i].style.paddingTop='22px';
+                 document.querySelectorAll('#header nav .nav-dropdown>a')[i].style.paddingBottom='22px';
+             }
+         }else if(window.scrollY>=800){
+             document.getElementById('header').style.height='50px';
+
+
+             for(let i=0;i<document.querySelectorAll('#header nav .nav-dropdown .details').length;i++){
+                 document.querySelectorAll('#header nav .nav-dropdown .details')[i].style.top='50px';
+             }
+
+             for(let i=0;i<document.querySelectorAll('#header nav .nav-dropdown>a').length;i++){
+                 document.querySelectorAll('#header nav .nav-dropdown>a')[i].style.paddingBottom='12px';
+                 document.querySelectorAll('#header nav .nav-dropdown>a')[i].style.paddingTop='12px';
+             }
+         }
+     });
+
+
+
+
+
+
+     document.addEventListener('DOMContentLoaded', function() {
+    var checkboxes = document.querySelectorAll('input[type=checkbox]');
+
+    for (var checkbox of checkboxes)
+    {
+        checkbox.addEventListener('change', function(event)
+        {
+
+                if($("#input_seaerch").val().length >= 3){
+            serachInElastic($("#input_seaerch").val() , $("#report").is(":checked") ? 'report' : null ,
+            $("#news").is(":checked") ? 'news' : null,$("#law").is(":checked") ? 'law' : null,
+            $("#legal").is(":checked") ? 'legal' : null,$("#agenda").is(":checked") ? 'agenda' : null );
+        }
+        });
+    }
+}, false);
+
+     function first_boot(){
+
+        document.querySelector("#input_seaerch").addEventListener("input", checkChange);
+
+    }
+
+     function checkChange(e){
+
+        if(e.target.value.length >= 3){
+            serachInElastic(e.target.value ,'report' ,
+            'news' ,  'law' , 'legal', 'agenda' );
+        }
+    }
+
+    $(document).ready(function(){
+        first_boot();
+
+    });
+
+
+    function serachInElastic(term ,report,news,law,legal,agenda ){
+        $("#loading_ajax_search").removeClass('d-none');
+        $.ajax({
+        // headers: {
+        //     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+        // },
+        url:$('#searchAjax').val(),
+        data:{q:term, report:report ,news:news ,legal:legal ,agenda:agenda ,law:law },
+        type:"GET",
+        beforeSend:function(){
+            $('#result').empty();
+            // jQuery('#year_no').append('<option>' + WAIT + '</option>');
+        },
+        success:function(data) {
+            $('#result').empty();
+            // for(var i = 0; i < years_no.length; i++) {
+            //     var arr = Object.values(years_no[i]);
+            //     $('#year_no').append('<option value="' + arr[0] + '" ' +
+            //         (arr[0] == yearNo? 'selected': '') + '>' + arr[1] + '</option>');
+            //     }
+            if(data['result'].length > 0 ){
+                $('#result').empty();
+                var row=1;
+                data['result'].forEach(element => {
+
+                    var title = element['title'];
+                    var link = element['link'];
+                    var date = element['date_fa'];
+                    var tbl_value = element['tbl_value'];
+                    var pure_title = element['pure_title'];
+                    // <li class="dropdown-header">`+tbl_value+`</li>
+                    $('#result').append(`<tr class=""><td scope="row">`+row+`</td><td onClick="clickli(this)" role="option" ><p style="display:none" class="pure_title">`+pure_title+`</p><a  target="_blank"  >`+title+`</a></td><td>`+date+`</td><td><span>`+tbl_value+`</td></tr>`);
+                        row++;
+                    });
+                    // $("#list").show();
+                $("#loading_ajax_search").addClass('d-none');
+                    // $('#list li a').first().focus();
+                    }
+            }
+
+        });
+
+    }
+
+
+    function clickli(item){
+    $("#input_seaerch").empty();
+    $("#input_seaerch").val($(item).find('p').text());
+    // $('#result').find('tr').remove().end();
+    // $('#result').hide();
+    $('#btn_search').click();
+
+     }
+</script>
+
+
+<script src="/assets/js/plugins/persian_datepicker/persian-date.min.js"></script>
+<script src="/assets/js/plugins/persian_datepicker/persian-datepicker.min.js"></script>
+<script src="/assets/js/search.js"></script>
+<input type="hidden" id="searchAjax" value="https://rc.majlis.ir/fa/search/searchAjax" />
+
+
+ <script src="/assets/js/hls.js?v=1.0"></script>
+ <script>
+     function showTv(){
+         var video = document.getElementById('video');
+
+         var url_streams = 'https://rc.majlis.ir/stream/'; $(document).ready(function () {
+             var list_video = document.getElementById("list_video").value; var video = document.getElementById('video'); var resultArray = list_video.split('|'); var currentIndex = 0;
+             function playNextVideo() {
+                 currentIndex++;
+                 if (currentIndex < resultArray.length - 1) { var file_name = resultArray[currentIndex].split('.').slice(0, -1).join('.') + '.m3u8'; hls.loadSource(url_streams + file_name); video.play(); } else { currentIndex = 0; var file_name = resultArray[currentIndex].split('.').slice(0, -1).join('.') + '.m3u8'; hls.loadSource(url_streams + file_name); video.play(); }
+                 video.play();
+             }
+             if (Hls.isSupported()) {
+                 var hls = new Hls({ "debug": false, "enableWorker": true, "lowLatencyMode": true, "backBufferLength": 90, });
+                 hls.attachMedia(video); hls.on(Hls.Events.MEDIA_ATTACHED, function () { video.muted = true; video.puse(); });
+                 hls.on(Hls.Events.MANIFEST_PARSED, function () { video.puse(); });
+                 hls.on(Hls.Events.MEDIA_ENDED, function () { playNextVideo(); });
+                 var file_name = resultArray[currentIndex].split('.').slice(0, -1).join('.') + '.m3u8'; hls.loadSource(url_streams + file_name);
+             } else if (video.canPlayType('application/vnd.apple.mpegurl')) { video.src = url_streams + file_name; video.addEventListener('canplay', function () { video.pause(); video.muted = true; }); }
+             video.addEventListener('ended', function () { playNextVideo(); });
+         });
+         video.pause()
+     }
+ </script>
+
+
+</body>
+</html>
