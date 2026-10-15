@@ -11,6 +11,10 @@ services:
     command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
     volumes:
       - ./generated/litellm.config.yaml:/app/config.yaml:ro
+      # Custom LiteLLM callback: next to the config so `cost_logger.proxy_handler_instance` imports.
+      - ./cost_logger.py:/app/cost_logger.py:ro
+      # Host request log; cost_logger writes /logs/requests.jsonl inside the container.
+      - /var/log/roxira-keypool:/logs
     ports:
       - "127.0.0.1:4000:4000"
     healthcheck:

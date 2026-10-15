@@ -36,6 +36,17 @@ bash scripts/infra/key_pool/health.sh             # ok / 429 / fail per provider
 `roxira_keypool` container already exists, restarts it so the changed config is loaded. The image tag in
 `gateway.image` is unverified: if `docker pull` fails, fix the tag in `key_pool.yaml` and re-run.
 
+## Cost and latency log
+- `gateway.cost_log: true` makes the renderer add the LiteLLM callback
+  `cost_logger.proxy_handler_instance`; the proxy writes one privacy-safe JSON line per call to
+  `/logs/requests.jsonl` (host: `/var/log/roxira-keypool/requests.jsonl`, rotated to `.1` past 200 MB).
+  Only counts, cost, latency and model ids are logged: never prompts, responses, keys or user ids.
+- Report: `python3 scripts/infra/key_pool/cost_report.py [--today|--days N] [--short]` prints calls,
+  success %, total cost, cost per successful call and p50/p95 latency per group, plus the top 5
+  deployments by cost. `--short` is capped at 12 lines for the owner's bot.
+- After merging a change to this file or `cost_logger.py`, run on the server:
+  `bash scripts/infra/key_pool/install.sh --apply`.
+
 ## Add a key or provider
 - Extra key for an existing provider: add its env var name to the provider's `keys:` list, set it with
   `set_server_env.sh`, re-run `install.sh --apply`.

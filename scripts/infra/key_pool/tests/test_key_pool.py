@@ -183,3 +183,13 @@ def test_private_client_only_calls_paid_openrouter():
     llm_pool.chat([{"role": "user", "content": "x"}], "private", pool=pool(), env=FAKE_ENV, post=post)
     assert {u.split("/")[2] for u, _ in calls} == {"openrouter.ai"}
     assert not any(m.endswith(":free") for _, m in calls)
+
+
+def test_render_adds_cost_callback_only_when_enabled():
+    p = pool()
+    assert p["gateway"]["cost_log"] is True
+    cfg = render_litellm.render(p, set(FAKE_ENV))
+    assert cfg["litellm_settings"]["callbacks"] == ["cost_logger.proxy_handler_instance"]
+    for off in (False, None):
+        p["gateway"]["cost_log"] = off
+        assert "callbacks" not in render_litellm.render(p, set(FAKE_ENV))["litellm_settings"]

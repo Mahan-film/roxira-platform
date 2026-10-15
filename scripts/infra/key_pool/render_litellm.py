@@ -55,10 +55,14 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
     router = dict(gw.get("router", {}))
     if fallbacks:
         router["fallbacks"] = router.get("fallbacks", []) + fallbacks
+    settings = {"drop_params": True, "telemetry": False, "num_retries": router.get("num_retries", 3)}
+    if gw.get("cost_log"):
+        # LiteLLM loads custom callbacks from the config dir; cost_logger.py is mounted there.
+        settings["callbacks"] = ["cost_logger.proxy_handler_instance"]
     return {
         "model_list": model_list,
         "router_settings": router,
-        "litellm_settings": {"drop_params": True, "telemetry": False, "num_retries": router.get("num_retries", 3)},
+        "litellm_settings": settings,
         "general_settings": {"master_key": f"os.environ/{gw.get('master_key_env', 'KEYPOOL_MASTER_KEY')}"},
     }
 

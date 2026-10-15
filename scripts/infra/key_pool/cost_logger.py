@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""LiteLLM CustomLogger: one JSON line per request (cost + latency), privacy-safe.
+
+Wired in by render_litellm.py as `cost_logger.proxy_handler_instance` when
+`gateway.cost_log` is true. Inside the gateway container the file lives at the path in
+$KEYPOOL_COST_LOG (default /logs/requests.jsonl); the host directory /var/log/roxira-keypool
+is bind-mounted there by docker-compose.keypool.yml.
+
+Only counts, costs, timing and model ids are written. Prompts, responses, keys, headers and
+user ids are NEVER logged. Logging must never break a request: every path is wrapped in
+try/except and errors are swallowed.
+"""
+from __future__ import annotations
+
+import json
+import math
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+try:  # litellm only exists in the gateway image; tests import this module without it.
+    from litellm.integrations.custom_logger import CustomLogger
+except Exception:  # pragma: no cover - only when litellm is absent
+
+    class CustomLogger:  # type: ignore[no-redef]
+        pass
+
+
+DEFAULT_LOG_PATH = "/logs/requests.jsonl"
+DEFAULT_MAX_BYTES = 200 * 1024 * 1024
+
+
+def _num(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _usage_field(usage: Any, name: str) -> int:
+    if usage is None:
+        return 0
+    if isinstance(usage, dict):
+        return _num(usage.get(name))
+    return _num(getattr(usage, name, None))
+
+
+def _latency_ms(start_time: Any, end_time: Any) -> int:
+    try:
+        delta = (end_time - start_time).total_seconds()
+    except Exception:
+        return 0
+    return max(0, int(round(delta * 1000)))
+
+
+def build_record(
+    kwargs: Any,
+    response_obj: Any,
+    start_time: Any,
+    end_time: Any,
+    success: bool,
+    error: BaseException | None = None,
+) -> dict[str, Any]:
+    """Build the record from a LiteLLM callback. Pure: never touches the filesystem."""
+    kw = kwargs if isinstance(kwargs, dict) else {}
+    slo = kw.get("standard_logging_object")
+    if not isinstance(slo, dict):
+        slo = {}
+    litellm_params = kw.get("litellm_params")
+    if not isinstance(litellm_params, dict):
+        litellm_params = {}
+    metadata = kw.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    model = str(litellm_params.get("model") or kw.get("model") or "")
+    model_group = str(
+        slo.get("model_group") or metadata.get("model_group") or kw.get("model") or model
+    )
+    deployment = str(slo.get("model_id") or metadata.get("model_id") or model)
+    provider = str(
+        slo.get("custom_llm_provider")
+        or kw.get("custom_llm_provider")
+        or metadata.get("custom_llm_provider")
+        or (model.split("/")[0] if "/" in model else "")
+    )
+
+    usage = getattr(response_obj, "usage", None)
+    if usage is None:
+        usage = slo.get("usage")
+    if usage is None:
+        usage = kw.get("usage")
+
+    cost = kw.get("response_cost")
+    if cost is None:
+        cost = slo.get("response_cost")
+    try:
+        cost = float(cost)
+    except (TypeError, ValueError):
+        cost = 0.0
+    if not math.isfinite(cost) or cost < 0:
+        cost = 0.0
+
+    return {
+        "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "model_group": model_group,
+        "deployment": deployment,
+        "provider": provider,
+        "prompt_tokens": _usage_field(usage, "prompt_tokens"),
+        "completion_tokens": _usage_field(usage, "completion_tokens"),
+        "response_cost": cost,
+        "latency_ms": _latency_ms(start_time, end_time),
+        "success": bool(success),
+        "error": type(error).__name__ if error is not None else "",
+    }
+
+
+def log_path() -> Path:
+    return Path(os.environ.get("KEYPOOL_COST_LOG") or DEFAULT_LOG_PATH)
+
+
+def _max_bytes() -> int:
+    try:
+        return int(os.environ.get("KEYPOOL_COST_LOG_MAX_BYTES") or DEFAULT_MAX_BYTES)
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_BYTES
+
+
+def append_record(record: dict[str, Any]) -> None:
+    """Append one JSON line, rotating to `<file>.1` once past the size guard (keep one)."""
+    path = log_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if path.exists() and path.stat().st_size >= _max_bytes():
+            os.replace(str(path), str(path) + ".1")
+    except OSError:
+        pass
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=True, separators=(",", ":")) + "\n")
+
+
+class CostLogger(CustomLogger):
+    """Appends one privacy-safe JSON line per LLM call; never raises."""
+
+    def _emit(
+        self,
+        kwargs: Any,
+        response_obj: Any,
+        start_time: Any,
+        end_time: Any,
+        success: bool,
+        error: BaseException | None = None,
+    ) -> None:
+        try:
+            append_record(build_record(kwargs, response_obj, start_time, end_time, success, error))
+        except Exception:
+            pass
+
+    async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
+        self._emit(kwargs, response_obj, start_time, end_time, True)
+
+    async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time):
+        error = kwargs.get("exception") if isinstance(kwargs, dict) else None
+        self._emit(kwargs, response_obj, start_time, end_time, False, error)
+
+
+proxy_handler_instance = CostLogger()

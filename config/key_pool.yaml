@@ -50,6 +50,7 @@ gateway:
   host: 127.0.0.1
   port: 4000
   master_key_env: KEYPOOL_MASTER_KEY   # callers send it as the OpenAI api key; set with set_server_env.sh --generate
+  cost_log: true                       # render_litellm adds the cost_logger callback; writes /logs/requests.jsonl
   router:
     # simple-shuffle picks among a group's deployments weighted by their rpm/tpm (from each
     # provider's `limits`), so the three Groq keys share the load. usage-based-routing-v2 was tried
