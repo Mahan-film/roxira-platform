@@ -203,7 +203,9 @@ groups:
       groq: [{role: agent_runner, alias: groq-strong}]
       gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
       mistral: [{id: mistral-medium-latest}]
-    fallback: [agent-free-paid]
+    # Paid fallback on the PRODUCT key (private: no_train), never the $5 agents key (2026-10-15: the
+    # cost log showed product chat draining OPENROUTER_API_KEY_AGENTS, which then stopped the agents).
+    fallback: [private]
 
   agent-free-paid:
     description: Paid DeepSeek Flash only. Shared last-resort fallback for the free agent groups.

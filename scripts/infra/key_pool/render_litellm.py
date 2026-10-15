@@ -16,8 +16,24 @@ import keypool_config as kc
 import yaml
 
 
+def _prices(models_path=None) -> dict:
+    """model id -> (usd per input token, usd per output token) from config/models.yaml price_per_1m."""
+    out = {}
+    try:
+        reg = kc._registry()
+        for role in reg.all_role_names(models_path):
+            for e in reg.role_entries(role, models_path):
+                p = e.get("price_per_1m") or {}
+                if e.get("id") and isinstance(p.get("in"), (int, float)) and isinstance(p.get("out"), (int, float)):
+                    out.setdefault(e["id"], (p["in"] / 1e6, p["out"] / 1e6))
+    except Exception:  # prices are optional: a registry problem must never block the gateway config
+        return {}
+    return out
+
+
 def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
     gw = pool.get("gateway", {})
+    prices = _prices(models_path)
     model_list = []
     fallbacks = []
     for group in pool["groups"]:
@@ -44,6 +60,8 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
                 params["tpm"] = d.tpm
             if d.extra_body:
                 params["extra_body"] = d.extra_body
+            if d.model in prices and d.tier == "paid":  # LiteLLM has no price for some ids: give ours
+                params["input_cost_per_token"], params["output_cost_per_token"] = prices[d.model]
             info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
             if d.mode:
                 info["mode"] = d.mode

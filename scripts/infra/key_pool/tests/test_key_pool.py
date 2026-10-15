@@ -193,3 +193,13 @@ def test_render_adds_cost_callback_only_when_enabled():
     for off in (False, None):
         p["gateway"]["cost_log"] = off
         assert "callbacks" not in render_litellm.render(p, set(FAKE_ENV))["litellm_settings"]
+
+
+def test_product_free_falls_back_to_private_and_paid_has_prices():
+    import render_litellm
+    pool = kc.load_pool()
+    cfg = render_litellm.render(pool)
+    fb = {k: v for d in cfg["router_settings"].get("fallbacks", []) for k, v in d.items()}
+    assert fb["product-free"] == ["private"]
+    paid = [m for m in cfg["model_list"] if m["model_name"] == "private"]
+    assert paid and all(m["litellm_params"].get("input_cost_per_token", 0) > 0 for m in paid)
