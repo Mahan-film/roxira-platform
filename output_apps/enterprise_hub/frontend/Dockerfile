@@ -46,7 +46,8 @@ ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs \
-    && apk add --no-cache curl
+    && apk add --no-cache curl \
+    && apk upgrade --no-cache   # patched OS libs (openssl etc.); see docs/ops/SBOM.md
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./

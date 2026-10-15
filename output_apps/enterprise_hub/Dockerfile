@@ -45,7 +45,8 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 RUN addgroup -S nestjs && adduser -S nestjs -G nestjs \
-    && apk add --no-cache curl python3 git bash docker-cli
+    && apk add --no-cache curl python3 git bash docker-cli \
+    && apk upgrade --no-cache   # patched OS libs (openssl etc.); see docs/ops/SBOM.md
 
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
