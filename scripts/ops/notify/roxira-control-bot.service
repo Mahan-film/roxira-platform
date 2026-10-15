@@ -1,0 +1,19 @@
+# Roxira owner control bot (Telegram/Bale). Installed by
+# scripts/ops/notify/install.sh; long-polls getUpdates and only answers the owner
+# chat. Reads NOTIFY_BOT_TOKEN / NOTIFY_CHAT_ID / NOTIFY_BOT_API from
+# /opt/roxira_platform/.env itself (values never logged). See docs/ops/CONTROL_BOT.md.
+[Unit]
+Description=Roxira owner control bot (Telegram/Bale)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/notify/control_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

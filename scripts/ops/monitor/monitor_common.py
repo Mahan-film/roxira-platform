@@ -5,6 +5,7 @@ Stdlib only. No network access at import time.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -102,6 +103,33 @@ def format_alerts(alerts, host: str, title: str) -> tuple[str, str]:
     return subject, "\n".join(lines) + f"\n\nhost: {host}\n"
 
 
+_NOTIFY_BOT = None
+
+
+def notify_bot(subject: str, body: str) -> None:
+    """Best-effort mirror of an alert to the owner's Telegram/Bale bot.
+
+    Silently does nothing when notify.py is missing or the bot is unconfigured.
+    Never raises and never prints secret values (notify.py scrubs its input).
+    """
+    global _NOTIFY_BOT
+    if _NOTIFY_BOT is None:
+        try:
+            here = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(here, "..", "notify", "notify.py")
+            spec = importlib.util.spec_from_file_location("notify", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            _NOTIFY_BOT = module
+        except Exception:
+            _NOTIFY_BOT = False
+    if _NOTIFY_BOT:
+        try:
+            _NOTIFY_BOT.send(f"{subject}\n{body[:500]}")
+        except Exception:
+            pass
+
+
 def send_email(subject: str, body: str, dry_run: bool = False) -> bool:
     """Send via SMTP using BACKUP_SMTP_USER / BACKUP_SMTP_PASS / BACKUP_NOTIFY_TO."""
     user = os.environ.get("BACKUP_SMTP_USER", "")
@@ -124,6 +152,7 @@ def send_email(subject: str, body: str, dry_run: bool = False) -> bool:
         with smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=30) as s:
             s.login(user, password)
             s.send_message(msg)
+        notify_bot(subject, body)
         return True
     except (OSError, smtplib.SMTPException) as exc:
         print(f"email send failed: {type(exc).__name__}")

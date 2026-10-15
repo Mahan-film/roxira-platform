@@ -36,6 +36,7 @@ SCOPES=()
 NO_FALLBACK=0 GATEWAY=0 TIER=""
 AGENT_GATEWAY_URL="${AGENT_GATEWAY_URL:-http://127.0.0.1:4000/v1}"
 REPO_ENV="${ROXIRA_REPO_ENV:-/opt/roxira_platform/.env}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
 
 log() { printf '[agent-run] %s\n' "$*" >&2; }
 die() { printf '[agent-run] ERROR: %s\n' "$*" >&2; exit 2; }
@@ -411,6 +412,11 @@ if [ "$CLEANUP" = 1 ] || { [ ${#FILES[@]} -eq 0 ] && [ ${#VIOLATIONS[@]} -eq 0 ]
   if [ "$SMOKE" = 1 ] || [ ${#FILES[@]} -eq 0 ]; then
     ag_git --git-dir="$BARE" branch -D "$BRANCH" >/dev/null 2>&1 || true
   fi
+fi
+# Best effort: tell the owner's bot how the run ended (never changes the exit code).
+if [ -f "$HERE/../../ops/notify/notify.py" ]; then
+  python3 "$HERE/../../ops/notify/notify.py" \
+    "ایجنت $SLUG: ok=$OK، ${#FILES[@]} فایل، ${DURATION}s" >/dev/null 2>&1 || true
 fi
 printf '%s\n' "$RESULT"
 [ "$OK" = 1 ]

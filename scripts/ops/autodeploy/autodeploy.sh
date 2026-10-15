@@ -55,6 +55,10 @@ write_status() {
       "$STARTED" "$TARGET" "$DEPLOYED_BEFORE" "$MIGRATED" "$RESULT" "$LOG_FILE" \
       >"$LAST_JSON" 2>/dev/null || true
     ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +$((KEEP_LOGS + 1)) | xargs -r rm -f 2>/dev/null || true
+    # Best effort: notify the owner for a real outcome, never for a no-op/skip.
+    if [ "$RESULT" = "ok" ] || [ "$RESULT" = "failed" ]; then
+      python3 "$REPO/scripts/ops/notify/notify.py" "استقرار ${TARGET_SHORT:0:7}: $RESULT" >/dev/null 2>&1 || true
+    fi
   fi
   [ -z "$DEPLOY_TMP" ] || rm -f "$DEPLOY_TMP"
   [ -z "${LOCK_DIR:-}" ] || rmdir "$LOCK_DIR" 2>/dev/null || true
