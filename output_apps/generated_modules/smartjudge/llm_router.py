@@ -591,9 +591,8 @@ async def complete(
         }
         gw_body["model"] = llm_gateway.model()
         gw_body["messages"] = messages
-        reasoning = reasoning_param(tier)
-        if reasoning is not None:
-            gw_body["reasoning"] = reasoning
+        # No OpenRouter-only `reasoning`/`usage` here: Groq and Mistral reject unknown body fields (HTTP 400).
+        gw_body.pop("usage", None)
         try:
             data, attempts = await _post_with_reasoning_fallback(
                 gw_body, fail_fast_on_429=False, timeout=timeout, max_retries=max_retries,

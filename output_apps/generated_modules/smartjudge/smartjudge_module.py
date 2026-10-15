@@ -1741,11 +1741,16 @@ def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature
         body = {
             "model": model, "messages": messages, "stream": True,
             "temperature": temperature, "max_tokens": max_tokens,
-            "usage": {"include": True},
         }
-        reasoning = _reasoning_body(model)
-        if reasoning is not None:
-            body["reasoning"] = reasoning
+        if gateway:
+            # OpenAI-standard usage flag; `usage`/`reasoning` are OpenRouter-only and Groq/Mistral reject
+            # them with HTTP 400 (2026-10-15: every free key-pool attempt failed and fell back to paid).
+            body["stream_options"] = {"include_usage": True}
+        else:
+            body["usage"] = {"include": True}
+            reasoning = _reasoning_body(model)
+            if reasoning is not None:
+                body["reasoning"] = reasoning
         if gateway:
             url = _llm_gateway.chat_completions_url()
             headers = _llm_gateway.headers()
