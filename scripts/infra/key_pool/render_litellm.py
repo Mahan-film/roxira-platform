@@ -60,7 +60,9 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
                 params["tpm"] = d.tpm
             if d.extra_body:
                 params["extra_body"] = d.extra_body
-            if d.model in prices and d.tier == "paid":  # LiteLLM has no price for some ids: give ours
+            if d.tier != "paid":  # free tiers cost us nothing; LiteLLM would log the list price
+                params["input_cost_per_token"] = params["output_cost_per_token"] = 0.0
+            elif d.model in prices:  # LiteLLM has no price for some ids: give ours
                 params["input_cost_per_token"], params["output_cost_per_token"] = prices[d.model]
             info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
             if d.mode:

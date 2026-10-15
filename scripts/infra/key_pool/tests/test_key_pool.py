@@ -203,3 +203,10 @@ def test_product_free_falls_back_to_private_and_paid_has_prices():
     assert fb["product-free"] == ["private"]
     paid = [m for m in cfg["model_list"] if m["model_name"] == "private"]
     assert paid and all(m["litellm_params"].get("input_cost_per_token", 0) > 0 for m in paid)
+
+
+def test_free_tier_deployments_cost_zero():
+    import render_litellm
+    cfg = render_litellm.render(kc.load_pool())
+    free = [m for m in cfg["model_list"] if m["model_info"]["tier"] != "paid"]
+    assert free and all(m["litellm_params"]["input_cost_per_token"] == 0.0 for m in free)
