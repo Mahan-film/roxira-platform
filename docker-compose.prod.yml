@@ -353,6 +353,8 @@ services:
       context: ./output_apps/enterprise_hub/frontend
       dockerfile: Dockerfile
       args:
+        NEXT_PUBLIC_UMAMI_WEBSITE_ID: ${NEXT_PUBLIC_UMAMI_WEBSITE_ID:-}
+        NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI: ${NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI:-}
         NEST_API_ORIGIN: http://roxira_enterprise_backend:3000
         JUDGE_API_ORIGIN: http://roxira_app_prod:8000
     container_name: roxira_enterprise_frontend

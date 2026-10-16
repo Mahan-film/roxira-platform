@@ -10,7 +10,7 @@
 # Image pinned to v3.4.0 (latest GitHub release at 2026-10-16). Bump deliberately, never :latest.
 services:
   umami:
-    image: ghcr.io/umami-software/umami:v3.4.0
+    image: ghcr.io/umami-software/umami:3.4.0   # ghcr tags have no "v" (checked 2026-10-16; amd64+arm64)
     container_name: roxira_umami
     restart: unless-stopped
     init: true
