@@ -62,6 +62,7 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
                     params["tpm"] = d.tpm
                 if d.tier != "paid":
                     params["input_cost_per_token"] = params["output_cost_per_token"] = 0.0
+                params.update(g.get("litellm_params") or {})  # e.g. reasoning_effort for latency-sensitive groups
                 info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
                 model_list.append({"model_name": names_by_rank[d.order], "litellm_params": params, "model_info": info})
             continue

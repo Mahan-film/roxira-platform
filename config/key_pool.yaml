@@ -236,6 +236,9 @@ groups:
   gemini-best-product:   # same ladder for Smart Judge chat; ends on the PRODUCT key, never the agents key
     description: Gemini ladder for product answers, then product-free, then the private (product key) group.
     ordered: true
+    # Chat waits 8 s for the first token (SMARTJUDGE_TTFT_FAST_SECONDS): low thinking keeps Gemini under it and
+    # stops the hidden thinking from eating the whole max_tokens budget (one empty answer seen in the 2026-10-16 test).
+    litellm_params: {reasoning_effort: low}
     providers: [gemini]
     models:
       gemini:
