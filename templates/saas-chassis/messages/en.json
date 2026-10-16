@@ -1,0 +1,54 @@
+{
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "faq": "FAQ",
+    "signIn": "Sign in",
+    "getStarted": "Get started",
+    "dashboard": "Dashboard"
+  },
+  "landing": {
+    "heroTitle": "Your product headline goes here",
+    "heroSubtitle": "One sentence that says who it is for and what it does for them.",
+    "cta": "Start for free",
+    "featuresTitle": "Everything you need",
+    "features": [
+      { "title": "Feature one", "body": "Describe the benefit, not the mechanism." },
+      { "title": "Feature two", "body": "Describe the benefit, not the mechanism." },
+      { "title": "Feature three", "body": "Describe the benefit, not the mechanism." }
+    ],
+    "pricingTitle": "Simple pricing",
+    "perMonth": "/month",
+    "choose": "Choose plan",
+    "faqTitle": "Frequently asked questions",
+    "faq": [
+      { "q": "What is this product?", "a": "Replace with a direct, factual answer." },
+      { "q": "Is there a free plan?", "a": "Yes. See the pricing section." },
+      { "q": "Is AI used?", "a": "Where AI generates content it is clearly labelled." }
+    ],
+    "waitlistTitle": "Join the waitlist",
+    "waitlistBody": "Be the first to know when we launch.",
+    "waitlistPlaceholder": "you@example.com",
+    "waitlistButton": "Notify me",
+    "waitlistThanks": "Thanks! You are on the list.",
+    "waitlistError": "Please enter a valid email."
+  },
+  "auth": {
+    "signInTitle": "Sign in",
+    "signUpTitle": "Create your account",
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "submitSignIn": "Sign in",
+    "submitSignUp": "Create account",
+    "magicLink": "Email me a sign-in link",
+    "magicLinkSent": "Check your email for the sign-in link.",
+    "noAccount": "No account?",
+    "haveAccount": "Already have an account?"
+  },
+  "footer": {
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "ai": "AI disclosure"
+  }
+}

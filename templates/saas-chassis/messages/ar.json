@@ -1,0 +1,43 @@
+{
+  "nav": {
+    "features": "المزايا",
+    "pricing": "الأسعار",
+    "faq": "الأسئلة الشائعة",
+    "signIn": "تسجيل الدخول",
+    "getStarted": "ابدأ الآن",
+    "dashboard": "لوحة التحكم"
+  },
+  "landing": {
+    "heroTitle": "عنوان منتجك الرئيسي هنا",
+    "heroSubtitle": "جملة واحدة توضح لمن هذا المنتج وماذا يقدم لهم.",
+    "cta": "ابدأ مجاناً",
+    "featuresTitle": "كل ما تحتاجه",
+    "pricingTitle": "أسعار بسيطة",
+    "perMonth": "/شهرياً",
+    "choose": "اختر الخطة",
+    "faqTitle": "الأسئلة الشائعة",
+    "waitlistTitle": "انضم إلى قائمة الانتظار",
+    "waitlistBody": "كن أول من يعلم عند الإطلاق.",
+    "waitlistButton": "أبلغني",
+    "waitlistThanks": "شكراً! تمت إضافتك إلى القائمة.",
+    "waitlistError": "الرجاء إدخال بريد إلكتروني صحيح."
+  },
+  "auth": {
+    "signInTitle": "تسجيل الدخول",
+    "signUpTitle": "أنشئ حسابك",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "name": "الاسم",
+    "submitSignIn": "دخول",
+    "submitSignUp": "إنشاء حساب",
+    "magicLink": "أرسل لي رابط الدخول بالبريد",
+    "magicLinkSent": "تحقق من بريدك للحصول على رابط الدخول.",
+    "noAccount": "ليس لديك حساب؟",
+    "haveAccount": "لديك حساب بالفعل؟"
+  },
+  "footer": {
+    "terms": "الشروط",
+    "privacy": "الخصوصية",
+    "ai": "الإفصاح عن الذكاء الاصطناعي"
+  }
+}

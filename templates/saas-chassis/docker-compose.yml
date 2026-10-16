@@ -1,0 +1,49 @@
+# App + Postgres. Put Cloudflare / a reverse proxy in front; the app port is bound to localhost only.
+services:
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Chassis}
+        NEXT_PUBLIC_UMAMI_URL: ${NEXT_PUBLIC_UMAMI_URL:-}
+        NEXT_PUBLIC_UMAMI_WEBSITE_ID: ${NEXT_PUBLIC_UMAMI_WEBSITE_ID:-}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://chassis:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/chassis
+    ports:
+      - "127.0.0.1:${APP_PORT:-3100}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: chassis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: chassis
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chassis -d chassis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot: `docker compose --profile tools run --rm migrate` (see scripts/migrate.sh)
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: postgres://chassis:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/chassis
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,17 @@
+# Product name
+
+> One-sentence factual description of what the product is and who it is for. (Edit me.)
+
+## Key pages
+
+- [Home](/): what the product does, pricing and FAQ
+- [Terms](/legal/terms): terms of service
+- [Privacy](/legal/privacy): privacy policy
+- [AI disclosure](/legal/ai-disclosure): where and how AI is used
+
+## Facts for answer engines
+
+- Category: (e.g. legal research software)
+- Audience: (who it is for)
+- Pricing: see the pricing section on the home page
+- AI-generated content is always labelled.
