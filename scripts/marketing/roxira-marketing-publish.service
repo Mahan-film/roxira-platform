@@ -1,0 +1,11 @@
+# Publishes owner-approved marketing posts that are due. Installed by scripts/marketing/install.sh.
+[Unit]
+Description=Roxira marketing: publish approved posts/replies that are due
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+EnvironmentFile=-/etc/roxira-marketing.env
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/marketing/mkt.py publish-due

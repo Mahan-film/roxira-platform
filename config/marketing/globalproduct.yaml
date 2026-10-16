@@ -1,0 +1,27 @@
+# Brand profile: PLACEHOLDER for the first global product (English). Fill in once the product
+# is chosen (docs/strategy/MASTER_PLAN_2026-10-16.md section 5). Not used until then.
+name: Global Product (placeholder)
+audience: Solo lawyers and small firms in English-speaking ASEAN markets
+languages: [en]
+tone: Clear, professional, practical; no hype
+timezone: Asia/Kuala_Lumpur
+week_start: monday
+post_hours: [9, 17]
+platforms: [linkedin, x]
+cadence:
+  linkedin: 2
+  x: 3
+links:
+  site: https://example.com
+hashtags:
+  - LegalTech
+banned_claims:
+  - Never promise legal outcomes or say the product replaces a lawyer
+  - Never state a number, date or statute that is not in the source text
+banned_phrases:
+  - guarantee
+  - 100%
+source:
+  type: guides
+  dir: docs/marketing/sources/globalproduct
+  base_path: /blog

@@ -33,6 +33,10 @@ CONTAINERS = (
 DOCKER_HEALTH_FORMAT = "{{.State.Status}}{{if .State.Health}}/{{.State.Health.Status}}{{end}}"
 _SLUG = re.compile(r"--slug\s+(\S+)")
 SPEC_SLUG = re.compile(r"^[a-z0-9-]{1,40}$")
+# mkt:<action>:<numeric id>  (F6 marketing engine; id is a plain decimal, never shell text)
+MKT_CALLBACK = re.compile(r"^mkt:(approve|reject|rapprove|rreject):([0-9]{1,9})$")
+MKT_ARGV = {"approve": "approve", "reject": "reject",
+            "rapprove": "reply-approve", "rreject": "reply-reject"}
 _SHA7 = 7
 COST_LIMIT = 3500
 
@@ -203,6 +207,27 @@ class Bot:
             self.send("لغو شد؛ تغییری اعمال نشد.")
         elif data.startswith("spec:"):
             self._on_spec_callback(data, cb_id)
+        elif data.startswith("mkt:"):
+            self._on_mkt_callback(data, cb_id)
+
+    def _on_mkt_callback(self, data: str, cb_id: str) -> None:
+        """mkt:approve|reject|rapprove|rreject:<id> -> fixed argv to scripts/marketing/mkt.py.
+
+        Only changes approval state in the marketing DB; publishing happens later in the
+        publish-due timer, never inside the bot."""
+        match = MKT_CALLBACK.fullmatch(data)
+        if not match:
+            self.answer_callback(cb_id, "نامعتبر")
+            return
+        action, row_id = MKT_ARGV[match.group(1)], str(int(match.group(2)))
+        script = os.path.join(self.paths["repo"], "scripts", "marketing", "mkt.py")
+        rc, _out = self.runner([sys.executable, script, action, row_id], timeout=60)
+        self.answer_callback(cb_id, "انجام شد" if rc == 0 else "خطا")
+        if rc == 0:
+            approved = action.endswith("approve")
+            self.send(("✅ تأیید شد؛ در زمان‌بندی منتشر می‌شود." if approved else "❌ رد شد.") + f" (#{row_id})")
+        else:
+            self.send(f"⚠️ #{row_id}: این مورد دیگر در انتظار تأیید نیست یا خطایی رخ داد.")
 
     def _on_spec_callback(self, data: str, cb_id: str) -> None:
         """spec:approve|reject:<slug> -> fixed argv to brief_to_spec.py (slug validated)."""

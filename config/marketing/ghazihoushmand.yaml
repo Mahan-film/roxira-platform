@@ -1,0 +1,38 @@
+# Brand profile: Smart Judge (ghazihoushmand.ir). Read by scripts/marketing/mkt.py.
+name: قاضی هوشمند (Smart Judge)
+audience: ایرانیان عادی و کسب‌وکارهای کوچک که دنبال راهنمای ساده و قابل اتکای حقوقی هستند
+languages: [fa]
+tone: صمیمی، ساده و محترمانه؛ بدون اصطلاح پیچیده؛ لحن آموزشی و نه تبلیغاتی
+timezone: Asia/Tehran
+week_start: saturday
+post_hours: [10, 20]
+platforms: [telegram, instagram, linkedin, x]
+cadence:
+  telegram: 3
+  instagram: 3
+  linkedin: 2
+  x: 3
+links:
+  site: https://ghazihoushmand.ir
+media_base_url: https://ghazihoushmand.ir/media/marketing
+handles:
+  instagram: ghazihoushmand
+  x: ghazihoushmand
+hashtags:
+  - قاضی_هوشمند
+  - راهنمای_حقوقی
+banned_claims:
+  - هرگز نتیجهٔ پرونده یا حکم دادگاه را تضمین نکن
+  - هرگز نگو که این متن جایگزین وکیل یا مشاورهٔ حقوقی رسمی است
+  - هرگز عدد، مهلت یا شمارهٔ ماده‌ای را که در متن منبع نیامده بنویس
+  - هرگز دربارهٔ پرونده یا شخص مشخصی نظر حقوقی نده
+banned_phrases:
+  - تضمین
+  - ۱۰۰ درصد
+  - مطمئناً برنده
+  - جایگزین وکیل
+source:
+  type: guides
+  dir: output_apps/enterprise_hub/frontend/content/guides
+  index_ts: output_apps/enterprise_hub/frontend/src/lib/guides.ts
+  base_path: /guides
