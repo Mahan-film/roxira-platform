@@ -44,7 +44,10 @@ export function VipGate({ children, feature }: { children: ReactNode; feature: s
   if (isLoading) return <p className="ap-muted py-8 text-center" role="status">در حال بررسی دسترسی…</p>;
   if (entitled || forceOpen) return <>{children}</>;
 
-  const plans = Object.values(pricing?.plans ?? {});
+  // Ruling/indictment drafts need the pro plan or higher: offer only those (monthly) here.
+  const plans = (["SJ_PRO_MONTHLY", "SJ_PREMIUM_MONTHLY"] as const)
+    .map((key) => pricing?.plans?.[key])
+    .filter((plan): plan is NonNullable<typeof plan> => Boolean(plan));
 
   return (
     <section className="ap-card no-print mb-12 text-center" aria-labelledby="vip-lock-title">

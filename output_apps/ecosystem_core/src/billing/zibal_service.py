@@ -141,8 +141,14 @@ def activate_user_subscription(user_id: str, plan_type: str = "7_DAYS_TRIAL") ->
         expire_at = now + datetime.timedelta(days=3650)  # ۱۰ سال
         status = "PERMANENT_ACTIVE"
     else:
-        expire_at = now + datetime.timedelta(days=30)
-        status = "MONTHLY_ACTIVE"
+        days = 30
+        try:  # SJ_*_YEARLY subscriptions last 365 days; everything else keeps 30
+            from . import pricing_service
+            days = pricing_service.plan_period_days(plan_type, 30)
+        except Exception:  # pragma: no cover - never block activation on this
+            pass
+        expire_at = now + datetime.timedelta(days=days)
+        status = "YEARLY_ACTIVE" if days >= 365 else "MONTHLY_ACTIVE"
 
     result = {
         "user_id": user_id,
@@ -169,6 +175,29 @@ def activate_user_subscription(user_id: str, plan_type: str = "7_DAYS_TRIAL") ->
         result["persist_error"] = str(exc)
 
     return result
+
+
+_LEVEL_RANK = {"free": 0, "basic": 1, "pro": 2, "premium": 3}
+
+
+def merge_entitlement(existing_plan, existing_expires, new_plan, new_expires, now):
+    """Decide the row to keep when a user buys while an entitlement may still be active.
+
+    Returns (plan_type, expires_at, write). A purchase of a LOWER level (e.g. a single draft or voice
+    pack while a subscription runs) never downgrades the active subscription (write=False). Renewing the
+    SAME level stacks the new period on top of the remaining time. A higher level replaces it.
+    """
+    from . import pricing_service
+
+    if not existing_plan or existing_expires is None or existing_expires <= now:
+        return new_plan, new_expires, True
+    old_rank = _LEVEL_RANK.get(pricing_service.plan_level(existing_plan), 0)
+    new_rank = _LEVEL_RANK.get(pricing_service.plan_level(new_plan), 0)
+    if new_rank < old_rank or (new_rank == 0 and old_rank == 0 and new_plan != existing_plan):
+        return existing_plan, existing_expires, False
+    if new_rank == old_rank and new_rank > 0:
+        return new_plan, existing_expires + (new_expires - now), True
+    return new_plan, new_expires, True
 
 
 def _persist_entitlement(
@@ -202,6 +231,16 @@ def _persist_entitlement(
                 );
                 """
             )
+            cur.execute(
+                "SELECT plan_type, expires_at FROM user_entitlements WHERE user_ref = %s;", (user_id,)
+            )
+            row = cur.fetchone()
+            plan_type, expires_at, write = merge_entitlement(
+                row[0] if row else None, row[1] if row else None, plan_type, expires_at,
+                datetime.datetime.now(datetime.timezone.utc),
+            )
+            if not write:
+                return True  # an active higher subscription is kept; the one-off purchase is in payment_orders
             cur.execute(
                 """
                 INSERT INTO user_entitlements

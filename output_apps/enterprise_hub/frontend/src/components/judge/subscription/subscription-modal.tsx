@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { Coins, Loader2, X } from "lucide-react";
 import { track } from "@/lib/analytics/umami";
 
+import { LEVEL_COPY, PAID_LEVELS, RECOMMENDED_LEVEL, monthlyEquivalent, periodLabel, planKey } from "@/lib/plan-catalog";
 import {
   type BackendPlanType,
+  type BillingPeriod,
   type PlanTier,
   type PricingMatrixResponse,
   formatPersianNumber,
@@ -15,6 +17,8 @@ export interface SubscriptionModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentPlan?: PlanTier;
+  /** Plan the user clicked on /plans: highlighted, and sets the monthly/yearly toggle. */
+  initialPlan?: BackendPlanType;
   /** JWT of the authenticated user, if any — sent as a Bearer token so the
    * server can activate the plan without asking for a phone number again. */
   accessToken?: string | null;
@@ -31,18 +35,26 @@ interface RealPlanCard {
   description: string;
 }
 
-const REAL_PLAN_COPY: Record<BackendPlanType, RealPlanCard> = {
-  SINGLE_DRAFT: {
-    planType: "SINGLE_DRAFT",
-    label: "خرید لایحه تکی",
-    description: "دانلود متن کامل لایحه دفاعیه یا دادخواست تولیدشده، قابل ویرایش و پرینت.",
-  },
-  VIP_MONTHLY_PRO: {
-    planType: "VIP_MONTHLY_PRO",
-    label: "اشتراک ماهانه VIP",
-    description: "یک ماه دسترسی به پیش‌نویس رأی و کیفرخواست و سقف بالاتر بارگذاری فایل. جزئیات در صفحهٔ اشتراک و قیمت‌ها.",
-  },
+const SINGLE_DRAFT_COPY: RealPlanCard = {
+  planType: "SINGLE_DRAFT",
+  label: "خرید لایحه تکی",
+  description: "دانلود متن کامل لایحه دفاعیه یا دادخواست تولیدشده، قابل ویرایش و پرینت.",
 };
+
+/** Card copy for any offered plan key (one-off draft or a subscription tier). */
+function cardCopy(planType: BackendPlanType): RealPlanCard {
+  if (planType === "SINGLE_DRAFT") return SINGLE_DRAFT_COPY;
+  const level = PAID_LEVELS.find((l) => planType.startsWith(`SJ_${l.toUpperCase()}_`));
+  if (!level) {
+    return { planType, label: "اشتراک ماهانه VIP", description: "جزئیات در صفحهٔ اشتراک و قیمت‌ها." };
+  }
+  const copy = LEVEL_COPY[level];
+  return {
+    planType,
+    label: `اشتراک ${copy.title}`,
+    description: `${copy.model}؛ ${copy.tagline}. جزئیات در صفحهٔ اشتراک و قیمت‌ها.`,
+  };
+}
 
 /** Top-level helper (outside the component) so the redirect isn't seen by
  * the React Compiler lint rule as an in-render mutation of a global. */
@@ -64,6 +76,7 @@ export function SubscriptionModal({
   isOpen,
   onClose,
   currentPlan,
+  initialPlan,
   accessToken,
   phone,
   onInvoiceIssued,
@@ -74,6 +87,7 @@ export function SubscriptionModal({
   const [pendingPlan, setPendingPlan] = useState<BackendPlanType | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [period, setPeriod] = useState<BillingPeriod>(initialPlan?.endsWith("_YEARLY") ? "yearly" : "monthly");
 
   // الگوی رسمی React برای بازنشانی وضعیت هنگام تغییر یک prop: مستقیماً حین
   // رندر (نه داخل effect) تا از رندر اضافی/cascading جلوگیری شود.
@@ -85,6 +99,7 @@ export function SubscriptionModal({
       setNotice(null);
       setPricing(null);
       setPricingError(null);
+      setPeriod(initialPlan?.endsWith("_YEARLY") ? "yearly" : "monthly");
     }
   }
 
@@ -110,6 +125,10 @@ export function SubscriptionModal({
   if (!isOpen) return null;
 
   const needsPhone = !accessToken;
+  const offeredPlans: BackendPlanType[] = [
+    "SINGLE_DRAFT",
+    ...PAID_LEVELS.map((level) => planKey(level, period)),
+  ];
 
   const startCheckout = async (planType: BackendPlanType) => {
     setError(null);
@@ -173,7 +192,7 @@ export function SubscriptionModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="glass-overlay flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl text-foreground shadow-2xl"
+        className="glass-overlay flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl text-foreground shadow-2xl"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
@@ -222,11 +241,30 @@ export function SubscriptionModal({
             </p>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {(Object.keys(REAL_PLAN_COPY) as BackendPlanType[]).map((planType) => {
-              const copy = REAL_PLAN_COPY[planType];
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div role="group" aria-label="دورهٔ پرداخت" className="inline-flex rounded-full border border-border bg-muted/40 p-1">
+              {(["monthly", "yearly"] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  aria-pressed={period === p}
+                  onClick={() => setPeriod(p)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
+                    period === p ? "bg-amber-500 text-slate-950" : "text-muted-foreground"
+                  }`}
+                >
+                  {p === "monthly" ? "ماهانه" : "سالانه"}
+                </button>
+              ))}
+            </div>
+            <span className="text-[13px] text-emerald-300">سالانه: ۲ ماه رایگان</span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {offeredPlans.map((planType) => {
+              const copy = cardCopy(planType);
               const server = pricing?.plans?.[planType];
-              const highlight = planType === "VIP_MONTHLY_PRO";
+              const highlight = initialPlan ? planType === initialPlan : planType === planKey(RECOMMENDED_LEVEL, period);
               return (
                 <article
                   key={planType}
@@ -245,8 +283,17 @@ export function SubscriptionModal({
                     ) : (
                       <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     )}
-                    {server && <span className="pb-1 text-[13px] text-muted-foreground">تومان</span>}
+                    {server && (
+                      <span className="pb-1 text-[13px] text-muted-foreground">
+                        تومان{planType === "SINGLE_DRAFT" ? "" : ` ${periodLabel(period)}`}
+                      </span>
+                    )}
                   </div>
+                  {server && period === "yearly" && planType !== "SINGLE_DRAFT" && (
+                    <p className="mt-1 text-[13px] text-muted-foreground">
+                      معادل {formatPersianNumber(monthlyEquivalent(server))} تومان در ماه
+                    </p>
+                  )}
                   <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
                     {copy.description}
                   </p>

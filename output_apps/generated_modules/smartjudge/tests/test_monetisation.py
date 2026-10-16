@@ -106,7 +106,7 @@ def _client(monkeypatch, answer_text):
     async def fake_guard(text, *, use_qdrant=True):
         return {"validated_articles": []}
 
-    async def fake_stream_answer(messages, tier, is_voice, max_tokens, temperature, on_delta=None):
+    async def fake_stream_answer(messages, tier, is_voice, max_tokens, temperature, on_delta=None, gateway_plan=None):
         if answer_text:
             return chat_fast.StreamOutcome(text=answer_text, model="fake"), "ok"
         return chat_fast.StreamOutcome(), "free_no_paid"
@@ -174,4 +174,4 @@ def test_daily_response_codes():
 def test_plan_limits_expose_daily_chat_limits(monkeypatch):
     monkeypatch.setenv("CHAT_FREE_DAILY_LIMIT", "7")
     day = plan_limits.get_plan_limits()["chat_messages_per_day"]
-    assert day == {"guest": 5, "free": 7, "vip": 300}
+    assert day == {"guest": 5, "free": 7, "vip": 300, "basic": 40, "pro": 150, "premium": 300}

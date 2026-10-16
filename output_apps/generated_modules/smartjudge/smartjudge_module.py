@@ -34,6 +34,8 @@ from output_apps.ecosystem_core.src.billing import payment_service
 # see output_apps/ecosystem_core/src/billing/pricing_service.py.
 from output_apps.generated_modules.smartjudge.plan_limits import get_plan_limits
 from output_apps.ecosystem_core.src.billing.pricing_service import (
+    highest_level,
+    plan_level,
     get_calculated_pricing,
 )
 
@@ -370,16 +372,23 @@ _ENTITLEMENT_CACHE: dict = {}
 _ENTITLEMENT_CACHE_TTL = 60
 
 
-def _entitlement_tier(phone: str) -> Optional[str]:
-    """Paid tier from ``user_entitlements`` (written by the payment flow).
+def _plan_level_from_plan_types(plans) -> str:
+    """Highest plan level (free/basic/pro/premium) over active entitlement plan types.
+    Legacy VIP types (VIP_MONTHLY_PRO, ...) count as pro; see pricing_service.plan_level."""
+    return highest_level(plan_level(plan) for plan in plans)
 
-    Returns "VIP" / "FREE", or None when the lookup is unavailable (callers then
-    default to FREE). Cached for 60s so chat does not hit Postgres on every message.
+
+def _entitlement_info(phone: str) -> Optional[tuple]:
+    """(tier, plan_level) from ``user_entitlements`` (written by the payment flow).
+
+    tier is "VIP" for any paid level, else "FREE". Returns None when the lookup is
+    unavailable (callers then default to FREE). Cached for 60s so chat does not hit
+    Postgres on every message.
     """
     cached = _ENTITLEMENT_CACHE.get(phone)
     if cached and cached[0] > time.time():
         return cached[1]
-    result: Optional[str] = None
+    result: Optional[tuple] = None
     try:
         with psycopg.connect(payment_orders._dsn(), connect_timeout=3, autocommit=True) as conn:
             with conn.cursor() as cur:
@@ -389,7 +398,10 @@ def _entitlement_tier(phone: str) -> Optional[str]:
                     (_hashed_user_ref(phone),),
                 )
                 plans = [row[0] for row in cur.fetchall()]
-        result = "VIP" if any(_is_vip_tier(plan) for plan in plans) else "FREE"
+        level = _plan_level_from_plan_types(plans)
+        if level == "free" and any(_is_vip_tier(plan) for plan in plans):
+            level = "pro"  # defensive: a VIP type unknown to pricing_service is grandfathered to pro
+        result = ("VIP" if level != "free" else "FREE", level)
     except Exception as exc:  # table missing / DB down: caller defaults to FREE
         print(f"[SMARTJUDGE][TIER-LOOKUP-UNAVAILABLE] {type(exc).__name__}", file=sys.stderr)
         result = None
@@ -399,10 +411,20 @@ def _entitlement_tier(phone: str) -> Optional[str]:
     return result
 
 
-def _tier_for_phone(phone: str) -> str:
+def _entitlement_tier(phone: str) -> Optional[str]:
+    info = _entitlement_info(phone)
+    return info[0] if info else None
+
+
+def _tier_and_level_for_phone(phone: str) -> tuple:
+    """(tier, plan_level). Allow-listed phones are legacy VIP without a level."""
     if phone in VIP_PHONE_ALLOWLIST:
-        return "VIP"
-    return _entitlement_tier(phone) or "FREE"
+        return "VIP", "free"
+    return _entitlement_info(phone) or ("FREE", "free")
+
+
+def _tier_for_phone(phone: str) -> str:
+    return _tier_and_level_for_phone(phone)[0]
 
 
 def _user_from_token(token: str) -> Optional[chat_auth.CurrentUser]:
@@ -413,7 +435,8 @@ def _user_from_token(token: str) -> Optional[chat_auth.CurrentUser]:
     phone = normalize_phone(claims.get("phone") or claims.get("sub") or "")
     if not _is_valid_phone(phone):
         return None
-    return chat_auth.CurrentUser(phone=phone, tier=_tier_for_phone(phone), authenticated=True)
+    tier, level = _tier_and_level_for_phone(phone)
+    return chat_auth.CurrentUser(phone=phone, tier=tier, authenticated=True, plan_level=level)
 
 
 chat_auth.configure(_user_from_token)
@@ -477,6 +500,18 @@ def _resolve_subscription_tier(payload: Optional[dict] = None,
     query = websocket.query_params if websocket is not None else None
     user = chat_auth.authenticate(headers, query)
     return user.tier if user.authenticated else "FREE"
+
+def _vip_drafts_allowed(request: Optional[Request], tier: str, user: Optional[chat_auth.CurrentUser] = None) -> bool:
+    """VIP-only draft types (ruling / indictment): any VIP tier except the basic plan level.
+
+    ``tier`` comes from ``_resolve_subscription_tier``; the level is read from the verified
+    token only, so a client can never claim a higher level."""
+    if not _is_vip_tier(tier):
+        return False
+    if user is None and request is not None:
+        user = chat_auth.authenticate(request.headers)
+    return not (user is not None and user.authenticated and user.plan_level == "basic")
+
 
 # --- OpenRouter routing configuration ---------------------------------------
 # NOTE: OpenRouter floating "latest" aliases MUST be prefixed with `~`
@@ -1789,13 +1824,13 @@ def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature
 
 
 async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool, max_tokens: int,
-                             temperature: float, on_delta=None):
+                             temperature: float, on_delta=None, gateway_plan: Optional[str] = None):
     """Returns (StreamOutcome, failure_kind). Empty outcome.text means every provider failed."""
     # Free-first key-pool gateway (SMARTJUDGE_LLM_GATEWAY), if configured. A
     # failure here (network/5xx/timeout) falls back to the direct path below.
     if _gateway_ready():
         gw_outcome = await _chat_fast.stream_with_fallback(
-            [(_llm_gateway.model_for(selected_tier), CHAT_TTFT_FAST_S)],
+            [(_llm_gateway.model_for(gateway_plan or selected_tier), CHAT_TTFT_FAST_S)],
             _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, {}, gateway=True),
             on_delta, total_timeout=CHAT_LLM_TOTAL_S,
         )
@@ -1803,7 +1838,7 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
             _llm_gateway.log_served("gateway", gw_outcome.model)
             return gw_outcome, "ok"
         print(f"[LLM-UNAVAILABLE] provider=key-pool-gateway status=None "
-              f"model={_llm_gateway.model_for(selected_tier)} kind=gateway_fallback", file=sys.stderr)
+              f"model={_llm_gateway.model_for(gateway_plan or selected_tier)} kind=gateway_fallback", file=sys.stderr)
 
     # Owner rule: free users (guest + logged-in without VIP) never reach a paid model.
     # SMARTJUDGE_FREE_PAID_FALLBACK=1 restores the old direct-OpenRouter fallback.
@@ -2034,6 +2069,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     if not daily_ok:
         await asyncio.to_thread(chat_auth.decr, daily_key)
         return chat_auth.daily_limit_response(daily_kind, daily_left)
+    # Plan-level model group (basic/pro/premium); pro/premium get a daily quota on the top group.
+    gateway_plan, top_key = await asyncio.to_thread(chat_auth.gateway_plan_for, user)
 
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     _t_retrieval = time.perf_counter()
@@ -2173,7 +2210,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                     feature="consult_voice" if is_voice else "consult",
                     timeout=16.0,
                     max_retries=1,
-                    plan=selected_tier,
+                    plan=gateway_plan,
                     temperature=temperature,
                     max_tokens=chosen_max_tokens,
                 )
@@ -2200,7 +2237,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                         await stream_cb(_chat_safety.to_latin_digits(piece))
 
                 outcome, llm_failed_kind = await _llm_stream_answer(
-                    messages_payload, selected_tier, is_voice, chosen_max_tokens, temperature, _emit)
+                    messages_payload, selected_tier, is_voice, chosen_max_tokens, temperature, _emit,
+                    gateway_plan=gateway_plan)
                 reply_msg = (outcome.text or "").strip()
                 if _llm_gateway is not None:  # some free models prepend English reasoning text
                     reply_msg = _llm_gateway.strip_leaked_reasoning(reply_msg)
@@ -2227,6 +2265,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
     if not reply_msg:
         await asyncio.to_thread(chat_auth.decr, daily_key)  # unanswered: does not use up the daily quota
+        if top_key:
+            await asyncio.to_thread(chat_auth.decr, top_key)
         if _llm_gateway is not None and not _llm_gateway.may_use_paid(selected_tier):
             # Free tier, free models exhausted: friendly upsell instead of a paid model or a 503.
             return _consult_body(
@@ -6225,7 +6265,7 @@ async def draft_ruling(request: Request, body: RulingDraftRequest):
     # Entitlement: `strong` tier is VIP-only. Only the signed JWT counts here;
     # client-supplied body fields are never trusted for the tier.
     tier = await asyncio.to_thread(_resolve_subscription_tier, payload=None, request=request)
-    if not _is_vip_tier(tier):
+    if not _vip_drafts_allowed(request, tier):
         return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
 
     request_id = str(uuid.uuid4())
@@ -6377,7 +6417,7 @@ def _finalize_indictment_response(result: dict, request_id: str) -> dict:
 async def draft_indictment(request: Request, body: IndictmentDraftRequest):
     """پیش‌نویس غیررسمی کیفرخواست؛ همیشه AI_DRAFT_UNVERIFIED یا INSUFFICIENT_BASIS."""
     tier = await asyncio.to_thread(_resolve_subscription_tier, payload=None, request=request)
-    if not _is_vip_tier(tier):
+    if not _vip_drafts_allowed(request, tier):
         return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
 
     request_id = str(uuid.uuid4())
@@ -6669,7 +6709,7 @@ async def draft_assist(request: Request, body: DraftAssistRequest,
             return {"status": _draft_assistant.STATUS_NOT_DRAFT, "request_id": request_id}
     # Same entitlement check as /drafts/ruling: only the signed bearer token counts.
     tier = await asyncio.to_thread(_resolve_subscription_tier, payload=None, request=request)
-    if draft_type in _draft_assistant.VIP_ONLY_TYPES and not _is_vip_tier(tier):
+    if draft_type in _draft_assistant.VIP_ONLY_TYPES and not _vip_drafts_allowed(request, tier, user):
         return _draft_upsell_response(draft_type, request_id)
 
     t0 = time.perf_counter()

@@ -3,7 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { track } from "@/lib/analytics/umami";
 
+import { LEVEL_COPY, PAID_LEVELS, planKey } from "@/lib/plan-catalog";
 import {
+  type BackendPlanType,
+  type BillingPeriod,
   type PricingMatrixResponse,
   formatPersianNumber,
 } from "./subscription/types";
@@ -15,7 +18,8 @@ interface PaymentModalProps {
 }
 
 export default function PaymentCheckoutModal({ isOpen, onClose, phone }: PaymentModalProps) {
-  const [selectedPlan, setSelectedPlan] = useState<"SINGLE_DRAFT" | "VIP_MONTHLY_PRO">("SINGLE_DRAFT");
+  const [selectedPlan, setSelectedPlan] = useState<BackendPlanType>("SINGLE_DRAFT");
+  const [period, setPeriod] = useState<BillingPeriod>("monthly");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -32,19 +36,24 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
 
   if (!isOpen) return null;
 
+  // Selection is a concrete plan key; switching the toggle moves a chosen tier to its other period.
+  const selectedKey: BackendPlanType =
+    selectedPlan === "SINGLE_DRAFT" || selectedPlan === "VIP_MONTHLY_PRO"
+      ? selectedPlan
+      : planKey(PAID_LEVELS.find((l) => selectedPlan.startsWith(`SJ_${l.toUpperCase()}_`)) ?? "pro", period);
+  const selectedPrice = pricing?.plans?.[selectedKey]?.price_toman;
   const singleDraftPrice = pricing?.plans?.SINGLE_DRAFT?.price_toman;
-  const vipMonthlyPrice = pricing?.plans?.VIP_MONTHLY_PRO?.price_toman;
 
   const handlePayment = async () => {
     setLoading(true);
     setNotice("");
     setError("");
-    track("checkout_started", { plan: selectedPlan });
+    track("checkout_started", { plan: selectedKey });
     try {
       const res = await fetch("/api/v1/apps/judge/payments/create-invoice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, plan_type: selectedPlan }),
+        body: JSON.stringify({ phone, plan_type: selectedKey }),
       });
 
       if (res.status === 503) {
@@ -81,11 +90,28 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded">✕</button>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3">
+          <div role="group" aria-label="دورهٔ پرداخت" className="inline-flex rounded-full border border-border p-1">
+            {(["monthly", "yearly"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                aria-pressed={period === p}
+                onClick={() => setPeriod(p)}
+                className={`rounded-full px-4 py-1.5 text-xs font-bold ${period === p ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                {p === "monthly" ? "ماهانه" : "سالانه"}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-emerald-400">سالانه: ۲ ماه رایگان</span>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div
             onClick={() => setSelectedPlan("SINGLE_DRAFT")}
             className={`cursor-pointer p-4 rounded-2xl border transition ${
-              selectedPlan === "SINGLE_DRAFT"
+              selectedKey === "SINGLE_DRAFT"
                 ? "bg-primary/10 border-primary text-foreground"
                 : "bg-background border-border text-muted-foreground hover:border-ring/50"
             }`}
@@ -98,21 +124,31 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
             <p className="text-xs text-muted-foreground">دانلود متن کامل لایحه دفاعیه با قابلیت ویرایش و پرینت</p>
           </div>
 
-          <div
-            onClick={() => setSelectedPlan("VIP_MONTHLY_PRO")}
-            className={`cursor-pointer p-4 rounded-2xl border transition ${
-              selectedPlan === "VIP_MONTHLY_PRO"
-                ? "bg-amber-950/40 border-amber-500 text-foreground"
-                : "bg-background border-border text-muted-foreground hover:border-ring/50"
-            }`}
-          >
-            <div className="font-bold text-sm text-amber-400 mb-1">اشتراک یک‌ماهه VIP</div>
-            <div className="text-xl font-extrabold text-foreground mb-2">
-              {vipMonthlyPrice != null ? formatPersianNumber(vipMonthlyPrice) : "..."}{" "}
-              <span className="text-xs font-normal text-muted-foreground">تومان</span>
-            </div>
-            <p className="text-xs text-muted-foreground">پیش‌نویس رأی و کیفرخواست و سقف بالاتر بارگذاری فایل؛ جزئیات در صفحهٔ اشتراک و قیمت‌ها</p>
-          </div>
+          {PAID_LEVELS.map((level) => {
+            const key = planKey(level, period);
+            const price = pricing?.plans?.[key]?.price_toman;
+            const active = selectedKey === key;
+            return (
+              <div
+                key={level}
+                onClick={() => setSelectedPlan(key)}
+                className={`cursor-pointer p-4 rounded-2xl border transition ${
+                  active
+                    ? "bg-amber-950/40 border-amber-500 text-foreground"
+                    : "bg-background border-border text-muted-foreground hover:border-ring/50"
+                }`}
+              >
+                <div className="font-bold text-sm text-amber-400 mb-1">اشتراک {LEVEL_COPY[level].title}</div>
+                <div className="text-xl font-extrabold text-foreground mb-2">
+                  {price != null ? formatPersianNumber(price) : "..."}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    تومان {period === "yearly" ? "در سال" : "در ماه"}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">{LEVEL_COPY[level].model}؛ {LEVEL_COPY[level].tagline}</p>
+              </div>
+            );
+          })}
         </div>
 
         <div className="bg-background p-4 rounded-xl border border-border text-xs text-muted-foreground space-y-1.5">
@@ -129,7 +165,7 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
 
         <button
           onClick={handlePayment}
-          disabled={loading || (selectedPlan === "SINGLE_DRAFT" ? singleDraftPrice == null : vipMonthlyPrice == null)}
+          disabled={loading || selectedPrice == null}
           className="w-full py-3.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {loading ? "در حال اتصال به شاپرک..." : "پرداخت امن آنلاین 🔒"}

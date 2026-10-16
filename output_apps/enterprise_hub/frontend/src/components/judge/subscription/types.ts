@@ -16,7 +16,21 @@ export interface SubscriptionSelection {
  * `get_calculated_pricing()` in smartjudge_module.py). Any UI option that
  * does not map to one of these must be shown as "coming soon", never wired
  * to a fake/local-only charge. */
-export type BackendPlanType = "SINGLE_DRAFT" | "VIP_MONTHLY_PRO";
+export type PaidLevel = "basic" | "pro" | "premium";
+export type BillingPeriod = "monthly" | "yearly";
+
+/** The 4-tier subscription keys (basic/pro/premium × monthly/yearly). */
+export type SubscriptionPlanKey =
+  | "SJ_BASIC_MONTHLY"
+  | "SJ_BASIC_YEARLY"
+  | "SJ_PRO_MONTHLY"
+  | "SJ_PRO_YEARLY"
+  | "SJ_PREMIUM_MONTHLY"
+  | "SJ_PREMIUM_YEARLY";
+
+/** `VIP_MONTHLY_PRO` is the legacy (grandfathered, = pro) plan: still accepted by the
+ * server but no longer offered in the UI. */
+export type BackendPlanType = "SINGLE_DRAFT" | "VIP_MONTHLY_PRO" | SubscriptionPlanKey;
 
 /** Shape of one entry in GET /payments/pricing-matrix's `plans` map. Prices
  * are fixed Toman amounts set server-side (W22) — there is no USD/exchange
@@ -25,6 +39,10 @@ export interface BackendPlanPrice {
   name: string;
   price_toman: number;
   price_rial: number;
+  /** Present on the SJ_* subscription plans only. */
+  usd?: number;
+  period_days?: number;
+  level?: PaidLevel;
 }
 
 export interface PricingMatrixResponse {

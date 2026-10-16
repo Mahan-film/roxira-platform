@@ -1,20 +1,27 @@
 /** Server-only loader for /plans: prices and limits both come from one backend response. */
 
+import type { BackendPlanPrice } from "@/components/judge/subscription/types";
+
+type BaseTier = "guest" | "free" | "vip";
+type PaidTier = "basic" | "pro" | "premium";
+
 export interface PlanLimits {
-  chat_messages_per_hour: Record<"guest" | "free" | "vip", number | null>;
-  chat_messages_per_day?: Record<"guest" | "free" | "vip", number | null>;
-  voice_requests_per_hour: Record<"guest" | "free" | "vip", number | null>;
-  file_uploads_per_day: Record<"guest" | "free" | "vip", number | null>;
+  chat_messages_per_hour: Record<BaseTier, number | null>;
+  chat_messages_per_day?: Record<BaseTier, number | null> & Partial<Record<PaidTier, number | null>>;
+  /** Answers per day served by the best model of the level before it steps down. */
+  top_model_answers_per_day?: Partial<Record<"pro" | "premium", number | null>>;
+  voice_requests_per_hour: Record<BaseTier, number | null> & Partial<Record<PaidTier, number | null>>;
+  file_uploads_per_day: Record<BaseTier, number | null> & Partial<Record<PaidTier, number | null>>;
   max_file_mb: number;
   max_pages_per_file: number;
   max_files_per_chat: number;
   max_message_chars: number;
-  draft_types: Record<"guest" | "free" | "vip", string[]>;
+  draft_types: Record<BaseTier, string[]> & Partial<Record<PaidTier, string[]>>;
   vip_only_draft_types: string[];
 }
 
 export interface PlansPayload {
-  plans: Record<string, { name: string; price_toman: number; price_rial: number }>;
+  plans: Record<string, BackendPlanPrice>;
   limits: PlanLimits;
 }
 
