@@ -17,9 +17,7 @@ services:
     restart: unless-stopped
     init: true
     env_file: ./generated/umami.env
-    environment:
-      # Umami serves itself under /umami so nginx can proxy the path without rewriting it.
-      BASE_PATH: /umami
+    # The official image serves from / (Umami's BASE_PATH is build-time); nginx strips /umami (snippets/umami.conf).
     ports:
       - "127.0.0.1:3005:3000"
     healthcheck:
