@@ -189,3 +189,15 @@ def test_second_approve_is_a_no_op(home, capsys):
     calls = []
     assert b.cmd_approve("dup-test", run=lambda *a, **k: calls.append(a)) == 0
     assert calls == [] and "already approved" in capsys.readouterr().out
+
+
+def test_degenerate_detects_loops():
+    assert b.degenerate("برای " + "وکلا " * 20)
+    assert not b.degenerate("یک خلاصهٔ کوتاه و عادی برای مالک با چند جملهٔ متفاوت.")
+
+
+def test_spec_ok_requires_sections_and_tasks():
+    tasks = "".join(f"### T{i}: t{i}\nScope: docs/\nAcceptance: ok\n\n" for i in range(1, 6))
+    good = "## Options\nx\n## Recommendation\ny\n## Task list\n" + tasks + "## Kill criteria\nz\n"
+    assert b.spec_ok(good)
+    assert not b.spec_ok(good.replace("## Kill criteria", "## Other"))

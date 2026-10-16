@@ -251,6 +251,29 @@ def chat(model: str, prompt: str, key: str, post=post_json) -> str:
     return str(data["choices"][0]["message"]["content"]).strip()
 
 
+REQUIRED_SECTIONS = ("## Options", "## Recommendation", "## Task list", "## Kill criteria")
+
+
+def degenerate(text: str) -> bool:
+    """True for looping model output: one word repeated 8+ times in a row, or a 30-char chunk 6+ times."""
+    words = text.split()
+    run = 1
+    for a, b in zip(words, words[1:]):
+        run = run + 1 if a == b else 1
+        if run >= 8:
+            return True
+    for i in range(0, max(0, len(text) - 30), 30):
+        chunk = text[i:i + 30]
+        if chunk.strip() and text.count(chunk) >= 6:
+            return True
+    return False
+
+
+def spec_ok(spec: str) -> bool:
+    return bool(spec) and not degenerate(spec) and all(h in spec for h in REQUIRED_SECTIONS) \
+        and len(parse_tasks(spec)) >= 5
+
+
 def spec_models(brief: str) -> list:
     return ["private"] if visibility(brief) == "private" else ["agent-strong-free", "private"]
 
@@ -274,20 +297,28 @@ def cmd_spec(slug: str, post=post_json, key=None) -> int:
     spec, used = "", ""
     for model in spec_models(brief):
         try:
-            spec = chat(model, prompt, key, post)
-            used = model
-            if spec:
-                break
+            candidate = chat(model, prompt, key, post)
         except Exception as exc:
             print(f"model {model} failed: {type(exc).__name__}", file=sys.stderr)
+            continue
+        if spec_ok(candidate):
+            spec, used = candidate, model
+            break
+        print(f"model {model} gave an incomplete or looping spec; trying the next model", file=sys.stderr)
+        spec, used = spec or candidate, used or model  # keep the best effort if every model fails the check
     if not spec:
         print("spec generation failed", file=sys.stderr)
         return 1
     _write(os.path.join(pdir, "spec.md"), spec + "\n")
-    try:
-        summary = chat(used, SUMMARY_PROMPT + "\n\n" + spec, key, post)
-    except Exception:
-        summary = ""
+    summary = ""
+    for model in dict.fromkeys([used] + spec_models(brief)):  # used first, then the rest, no repeats
+        try:
+            candidate = chat(model, SUMMARY_PROMPT + "\n\n" + spec, key, post)
+        except Exception:
+            continue
+        if candidate.strip() and not degenerate(candidate) and len(candidate) < 3000:
+            summary = candidate
+            break
     lines = [ln for ln in summary.splitlines() if ln.strip()][:12]
     if not lines:
         lines = [f"مشخصات پروژه {slug} آماده است؛ خلاصه فارسی ساخته نشد، فایل spec.md را ببینید."]
