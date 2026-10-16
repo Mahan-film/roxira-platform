@@ -43,6 +43,16 @@ export const GUIDE_SLUGS = [
   "breach-of-trust-crime-punishment",
   "company-directors-cheque-debt-liability",
   "work-accident-employer-insurance-liability",
+  "customs-dispute-objection-commission",
+  "guild-business-licence-sealing",
+  "lease-repair-obligation-landlord-tenant",
+  "default-judgment-objection-vakhavi",
+  "cyber-insult-threat-defamation",
+  "legitimate-defense-conditions",
+  "company-dissolution-liquidation",
+  "installments-insolvency-payment",
+  "proof-of-debt-receipt-bank-slip",
+  "insurance-claim-compensation-procedure",
 ] as const;
 
 export type GuideSlug = (typeof GUIDE_SLUGS)[number];
