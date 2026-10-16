@@ -211,6 +211,35 @@ def test_propose_sends_buttons_and_marks_proposed(store, tmp_path):
     assert store.get("posts", pid2)["status"] == "draft"
 
 
+def test_propose_platform_filter(store):
+    tg = _draft(store)  # telegram draft
+    x = store.add_post(brand="t", platform="x", campaign="c", source_id="x1", caption="c",
+                       link="https://x.test/a", scheduled_at=100)
+    sent = []
+    send = lambda t, b: sent.append(t) or True  # noqa: E731
+    no_image = lambda p, b: ("", "")  # noqa: E731
+    # platforms={"x"}: only the x draft is proposed, telegram stays a draft
+    assert mkt.cmd_propose(store, brand(), send=send, make_image=no_image, platforms={"x"}) == [x]
+    assert store.get("posts", tg)["status"] == "draft" and store.get("posts", x)["status"] == "proposed"
+    assert len(sent) == 1
+    # default (None) keeps the old behaviour: every remaining draft is proposed
+    assert mkt.cmd_propose(store, brand(), send=send, make_image=no_image) == [tg]
+    assert store.get("posts", tg)["status"] == "proposed"
+
+
+def test_propose_cli_platform_flag(store, monkeypatch):
+    calls = []
+    monkeypatch.setattr(mkt_store, "Store", lambda: store)
+    monkeypatch.setattr(mkt.content, "load_brand", lambda name: brand())
+    monkeypatch.setattr(mkt, "cmd_propose", lambda s, b, platforms=None: calls.append(platforms) or [])
+    assert mkt.main(["propose", "t"]) == 0
+    assert mkt.main(["propose", "t", "--platform", "telegram"]) == 0
+    assert mkt.main(["propose", "t", "--platform", "telegram", "--platform", "x"]) == 0
+    assert calls == [None, ["telegram"], ["telegram", "x"]]
+    with pytest.raises(SystemExit):  # unknown platform is rejected by argparse
+        mkt.main(["propose", "t", "--platform", "myspace"])
+
+
 # -------------------------------------------------------------------- adapters
 POST = {"caption": "متن", "hashtags": json.dumps(["#a"]), "link": "https://x.test/g?utm_source=x",
         "image_url": "https://x.test/m.png", "source_title": "T"}

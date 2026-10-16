@@ -2,7 +2,7 @@
 """Factory F6: marketing engine (stdlib only; runs ON the server as root).
 
   mkt.py plan <brand> --week [--start YYYY-MM-DD]   draft next week's posts (LLM, claim-checked)
-  mkt.py propose <brand>                            send drafts to the owner bot (approve/reject)
+  mkt.py propose <brand> [--platform telegram ...]  send drafts to the owner bot (approve/reject)
   mkt.py approve|reject <post-id>                   state change only (called by control_bot)
   mkt.py reply-approve|reply-reject <reply-id>
   mkt.py publish-due [--dry-run]                    publish approved posts/replies that are due
@@ -82,9 +82,13 @@ def propose_text(post, brand) -> str:
             "بدون تأیید شما چیزی منتشر نمی‌شود.")
 
 
-def cmd_propose(store, brand, send=bot_send, make_image=images.ensure_image) -> list:
+def cmd_propose(store, brand, send=bot_send, make_image=images.ensure_image, platforms=None) -> list:
+    """Send draft posts to the owner bot. platforms: optional iterable of platform names;
+    None or empty means all platforms."""
     sent = []
     for post in store.list("posts", brand=brand["id"], status="draft"):
+        if platforms and post["platform"] not in platforms:
+            continue
         if not post["image_path"]:
             path, url = make_image(post, brand)
             if path:
@@ -238,8 +242,11 @@ def main(argv=None) -> int:
     p.add_argument("brand")
     p.add_argument("--week", action="store_true", required=True)
     p.add_argument("--start", help="first day YYYY-MM-DD (default: start of next week)")
-    for name in ("propose", "inbox"):
-        sub.add_parser(name).add_argument("brand")
+    sub.add_parser("inbox").add_argument("brand")
+    pr = sub.add_parser("propose")
+    pr.add_argument("brand")
+    pr.add_argument("--platform", action="append", dest="platforms", choices=sorted(adapters.ADAPTERS),
+                    help="only propose drafts for this platform (repeatable; default: all)")
     for name in ("approve", "reject", "reply-approve", "reply-reject"):
         sub.add_parser(name).add_argument("id", type=int)
     d = sub.add_parser("publish-due")
@@ -267,7 +274,7 @@ def main(argv=None) -> int:
                 for platform, item, reasons in rep["skipped"]:
                     print(f"  skipped {platform}/{item}: {'; '.join(reasons)}")
             elif args.cmd == "propose":
-                print("proposed:", cmd_propose(store, brand))
+                print("proposed:", cmd_propose(store, brand, platforms=args.platforms))
             elif args.cmd == "inbox":
                 print("reply drafts proposed:", cmd_inbox(store, brand, mkt_llm.chat))
     except (ValueError, OSError, mkt_llm.LLMError) as exc:
