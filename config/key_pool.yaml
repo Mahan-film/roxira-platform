@@ -56,11 +56,12 @@ gateway:
     # provider's `limits`), so the three Groq keys share the load. usage-based-routing-v2 was tried
     # and made every group answer "No deployments available" on this LiteLLM build: do not use it.
     routing_strategy: simple-shuffle   # usage-based-routing-v2 broke every group on this LiteLLM build (2026-10-14): "No deployments available"
-    num_retries: 2
+    num_retries: 1                     # rank ladders already try every key; extra retries only add latency
+    allowed_fails: 1                   # one failure (429/503) puts that key+model in cooldown, so the next
+                                       # requests skip a busy model at once instead of re-trying it (2026-10-16)
     retry_after: 1
     timeout: 60
     cooldown_time: 60                  # seconds a deployment sits out after a 429 / failure
-    allowed_fails: 3
     enable_pre_call_checks: true
 
 providers:

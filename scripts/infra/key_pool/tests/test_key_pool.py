@@ -78,7 +78,7 @@ def test_render_router_settings_and_per_key_limits():
     cfg = render_litellm.render(pool(), set(FAKE_ENV))
     router = cfg["router_settings"]
     assert router["routing_strategy"] == "simple-shuffle"
-    assert (router["num_retries"], router["allowed_fails"], router["cooldown_time"]) == (2, 3, 60)
+    assert (router["num_retries"], router["allowed_fails"], router["cooldown_time"]) == (1, 1, 60)  # num_retries, allowed_fails, cooldown (2026-10-16: skip busy models at once)
     groq = [m for m in cfg["model_list"]
             if m["model_name"] == "agent-strong-free"
             and m["litellm_params"]["model"] == "groq/openai/gpt-oss-120b"]
