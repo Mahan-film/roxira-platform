@@ -1,107 +1,136 @@
-# Roxira master plan — 2026-10-16
+# Roxira master plan — v2, 2026-10-16
 
-Supersedes the priority lists in `docs/STRATEGY.md` §5 and `docs/STRATEGY_STATUS_2026-10-14.md` §9.
-`docs/STATE.md` stays the live status page; this file is the plan it serves.
+Supersedes v1 of the same day and the priority lists in `docs/STRATEGY.md` §5 and
+`docs/STRATEGY_STATUS_2026-10-14.md` §9. `docs/STATE.md` stays the live status page.
+
+## 0. Owner decisions (2026-10-16)
+
+1. **Priority 1 is the software factory**: our own machine that can build any product fast, with the best
+   technology at the lowest cost, open source first, choosing technology through our research system.
+2. **Then a global business** through the owner's Malaysian company (owner: Malaysian residence card and
+   bank account; partner holds 70–80% as investor). Infrastructure and accounts move to that entity first.
+3. **Cost-effective**: spend only where it is clearly necessary; prefer open source.
+4. **Sales and marketing**: open to hiring and to AI-automated marketing (posts, replies) on Instagram
+   and other platforms; will buy the APIs that are needed.
+5. Smart Judge and Roxira (Iran) continue, but in maintenance-plus-growth mode, not as the main build focus.
 
 ## 1. Where we really are (measured 2026-10-15/16)
 
-| Area | Fact | Source |
+| Area | Fact |
+| --- | --- |
+| Smart Judge | Complete product (cited chat, laws v6, 300 rulings, 112 regulations, 31 guides, drafting, voice, payments, PWA). 2 registered users, 1 test payment, almost no organic traffic yet. |
+| Roxira | Portal + 7 tenant-isolated modules; Moadian not connected live. 0 inquiries. |
+| Factory (pieces exist, no single pipeline) | Build+host engine (`ecosystem_core/src/factory/ephemeral_runner.py`, swarm, templates, mission-control UI); server agents (`run_task.sh`, OpenCode, worktrees, scope checks); key pool (free first, paid fallback, cost log); research service (GPT-Researcher + SearXNG + Tavily); auto-deploy with rollback; SBOM, mutation, property tests; throwaway DBs; owner bot. |
+| Factory gaps | No brief→research→spec→plan pipeline; agents cannot run npm/tsc/tests (the hub tests by hand); one agent = one task, no queue, no retry/escalation; free models fail multi-step tasks and the paid agents key is empty; no reusable product chassis for new (global) products; deploy is single-repo; no marketing engine. |
+
+## 2. Structure: two tracks, clearly separated
+
+| | Track I — Iran | Track G — Global |
 | --- | --- | --- |
-| Product | Smart Judge works end to end: grounded chat with citations, laws v6 (29+ laws, ~6,200 articles), 300 unity rulings, 112 regulations in chat, 31 guides, drafting, damages, voice, payments, PWA. | live tests this week |
-| Roxira | Portal + 7 tenant-isolated modules (CRM, invoicing, accounting, HR, inventory, damages, tax). Moadian is **not** connected to the real system. | STATE.md |
-| Users | **2 registered users, 2 tenants, 0 enterprise inquiries.** | prod DB counts |
-| Revenue | **1 paid order (1,000,000 rial = 100k toman, a test); 4 pending.** | `payment_orders` |
-| Traffic | A few hundred unique visitors a day at most, much of it bots and our own QA; **no search-engine referrals yet** (GSC/Bing verified 2026-10-14, indexing still young). | nginx logs, 7 days |
-| Running cost | One Hetzner ARM server (8 GB) + free model tiers; paid DeepSeek only as fallback (≈ $0.0003 per paid answer). | key-pool cost log |
-| Engineering | ~680 PRs, auto-deploy with rollback, monitoring, backups, SBOM, mutation/property tests, key pool, agents. | repo |
+| Entity | Owner personally (as today) | Malaysian company |
+| Products | Smart Judge, Roxira | New products built by the factory (§4) |
+| Payments | Iranian gateways (Zibal) | Stripe Malaysia or a merchant of record (Paddle / Lemon Squeezy / Polar) — to be confirmed (§3) |
+| Accounts | Current GitHub org, Hetzner, Cloudflare | **New** GitHub org, cloud, Cloudflare, domain, email, all billed to the company |
+| Mode | Maintenance + low-cost growth (content, lawyers) | Main build focus after the factory core |
 
-**Diagnosis.** We built a strong product and a strong engineering machine, and almost no distribution.
-The bottleneck is not technology. It is (1) people finding the product, (2) trusting it enough to pay, and
-(3) a clear offer and price. Every hour spent on infrastructure from now on must be justified by one of
-those three. Infrastructure is frozen except for fixes and what the growth plan needs.
+Why separate: payment processors and US-based platforms screen sanctions exposure; mixing Iranian
+operations with the global entity's accounts can get the global accounts frozen. The factory code is
+ours and can serve both, but each track deploys from its own accounts.
 
-## 2. Business architecture (what makes money, in order)
+## 3. Phase 0 — entity and compliance foundation (owner, weeks 1–2, in parallel with the factory)
 
-| # | Business | Customer | Offer | Why it fits us | Status |
-| --- | --- | --- | --- | --- | --- |
-| A | **Smart Judge B2C** | Iranians with a legal problem (rent, cheque, labour, family, inheritance) | Free answers with citations → paid drafts (petition, complaint, defence) and a monthly plan | Product done; huge search demand; self-serve, no sales calls | Live, needs traffic + trust + price |
-| B | **Smart Judge Pro** | Lawyers, legal staff, law students | Faster research, drafting, citation check, case files; per-seat monthly | Lawyers pay (owner decision); one lawyer brings clients; word of mouth in a closed profession | Not packaged yet |
-| C | **Roxira tax wedge (Moadian)** | SMBs and the accountants who serve many of them | Invoice + e-invoice compliance + legal/tax Q&A; accountants manage many tenants | Legal mandate creates demand; accountants are a channel (one accountant = 20–50 SMBs); our legal AI is a differentiator | Modules exist; real Moadian link missing |
-| D | **Legal data API (DaaS, Iran)** | Legal-tech, fintech, publishers | Clean laws/rulings/regulations with versions and citations via API | We already built the corpus and pipelines | Later, after A–C prove demand |
-| E | **AI Software Factory** | SMBs that want a custom app | Done-for-you app built by our agents, sold as a project | Real capability, but needs sales calls and support | Park until A or C pays the bills |
+These are business/legal steps. The hub prepares checklists and documents; it does not give legal advice.
 
-Rules for choosing work (the solo-founder filter, accepted from the 2026-10-15 review): self-serve sale,
-value in data/automation not in heavy UI, buyers are SMBs/professionals in Iran, no regulated
-liabilities we cannot carry. CRM/HR/inventory stay add-ons, not the lead offer.
+1. **Professional check (mandatory before taking payments):** a Malaysian corporate lawyer/accountant
+   confirms that the company may sell SaaS globally with the current shareholders and the owner's role,
+   and how payment providers' KYC/sanctions screening will treat it. Ask specifically about Stripe
+   Malaysia vs a merchant of record. (Our search found no definitive public answer.)
+2. **Owner–partner agreement in writing:** who owns the factory code/IP, revenue share, the owner's role
+   and salary/dividends. Protects both sides before value is created.
+3. **Company accounts:** domain (.com), email, GitHub org, Cloudflare, Hetzner (or another EU host),
+   OpenRouter/model APIs, Meta Business, all registered to the company.
+4. **Payments:** open the provider the adviser recommends; the factory chassis supports both Stripe and a
+   merchant of record behind one adapter.
 
-## 3. Target architecture (keep it; do not rebuild)
+## 4. The software factory (priority 1)
 
-One server (srv1), one repo, one Next.js app for all domains, NestJS for business modules, FastAPI for the
-legal AI, Postgres + Qdrant + Redis, LiteLLM key pool (free first, paid fallback), auto-deploy with
-rollback. This is right for our scale for at least 12 months.
+Goal: give the factory a one-paragraph brief and get a researched, specified, built, tested, deployed and
+measured product, with the hub (Claude) as architect/reviewer and the owner approving at two gates.
 
-Only these architecture additions are justified, each tied to a business need:
+```
+Brief → Research → Spec + decision (owner gate 1) → Plan (tasks + acceptance tests)
+      → Parallel build (agents in worktrees) → Verify (tests, types, property, mutation, SBOM, review)
+      → Deploy (chassis + autodeploy) → Measure (analytics, cost, errors) → Improve (owner gate 2: scale/kill)
+```
 
-| Addition | Serves | Cost |
-| --- | --- | --- |
-| Self-hosted privacy-friendly analytics (Umami on our Postgres) | Know the funnel: visit → chat → signup → pay | ~100 MB RAM, free |
-| Messenger channel: Smart Judge bot in **Bale** (and Telegram) | Distribution where Iranians are; headless, no UI work | small, reuses chat API |
-| Lawyer verification layer: "reviewed by a lawyer" badge, `lawyer_verified` golden cases | Trust → payment | lawyer time |
-| Real Moadian integration (token, send, inquiry, per-tenant keys) | Business C | `docs/research/MOADIAN_REQUIREMENTS_2026-10-14.md` §7 |
-| Pro workspace: case files, saved research, seats | Business B | mostly existing pieces |
+| # | Milestone | What it adds | Builds on | Weeks |
+| --- | --- | --- | --- | --- |
+| F1 | **Agent workbench** | A test container per agent worktree with cached `node_modules`/venv, so agents (and the hub) run `tsc`, `eslint`, `jest`, `pytest`, builds on the server; result attached to every agent run. Removes the hub's manual testing bottleneck. | `run_task.sh`, agent DBs | 1 |
+| F2 | **Task queue + escalation** | A queue (Postgres table) of tasks with acceptance tests; N parallel agents with stagger; automatic retry on failure with model escalation (free → DeepSeek Flash → stronger), patch collection, a cross-model reviewer pass, results to the bot. | F1, key pool, cost log | 1–2 |
+| F3 | **Research → spec pipeline** | `brief.md` → 3 research jobs (market, tech, compliance) → a spec + decision record (stack options, cost, risks, task list) in English with a Persian summary → owner approves in the bot. | research service, bot | 2 |
+| F4 | **Golden chassis (global SaaS template)** | A new repo template: TypeScript monorepo (pnpm), Next.js app + API, Postgres, auth with organisations and API keys (open source), billing adapter (Stripe / merchant of record), i18n (en first + others), Umami analytics, AI gateway client (our key pool), SEO/GEO kit (sitemaps, schema, llms.txt), legal pages, AI-disclosure label, Dockerfile, CI, SBOM. Every new product starts here; agents write only the domain logic. | research picks each part | 3–4 |
+| F5 | **Multi-project deploy** | Generalise our autodeploy to a project manifest (repo, domain, services, DB) on the global server; one-command new project. | autodeploy | 4 |
+| F6 | **Marketing engine** | Research → posts (text + images) → scheduled publishing on Instagram (Meta Graph API, business account), LinkedIn, X; comment/DM reply drafts with owner approval in the bot; weekly content calendar per product. Within platform rules: no fake accounts, no spam. | key pool, bot | 5–6 |
+| F7 | **Per-project observability** | Cost log tagged by project, Umami funnels, uptime, error alerts, a weekly KPI report per product in the bot; scale/kill gate at 30/60/90 days (owner decides). | cost log, bot | 6 |
 
-Explicitly **not** now: x402/Stripe/Polar/Lago, Bifrost, Restate, LangGraph, Neon, Firecracker/second
-server, Chatwoot, EU compliance, Camoufox (refused), microservice splits, a second product line beyond A–C.
+Model and budget policy for the factory: free tiers for research gathering and light edits; DeepSeek
+V4.1 Flash for normal implementation (≈ $0.30/$1.20 per M tokens); a stronger model only for planning
+and hard fixes. **A funded agents key is required** (~$20–50/month covers heavy use); free tiers alone
+fail multi-step tasks, as measured on 2026-10-15.
 
-## 4. 90-day plan
+Technology choices for the chassis are made by F3 research runs, not by preference. Earlier "skip"
+verdicts change for Track G: Stripe/merchant-of-record and the EU AI Act transparency label become
+**required**; usage metering (Lago) and machine payments (x402) stay **later**, only if a product needs them.
 
-### Phase 1 — Measure and earn trust (weeks 1–2)
-1. Analytics: Umami self-hosted + funnel events (landing, chat started, answer shown, signup, checkout, paid). Persian weekly KPI report to the owner bot.
-2. Iran reachability: probe from an Iranian vantage (the Mac relay already runs in Iran); fix Cloudflare settings if needed.
-3. Pricing and packaging (owner decides; hub prepares 2–3 options with Iranian competitor prices): free tier limits, per-draft price, monthly plan, Pro seat.
-4. Lawyer loop: the review pack (`~/Downloads/بازبینی_پاسخ‌های_قاضی_هوشمند_۱۴۰۵-۰۷-۲۲.docx`) → verdicts into golden cases → fix wrong answers → "reviewed" badge on verified guides.
-5. Conversion fixes: every guide/law/ruling page ends with a specific chat CTA ("ask about your case"), signup prompt after the 2nd answer, clear upgrade moment at drafting.
+## 5. First global products (to be validated by the factory, not assumed)
 
-### Phase 2 — Distribution engine (weeks 3–6)
-6. Content machine: 3 citation-checked guides per week from the 50 high-intent queries (agents write, hub checks citations, lawyer spot-checks). Internal links laws ↔ guides ↔ rulings.
-7. GEO: `llms.txt`, FAQ/Organization schema audit, brand profiles, comparison pages ("قاضی هوشمند vs ...") — honest.
-8. Bale bot (then Telegram): ask a question in the messenger, get a cited short answer + link to full answer/draft on the site.
-9. Lawyer channel: free Pro for the first 20 lawyers in exchange for feedback and referrals; referral code for clients.
-10. Missing law: direct taxes (consolidated text) — high search demand, also feeds Business C.
+Each candidate gets a research run and a cheap demand test (landing page + waitlist + a few posts)
+before any build. Ranked by fit with what we already know how to do:
 
-### Phase 3 — Second revenue line (weeks 7–12)
-11. Moadian wedge MVP for accountants: multi-client view, invoice → e-invoice send/inquiry (real API), tax Q&A grounded in tax circulars (already in chat).
-12. 3–5 paying pilot accountants (owner sells; hub prepares the demo, onboarding doc and contract template).
-13. Smart Judge Pro packaging (seats, case files, saved research) if lawyers in step 9 ask for it.
-
-### Always-on (small, weekly)
-Weekly relay batches (laws/regulations) and collection refresh; SBOM/mutation reports; dependency bumps;
-security fixes from the scan; cost report. No new infrastructure without a line in §3.
-
-## 5. KPIs (weekly, in the owner bot)
-
-| KPI | Now | 30 days | 90 days |
+| # | Candidate | Why us | Demand signal to test |
 | --- | --- | --- | --- |
-| Organic visitors / week (human) | ~0 measured | 1,000 | 10,000 |
-| Chats started / week | tens | 300 | 3,000 |
-| Signups / week | ~0 | 30 | 300 |
-| Paying customers (cumulative) | 0 real | 10 | 100 + 3 accountant pilots |
-| Revenue / month | 0 | first real payments | covers server + models + lawyer |
-| Answer accuracy on lawyer-verified set | not measured | measured | ≥ 90% |
-| Cost per answered question | ≈ $0 free / $0.0003 paid | tracked | tracked |
+| G1 | **MyInvois e-invoicing assistant for Malaysian SMEs and their accountants** (photo/WhatsApp → validated e-invoice, multi-client view, tax Q&A) | Same problem as Moadian, which we already modelled; the owner is in Malaysia; Phase 4 (SMEs) has applied since 2026-01-01 with penalties deferred to end-2027 (sources disagree on the exemption threshold: RM1M vs RM3M — verify with LHDN) | Accountants' sign-ups; competitor prices (research job `myinvois`) |
+| G2 | **Legal research assistant for an English-language jurisdiction** (start with Malaysia or Singapore public legislation) | Smart Judge's engine (ingest, citations, golden sets, guides) transfers directly | Lawyer/SME sign-ups; open-data licence check (research job `legalai`) |
+| G3 | **AI marketing autopilot for small businesses** | We build F6 for ourselves first; then sell it | Our own results first |
+| G4 | **Custom apps built by the factory (done-for-you)** | Fastest cash, but needs sales calls | Only if G1–G3 are slow |
 
-## 6. Operating model
+Research results (running on srv1 since 2026-10-16): `/root/research/2026-10-16/{myinvois,legalai,payments}.json`.
 
-- Owner: decisions (price, offers, lawyer, accountant sales), identity/payment actions, 2 short reviews a week.
-- Hub (Claude): plans, specs, reviews, tests, merges, ops; reports in Persian; never hands the owner shell work unless a secret or identity is needed.
-- Agents (server, OpenCode): implementation. Need the agents' OpenRouter key funded (~$10/month is enough at current rates); free tiers alone fail on multi-step tasks.
-- Lawyer: monthly review batch (answers + new guides), paid per batch.
-- Cadence: Saturday plan (hub posts the week's 3–5 goals), Wednesday check, KPI report every Friday via the bot.
+## 6. Track I (Iran) — low-cost growth, mostly automated
 
-## 7. Decisions needed from the owner
+- Weekly: 3 citation-checked guides; relay batches; collection refresh; lawyer review batch monthly.
+- Measure: Umami (shared work with F4/F7). Owner decides prices for the free/paid tiers.
+- Messenger bot for Smart Judge (Bale/Telegram) when F2 frees capacity.
+- Moadian live integration only if an Iranian accountant pilot asks for it.
 
-1. Personal goal: target monthly income and time horizon (sets how aggressive Phase 2–3 are).
-2. Primary focus for the next 90 days: A+B (Smart Judge) first, or C (Moadian/accountants) in parallel.
-3. Prices: free-tier limits, per-draft, monthly, Pro seat (hub will bring options with competitor data).
-4. Budget: agents key top-up, lawyer per batch, optional ads (Yektanet/Instagram) once the funnel is measured.
-5. Who sells to accountants/lawyers (the owner, a part-time sales partner, or referrals only).
+## 7. 12-week timeline
+
+| Weeks | Factory (hub + agents) | Phase 0 (owner) | Products |
+| --- | --- | --- | --- |
+| 1–2 | F1 workbench, F2 queue + escalation, F3 research→spec | Adviser check, partner agreement, company accounts | Research G1/G2/payments; Track I guides continue |
+| 3–4 | F4 chassis v1, F5 multi-project deploy | Payment provider opened | G1 landing + waitlist (built with F4) |
+| 5–6 | F6 marketing engine, F7 observability | Meta Business, domains | G1 MVP if demand; marketing for G1 + Smart Judge |
+| 7–12 | Factory hardening (sandbox for untrusted code, second server only if needed) | Hiring decision (sales/support) | G1 paid pilots; G2 demand test; kill/scale gates |
+
+## 8. Monthly cost (target)
+
+| Item | Now | With plan |
+| --- | --- | --- |
+| srv1 (Iran track) | ~€15–20 | same |
+| Global server (Track G) | — | ~€15–40 (Hetzner ARM, company account) |
+| Models (product, free first) | ≈ $0–5 | ≈ $5–20 |
+| Agents (factory) | $0 (key empty) | $20–50 |
+| Domains, email | small | ~$5–10 |
+| Optional | — | ads, lawyer batches, a part-time marketer, only after the funnel is measured |
+
+## 9. KPIs (weekly in the bot)
+
+Factory: tasks completed per week, % merged without hub fixes, cost per merged task, time brief→deploy.
+Products: visitors, sign-ups, activation, paying customers, MRR, cost per answer/task. Track I and G separately.
+
+## 10. Owner actions now
+
+1. Fund the agents OpenRouter key (~$20) — unblocks F1–F3 at full speed.
+2. Book the Malaysian adviser (questions in §3.1) and write the partner agreement (§3.2).
+3. Press Start in `@roxira_ops_bot` (status, approvals and reports arrive there).
+4. Approve this plan (or tell the hub what to change).

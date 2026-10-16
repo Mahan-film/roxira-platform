@@ -1,3 +1,5 @@
+> **Plan: `docs/strategy/MASTER_PLAN_2026-10-16.md` (v2: factory first, then a global business via the Malaysian company; Track I Iran / Track G global). Owner decisions are in §0.**
+
 > **Last update: 2026-10-15. NEW CHAT? Read `docs/HANDOFF_2026-10-15.md` first (complete context), then this file. Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
 
 # Current state (read this first)
