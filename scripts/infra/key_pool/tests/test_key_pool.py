@@ -236,3 +236,20 @@ def test_product_ladder_never_reaches_the_agents_key():
     chain = fb["gemini-best-product"]
     assert chain[-1] == "product-free" and "agent-free-paid" not in chain
     assert fb["product-free"] == ["private"]
+
+
+def test_best_product_is_one_cross_provider_ladder():
+    import render_litellm
+    names = {"GEMINI_API_KEY", "GEMINI_API_KEY_2", "GROQ_API_KEY", "GROQ_API_KEY_2", "MISTRAL_API_KEY", "KEYPOOL_MASTER_KEY"}
+    cfg = render_litellm.render(kc.load_pool(), names=names)
+    fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
+    chain = ["best-product"] + fb["best-product"]
+    models = {}
+    for m in cfg["model_list"]:
+        if m["model_name"].startswith("best-product"):
+            models.setdefault(m["model_name"], set()).add(m["litellm_params"]["model"])
+    order = [sorted(models[n])[0] for n in chain if n in models]
+    assert order[:3] == ["gemini/gemini-3.8-flash", "gemini/gemini-3.7-flash", "groq/openai/gpt-oss-120b"]
+    assert chain[-1] == "private" and "agent-free-paid" not in chain
+    groq_rank = [n for n in models if "groq/openai/gpt-oss-120b" in models[n]][0]
+    assert len([m for m in cfg["model_list"] if m["model_name"] == groq_rank]) == 2   # both Groq keys in one rank

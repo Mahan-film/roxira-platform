@@ -257,6 +257,47 @@ groups:
         - {id: gemini-flash-lite-latest}
     fallback: [product-free]
 
+  best-product:   # owner 2026-10-16: ONE quality ladder over ALL our keys (Gemini x4, Groq x3, Mistral x4) for Smart
+                  # Judge. Each rank = one model on every key that has it; all must fail before the next rank.
+                  # Fast per-attempt caps so a busy model hands over quickly (chat waits ~15 s for the first token).
+    description: Cross-provider quality ladder for product answers, ending on the product key.
+    ordered: true
+    providers: [gemini, groq, mistral]
+    models:
+      gemini:
+        - {id: gemini-4-argon, needs_billing: true, rank: 1}
+        - {id: gemini-3.1-pro-preview, needs_billing: true, rank: 2}
+        - {id: gemini-3.8-flash, rank: 3}
+        - {id: gemini-3.7-flash, rank: 4}
+        - {id: gemini-3.6-flash, rank: 6}
+        - {id: gemini-3.5-flash, rank: 8}
+        - {id: gemini-3-flash-preview, rank: 9}
+        - {id: gemma-4-31b-it, rank: 10}
+        - {id: gemini-3.5-flash-lite, rank: 11}
+      groq: [{role: agent_runner, alias: groq-strong, rank: 5}]
+      mistral: [{id: mistral-medium-latest, rank: 7}]
+    litellm_params: {reasoning_effort: low, stream_timeout: 9, timeout: 30}
+    fallback: [private]
+
+  best-all:   # the same idea for agents and tools (public work only: free tiers may log)
+    description: Cross-provider quality ladder for agents, ending on paid DeepSeek.
+    ordered: true
+    providers: [gemini, groq, mistral, sambanova]
+    models:
+      gemini:
+        - {id: gemini-4-argon, needs_billing: true, rank: 1}
+        - {id: gemini-3.1-pro-preview, needs_billing: true, rank: 2}
+        - {id: gemini-3.8-flash, rank: 3}
+        - {id: gemini-3.7-flash, rank: 4}
+        - {id: gemini-3.6-flash, rank: 6}
+        - {id: gemini-3.5-flash, rank: 8}
+        - {id: gemma-4-31b-it, rank: 9}
+        - {id: gemini-3.5-flash-lite, rank: 11}
+      groq: [{role: agent_runner, alias: groq-strong, rank: 5}]
+      sambanova: [{id: gpt-oss-120b, rank: 5}]
+      mistral: [{id: mistral-medium-latest, rank: 7}, {id: mistral-code-latest, rank: 10}]
+    fallback: [agent-free-paid]
+
   agent-free-paid:
     description: Paid DeepSeek Flash only. Shared last-resort fallback for the free agent groups.
     providers: [openrouter-paid]

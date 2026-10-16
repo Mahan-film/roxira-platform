@@ -168,12 +168,13 @@ def group_deployments(
             if spec.get("needs_billing") and not prov.get("billing"):
                 continue  # e.g. Gemini Pro: zero quota on free AI Studio keys until billing is enabled
             order += 1
+            rank = int(spec["rank"]) if spec.get("rank") is not None else order  # cross-provider quality ladder
             for k in keys:
                 out.append(
                     Deployment(
                         group=group, provider=pname, tier=prov["tier"], data_policy=prov["data_policy"],
                         base_url=prov["base_url"], litellm_prefix=prov["litellm_prefix"], key_env=k,
-                        model=model, order=order, mode=spec.get("mode"), api_base=api_base,
+                        model=model, order=rank, mode=spec.get("mode"), api_base=api_base,
                         rpm=_num(lim.get("rpm")), tpm=_num(lim.get("tpm")),
                         extra_body=dict(prov.get("extra_body") or {}),
                     )
