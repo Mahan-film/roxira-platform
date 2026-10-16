@@ -168,6 +168,8 @@ providers:
 snippets:
   anthropic_cache: &anthropic_cache   # OpenRouter needs cache_control on the static prefix for Anthropic models
     cache_control_injection_points: [{location: message, role: system}]
+  no_think: &no_think                 # hidden Anthropic reasoning ate the answer budget (empty replies, 2026-10-17)
+    reasoning: {enabled: false}
   sort_price: &sort_price             # OpenRouter picks the cheapest endpoint for this model
     provider: {sort: price}
 
@@ -320,7 +322,7 @@ groups:
     providers: [openrouter-private]
     models:
       openrouter-private:
-        - {role: product, alias: haiku, rank: 1, litellm_params: *anthropic_cache}
+        - {role: product, alias: haiku, rank: 1, litellm_params: *anthropic_cache, extra_body: *no_think}
         - {role: product, alias: ds-flash, rank: 2, extra_body: *sort_price}
     fallback: [best-product-free]
 
@@ -331,7 +333,7 @@ groups:
     models:
       openrouter-private:
         - {role: product_pro, alias: pro, rank: 1}
-        - {role: product_pro, alias: haiku, rank: 2, litellm_params: *anthropic_cache}
+        - {role: product_pro, alias: haiku, rank: 2, litellm_params: *anthropic_cache, extra_body: *no_think}
         - {role: product_pro, alias: glm, rank: 3}
     fallback: [vip-product]
 
@@ -341,7 +343,7 @@ groups:
     providers: [openrouter-private]
     models:
       openrouter-private:
-        - {role: product_premium, alias: opus, rank: 1, litellm_params: *anthropic_cache}
+        - {role: product_premium, alias: opus, rank: 1, litellm_params: *anthropic_cache, extra_body: *no_think}
         - {role: product_premium, alias: kimi, rank: 2}
     fallback: [vip-pro]
 
