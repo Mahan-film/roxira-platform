@@ -42,6 +42,29 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
         # Explicit `fallback:` (tier groups) wins. Otherwise keep the legacy behaviour: a group that
         # mixes tiers moves its paid deployments to "<group>-paid", reached only through a router
         # fallback (providers reject an "order" param).
+        if g.get("ordered"):
+            # Rank ladder (owner 2026-10-16): each model is its own LiteLLM group holding ALL keys of that model;
+            # the group name serves rank 1 and falls back rank by rank, then to the explicit fallbacks. A plain
+            # `order` param was tried first: the router spent its retries on the top ranks and never got lower.
+            ranks = sorted({d.order for d in deps})
+            names_by_rank = {r: group if i == 0 else f"{group}__r{i + 1}" for i, r in enumerate(ranks)}
+            fallbacks.append({group: [names_by_rank[r] for r in ranks[1:]] + list(g.get("fallback") or [])})
+            for r in ranks[1:]:
+                fallbacks.append({names_by_rank[r]: [names_by_rank[x] for x in ranks if x > r] + list(g.get("fallback") or [])})
+            for d in deps:
+                api_key = "none" if d.keyless else f"os.environ/{d.key_env}"
+                params = {"model": d.litellm_model, "api_key": api_key}
+                if d.api_base:
+                    params["api_base"] = d.api_base
+                if d.rpm:
+                    params["rpm"] = d.rpm
+                if d.tpm:
+                    params["tpm"] = d.tpm
+                if d.tier != "paid":
+                    params["input_cost_per_token"] = params["output_cost_per_token"] = 0.0
+                info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
+                model_list.append({"model_name": names_by_rank[d.order], "litellm_params": params, "model_info": info})
+            continue
         explicit = g.get("fallback")
         split = not explicit and any(d.tier == "paid" for d in deps) and any(d.tier != "paid" for d in deps)
         if explicit:

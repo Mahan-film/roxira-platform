@@ -210,3 +210,20 @@ def test_free_tier_deployments_cost_zero():
     cfg = render_litellm.render(kc.load_pool())
     free = [m for m in cfg["model_list"] if m["model_info"]["tier"] != "paid"]
     assert free and all(m["litellm_params"]["input_cost_per_token"] == 0.0 for m in free)
+
+
+def test_ordered_group_is_a_rank_chain_over_all_keys():
+    import render_litellm
+    names = {"GEMINI_API_KEY", "GEMINI_API_KEY_2", "KEYPOOL_MASTER_KEY"}
+    cfg = render_litellm.render(kc.load_pool(), names=names)
+    ladder = [m for m in cfg["model_list"] if m["model_name"].startswith("gemini-best")]
+    by_name = {}
+    for m in ladder:
+        by_name.setdefault(m["model_name"], set()).add((m["litellm_params"]["model"], m["litellm_params"]["api_key"]))
+    assert all(len(v) == 2 and len({x[0] for x in v}) == 1 for v in by_name.values())  # one model, both keys
+    assert not any("argon" in x[0] for v in by_name.values() for x in v)               # needs_billing skipped
+    top = {x[0] for x in by_name["gemini-best"]}
+    assert top == {"gemini/gemini-3.8-flash"}
+    fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
+    assert fb["gemini-best"][0] == "gemini-best__r2" and fb["gemini-best"][-1] == "agent-free-paid"
+    assert all("order" not in m["litellm_params"] for m in cfg["model_list"])

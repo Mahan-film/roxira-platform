@@ -165,6 +165,8 @@ def group_deployments(
         for model, spec in resolve_model_specs(select.get(pname, prov["models"]), models_path):
             if not keys:
                 continue
+            if spec.get("needs_billing") and not prov.get("billing"):
+                continue  # e.g. Gemini Pro: zero quota on free AI Studio keys until billing is enabled
             order += 1
             for k in keys:
                 out.append(
