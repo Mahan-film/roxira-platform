@@ -253,3 +253,16 @@ def test_best_product_is_one_cross_provider_ladder():
     assert chain[-1] == "private" and "agent-free-paid" not in chain
     groq_rank = [n for n in models if "groq/openai/gpt-oss-120b" in models[n]][0]
     assert len([m for m in cfg["model_list"] if m["model_name"] == groq_rank]) == 2   # both Groq keys in one rank
+
+
+def test_free_ladder_has_no_paid_step_and_vip_is_paid_first():
+    import render_litellm
+    names = {"GEMINI_API_KEY", "GROQ_API_KEY", "MISTRAL_API_KEY", "OPENROUTER_API_KEY", "KEYPOOL_MASTER_KEY"}
+    cfg = render_litellm.render(kc.load_pool(), names=names)
+    fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
+    free_chain = ["best-product-free"] + fb.get("best-product-free", [])
+    tiers = {m["model_info"]["tier"] for m in cfg["model_list"] if m["model_name"] in free_chain}
+    assert tiers == {"free"}                                   # no paid deployment anywhere on the free path
+    vip = [m for m in cfg["model_list"] if m["model_name"] == "vip-product"]
+    assert vip and all(m["model_info"]["tier"] == "paid" for m in vip)
+    assert fb["vip-product"] == ["best-product-free"]          # never stops when credit runs out
