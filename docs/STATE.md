@@ -20,6 +20,18 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - **Infra**: key pool LiteLLM `127.0.0.1:4000` (groups agent-strong-free, agent-light-free, product-free, agent-free-paid, private, embeddings; simple-shuffle — never usage-based-routing-v2), TEI embeddings (batch <= 4), research service `127.0.0.1:8090` (searx + tavily, `query_domains`), Xray REALITY VPN on 8443, backups/monitor/selfimprove timers.
 - **Owner's Mac**: `ir.roxira.lawwatch` (ekhtebar, 6 h) + **`ir.roxira.iranrelay`** (regulation.tax.gov.ir, dotic.ir, rc.majlis.ir; Sat–Thu 09:30 & 11:00 Tehran, VPN must be OFF) both write to `~/Developer/roxira-lawwatch/data/legal/staged/` and `relay_publish.sh` opens a data PR; `ir.roxira.reposync` fast-forwards `~/Developer/roxira-platform` every 30 min and resets `core.bare` (it flips to true after app worktree cleanups — run `git --git-dir=~/Developer/roxira-platform/.git config core.bare false` if git says "must be run in a work tree").
 
+## Software factory (built 2026-10-16, plan: docs/strategy/MASTER_PLAN_2026-10-16.md §4)
+| Step | What | Where | State |
+| --- | --- | --- | --- |
+| F1 | Isolated checks for every agent run | scripts/infra/server_agents/workbench.sh (#691) | live |
+| F2 | Task queue + model escalation (best -> free -> ds-flash -> strong) | scripts/infra/server_agents/taskq.py, systemd roxira-taskq (#692, #704) | live |
+| F3 | Brief -> research -> spec -> owner approval in the bot | scripts/factory/brief_to_spec.py, docs/factory/HOUSE_STACK.md (#693-#695) | live; project my-legal-research specced |
+| F4 | Golden SaaS chassis | templates/saas-chassis (#705) | built + verified (npm ci, tsc, lint, build) |
+| F5 | Multi-project deploy | scripts/ops/projects/projectctl.py (#700) | built; for the global server |
+| F6 | Marketing engine with approval | scripts/marketing/ (#702) | built; needs platform tokens |
+| F7 | Umami analytics + weekly Persian KPI report | services/analytics, scripts/ops/kpi (#703) | built; inert until configured |
+Also: gemini-best quality-first ladder over all AI Studio keys (#699; add GEMINI_API_KEY_2..4), G2 Malaysian law pilot pipeline (#701, internal eval only until AGC permission).
+
 ## Next workstreams, in order
 1. **Missing laws**: **direct taxes 1366** (rc.majlis.ir 91488 has only the original text, e.g. art. 131 still 4%; needs a consolidated amended source) and the **1403 guild amendment** (no rc.majlis id found). Fix: guild-amendment rows are split on the quoted base-article headings, so chat cites «ماده 27 قانون اصلاح قانون نظام صنفی کشور»; relabel them as «ماده N قانون نظام صنفی کشور (اصلاحی 1392)» in `split_rc_law_articles.py` for v7. Relay rc ids: 801835, 94011, 866380.
 2. Regulations: refresh `iran_regulations_v2` (or v3) when new relay batches land (build script takes `DST` + `BUILD_FILES`); frontend can render the `regulations` field as its own card.
