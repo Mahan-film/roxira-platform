@@ -163,6 +163,14 @@ providers:
     models:
       - {id: bge-m3, mode: embedding}
 
+# Reusable snippets (YAML anchors; not read by the loader). Spec-level `litellm_params` / `extra_body`
+# apply to that one model only, so Anthropic-only settings never reach DeepSeek.
+snippets:
+  anthropic_cache: &anthropic_cache   # OpenRouter needs cache_control on the static prefix for Anthropic models
+    cache_control_injection_points: [{location: message, role: system}]
+  sort_price: &sort_price             # OpenRouter picks the cheapest endpoint for this model
+    provider: {sort: price}
+
 groups:
   agent-strong-free:
     description: Strong models for code, docs and dev tasks. Free providers only, paid DeepSeek Flash as last resort.
@@ -285,7 +293,7 @@ groups:
                   # Fast per-attempt caps so a busy model hands over quickly (chat waits ~15 s for the first token).
     description: Cross-provider FREE ladder for non-subscribers; no paid step.
     ordered: true
-    providers: [gemini, groq, mistral]
+    providers: [gemini, groq, mistral, openrouter-free]
     models:
       gemini:
         - {id: gemini-4-argon, needs_billing: true, rank: 1}
@@ -296,29 +304,45 @@ groups:
         - {id: gemini-3.5-flash, rank: 8}
         - {id: gemini-3-flash-preview, rank: 9}
         - {id: gemma-4-31b-it, rank: 10}
-        - {id: gemini-3.5-flash-lite, rank: 11}
+        - {id: gemini-3.5-flash-lite, rank: 14}
       groq: [{role: agent_runner, alias: groq-strong, rank: 5}]
       mistral: [{id: mistral-medium-latest, rank: 7}]
+      openrouter-free:   # verified free models (2026-10-17); after the Gemini flash ranks, before flash-lite
+        - {role: free, alias: nemotron-ultra, rank: 11}
+        - {role: free, alias: nemotron-super, rank: 12}
+        - {role: free, alias: gemma-free, rank: 13}
     litellm_params: {reasoning_effort: low, stream_timeout: 9, timeout: 30}
     fallback: []   # free users never reach a paid model (owner 2026-10-16)
 
-  vip-product:   # subscribers: paid model first; if OpenRouter credit is out it continues on the free ladder (never stops)
+  vip-product:   # BASIC subscribers: Haiku 5.5 first, then DeepSeek V4.1 Flash, then the free ladder (never stops)
     description: Paid first for subscribers (product key, no_train), then the free cross-provider ladder.
+    ordered: true
     providers: [openrouter-private]
+    models:
+      openrouter-private:
+        - {role: product, alias: haiku, rank: 1, litellm_params: *anthropic_cache}
+        - {role: product, alias: ds-flash, rank: 2, extra_body: *sort_price}
     fallback: [best-product-free]
 
-  vip-pro:   # PRO plan: strong paid models (product key, no_train), then the basic paid model, then free ladder
+  vip-pro:   # PRO plan: DeepSeek V4 Pro, Haiku 5.5, GLM-5.3 last (expensive output), then vip-product -> free
     description: Smart Judge PRO plan answers.
+    ordered: true
     providers: [openrouter-private]
     models:
-      openrouter-private: [{role: product_pro}]
+      openrouter-private:
+        - {role: product_pro, alias: pro, rank: 1}
+        - {role: product_pro, alias: haiku, rank: 2, litellm_params: *anthropic_cache}
+        - {role: product_pro, alias: glm, rank: 3}
     fallback: [vip-product]
 
-  vip-premium:   # PREMIUM plan: world-best models, then PRO
+  vip-premium:   # PREMIUM plan: Opus 5, then Kimi K3, then PRO
     description: Smart Judge PREMIUM plan answers.
+    ordered: true
     providers: [openrouter-private]
     models:
-      openrouter-private: [{role: product_premium}]
+      openrouter-private:
+        - {role: product_premium, alias: opus, rank: 1, litellm_params: *anthropic_cache}
+        - {role: product_premium, alias: kimi, rank: 2}
     fallback: [vip-pro]
 
   best-all:   # the same idea for agents and tools (public work only: free tiers may log)
@@ -340,9 +364,25 @@ groups:
       mistral: [{id: mistral-medium-latest, rank: 7}, {id: mistral-code-latest, rank: 10}]
     fallback: [agent-free-paid]
 
-  agent-free-paid:
-    description: Paid DeepSeek Flash only. Shared last-resort fallback for the free agent groups.
+  agent-free-paid:   # cheap paid agent step (2026-10-17): GLM-5.3 Flash first, then DeepSeek V4.1 Flash
+    description: Cheap paid step (GLM-5.3 Flash, then DeepSeek V4.1 Flash). Shared last-resort fallback for the free agent groups.
+    ordered: true
     providers: [openrouter-paid]
+    models:
+      openrouter-paid:
+        - {role: cheap_agent, alias: glm-flash, rank: 1}
+        - {role: cheap_agent, alias: ds-flash, rank: 2, extra_body: *sort_price}
+
+  summarize-cheap:   # compress long uploaded case files before the main model (no app wiring yet).
+                     # ScaleDown first ($0.04/M in, $0 out, 1M context), then the free ladder: never stops.
+                     # Runs on the product key (openrouter-private, data_collection=deny); only the free fallback may log.
+    description: Cheap long-context summariser for case files, then the free ladder.
+    ordered: true
+    providers: [openrouter-private]
+    models:
+      openrouter-private:
+        - {role: summarize, alias: summarize, rank: 1}
+    fallback: [best-product-free]
 
   private:
     description: Customer or case data. No free tier, no may_log provider, no :free model id.

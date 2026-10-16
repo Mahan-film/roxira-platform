@@ -30,7 +30,7 @@
 # list for a role at runtime. This file only sets the defaults.
 
 schema_version: 1
-checked_at: "2026-09-29"
+checked_at: "2026-10-17"
 source: docs/research/TECH_CURRENCY_2026-09.md
 
 roles:
@@ -42,8 +42,15 @@ roles:
       - id: qwen/qwen3.8-27b:free
         price_per_1m: { in: 0, out: 0 }
       - id: google/gemma-4-31b-it:free
+        alias: gemma-free
         price_per_1m: { in: 0, out: 0 }
       - id: nvidia/nemotron-3-super-120b-a12b:free
+        alias: nemotron-super
+        price_per_1m: { in: 0, out: 0 }
+      # Added 2026-10-17 (live catalogue check): strongest free model, used by the key pool's
+      # free product ladder (config/key_pool.yaml best-product-free).
+      - id: nvidia/nemotron-3-ultra-550b-a55b:free
+        alias: nemotron-ultra
         price_per_1m: { in: 0, out: 0 }
       # Last-resort fallback: openrouter/free is OpenRouter's own auto-router id, not a
       # single named model, so it never appears in GET /api/v1/models and price/quality
@@ -69,7 +76,7 @@ roles:
       # 0.30/1.20. The owner-mandated primary is kept unchanged (this PR
       # corrects prices only; a primary swap is a separate owner decision).
       - id: deepseek/deepseek-v4.1-flash
-        price_per_1m: { in: 0.30, out: 1.20 }
+        price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
       # Fallback if the primary is rate-limited/retired: same DeepSeek Flash
       # family. Price re-checked live 2026-09-29 (issue #103):
       # 0.018/0.32 (was 0.021/0.32 in the 2026-09-26 audit).
@@ -98,36 +105,89 @@ roles:
       # GLM-5.3 (1.40/4.40), Kimi K3 (3.00/15.00) and Gemini 3.8 Flash
       # (0.75/3.75) were already current.
       - id: deepseek/deepseek-v4-pro
-        price_per_1m: { in: 0.936294, out: 1.872588 }
+        price_per_1m: { in: 0.267, out: 0.533, cache_read: 0.022 }
       - id: z-ai/glm-5.3
-        price_per_1m: { in: 1.40, out: 4.40 }
+        price_per_1m: { in: 0.079, out: 4.80 }
       - id: moonshotai/kimi-k3
-        price_per_1m: { in: 3.00, out: 15.00 }
+        price_per_1m: { in: 0.304, out: 11.94 }
       - id: google/gemini-3.8-flash
         price_per_1m: { in: 0.75, out: 3.75 }
 
+  product:
+    description: >
+      Smart Judge BASIC paid plan (owner 2026-10-17) -- Claude Haiku 5.5 first, then DeepSeek V4.1 Flash.
+      Anthropic needs cache_control on the static prefix (set in config/key_pool.yaml); DeepSeek caches itself.
+      The key pool chains this to the free ladder, so nothing stops when paid credit runs out.
+    data_policy: standard
+    models:
+      - id: anthropic/claude-haiku-5.5
+        alias: haiku
+        price_per_1m: { in: 0.10, out: 0.50, cache_read: 0.01 }
+      - id: deepseek/deepseek-v4.1-flash
+        alias: ds-flash
+        price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
+
   product_pro:
-    description: Smart Judge PRO plan (owner 2026-10-16, $10/month) -- strong paid models for subscribers'
-      answers, up to SJ_PRO_TOP_DAILY per day, then the basic paid model. Same ids/prices as `strong`.
+    description: >
+      Smart Judge PRO plan (owner 2026-10-16, $10/month) -- strong paid models for subscribers'
+      answers, up to SJ_PRO_TOP_DAILY per day, then the basic paid model. Order (2026-10-17): DeepSeek V4 Pro,
+      Claude Haiku 5.5, GLM-5.3 last (its output is expensive).
     data_policy: standard
     models:
       - id: deepseek/deepseek-v4-pro
-        price_per_1m: { in: 0.936294, out: 1.872588 }
+        alias: pro
+        price_per_1m: { in: 0.267, out: 0.533, cache_read: 0.022 }
+      - id: anthropic/claude-haiku-5.5
+        alias: haiku
+        price_per_1m: { in: 0.10, out: 0.50, cache_read: 0.01 }
       - id: z-ai/glm-5.3
-        price_per_1m: { in: 1.4, out: 4.4 }
-      - id: google/gemini-3.8-flash
-        price_per_1m: { in: 0.75, out: 3.75 }
+        alias: glm
+        price_per_1m: { in: 0.079, out: 4.80 }
 
   product_premium:
-    description: Smart Judge PREMIUM plan (owner 2026-10-16, $29/month) -- the world's best models, up to
+    description: >
+      Smart Judge PREMIUM plan (owner 2026-10-16, $29/month) -- the world's best models, up to
       CHAT_PREMIUM_TOP_DAILY_LIMIT (default 8) answers per day, then product_pro. The owner asked explicitly for top models
       here, which supersedes the 2026-09-28 "no Anthropic in the product runtime" note for this plan only.
     data_policy: standard
     models:
       - id: anthropic/claude-opus-5
-        price_per_1m: { in: 5.0, out: 25.0 }
+        alias: opus
+        price_per_1m: { in: 5.0, out: 25.0, cache_read: 0.5 }
       - id: moonshotai/kimi-k3
-        price_per_1m: { in: 3.0, out: 15.0 }
+        alias: kimi
+        price_per_1m: { in: 0.304, out: 11.94 }
+
+  cheap_agent:
+    description: >
+      Background / agent paid step (key pool group agent-free-paid) -- GLM-5.3 Flash first, then
+      DeepSeek V4.1 Flash. Public/dev work only (agents key); both cache automatically on OpenRouter.
+    data_policy: standard
+    models:
+      - id: z-ai/glm-5.3-flash
+        alias: glm-flash
+        price_per_1m: { in: 0.016, out: 0.405, cache_read: 0.011 }
+      - id: deepseek/deepseek-v4.1-flash
+        alias: ds-flash
+        price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
+
+  summarize:
+    description: >
+      Compress long uploaded case files before the main model (key pool group summarize-cheap).
+      ScaleDown has a 1M context and $0 output; not wired into any app yet.
+    data_policy: standard
+    models:
+      - id: scaledown/summarize
+        alias: summarize
+        price_per_1m: { in: 0.04, out: 0 }
+
+  mimo:
+    description: >
+      Candidate only (not used by any group) -- Xiaomi MiMo V2.6 Flash, kept for model-eval runs.
+    data_policy: standard
+    models:
+      - id: xiaomi/mimo-v2.6-flash
+        price_per_1m: { in: 0.14, out: 0.28 }
 
   stt:
     description: Speech-to-text for the voice pipeline (Persian/Farsi required).
@@ -284,7 +344,7 @@ roles:
     # $0.0066; v4-flash-0731 3/7 (4 calls hit the 120s deadline), 39s avg, $0.0022.
     models:
       - id: deepseek/deepseek-v4.1-flash
-        price_per_1m: { in: 0.3, out: 1.2 }
+        price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
       - id: deepseek/deepseek-v4-flash-0731
         price_per_1m: { in: 0.018, out: 0.32 }
       - id: deepseek/deepseek-v4-flash
@@ -331,7 +391,7 @@ roles:
         price_per_1m: { in: 0, out: 0 }
         public_code_only: true
       - id: deepseek/deepseek-v4.1-flash
-        price_per_1m: { in: 0.30, out: 1.20 }
+        price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
       - id: qwen/qwen3-coder
         price_per_1m: { in: 0.30, out: 1.00 }
 
@@ -375,7 +435,7 @@ roles:
       - id: deepseek/deepseek-v4.1-flash
         alias: ds-flash
         provider: openrouter
-        price_per_1m: { in: 0.30, out: 1.20 }
+        price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
 
   agent_runner_public:
     description: >

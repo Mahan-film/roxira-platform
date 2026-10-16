@@ -60,9 +60,13 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
                     params["rpm"] = d.rpm
                 if d.tpm:
                     params["tpm"] = d.tpm
+                if d.extra_body:  # e.g. data_collection=deny on the private/paid providers, sort=price per model
+                    params["extra_body"] = d.extra_body
                 if d.tier != "paid":
                     params["input_cost_per_token"] = params["output_cost_per_token"] = 0.0
-                params.update(g.get("litellm_params") or {})  # e.g. reasoning_effort for latency-sensitive groups
+                elif d.model in prices:
+                    params["input_cost_per_token"], params["output_cost_per_token"] = prices[d.model]
+                params.update(kc.merge_dicts(g.get("litellm_params") or {}, d.params))  # group (e.g. reasoning_effort), then per-model
                 info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
                 model_list.append({"model_name": names_by_rank[d.order], "litellm_params": params, "model_info": info})
             continue
@@ -88,6 +92,7 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
                 params["input_cost_per_token"] = params["output_cost_per_token"] = 0.0
             elif d.model in prices:  # LiteLLM has no price for some ids: give ours
                 params["input_cost_per_token"], params["output_cost_per_token"] = prices[d.model]
+            params.update(d.params)  # per-model litellm_params
             info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
             if d.mode:
                 info["mode"] = d.mode

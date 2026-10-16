@@ -39,7 +39,9 @@ def test_render_shape_and_no_secret_values():
     light = [m for m in cfg["model_list"] if m["model_name"] == "agent-light-free"]
     assert light and all(m["model_info"]["tier"] == "free" for m in light)
     paid = [m for m in cfg["model_list"] if m["model_name"] == "agent-free-paid"]
-    assert paid and all(m["litellm_params"]["model"].startswith("openrouter/deepseek/") for m in paid)
+    assert paid and paid[0]["litellm_params"]["model"] == "openrouter/z-ai/glm-5.3-flash"  # cheap agent step: GLM Flash first
+    paid2 = [m for m in cfg["model_list"] if m["model_name"] == "agent-free-paid__r2"]
+    assert paid2 and all(m["litellm_params"]["model"] == "openrouter/deepseek/deepseek-v4.1-flash" for m in paid2)
     fb = {k: v for f in cfg["router_settings"]["fallbacks"] for k, v in f.items()}
     assert fb["agent-strong-free"] == ["gemini-best"]  # Gemini ladder before paid DeepSeek (owner 2026-10-16)
     assert fb["agent-light-free"] == ["agent-strong-free", "agent-free-paid"]
@@ -265,13 +267,71 @@ def test_free_ladder_has_no_paid_step_and_vip_is_paid_first():
     assert tiers == {"free"}                                   # no paid deployment anywhere on the free path
     vip = [m for m in cfg["model_list"] if m["model_name"] == "vip-product"]
     assert vip and all(m["model_info"]["tier"] == "paid" for m in vip)
-    assert fb["vip-product"] == ["best-product-free"]          # never stops when credit runs out
+    assert fb["vip-product"] == ["vip-product__r2", "best-product-free"]   # never stops when credit runs out
 
 
 def test_plan_groups_chain_down_to_free():
     import render_litellm
     cfg = render_litellm.render(kc.load_pool(), names={"OPENROUTER_API_KEY", "GEMINI_API_KEY", "KEYPOOL_MASTER_KEY"})
     fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
-    assert fb["vip-premium"] == ["vip-pro"] and fb["vip-pro"] == ["vip-product"] and fb["vip-product"] == ["best-product-free"]
+    assert fb["vip-premium"] == ["vip-premium__r2", "vip-pro"]
+    assert fb["vip-pro"] == ["vip-pro__r2", "vip-pro__r3", "vip-product"]
+    assert fb["vip-product"] == ["vip-product__r2", "best-product-free"]
     prem = {m["litellm_params"]["model"] for m in cfg["model_list"] if m["model_name"] == "vip-premium"}
     assert "openrouter/anthropic/claude-opus-5" in prem
+
+
+def _chain(cfg, group):
+    """[(model, params)] per rank of an ordered group, in fallback order (first deployment of each rank)."""
+    fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
+    out = []
+    for n in [group] + [x for x in fb[group] if x.startswith(group + "__")]:
+        m = next(m for m in cfg["model_list"] if m["model_name"] == n)
+        out.append((m["litellm_params"]["model"].removeprefix("openrouter/"), m["litellm_params"]))
+    return out
+
+
+def _full_cfg():
+    return render_litellm.render(kc.load_pool(), names={"OPENROUTER_API_KEY", "OPENROUTER_API_KEY_AGENTS", "GEMINI_API_KEY",
+                                                         "GROQ_API_KEY", "MISTRAL_API_KEY", "KEYPOOL_MASTER_KEY"})
+
+
+def test_plan_orders_and_free_end():
+    cfg = _full_cfg()
+    assert [m for m, _ in _chain(cfg, "vip-product")] == ["anthropic/claude-haiku-5.5", "deepseek/deepseek-v4.1-flash"]
+    assert [m for m, _ in _chain(cfg, "vip-pro")] == ["deepseek/deepseek-v4-pro", "anthropic/claude-haiku-5.5", "z-ai/glm-5.3"]
+    assert [m for m, _ in _chain(cfg, "vip-premium")] == ["anthropic/claude-opus-5", "moonshotai/kimi-k3"]
+
+
+def test_anthropic_cache_injection_only_on_anthropic_and_deepseek_sorts_by_price():
+    cfg = _full_cfg()
+    for m in cfg["model_list"]:
+        p = m["litellm_params"]
+        anthropic = "anthropic/" in p["model"]
+        if m["model_name"].startswith("vip-"):
+            assert ("cache_control_injection_points" in p) == anthropic, p["model"]
+        if "deepseek-v4.1-flash" in p["model"] and m["model_name"] != "private":
+            assert p["extra_body"]["provider"]["sort"] == "price"
+            assert p["extra_body"]["provider"]["data_collection"] == "deny"  # provider-level body is kept
+    for m in cfg["model_list"]:  # ordered groups keep the privacy flag of the private provider
+        if m["model_name"].startswith("vip-"):
+            assert m["litellm_params"]["extra_body"]["provider"]["data_collection"] == "deny"
+            assert m["litellm_params"]["input_cost_per_token"] > 0
+
+
+def test_free_ladder_has_verified_free_models_after_gemini_flash():
+    cfg = _full_cfg()
+    chain = _chain(cfg, "best-product-free")
+    ids = [m for m, _ in chain]
+    for free in ("nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3-super-120b-a12b:free", "google/gemma-4-31b-it:free"):
+        assert free in ids
+    assert ids.index("nvidia/nemotron-3-ultra-550b-a55b:free") > ids.index("gemini/gemini-3-flash-preview")
+    assert ids.index("nvidia/nemotron-3-ultra-550b-a55b:free") < ids.index("gemini/gemini-3.5-flash-lite")
+
+
+def test_summarize_cheap_then_free_ladder_and_cheap_agent_order():
+    cfg = _full_cfg()
+    fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
+    assert [m for m, _ in _chain(cfg, "summarize-cheap")] == ["scaledown/summarize"]
+    assert fb["summarize-cheap"] == ["best-product-free"]
+    assert [m for m, _ in _chain(cfg, "agent-free-paid")] == ["z-ai/glm-5.3-flash", "deepseek/deepseek-v4.1-flash"]

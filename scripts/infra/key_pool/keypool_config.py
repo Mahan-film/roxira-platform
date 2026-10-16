@@ -5,6 +5,7 @@ Model ids come from config/models.yaml through model_registry when a spec uses r
 """
 from __future__ import annotations
 
+import copy
 import os
 import pathlib
 import sys
@@ -42,6 +43,7 @@ class Deployment:
     rpm: int | None = None
     tpm: int | None = None
     extra_body: dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)  # per-model litellm_params (e.g. Anthropic cache_control)
 
     @property
     def keyless(self) -> bool:
@@ -141,6 +143,17 @@ def validate_group(name: str, group: dict[str, Any], deps: list[Deployment]) -> 
                 raise PoolError(f"group private must never contain {d.provider}/{d.model} (may_log or free)")
 
 
+def merge_dicts(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
+    """Deep copy of base with extra merged over it (nested dicts merge, anything else is replaced)."""
+    out = copy.deepcopy(base)
+    for k, v in (extra or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = merge_dicts(out[k], v)
+        else:
+            out[k] = copy.deepcopy(v)
+    return out
+
+
 def group_deployments(
     pool: dict[str, Any], group: str, names: set[str] | None = None, models_path: pathlib.Path | None = None
 ) -> list[Deployment]:
@@ -176,7 +189,8 @@ def group_deployments(
                         base_url=prov["base_url"], litellm_prefix=prov["litellm_prefix"], key_env=k,
                         model=model, order=rank, mode=spec.get("mode"), api_base=api_base,
                         rpm=_num(lim.get("rpm")), tpm=_num(lim.get("tpm")),
-                        extra_body=dict(prov.get("extra_body") or {}),
+                        extra_body=merge_dicts(prov.get("extra_body") or {}, spec.get("extra_body") or {}),
+                        params=copy.deepcopy(spec.get("litellm_params") or {}),
                     )
                 )
     validate_group(group, g, out)
