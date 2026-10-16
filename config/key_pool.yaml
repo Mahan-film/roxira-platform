@@ -307,6 +307,20 @@ groups:
     providers: [openrouter-private]
     fallback: [best-product-free]
 
+  vip-pro:   # PRO plan: strong paid models (product key, no_train), then the basic paid model, then free ladder
+    description: Smart Judge PRO plan answers.
+    providers: [openrouter-private]
+    models:
+      openrouter-private: [{role: product_pro}]
+    fallback: [vip-product]
+
+  vip-premium:   # PREMIUM plan: world-best models, then PRO
+    description: Smart Judge PREMIUM plan answers.
+    providers: [openrouter-private]
+    models:
+      openrouter-private: [{role: product_premium}]
+    fallback: [vip-pro]
+
   best-all:   # the same idea for agents and tools (public work only: free tiers may log)
     description: Cross-provider quality ladder for agents, ending on paid DeepSeek.
     ordered: true

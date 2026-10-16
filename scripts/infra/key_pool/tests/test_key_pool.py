@@ -266,3 +266,12 @@ def test_free_ladder_has_no_paid_step_and_vip_is_paid_first():
     vip = [m for m in cfg["model_list"] if m["model_name"] == "vip-product"]
     assert vip and all(m["model_info"]["tier"] == "paid" for m in vip)
     assert fb["vip-product"] == ["best-product-free"]          # never stops when credit runs out
+
+
+def test_plan_groups_chain_down_to_free():
+    import render_litellm
+    cfg = render_litellm.render(kc.load_pool(), names={"OPENROUTER_API_KEY", "GEMINI_API_KEY", "KEYPOOL_MASTER_KEY"})
+    fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
+    assert fb["vip-premium"] == ["vip-pro"] and fb["vip-pro"] == ["vip-product"] and fb["vip-product"] == ["best-product-free"]
+    prem = {m["litellm_params"]["model"] for m in cfg["model_list"] if m["model_name"] == "vip-premium"}
+    assert "openrouter/anthropic/claude-opus-5" in prem
