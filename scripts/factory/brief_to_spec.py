@@ -31,6 +31,7 @@ GATEWAY_URL = os.environ.get("AGENT_GATEWAY_URL", "http://127.0.0.1:4000/v1") + 
 REPO_ENV = os.environ.get("ROXIRA_REPO_ENV", "/opt/roxira_platform/.env")
 TASKQ = os.environ.get("TASKQ_BIN", "/opt/roxira_platform/scripts/infra/server_agents/taskq.py")
 NOTIFY = os.environ.get("NOTIFY_PY", "/opt/roxira_platform/scripts/ops/notify/notify.py")
+HOUSE_STACK = os.environ.get("FACTORY_HOUSE_STACK", "/opt/roxira_platform/docs/factory/HOUSE_STACK.md")
 RESEARCH_TIMEOUT = 25 * 60
 LLM_TIMEOUT = 600
 REPORT_LIMIT = 12000
@@ -262,6 +263,9 @@ def cmd_spec(slug: str, post=post_json, key=None) -> int:
         print("KEYPOOL_MASTER_KEY not available", file=sys.stderr)
         return 1
     parts = [SPEC_PROMPT, "\n\n# BRIEF\n" + brief]
+    if os.path.exists(HOUSE_STACK):  # options and the recommendation must start from what we already run
+        parts.append("\n\n# HOUSE STACK (option 1 must be built on this; deviate only with a stated hard reason)\n"
+                     + _read(HOUSE_STACK))
     for name in QUESTIONS:
         path = os.path.join(pdir, "research", f"{name}.md")
         text = _read(path)[:REPORT_LIMIT] if os.path.exists(path) else "(research failed or missing)"
