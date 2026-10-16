@@ -547,6 +547,7 @@ async def complete(
     feature: str | None = None,
     timeout: float | None = None,
     max_retries: int | None = None,
+    plan: str | None = None,
     **params: Any,
 ) -> LLMResult:
     """Run one chat completion through the tiered OpenRouter router.
@@ -557,6 +558,10 @@ async def complete(
     are rejected so callers cannot bypass the tier lists. ``timeout`` (seconds
     per attempt) and ``max_retries`` override LLM_TIMEOUT_SECONDS and
     LLM_MAX_RETRIES for latency-sensitive callers such as voice.
+
+    ``plan`` ("VIP"/"FREE") picks the gateway group (``llm_gateway.model_for``). A plan that
+    may not use paid models never falls back to the direct OpenRouter path: the call
+    raises ``LLMRouterError`` instead. ``plan=None`` keeps the historical behaviour.
     """
     if "model" in params or "models" in params:
         raise ValueError("pass a tier, not model/models; configure models via LLM_TIER_*")
@@ -589,7 +594,7 @@ async def complete(
         gw_body: dict[str, Any] = {
             k: v for k, v in params.items() if k not in ("models", "provider")
         }
-        gw_body["model"] = llm_gateway.model()
+        gw_body["model"] = llm_gateway.model_for(plan)
         gw_body["messages"] = messages
         # No OpenRouter-only `reasoning`/`usage` here: Groq and Mistral reject unknown body fields (HTTP 400).
         gw_body.pop("usage", None)
@@ -601,19 +606,24 @@ async def complete(
         except _CallFailed as exc:
             log.warning(
                 "key-pool gateway call failed (model=%s status=%s); falling back to direct OpenRouter",
-                llm_gateway.model(), exc.status,
+                llm_gateway.model_for(plan), exc.status,
             )
         else:
             result = _parse_result(data, tier, attempts)
-            llm_gateway.log_served("gateway", result.model or llm_gateway.model())
+            llm_gateway.log_served("gateway", result.model or llm_gateway.model_for(plan))
             _log_usage_background(
-                _usage_record(base, result, [llm_gateway.model()], t0, "ok", 200)
+                _usage_record(base, result, [llm_gateway.model_for(plan)], t0, "ok", 200)
             )
             if key and result.content:
                 cached = asdict(result)
                 cached.pop("raw", None)
                 await _cache_set(key, cached)
             return result
+
+    if plan is not None and not llm_gateway.may_use_paid(plan):
+        failed = LLMResult(content="", model="", tier=tier, attempts=0)
+        _log_usage_background(_usage_record(base, failed, models, t0, "error", None))
+        raise LLMRouterError("free plan: gateway unavailable and paid fallback disabled", status=None, tier=tier)
 
     total_attempts = 0
     while True:

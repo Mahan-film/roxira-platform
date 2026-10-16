@@ -1795,7 +1795,7 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
     # failure here (network/5xx/timeout) falls back to the direct path below.
     if _gateway_ready():
         gw_outcome = await _chat_fast.stream_with_fallback(
-            [(_llm_gateway.model(), CHAT_TTFT_FAST_S)],
+            [(_llm_gateway.model_for(selected_tier), CHAT_TTFT_FAST_S)],
             _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, {}, gateway=True),
             on_delta, total_timeout=CHAT_LLM_TOTAL_S,
         )
@@ -1803,7 +1803,14 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
             _llm_gateway.log_served("gateway", gw_outcome.model)
             return gw_outcome, "ok"
         print(f"[LLM-UNAVAILABLE] provider=key-pool-gateway status=None "
-              f"model={_llm_gateway.model()} kind=gateway_fallback", file=sys.stderr)
+              f"model={_llm_gateway.model_for(selected_tier)} kind=gateway_fallback", file=sys.stderr)
+
+    # Owner rule: free users (guest + logged-in without VIP) never reach a paid model.
+    # SMARTJUDGE_FREE_PAID_FALLBACK=1 restores the old direct-OpenRouter fallback.
+    if _llm_gateway is None or not _llm_gateway.may_use_paid(selected_tier):
+        print("[LLM-UNAVAILABLE] provider=key-pool-gateway status=None model=None kind=free_no_paid",
+              file=sys.stderr)
+        return _chat_fast.StreamOutcome(), "free_no_paid"
 
     plan = _chat_model_plan(selected_tier, is_voice)
     keys = _llm_api_keys()
@@ -1911,6 +1918,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         return chat_auth.error_json(400, chat_auth.MSG_CHAT_TOO_LONG, code="MESSAGE_TOO_LONG", label="ERROR")
     if not user_text:
         return JSONResponse({"status": "ERROR", "message": "متن درخواست الزامی است."}, status_code=400)
+    client_ip_for_limits = chat_auth.request_ip(request) if request is not None else "unknown"
     if not user.authenticated:
         # TODO: per-IP counters are per worker unless REDIS_HOST/REDIS_URL is set
         ok, left = await chat_auth.acheck_limit("chat-anon", chat_auth.request_ip(request), chat_auth.chat_anon_hourly_limit()) \
@@ -2018,6 +2026,14 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             prob=None, draft=None, laws=[], precedents=[], court_suggestion=None, case_file_refs=[],
             model=cfg["primary_model"], tier=selected_tier, t0=t0, clarification_needed=court_missing,
         )
+
+    # Daily fair-use / upsell limit (fixed 24 h). Counted only for real answered questions:
+    # the fast-path replies above already returned, and the count is refunded if no answer is produced.
+    daily_key, daily_limit, daily_kind = chat_auth.daily_chat_key(user, client_ip_for_limits)
+    daily_ok, daily_left = await asyncio.to_thread(chat_auth.count_daily_chat, daily_key, daily_limit)
+    if not daily_ok:
+        await asyncio.to_thread(chat_auth.decr, daily_key)
+        return chat_auth.daily_limit_response(daily_kind, daily_left)
 
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     _t_retrieval = time.perf_counter()
@@ -2157,12 +2173,13 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                     feature="consult_voice" if is_voice else "consult",
                     timeout=16.0,
                     max_retries=1,
+                    plan=selected_tier,
                     temperature=temperature,
                     max_tokens=chosen_max_tokens,
                 )
                 reply_msg = routed.content
                 routed_model = routed.model or None
-                if not is_voice and _answer_escalation.enabled():
+                if not is_voice and _answer_escalation.enabled() and _llm_gateway.may_use_paid(selected_tier):
                     # B3: flag-gated, one strong-tier re-ask on a deterministic quality trigger.
                     esc = await _answer_escalation.maybe_escalate(
                         reply=reply_msg, messages=messages_payload, user_text=user_text,
@@ -2208,8 +2225,17 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             reply_msg, report.get("validated_articles") or []
         )
 
-    # No canned "answers": when every provider failed the caller gets a 503, never a fake reply.
     if not reply_msg:
+        await asyncio.to_thread(chat_auth.decr, daily_key)  # unanswered: does not use up the daily quota
+        if _llm_gateway is not None and not _llm_gateway.may_use_paid(selected_tier):
+            # Free tier, free models exhausted: friendly upsell instead of a paid model or a 503.
+            return _consult_body(
+                conv_id=conv_id or str(uuid.uuid4()), reply=_llm_gateway.UPSELL_MESSAGE, prob=None, draft=None,
+                laws=[], precedents=[], court_suggestion=None, case_file_refs=[],
+                model=cfg["primary_model"], tier=selected_tier, t0=t0,
+                upsell=True, plans_url=_llm_gateway.PLANS_URL,
+            )
+        # No canned "answers": when every provider failed the caller gets a 503, never a fake reply.
         return _llm_unavailable_response()
 
     reply_msg = _chat_safety.to_latin_digits(reply_msg)
@@ -4218,7 +4244,7 @@ async def chat_stream(request: Request, payload: dict = Body(default=None)):
         last_error = None
         attempts = []
         if _gateway_ready():  # free-first key-pool gateway first, direct models as fallback
-            attempts.append((_llm_gateway.model(), True))
+            attempts.append((_llm_gateway.model_for("VIP"), True))  # route is VIP-gated
         attempts += [(cfg["primary_model"], False), (cfg["fallback_model"], False)]
         for model, via_gateway in attempts:
             usage_out: dict = {}

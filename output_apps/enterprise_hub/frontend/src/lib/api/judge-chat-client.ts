@@ -78,6 +78,8 @@ export interface ChatFailure {
   kind: ChatFailureKind;
   message: string;
   retryable: boolean;
+  /** Daily free limit hit: show the upgrade card ("login" = guest, offer login first). */
+  upsell?: "login" | "upgrade";
 }
 
 function serverMessage(data: unknown): string | null {
@@ -99,6 +101,15 @@ export function failureFromResponse(status: number, data: unknown): ChatFailure 
     };
   }
   if (status === 429) {
+    const body = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+    if (body.code === "LOGIN_OR_UPGRADE" || body.code === "UPGRADE_REQUIRED" || body.upsell === true) {
+      return {
+        kind: "rate",
+        message: msg ?? "سقف پرسش‌های رایگان امروز شما تمام شد.",
+        retryable: false,
+        upsell: body.code === "LOGIN_OR_UPGRADE" ? "login" : "upgrade",
+      };
+    }
     return {
       kind: "rate",
       message: msg ?? "تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً چند دقیقه بعد دوباره تلاش کنید.",

@@ -54,6 +54,21 @@ def chat_anon_hourly_limit() -> int:
     return _int_env("CHAT_ANON_HOURLY_LIMIT", 10)
 
 
+DAY_SECONDS = 86400
+
+
+def chat_anon_daily_limit() -> int:
+    return _int_env("CHAT_ANON_DAILY_LIMIT", 5)
+
+
+def chat_free_daily_limit() -> int:
+    return _int_env("CHAT_FREE_DAILY_LIMIT", 20)
+
+
+def chat_vip_daily_limit() -> int:
+    return _int_env("CHAT_VIP_DAILY_LIMIT", 300)
+
+
 def voice_anon_hourly_limit() -> int:
     return _int_env("VOICE_ANON_HOURLY_LIMIT", 5)
 
@@ -407,6 +422,46 @@ def rate_limited(retry_after: int, *, label: str = "error", anonymous: bool = Fa
         label=label,
         headers={"Retry-After": str(retry_after)},
         retry_after=retry_after,
+    )
+
+
+def daily_chat_key(user: "CurrentUser", ip: str) -> tuple[str, int, str]:
+    """(redis key, limit, kind) for the 24 h answered-question counter; kind is guest/free/vip."""
+    if not user.authenticated:
+        return f"rl:chat-day:guest:{ip}", chat_anon_daily_limit(), "guest"
+    if user.tier == "VIP":
+        return f"rl:chat-day:vip:{user.phone or ''}", chat_vip_daily_limit(), "vip"
+    return f"rl:chat-day:free:{user.phone or ''}", chat_free_daily_limit(), "free"
+
+
+def count_daily_chat(key: str, limit: int) -> tuple[bool, int]:
+    """Count one answered question in a fixed 24 h window. Returns (allowed, retry_after_s)."""
+    count, left = incr(key, DAY_SECONDS)
+    return (count <= limit), left
+
+
+MSG_UPGRADE_FREE = (
+    "سقف پرسش‌های رایگان امروز شما تمام شد. برای ادامهٔ گفتگو و دسترسی به مدل‌های قوی‌تر، "
+    "اشتراک ویژه تهیه کنید یا فردا دوباره تلاش کنید."
+)
+MSG_UPGRADE_GUEST = (
+    "سقف پرسش‌های رایگان امروز شما به‌عنوان مهمان تمام شد. برای ادامه ابتدا وارد حساب کاربری شوید "
+    "یا اشتراک ویژه تهیه کنید."
+)
+MSG_DAILY_FAIR_USE = "سقف استفادهٔ منصفانهٔ روزانهٔ شما تمام شد. لطفاً فردا دوباره تلاش کنید."
+
+
+def daily_limit_response(kind: str, retry_after: int, *, label: str = "ERROR") -> JSONResponse:
+    retry_after = max(1, int(retry_after))
+    if kind == "vip":
+        return error_json(429, MSG_DAILY_FAIR_USE, code="DAILY_LIMIT", label=label,
+                          headers={"Retry-After": str(retry_after)}, retry_after=retry_after)
+    guest = kind == "guest"
+    return error_json(
+        429, MSG_UPGRADE_GUEST if guest else MSG_UPGRADE_FREE,
+        code="LOGIN_OR_UPGRADE" if guest else "UPGRADE_REQUIRED", label=label,
+        headers={"Retry-After": str(retry_after)}, retry_after=retry_after,
+        plans_url="/plans", upsell=True,
     )
 
 

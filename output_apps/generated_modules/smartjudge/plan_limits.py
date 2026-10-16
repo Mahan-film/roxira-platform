@@ -28,6 +28,11 @@ def get_plan_limits() -> dict[str, Any]:
             "free": None,
             "vip": None,
         },
+        "chat_messages_per_day": {
+            "guest": chat_auth.chat_anon_daily_limit(),
+            "free": chat_auth.chat_free_daily_limit(),
+            "vip": chat_auth.chat_vip_daily_limit(),
+        },
         "voice_requests_per_hour": {
             "guest": chat_auth.voice_anon_hourly_limit(),
             "free": chat_auth.voice_auth_hourly_limit(),

@@ -2,6 +2,7 @@
 
 export interface PlanLimits {
   chat_messages_per_hour: Record<"guest" | "free" | "vip", number | null>;
+  chat_messages_per_day?: Record<"guest" | "free" | "vip", number | null>;
   voice_requests_per_hour: Record<"guest" | "free" | "vip", number | null>;
   file_uploads_per_day: Record<"guest" | "free" | "vip", number | null>;
   max_file_mb: number;

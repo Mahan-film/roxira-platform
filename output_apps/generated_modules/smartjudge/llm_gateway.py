@@ -10,6 +10,12 @@ container ``roxira_keypool``, port 4000).
                                   OpenRouter directly, nothing changes.
     SMARTJUDGE_LLM_GATEWAY_MODEL  gateway group name (default "agent-strong-free";
                                   the gateway itself falls back to paid DeepSeek).
+    SMARTJUDGE_LLM_GATEWAY_MODEL_FREE  group for guests/free users (default "best-product-free").
+    SMARTJUDGE_LLM_GATEWAY_MODEL_VIP   group for subscribers (default "vip-product").
+                                  If neither tier var is set and the legacy MODEL var is set,
+                                  the legacy value serves both tiers (backward compatible).
+    SMARTJUDGE_FREE_PAID_FALLBACK 1 = free users may fall back to the direct paid OpenRouter
+                                  path when the gateway fails (old behaviour; default off).
     KEYPOOL_MASTER_KEY            gateway auth, sent as the OpenAI api key.
 
 This module never makes a network call and never logs a key. Callers keep their
@@ -27,6 +33,11 @@ logger = logging.getLogger("llm_gateway")
 
 ENV_GATEWAY = "SMARTJUDGE_LLM_GATEWAY"
 ENV_MODEL = "SMARTJUDGE_LLM_GATEWAY_MODEL"
+ENV_MODEL_FREE = "SMARTJUDGE_LLM_GATEWAY_MODEL_FREE"
+ENV_MODEL_VIP = "SMARTJUDGE_LLM_GATEWAY_MODEL_VIP"
+ENV_FREE_PAID_FALLBACK = "SMARTJUDGE_FREE_PAID_FALLBACK"
+DEFAULT_MODEL_FREE = "best-product-free"
+DEFAULT_MODEL_VIP = "vip-product"
 ENV_API_KEY = "KEYPOOL_MASTER_KEY"
 DEFAULT_MODEL = "agent-strong-free"
 
@@ -39,6 +50,39 @@ def base_url() -> str:
 def model() -> str:
     """Gateway group to ask for (default ``agent-strong-free``)."""
     return os.environ.get(ENV_MODEL, "").strip() or DEFAULT_MODEL
+
+
+def is_vip(tier: str | None) -> bool:
+    return str(tier or "").upper() == "VIP"
+
+
+def model_for(tier: str | None) -> str:
+    """Gateway group for a plan: VIP -> paid-capable group, everyone else -> free-only group."""
+    vip = is_vip(tier)
+    specific = os.environ.get(ENV_MODEL_VIP if vip else ENV_MODEL_FREE, "").strip()
+    if specific:
+        return specific
+    other = os.environ.get(ENV_MODEL_FREE if vip else ENV_MODEL_VIP, "").strip()
+    legacy = os.environ.get(ENV_MODEL, "").strip()
+    if legacy and not other:
+        return legacy
+    return DEFAULT_MODEL_VIP if vip else DEFAULT_MODEL_FREE
+
+
+def free_paid_fallback_allowed() -> bool:
+    """Kill switch: SMARTJUDGE_FREE_PAID_FALLBACK=1 lets free users reach paid models again."""
+    return os.environ.get(ENV_FREE_PAID_FALLBACK, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def may_use_paid(tier: str | None) -> bool:
+    return is_vip(tier) or free_paid_fallback_allowed()
+
+
+UPSELL_MESSAGE = (
+    "در حال حاضر تقاضا بسیار زیاد است و پاسخ‌گویی رایگان موقتاً شلوغ است. "
+    "لطفاً یک دقیقه دیگر دوباره تلاش کنید. کاربران دارای اشتراک ویژه در این شرایط اولویت دارند."
+)
+PLANS_URL = "/plans"
 
 
 def api_key() -> str:

@@ -31,6 +31,9 @@ export interface ChatDoneBody {
   conversation_id?: string;
   reply?: string;
   response?: string;
+  /** Free tier is busy or limited: show the upgrade card (server sets plans_url). */
+  upsell?: boolean;
+  plans_url?: string;
   defense_draft?: string;
   success_probability?: string;
   statutory_basis?: unknown[];

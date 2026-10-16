@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { UpgradeCard } from "@/components/chat/upgrade-card";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -130,6 +131,8 @@ type ChatMessage = {
   retryPrompt?: string;
   /** Idempotency id of the failed question; a manual retry reuses it. */
   retryRequestId?: string;
+  /** Free-tier limit or busy notice: render the upgrade card under this bubble. */
+  upsell?: "login" | "upgrade";
   /** Finished draft rendered as a result card under this bubble. */
   draftResult?: DraftResult;
   /** Feature name: render the VIP lock card (real prices + login/upgrade) under this bubble. */
@@ -624,6 +627,7 @@ export function ChatShell() {
     role: "assistant",
     content: failure.message,
     isError: true,
+    upsell: failure.upsell,
     retryPrompt: failure.retryable ? prompt : undefined,
     retryRequestId: failure.retryable ? requestId : undefined,
   });
@@ -698,6 +702,11 @@ export function ChatShell() {
         return;
       }
       clearPending();
+      if (data.upsell === true) {
+        // Free models are busy: friendly notice plus upgrade card; kept out of the chat history.
+        finish({ role: "assistant", content: reply, isError: true, upsell: "upgrade", retryPrompt: textToSend, retryRequestId: newRequestId() });
+        return;
+      }
       if (data.conversation_id && !conversationId) {
         setConversationId(data.conversation_id);
       }
@@ -1130,6 +1139,19 @@ export function ChatShell() {
                     {msg.files.length.toLocaleString("fa-IR")} فایل: {msg.files.join("، ")}
                   </span>
                 </p>
+              )}
+
+              {msg.upsell && (
+                <UpgradeCard
+                  showLogin={msg.upsell === "login" || !isAuthenticated}
+                  onLogin={() =>
+                    openLogin({
+                      serviceDomain: "GHAZI",
+                      title: "ورود به قاضی هوشمند",
+                      description: "کد تأیید به شمارهٔ همراه شما پیامک می‌شود.",
+                    })
+                  }
+                />
               )}
 
               {msg.isError && msg.retryPrompt && (

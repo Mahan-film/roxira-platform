@@ -35,6 +35,10 @@ function perHour(n: number | null): string {
   return n === null ? "سقف ساعتی خاصی اعمال نمی‌شود" : `تا ${fa(n)} بار در ساعت`;
 }
 
+function perChatDay(n: number | null): string {
+  return n === null ? "—" : `تا ${fa(n)} پرسش در روز`;
+}
+
 function perDay(n: number | null): string {
   if (n === null) return "—";
   return n === 0 ? "نیاز به ورود دارد" : `تا ${fa(n)} فایل در روز`;
@@ -54,6 +58,18 @@ function buildRows(l: PlanLimits): Array<{ label: string; cells: [string, string
         perHour(l.chat_messages_per_hour.vip),
       ],
     },
+    ...(l.chat_messages_per_day
+      ? [
+          {
+            label: "پرسش در روز",
+            cells: [
+              perChatDay(l.chat_messages_per_day.guest),
+              perChatDay(l.chat_messages_per_day.free),
+              perChatDay(l.chat_messages_per_day.vip),
+            ] as [string, string, string],
+          },
+        ]
+      : []),
     {
       label: "صدا (میکروفون و مکالمه زنده)",
       cells: [perHour(l.voice_requests_per_hour.guest), perHour(l.voice_requests_per_hour.free), perHour(l.voice_requests_per_hour.vip)],
