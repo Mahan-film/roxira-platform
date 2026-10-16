@@ -1,0 +1,10 @@
+[Unit]
+Description=Run multi-project deploy every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

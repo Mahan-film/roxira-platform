@@ -1,0 +1,16 @@
+# Example product manifest. Copy to <name>.yaml (file name == `name`). Disabled by default:
+# `projectctl.py deploy-all` ignores it until enabled: true.
+name: example
+repo: https://github.com/example-org/example-product.git   # https or ssh (git@host:org/repo.git)
+branch: main
+domains:                     # DNS A/AAAA (or Cloudflare proxied) must point at the proxy server
+  - example.com
+  - www.example.com
+compose_file: docker-compose.yml     # path inside the repo
+service: app                         # compose service that serves HTTP (joins projects_net)
+port: 3000                           # container port of that service
+health_url: https://example.com/api/health   # must return 2xx/3xx after a deploy
+env_file: /srv/projects/example/.env         # created by `create`, mode 600, never printed
+db_name: example                     # database AND role name on projects_postgres
+migrate_command: npm run db:migrate  # optional; run in a one-off container before the switch
+enabled: false

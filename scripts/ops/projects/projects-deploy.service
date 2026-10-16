@@ -1,0 +1,12 @@
+# Multi-project deploy (F5). Installed by scripts/ops/projects/install.sh. Independent of
+# roxira-autodeploy. See docs/ops/PROJECTS.md.
+[Unit]
+Description=Deploy enabled product projects with new commits
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/projects/projectctl.py deploy-all
+Nice=10
+TimeoutStartSec=3600
