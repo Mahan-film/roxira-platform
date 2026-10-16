@@ -1,0 +1,34 @@
+{
+ "_meta": {
+  "purpose": "Retrieval golden cases for the Malaysian internal-evaluation collection my_laws_eval_v1 (global product G2). Run with: python3 scripts/eval_chat_golden.py --retrieval-only --retrieval-set scripts/global/my_law/golden_my_law.json (point the retrieval engine at my_laws_eval_v1 first, see README.md).",
+  "status": "DRAFT, verify against the official text",
+  "matching": "same as data/eval/chat_golden/retrieval_golden_new_laws.json: a case passes when a retrieved row's law_name contains one of law_any and its article_no (letter suffix dropped) is in articles. Written from general knowledge of where these rules live; every section number must be checked by a Malaysian lawyer / against the official reprint before it counts as ground truth."
+ },
+ "cases": [
+  {"id": "my-limit-contract", "question": "What is the limitation period for an action founded on contract?", "law_any": ["Limitation Act 1953"], "articles": [6]},
+  {"id": "my-limit-land", "question": "How long do I have to bring an action to recover land?", "law_any": ["Limitation Act 1953"], "articles": [9]},
+  {"id": "my-contract-valid", "question": "What makes an agreement a contract: free consent, competent parties, lawful consideration and object?", "law_any": ["Contracts Act 1950"], "articles": [10]},
+  {"id": "my-contract-fraud", "question": "What is fraud for the purposes of a contract and what are its effects?", "law_any": ["Contracts Act 1950"], "articles": [17]},
+  {"id": "my-contract-restraint-trade", "question": "Is a contract in restraint of trade enforceable?", "law_any": ["Contracts Act 1950"], "articles": [28]},
+  {"id": "my-contract-damages", "question": "What compensation can a party claim when the other party breaks the contract, including a penalty or liquidated damages clause?", "law_any": ["Contracts Act 1950"], "articles": [74]},
+  {"id": "my-sra-performance", "question": "When can the court order specific performance of a contract?", "law_any": ["Specific Relief Act 1950"], "articles": [11]},
+  {"id": "my-cla-english-law", "question": "When does English common law and equity apply in Malaysia?", "law_any": ["Civil Law Act 1956"], "articles": [3]},
+  {"id": "my-cla-interest", "question": "Can the court award interest on a debt or damages?", "law_any": ["Civil Law Act 1956"], "articles": [11]},
+  {"id": "my-cla-death-dependants", "question": "Can the dependants of a person killed by a wrongful act claim compensation?", "law_any": ["Civil Law Act 1956"], "articles": [7]},
+  {"id": "my-evidence-burden", "question": "Who has the burden of proof in a civil case?", "law_any": ["Evidence Act 1950"], "articles": [101]},
+  {"id": "my-evidence-written-terms", "question": "Can oral evidence be used to vary the terms of a contract that has been reduced to writing?", "law_any": ["Evidence Act 1950"], "articles": [91, 92]},
+  {"id": "my-evidence-computer", "question": "When is a document produced by a computer admissible as evidence?", "law_any": ["Evidence Act 1950"], "articles": [90], "note": "expected section is 90A; the matcher drops the letter suffix"},
+  {"id": "my-cja-high-court", "question": "What is the civil jurisdiction of the High Court?", "law_any": ["Courts of Judicature Act 1964"], "articles": [23]},
+  {"id": "my-cja-federal-leave", "question": "What are the conditions for appealing to the Federal Court and when is leave needed?", "law_any": ["Courts of Judicature Act 1964"], "articles": [96]},
+  {"id": "my-ea-maternity", "question": "How many days of maternity leave is an employee entitled to?", "law_any": ["Employment Act 1955"], "articles": [37]},
+  {"id": "my-ea-annual-leave", "question": "How much paid annual leave is an employee entitled to?", "law_any": ["Employment Act 1955"], "articles": [60], "note": "expected section is 60E; the matcher drops the letter suffix"},
+  {"id": "my-ira-reinstatement", "question": "What can a dismissed employee do to claim reinstatement for dismissal without just cause or excuse?", "law_any": ["Industrial Relations Act 1967"], "articles": [20]},
+  {"id": "my-lrmda-matrimonial-assets", "question": "How does the court divide matrimonial assets on divorce between non-Muslims?", "law_any": ["Law Reform (Marriage and Divorce) Act 1976"], "articles": [76]},
+  {"id": "my-lrmda-breakdown", "question": "What are the grounds that prove the breakdown of a marriage for divorce?", "law_any": ["Law Reform (Marriage and Divorce) Act 1976"], "articles": [54]},
+  {"id": "my-lrmda-custody", "question": "Who gets custody of the children after a divorce?", "law_any": ["Law Reform (Marriage and Divorce) Act 1976"], "articles": [88]},
+  {"id": "my-wills-formalities", "question": "What formalities make a will valid: writing, signature and witnesses?", "law_any": ["Wills Act 1959"], "articles": [5]},
+  {"id": "my-nlc-indefeasibility", "question": "Is the registered owner's title indefeasible?", "law_any": ["National Land Code"], "articles": [340]},
+  {"id": "my-nlc-chargee-sale", "question": "How can a chargee apply to sell charged land when the borrower defaults?", "law_any": ["National Land Code"], "articles": [256]},
+  {"id": "my-companies-directors-duties", "question": "What are a company director's duties to act in good faith in the best interests of the company?", "law_any": ["Companies Act 2016"], "articles": [213]}
+ ]
+}

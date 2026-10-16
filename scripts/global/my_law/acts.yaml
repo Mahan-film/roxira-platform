@@ -1,0 +1,35 @@
+# Pilot Acts for global product G2 (INTERNAL EVALUATION ONLY, see README.md).
+# Source of the list: docs/research/global/2026-10-16_malaysia_legislation_reuse.md.
+# Act numbers come from that research and are NOT yet confirmed on the official portal
+# (confirm: true). The hub fills `url` (and `url_pattern`) after reading the portal terms;
+# fetch_acts.py skips every Act whose url is null.
+source_portal: https://lom.agc.gov.my/
+url_pattern: null   # hub fills in, e.g. a template with {act_no}; a per-Act `url` wins when set
+acts:
+  - {act_no: 136, title: "Contracts Act 1950", url: null, confirm: true}
+  - {act_no: 137, title: "Specific Relief Act 1950", url: null, confirm: true}
+  - {act_no: 254, title: "Limitation Act 1953", url: null, confirm: true}
+  - {act_no: 67, title: "Civil Law Act 1956", url: null, confirm: true}
+  - {act_no: 56, title: "Evidence Act 1950", url: null, confirm: true}
+  - {act_no: 91, title: "Courts of Judicature Act 1964", url: null, confirm: true}
+  - {act_no: 265, title: "Employment Act 1955", url: null, confirm: true}
+  - {act_no: 177, title: "Industrial Relations Act 1967", url: null, confirm: true}
+  - {act_no: 135, title: "Partnership Act 1961", url: null, confirm: true}
+  - {act_no: 164, title: "Law Reform (Marriage and Divorce) Act 1976", url: null, confirm: true}
+  - {act_no: 303, title: "Islamic Family Law (Federal Territories) Act 1984", url: null, confirm: true}
+  - {act_no: 97, title: "Probate and Administration Act 1959", url: null, confirm: true}
+  - {act_no: 346, title: "Wills Act 1959", url: null, confirm: true}
+  - {act_no: 318, title: "Strata Titles Act 1985", url: null, confirm: true}
+  - {act_no: 757, title: "Strata Management Act 2013", url: null, confirm: true}
+  - {act_no: 828, title: "National Land Code", url: null, confirm: true}
+  - {act_no: 118, title: "Housing Development (Control and Licensing) Act 1966", url: null, confirm: true}
+  - {act_no: 363, title: "Control of Rent Act 1966", url: null, confirm: true}
+  - {act_no: 212, title: "Hire-Purchase Act 1967", url: null, confirm: true}
+  - {act_no: 777, title: "Companies Act 2016", url: null, confirm: true}
+# Named in the research as later candidates. NOT fetched; fetch_acts.py ignores this list.
+candidates:
+  - {act_no: 574, title: "Penal Code"}
+  - {act_no: 593, title: "Criminal Procedure Code"}
+  - {act_no: 360, title: "Insolvency Act 1967"}
+  - {act_no: 378, title: "Stamp Act 1949"}
+  - {act_no: 208, title: "Trustee Act 1949"}

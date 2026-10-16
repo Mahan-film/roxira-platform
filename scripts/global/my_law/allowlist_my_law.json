@@ -1,0 +1,26 @@
+{
+  "_comment": "Allowlist for scripts/legal/ingest_pipeline.py validate/apply of the Malaysian INTERNAL-EVALUATION collection my_laws_eval_v1. Pass with --allowlist. Same format as config/legal_allowlist.json. Must match acts.yaml titles. See scripts/global/my_law/README.md.",
+  "schema_version": 1,
+  "laws": [
+    {"name": "Contracts Act 1950", "status": "present", "enacted": true},
+    {"name": "Specific Relief Act 1950", "status": "present", "enacted": true},
+    {"name": "Limitation Act 1953", "status": "present", "enacted": true},
+    {"name": "Civil Law Act 1956", "status": "present", "enacted": true},
+    {"name": "Evidence Act 1950", "status": "present", "enacted": true},
+    {"name": "Courts of Judicature Act 1964", "status": "present", "enacted": true},
+    {"name": "Employment Act 1955", "status": "present", "enacted": true},
+    {"name": "Industrial Relations Act 1967", "status": "present", "enacted": true},
+    {"name": "Partnership Act 1961", "status": "present", "enacted": true},
+    {"name": "Law Reform (Marriage and Divorce) Act 1976", "status": "present", "enacted": true},
+    {"name": "Islamic Family Law (Federal Territories) Act 1984", "status": "present", "enacted": true},
+    {"name": "Probate and Administration Act 1959", "status": "present", "enacted": true},
+    {"name": "Wills Act 1959", "status": "present", "enacted": true},
+    {"name": "Strata Titles Act 1985", "status": "present", "enacted": true},
+    {"name": "Strata Management Act 2013", "status": "present", "enacted": true},
+    {"name": "National Land Code", "status": "present", "enacted": true},
+    {"name": "Housing Development (Control and Licensing) Act 1966", "status": "present", "enacted": true},
+    {"name": "Control of Rent Act 1966", "status": "present", "enacted": true},
+    {"name": "Hire-Purchase Act 1967", "status": "present", "enacted": true},
+    {"name": "Companies Act 2016", "status": "present", "enacted": true}
+  ]
+}
