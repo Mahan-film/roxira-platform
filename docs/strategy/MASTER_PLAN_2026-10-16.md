@@ -82,19 +82,21 @@ Technology choices for the chassis are made by F3 research runs, not by preferen
 verdicts change for Track G: Stripe/merchant-of-record and the EU AI Act transparency label become
 **required**; usage metering (Lago) and machine payments (x402) stay **later**, only if a product needs them.
 
-## 5. First global products (to be validated by the factory, not assumed)
+## 5. First global products (research run 2026-10-16, reports in `docs/research/global/`)
 
-Each candidate gets a research run and a cheap demand test (landing page + waitlist + a few posts)
-before any build. Ranked by fit with what we already know how to do:
+Each candidate still gets a demand test (landing page + waitlist + posts) before a full build.
 
-| # | Candidate | Why us | Demand signal to test |
+| Rank | Candidate | Research verdict | Next step |
 | --- | --- | --- | --- |
-| G1 | **MyInvois e-invoicing assistant for Malaysian SMEs and their accountants** (photo/WhatsApp → validated e-invoice, multi-client view, tax Q&A) | Same problem as Moadian, which we already modelled; the owner is in Malaysia; Phase 4 (SMEs) has applied since 2026-01-01 with penalties deferred to end-2027 (sources disagree on the exemption threshold: RM1M vs RM3M — verify with LHDN) | Accountants' sign-ups; competitor prices (research job `myinvois`) |
-| G2 | **Legal research assistant for an English-language jurisdiction** (start with Malaysia or Singapore public legislation) | Smart Judge's engine (ingest, citations, golden sets, guides) transfers directly | Lawyer/SME sign-ups; open-data licence check (research job `legalai`) |
-| G3 | **AI marketing autopilot for small businesses** | We build F6 for ourselves first; then sell it | Our own results first |
-| G4 | **Custom apps built by the factory (done-for-you)** | Fastest cash, but needs sales calls | Only if G1–G3 are slow |
+| 1 | **G2 — Citation-checked legal research for solo lawyers and small firms, Malaysia first, then other English-language ASEAN jurisdictions** | Strongest. The clearest documented market gap is affordable research for solos/small firms (big tools need 25–50+ seats; Paxton lists $499/user/month). Malaysia's Federal Legislation Portal (AGC) is the official source; courts now require source checking and hallucination controls, which is exactly our citation-guard + golden-set machinery. Sell to **lawyers** (pro tool), not consumers, to stay clear of unauthorised-practice rules. | Verify the AGC portal's reuse terms (open access ≠ automatically licensed for commercial reuse); ingest a pilot set of 20 key Malaysian Acts with the Smart Judge pipeline; landing page + waitlist for Malaysian lawyers. |
+| 2 | G3 — AI marketing autopilot for small businesses | Built for ourselves first (F6); sell only after it works for us. | After F6. |
+| 3 | G1 — MyInvois e-invoicing | **Weaker than assumed.** Since 2026-09-01 the exemption threshold is reported as RM3M (secondary sources; confirm with LHDN), removing >1.1M businesses from the mandate; the space is crowded (Bukku already does WhatsApp/photo capture at RM0–99/month, plus AutoCount, QuickBooks, Odoo, Xero). Remaining niches: one compliance dashboard for accountants across clients on different software, and self-billed e-invoices for importers. | Park; revisit only as a niche add-on. |
+| 4 | G4 — Done-for-you apps from the factory | Fastest cash but needs sales calls. | Only if G2 is slow. |
 
-Research results (running on srv1 since 2026-10-16): `/root/research/2026-10-16/{myinvois,legalai,payments}.json`.
+Payments for the Malaysian company (research `payments`): a **merchant of record** fits low-price B2B/B2C
+SaaS sold worldwide (it collects and remits VAT/GST everywhere; ~5% fees). Paddle pays out in 31
+currencies; Lemon Squeezy pays bank payouts in USD only; Polar runs on Stripe. **All providers screen
+beneficial owners against sanctions lists**, so the adviser check in §3.1 is a hard prerequisite.
 
 ## 6. Track I (Iran) — low-cost growth, mostly automated
 
