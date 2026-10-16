@@ -118,7 +118,7 @@ if [ "$GATEWAY" = 1 ] || [ -n "$TIER" ]; then   # key-pool gateway; --tier picks
   GATEWAY=1
   case "$TIER" in
     light) MODEL_REF="keypool/agent-light-free" ;;
-    best) MODEL_REF="keypool/gemini-best" ;;   # Gemini quality-first ladder over all AI Studio keys
+    best) MODEL_REF="keypool/best-all" ;;   # quality ladder over ALL keys (Gemini x4, Groq x3, Mistral x4, SambaNova)
     *) MODEL_REF="keypool/agent-strong-free" ;;   # default, and --tier strong
   esac
   MODEL_ALIAS=gateway PUBLIC_ONLY=1 KEYVAR=KEYPOOL_MASTER_KEY
@@ -202,6 +202,7 @@ if os.environ["OV_GW"] == "1":   # key-pool gateway as one OpenAI-compatible pro
             "agent-strong-free": {"name": "agent-strong-free"},
             "agent-light-free": {"name": "agent-light-free"},
             "gemini-best": {"name": "gemini-best"},
+            "best-all": {"name": "best-all"},
         }}
     ep = cfg.get("enabled_providers")
     if isinstance(ep, list) and "keypool" not in ep:   # base config whitelists providers; add the gateway
