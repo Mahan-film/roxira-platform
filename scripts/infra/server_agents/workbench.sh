@@ -10,14 +10,15 @@
 # Exit: 0 always, except wrong arguments (2). Callers read "ok" from the JSON / the summary.
 #
 # Groups are chosen only for what changed:
-#   output_apps/enterprise_hub/frontend/**   tsc --noEmit, eslint <changed ts/tsx/js files>
+#   output_apps/enterprise_hub/frontend/**   tsc --noEmit, eslint <changed ts/tsx/js files> (fails only on NEW errors)
 #   output_apps/enterprise_hub/** (not fe)   tsc --noEmit, jest --findRelatedTests <changed files>
 #   *.py                                     ruff (F821,F822,F823,E9 blocking; rest reported), pytest ONLY on changed
 #                                            test files / test_<module>.py next to changed modules, inside
 #                                            scripts/**/tests or smartjudge/tests. NEVER src/ or the repo root.
 #   *.sh                                     bash -n
-# Node groups: node:20-bookworm-slim; python: python:3.12-slim. Worktree mounted read-only at /w; checks run with
-# --network none, --memory 2g, --pids-limit 512, --cap-drop ALL, no-new-privileges, uid 1000, read-only rootfs.
+# Node groups: node:20-bookworm-slim; python: python:3.12-slim. Worktree mounted read-only at /w. Lint groups mount the
+# base versions read-only at /base and fail only on errors that are NOT already present on the base branch.
+# Checks run with --network none, --memory 2g, --pids-limit 512, --cap-drop ALL, no-new-privileges, uid 1000, read-only rootfs.
 # Dependencies live in named volumes keyed by lockfile hash (rx-nm-<dir>-<hash12>, rx-py-<hash12>), populated once
 # by a separate container that is the only one with network (npm ci --ignore-scripts / pip install).
 # Timeouts: 15 min overall, 8 min per group. Env overrides: WB_NODE_IMAGE, WB_PY_IMAGE, WB_GROUP_TIMEOUT, WB_TOTAL_TIMEOUT.
@@ -31,6 +32,8 @@ HUB_DIR="output_apps/enterprise_hub"
 FE_DIR="output_apps/enterprise_hub/frontend"
 PYTEST_DIRS_RE='^(scripts/.*/tests/|output_apps/generated_modules/smartjudge/tests/)'
 TEST_FILE_RE='(^|/)test_[^/]*\.py$|_test\.py$'
+WB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ESLINT_DIFF="$WB_DIR/eslint_diff.py"
 
 log() { printf '[workbench] %s\n' "$*" >&2; }
 die() { printf '[workbench] ERROR: %s\n' "$*" >&2; exit 2; }
@@ -76,9 +79,15 @@ else
 fi
 
 # ---- group selection ----------------------------------------------------------------------------------------
-# Parallel arrays: one entry per check. KIND = node | py | host ; DIR = package dir (node only).
-G_NAME=() G_KIND=() G_DIR=() G_CMD=()
-add_group() { G_NAME+=("$1"); G_KIND+=("$2"); G_DIR+=("$3"); G_CMD+=("$4"); }
+# Parallel arrays: one entry per check. KIND = node | py | lint | host ; DIR = package dir (node/lint only).
+# Lint groups additionally carry G_LCMD (the eslint prefix) and G_LFILES (newline-joined relative files).
+G_NAME=() G_KIND=() G_DIR=() G_CMD=() G_LCMD=() G_LFILES=()
+add_group() { G_NAME+=("$1"); G_KIND+=("$2"); G_DIR+=("$3"); G_CMD+=("$4"); G_LCMD+=(""); G_LFILES+=(""); }
+add_lint_group() { # name dir prefix files...
+  local name="$1" dir="$2" prefix="$3"; shift 3
+  G_NAME+=("$name"); G_KIND+=("lint"); G_DIR+=("$dir"); G_CMD+=("$prefix $(quote_list "$@")")
+  G_LCMD+=("$prefix"); G_LFILES+=("$(printf '%s\n' "$@")")
+}
 quote_list() { local o="" x; for x in "$@"; do o+=" $(printf '%q' "$x")"; done; printf '%s' "${o# }"; }
 exists() { [ -f "$WT/$1" ]; }
 
@@ -111,7 +120,7 @@ done
 if [ "$FE_ALL" = 1 ]; then
   add_group "frontend:tsc" node "$FE_DIR" "npx --no-install tsc --noEmit -p ."
   if [ ${#FE_LINT[@]} -gt 0 ]; then
-    add_group "frontend:eslint" node "$FE_DIR" "npx --no-install eslint $(quote_list "${FE_LINT[@]}")"
+    add_lint_group "frontend:eslint" "$FE_DIR" "npx --no-install eslint" "${FE_LINT[@]}"
   fi
 fi
 if [ "$HUB_ALL" = 1 ]; then
@@ -174,7 +183,7 @@ if [ "$DRY" = 1 ]; then
   echo "changed: ${#CHANGED[@]} file(s)"
   for ((i = 0; i < ${#G_NAME[@]}; i++)); do
     case "${G_KIND[$i]}" in
-      node) img="$NODE_IMAGE" ;; py) img="$PY_IMAGE" ;; *) img="host" ;;
+      node | lint) img="$NODE_IMAGE" ;; py) img="$PY_IMAGE" ;; *) img="host" ;;
     esac
     printf 'GROUP %s | image=%s | dir=%s | cmd=%s\n' "${G_NAME[$i]}" "$img" "${G_DIR[$i]:-.}" "${G_CMD[$i]}"
     record "${G_NAME[$i]}" "${G_CMD[$i]}" skip 0 ""
@@ -190,6 +199,20 @@ START=$SECONDS
 OK=1
 SEQ=0
 hash12() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-12; }
+
+# Write the base-branch version of each relative file into a temp dir that mirrors the package layout, so it can be
+# mounted read-only at /base in the lint container. Files absent on the base (new files) are simply not written.
+build_base() { # $1=outdir $2=package dir $3..=relative files
+  local out="$1" dir="$2"; shift 2
+  local f
+  mkdir -p "$out"
+  for f in "$@"; do
+    if git -c safe.directory='*' -C "$WT" show "$BASE:$dir/$f" >"$TMP/basefile" 2>/dev/null; then
+      mkdir -p "$out/$(dirname "$f")"
+      cp "$TMP/basefile" "$out/$f"
+    fi
+  done
+}
 HARDEN=(--rm --network none --memory 2g --memory-swap 2g --pids-limit 512 --cap-drop ALL
   --security-opt no-new-privileges --read-only --user 1000:1000 --tmpfs /tmp:rw,exec,nosuid,size=256m,mode=1777
   -e HOME=/tmp)
@@ -264,6 +287,42 @@ run_group() { # index
         -e NEXT_TELEMETRY_DISABLED=1 -e CI=1 "$NODE_IMAGE" bash -c \
         "set -e; tar -C /w/$dir $excl -cf - . | tar -C /work -xf -; ln -s /cache/node_modules /work/node_modules; $cmd" \
         >"$out" 2>&1 || rc=$? ;;
+    lint)
+      command -v docker >/dev/null 2>&1 || { echo "docker unavailable" >"$out"; record "$name" "$cmd" fail 0 "$out"; OK=0; return; }
+      if ! { ensure_image "$NODE_IMAGE" && ensure_nm "$dir"; } 2>>"$out"; then
+        { echo "${NM_FAIL:-setup failed}"; tail -n 40 "$TMP/populate.log" 2>/dev/null || true; } >>"$out"
+        case "$NM_FAIL" in skip:*) status=skip ;; *) status=fail; OK=0 ;; esac
+        record "$name" "$cmd" "${status:-fail}" $((SECONDS - t0)) "$out"; return
+      fi
+      local outdir="$TMP/lint.$i" basedir="$TMP/base.$i" lf=() bf="" f
+      mkdir -p "$outdir"; chmod 777 "$outdir" 2>/dev/null || true
+      mapfile -t lf < <(printf '%s\n' "${G_LFILES[$i]}")
+      build_base "$basedir" "$dir" ${lf[@]+"${lf[@]}"}
+      for f in ${lf[@]+"${lf[@]}"}; do if [ -f "$basedir/$f" ]; then bf+=" $(printf '%q' "$f")"; fi; done
+      local excl="--exclude=./node_modules"; [ "$dir" != "$HUB_DIR" ] || excl+=" --exclude=./frontend"
+      local lcmd="${G_LCMD[$i]}" fargs; fargs="$(quote_list ${lf[@]+"${lf[@]}"})"
+      local script="set -e; tar -C /w/$dir $excl -cf - . | tar -C /work -xf -; ln -s /cache/node_modules /work/node_modules; "
+      script+="$lcmd --format json $fargs > /lintout/current.json || true; "
+      if [ -n "$bf" ]; then
+        script+="for f in$bf; do cp -f \"/base/\$f\" \"/work/\$f\" 2>/dev/null || true; done; $lcmd --format json$bf > /lintout/base.json || true;"
+      else
+        script+='echo "[]" > /lintout/base.json;'
+      fi
+      "$TO" -k 10 "$lim" docker run --name "$cname" "${HARDEN[@]}" --tmpfs /work:rw,exec,nosuid,size=512m,uid=1000,gid=1000 \
+        -v "$WT:/w:ro" -v "$NM_VOL:/cache:ro" -v "$basedir:/base:ro" -v "$outdir:/lintout:rw" -w /work \
+        -e NODE_OPTIONS=--max-old-space-size=1536 -e NEXT_TELEMETRY_DISABLED=1 -e CI=1 "$NODE_IMAGE" bash -c "$script" \
+        >"$out" 2>&1 || rc=$?
+      if [ "$rc" = 0 ]; then
+        local cmp_out
+        if cmp_out="$(python3 "$ESLINT_DIFF" "$outdir/current.json" "$outdir/base.json" 2>&1)"; then
+          status=pass
+        else
+          status=fail; OK=0
+        fi
+        printf '%s\n' "$cmp_out" >>"$out"
+      elif [ "$rc" = 124 ] || [ "$rc" = 137 ]; then status=timeout; OK=0; docker rm -f "$cname" >/dev/null 2>&1 || true
+      else status=fail; OK=0; fi
+      record "$name" "$cmd" "$status" $((SECONDS - t0)) "$out"; return ;;
     py)
       command -v docker >/dev/null 2>&1 || { echo "docker unavailable" >"$out"; record "$name" "$cmd" fail 0 "$out"; OK=0; return; }
       if ! { ensure_image "$PY_IMAGE" && ensure_py; } 2>>"$out"; then

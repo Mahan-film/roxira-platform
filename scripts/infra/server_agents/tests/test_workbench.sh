@@ -9,7 +9,7 @@ trap 'rm -rf "$T"' EXIT
 FAIL=0
 
 mk() { mkdir -p "$T/wt/$(dirname "$1")"; : >"$T/wt/$1"; }
-for f in output_apps/enterprise_hub/frontend/src/a.tsx output_apps/enterprise_hub/src/b.ts \
+for f in output_apps/enterprise_hub/frontend/src/a.tsx output_apps/enterprise_hub/frontend/src/c.tsx output_apps/enterprise_hub/src/b.ts \
   output_apps/generated_modules/smartjudge/mod.py output_apps/generated_modules/smartjudge/tests/test_mod.py \
   output_apps/generated_modules/smartjudge/tests/test_other.py scripts/x/tool.py scripts/x/tests/test_tool.py \
   src/test_danger.py src/lib.py scripts/run.sh docs/a.md; do mk "$f"; done
@@ -27,6 +27,9 @@ expect fe-tsc "$o" 'GROUP frontend:tsc .*node:20-bookworm-slim.*npx --no-install
 expect fe-eslint "$o" 'GROUP frontend:eslint .*eslint src/a\.tsx'
 reject fe-no-hub "$o" 'GROUP hub:'
 reject fe-no-py "$o" 'GROUP py:'
+
+o="$(run output_apps/enterprise_hub/frontend/src/a.tsx output_apps/enterprise_hub/frontend/src/c.tsx)"
+expect fe-eslint-multi "$o" 'GROUP frontend:eslint .*node:20-bookworm-slim.*eslint src/a\.tsx src/c\.tsx'
 
 o="$(run output_apps/enterprise_hub/src/b.ts)"
 expect hub-tsc "$o" 'GROUP hub:tsc'
@@ -57,6 +60,18 @@ expect none "$o" 'NO GROUPS'
 o="$(run scripts/gone.sh output_apps/enterprise_hub/src/deleted.ts)"   # deleted files: no lint targets, hub still checked
 expect del-hub "$o" 'GROUP hub:tsc'
 reject del-no-sh "$o" 'GROUP sh:'
+
+# eslint_diff helper: only NEW errors fail (base comparison)
+printf '%s\n' '[{"filePath":"/work/src/a.tsx","messages":[{"ruleId":"react-hooks/rules-of-hooks","severity":2}]}]' >"$T/base.json"
+printf '%s\n' '[{"filePath":"/work/src/a.tsx","messages":[{"ruleId":"react-hooks/rules-of-hooks","severity":2}]}]' >"$T/cur.json"
+set +e; out="$(python3 "$HERE/../eslint_diff.py" "$T/cur.json" "$T/base.json")"; rc=$?; set -e
+[ "$rc" = 0 ] || { echo "FAIL [eslint-diff-preexisting]: exit $rc"; FAIL=1; }
+[ "$out" = "no new errors (1 pre-existing)" ] || { echo "FAIL [eslint-diff-preexisting]: $out"; FAIL=1; }
+
+printf '%s\n' '[]' >"$T/base.json"
+set +e; out="$(python3 "$HERE/../eslint_diff.py" "$T/cur.json" "$T/base.json")"; rc=$?; set -e
+[ "$rc" = 1 ] || { echo "FAIL [eslint-diff-new]: exit $rc"; FAIL=1; }
+expect eslint-diff-new "$out" 'new errors: src/a\.tsx:react-hooks/rules-of-hooks x 1'
 
 # JSON output in dry-run
 printf 'scripts/run.sh\n' >"$T/files"
