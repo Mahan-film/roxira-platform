@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { track } from "@/lib/analytics/umami";
 
 import {
   type PricingMatrixResponse,
@@ -38,6 +39,7 @@ export default function PaymentCheckoutModal({ isOpen, onClose, phone }: Payment
     setLoading(true);
     setNotice("");
     setError("");
+    track("checkout_started", { plan: selectedPlan });
     try {
       const res = await fetch("/api/v1/apps/judge/payments/create-invoice", {
         method: "POST",

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Coins, Loader2, X } from "lucide-react";
+import { track } from "@/lib/analytics/umami";
 
 import {
   type BackendPlanType,
@@ -119,6 +120,7 @@ export function SubscriptionModal({
       return;
     }
 
+    track("checkout_started", { plan: planType });
     setPendingPlan(planType);
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };

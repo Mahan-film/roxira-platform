@@ -32,6 +32,7 @@ import {
   sendJudgeOtp,
   verifyJudgeOtp,
 } from "@/lib/api/judge-auth-client";
+import { track } from "@/lib/analytics/umami";
 import { cn } from "@/lib/utils";
 
 /** Minimum wait before the user may request another code. */
@@ -266,6 +267,8 @@ export function LoginModal({
         const session = await verifyJudgeOtp(phone, cleanCode, {
           onRetry: () => setRetrying(true),
         });
+        // OTP verification is shared by sign-up and sign-in; the API does not flag new users yet.
+        track("signup_completed");
         onAuthenticated({
           tokenType: session.tokenType,
           accessToken: session.accessToken,

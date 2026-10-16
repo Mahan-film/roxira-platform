@@ -27,6 +27,12 @@ ENV NEST_API_ORIGIN=${NEST_API_ORIGIN}
 # آدرس واقعی موتور قاضی هوشمند (AI Core Layer — FastAPI/Python)
 ARG JUDGE_API_ORIGIN=http://roxira_app_prod:8000
 ENV JUDGE_API_ORIGIN=${JUDGE_API_ORIGIN}
+# Umami website ids (public values, inlined into the bundle at build time). Empty = no tracker script.
+# See docs/ops/OBSERVABILITY.md.
+ARG NEXT_PUBLIC_UMAMI_WEBSITE_ID=
+ARG NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI=
+ENV NEXT_PUBLIC_UMAMI_WEBSITE_ID=${NEXT_PUBLIC_UMAMI_WEBSITE_ID}
+ENV NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI=${NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules

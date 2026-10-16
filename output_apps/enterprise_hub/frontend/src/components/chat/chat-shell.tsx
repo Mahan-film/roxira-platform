@@ -28,6 +28,7 @@ import {
   type DraftType,
 } from "@/lib/chat-actions";
 import { VipGate } from "@/components/draft/vip-gate";
+import { track } from "@/lib/analytics/umami";
 import {
   DraftAssistError,
   draftAssist,
@@ -639,6 +640,8 @@ export function ChatShell() {
     };
   }, [isLoading]);
 
+  const chatStartedRef = useRef(false);
+
   const sendChat = async (textToSend: string, baseMsgs: ChatMessage[], requestIdIn?: string) => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -647,6 +650,10 @@ export function ChatShell() {
     setIsLoading(true);
     if (isAuthenticated) setGuestNotice(false);
     savePending(textToSend, requestId);
+    if (!chatStartedRef.current) {
+      chatStartedRef.current = true;
+      track("chat_started");
+    }
 
     const finish = (msg: ChatMessage) => setMessages([...baseMsgs, msg]);
 
@@ -694,6 +701,7 @@ export function ChatShell() {
       if (data.conversation_id && !conversationId) {
         setConversationId(data.conversation_id);
       }
+      track("answer_shown");
       finish({
         role: "assistant",
         content: reply,

@@ -1,0 +1,11 @@
+# Friday 06:00 UTC: the weekly KPI report covers the previous 7 days. Persistent=true sends a
+# missed report after a server outage. See docs/ops/OBSERVABILITY.md.
+[Unit]
+Description=Weekly KPI report every Friday 06:00 UTC
+
+[Timer]
+OnCalendar=Fri *-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

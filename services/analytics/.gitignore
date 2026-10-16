@@ -1,0 +1,2 @@
+# install.sh writes generated/umami.env (DATABASE_URL and APP_SECRET). Never commit it.
+generated/

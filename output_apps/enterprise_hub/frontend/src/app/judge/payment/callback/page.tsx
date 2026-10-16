@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { track } from "@/lib/analytics/umami";
 
 /**
  * صفحه بازگشت از درگاه زیبال (callbackUrl فاکتور).
@@ -48,6 +49,7 @@ function PaymentCallbackContent() {
       }
 
       if (res.ok && data.status === "PAID") {
+        track("payment_success");
         setState("paid");
         setMessage(data.message || "پرداخت با موفقیت تایید شد.");
         try {

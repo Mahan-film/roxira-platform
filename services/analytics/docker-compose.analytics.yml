@@ -1,0 +1,36 @@
+# Umami analytics (self-hosted, privacy-friendly). Factory milestone F7, see docs/ops/OBSERVABILITY.md.
+#
+# Bound to 127.0.0.1:3005 ONLY. 3005 is not in the reserved-port list (AGENTS.md section 7);
+# verify on the server before the first start: ss -tlnp | grep 3005
+# Served publicly at https://roxira.ir/umami (and ghazihoushmand.ir) by nginx, see nginx/umami-location.conf.
+#
+# Database: a dedicated `umami` database on the existing roxira_postgres_prod container
+# (one-time CREATE USER/DATABASE step in docs/ops/OBSERVABILITY.md). Nothing secret is in this file:
+# install.sh writes generated/umami.env (mode 600) from UMAMI_DB_PASSWORD and UMAMI_APP_SECRET.
+# Image pinned to v3.4.0 (latest GitHub release at 2026-10-16). Bump deliberately, never :latest.
+services:
+  umami:
+    image: ghcr.io/umami-software/umami:v3.4.0
+    container_name: roxira_umami
+    restart: unless-stopped
+    init: true
+    env_file: ./generated/umami.env
+    environment:
+      # Umami serves itself under /umami so nginx can proxy the path without rewriting it.
+      BASE_PATH: /umami
+    ports:
+      - "127.0.0.1:3005:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:3000/api/heartbeat >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      - roxira_net
+
+networks:
+  roxira_net:
+    external: true
+    name: roxira_platform_roxira_net

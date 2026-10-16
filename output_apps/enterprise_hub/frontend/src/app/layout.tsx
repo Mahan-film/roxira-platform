@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Script from "next/script";
 import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PwaRegister } from "@/components/pwa/pwa-register";
 import { buildBrandJsonLd } from "@/lib/seo/laws-schema";
+import { umamiScriptConfig } from "@/lib/analytics/umami";
 
 /**
  * فونت فارسی اصلی رابط کاربری (Vazirmatn) — self-host شده (next/font/local) تا
@@ -70,6 +72,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { isEnglish, isGhazi } = await getHostInfo();
+  // Umami tracker only when a website id is configured for this host (see lib/analytics/umami.ts).
+  const umami = umamiScriptConfig(isGhazi);
 
   return (
     <html
@@ -80,6 +84,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-full flex flex-col font-sans">
         {isGhazi ? <JsonLd id="ghazi-brand-jsonld" data={buildBrandJsonLd()} /> : null}
         {isGhazi ? <PwaRegister /> : null}
+        {umami ? (
+          <Script
+            src={umami.src}
+            data-website-id={umami.websiteId}
+            data-host-url={umami.hostUrl}
+            strategy="afterInteractive"
+          />
+        ) : null}
         <AuthProvider>
           {children}
         </AuthProvider>
