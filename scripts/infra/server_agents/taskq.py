@@ -6,7 +6,7 @@ CLI over a SQLite DB (default /var/lib/roxira-agents/taskq.db); runs on the serv
   taskq.py list [--status S] | show ID | cancel ID | retry ID
   taskq.py run [--max-parallel 3] [--stagger 15] [--once]
 
-Ladder steps: free = run_task.sh --gateway --public (public tasks only), ds-flash = --model ds-flash,
+Ladder steps: best = --gateway --public --tier best (gemini-best), free = run_task.sh --gateway --public (public tasks only), ds-flash = --model ds-flash,
 strong = --model $TASKQ_STRONG_ALIAS (skipped when unset). A failed attempt moves to the next step with
 the failure reason appended to a copy of the task file. Stdlib only.
 
@@ -30,7 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 NOTIFY = HERE.parent.parent / "ops" / "notify" / "notify.py"
 STATES = ("queued", "running", "done", "failed", "cancelled")
-DEFAULT_LADDER = "free,ds-flash,strong"
+DEFAULT_LADDER = "best,free,ds-flash,strong"
 
 
 def state_dir() -> Path:
@@ -93,6 +93,8 @@ def alive(pid: int | None) -> bool:
 # ---------------------------------------------------------------- ladder
 def step_args(step: str, public: bool) -> list[str] | None:
     """run_task.sh model arguments for a ladder step, or None when the step must be skipped."""
+    if step == "best":  # Gemini quality-first ladder (free AI Studio keys): public tasks only, like "free"
+        return ["--gateway", "--public", "--tier", "best"] if public else None
     if step == "free":
         return ["--gateway", "--public"] if public else None
     if step == "ds-flash":
@@ -306,9 +308,9 @@ def cmd_add(db, a) -> int:
         print(f"task file not found: {a.task_file}", file=sys.stderr)
         return 2
     ladder = [s.strip() for s in a.ladder.split(",") if s.strip()]
-    bad = [s for s in ladder if s not in ("free", "ds-flash", "strong")]
+    bad = [s for s in ladder if s not in ("best", "free", "ds-flash", "strong")]
     if not ladder or bad:
-        print(f"bad ladder {a.ladder!r} (free, ds-flash, strong)", file=sys.stderr)
+        print(f"bad ladder {a.ladder!r} (best, free, ds-flash, strong)", file=sys.stderr)
         return 2
     now = time.time()
     cur = db.execute(

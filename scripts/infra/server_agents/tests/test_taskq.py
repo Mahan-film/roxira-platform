@@ -45,6 +45,8 @@ def env(tmp_path, monkeypatch):
 
 
 def add(task, *extra, slug="demo"):
+    if "--ladder" not in extra:  # these tests were written for the three-step ladder
+        extra = (*extra, "--ladder", "free,ds-flash,strong")
     assert taskq.main(["add", "--slug", slug, "--task-file", str(task), *extra]) == 0
 
 
@@ -148,3 +150,9 @@ def test_failing_checks_reads_workbench_format(tmp_path):
         {"name": "frontend:eslint", "status": "pass", "tail": ""}]}))
     note = taskq.failing_checks({"checks": str(p)})
     assert "frontend:tsc" in note and "TS2304" in note and "eslint" not in note
+
+
+def test_best_step_uses_gemini_best_for_public_only():
+    assert taskq.step_args("best", True) == ["--gateway", "--public", "--tier", "best"]
+    assert taskq.step_args("best", False) is None
+    assert taskq.DEFAULT_LADDER.split(",")[0] == "best"
