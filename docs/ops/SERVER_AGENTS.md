@@ -142,3 +142,26 @@ Do not use the global config for agents; use `run_task.sh`.
 - فیل‌اور کلید Groq فقط هنگام خطای احراز هویت (401/403) به کلید بعدی می‌رود، نه برای دور زدن محدودیت نرخ. در خطای 429 یک بار صبر می‌کند و بعد به DeepSeek Flash می‌رود.
 - توقف: `pkill -f 'opencode run'` یا برداشتن کلیدها. روی سرور جدید با `bootstrap_new_server.sh --agents` همان‌طور منتقل می‌شود.
 - علت احتمالی `UnknownError`: کلید ارائه‌دهنده در محیط ssh غیرتعاملی نیست (محلی بازتولید شد، روی سرور هنوز تأیید نشده)، و تنظیمات سراسری `pool` با تنظیمات دیگر ادغام می‌شود نه جایگزین. ران‌نر خودش HOME/XDG جدا دارد.
+## 8. Task queue (F2)
+
+`scripts/infra/server_agents/taskq.py` queues tasks in SQLite (`/var/lib/roxira-agents/taskq.db`) and runs them through
+`run_task.sh` with an escalation ladder, so the hub no longer launches, retries and collects by hand.
+
+```bash
+T=/opt/roxira_platform/scripts/infra/server_agents
+python3 $T/taskq.py add --slug fix-docs --task-file /tmp/task.md --scope docs/ops/ --public --priority 5 \
+    --accept 'bash -n scripts/x.sh'            # --accept is stored for the hub only, never run by the queue
+python3 $T/taskq.py list --status queued       # also: show <id>, cancel <id>, retry <id>
+python3 $T/taskq.py run --once --stagger 15    # one-shot drain; the service runs `run --max-parallel 3`
+bash $T/taskq_install.sh                       # dry-run; add --apply to install systemd unit roxira-taskq
+```
+
+Ladder (default `free,ds-flash,strong`, set per task with `--ladder`): `free` = `--gateway --public` (skipped unless the
+task is `--public`), `ds-flash` = `--model ds-flash`, `strong` = `--model $TASKQ_STRONG_ALIAS` (skipped when unset;
+put it in `/etc/roxira/taskq.env`). Each attempt uses slug `<slug>-aN`. Success = result `ok` and `checks_ok` true (or
+missing) and files non-empty. On failure the next step runs on a copy of the task file with a
+"previous attempt failed: ..." note (failing check names + output tail). Ladder exhausted -> `failed`.
+On success the patch is written to `/var/lib/roxira-agents/patches/<id>-<slug>.patch` and `show <id>` has the branch,
+worktree and files. Every state change is sent to the owner bot (best effort). `TASKQ_MAX_ATTEMPTS_PER_DAY`
+(default 30, rolling 24 h) stops new attempts. After a restart, `running` tasks whose process is gone return to `queued`.
+
