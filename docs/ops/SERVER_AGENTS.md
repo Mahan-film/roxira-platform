@@ -82,6 +82,25 @@ back to `ds-flash` (if an agents OpenRouter key exists and the task is not publi
 - Groq free-tier daily token limits apply; a big task may need `ds-flash`. Default timeout 900 s, `--kill-after 15`.
 - Ports: nothing listens; no new service is started.
 
+## 4b. Workbench checks (automatic, per run)
+
+After the runner has committed, `run_task.sh` calls `scripts/infra/server_agents/workbench.sh <worktree>` (skip with
+`--no-checks`; never for `--smoke` or runs without changes). It picks check groups from the changed files only:
+frontend -> `tsc --noEmit` + `eslint`; enterprise_hub -> `tsc` + `jest --findRelatedTests`; `*.py` -> `ruff` (only
+F821/F822/F823/E9 block, the rest is reported) + `pytest` on changed test files or `tests/test_<module>.py` next to
+changed modules (only `scripts/**/tests`, `smartjudge/tests`; never `src/` or the repo root); `*.sh` -> `bash -n`.
+
+- Each group runs in a throwaway docker container (`node:20-bookworm-slim`, `python:3.12-slim`): worktree read-only at `/w`,
+  `--network none --memory 2g --pids-limit 512 --cap-drop ALL --security-opt no-new-privileges`, uid 1000, read-only rootfs.
+- Dependencies sit in named volumes keyed by lockfile hash: `rx-nm-<dir>-<hash12>` (`npm ci --ignore-scripts`) and
+  `rx-py-<hash12>` (`ci/requirements-test.txt` + ruff). Only the one-time populate container has network. Old volumes are
+  not pruned automatically: `docker volume ls -f name=rx-` and remove stale ones by hand.
+- Timeouts: 8 min per group, 15 min total. Result: `<run log>.checks.json` (`{groups:[{name,cmd,status,seconds,tail}],ok}`);
+  `results.jsonl` gets `checks_ok` and `checks`, and the owner-bot line gets `checks=ok(n)` or `checks=FAIL(group,...)`.
+  Checks are advisory: they never change `run_task.sh`'s exit code or block the push.
+- Manual: `workbench.sh <worktree> [--base origin/main] [--json out.json]`; `--dry-run` prints the groups without docker.
+  Test of the selection logic (no docker): `bash scripts/infra/server_agents/tests/test_workbench.sh`.
+
 ## 5. Stopping it
 
 - One run: `pkill -f 'opencode run'` (the `timeout` wrapper ends within 15 s anyway).

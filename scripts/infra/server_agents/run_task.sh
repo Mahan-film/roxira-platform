@@ -5,6 +5,7 @@
 #
 #   run_task.sh (--task TEXT | --task-file FILE) [--model ALIAS] [--scope PATH]... [--public] [--push]
 #               [--timeout SECS] [--slug WORD] [--cleanup] [--dry-run] [--gateway] [--tier light|strong]
+#               [--no-checks]   skip the post-run workbench checks (workbench.sh: docker-isolated tsc/eslint/jest/ruff/pytest)
 #   --gateway   route through the key-pool gateway: --tier strong (default) -> group agent-strong-free,
 #               --tier light -> agent-light-free. URL from $AGENT_GATEWAY_URL (default
 #               http://127.0.0.1:4000/v1, key KEYPOOL_MASTER_KEY). Free providers may log: needs --public.
@@ -33,7 +34,7 @@ BASE_REF="refs/remotes/origin/main"
 
 TASK="" TASK_FILE="" MODEL_ALIAS="" TIMEOUT=900 SLUG="" PUSH=0 PUBLIC=0 CLEANUP=0 DRY=0 SMOKE=0 LIST=0
 SCOPES=()
-NO_FALLBACK=0 GATEWAY=0 TIER=""
+NO_FALLBACK=0 GATEWAY=0 TIER="" NO_CHECKS=0
 AGENT_GATEWAY_URL="${AGENT_GATEWAY_URL:-http://127.0.0.1:4000/v1}"
 REPO_ENV="${ROXIRA_REPO_ENV:-/opt/roxira_platform/.env}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -55,10 +56,11 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1 ;;
     --smoke) SMOKE=1 ;;
     --list) LIST=1 ;;
+    --no-checks) NO_CHECKS=1 ;;
     --no-fallback) NO_FALLBACK=1 ;;
     --gateway) GATEWAY=1 ;;
     --tier) TIER="${2?--tier needs light or strong}"; shift ;;
-    -h | --help) sed -n '2,21p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,22p' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -383,8 +385,26 @@ if [ "$SMOKE" = 1 ]; then
   [ "$SMOKE_OK" = true ] || OK=0
 fi
 
+# ---- workbench checks (best effort: never changes the exit behaviour of this script) ---------------------
+CHECKS_JSON="" CHECKS_OK="" CHECKS_NOTE=""
+if [ "$NO_CHECKS" = 0 ] && [ "$SMOKE" = 0 ] && [ ${#FILES[@]} -gt 0 ] && [ -x "$HERE/workbench.sh" ] && [ -d "$WT" ]; then
+  CHECKS_JSON="${LOG%.log}.checks.json"
+  log "workbench: checking $WT (json: $CHECKS_JSON)"
+  { timeout --kill-after=30 960 "$HERE/workbench.sh" "$WT" --base "$BASE_REF" --json "$CHECKS_JSON" >&2; } 2>&1 || true
+  if [ -s "$CHECKS_JSON" ]; then
+    CHECKS_OK="$(python3 -c 'import json,sys; print("true" if json.load(open(sys.argv[1])).get("ok") else "false")' "$CHECKS_JSON" 2>/dev/null || true)"
+    CHECKS_NOTE="$(python3 -c '
+import json, sys
+g = json.load(open(sys.argv[1])).get("groups", [])
+bad = [x["name"] for x in g if x["status"] in ("fail", "timeout")]
+print("checks=" + ("FAIL(" + ",".join(bad) + ")" if bad else "ok(%d)" % len(g)))' "$CHECKS_JSON" 2>/dev/null || true)"
+  else
+    CHECKS_JSON="" ; log "workbench produced no result (ignored)"
+  fi
+fi
+
 DURATION=$((SECONDS - START))
-RESULT="$(R_OK=$OK R_BRANCH=$BRANCH R_WT=$WT R_EXIT=$EXIT R_ALIAS=$MODEL_ALIAS R_MODEL=$MODEL_REF R_DUR=$DURATION \
+RESULT="$(R_CHECKS_OK=$CHECKS_OK R_CHECKS=$CHECKS_JSON R_OK=$OK R_BRANCH=$BRANCH R_WT=$WT R_EXIT=$EXIT R_ALIAS=$MODEL_ALIAS R_MODEL=$MODEL_REF R_DUR=$DURATION \
   R_PUSHED=$PUSHED R_LOG=$LOG R_SMOKE=$SMOKE_OK R_FILES="$(printf '%s\n' ${FILES[@]+"${FILES[@]}"})" \
   R_RL=$RATE_LIMITED R_KEY=$((KEY_I + 1)) R_EVENTS="$(printf '%s\n' ${EVENTS[@]+"${EVENTS[@]}"})" \
   R_VIOL="$(printf '%s\n' ${VIOLATIONS[@]+"${VIOLATIONS[@]}"})" python3 - <<'PY'
@@ -397,6 +417,9 @@ r = {"ok": e["R_OK"] == "1", "branch": e["R_BRANCH"], "worktree": e["R_WT"], "fi
      "duration_s": int(e["R_DUR"]), "pushed": e["R_PUSHED"] == "true", "violations": viol, "log": e["R_LOG"],
      "rate_limited": e["R_RL"] == "true", "groq_key_index": int(e["R_KEY"]),
      "events": [x for x in e["R_EVENTS"].split("\n") if x]}
+if e["R_CHECKS_OK"]:
+    r["checks_ok"] = e["R_CHECKS_OK"] == "true"
+    r["checks"] = e["R_CHECKS"]
 if e["R_SMOKE"]:
     r["smoke_ok"] = e["R_SMOKE"] == "true"
 print(json.dumps(r))
@@ -416,7 +439,7 @@ fi
 # Best effort: tell the owner's bot how the run ended (never changes the exit code).
 if [ -f "$HERE/../../ops/notify/notify.py" ]; then
   python3 "$HERE/../../ops/notify/notify.py" \
-    "ایجنت $SLUG: ok=$OK، ${#FILES[@]} فایل، ${DURATION}s" >/dev/null 2>&1 || true
+    "ایجنت $SLUG: ok=$OK، ${#FILES[@]} فایل، ${DURATION}s${CHECKS_NOTE:+، $CHECKS_NOTE}" >/dev/null 2>&1 || true
 fi
 printf '%s\n' "$RESULT"
 [ "$OK" = 1 ]

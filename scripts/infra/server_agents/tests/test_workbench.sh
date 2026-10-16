@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Group-selection tests for workbench.sh in --dry-run mode. No docker, no network, no repo state needed.
+#   bash scripts/infra/server_agents/tests/test_workbench.sh
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WB="$HERE/../workbench.sh"
+T="$(mktemp -d "${TMPDIR:-/tmp}/wbtest.XXXXXX")"
+trap 'rm -rf "$T"' EXIT
+FAIL=0
+
+mk() { mkdir -p "$T/wt/$(dirname "$1")"; : >"$T/wt/$1"; }
+for f in output_apps/enterprise_hub/frontend/src/a.tsx output_apps/enterprise_hub/src/b.ts \
+  output_apps/generated_modules/smartjudge/mod.py output_apps/generated_modules/smartjudge/tests/test_mod.py \
+  output_apps/generated_modules/smartjudge/tests/test_other.py scripts/x/tool.py scripts/x/tests/test_tool.py \
+  src/test_danger.py src/lib.py scripts/run.sh docs/a.md; do mk "$f"; done
+
+run() { printf '%s\n' "$@" >"$T/files"; "$WB" "$T/wt" --dry-run --files-from "$T/files" 2>&1; }
+expect() { # label, output, pattern (grep -E)
+  if ! printf '%s\n' "$2" | grep -Eq -- "$3"; then echo "FAIL [$1]: missing /$3/"; printf '%s\n' "$2"; FAIL=1; fi
+}
+reject() {
+  if printf '%s\n' "$2" | grep -Eq -- "$3"; then echo "FAIL [$1]: unexpected /$3/"; printf '%s\n' "$2"; FAIL=1; fi
+}
+
+o="$(run output_apps/enterprise_hub/frontend/src/a.tsx)"
+expect fe-tsc "$o" 'GROUP frontend:tsc .*node:20-bookworm-slim.*npx --no-install tsc --noEmit -p \.'
+expect fe-eslint "$o" 'GROUP frontend:eslint .*eslint src/a\.tsx'
+reject fe-no-hub "$o" 'GROUP hub:'
+reject fe-no-py "$o" 'GROUP py:'
+
+o="$(run output_apps/enterprise_hub/src/b.ts)"
+expect hub-tsc "$o" 'GROUP hub:tsc'
+expect hub-jest "$o" 'GROUP hub:jest .*--findRelatedTests src/b\.ts --passWithNoTests'
+reject hub-no-fe "$o" 'GROUP frontend:'
+
+o="$(run output_apps/generated_modules/smartjudge/mod.py)"
+expect py-block "$o" 'GROUP py:ruff-blocking .*F821,F822,F823,E9'
+expect py-report "$o" 'GROUP py:ruff-report'
+expect py-neighbour-test "$o" 'GROUP py:pytest .*smartjudge/tests/test_mod\.py'
+reject py-not-other-tests "$o" 'test_other\.py'
+
+o="$(run scripts/x/tests/test_tool.py)"
+expect py-changed-test "$o" 'GROUP py:pytest .*scripts/x/tests/test_tool\.py'
+
+o="$(run src/test_danger.py src/lib.py)"
+expect src-ruff "$o" 'GROUP py:ruff-blocking'
+reject src-no-pytest "$o" 'GROUP py:pytest'
+expect src-ignored "$o" 'IGNORED src/test_danger\.py'
+
+o="$(run scripts/run.sh)"
+expect sh "$o" 'GROUP sh:bash-n .*host.*bash -n scripts/run\.sh'
+reject sh-only "$o" 'GROUP (py|hub|frontend)'
+
+o="$(run docs/a.md)"
+expect none "$o" 'NO GROUPS'
+
+o="$(run scripts/gone.sh output_apps/enterprise_hub/src/deleted.ts)"   # deleted files: no lint targets, hub still checked
+expect del-hub "$o" 'GROUP hub:tsc'
+reject del-no-sh "$o" 'GROUP sh:'
+
+# JSON output in dry-run
+printf 'scripts/run.sh\n' >"$T/files"
+"$WB" "$T/wt" --dry-run --files-from "$T/files" --json "$T/out.json" >/dev/null 2>&1
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["ok"] is True and d["groups"][0]["name"] == "sh:bash-n" and d["groups"][0]["status"] == "skip", d
+' "$T/out.json" || { echo "FAIL [json]"; FAIL=1; }
+
+# wrong arguments exit 2
+set +e; "$WB" >/dev/null 2>&1; rc=$?; set -e
+[ "$rc" = 2 ] || { echo "FAIL [args]: exit $rc"; FAIL=1; }
+
+if [ "$FAIL" = 0 ]; then echo "test_workbench: all passed"; else exit 1; fi
