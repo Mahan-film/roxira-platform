@@ -10,6 +10,7 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/opt/roxira_platform
 # Optional: UMAMI_API_TOKEN and UMAMI_WEBSITE_* live here (mode 600), not in the repo.
+EnvironmentFile=-/opt/roxira_platform/.env
 EnvironmentFile=-/etc/roxira/kpi.env
 ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/kpi/weekly_report.py
 TimeoutStartSec=300

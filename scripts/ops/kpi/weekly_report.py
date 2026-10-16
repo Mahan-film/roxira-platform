@@ -39,7 +39,7 @@ sys.path.insert(0, str(HERE.parents[1] / "infra" / "key_pool"))  # scripts/infra
 import cost_report  # noqa: E402
 import notify  # noqa: E402
 
-DEFAULT_UMAMI_API = "http://127.0.0.1:3005/umami"
+DEFAULT_UMAMI_API = "http://127.0.0.1:3005"  # the official image serves from / (nginx strips /umami publicly)
 DEFAULT_TASKQ_DB = "/var/lib/roxira-agents/taskq.db"
 DEFAULT_DEPLOY_STATE = "/root/deploy-state"
 TIMEOUT = 15
@@ -116,8 +116,23 @@ def http_get_json(url: str, headers: dict[str, str], params: dict[str, Any]) -> 
 
 
 # ---------------------------------------------------------------- Umami
-def umami_config(env: dict[str, str]) -> dict[str, Any]:
+def _umami_login(api: str, password: str) -> str:
+    """Self-hosted Umami has no static API key: log in as admin (password from the server .env) for a token."""
+    req = urllib.request.Request(api.rstrip("/") + "/api/auth/login",
+                                 data=json.dumps({"username": "admin", "password": password}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode()).get("token", "")
+
+
+def umami_config(env: dict[str, str], login=None) -> dict[str, Any]:
     token = (env.get("UMAMI_API_TOKEN") or "").strip()
+    if not token and (env.get("UMAMI_ADMIN_PASSWORD") or "").strip():
+        try:
+            token = (login or _umami_login)((env.get("UMAMI_API_URL") or DEFAULT_UMAMI_API).strip(),
+                                            env["UMAMI_ADMIN_PASSWORD"].strip())
+        except Exception as exc:  # noqa: BLE001 - the report must still go out without Umami
+            return {"status": "not configured", "reason": f"umami login failed: {type(exc).__name__}"}
     websites = {
         host: (env.get(var) or "").strip() for host, var in WEBSITES if (env.get(var) or "").strip()
     }

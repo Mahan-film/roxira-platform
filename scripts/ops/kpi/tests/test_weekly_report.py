@@ -321,3 +321,10 @@ def test_main_sends_through_notify_when_not_dry_run(tmp_path, monkeypatch, capsy
 def test_main_rejects_non_positive_days(tmp_path):
     with pytest.raises(SystemExit):
         wr.main(["--dry-run", "--days", "0"])
+
+
+def test_umami_config_logs_in_with_admin_password():
+    import weekly_report as wr
+    env = {"UMAMI_ADMIN_PASSWORD": "pw", "UMAMI_WEBSITE_GHAZI": "abc"}
+    cfg = wr.umami_config(env, login=lambda api, pw: "tok-" + pw)
+    assert cfg["status"] == "ok" and cfg["token"] == "tok-pw" and cfg["api"] == "http://127.0.0.1:3005"
