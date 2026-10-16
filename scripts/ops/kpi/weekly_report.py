@@ -161,7 +161,7 @@ def umami_site(api: str, token: str, website_id: str, start: datetime, end: date
     base = f"{api}/api/websites/{website_id}"
     stats = fetch(f"{base}/stats", headers, dict(window))
     stats = stats if isinstance(stats, dict) else {}
-    pages = _pairs(fetch(f"{base}/metrics", headers, {**window, "type": "url", "limit": TOP_PAGES}))
+    pages = _pairs(fetch(f"{base}/metrics", headers, {**window, "type": "path", "limit": TOP_PAGES}))
     events = _pairs(fetch(f"{base}/metrics", headers, {**window, "type": "event", "limit": 50}))
     top_pages = [(path.split("?", 1)[0][:60], n) for path, n in pages[:TOP_PAGES]]
     return {

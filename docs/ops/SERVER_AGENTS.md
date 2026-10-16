@@ -152,7 +152,7 @@ T=/opt/roxira_platform/scripts/infra/server_agents
 python3 $T/taskq.py add --slug fix-docs --task-file /tmp/task.md --scope docs/ops/ --public --priority 5 \
     --accept 'bash -n scripts/x.sh'            # --accept is stored for the hub only, never run by the queue
 python3 $T/taskq.py list --status queued       # also: show <id>, cancel <id>, retry <id>
-python3 $T/taskq.py run --once --stagger 15    # one-shot drain; the service runs `run --max-parallel 3`
+python3 $T/taskq.py run --once --stagger 15    # one-shot drain; the service runs `run --max-parallel 5`
 bash $T/taskq_install.sh                       # dry-run; add --apply to install systemd unit roxira-taskq
 ```
 

@@ -190,7 +190,7 @@ def _fake_umami(calls: list[tuple[str, dict, dict]]):
             raise urllib.error.HTTPError(url, 401, "Unauthorized", None, None)
         if url.endswith("/stats"):
             return {"visitors": {"value": 12, "prev": 3}, "pageviews": 40}
-        if params.get("type") == "url":
+        if params.get("type") == "path":
             return [{"x": "/chat?case=1", "y": 9}, {"x": "/judge", "y": 4}]
         if params.get("type") == "event":
             return [

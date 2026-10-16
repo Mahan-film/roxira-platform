@@ -23,7 +23,7 @@ Type=simple
 User=root
 Nice=5
 EnvironmentFile=-/etc/roxira/taskq.env
-ExecStart=/usr/bin/python3 $HERE/taskq.py run --max-parallel 3
+ExecStart=/usr/bin/python3 $HERE/taskq.py run --max-parallel 5
 Restart=on-failure
 RestartSec=10
 
