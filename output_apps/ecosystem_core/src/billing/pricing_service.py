@@ -195,7 +195,7 @@ def _fetch_live_rate() -> tuple[int, str] | None:
     return None
 
 
-def get_usd_toman_rate() -> dict[str, object]:
+def _base_usd_toman_rate() -> dict[str, object]:
     """Rate used to price USD plans: {"rate_toman", "source", "snapshot_ts"}.
 
     Order: env SMARTJUDGE_USD_TOMAN_RATE (if within bounds) > snapshot younger
@@ -229,6 +229,47 @@ def get_usd_toman_rate() -> dict[str, object]:
             return {"rate_toman": RATE_FALLBACK_TOMAN, "source": "FALLBACK", "snapshot_ts": None}
         return {"rate_toman": int(snap["rate"]), "source": str(snap.get("source", "SNAPSHOT")),
                 "snapshot_ts": snap.get("ts")}
+
+
+RATE_FLOOR_DEFAULT_TOMAN = 280_000
+
+
+def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
+    try:
+        value = float(os.environ.get(name, "").strip())
+    except (TypeError, ValueError):
+        return default
+    return value if value >= minimum else default
+
+
+def rate_floor_toman() -> int:
+    """SMARTJUDGE_USD_TOMAN_RATE_FLOOR (default 280,000): the price never uses a lower rate."""
+    value = int(_env_float("SMARTJUDGE_USD_TOMAN_RATE_FLOOR", RATE_FLOOR_DEFAULT_TOMAN, minimum=1))
+    return value
+
+
+def price_margin_pct() -> float:
+    """SMARTJUDGE_PRICE_MARGIN_PCT (default 0): safety margin added on top of the rate."""
+    return _env_float("SMARTJUDGE_PRICE_MARGIN_PCT", 0.0)
+
+
+def get_usd_toman_rate() -> dict[str, object]:
+    """Effective rate used to price USD plans.
+
+    effective = max(live_or_override, floor) x (1 + margin/100). The explicit
+    SMARTJUDGE_USD_TOMAN_RATE override replaces the live rate but the floor still
+    applies. Returns {"rate_toman" (effective), "source", "snapshot_ts",
+    "base_rate_toman", "floor_toman", "margin_pct"}."""
+    base = _base_usd_toman_rate()
+    floor = rate_floor_toman()
+    margin = price_margin_pct()
+    base_rate = int(base["rate_toman"])
+    effective = int(round(max(base_rate, floor) * (1 + margin / 100.0)))
+    source = str(base["source"])
+    if base_rate < floor:
+        source = f"{source}_FLOOR"
+    return {"rate_toman": effective, "source": source, "snapshot_ts": base.get("snapshot_ts"),
+            "base_rate_toman": base_rate, "floor_toman": floor, "margin_pct": margin}
 
 
 def reset_rate_cache_for_tests() -> None:

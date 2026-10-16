@@ -88,9 +88,41 @@ def test_env_rate_override_and_bounds(live, monkeypatch):
         assert ps.get_usd_toman_rate()["rate_toman"] == 300_000
 
 
+def test_floor_raises_low_live_rate(live, monkeypatch):
+    live["result"] = (250_000, "TETHERLAND")
+    info = ps.get_usd_toman_rate()
+    assert info["rate_toman"] == 280_000 and info["base_rate_toman"] == 250_000
+    assert info["floor_toman"] == 280_000 and info["source"].endswith("_FLOOR")
+
+
+def test_floor_applies_to_env_override(live, monkeypatch):
+    monkeypatch.setenv("SMARTJUDGE_USD_TOMAN_RATE", "200000")
+    assert ps.get_usd_toman_rate()["rate_toman"] == 280_000
+    monkeypatch.setenv("SMARTJUDGE_USD_TOMAN_RATE_FLOOR", "150000")
+    assert ps.get_usd_toman_rate()["rate_toman"] == 200_000
+
+
+def test_floor_env_custom_and_invalid(live, monkeypatch):
+    monkeypatch.setenv("SMARTJUDGE_USD_TOMAN_RATE_FLOOR", "320000")
+    assert ps.get_usd_toman_rate()["rate_toman"] == 320_000  # live 300,000 < floor
+    monkeypatch.setenv("SMARTJUDGE_USD_TOMAN_RATE_FLOOR", "junk")
+    assert ps.get_usd_toman_rate()["rate_toman"] == 300_000  # default floor 280,000
+
+
+def test_margin_pct_on_top_and_exposed_in_matrix(live, monkeypatch):
+    monkeypatch.setenv("SMARTJUDGE_PRICE_MARGIN_PCT", "10")
+    info = ps.get_usd_toman_rate()
+    assert info["rate_toman"] == 330_000 and info["margin_pct"] == 10
+    plan = ps.get_calculated_pricing()["SJ_BASIC_MONTHLY"]
+    assert plan["exchange_rate_toman"] == 330_000 and plan["price_toman"] == 1_320_000
+    monkeypatch.setenv("SMARTJUDGE_PRICE_MARGIN_PCT", "-5")  # negative ignored
+    assert ps.get_usd_toman_rate()["rate_toman"] == 300_000
+
+
 def test_live_rate_out_of_bounds_falls_back(live):
     live["result"] = None
-    assert ps.get_usd_toman_rate() == {"rate_toman": 280_000, "source": "FALLBACK", "snapshot_ts": None}
+    info = ps.get_usd_toman_rate()
+    assert (info["rate_toman"], info["source"], info["snapshot_ts"]) == (280_000, "FALLBACK", None)
 
 
 def test_fetch_live_rate_rejects_bounds_and_fallback_source(monkeypatch):

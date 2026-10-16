@@ -2071,6 +2071,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         return chat_auth.daily_limit_response(daily_kind, daily_left)
     # Plan-level model group (basic/pro/premium); pro/premium get a daily quota on the top group.
     gateway_plan, top_key = await asyncio.to_thread(chat_auth.gateway_plan_for, user)
+    top_note = chat_auth.top_quota_note(user, gateway_plan)
 
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     _t_retrieval = time.perf_counter()
@@ -2331,6 +2332,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         conv_id=conv_id, reply=reply_msg, prob=prob, draft=draft, laws=laws, precedents=precedents,
         court_suggestion=court_suggestion, case_file_refs=case_file_refs,
         model=routed_model or cfg["primary_model"], tier=selected_tier, t0=t0,
+        **({"model_notice": top_note} if top_note else {}),
     )
 
 

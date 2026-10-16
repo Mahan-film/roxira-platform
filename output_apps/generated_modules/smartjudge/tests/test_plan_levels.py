@@ -10,6 +10,7 @@ ENVS = (
     "SMARTJUDGE_LLM_GATEWAY_MODEL_BASIC", "SMARTJUDGE_LLM_GATEWAY_MODEL_PRO", "SMARTJUDGE_LLM_GATEWAY_MODEL_PREMIUM",
     "CHAT_ANON_DAILY_LIMIT", "CHAT_FREE_DAILY_LIMIT", "CHAT_VIP_DAILY_LIMIT", "CHAT_BASIC_DAILY_LIMIT",
     "CHAT_PRO_DAILY_LIMIT", "CHAT_PREMIUM_DAILY_LIMIT", "SJ_PRO_TOP_DAILY", "SJ_PREMIUM_TOP_DAILY",
+    "CHAT_PREMIUM_TOP_DAILY_LIMIT",
 )
 
 
@@ -103,7 +104,7 @@ def test_paid_levels_may_use_paid():
 
 # --- top-model caps ------------------------------------------------------------------
 def test_premium_top_cap_switches_to_pro(monkeypatch):
-    monkeypatch.setenv("SJ_PREMIUM_TOP_DAILY", "3")
+    monkeypatch.setenv("CHAT_PREMIUM_TOP_DAILY_LIMIT", "3")
     u = _user("premium")
     plans = [chat_auth.gateway_plan_for(u)[0] for _ in range(5)]
     assert plans == ["premium"] * 3 + ["pro"] * 2
@@ -118,7 +119,7 @@ def test_pro_top_cap_switches_to_product(monkeypatch):
 
 
 def test_top_cap_default_values_and_refund():
-    assert chat_auth.premium_top_daily() == 20 and chat_auth.pro_top_daily() == 60
+    assert chat_auth.premium_top_daily() == 8 and chat_auth.pro_top_daily() == 60
     u = _user("premium")
     plan, key = chat_auth.gateway_plan_for(u)
     assert plan == "premium" and key
@@ -144,8 +145,8 @@ def test_other_levels_have_no_top_counter():
     (chat_auth.CurrentUser(), "guest", 5),
     (_user("free"), "free", 20),
     (_user("basic"), "basic", 40),
-    (_user("pro"), "pro", 150),
-    (_user("premium"), "premium", 300),
+    (_user("pro"), "pro", 60),
+    (_user("premium"), "premium", 120),
     (_user("free", tier="VIP"), "vip", 300),  # legacy VIP without a level
 ])
 def test_daily_limit_per_level(user, kind, limit):
@@ -190,10 +191,27 @@ def test_vip_drafts_route_gate_blocks_basic_only():
 
 
 def test_plan_limits_expose_levels(monkeypatch):
-    monkeypatch.setenv("SJ_PREMIUM_TOP_DAILY", "7")
+    monkeypatch.setenv("CHAT_PREMIUM_TOP_DAILY_LIMIT", "7")
     lim = plan_limits.get_plan_limits()
     assert lim["chat_messages_per_day"] == {
-        "guest": 5, "free": 20, "vip": 300, "basic": 40, "pro": 150, "premium": 300}
+        "guest": 5, "free": 20, "vip": 300, "basic": 40, "pro": 60, "premium": 120}
     assert lim["top_model_answers_per_day"] == {"pro": 60, "premium": 7}
     assert "ruling" not in lim["draft_types"]["basic"] and "ruling" in lim["draft_types"]["pro"]
     assert "ruling" in lim["draft_types"]["premium"]
+
+
+def test_premium_downgrade_note_and_legacy_env(monkeypatch):
+    monkeypatch.setenv("SJ_PREMIUM_TOP_DAILY", "5")  # legacy alias still honoured
+    assert chat_auth.premium_top_daily() == 5
+    monkeypatch.setenv("CHAT_PREMIUM_TOP_DAILY_LIMIT", "1")
+    u = _user("premium")
+    first, _ = chat_auth.gateway_plan_for(u)
+    second, _ = chat_auth.gateway_plan_for(u)
+    assert chat_auth.top_quota_note(u, first) is None
+    assert chat_auth.top_quota_note(u, second) == chat_auth.MSG_PREMIUM_TOP_EXHAUSTED
+    assert chat_auth.top_quota_note(_user("pro"), "basic") is None
+
+
+def test_default_daily_totals():
+    assert chat_auth.chat_pro_daily_limit() == 60 and chat_auth.chat_premium_daily_limit() == 120
+    assert chat_auth.chat_basic_daily_limit() == 40

@@ -75,11 +75,11 @@ def chat_basic_daily_limit() -> int:
 
 
 def chat_pro_daily_limit() -> int:
-    return _int_env("CHAT_PRO_DAILY_LIMIT", 150)
+    return _int_env("CHAT_PRO_DAILY_LIMIT", 60)
 
 
 def chat_premium_daily_limit() -> int:
-    return _int_env("CHAT_PREMIUM_DAILY_LIMIT", 300)
+    return _int_env("CHAT_PREMIUM_DAILY_LIMIT", 120)
 
 
 def pro_top_daily() -> int:
@@ -89,7 +89,8 @@ def pro_top_daily() -> int:
 
 def premium_top_daily() -> int:
     """Answers per day a PREMIUM user gets on the world-best group (vip-premium) before dropping to vip-pro."""
-    return _int_env("SJ_PREMIUM_TOP_DAILY", 20)
+    # CHAT_PREMIUM_TOP_DAILY_LIMIT is the documented name; SJ_PREMIUM_TOP_DAILY stays as a legacy alias.
+    return _int_env("CHAT_PREMIUM_TOP_DAILY_LIMIT", _int_env("SJ_PREMIUM_TOP_DAILY", 8))
 
 
 def voice_anon_hourly_limit() -> int:
@@ -489,7 +490,7 @@ def gateway_plan_for(user: "CurrentUser") -> tuple[str, Optional[str]]:
     """Plan name for ``llm_gateway.model_for`` plus the top-model counter key to refund if no
     answer is produced (None when no top-model cap applies).
 
-    premium: first SJ_PREMIUM_TOP_DAILY answers/day on vip-premium, then vip-pro.
+    premium: first CHAT_PREMIUM_TOP_DAILY_LIMIT (default 8) answers/day on vip-premium, then vip-pro.
     pro:     first SJ_PRO_TOP_DAILY answers/day on vip-pro, then vip-product (basic group).
     Other levels map straight to their own group; legacy VIP keeps "VIP"."""
     level = user_level(user)
@@ -504,6 +505,17 @@ def gateway_plan_for(user: "CurrentUser") -> tuple[str, Optional[str]]:
     if level in ("basic",):
         return "basic", None
     return ("VIP" if level == "vip" else "FREE"), None
+
+
+MSG_PREMIUM_TOP_EXHAUSTED = "سهمیهٔ امروز مدل برتر تمام شد؛ پاسخ با مدل حرفه‌ای"
+
+
+def top_quota_note(user: "CurrentUser", gateway_plan: str) -> Optional[str]:
+    """Persian note for the response metadata when a premium user's answer was routed to the
+    pro group because the daily top-model quota is used up (None otherwise)."""
+    if user_level(user) == "premium" and gateway_plan == "pro":
+        return MSG_PREMIUM_TOP_EXHAUSTED
+    return None
 
 
 def count_daily_chat(key: str, limit: int) -> tuple[bool, int]:

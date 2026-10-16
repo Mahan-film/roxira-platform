@@ -120,7 +120,7 @@ roles:
 
   product_premium:
     description: Smart Judge PREMIUM plan (owner 2026-10-16, $29/month) -- the world's best models, up to
-      SJ_PREMIUM_TOP_DAILY answers per day, then product_pro. The owner asked explicitly for top models
+      CHAT_PREMIUM_TOP_DAILY_LIMIT (default 8) answers per day, then product_pro. The owner asked explicitly for top models
       here, which supersedes the 2026-09-28 "no Anthropic in the product runtime" note for this plan only.
     data_policy: standard
     models:

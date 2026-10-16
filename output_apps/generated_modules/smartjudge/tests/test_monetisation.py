@@ -174,4 +174,4 @@ def test_daily_response_codes():
 def test_plan_limits_expose_daily_chat_limits(monkeypatch):
     monkeypatch.setenv("CHAT_FREE_DAILY_LIMIT", "7")
     day = plan_limits.get_plan_limits()["chat_messages_per_day"]
-    assert day == {"guest": 5, "free": 7, "vip": 300, "basic": 40, "pro": 150, "premium": 300}
+    assert day == {"guest": 5, "free": 7, "vip": 300, "basic": 40, "pro": 60, "premium": 120}
