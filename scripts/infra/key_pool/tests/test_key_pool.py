@@ -41,7 +41,7 @@ def test_render_shape_and_no_secret_values():
     paid = [m for m in cfg["model_list"] if m["model_name"] == "agent-free-paid"]
     assert paid and all(m["litellm_params"]["model"].startswith("openrouter/deepseek/") for m in paid)
     fb = {k: v for f in cfg["router_settings"]["fallbacks"] for k, v in f.items()}
-    assert fb["agent-strong-free"] == ["agent-free-paid"]
+    assert fb["agent-strong-free"] == ["gemini-best"]  # Gemini ladder before paid DeepSeek (owner 2026-10-16)
     assert fb["agent-light-free"] == ["agent-strong-free", "agent-free-paid"]
     assert fb["agent-free"] == ["agent-free-paid"]
     assert cfg["router_settings"]["routing_strategy"] == "simple-shuffle"
@@ -227,3 +227,12 @@ def test_ordered_group_is_a_rank_chain_over_all_keys():
     fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
     assert fb["gemini-best"][0] == "gemini-best__r2" and fb["gemini-best"][-1] == "agent-free-paid"
     assert all("order" not in m["litellm_params"] for m in cfg["model_list"])
+
+
+def test_product_ladder_never_reaches_the_agents_key():
+    import render_litellm
+    cfg = render_litellm.render(kc.load_pool(), names={"GEMINI_API_KEY", "KEYPOOL_MASTER_KEY", "OPENROUTER_API_KEY"})
+    fb = {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
+    chain = fb["gemini-best-product"]
+    assert chain[-1] == "product-free" and "agent-free-paid" not in chain
+    assert fb["product-free"] == ["private"]

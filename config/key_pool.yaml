@@ -172,7 +172,7 @@ groups:
       mistral: [{id: mistral-medium-latest}, {id: mistral-code-latest}]
       gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
-    fallback: [agent-free-paid]
+    fallback: [gemini-best]
 
   agent-light-free:
     description: Cheap models for light code, docs and dev tasks. Free providers only, falls back to strong then paid.
@@ -212,23 +212,47 @@ groups:
 
   gemini-best:   # owner 2026-10-16: best model first on ALL keys, then the next model on all keys, and so on.
                  # `ordered: true`: one LiteLLM group per model rank (all keys inside), chained by fallbacks.
-                 # Free tier (no billing): Pro models answer 429 until billing is on, then they lead automatically.
-                 # Probe 2026-10-16: argon/3.1-pro/pro-latest 429, 3.8/3.7-flash 503 (busy), 3.6/3.5/3-flash ok.
-    description: Gemini ladder, best quality first across all AI Studio keys.
+                 # Probe 2026-10-16 (4 keys): Pro models 429 on every key (free tier, no billing); 2.5-* 404 for new users.
+    description: Gemini ladder for agents and tools, best quality first across all AI Studio keys.
     ordered: true
     providers: [gemini]
     models:
       gemini:
         - {id: gemini-4-argon, needs_billing: true}          # joins the ladder when gemini.billing is true
         - {id: gemini-3.1-pro-preview, needs_billing: true}
+        - {id: gemini-pro-latest, needs_billing: true}
         - {id: gemini-3.8-flash}
         - {id: gemini-3.7-flash}
         - {id: gemini-3.6-flash}
         - {id: gemini-3.5-flash}
         - {id: gemini-3-flash-preview}
+        - {id: gemma-4-31b-it}
         - {id: gemini-3.5-flash-lite}
+        - {id: gemini-3.1-flash-lite}
         - {id: gemma-4-26b-a4b-it}
+        - {id: gemini-flash-lite-latest}
     fallback: [agent-free-paid]
+
+  gemini-best-product:   # same ladder for Smart Judge chat; ends on the PRODUCT key, never the agents key
+    description: Gemini ladder for product answers, then product-free, then the private (product key) group.
+    ordered: true
+    providers: [gemini]
+    models:
+      gemini:
+        - {id: gemini-4-argon, needs_billing: true}          # joins the ladder when gemini.billing is true
+        - {id: gemini-3.1-pro-preview, needs_billing: true}
+        - {id: gemini-pro-latest, needs_billing: true}
+        - {id: gemini-3.8-flash}
+        - {id: gemini-3.7-flash}
+        - {id: gemini-3.6-flash}
+        - {id: gemini-3.5-flash}
+        - {id: gemini-3-flash-preview}
+        - {id: gemma-4-31b-it}
+        - {id: gemini-3.5-flash-lite}
+        - {id: gemini-3.1-flash-lite}
+        - {id: gemma-4-26b-a4b-it}
+        - {id: gemini-flash-lite-latest}
+    fallback: [product-free]
 
   agent-free-paid:
     description: Paid DeepSeek Flash only. Shared last-resort fallback for the free agent groups.
