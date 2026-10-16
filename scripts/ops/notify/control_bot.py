@@ -32,6 +32,7 @@ CONTAINERS = (
 )
 DOCKER_HEALTH_FORMAT = "{{.State.Status}}{{if .State.Health}}/{{.State.Health.Status}}{{end}}"
 _SLUG = re.compile(r"--slug\s+(\S+)")
+SPEC_SLUG = re.compile(r"^[a-z0-9-]{1,40}$")
 _SHA7 = 7
 COST_LIMIT = 3500
 
@@ -200,6 +201,25 @@ class Bot:
         elif data == "unfreeze:cancel":
             self.answer_callback(cb_id, "لغو شد")
             self.send("لغو شد؛ تغییری اعمال نشد.")
+        elif data.startswith("spec:"):
+            self._on_spec_callback(data, cb_id)
+
+    def _on_spec_callback(self, data: str, cb_id: str) -> None:
+        """spec:approve|reject:<slug> -> fixed argv to brief_to_spec.py (slug validated)."""
+        parts = data.split(":")
+        if len(parts) != 3 or parts[1] not in ("approve", "reject") or not SPEC_SLUG.fullmatch(parts[2]):
+            self.answer_callback(cb_id, "نامعتبر")
+            return
+        action, slug = parts[1], parts[2]
+        script = os.path.join(self.paths["repo"], "scripts", "factory", "brief_to_spec.py")
+        rc, _out = self.runner([sys.executable, script, action, slug], timeout=120)
+        self.answer_callback(cb_id, "انجام شد" if rc == 0 else "خطا")
+        if rc != 0:
+            self.send(f"⚠️ اجرای {action} برای «{slug}» ناموفق بود؛ لاگ سرور را ببینید.")
+        elif action == "approve":
+            self.send(f"✅ پروژه «{slug}» تأیید شد؛ وظایف آماده/وارد صف شدند (جزئیات: brief_to_spec.py status).")
+        else:
+            self.send(f"❌ پروژه «{slug}» رد شد.")
 
     # ----------------------------------------------------------------- helpers
     @staticmethod
