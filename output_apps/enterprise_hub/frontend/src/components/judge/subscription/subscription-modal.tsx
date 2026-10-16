@@ -87,6 +87,8 @@ export function SubscriptionModal({
   const [pendingPlan, setPendingPlan] = useState<BackendPlanType | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Plan whose button was pressed last: error/notice render right under it.
+  const [messagePlan, setMessagePlan] = useState<BackendPlanType | null>(null);
   const [period, setPeriod] = useState<BillingPeriod>(initialPlan?.endsWith("_YEARLY") ? "yearly" : "monthly");
 
   // الگوی رسمی React برای بازنشانی وضعیت هنگام تغییر یک prop: مستقیماً حین
@@ -133,6 +135,7 @@ export function SubscriptionModal({
   const startCheckout = async (planType: BackendPlanType) => {
     setError(null);
     setNotice(null);
+    setMessagePlan(planType);
 
     if (needsPhone && !/^09\d{9}$/.test(phoneInput.trim())) {
       setError("برای فعال‌سازی، ابتدا وارد سامانه شوید یا یک شماره همراه معتبر ایرانی (09xxxxxxxxx) وارد کنید.");
@@ -299,7 +302,8 @@ export function SubscriptionModal({
                   </p>
                   <button
                     type="button"
-                    disabled={!server || pendingPlan === planType}
+                    disabled={!server || pendingPlan !== null}
+                    aria-busy={pendingPlan === planType}
                     onClick={() => startCheckout(planType)}
                     className={`mt-5 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
                       highlight
@@ -308,23 +312,25 @@ export function SubscriptionModal({
                     }`}
                   >
                     {pendingPlan === planType && <Loader2 className="size-3.5 animate-spin" />}
-                    فعال‌سازی {copy.label}
+                    {pendingPlan === planType ? "در حال صدور فاکتور..." : `فعال‌سازی ${copy.label}`}
                   </button>
+                  {/* Always-mounted live region so screen readers announce the message. */}
+                  <div role="status" aria-live="polite" className="empty:hidden">
+                    {messagePlan === planType && error && (
+                      <p className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-[13px] leading-relaxed text-destructive">
+                        {error}
+                      </p>
+                    )}
+                    {messagePlan === planType && notice && (
+                      <p className="mt-3 rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-3 text-[13px] leading-relaxed text-emerald-300">
+                        {notice}
+                      </p>
+                    )}
+                  </div>
                 </article>
               );
             })}
           </div>
-
-          {notice && (
-            <p className="mt-6 rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-4 text-[13px] leading-relaxed text-emerald-300">
-              {notice}
-            </p>
-          )}
-          {error && (
-            <p className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-[13px] leading-relaxed text-destructive">
-              {error}
-            </p>
-          )}
 
           <p className="mt-6 rounded-2xl border border-border bg-muted/30 p-4 text-[13px] leading-relaxed text-muted-foreground">
             مبلغ نهایی همیشه به تومان و بر اساس ماتریس قیمت لحظه‌ای سرور محاسبه می‌شود؛ هیچ مبلغی
