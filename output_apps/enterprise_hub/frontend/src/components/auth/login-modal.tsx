@@ -280,6 +280,7 @@ export function LoginModal({
             email: session.user.email,
             role: toUserRole(session.user.role),
             subscriptionTier: session.user.subscriptionTier,
+            planLevel: session.user.planLevel,
             serviceDomain: serviceDomain ?? "GHAZI",
             createdAt: new Date().toISOString(),
           },

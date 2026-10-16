@@ -21,6 +21,8 @@
  *                 "expires_in":...,"user":{...}}
  */
 
+import type { PlanLevel } from "@/lib/plan-catalog";
+
 import { newRequestId, reportClientError, sleep, waitUntilUsable } from "./judge-chat-client";
 
 /** Per-attempt timeout of one auth call. */
@@ -136,6 +138,7 @@ export interface JudgeAuthUser {
   email: string | null;
   role: string;
   subscriptionTier: string;
+  planLevel?: PlanLevel;
 }
 
 /** سشن صادرشده پس از تأیید موفق کد. */
@@ -329,6 +332,13 @@ function asString(value: unknown): string | null {
   return null;
 }
 
+function asPlanLevel(value: unknown): PlanLevel | undefined {
+  const level = asString(value)?.toLowerCase();
+  return level === "free" || level === "basic" || level === "pro" || level === "premium"
+    ? level
+    : undefined;
+}
+
 /**
  * ارسال کد یک‌بارمصرف به شماره همراه.
  *
@@ -421,6 +431,7 @@ export async function verifyJudgeOtp(
       email: asString(rawUser.email),
       role: asString(rawUser.role) ?? "USER",
       subscriptionTier: asString(rawUser.subscription_tier ?? rawUser.subscriptionTier) ?? "FREE",
+      planLevel: asPlanLevel(rawUser.plan_level ?? rawUser.planLevel),
     },
   };
 }

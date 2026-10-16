@@ -7,6 +7,7 @@ import { Lock } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { SubscriptionModal } from "@/components/judge/subscription/subscription-modal";
 import { formatPersianNumber, type PricingMatrixResponse } from "@/components/judge/subscription/types";
+import type { PlanLevel } from "@/lib/plan-catalog";
 
 const PRICING_URL = "/api/v1/apps/judge/payments/pricing-matrix";
 
@@ -14,10 +15,20 @@ function isVipTier(tier: string | undefined): boolean {
   return Boolean(tier && tier.toUpperCase().includes("VIP"));
 }
 
+/** Plan levels the server allows ruling / indictment drafts for; legacy VIP has no level. */
+const ENTITLED_PLAN_LEVELS: readonly PlanLevel[] = ["pro", "premium"];
+
+/** Basic users are tier "VIP" on the server but get a 403 for these drafts, so check the level. */
+function isDraftEntitled(tier: string | undefined, planLevel: PlanLevel | undefined): boolean {
+  if (!isVipTier(tier)) return false;
+  if (!planLevel || planLevel === "free") return true;
+  return ENTITLED_PLAN_LEVELS.includes(planLevel);
+}
+
 /**
  * Shows the lock card (real prices from the pricing API + login/upgrade CTA)
- * instead of the form for guests and FREE users, so nobody types a long case
- * before hitting the paywall. The server still enforces VIP on submit.
+ * instead of the form for guests and users below the pro plan, so nobody types a
+ * long case before hitting the paywall. The server still enforces pro/premium on submit.
  */
 export function VipGate({ children, feature }: { children: ReactNode; feature: string }) {
   const { isAuthenticated, isLoading, user, accessToken, openLogin } = useAuth();
@@ -27,7 +38,9 @@ export function VipGate({ children, feature }: { children: ReactNode; feature: s
   // Stored tier can be stale right after a payment: let the user open the form explicitly.
   const [forceOpen, setForceOpen] = useState(false);
 
-  const entitled = isAuthenticated && isVipTier(user?.subscriptionTier);
+  const planLevel = user?.planLevel;
+  const entitled = isAuthenticated && isDraftEntitled(user?.subscriptionTier, planLevel);
+  const isBasicUser = isAuthenticated && planLevel === "basic";
 
   useEffect(() => {
     if (entitled || isLoading) return;
@@ -53,12 +66,14 @@ export function VipGate({ children, feature }: { children: ReactNode; feature: s
     <section className="ap-card no-print mb-12 text-center" aria-labelledby="vip-lock-title">
       <Lock className="mx-auto size-8" aria-hidden="true" />
       <h2 id="vip-lock-title" className="mt-3 text-xl font-semibold">
-        {feature} فقط برای کاربران VIP است
+        {feature} به اشتراک حرفه‌ای یا بالاتر نیاز دارد
       </h2>
       <p className="ap-muted mx-auto mt-2 max-w-xl">
-        {isAuthenticated
-          ? "حساب شما اشتراک VIP ندارد. پیش از وارد کردن اطلاعات پرونده، اشتراک تهیه کنید."
-          : "برای استفاده ابتدا وارد شوید و اشتراک VIP تهیه کنید؛ پیش از آن چیزی لازم نیست تایپ کنید."}
+        {isBasicUser
+          ? "اشتراک پایه برای این پیش‌نویس کافی نیست. برای دسترسی، به اشتراک حرفه‌ای (Pro) ارتقا دهید."
+          : isAuthenticated
+            ? "این پیش‌نویس برای کاربران VIP است. برای دسترسی، اشتراک حرفه‌ای یا بالاتر تهیه کنید."
+            : "برای استفاده ابتدا وارد شوید و اشتراک حرفه‌ای تهیه کنید؛ پیش از آن چیزی لازم نیست تایپ کنید."}
       </p>
       <ul className="mx-auto mt-4 max-w-md space-y-2 text-start">
         {plans.map((plan) => (
@@ -99,7 +114,13 @@ export function VipGate({ children, feature }: { children: ReactNode; feature: s
           اشتراک فعال دارم؛ نمایش فرم
         </button>
       </p>
-      <SubscriptionModal isOpen={modalOpen} onClose={() => setModalOpen(false)} accessToken={accessToken} phone={user?.phone} />
+      <SubscriptionModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        initialPlan="SJ_PRO_MONTHLY"
+        accessToken={accessToken}
+        phone={user?.phone}
+      />
     </section>
   );
 }

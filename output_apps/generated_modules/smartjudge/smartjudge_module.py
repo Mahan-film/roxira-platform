@@ -6069,6 +6069,9 @@ async def verify_auth_otp(payload: dict = Body(...), request: Request = None):
     }
     tier = await asyncio.to_thread(_tier_for_phone, phone)
     token = _issue_access_token(phone, tier, profile)
+    # Plan level (free/basic/pro/premium) for the UI's gates; the server still enforces every limit.
+    info = await asyncio.to_thread(_entitlement_info, phone)
+    plan_level = info[1] if info else ("pro" if str(tier).upper() == "VIP" else "free")
 
     return {
         "status": "success",
@@ -6081,6 +6084,7 @@ async def verify_auth_otp(payload: dict = Body(...), request: Request = None):
             "last_name": profile["last_name"],
             "username": profile["username"],
             "subscription_tier": tier,
+            "plan_level": plan_level,
         },
     }
 

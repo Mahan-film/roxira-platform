@@ -12,6 +12,7 @@
 
 import { ApiClientError, apiRequest } from "@/lib/api/http-client";
 import { API_PROXY_BASE_PATH, AUTH_RESOURCE_PATH } from "@/lib/api/config";
+import type { PlanLevel } from "@/lib/plan-catalog";
 
 /** دامنه سرویس — تعیین‌کننده قالب پیامک . */
 export type AuthServiceDomain = "ROXIRA" | "GHAZI";
@@ -28,6 +29,7 @@ export interface AuthUser {
   role: UserRole;
   /** Subscription tier from the verify-otp response (FREE / VIP ...). */
   subscriptionTier?: string;
+  planLevel?: PlanLevel;
   serviceDomain: AuthServiceDomain;
   createdAt: string;
 }
