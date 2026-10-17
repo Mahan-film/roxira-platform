@@ -177,6 +177,34 @@ def activate_user_subscription(user_id: str, plan_type: str = "7_DAYS_TRIAL") ->
     return result
 
 
+def lookup_entitlement(user_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Current row of ``user_entitlements`` for a user ref (read only), used by
+    the payment result page. Returns None when absent or the DB is unavailable."""
+    if not user_id:
+        return None
+    import psycopg
+
+    from src.roxira_config import postgres_dsn
+
+    dsn = os.environ.get("DATABASE_URL") or postgres_dsn(
+        host=os.environ.get("POSTGRES_HOST", "roxira_postgres_prod"),
+        port=int(os.environ.get("POSTGRES_PORT", "5432")),
+    )
+    try:
+        with psycopg.connect(dsn, autocommit=True, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT plan_type, expires_at FROM user_entitlements WHERE user_ref = %s;",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+    except Exception:
+        return None
+    if not row:
+        return None
+    return {"plan_type": row[0], "expires_at": row[1].isoformat() if row[1] else None}
+
+
 _LEVEL_RANK = {"free": 0, "basic": 1, "pro": 2, "premium": 3}
 
 

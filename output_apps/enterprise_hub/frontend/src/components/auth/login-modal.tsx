@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -57,6 +57,22 @@ async function withNetworkRetry<T>(call: () => Promise<T>, onRetry: () => void):
     }
   }
 }
+const OTP_LENGTH = 5;
+/** Give up waiting for the SMS auto-read after this long. */
+const WEBOTP_TIMEOUT_MS = 120_000;
+
+/**
+ * Pull the 5-digit code out of whatever was typed, autofilled or pasted
+ * (a whole SMS included). Persian/Arabic digits are normalised, spaces ignored.
+ */
+function extractOtp(raw: string): string {
+  const spaced = Array.from(raw)
+    .map((ch) => normalizeOtpCode(ch) || " ")
+    .join("");
+  const run = spaced.match(/(?<!\d)\d{5}(?!\d)/);
+  if (run) return run[0];
+  return normalizeOtpCode(raw).slice(0, OTP_LENGTH);
+}
 const SHOW_DEV_CODE = process.env.NODE_ENV !== "production";
 
 function toUserRole(role: string | null | undefined): UserRole {
@@ -109,6 +125,8 @@ export function LoginModal({
   const [retrying, setRetrying] = useState(false);
   const [networkFailed, setNetworkFailed] = useState(false);
   const [organizationName, setOrganizationName] = useState("");
+  /** Last code already sent for verification: blocks double auto-submit. */
+  const submittedCodeRef = useRef<string | null>(null);
 
   /** ورود از پورتال سازمانی روکسیرا (نه قاضی هوشمند) — مسیر NestJS فعال می‌شود. */
   const isEnterprise = serviceDomain === "ROXIRA";
@@ -238,14 +256,9 @@ export function LoginModal({
     [phone, requestCode],
   );
 
-  const handleVerify = useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault();
-      const cleanCode = normalizeOtpCode(code);
-      if (cleanCode.length < 4) {
-        setError(["کد تأیید باید ۵ رقم باشد."]);
-        return;
-      }
+  const submitCode = useCallback(
+    async (cleanCode: string) => {
+      submittedCodeRef.current = cleanCode;
       setLoading(true);
       setError(null);
       setNetworkFailed(false);
@@ -287,13 +300,19 @@ export function LoginModal({
         });
         onClose();
       } catch (err) {
+        let offline = true;
         if (err instanceof JudgeAuthError || err instanceof ApiClientError) {
           setError(err.details);
-          setNetworkFailed(err.statusCode === 0);
+          offline = err.statusCode === 0;
         } else {
           // fetch() rejects only on network failure: the code was not checked.
           setError([NETWORK_ERROR_COPY]);
-          setNetworkFailed(true);
+        }
+        setNetworkFailed(offline);
+        if (!offline) {
+          // the server rejected the code: clear it so the user can enter a new one
+          setCode("");
+          submittedCodeRef.current = null;
         }
       } finally {
         setLoading(false);
@@ -301,7 +320,6 @@ export function LoginModal({
       }
     },
     [
-      code,
       isEnterprise,
       onAuthenticated,
       onClose,
@@ -310,6 +328,54 @@ export function LoginModal({
       serviceDomain,
     ],
   );
+
+  const handleVerify = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      const cleanCode = extractOtp(code);
+      if (cleanCode.length < 4) {
+        setError(["کد تأیید باید ۵ رقم باشد."]);
+        return;
+      }
+      await submitCode(cleanCode);
+    },
+    [code, submitCode],
+  );
+
+  // Auto-submit once the field holds exactly 5 digits (typed, pasted, autofilled or WebOTP).
+  useEffect(() => {
+    if (!open || step !== "code" || loading) return;
+    if (code.length < OTP_LENGTH) submittedCodeRef.current = null;
+    if (code.length !== OTP_LENGTH || submittedCodeRef.current === code) return;
+    void submitCode(code);
+  }, [code, loading, open, step, submitCode]);
+
+  // Android Chrome WebOTP: read the SMS (ending in "@domain #code") without typing.
+  useEffect(() => {
+    if (!open || step !== "code") return;
+    if (typeof window === "undefined" || !("OTPCredential" in window)) return;
+    const credentials = navigator.credentials;
+    if (!credentials || typeof credentials.get !== "function") return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), WEBOTP_TIMEOUT_MS);
+    try {
+      credentials
+        .get({ otp: { transport: ["sms"] }, signal: controller.signal } as CredentialRequestOptions)
+        .then((credential) => {
+          const received = (credential as { code?: string } | null)?.code;
+          if (received) setCode(extractOtp(received));
+        })
+        .catch(() => {
+          // aborted, dismissed or unsupported: manual entry still works
+        });
+    } catch {
+      // never let WebOTP break the login form
+    }
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [open, step]);
 
   if (!open) return null;
 
@@ -452,10 +518,15 @@ export function LoginModal({
                 </Label>
                 <Input
                   id="auth-code"
+                  name="otp"
+                  type="text"
                   value={code}
-                  onChange={(event) =>
-                    setCode(normalizeOtpCode(event.target.value).slice(0, 5))
-                  }
+                  onChange={(event) => setCode(extractOtp(event.target.value))}
+                  onPaste={(event) => {
+                    event.preventDefault();
+                    setCode(extractOtp(event.clipboardData.getData("text")));
+                  }}
+                  maxLength={200}
                   placeholder="- - - - -"
                   inputMode="numeric"
                   autoComplete="one-time-code"

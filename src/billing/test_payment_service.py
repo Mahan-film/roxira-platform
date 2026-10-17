@@ -471,3 +471,103 @@ def test_verify_invoice_activation_persist_failure_sets_activation_pending():
     assert result["status"] == "PAID"  # payment itself is never undone
     assert result["activation_pending"] is True
     assert store.orders["TRK-1"]["status"] == "paid"
+
+
+# ---------------------------------------------------------------------------
+# Return-page flow: replay safety, retries, result details, Persian messages
+# ---------------------------------------------------------------------------
+
+_PAID_OK = {
+    "success": True, "paid": True, "definitive": True,
+    "amount": 35_000_000, "ref_number": "REF-9",
+}
+
+
+def _verify(store, activate_fn, track_id="TRK-1", verify_res=None, **kw):
+    return payment_service.verify_invoice(
+        track_id=track_id,
+        order_store=store,
+        zibal_verify_fn=lambda tid: verify_res or _PAID_OK,
+        activate_fn=activate_fn,
+        **kw,
+    )
+
+
+def test_same_order_verified_three_times_activates_exactly_once():
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+    activated = []
+
+    def activate(user_ref, plan_type):
+        activated.append((user_ref, plan_type))
+        return {"persisted": True, "expires_at": "2030-01-01T00:00:00+00:00"}
+
+    for _ in range(3):
+        assert _verify(store, activate)["status"] == "PAID"
+    assert len(activated) == 1
+    assert store.mark_paid_calls == 1
+
+
+def test_paid_result_has_plan_name_level_and_stored_expiry():
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+
+    def ent(ref):
+        return {"plan_type": "VIP_MONTHLY_PRO", "expires_at": "2030-02-01T00:00:00+00:00"}
+
+    first = _verify(
+        store, lambda u, p: {"persisted": True, "expires_at": "2030-01-01T00:00:00+00:00"},
+        plans=PLANS, entitlement_fn=ent,
+    )
+    replay = _verify(store, lambda u, p: pytest.fail("re-activated"), plans=PLANS, entitlement_fn=ent)
+
+    for res in (first, replay):
+        assert res["plan_name"] == "اشتراک ماهانه VIP"
+        assert res["plan_level"] == "pro"
+        assert res["expires_at"] == "2030-02-01T00:00:00+00:00"  # stored (stacked) value wins
+
+
+def test_activation_is_retried_when_persist_fails_transiently():
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+    calls = []
+
+    def flaky(user_ref, plan_type):
+        calls.append(1)
+        return {"persisted": len(calls) >= 3}
+
+    res = _verify(store, flaky)
+    assert res["status"] == "PAID"
+    assert "activation_pending" not in res
+    assert len(calls) == 3
+
+
+def test_activate_fn_exception_does_not_lose_the_paid_order():
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+
+    def boom(user_ref, plan_type):
+        raise RuntimeError("db down")
+
+    res = _verify(store, boom)
+    assert res["status"] == "PAID"
+    assert res["activation_pending"] is True
+    assert store.orders["TRK-1"]["status"] == "paid"
+
+
+def test_failure_messages_are_persian_never_raw_gateway_english():
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+    res = _verify(store, lambda u, p: None, verify_res={
+        "success": True, "paid": False, "definitive": True, "message": "transaction failed",
+    })
+    assert res["status"] == "FAILED"
+    assert "transaction failed" not in res["message"]
+
+    store2 = FakeOrderStore()
+    _seed_pending(store2, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+    res2 = _verify(store2, lambda u, p: None, verify_res={
+        "success": False, "paid": False, "definitive": False, "message": "timed out",
+    })
+    assert res2["status"] == "PENDING_RETRY"
+    assert "timed out" not in res2["message"]

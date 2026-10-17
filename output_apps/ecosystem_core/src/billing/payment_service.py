@@ -151,6 +151,8 @@ def verify_invoice(
     order_store: OrderStore,
     zibal_verify_fn: Callable[[str], dict],
     activate_fn: Callable[[str | None, str], Any],
+    plans: dict | None = None,
+    entitlement_fn: Callable[[str | None], dict | None] | None = None,
 ) -> dict:
     """Real Zibal verify. Idempotent: a second call for an already-paid
     track_id returns PAID again without re-calling Zibal or re-activating.
@@ -166,11 +168,12 @@ def verify_invoice(
         return {"status": "FAILED", "message": "سفارش با این شناسه یافت نشد."}
 
     if order["status"] == "paid":
-        return {
-            "status": "PAID",
-            "message": "این تراکنش پیش‌تر تایید و فعال شده است.",
-            "track_id": track_id,
-        }
+        # Idempotent replay (page refresh / Zibal calling twice): never
+        # re-verify or re-activate; only report what is already stored.
+        return _paid_result(
+            order, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
+            plans=plans, entitlement_fn=entitlement_fn,
+        )
 
     verify_res = zibal_verify_fn(track_id)
 
@@ -179,10 +182,8 @@ def verify_invoice(
         # (never mark_failed here) so the callback page can retry.
         return {
             "status": "PENDING_RETRY",
-            "message": verify_res.get(
-                "message",
-                "امکان تایید قطعی نتیجهٔ پرداخت در حال حاضر وجود ندارد؛ لطفاً دوباره تلاش کنید.",
-            ),
+            # fixed Persian copy: the gateway/network text is English
+            "message": "امکان تایید قطعی نتیجهٔ پرداخت در حال حاضر وجود ندارد؛ لطفاً دوباره تلاش کنید.",
             "track_id": track_id,
         }
 
@@ -190,7 +191,7 @@ def verify_invoice(
         order_store.mark_failed(track_id)
         return {
             "status": "FAILED",
-            "message": verify_res.get("message", "پرداخت تایید نشد."),
+            "message": "پرداخت انجام نشد یا لغو شد. مبلغی از حساب شما کسر نشده است.",
         }
 
     gateway_amount = int(verify_res.get("amount") or 0)
@@ -212,18 +213,30 @@ def verify_invoice(
                 "status": "FAILED",
                 "message": "وضعیت تراکنش نامشخص است؛ لطفاً دوباره تلاش کنید.",
             }
-        return {
-            "status": "PAID",
-            "message": "این تراکنش پیش‌تر تایید و فعال شده است.",
-            "track_id": track_id,
-        }
+        return _paid_result(
+            refreshed, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
+            plans=plans, entitlement_fn=entitlement_fn,
+        )
 
-    activation_result = activate_fn(
-        order.get("user_ref") or order.get("phone"), order["plan_type"]
-    )
-    activation_pending = isinstance(activation_result, dict) and not activation_result.get(
-        "persisted", True
-    )
+    # Only the call that won mark_paid() reaches this point, so an order is
+    # activated at most once (merge_entitlement stacks same-level renewals, a
+    # second activation would wrongly add another period). A failed persist
+    # touches nothing, so retrying it a couple of times is safe.
+    activation_result: Any = None
+    activation_pending = True
+    for _attempt in range(3):
+        try:
+            activation_result = activate_fn(
+                order.get("user_ref") or order.get("phone"), order["plan_type"]
+            )
+        except Exception:  # never turn a captured payment into a 500
+            logger.exception("W17 activate_fn raised: track_id=%s", track_id)
+            continue
+        activation_pending = isinstance(activation_result, dict) and not activation_result.get(
+            "persisted", True
+        )
+        if not activation_pending:
+            break
     if activation_pending:
         # Payment IS captured and marked paid — never undo that. But the
         # entitlement write failed, so this needs manual reconciliation
@@ -232,12 +245,55 @@ def verify_invoice(
             "W17 payment verified but entitlement persist failed: track_id=%s", track_id
         )
 
-    result = {
-        "status": "PAID",
-        "message": "پرداخت با موفقیت تایید و حساب کاربری فعال شد.",
-        "track_id": track_id,
-        "ref_number": verify_res.get("ref_number"),
-    }
+    result = _paid_result(
+        order, track_id, "پرداخت با موفقیت تایید و حساب کاربری فعال شد.",
+        plans=plans, entitlement_fn=entitlement_fn,
+        activation=activation_result if isinstance(activation_result, dict) else None,
+    )
+    result["ref_number"] = verify_res.get("ref_number")
     if activation_pending:
         result["activation_pending"] = True
+    return result
+
+
+def _paid_result(
+    order: dict,
+    track_id: str,
+    message: str,
+    *,
+    plans: dict | None,
+    entitlement_fn: Callable[[str | None], dict | None] | None,
+    activation: dict | None = None,
+) -> dict:
+    """PAID response enriched with what the result page shows: plan name,
+    plan level and expiry. Pure lookups; any failure just omits the fields."""
+    from . import pricing_service
+
+    plan_type = order.get("plan_type")
+    result: dict = {
+        "status": "PAID",
+        "message": message,
+        "track_id": track_id,
+        "plan_type": plan_type,
+        "plan_level": pricing_service.plan_level(plan_type),
+    }
+    plan = (plans or {}).get(plan_type) or {}
+    if plan.get("name"):
+        result["plan_name"] = plan["name"]
+    expires_at = None
+    if entitlement_fn is not None:
+        # the stored row is the truth (same-level renewals stack, a higher
+        # active plan is kept), not the period the single activation computed
+        try:
+            ent = entitlement_fn(order.get("user_ref") or order.get("phone")) or {}
+            expires_at = ent.get("expires_at")
+            if ent.get("plan_type"):
+                result["active_plan_type"] = ent["plan_type"]
+                result["plan_level"] = pricing_service.plan_level(ent["plan_type"])
+        except Exception:
+            logger.exception("W17 entitlement lookup failed: track_id=%s", track_id)
+    if not expires_at:
+        expires_at = (activation or {}).get("expires_at")
+    if expires_at:
+        result["expires_at"] = expires_at
     return result

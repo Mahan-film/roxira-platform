@@ -2843,11 +2843,16 @@ async def verify_payment(payload: dict = Body(...)):
             order_store=store,
             zibal_verify_fn=zibal_service.verify_payment,
             activate_fn=zibal_service.activate_user_subscription,
+            plans=get_calculated_pricing(),
+            entitlement_fn=zibal_service.lookup_entitlement,
         )
     finally:
         conn.close()
 
     status = result.get("status")
+    if status == "PAID":
+        # the chat tier lookup is cached for 60s: drop it so the new plan shows at once
+        _ENTITLEMENT_CACHE.clear()
     if status == "PENDING_RETRY":
         # پاسخ قطعی از زیبال نرسید (خطای گذرا/شبکه) — سفارش هنوز pending است؛
         # ۵۰۳ تا صفحه callback دوباره تلاش کند، بدون آن‌که هرگز failed شود.
