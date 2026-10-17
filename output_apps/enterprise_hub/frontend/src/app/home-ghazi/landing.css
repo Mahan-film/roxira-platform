@@ -1,0 +1,143 @@
+/* Landing (home-ghazi) look: dark futuristic, gold primary, cyan secondary.
+   Palette comes from the brand emblem: #05080f / #0a0f1a, cyan #38bdf8, gold #fbbf24 / #f59e0b. */
+
+.gl-root {
+  background: #05080f;
+  color: #e2e8f0;
+  overflow-x: clip;
+}
+
+.gl-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 50%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 50%, transparent 100%);
+}
+
+.gl-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+.gl-gold {
+  background: linear-gradient(120deg, #fde68a 0%, #fbbf24 45%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gl-glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* Blur lives on a pseudo-element: backdrop-filter on the header itself would become the
+   containing block of the fixed mobile-menu overlay and collapse it to header height. */
+.gl-header {
+  isolation: isolate;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.gl-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(5, 8, 15, 0.8);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.gl-card {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 1.25rem;
+  transition: border-color 0.25s ease, transform 0.25s ease;
+}
+.gl-card:hover {
+  border-color: rgba(251, 191, 36, 0.4);
+  transform: translateY(-3px);
+}
+
+.gl-card-static:hover {
+  transform: none;
+}
+
+.gl-btn {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b 55%, #d97706);
+  color: #1c1204;
+  box-shadow: 0 10px 30px -12px rgba(245, 158, 11, 0.6);
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+.gl-btn:hover {
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+}
+.gl-btn:active {
+  transform: none;
+}
+
+.gl-focus:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.gl-ask:focus-within {
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+
+@keyframes gl-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gl-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.gl-fade-1 {
+  animation: gl-fade-up 0.6s ease both;
+}
+.gl-fade-2 {
+  animation: gl-fade-up 0.6s 0.1s ease both;
+}
+.gl-fade-3 {
+  animation: gl-fade-up 0.6s 0.2s ease both;
+}
+.gl-float {
+  animation: gl-float 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gl-fade-1,
+  .gl-fade-2,
+  .gl-fade-3,
+  .gl-float {
+    animation: none;
+  }
+  .gl-card,
+  .gl-btn {
+    transition: none;
+  }
+  .gl-card:hover,
+  .gl-btn:hover {
+    transform: none;
+  }
+}

@@ -1,26 +1,27 @@
-# Smart Judge landing redesign (2026-10)
+# Smart Judge landing redesign (2026-10, v2: dark futuristic)
 
 Route: `output_apps/enterprise_hub/frontend/src/app/home-ghazi/page.tsx` (ghazihoushmand.ir root is rewritten to it by middleware).
 
-History: the file has only two commits (#623 creation, #663 nav link), so no earlier "nicer" version exists in git for this route; the redesign is built fresh on the existing content, copy and routes.
+v1 (light, plain) was rejected by the owner: no real menu, no login entry, flat look. v2 brings back the look of the old static page (`output_apps/ecosystem_core/src/api/static/ghazi_landing.html`) inside Next.js, with the new brand logo.
 
 | Decision | Reason |
 |---|---|
-| Header: 56px on mobile, logo + short name "قاضی هوشمند", small "شروع" CTA (full "شروع رایگان گفتگو" from `sm`), hamburger `<details>` menu below `md` | The old 40px logo + long title + 20px-padded button overflowed 390px; `<details>` needs no JS and no new library |
-| "قوانین ۱۴۰۵" pill moved from header into the trust chips | It wrapped under the title on mobile; it is a trust fact, not branding |
-| Hero: eyebrow chip, H1 (text unchanged), one-line sub copy, ONE primary CTA "سؤال حقوقی‌ات را بپرس", ONE secondary "جستجوی متن قوانین" | Clear hierarchy; long paragraph removed (was text-heavy). Buttons full width up to 384px on mobile (48px touch target) |
-| Trust signals = rounded chips (flex-wrap) with check icon, slate-700 on white | Replaces grey 12px text row; contrast above AA |
-| Soft blue gradient behind hero only, no animation (pulse dot removed, no wavy underline) | 2026 look, zero CWV cost, no motion |
-| Stats card: article count + law count from `public/coverage_manifest.json` (`loadCoverageTotals`, same source as /coverage) and guide count from `GUIDE_SLUGS.length` | Only true, build-time numbers; nothing invented |
-| 3 steps as a compact list (row on mobile, columns from `md`), 6 features as short cards | Less vertical space, removes the big empty grey gap; text shortened |
-| Pricing teaser: level names from `LEVEL_COPY` + link to `/plans`, no prices | Prices are served live from the server matrix; hardcoding would go stale |
-| FAQ keeps 4 questions and the FAQ JSON-LD unchanged; disclaimer kept as one amber card | SEO/legal content preserved |
-| Colours: slate-600+ body on white, amber-700 (not 600) for small amber text, `dark:` variants kept everywhere | WCAG AA; dark mode still works |
-| Spacing scale: sections `py-14` / `sm:py-20`, cards `p-5`, gaps 3/4 | Consistent 4px-based rhythm |
-| Font: existing Vazirmatn (`font-sans` from layout) | No new font load |
-| Focus rings on all links/summary; decorative SVGs `aria-hidden`; real `<main>`, `<ol>`, `<dl>` | Accessibility |
-| No layout shift: no images, no client JS, server component | CWV |
+| Dark theme: `#05080f` / `#0a0f1a`, subtle grid, blurred glow blobs, glass cards (`landing.css`, `gl-*` classes) | Owner liked the old dark 2026 look; palette is taken from the logo. Plain CSS file next to the page, no new packages |
+| Gold (`#fbbf24 -> #f59e0b`) = primary CTA and headline highlight; cyan `#38bdf8` = kickers, links, focus rings, check icons | Same CTA colour as the old design; cyan comes from the left half of the logo and stays secondary |
+| Header: mark + name, desktop nav (گفتگو، قوانین، آرا و بخشنامه‌ها، وحدت رویه، راهنماها، اشتراک‌ها، درباره) from `lg`, gold pill "ورود / ثبت‌نام (سریع)", hamburger below `lg` | The owner saw no menu and no sign-in. Nav list is one shared file (`components/landing/landing-nav.ts`) |
+| Mobile menu = small client component (`landing-mobile-menu.tsx`): `aria-expanded`/`aria-controls`, Esc closes and returns focus, first link focused on open, body scroll locked | Accessible full-screen menu. Header blur is on a `::before` because `backdrop-filter` on the header would trap the fixed overlay |
+| Login pill goes to `/chat?login=1`; `chat-shell.tsx` opens the existing `openLogin({serviceDomain:"GHAZI"})` dialog (same as the chat header) and strips the param | No second auth system; login lives in the chat app's `AuthProvider` |
+| Hero question box (`hero-ask.tsx`): textarea + attach + voice + big gold CTA "شروع بررسی هوشمند پرونده"; submit goes to `/chat?q=<text>`, `chat-shell.tsx` sends it once and removes the param; attach/voice link to `/chat` | The old page's main hook: ask right in the hero. Attachments and recording already exist in the chat, so the landing does not duplicate them |
+| Headline kept: «پاسخ حقوقی مطمئن و مستند به قانون، در چند ثانیه» (gold gradient on the second half) | Existing approved copy |
+| Stats, FAQ + FAQ JSON-LD, disclaimer, pricing teaser (names from `LEVEL_COPY`, no prices) unchanged in substance | Only true build-time numbers; prices stay live on `/plans` |
+| Motion: fade-up on hero, slow float on the emblem, ping dot, card hover lift; all disabled under `prefers-reduced-motion` | Subtle, CSS only, no CWV cost |
+| Text contrast: body `slate-300` / small text `slate-400` or lighter on near-black (above 7:1); amber-300 on dark | WCAG AA |
+| Mobile first (360-430px): emblem above the text at 300px, single column, `overflow-x: clip` on the root | No horizontal scroll |
 
-Subscription modal (`src/components/judge/subscription/subscription-modal.tsx`): the checkout error/notice now renders inside the card of the pressed plan, directly under its button, in an always-mounted `role="status" aria-live="polite"` region. The pressed button shows a spinner and "در حال صدور فاکتور..."; all plan buttons are disabled while one checkout is pending (prevents double invoices). `track("checkout_started")` and the redirect guard are unchanged.
+## Logo decision
 
-Not changed: backend APIs, routes, `track(...)`/Umami wiring (the landing page never had inline track calls; Umami is loaded in `layout.tsx`).
+- The owner's emblem (glowing circuit, scales + gavel, cyan to gold, on carbon) is used as a **photo** only where there is room: hero (`public/brand/ghazi-emblem-960.webp`, 960x616, ~86 KB, `next/image` with explicit size and `priority`, soft radial mask so its carbon background melts into the page) and social sharing (`og:image` = `public/brand/ghazi-emblem.webp`, 1668x1070 original).
+- For small sizes (header 36px, footer 28px, app icons, favicon) a detailed glow image turns into mud and costs bytes. So a clean **inline SVG mark** is drawn from the same idea: round ring, scales, diagonal gavel, thin strokes, gradient cyan to gold (`components/brand/GhaziMark.tsx`). The same mark is in `public/icons/ghazi-192.svg`, `ghazi-512.svg`, `ghazi-maskable.svg` on a `#05080f` background (maskable has extra safe-zone padding).
+- Rule: photo for >= 300px / sharing, SVG mark for everything smaller. Do not downscale the photo into a header.
+
+Not changed: backend APIs, routes, Umami wiring. Subscription modal change from v1 (inline checkout errors) stays.

@@ -1028,6 +1028,39 @@ export function ChatShell() {
     await sendChat(textToSend, [...messages, userMsg]);
   };
 
+  // Landing page hand-off: /chat?login=1 opens the existing login dialog, /chat?q=<text> sends
+  // the question typed in the landing hero. Params are removed from the URL right away so a
+  // reload does not re-send or re-open anything.
+  const landingParamsDoneRef = useRef(false);
+  useEffect(() => {
+    if (landingParamsDoneRef.current) return;
+    const q = (searchParams.get("q") ?? "").trim();
+    const wantsLogin = searchParams.get("login") === "1";
+    if (!q && !wantsLogin) return;
+    landingParamsDoneRef.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("q");
+    url.searchParams.delete("login");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    // No cleanup on purpose: replaceState re-renders with new params (and StrictMode re-runs
+    // effects); the ref above already guarantees this fires exactly once.
+    window.setTimeout(() => {
+      if (wantsLogin && !isAuthenticated) {
+        openLogin({
+          serviceDomain: "GHAZI",
+          title: "ورود به سامانه قاضی هوشمند",
+          description: "شماره همراه خود را وارد کنید؛ کد تأیید پیامکی ارسال می‌شود.",
+        });
+      }
+      if (q) {
+        if (q.length <= MAX_CHAT_CHARS) void handleSendMessage(q);
+        else setInputPrompt(q.slice(0, MAX_CHAT_CHARS));
+      }
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+
   const removeContextFile = (f: ContextFile) => {
     contextRef.current = contextRef.current.filter((c) => c.fileId !== f.fileId);
     setContextFiles(contextRef.current);
