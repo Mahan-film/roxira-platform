@@ -53,6 +53,16 @@ export const GUIDE_SLUGS = [
   "installments-insolvency-payment",
   "proof-of-debt-receipt-bank-slip",
   "insurance-claim-compensation-procedure",
+  "compel-official-deed-transfer",
+  "joint-property-partition-afraz",
+  "buyer-rights-hidden-defect",
+  "assault-battery-dieh-arsh",
+  "transfer-of-anothers-property",
+  "retrial-rehearing-request",
+  "arbitration-award-annulment",
+  "service-promissory-note-return",
+  "maternity-leave-working-women",
+  "tax-assessment-objection-commission",
 ] as const;
 
 export type GuideSlug = (typeof GUIDE_SLUGS)[number];
