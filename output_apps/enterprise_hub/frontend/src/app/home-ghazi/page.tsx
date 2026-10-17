@@ -1,3 +1,4 @@
+import { EnamadBadge } from "@/components/layout/EnamadBadge";
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -374,6 +375,13 @@ export default function HomeGhaziPage() {
               <Link href="/contact" className="gl-focus rounded hover:text-amber-300">تماس با ما</Link>
               <Link href="/support" className="gl-focus rounded hover:text-amber-300">پشتیبانی</Link>
             </nav>
+          </div>
+          {/* نماد اعتماد الکترونیکی: همیشه در پایین صفحه، با کد رسمی اینماد (بدون rel/noreferrer). */}
+          <div className="mt-8 flex flex-col items-center gap-2">
+            <div className="rounded-2xl bg-white p-2 shadow-lg shadow-black/40">
+              <EnamadBadge domain="ghazi" width={88} height={88} className="block w-[88px]" />
+            </div>
+            <span className="text-xs text-slate-400">نماد اعتماد الکترونیکی</span>
           </div>
           <p className="mt-6 border-t border-white/5 pt-6 text-center text-xs text-slate-400">
             تمامی حقوق مادی و معنوی متعلق به سامانه قاضی هوشمند است. استفاده از محتوا با ذکر منبع بلامانع است.
