@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Coins, Loader2, X } from "lucide-react";
 import { track } from "@/lib/analytics/umami";
+import { CryptoPayPanel } from "./crypto-pay-panel";
 
 import { LEVEL_COPY, PAID_LEVELS, RECOMMENDED_LEVEL, monthlyEquivalent, periodLabel, planKey } from "@/lib/plan-catalog";
 import {
@@ -89,6 +90,9 @@ export function SubscriptionModal({
   const [notice, setNotice] = useState<string | null>(null);
   // Plan whose button was pressed last: error/notice render right under it.
   const [messagePlan, setMessagePlan] = useState<BackendPlanType | null>(null);
+  // Optional USDT checkout: shown only when the server says it is enabled (default off).
+  const [cryptoEnabled, setCryptoEnabled] = useState(false);
+  const [cryptoPlan, setCryptoPlan] = useState<BackendPlanType | null>(null);
   const [period, setPeriod] = useState<BillingPeriod>(initialPlan?.endsWith("_YEARLY") ? "yearly" : "monthly");
 
   // الگوی رسمی React برای بازنشانی وضعیت هنگام تغییر یک prop: مستقیماً حین
@@ -101,6 +105,7 @@ export function SubscriptionModal({
       setNotice(null);
       setPricing(null);
       setPricingError(null);
+      setCryptoPlan(null);
       setPeriod(initialPlan?.endsWith("_YEARLY") ? "yearly" : "monthly");
     }
   }
@@ -122,6 +127,14 @@ export function SubscriptionModal({
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
       .then((data: PricingMatrixResponse) => setPricing(data))
       .catch(() => setPricingError("دریافت قیمت‌های لحظه‌ای از سرور ناموفق بود."));
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/v1/apps/judge/payments/crypto/config")
+      .then((res) => (res.ok ? res.json() : { enabled: false }))
+      .then((data: { enabled?: boolean }) => setCryptoEnabled(data.enabled === true))
+      .catch(() => setCryptoEnabled(false));
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -244,6 +257,12 @@ export function SubscriptionModal({
             </p>
           )}
 
+          {cryptoPlan && accessToken && (
+            <div className="mb-4">
+              <CryptoPayPanel planType={cryptoPlan} accessToken={accessToken} onClose={() => setCryptoPlan(null)} />
+            </div>
+          )}
+
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <div role="group" aria-label="دورهٔ پرداخت" className="inline-flex rounded-full border border-border bg-muted/40 p-1">
               {(["monthly", "yearly"] as const).map((p) => (
@@ -314,6 +333,19 @@ export function SubscriptionModal({
                     {pendingPlan === planType && <Loader2 className="size-3.5 animate-spin" />}
                     {pendingPlan === planType ? "در حال صدور فاکتور..." : `فعال‌سازی ${copy.label}`}
                   </button>
+                  {cryptoEnabled && accessToken && planType !== "SINGLE_DRAFT" && (
+                    <button
+                      type="button"
+                      disabled={pendingPlan !== null}
+                      onClick={() => {
+                        track("checkout_started", { plan: planType, method: "usdt_trc20" });
+                        setCryptoPlan(planType);
+                      }}
+                      className="mt-2 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-2 text-xs font-bold text-emerald-300 transition-colors hover:bg-emerald-950/40 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      پرداخت با تتر (USDT - TRC20)
+                    </button>
+                  )}
                   {/* Always-mounted live region so screen readers announce the message. */}
                   <div role="status" aria-live="polite" className="empty:hidden">
                     {messagePlan === planType && error && (

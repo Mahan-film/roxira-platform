@@ -32,6 +32,7 @@ from output_apps.generated_modules.smartjudge import laws_public as _laws_public
 from output_apps.generated_modules.smartjudge import regulations_public as _regulations_public
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
+from output_apps.ecosystem_core.src.billing import crypto_payment_service, router_crypto
 # W22: fixed Toman pricing per plan (PRICE_TOMAN_<PLAN_KEY> env override) —
 # see output_apps/ecosystem_core/src/billing/pricing_service.py.
 from output_apps.generated_modules.smartjudge.plan_limits import get_plan_limits
@@ -2831,7 +2832,8 @@ async def create_payment_invoice(request: Request, payload: dict = Body(...)):
 @router.post("/payments/verify")
 async def verify_payment(payload: dict = Body(...)):
     """تأیید واقعی تراکنش زیبال با trackId و فعال‌سازی دسترسی VIP پس از تطابق مبلغ"""
-    if not payment_service.payments_live_enabled():
+    if (not payment_service.payments_live_enabled()
+            and not str(payload.get("track_id") or payload.get("trackId") or "").startswith("USDT_")):
         return JSONResponse(
             status_code=503,
             content={"status": "UNAVAILABLE", "message": "درگاه پرداخت موقتاً در دسترس نیست."},
@@ -2843,6 +2845,17 @@ async def verify_payment(payload: dict = Body(...)):
             status_code=400,
             content={"status": "FAILED", "message": "شناسه پیگیری (track_id) الزامی است."},
         )
+
+    if str(track_id).startswith("USDT_"):
+        # Optional USDT-TRC20 checkout (CRYPTO_PAY_ENABLED): no Zibal call.
+        if not crypto_payment_service.crypto_pay_enabled():
+            return JSONResponse(status_code=404, content={"status": "NOT_FOUND"})
+        crypto_result = _crypto_verify_by_track_id(str(track_id))
+        if crypto_result is None:
+            return JSONResponse(status_code=404, content={"status": "NOT_FOUND"})
+        if crypto_result.get("status") == "PAID":
+            return crypto_result
+        return JSONResponse(status_code=400, content=crypto_result)
 
     conn = payment_orders.get_connection()
     try:
@@ -2869,6 +2882,25 @@ async def verify_payment(payload: dict = Body(...)):
     if status != "PAID":
         return JSONResponse(status_code=400, content=result)
     return result
+def _crypto_user_ref(request: Request) -> Optional[str]:
+    """Same identity the Zibal create-invoice path stores (hashed JWT subject)."""
+    token = _extract_bearer_token(None, request)
+    claims = _decode_jwt(token) if token else None
+    if not claims:
+        return None
+    ident = claims.get("sub") or claims.get("user_id") or claims.get("phone")
+    return _hashed_user_ref(str(ident)) if ident else None
+
+
+# Optional USDT-TRC20 checkout — OFF unless CRYPTO_PAY_ENABLED=1 (see
+# docs/ops/CRYPTO_PAYMENTS.md). Disabled => every endpoint but /config is 404.
+_crypto_router, _crypto_verify_by_track_id = router_crypto.build_router(
+    resolve_user_ref=_crypto_user_ref,
+    on_paid=lambda: _ENTITLEMENT_CACHE.clear(),
+)
+router.include_router(_crypto_router)
+
+
 @router.post("/telephony-session")
 async def create_telephony_session(payload: dict = Body(default=None),
                                    user: chat_auth.CurrentUser = Depends(get_current_user)):

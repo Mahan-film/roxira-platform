@@ -1,0 +1,11 @@
+# Every minute; the unit is a harmless no-op while crypto payments are off.
+[Unit]
+Description=Poll USDT TRC20 payments every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

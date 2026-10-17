@@ -145,6 +145,38 @@ def create_invoice(
     }
 
 
+def activate_with_retry(
+    order: dict, track_id: str, activate_fn: Callable[[str | None, str], Any]
+) -> tuple[Any, bool]:
+    """Activation after a won mark_paid(). Returns (result, activation_pending).
+    Shared by the Zibal verify path and the crypto (USDT) settle path so both
+    activate identically. A failed persist touches nothing, so retrying a
+    couple of times is safe."""
+    activation_result: Any = None
+    activation_pending = True
+    for _attempt in range(3):
+        try:
+            activation_result = activate_fn(
+                order.get("user_ref") or order.get("phone"), order["plan_type"]
+            )
+        except Exception:  # never turn a captured payment into a 500
+            logger.exception("W17 activate_fn raised: track_id=%s", track_id)
+            continue
+        activation_pending = isinstance(activation_result, dict) and not activation_result.get(
+            "persisted", True
+        )
+        if not activation_pending:
+            break
+    if activation_pending:
+        # Payment IS captured and marked paid — never undo that. But the
+        # entitlement write failed, so this needs manual reconciliation
+        # (see docs/W17_payment_fix.md). track_id only, no PII.
+        logger.error(
+            "W17 payment verified but entitlement persist failed: track_id=%s", track_id
+        )
+    return activation_result, activation_pending
+
+
 def verify_invoice(
     *,
     track_id: str,
@@ -222,28 +254,7 @@ def verify_invoice(
     # activated at most once (merge_entitlement stacks same-level renewals, a
     # second activation would wrongly add another period). A failed persist
     # touches nothing, so retrying it a couple of times is safe.
-    activation_result: Any = None
-    activation_pending = True
-    for _attempt in range(3):
-        try:
-            activation_result = activate_fn(
-                order.get("user_ref") or order.get("phone"), order["plan_type"]
-            )
-        except Exception:  # never turn a captured payment into a 500
-            logger.exception("W17 activate_fn raised: track_id=%s", track_id)
-            continue
-        activation_pending = isinstance(activation_result, dict) and not activation_result.get(
-            "persisted", True
-        )
-        if not activation_pending:
-            break
-    if activation_pending:
-        # Payment IS captured and marked paid — never undo that. But the
-        # entitlement write failed, so this needs manual reconciliation
-        # (see docs/W17_payment_fix.md). track_id only, no PII.
-        logger.error(
-            "W17 payment verified but entitlement persist failed: track_id=%s", track_id
-        )
+    activation_result, activation_pending = activate_with_retry(order, track_id, activate_fn)
 
     result = _paid_result(
         order, track_id, "پرداخت با موفقیت تایید و حساب کاربری فعال شد.",
@@ -297,3 +308,7 @@ def _paid_result(
     if expires_at:
         result["expires_at"] = expires_at
     return result
+
+
+# Public alias: the crypto (USDT) path renders the same PAID payload as Zibal.
+paid_result = _paid_result

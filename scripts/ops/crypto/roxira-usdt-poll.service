@@ -1,0 +1,14 @@
+# Polls TronGrid for USDT-TRC20 payments (no-op unless CRYPTO_PAY_ENABLED=1). See docs/ops/CRYPTO_PAYMENTS.md.
+[Unit]
+Description=Roxira USDT TRC20 payment poller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+# CRYPTO_PAY_ENABLED, CRYPTO_USDT_TRC20_ADDRESS, TRONGRID_API_KEY, DB settings live here (mode 600), not in the repo.
+EnvironmentFile=-/opt/roxira_platform/.env
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/crypto/poll_usdt.py
+TimeoutStartSec=60
+Nice=10
