@@ -130,6 +130,13 @@ export function LoginModal({
 
   /** ورود از پورتال سازمانی روکسیرا (نه قاضی هوشمند) — مسیر NestJS فعال می‌شود. */
   const isEnterprise = serviceDomain === "ROXIRA";
+  // Ghazi brand: gold primary with dark text (tokens in globals.css .ghazi-theme).
+  // The Roxira enterprise login keeps its own blue.
+  const isGhazi = !isEnterprise;
+  const primaryBtn = isGhazi
+    ? "bg-[var(--gh-gold)] font-bold text-[var(--gh-on-gold)] hover:bg-[var(--gh-gold-strong)] disabled:opacity-60"
+    : "bg-[#0071e3] text-white hover:bg-[#0077ed]";
+  const primaryIcon = isGhazi ? "bg-[var(--gh-gold)] text-[var(--gh-on-gold)]" : "bg-[#0071e3] text-white";
 
   useEffect(() => {
     if (!open) return;
@@ -382,7 +389,7 @@ export function LoginModal({
   return (
     <div
       dir="rtl"
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4${isGhazi ? " ghazi-theme" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -391,13 +398,13 @@ export function LoginModal({
         type="button"
         aria-label="بستن"
         onClick={handleClose}
-        className="absolute inset-0 cursor-default bg-slate-950/70 backdrop-blur-sm"
+        className="absolute inset-0 cursor-default bg-[#05080f]/80 backdrop-blur-sm"
       />
 
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#0B111F] text-slate-100 shadow-2xl shadow-black/50">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#0a0f1a] text-slate-100 shadow-2xl shadow-black/50">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-[#0071e3] text-white">
+            <span className={`flex size-9 items-center justify-center rounded-xl ${primaryIcon}`}>
               <Lock className="size-4" />
             </span>
             <div>
@@ -440,7 +447,7 @@ export function LoginModal({
                     className="h-11 border-white/10 bg-black/30 pr-10 text-left text-slate-100 placeholder:text-slate-600"
                   />
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-400">
                   ارقام فارسی و عربی نیز پذیرفته می‌شوند (مثال: ۰۹۱۲xxxxxxx).
                 </p>
               </div>
@@ -458,7 +465,7 @@ export function LoginModal({
                     maxLength={150}
                     className="h-11 border-white/10 bg-black/30 text-slate-100 placeholder:text-slate-600"
                   />
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-400">
                     اختیاری؛ تنها اگر برای نخستین بار سازمانی ثبت می‌کنید آن را وارد کنید.
                   </p>
                 </div>
@@ -480,7 +487,7 @@ export function LoginModal({
               <Button
                 type="submit"
                 disabled={loading}
-                className="h-11 w-full bg-[#0071e3] text-white hover:bg-[#0077ed]"
+                className={`h-11 w-full ${primaryBtn}`}
               >
                 {loading ? (
                   <>
@@ -544,7 +551,7 @@ export function LoginModal({
                     type="button"
                     disabled={resendIn > 0 || loading}
                     onClick={() => void requestCode(normalizePhone(phone))}
-                    className="font-semibold text-indigo-300 transition-colors hover:text-indigo-200 disabled:cursor-not-allowed disabled:text-slate-600"
+                    className="font-semibold text-sky-300 transition-colors hover:text-sky-200 disabled:cursor-not-allowed disabled:text-slate-500"
                   >
                     ارسال مجدد کد
                   </button>
@@ -552,7 +559,7 @@ export function LoginModal({
               </div>
 
               {notice && (
-                <p className="flex items-start gap-1.5 rounded-lg bg-indigo-500/10 px-3 py-2 text-xs text-indigo-200">
+                <p className="flex items-start gap-1.5 rounded-lg bg-sky-400/10 px-3 py-2 text-xs text-sky-200">
                   <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
                   {notice}
                 </p>
@@ -586,7 +593,7 @@ export function LoginModal({
               <Button
                 type="submit"
                 disabled={loading || code.length !== 5}
-                className="h-11 w-full bg-[#0071e3] text-white hover:bg-[#0077ed]"
+                className={`h-11 w-full ${primaryBtn}`}
               >
                 {loading ? (
                   <>
@@ -603,7 +610,7 @@ export function LoginModal({
             </form>
           )}
 
-          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-500">
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-400">
             <ShieldCheck className="size-3" />
             احراز هویت امن با کد یک‌بارمصرف
           </p>

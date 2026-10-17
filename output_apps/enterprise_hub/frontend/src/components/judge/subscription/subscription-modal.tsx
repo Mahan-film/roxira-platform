@@ -190,16 +190,16 @@ export function SubscriptionModal({
       aria-modal="true"
       aria-label="اشتراک"
       onClick={onClose}
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      className="ghazi-theme fixed inset-0 z-[120] flex items-center justify-center bg-[#05080f]/85 p-4 backdrop-blur-sm"
       dir="rtl"
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="glass-overlay flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl text-foreground shadow-2xl"
+        className="gh-modal-panel flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
-            <Coins className="size-4 text-amber-300" />
+            <Coins className="size-4 text-[var(--gh-gold)]" />
             <h3 className="text-sm font-bold text-foreground">اشتراک</h3>
             {currentPlan && (
               <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -211,7 +211,7 @@ export function SubscriptionModal({
             type="button"
             onClick={onClose}
             aria-label="بستن"
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gh-cyan)]"
           >
             <X className="size-4" />
           </button>
@@ -219,7 +219,7 @@ export function SubscriptionModal({
 
         <div className="overflow-y-auto p-5">
           {needsPhone && (
-            <div className="mb-4 rounded-2xl border border-amber-400/40 bg-amber-500/[0.06] p-4">
+            <div className="mb-4 rounded-2xl border border-[var(--gh-gold)]/40 bg-[var(--gh-gold)]/[0.06] p-4">
               <label htmlFor="checkout-phone" className="mb-1.5 block text-xs font-semibold text-foreground">
                 شماره همراه برای صدور فاکتور
               </label>
@@ -230,7 +230,7 @@ export function SubscriptionModal({
                 placeholder="09xxxxxxxxx"
                 dir="ltr"
                 inputMode="numeric"
-                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="w-full rounded-xl border border-white/30 bg-black/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-[var(--gh-cyan)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gh-cyan)]"
               />
               <p className="mt-1.5 text-[13px] text-muted-foreground">
                 وارد نبوده‌اید؛ برای فعال‌سازی بدون ورود، یک شماره همراه ایرانی معتبر لازم است.
@@ -252,15 +252,15 @@ export function SubscriptionModal({
                   type="button"
                   aria-pressed={period === p}
                   onClick={() => setPeriod(p)}
-                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
-                    period === p ? "bg-amber-500 text-slate-950" : "text-muted-foreground"
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gh-cyan)] ${
+                    period === p ? "bg-[var(--gh-gold)] text-[var(--gh-on-gold)]" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {p === "monthly" ? "ماهانه" : "سالانه"}
                 </button>
               ))}
             </div>
-            <span className="text-[13px] text-emerald-300">سالانه: ۲ ماه رایگان</span>
+            <span className="text-[13px] text-[var(--gh-ok)]">سالانه: ۲ ماه رایگان</span>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -273,8 +273,8 @@ export function SubscriptionModal({
                   key={planType}
                   className={`relative flex flex-col rounded-2xl border p-5 ${
                     highlight
-                      ? "border-amber-400/40 bg-amber-500/[0.06]"
-                      : "border-border bg-muted/40"
+                      ? "border-[var(--gh-gold)]/50 bg-[var(--gh-gold)]/[0.06]"
+                      : "border-border bg-white/[0.04]"
                   }`}
                 >
                   <h4 className="text-sm font-bold text-foreground">{copy.label}</h4>
@@ -305,10 +305,10 @@ export function SubscriptionModal({
                     disabled={!server || pendingPlan !== null}
                     aria-busy={pendingPlan === planType}
                     onClick={() => startCheckout(planType)}
-                    className={`mt-5 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`mt-5 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gh-cyan)] disabled:cursor-not-allowed disabled:opacity-60 ${
                       highlight
-                        ? "bg-gradient-to-l from-amber-500 to-orange-500 text-slate-950"
-                        : "border border-border bg-background text-foreground"
+                        ? "bg-[var(--gh-gold)] text-[var(--gh-on-gold)] hover:bg-[var(--gh-gold-strong)]"
+                        : "border border-white/30 bg-white/[0.04] text-foreground hover:border-[var(--gh-cyan)]"
                     }`}
                   >
                     {pendingPlan === planType && <Loader2 className="size-3.5 animate-spin" />}
@@ -322,7 +322,7 @@ export function SubscriptionModal({
                       </p>
                     )}
                     {messagePlan === planType && notice && (
-                      <p className="mt-3 rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-3 text-[13px] leading-relaxed text-emerald-300">
+                      <p className="mt-3 rounded-xl border border-[var(--gh-ok)]/40 bg-[var(--gh-ok)]/10 p-3 text-[13px] leading-relaxed text-[var(--gh-ok)]">
                         {notice}
                       </p>
                     )}

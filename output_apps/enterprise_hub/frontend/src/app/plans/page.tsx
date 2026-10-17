@@ -98,7 +98,7 @@ export default async function PlansPage() {
   const rows = data ? buildRows(data.limits) : [];
 
   return (
-    <div className="ap-theme min-h-screen" data-theme="dark" dir="rtl" lang="fa">
+    <div className="ap-theme ghazi-theme min-h-screen" data-theme="dark" dir="rtl" lang="fa">
       <GhaziHeader />
       <main className="mx-auto max-w-6xl space-y-10 px-4 py-10">
         <header className="space-y-3">

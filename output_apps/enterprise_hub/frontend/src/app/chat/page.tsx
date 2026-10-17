@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function ChatPage() {
   return (
-    <div className="dark ap-theme flex flex-col h-dvh overflow-hidden" data-theme="dark" dir="rtl" lang="fa">
+    <div className="dark ap-theme ghazi-theme flex flex-col h-dvh overflow-hidden" data-theme="dark" dir="rtl" lang="fa">
       <a href="#chat-main" className="ap-skip-link">رفتن به گفتگو</a>
       <GhaziHeader />
       <main id="chat-main" tabIndex={-1} className="flex-1 flex flex-col min-h-0 relative overflow-hidden">

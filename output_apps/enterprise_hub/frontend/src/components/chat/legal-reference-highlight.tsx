@@ -72,7 +72,7 @@ export function LegalReferenceHighlight({
     precedents.forEach(precedent => {
       const regex = new RegExp(`(${precedent.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
       highlighted = highlighted.replace(regex, 
-        `<span class="legal-ref-precedent cursor-pointer hover:bg-indigo-500/30 bg-indigo-500/20 text-indigo-300 px-1 rounded transition-colors" 
+        `<span class="legal-ref-precedent cursor-pointer hover:bg-sky-500/30 bg-sky-500/20 text-sky-300 px-1 rounded transition-colors" 
               data-title="${precedent.title}">$1</span>`
       );
     });
@@ -102,17 +102,17 @@ export function LegalReferenceHighlight({
 
       {/* Reference panel */}
       {activeReference && (
-        <div className="mt-4 rounded-xl border border-white/10 bg-[#0E1626] p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="mt-4 rounded-xl border border-white/10 bg-[#0a0f1a] p-4 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2">
               {activeReference.type === "law" ? (
                 <BookOpen className="size-4 text-emerald-400" />
               ) : (
-                <Scale className="size-4 text-indigo-400" />
+                <Scale className="size-4 text-sky-400" />
               )}
               <span className={cn(
                 "text-xs font-bold",
-                activeReference.type === "law" ? "text-emerald-300" : "text-indigo-300"
+                activeReference.type === "law" ? "text-emerald-300" : "text-sky-300"
               )}>
                 {activeReference.type === "law" ? "مستند قانونی" : "رأی وحدت رویه"}
               </span>
@@ -183,7 +183,7 @@ export function LegalReferenceHighlight({
             <span>مواد قانونی</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-indigo-500/30"></span>
+            <span className="w-2 h-2 rounded-full bg-sky-500/30"></span>
             <span>آرای وحدت رویه</span>
           </div>
           <span className="mr-auto">برای جزئیات کلیک کنید</span>

@@ -526,3 +526,117 @@
   .ap-theme { background: #fff; color: #000; }
   .ap-theme .ap-card { background: #fff; border: 1px solid #999; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Ghazi brand tokens («قاضی هوشمند»): ONE palette for every Ghazi     */
+/* page and modal, same as the landing (home-ghazi/landing.css).       */
+/* Scope: add `ghazi-theme` to a page wrapper / header / modal root.   */
+/* Roxira pages never get the class, so they are unchanged. Dark only. */
+/* Primary action = gold + dark text; secondary = glass outline;       */
+/* links/highlights/focus = cyan; cards/modals = dark glass.           */
+/* ------------------------------------------------------------------ */
+.ghazi-theme,
+.ghazi-theme .ap-theme,
+.ap-theme.ghazi-theme {
+  color-scheme: dark;
+  --gh-bg: #05080f;
+  --gh-bg-2: #0a0f1a;
+  --gh-surface: rgb(255 255 255 / 0.04);
+  --gh-surface-2: rgb(255 255 255 / 0.07);
+  --gh-border: rgb(255 255 255 / 0.1);
+  --gh-border-strong: rgb(255 255 255 / 0.28);
+  --gh-text: #e2e8f0;
+  --gh-muted: #94a3b8;
+  --gh-gold: #fbbf24;
+  --gh-gold-strong: #f59e0b;
+  --gh-on-gold: #0b1020;
+  --gh-cyan: #38bdf8;
+  --gh-cyan-soft: rgb(56 189 248 / 0.12);
+  --gh-danger: #fb7185;
+  --gh-ok: #34d399;
+  --gh-ring: #38bdf8;
+  --gh-modal: #0a0f1a;
+
+  /* map the brand tokens onto the shared ap-* tokens */
+  --ap-bg: var(--gh-bg);
+  --ap-surface: #0b111d;
+  --ap-surface-2: rgb(255 255 255 / 0.07);
+  --ap-text: var(--gh-text);
+  --ap-text-muted: var(--gh-muted);
+  --ap-accent: var(--gh-gold);
+  --ap-accent-text: var(--gh-on-gold);
+  --ap-accent-soft: var(--gh-cyan-soft);
+  --ap-line: var(--gh-border);
+  --ap-link: var(--gh-cyan);
+  --ap-hover: rgb(255 255 255 / 0.08);
+  --ap-warn: var(--gh-gold);
+  --ap-danger: var(--gh-danger);
+  --ap-ok: var(--gh-ok);
+  --ap-nav-bg: rgb(5 8 15 / 0.85);
+  --ap-menu-bg: var(--gh-bg-2);
+  --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
+  --ap-field-border: rgb(255 255 255 / 0.45);
+
+  /* map onto the shadcn tokens so shared UI (Input, Label, Button, ...) is dark too */
+  --background: var(--gh-bg);
+  --foreground: var(--gh-text);
+  --card: var(--gh-bg-2);
+  --card-foreground: var(--gh-text);
+  --popover: var(--gh-bg-2);
+  --popover-foreground: var(--gh-text);
+  --primary: var(--gh-gold);
+  --primary-foreground: var(--gh-on-gold);
+  --secondary: rgb(255 255 255 / 0.07);
+  --secondary-foreground: var(--gh-text);
+  --muted: rgb(255 255 255 / 0.06);
+  --muted-foreground: var(--gh-muted);
+  --accent: rgb(255 255 255 / 0.08);
+  --accent-foreground: var(--gh-text);
+  --destructive: var(--gh-danger);
+  --border: var(--gh-border);
+  --input: rgb(255 255 255 / 0.14);
+  --ring: var(--gh-ring);
+  --glass-surface: var(--gh-surface);
+  --glass-raised: var(--gh-surface-2);
+  --glass-overlay: rgb(10 15 26 / 0.96);
+  --glass-solid: var(--gh-bg-2);
+  --glass-border: var(--gh-border);
+}
+
+/* primary = gold */
+.ghazi-theme .ap-btn:not(.ap-btn-ghost):hover:not(:disabled) { background: var(--gh-gold-strong); }
+.ghazi-theme .ap-btn { font-weight: 600; }
+/* secondary = glass outline */
+.ghazi-theme .ap-btn-ghost {
+  background: var(--gh-surface); color: var(--gh-text); border-color: var(--gh-border-strong);
+}
+.ghazi-theme .ap-btn-ghost:hover:not(:disabled) { background: var(--gh-surface-2); border-color: var(--gh-cyan); }
+/* cyan focus ring everywhere */
+.ghazi-theme :is(.ap-btn, .ap-input, a, button, select, textarea, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--gh-ring); outline-offset: 2px;
+}
+.ghazi-theme .ap-composer:focus-within { outline: 2px solid var(--gh-ring); outline-offset: 2px; }
+.ghazi-theme .ap-composer textarea:focus-visible { outline: none; }
+/* glass cards / bubbles / composer */
+.ghazi-theme .ap-card,
+.ghazi-theme .ap-starter,
+.ghazi-theme .ap-bubble-ai,
+.ghazi-theme .ap-composer {
+  background: linear-gradient(165deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.015));
+  border: 1px solid var(--gh-border);
+}
+.ghazi-theme .ap-composer { border-color: var(--ap-field-border); }
+.ghazi-theme .ap-starter:hover { border-color: rgb(56 189 248 / 0.45); background: var(--gh-cyan-soft); }
+.ghazi-theme .ap-bubble-user {
+  background: var(--gh-cyan-soft); color: var(--gh-text); border: 1px solid rgb(56 189 248 / 0.35);
+}
+.ghazi-theme .ap-chip-link { border-color: rgb(56 189 248 / 0.6); }
+.ghazi-theme .ap-brand-mark { background: transparent; width: 40px; height: 40px; }
+/* dark glass modal surface (login, subscription) */
+.ghazi-theme .gh-modal-panel {
+  background: var(--gh-modal); color: var(--gh-text); border: 1px solid var(--gh-border);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.6);
+}
+/* horizontal chip row: inline padding keeps the first/last chip clear of the edge fade */
+.ghazi-theme .ap-chip-row.scroll-fade-x { padding-inline: 18px; }
+.ghazi-theme .ap-chip-row > * { flex-shrink: 0; }

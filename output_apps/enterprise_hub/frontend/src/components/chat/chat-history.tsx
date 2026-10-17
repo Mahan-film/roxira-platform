@@ -154,7 +154,7 @@ export function ChatHistory({ activeId, busy, hasUnsaved, onRestore, onNew }: Ch
         isAuthenticated &&
         typeof document !== "undefined" &&
         createPortal(
-          <div className="ap-theme" dir="rtl" lang="fa" style={{ background: "transparent", position: "fixed", inset: 0, zIndex: 80 }}>
+          <div className="ap-theme ghazi-theme" data-theme="dark" dir="rtl" lang="fa" style={{ background: "transparent", position: "fixed", inset: 0, zIndex: 80 }}>
             <button
               type="button"
               aria-label={HISTORY_COPY.close}

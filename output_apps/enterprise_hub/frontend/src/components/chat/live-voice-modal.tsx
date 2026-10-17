@@ -438,8 +438,8 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="relative w-full max-w-md p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl text-white space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#05080f]/85 backdrop-blur-md">
+      <div className="relative w-full max-w-md p-6 bg-[#0a0f1a] border border-white/10 rounded-3xl shadow-2xl text-white space-y-5">
         <div className="flex justify-between items-center border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">
             <div className={`p-2.5 rounded-2xl transition-all ${sessionState === 'SPEAKING' ? 'bg-amber-500/20 text-amber-400 ring-2 ring-amber-500/40 animate-pulse' : 'bg-emerald-500/20 text-emerald-400'}`}>
@@ -465,13 +465,13 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
         <div className="flex flex-col items-center justify-center py-4">
           <div className={`relative w-28 h-28 rounded-full flex items-center justify-center transition-all duration-200 ${
             sessionState === 'SPEAKING' ? 'bg-amber-500/20 border-2 border-amber-400 shadow-xl shadow-amber-500/40 animate-pulse' :
-            sessionState === 'THINKING' ? 'bg-blue-500/20 border-2 border-blue-400 animate-pulse' :
+            sessionState === 'THINKING' ? 'bg-sky-500/20 border-2 border-sky-400 animate-pulse' :
             sessionState === 'LISTENING' ? 'bg-emerald-500/20 border-2 border-emerald-400 ring-8 ring-emerald-500/10 scale-105' :
             'bg-slate-800 border border-slate-700'
           }`}>
             <Mic className={`w-10 h-10 ${
               sessionState === 'SPEAKING' ? 'text-amber-400' :
-              sessionState === 'THINKING' ? 'text-blue-400' :
+              sessionState === 'THINKING' ? 'text-sky-400' :
               sessionState === 'LISTENING' ? 'text-emerald-400' : 'text-slate-500'
             }`} />
           </div>
@@ -479,7 +479,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
           <div className="mt-4 text-xs font-bold tracking-wide text-center">
             {sessionState === 'IDLE' && <span className="text-slate-400">جهت آغاز تماس صوتی کلیک فرمایید</span>}
             {sessionState === 'LISTENING' && <span className="text-emerald-400">🟢 در حال شنیدن صدای شما (صحبت کنید و مکث فرمایید)...</span>}
-            {sessionState === 'THINKING' && <span className="text-blue-400">🟡 در حال استخراج ادله، آراء و مصوبات دولت...</span>}
+            {sessionState === 'THINKING' && <span className="text-sky-400">🟡 در حال استخراج ادله، آراء و مصوبات دولت...</span>}
             {sessionState === 'SPEAKING' && <span className="text-amber-400">🔊 در حال بیان تحلیل مستشار (لطفاً گوش فرادهید)...</span>}
           </div>
 
@@ -513,7 +513,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
           {sessionState === 'IDLE' ? (
             <button
               onClick={startSession}
-              className="flex items-center gap-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl shadow-lg transition active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-8 py-3 bg-[#fbbf24] hover:bg-[#f59e0b] text-[#0b1020] font-bold focus-visible:outline-2 focus-visible:outline-sky-400 rounded-2xl shadow-lg transition active:scale-95 cursor-pointer"
             >
               <Phone className="w-5 h-5" />
               شروع مکالمه زنده

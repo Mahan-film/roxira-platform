@@ -6,10 +6,10 @@ import {
   CircleHelp,
   LogOut,
   Menu,
-  Scale,
   User,
   X,
 } from "lucide-react";
+import { GhaziMark } from "@/components/brand/GhaziMark";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ApDropdown } from "@/components/layout/ap-dropdown";
 
@@ -99,11 +99,11 @@ export function GhaziHeader() {
 
   return (
     <>
-      <header className="ap-theme ap-header" data-theme="dark" dir="rtl" lang="fa">
+      <header className="ap-theme ghazi-theme ap-header" data-theme="dark" dir="rtl" lang="fa">
         <div className="ap-header-row">
           <Link href="/chat" className="ap-brand">
             <span className="ap-brand-mark" aria-hidden="true">
-              <Scale className="size-5" />
+              <GhaziMark className="size-9" />
             </span>
             <span>قاضی هوشمند</span>
           </Link>

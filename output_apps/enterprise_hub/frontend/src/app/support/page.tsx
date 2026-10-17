@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function SupportPage() {
   return (
-    <div className="dark ap-theme flex min-h-dvh flex-col" data-theme="dark" dir="rtl" lang="fa">
+    <div className="dark ap-theme ghazi-theme flex min-h-dvh flex-col" data-theme="dark" dir="rtl" lang="fa">
       <GhaziHeader />
       <main className="mx-auto w-full max-w-[var(--ap-content-max)] flex-1 px-4 py-10">
         <section className="ap-card space-y-4" aria-labelledby="support-title">
