@@ -24,8 +24,11 @@ import {
   verifyOtp as verifyEnterpriseOtp,
 } from "@/lib/api/auth-client";
 import { ApiClientError } from "@/lib/api/http-client";
+import { EmailAuthPanel } from "@/components/auth/email-auth-panel";
 import {
+  type JudgeAuthSession,
   JudgeAuthError,
+  fetchAuthMethods,
   isValidIranianMobile,
   normalizeOtpCode,
   normalizePhone,
@@ -125,6 +128,9 @@ export function LoginModal({
   const [retrying, setRetrying] = useState(false);
   const [networkFailed, setNetworkFailed] = useState(false);
   const [organizationName, setOrganizationName] = useState("");
+  /** Sign-in method tab. The e-mail tab only exists when the server has SMTP configured. */
+  const [tab, setTab] = useState<"phone" | "email">("phone");
+  const [emailEnabled, setEmailEnabled] = useState(false);
   /** Last code already sent for verification: blocks double auto-submit. */
   const submittedCodeRef = useRef<string | null>(null);
 
@@ -150,7 +156,19 @@ export function LoginModal({
     setRetrying(false);
     setNetworkFailed(false);
     setOrganizationName("");
+    setTab("phone");
   }, [open]);
+
+  useEffect(() => {
+    if (!open || isEnterprise) return;
+    let cancelled = false;
+    void fetchAuthMethods().then((methods) => {
+      if (!cancelled) setEmailEnabled(methods.email);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isEnterprise]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -263,6 +281,30 @@ export function LoginModal({
     [phone, requestCode],
   );
 
+  /** Map a Smart Judge session (OTP or e-mail login) to the app session and close. */
+  const completeJudgeSession = useCallback(
+    (session: JudgeAuthSession) => {
+      onAuthenticated({
+        tokenType: session.tokenType,
+        accessToken: session.accessToken,
+        expiresIn: session.expiresIn,
+        user: {
+          id: session.user.id,
+          phone: session.user.phone,
+          displayName: session.user.displayName,
+          email: session.user.email,
+          role: toUserRole(session.user.role),
+          subscriptionTier: session.user.subscriptionTier,
+          planLevel: session.user.planLevel,
+          serviceDomain: serviceDomain ?? "GHAZI",
+          createdAt: new Date().toISOString(),
+        },
+      });
+      onClose();
+    },
+    [onAuthenticated, onClose, serviceDomain],
+  );
+
   const submitCode = useCallback(
     async (cleanCode: string) => {
       submittedCodeRef.current = cleanCode;
@@ -289,23 +331,7 @@ export function LoginModal({
         });
         // OTP verification is shared by sign-up and sign-in; the API does not flag new users yet.
         track("signup_completed");
-        onAuthenticated({
-          tokenType: session.tokenType,
-          accessToken: session.accessToken,
-          expiresIn: session.expiresIn,
-          user: {
-            id: session.user.id,
-            phone: session.user.phone,
-            displayName: session.user.displayName,
-            email: session.user.email,
-            role: toUserRole(session.user.role),
-            subscriptionTier: session.user.subscriptionTier,
-            planLevel: session.user.planLevel,
-            serviceDomain: serviceDomain ?? "GHAZI",
-            createdAt: new Date().toISOString(),
-          },
-        });
-        onClose();
+        completeJudgeSession(session);
       } catch (err) {
         let offline = true;
         if (err instanceof JudgeAuthError || err instanceof ApiClientError) {
@@ -327,12 +353,12 @@ export function LoginModal({
       }
     },
     [
+      completeJudgeSession,
       isEnterprise,
       onAuthenticated,
       onClose,
       organizationName,
       phone,
-      serviceDomain,
     ],
   );
 
@@ -425,6 +451,30 @@ export function LoginModal({
         </div>
 
         <div className="px-5 py-5">
+          {emailEnabled && !isEnterprise && (
+            <div role="tablist" className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-black/30 p-1">
+              {(["phone", "email"] as const).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === id}
+                  onClick={() => setTab(id)}
+                  className={cn(
+                    "rounded-lg py-2 text-sm font-semibold transition-colors",
+                    tab === id ? "bg-[#fbbf24] text-[#05080f]" : "text-slate-400 hover:text-white",
+                  )}
+                >
+                  {id === "phone" ? "موبایل" : "ایمیل"}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {tab === "email" && emailEnabled && !isEnterprise ? (
+            <EmailAuthPanel onSession={completeJudgeSession} />
+          ) : (
+            <>
           <p className="mb-4 text-xs leading-relaxed text-slate-400">{description}</p>
 
           {step === "phone" ? (
@@ -614,6 +664,8 @@ export function LoginModal({
             <ShieldCheck className="size-3" />
             احراز هویت امن با کد یک‌بارمصرف
           </p>
+            </>
+          )}
         </div>
       </div>
     </div>

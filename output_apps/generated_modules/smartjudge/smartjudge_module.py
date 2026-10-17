@@ -18,6 +18,8 @@ from output_apps.generated_modules.smartjudge.fast_path import (
 from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
 from output_apps.generated_modules.smartjudge import chat_fast as _chat_fast
 from output_apps.generated_modules.smartjudge import chat_auth
+from output_apps.generated_modules.smartjudge import email_auth as _email_auth
+from output_apps.generated_modules.smartjudge import email_sender as _email_sender
 from output_apps.generated_modules.smartjudge import case_files as _case_files
 from output_apps.generated_modules.smartjudge import answer_escalation as _answer_escalation
 from output_apps.generated_modules.smartjudge import voice_stt as _voice_stt
@@ -432,6 +434,13 @@ def _user_from_token(token: str) -> Optional[chat_auth.CurrentUser]:
     claims = _decode_jwt(token)
     if not claims:
         return None
+    if claims.get("auth") == "email":
+        # e-mail account: the opaque user_ref (em_ + 16 hex) takes the slot a phone normally has
+        ref = str(claims.get("sub") or "")
+        if not _email_auth.USER_REF_RE.match(ref):
+            return None
+        tier, level = _entitlement_info(ref) or ("FREE", "free")
+        return chat_auth.CurrentUser(phone=ref, tier=tier, authenticated=True, plan_level=level)
     phone = normalize_phone(claims.get("phone") or claims.get("sub") or "")
     if not _is_valid_phone(phone):
         return None
@@ -5978,6 +5987,24 @@ def _issue_access_token(phone: str, tier: str, profile: dict) -> str:
     return _sign_jwt(claims)
 
 
+def _issue_email_access_token(account, tier: str, plan_level: str) -> str:
+    """JWT for an e-mail account. ``sub`` is the stable user_ref (see email_auth.py), so
+    ``_hashed_user_ref(sub)`` is its single ``user_entitlements`` key, like a phone for OTP users."""
+    now = int(time.time())
+    return _sign_jwt({
+        "iss": "roxira.smartjudge",
+        "auth": "email",
+        "sub": account.user_ref,
+        "email": account.email,
+        "username": account.email,
+        "first_name": "",
+        "last_name": "",
+        "subscription_tier": tier,
+        "iat": now,
+        "exp": now + JWT_TTL_SECONDS,
+    })
+
+
 def _otp_error(status_code: int, message: str, code: str, **extra) -> JSONResponse:
     return chat_auth.error_json(status_code, message, code=code, **extra)
 
@@ -6095,6 +6122,19 @@ async def verify_auth_otp(payload: dict = Body(...), request: Request = None):
         },
     }
 
+
+
+# --- e-mail + password accounts (email_auth.py) -------------------------------------------
+_email_auth_service = _email_auth.EmailAuthService(
+    store=_email_auth.PgAccountStore(lambda: payment_orders._dsn()),
+    secret=JWT_SECRET,
+    sender=_email_sender.send_email_async,
+    issue_token=_issue_email_access_token,
+    plan_info=lambda ref: _entitlement_info(ref) or ("FREE", "free"),
+    jwt_ttl=JWT_TTL_SECONDS,
+    normalize_phone=normalize_phone,
+)
+router.include_router(_email_auth.build_router(_email_auth_service))
 
 
 # ==============================================================================

@@ -10,23 +10,24 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | docker-socket-proxy | tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459 | - |
 | enterprise_app | build | 127.0.0.1:8000:8000 |
 | nginx_gateway | nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913 | 443:443<br>80:80 |
-| pgbouncer_prod | edoburu/pgbouncer:latest@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd | 127.0.0.1:6432:6432 |
+| pgbouncer_prod | edoburu/pgbouncer@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd | 127.0.0.1:6432:6432 |
 | postgres_prod | postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73 | 127.0.0.1:5432:5432 |
 | qdrant_prod | qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc | 127.0.0.1:6333:6333 |
 | redis_prod | redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf | 127.0.0.1:6379:6379 |
+| roxira_embeddings | ghcr.io/huggingface/text-embeddings-inference@sha256:798cd7615e060a72ccbdf19aa0ada52289c6a0147490195bafaece6ce04d70f1 | - |
 | roxira_enterprise_backend | build | 127.0.0.1:3000:3000 |
 | roxira_enterprise_frontend | build | 127.0.0.1:3001:3001 |
 
 ## Environment variable names referenced in docker-compose.prod.yml
 
-`AUTH`, `AUTH_TYPE`, `BUILD`, `COMMIT`, `CONFIGS`, `CONTAINERS`, `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_PASSWORD`, `DATABASE_PORT`, `DATABASE_USER`, `DB_HOST`, `DB_NAME`, `DB_PASSWORD`, `DB_PORT`, `DB_USER`, `DEFAULT_POOL_SIZE`, `DISTRIBUTION`, `DOCKER_HOST`, `EVENTS`, `EXEC`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `HOME`, `HOSTNAME`, `IGNORE_STARTUP_PARAMETERS`, `IMAGES`, `INFO`, `JUDGE_API_ORIGIN`, `JWT_SECRET`, `JWT_TTL_SECONDS`, `KAVENEGAR_API_KEY`, `KAVENEGAR_TEMPLATE_GHAZI`, `KAVENEGAR_TEMPLATE_ROXIRA`, `KIRA_API_KEY`, `KIRA_BASE_URL`, `KIRA_FALLBACK_MODEL`, `KIRA_REASONING_MODEL`, `LISTEN_PORT`, `MAX_CLIENT_CONN`, `MAX_DB_CONNECTIONS`, `NEST_API_ORIGIN`, `NETWORKS`, `NODES`, `NODE_ENV`, `OPENROUTER_API_KEY`, `PING`, `PLUGINS`, `POOL_MODE`, `PORT`, `POST`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`, `POSTGRES_USER`, `PYTHONDONTWRITEBYTECODE`, `PYTHONPATH`, `PYTHON_BIN`, `QDRANT_HOST`, `QDRANT_PORT`, `RADAR_PROJECT_ROOT`, `REDIS_HOST`, `REDIS_PORT`, `ROXIRA_AUTH_DB_URL`, `SECRETS`, `SERVICES`, `SESSION`, `SMS_IR_API_KEY`, `SMS_IR_TEMPLATE_ID`, `SWARM`, `SYSTEM`, `TASKS`, `VERSION`, `VIP_PHONE_ALLOWLIST`, `VOLUMES`, `WEBAUTHN_ORIGINS`, `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_NAME`
+`AUTH`, `AUTH_TYPE`, `BUILD`, `COMMIT`, `CONFIGS`, `CONTAINERS`, `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_PASSWORD`, `DATABASE_PORT`, `DATABASE_USER`, `DB_HOST`, `DB_NAME`, `DB_PASSWORD`, `DB_PORT`, `DB_USER`, `DEFAULT_POOL_SIZE`, `DISTRIBUTION`, `DOCKER_HOST`, `EMBEDDING_URL`, `EVENTS`, `EXEC`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `HOME`, `HOSTNAME`, `IGNORE_STARTUP_PARAMETERS`, `IMAGES`, `INFO`, `JUDGE_API_ORIGIN`, `JWT_SECRET`, `JWT_TTL_SECONDS`, `KAVENEGAR_API_KEY`, `KAVENEGAR_TEMPLATE_GHAZI`, `KAVENEGAR_TEMPLATE_ROXIRA`, `KEYPOOL_MASTER_KEY`, `KIRA_API_KEY`, `KIRA_BASE_URL`, `KIRA_FALLBACK_MODEL`, `KIRA_REASONING_MODEL`, `LISTEN_PORT`, `MAX_CLIENT_CONN`, `MAX_DB_CONNECTIONS`, `NEST_API_ORIGIN`, `NETWORKS`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI`, `NODES`, `NODE_ENV`, `OPENROUTER_API_KEY`, `PING`, `PLUGINS`, `POOL_MODE`, `PORT`, `POST`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`, `POSTGRES_USER`, `PYTHONDONTWRITEBYTECODE`, `PYTHONPATH`, `PYTHON_BIN`, `QDRANT_HOST`, `QDRANT_PORT`, `RADAR_PROJECT_ROOT`, `REDIS_HOST`, `REDIS_PORT`, `ROXIRA_AUTH_DB_URL`, `SECRETS`, `SERVICES`, `SESSION`, `SMARTJUDGE_LLM_GATEWAY`, `SMARTJUDGE_LLM_GATEWAY_MODEL`, `SMS_IR_API_KEY`, `SMS_IR_TEMPLATE_ID`, `SWARM`, `SYSTEM`, `TASKS`, `VERSION`, `VIP_PHONE_ALLOWLIST`, `VOLUMES`, `WEBAUTHN_ORIGINS`, `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_NAME`
 
 ## nginx server_name values
 
 | Config file | server_name values |
 | --- | --- |
-| nginx.conf | 5.75.200.67, ghazihoushmand.ir, roxira.ir, www.ghazihoushmand.ir, www.roxira.ir |
-| nginx_split.conf | 5.75.200.67, _, ghazihoushmand.ir, roxira.ir, roxira.net, roxirad.ir, roxirad.net, www.ghazihoushmand.ir, www.roxira.ir, www.roxira.net |
+| nginx.conf | ghazihoushmand.ir, roxira.ir, www.ghazihoushmand.ir, www.roxira.ir |
+| nginx_split.conf | _, ghazihoushmand.ir, roxira.ir, roxira.net, roxirad.ir, roxirad.net, www.ghazihoushmand.ir, www.roxira.ir, www.roxira.net |
 | output_apps/nginx_config/nginx.conf | _, ghazihoushmand.ir, roxira.ir, roxira.net, www.ghazihoushmand.ir, www.roxira.ir, www.roxira.net |
 | production_bundle/nginx/nginx.conf | 127.0.0.1, ghazihoushmand.ir, localhost, roxira.ir, roxira.net, www.ghazihoushmand.ir, www.roxira.ir, www.roxira.net |
 
@@ -51,7 +52,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | preview-e2e.yml | Preview E2E | workflow_dispatch |
 | project-pages.yml | Factory project pages | workflow_dispatch |
 | rx-automerge.yml | RX auto-merge | workflow_dispatch, workflow_run |
-| tech-radar-weekly.yml | Tech radar weekly | schedule, workflow_dispatch |
+| tech-radar-weekly.yml | Tech radar weekly | workflow_dispatch |
 | uptime.yml | Uptime check (production) | schedule, workflow_dispatch |
 
 ## Packages
@@ -66,20 +67,28 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 - pyproject requires-python: `>=3.13`
 - Dockerfile.prod base image: `python:3.11-slim`
 - pyproject.toml: httpx >=0.28.1, pydantic >=2.13.4
-- Dockerfile.prod: fastapi (unpinned), httpx (unpinned), pydantic (unpinned)
+- Dockerfile.prod: fastapi ==0.143.0, httpx (unpinned), pydantic (unpinned)
 
 ## Model roles (config/models.yaml)
 
 | Role | Model ids (first = primary) |
 | --- | --- |
+| agent_runner | openai/gpt-oss-120b, openai/gpt-oss-20b, deepseek/deepseek-v4.1-flash |
+| agent_runner_public | qwen/qwen3.8-27b:free |
 | architect | anthropic/claude-opus-5 |
 | cheap | deepseek/deepseek-v4.1-flash, deepseek/deepseek-v4-flash-0731, qwen/qwen3.8-flash, google/gemini-3.1-flash-lite, deepseek/deepseek-v4-flash |
+| cheap_agent | z-ai/glm-5.3-flash, deepseek/deepseek-v4.1-flash |
 | executor | deepseek/deepseek-v4.1-flash, deepseek/deepseek-v4-flash-0731, deepseek/deepseek-v4-flash |
-| free | qwen/qwen3.8-27b:free, google/gemma-4-31b-it:free, nvidia/nemotron-3-super-120b-a12b:free, openrouter/free |
+| free | qwen/qwen3.8-27b:free, google/gemma-4-31b-it:free, nvidia/nemotron-3-super-120b-a12b:free, nvidia/nemotron-3-ultra-550b-a55b:free, openrouter/free |
 | mechanical | google/gemini-3.1-flash-lite, anthropic/claude-haiku-4.5 |
+| mimo | xiaomi/mimo-v2.6-flash |
+| product | anthropic/claude-haiku-5.5, deepseek/deepseek-v4.1-flash |
+| product_premium | anthropic/claude-opus-5, moonshotai/kimi-k3 |
+| product_pro | deepseek/deepseek-v4-pro, anthropic/claude-haiku-5.5, z-ai/glm-5.3 |
 | reviewer | qwen/qwen3.8-27b:free, deepseek/deepseek-v4.1-flash, qwen/qwen3-coder |
 | strong | deepseek/deepseek-v4-pro, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
 | stt | openai/whisper-large-v3, openai/whisper-large-v3-turbo, openai/gpt-audio |
+| summarize | scaledown/summarize |
 | tts | edge-tts:fa-IR-FaridNeural |
 | vision | google/gemini-3.8-flash |
 | voice_realtime | gemini-3.8-live, gemini-3.1-flash-live-preview |

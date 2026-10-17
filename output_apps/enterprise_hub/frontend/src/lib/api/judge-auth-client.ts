@@ -407,7 +407,11 @@ export async function verifyJudgeOtp(
   const result = await postJson(JUDGE_VERIFY_OTP_PATH, { phone, code }, opts);
   if (!result.ok) throw new JudgeAuthError(result.status, result.fallbackDetails);
 
-  const body = result.body as Record<string, unknown>;
+  return sessionFromBody(result.body as Record<string, unknown>, phone);
+}
+
+/** Build a session from a verify-otp / email-login response body. */
+function sessionFromBody(body: Record<string, unknown>, phoneFallback: string): JudgeAuthSession {
   const token = asString(body.token ?? body.access_token ?? body.accessToken);
   if (!token) {
     throw new JudgeAuthError(500, ["توکن دسترسی از سرویس دریافت نشد. لطفاً دوباره تلاش کنید."]);
@@ -425,8 +429,8 @@ export async function verifyJudgeOtp(
     accessToken: token,
     expiresIn: Number.isFinite(expiresInRaw) && expiresInRaw > 0 ? expiresInRaw : 60 * 60 * 24 * 30,
     user: {
-      id: asString(rawUser.id ?? rawUser.user_id) ?? phone,
-      phone: asString(rawUser.phone) ?? phone,
+      id: asString(rawUser.id ?? rawUser.user_id) ?? phoneFallback,
+      phone: asString(rawUser.phone) ?? phoneFallback,
       displayName: displayName || null,
       email: asString(rawUser.email),
       role: asString(rawUser.role) ?? "USER",
@@ -434,4 +438,76 @@ export async function verifyJudgeOtp(
       planLevel: asPlanLevel(rawUser.plan_level ?? rawUser.planLevel),
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// E-mail + password accounts (for users without an Iranian SIM)
+//   GET  /api/v1/apps/judge/auth/methods
+//   POST /api/v1/apps/judge/auth/email/{register,verify-email,resend-verification,
+//        login,forgot-password,reset-password}
+// ---------------------------------------------------------------------------
+const JUDGE_AUTH_BASE = "/api/v1/apps/judge/auth";
+
+/** Which sign-in methods the server has enabled (e-mail needs SMTP configured). */
+export async function fetchAuthMethods(): Promise<{ phone: boolean; email: boolean }> {
+  try {
+    const response = await fetch(`${JUDGE_AUTH_BASE}/methods`, { cache: "no-store" });
+    if (!response.ok) return { phone: true, email: false };
+    const body = (await response.json()) as Record<string, unknown>;
+    return { phone: body.phone !== false, email: body.email === true };
+  } catch {
+    return { phone: true, email: false };
+  }
+}
+
+async function emailPost(path: string, payload: Record<string, unknown>, opts: PostOptions = {}) {
+  const result = await postJson(`${JUDGE_AUTH_BASE}/email/${path}`, payload, opts);
+  if (!result.ok) throw new JudgeAuthError(result.status, result.fallbackDetails);
+  const body = result.body as Record<string, unknown>;
+  return { body, message: asString(body.message) ?? "" };
+}
+
+export function isPlausibleEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+export async function registerWithEmail(
+  email: string,
+  password: string,
+  phone: string | null,
+  opts: PostOptions = {},
+): Promise<string> {
+  const normalizedPhone = phone ? normalizePhone(phone) : "";
+  const payload: Record<string, unknown> = { email: email.trim(), password };
+  if (normalizedPhone) payload.phone = normalizedPhone;
+  return (await emailPost("register", payload, opts)).message;
+}
+
+export async function resendVerificationEmail(email: string, opts: PostOptions = {}): Promise<string> {
+  return (await emailPost("resend-verification", { email: email.trim() }, opts)).message;
+}
+
+export async function loginWithEmail(
+  email: string,
+  password: string,
+  opts: PostOptions = {},
+): Promise<JudgeAuthSession> {
+  const { body } = await emailPost("login", { email: email.trim(), password }, opts);
+  return sessionFromBody(body, "");
+}
+
+export async function requestPasswordReset(email: string, opts: PostOptions = {}): Promise<string> {
+  return (await emailPost("forgot-password", { email: email.trim() }, opts)).message;
+}
+
+export async function verifyEmailToken(token: string, opts: PostOptions = {}): Promise<string> {
+  return (await emailPost("verify-email", { token }, opts)).message;
+}
+
+export async function resetPasswordWithToken(
+  token: string,
+  password: string,
+  opts: PostOptions = {},
+): Promise<string> {
+  return (await emailPost("reset-password", { token, password }, opts)).message;
 }
