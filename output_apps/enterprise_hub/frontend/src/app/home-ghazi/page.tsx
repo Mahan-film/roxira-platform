@@ -39,9 +39,9 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: 'https://ghazihoushmand.ir/brand/ghazi-emblem.webp',
-        width: 1668,
-        height: 1070,
+        url: 'https://ghazihoushmand.ir/brand/ghazi-emblem-og.jpg',
+        width: 1024,
+        height: 1024,
         alt: 'نشان قاضی هوشمند',
       },
     ],
@@ -229,16 +229,16 @@ export default function HomeGhaziPage() {
             </div>
 
             {/* Emblem: above the text on mobile, beside it on desktop. Explicit size = no layout shift. */}
-            <div className="relative order-first mx-auto w-full max-w-[300px] sm:max-w-sm lg:order-last lg:max-w-none">
+            <div className="relative order-first mx-auto w-full max-w-[240px] sm:max-w-xs lg:order-last lg:max-w-none">
               <div className="gl-float">
                 <Image
-                  src="/brand/ghazi-emblem-960.webp"
+                  src="/brand/ghazi-emblem-720.webp"
                   alt="نشان قاضی هوشمند: ترازوی عدالت و چکش قضایی با مدارهای الکترونیکی"
-                  width={960}
-                  height={616}
+                  width={720}
+                  height={720}
                   priority
-                  sizes="(min-width: 1024px) 560px, (min-width: 640px) 384px, 300px"
-                  className="h-auto w-full [mask-image:radial-gradient(ellipse_at_center,#000_42%,transparent_71%)] [-webkit-mask-image:radial-gradient(ellipse_at_center,#000_42%,transparent_71%)]"
+                  sizes="(min-width: 1024px) 480px, (min-width: 640px) 320px, 240px"
+                  className="h-auto w-full [mask-image:radial-gradient(circle_at_center,#000_60%,transparent_71%)] [-webkit-mask-image:radial-gradient(circle_at_center,#000_60%,transparent_71%)]"
                 />
               </div>
             </div>
