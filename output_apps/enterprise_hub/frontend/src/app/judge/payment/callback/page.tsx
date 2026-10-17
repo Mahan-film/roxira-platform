@@ -130,7 +130,7 @@ function PaymentCallbackContent() {
 
       if (zibalSuccess === "0") {
         setState("failed");
-        setMessage("پرداخت توسط شما لغو شد یا ناموفق بود. مبلغی از حساب شما کسر نشده است.");
+        setMessage("پرداخت توسط شما لغو شد یا ناموفق بود. در صورت کسر وجه، مبلغ ظرف ۷۲ ساعت به حساب شما بازمی‌گردد.");
         return;
       }
 

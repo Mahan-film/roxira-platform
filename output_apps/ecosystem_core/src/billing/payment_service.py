@@ -191,7 +191,7 @@ def verify_invoice(
         order_store.mark_failed(track_id)
         return {
             "status": "FAILED",
-            "message": "پرداخت انجام نشد یا لغو شد. مبلغی از حساب شما کسر نشده است.",
+            "message": "پرداخت انجام نشد یا لغو شد. در صورت کسر وجه، مبلغ ظرف ۷۲ ساعت به حساب شما بازمی‌گردد.",
         }
 
     gateway_amount = int(verify_res.get("amount") or 0)
