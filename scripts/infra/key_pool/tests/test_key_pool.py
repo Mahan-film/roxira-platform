@@ -64,7 +64,7 @@ def test_strong_and_light_tiers_do_not_mix_models():
     assert any(m.endswith("nemotron-3-ultra-550b-a55b:free") for m in strong)
     assert any(m.endswith("nemotron-3-super-120b-a12b:free") for m in light)
     assert any(m.endswith("gemma-4-31b-it:free") for m in light)
-    assert any(m.endswith("laguna-s-2.1:free") for m in light)
+    assert any(m.endswith("nemotron-3.5-lightning:free") for m in light)
 
 
 def test_agent_free_is_strong_alias():

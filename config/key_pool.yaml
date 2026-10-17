@@ -33,7 +33,7 @@
 #   agent-strong-free  strong models only (groq gpt-oss-120b, sambanova gpt-oss-120b, Gemini Flash
 #                      x2, nemotron-ultra :free). Falls back to agent-free-paid.
 #   agent-light-free   cheap models only (groq gpt-oss-20b, mistral-small, gemma-4 :free,
-#                      nemotron-super :free, laguna :free). Falls back to agent-strong-free then paid.
+#                      nemotron-super :free, nemotron-lightning :free). Falls back to agent-strong-free then paid.
 #   agent-free         backward-compatible alias of agent-strong-free (same deployments).
 #   agent-free-paid    paid DeepSeek Flash only; the shared last-resort fallback for the free groups.
 #   private            customer/case data. `require` makes the renderer and the client REFUSE to build the
@@ -123,8 +123,8 @@ providers:
       - {id: "google/gemma-4-31b-it:free"}
       - {id: "nvidia/nemotron-3-super-120b-a12b:free"}
       - {id: "nvidia/nemotron-3-ultra-550b-a55b:free"}
-      - {id: "poolside/laguna-s-2.1:free"}
-    limits: {rpm: 20, tpm: unverified, rpd: 50, status: unverified}   # rpd 50 without credit, ~1000 with $10 credit
+      - {id: "nvidia/nemotron-3.5-lightning:free"}
+    limits: {rpm: 20, tpm: unverified, rpd: 1000, status: unverified}   # ~1000/day since the account holds >= $10 credit (2026-10-17)
     note: Blocked from Iranian IPs without a VPN; the Mac client skips it quickly when it fails.
 
   openrouter-paid:
@@ -194,7 +194,7 @@ groups:
       openrouter-free:
         - {id: "google/gemma-4-31b-it:free"}
         - {id: "nvidia/nemotron-3-super-120b-a12b:free"}
-        - {id: "poolside/laguna-s-2.1:free"}
+        - {id: "nvidia/nemotron-3.5-lightning:free"}
     fallback: [agent-strong-free, agent-free-paid]
 
   agent-free:   # backward-compatible alias of agent-strong-free (same deployments, same fallback)
