@@ -7,6 +7,7 @@ from output_apps.ecosystem_core.src.factory.persian_text import split_persian_se
 
 # chat_auth is a leaf module (no import of smartjudge_module), so there is no cycle.
 from output_apps.generated_modules.smartjudge import chat_auth
+from output_apps.generated_modules.smartjudge import small_talk
 
 router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudgeVoice"])
 
@@ -165,30 +166,61 @@ async def transcribe_audio_payload(audio_bytes: bytes, audio_fmt: str = "wav") -
     finally:
         log_voice_timing("stt", stt_ms=sw.elapsed_ms())
 
-async def _analyze_legal_query_impl(query_text: str) -> str:
-    q_norm = query_text.lower().replace("؟", "").replace(".", "").strip()
+_VOICE_PROMPT_HEAD = (
+    "امروز در سال ۱۴۰۵ هجری خورشیدی قرار داریم. شما «قاضی هوشمند» هستید و در یک مکالمهٔ صوتی زنده "
+    "مثل یک گفتگوی تلفنی طبیعی و دوستانه پاسخ می‌دهید. پاسخ را در ۲ تا ۴ جمله کوتاه و روان بگویید "
+    "(بدون فهرست و علامت) و در پایان در صورت نیاز بگویید که جزئیات و استناد کامل را می‌توانید متنی هم بدهید."
+)
+_VOICE_PROMPT_GROUNDED = (
+    "فقط در صورتی که مادهٔ مرتبطی در مستندات زیر هست به آن استناد کنید و هیچ شمارهٔ ماده یا رأی نسازید."
+)
+_VOICE_PROMPT_UNGROUNDED = (
+    "منبع قانونی مرتبطی برای این جمله پیدا نشد؛ به هیچ ماده یا رأیی استناد نکنید. اگر پرسش مبهم است "
+    "یک سؤال کوتاه روشن‌کننده بپرسید، و اگر روشن است کلی و محتاطانه پاسخ دهید."
+)
 
-    if q_norm in ["salam", "dorood", "سلام", "درود", "صبح بخیر", "عصر بخیر"] or (len(q_norm) < 15 and "salam" in q_norm):
-        return "سلام و احترام. من مستشار تخصصی قضایی سامانه «قاضی هوشمند» هستم. لطفاً شرح دادخواست، پرسش یا پرونده حقوقی خود را بفرمایید تا مستند به قوانین و رویه قضایی راهنماییتان کنم."
 
-    if any(p in q_norm for p in ["اسم تو چیه", "نام شما", "کی هستی", "کاربرد تو", "کارکرد تو"]):
-        return "من دستیار و مستشار قضایی سامانه «قاضی هوشمند» هستم. کاربرد اصلی من تحلیل پرونده‌های حقوقی و کیفری، تطبیق با آراء وحدت رویه، مصوبات هیئت وزیران و تنظیم لوایح قضایی است."
+def select_voice_context(laws, prec) -> str:
+    """Keep only relevant retrieval rows (no FALLBACK placeholders, no generic category hits,
+    no low-score matches). Returns "" when nothing relevant remains, so the prompt does not
+    force a citation from a coincidental keyword match."""
+    try:
+        from output_apps.generated_modules.smartjudge import source_filter
+        laws = source_filter.filter_relevant(laws)
+        prec = source_filter.filter_relevant(prec)
+    except Exception:
+        laws = [r for r in (laws or []) if isinstance(r, dict) and r.get("match_level") != "FALLBACK"]
+        prec = [r for r in (prec or []) if isinstance(r, dict) and r.get("match_level") != "FALLBACK"]
+    if not laws and not prec:
+        return ""
+    return f"قوانین و مصوبات: {laws[:3]}\nآراء و بخشنامه‌ها: {prec[:3]}"
 
-    context_data = ""
+
+def build_voice_system_prompt(context_data: str) -> str:
+    if context_data:
+        return f"{_VOICE_PROMPT_HEAD}\n{_VOICE_PROMPT_GROUNDED}\nمستندات پایگاه داده:\n{context_data}\n"
+    return f"{_VOICE_PROMPT_HEAD}\n{_VOICE_PROMPT_UNGROUNDED}\n"
+
+
+async def _voice_context_for(query_text: str) -> str:
     try:
         from output_apps.generated_modules.smartjudge.smartjudge_module import aquery_knowledge_graph
         laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.0)
-        context_data = f"قوانین و مصوبات: {laws}\nآراء و بخشنامه‌ها: {prec}"
+        return select_voice_context(laws, prec)
     except Exception:
-        pass
+        return ""
+
+
+async def _analyze_legal_query_impl(query_text: str) -> str:
+    # Greetings, mic checks, thanks, bye...: short spoken reply, no retrieval, no citations.
+    chat_reply = small_talk.small_talk_for(query_text)
+    if chat_reply:
+        return chat_reply
+
+    context_data = await _voice_context_for(query_text)
 
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-    sys_prompt = f"""
-امروز در سال ۱۴۰۵ هجری خورشیدی قرار داریم. شما مستشار عالی‌رتبه قضایی در سامانه «قاضی هوشمند» هستید.
-پاسخ شما به پرسش‌های حقوقی باید مستند، رسا، در قالب ۲ الی ۴ جمله و همراه با ذکر شماره مواد قانونی یا شماره رأی وحدت رویه و تصویب‌نامه‌های هیئت وزیران باشد.
-مستندات پایگاه داده:
-{context_data}
-"""
+    sys_prompt = build_voice_system_prompt(context_data)
 
     payload = json.dumps({
         "model": VOICE_LLM_MODEL,
@@ -253,28 +285,14 @@ async def analyze_legal_query_streaming(query_text: str, on_sentence) -> str:
         log_voice_timing("llm", llm_first_token_ms=ms, llm_total_ms=ms, streamed=False)
         return text
 
-    q_norm = query_text.lower().replace("؟", "").replace(".", "").strip()
-    if q_norm in ["salam", "dorood", "سلام", "درود", "صبح بخیر", "عصر بخیر"] or (len(q_norm) < 15 and "salam" in q_norm):
-        text = await _analyze_legal_query_impl(query_text)
-        await on_sentence(text)
+    chat_reply = small_talk.small_talk_for(query_text)
+    if chat_reply:
+        await on_sentence(chat_reply)
         ms = sw.elapsed_ms()
         log_voice_timing("llm", llm_first_token_ms=ms, llm_total_ms=ms, streamed=False)
-        return text
+        return chat_reply
 
-    context_data = ""
-    try:
-        from output_apps.generated_modules.smartjudge.smartjudge_module import aquery_knowledge_graph
-        laws, prec = await asyncio.wait_for(aquery_knowledge_graph(query_text, limit=3), timeout=2.0)
-        context_data = f"قوانین و مصوبات: {laws}\nآراء و بخشنامه‌ها: {prec}"
-    except Exception:
-        pass
-
-    sys_prompt = f"""
-امروز در سال ۱۴۰۵ هجری خورشیدی قرار داریم. شما مستشار عالی‌رتبه قضایی در سامانه «قاضی هوشمند» هستید.
-پاسخ شما به پرسش‌های حقوقی باید مستند، رسا، در قالب ۲ الی ۴ جمله و همراه با ذکر شماره مواد قانونی یا شماره رأی وحدت رویه و تصویب‌نامه‌های هیئت وزیران باشد.
-مستندات پایگاه داده:
-{context_data}
-"""
+    sys_prompt = build_voice_system_prompt(await _voice_context_for(query_text))
 
     try:
         import httpx
@@ -433,6 +451,8 @@ MSG_NO_SPEECH = "صدایی تشخیص داده نشد. کمی بلندتر و �
 MSG_TTS_DOWN = "پخش صدا ممکن نشد؛ پاسخ به‌صورت متن نمایش داده می‌شود."
 MSG_TURN_FAILED = "خطا در پردازش گفتار. لطفاً دوباره صحبت کنید."
 KEEPALIVE_SECONDS = 25.0
+# Client -> server: user spoke over the assistant (stop answering, drop buffered audio).
+BARGE_IN_EVENTS = {"barge_in", "barge-in", "interrupt", "stop", "cancel"}
 MAX_PCM_BYTES = 16000 * 2 * 60  # 60 s of 16 kHz mono Int16
 
 
@@ -484,6 +504,18 @@ async def live_voice_websocket(websocket: WebSocket):
 
     pcm_accumulator = bytearray()
     keepalive = asyncio.create_task(_keepalive(websocket))
+    active_turn: dict = {"task": None}
+
+    async def _cancel_turn() -> None:
+        """Barge-in / new utterance: stop generating and synthesising the previous answer."""
+        task = active_turn["task"]
+        active_turn["task"] = None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except BaseException:  # CancelledError or the turn's own failure: both are over
+                pass
 
     try:
         while True:
@@ -505,7 +537,15 @@ async def live_voice_websocket(websocket: WebSocket):
 
                 event_type = str(data.get("type") or data.get("event") or "").lower()
 
+                if event_type in BARGE_IN_EVENTS:
+                    # The user started talking over the assistant: drop the in-flight answer and
+                    # any audio buffered before this point (the client streams fresh PCM after it).
+                    await _cancel_turn()
+                    pcm_accumulator.clear()
+                    continue
+
                 if event_type in ("commit", "audio_input", "speech_end"):
+                    await _cancel_turn()
                     raw_bytes = bytes(pcm_accumulator)
                     pcm_accumulator.clear()
 
@@ -554,7 +594,8 @@ async def live_voice_websocket(websocket: WebSocket):
                                 }))
                                 if not sent_any:
                                     await _notice(websocket, "TTS_UNAVAILABLE", MSG_TTS_DOWN)
-                                    await websocket.send_text(json.dumps({"event": "turn_complete"}))
+                                # Always close the turn so the client re-arms the mic once playback drains.
+                                await websocket.send_text(json.dumps({"event": "turn_complete"}))
                             else:
                                 reply_text = await analyze_legal_query(user_text)
                                 await websocket.send_text(json.dumps({
@@ -572,7 +613,7 @@ async def live_voice_websocket(websocket: WebSocket):
                                     }))
                                 else:
                                     await _notice(websocket, "TTS_UNAVAILABLE", MSG_TTS_DOWN)
-                                    await websocket.send_text(json.dumps({"event": "turn_complete"}))
+                                await websocket.send_text(json.dumps({"event": "turn_complete"}))
 
                         except Exception as turn_exc:
                             print(f"[WS-TURN-ERR] {type(turn_exc).__name__}: {turn_exc}", file=sys.stderr)
@@ -588,7 +629,7 @@ async def live_voice_websocket(websocket: WebSocket):
                                 streamed=VOICE_STREAM_TTS,
                             )
 
-                    asyncio.create_task(_handle_turn(raw_bytes))
+                    active_turn["task"] = asyncio.create_task(_handle_turn(raw_bytes))
 
     except WebSocketDisconnect:
         pass
@@ -596,3 +637,4 @@ async def live_voice_websocket(websocket: WebSocket):
         print(f"[WS-ERR] {exc}", file=sys.stderr)
     finally:
         keepalive.cancel()
+        await _cancel_turn()

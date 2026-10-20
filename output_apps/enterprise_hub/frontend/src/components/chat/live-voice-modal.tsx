@@ -49,17 +49,25 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
   const audioQueueRef = useRef<Array<{ data: string; mime?: string }>>([]);
   const isPlayingRef = useRef(false);
   const turnCompletePendingRef = useRef(false);
+  // Playback goes through one gain node so barge-in can fade the voice out instead of clicking.
+  const masterGainRef = useRef<GainNode | null>(null);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rearmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const setListenMode = (isListening: boolean) => {
+  // Mic VAD mode (see /worklets/pcm-processor.js):
+  //   listen  = user's turn (stream + automatic end-of-turn after ~800 ms of silence)
+  //   monitor = assistant speaks (nothing streamed; a high threshold detects barge-in)
+  //   off     = assistant is thinking
+  const setMicMode = (mode: 'listen' | 'monitor' | 'off') => {
     if (workletNodeRef.current) {
-      workletNodeRef.current.port.postMessage({
-        command: 'SET_LISTEN',
-        listening: isListening,
-      });
+      workletNodeRef.current.port.postMessage({ command: 'SET_MODE', mode });
     }
   };
 
-  const transitionState = (newState: 'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING') => {
+  const transitionState = (
+    newState: 'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING',
+    opts?: { keepMic?: boolean },
+  ) => {
     stateRef.current = newState;
     setSessionState(newState);
 
@@ -67,11 +75,14 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       clearTimeout(watchdogTimerRef.current);
       watchdogTimerRef.current = null;
     }
+    if (rearmTimerRef.current) {
+      clearTimeout(rearmTimerRef.current);
+      rearmTimerRef.current = null;
+    }
 
-    if (newState === 'LISTENING') {
-      setListenMode(true);
-    } else {
-      setListenMode(false);
+    // keepMic: barge-in already switched the worklet to 'listen' with the speech onset buffered.
+    if (!opts?.keepMic) {
+      setMicMode(newState === 'LISTENING' ? 'listen' : newState === 'SPEAKING' ? 'monitor' : 'off');
     }
 
     if (newState === 'THINKING' || newState === 'SPEAKING') {
@@ -140,6 +151,34 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     });
   };
 
+  // Barge-in / hang-up: drop everything queued and fade the current clip out (~60 ms).
+  const stopPlayback = () => {
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    turnCompletePendingRef.current = false;
+    const ctx = audioContextRef.current;
+    const gain = masterGainRef.current;
+    const src = currentSourceRef.current;
+    currentSourceRef.current = null;
+    if (src) {
+      src.onended = null; // a stopped clip must not pull the next one from the queue
+      if (ctx && gain) {
+        try {
+          gain.gain.cancelScheduledValues(ctx.currentTime);
+          gain.gain.setTargetAtTime(0, ctx.currentTime, 0.015);
+        } catch { /* ignore */ }
+        if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+        fadeTimerRef.current = setTimeout(() => {
+          fadeTimerRef.current = null;
+          try { src.stop(); } catch { /* already stopped */ }
+          try { gain.gain.cancelScheduledValues(0); gain.gain.value = 1; } catch { /* ignore */ }
+        }, 80);
+      } else {
+        try { src.stop(); } catch { /* already stopped */ }
+      }
+    }
+  };
+
   const pumpAudioQueue = () => {
     const ctx = audioContextRef.current;
     if (!ctx) return;
@@ -150,7 +189,12 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       currentSourceRef.current = null;
       if (turnCompletePendingRef.current) {
         turnCompletePendingRef.current = false;
-        setTimeout(() => transitionState('LISTENING'), 250);
+        // Answer finished: re-arm listening automatically.
+        if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current);
+        rearmTimerRef.current = setTimeout(() => {
+          rearmTimerRef.current = null;
+          if (stateRef.current === 'SPEAKING') transitionState('LISTENING');
+        }, 250);
       }
       return;
     }
@@ -168,7 +212,8 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
         const audioBuffer = await decodeToBuffer(ctx, next.data, next.mime);
         const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
-        source.connect(ctx.destination);
+        source.connect(masterGainRef.current || ctx.destination);
+        if (stateRef.current === 'LISTENING' || stateRef.current === 'IDLE') return; // barge-in raced the decode
         currentSourceRef.current = source;
         source.onended = () => {
           pumpAudioQueue();
@@ -184,6 +229,8 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
   const enqueueAudio = (base64Audio: string, mime?: string) => {
     if (!base64Audio) return;
+    // Stale chunk of an answer the user already interrupted (or a closed call): never play it.
+    if (stateRef.current === 'LISTENING' || stateRef.current === 'IDLE') return;
     audioQueueRef.current.push({ data: base64Audio, mime });
     if (!isPlayingRef.current) {
       pumpAudioQueue();
@@ -192,9 +239,28 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
   const triggerCommit = () => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && stateRef.current === 'LISTENING') {
-      socketRef.current.send(JSON.stringify({ type: 'commit' }));
+      // Ask the worklet to flush its buffered tail first; the commit is sent on its FLUSHED reply
+      // so it cannot overtake the last PCM chunks.
+      if (workletNodeRef.current) workletNodeRef.current.port.postMessage({ command: 'FLUSH' });
+      else commitTurn();
+    }
+  };
+
+  const commitTurn = () => {
+    const ws = socketRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN && stateRef.current === 'LISTENING') {
+      ws.send(JSON.stringify({ type: 'commit' }));
       transitionState('THINKING');
     }
+  };
+
+  // The user talked over the assistant: silence it now, tell the server to stop generating, listen.
+  const handleBargeIn = () => {
+    if (stateRef.current !== 'SPEAKING') return;
+    stopPlayback();
+    const ws = socketRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'barge_in' }));
+    transitionState('LISTENING', { keepMic: true });
   };
 
   const startSession = async () => {
@@ -232,6 +298,12 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
         /* non-fatal */
       }
 
+      const masterGain = audioCtx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(audioCtx.destination);
+      masterGainRef.current = masterGain;
+
+      // Echo protection starts here: the browser's echo canceller, noise suppression and AGC stay on.
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -257,14 +329,19 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
         const data = event.data;
         if (!data) return;
 
+        if (data.event === 'BARGE_IN') {
+          handleBargeIn();
+          return;
+        }
         if (stateRef.current !== 'LISTENING') return;
         const ws = socketRef.current;
 
-        if (data.event === 'SPEECH_END') {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'commit' }));
-            transitionState('THINKING');
-          }
+        if (data.event === 'SPEECH_END' || data.event === 'FLUSHED') {
+          // Automatic end of turn (~800 ms of silence) or the manual send button.
+          commitTurn();
+        } else if (data.event === 'SPEECH_DISCARDED') {
+          // Too short to be speech (cough/click): make the server forget the streamed bytes.
+          if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel' }));
         } else if (data.event === 'PCM_DATA' && data.buffer) {
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(data.buffer);
@@ -331,7 +408,9 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
           // turnCompletePendingRef is set. If nothing is playing (e.g.
           // TTS failed and produced no audio at all), go straight back
           // to LISTENING so the conversation keeps moving.
-          if (isPlayingRef.current || audioQueueRef.current.length > 0) {
+          if (stateRef.current !== 'THINKING' && stateRef.current !== 'SPEAKING') {
+            // Stale event of an interrupted turn: the mic is already live, do not reset the VAD.
+          } else if (isPlayingRef.current || audioQueueRef.current.length > 0) {
             turnCompletePendingRef.current = true;
           } else {
             transitionState('LISTENING');
@@ -406,15 +485,25 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       clearTimeout(watchdogTimerRef.current);
       watchdogTimerRef.current = null;
     }
-    setListenMode(false);
+    if (rearmTimerRef.current) {
+      clearTimeout(rearmTimerRef.current);
+      rearmTimerRef.current = null;
+    }
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current);
+      fadeTimerRef.current = null;
+    }
+    setMicMode('off');
     stateRef.current = 'IDLE';
     audioQueueRef.current = [];
     isPlayingRef.current = false;
     turnCompletePendingRef.current = false;
     if (currentSourceRef.current) {
+      currentSourceRef.current.onended = null;
       try { currentSourceRef.current.stop(); } catch (e) {}
       currentSourceRef.current = null;
     }
+    masterGainRef.current = null;
     if (workletNodeRef.current) {
       workletNodeRef.current.disconnect();
       workletNodeRef.current = null;
@@ -478,11 +567,14 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
 
           <div className="mt-4 text-xs font-bold tracking-wide text-center">
             {sessionState === 'IDLE' && <span className="text-slate-400">جهت آغاز تماس صوتی کلیک فرمایید</span>}
-            {sessionState === 'LISTENING' && <span className="text-emerald-400">🟢 در حال شنیدن صدای شما (صحبت کنید و مکث فرمایید)...</span>}
-            {sessionState === 'THINKING' && <span className="text-sky-400">🟡 در حال استخراج ادله، آراء و مصوبات دولت...</span>}
-            {sessionState === 'SPEAKING' && <span className="text-amber-400">🔊 در حال بیان تحلیل مستشار (لطفاً گوش فرادهید)...</span>}
+            {sessionState === 'LISTENING' && <span className="text-emerald-400">در حال گوش دادن…</span>}
+            {sessionState === 'THINKING' && <span className="text-sky-400">در حال فکر کردن…</span>}
+            {sessionState === 'SPEAKING' && <span className="text-amber-400">در حال پاسخ…</span>}
           </div>
 
+          {sessionState === 'SPEAKING' && (
+            <p className="mt-2 text-[11px] text-slate-400">برای قطع پاسخ، کافی است شروع به صحبت کنید.</p>
+          )}
           {sessionState === 'LISTENING' && (
             <button
               onClick={triggerCommit}

@@ -2,6 +2,11 @@
 
 import re
 
+try:  # package import (production) or flat import (unit tests run from this folder)
+    from output_apps.generated_modules.smartjudge.small_talk import classify_small_talk
+except ImportError:  # pragma: no cover
+    from small_talk import classify_small_talk
+
 
 mic_test_patterns = [
     "صدای من",
@@ -120,6 +125,13 @@ def classify_fast_path(user_text: str) -> str | None:
 
     if any(pattern in normalized_text for pattern in IDENTITY_PATTERNS):
         return "identity"
+    # Shared small-talk detector: thanks / bye / presence / how-are-you and mic checks answer
+    # without legal retrieval or citations.
+    small = classify_small_talk(normalized_text)
+    if small == "mic_check":
+        return "mic_check"
+    if small in ("thanks", "bye", "presence", "how_are_you", "capabilities"):
+        return "small_talk"
     if any(pattern in normalized_text for pattern in mic_test_patterns):
         return "mic_check"
 

@@ -23,6 +23,7 @@ from output_apps.generated_modules.smartjudge import email_sender as _email_send
 from output_apps.generated_modules.smartjudge import case_files as _case_files
 from output_apps.generated_modules.smartjudge import answer_escalation as _answer_escalation
 from output_apps.generated_modules.smartjudge import voice_stt as _voice_stt
+from output_apps.generated_modules.smartjudge import small_talk as _small_talk
 from output_apps.generated_modules.smartjudge import legal_notes as _legal_notes
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
@@ -2035,6 +2036,19 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             "tier": selected_tier,
             "latency_ms": round((time.time() - t0) * 1000, 2)
         }
+    elif kind == "small_talk":
+        return {
+            "status": "SUCCESS",
+            "conversation_id": conv_id or str(uuid.uuid4()),
+            "reply": _small_talk.small_talk_reply(_small_talk.classify_small_talk(user_text) or "greeting", user_text),
+            "success_probability": None,
+            "defense_draft": None,
+            "statutory_basis": [],
+            "unified_precedents": [],
+            "model_assigned": cfg["primary_model"],
+            "tier": selected_tier,
+            "latency_ms": round((time.time() - t0) * 1000, 2)
+        }
     elif kind == "greeting":
         reply_fast = "سلام و درود بر شما، وقت بخیر. در خدمت شما هستم؛ لطفاً شرح پرونده یا پرسش حقوقی خود را بفرمایید تا بررسی و راهنمایی کنم."
         return {
@@ -2172,7 +2186,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 system_msg = _prompt_library.VOICE_SYSTEM_PROMPT
                 system_msg += " " + _chat_safety.LATIN_DIGITS_INSTRUCTION
                 if not grounded:
-                    system_msg += " " + _chat_safety.GENERAL_KNOWLEDGE_INSTRUCTION
+                    # Low relevance: never force a citation; ask a clarifying question instead.
+                    system_msg += " " + _chat_safety.VOICE_LOW_RELEVANCE_INSTRUCTION
             elif use_prompt_library:
                 system_msg = _prompt_library.build_system_prompt(detected_domains, grounded, user_text)
             else:
@@ -2207,7 +2222,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             messages_payload.append({"role": "user", "content": user_prompt})
 
             is_voice = bool(payload.get("is_voice_mode"))
-            chosen_max_tokens = 60 if is_voice else CHAT_MAX_TOKENS
+            chosen_max_tokens = 200 if is_voice else CHAT_MAX_TOKENS  # 2-4 spoken sentences
             temperature = 0.2 if is_voice else 0.3
             if _use_llm_router():
                 # Case text is customer legal data: sensitive=True keeps it off :free endpoints.
