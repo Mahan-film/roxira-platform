@@ -1,0 +1,11 @@
+# Every minute; the console treats a snapshot older than 10 minutes as stale.
+[Unit]
+Description=Roxira admin console host snapshot every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

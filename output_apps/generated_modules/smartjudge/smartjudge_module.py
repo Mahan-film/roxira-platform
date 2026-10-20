@@ -6194,6 +6194,22 @@ _email_auth_service = _email_auth.EmailAuthService(
 )
 router.include_router(_email_auth.build_router(_email_auth_service))
 
+# --- owner admin console (admin_api.py): /api/v1/apps/judge/admin/console/* -------------------------
+# Admins are the phones in SMARTJUDGE_ADMIN_PHONES (same list as admin_gate). The module takes the token
+# verifier and these helpers as arguments and never imports this file. See docs/ops/ADMIN_CONSOLE.md.
+from output_apps.generated_modules.smartjudge import admin_api as _admin_api
+from output_apps.generated_modules.smartjudge import admin_store as _admin_store
+
+router.include_router(_admin_api.build_router(
+    get_current_user=get_current_user,
+    admin_phones=_admin_phones,
+    store=_admin_store.PgAdminStore(
+        lambda: payment_orders._dsn(), tenant=os.environ.get("ADMIN_TENANT", "").strip() or _admin_store.DEFAULT_TENANT),
+    normalize_phone=normalize_phone,
+    is_valid_phone=_is_valid_phone,
+    on_entitlement_change=lambda: _ENTITLEMENT_CACHE.clear(),
+))
+
 
 # ==============================================================================
 # اتصال یکپارچه Twenty CRM و صف انتشار شبکه‌های اجتماعی (Postiz Hook)

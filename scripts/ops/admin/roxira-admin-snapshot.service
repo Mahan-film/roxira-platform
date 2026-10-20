@@ -1,0 +1,10 @@
+# Writes the host status snapshot the owner admin console reads (timers, disk, load).
+# Installed by scripts/ops/admin/install.sh. Read-only on the system: only /var/lib/roxira-admin is written.
+[Unit]
+Description=Roxira admin console host snapshot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/admin/host_snapshot.py
+TimeoutStartSec=60
+Nice=10

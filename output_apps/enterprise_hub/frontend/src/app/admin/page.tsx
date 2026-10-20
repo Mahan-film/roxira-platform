@@ -1,122 +1,148 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { notFound } from "next/navigation";
 
-export default function AdminDashboard() {
-  const isAuthenticated = process.env.NODE_ENV !== "production";
-  
-  
+/**
+ * Owner admin console (/admin on roxira.ir). Persian, RTL, dark `.ghazi-theme` (navy / gold / cyan), mobile first.
+ *
+ * Protection is on the SERVER: every call goes to /api/v1/apps/judge/admin/console/*, which requires a valid
+ * login token whose phone is in SMARTJUDGE_ADMIN_PHONES (401 / 403 otherwise), is rate limited, and validates
+ * every body. This page only signs in with the normal SMS flow and renders what the API returns.
+ * Docs: docs/ops/ADMIN_CONSOLE.md.
+ */
+import Link from "next/link";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { AdminApiError, adminGet, clearAdminToken, downloadDataset, hasAdminToken, subscribeAdminToken } from "@/lib/api/admin-console-client";
+import { AgentsTab } from "@/components/admin/agents-tab";
+import { Btn, Notice, Spinner } from "@/components/admin/admin-ui";
+import { DashboardTab } from "@/components/admin/dashboard-tab";
+import { HealthTab } from "@/components/admin/health-tab";
+import { LoginGate } from "@/components/admin/login-gate";
+import { MarketingTab } from "@/components/admin/marketing-tab";
+import { ModelsTab } from "@/components/admin/models-tab";
+import { PaymentsTab } from "@/components/admin/payments-tab";
+import { UsersTab } from "@/components/admin/users-tab";
 
-  // Temporary measure until proper server-side guard exists
+const TABS = [
+  { id: "dashboard", label: "داشبورد" },
+  { id: "users", label: "کاربران و اشتراک‌ها" },
+  { id: "payments", label: "پرداخت‌ها" },
+  { id: "models", label: "مدل‌ها و هزینه" },
+  { id: "agents", label: "پژوهش و ایجنت‌ها" },
+  { id: "marketing", label: "بازاریابی" },
+  { id: "health", label: "سلامت سیستم" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
 
-  
+export default function AdminConsolePage() {
+  // token presence is an external store (sessionStorage): no effect-driven setState needed for it
+  const hasToken = useSyncExternalStore(subscribeAdminToken, hasAdminToken, () => false);
+  const [admin, setAdmin] = useState<string | null>(null);
+  const [reason, setReason] = useState<string | undefined>(undefined);
+  const [tab, setTab] = useState<TabId>("dashboard");
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  
+  const signOut = useCallback((why?: string) => {
+    setAdmin(null);
+    setReason(why);
+    clearAdminToken();
+  }, []);
 
-  
+  // Ask the server who we are once a token exists; the server decides whether this phone is an admin.
+  useEffect(() => {
+    if (!hasToken || admin !== null) return;
+    let cancelled = false;
+    adminGet<{ admin: string }>("/me")
+      .then((me) => {
+        if (!cancelled) {
+          setReason(undefined);
+          setAdmin(me.admin);
+        }
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        if (e instanceof AdminApiError && (e.status === 401 || e.status === 403)) {
+          signOut(e.status === 403 ? "این شماره دسترسی مدیر ندارد." : "نشست منقضی شده؛ دوباره وارد شوید.");
+        } else {
+          signOut(e instanceof Error ? e.message : "خطای اتصال");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasToken, admin, signOut]);
 
-  const handleDownloadDataset = () => {
-    window.open("/api/v1/apps/judge/admin/export-dataset", "_blank");
-  };
+  const session: "out" | "checking" | "in" = !hasToken ? "out" : admin === null ? "checking" : "in";
 
-  const agentsList = [
-    { name: "Legal Ingestor (Crawl4AI)", status: "Active", latency: "24ms" },
-    { name: "Dual LightRAG Engine", status: "Active", latency: "38ms" },
-    { name: "Memory & Context (Mem0)", status: "Active", latency: "19ms" },
-    { name: "Social Content Autopilot", status: "Active", latency: "Gemini-Flash" },
-    { name: "Twenty CRM Bridge", status: "Active", latency: "Synced" },
-    { name: "Live Audio Consultation Gate", status: "Active", latency: "Standby" },
-    { name: "Multi-Currency Arbitrage", status: "Active", latency: "Live Tetherland" },
-    { name: "Bilingual Contract Arbiter", status: "Active", latency: "FA/EN" },
-    { name: "Security & JWT Sentinel", status: "Active", latency: "Secured" },
-    { name: "GEO / SEO Knowledge Dispatcher", status: "Active", latency: "Indexed" },
-  ];
+  const authLost = useCallback(() => signOut("نشست منقضی شده؛ دوباره وارد شوید."), [signOut]);
 
-  if (!isAuthenticated) {
-    notFound();
+  async function dataset() {
+    setDownloadError(null);
+    try {
+      await downloadDataset();
+    } catch (e) {
+      setDownloadError(e instanceof Error ? e.message : "دانلود ناموفق بود.");
+    }
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans" dir="rtl">
-      {/* هدر پنل */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-slate-800 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-amber-400 flex items-center gap-2">
-            <span>🛡️ داشبورد مدیریت و مانیتورینگ هوشمند روکسیرا</span>
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">پایش وضعیت شبکه ۱۰ عاملی، پایگاه داده کاربران و استخراج دیتاست</p>
+    <div className="dark ap-theme ghazi-theme min-h-dvh" data-theme="dark" dir="rtl" lang="fa">
+      <header className="sticky top-0 z-20 border-b border-[var(--gh-border)] bg-[var(--ap-nav-bg)] backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4">
+          <div>
+            <h1 className="text-base font-bold text-[var(--gh-gold)] sm:text-lg">کنسول مدیریت روکسیرا</h1>
+            {session === "in" && <p className="text-[11px] text-[var(--gh-muted)]">مدیر: <span dir="ltr">{admin}</span></p>}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/admin/mission-control" className="text-xs text-[var(--gh-cyan)] underline">مرکز فرماندهی کارخانه</Link>
+            <Link href="/" className="text-xs text-[var(--gh-cyan)] underline">سایت</Link>
+            {session === "in" && (
+              <>
+                <Btn small variant="ghost" onClick={() => void dataset()}>دیتاست چت‌ها</Btn>
+                <Btn small variant="ghost" onClick={() => signOut()}>خروج</Btn>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <a href="/" className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-xl transition-colors">
-            صفحه اصلی سایت
-          </a>
-        </div>
-      </div>
-
-      {/* کارت‌های آماری */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-8">
-        <div className="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-sm">
-          <div className="text-xs text-slate-400 mb-1">عامل‌های هوشمند فعال</div>
-          <div className="text-2xl font-bold text-amber-400 font-mono">10 / 10</div>
-          <div className="text-[11px] text-emerald-400 mt-2">شبکه Swarm عملیاتی</div>
-        </div>
-
-        <div className="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-sm">
-          <div className="text-xs text-slate-400 mb-1">کاربران ثبت‌نام‌شده</div>
-          <div className="text-2xl font-bold text-white font-mono">14</div>
-          <div className="text-[11px] text-slate-400 mt-2">Kavenegar OTP احراز هویت</div>
-        </div>
-
-        <div className="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-sm">
-          <div className="text-xs text-slate-400 mb-1">مکالمات استخراج‌شده</div>
-          <div className="text-2xl font-bold text-white font-mono">86</div>
-          <div className="text-[11px] text-amber-400 mt-2">فرمت استاندارد JSONL</div>
-        </div>
-
-        <div className="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-sm">
-          <div className="text-xs text-slate-400 mb-1">امنیت و گیت دسترسی</div>
-          <div className="text-2xl font-bold text-emerald-400 font-mono">Protected</div>
-          <div className="text-[11px] text-slate-400 mt-2">احراز هویت سشن فعال</div>
-        </div>
-      </div>
-
-      {/* ماتریس ۱۰ عامل هوشمند */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 mb-8">
-        <h2 className="text-base font-bold text-slate-200 mb-4">🤖 وضعیت زنده شبکه ۱۰ عاملی (Autonomous Agent Mesh)</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {agentsList.map((ag, idx) => (
-            <div key={idx} className="bg-slate-950/70 border border-slate-800/80 p-3.5 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="text-xs font-medium text-slate-300">{ag.name}</span>
-              </div>
-              <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                {ag.latency}
-              </span>
+        {session === "in" && (
+          <nav className="mx-auto max-w-6xl overflow-x-auto px-2" aria-label="بخش‌های کنسول">
+            <div role="tablist" className="flex min-w-max gap-1 pb-2">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  role="tab"
+                  id={`tab-${t.id}`}
+                  aria-selected={tab === t.id}
+                  aria-controls={`panel-${t.id}`}
+                  onClick={() => setTab(t.id)}
+                  className={`min-h-11 whitespace-nowrap rounded-xl border px-3 text-sm transition-colors ${
+                    tab === t.id
+                      ? "border-[var(--gh-gold)] bg-[var(--gh-surface-2)] font-semibold text-[var(--gh-gold)]"
+                      : "border-transparent text-[var(--gh-muted)] hover:text-[var(--gh-text)]"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </nav>
+        )}
+      </header>
 
-      {/* اقدامات سریع */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6">
-        <h2 className="text-base font-bold text-slate-200 mb-4">⚡ استخراج داده‌ها و عملیات بازاریابی</h2>
-        <div className="flex flex-wrap gap-3">
-          <button 
-            onClick={handleDownloadDataset}
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-2"
-          >
-            <span>📥 دانلود خروجی چت‌های کاربران (ghazihoushmand_dataset.jsonl)</span>
-          </button>
-          <a
-            href="/api/v1/apps/judge/marketing/campaign-queue"
-            target="_blank"
-            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors flex items-center gap-2"
-          >
-            <span>📢 مشاهده صف پست‌های شبکه‌های اجتماعی</span>
-          </a>
-        </div>
-      </div>
+      <main className="mx-auto max-w-6xl px-3 py-4 sm:px-4">
+        {downloadError && <div className="mb-3"><Notice tone="danger">{downloadError}</Notice></div>}
+        {session === "checking" && <Spinner label="در حال بررسی نشست…" />}
+        {session === "out" && <LoginGate reason={reason} onSignedIn={() => setReason(undefined)} />}
+        {session === "in" && (
+          <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+            {tab === "dashboard" && <DashboardTab onAuthLost={authLost} />}
+            {tab === "users" && <UsersTab onAuthLost={authLost} />}
+            {tab === "payments" && <PaymentsTab onAuthLost={authLost} />}
+            {tab === "models" && <ModelsTab onAuthLost={authLost} />}
+            {tab === "agents" && <AgentsTab onAuthLost={authLost} />}
+            {tab === "marketing" && <MarketingTab onAuthLost={authLost} />}
+            {tab === "health" && <HealthTab onAuthLost={authLost} />}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

@@ -16,6 +16,25 @@ services:
       - ./output_apps:/app/output_apps
       - ./run_unified_server.py:/app/run_unified_server.py
       - ./data:/opt/roxira_platform/data
+      # --- Owner admin console (docs/ops/ADMIN_CONSOLE.md). Host paths are mounted at the SAME path inside
+      # the container, so a path that taskq.py stores in its database is valid for the host worker too.
+      # Read-only (:ro) unless marked RW. The Docker socket is NOT mounted (see docker-socket-proxy below).
+      # tab 5/6: the existing engines' own code, so the console uses their real state machines
+      - ./scripts/marketing:/app/scripts/marketing:ro
+      - ./scripts/infra/server_agents:/app/scripts/infra/server_agents:ro
+      # tab 4: tier -> group fallback chains (env-var names only, no keys inside)
+      - ./config/key_pool.yaml:/app/config/key_pool.yaml:ro
+      # tab 1/4: LLM cost + latency log written by the key-pool gateway (no prompts in it)
+      - /var/log/roxira-keypool:/var/log/roxira-keypool:ro
+      # tab 4: model bake-off reports (*.md)
+      - /var/lib/roxira-eval/bakeoff:/var/lib/roxira-eval/bakeoff:ro
+      # tab 7: autodeploy-last.json (last deploy) and the host timer/disk snapshot
+      - /root/deploy-state:/root/deploy-state:ro
+      - /var/lib/roxira-admin:/var/lib/roxira-admin:ro
+      # tab 5 (RW): taskq.db + admin-tasks/ - the console queues tasks through `taskq.py add`
+      - /var/lib/roxira-agents:/var/lib/roxira-agents
+      # tab 6 (RW): marketing.db - approve/reject posts with mkt_store's state machine
+      - /var/lib/roxira-marketing:/var/lib/roxira-marketing
     environment:
       - ROXIRA_AUTH_DB_URL=sqlite+aiosqlite:////data/roxira_auth.db
       - POSTGRES_HOST=roxira_pgbouncer
