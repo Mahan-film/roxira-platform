@@ -299,7 +299,7 @@ def _full_cfg():
 def test_plan_orders_and_free_end():
     cfg = _full_cfg()
     assert [m for m, _ in _chain(cfg, "vip-product")] == ["anthropic/claude-haiku-5.5", "deepseek/deepseek-v4.1-flash"]
-    assert [m for m, _ in _chain(cfg, "vip-pro")] == ["deepseek/deepseek-v4-pro", "anthropic/claude-haiku-5.5", "z-ai/glm-5.3"]
+    assert [m for m, _ in _chain(cfg, "vip-pro")] == ["anthropic/claude-haiku-5.5", "deepseek/deepseek-v4-pro", "z-ai/glm-5.3"]  # bake-off 2026-10-20
     assert [m for m, _ in _chain(cfg, "vip-premium")] == ["anthropic/claude-opus-5", "moonshotai/kimi-k3"]
 
 
@@ -319,14 +319,15 @@ def test_anthropic_cache_injection_only_on_anthropic_and_deepseek_sorts_by_price
             assert m["litellm_params"]["input_cost_per_token"] > 0
 
 
-def test_free_ladder_has_verified_free_models_after_gemini_flash():
+def test_free_ladder_follows_bakeoff_order():
     cfg = _full_cfg()
     chain = _chain(cfg, "best-product-free")
     ids = [m for m, _ in chain]
     for free in ("nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3-super-120b-a12b:free", "google/gemma-4-31b-it:free"):
         assert free in ids
-    assert ids.index("nvidia/nemotron-3-ultra-550b-a55b:free") > ids.index("gemini/gemini-3-flash-preview")
-    assert ids.index("nvidia/nemotron-3-ultra-550b-a55b:free") < ids.index("gemini/gemini-3.5-flash-lite")
+    # 2026-10-20 bake-off: Nemotron Ultra, then Groq gpt-oss-120b, then Gemini 3.8 Flash and flash-lite lead the ladder
+    assert ids.index("nvidia/nemotron-3-ultra-550b-a55b:free") < ids.index("gemini/gemini-3.8-flash")
+    assert ids.index("gemini/gemini-3.5-flash-lite") < ids.index("gemini/gemini-3-flash-preview")
 
 
 def test_summarize_cheap_then_free_ladder_and_cheap_agent_order():

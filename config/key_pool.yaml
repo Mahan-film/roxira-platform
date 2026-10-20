@@ -295,24 +295,26 @@ groups:
                   # Fast per-attempt caps so a busy model hands over quickly (chat waits ~15 s for the first token).
     description: Cross-provider FREE ladder for non-subscribers; no paid step.
     ordered: true
+    # 2026-10-20 bake-off (40 Qs, judged): Nemotron Ultra :free 45.9, gpt-oss-120b 39.6 (1 s), flash-lite 37.3 were the
+    # reliable ones; the Gemini flash thinking models mostly missed the 9 s stream timeout under load.
     providers: [gemini, groq, mistral, openrouter-free]
     models:
       gemini:
         - {id: gemini-4-argon, needs_billing: true, rank: 1}
         - {id: gemini-3.1-pro-preview, needs_billing: true, rank: 2}
-        - {id: gemini-3.8-flash, rank: 3}
-        - {id: gemini-3.7-flash, rank: 4}
-        - {id: gemini-3.6-flash, rank: 6}
-        - {id: gemini-3.5-flash, rank: 8}
-        - {id: gemini-3-flash-preview, rank: 9}
-        - {id: gemma-4-31b-it, rank: 10}
-        - {id: gemini-3.5-flash-lite, rank: 14}
-      groq: [{role: agent_runner, alias: groq-strong, rank: 5}]
-      mistral: [{id: mistral-medium-latest, rank: 7}]
-      openrouter-free:   # verified free models (2026-10-17); after the Gemini flash ranks, before flash-lite
-        - {role: free, alias: nemotron-ultra, rank: 11}
-        - {role: free, alias: nemotron-super, rank: 12}
-        - {role: free, alias: gemma-free, rank: 13}
+        - {id: gemini-3.8-flash, rank: 5}
+        - {id: gemini-3.7-flash, rank: 11}
+        - {id: gemini-3.6-flash, rank: 10}
+        - {id: gemini-3.5-flash, rank: 9}
+        - {id: gemini-3-flash-preview, rank: 7}
+        - {id: gemma-4-31b-it, rank: 8}
+        - {id: gemini-3.5-flash-lite, rank: 6}
+      groq: [{role: agent_runner, alias: groq-strong, rank: 4}]
+      mistral: [{id: mistral-medium-latest, rank: 12}]
+      openrouter-free:   # ranks from the 2026-10-20 bake-off (docs/eval): Nemotron Ultra was the most reliable free model
+        - {role: free, alias: nemotron-ultra, rank: 3}
+        - {role: free, alias: nemotron-super, rank: 13}
+        - {role: free, alias: gemma-free, rank: 14}
     litellm_params: {reasoning_effort: low, stream_timeout: 9, timeout: 30}
     fallback: []   # free users never reach a paid model (owner 2026-10-16)
 
@@ -326,14 +328,14 @@ groups:
         - {role: product, alias: ds-flash, rank: 2, extra_body: *sort_price}
     fallback: [best-product-free]
 
-  vip-pro:   # PRO plan: DeepSeek V4 Pro, Haiku 5.5, GLM-5.3 last (expensive output), then vip-product -> free
+  vip-pro:   # PRO plan: Haiku 5.5, DeepSeek V4 Pro, GLM-5.3 last; bake-off 2026-10-20: Haiku 48.8 / 0% bad / 4.6 s vs DS Pro 42.7 / 10% bad / 13 s
     description: Smart Judge PRO plan answers.
     ordered: true
     providers: [openrouter-private]
     models:
       openrouter-private:
-        - {role: product_pro, alias: pro, rank: 1}
-        - {role: product_pro, alias: haiku, rank: 2, litellm_params: *anthropic_cache, extra_body: *no_think}
+        - {role: product_pro, alias: pro, rank: 2}
+        - {role: product_pro, alias: haiku, rank: 1, litellm_params: *anthropic_cache, extra_body: *no_think}
         - {role: product_pro, alias: glm, rank: 3}
     fallback: [vip-product]
 
