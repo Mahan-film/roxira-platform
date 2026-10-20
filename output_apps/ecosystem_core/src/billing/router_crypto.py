@@ -43,6 +43,7 @@ def build_router(
     store_factory: Callable[[], tuple[Any, Callable[[], None]]] | None = None,
     fetch_fn: Callable[..., list[dict]] | None = None,
     on_paid: Callable[[], None] | None = None,
+    gate_status: Callable[[Request, str], Any] | None = None,
 ) -> tuple[APIRouter, Callable[[str], dict | None]]:
     """Returns (router, verify_by_track_id). The second is used by the generic
     /payments/verify endpoint for ``USDT_`` track ids (no login: the track id is
@@ -117,6 +118,10 @@ def build_router(
     async def crypto_invoice_status(request: Request, track_id: str = Path(..., pattern=_TRACK_RE)):
         if not cps.crypto_pay_enabled():
             return _not_found()
+        if gate_status is not None:
+            limited = gate_status(request, track_id)
+            if limited is not None:
+                return limited
         user_ref = resolve_user_ref(request)
         if not user_ref:
             return JSONResponse(status_code=401, content={"status": "FAILED"})

@@ -571,3 +571,30 @@ def test_failure_messages_are_persian_never_raw_gateway_english():
     })
     assert res2["status"] == "PENDING_RETRY"
     assert "timed out" not in res2["message"]
+
+
+def test_one_off_purchase_is_not_a_subscription_and_has_no_expiry():
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="SINGLE_DRAFT")
+
+    def ent(ref):  # the stored one-off row still has a 30-day expires_at
+        return {"plan_type": "SINGLE_DRAFT", "expires_at": "2030-02-01T00:00:00+00:00"}
+
+    res = _verify(
+        store, lambda u, p: {"persisted": True, "expires_at": "2030-01-01T00:00:00+00:00"},
+        plans=PLANS, entitlement_fn=ent,
+    )
+    assert res["status"] == "PAID"
+    assert res["is_subscription"] is False
+    assert res["plan_level"] == "free"  # a draft purchase never grants subscription-level chat
+    assert "expires_at" not in res
+
+
+def test_subscription_purchase_is_flagged_subscription():
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+    res = _verify(store, lambda u, p: {"persisted": True}, plans=PLANS,
+                  entitlement_fn=lambda r: {"plan_type": "VIP_MONTHLY_PRO",
+                                            "expires_at": "2030-02-01T00:00:00+00:00"})
+    assert res["is_subscription"] is True
+    assert res["expires_at"] == "2030-02-01T00:00:00+00:00"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Roxira OS & SmartJudge (ghazihoushmand.ir) - Official Zibal Gateway Integration
-Merchant: REDACTED_SECRET_17
+Merchant id: read from the ZIBAL_MERCHANT environment variable only.
 Handles: Payment Request, Verification, 7-Day Trial, and Permanent Subscriptions.
 """
 import os, json, urllib.request, datetime
@@ -11,8 +11,15 @@ ZIBAL_REQUEST_URL = "https://gateway.zibal.ir/v1/request"
 ZIBAL_VERIFY_URL = "https://gateway.zibal.ir/v1/verify"
 ZIBAL_START_URL = "https://gateway.zibal.ir/start/"
 
+class ZibalConfigError(RuntimeError):
+    """ZIBAL_MERCHANT is not configured; callers answer 503 instead of charging."""
+
+
 def get_merchant() -> str:
-    return os.environ.get("ZIBAL_MERCHANT", "REDACTED_SECRET_17")
+    merchant = os.environ.get("ZIBAL_MERCHANT", "").strip()
+    if not merchant:
+        raise ZibalConfigError("ZIBAL_MERCHANT is not set")
+    return merchant
 
 def create_payment_request(
     amount_rials: int,
@@ -76,7 +83,12 @@ def verify_payment(track_id: str) -> Dict[str, Any]:
     ``definitive=False`` یعنی پاسخ نامشخص است یا اصلاً به زیبال نرسیدیم (خطای
     شبکه/timeout) — کالر (payment_service.verify_invoice) در این حالت نباید
     سفارش را failed کند، چون ممکن است تراکنش واقعاً موفق بوده باشد."""
-    merchant = get_merchant()
+    try:
+        merchant = get_merchant()
+    except ZibalConfigError:
+        # not a gateway answer: leave the order pending, never fail a paid order
+        return {"success": False, "paid": False, "definitive": False,
+                "message": "درگاه پرداخت پیکربندی نشده است."}
     payload = {
         "merchant": merchant,
         "trackId": track_id

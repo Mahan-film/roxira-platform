@@ -22,6 +22,9 @@ type VerifyState = "checking" | "paid" | "failed" | "unavailable" | "pending_ret
 interface PaidDetails {
   planName: string | null;
   expiresAt: string | null;
+  /** false for one-off purchases (single draft, voice pack): no plan, no expiry */
+  isSubscription: boolean;
+  planType: string | null;
   activationPending: boolean;
 }
 
@@ -93,6 +96,9 @@ function PaymentCallbackContent() {
         setPaid({
           planName: typeof data.plan_name === "string" ? data.plan_name : null,
           expiresAt: typeof data.expires_at === "string" ? data.expires_at : null,
+          // older servers omit the flag: treat only an explicit false as one-off
+          isSubscription: data.is_subscription !== false,
+          planType: typeof data.plan_type === "string" ? data.plan_type : null,
           activationPending: data.activation_pending === true,
         });
         refreshStoredPlan(data.plan_level);
@@ -161,7 +167,17 @@ function PaymentCallbackContent() {
         <h1 className="text-lg font-bold text-white">{title}</h1>
         <p className={`text-sm leading-relaxed ${color}`} role="status">{message}</p>
 
-        {state === "paid" && paid && (
+        {state === "paid" && paid && !paid.isSubscription && (
+          <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-sm text-slate-200 space-y-2 text-right">
+            <p className="font-semibold">خرید شما ثبت شد: {paid.planName ?? "خرید تکی"}</p>
+            <p className="text-slate-400 leading-6">
+              این خرید یک‌بار مصرف است و اشتراک فعال نمی‌کند.
+              {paid.planType === "SINGLE_DRAFT" ? " یک پیش‌نویس لایحه برای شما باز شد." : ""}
+            </p>
+          </div>
+        )}
+
+        {state === "paid" && paid?.isSubscription && (
           <dl className="rounded-xl border border-white/10 bg-black/30 p-4 text-sm text-slate-200 space-y-2 text-right">
             {paid.planName && (
               <div className="flex justify-between gap-3">
@@ -191,7 +207,19 @@ function PaymentCallbackContent() {
         )}
 
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-          {state === "paid" && (
+          {state === "paid" && paid && !paid.isSubscription && (
+            <>
+              {paid.planType === "SINGLE_DRAFT" && (
+                <a href="/chat?draft=defense" className={cta}>
+                  رفتن به پیش‌نویس لایحه
+                </a>
+              )}
+              <a href="/chat" className={paid.planType === "SINGLE_DRAFT" ? secondary : cta}>
+                بازگشت به گفتگو
+              </a>
+            </>
+          )}
+          {state === "paid" && !(paid && !paid.isSubscription) && (
             <a href="/chat" className={cta}>
               بازگشت به گفتگو با قاضی هوشمند
             </a>

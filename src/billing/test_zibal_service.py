@@ -11,7 +11,14 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from output_apps.ecosystem_core.src.billing import zibal_service
+
+
+@pytest.fixture(autouse=True)
+def _merchant(monkeypatch):
+    monkeypatch.setenv("ZIBAL_MERCHANT", "test-merchant")
 
 
 class _FakeResponse:
@@ -160,3 +167,25 @@ def test_activate_user_subscription_persist_error_does_not_raise(monkeypatch):
     result = zibal_service.activate_user_subscription("usr_1", "MONTHLY")
     assert result["persisted"] is False
     assert "persist_error" in result
+
+
+def test_missing_merchant_raises_config_error(monkeypatch):
+    monkeypatch.delenv("ZIBAL_MERCHANT", raising=False)
+    with pytest.raises(zibal_service.ZibalConfigError):
+        zibal_service.get_merchant()
+    with pytest.raises(zibal_service.ZibalConfigError):
+        zibal_service.create_payment_request(amount_rials=1, order_id="o", description="d")
+    monkeypatch.setenv("ZIBAL_MERCHANT", "   ")
+    with pytest.raises(zibal_service.ZibalConfigError):
+        zibal_service.get_merchant()
+
+
+def test_verify_without_merchant_is_not_definitive(monkeypatch):
+    monkeypatch.delenv("ZIBAL_MERCHANT", raising=False)
+    res = zibal_service.verify_payment("1")
+    assert res["paid"] is False and res["definitive"] is False
+
+
+def test_merchant_is_stripped(monkeypatch):
+    monkeypatch.setenv("ZIBAL_MERCHANT", "  abc \n")
+    assert zibal_service.get_merchant() == "abc"

@@ -2815,6 +2815,12 @@ async def create_payment_invoice(request: Request, payload: dict = Body(...)):
             status_code=400,
             content={"status": "FAILED", "message": "نوع پلن نامعتبر است."},
         )
+    except zibal_service.ZibalConfigError:
+        print("[SMARTJUDGE][PAYMENTS] ZIBAL_MERCHANT is not configured", file=sys.stderr)
+        return JSONResponse(
+            status_code=503,
+            content={"status": "UNAVAILABLE", "message": "درگاه پرداخت موقتاً در دسترس نیست."},
+        )
     except payment_service.MissingIdentifierError:
         return JSONResponse(
             status_code=400,
@@ -2830,8 +2836,12 @@ async def create_payment_invoice(request: Request, payload: dict = Body(...)):
 
 
 @router.post("/payments/verify")
-async def verify_payment(payload: dict = Body(...)):
+async def verify_payment(request: Request, payload: dict = Body(...)):
     """تأیید واقعی تراکنش زیبال با trackId و فعال‌سازی دسترسی VIP پس از تطابق مبلغ"""
+    limited = await asyncio.to_thread(
+        chat_auth.gate_payment_status, request, str(payload.get("track_id") or payload.get("trackId") or "") or None)
+    if limited is not None:
+        return limited
     if (not payment_service.payments_live_enabled()
             and not str(payload.get("track_id") or payload.get("trackId") or "").startswith("USDT_")):
         return JSONResponse(
@@ -2897,6 +2907,7 @@ def _crypto_user_ref(request: Request) -> Optional[str]:
 _crypto_router, _crypto_verify_by_track_id = router_crypto.build_router(
     resolve_user_ref=_crypto_user_ref,
     on_paid=lambda: _ENTITLEMENT_CACHE.clear(),
+    gate_status=chat_auth.gate_payment_status,
 )
 router.include_router(_crypto_router)
 

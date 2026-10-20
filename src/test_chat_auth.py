@@ -291,3 +291,29 @@ def test_single_otp_handler_pair():
     assert paths.count(f"{BASE}/auth/send-otp") == 1
     assert paths.count(f"{BASE}/auth/verify-otp") == 1
     assert not hasattr(mod, "_OTP_CACHE")
+
+
+# ---------------- payment status rate limits ----------------
+def test_payments_verify_rate_limited_per_track_id(client, monkeypatch):
+    monkeypatch.setenv("PAYMENTS_LIVE", "0")  # 503 UNAVAILABLE once past the gate, no DB/network
+    codes = [client.post(f"{BASE}/payments/verify", json={"track_id": "T-1"}).status_code for _ in range(12)]
+    assert codes[:10] == [503] * 10
+    assert codes[10:] == [429, 429]
+    resp = client.post(f"{BASE}/payments/verify", json={"track_id": "T-1"})
+    assert resp.status_code == 429 and "Retry-After" in resp.headers
+    assert "پرداخت" in resp.json()["message"]
+
+
+def test_payments_verify_rate_limited_per_ip(client, monkeypatch):
+    monkeypatch.setenv("PAYMENTS_LIVE", "0")
+    codes = [client.post(f"{BASE}/payments/verify", json={"track_id": f"T-{i}"}).status_code for i in range(32)]
+    assert codes[:30] == [503] * 30
+    assert codes[30:] == [429, 429]
+
+
+def test_one_off_entitlement_does_not_grant_subscription_level():
+    # SINGLE_DRAFT / VOICE_PACK rows in user_entitlements must stay level "free"
+    assert mod._plan_level_from_plan_types(["SINGLE_DRAFT"]) == "free"
+    assert mod._plan_level_from_plan_types(["SINGLE_DRAFT", "VOICE_PACK_10MIN"]) == "free"
+    assert not mod._is_vip_tier("SINGLE_DRAFT")
+    assert mod._plan_level_from_plan_types(["SINGLE_DRAFT", "SJ_PRO_MONTHLY"]) == "pro"

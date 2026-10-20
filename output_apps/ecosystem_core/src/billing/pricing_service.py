@@ -36,6 +36,9 @@ BASE_PLANS_TOMAN: dict[str, dict[str, object]] = {
     "SINGLE_DRAFT": {
         "name": "خرید لایحه تکی تخصصی دادگاه",
         "default_toman": 100_000,
+        # USD base for USDT checkout only (= 350,000 toman at 280k); the toman
+        # price shown/charged stays default_toman / PRICE_TOMAN_SINGLE_DRAFT.
+        "default_usd": 1.25,
     },
     "VOICE_PACK_10MIN": {
         "name": "بسته ۱۰ دقیقه مشاوره صوتی زنده",
@@ -88,6 +91,12 @@ def plan_level(plan_type: str | None) -> str:
     if key in PLAN_LEVELS:
         return PLAN_LEVELS[key]
     return "pro" if key in LEGACY_VIP_PLAN_TYPES else "free"
+
+
+def is_subscription(plan_type: str | None) -> bool:
+    """True for plans that grant a subscription level (SJ_*, legacy VIP types);
+    one-off purchases (SINGLE_DRAFT, VOICE_PACK_*) are not subscriptions."""
+    return plan_level(plan_type) != "free"
 
 
 def highest_level(levels) -> str:
@@ -321,6 +330,8 @@ def get_calculated_pricing() -> dict[str, dict[str, object]]:
             "price_toman": price_toman,
             "price_rial": price_toman * 10,
         }
+        if "default_usd" in item:
+            plans[key]["usd"] = env_plan_price_usd(key, float(item["default_usd"]))
     rate = get_usd_toman_rate()
     for key, item in USD_PLANS.items():
         usd = env_plan_price_usd(key, float(item["default_usd"]))

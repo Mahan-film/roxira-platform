@@ -67,3 +67,17 @@ def test_enabled_requires_login_and_validates_body(monkeypatch, parts):
     assert client.get("/payments/crypto/status/not-a-track").status_code == 422
     other, _ = build(user="someone-else", factory=lambda: (store, lambda: None))
     assert other.get(f"/payments/crypto/status/{track}").status_code == 404
+
+
+def test_status_endpoint_is_rate_limited_when_gate_says_so(monkeypatch):
+    from fastapi.responses import JSONResponse
+
+    monkeypatch.setenv("CRYPTO_PAY_ENABLED", "1")
+    monkeypatch.setenv("CRYPTO_USDT_TRC20_ADDRESS", OUR)
+    router, _ = router_crypto.build_router(
+        resolve_user_ref=lambda request: "u1",
+        gate_status=lambda request, tid: JSONResponse(status_code=429, content={"status": "RATE_LIMITED"}),
+    )
+    app = FastAPI()
+    app.include_router(router)
+    assert TestClient(app).get(f"/payments/crypto/status/{TRACK}").status_code == 429

@@ -289,6 +289,9 @@ def _paid_result(
         "plan_level": pricing_service.plan_level(plan_type),
     }
     plan = (plans or {}).get(plan_type) or {}
+    # is_subscription is decided by the PURCHASED plan: a one-off bought while a
+    # subscription runs must not render as a subscription activation
+    result["is_subscription"] = pricing_service.is_subscription(plan_type)
     if plan.get("name"):
         result["plan_name"] = plan["name"]
     expires_at = None
@@ -303,9 +306,9 @@ def _paid_result(
                 result["plan_level"] = pricing_service.plan_level(ent["plan_type"])
         except Exception:
             logger.exception("W17 entitlement lookup failed: track_id=%s", track_id)
-    if not expires_at:
+    if not expires_at and result["is_subscription"]:
         expires_at = (activation or {}).get("expires_at")
-    if expires_at:
+    if expires_at and result["is_subscription"]:
         result["expires_at"] = expires_at
     return result
 

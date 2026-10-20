@@ -102,3 +102,22 @@ def test_create_invoice_charges_exactly_the_pricing_matrix_amount(monkeypatch):
     assert result["status"] == "SUCCESS"
     assert result["amount_rial"] == plans["SINGLE_DRAFT"]["price_toman"] * 10
     assert captured["amount_rials"] == plans["SINGLE_DRAFT"]["price_toman"] * 10
+
+
+def test_single_draft_has_usd_base_without_changing_toman(monkeypatch):
+    monkeypatch.delenv("PRICE_TOMAN_SINGLE_DRAFT", raising=False)
+    monkeypatch.delenv("PRICE_USD_SINGLE_DRAFT", raising=False)
+    plan = pricing_service.get_calculated_pricing()["SINGLE_DRAFT"]
+    assert plan["usd"] == 1.25
+    assert plan["price_toman"] == 100_000  # unchanged code default
+    monkeypatch.setenv("PRICE_TOMAN_SINGLE_DRAFT", "350000")
+    plan = pricing_service.get_calculated_pricing()["SINGLE_DRAFT"]
+    assert plan["price_toman"] == 350_000 and plan["usd"] == 1.25
+
+
+def test_one_off_plans_are_not_subscriptions_and_stay_free_level():
+    for key in ("SINGLE_DRAFT", "VOICE_PACK_10MIN"):
+        assert pricing_service.plan_level(key) == "free"
+        assert pricing_service.is_subscription(key) is False
+    assert pricing_service.is_subscription("SJ_PRO_MONTHLY") is True
+    assert pricing_service.is_subscription("VIP_MONTHLY_PRO") is True

@@ -578,6 +578,34 @@ async def acheck_limit(scope: str, key: str, limit: int) -> tuple[bool, int]:
     return await asyncio.to_thread(check_limit, scope, key, limit)
 
 
+# Payment status polling (/payments/verify, crypto status): callable by track id
+# without a login, so it is capped per IP and per track id.
+PAY_VERIFY_IP_PER_MIN = 30
+PAY_VERIFY_IP_PER_HOUR = 300
+PAY_VERIFY_TRACK_PER_MIN = 10
+_PAY_RATE_MESSAGE = "تعداد درخواست‌های بررسی پرداخت زیاد است؛ لطفاً کمی بعد دوباره تلاش کنید."
+
+
+def gate_payment_status(request: Any, track_id: Optional[str]) -> Optional[JSONResponse]:
+    """429 (Persian message + Retry-After) when an IP or a track id polls too often."""
+    checks = [
+        (f"rl:payverify-ip-min:{request_ip(request)}", 60, PAY_VERIFY_IP_PER_MIN),
+        (f"rl:payverify-ip-hour:{request_ip(request)}", HOUR_SECONDS, PAY_VERIFY_IP_PER_HOUR),
+    ]
+    if track_id:
+        checks.append((f"rl:payverify-track:{str(track_id)[:80]}", 60, PAY_VERIFY_TRACK_PER_MIN))
+    worst = 0
+    for key, window, limit in checks:
+        count, left = incr(key, window)
+        if count > limit:
+            worst = max(worst, left)
+    if not worst:
+        return None
+    return JSONResponse(status_code=429, headers={"Retry-After": str(worst)},
+                        content={"status": "RATE_LIMITED", "message": _PAY_RATE_MESSAGE,
+                                 "retry_after": worst})
+
+
 def gate_voice(request: Any, user: CurrentUser) -> Optional[JSONResponse]:
     """401 on a bad token; per-IP (anonymous) or per-user hourly cap on voice endpoints."""
     denied = deny_if_invalid(user)
