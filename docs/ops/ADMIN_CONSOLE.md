@@ -1,9 +1,9 @@
-# Owner admin console (`/admin`)
+# Owner admin console (`/owner`)
 
 One page for the owner: dashboard, users and subscriptions, payments, models and cost, research and agents,
 marketing, system health. Persian, RTL, dark `.ghazi-theme` (navy / gold / cyan), usable on a phone.
 
-- URL: `https://roxira.ir/admin` (middleware redirects `/admin` from ghazihoushmand.ir to roxira.ir).
+- URL: `https://roxira.ir/admin` (middleware redirects `/owner` from ghazihoushmand.ir to roxira.ir).
 - Frontend: `output_apps/enterprise_hub/frontend/src/app/admin/page.tsx` + `src/components/admin/*`,
   client `src/lib/api/admin-console-client.ts`. `/admin/mission-control` (factory control room) is a separate page, linked from the header.
 - API: `output_apps/generated_modules/smartjudge/admin_api.py` (routes, authz, validation), `admin_store.py`
