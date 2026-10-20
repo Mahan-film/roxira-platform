@@ -1,35 +1,83 @@
 # E-mail sign-in: SMTP setup
 
 Smart Judge accepts e-mail + password accounts (for users without an Iranian SIM). The
-verification and password-reset mails are sent over plain SMTP (STARTTLS). Until SMTP is
-configured the e-mail endpoints answer 503 and the login modal hides the «ایمیل» tab
+verification and password-reset mails are sent over SMTP by `email_sender.py` (stdlib smtplib).
+Until SMTP is configured the e-mail endpoints answer 503 and the login modal hides the «ایمیل» tab
 (`GET /api/v1/apps/judge/auth/methods` returns `{"phone": true, "email": false}`).
 
-## Provider (owner action)
+Default path: a **self-hosted, send-only relay** (open source, no third-party account). Brevo or
+another provider is only an optional fallback (last section).
 
-Recommended: **Brevo** (EU, free plan 300 mails/day, SMTP relay included). Alternatives
-with a free tier: Mailjet (EU, 200/day), SMTP2GO (1000/month). Create the account yourself;
-the key stays in your hands and goes only into the server env.
+## Self-hosted relay (default)
 
-1. Brevo > Senders, Domains & dedicated IPs > Domains > add `ghazihoushmand.ir`.
-2. Add the DNS records Brevo shows, at the DNS host of `ghazihoushmand.ir`:
-   - **SPF**: a single TXT on the root. If one already exists, merge, never add a second.
-     Example: `v=spf1 include:spf.brevo.com ~all` (add other providers' includes to the same line).
-   - **DKIM**: the CNAME/TXT record(s) Brevo gives (`brevo1._domainkey`, `brevo2._domainkey`, or one TXT).
-   - **Brevo code**: the `brevo-code:...` TXT used to verify domain ownership.
-   - **DMARC**: already set by the owner; keep `rua=` reports on for the first weeks.
-3. Wait until Brevo shows the domain as authenticated (usually minutes, up to 24 h).
-4. Brevo > SMTP & API > SMTP: note the server, port 587, the login, and generate an SMTP key.
+Container `roxira_mail` (Postfix + OpenDKIM, image `boky/postfix:5.1.0`), files in `services/mail/`:
 
-## Environment variables (server `.env`, never in git)
+- `docker-compose.mail.yml`: sends for `ghazihoushmand.ir` and `roxira.ir`, HELO `mail.ghazihoushmand.ir`,
+  DKIM selector `rx1`. **No host port is published** (AGENTS.md section 7): it is reachable only on the app's
+  docker network as `roxira_mail:25`, and Postfix trusts only the private docker ranges, so no login is needed.
+  It does not receive mail.
+- `install.sh`: dry-run by default, `--apply` generates 2048-bit DKIM keys (once, in
+  `/var/lib/roxira-mail/dkim`, mode 600, never in git), starts the container and prints the DNS records and `.env` values.
+- `send_test.py`: sends one test mail through the relay.
+
+### Steps (hub, on srv1; DNS and rDNS are owner actions)
+
+```bash
+cd /opt/roxira_platform && git pull --ff-only
+bash services/mail/install.sh              # dry-run: preconditions and plan
+bash services/mail/install.sh --apply      # keys, container, then prints the exact DNS records
+```
+
+1. **DNS** (at the DNS host of each domain), exactly as the script prints:
+   - **SPF**: one TXT on the root, `v=spf1 ip4:91.107.248.99 -all`. Check for an existing one first:
+     `dig +short TXT ghazihoushmand.ir | grep spf1` (same for `roxira.ir`). If it exists, **merge** (add
+     `ip4:91.107.248.99` before the final `-all`/`~all`); two SPF records make both invalid.
+   - **DKIM**: TXT `rx1._domainkey.ghazihoushmand.ir` and `rx1._domainkey.roxira.ir` (`v=DKIM1; k=rsa; p=...`).
+   - **Host**: A `mail.ghazihoushmand.ir` -> `91.107.248.99` (DNS only, not proxied by Cloudflare).
+   - **DMARC**: keep the record the owner already set.
+2. **Reverse DNS** (Hetzner Cloud console > Servers > srv1 > Networking > the IPv4 > Edit reverse DNS):
+   `91.107.248.99` -> `mail.ghazihoushmand.ir`. Must match the A record above (forward-confirmed).
+3. Server `.env` (never in git), then restart the app container (needs the owner's OK):
 
 | Variable | Value |
 |---|---|
-| `SMTP_HOST` | `smtp-relay.brevo.com` |
-| `SMTP_PORT` | `587` (STARTTLS; `465` uses implicit TLS) |
-| `SMTP_USER` | the SMTP login Brevo shows |
-| `SMTP_PASSWORD` | the SMTP key (a secret) |
+| `SMTP_HOST` | `roxira_mail` |
+| `SMTP_PORT` | `25` |
+| `SMTP_USER` | empty (no login, no STARTTLS inside the private network) |
+| `SMTP_PASSWORD` | empty |
 | `SMTP_FROM` | `قاضی هوشمند <no-reply@ghazihoushmand.ir>` |
+
+4. Test: `docker exec -i -e SMTP_HOST=roxira_mail -e SMTP_PORT=25 -e SMTP_FROM='no-reply@ghazihoushmand.ir' roxira_app_prod python3 - you@example.com < services/mail/send_test.py`
+   then `docker logs --tail 30 roxira_mail` (look for `status=sent`, or the remote refusal text).
+5. Verify DNS: `dig +short TXT rx1._domainkey.ghazihoushmand.ir`, `dig +short -x 91.107.248.99`,
+   and send a mail to the address shown at <https://www.mail-tester.com> (aim for 9/10 or better; it reports SPF, DKIM, DMARC, rDNS).
+
+### Deliverability notes
+
+- A new IP has no reputation. **Warm up**: start with a handful of real sign-ups per day and grow over 2-4 weeks;
+  never blast a list. Gmail/Outlook may spam-folder the first mails; asking the user to mark "not spam" helps.
+- rDNS, forward A record, HELO name and SPF/DKIM/DMARC must all agree on `mail.ghazihoushmand.ir` / the domains.
+  Without rDNS many providers reject outright.
+- Check the IP on public blocklists (<https://mxtoolbox.com/blacklists.aspx>, Spamhaus lookup). Hetzner ranges
+  sometimes carry old listings; if listed, delist or fall back to a provider relay.
+- Keep sending transactional only (verify, reset). Low bounce rate; watch `docker logs roxira_mail` for `status=bounced/deferred`.
+- Iranian/CDN note: do not proxy `mail.` through Cloudflare. Keep DMARC `rua=` reports on during warm-up.
+- Back up `/var/lib/roxira-mail/dkim` (losing it only means regenerating keys and updating DNS).
+
+## Optional fallback: a provider relay (Brevo)
+
+If the IP stays blocklisted or Gmail keeps rejecting, use a provider relay instead. Brevo (EU, free
+300 mails/day), Mailjet (200/day) and SMTP2GO (1000/month) work. Create the account yourself; the key
+goes only into the server env.
+
+1. Brevo > Senders, Domains & dedicated IPs > Domains > add `ghazihoushmand.ir`; add the DNS records it shows
+   (merge SPF: `v=spf1 ip4:91.107.248.99 include:spf.brevo.com -all`; its DKIM records; the `brevo-code` TXT).
+2. Brevo > SMTP & API > SMTP: note the login and generate an SMTP key.
+3. `.env`: `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER=<login>`, `SMTP_PASSWORD=<key>`,
+   same `SMTP_FROM`. With a non-empty `SMTP_USER` the sender uses STARTTLS and login automatically
+   (`SMTP_STARTTLS=0|1` overrides; port 465 uses implicit TLS).
+
+## Common
 
 `JWT_SECRET` must also be set and stable (verification/reset links are signed with a key
 derived from it; without it every restart invalidates all pending links and tokens).

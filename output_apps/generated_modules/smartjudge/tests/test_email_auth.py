@@ -282,6 +282,44 @@ def test_email_sender_unconfigured(monkeypatch):
     assert "https://ghazihoushmand.ir/verify-email?token=tok" in text and "tok" in page
 
 
+def test_email_sender_relay_without_login_skips_starttls(monkeypatch):
+    """Self-hosted relay: empty SMTP_USER -> no STARTTLS, no login; with a user -> STARTTLS + login."""
+    calls = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None):
+            calls.append(("connect", host, port))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self, context=None):
+            calls.append(("starttls",))
+
+        def login(self, user, password):
+            calls.append(("login", user))
+
+        def send_message(self, msg):
+            calls.append(("send", msg["To"]))
+
+    monkeypatch.setattr(email_sender.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("SMTP_HOST", "roxira_mail")
+    monkeypatch.setenv("SMTP_PORT", "25")
+    monkeypatch.setenv("SMTP_FROM", "Ghazi <no-reply@ghazihoushmand.ir>")
+    monkeypatch.setenv("SMTP_USER", "")
+    monkeypatch.delenv("SMTP_STARTTLS", raising=False)
+    assert email_sender.send_email("a@example.com", "s", "t", "<p>h</p>") is True
+    assert calls == [("connect", "roxira_mail", 25), ("send", "a@example.com")]
+
+    calls.clear()
+    monkeypatch.setenv("SMTP_USER", "u")
+    assert email_sender.send_email("a@example.com", "s", "t", "<p>h</p>") is True
+    assert [c[0] for c in calls] == ["connect", "starttls", "login", "send"]
+
+
 def test_jwt_roundtrip_resolves_email_user(monkeypatch):
     """smartjudge_module: email token -> CurrentUser keyed on user_ref (one entitlement key)."""
     from output_apps.generated_modules.smartjudge import smartjudge_module as mod

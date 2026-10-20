@@ -1,0 +1,44 @@
+# Self-hosted send-only mail relay (Postfix + OpenDKIM) for Smart Judge account e-mails.
+# See docs/ops/EMAIL_SETUP.md. Image: boky/postfix 5.1.0 (tag verified on Docker Hub 2026-10-20).
+# Bump deliberately, never :latest. Keep the image line comment-free: install.sh reads the tag from it.
+#
+# NO host port is published (AGENTS.md section 7: 25/587 stay unbound on the host). The relay is reachable
+# only on the compose network of the app, as roxira_mail:25 (no auth: Postfix trusts only the private
+# docker ranges in POSTFIX_mynetworks, which is exactly the app network). Inbound mail is not supported.
+#
+# DKIM: selector rx1, 2048-bit keys <domain>.private in ${MAIL_DKIM_DIR}, created by install.sh on the
+# server (never committed). No secret is in this file.
+services:
+  mail:
+    image: boky/postfix:5.1.0
+    container_name: roxira_mail
+    hostname: mail.ghazihoushmand.ir
+    restart: unless-stopped
+    environment:
+      ALLOWED_SENDER_DOMAINS: "ghazihoushmand.ir roxira.ir"
+      POSTFIX_myhostname: mail.ghazihoushmand.ir
+      POSTFIX_mynetworks: "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      DKIM_SELECTOR: rx1
+    volumes:
+      - ${MAIL_DKIM_DIR:-/var/lib/roxira-mail/dkim}:/etc/opendkim/keys
+      - roxira_mail_spool:/var/spool/postfix
+    healthcheck:
+      test: ["CMD-SHELL", "postfix status >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - roxira_net
+
+volumes:
+  roxira_mail_spool:
+
+networks:
+  roxira_net:
+    external: true
+    name: roxira_platform_roxira_net

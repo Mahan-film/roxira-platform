@@ -4,8 +4,9 @@ Configuration comes from the environment only (never hardcoded):
 
   SMTP_HOST      e.g. smtp-relay.brevo.com
   SMTP_PORT      default 587 (STARTTLS)
-  SMTP_USER      SMTP login
+  SMTP_USER      SMTP login; leave empty for the self-hosted relay (no login, no STARTTLS)
   SMTP_PASSWORD  SMTP key / password
+  SMTP_STARTTLS  optional 1/0 override (default: on only when SMTP_USER is set)
   SMTP_FROM      e.g. "قاضی هوشمند <no-reply@ghazihoushmand.ir>"
 
 When SMTP_HOST or SMTP_FROM is missing, :func:`is_configured` is False and the e-mail
@@ -41,6 +42,17 @@ def _port() -> int:
         return 587
 
 
+def _use_starttls() -> bool:
+    """STARTTLS when logging in (default); plain when SMTP_USER is empty, i.e. the self-hosted relay on the
+    private docker network (roxira_mail:25). SMTP_STARTTLS=1/0 overrides either way."""
+    override = _cfg("SMTP_STARTTLS").lower()
+    if override in ("1", "true", "yes"):
+        return True
+    if override in ("0", "false", "no"):
+        return False
+    return bool(_cfg("SMTP_USER"))
+
+
 def send_email(to: str, subject: str, text: str, html_body: str) -> bool:
     """Send one multipart message. Never raises; returns False on any failure.
 
@@ -63,7 +75,8 @@ def send_email(to: str, subject: str, text: str, html_body: str) -> bool:
                 _login_and_send(smtp, msg)
         else:
             with smtplib.SMTP(_cfg("SMTP_HOST"), port, timeout=_TIMEOUT_SECONDS) as smtp:
-                smtp.starttls(context=context)
+                if _use_starttls():
+                    smtp.starttls(context=context)
                 _login_and_send(smtp, msg)
         return True
     except Exception as exc:  # noqa: BLE001 - delivery problems must never become a 500
