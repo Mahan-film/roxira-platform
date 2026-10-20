@@ -1,6 +1,6 @@
 > **Plan: `docs/strategy/MASTER_PLAN_2026-10-16.md` (v2: factory first, then a global business via the Malaysian company; Track I Iran / Track G global). Owner decisions are in §0.**
 
-> **Last update: 2026-10-15. NEW CHAT? Read `docs/HANDOFF_2026-10-15.md` first (complete context), then this file. Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
+> **Last update: 2026-10-20. NEW CHAT? Read this file, then `docs/HANDOFF_2026-10-15.md` (older context; the section "Shipped 2026-10-16..20" below supersedes it). Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
 
 # Current state (read this first)
 
@@ -15,10 +15,22 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 
 ## Live and working (srv1 = 91.107.248.99, ssh alias `roxira-prod`)
 - **Smart Judge** ghazihoushmand.ir: landing at `/`, chat `/chat` (free-first via key-pool group `product-free`: Groq gpt-oss-120b x3 keys, Gemini Flash x2, Mistral-medium x4 keys -> paid DeepSeek; English-reasoning leak stripped), payments live (`PAYMENTS_LIVE=true`). Serving laws collection **`iran_laws_v6`** since 2026-10-15 (= v5 + customs 1390 + guild 1382 + guild amendment 1392 from rc.majlis.ir; recall@5 37/37, no regressions; rollback = set `LIGHTRAG_QDRANT_COLLECTION=iran_laws_v5` and recreate `enterprise_app`, .env backup `/root/env-backups/.env.before-laws-v6`). Rulings `iran_rulings_v1` in chat.
-- **Public legal pages**: `/laws` 29 laws / 5,890 articles; `/precedents` 300 unity rulings; `/guides` 31 citation-checked guides; `/regulations` 112 circulars/resolutions/tax opinions. **Regulations are in chat** (`SMARTJUDGE_REGULATIONS_COLLECTION=iran_regulations_v2`, 539 rows: deregulation board + CBI + relay taxreg/dotic, recall@5 10/10; own prompt block + `regulations` response field, #671; rollback = empty the flag and recreate `enterprise_app`, .env backup `/root/env-backups/.env.before-regulations-v2`). PWA live (manifest + static-only service worker, #670); TWA guide `docs/ops/ANDROID_TWA.md` (owner needs Cafe Bazaar/Myket developer accounts). All in `/sitemap_index.xml` (GSC + Bing verified).
+- **Public legal pages**: `/laws` 29 laws / 5,890 articles; `/precedents` 300 unity rulings; `/guides` 51 citation-verified guides (31 on 2026-10-15); `/regulations` 112 circulars/resolutions/tax opinions. **Regulations are in chat** (`SMARTJUDGE_REGULATIONS_COLLECTION=iran_regulations_v2`, 539 rows: deregulation board + CBI + relay taxreg/dotic, recall@5 10/10; own prompt block + `regulations` response field, #671; rollback = empty the flag and recreate `enterprise_app`, .env backup `/root/env-backups/.env.before-regulations-v2`). PWA live (manifest + static-only service worker, #670); TWA guide `docs/ops/ANDROID_TWA.md` (owner needs Cafe Bazaar/Myket developer accounts). All in `/sitemap_index.xml` (GSC + Bing verified).
 - **Roxira portal** roxira.ir/.net: honest copy, no prices, pre-registration form stored (`enterprise_inquiries`). Enterprise modules (CRM, invoicing, accounting, HR, inventory, damages, tax compliance) are **tenant-isolated** (migrations 1789120000000–1789190000000); access = platform ADMIN or tenant OWNER (`requireTenantAdmin`). `/team` (members), CRM AI import (CSV + xlsx, `/crm/import`). Owner account = ADMIN + OWNER of the default tenant `00000000-…0001`.
 - **Infra**: key pool LiteLLM `127.0.0.1:4000` (groups agent-strong-free, agent-light-free, product-free, agent-free-paid, private, embeddings; simple-shuffle — never usage-based-routing-v2), TEI embeddings (batch <= 4), research service `127.0.0.1:8090` (searx + tavily, `query_domains`), Xray REALITY VPN on 8443, backups/monitor/selfimprove timers.
 - **Owner's Mac**: `ir.roxira.lawwatch` (ekhtebar, 6 h) + **`ir.roxira.iranrelay`** (regulation.tax.gov.ir, dotic.ir, rc.majlis.ir; Sat–Thu 09:30 & 11:00 Tehran, VPN must be OFF) both write to `~/Developer/roxira-lawwatch/data/legal/staged/` and `relay_publish.sh` opens a data PR; `ir.roxira.reposync` fast-forwards `~/Developer/roxira-platform` every 30 min and resets `core.bare` (it flips to true after app worktree cleanups — run `git --git-dir=~/Developer/roxira-platform/.git config core.bare false` if git says "must be run in a work tree").
+
+## Shipped 2026-10-16..20 (all merged to main and deployed unless noted)
+- **Pricing**: 4 tiers Free / Basic $4 / Pro $10 / Premium $29; annual = 10x monthly; toman = USD x max(live Tetherland rate, floor 280,000) (+ optional margin %). Daily chat caps: guest 3, free 8, basic 40, pro 60, premium 100, of which 5 Opus answers/day, then pro models (`CHAT_PREMIUM_TOP_DAILY_LIMIT=5`).
+- **Model routing** (`docs/strategy/MODEL_ROUTING_DECISION_2026-10-17.md`): free users get free models only (own Gemini x4 / Groq / Mistral keys, then OpenRouter `:free`; never paid). Paid ladders: `vip-product` Haiku 5.5 -> DeepSeek V4.1 Flash; `vip-pro` DeepSeek V4 Pro -> Haiku -> GLM-5.3; `vip-premium` Opus 5 -> Kimi K3; every paid ladder ends in the free ladder. Anthropic hidden reasoning disabled; prompt-cache injection. Bake-off harness `scripts/eval/model_bakeoff.py` runs on srv1 (results `/var/lib/roxira-eval/bakeoff`).
+- **Payments**: Zibal live (a real payment was verified 2026-10-20), result page with receipts, activation retry, verify rate limits, merchant id env-only. **USDT-TRC20 self-custody checkout live** (`CRYPTO_PAY_ENABLED=1`; poller `roxira-usdt-poll.timer` runs inside the app container; `docs/ops/CRYPTO_PAYMENTS.md`).
+- **Auth**: phone OTP (auto-submit, WebOTP; Kavenegar template `ghazi-verify`) and email+password accounts with verification, live via the self-hosted mail relay `roxira_mail` (Postfix + DKIM selector rx1; SPF/DKIM/rDNS set for `mail.ghazihoushmand.ir`).
+- **UI**: dark brand theme (`.ghazi-theme`), new emblem logo, landing with nav + login, e-namad seal always in the footer (owner rule), owner console at `https://ghazihoushmand.ir/owner` (admins = `SMARTJUDGE_ADMIN_PHONES`; `/admin` stays 404; `docs/ops/ADMIN_CONSOLE.md`), voice live chat with small-talk bypass and barge-in.
+- **Content**: 51 citation-verified guides; legal sync from nezamat.ir / ekhtebar.ir (`scripts/legal/sync_sources.py`). qavanin.ir is behind an ArvanCloud challenge and is never bypassed.
+- **Marketing**: Telegram channel @ghazihoushmand publishes approved posts (env `/etc/roxira-marketing.env`).
+- **CRM dogfooding** (built, NOT yet enabled): `scripts/ops/crm/sync_to_twenty.py` + `roxira-crm-sync.timer` (03:30 UTC) sync users, plans, paid orders and tickets into Twenty; Twenty has 0 workspaces until the owner follows `docs/ops/CRM_SYNC.md`.
+- **Security audit** `docs/security/SECURITY_AUDIT_2026-10-20.md`. Open: off-site backup (HIGH), ufw generic 80/443 rules, CSP enforce, dependency audits.
+- **Open-source adoption audit**: `docs/research/OSS_ADOPTION_AUDIT_2026-10-20.md`.
 
 ## Software factory (built 2026-10-16, plan: docs/strategy/MASTER_PLAN_2026-10-16.md §4)
 | Step | What | Where | State |
@@ -51,6 +63,7 @@ Also: gemini-best quality-first ladder over all AI Studio keys (#699; add GEMINI
 - Agents key `OPENROUTER_API_KEY_AGENTS` has a $5 limit (≈$3 left on 2026-10-14); `CEREBRAS_API_KEY` is invalid.
 
 ## Waiting on the owner
+- Off-site backup storage (HIGH, from the security audit); fix the roxira.ir DKIM record typo; set the Kavenegar template's last line to `@ghazihoushmand.ir #%token`; make one test USDT purchase; create the Twenty workspace + API key and enable the CRM sync timer (`docs/ops/CRM_SYNC.md`).
 - Send the lawyer review pack; bring the answers back.
 - Optional: more free keys from *other* accounts (Groq, Gemini, a valid Cerebras, NVIDIA) via `scripts/ops/set_server_env.sh NAME`.
 - Decide: factory MVP shell vs per-customer apps; when to decommission the old server; Langfuse cloud account (free) if wanted.

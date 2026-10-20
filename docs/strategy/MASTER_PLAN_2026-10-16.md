@@ -18,7 +18,7 @@ Supersedes v1 of the same day and the priority lists in `docs/STRATEGY.md` §5 a
 
 | Area | Fact |
 | --- | --- |
-| Smart Judge | Complete product (cited chat, laws v6, 300 rulings, 112 regulations, 31 guides, drafting, voice, payments, PWA). 2 registered users, 1 test payment, almost no organic traffic yet. |
+| Smart Judge | Complete product (cited chat, laws v6, 300 rulings, 112 regulations, drafting, voice, payments, PWA). 2 registered users, 1 test payment, almost no organic traffic yet (measured 2026-10-15/16). **Update 2026-10-20**: 4 pricing tiers (Free / Basic $4 / Pro $10 / Premium $29) with tiered model routing, Zibal + USDT-TRC20 payments live (real payment verified), email+password and phone-OTP auth, 51 guides, owner console `/owner`, Telegram channel @ghazihoushmand, own mail relay; details in `docs/STATE.md`. |
 | Roxira | Portal + 7 tenant-isolated modules; Moadian not connected live. 0 inquiries. |
 | Factory (pieces exist, no single pipeline) | Build+host engine (`ecosystem_core/src/factory/ephemeral_runner.py`, swarm, templates, mission-control UI); server agents (`run_task.sh`, OpenCode, worktrees, scope checks); key pool (free first, paid fallback, cost log); research service (GPT-Researcher + SearXNG + Tavily); auto-deploy with rollback; SBOM, mutation, property tests; throwaway DBs; owner bot. |
 | Factory gaps | No brief→research→spec→plan pipeline; agents cannot run npm/tsc/tests (the hub tests by hand); one agent = one task, no queue, no retry/escalation; free models fail multi-step tasks and the paid agents key is empty; no reusable product chassis for new (global) products; deploy is single-repo; no marketing engine. |
@@ -100,7 +100,9 @@ beneficial owners against sanctions lists**, so the adviser check in §3.1 is a 
 
 ## 6. Track I (Iran) — low-cost growth, mostly automated
 
-- Weekly: 3 citation-checked guides; relay batches; collection refresh; lawyer review batch monthly.
+Status 2026-10-20: paid tiers and payments are live (pricing and model routing in `docs/STATE.md` and `docs/strategy/MODEL_ROUTING_DECISION_2026-10-17.md`); Telegram marketing channel is publishing; the CRM (Twenty) is being dogfooded via `docs/ops/CRM_SYNC.md`.
+
+- Weekly: 3 citation-checked guides (51 live by 2026-10-20); relay batches; collection refresh; lawyer review batch monthly.
 - Measure: Umami (shared work with F4/F7). Owner decides prices for the free/paid tiers.
 - Messenger bot for Smart Judge (Bale/Telegram) when F2 frees capacity.
 - Moadian live integration only if an Iranian accountant pilot asks for it.
@@ -131,6 +133,8 @@ Factory: tasks completed per week, % merged without hub fixes, cost per merged t
 Products: visitors, sign-ups, activation, paying customers, MRR, cost per answer/task. Track I and G separately.
 
 ## 10. Owner actions now
+
+(2026-10-20 additions: off-site backup storage, roxira.ir DKIM record typo, Kavenegar template last line `@ghazihoushmand.ir #%token`, one test USDT purchase, Twenty workspace + API key for the CRM sync. Security audit: `docs/security/SECURITY_AUDIT_2026-10-20.md`; OSS audit: `docs/research/OSS_ADOPTION_AUDIT_2026-10-20.md`.)
 
 1. Fund the agents OpenRouter key (~$20) — unblocks F1–F3 at full speed.
 2. Book the Malaysian adviser (questions in §3.1) and write the partner agreement (§3.2).

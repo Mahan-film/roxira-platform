@@ -1,0 +1,17 @@
+# Nightly sync of Smart Judge users/orders/tickets into Twenty CRM. See docs/ops/CRM_SYNC.md.
+[Unit]
+Description=Roxira -> Twenty CRM sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+# Runs inside the app container (psycopg + DB env). TWENTY_API_KEY / TWENTY_API_URL live in
+# /etc/roxira-crm.env (chmod 600, owner-created) and are passed through into the container by
+# `docker exec -e NAME`. Without the key the script exits 2 (refuses --apply) and the unit shows failed.
+EnvironmentFile=/etc/roxira-crm.env
+StandardInput=file:/opt/roxira_platform/scripts/ops/crm/sync_to_twenty.py
+ExecStart=/usr/bin/docker exec -i -w /app -e PYTHONPATH=/app -e TWENTY_API_KEY -e TWENTY_API_URL roxira_app_prod python3 - --apply
+TimeoutStartSec=600
+Nice=10

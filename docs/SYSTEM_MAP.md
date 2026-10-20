@@ -1,6 +1,6 @@
 # System map (what exists)
 
-Canonical inventory for a fresh chat. Written 2026-09-30 by the hub. Current status lives in `docs/STATE.md`;
+Canonical inventory for a fresh chat. Written 2026-09-30 by the hub; payments/auth/CRM/mail rows refreshed 2026-10-20 (other rows still reflect 2026-09-30). Current status lives in `docs/STATE.md`;
 the derivable facts (compose, nginx, workflows, versions, model ids) are in `docs/SYSTEM_INVENTORY.generated.md`
 (regenerate: `python3 scripts/gen_system_inventory.py`). Anything not checked is marked UNVERIFIED. Key NAMES only, never values.
 
@@ -35,7 +35,8 @@ Running containers (13):
 | roxira_postgres_prod | postgres:17-alpine (compose) | Main DB `enterprise_db` |
 | roxira_redis_prod | redis:7-alpine (compose) | Cache/queues |
 | roxira_qdrant_prod | qdrant/qdrant (compose) | Vector store |
-| roxira_twenty_crm, roxira_twenty_db (postgres:16-alpine), roxira_twenty_redis | not in `docker-compose.prod.yml` | Twenty CRM stack. Compose file for it: UNVERIFIED |
+| roxira_twenty_crm, roxira_twenty_db (postgres:16-alpine), roxira_twenty_redis | not in `docker-compose.prod.yml` | Twenty CRM stack, 0 workspaces as of 2026-10-20; nightly sync from our DB built in `scripts/ops/crm/` (`docs/ops/CRM_SYNC.md`). Compose file for it: UNVERIFIED |
+| roxira_mail | not in `docker-compose.prod.yml` (2026-10-20) | Postfix + DKIM (selector rx1) for account-verification mail from `mail.ghazihoushmand.ir` |
 | roxira_sandbox_saas-portal-v2, roxira_sandbox_smart-accounting | not in compose; sources in `data/sandboxes/` | Auto-generated sandbox apps (Software Foundry) |
 
 Timers and cron (on the host):
@@ -47,6 +48,8 @@ Timers and cron (on the host):
 | cron 03:30 | daily | Legal crawler `scripts/run_periodic_crawler.py` via `scripts/ops/with_env.py` |
 | cron hourly | hourly | `scripts/auto_backup_daemon.sh` (backup); a daily pull copies backups to the Mac (`scripts/ops/pull_backups_to_mac.sh`) |
 | cron 04:30 | daily | `scripts/daily_tech_scout.sh` |
+| roxira-usdt-poll.timer | every minute | USDT-TRC20 payment poller, runs in the app container |
+| roxira-crm-sync.timer | daily 03:30 UTC | Twenty CRM sync; built, owner must create the API key first |
 
 Deploy: STRATEGY §7 (git pull --ff-only, `compose config -q`, dry import, `up -d --no-deps <svc>`, nginx reload, verify). Merged but NOT installed on prod: `scripts/ops/deploy.sh` (auto-rollback), `rollback.sh`, `backup.sh`, `deploy/systemd/roxira-backup.*`, compose healthchecks (#81). Restore drill: `docs/ops/RESTORE_DRILL.md`.
 
@@ -73,9 +76,10 @@ Other components:
 | Area | Detail |
 | --- | --- |
 | Voice | STT `openai/whisper-large-v3-turbo` (OpenRouter; AssemblyAI keys in template), TTS edge-tts `fa-IR-FaridNeural`; optional Gemini Live realtime (`voice_realtime` role, off by default, W20/#84). Docs `docs/W20_realtime_voice.md` |
-| Payments | Zibal (`ZIBAL_MERCHANT`, `ZIBAL_CALLBACK_URL`, `PAYMENTS_LIVE`); verify via `payment_orders`; legacy callback only redirects (#100). Prices env `PRICE_TOMAN_*` (single draft 100k, VIP monthly 490k, voice pack 63k, diaspora 1.015M). Token packs are "coming soon", no backend |
+| Payments | Zibal live (`ZIBAL_MERCHANT` env-only, `ZIBAL_CALLBACK_URL`, `PAYMENTS_LIVE`; result page with receipts, activation retry, verify rate limits); verify via `payment_orders`. USDT-TRC20 self-custody checkout live (`CRYPTO_PAY_ENABLED=1`, poller `roxira-usdt-poll.timer` inside the app container, `docs/ops/CRYPTO_PAYMENTS.md`). Pricing (2026-10-20): Free / Basic $4 / Pro $10 / Premium $29, annual = 10x, toman = USD x max(Tetherland rate, 280,000 floor) + optional margin; older `PRICE_TOMAN_*` values are historical. Token packs are "coming soon" |
 | SMS / OTP | Kavenegar (templates `ghazi-verify`, `roxira-verify`); sms.ir key also wired |
-| Auth | JWT, Google OAuth (optional), WebAuthn passkeys in the NestJS backend |
+| Auth | JWT, Google OAuth (optional), WebAuthn passkeys in the NestJS backend; Smart Judge: phone OTP (auto-submit, WebOTP) and email+password accounts with verification via the self-hosted mail relay `roxira_mail` (Postfix + DKIM rx1) |
+| Model routing | Tiered per plan (free-only for free users; vip-product / vip-pro / vip-premium paid ladders, all ending in the free ladder): `docs/strategy/MODEL_ROUTING_DECISION_2026-10-17.md`; bake-off `scripts/eval/model_bakeoff.py` on srv1 |
 | Search/crawl | Brave, Exa, Firecrawl, Jina, Tavily used by radar/crawlers (keys below) |
 
 ## 4. Models and keys
@@ -100,6 +104,9 @@ Keys and secrets by NAME (values are never in this repo or in chat):
 | OPENROUTER_RESEARCH_KEY | referenced by workflows, no such secret exists | radar/research workflows | n/a (gap) |
 | GEMINI_API_KEY, KIRA_API_KEY | prod `.env` | Gemini voice/LLM, Kira fallback engine | UNVERIFIED |
 | ZIBAL_MERCHANT, ZIBAL_CALLBACK_URL, PAYMENTS_LIVE | prod `.env` | payments | n/a |
+| CRYPTO_PAY_ENABLED, CRYPTO_USDT_TRC20_ADDRESS, TRONGRID_API_KEY | prod `.env` | USDT checkout | n/a |
+| CHAT_PREMIUM_TOP_DAILY_LIMIT, SMARTJUDGE_ADMIN_PHONES | prod `.env` (config) | Opus answers/day for Premium; owner console admins | n/a |
+| TWENTY_API_KEY, TWENTY_API_URL | `/etc/roxira-crm.env` (not yet created) | CRM sync | n/a |
 | KAVENEGAR_API_KEY, SMS_IR_API_KEY | prod `.env` | OTP SMS | UNVERIFIED |
 | JWT_SECRET, JWT_SECRET_KEY | prod `.env` | token signing | n/a |
 | POSTGRES_PASSWORD | prod `.env` | Postgres, PgBouncer | n/a |
