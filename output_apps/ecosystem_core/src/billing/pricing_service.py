@@ -117,7 +117,8 @@ def plan_period_days(plan_type: str | None, default: int = 30) -> int:
 RATE_MIN_TOMAN = 100_000
 RATE_MAX_TOMAN = 1_000_000
 RATE_FALLBACK_TOMAN = 280_000
-RATE_SNAPSHOT_TTL_S = 7 * 86400
+# Refresh the live USD rate every 6 h (was weekly): a 20% devaluation must reach prices the same day.
+RATE_SNAPSHOT_TTL_S = int(os.environ.get("SMARTJUDGE_USD_RATE_TTL_S", str(6 * 3600)))
 _RATE_FAIL_RETRY_S = 300  # after a failed live fetch do not hammer the sources for 5 min
 _RATE_REDIS_KEY = "smartjudge:usd_toman_rate"
 _rate_lock = threading.Lock()

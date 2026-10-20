@@ -257,9 +257,24 @@ export function SubscriptionModal({
             </p>
           )}
 
+          {/* Overlay, not inline at the top: the USDT button sits far down the scrolled plan list, so an
+              inline panel at the top was off-screen and the button looked dead (owner report 2026-10-20). */}
           {cryptoPlan && accessToken && (
-            <div className="mb-4">
-              <CryptoPayPanel planType={cryptoPlan} accessToken={accessToken} onClose={() => setCryptoPlan(null)} />
+            <div
+              className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (event.target === event.currentTarget) setCryptoPlan(null);
+              }}
+            >
+              <div className="max-h-[90vh] w-full max-w-md overflow-y-auto">
+                <CryptoPayPanel
+                  key={cryptoPlan}
+                  planType={cryptoPlan}
+                  accessToken={accessToken}
+                  onClose={() => setCryptoPlan(null)}
+                />
+              </div>
             </div>
           )}
 
@@ -333,7 +348,7 @@ export function SubscriptionModal({
                     {pendingPlan === planType && <Loader2 className="size-3.5 animate-spin" />}
                     {pendingPlan === planType ? "در حال صدور فاکتور..." : `فعال‌سازی ${copy.label}`}
                   </button>
-                  {cryptoEnabled && accessToken && planType !== "SINGLE_DRAFT" && (
+                  {cryptoEnabled && accessToken && (
                     <button
                       type="button"
                       disabled={pendingPlan !== null}
