@@ -7,8 +7,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/roxira_platform
-# CRYPTO_PAY_ENABLED, CRYPTO_USDT_TRC20_ADDRESS, TRONGRID_API_KEY, DB settings live here (mode 600), not in the repo.
-EnvironmentFile=-/opt/roxira_platform/.env
-ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/crypto/poll_usdt.py
+# Runs inside the app container: it has psycopg, the billing code under /app and the CRYPTO_*/DB env
+# (from /opt/roxira_platform/.env via compose). The host python has no psycopg.
+StandardInput=file:/opt/roxira_platform/scripts/ops/crypto/poll_usdt.py
+ExecStart=/usr/bin/docker exec -i -w /app -e PYTHONPATH=/app roxira_app_prod python3 -
 TimeoutStartSec=60
 Nice=10

@@ -15,7 +15,10 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+try:  # repo checkout; when piped into the app container (stdin) PYTHONPATH=/app is used instead
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+except (NameError, IndexError):
+    pass
 
 from output_apps.ecosystem_core.src.billing import (  # noqa: E402
     crypto_orders,
