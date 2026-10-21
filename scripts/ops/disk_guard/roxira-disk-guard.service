@@ -1,0 +1,16 @@
+# Hourly disk guard for srv1: prunes the docker build cache and stale agent worktrees when / is
+# >=80% full (see scripts/ops/disk_guard.sh). Images, volumes and containers are never touched.
+# Installed by the header of scripts/ops/disk_guard.sh.
+[Unit]
+Description=Roxira disk guard (build cache + stale agent worktrees)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+# NOTIFY_* for the alert live here (mode 600), never in the repo.
+EnvironmentFile=-/opt/roxira_platform/.env
+ExecStart=/usr/bin/env bash /opt/roxira_platform/scripts/ops/disk_guard.sh
+TimeoutStartSec=30min
+Nice=10
