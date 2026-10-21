@@ -143,10 +143,13 @@ missing_env() {
 # result does not depend on the operator's network: from an Iranian IP without VPN,
 # Cloudflare geo-redirects roxira.net and the checks fail although the site is fine.
 SMOKE_UA="RoxiraDeploy/1.0"
-http_code() { rsh "curl -s -o /dev/null -m 15 -A '$SMOKE_UA' -w '%{http_code}' $(printf '%q' "$1")" || true; }
+# Smoke tests hit OUR origin (nginx on the server) directly, so a public DNS / registry outage (e.g. the
+# .ir registry dropping a delegation, 2026-10-21) cannot trigger a false rollback of a healthy deploy.
+SMOKE_RESOLVE="${SMOKE_RESOLVE:---resolve ghazihoushmand.ir:443:127.0.0.1 --resolve www.ghazihoushmand.ir:443:127.0.0.1 --resolve roxira.ir:443:127.0.0.1 --resolve www.roxira.ir:443:127.0.0.1 --resolve roxira.net:443:127.0.0.1 --resolve www.roxira.net:443:127.0.0.1}"
+http_code() { rsh "curl $SMOKE_RESOLVE -s -o /dev/null -m 15 -A '$SMOKE_UA' -w '%{http_code}' $(printf '%q' "$1")" || true; }
 # Final status after following redirects (Cloudflare may redirect a domain, e.g. roxira.net -> roxira.ir).
-http_code_final() { rsh "curl -sL --max-redirs 5 -o /dev/null -m 20 -A '$SMOKE_UA' -w '%{http_code}' $(printf '%q' "$1")" || true; }
-http_body() { rsh "curl -s -m 15 -A '$SMOKE_UA' $(printf '%q' "$1")" || true; }
+http_code_final() { rsh "curl $SMOKE_RESOLVE -sL --max-redirs 5 -o /dev/null -m 20 -A '$SMOKE_UA' -w '%{http_code}' $(printf '%q' "$1")" || true; }
+http_body() { rsh "curl $SMOKE_RESOLVE -s -m 15 -A '$SMOKE_UA' $(printf '%q' "$1")" || true; }
 
 # The app warms its embedder on start; wait (bounded) until /health answers 200.
 wait_ready() {
