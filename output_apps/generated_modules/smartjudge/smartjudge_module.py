@@ -6956,3 +6956,124 @@ async def draft_assist(request: Request, body: DraftAssistRequest,
             file=sys.stderr,
         )
     return result
+
+
+# ------------------------------------------------------------------------------
+# POST /legal-strategy: «استراتژی حقوقی» -- multi-track action plan (core: legal_strategy.py)
+# Planner -> per-track retrieval (parallel) -> per-track section -> citation guard on
+# every section -> report. Free plans get the single cheapest track + upsell.
+# Case data is sensitive (router never uses :free endpoints for it). Logs carry ids,
+# depth and status only; never case text.
+# ------------------------------------------------------------------------------
+try:
+    from . import legal_strategy as _legal_strategy
+except ImportError:
+    from output_apps.generated_modules.smartjudge import legal_strategy as _legal_strategy
+
+_STRATEGY_CALL_TIMEOUT_S = 90.0
+MSG_STRATEGY_UNAVAILABLE = "سرویس استراتژی حقوقی موقتاً در دسترس نیست؛ لطفاً چند لحظه بعد دوباره تلاش کنید."
+MSG_STRATEGY_BAD_INPUT = "شرح پرونده برای تحلیل کافی نیست؛ لطفاً ماجرا را کمی کامل‌تر بنویسید."
+
+
+class LegalStrategyRequest(_BaseModel):
+    model_config = _ConfigDict(extra="forbid")
+
+    what_happened: str = _Field(..., min_length=_legal_strategy.MIN_WHAT_HAPPENED,
+                                max_length=_legal_strategy.MAX_WHAT_HAPPENED)
+    counterparty: str = _Field("", max_length=_legal_strategy.MAX_SHORT_FIELD)
+    arbitration_clause: _Literal["yes", "no", "unknown"] = "unknown"
+    amount: str = _Field("", max_length=_legal_strategy.MAX_SHORT_FIELD)
+    dates: str = _Field("", max_length=_legal_strategy.MAX_SHORT_FIELD)
+    notes: str = _Field("", max_length=_legal_strategy.MAX_NOTES)
+    case_file_ids: List[str] = _Field(default_factory=list, max_length=5)
+    request_id: Optional[str] = _Field(None, max_length=64)
+
+
+def _strategy_plan_for(user: chat_auth.CurrentUser) -> str:
+    """Gateway plan for llm_gateway.model_for. Premium is served by the pro group so one
+    report (about six calls) never drains the premium top-model quota."""
+    level = chat_auth.user_level(user)
+    if level in ("premium", "team"):
+        return "pro"
+    if level in ("basic", "pro"):
+        return level
+    return "VIP" if level == "vip" else "FREE"
+
+
+@router.post("/legal-strategy")
+async def legal_strategy(request: Request, body: LegalStrategyRequest,
+                         user: chat_auth.CurrentUser = Depends(get_current_user)):
+    """Multi-track legal strategy (criminal / civil-arbitration / disciplinary / other)."""
+    denied = chat_auth.deny_if_invalid(user, label="ERROR")
+    if denied is not None:
+        return denied
+    request_id = chat_auth.extract_request_id({"request_id": body.request_id}, request.headers)
+    if user.authenticated:
+        ok, left = await chat_auth.acheck_limit(
+            "strategy-auth", _hashed_user_ref(user.phone) or "-", int(_env_num("SMARTJUDGE_STRATEGY_AUTH_HOURLY", 20))
+        )
+    else:
+        ok, left = await chat_auth.acheck_limit(
+            "strategy-anon", chat_auth.request_ip(request), int(_env_num("SMARTJUDGE_STRATEGY_ANON_HOURLY", 3))
+        )
+    if not ok:
+        return chat_auth.rate_limited(left, label="ERROR", anonymous=not user.authenticated)
+
+    try:
+        case = _legal_strategy.sanitize_case(body.model_dump())
+    except ValueError:
+        return chat_auth.error_json(422, MSG_STRATEGY_BAD_INPUT, code="BAD_STRATEGY_INPUT", label="ERROR")
+
+    doc_block = ""
+    if body.case_file_ids:
+        try:
+            ids = _case_files.parse_case_file_ids(body.case_file_ids)
+            if ids:
+                if not user.authenticated:
+                    return chat_auth.error_json(401, _case_files.MSG_LOGIN_REQUIRED, code="AUTH_REQUIRED",
+                                                label="ERROR", headers={"WWW-Authenticate": "Bearer"})
+                records = await asyncio.to_thread(_case_files.load_all_owned, ids, user.phone)
+                _addendum, doc_block = _case_files.build_prompt_parts(records)
+        except _case_files.CaseFileError as exc:
+            return _casefile_error(exc)
+
+    level = chat_auth.user_level(user)
+    paid = level in chat_auth.PAID_LEVELS or level == "vip"
+    depth = _legal_strategy.DEPTH_FULL if paid else _legal_strategy.DEPTH_SHORT
+    plan = _strategy_plan_for(user)
+    router_tier = ROUTER_TIER_BY_PLAN["VIP" if paid else "FREE"]
+    user_ref = _hashed_user_ref(user.phone)
+
+    async def _llm(system: str, prompt: str, *, feature: str, max_tokens: int) -> str:
+        if _llm_router is None:
+            raise RuntimeError("llm router unavailable")
+        messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
+        routed = await _llm_router.complete(
+            router_tier, messages, sensitive=True, tenant="smartjudge", user=user_ref, feature=feature,
+            timeout=_STRATEGY_CALL_TIMEOUT_S, max_retries=1, plan=plan,
+            temperature=0.1, max_tokens=max_tokens,
+        )
+        return routed.content
+
+    t0 = time.perf_counter()
+    status = "error"
+    try:
+        report = await _legal_strategy.build_strategy(
+            case, call_llm=_llm, retrieve=_ruling_retrieve_laws,
+            verify=lambda text: _guard_citations(text, use_qdrant=True), depth=depth, doc_block=doc_block,
+        )
+        status = "ok"
+    except _legal_strategy.StrategyError:
+        return chat_auth.error_json(503, MSG_STRATEGY_UNAVAILABLE, code="LLM_UNAVAILABLE", label="ERROR")
+    except Exception as exc:  # noqa: BLE001 - never leak provider/case text
+        print(f"[SMARTJUDGE][STRATEGY-ERR] request_id={request_id} {type(exc).__name__}", file=sys.stderr)
+        return chat_auth.error_json(503, MSG_STRATEGY_UNAVAILABLE, code="LLM_UNAVAILABLE", label="ERROR")
+    finally:
+        print(
+            f"[SMARTJUDGE][STRATEGY] request_id={request_id or '-'} depth={depth} level={level} "
+            f"status={status} ms={round((time.perf_counter() - t0) * 1000)}",
+            file=sys.stderr,
+        )
+    report["request_id"] = request_id
+    report["requires_human_review"] = True
+    return report

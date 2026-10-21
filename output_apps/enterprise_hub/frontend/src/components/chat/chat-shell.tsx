@@ -18,6 +18,7 @@ import {
   Phone,
   Plus,
   RotateCw,
+  Scale,
   Send,
   Square,
   X,
@@ -42,6 +43,13 @@ import {
   type DraftResult,
 } from "@/lib/api/draft-assist-client";
 import { DraftInfoCard, DraftResultCard, type DraftSession } from "./draft-cards";
+import { StrategyIntakeForm, StrategyReportCard } from "./strategy-cards";
+import {
+  LegalStrategyError,
+  legalStrategy,
+  type StrategyIntake,
+  type StrategyReport,
+} from "@/lib/api/legal-strategy-client";
 import { MicHint, useMicHint } from "./chat-onboarding";
 import { ChatHistory } from "./chat-history";
 import type { StoredConversation } from "@/lib/api/conversations-client";
@@ -140,6 +148,8 @@ type ChatMessage = {
   upsell?: "login" | "upgrade";
   /** Finished draft rendered as a result card under this bubble. */
   draftResult?: DraftResult;
+  /** Multi-track legal strategy report («استراتژی حقوقی») rendered under this bubble. */
+  strategyResult?: StrategyReport;
   /** Feature name: render the VIP lock card (real prices + login/upgrade) under this bubble. */
   vipGate?: string;
 };
@@ -235,6 +245,8 @@ export function ChatShell() {
   const [micFocused, setMicFocused] = useState(false);
   const [draft, setDraft] = useState<DraftSession | null>(null);
   const [reviseIdx, setReviseIdx] = useState<number | null>(null);
+  const [strategyOpen, setStrategyOpen] = useState(false);
+  const [strategyBusy, setStrategyBusy] = useState(false);
   const plusRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -865,6 +877,47 @@ export function ChatShell() {
     return true;
   };
 
+  // ---- استراتژی حقوقی (/legal-strategy): intake form -> one request -> report card ----
+  const runStrategy = async (intake: StrategyIntake) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setStrategyBusy(true);
+    setIsLoading(true);
+    const base = messagesRef.current;
+    const userMsg: ChatMessage = { role: "user", content: `استراتژی حقوقی: ${intake.what_happened}` };
+    setMessages([...base, userMsg]);
+    try {
+      const report = await legalStrategy(
+        { ...intake, case_file_ids: caseIds() },
+        {
+          token: getAccessToken(),
+          onAuthExpired: () => {
+            expireSession();
+            setGuestNotice(true);
+          },
+        },
+      );
+      setStrategyOpen(false);
+      setMessages([
+        ...base,
+        userMsg,
+        { role: "assistant", content: "گزارش استراتژی حقوقی آماده است.", strategyResult: report },
+      ]);
+    } catch (err) {
+      const failure = err instanceof LegalStrategyError ? err.failure : null;
+      if (failure?.kind === "auth") expireSession();
+      setMessages([
+        ...base,
+        userMsg,
+        { role: "assistant", content: failure?.message ?? "تهیهٔ استراتژی حقوقی انجام نشد؛ دوباره تلاش کنید.", isError: true },
+      ]);
+    } finally {
+      busyRef.current = false;
+      setStrategyBusy(false);
+      setIsLoading(false);
+    }
+  };
+
   const startDraft = async (type: DraftType): Promise<boolean> => {
     if (busyRef.current) return false;
     setReviseIdx(null);
@@ -1283,6 +1336,8 @@ export function ChatShell() {
                 />
               )}
 
+              {msg.strategyResult && <StrategyReportCard report={msg.strategyResult} />}
+
               {msg.role === "assistant" && msg.case_file_refs && <CaseFileRefChips refs={msg.case_file_refs} />}
 
               {msg.role === "assistant" && msg.statutory_basis && msg.statutory_basis.length > 0 && (
@@ -1405,6 +1460,17 @@ export function ChatShell() {
             <FileSearch className="size-4 ap-chip-icon" aria-hidden="true" />
             <span>بررسی قرارداد{canReview ? "" : " (ویژه)"}</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setStrategyOpen((o) => !o)}
+            disabled={isLoading}
+            aria-expanded={strategyOpen}
+            className="ap-chip"
+            data-testid="strategy-chip"
+          >
+            <Scale className="size-4 ap-chip-icon" aria-hidden="true" />
+            <span>استراتژی حقوقی</span>
+          </button>
         </div>
 
         {reviewUpsell && !canReview && (
@@ -1430,6 +1496,16 @@ export function ChatShell() {
               لغو
             </button>
           </p>
+        )}
+
+
+        {strategyOpen && (
+          <StrategyIntakeForm
+            busy={strategyBusy}
+            hasFiles={readyFileIds.length + processingFileIds.length > 0}
+            onSubmit={(intake) => void runStrategy(intake)}
+            onClose={() => setStrategyOpen(false)}
+          />
         )}
 
         {guestNotice && !isAuthenticated && (
