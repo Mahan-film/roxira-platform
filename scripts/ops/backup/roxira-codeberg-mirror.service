@@ -1,0 +1,15 @@
+# Hourly GitHub -> Codeberg code mirror. Installed by scripts/ops/backup/install_offsite.sh.
+# CODEBERG_TOKEN is read by the script from /opt/roxira_platform/.env (set with set_server_env.sh).
+# See docs/ops/OFFSITE_BACKUP.md.
+[Unit]
+Description=Roxira code mirror GitHub to Codeberg
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/opt/roxira_platform/scripts/ops/backup/codeberg_mirror.sh
+Nice=10
+TimeoutStartSec=30min

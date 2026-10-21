@@ -1,0 +1,18 @@
+# Daily free off-site DB copy to Neon. Installed by scripts/ops/backup/install_offsite.sh.
+# NEON_BACKUP_URL / BACKUP_AGE_RECIPIENT are read by the script from /opt/roxira_platform/.env
+# and /etc/roxira/backup.env (by name; the files are never exported wholesale).
+# See docs/ops/OFFSITE_BACKUP.md.
+[Unit]
+Description=Roxira off-site database backup to Neon
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/opt/roxira_platform/scripts/ops/backup/neon_offsite.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=1h

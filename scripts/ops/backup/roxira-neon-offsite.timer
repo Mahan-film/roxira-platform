@@ -1,0 +1,11 @@
+# Daily 02:40 UTC (after the hourly DR backup run, before the 03:00 prune hour).
+[Unit]
+Description=Run the Neon off-site database backup daily at 02:40 UTC
+
+[Timer]
+OnCalendar=*-*-* 02:40:00 UTC
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target
