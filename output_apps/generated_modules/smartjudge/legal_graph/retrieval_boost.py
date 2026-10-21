@@ -136,6 +136,67 @@ def law_matches(law_name: Any, fragments: Iterable[str]) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Opt-in answer-quality flags (both default OFF: production behaviour is unchanged)
+# ---------------------------------------------------------------------------
+QUERY_REWRITE_ENV = "SMARTJUDGE_QUERY_REWRITE"
+MUSTCITE_BOOST_ENV = "SMARTJUDGE_MUSTCITE_BOOST"
+#: RRF weight of the "articles/laws named in the question" ranking (vector=1.0, lexical=0.5).
+MUSTCITE_WEIGHT = 2.0
+
+
+def _flag_on(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def query_rewrite_enabled() -> bool:
+    """``SMARTJUDGE_QUERY_REWRITE=1`` extends the search text with canonical legal terms."""
+    return _flag_on(QUERY_REWRITE_ENV)
+
+
+def mustcite_boost_enabled() -> bool:
+    """``SMARTJUDGE_MUSTCITE_BOOST=1`` ranks the article/law named in the question first."""
+    return _flag_on(MUSTCITE_BOOST_ENV)
+
+
+# colloquial / compound term -> canonical legal term used in the corpus (embedding + lexical).
+LEGAL_TERM_EXPANSIONS: Tuple[Tuple[str, str], ...] = (
+    ("تجدیدنظرخواهی", "تجدیدنظر"),
+    ("فرجامخواهی", "فرجام"),
+    ("واخواهی", "حکم غیابی"),
+    ("چک برگشتی", "صدور چک"),
+    ("چک بلامحل", "صدور چک"),
+    ("مهریه", "مهر"),
+    ("حضانت", "نگهداری فرزند"),
+    ("تأخیر تأدیه", "خسارت تاخیر تادیه"),
+)
+
+
+def rewrite_query(query: Any) -> str:
+    """Extend ``query`` with canonical legal-term variants (never removes the user's words).
+
+    Pure and conservative so article-number parsing and the exact lookups still see the
+    original question; returns the input unchanged when no term fires. Opt-in via
+    ``SMARTJUDGE_QUERY_REWRITE`` (default OFF).
+    """
+    original = str(query or "")
+    text = normalize_text(original)
+    if not text:
+        return original
+    have = tokens(original)
+    additions: List[str] = []
+    for trigger, expansion in LEGAL_TERM_EXPANSIONS:
+        if normalize_text(trigger) not in text:
+            continue
+        new_tokens = tokens(expansion) - have
+        if new_tokens:
+            additions.append(expansion)
+            have |= new_tokens
+    if not additions:
+        return original
+    return original + " " + " ".join(additions)
+
+
+# ---------------------------------------------------------------------------
 # Fusion + cutoff
 # ---------------------------------------------------------------------------
 def rrf_merge(rankings: Sequence[Tuple[float, Sequence[Hashable]]], k: int = 60) -> List[Hashable]:

@@ -480,6 +480,40 @@ def _payload_to_row(
     return row
 
 
+def _mustcite_keys(
+    query: str, scored: Sequence[Tuple[int, int, Dict[str, Any], str]]
+) -> List[int]:
+    """Payload ids whose article number or law name is named in the question.
+
+    Explicit article numbers come first, then the other articles of a named law; returns
+    ``[]`` when the question names neither an article nor a recognizable law. Opt-in via
+    ``retrieval_boost.mustcite_boost_enabled()`` (see ``_rank_payloads``).
+    """
+    parsed = _parse_article_query(query)
+    article_nos = {str(n) for n in (parsed or {}).get("article_nos") or []}
+    law_name = recognize_law_name(query)
+    if not article_nos and not law_name:
+        return []
+    law_norm = _normalize_law_text(law_name) if law_name else None
+    article_keys: List[int] = []
+    law_keys: List[int] = []
+    for _overlap, _neg_index, payload, _text in scored:
+        payload_law = _normalize_law_text(payload.get("law_name"))
+        payload_no = _payload_article_no(payload)
+        matches_law = law_norm is None or payload_law == law_norm
+        if article_nos and payload_no in article_nos and matches_law:
+            article_keys.append(id(payload))
+        elif law_norm and payload_law == law_norm:
+            law_keys.append(id(payload))
+    keys: List[int] = []
+    seen: set = set()
+    for key in article_keys + law_keys:
+        if key not in seen:
+            seen.add(key)
+            keys.append(key)
+    return keys
+
+
 def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -> List[Dict[str, Any]]:
     """رتبه‌بندی واژگانی نقاط Qdrant تا مرتبط‌ترین مواد اول برگردند."""
     tokens = _tokens(query)
@@ -500,9 +534,17 @@ def _rank_payloads(payloads: Sequence[Dict[str, Any]], query: str, limit: int) -
     vector_keys = [id(item[2]) for item in sorted(scored, key=lambda i: i[1], reverse=True)]
     lexical_keys = [id(item[2]) for item in lexical_order]
     has_vec = any(item[2].get("_vector_score") is not None for item in scored)
-    fused = (
-        _rb.rrf_merge([(1.0, vector_keys), (0.5, lexical_keys)]) if has_vec else lexical_keys
-    )
+    # Opt-in (SMARTJUDGE_MUSTCITE_BOOST=1): articles/laws named in the question enter the
+    # fusion as a strong ranking, so the must-cite provision is returned first.
+    mustcite_keys = _mustcite_keys(query, scored) if _rb.mustcite_boost_enabled() else []
+    if mustcite_keys:
+        fused = _rb.rrf_merge(
+            [(1.0, vector_keys), (0.5, lexical_keys), (_rb.MUSTCITE_WEIGHT, mustcite_keys)]
+        )
+    else:
+        fused = (
+            _rb.rrf_merge([(1.0, vector_keys), (0.5, lexical_keys)]) if has_vec else lexical_keys
+        )
 
     rows: List[Dict[str, Any]] = []
     for key in fused[: max(1, limit)]:
@@ -1340,13 +1382,17 @@ async def _qdrant_fallback_laws_impl(
     desired = max(1, int(limit))
     _qdrant_last_reachable = False
 
+    # Opt-in (SMARTJUDGE_QUERY_REWRITE=1): the vector/lexical branches use the canonical-term
+    # extended text; the exact-article lookup keeps the original so "ماده N" still parses.
+    search_text = _rb.rewrite_query(text) if _rb.query_rewrite_enabled() else text
+
     # پیش‌قدم قطعی (W25-1): «ماده N قانون X» را با فیلتر payload پیدا کن تا
     # جست‌وجوی برداری اشتباهاً مادهٔ دیگری (مثلاً ۱۰۱۰ برای ۱۰) را برنگرداند.
     # exact lookup and vector search are independent: run them concurrently.
     exact_res, rest_res, boost_res = await asyncio.gather(
         exact_article_lookup(text, limit=desired, active_only=active_only),
-        _qdrant_vector_or_scroll_laws(text, desired, active_only),
-        keyword_boost_laws(text, active_only=active_only),
+        _qdrant_vector_or_scroll_laws(search_text, desired, active_only),
+        keyword_boost_laws(search_text, active_only=active_only),
         return_exceptions=True,
     )
     boost_rows = [] if isinstance(boost_res, BaseException) else list(boost_res or [])
