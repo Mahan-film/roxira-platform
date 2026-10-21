@@ -16,7 +16,9 @@ import {
 } from "@/lib/seo/laws-schema";
 
 /** متن قانونی کم‌تغییر است؛ رندر مجدد روزانه کافی است. */
-export const revalidate = 86_400;
+// The root layout reads headers() (host-based metadata), so ISR/SSG here failed at runtime with
+// DYNAMIC_SERVER_USAGE (HTTP 500, QA 2026-10-21). Render per request; the data is local and cheap.
+export const dynamic = "force-dynamic";
 
 /**
  * هیچ مسیری پیش‌ساخته نمی‌شود؛ همهٔ صفحات ماده با ISR و به‌صورت on-demand
