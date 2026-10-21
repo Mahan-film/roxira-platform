@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { GuideContent } from "@/lib/guides-markdown";
 
 interface LegalStreamingTextProps {
   content: string;
   isStreaming: boolean;
   className?: string;
-  /** "plain" renders unformatted text (chat bubbles) with no indicator. */
+  /** "plain" renders safe markdown (chat bubbles). */
   variant?: "legal" | "plain";
   /** Called once the typewriter has revealed the whole text. */
   onComplete?: () => void;
@@ -81,7 +82,23 @@ export function LegalStreamingText({ content, isStreaming, className, variant = 
   };
 
   if (variant === "plain") {
-    return <div className={cn("whitespace-pre-line", className)}>{displayedContent}</div>;
+    // Render the assistant answer as safe markdown (bold, lists, headings,
+    // line breaks) using the shared renderer — it escapes text and never
+    // injects raw HTML, so streaming stays smooth and XSS-safe.
+    return (
+      <div className={cn("relative", className)}>
+        <GuideContent markdown={displayedContent} resolveCitation={() => null} />
+        {isStreaming && (
+          <span
+            aria-hidden
+            className={cn(
+              "ms-1 inline-block h-3.5 w-1.5 rounded-full bg-amber-400 align-middle",
+              cursorVisible ? "animate-pulse" : "opacity-40",
+            )}
+          />
+        )}
+      </div>
+    );
   }
 
   return (

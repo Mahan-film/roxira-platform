@@ -21,10 +21,35 @@ export const metadata: Metadata = {
 
 const OTHER_GROUP = "سایر قوانین";
 
+/** برچسب فارسی برای مقادیر شمارشی `law_type` در سرتیترهای دسته‌بندی. */
+const LAW_TYPE_LABELS: Record<string, string> = {
+  PROCEDURE: "آیین دادرسی",
+  CONSTITUTIONAL: "قانون اساسی",
+  STATUTE: "قوانین عادی",
+  INSURANCE: "بیمه",
+  CIVIL: "قانون مدنی",
+  CRIMINAL: "قانون مجازات",
+  COMMERCIAL: "قانون تجارت",
+  ADMINISTRATIVE: "قوانین اداری",
+  TAX: "قوانین مالیاتی",
+  BANKING: "قوانین بانکی",
+  LABOR: "قوانین کار",
+  REGULATION: "مقررات و آیین‌نامه‌ها",
+  RULING: "آرای وحدت رویه",
+  BILL: "لایحه",
+  LAW: "قوانین",
+};
+
+function lawTypeLabel(lawType: string | null | undefined): string {
+  const key = lawType?.trim();
+  if (!key) return OTHER_GROUP;
+  return LAW_TYPE_LABELS[key.toUpperCase()] ?? key;
+}
+
 function groupByLawType(laws: PublicLawSummary[]): Array<[string, PublicLawSummary[]]> {
   const grouped = new Map<string, PublicLawSummary[]>();
   for (const law of laws) {
-    const key = law.law_type?.trim() || OTHER_GROUP;
+    const key = lawTypeLabel(law.law_type);
     const bucket = grouped.get(key);
     if (bucket) bucket.push(law);
     else grouped.set(key, [law]);

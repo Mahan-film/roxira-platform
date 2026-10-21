@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Gavel, Scale } from "lucide-react";
 
+import { EnamadFooter } from "@/components/layout/enamad-footer";
+
 /**
  * پوسته مشترک صفحات عمومی پایگاه دانش حقوقی (دامنه ghazihoushmand.ir).
  *
@@ -12,7 +14,7 @@ export function LegalPageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#050505]/90 text-slate-100 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
+        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3.5 sm:px-6">
           <Link href="https://ghazihoushmand.ir/" className="flex items-center gap-2.5">
             <span className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-lg shadow-orange-600/30">
               <Gavel className="size-4" />
@@ -25,7 +27,7 @@ export function LegalPageShell({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          <nav className="flex items-center gap-1 text-sm">
+          <nav className="flex w-full flex-wrap items-center justify-end gap-1 text-sm sm:w-auto">
             <Link
               href="/laws"
               className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
@@ -75,6 +77,9 @@ export function LegalPageShell({ children }: { children: React.ReactNode }) {
           </span>
         </div>
       </footer>
+
+      {/* نشان اینماد رسمی (اینماد قاضی هوشمند، شناسه ۷۴۹۱۴۳۹) */}
+      <EnamadFooter />
     </div>
   );
 }
