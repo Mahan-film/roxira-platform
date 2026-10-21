@@ -7,7 +7,7 @@ timers, restic to the Storage Box, age-encrypted e-mail bundle; see `DISASTER_RE
 
 | Copy | What | When | Where |
 |---|---|---|---|
-| Neon | `enterprise_db`, `umami` (restored, queryable) + local age-encrypted dumps | daily 02:40 UTC | Neon Frankfurt, databases `bk_enterprise_db`, `bk_umami` |
+| Neon | `enterprise_db`, `umami` (restored, queryable) + local age-encrypted dumps | daily 02:40 UTC | Neon Frankfurt (first account + optional spares), databases `bk_enterprise_db`, `bk_umami` |
 | Codeberg | full git history (branches + tags) | hourly | `https://codeberg.org/mahanofficial/roxira-platform` (private) |
 
 Neon is a **backup copy, not the live database**. Nothing in production reads from it. Twenty's
@@ -19,18 +19,24 @@ database (`roxira_twenty_db`) is not in the Neon set by default (the DR system a
 
 1. `pg_dump -Fc` inside the Postgres container (`docker exec`, no host port).
 2. `pg_restore --clean --if-exists --no-owner --no-acl` into Neon database `bk_<source db>` (created on
-   first run), from a throwaway `postgres:17-alpine` container on the host network. The connection
-   string reaches the container as an environment variable name (`-e NEON_TARGET_URL`), never in argv.
-3. Verify: exact `count(*)` of the 10 biggest tables on both sides. The source is live, so a drift of
-   `max(10 rows, 2 %)` is tolerated (`NEON_COUNT_TOLERANCE_ABS/PCT`); a missing table or an empty target
-   table is always a failure.
+   first run) on **every configured account**, from a throwaway `postgres:17-alpine` container on the
+   host network. The connection string reaches the container as an environment variable name
+   (`-e NEON_TARGET_URL`), never in argv.
+3. Verify: exact `count(*)` of the 10 biggest tables on both sides, per account. The source is live, so
+   a drift of `max(10 rows, 2 %)` is tolerated (`NEON_COUNT_TOLERANCE_ABS/PCT`); a missing table or an
+   empty target table is always a failure.
 4. Keep the dump locally in `/opt/roxira_backups/neon/<db>/`, `age`-encrypted to `BACKUP_AGE_RECIPIENT`,
    newest 7 per database. The plaintext dump only exists in a 0700 work dir and is deleted at exit. If
    age or the recipient is missing, no local copy is kept (a warning is logged).
-5. Any failure or mismatch: exit 1 and an owner-bot message. Success message: at most once a week.
+5. Accounts: `NEON_BACKUP_URL` (first) plus optional spare accounts `NEON_BACKUP_URL_2..4` (owner has 4).
+   A target is used only when its variable is set; each is restored to and verified independently. One
+   target failing does not stop the others and the run exits non-zero only when every target fails (or a
+   dump cannot be produced).
+6. Any failure or mismatch: exit 1 and an owner-bot message (failure, or a partial-account warning when
+   another account still verified every database). Success message: at most once a week.
 
 Every log line passes through `offsite_tools.py redact` (URL userinfo, `password=`, tokens, and the exact
-values of `NEON_BACKUP_URL` / `CODEBERG_TOKEN` are masked), and the URL is never printed.
+values of `NEON_BACKUP_URL[_2..4]` / `CODEBERG_TOKEN` are masked), and the URLs are never printed.
 
 ### Free-tier limits (check the Neon console for the current numbers)
 
@@ -52,6 +58,9 @@ values of `NEON_BACKUP_URL` / `CODEBERG_TOKEN` are masked), and the URL is never
    owner role is).
 2. From your Mac: `scripts/ops/set_server_env.sh NEON_BACKUP_URL` (hidden input; paste the string).
    Optional: `scripts/ops/set_server_env.sh NEON_BACKUP_DBS` with e.g. `enterprise_db umami`.
+   Optional spare accounts (owner has 4): repeat 1–2 with `NEON_BACKUP_URL_2`, `NEON_BACKUP_URL_3`,
+   `NEON_BACKUP_URL_4` (each from a different Neon project/account, direct connection string). Every
+   configured account is restored to and verified in order; leave any unset to skip it.
 3. On the server (after the PR is deployed): `sudo bash /opt/roxira_platform/scripts/ops/backup/install_offsite.sh`
    (dry-run), then `... --apply`.
 4. Run it once: `sudo systemctl start roxira-neon-offsite.service`, then

@@ -32,16 +32,23 @@
 
 **Now.** Hot read-only replica of the active law collection(s).
 - `scripts/infra/qdrant_replica.py`: nightly (03:10 UTC) snapshot of the local collection(s), stream
-  upload to Qdrant Cloud (`/snapshots/upload?priority=snapshot`), then verify exact point counts and
-  that top-5 ids of 20 sample vectors are identical on both sides. Dry-run by default.
+  upload to **every configured Qdrant Cloud cluster**, then verify exact point counts and that top-5
+  ids of 20 sample vectors are identical on both sides. Each cluster is verified independently and
+  reported as its own JSON line (`"cluster"` field); one failing cluster does not stop the others,
+  and the job exits non-zero only when all of them fail. Dry-run by default.
+- Accounts: `QDRANT_CLOUD_URL` / `QDRANT_CLOUD_API_KEY` (first cluster) plus optional spare accounts
+  `QDRANT_CLOUD_URL_2..4` / `QDRANT_CLOUD_API_KEY_2..4`. A cluster is used only when its URL is set;
+  every cloud URL must be https (the key is sent as the `api-key` header). Secrets stay in the server
+  `.env` and are never logged.
 - Units: `scripts/infra/roxira-qdrant-replica.service` / `.timer`, installer
   `scripts/infra/install_qdrant_replica.sh` (dry-run default, `--apply`). The job runs in a disposable
   `python:3.12-slim` container sharing Qdrant's network namespace, 256 MB cap, only the needed env
   names passed (not the whole `.env`).
 - App failover: `legal_graph/qdrant_cloud.py` + `lightrag_engine._qdrant_targets()`. Local hosts are
-  tried first exactly as before; only when every local host fails to connect/time out is the cloud
-  replica tried (read calls only: search, scroll, collection info). One warning per minute, the URL and
-  key are never logged. Cloud URL must be https (the key is sent as the `api-key` header).
+  tried first exactly as before; only when every local host fails to connect/time out are the cloud
+  clusters tried in order — `QDRANT_CLOUD_URL`, then `QDRANT_CLOUD_URL_2..4` (only those configured).
+  Read calls only: search, scroll, collection info. One warning per minute across all cloud clusters,
+  the URL and key are never logged.
 - Collections: `QDRANT_REPLICA_COLLECTIONS` (comma list), default `LIGHTRAG_QDRANT_COLLECTION`, else
   `iran_laws_v3`. Set it explicitly to the collection `LIGHTRAG_QDRANT_COLLECTION` points to in prod.
 - Limits to check before enabling: free cluster is ~1 GB RAM / 4 GB disk; a 1024-dim collection of
@@ -106,12 +113,18 @@ Qdrant Cloud:
    `docker exec roxira_qdrant_prod qdrant --version` or the dashboard) and an API key.
 2. `bash scripts/ops/set_server_env.sh QDRANT_CLOUD_URL` (https://<cluster>.<region>.cloud.qdrant.io:6333)
 3. `bash scripts/ops/set_server_env.sh QDRANT_CLOUD_API_KEY`
-4. Optional: `bash scripts/ops/set_server_env.sh QDRANT_REPLICA_COLLECTIONS` (e.g. `iran_laws_v3`).
-5. On srv1: `bash scripts/infra/install_qdrant_replica.sh` (dry-run), then `--apply`; first run:
+4. Optional spare accounts (owner has 4): repeat 1–3 with `QDRANT_CLOUD_URL_2`/`QDRANT_CLOUD_API_KEY_2`,
+   `QDRANT_CLOUD_URL_3`/`QDRANT_CLOUD_API_KEY_3`, `QDRANT_CLOUD_URL_4`/`QDRANT_CLOUD_API_KEY_4`. Each
+   configured URL is replicated to, verified, and tried as a read fallback in that order; leave any of
+   them unset to skip it.
+5. Optional: `bash scripts/ops/set_server_env.sh QDRANT_REPLICA_COLLECTIONS` (e.g. `iran_laws_v3`).
+6. On srv1: `bash scripts/infra/install_qdrant_replica.sh` (dry-run), then `--apply`; first run:
    `systemctl start roxira-qdrant-replica.service && journalctl -u roxira-qdrant-replica -n 30`
-   (expect a JSON line with `"ok": true`).
-6. App failover needs the app container to see the two variables: `docker-compose.prod.yml` now
-   passes them; takes effect at the next owner-approved app restart.
+   (expect one JSON line with `"ok": true` per configured cluster).
+7. App failover needs the app container to see the variables: `docker-compose.prod.yml` currently
+   passes `QDRANT_CLOUD_URL`/`QDRANT_CLOUD_API_KEY`; to activate the spare clusters on the read path,
+   add `QDRANT_CLOUD_URL_2..4`/`QDRANT_CLOUD_API_KEY_2..4` there as well. Takes effect at the next
+   owner-approved app restart. (The nightly replica service already passes all of them.)
 
 Modal:
 1. In Modal, create a token (Settings > API tokens).
@@ -121,6 +134,8 @@ Modal:
    (The build script reads the tokens from its shell environment; export them for that session from
    the server `.env`, do not paste them into the terminal history.)
 
-Neon: already configured via `NEON_BACKUP_URL` (#758). Nothing new.
+Neon: already configured via `NEON_BACKUP_URL` (#758). Optional spare accounts `NEON_BACKUP_URL_2..4`
+are restored to and verified as ordered fallbacks (same direct-connection rule); see
+`docs/ops/OFFSITE_BACKUP.md`. Nothing else to set.
 
 Zilliz: nothing to set. Do not create keys until needed.

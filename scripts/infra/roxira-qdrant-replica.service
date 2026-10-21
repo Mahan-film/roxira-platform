@@ -20,6 +20,9 @@ ExecStart=/usr/bin/docker run --rm --name roxira_qdrant_replica_job \
   -v /var/tmp/qdrant_replica:/work -e TMPDIR=/work \
   -e QDRANT_LOCAL_URL=http://127.0.0.1:6333 \
   -e QDRANT_CLOUD_URL -e QDRANT_CLOUD_API_KEY -e QDRANT_LOCAL_API_KEY \
+  -e QDRANT_CLOUD_URL_2 -e QDRANT_CLOUD_API_KEY_2 \
+  -e QDRANT_CLOUD_URL_3 -e QDRANT_CLOUD_API_KEY_3 \
+  -e QDRANT_CLOUD_URL_4 -e QDRANT_CLOUD_API_KEY_4 \
   -e QDRANT_REPLICA_COLLECTIONS -e LIGHTRAG_QDRANT_COLLECTION -e QDRANT_REPLICA_SAMPLES \
   python:3.12-slim python3 /job/qdrant_replica.py --apply
 TimeoutStartSec=3h

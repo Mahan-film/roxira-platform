@@ -128,6 +128,97 @@ def test_multipart_body_length_matches(tmp_path):
     assert total == body.length
 
 
+# ---- multiple spare cloud accounts -----------------------------------------------------------------
+
+def _cloud_urls(n_extra):
+    return ["https://c1.cloud.qdrant.io:6333"] + [
+        f"https://c{i}.cloud.qdrant.io:6333" for i in range(2, 2 + n_extra)
+    ]
+
+
+def _cloud_env(urls, local="http://local:6333"):
+    env = {"QDRANT_LOCAL_URL": local}
+    for i, url in enumerate(urls, start=1):
+        suffix = "" if i == 1 else f"_{i}"
+        env[f"QDRANT_CLOUD_URL{suffix}"] = url
+        env[f"QDRANT_CLOUD_API_KEY{suffix}"] = f"K{i}"
+    return env
+
+
+def _multi_api(mapping):
+    def api(ep, method, path, body=None, timeout=None):
+        return mapping[ep.base].handle(method, path, body)
+
+    return api
+
+
+def _cloud_mapping(urls, cloud_points, local_points):
+    mapping = {"http://local:6333": FakeQdrant(local_points)}
+    for url, pts in zip(urls, cloud_points):
+        mapping[url] = FakeQdrant(pts)
+    return _multi_api(mapping)
+
+
+def test_cloud_endpoints_zero_one_and_three_extra():
+    base = {"QDRANT_CLOUD_URL": "https://c1.cloud.qdrant.io:6333", "QDRANT_CLOUD_API_KEY": "K1"}
+    assert [label for label, _ in rep.cloud_endpoints_from_env(base)] == ["qdrant-cloud"]
+    one = {**base, "QDRANT_CLOUD_URL_2": "https://c2.cloud.qdrant.io:6333", "QDRANT_CLOUD_API_KEY_2": "K2"}
+    assert [label for label, _ in rep.cloud_endpoints_from_env(one)] == ["qdrant-cloud", "qdrant-cloud-2"]
+    three = {
+        **one,
+        "QDRANT_CLOUD_URL_3": "https://c3.cloud.qdrant.io:6333",
+        "QDRANT_CLOUD_URL_4": "https://c4.cloud.qdrant.io:6333",
+    }
+    assert [label for label, _ in rep.cloud_endpoints_from_env(three)] == [
+        "qdrant-cloud", "qdrant-cloud-2", "qdrant-cloud-3", "qdrant-cloud-4",
+    ]
+
+
+def test_dry_run_lists_every_cluster_without_keys(capsys):
+    pts = {1: _unit(1)}
+    urls = _cloud_urls(3)
+    api = _cloud_mapping(urls, [{}, {}, {}, {}], pts)
+    assert rep.main(["--dry-run"], env=_cloud_env(urls), api=api) == 0
+    out = capsys.readouterr().out
+    for label in ("qdrant-cloud", "qdrant-cloud-2", "qdrant-cloud-3", "qdrant-cloud-4"):
+        assert label in out
+    assert "K1" not in out and "iran_laws_v3" in out
+
+
+def test_multi_cluster_verify_reports_per_cluster(capsys):
+    pts = {i: _unit(i) for i in range(4)}
+    urls = _cloud_urls(3)
+    api = _cloud_mapping(urls, [pts, pts, pts, pts], pts)
+    assert rep.main(["--verify-only"], env=_cloud_env(urls), api=api) == 0
+    lines = [json.loads(line) for line in capsys.readouterr().out.strip().splitlines()]
+    assert [r["cluster"] for r in lines] == [
+        "qdrant-cloud", "qdrant-cloud-2", "qdrant-cloud-3", "qdrant-cloud-4",
+    ]
+    assert all(r["ok"] for r in lines)
+
+
+def test_one_failing_cluster_does_not_stop_the_others(capsys):
+    pts = {i: _unit(i) for i in range(4)}
+    urls = _cloud_urls(1)
+    api = _cloud_mapping(urls, [pts, {}], pts)
+    assert rep.main(["--verify-only"], env=_cloud_env(urls), api=api) == 0
+    lines = [json.loads(line) for line in capsys.readouterr().out.strip().splitlines()]
+    assert {r["cluster"]: r["ok"] for r in lines} == {"qdrant-cloud": True, "qdrant-cloud-2": False}
+
+
+def test_all_clusters_failing_exits_nonzero(capsys):
+    pts = {i: _unit(i) for i in range(4)}
+    urls = _cloud_urls(1)
+    api = _cloud_mapping(urls, [{}, {}], pts)
+    assert rep.main(["--verify-only"], env=_cloud_env(urls), api=api) == 1
+
+
+def test_spare_cluster_must_be_https():
+    env = {"QDRANT_CLOUD_URL": "https://c1.cloud.qdrant.io:6333",
+           "QDRANT_CLOUD_URL_2": "http://insecure.example:6333"}
+    assert rep.main(["--apply"], env=env) == 2
+
+
 # ------------------------------------------------------------------ modal_embed
 
 def _fake_runner(dim=me.DIM):

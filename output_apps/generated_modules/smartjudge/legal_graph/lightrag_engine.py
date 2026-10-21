@@ -137,9 +137,9 @@ _QDRANT_HOST_CANDIDATES: Tuple[str, ...] = tuple(
 
 
 def _qdrant_targets() -> List[Tuple[str, str, Dict[str, str]]]:
-    """(label, base_url, headers): local hosts, then the optional Qdrant Cloud replica
-    (only when QDRANT_CLOUD_URL is set). Reads only; the cloud is tried after every local
-    host failed to connect."""
+    """(label, base_url, headers): local hosts, then the optional Qdrant Cloud clusters
+    (QDRANT_CLOUD_URL then QDRANT_CLOUD_URL_2..4, only those set). Reads only; the cloud
+    replicas are tried in order after every local host failed to connect."""
     return _qcloud.targets(_QDRANT_HOST_CANDIDATES, QDRANT_PORT)
 
 # مدل embedding پرس‌وجو برای جست‌وجوی برداری واقعی روی Qdrant — همان مدل و

@@ -163,5 +163,46 @@ class Askpass(unittest.TestCase):
         self.assertNotIn("--mirror", r.stdout)
 
 
+class NeonMultiAccount(unittest.TestCase):
+    """neon_offsite.sh with 0, 1 and 3 spare Neon accounts (URL_2..4)."""
+
+    NONE = {"ROXIRA_SERVER_ENV_FILE": "/nonexistent", "BACKUP_ENV_FILE": "/nonexistent"}
+    ALL = ("NEON_BACKUP_URL", "NEON_BACKUP_URL_2", "NEON_BACKUP_URL_3", "NEON_BACKUP_URL_4")
+
+    def _dry_run(self, env):
+        return bash("bash neon_offsite.sh --dry-run", {**self.NONE, **env})
+
+    def test_zero_targets_prints_none(self):
+        env = {n: "" for n in self.ALL}
+        r = self._dry_run(env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("targets  : none configured", r.stdout)
+
+    def test_zero_one_and_three_extra_targets(self):
+        for extra in (0, 1, 3):
+            names = ["NEON_BACKUP_URL"] + [f"NEON_BACKUP_URL_{i}" for i in range(2, 2 + extra)]
+            env = {n: FAKE_URL.replace("ep-cool-123", f"ep-cool-{i}") for i, n in enumerate(names)}
+            for n in self.ALL:  # clear the rest so a leaked env var cannot add a target
+                env.setdefault(n, "")
+            r = self._dry_run(env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            for n in names:
+                self.assertIn(n, r.stdout)
+            self.assertNotIn("Sup3rS3cretPw", r.stdout + r.stderr)
+            self.assertEqual(r.stdout.count("[dry-run] restore"), 2 * len(names))  # 2 default DBs
+
+    def test_no_target_is_fatal_when_not_dry_run(self):
+        r = bash("bash neon_offsite.sh", {**self.NONE, **{n: "" for n in self.ALL}})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no Neon backup URL set", r.stderr)
+
+    def test_spare_pooler_target_refused(self):
+        pooler = FAKE_URL.replace("ep-cool-123", "ep-cool-123-pooler")
+        r = bash("bash neon_offsite.sh", {**self.NONE, "NEON_BACKUP_URL": "", "NEON_BACKUP_URL_2": pooler})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("pooler", r.stderr)
+        self.assertNotIn("Sup3rS3cretPw", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

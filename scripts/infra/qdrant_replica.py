@@ -6,15 +6,18 @@ Optional and inert: without QDRANT_CLOUD_URL it prints "inert" and exits 0.
 Env (secrets come from the server .env only, never from code):
   QDRANT_CLOUD_URL            https://<cluster>.cloud.qdrant.io:6333   (https required)
   QDRANT_CLOUD_API_KEY        cloud api key (sent as the `api-key` header, never logged)
+  QDRANT_CLOUD_URL_2..4       optional spare cloud clusters (same https rule)
+  QDRANT_CLOUD_API_KEY_2..4   api keys for the spare clusters
   QDRANT_LOCAL_URL            default http://roxira_qdrant_prod:6333  (host run: http://127.0.0.1:6333)
   QDRANT_LOCAL_API_KEY        optional, if the local Qdrant uses one
   QDRANT_REPLICA_COLLECTIONS  comma list; default LIGHTRAG_QDRANT_COLLECTION, else iran_laws_v3
   QDRANT_REPLICA_SAMPLES      sample vectors for the search check (default 20)
 
-Flow per collection: create snapshot on local -> stream-download -> upload to the cloud
-(`/snapshots/upload?priority=snapshot`, replaces the cloud collection) -> delete the local
+Flow per collection: create snapshot on local -> stream-download -> upload to every configured
+cloud (`/snapshots/upload?priority=snapshot`, replaces the cloud collection) -> delete the local
 snapshot -> verify exact point counts equal and that top-5 ids of SAMPLES stored vectors match
-between local and cloud. Exit 0 only when every collection verifies.
+between local and each cloud. One failing cluster does not stop the others; exit non-zero only
+when every configured cluster fails.
 
 Usage:
   python3 scripts/infra/qdrant_replica.py --dry-run     # read-only: shows plan + local counts
@@ -199,6 +202,24 @@ def replicate(api: Api, local: Endpoint, cloud: Endpoint, coll: str, samples: in
     return report
 
 
+CLOUD_URL_ENVS = ("QDRANT_CLOUD_URL", "QDRANT_CLOUD_URL_2", "QDRANT_CLOUD_URL_3", "QDRANT_CLOUD_URL_4")
+CLOUD_KEY_ENVS = ("QDRANT_CLOUD_API_KEY", "QDRANT_CLOUD_API_KEY_2", "QDRANT_CLOUD_API_KEY_3", "QDRANT_CLOUD_API_KEY_4")
+
+
+def cloud_endpoints_from_env(env: dict[str, str]) -> list[tuple[str, Endpoint]]:
+    """Every configured cloud cluster in order (base, then _2.._4). A cluster counts as
+    configured when its URL is non-empty; the api key is optional. Raises ReplicaError when a
+    configured URL is not a usable https endpoint."""
+    out: list[tuple[str, Endpoint]] = []
+    for i, (url_env, key_env) in enumerate(zip(CLOUD_URL_ENVS, CLOUD_KEY_ENVS), start=1):
+        url = env.get(url_env, "").strip()
+        if not url:
+            continue
+        label = "qdrant-cloud" if i == 1 else f"qdrant-cloud-{i}"
+        out.append((label, Endpoint(url, env.get(key_env, "").strip(), require_https=True)))
+    return out
+
+
 def collections_from_env(env: dict[str, str]) -> list[str]:
     raw = env.get("QDRANT_REPLICA_COLLECTIONS") or env.get("LIGHTRAG_QDRANT_COLLECTION") or DEFAULT_COLLECTION
     names = [c.strip() for c in raw.split(",") if c.strip()]
@@ -217,12 +238,15 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict[str, str]] = None,
     mode.add_argument("--verify-only", action="store_true", help="only compare counts + sample searches")
     args = ap.parse_args(argv)
 
-    cloud_url = env.get("QDRANT_CLOUD_URL", "").strip()
-    if not cloud_url:
-        print("qdrant_replica: inert (QDRANT_CLOUD_URL not set)")
+    try:
+        clouds = cloud_endpoints_from_env(env)
+    except ReplicaError as exc:
+        print(f"qdrant_replica: config error: {exc}", file=sys.stderr)
+        return 2
+    if not clouds:
+        print("qdrant_replica: inert (no QDRANT_CLOUD_URL* set)")
         return 0
     try:
-        cloud = Endpoint(cloud_url, env.get("QDRANT_CLOUD_API_KEY", "").strip(), require_https=True)
         local = Endpoint(env.get("QDRANT_LOCAL_URL", DEFAULT_LOCAL), env.get("QDRANT_LOCAL_API_KEY", "").strip())
         colls = collections_from_env(env)
         samples = int(env.get("QDRANT_REPLICA_SAMPLES", "20"))
@@ -230,23 +254,45 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict[str, str]] = None,
         print(f"qdrant_replica: config error: {exc}", file=sys.stderr)
         return 2
 
-    ok = True
-    try:
-        if not (args.apply or args.verify_only):
+    if not (args.apply or args.verify_only):
+        try:
             for c in colls:
-                print(f"[dry-run] would snapshot {c} (local points: {count_points(api, local, c)}) -> {cloud!r}")
-            print("[dry-run] nothing written; re-run with --apply")
-            return 0
+                local_count = count_points(api, local, c)
+                for label, cloud in clouds:
+                    print(f"[dry-run] would snapshot {c} (local points: {local_count}) -> {label} {cloud!r}")
+        except ReplicaError as exc:
+            print(f"qdrant_replica: FAILED: {exc}", file=sys.stderr)
+            return 1
+        print("[dry-run] nothing written; re-run with --apply")
+        return 0
+
+    cluster_ok = {label: True for label, _ in clouds}
+    try:
         with tempfile.TemporaryDirectory(prefix="qdrant_replica_") as td:
             for c in colls:
-                rep = (verify(api, local, cloud, c, samples) if args.verify_only
-                       else replicate(api, local, cloud, c, samples, Path(td)))
-                print(json.dumps(rep, sort_keys=True))
-                ok = ok and bool(rep.get("ok"))
+                for label, cloud in clouds:
+                    try:
+                        rep = (verify(api, local, cloud, c, samples) if args.verify_only
+                               else replicate(api, local, cloud, c, samples, Path(td)))
+                    except ReplicaError as exc:
+                        print(f"qdrant_replica: {label} collection {c} FAILED: {exc}", file=sys.stderr)
+                        cluster_ok[label] = False
+                        continue
+                    rep["cluster"] = label
+                    print(json.dumps(rep, sort_keys=True))
+                    if not rep.get("ok"):
+                        cluster_ok[label] = False
     except ReplicaError as exc:
         print(f"qdrant_replica: FAILED: {exc}", file=sys.stderr)
         return 1
-    return 0 if ok else 1
+
+    failed = [label for label, good in cluster_ok.items() if not good]
+    if len(failed) == len(clouds):
+        print(f"qdrant_replica: FAILED (all {len(clouds)} cloud cluster(s) failed)", file=sys.stderr)
+        return 1
+    if failed:
+        print(f"qdrant_replica: partial: cluster(s) failed: {', '.join(failed)}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
