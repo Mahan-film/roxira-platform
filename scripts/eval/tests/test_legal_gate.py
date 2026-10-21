@@ -61,7 +61,10 @@ def test_must_include_phrases_come_from_the_staged_article_text():
             texts.setdefault((lg.norm(r["law_name"]), str(r["article_no"])), []).append(lg.norm(r["text"]))
     for c in lg.load_cases():
         blob = " ".join(texts[(lg.norm(c["expected_law"]), c["expected_articles"][0])])
+        practice = set(c.get("must_include_added_2026_10_21") or [])  # lawyer practice notes, not article text
         for phrase in c["must_include"]:
+            if phrase in practice:
+                continue
             assert lg.norm(phrase) in blob, (c["id"], phrase)
 
 
