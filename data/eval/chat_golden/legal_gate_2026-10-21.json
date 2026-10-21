@@ -1,0 +1,3199 @@
+{
+ "_meta": {
+  "purpose": "Objective accuracy gate for Smart Judge legal answers (docs/STRATEGY_GAP_2026-10-12.md section 4 item 4 / L1). 70 questions: 50 dev + 20 held_out=true. Each question was written from a real article row of the corpus served as iran_laws_v3.",
+  "corpus": "iran_laws_v3 = data/legal/phase1_canonical.jsonl (v2 laws) + data/legal/staged/corpus_fill_2026-10-11*.jsonl + corpus_fill_2026-10-12_ekhtebar.jsonl. Only ekhtebar.ir is used as the legal web source (unofficial tier); the constitution comes from the staged wikisource file.",
+  "generated": "2026-10-21",
+  "status": "text_verified = every must_include phrase and the quoted article text were checked mechanically against the staged corpus text (verified_by auto:article_text); needs_lawyer = depends on interpretation, validity or adjustable figures, see needs_lawyer_reason; lawyer_verified (field lawyer_answer, lawyer_answered_at) / lawyer_rejected are set only after the lawyer answers; 2026-10-13 answers applied to items 4, 5, 6 (lg-adm-19 and lg-soc-76 stay needs_lawyer). Review sheet: docs/legal/LAWYER_REVIEW_GATE_FA.md | 2026-10-21 lawyer round 2 (docs/LAWYER_ANSWERS_2026-10-21.md): must_include extended on lg-taz-669 (Q1/Q2), lg-chk-12 (Q15), lg-cpr-48 (Q18), lg-reg-46 (Q20); the added phrases are lawyer practice notes, not article text, so they are listed in must_include_added_2026_10_21 and are guaranteed in answers by smartjudge/legal_notes.py notices. Case count and retrieval expectations are unchanged, so legal_gate_baseline.json stays comparable.",
+  "run_retrieval": "python3 scripts/eval/legal_gate.py retrieval   (no LLM, 0 USD; needs Qdrant + embedder, run on the server)",
+  "run_answer": "python3 scripts/eval/legal_gate.py answer --base-url URL --confirm-spend   (calls the live chat endpoint, hard cost cap)",
+  "fields": {
+   "expected_law": "exact law_name of the corpus row",
+   "expected_articles": "article_no values (strings) of that row; a hit on any of them counts",
+   "must_include": "short exact phrases from the article text; checked after digit/ZWNJ/Arabic-letter normalisation",
+   "must_not_include": "model-name mentions and unrelated laws that must not appear in an answer",
+   "held_out": "true = do not tune prompts or retrieval against these; report them separately",
+   "law_any/articles": "kept for compatibility with scripts/eval_chat_golden.py retrieval_hit"
+  },
+  "must_include_caveat": "Phrases come from the statute wording. A correct answer may paraphrase (digits for words, different order), so answer-mode failures on must_include are a signal to inspect, not proof of a wrong answer.",
+  "supersedes": "legal_gate_2026-10-12.json (unchanged; data/ is immutable)"
+ },
+ "cases": [
+  {
+   "id": "lg-taz-618",
+   "question": "اگر کسی با داد و فریاد و رفتار نامتعارف نظم و آرامش عمومی را به هم بزند، مجازاتش چیست؟",
+   "expected_law": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+   "expected_articles": [
+    "618"
+   ],
+   "law_any": [
+    "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)"
+   ],
+   "articles": [
+    "618"
+   ],
+   "must_include": [
+    "سه ماه تا یک سال",
+    "74"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_taazirat_1375",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%83%d8%aa%d8%a7%d8%a8-%d9%be%d9%86%d8%ac%d9%85-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d8%a7%d8%b3%d9%84%d8%a7%d9%85%d9%8a-%e2%80%8c-%d8%aa%d8%b9%d8%b2%d9%8a%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 618",
+    "quote": "هر‌کس با هیاهو و جنجال یا حرکات غیرمتعارف یا تعرض به افراد موجب اخلال نظم و آسایش و آرامش عمومی گردد یا مردم را از کسب و کار باز دارد به حبس از سه ماه تا یک سال"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-taz-669",
+   "question": "اگر کسی دیگری را تهدید به قتل یا افشای راز کند، چه مجازاتی دارد؟",
+   "expected_law": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+   "expected_articles": [
+    "669"
+   ],
+   "law_any": [
+    "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)"
+   ],
+   "articles": [
+    "669"
+   ],
+   "must_include": [
+    "یک ماه تا یک سال",
+    "74",
+    "جایگزین"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "easy",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_taazirat_1375",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%83%d8%aa%d8%a7%d8%a8-%d9%be%d9%86%d8%ac%d9%85-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d8%a7%d8%b3%d9%84%d8%a7%d9%85%d9%8a-%e2%80%8c-%d8%aa%d8%b9%d8%b2%d9%8a%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 669",
+    "quote": "هر‌گاه کسی دیگری را به هر نحو تهدید به قتل یا ضررهای نفسی یا شرفی یا مالی و یا به افشای سری نسبت به خود یا بستگان او نماید، اعم از این‌که به این و‌اسطه تقاضای و"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است.",
+   "must_include_added_2026_10_21": [
+    "جایگزین"
+   ],
+   "lawyer_round2": {
+    "item": "Q1/Q2",
+    "answered_at": "2026-10-21",
+    "answer": "طبق ماده 65 تا 67 و 70 قانون مجازات اسلامی ۱۳۹۲ و رویهٔ عملی، حکم حبس کمتر از سه ماه صادر نمی‌شود و به مجازات جایگزین حبس تبدیل می‌شود؛ در تهدید و توهین معمولاً جزای نقدی حکم می‌دهند.",
+    "kind": "practice note (not article text); see docs/LAWYER_ANSWERS_2026-10-21.md"
+   }
+  },
+  {
+   "id": "lg-taz-674",
+   "question": "مالی را به امانت به کسی داده‌ام و آن را تصاحب کرده است؛ مجازات خیانت در امانت چقدر است؟",
+   "expected_law": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+   "expected_articles": [
+    "674"
+   ],
+   "law_any": [
+    "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)"
+   ],
+   "articles": [
+    "674"
+   ],
+   "must_include": [
+    "سه ماه تا یک سال و شش ماه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_taazirat_1375",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%83%d8%aa%d8%a7%d8%a8-%d9%be%d9%86%d8%ac%d9%85-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d8%a7%d8%b3%d9%84%d8%a7%d9%85%d9%8a-%e2%80%8c-%d8%aa%d8%b9%d8%b2%d9%8a%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 674",
+    "quote": "هر‌گاه اموال منقول یا غیرمنقول یا نوشته‌هایی از قبیل سفته و چک و قبض و نظایر آن به عنوان اجاره یا امانت یا رهن یا برای و‌کالت یا هر کار با اجرت یا بی‌اجرت به کس"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
+  },
+  {
+   "id": "lg-taz-694",
+   "question": "اگر چند نفر مسلح به زور وارد خانه کسی شوند مجازاتشان چیست؟",
+   "expected_law": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+   "expected_articles": [
+    "694"
+   ],
+   "law_any": [
+    "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)"
+   ],
+   "articles": [
+    "694"
+   ],
+   "must_include": [
+    "شش ماه تا سه سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_taazirat_1375",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%83%d8%aa%d8%a7%d8%a8-%d9%be%d9%86%d8%ac%d9%85-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d8%a7%d8%b3%d9%84%d8%a7%d9%85%d9%8a-%e2%80%8c-%d8%aa%d8%b9%d8%b2%d9%8a%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 694",
+    "quote": "هر‌کس در منزل یا مسکن دیگری به عنف یا تهدید وارد شود به مجازات از سه ماه تا یک سال و شش ماه حبس محکوم خواهد شد و در صورتی که مرتکبین دو نفر یا بیشتر بوده و لااق"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
+  },
+  {
+   "id": "lg-taz-719",
+   "question": "راننده‌ای که پس از تصادف مصدوم را رها کرده و فرار کند چه مجازاتی دارد و آیا دادگاه می‌تواند مجازات را تخفیف بدهد؟",
+   "expected_law": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+   "expected_articles": [
+    "719"
+   ],
+   "law_any": [
+    "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)"
+   ],
+   "articles": [
+    "719"
+   ],
+   "must_include": [
+    "دوسوم",
+    "مخففه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_taazirat_1375",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%83%d8%aa%d8%a7%d8%a8-%d9%be%d9%86%d8%ac%d9%85-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d8%a7%d8%b3%d9%84%d8%a7%d9%85%d9%8a-%e2%80%8c-%d8%aa%d8%b9%d8%b2%d9%8a%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 719",
+    "quote": "هر‌گاه مصدوم احتیاج به کمک فوری داشته و راننده با وجود امکان رساندن مصدوم به مراکز درمانی و یا استمداد از مأمورین انتظامی از این کار خودداری کند و یا به منظور ف"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-taz-657",
+   "question": "مجازات جیب‌بری و کیف‌زنی چیست؟",
+   "expected_law": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+   "expected_articles": [
+    "657"
+   ],
+   "law_any": [
+    "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)"
+   ],
+   "articles": [
+    "657"
+   ],
+   "must_include": [
+    "یک تا پنج سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "easy",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_taazirat_1375",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%83%d8%aa%d8%a7%d8%a8-%d9%be%d9%86%d8%ac%d9%85-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d8%a7%d8%b3%d9%84%d8%a7%d9%85%d9%8a-%e2%80%8c-%d8%aa%d8%b9%d8%b2%d9%8a%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 657",
+    "quote": "هر‌کس مرتکب ربودن مال دیگری از طریق کیف زنی، جیب‌بری و امثال آن شود به حبس از یک تا پنج سال و تا (74) ضربه شلاق محکوم خواهد شد."
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
+  },
+  {
+   "id": "lg-taz-651",
+   "question": "سرقت شبانه توسط چند نفر مسلح با تهدید صاحب‌خانه چند سال حبس دارد؟",
+   "expected_law": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+   "expected_articles": [
+    "651"
+   ],
+   "law_any": [
+    "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)"
+   ],
+   "articles": [
+    "651"
+   ],
+   "must_include": [
+    "پنج تا بیست سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_taazirat_1375",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%83%d8%aa%d8%a7%d8%a8-%d9%be%d9%86%d8%ac%d9%85-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d8%a7%d8%b3%d9%84%d8%a7%d9%85%d9%8a-%e2%80%8c-%d8%aa%d8%b9%d8%b2%d9%8a%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 651",
+    "quote": "هر‌گاه سرقت جامع شرایط حد نباشد ولی مقرون به تمام پنج شرط ذیل باشد مرتکب از پنج تا بیست سال حبس و تا (74) ضربه شلاق محکوم می‌گردد: 1- سرقت در شب واقع شده باشد. "
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-taz-608",
+   "question": "اگر کسی به دیگری فحاشی و توهین کند و حد قذف نباشد مجازاتش چیست؟",
+   "expected_law": "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)",
+   "expected_articles": [
+    "608"
+   ],
+   "law_any": [
+    "قانون مجازات اسلامی (کتاب پنجم - تعزیرات و مجازات‌های بازدارنده)"
+   ],
+   "articles": [
+    "608"
+   ],
+   "must_include": [
+    "جزای نقدی درجه شش"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_taazirat_1375",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%83%d8%aa%d8%a7%d8%a8-%d9%be%d9%86%d8%ac%d9%85-%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d8%a7%d8%b3%d9%84%d8%a7%d9%85%d9%8a-%e2%80%8c-%d8%aa%d8%b9%d8%b2%d9%8a%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 608",
+    "quote": "توهین به افراد از قبیل فحاشی و استعمال الفاظ رکیک چنانچه موجب حد قذف نباشد جزای نقدی درجه شش خواهد بود. نظر مجلس: از نظر مقررات کیفری اهانت و توهین و… عبارت است"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1399-02-23 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
+  },
+  {
+   "id": "lg-adm-19",
+   "question": "هزینه دادرسی در دیوان عدالت اداری چقدر است؟",
+   "expected_law": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری",
+   "expected_articles": [
+    "19"
+   ],
+   "law_any": [
+    "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری"
+   ],
+   "articles": [
+    "19"
+   ],
+   "must_include": [
+    "دویست‌هزار",
+    "چهارصد هزار"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "admin court",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "needs_lawyer",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_admin_justice_court",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%af%db%8c%d9%88%d8%a7%d9%86-%d8%b9%d8%af%d8%a7%d9%84%d8%aa-%d8%a7%d8%af%d8%a7%d8%b1%db%8c-%db%b1%db%b4%db%b0%db%b2/"
+   },
+   "verified_against": {
+    "article_label": "ماده 19",
+    "quote": "هزینه دادرسی در شعب بدوی دیوان، دویست‌هزار (200/000) ریال و در شعب تجدیدنظر چهارصد هزار (400/000) ریال است. تبصره- مبلغ مذکور در این ماده به تناسب نرخ تورم اعلا"
+   },
+   "needs_lawyer_reason": "مبلغ هزینه دادرسی طبق تبصرهٔ همین ماده بر اساس تورم تعدیل می‌شود؛ مبلغ جاری باید تأیید شود."
+  },
+  {
+   "id": "lg-adm-30",
+   "question": "طرف شکایت در دیوان عدالت اداری چقدر مهلت دارد پاسخ بدهد و اگر پاسخ ندهد چه می‌شود؟",
+   "expected_law": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری",
+   "expected_articles": [
+    "30"
+   ],
+   "law_any": [
+    "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری"
+   ],
+   "articles": [
+    "30"
+   ],
+   "must_include": [
+    "یک ماه",
+    "انفصال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "admin court",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_admin_justice_court",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%af%db%8c%d9%88%d8%a7%d9%86-%d8%b9%d8%af%d8%a7%d9%84%d8%aa-%d8%a7%d8%af%d8%a7%d8%b1%db%8c-%db%b1%db%b4%db%b0%db%b2/"
+   },
+   "verified_against": {
+    "article_label": "ماده 30",
+    "quote": "طرف شکایت موظف است ظرف یک ماه از تاریخ ابلاغ، نسبت به ارسال پاسخ اقدام کند. عدم وصول پاسخ، مانع رسیدگی نیست و شعبه با توجه به مدارک موجود، به پرونده رسیدگی و مب"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-adm-65",
+   "question": "مهلت تجدیدنظرخواهی از رأی شعب بدوی دیوان عدالت اداری چند روز است؟",
+   "expected_law": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری",
+   "expected_articles": [
+    "65"
+   ],
+   "law_any": [
+    "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری"
+   ],
+   "articles": [
+    "65"
+   ],
+   "must_include": [
+    "بیست روز",
+    "دو ماه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "admin court",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_admin_justice_court",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%af%db%8c%d9%88%d8%a7%d9%86-%d8%b9%d8%af%d8%a7%d9%84%d8%aa-%d8%a7%d8%af%d8%a7%d8%b1%db%8c-%db%b1%db%b4%db%b0%db%b2/"
+   },
+   "verified_against": {
+    "article_label": "ماده 65",
+    "quote": "کلیه آراء شعب بدوی دیوان به درخواست یکی از طرفین یا وکیل یا قائم‌مقام و یا نماینده قانونی آنها، قابل تجدیدنظرخواهی در شعب تجدیدنظر است. مهلت تجدیدنظرخواهی برای "
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-adm-99",
+   "question": "مهلت درخواست اعاده دادرسی در دیوان عدالت اداری چقدر است؟",
+   "expected_law": "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری",
+   "expected_articles": [
+    "99"
+   ],
+   "law_any": [
+    "قانون تشکیلات و آیین دادرسی دیوان عدالت اداری"
+   ],
+   "articles": [
+    "99"
+   ],
+   "must_include": [
+    "بیست روز"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "admin court",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_admin_justice_court",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%af%db%8c%d9%88%d8%a7%d9%86-%d8%b9%d8%af%d8%a7%d9%84%d8%aa-%d8%a7%d8%af%d8%a7%d8%b1%db%8c-%db%b1%db%b4%db%b0%db%b2/"
+   },
+   "verified_against": {
+    "article_label": "ماده 99",
+    "quote": "مهلت تقدیم دادخواست اعاده دادرسی به شرح زیر است: 1- در مورد بندهای «الف» تا «پ» ماده (98) این قانون، بیست روز از تاریخ ابلاغ رأی شعبه 2- درخصوص بندهای «ت» تا «ج"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-ins-2",
+   "question": "آیا بیمه شخص ثالث برای خودرو اجباری است و بر عهده چه کسی است؟",
+   "expected_law": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه",
+   "expected_articles": [
+    "2"
+   ],
+   "law_any": [
+    "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+   ],
+   "articles": [
+    "2"
+   ],
+   "must_include": [
+    "مکلفند",
+    "مالک"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "insurance",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_third_party_insurance_1395",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%a8%db%8c%d9%85%d9%87-%d8%a7%d8%ac%d8%a8%d8%a7%d8%b1%db%8c-%d8%ae%d8%b3%d8%a7%d8%b1%d8%a7%d8%aa-%d9%88%d8%a7%d8%b1%d8%af%d8%b4%d8%af%d9%87-%d8%a8%d9%87-%d8%b4%d8%ae/"
+   },
+   "verified_against": {
+    "article_label": "ماده 2",
+    "quote": "کلیه دارندگان وسایل نقلیه موضوع این قانون اعم از اینکه اشخاص حقیقی یا حقوقی باشند مکلفند وسایل نقلیه خود را در قبال خسارت بدنی و مالی که در اثر حوادث وسایل نقلی"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-ins-8",
+   "question": "حداقل مبلغ تعهد بیمه شخص ثالث برای خسارت بدنی چقدر تعیین شده است؟",
+   "expected_law": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه",
+   "expected_articles": [
+    "8"
+   ],
+   "law_any": [
+    "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+   ],
+   "articles": [
+    "8"
+   ],
+   "must_include": [
+    "دیه یک مرد مسلمان",
+    "ماه‌های حرام"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "insurance",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_third_party_insurance_1395",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%a8%db%8c%d9%85%d9%87-%d8%a7%d8%ac%d8%a8%d8%a7%d8%b1%db%8c-%d8%ae%d8%b3%d8%a7%d8%b1%d8%a7%d8%aa-%d9%88%d8%a7%d8%b1%d8%af%d8%b4%d8%af%d9%87-%d8%a8%d9%87-%d8%b4%d8%ae/"
+   },
+   "verified_against": {
+    "article_label": "ماده 8",
+    "quote": "حداقل مبلغ بیمه موضوع این قانون در بخش خسارت بدنی معادل حداقل ریالی دیه یک مرد مسلمان در ماه‌های حرام با رعایت تبصره ماده (9) این قانون است و در هر حال بیمه‌گذا"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-ins-14",
+   "question": "اگر راننده مقصر تصادف تخلف حادثه‌ساز داشته باشد، بیمه‌گر چقدر از او بازیافت می‌کند؟",
+   "expected_law": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه",
+   "expected_articles": [
+    "14"
+   ],
+   "law_any": [
+    "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+   ],
+   "articles": [
+    "14"
+   ],
+   "must_include": [
+    "دو و نیم درصد"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "insurance",
+   "difficulty": "hard",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_third_party_insurance_1395",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%a8%db%8c%d9%85%d9%87-%d8%a7%d8%ac%d8%a8%d8%a7%d8%b1%db%8c-%d8%ae%d8%b3%d8%a7%d8%b1%d8%a7%d8%aa-%d9%88%d8%a7%d8%b1%d8%af%d8%b4%d8%af%d9%87-%d8%a8%d9%87-%d8%b4%d8%ae/"
+   },
+   "verified_against": {
+    "article_label": "ماده 14",
+    "quote": "در حوادث رانندگی منجر به جرح یا فوت که به استناد گزارش کارشناس تصادفات راهنمایی و رانندگی یا پلیس‌راه، علت اصلی وقوع تصادف یکی از تخلفات رانندگی حادثه‌ساز باشد،"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-ins-61",
+   "question": "مجازات تصادف ساختگی برای دریافت خسارت بیمه چیست؟",
+   "expected_law": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه",
+   "expected_articles": [
+    "61"
+   ],
+   "law_any": [
+    "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+   ],
+   "articles": [
+    "61"
+   ],
+   "must_include": [
+    "دو برابر",
+    "حبس تعزیری درجه شش"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "insurance",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_third_party_insurance_1395",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%a8%db%8c%d9%85%d9%87-%d8%a7%d8%ac%d8%a8%d8%a7%d8%b1%db%8c-%d8%ae%d8%b3%d8%a7%d8%b1%d8%a7%d8%aa-%d9%88%d8%a7%d8%b1%d8%af%d8%b4%d8%af%d9%87-%d8%a8%d9%87-%d8%b4%d8%ae/"
+   },
+   "verified_against": {
+    "article_label": "ماده 61",
+    "quote": "هر کس با انجام اعمال متقلبانه مانند صحنه‌سازی صوری تصادف، تعویض خودرو یا ایجاد خسارت عمدی، وجوهی را بابت خسارت دریافت کند، به حبس تعزیری درجه شش و جزای نقدی معا"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-ins-4",
+   "question": "اگر خودروی مسبب حادثه بیمه نداشته باشد خسارت بدنی را چه کسی جبران می‌کند؟",
+   "expected_law": "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه",
+   "expected_articles": [
+    "4"
+   ],
+   "law_any": [
+    "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+   ],
+   "articles": [
+    "4"
+   ],
+   "must_include": [
+    "صندوق"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "insurance",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_third_party_insurance_1395",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%a8%db%8c%d9%85%d9%87-%d8%a7%d8%ac%d8%a8%d8%a7%d8%b1%db%8c-%d8%ae%d8%b3%d8%a7%d8%b1%d8%a7%d8%aa-%d9%88%d8%a7%d8%b1%d8%af%d8%b4%d8%af%d9%87-%d8%a8%d9%87-%d8%b4%d8%ae/"
+   },
+   "verified_against": {
+    "article_label": "ماده 4",
+    "quote": "در صورت وقوع حادثه و ایجاد خسارت بدنی یا مالی برای شخص ثالث: الف- در صورتی که وسیله نقلیه مسبب حادثه، دارای بیمه‌نامه موضوع این قانون باشد. جبران خسارت‌های وارد"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-smg-18",
+   "question": "جریمه قاچاق کالای مجاز چقدر است؟",
+   "expected_law": "قانون مبارزه با قاچاق کالا و ارز",
+   "expected_articles": [
+    "18"
+   ],
+   "law_any": [
+    "قانون مبارزه با قاچاق کالا و ارز"
+   ],
+   "articles": [
+    "18"
+   ],
+   "must_include": [
+    "یک تا دو برابر ارزش کالا"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون حمایت خانواده"
+   ],
+   "category": "smuggling",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_smuggling_goods_currency",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%a8%d8%a7%d8%b1%d8%b2%d9%87-%d8%a8%d8%a7-%d9%82%d8%a7%da%86%d8%a7%d9%82-%da%a9%d8%a7%d9%84%d8%a7-%d9%88-%d8%a7%d8%b1%d8%b2-%d9%85%d8%b5%d9%88%d8%a8-1392/"
+   },
+   "verified_against": {
+    "article_label": "ماده 18",
+    "quote": "هر شخص که مرتکب قاچاق کالا و ارز و حمل و یا نگهداری آن شود، علاوه بر ضبط کالا یا ارز، به جریمه‌های نقدی زیر محکوم می‌شود: الف- کالای مجاز: جریمه نقدی یک تا دو ب"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-smg-21",
+   "question": "اگر ارزش کالای قاچاق کشف‌شده پنجاه میلیون ریال یا کمتر باشد، چطور رسیدگی می‌شود و چند روز برای اعتراض فرصت هست؟",
+   "expected_law": "قانون مبارزه با قاچاق کالا و ارز",
+   "expected_articles": [
+    "21"
+   ],
+   "law_any": [
+    "قانون مبارزه با قاچاق کالا و ارز"
+   ],
+   "articles": [
+    "21"
+   ],
+   "must_include": [
+    "پنجاه میلیون",
+    "ده روز"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون حمایت خانواده"
+   ],
+   "category": "smuggling",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_smuggling_goods_currency",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%a8%d8%a7%d8%b1%d8%b2%d9%87-%d8%a8%d8%a7-%d9%82%d8%a7%da%86%d8%a7%d9%82-%da%a9%d8%a7%d9%84%d8%a7-%d9%88-%d8%a7%d8%b1%d8%b2-%d9%85%d8%b5%d9%88%d8%a8-1392/"
+   },
+   "verified_against": {
+    "article_label": "ماده 21",
+    "quote": "در صورتی که ارزش کالای قاچاق و یا ارز مکشوفه موضوع ماده (18) این قانون، برابر تشخیص اولیه دستگاه کاشف معادل پنجاه میلیون (50/000/000) ریال یا کمتر باشد با قید د"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1400-11-10 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
+  },
+  {
+   "id": "lg-smg-22",
+   "question": "مجازات نگهداری و حمل کالای ممنوع قاچاق با ارزش تا ده میلیون ریال چیست؟",
+   "expected_law": "قانون مبارزه با قاچاق کالا و ارز",
+   "expected_articles": [
+    "22"
+   ],
+   "law_any": [
+    "قانون مبارزه با قاچاق کالا و ارز"
+   ],
+   "articles": [
+    "22"
+   ],
+   "must_include": [
+    "دو تا سه برابر"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون حمایت خانواده"
+   ],
+   "category": "smuggling",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_smuggling_goods_currency",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%a8%d8%a7%d8%b1%d8%b2%d9%87-%d8%a8%d8%a7-%d9%82%d8%a7%da%86%d8%a7%d9%82-%da%a9%d8%a7%d9%84%d8%a7-%d9%88-%d8%a7%d8%b1%d8%b2-%d9%85%d8%b5%d9%88%d8%a8-1392/"
+   },
+   "verified_against": {
+    "article_label": "ماده 22",
+    "quote": "هر‌کس مرتکب قاچاق کالای ممنوع گردد یا کالای ممنوع قاچاق را نگهداری یا حمل نماید یا بفروشد، علاوه بر ضبط کالا به شرح زیر و مواد (23) و (24) مجازات می‌شود: الف- د"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-smg-34",
+   "question": "اگر حامل کالای قاچاق با مأموران درگیر شود یا مقاومت کند چه مجازاتی دارد؟",
+   "expected_law": "قانون مبارزه با قاچاق کالا و ارز",
+   "expected_articles": [
+    "34"
+   ],
+   "law_any": [
+    "قانون مبارزه با قاچاق کالا و ارز"
+   ],
+   "articles": [
+    "34"
+   ],
+   "must_include": [
+    "شش ماه تا دو سال",
+    "هفتاد و چهار ضربه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون حمایت خانواده"
+   ],
+   "category": "smuggling",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_smuggling_goods_currency",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%a8%d8%a7%d8%b1%d8%b2%d9%87-%d8%a8%d8%a7-%d9%82%d8%a7%da%86%d8%a7%d9%82-%da%a9%d8%a7%d9%84%d8%a7-%d9%88-%d8%a7%d8%b1%d8%b2-%d9%85%d8%b5%d9%88%d8%a8-1392/"
+   },
+   "verified_against": {
+    "article_label": "ماده 34",
+    "quote": "در صورتی که شخص حامل یا مالک کالا و یا ارز قاچاق، در مواجهه با مأموران کاشف به هر نحوی مقابله یا مقاومت نماید، اگر عمل مذکور از مصادیق دست بردن به سلاح و سلب ام"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-smg-52",
+   "question": "متهم قاچاق که به اسناد گمرکی استناد می‌کند چند روز برای ارائه اصل سند فرصت دارد؟",
+   "expected_law": "قانون مبارزه با قاچاق کالا و ارز",
+   "expected_articles": [
+    "52"
+   ],
+   "law_any": [
+    "قانون مبارزه با قاچاق کالا و ارز"
+   ],
+   "articles": [
+    "52"
+   ],
+   "must_include": [
+    "ده روز"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون حمایت خانواده"
+   ],
+   "category": "smuggling",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-12_ekhtebar.jsonl",
+    "law_id": "corpus_fill_smuggling_goods_currency",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d9%85%d8%a8%d8%a7%d8%b1%d8%b2%d9%87-%d8%a8%d8%a7-%d9%82%d8%a7%da%86%d8%a7%d9%82-%da%a9%d8%a7%d9%84%d8%a7-%d9%88-%d8%a7%d8%b1%d8%b2-%d9%85%d8%b5%d9%88%d8%a8-1392/"
+   },
+   "verified_against": {
+    "article_label": "ماده 52",
+    "quote": "متهمانی که به منظور رد اتهام جرایم یا تخلفات موضوع این قانون به اسناد مثبته گمرکی استناد می‌کنند، مکلفند ظرف ده روز از زمان ابلاغ احضاریه یا جلب در مرجع رسیدگی‌"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده در 1400-11-10 اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
+  },
+  {
+   "id": "lg-cyb-729",
+   "question": "اگر کسی بدون اجازه به سامانه رایانه‌ای حفاظت‌شده دیگری دسترسی پیدا کند مجازاتش چیست؟",
+   "expected_law": "قانون جرایم رایانه‌ای",
+   "expected_articles": [
+    "729"
+   ],
+   "law_any": [
+    "قانون جرایم رایانه‌ای"
+   ],
+   "articles": [
+    "729"
+   ],
+   "must_include": [
+    "نود و یک روز تا یک سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "cyber",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_cybercrime",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%ac%d8%b1%d8%a7%db%8c%d9%85-%d8%b1%d8%a7%db%8c%d8%a7%d9%86%d9%87-%d8%a7%db%8c-%d9%88-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d9%85%d8%b5%d8%a7%d8%af%db%8c%d9%82-%d9%85%d8%ad/"
+   },
+   "verified_against": {
+    "article_label": "ماده 729",
+    "quote": "هرکس به طور غیرمجاز به داده‌ها یا سامانه‌های رایانه‌ای یا مخابراتی که به وسیله تدابیر امنیتی حفاظت شده است دسترسی یابد، به حبس از نود و یک روز تا یک سال یا جزای"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "جزای نقدی این ماده در ۱۴۰۳/۰۴/۰۴ توسط هیئت وزیران تعدیل شده و یادداشت تعدیل در متن ماده در پایگاه هست (مطابق ekhtebar.ir)؛ عبارت‌های الزامی فقط مدت حبس‌اند."
+  },
+  {
+   "id": "lg-cyb-736",
+   "question": "مجازات حذف یا تخریب داده‌های دیگران در سامانه رایانه‌ای چیست؟",
+   "expected_law": "قانون جرایم رایانه‌ای",
+   "expected_articles": [
+    "736"
+   ],
+   "law_any": [
+    "قانون جرایم رایانه‌ای"
+   ],
+   "articles": [
+    "736"
+   ],
+   "must_include": [
+    "شش ماه تا دو سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "cyber",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_cybercrime",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%ac%d8%b1%d8%a7%db%8c%d9%85-%d8%b1%d8%a7%db%8c%d8%a7%d9%86%d9%87-%d8%a7%db%8c-%d9%88-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d9%85%d8%b5%d8%a7%d8%af%db%8c%d9%82-%d9%85%d8%ad/"
+   },
+   "verified_against": {
+    "article_label": "ماده 736",
+    "quote": "هر کس به طور غیرمجاز داده‌های دیگری را از سامانه‌های رایانه‌ای یا مخابراتی یا حامل‌های داده حذف یا تخریب یا مختل یا غیرقابل پردازش کند به حبس از شش ماه تا دو سا"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "جزای نقدی این ماده در ۱۴۰۳/۰۴/۰۴ توسط هیئت وزیران تعدیل شده و یادداشت تعدیل در متن ماده در پایگاه هست (مطابق ekhtebar.ir)؛ عبارت‌های الزامی فقط مدت حبس‌اند."
+  },
+  {
+   "id": "lg-cyb-741",
+   "question": "کلاهبرداری رایانه‌ای یعنی چه و مجازاتش چقدر است؟",
+   "expected_law": "قانون جرایم رایانه‌ای",
+   "expected_articles": [
+    "741"
+   ],
+   "law_any": [
+    "قانون جرایم رایانه‌ای"
+   ],
+   "articles": [
+    "741"
+   ],
+   "must_include": [
+    "یک تا پنج سال",
+    "رد مال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "cyber",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_cybercrime",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%ac%d8%b1%d8%a7%db%8c%d9%85-%d8%b1%d8%a7%db%8c%d8%a7%d9%86%d9%87-%d8%a7%db%8c-%d9%88-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d9%85%d8%b5%d8%a7%d8%af%db%8c%d9%82-%d9%85%d8%ad/"
+   },
+   "verified_against": {
+    "article_label": "ماده 741",
+    "quote": "هرکس به طور غیرمجاز از سامانه‌های رایانه‌ای یا مخابراتی با ارتکاب اعمالی از قبیل وارد کردن، تغییر، محو، ایجاد یا متوقف کردن داده‌ها یا مختل کردن سامانه، وجه یا "
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "جزای نقدی این ماده در ۱۴۰۳/۰۴/۰۴ توسط هیئت وزیران تعدیل شده و یادداشت تعدیل در متن ماده در پایگاه هست (مطابق ekhtebar.ir)؛ عبارت‌های الزامی فقط مدت حبس‌اند."
+  },
+  {
+   "id": "lg-cyb-746",
+   "question": "نشر اکاذیب در فضای مجازی برای تشویش اذهان عمومی چه مجازاتی دارد؟",
+   "expected_law": "قانون جرایم رایانه‌ای",
+   "expected_articles": [
+    "746"
+   ],
+   "law_any": [
+    "قانون جرایم رایانه‌ای"
+   ],
+   "articles": [
+    "746"
+   ],
+   "must_include": [
+    "نود و یک روز تا دو سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "cyber",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_cybercrime",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%ac%d8%b1%d8%a7%db%8c%d9%85-%d8%b1%d8%a7%db%8c%d8%a7%d9%86%d9%87-%d8%a7%db%8c-%d9%88-%d9%81%d9%87%d8%b1%d8%b3%d8%aa-%d9%85%d8%b5%d8%a7%d8%af%db%8c%d9%82-%d9%85%d8%ad/"
+   },
+   "verified_against": {
+    "article_label": "ماده 746",
+    "quote": "هر کس به قصد اضرار به غیر یا تشویش اذهان عمومی یا مقامات رسمی به وسیله سامانه رایانه‌ای یا مخابراتی اکاذیبی را منتشر نماید یا در دسترس دیگران قرار دهد یا با هما"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "جزای نقدی این ماده در ۱۴۰۳/۰۴/۰۴ توسط هیئت وزیران تعدیل شده و یادداشت تعدیل در متن ماده در پایگاه هست (مطابق ekhtebar.ir)؛ عبارت‌های الزامی فقط مدت حبس‌اند."
+  },
+  {
+   "id": "lg-brb-4",
+   "question": "مجازات کسانی که با تشکیل شبکه چندنفره رشوه و اختلاس و کلاهبرداری می‌کنند چیست؟",
+   "expected_law": "قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری",
+   "expected_articles": [
+    "4"
+   ],
+   "law_any": [
+    "قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری"
+   ],
+   "articles": [
+    "4"
+   ],
+   "must_include": [
+    "پانزده سال",
+    "شبکه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_bribery_fraud_1367",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%aa%d8%b4%d8%af%db%8c%d8%af-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d9%85%d8%b1%d8%aa%da%a9%d8%a8%db%8c%d9%86-%d8%a7%d8%b1%d8%aa%d8%b4%d8%a7%d8%a1%d8%8c-%d8%a7%d8%ae/"
+   },
+   "verified_against": {
+    "article_label": "ماده 4",
+    "quote": "کسانی که با تشکیل یا رهبری شبکه چند نفری به امر ارتشاء و اختلاس و کلاهبرداری مبادرت ورزند علاوه بر ضبط کلیه اموال منقول و غیرمنقولی که از طریق رشوه کسب کرده‌اند"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-brb-3",
+   "question": "کارمند دولتی که رشوه بگیرد و مبلغ آن کم باشد چه مجازاتی دارد؟",
+   "expected_law": "قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری",
+   "expected_articles": [
+    "3"
+   ],
+   "law_any": [
+    "قانون تشدید مجازات مرتکبین ارتشاء، اختلاس و کلاهبرداری"
+   ],
+   "articles": [
+    "3"
+   ],
+   "must_include": [
+    "انفصال موقت",
+    "شش ماه تا سه سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_bribery_fraud_1367",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d8%a7%d9%86%d9%88%d9%86-%d8%aa%d8%b4%d8%af%db%8c%d8%af-%d9%85%d8%ac%d8%a7%d8%b2%d8%a7%d8%aa-%d9%85%d8%b1%d8%aa%da%a9%d8%a8%db%8c%d9%86-%d8%a7%d8%b1%d8%aa%d8%b4%d8%a7%d8%a1%d8%8c-%d8%a7%d8%ae/"
+   },
+   "verified_against": {
+    "article_label": "ماده 3",
+    "quote": "هر یک از مستخدمین و مامورین دولتی اعم از قضایی و اداری یا شوراها یا شهرداری‌ها یا نهادهای انقلابی و به طور کلی قوای سه‌گانه و همچنین نیروهای مسلح یا شرکت‌های دو"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-con-37",
+   "question": "اصل برائت در قانون اساسی چیست؟",
+   "expected_law": "قانون اساسی جمهوری اسلامی ایران",
+   "expected_articles": [
+    "37"
+   ],
+   "law_any": [
+    "قانون اساسی جمهوری اسلامی ایران"
+   ],
+   "articles": [
+    "37"
+   ],
+   "must_include": [
+    "برائت",
+    "دادگاه صالح"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "constitution",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_constitution",
+    "source": "wikisource",
+    "source_tier": "secondary",
+    "source_url": "https://fa.wikisource.org/wiki/%D9%82%D8%A7%D9%86%D9%88%D9%86_%D8%A7%D8%B3%D8%A7%D8%B3%DB%8C_%D8%AC%D9%85%D9%87%D9%88%D8%B1%DB%8C_%D8%A7%D8%B3%D9%84%D8%A7%D9%85%DB%8C_%D8%A7%DB%8C%D8%B1%D8%A7%D9%86_%28%D9%85%D8%B5%D9%88%D8%A8_%DB%B1%DB%B3%DB%B6%DB%B8%29"
+   },
+   "verified_against": {
+    "article_label": "اصل 37",
+    "quote": "اصل، برائت است و هیچ‌کس از نظر قانون مجرم شناخته نمی‌شود، مگر این که جرم او در دادگاه صالح ثابت گردد."
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-con-35",
+   "question": "آیا طرفین دعوا حق دارند وکیل انتخاب کنند؟",
+   "expected_law": "قانون اساسی جمهوری اسلامی ایران",
+   "expected_articles": [
+    "35"
+   ],
+   "law_any": [
+    "قانون اساسی جمهوری اسلامی ایران"
+   ],
+   "articles": [
+    "35"
+   ],
+   "must_include": [
+    "وکیل"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "constitution",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_constitution",
+    "source": "wikisource",
+    "source_tier": "secondary",
+    "source_url": "https://fa.wikisource.org/wiki/%D9%82%D8%A7%D9%86%D9%88%D9%86_%D8%A7%D8%B3%D8%A7%D8%B3%DB%8C_%D8%AC%D9%85%D9%87%D9%88%D8%B1%DB%8C_%D8%A7%D8%B3%D9%84%D8%A7%D9%85%DB%8C_%D8%A7%DB%8C%D8%B1%D8%A7%D9%86_%28%D9%85%D8%B5%D9%88%D8%A8_%DB%B1%DB%B3%DB%B6%DB%B8%29"
+   },
+   "verified_against": {
+    "article_label": "اصل 35",
+    "quote": "در همه دادگاه‌ها طرفین دعوی حق دارند برای خود وکیل انتخاب نمایند و اگر توانایی انتخاب وکیل را نداشته باشند باید برای آنها امکانات تعیین وکیل فراهم گردد."
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-con-34",
+   "question": "دادخواهی چه جایگاهی در قانون اساسی دارد؟",
+   "expected_law": "قانون اساسی جمهوری اسلامی ایران",
+   "expected_articles": [
+    "34"
+   ],
+   "law_any": [
+    "قانون اساسی جمهوری اسلامی ایران"
+   ],
+   "articles": [
+    "34"
+   ],
+   "must_include": [
+    "دادخواهی حق مسلم"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "constitution",
+   "difficulty": "easy",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_constitution",
+    "source": "wikisource",
+    "source_tier": "secondary",
+    "source_url": "https://fa.wikisource.org/wiki/%D9%82%D8%A7%D9%86%D9%88%D9%86_%D8%A7%D8%B3%D8%A7%D8%B3%DB%8C_%D8%AC%D9%85%D9%87%D9%88%D8%B1%DB%8C_%D8%A7%D8%B3%D9%84%D8%A7%D9%85%DB%8C_%D8%A7%DB%8C%D8%B1%D8%A7%D9%86_%28%D9%85%D8%B5%D9%88%D8%A8_%DB%B1%DB%B3%DB%B6%DB%B8%29"
+   },
+   "verified_against": {
+    "article_label": "اصل 34",
+    "quote": "دادخواهی حق مسلم هر فرد است و هر کس می‌تواند به منظور دادخواهی به دادگاه‌های صالح رجوع نماید. همه افراد ملت حق دارند این گونه دادگاه‌ها را در دسترس داشته باشند "
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-con-167",
+   "question": "اگر قانونی برای موضوع پرونده وجود نداشته باشد قاضی چگونه رأی می‌دهد؟",
+   "expected_law": "قانون اساسی جمهوری اسلامی ایران",
+   "expected_articles": [
+    "167"
+   ],
+   "law_any": [
+    "قانون اساسی جمهوری اسلامی ایران"
+   ],
+   "articles": [
+    "167"
+   ],
+   "must_include": [
+    "منابع معتبر اسلامی"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "constitution",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_constitution",
+    "source": "wikisource",
+    "source_tier": "secondary",
+    "source_url": "https://fa.wikisource.org/wiki/%D9%82%D8%A7%D9%86%D9%88%D9%86_%D8%A7%D8%B3%D8%A7%D8%B3%DB%8C_%D8%AC%D9%85%D9%87%D9%88%D8%B1%DB%8C_%D8%A7%D8%B3%D9%84%D8%A7%D9%85%DB%8C_%D8%A7%DB%8C%D8%B1%D8%A7%D9%86_%28%D9%85%D8%B5%D9%88%D8%A8_%DB%B1%DB%B3%DB%B6%DB%B8%29"
+   },
+   "verified_against": {
+    "article_label": "اصل 167",
+    "quote": "قاضی موظف است کوشش کند حکم هر دعوا را در قوانین مدونه بیابد و اگر نیابد با استناد به منابع معتبر اسلامی یا فتاوای معتبر، حکم قضیه را صادر نماید و نمی‌تواند به ب"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-con-168",
+   "question": "جرائم سیاسی و مطبوعاتی با چه شرایطی رسیدگی می‌شود؟",
+   "expected_law": "قانون اساسی جمهوری اسلامی ایران",
+   "expected_articles": [
+    "168"
+   ],
+   "law_any": [
+    "قانون اساسی جمهوری اسلامی ایران"
+   ],
+   "articles": [
+    "168"
+   ],
+   "must_include": [
+    "هیئت منصفه",
+    "علنی"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "constitution",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_constitution",
+    "source": "wikisource",
+    "source_tier": "secondary",
+    "source_url": "https://fa.wikisource.org/wiki/%D9%82%D8%A7%D9%86%D9%88%D9%86_%D8%A7%D8%B3%D8%A7%D8%B3%DB%8C_%D8%AC%D9%85%D9%87%D9%88%D8%B1%DB%8C_%D8%A7%D8%B3%D9%84%D8%A7%D9%85%DB%8C_%D8%A7%DB%8C%D8%B1%D8%A7%D9%86_%28%D9%85%D8%B5%D9%88%D8%A8_%DB%B1%DB%B3%DB%B6%DB%B8%29"
+   },
+   "verified_against": {
+    "article_label": "اصل 168",
+    "quote": "رسیدگی به جرائم سیاسی و مطبوعاتی علنی است و با حضور هیئت منصفه در محاکم دادگستری صورت می‌گیرد. نحوه انتخاب، شرایط، اختیارات هیئت منصفه و تعریف جرم سیاسی را قانو"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-l56-11",
+   "question": "طبق قانون موجر و مستأجر ۱۳۵۶ مستأجر چند روز بعد از سررسید فرصت دارد اجاره‌بها را بپردازد؟",
+   "expected_law": "قانون روابط موجر و مستاجر ۱۳۵۶",
+   "expected_articles": [
+    "11"
+   ],
+   "law_any": [
+    "قانون روابط موجر و مستاجر ۱۳۵۶"
+   ],
+   "articles": [
+    "11"
+   ],
+   "must_include": [
+    "ده روز"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "lease",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "lawyer_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_landlord_tenant_1356",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d9%88%d8%a7%d9%86%db%8c%d9%86-%d9%88-%d9%85%d9%82%d8%b1%d8%b1%d8%a7%d8%aa-%d8%b1%d9%88%d8%a7%d8%a8%d8%b7-%d9%85%d9%88%d8%ac%d8%b1-%d9%88-%d9%85%d8%b3%d8%aa%d8%a7%d8%ac%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 11",
+    "quote": "دفا‌تر اسناد رسمی مکلفند علاوه بر نکاتی که به موجب قوانین و مقررات باید رعایت شود نکات زیر را در اجاره‌نامه تصریح بنمایند: 1- شغل موجر و مستأجر و اقامتگاه موجر "
+   },
+   "lawyer_answer": "هر یک از قوانین ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر اماکن در دامنهٔ خودش حاکم است؛ انتخاب قانون حاکم نظر حقوقی است و به تاریخ و نوع قرارداد بستگی دارد (بند ۵، ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
+  },
+  {
+   "id": "lg-l56-10",
+   "question": "آیا مستأجر می‌تواند ملک اجاره‌ای را بدون اجازه موجر به دیگری واگذار کند؟",
+   "expected_law": "قانون روابط موجر و مستاجر ۱۳۵۶",
+   "expected_articles": [
+    "10"
+   ],
+   "law_any": [
+    "قانون روابط موجر و مستاجر ۱۳۵۶"
+   ],
+   "articles": [
+    "10"
+   ],
+   "must_include": [
+    "کتبا"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "lease",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "lawyer_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11.jsonl",
+    "law_id": "corpus_fill_landlord_tenant_1356",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/%d9%82%d9%88%d8%a7%d9%86%db%8c%d9%86-%d9%88-%d9%85%d9%82%d8%b1%d8%b1%d8%a7%d8%aa-%d8%b1%d9%88%d8%a7%d8%a8%d8%b7-%d9%85%d9%88%d8%ac%d8%b1-%d9%88-%d9%85%d8%b3%d8%aa%d8%a7%d8%ac%d8%b1/"
+   },
+   "verified_against": {
+    "article_label": "ماده 10",
+    "quote": "مستأجر نمی‌تواند منافع مورد اجاره را کلا یا جزا یا به نحو اشاعه به غیر انتقال دهد یا واگذار نماید مگر اینکه کتبا این اختیار به او داده ‌شده باشد. ‌هر‌گاه مستأجر"
+   },
+   "lawyer_answer": "هر یک از قوانین ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر اماکن در دامنهٔ خودش حاکم است؛ انتخاب قانون حاکم نظر حقوقی است و به تاریخ و نوع قرارداد بستگی دارد (بند ۵، ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
+  },
+  {
+   "id": "lg-l76-3",
+   "question": "بعد از پایان مدت اجاره، تخلیه ملک چقدر زمان می‌برد؟",
+   "expected_law": "قانون روابط موجر و مستاجر ۱۳۷۶",
+   "expected_articles": [
+    "3"
+   ],
+   "law_any": [
+    "قانون روابط موجر و مستاجر ۱۳۷۶"
+   ],
+   "articles": [
+    "3"
+   ],
+   "must_include": [
+    "یک هفته"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "lease",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11_replace_lease1376.jsonl",
+    "law_id": "corpus_fill_landlord_tenant_1376",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/28246-2/"
+   },
+   "verified_against": {
+    "article_label": "ماده 3",
+    "quote": "پس از انقضای مدت اجاره بنا به تقاضای موجر یا قائم‌مقام قانونی وی تخلیه عین مستأجره در اجاره با سند رسمی توسط دوایر اجرای ثبت ظرف یک هفته و در اجاره با سند عادی "
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-l76-4",
+   "question": "اگر موجر ودیعه یا قرض‌الحسنه گرفته باشد، تخلیه ملک چه ارتباطی با استرداد آن دارد؟",
+   "expected_law": "قانون روابط موجر و مستاجر ۱۳۷۶",
+   "expected_articles": [
+    "4"
+   ],
+   "law_any": [
+    "قانون روابط موجر و مستاجر ۱۳۷۶"
+   ],
+   "articles": [
+    "4"
+   ],
+   "must_include": [
+    "استرداد",
+    "دایره اجرا"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "lease",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11_replace_lease1376.jsonl",
+    "law_id": "corpus_fill_landlord_tenant_1376",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/28246-2/"
+   },
+   "verified_against": {
+    "article_label": "ماده 4",
+    "quote": "در صورتی که موجر مبلغی به عنوان ودیعه یا تضمین یا قرض‌الحسنه و یا سند تعهدآور و مشابه آن از مستأجر دریافت کرده باشد تخلیه و تحویل مورد اجاره به موجر موکول به اس"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-l76-2",
+   "question": "در قرارداد اجاره چه چیزهایی باید حتماً قید و ثبت شود؟",
+   "expected_law": "قانون روابط موجر و مستاجر ۱۳۷۶",
+   "expected_articles": [
+    "2"
+   ],
+   "law_any": [
+    "قانون روابط موجر و مستاجر ۱۳۷۶"
+   ],
+   "articles": [
+    "2"
+   ],
+   "must_include": [
+    "مدت",
+    "قرض‌الحسنه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "lease",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/staged/corpus_fill_2026-10-11_replace_lease1376.jsonl",
+    "law_id": "corpus_fill_landlord_tenant_1376",
+    "source": "ekhtebar",
+    "source_tier": "unofficial",
+    "source_url": "https://www.ekhtebar.ir/28246-2/"
+   },
+   "verified_against": {
+    "article_label": "ماده 2",
+    "quote": "در کلیه قراردادهای اجاره باید مدت و مبلغ اجاره و مبلغ قرض‌الحسنه، تصریح و در سامانه‌های ثبت الکترونیک اسناد یا ثبت معاملات املاک و مستغلات کشور ثبت شود و پس از "
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "ماده ۲ در ۱۴۰۳/۰۲/۱۰ اصلاح شده و متن پایگاه همان نسخهٔ اصلاح‌شده است."
+  },
+  {
+   "id": "lg-l62-7",
+   "question": "اگر موجر از تحویل گرفتن ملک بعد از تخلیه خودداری کند مستأجر چه کار کند؟",
+   "expected_law": "قانون روابط موجر و مستأجر ۱۳۶۲",
+   "expected_articles": [
+    "7"
+   ],
+   "law_any": [
+    "قانون روابط موجر و مستأجر ۱۳۶۲"
+   ],
+   "articles": [
+    "7"
+   ],
+   "must_include": [
+    "تأمین دلیل"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "lease",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "lawyer_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/90715"
+   },
+   "verified_against": {
+    "article_label": "ماده 7",
+    "quote": "هر گاه مستأجر به علت انقضاء مدت اجاره یا در موارد فسخ اجاره مورد اجاره را تخلیه کند و موجر از تحویل گرفتن آن امتناع کند مستأجر‌می‌تواند به دادگاه محل وقوع ملک م"
+   },
+   "lawyer_answer": "هر یک از قوانین ۱۳۵۶، ۱۳۶۲ و ۱۳۷۶ بر اماکن در دامنهٔ خودش حاکم است؛ انتخاب قانون حاکم نظر حقوقی است و به تاریخ و نوع قرارداد بستگی دارد (بند ۵، ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
+  },
+  {
+   "id": "lg-chk-12",
+   "question": "چه مواردی باعث می‌شود صادرکننده چک قابل تعقیب کیفری نباشد؟",
+   "expected_law": "قانون صدور چک",
+   "expected_articles": [
+    "12"
+   ],
+   "law_any": [
+    "قانون صدور چک"
+   ],
+   "articles": [
+    "12"
+   ],
+   "must_include": [
+    "سفید امضاء",
+    "تضمین انجام معامله",
+    "شش ماه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "commercial",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/97463"
+   },
+   "verified_against": {
+    "article_label": "ماده 12",
+    "quote": "در موارد زیر صادرکننده چک از نظر این قانون قابل تعقیب کیفری نیست. 1 - در صورتی که ثابت شود چک سفید امضاء داده شده باشد. 2 - هرگاه در متن چک وصول وجه آن منوط به "
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "قانون اصلاح ۱۳۹۷ فقط مواد ۴، ۵، ۶، ۲۱، ۲۳ و ۲۴ را تغییر داده و به ماده ۱۲ دست نزده است (متن قانون ۱۳۹۷ در پایگاه).",
+   "must_include_added_2026_10_21": [
+    "شش ماه"
+   ],
+   "lawyer_round2": {
+    "item": "Q15",
+    "answered_at": "2026-10-21",
+    "answer": "چک غیرتضمینی، غیرمشروط و غیرسفیدامضا باید ظرف شش ماه از تاریخ خود برگشت بخورد و شکایت کیفری ظرف شش ماه از برگشت به دادسرا تقدیم شود؛ در عمل چک صیادی پس از عدم پرداخت مسیر حقوقی دارد و چک‌های عادی قدیمی خارج از مهلت قابل پیگرد کیفری نیستند.",
+    "kind": "practice note (not article text); see docs/LAWYER_ANSWERS_2026-10-21.md"
+   }
+  },
+  {
+   "id": "lg-chk-13",
+   "question": "اگر چک گم یا سرقت شده باشد چطور می‌توان دستور عدم پرداخت داد؟",
+   "expected_law": "قانون صدور چک",
+   "expected_articles": [
+    "13"
+   ],
+   "law_any": [
+    "قانون صدور چک"
+   ],
+   "articles": [
+    "13"
+   ],
+   "must_include": [
+    "مفقود یا سرقت یا جعل"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "commercial",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/97463"
+   },
+   "verified_against": {
+    "article_label": "ماده 13",
+    "quote": "در صورتی که صادرکننده چک یا ذینفع یا قائم‌مقام قانونی آنها با تصریح به اینکه چک مفقود یا سرقت یا جعل شده و یا از طریق‌کلاهبرداری یا خیانت در امانت یا جرائم دیگر"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "قانون اصلاح ۱۳۹۷ فقط مواد ۴، ۵، ۶، ۲۱، ۲۳ و ۲۴ را تغییر داده و به ماده ۱۳ دست نزده است (متن قانون ۱۳۹۷ در پایگاه)."
+  },
+  {
+   "id": "lg-c97-4",
+   "question": "پس از ثبت چک برگشتی در سامانه بانک مرکزی بانک‌ها چه محدودیت‌هایی برای صاحب حساب اعمال می‌کنند؟",
+   "expected_law": "قانون اصلاح قانون صدور چک (۱۳۹۷)",
+   "expected_articles": [
+    "4"
+   ],
+   "law_any": [
+    "قانون اصلاح قانون صدور چک (۱۳۹۷)"
+   ],
+   "articles": [
+    "4"
+   ],
+   "must_include": [
+    "بیست و چهار ساعت",
+    "مسدود"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "commercial",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/1091223"
+   },
+   "verified_against": {
+    "article_label": "ماده 4",
+    "quote": "ماده۵ مکررـ بعد از ثبت غیرقابل پرداخت بودن یا کسری مبلغ چک در سامانه یکپارچه بانک مرکزی، این سامانه مراتب را به صورت برخط به تمام بانک ها و مؤسسات اعتباری اطلاع"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "قانون اصلاح ۱۴۰۰ به ماده ۵ مکرر دست نزده است (متن قانون ۱۴۰۰ در پایگاه)."
+  },
+  {
+   "id": "lg-c97-8",
+   "question": "بانک مرکزی چه کسانی را از دریافت دسته چک منع می‌کند؟",
+   "expected_law": "قانون اصلاح قانون صدور چک (۱۳۹۷)",
+   "expected_articles": [
+    "8"
+   ],
+   "law_any": [
+    "قانون اصلاح قانون صدور چک (۱۳۹۷)"
+   ],
+   "articles": [
+    "8"
+   ],
+   "must_include": [
+    "ورشکسته",
+    "سامانه صیاد"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "commercial",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/1091223"
+   },
+   "verified_against": {
+    "article_label": "ماده 8",
+    "quote": "ماده۲۱ مکررـ بانک مرکزی مکلف است ظرف مدت دوسال پس از لازم الاجراء شدن این قانون در مورد اشخاص ورشکسته، معسر از پرداخت محکومٌ به یا دارای چک برگشتی رفع سوءاثر نش"
+   },
+   "verified_by": "auto:article_text",
+   "verification_note": "قانون اصلاح ۱۴۰۰ فقط تبصره ۱ ماده ۲۱ مکرر را تغییر داده؛ فهرست افراد ممنوع از دسته‌چک همان متن اصلی است."
+  },
+  {
+   "id": "lg-cpr-48",
+   "question": "دادخواست را برای شروع دادرسی به کجا باید تسلیم کرد؟",
+   "expected_law": "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی",
+   "expected_articles": [
+    "48"
+   ],
+   "law_any": [
+    "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"
+   ],
+   "articles": [
+    "48"
+   ],
+   "must_include": [
+    "دفتر",
+    "شعبه اول",
+    "دفاتر خدمات الکترونیک قضایی"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/93305"
+   },
+   "verified_against": {
+    "article_label": "ماده 48",
+    "quote": "شروع رسیدگی در دادگاه مستلزم تقدیم دادخواست می‌باشد. دادخواست به دفتر دادگاه صالح و در نقاطی که دادگاه دارای شعب متعدد‌است به‌دفتر شعبه اول تسلیم می‌گردد."
+   },
+   "verified_by": "auto:article_text",
+   "must_include_added_2026_10_21": [
+    "دفاتر خدمات الکترونیک قضایی"
+   ],
+   "lawyer_round2": {
+    "item": "Q18",
+    "answered_at": "2026-10-21",
+    "answer": "طبق رویهٔ عملی هر دادخواست یا شکوائیه باید از طریق دفاتر خدمات الکترونیک قضایی ثبت شود.",
+    "kind": "practice note (not article text); see docs/LAWYER_ANSWERS_2026-10-21.md"
+   }
+  },
+  {
+   "id": "lg-cpr-84",
+   "question": "خوانده در دعوای مدنی چه ایرادهایی می‌تواند مطرح کند؟",
+   "expected_law": "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی",
+   "expected_articles": [
+    "84"
+   ],
+   "law_any": [
+    "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"
+   ],
+   "articles": [
+    "84"
+   ],
+   "must_include": [
+    "صلاحیت نداشته باشد"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/93305"
+   },
+   "verified_against": {
+    "article_label": "ماده 84",
+    "quote": "در موارد زیر خوانده می‌تواند ضمن پاسخ نسبت به ماهیت دعوا ایراد کند: 1 - دادگاه صلاحیت نداشته باشد. 2 - دعوا بین همان اشخاص در همان دادگاه یا دادگاه هم عرض دیگری"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-cpr-336",
+   "question": "مهلت تجدیدنظرخواهی از رأی دادگاه برای فرد مقیم ایران و مقیم خارج چقدر است؟",
+   "expected_law": "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی",
+   "expected_articles": [
+    "336"
+   ],
+   "law_any": [
+    "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"
+   ],
+   "articles": [
+    "336"
+   ],
+   "must_include": [
+    "بیست روز",
+    "دوماه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/93305"
+   },
+   "verified_against": {
+    "article_label": "ماده 336",
+    "quote": "مهلت درخواست تجدیدنظر اصحاب دعوا، برای اشخاص مقیم ایران بیست روز و برای اشخاص مقیم خارج از کشور دوماه از تاریخ‌ابلاغ یا انقضای مدت واخواهی است."
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-cpr-346",
+   "question": "در مرحلهٔ تجدیدنظر، پس از ارسال نسخهٔ دادخواست تجدیدنظر برای طرف دعوا، او چند روز برای پاسخ فرصت دارد؟",
+   "expected_law": "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی",
+   "expected_articles": [
+    "346"
+   ],
+   "law_any": [
+    "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"
+   ],
+   "articles": [
+    "346"
+   ],
+   "must_include": [
+    "ده روز"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/93305"
+   },
+   "verified_against": {
+    "article_label": "ماده 346",
+    "quote": "مدیر دفتر دادگاه بدوی ظرف دو روز از تاریخ وصول دادخواست و ضمائم آن و یا پس از رفع نقص، یک نسخه از دادخواست و‌پیوست‌های آن را برای طرف دعوا می‌فرستد که ظرف ده رو"
+   },
+   "question_fix": "question reworded 2026-10-12: article 346 is the appeal-stage reply period, not the first-instance one",
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-exe-34",
+   "question": "بعد از ابلاغ اجراییه، محکوم‌علیه چند روز فرصت دارد حکم را اجرا کند؟",
+   "expected_law": "قانون اجرای احکام مدنی",
+   "expected_articles": [
+    "34"
+   ],
+   "law_any": [
+    "قانون اجرای احکام مدنی"
+   ],
+   "articles": [
+    "34"
+   ],
+   "must_include": [
+    "ده روز"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/97591"
+   },
+   "verified_against": {
+    "article_label": "ماده 34",
+    "quote": "همین که اجراییه به محکوم‌علیه ابلاغ شد محکوم‌علیه مکلف است ظرف ده روز مفاد آن را به موقع اجرا بگذارد یا ترتیبی برای پرداخت‌محکوم به بدهد یا مالی معرفی کند که اج"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-exe-2",
+   "question": "حکم دادگاه چه زمانی به مرحله اجرا گذاشته می‌شود؟",
+   "expected_law": "قانون اجرای احکام مدنی",
+   "expected_articles": [
+    "2"
+   ],
+   "law_any": [
+    "قانون اجرای احکام مدنی"
+   ],
+   "articles": [
+    "2"
+   ],
+   "must_include": [
+    "ابلاغ",
+    "کتبا"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "easy",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/97591"
+   },
+   "verified_against": {
+    "article_label": "ماده 2",
+    "quote": "احکام دادگاههای دادگستری وقتی به موقع اجرا گذارده می‌شود که به محکوم‌علیه یا وکیل یا قائم‌مقام قانونی او ابلاغ شده و محکوم‌له یا‌نماینده و یا قائم‌مقام قانونی ا"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-fin-3",
+   "question": "اگر محکوم‌علیه مالی نداشته باشد آیا حبس می‌شود و چه مهلتی برای دعوی اعسار دارد؟",
+   "expected_law": "قانون نحوه اجرای محکومیت‌های مالی",
+   "expected_articles": [
+    "3"
+   ],
+   "law_any": [
+    "قانون نحوه اجرای محکومیت‌های مالی"
+   ],
+   "articles": [
+    "3"
+   ],
+   "must_include": [
+    "سی روز",
+    "حبس"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/932384"
+   },
+   "verified_against": {
+    "article_label": "ماده 3",
+    "quote": "ـ اگر استیفای محکومٌ به از طرق مذکور در این قانون ممکن نگردد محکومٌ علیه به تقاضای محکومٌ له تا زمان اجرای حکم یا پذیرفته شدن ادعای اعسار او یا جلب رضایت محکومٌ"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-reg-46",
+   "question": "ثبت اسناد در چه مواردی اجباری است؟",
+   "expected_law": "قانون ثبت اسناد و املاک",
+   "expected_articles": [
+    "46"
+   ],
+   "law_any": [
+    "قانون ثبت اسناد و املاک"
+   ],
+   "articles": [
+    "46"
+   ],
+   "must_include": [
+    "اختیاری",
+    "ساغر"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "registration",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/92284"
+   },
+   "verified_against": {
+    "article_label": "ماده 46",
+    "quote": "ثبت اسناد اختیاری است مگر در موارد ذیل: 1) کلیه عقود و معاملات راجع به عین یا منافع املاکی که قبلاً در دفتر املاک ثبت شده باشد. 2) کلیه معاملات راجع به حقوقی که"
+   },
+   "verified_by": "auto:article_text",
+   "must_include_added_2026_10_21": [
+    "ساغر"
+   ],
+   "lawyer_round2": {
+    "item": "Q20",
+    "answered_at": "2026-10-21",
+    "answer": "سامانهٔ جدید «ساغر» برای ثبت املاک راه‌اندازی شده و ثبت قولنامه برای ملک دارای سابقهٔ ثبتی اجباری است (نیازمند بررسی با ابلاغیهٔ رسمی).",
+    "kind": "practice note (not article text); see docs/LAWYER_ANSWERS_2026-10-21.md"
+   }
+  },
+  {
+   "id": "lg-reg-48",
+   "question": "اگر سندی که باید ثبت شود به ثبت نرسد چه می‌شود؟",
+   "expected_law": "قانون ثبت اسناد و املاک",
+   "expected_articles": [
+    "48"
+   ],
+   "law_any": [
+    "قانون ثبت اسناد و املاک"
+   ],
+   "articles": [
+    "48"
+   ],
+   "must_include": [
+    "پذیرفته نخواهد شد"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "registration",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/92284"
+   },
+   "verified_against": {
+    "article_label": "ماده 48",
+    "quote": "سندی که مطابق مواد فوق باید به ثبت برسد و به ثبت نرسیده در هیچ یک از ادارات و محاکم پذیرفته نخواهد شد."
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-soc-76",
+   "question": "شرایط دریافت مستمری بازنشستگی تأمین اجتماعی از نظر سن و سابقه چیست؟",
+   "expected_law": "قانون تأمین اجتماعی",
+   "expected_articles": [
+    "76"
+   ],
+   "law_any": [
+    "قانون تأمین اجتماعی"
+   ],
+   "articles": [
+    "76"
+   ],
+   "must_include": [
+    "ده سال",
+    "شصت سال",
+    "پنجاه و پنج سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "social security",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "needs_lawyer",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/97316"
+   },
+   "verified_against": {
+    "article_label": "ماده 76",
+    "quote": "مشمولین این قانون در صورت حائزبودن شرایط زیر حق استفاده از مستمری بازنشستگی را خواهند داشت. 1- حداقل ده سال حق بیمه مقرر را قبل از تاریخ تقاضای بازنشستگی پرداخت"
+   },
+   "needs_lawyer_reason": "ماده ۷۶ تنها یکی از مسیرهای بازنشستگی است و سن و سابقه ممکن است با قوانین و آیین‌نامه‌های بعدی تغییر کرده باشد.",
+   "lawyer_note": "وکیل پاسخ قطعی ندارد (بند ۷، ۲۰۲۶-۱۰-۱۳)؛ پاسخ‌های بازنشستگی تذکر استعلام از سازمان تأمین اجتماعی دارند."
+  },
+  {
+   "id": "lg-soc-4",
+   "question": "چه کسانی مشمول قانون تأمین اجتماعی هستند؟",
+   "expected_law": "قانون تأمین اجتماعی",
+   "expected_articles": [
+    "4"
+   ],
+   "law_any": [
+    "قانون تأمین اجتماعی"
+   ],
+   "articles": [
+    "4"
+   ],
+   "must_include": [
+    "صاحبان حرف و مشاغل آزاد"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "social security",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/97316"
+   },
+   "verified_against": {
+    "article_label": "ماده 4",
+    "quote": "الف - افرادی که به هر عنوان در مقابل دریافت مزد یا حقوق کار می‌کنند. ب - صاحبان حرف و مشاغل آزاد. ج - دریافت‌کنندگان مستمریهای بازنشستگی، ازکارافتادگی و فوت. تب"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-fam-22",
+   "question": "تا چه میزان مهریه با حبس زوج قابل وصول است؟",
+   "expected_law": "قانون حمایت خانواده",
+   "expected_articles": [
+    "22"
+   ],
+   "law_any": [
+    "قانون حمایت خانواده"
+   ],
+   "articles": [
+    "22"
+   ],
+   "must_include": [
+    "یکصد و ده سکّه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "family",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "lawyer_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/840814"
+   },
+   "verified_against": {
+    "article_label": "ماده 22",
+    "quote": "ـ هرگاه مهریه در زمان وقوع عقد تا یکصد و ده سکّه تمام بهارآزادی یا معادل آن باشد، وصول آن مشمول مقررات ماده (۲) قانون اجرای محکومیت های مالی است. چنانچه مهریه، "
+   },
+   "lawyer_answer": "ماده ۲۲ قانون حمایت خانواده (۱۱۰ سکه) در حال حاضر معتبر است و فقط به حبس مربوط است: با پرداخت ۱۱۰ سکه برای باقی‌مانده حبس نیست؛ اقساط پرداخت‌نشده در محدودهٔ ۱۱۰ سکه حبس را حفظ می‌کند (بند ۶، ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
+  },
+  {
+   "id": "lg-fam-27",
+   "question": "آیا دادگاه در دعوای طلاق باید موضوع را به داوری ارجاع دهد؟",
+   "expected_law": "قانون حمایت خانواده",
+   "expected_articles": [
+    "27"
+   ],
+   "law_any": [
+    "قانون حمایت خانواده"
+   ],
+   "articles": [
+    "27"
+   ],
+   "must_include": [
+    "داوری",
+    "طلاق توافقی"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "family",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/840814"
+   },
+   "verified_against": {
+    "article_label": "ماده 27",
+    "quote": "ـ در کلیه موارد درخواست طلاق، به جز طلاق توافقی، دادگاه باید به منظور ایجاد صلح و سازش موضوع را به داوری ارجاع کند. دادگاه در این موارد باید با توجه به نظر داور"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-fam-28",
+   "question": "هر یک از زوجین چه مدت برای معرفی داور فرصت دارند و داور چه شرایطی باید داشته باشد؟",
+   "expected_law": "قانون حمایت خانواده",
+   "expected_articles": [
+    "28"
+   ],
+   "law_any": [
+    "قانون حمایت خانواده"
+   ],
+   "articles": [
+    "28"
+   ],
+   "must_include": [
+    "یک هفته",
+    "سی سال"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "family",
+   "difficulty": "hard",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/840814"
+   },
+   "verified_against": {
+    "article_label": "ماده 28",
+    "quote": "ـ پس از صدور قرار ارجاع امر به داوری، هریک از زوجین مکلفند ظرف یک هفته از تاریخ ابلاغ یک نفر از اقارب متأهل خود را که حداقل سی سال داشته و آشنا به مسائل شرعی و "
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-fam-24",
+   "question": "ثبت طلاق در دفترخانه چه زمانی مجاز است؟",
+   "expected_law": "قانون حمایت خانواده",
+   "expected_articles": [
+    "24"
+   ],
+   "law_any": [
+    "قانون حمایت خانواده"
+   ],
+   "articles": [
+    "24"
+   ],
+   "must_include": [
+    "گواهی عدم امکان سازش"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون صدور چک"
+   ],
+   "category": "family",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/840814"
+   },
+   "verified_against": {
+    "article_label": "ماده 24",
+    "quote": "ـ ثبت طلاق و سایر موارد انحلال نکاح و نیز اعلام بطلان نکاح یا طلاق در دفاتر رسمی ازدواج و طلاق حسب مورد پس از صدور گواهی عدم امکان سازش یا حکم مربوط از سوی دادگ"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-dsp-12",
+   "question": "شورای حل اختلاف تا چه سقفی به دعاوی مالی رسیدگی می‌کند؟",
+   "expected_law": "قانون شوراهای حل اختلاف",
+   "expected_articles": [
+    "12"
+   ],
+   "law_any": [
+    "قانون شوراهای حل اختلاف"
+   ],
+   "articles": [
+    "12"
+   ],
+   "must_include": [
+    "دعاوی مالی تا نصاب"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "lawyer_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/1787453"
+   },
+   "verified_against": {
+    "article_label": "ماده 12",
+    "quote": "۱ـ دعاوی مالی تا نصاب یک ­ میلیارد (۱.۰۰۰.۰۰۰.۰۰۰) ریال تبصره ـ رئیس قوه قضائیه می‏تواند نصاب مذکور در این بند را هر سه سال یک بار با رعایت تناسب تغییر شاخص سال"
+   },
+   "lawyer_answer": "سقف فعلی دعاوی مالی دادگاه صلح همان یک میلیارد ریال (۱۰۰ میلیون تومان) است؛ بالاتر از آن دادگاه عمومی صالح است (بند ۴ برگهٔ وکیل، پاسخ ۲۰۲۶-۱۰-۱۳).",
+   "lawyer_answered_at": "2026-10-13"
+  },
+  {
+   "id": "lg-liab-1",
+   "question": "چه کسی مسئول جبران خسارت ناشی از لطمه به جان یا مال دیگری است؟",
+   "expected_law": "قانون مسئولیت مدنی",
+   "expected_articles": [
+    "1"
+   ],
+   "law_any": [
+    "قانون مسئولیت مدنی"
+   ],
+   "articles": [
+    "1"
+   ],
+   "must_include": [
+    "مسئول جبران خسارت"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "civil",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/95202"
+   },
+   "verified_against": {
+    "article_label": "ماده 1",
+    "quote": "هر کس بدون مجوز قانونی عمداً یا در نتیجه بی‌احتیاطی به جان یا سلامتی یا مال یا آزادی یا حیثیت یا شهرت تجارتی یا به هر حق دیگر‌که به موجب قانون برای افراد ایجاد "
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-liab-12",
+   "question": "آیا کارفرما مسئول خسارتی است که کارگرش در حین کار وارد می‌کند؟",
+   "expected_law": "قانون مسئولیت مدنی",
+   "expected_articles": [
+    "12"
+   ],
+   "law_any": [
+    "قانون مسئولیت مدنی"
+   ],
+   "articles": [
+    "12"
+   ],
+   "must_include": [
+    "کارفرمایانی",
+    "مسئول"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "civil",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/95202"
+   },
+   "verified_against": {
+    "article_label": "ماده 12",
+    "quote": "کارفرمایانی که مشمول قانون کار هستند مسئول جبران خساراتی می‌باشند که از طرف کارکنان اداری و یا کارگران آنان در حین انجام کار یا‌به مناسبت آن وارد شده است مگر ای"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-liab-4",
+   "question": "دادگاه در چه مواردی می‌تواند میزان خسارت را کاهش دهد؟",
+   "expected_law": "قانون مسئولیت مدنی",
+   "expected_articles": [
+    "4"
+   ],
+   "law_any": [
+    "قانون مسئولیت مدنی"
+   ],
+   "articles": [
+    "4"
+   ],
+   "must_include": [
+    "تخفیف"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "civil",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/95202"
+   },
+   "verified_against": {
+    "article_label": "ماده 4",
+    "quote": "دادگاه می‌تواند میزان خسارت را در مورد زیر تخفیف دهد: 1 - هر گاه پس از وقوع خسارت واردکننده زیان به نحو مؤثری به زیان‌دیده کمک و مساعدت کرده باشد. 2 - هر گاه وق"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-crt-3",
+   "question": "حوزه قضایی چیست و رسیدگی به امور مدنی و جزایی در آن با کدام دادگاه است؟",
+   "expected_law": "قانون تشکیل دادگاه‌های عمومی و انقلاب",
+   "expected_articles": [
+    "3"
+   ],
+   "law_any": [
+    "قانون تشکیل دادگاه‌های عمومی و انقلاب"
+   ],
+   "articles": [
+    "3"
+   ],
+   "must_include": [
+    "حوزه قضایی"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "civil procedure",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/90416"
+   },
+   "verified_against": {
+    "article_label": "ماده 3",
+    "quote": "با تأسیس دادگاه‌های عمومی در هر حوزه قضایی رسیدگی به کلیه امور مدنی و جزایی و امور حسبیه با لحاظ قلمرو محلی با دادگاه‌های‌مزبور خواهد بود. تبصره 1 - حوزه قضایی "
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-red-3",
+   "question": "حبس ابد غیرحدی طبق قانون کاهش مجازات حبس تعزیری به چه چیزی تبدیل می‌شود؟",
+   "expected_law": "قانون کاهش مجازات حبس تعزیری",
+   "expected_articles": [
+    "3"
+   ],
+   "law_any": [
+    "قانون کاهش مجازات حبس تعزیری"
+   ],
+   "articles": [
+    "3"
+   ],
+   "must_include": [
+    "حبس درجه یک"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون کار",
+    "قانون ثبت اسناد و املاک"
+   ],
+   "category": "criminal",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/1554540"
+   },
+   "verified_against": {
+    "article_label": "ماده 3",
+    "quote": "ـ یک تبصره به شرح زیر به عنوان تبصره (۶) به ماده (۱۹) قانون مجازات اسلامی مصوب ۱۳۹۲/۲/۱ الحاق می شود: تبصره۶ ـ تمام حبس­های ابد غیرحدی مقرر در قانون به حبس درجه"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-lab-7",
+   "question": "قرارداد کار چیست و اگر مدت در قرارداد ذکر نشود چه می‌شود؟",
+   "expected_law": "قانون کار",
+   "expected_articles": [
+    "7"
+   ],
+   "law_any": [
+    "قانون کار"
+   ],
+   "articles": [
+    "7"
+   ],
+   "must_include": [
+    "دائمی تلقی می‌شود"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "labor",
+   "difficulty": "easy",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/99612"
+   },
+   "verified_against": {
+    "article_label": "ماده 7",
+    "quote": "قرارداد کار عبارت است از قرارداد کتبی یا شفاهی که به موجب آن کارگر در قبال دریافت حق‌السعی کاری را برای مدت موقت یا مدت غیر‌موقت برای کارفرما انجام می‌دهد. تبصر"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-lab-27",
+   "question": "کارفرما در چه صورتی می‌تواند کارگر را به دلیل قصور اخراج کند و حق سنوات چقدر است؟",
+   "expected_law": "قانون کار",
+   "expected_articles": [
+    "27"
+   ],
+   "law_any": [
+    "قانون کار"
+   ],
+   "articles": [
+    "27"
+   ],
+   "must_include": [
+    "شورای اسلامی کار",
+    "یک ماه آخرین حقوق"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "labor",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/99612"
+   },
+   "verified_against": {
+    "article_label": "ماده 27",
+    "quote": "هر گاه کارگر در انجام وظائف محوله قصور ورزد و یا آیین‌نامه‌های انضباطی کارگاه را پس از تذکرات کتبی نقض نماید کارفرما حق دارد در‌صورت اعلام نظر مثبت شورای اسلامی"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-lab-41",
+   "question": "حداقل دستمزد کارگران را چه نهادی هر سال تعیین می‌کند؟",
+   "expected_law": "قانون کار",
+   "expected_articles": [
+    "41"
+   ],
+   "law_any": [
+    "قانون کار"
+   ],
+   "articles": [
+    "41"
+   ],
+   "must_include": [
+    "شورای عالی کار"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "labor",
+   "difficulty": "medium",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/99612"
+   },
+   "verified_against": {
+    "article_label": "ماده 41",
+    "quote": "شورای عالی کار همه ساله موظف است، میزان حداقل مزد کارگران را برای نقاط مختلف کشور و یا صنایع مختلف با توجه به معیارهای‌ذیل تعیین نماید: 1 - حداقل مزد کارگران با"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-lab-51",
+   "question": "حداکثر ساعت کار روزانه و هفتگی کارگر چقدر است؟",
+   "expected_law": "قانون کار",
+   "expected_articles": [
+    "51"
+   ],
+   "law_any": [
+    "قانون کار"
+   ],
+   "articles": [
+    "51"
+   ],
+   "must_include": [
+    "8 ساعت",
+    "44 ساعت"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "labor",
+   "difficulty": "medium",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/99612"
+   },
+   "verified_against": {
+    "article_label": "ماده 51",
+    "quote": "ساعت کار در این قانون مدت زمانی است که کارگر نیرو یا وقت خود را به منظور انجام کار در اختیار کارفرما قرار می‌دهد. به غیر از‌مواردی که در این قانون مستثنی شده اس"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-lab-56",
+   "question": "فوق‌العاده نوبت کاری برای کارگران شب‌کار و عصر و صبح چند درصد است؟",
+   "expected_law": "قانون کار",
+   "expected_articles": [
+    "56"
+   ],
+   "law_any": [
+    "قانون کار"
+   ],
+   "articles": [
+    "56"
+   ],
+   "must_include": [
+    "22.5",
+    "15"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "labor",
+   "difficulty": "hard",
+   "held_out": false,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/99612"
+   },
+   "verified_against": {
+    "article_label": "ماده 56",
+    "quote": "کارگری که در طول ماه به طور نوبتی کار می‌کند و نوبتهای کار وی در صبح و عصر واقع می‌شود 10% و چنانچه نوبتهای در صبح و عصر‌و شب قرار گیرد، 15% و در صورتی که نوبته"
+   },
+   "verified_by": "auto:article_text"
+  },
+  {
+   "id": "lg-lab-64",
+   "question": "مرخصی استحقاقی سالانه کارگر چقدر است؟",
+   "expected_law": "قانون کار",
+   "expected_articles": [
+    "64"
+   ],
+   "law_any": [
+    "قانون کار"
+   ],
+   "articles": [
+    "64"
+   ],
+   "must_include": [
+    "یک ماه",
+    "چهار روز جمعه"
+   ],
+   "must_not_include": [
+    "Gemini",
+    "جمینای",
+    "ChatGPT",
+    "OpenAI",
+    "DeepSeek",
+    "Claude",
+    "به عنوان یک مدل زبانی",
+    "قانون صدور چک",
+    "قانون روابط موجر و مستاجر"
+   ],
+   "category": "labor",
+   "difficulty": "easy",
+   "held_out": true,
+   "status": "text_verified",
+   "source": {
+    "file": "data/legal/phase1_canonical.jsonl",
+    "law_id": null,
+    "source": "owner-supplied file",
+    "source_tier": "official",
+    "source_url": "https://rc.majlis.ir/fa/law/show/99612"
+   },
+   "verified_against": {
+    "article_label": "ماده 64",
+    "quote": "مرخصی استحقاقی سالانه کارگران با استفاده از مزد و احتساب چهار روز جمعه، جمعاً یک ماه است. سایر روزهای تعطیل جزء ایام‌مرخصی محسوب نخواهد شد. برای کار کمتر از یک "
+   },
+   "verified_by": "auto:article_text"
+  }
+ ]
+}

@@ -16,6 +16,16 @@ Source: the lawyer's answers of 2026-10-13 to docs/legal/LAWYER_REVIEW_GATE_FA.m
           deterministic, reviewed in git and testable offline.
 * Item 6  social security retirement: fixed disclaimer to check with the social security organisation.
 
+Round 2 (lawyer answers of 2026-10-21, docs/LAWYER_ANSWERS_2026-10-21.md), same mechanism:
+
+* Q1/Q2   short imprisonment: statutory facts (IPC 1392 art 65-67, 70) and the lawyer's practice note are injected
+          into the prompt; a fixed notice is appended when the reply never mentions the alternative punishments.
+* Q15     cheques: art 11 deadlines (6 + 6 months), ruling 812 and the lawyer's practice notes.
+* Q18     filing: practice note that petitions/complaints are filed through the judicial electronic services offices.
+* Q20     property transactions: the new Saghar registration system (practice note, official notice still unchecked).
+
+Statutory facts are worded as such; everything that comes only from the lawyer is worded «طبق رویهٔ عملی».
+
 Wording here is lawyer-reviewed text; change it only with a new lawyer answer.
 """
 
@@ -55,9 +65,76 @@ SOCIAL_SECURITY_DISCLAIMER_FA = (
     "این پاسخ جایگزین نظر آن سازمان نیست."
 )
 
+# ---- round 2 (2026-10-21) -------------------------------------------------------------------
+SHORT_PRISON_FACT = (
+    "پرسش دربارهٔ حبس کوتاه‌مدت یا مجازات جایگزین حبس است. متن قانون (قانون مجازات اسلامی ۱۳۹۲): طبق ماده 65 "
+    "مرتکبان جرایم عمدی که حداکثر مجازات قانونی آنها سه ماه حبس است به‌جای حبس به مجازات جایگزین حبس محکوم "
+    "می‌شوند؛ ماده 66 همین قاعده را برای حداکثر «نود و یک روز تا شش ماه» دارد، مگر آنکه متهم سابقهٔ محکومیت "
+    "مؤثر داشته باشد؛ ماده 67 برای حداکثر بیش از شش ماه تا یک سال، اعمال مجازات جایگزین را اختیاری دادگاه می‌داند؛ "
+    "ماده 70: دادگاه ضمن تعیین مجازات جایگزین، مدت حبس را هم تعیین می‌کند تا در صورت تعذر اجرا اعمال شود. "
+    "طبق رویهٔ عملی (نظر وکیل، نه متن قانون): حکم حبس کمتر از سه ماه صادر نمی‌شود و باید به مجازات جایگزین تبدیل شود؛ "
+    "اگر حداقل قانونی کمتر از سه ماه باشد، قاضی کمتر از 91 روز حبس تعیین نمی‌کند؛ و در عمل برای جرایمی مانند تهدید "
+    "و توهین معمولاً جزای نقدی به‌جای حبس یا شلاق حکم داده می‌شود. این بخش رویه را با برچسب «طبق رویهٔ عملی» بگو."
+)
+SHORT_PRISON_NOTICE_FA = (
+    "توجه: طبق مواد 65 تا 67 و 70 قانون مجازات اسلامی ۱۳۹۲، در جرایم عمدی با حداکثر مجازات تا سه ماه حبس، "
+    "دادگاه به‌جای حبس به مجازات جایگزین حبس (مانند جزای نقدی، دوره مراقبت یا خدمات عمومی) حکم می‌دهد و برای "
+    "حداکثر بیش از سه ماه تا شش ماه نیز اصل بر مجازات جایگزین است. طبق رویهٔ عملی، حکم حبس کمتر از سه ماه صادر "
+    "نمی‌شود و در تهدید و توهین معمولاً جزای نقدی تعیین می‌شود."
+)
+
+CHEQUE_FACT = (
+    "پرسش دربارهٔ چک است. متن قانون: طبق ماده 11 قانون صدور چک (در برخی متون ماده 10)، اگر دارنده تا شش ماه از "
+    "تاریخ صدور چک برای وصول به بانک مراجعه نکند یا ظرف شش ماه از تاریخ گواهی عدم پرداخت شکایت نکند، دیگر حق شکایت "
+    "کیفری ندارد؛ این مهلت فقط شکایت کیفری را محدود می‌کند. طبق ماده 13 (در برخی متون ماده 12)، چک سفیدامضا، "
+    "مشروط یا تضمینی قابل تعقیب کیفری نیست. طبق رأی وحدت رویهٔ 812 دیوان عالی کشور مبدأ خسارت تأخیر تأدیه چک "
+    "تاریخ چک است. طبق رویهٔ عملی (نظر وکیل): مرجع شکایت کیفری چک دادسرا است؛ در چک‌های صیادی پس از عدم پرداخت "
+    "دعوای حقوقی هم دنبال می‌شود؛ چک‌های عادی قدیمی که مهلت شش‌ماهه را از دست داده‌اند قابل پیگرد کیفری نیستند ولی "
+    "اصل وجه و خسارت تأخیر از تاریخ چک در دعوای حقوقی قابل مطالبه است؛ دعاوی تا سقف نصاب دادگاه صلح (طبق جدول "
+    "صلاحیت) در دادگاه صلح و بالاتر از آن در دادگاه عمومی حقوقی رسیدگی می‌شود."
+)
+CHEQUE_NOTICE_FA = (
+    "توجه (چک): شکایت کیفری فقط برای چکی ممکن است که تضمینی، مشروط یا سفیدامضا نباشد، ظرف شش ماه از تاریخ چک "
+    "برای وصول به بانک ارائه و برگشت شود و ظرف شش ماه از تاریخ گواهی عدم پرداخت به دادسرا شکایت شود (ماده 11 "
+    "قانون صدور چک). پس از این مهلت راه کیفری بسته است ولی دعوای حقوقی برای اصل وجه و خسارت تأخیر از تاریخ چک "
+    "باز می‌ماند (رأی وحدت رویهٔ 812)؛ طبق رویهٔ عملی در چک‌های صیادی پس از عدم پرداخت مسیر حقوقی دنبال می‌شود."
+)
+
+FILING_FACT = (
+    "طبق رویهٔ عملی (نظر وکیل): هر دادخواست یا شکوائیه باید از طریق دفاتر خدمات الکترونیک قضایی ثبت شود؛ "
+    "در پاسخ به پرسش دربارهٔ ثبت یا تقدیم دعوا و شکایت، این نکته را بگو. (ماده 655 تبصره 2 قانون آیین دادرسی "
+    "کیفری قوه قضاییه را به ایجاد این دفاتر مجاز کرده است.)"
+)
+FILING_NOTICE_FA = (
+    "توجه: طبق رویهٔ عملی، ثبت دادخواست و شکوائیه از طریق دفاتر خدمات الکترونیک قضایی انجام می‌شود "
+    "(مبنای ایجاد این دفاتر: ماده 655 قانون آیین دادرسی کیفری)."
+)
+
+PROPERTY_FACT = (
+    "پرسش دربارهٔ معامله یا ثبت ملک است. طبق اعلام وکیل (رویهٔ عملی؛ متن قانونی آن در پایگاه نیست و «نیازمند "
+    "بررسی» است): سامانهٔ جدید «ساغر» برای ثبت املاک راه‌اندازی شده و ثبت قولنامه‌ها (سند عادی) برای ملک‌هایی که "
+    "سابقهٔ ثبتی دارند اکنون اجباری است. حتماً این نکته را با همین برچسب بگو و آن را قطعی‌تر از این نقل نکن."
+)
+PROPERTY_NOTICE_FA = (
+    "توجه: طبق اعلام وکیل (رویهٔ عملی، نیازمند بررسی با ابلاغیهٔ رسمی)، سامانهٔ جدید «ساغر» برای ثبت املاک "
+    "راه‌اندازی شده و ثبت قولنامه‌ها برای ملک‌های دارای سابقهٔ ثبتی اجباری است."
+)
+
 _LEASE_TRIGGERS = ("اجاره", "مستاجر", "موجر", "اجاره نامه", "اجاره بها", "مورد اجاره")
 _MAHR_TRIGGERS = ("مهریه", "مهر ", "سکه")
 _RETIRE_TRIGGERS = ("بازنشست", "مستمری")
+_PRISON_WORDS = ("حبس", "زندان")
+# duration words only count together with a prison word; offence words (where the lawyer says courts fine
+# instead of jailing, items 66/67) count alone because the user often asks «مجازات توهین چیست؟» without «حبس»
+_SHORT_PRISON_MARKERS = ("سه ماه", "3 ماه", "نود و یک", "91 روز", "کوتاه")
+_SHORT_PRISON_OFFENCES = ("توهین", "فحاشی", "تهدید", "هجو", "مزاحمت", "افترا", "نشر اکاذیب")
+_ALT_PUNISHMENT_TRIGGERS = ("مجازات جایگزین", "جایگزین حبس", "مجازاتهای جایگزین", "مجازات های جایگزین")
+_CHEQUE_TOKENS = frozenset({"چک", "چکی", "چکها", "چکهای", "چک ها", "چکم", "صیادی"})
+_FILING_TRIGGERS = ("دادخواست", "شکوایی", "شکایت", "طرح دعو", "ثبت دعو", "اقامه دعو")
+_PROPERTY_TRIGGERS = ("قولنامه", "مبایعه", "ثبت ملک", "ثبت املاک", "سند رسمی", "سند ملک", "سند عادی",
+                      "خرید ملک", "فروش ملک", "خرید خانه", "فروش خانه", "خرید آپارتمان", "فروش آپارتمان",
+                      "خرید زمین", "فروش زمین", "معامله ملک", "انتقال ملک", "انتقال سند", "ثبت اسناد", "ثبت سند",
+                      "املاک")
 # the lease reply is acceptable when it says the governing law depends on date AND type of contract
 _LEASE_MARKERS = (("بستگی",), ("تاریخ",), ("نوع",))
 
@@ -84,6 +161,32 @@ def is_retirement_question(text: Any) -> bool:
     return any(t in h for t in _RETIRE_TRIGGERS)
 
 
+def is_short_prison_question(text: Any) -> bool:
+    h = _n(text)
+    if any(_n(t).strip() in h for t in _ALT_PUNISHMENT_TRIGGERS):
+        return True
+    if any(o in h for o in _SHORT_PRISON_OFFENCES):
+        return True
+    return any(w in h for w in _PRISON_WORDS) and any(m in h for m in _SHORT_PRISON_MARKERS)
+
+
+def is_cheque_question(text: Any) -> bool:
+    return bool(set(_n(text).split()) & _CHEQUE_TOKENS)
+
+
+def is_filing_question(text: Any) -> bool:
+    h = _n(text)
+    return any(t in h for t in _FILING_TRIGGERS)
+
+
+def is_property_question(text: Any) -> bool:
+    """Property sale/registration questions; leases are a separate rule (item 4)."""
+    h = _n(text)
+    if is_lease_question(text):
+        return False
+    return any(_n(t).strip() in h for t in _PROPERTY_TRIGGERS)
+
+
 def prompt_addenda(user_text: Any) -> list[str]:
     """Prompt parts to append for ``user_text`` (empty list when no rule triggers)."""
     out: list[str] = []
@@ -91,6 +194,14 @@ def prompt_addenda(user_text: Any) -> list[str]:
         out.append(LEASE_ADDENDUM)
     if is_mahr_question(user_text):
         out.append(MAHR_FACT)
+    if is_short_prison_question(user_text):
+        out.append(SHORT_PRISON_FACT)
+    if is_cheque_question(user_text):
+        out.append(CHEQUE_FACT)
+    if is_filing_question(user_text):
+        out.append(FILING_FACT)
+    if is_property_question(user_text):
+        out.append(PROPERTY_FACT)
     return out
 
 
@@ -115,6 +226,15 @@ def notice_lines(reply: Any, user_text: Any, rows: Iterable[Any] = ()) -> list[s
         lines.append(LEASE_NOTICE_FA)
     if is_retirement_question(user_text):
         lines.append(SOCIAL_SECURITY_DISCLAIMER_FA)
+    hr = _n(reply)
+    if is_short_prison_question(user_text) and "جایگزین" not in hr:
+        lines.append(SHORT_PRISON_NOTICE_FA)
+    if is_cheque_question(user_text) and not any(m in hr for m in ("شش ماه", "6 ماه")):
+        lines.append(CHEQUE_NOTICE_FA)
+    if is_filing_question(user_text) and "دفاتر خدمات الکترونیک قضایی" not in hr:
+        lines.append(FILING_NOTICE_FA)
+    if is_property_question(user_text) and "ساغر" not in hr:
+        lines.append(PROPERTY_NOTICE_FA)
     current = str(reply or "")
     return [ln for ln in lines if ln not in current]
 

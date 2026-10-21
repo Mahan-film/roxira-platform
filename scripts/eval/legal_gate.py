@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Objective accuracy gate for Smart Judge legal answers (STRATEGY_GAP_2026-10-12 L1).
 
-Question set: data/eval/chat_golden/legal_gate_2026-10-12.json (70 cases, 20 held out;
+Question set: data/eval/chat_golden/legal_gate_2026-10-21.json (70 cases, 20 held out;
 status text_verified = article text checked mechanically, needs_lawyer = waits for the lawyer; see
 docs/legal/LAWYER_REVIEW_GATE_FA.md).
 
@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SET = ROOT / "data" / "eval" / "chat_golden" / "legal_gate_2026-10-12.json"
+DEFAULT_SET = ROOT / "data" / "eval" / "chat_golden" / "legal_gate_2026-10-21.json"
 DEFAULT_BASELINE = ROOT / "data" / "eval" / "chat_golden" / "legal_gate_baseline.json"
 MARKER = "LEGAL_GATE_JSON"
 KS = (1, 3, 5, 10)

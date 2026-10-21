@@ -109,7 +109,7 @@ Required before the first deploy of the Oct-2026 changes: `ADMIN_HEALTH_KEY`, `G
 
 After a successful smoke test, `deploy` runs `scripts/eval/legal_gate.py retrieval` on the server (a one-off
 container beside Qdrant, no LLM, 0 USD) and prints `retrieval@5` for the 70 questions of
-`data/eval/chat_golden/legal_gate_2026-10-12.json`. It logs a `WARNING` when retrieval@5 is more than 5 points below
+`data/eval/chat_golden/legal_gate_2026-10-21.json`. It logs a `WARNING` when retrieval@5 is more than 5 points below
 `data/eval/chat_golden/legal_gate_baseline.json`. It never blocks or rolls back a deploy; `DEPLOY_EVAL_GATE=0` skips it.
 
 Capture or refresh the baseline (needs the gate script already deployed to the server):
