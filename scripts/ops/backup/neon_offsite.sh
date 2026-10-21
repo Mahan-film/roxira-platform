@@ -57,10 +57,10 @@ done
 # --- dry run: print the plan (no URL needed, nothing executed) ---------------------------------
 if [ "$DRY_RUN" = "1" ]; then
   echo "[dry-run] databases: $DBS  (source container: $PG_CONTAINER)"
-  echo "[dry-run] targets  : ${TARGETS[*]:-none configured}"
+  if [ "${#TARGETS[@]}" -gt 0 ]; then echo "[dry-run] targets  : ${TARGETS[*]}"; else echo "[dry-run] targets  : none configured"; fi
   for db in $DBS; do
     printf '[dry-run] dump    : '; build_pg_dump_exec "$PG_CONTAINER" "$db" | show_cmd; echo "> \$WORK/$db.dump"
-    for name in "${TARGETS[@]}"; do
+    for name in ${TARGETS[@]+"${TARGETS[@]}"}; do
       printf '[dry-run] restore : '; build_pg_restore_run | show_cmd; echo "< \$WORK/$db.dump   (target $name, database bk_$db)"
       echo "[dry-run] verify  : count(*) of the 10 biggest tables, tolerance max(${TOL_ABS}, ${TOL_PCT}%)"
     done
@@ -71,7 +71,7 @@ fi
 
 # --- preflight ---------------------------------------------------------------------------------
 [ "${#TARGETS[@]}" -gt 0 ] || die "no Neon backup URL set (NEON_BACKUP_URL[_2..4]; scripts/ops/set_server_env.sh NEON_BACKUP_URL)"
-for name in "${TARGETS[@]}"; do
+for name in ${TARGETS[@]+"${TARGETS[@]}"}; do
   python3 -I "$OFFSITE_TOOLS" check-url "$name"
   rc=$?
   if [ "$rc" = 3 ]; then die "$name is a pooler URL; use the DIRECT connection string (host without -pooler)"; fi
@@ -174,7 +174,7 @@ backup_one() { # <db>; returns non-zero when no target could take the database
   fi
 
   local name any_ok=0
-  for name in "${TARGETS[@]}"; do
+  for name in ${TARGETS[@]+"${TARGETS[@]}"}; do
     if restore_into_target "$db" "$name" "$dump" "$WORK/$db.count.sql" "$WORK/$db.src.tsv"; then
       any_ok=1
     else
@@ -192,7 +192,7 @@ done
 # and no un-dumped database; individual spare-account failures are reported but not fatal.
 GOOD_TARGETS=()
 FAILED_TARGETS=()
-for name in "${TARGETS[@]}"; do
+for name in ${TARGETS[@]+"${TARGETS[@]}"}; do
   failed=0
   if [ "${#TARGET_FAILS[@]}" -gt 0 ]; then
     for entry in "${TARGET_FAILS[@]}"; do
