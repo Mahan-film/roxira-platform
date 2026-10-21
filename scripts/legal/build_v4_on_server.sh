@@ -117,7 +117,18 @@ EXTRA_ENV=()
 # network roxira_embeddings is on; we enable TEI only when the two share a network. TEI keeps
 # no model in-process, so the build container is capped at --memory 2g.
 EMBED_ARGS=()
-if [ -n "${EMBEDDING_URL:-}" ]; then
+MODAL_SETUP=0
+# Optional batch embeddings on Modal GPU (docs/infra/CLOUD_ACCOUNTS_PLAN.md). Default stays TEI.
+# Tokens are passed by NAME only (-e NAME inherits from this shell), never written to disk or logs.
+if [ "${EMBED_BACKEND:-tei}" = modal ]; then
+  [ -n "${MODAL_TOKEN_ID:-}" ] && [ -n "${MODAL_TOKEN_SECRET:-}" ] ||
+    die "EMBED_BACKEND=modal needs MODAL_TOKEN_ID and MODAL_TOKEN_SECRET in the environment / توکن Modal تنظیم نشده"
+  [ -f scripts/infra/modal_embed.py ] || die "missing scripts/infra/modal_embed.py"
+  EMBED_ARGS=(-e EMBED_BACKEND=modal -e MODAL_TOKEN_ID -e MODAL_TOKEN_SECRET -e MODAL_EMBED_MAX_ROWS
+              -e MODAL_GPU -e PYTHONPATH=/work/pydeps --memory 1g)
+  MODAL_SETUP=1
+  echo "embedding source: Modal GPU (EMBED_BACKEND=modal; row cap ${MODAL_EMBED_MAX_ROWS:-20000}) / embedding روی Modal"
+elif [ -n "${EMBEDDING_URL:-}" ]; then
   EMBED_ARGS=(-e "EMBEDDING_URL=${EMBEDDING_URL_IN_CONTAINER:-http://roxira_embeddings:80}" --memory 2g)
   echo "embedding source: shared TEI service (EMBEDDING_URL from the host) / سرویس مشترک embedding"
 elif docker ps --format '{{.Names}}' | grep -qx roxira_embeddings; then
@@ -145,6 +156,10 @@ run_step() { # description, then command args; stops on first failure
   echo "--- $desc"
   run "$@" || die "step failed: $desc / مرحله ناموفق: $desc"
 }
+if [ "$MODAL_SETUP" = 1 ] && [ "$DRY" = 0 ]; then
+  # the app image has no Modal SDK; install it into the shared work dir (not into the image)
+  run_step "install modal SDK into /work/pydeps" -m pip install --quiet --target /work/pydeps 'modal>=1.0'
+fi
 
 # ---------------------------------------------------------------- gates (read-only)
 step "Validate staged files / اعتبارسنجی فایل‌ها (no writes)"

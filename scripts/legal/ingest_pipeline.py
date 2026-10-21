@@ -345,12 +345,31 @@ def _embed_http(texts: list[str]) -> list[list[float]]:
     return vectors
 
 
+def _embed_modal(texts: list[str]) -> list[list[float]]:
+    """Embed on a Modal GPU (env EMBED_BACKEND=modal; scripts/infra/modal_embed.py)."""
+    path = Path(__file__).resolve().parents[1] / "infra" / "modal_embed.py"
+    spec = importlib.util.spec_from_file_location("roxira_modal_embed", path)
+    if spec is None or spec.loader is None or not path.is_file():
+        raise Refusal(f"EMBED_BACKEND=modal but {path} is missing")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["roxira_modal_embed"] = mod
+    spec.loader.exec_module(mod)
+    try:
+        return mod.embed_texts(texts)
+    except mod.ModalEmbedError as exc:
+        raise Refusal(f"modal embedding failed: {exc}") from exc
+
+
 def default_embed(texts: list[str]) -> list[list[float]]:
     """Same model/normalisation as the app's Qdrant vector path.
 
-    With env ``EMBEDDING_URL`` set, embeddings come from the shared TEI service and no
-    local BAAI/bge-m3 is loaded; otherwise it uses sentence_transformers (must be installed).
+    Env ``EMBED_BACKEND=modal`` sends the texts to a Modal GPU function instead (opt-in,
+    capped by MODAL_EMBED_MAX_ROWS). Otherwise, with env ``EMBEDDING_URL`` set, embeddings
+    come from the shared TEI service and no local BAAI/bge-m3 is loaded; failing that it
+    uses sentence_transformers (must be installed). Default stays TEI.
     """
+    if os.environ.get("EMBED_BACKEND", "").strip().lower() == "modal":
+        return _embed_modal(texts)
     if embedding_url():
         return _embed_http(texts)
     try:

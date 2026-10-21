@@ -48,6 +48,10 @@ services:
       - REDIS_PORT=6379
       - QDRANT_HOST=qdrant_prod
       - QDRANT_PORT=6333
+      # Optional read-only Qdrant Cloud replica, used only when local Qdrant is unreachable
+      # (docs/infra/CLOUD_ACCOUNTS_PLAN.md). Empty = off.
+      - QDRANT_CLOUD_URL=${QDRANT_CLOUD_URL:-}
+      - QDRANT_CLOUD_API_KEY=${QDRANT_CLOUD_API_KEY:-}
       # سرویس مشترک embedding (TEI / BAAI/bge-m3) — یک نسخه برای اپ و اسکریپت‌های ساخت
       - EMBEDDING_URL=http://roxira_embeddings:80
       # sms.ir (Fast/Verify) — سرویس ارسال کد تأیید (از .env مقداردهی می‌شود)

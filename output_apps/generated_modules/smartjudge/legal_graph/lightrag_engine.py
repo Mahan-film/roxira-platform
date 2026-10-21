@@ -135,6 +135,13 @@ _QDRANT_HOST_CANDIDATES: Tuple[str, ...] = tuple(
     dict.fromkeys([QDRANT_HOST, "qdrant_prod", "qdrant", "127.0.0.1", "localhost"])
 )
 
+
+def _qdrant_targets() -> List[Tuple[str, str, Dict[str, str]]]:
+    """(label, base_url, headers): local hosts, then the optional Qdrant Cloud replica
+    (only when QDRANT_CLOUD_URL is set). Reads only; the cloud is tried after every local
+    host failed to connect."""
+    return _qcloud.targets(_QDRANT_HOST_CANDIDATES, QDRANT_PORT)
+
 # مدل embedding پرس‌وجو برای جست‌وجوی برداری واقعی روی Qdrant — همان مدل و
 # نرمال‌سازی‌ای که `scripts/w6_ingest_dotic.py` هنگام تزریق استفاده کرده
 # (`BAAI/bge-m3`، `normalize_embeddings=True`، بردار بدون نام/unnamed،
@@ -355,6 +362,7 @@ _PAYLOAD_TEXT_KEYS = (
     "law_name",
 )
 _TOKEN_RE = re.compile(r"[\w\u0600-\u06FF]+", re.UNICODE)
+from . import qdrant_cloud as _qcloud  # noqa: E402  (optional read-only cloud replica)
 from . import retrieval_boost as _rb  # noqa: E402  (pure helpers, no circular import)
 from .. import reranker as _reranker  # noqa: E402  (optional cross-encoder, flag-gated, never raises)
 _ENACTED_DESPITE_TITLE = (
@@ -698,10 +706,11 @@ async def _qdrant_collection_vector_size(collection: str) -> Optional[int]:
     except ImportError:
         return None
     async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
-        for host in _QDRANT_HOST_CANDIDATES:
-            url = f"http://{host}:{QDRANT_PORT}/collections/{collection}"
+        for host, base, hdrs in _qdrant_targets():
+            _qcloud.note_failover(host)
+            url = f"{base}/collections/{collection}"
             try:
-                response = await client.get(url)
+                response = await client.get(url, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant collection-info host %s unreachable: %s", host, exc)
                 continue
@@ -753,10 +762,11 @@ async def _qdrant_vector_search_httpx(
     except ImportError:
         return None
     async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
-        for host in _QDRANT_HOST_CANDIDATES:
-            url = f"http://{host}:{QDRANT_PORT}/collections/{collection}/points/search"
+        for host, base, hdrs in _qdrant_targets():
+            _qcloud.note_failover(host)
+            url = f"{base}/collections/{collection}/points/search"
             try:
-                response = await client.post(url, json=body)
+                response = await client.post(url, json=body, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant vector-search host %s unreachable: %s", host, exc)
                 continue
@@ -849,10 +859,11 @@ async def _qdrant_scroll_httpx(query: str, limit: int, active_only: Optional[boo
     global _qdrant_last_reachable
     body = _scroll_body(limit, active_only)
     async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
-        for host in _QDRANT_HOST_CANDIDATES:
-            url = f"http://{host}:{QDRANT_PORT}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
+        for host, base, hdrs in _qdrant_targets():
+            _qcloud.note_failover(host)
+            url = f"{base}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
             try:
-                response = await client.post(url, json=body)
+                response = await client.post(url, json=body, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant host %s unreachable: %s", host, exc)
                 continue
@@ -871,10 +882,11 @@ def _qdrant_scroll_urllib(query: str, limit: int, active_only: Optional[bool] = 
 
     global _qdrant_last_reachable
     body = json.dumps(_scroll_body(limit, active_only)).encode("utf-8")
-    for host in _QDRANT_HOST_CANDIDATES:
-        url = f"http://{host}:{QDRANT_PORT}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
+    for host, base, hdrs in _qdrant_targets():
+        _qcloud.note_failover(host)
+        url = f"{base}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
         request = urllib.request.Request(
-            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+            url, data=body, headers={"Content-Type": "application/json", **hdrs}, method="POST"
         )
         try:
             with urllib.request.urlopen(request, timeout=QDRANT_FALLBACK_TIMEOUT) as response:
@@ -1125,10 +1137,11 @@ async def _scroll_by_point_filter(point_filter: Dict[str, Any], limit: int) -> L
         "filter": point_filter,
     }
     async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
-        for host in _QDRANT_HOST_CANDIDATES:
-            url = f"http://{host}:{QDRANT_PORT}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
+        for host, base, hdrs in _qdrant_targets():
+            _qcloud.note_failover(host)
+            url = f"{base}/collections/{QDRANT_FALLBACK_COLLECTION}/points/scroll"
             try:
-                response = await client.post(url, json=body)
+                response = await client.post(url, json=body, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant exact-scroll host %s unreachable: %s", host, exc)
                 continue
@@ -1152,10 +1165,11 @@ def _scroll_by_point_filter_urllib(
             "filter": point_filter,
         }
     ).encode("utf-8")
-    for host in _QDRANT_HOST_CANDIDATES:
-        url = f"http://{host}:{QDRANT_PORT}/collections/{collection}/points/scroll"
+    for host, base, hdrs in _qdrant_targets():
+        _qcloud.note_failover(host)
+        url = f"{base}/collections/{collection}/points/scroll"
         request = urllib.request.Request(
-            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+            url, data=body, headers={"Content-Type": "application/json", **hdrs}, method="POST"
         )
         try:
             with urllib.request.urlopen(request, timeout=QDRANT_FALLBACK_TIMEOUT) as response:

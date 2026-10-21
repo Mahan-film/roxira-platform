@@ -1,0 +1,26 @@
+# Nightly Qdrant Cloud hot replica. Inert until QDRANT_CLOUD_URL is in /opt/roxira_platform/.env.
+# See docs/infra/CLOUD_ACCOUNTS_PLAN.md. Installed by scripts/infra/install_qdrant_replica.sh.
+[Unit]
+Description=Roxira Qdrant Cloud replica (snapshot local -> cloud, verify)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+# Secrets reach the container by name only (`-e NAME` inherits from this environment); the whole
+# .env is never mounted or passed. The leading "-" keeps the unit harmless if the file is absent.
+EnvironmentFile=-/opt/roxira_platform/.env
+# Disposable container shares the network namespace of the local Qdrant (so 127.0.0.1:6333 is local
+# Qdrant and the cloud is reached over the host's normal egress). Script is mounted read-only.
+ExecStartPre=/usr/bin/mkdir -p /var/tmp/qdrant_replica
+ExecStart=/usr/bin/docker run --rm --name roxira_qdrant_replica_job \
+  --network container:roxira_qdrant_prod --memory 256m --cpus 1 \
+  -v /opt/roxira_platform/scripts/infra/qdrant_replica.py:/job/qdrant_replica.py:ro \
+  -v /var/tmp/qdrant_replica:/work -e TMPDIR=/work \
+  -e QDRANT_LOCAL_URL=http://127.0.0.1:6333 \
+  -e QDRANT_CLOUD_URL -e QDRANT_CLOUD_API_KEY -e QDRANT_LOCAL_API_KEY \
+  -e QDRANT_REPLICA_COLLECTIONS -e LIGHTRAG_QDRANT_COLLECTION -e QDRANT_REPLICA_SAMPLES \
+  python:3.12-slim python3 /job/qdrant_replica.py --apply
+TimeoutStartSec=3h
+Nice=10
