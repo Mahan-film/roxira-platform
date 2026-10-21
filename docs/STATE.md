@@ -1,6 +1,6 @@
 > **Plan: `docs/strategy/MASTER_PLAN_2026-10-16.md` (v2: factory first, then a global business via the Malaysian company; Track I Iran / Track G global). Owner decisions are in §0.**
 
-> **Last update: 2026-10-20. NEW CHAT? Read this file, then `docs/HANDOFF_2026-10-15.md` (older context; the section "Shipped 2026-10-16..20" below supersedes it). Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
+> **Last update: 2026-10-21. NEW CHAT? Read this file, then `docs/HANDOFF_2026-10-15.md` (older context; the section "Shipped 2026-10-16..20" below supersedes it). Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
 
 # Current state (read this first)
 
@@ -19,6 +19,15 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - **Roxira portal** roxira.ir/.net: honest copy, no prices, pre-registration form stored (`enterprise_inquiries`). Enterprise modules (CRM, invoicing, accounting, HR, inventory, damages, tax compliance) are **tenant-isolated** (migrations 1789120000000–1789190000000); access = platform ADMIN or tenant OWNER (`requireTenantAdmin`). `/team` (members), CRM AI import (CSV + xlsx, `/crm/import`). Owner account = ADMIN + OWNER of the default tenant `00000000-…0001`.
 - **Infra**: key pool LiteLLM `127.0.0.1:4000` (groups agent-strong-free, agent-light-free, product-free, agent-free-paid, private, embeddings; simple-shuffle — never usage-based-routing-v2), TEI embeddings (batch <= 4), research service `127.0.0.1:8090` (searx + tavily, `query_domains`), Xray REALITY VPN on 8443, backups/monitor/selfimprove timers.
 - **Owner's Mac**: `ir.roxira.lawwatch` (ekhtebar, 6 h) + **`ir.roxira.iranrelay`** (regulation.tax.gov.ir, dotic.ir, rc.majlis.ir; Sat–Thu 09:30 & 11:00 Tehran, VPN must be OFF) both write to `~/Developer/roxira-lawwatch/data/legal/staged/` and `relay_publish.sh` opens a data PR; `ir.roxira.reposync` fast-forwards `~/Developer/roxira-platform` every 30 min and resets `core.bare` (it flips to true after app worktree cleanups — run `git --git-dir=~/Developer/roxira-platform/.git config core.bare false` if git says "must be run in a work tree").
+
+## Shipped 2026-10-21
+
+- Bake-off ladders (#753, docs/eval/MODEL_BAKEOFF_2026-10-20.md): free = Nemotron Ultra :free -> Groq gpt-oss-120b -> Gemini 3.8 Flash -> flash-lite; Pro = Haiku 5.5 -> DeepSeek V4 Pro -> GLM-5.3. Answer quality ~40-49/100 everywhere: retrieval/prompt is the bottleneck.
+- Pricing: live USDT rate every 6 h, floor 280,000, margin 10% (SMARTJUDGE_PRICE_MARGIN_PCT). Basic 1.23M, Pro 3.08M, Premium 8.93M, Team 30.49M toman/month.
+- Team tier $99 (#759): SJ_TEAM_*, 200/day, 20 answers/day on vip-team (Opus 5 -> Kimi K3 -> vip-pro); contract review for team + premium; sessions expire after 3 days (JWT_TTL_SECONDS=259200).
+- Legal strategy (#760): multi-track case plan (criminal / civil-arbitration / disciplinary / other) with per-track retrieval and citation guard; chat chip + intake form.
+- USDT panel opens as an overlay (#752); single draft payable in USDT. Next.js 16.4.2 (#754).
+- Off-site: nightly Neon restore + hourly Codeberg mirror installed (#758), active once NEON_BACKUP_URL / CODEBERG_TOKEN are set.
 
 ## Shipped 2026-10-16..20 (all merged to main and deployed unless noted)
 - **Pricing**: 4 tiers Free / Basic $4 / Pro $10 / Premium $29; annual = 10x monthly; toman = USD x max(live Tetherland rate, floor 280,000) (+ optional margin %). Daily chat caps: guest 3, free 8, basic 40, pro 60, premium 100, of which 5 Opus answers/day, then pro models (`CHAT_PREMIUM_TOP_DAILY_LIMIT=5`).
