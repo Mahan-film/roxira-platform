@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 
+import { RECOMMENDED_LEVEL, planKey } from "@/lib/plan-catalog";
+
 interface UpgradeCardProps {
   /** Guests are offered login first; logged-in free users only see the plans button. */
   showLogin: boolean;
@@ -23,7 +25,7 @@ export function UpgradeCard({ showLogin, onLogin }: UpgradeCardProps) {
           ورود به حساب
         </button>
       )}
-      <Link href="/plans" className="ap-btn">
+      <Link href={`/plans?plan=${planKey(RECOMMENDED_LEVEL, "monthly")}`} className="ap-btn">
         مشاهده اشتراک‌ها
       </Link>
     </div>

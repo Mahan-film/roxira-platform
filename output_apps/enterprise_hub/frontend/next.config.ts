@@ -59,6 +59,18 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        // `generateSitemaps` serves only /sitemap/{id}.xml; the index lives at
+        // /sitemap_index.xml. Crawlers (and older links) still probe the
+        // conventional /sitemap.xml, so send them to the real index permanently.
+        source: "/sitemap.xml",
+        destination: "/sitemap_index.xml",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

@@ -127,7 +127,7 @@ export default function InternationalPortal() {
               { href: "#modules", label: "Modules" },
               { href: "#api", label: "API" },
               { href: "#fx", label: "FX & Settlement" },
-              { href: "/docs", label: "Swagger Docs" },
+              { href: "/contact", label: "Request API access" },
             ].map((link) => (
               <Link
                 key={link.href}
@@ -148,11 +148,11 @@ export default function InternationalPortal() {
             </a>
             <PasskeyLoginButton />
             <Link
-              href="/docs"
+              href="/contact"
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
             >
               <BookOpen className="size-3.5" />
-              API Access
+              Request API access
             </Link>
           </div>
         </div>
@@ -183,11 +183,11 @@ export default function InternationalPortal() {
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <Link
-                href="/docs"
+                href="/contact"
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
               >
                 <BookOpen className="size-4" />
-                Explore the API
+                Request API access
               </Link>
               <a
                 href="#modules"
@@ -300,7 +300,7 @@ export default function InternationalPortal() {
                 {[
                   "Versioned endpoints under /api/v1",
                   "Bearer JWT authentication with scoped roles",
-                  "Interactive Swagger UI at /docs",
+                  "Interactive API reference available on request",
                   "Same-origin proxy — no CORS configuration required",
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-2">
@@ -311,10 +311,10 @@ export default function InternationalPortal() {
               </ul>
               <div className="flex flex-wrap gap-3 pt-1">
                 <Link
-                  href="/docs"
+                  href="/contact"
                   className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
                 >
-                  Open Swagger UI
+                  Request API access
                   <ArrowUpRight className="size-4" />
                 </Link>
               </div>
@@ -423,8 +423,8 @@ curl -X POST \\
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <Link href="/docs" className="transition-colors hover:text-white">
-              API Documentation
+            <Link href="/contact" className="transition-colors hover:text-white">
+              Request API access
             </Link>
             <a href="https://roxira.ir" className="transition-colors hover:text-white">
               Persian Portal

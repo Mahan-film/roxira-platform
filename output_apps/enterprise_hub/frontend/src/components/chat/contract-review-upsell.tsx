@@ -28,7 +28,7 @@ export function ContractReviewUpsell({ showLogin, onLogin, onClose }: ContractRe
           ورود به حساب
         </button>
       )}
-      <Link href="/plans" className="ap-btn">
+      <Link href="/plans?plan=SJ_PREMIUM_MONTHLY" className="ap-btn">
         مشاهده اشتراک‌ها
       </Link>
       <button type="button" className="ap-chip" onClick={onClose} aria-label="بستن">

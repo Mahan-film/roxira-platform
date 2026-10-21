@@ -34,6 +34,13 @@ export type SubscriptionPlanKey =
  * server but no longer offered in the UI. */
 export type BackendPlanType = "SINGLE_DRAFT" | "VIP_MONTHLY_PRO" | SubscriptionPlanKey;
 
+/** Narrows an untrusted string (e.g. a `?plan=` query value) to a real backend plan key. */
+export function isBackendPlanType(value: string | null | undefined): value is BackendPlanType {
+  if (!value) return false;
+  if (value === "SINGLE_DRAFT" || value === "VIP_MONTHLY_PRO") return true;
+  return /^SJ_(BASIC|PRO|PREMIUM|TEAM)_(MONTHLY|YEARLY)$/.test(value);
+}
+
 /** Shape of one entry in GET /payments/pricing-matrix's `plans` map. Prices
  * are fixed Toman amounts set server-side (W22) — there is no USD/exchange
  * rate involved anymore. */

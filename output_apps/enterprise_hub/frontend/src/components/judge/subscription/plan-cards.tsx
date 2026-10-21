@@ -29,12 +29,14 @@ export interface PlanCardsProps {
   /** `plans` map of GET /payments/pricing-matrix: the only source of prices. */
   plans: Record<string, BackendPlanPrice>;
   limits: PlanLimits;
+  /** Deep link (?plan=): open the modal with this plan already selected. */
+  initialPlan?: BackendPlanType;
 }
 
 /** The plan cards (free, basic, pro, premium + the gold team card) with a monthly/yearly toggle. */
-export function PlanCards({ plans, limits }: PlanCardsProps) {
+export function PlanCards({ plans, limits, initialPlan }: PlanCardsProps) {
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
-  const [modalPlan, setModalPlan] = useState<BackendPlanType | null>(null);
+  const [modalPlan, setModalPlan] = useState<BackendPlanType | null>(initialPlan ?? null);
   const { accessToken, user } = useAuth();
 
   return (

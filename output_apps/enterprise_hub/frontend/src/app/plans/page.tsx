@@ -4,7 +4,7 @@ import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
 import { SubscriptionCta } from "@/components/judge/subscription/subscription-cta";
 import { PlanCards } from "@/components/judge/subscription/plan-cards";
-import { formatPersianNumber } from "@/components/judge/subscription/types";
+import { formatPersianNumber, isBackendPlanType } from "@/components/judge/subscription/types";
 import { LEVEL_COPY, PLAN_LEVELS, draftsText, planKey } from "@/lib/plan-catalog";
 import { loadPlans, type PlanLimits } from "@/lib/plans-data";
 
@@ -97,7 +97,13 @@ function buildRows(l: PlanLimits): Row[] {
   ];
 }
 
-export default async function PlansPage() {
+export default async function PlansPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string }>;
+}) {
+  const { plan: planParam } = await searchParams;
+  const initialPlan = isBackendPlanType(planParam) ? planParam : undefined;
   const data = await loadPlans();
   const single = data?.plans?.SINGLE_DRAFT;
   const hasTiers = Boolean(data && PLAN_LEVELS.some((lv) => lv !== "free" && data.plans?.[planKey(lv, "monthly")]));
@@ -125,7 +131,7 @@ export default async function PlansPage() {
             {hasTiers && data && (
               <section aria-labelledby="prices-h" className="space-y-4">
                 <h2 id="prices-h" className="text-lg font-semibold">طرح‌ها و قیمت‌ها</h2>
-                <PlanCards plans={data.plans} limits={data.limits} />
+                <PlanCards plans={data.plans} limits={data.limits} initialPlan={initialPlan} />
                 <p className="ap-muted text-[13px] leading-6">
                   پرداخت از درگاه زیبال انجام می‌شود. مبلغ نهایی پیش از انتقال به درگاه در پنجرهٔ خرید دوباره نشان داده می‌شود.
                 </p>
@@ -139,7 +145,7 @@ export default async function PlansPage() {
                   <h3 className="font-semibold">یک لایحهٔ تخصصی</h3>
                   <p className="text-2xl font-semibold">{fa(single.price_toman)} <span className="ap-muted text-sm font-normal">تومان</span></p>
                   <p className="ap-muted text-sm leading-6">پرداخت یک‌بار برای یک لایحه، بدون اشتراک.</p>
-                  <SubscriptionCta label="خرید لایحه" className="ap-btn" />
+                  <SubscriptionCta label="خرید لایحه" plan="SINGLE_DRAFT" className="ap-btn" />
                 </article>
               </section>
             )}

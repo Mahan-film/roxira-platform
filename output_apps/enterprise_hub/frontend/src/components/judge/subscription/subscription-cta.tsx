@@ -4,11 +4,14 @@ import { useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { SubscriptionModal } from "./subscription-modal";
+import type { BackendPlanType } from "./types";
 
 export interface SubscriptionCtaProps {
   /** متن دکمه؛ پیش‌فرض یک برچسب عمومی خرید اشتراک است. */
   label?: string;
   className?: string;
+  /** پلنی که این دکمه نمایندگی می‌کند؛ در مودال برجسته و انتخاب می‌شود. */
+  plan?: BackendPlanType;
 }
 
 /**
@@ -21,6 +24,7 @@ export interface SubscriptionCtaProps {
 export function SubscriptionCta({
   label = "خرید و فعال‌سازی اشتراک",
   className,
+  plan,
 }: SubscriptionCtaProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { accessToken, user } = useAuth();
@@ -34,6 +38,7 @@ export function SubscriptionCta({
       <SubscriptionModal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
+        initialPlan={plan}
         accessToken={accessToken}
         phone={user?.phone}
       />
