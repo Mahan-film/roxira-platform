@@ -52,7 +52,7 @@ MAX_REDIRECTS = 5
 HOSTS = {
     "nezamat": {"base": "https://nezamat.ir", "netlocs": ("nezamat.ir", "www.nezamat.ir"),
                 "source_label": "nezamat.ir"},
-    "ekhtebar": {"base": "https://ekhtebar.ir", "netlocs": ("ekhtebar.ir", "www.ekhtebar.ir"),
+    "ekhtebar": {"base": "https://www.ekhtebar.ir", "netlocs": ("ekhtebar.ir", "www.ekhtebar.ir"),
                  "source_label": "ekhtebar.ir"},
 }  # fmt: skip
 NETLOC_TO_HOST = {n: k for k, v in HOSTS.items() for n in v["netlocs"]}
@@ -64,7 +64,8 @@ STRONG_CHALLENGE = (
 )  # fmt: skip
 WEAK_CHALLENGE = ("captcha", "access denied")  # only trusted on small pages (a real law page is large)
 
-LAW_SLUG_RE = re.compile(r"قانون|آیین[\s‌-]?نامه|اصلاحیه|اصلاح|دستورالعمل|مقررات|تصویب[\s‌-]?نامه|بخشنامه|لایحه|ماده[\s‌-]واحده")
+LAW_SLUG_RE = re.compile(r"قانون|قوانین|آیین[\s‌-]?نامه|اصلاحیه|اصلاح|دستورالعمل|مقررات|تصویب[\s‌-]?نامه|بخشنامه|لایحه|ماده[\s‌-]واحده")
+LAW_PATH_TRANS = str.maketrans({"ي": "ی", "ك": "ک", "ى": "ی"})  # ekhtebar slugs mix Arabic yeh/kaf
 KIND_RES = (
     ("amendment", re.compile(r"اصلاح|الحاق")),
     ("regulation", re.compile(r"آیین[\s‌-]?نامه|دستورالعمل|مقررات|تصویب[\s‌-]?نامه|بخشنامه")),
@@ -82,6 +83,10 @@ VOID_TAGS = frozenset({"br", "hr", "img", "input", "meta", "link", "source", "ar
 
 class Blocked(Exception):
     """Robots refusal, 401/403/451, challenge or CAPTCHA: the host is skipped for the rest of the run."""
+
+
+class BudgetExhausted(Blocked):
+    """The per-host request budget for this run is used up: the URL is deferred to the next run, not a failure."""
 
 
 class FetchFailed(Exception):
@@ -269,7 +274,7 @@ class Fetcher:
         if hk in self.blocked:
             raise Blocked(f"{hk} already blocked: {self.blocked[hk]}")
         if self.requests.get(hk, 0) >= self.max_requests:
-            raise Blocked(f"request budget ({self.max_requests}) exhausted for {hk}")
+            raise BudgetExhausted(f"request budget ({self.max_requests}) exhausted for {hk}")
 
     # -- cache
     def _cache_paths(self, url: str) -> tuple[Path, Path]:
@@ -413,7 +418,7 @@ def is_law_url(url: str) -> bool:
     path = urllib.parse.unquote(urllib.parse.urlparse(url).path)
     if SKIP_PATH_RE.search(path) or path.strip("/") == "":
         return False
-    return bool(LAW_SLUG_RE.search(path.replace("_", " ")))
+    return bool(LAW_SLUG_RE.search(path.translate(LAW_PATH_TRANS).replace("_", " ")))
 
 
 def classify_kind(title: str) -> str:
@@ -424,7 +429,9 @@ def classify_kind(title: str) -> str:
 
 
 def discover(fetcher: Fetcher, host: str, max_urls: int | None = None, max_sitemaps: int = 200) -> list[dict]:
-    """Law-like page URLs of a host from robots.txt Sitemap lines / well-known sitemap paths. Newest first."""
+    """Law-like page URLs of a host from robots.txt Sitemap lines + the well-known sitemap paths on the base
+    host. Newest first. Sitemaps/redirects on other netlocs are ignored (Fetcher follows redirects only within
+    the source netlocs)."""
     base = HOSTS[host]["base"]
     robots_sm: list[str] = []
     try:
@@ -433,34 +440,34 @@ def discover(fetcher: Fetcher, host: str, max_urls: int | None = None, max_sitem
                      if ln.lower().startswith("sitemap:")]  # fmt: skip
     except FetchFailed:
         pass
-    groups = [g for g in (robots_sm, [f"{base}/wp-sitemap.xml", f"{base}/sitemap_index.xml", f"{base}/sitemap.xml"]) if g]
+    well_known = [f"{base}/sitemap_index.xml", f"{base}/wp-sitemap.xml", f"{base}/sitemap.xml"]
+    queue = list(dict.fromkeys(robots_sm + well_known))
     seen_sm: set[str] = set()
     found: dict[str, str | None] = {}
-    for roots in groups:
-        queue = list(dict.fromkeys(roots))
-        while queue and len(seen_sm) < max_sitemaps:
-            sm = queue.pop(0)
-            if sm in seen_sm:
+    while queue and len(seen_sm) < max_sitemaps:
+        sm = queue.pop(0)
+        if sm in seen_sm:
+            continue
+        seen_sm.add(sm)
+        try:
+            if host_key(sm) != host:
                 continue
-            seen_sm.add(sm)
+        except Blocked:
+            continue  # a sitemap advertised on another domain is ignored
+        try:
+            status, _, body, _ = fetcher.get(sm)
+        except FetchFailed:
+            continue
+        if status != 200:
+            continue
+        children, urls = parse_sitemap(body)
+        queue += [loc for loc, _lm in children if not SKIP_SITEMAP_RE.search(loc)]
+        for loc, lm in urls:
             try:
-                if host_key(sm) != host:
-                    continue
-                status, _, body, _ = fetcher.get(sm)
-            except FetchFailed:
+                if host_key(loc) == host and is_law_url(loc):
+                    found.setdefault(loc, lm)
+            except Blocked:
                 continue
-            if status != 200:
-                continue
-            children, urls = parse_sitemap(body)
-            queue += [loc for loc, _lm in children if not SKIP_SITEMAP_RE.search(loc)]
-            for loc, lm in urls:
-                try:
-                    if host_key(loc) == host and is_law_url(loc):
-                        found.setdefault(loc, lm)
-                except Blocked:
-                    continue
-        if found:
-            break  # a working sitemap group: do not probe the others
     items = [{"url": u, "lastmod": lm, "host": host} for u, lm in found.items()]
     items.sort(key=lambda x: x["lastmod"] or "", reverse=True)
     return items[:max_urls] if max_urls else items
@@ -669,9 +676,12 @@ def build_report(date: str, run: dict) -> str:
          "Source policy: nezamat.ir and ekhtebar.ir only (qavanin.ir serves a bot challenge; see SOURCES_ACCESS.md). "
          "All rows are UNOFFICIAL and need lawyer review before ingest.", "",
          "## Counts", "", "| item | count |", "|---|---|"]  # fmt: skip
-    for k in ("urls_discovered", "urls_skipped_unchanged", "pages_fetched", "pages_failed", "laws_parsed",
-              "new_laws", "new_rows", "repealed_rows", "existing_laws_checked", "article_diffs"):
+    for k in ("urls_discovered", "urls_skipped_unchanged", "pages_fetched", "pages_failed", "pages_deferred_budget",
+              "laws_parsed", "new_laws", "new_rows", "repealed_rows", "existing_laws_checked", "article_diffs"):
         L.append(f"| {k} | {s.get(k, 0)} |")
+    if s.get("pages_deferred_budget"):
+        L += ["", f"Deferred: {s['pages_deferred_budget']} URL(s) were skipped because the per-host request budget "
+              "was exhausted; nothing was lost and the sync continues on the next run (incremental state is saved)."]
     L += ["", "## Requests per host", ""]
     for h, n in sorted(run["requests"].items()):
         L.append(f"- {h}: {n} requests")
@@ -704,8 +714,8 @@ def run_sync(args, fetcher: Fetcher | None = None, today: str | None = None) -> 
     state = load_state(state_path)
     hosts = list(HOSTS) if args.host == "all" else [args.host]
     run = {"stats": dict.fromkeys(("urls_discovered", "urls_skipped_unchanged", "pages_fetched", "pages_failed",
-                                   "laws_parsed", "new_laws", "new_rows", "repealed_rows", "existing_laws_checked",
-                                   "article_diffs"), 0),
+                                   "pages_deferred_budget", "laws_parsed", "new_laws", "new_rows", "repealed_rows",
+                                   "existing_laws_checked", "article_diffs"), 0),
            "new_laws": [], "diffs": [], "failures": [], "files": [], "requests": {}, "blocked": {}}  # fmt: skip
     st = run["stats"]
 
@@ -746,6 +756,9 @@ def run_sync(args, fetcher: Fetcher | None = None, today: str | None = None) -> 
                 continue
             try:
                 status, hdrs, body, cached = fetcher.get(url)
+            except BudgetExhausted:
+                st["pages_deferred_budget"] += 1
+                continue
             except Blocked as exc:
                 run["failures"].append((url, f"BLOCKED: {exc}"))
                 st["pages_failed"] += 1

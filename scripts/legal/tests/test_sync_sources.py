@@ -21,6 +21,13 @@ LAW2 = (
     "%D8%A7%D8%AC%D8%B1%D8%A7%DB%8C%DB%8C-%D8%A2%D8%B2%D9%85%D8%A7%DB%8C%D8%B4%DB%8C/"
 )
 
+# real ekhtebar.ir law-page permalink shapes (percent-encoded Persian slug, one with an Arabic yeh)
+EKHTEBAR_LAW = "https://www.ekhtebar.ir/%D9%82%D8%A7%D9%86%D9%88%D9%86-%D8%A2%D8%B2%D9%85%D8%A7%DB%8C%D8%B4%DB%8C/"
+EKHTEBAR_AYIN = "https://www.ekhtebar.ir/%D8%A2%D9%8A%D9%8A%D9%86-%D9%86%D8%A7%D9%85%D9%87-%D8%A2%D8%B2%D9%85%D8%A7%DB%8C%D8%B4%DB%8C/"
+EKHTEBAR_QAVANIN = "https://www.ekhtebar.ir/%D9%82%D9%88%D8%A7%D9%86%DB%8C%D9%86-%D8%A2%D8%B2%D9%85%D8%A7%DB%8C%D8%B4%DB%8C/"
+EKHTEBAR_NEWS = "https://www.ekhtebar.ir/%D8%A7%D8%AE%D8%A8%D8%A7%D8%B1-%D8%A2%D8%B2%D9%85%D8%A7%DB%8C%D8%B4%DB%8C/"
+EKHTEBAR_FOREIGN = "http://www.ekhtebar.com/%D9%82%D8%A7%D9%86%D9%88%D9%86-x/"
+
 
 def fx(name: str) -> bytes:
     return (FX / name).read_bytes()
@@ -61,6 +68,12 @@ ROUTES = {
     "https://nezamat.ir/wp-sitemap-posts-post-1.xml": (200, {}, fx("sitemap_posts.xml")),
     LAW: (200, {"ETag": '"v1"'}, fx("law_page_nezamat.html")),
     LAW2: (404, {}, b""),
+}
+
+EKHTEBAR_ROUTES = {
+    "https://www.ekhtebar.ir/robots.txt": (200, {}, fx("ekhtebar_robots.txt")),
+    "https://www.ekhtebar.ir/sitemap_index.xml": (200, {}, fx("ekhtebar_sitemap_index.xml")),
+    "https://www.ekhtebar.ir/post-sitemap.xml": (200, {}, fx("ekhtebar_post_sitemap.xml")),
 }
 
 
@@ -170,6 +183,32 @@ def test_discover_filters_sorts_and_skips_taxonomy_sitemaps(tmp_path):
     assert len(items) == 2
     assert not any("taxonomies" in u for u, _ in net.calls)
     assert len(ss.discover(f, "nezamat", max_urls=1)) == 1
+
+
+def test_is_law_url_matches_ekhtebar_slugs():
+    _kids, urls = ss.parse_sitemap(fx("ekhtebar_post_sitemap.xml"))
+    matched = set()
+    for loc, _lm in urls:
+        try:
+            if ss.host_key(loc) == "ekhtebar" and ss.is_law_url(loc):
+                matched.add(loc)
+        except ss.Blocked:
+            continue
+    assert {EKHTEBAR_LAW, EKHTEBAR_AYIN, EKHTEBAR_QAVANIN} <= matched
+    assert EKHTEBAR_NEWS not in matched and EKHTEBAR_FOREIGN not in matched
+
+
+def test_ekhtebar_discovery_uses_well_known_yoast_sitemap(tmp_path):
+    f, net, _ = make_fetcher(tmp_path, EKHTEBAR_ROUTES)
+    items = ss.discover(f, "ekhtebar")
+    urls = [it["url"] for it in items]
+    assert urls[0] == EKHTEBAR_LAW  # newest lastmod first
+    assert {EKHTEBAR_LAW, EKHTEBAR_AYIN, EKHTEBAR_QAVANIN} <= set(urls)
+    assert EKHTEBAR_NEWS not in urls and EKHTEBAR_FOREIGN not in urls
+    called = {u for u, _ in net.calls}
+    # the robots.txt Sitemap line points at another domain: it is ignored, the well-known path is used
+    assert "https://www.ekhtebar.ir/sitemap_index.xml" in called
+    assert not any(u.startswith("http://www.ekhtebar.com") for u in called)
 
 
 # ---------------------------------------------------------------- parsing
@@ -282,3 +321,15 @@ def test_never_overwrites_existing_output(tmp_path):
     with pytest.raises(SystemExit):
         ss.write_new_jsonl(p, [{"a": 1}])
     assert p.read_text() == "keep"
+
+
+def test_budget_exhaustion_is_deferred_not_failed(tmp_path):
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    # discovery needs 5 requests (robots + 3 well-known sitemaps + post sitemap): only law 1 is fetched
+    f, _, _ = make_fetcher(tmp_path / "c", ROUTES, max_requests=6)
+    assert ss.run_sync(args_for(tmp_path, empty, max_requests=6), f, "2026-10-20") == 0
+    report = (tmp_path / "docs" / "SYNC_REPORT_2026-10-20.md").read_text(encoding="utf-8")
+    assert "| pages_failed | 0 |" in report
+    assert "| pages_deferred_budget | 1 |" in report
+    assert "continues on the next run" in report
