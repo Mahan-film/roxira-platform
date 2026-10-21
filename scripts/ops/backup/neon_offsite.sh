@@ -6,7 +6,7 @@
 # database in NEON_BACKUP_DBS (default "enterprise_db umami") and each configured target:
 #   1. pg_dump -Fc inside the Postgres container (docker exec; no host port)
 #   2. pg_restore --clean --if-exists --no-owner --no-acl into the target database bk_<db>
-#      (created on first run), from a throwaway postgres:17-alpine container on the host network
+#      (created on first run), from a throwaway postgres:18-alpine container on the host network
 #   3. verify: exact count(*) of the 10 biggest tables, source vs target (small drift tolerated)
 #   4. keep the dump locally, age-encrypted to BACKUP_AGE_RECIPIENT (same key as the DR bundle),
 #      newest NEON_KEEP_LOCAL (default 7) per database

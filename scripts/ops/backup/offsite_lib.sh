@@ -71,7 +71,7 @@ show_cmd() {
 }
 
 # ---- argument builders (pure functions; unit-tested) ------------------------------------------
-PG_CLIENT_IMAGE="${PG_CLIENT_IMAGE:-postgres:17-alpine}"
+PG_CLIENT_IMAGE="${PG_CLIENT_IMAGE:-postgres:18-alpine}"  # Neon runs PG 18; pg_dump must be >= server
 
 # The connection string is passed by variable NAME only (docker -e NAME), so it never appears
 # in any process argument list.

@@ -98,7 +98,7 @@ class ShellBuilders(unittest.TestCase):
         self.assertIn("--network", r.stdout)
         self.assertIn("host", r.stdout)
         self.assertIn("NEON_TARGET_URL", r.stdout)
-        self.assertIn("postgres:17-alpine", r.stdout)
+        self.assertIn("postgres:18-alpine", r.stdout)
         self.assertIn("--clean --if-exists --no-owner --no-acl", r.stdout)
 
     def test_dump_exec_args(self):

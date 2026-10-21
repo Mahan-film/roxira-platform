@@ -33,7 +33,7 @@ MIN_ROWS="${DRILL_MIN_ROWS:-1}"
 export REDACT_ENV_NAMES="NEON_BACKUP_URL NEON_TARGET_URL"
 
 if [ "$DRY_RUN" = "1" ]; then
-  echo "[dry-run] docker run -d --name $NAME --tmpfs /var/lib/postgresql/data -e POSTGRES_PASSWORD=<random> $PG_CLIENT_IMAGE   (no published ports)"
+  echo "[dry-run] docker run -d --name $NAME --tmpfs /var/lib/postgresql -e PGDATA=/var/lib/postgresql/data -e POSTGRES_PASSWORD=<random> $PG_CLIENT_IMAGE   (no published ports)"
   if [ "$MODE" = neon ]; then
     echo "[dry-run] per DB: pg_dump -Fc from Neon bk_<db> (client container, URL via env name) | docker exec -i $NAME pg_restore --no-owner --no-acl"
   else
@@ -50,7 +50,7 @@ cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 log "starting scratch container $NAME"
-docker run -d --name "$NAME" --tmpfs /var/lib/postgresql/data -e POSTGRES_PASSWORD="$SCRATCH_PW" "$PG_CLIENT_IMAGE" >/dev/null || die "cannot start scratch container"
+docker run -d --name "$NAME" --tmpfs /var/lib/postgresql -e PGDATA=/var/lib/postgresql/data -e POSTGRES_PASSWORD="$SCRATCH_PW" "$PG_CLIENT_IMAGE" >/dev/null || die "cannot start scratch container"
 for _ in $(seq 1 60); do docker exec "$NAME" pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
 docker exec "$NAME" pg_isready -U postgres >/dev/null 2>&1 || die "scratch postgres did not become ready"
 
