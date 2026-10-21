@@ -15,12 +15,27 @@ mkt.py inbox <brand>            # new comments -> drafted replies -> bot [send r
 ```
 
 Nothing is published without an approval click. `touch /var/lib/roxira-marketing/PAUSE` stops all
-publishing at once. Install the timer: `scripts/marketing/install.sh` (dry-run), then `--apply`.
+publishing at once.
+
+## Timers
+
+`scripts/marketing/install.sh` installs the units (dry-run by default; add `--apply` to install and
+enable them):
+
+- `roxira-marketing-publish.timer` - every 15 min, publishes owner-approved posts/replies that are due.
+- `roxira-marketing-plan.timer` - every Thursday 08:00 UTC, runs the weekly content cycle:
+  `mkt.py plan ghazihoushmand --week` (draft next week's posts) and then
+  `mkt.py propose ghazihoushmand --platform telegram`, which sends only the Telegram drafts to the
+  owner bot. Re-running is idempotent: a week that already has drafts is not planned again, so a
+  duplicate timer run never duplicates drafts.
 
 ## Environment
 
 Put tokens in `/etc/roxira-marketing.env` (root, chmod 600), never in the repo. The key pool key
-`KEYPOOL_MASTER_KEY` is read from `/opt/roxira_platform/.env` as for the other factory tools.
+`KEYPOOL_MASTER_KEY` is read from `/opt/roxira_platform/.env` as for the other factory tools. The
+weekly plan service also needs `KEYPOOL_MASTER_KEY` for the text model and the owner bot's
+`NOTIFY_*` for `propose`; both are read from `/opt/roxira_platform/.env` (`/etc/roxira-marketing.env`
+stays optional and can override e.g. `MKT_MODEL_GROUP`).
 
 | Variable | Meaning |
 | --- | --- |

@@ -1,0 +1,12 @@
+# Thursday 08:00 UTC: draft next week's posts and propose the Telegram ones to the owner bot.
+# Persistent=true catches up after a server outage; re-running a week is idempotent.
+[Unit]
+Description=Roxira marketing weekly plan every Thursday 08:00 UTC
+
+[Timer]
+OnCalendar=Thu *-*-* 08:00:00 UTC
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+# Weekly content cycle: draft next week's posts, then propose ONLY the Telegram drafts to the owner
+# bot for approval. Installed by scripts/marketing/install.sh. Both steps run in order.
+[Unit]
+Description=Roxira marketing: plan next week's drafts and propose the Telegram ones
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+# KEYPOOL_MASTER_KEY and the owner bot's NOTIFY_* live here (mkt_llm/notify also read it directly);
+# /etc/roxira-marketing.env is optional and overrides it (e.g. MKT_MODEL_GROUP).
+EnvironmentFile=-/opt/roxira_platform/.env
+EnvironmentFile=-/etc/roxira-marketing.env
+# plan is prefixed with '-' so a planning error still lets the proposal of existing drafts run;
+# the plan is idempotent, so re-running a week never creates duplicate drafts.
+ExecStart=-/usr/bin/python3 /opt/roxira_platform/scripts/marketing/mkt.py plan ghazihoushmand --week
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/marketing/mkt.py propose ghazihoushmand --platform telegram

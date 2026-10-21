@@ -240,6 +240,39 @@ def test_propose_cli_platform_flag(store, monkeypatch):
         mkt.main(["propose", "t", "--platform", "myspace"])
 
 
+# ----------------------------------------------------------- weekly cycle (timer)
+def test_weekly_plan_command_is_idempotent(store, monkeypatch):
+    b = brand()
+    start = dt.date(2026, 10, 17)  # a Saturday
+    items = [ITEM, {**ITEM, "id": "second-guide"}]
+    monkeypatch.setattr(mkt.content, "load_sources", lambda brand, repo=None: items)
+    first = mkt.cmd_plan(store, b, fake_llm, start)
+    assert len(first["created"]) == 3 and len(store.list("posts")) == 3
+    # the timer may fire again for the same week: drafts must not be duplicated
+    again = mkt.cmd_plan(store, b, fake_llm, start)
+    assert again["created"] == [] and len(store.list("posts")) == 3
+    keys = {(p["platform"], p["campaign"], p["source_id"]) for p in store.list("posts")}
+    assert len(keys) == 3
+
+
+def test_weekly_cycle_proposes_only_telegram_and_is_idempotent(store, monkeypatch):
+    b = brand()
+    items = [ITEM, {**ITEM, "id": "second-guide"}]
+    monkeypatch.setattr(mkt.content, "load_sources", lambda brand, repo=None: items)
+    mkt.cmd_plan(store, b, fake_llm, dt.date(2026, 10, 17))
+    sent: list = []
+    send = lambda text, buttons: sent.append(buttons) or True  # noqa: E731
+    no_image = lambda post, brand: ("", "")  # noqa: E731
+    proposed = mkt.cmd_propose(store, b, send=send, make_image=no_image, platforms={"telegram"})
+    assert len(proposed) == 2 and len(sent) == 2
+    assert {store.get("posts", pid)["platform"] for pid in proposed} == {"telegram"}
+    # other platforms stay drafts for a later, explicit proposal
+    assert any(p["platform"] == "x" and p["status"] == "draft" for p in store.list("posts"))
+    # re-running the weekly propose step sends nothing a second time
+    assert mkt.cmd_propose(store, b, send=send, make_image=no_image, platforms={"telegram"}) == []
+    assert len(sent) == 2
+
+
 # -------------------------------------------------------------------- adapters
 POST = {"caption": "متن", "hashtags": json.dumps(["#a"]), "link": "https://x.test/g?utm_source=x",
         "image_url": "https://x.test/m.png", "source_title": "T"}
