@@ -3,13 +3,13 @@
 import type { BackendPlanPrice } from "@/components/judge/subscription/types";
 
 type BaseTier = "guest" | "free" | "vip";
-type PaidTier = "basic" | "pro" | "premium";
+type PaidTier = "basic" | "pro" | "premium" | "team";
 
 export interface PlanLimits {
   chat_messages_per_hour: Record<BaseTier, number | null>;
   chat_messages_per_day?: Record<BaseTier, number | null> & Partial<Record<PaidTier, number | null>>;
   /** Answers per day served by the best model of the level before it steps down. */
-  top_model_answers_per_day?: Partial<Record<"pro" | "premium", number | null>>;
+  top_model_answers_per_day?: Partial<Record<"pro" | "premium" | "team", number | null>>;
   voice_requests_per_hour: Record<BaseTier, number | null> & Partial<Record<PaidTier, number | null>>;
   file_uploads_per_day: Record<BaseTier, number | null> & Partial<Record<PaidTier, number | null>>;
   max_file_mb: number;

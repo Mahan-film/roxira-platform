@@ -31,7 +31,7 @@ interface AuditRow {
   ts: string;
 }
 
-const LEVEL_FA: Record<string, string> = { free: "رایگان", basic: "پایه", pro: "حرفه‌ای", premium: "ویژه" };
+const LEVEL_FA: Record<string, string> = { free: "رایگان", basic: "پایه", pro: "حرفه‌ای", premium: "ویژه", team: "تیمی" };
 const ACTION_FA: Record<string, string> = { grant: "اعطا / جایگزینی اشتراک", extend: "تمدید", revoke: "لغو (انقضای فوری)" };
 
 export function UsersTab({ onAuthLost }: { onAuthLost: () => void }) {

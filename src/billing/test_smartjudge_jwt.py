@@ -61,8 +61,8 @@ def test_explicit_env_secret_is_used_verbatim(sj):
 
 
 def test_ttl_default_and_clamp(sj):
-    assert sj._resolve_jwt_ttl_seconds("") == 60 * 60 * 24 * 7
-    assert sj._resolve_jwt_ttl_seconds("not-a-number") == 60 * 60 * 24 * 7
+    assert sj._resolve_jwt_ttl_seconds("") == 60 * 60 * 24 * 3  # owner 2026-10-21: log out every 3 days
+    assert sj._resolve_jwt_ttl_seconds("not-a-number") == 60 * 60 * 24 * 3  # owner 2026-10-21: log out every 3 days
     assert sj._resolve_jwt_ttl_seconds("10") == 300
     assert sj._resolve_jwt_ttl_seconds("99999999") == 2592000
     assert sj._resolve_jwt_ttl_seconds("3600") == 3600

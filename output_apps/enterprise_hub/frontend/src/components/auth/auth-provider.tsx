@@ -39,10 +39,14 @@ interface AuthContextValue {
   openLogin: (options?: OpenLoginOptions) => void;
   closeLogin: () => void;
   logout: () => void;
+  /** Server answered 401 (token expired, sessions last 3 days): clear the session and open the login dialog. */
+  expireSession: () => void;
   getAccessToken: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+export const SESSION_EXPIRED_MESSAGE = "نشست شما منقضی شد؛ دوباره وارد شوید";
 
 /**
  * فراهم‌کننده وضعیت احراز هویت در سراسر رابط (هدر، چت‌بات قاضی و فرم‌های
@@ -98,6 +102,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
   }, []);
 
+  const expireSession = useCallback(() => {
+    clearStoredSession();
+    setSession(null);
+    pendingRef.current = null;
+    setModalOptions({
+      serviceDomain: "GHAZI",
+      title: "ورود به قاضی هوشمند",
+      description: SESSION_EXPIRED_MESSAGE,
+    });
+    setLoginOpen(true);
+  }, []);
+
   const getAccessToken = useCallback(
     () => session?.accessToken ?? null,
     [session],
@@ -113,10 +129,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       openLogin,
       closeLogin,
       logout,
+      expireSession,
       getAccessToken,
     }),
     [
       closeLogin,
+      expireSession,
       getAccessToken,
       isLoading,
       loginOpen,

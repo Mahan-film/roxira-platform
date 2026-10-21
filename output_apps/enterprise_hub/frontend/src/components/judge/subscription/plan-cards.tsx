@@ -31,7 +31,7 @@ export interface PlanCardsProps {
   limits: PlanLimits;
 }
 
-/** The four plan cards (free, basic, pro, premium) with a monthly/yearly toggle. */
+/** The plan cards (free, basic, pro, premium + the gold team card) with a monthly/yearly toggle. */
 export function PlanCards({ plans, limits }: PlanCardsProps) {
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
   const [modalPlan, setModalPlan] = useState<BackendPlanType | null>(null);
@@ -74,7 +74,7 @@ export function PlanCards({ plans, limits }: PlanCardsProps) {
           </Link>
         </article>
 
-        {PAID_LEVELS.map((level) => (
+        {PAID_LEVELS.filter((level) => level !== "team").map((level) => (
           <PaidCard
             key={level}
             level={level}
@@ -86,6 +86,13 @@ export function PlanCards({ plans, limits }: PlanCardsProps) {
           />
         ))}
       </div>
+
+      <TeamCard
+        period={period}
+        price={plans[planKey("team", period)]}
+        limits={limits}
+        onBuy={() => setModalPlan(planKey("team", period))}
+      />
 
       <SubscriptionModal
         isOpen={modalPlan !== null}
@@ -150,6 +157,68 @@ function PaidCard({
       >
         خرید اشتراک {copy.title}
       </button>
+    </article>
+  );
+}
+
+/** Gold, full-width card for the team / organisation plan (law firms and legal teams). */
+function TeamCard({
+  period,
+  price,
+  limits,
+  onBuy,
+}: {
+  period: BillingPeriod;
+  price: BackendPlanPrice | undefined;
+  limits: PlanLimits;
+  onBuy: () => void;
+}) {
+  const copy = LEVEL_COPY.team;
+  return (
+    <article
+      aria-labelledby="team-plan-h"
+      className="relative grid gap-5 rounded-2xl p-5 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:p-6"
+      style={{
+        border: "1px solid var(--gh-gold)",
+        background: "linear-gradient(135deg, rgba(212,175,55,0.14), rgba(212,175,55,0.04))",
+      }}
+    >
+      <div className="flex flex-col space-y-3">
+        <header>
+          <h3 id="team-plan-h" className="text-lg font-semibold" style={{ color: "var(--gh-gold)" }}>
+            {copy.title} <span className="text-sm font-normal">(وکلا و تیم‌های حقوقی)</span>
+          </h3>
+          <p className="ap-muted text-sm">
+            برای دفاتر وکالت و تیم‌های حقوقی: بررسی ساختاریافتهٔ قرارداد، بالاترین سقف پرسش و بارگذاری، و بهترین مدل‌های دنیا.
+          </p>
+        </header>
+        {price ? (
+          <div>
+            <p className="text-2xl font-semibold">
+              {fa(price.price_toman)}{" "}
+              <span className="ap-muted text-sm font-normal">تومان {periodLabel(period)}</span>
+            </p>
+            {price.usd != null && (
+              <p className="ap-muted text-[13px]">معادل {fa(price.usd)} دلار {periodLabel(period)}</p>
+            )}
+            {period === "yearly" && (
+              <p className="ap-muted text-[13px]">معادل {fa(monthlyEquivalent(price))} تومان در ماه</p>
+            )}
+          </div>
+        ) : (
+          <p className="ap-muted text-sm" role="status">قیمت اکنون در دسترس نیست.</p>
+        )}
+        <button
+          type="button"
+          className="mt-auto w-full rounded-xl px-4 py-2.5 text-sm font-bold transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+          style={{ background: "var(--gh-gold)", color: "var(--gh-on-gold)", minHeight: 44 }}
+          disabled={!price}
+          onClick={onBuy}
+        >
+          خرید اشتراک {copy.title}
+        </button>
+      </div>
+      <FeatureList lines={featureLines("team", limits, fa)} />
     </article>
   );
 }

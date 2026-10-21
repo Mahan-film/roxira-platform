@@ -349,6 +349,16 @@ groups:
         - {role: product_premium, alias: kimi, rank: 2}
     fallback: [vip-pro]
 
+  vip-team:   # TEAM plan ($99, law firms): Opus 5 first, then Kimi K3, then PRO (same ladder as vip-premium)
+    description: Smart Judge TEAM plan answers.
+    ordered: true
+    providers: [openrouter-private]
+    models:
+      openrouter-private:
+        - {role: product_premium, alias: opus, rank: 1, litellm_params: *anthropic_cache, extra_body: *no_think}
+        - {role: product_premium, alias: kimi, rank: 2}
+    fallback: [vip-pro]
+
   best-all:   # the same idea for agents and tools (public work only: free tiers may log)
     description: Cross-provider quality ladder for agents, ending on paid DeepSeek.
     ordered: true

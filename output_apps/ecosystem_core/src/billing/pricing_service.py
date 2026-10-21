@@ -57,8 +57,8 @@ BASE_PLANS_TOMAN: dict[str, dict[str, object]] = {
 # ---------------------------------------------------------------------------
 # 4-tier Smart Judge subscriptions (owner-approved 2026-10-16).
 # ---------------------------------------------------------------------------
-USD_MONTHLY: dict[str, float] = {"basic": 4.0, "pro": 10.0, "premium": 29.0}
-_LEVEL_NAMES_FA = {"basic": "پایه", "pro": "حرفه‌ای", "premium": "ویژه"}
+USD_MONTHLY: dict[str, float] = {"basic": 4.0, "pro": 10.0, "premium": 29.0, "team": 99.0}
+_LEVEL_NAMES_FA = {"basic": "پایه", "pro": "حرفه‌ای", "premium": "ویژه", "team": "تیمی و سازمانی"}
 YEARLY_MULTIPLIER = 10  # 12 months for the price of 10 (2 months free)
 
 USD_PLANS: dict[str, dict[str, object]] = {}
@@ -75,7 +75,7 @@ for _level, _usd in USD_MONTHLY.items():
 # plan key -> subscription level / entitlement length (entitlement + activation code use these)
 PLAN_LEVELS: dict[str, str] = {k: str(v["level"]) for k, v in USD_PLANS.items()}
 PLAN_PERIOD_DAYS: dict[str, int] = {k: int(v["period_days"]) for k, v in USD_PLANS.items()}
-LEVEL_ORDER = ("free", "basic", "pro", "premium")
+LEVEL_ORDER = ("free", "basic", "pro", "premium", "team")
 # Plans sold before the 4-tier model keep working and are grandfathered to PRO.
 LEGACY_VIP_PLAN_TYPES = frozenset({
     "VIP", "VIP_MONTHLY", "VIP_MONTHLY_PRO", "VIP_UNLIMITED", "PRO",
@@ -84,7 +84,7 @@ LEGACY_VIP_PLAN_TYPES = frozenset({
 
 
 def plan_level(plan_type: str | None) -> str:
-    """Level granted by an entitlement ``plan_type``: free | basic | pro | premium.
+    """Level granted by an entitlement ``plan_type``: free | basic | pro | premium | team.
     SJ_* keys map to their level; legacy VIP types (VIP_MONTHLY_PRO, ...) map to
     ``pro``; anything else (SINGLE_DRAFT, VOICE_PACK_10MIN, ...) is ``free``."""
     key = str(plan_type or "").strip().upper()

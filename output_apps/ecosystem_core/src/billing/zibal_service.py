@@ -217,7 +217,7 @@ def lookup_entitlement(user_id: Optional[str]) -> Optional[Dict[str, Any]]:
     return {"plan_type": row[0], "expires_at": row[1].isoformat() if row[1] else None}
 
 
-_LEVEL_RANK = {"free": 0, "basic": 1, "pro": 2, "premium": 3}
+_LEVEL_RANK = {"free": 0, "basic": 1, "pro": 2, "premium": 3, "team": 4}
 
 
 def merge_entitlement(existing_plan, existing_expires, new_plan, new_expires, now):

@@ -1,5 +1,5 @@
 /**
- * Copy and feature lines for the 4 Smart Judge plan cards (free / basic / pro / premium).
+ * Copy and feature lines for the 4 Smart Judge plan cards (free / basic / pro / premium / team).
  *
  * No price lives here: Toman amounts always come from the backend pricing matrix.
  * Daily limits and draft types come from `limits` (the same constants the server enforces).
@@ -14,7 +14,14 @@ import type { PlanLimits } from "@/lib/plans-data";
 
 export type PlanLevel = "free" | PaidLevel;
 
-export const PAID_LEVELS: PaidLevel[] = ["basic", "pro", "premium"];
+export const PAID_LEVELS: PaidLevel[] = ["basic", "pro", "premium", "team"];
+
+/** Levels that get the «بررسی قرارداد» (contract review) mode; the server enforces it too. */
+export const CONTRACT_REVIEW_LEVELS: readonly PlanLevel[] = ["premium", "team"];
+
+export function canReviewContract(level: PlanLevel | undefined): boolean {
+  return level !== undefined && CONTRACT_REVIEW_LEVELS.includes(level);
+}
 export const PLAN_LEVELS: PlanLevel[] = ["free", ...PAID_LEVELS];
 export const RECOMMENDED_LEVEL: PaidLevel = "pro";
 
@@ -39,6 +46,11 @@ export const LEVEL_COPY: Record<PlanLevel, LevelCopy> = {
   basic: { title: "پایه", tagline: "پاسخ سریع‌تر برای استفادهٔ روزمره", model: "مدل سریع پولی" },
   pro: { title: "حرفه‌ای", tagline: "برای وکلا و پرونده‌های جدی", model: "مدل‌های قوی" },
   premium: { title: "ویژه", tagline: "بالاترین کیفیت برای پرونده‌های سنگین", model: "بهترین مدل‌های دنیا" },
+  team: {
+    title: "تیمی و سازمانی",
+    tagline: "وکلا و تیم‌های حقوقی",
+    model: "بهترین مدل‌های دنیا با بیشترین سهمیه",
+  },
 };
 
 export function planKey(level: PaidLevel, period: BillingPeriod): SubscriptionPlanKey {
@@ -80,6 +92,13 @@ export function featureLines(level: PlanLevel, limits: PlanLimits, fa: Fa): stri
   }
   if (level === "premium" && top?.premium != null) {
     lines.push(`${fa(top.premium)} پاسخ در روز با بهترین مدل‌های دنیا، سپس مدل‌های قوی`);
+  }
+
+  if (level === "team" && top?.team != null) {
+    lines.push(`${fa(top.team)} پاسخ در روز با بهترین مدل‌های دنیا، سپس مدل‌های قوی`);
+  }
+  if (canReviewContract(level)) {
+    lines.push("بررسی قرارداد: ریسک، بندهای ناعادلانه، استناد قانونی و متن پیشنهادی اصلاح");
   }
 
   const drafts = limits.draft_types[level === "free" ? "free" : level];

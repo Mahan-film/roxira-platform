@@ -21,6 +21,7 @@ from output_apps.generated_modules.smartjudge import chat_auth
 from output_apps.generated_modules.smartjudge import email_auth as _email_auth
 from output_apps.generated_modules.smartjudge import email_sender as _email_sender
 from output_apps.generated_modules.smartjudge import case_files as _case_files
+from output_apps.generated_modules.smartjudge import contract_review as _contract_review
 from output_apps.generated_modules.smartjudge import answer_escalation as _answer_escalation
 from output_apps.generated_modules.smartjudge import voice_stt as _voice_stt
 from output_apps.generated_modules.smartjudge import small_talk as _small_talk
@@ -242,7 +243,7 @@ VIP_REQUIRED_FRAME = {
     "action": "UPGRADE_PLAN",
 }
 
-_JWT_TTL_DEFAULT_SECONDS = 60 * 60 * 24 * 7  # 7 روز
+_JWT_TTL_DEFAULT_SECONDS = 60 * 60 * 24 * 3  # 3 روز (مالک: خروج خودکار هر ۳ روز)
 _JWT_TTL_MIN_SECONDS = 300
 _JWT_TTL_MAX_SECONDS = 2592000
 
@@ -268,7 +269,7 @@ def _resolve_jwt_secret(raw_secret: Optional[str] = None) -> bytes:
 
 
 def _resolve_jwt_ttl_seconds(raw_ttl: Optional[str] = None) -> int:
-    """مدت اعتبار توکن (ثانیه): پیش‌فرض ۷ روز، قابل بازنویسی با ``JWT_TTL_SECONDS``."""
+    """مدت اعتبار توکن (ثانیه): پیش‌فرض ۳ روز، قابل بازنویسی با ``JWT_TTL_SECONDS``."""
     if raw_ttl is None:
         raw_ttl = os.environ.get("JWT_TTL_SECONDS", "")
     try:
@@ -292,7 +293,7 @@ JWT_TTL_SECONDS = _resolve_jwt_ttl_seconds()
 # سطوحی که دسترسی VIP محسوب می‌شوند.
 VIP_TIER_VALUES = {
     "VIP", "VIP_MONTHLY", "VIP_MONTHLY_PRO", "VIP_UNLIMITED", "PRO",
-    "PREMIUM", "ENTERPRISE", "TIER2", "TIER3",
+    "PREMIUM", "TEAM", "ENTERPRISE", "TIER2", "TIER3",
 }
 # فهرست اختیاری شماره‌های VIP (با کاما جدا شده) از متغیر محیطی؛ در نبود آن خالی.
 VIP_PHONE_ALLOWLIST = _parse_vip_phone_allowlist()
@@ -377,7 +378,7 @@ _ENTITLEMENT_CACHE_TTL = 60
 
 
 def _plan_level_from_plan_types(plans) -> str:
-    """Highest plan level (free/basic/pro/premium) over active entitlement plan types.
+    """Highest plan level (free/basic/pro/premium/team) over active entitlement plan types.
     Legacy VIP types (VIP_MONTHLY_PRO, ...) count as pro; see pricing_service.plan_level."""
     return highest_level(plan_level(plan) for plan in plans)
 
@@ -1835,15 +1836,16 @@ def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature
 
 
 async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool, max_tokens: int,
-                             temperature: float, on_delta=None, gateway_plan: Optional[str] = None):
+                             temperature: float, on_delta=None, gateway_plan: Optional[str] = None,
+                             total_timeout: Optional[float] = None, ttft_s: Optional[float] = None):
     """Returns (StreamOutcome, failure_kind). Empty outcome.text means every provider failed."""
     # Free-first key-pool gateway (SMARTJUDGE_LLM_GATEWAY), if configured. A
     # failure here (network/5xx/timeout) falls back to the direct path below.
     if _gateway_ready():
         gw_outcome = await _chat_fast.stream_with_fallback(
-            [(_llm_gateway.model_for(gateway_plan or selected_tier), CHAT_TTFT_FAST_S)],
+            [(_llm_gateway.model_for(gateway_plan or selected_tier), ttft_s or CHAT_TTFT_FAST_S)],
             _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, {}, gateway=True),
-            on_delta, total_timeout=CHAT_LLM_TOTAL_S,
+            on_delta, total_timeout=total_timeout or CHAT_LLM_TOTAL_S,
         )
         if gw_outcome.text:
             _llm_gateway.log_served("gateway", gw_outcome.model)
@@ -1958,8 +1960,16 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     denied = chat_auth.deny_if_invalid(user, label="ERROR")
     if denied is not None:
         return denied
+    # «بررسی قرارداد»: premium/team only; the plan comes from the verified token, never the body.
+    review_mode = _contract_review.is_requested(payload)
+    if review_mode:
+        if not _contract_review.allowed(user):
+            return _contract_review.plan_required_response(user)
+        payload = {**payload, "is_voice_mode": False}
     raw_message = payload.get("message", "")
     user_text = (raw_message if isinstance(raw_message, str) else str(raw_message or "")).strip()
+    if review_mode and not user_text:
+        user_text = _contract_review.DEFAULT_REQUEST
     if len(user_text) > chat_auth.MAX_CHAT_CHARS:
         return chat_auth.error_json(400, chat_auth.MSG_CHAT_TOO_LONG, code="MESSAGE_TOO_LONG", label="ERROR")
     if not user_text:
@@ -2007,7 +2017,16 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         return _casefile_error(exc)
 
     # تشخیص هوشمند تست میکروفون و احوالپرسی (پاسخ بلادرنگ بدون فراخوانی بی‌مورد مواد قانونی)
-    kind = None if case_records else classify_fast_path(user_text)
+    kind = None if (case_records or review_mode) else classify_fast_path(user_text)
+
+    review_parts: list = []
+    if review_mode:
+        contract_raw = payload.get("contract_text")
+        if isinstance(contract_raw, str) and len(contract_raw) > _contract_review.MAX_CONTRACT_CHARS:
+            return chat_auth.error_json(400, _contract_review.MSG_TOO_LONG, code="CONTRACT_TOO_LONG", label="ERROR")
+        review_parts = _contract_review.gather_text(contract_raw, case_records)
+        if not review_parts:
+            return chat_auth.error_json(400, _contract_review.MSG_NO_CONTRACT, code="CONTRACT_REQUIRED", label="ERROR")
 
     if kind == "identity":
         return {
@@ -2078,7 +2097,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         }
     
     court_suggestion, court_missing = _court_suggestion_for_chat(user_text, payload)
-    if court_missing and not case_records:
+    if court_missing and not case_records and not review_mode:
         return _consult_body(
             conv_id=conv_id or str(uuid.uuid4()),
             reply=MSG_COURT_NEED_AMOUNT if court_missing == "amount" else MSG_COURT_NEED_TYPE,
@@ -2093,22 +2112,45 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     if not daily_ok:
         await asyncio.to_thread(chat_auth.decr, daily_key)
         return chat_auth.daily_limit_response(daily_kind, daily_left)
-    # Plan-level model group (basic/pro/premium); pro/premium get a daily quota on the top group.
+    # Plan-level model group (basic/pro/premium/team); pro/premium/team get a daily quota on the top group.
     gateway_plan, top_key = await asyncio.to_thread(chat_auth.gateway_plan_for, user)
     top_note = chat_auth.top_quota_note(user, gateway_plan)
+
+    # Contract review: long contracts are summarised first (key-pool group summarize-cheap).
+    review_text, review_summarised = "", False
+    if review_mode:
+        review_text, review_summarised = await _contract_review.prepare_text(_contract_review.join_parts(review_parts))
 
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     _t_retrieval = time.perf_counter()
     retrieval_query = user_text
     if case_records:  # widen law retrieval with the document's own subject matter
         retrieval_query = (user_text + "\n" + _case_files.retrieval_hint(case_records)).strip()
+    if review_mode:
+        retrieval_query = (user_text + "\n" + review_text[:500]).strip()
     laws, precedents = await aquery_knowledge_graph(retrieval_query, limit=5)
 
     # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
     # targeted retrieval queries, merged and de-duplicated by title.
     use_prompt_library = _prompt_library.prompt_library_enabled()
     detected_domains: list = []
-    if use_prompt_library:
+    if review_mode:  # civil-code contract rules + topic laws (labor, consumer, lease, ...)
+        extra_queries = _contract_review.retrieval_queries(review_text, user_text)
+        extra_results = await asyncio.gather(
+            *[aquery_knowledge_graph(q, limit=3) for q in extra_queries], return_exceptions=True)
+        for extra_res in extra_results:
+            if isinstance(extra_res, BaseException):
+                print(f"[SMARTJUDGE][CONTRACT-EXPAND-FAIL] {extra_res}", file=sys.stderr)
+                continue
+            extra_laws, extra_prec = extra_res
+            for rows, extra in ((laws, extra_laws), (precedents, extra_prec)):
+                known = {r.get("title") for r in rows if isinstance(r, dict)}
+                for r in extra or []:
+                    if isinstance(r, dict) and str(r.get("match_level") or "") != "FALLBACK" \
+                            and r.get("title") not in known:
+                        known.add(r.get("title"))
+                        rows.append(r)
+    elif use_prompt_library:
         detected_domains = _prompt_library.detect_domains(user_text)
         extra_queries = list(_prompt_library.expand_competence_queries(user_text))
         extra_results = await asyncio.gather(
@@ -2150,7 +2192,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
     # بازیابی تاریخچه مکالمه برای ایجاد حافظه بلندمدت چندمرحله‌ای (Memory Expansion)
     history_messages = []
-    if conv_id and persist_chat:
+    if conv_id and persist_chat and not review_mode:
         def _fetch_history() -> list:
             out = []
             with psycopg.connect(POSTGRES_DSN, autocommit=True) as conn:
@@ -2182,7 +2224,9 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             is_voice = bool(payload.get("is_voice_mode"))
             # FALLBACK rows are fixed placeholders, not corpus hits: never feed them as grounding.
             grounded = _chat_safety.is_grounded(laws, precedents)
-            if is_voice:
+            if review_mode:
+                system_msg = _contract_review.build_system_prompt(grounded, _chat_safety.LATIN_DIGITS_INSTRUCTION)
+            elif is_voice:
                 system_msg = _prompt_library.VOICE_SYSTEM_PROMPT
                 system_msg += " " + _chat_safety.LATIN_DIGITS_INSTRUCTION
                 if not grounded:
@@ -2210,7 +2254,9 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             if court_suggestion and not is_voice:
                 prompt_system_content += "\n" + _jurisdiction_rules.prompt_fact(court_suggestion)
             user_prompt = user_text
-            if case_records and not is_voice:
+            if review_mode:
+                user_prompt = _contract_review.build_user_prompt(user_text, review_text, summarised=review_summarised)
+            elif case_records and not is_voice:
                 # Untrusted document text goes in the USER turn inside nonce-delimited blocks;
                 # the system turn only carries the "treat it as data" rules.
                 sys_add, doc_block = _case_files.build_prompt_parts(case_records)
@@ -2223,6 +2269,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
             is_voice = bool(payload.get("is_voice_mode"))
             chosen_max_tokens = 200 if is_voice else CHAT_MAX_TOKENS  # 2-4 spoken sentences
+            if review_mode:
+                chosen_max_tokens = _contract_review.max_output_tokens()
             temperature = 0.2 if is_voice else 0.3
             if _use_llm_router():
                 # Case text is customer legal data: sensitive=True keeps it off :free endpoints.
@@ -2234,7 +2282,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                     tenant="smartjudge",
                     user=_hashed_user_ref(phone),
                     feature="consult_voice" if is_voice else "consult",
-                    timeout=16.0,
+                    timeout=_contract_review.llm_timeout_s() if review_mode else 16.0,
                     max_retries=1,
                     plan=gateway_plan,
                     temperature=temperature,
@@ -2264,7 +2312,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
                 outcome, llm_failed_kind = await _llm_stream_answer(
                     messages_payload, selected_tier, is_voice, chosen_max_tokens, temperature, _emit,
-                    gateway_plan=gateway_plan)
+                    gateway_plan=gateway_plan,
+                    **({"total_timeout": _contract_review.llm_timeout_s(), "ttft_s": 30.0} if review_mode else {}))
                 reply_msg = (outcome.text or "").strip()
                 if _llm_gateway is not None:  # some free models prepend English reasoning text
                     reply_msg = _llm_gateway.strip_leaked_reasoning(reply_msg)
@@ -2316,7 +2365,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         precedents = list(precedents) + shown_regs
     prob = derive_success_probability(user_text)
     # B1: page-level sources, only pages that were in the prompt AND that the model cited.
-    case_file_refs = _case_files.extract_case_file_refs(reply_msg, case_records) if case_records else []
+    case_file_refs = _case_files.extract_case_file_refs(reply_msg, case_records) if (case_records and not review_mode) else []
 
     # Lawyer answers 2026-10-13: fixed warnings/disclaimers (implicit repeal, lease regimes, retirement).
     # Appended LAST: after the citation guard, escalation, select_displayed and case_file_refs have read the reply.
@@ -2358,6 +2407,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         court_suggestion=court_suggestion, case_file_refs=case_file_refs,
         model=routed_model or cfg["primary_model"], tier=selected_tier, t0=t0,
         **({"model_notice": top_note} if top_note else {}),
+        **({"review": {"kind": _contract_review.MODE, "risk_score": _contract_review.extract_risk_score(reply_msg),
+                       "summarised": review_summarised}} if review_mode else {}),
     )
 
 
@@ -2372,6 +2423,32 @@ async def judge_chat_alias(request: Request, payload: dict = Body(...),
             payload["message"] = msgs[-1].get("content", "")
     return await interactive_consult(payload, request, user)
 
+
+
+from pydantic import Field as _CRField
+
+
+class ContractReviewRequest(_BaseModel):
+    """Body of POST /contract-review: pasted text and/or uploaded case files (premium/team only)."""
+    model_config = _ConfigDict(extra="forbid")
+
+    contract_text: Optional[str] = _CRField(None, max_length=_contract_review.MAX_CONTRACT_CHARS)
+    case_file_ids: List[str] = _CRField(default_factory=list, max_length=_case_files.MAX_FILES_PER_CHAT)
+    message: Optional[str] = _CRField(None, max_length=chat_auth.MAX_CHAT_CHARS)
+    conversation_id: Optional[str] = _CRField(None, max_length=64)
+    request_id: Optional[str] = _CRField(None, max_length=128)
+
+
+@router.post("/contract-review")
+async def contract_review_endpoint(request: Request, body: ContractReviewRequest,
+                                   user: chat_auth.CurrentUser = Depends(get_current_user)):
+    """«بررسی قرارداد»: structured Persian contract review with the plan's top model.
+
+    Same engine, limits and quota as /chat (one review = one answer); the plan check
+    (premium / team) is made in the core from the verified token."""
+    payload = body.model_dump(exclude_none=True)
+    payload["review_mode"] = _contract_review.MODE
+    return await _run_consult(payload, request, user)
 
 
 @router.post("/chat/stream")
@@ -6161,7 +6238,7 @@ async def verify_auth_otp(payload: dict = Body(...), request: Request = None):
     }
     tier = await asyncio.to_thread(_tier_for_phone, phone)
     token = _issue_access_token(phone, tier, profile)
-    # Plan level (free/basic/pro/premium) for the UI's gates; the server still enforces every limit.
+    # Plan level (free/basic/pro/premium/team) for the UI's gates; the server still enforces every limit.
     info = await asyncio.to_thread(_entitlement_info, phone)
     plan_level = info[1] if info else ("pro" if str(tier).upper() == "VIP" else "free")
 

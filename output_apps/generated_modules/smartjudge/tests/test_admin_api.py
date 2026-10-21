@@ -477,13 +477,13 @@ def test_dashboard_numbers_margin_and_graceful_umami(tmp_path):
     body = client.get(BASE + "/dashboard", headers=H()).json()
     d7 = body["windows"]["d7"]
     assert d7["new_users"] == 3 and d7["active_users"] == 3 and d7["paid_orders"] == 3
-    assert d7["questions_by_plan"] == {"free": 5, "basic": 0, "pro": 7, "premium": 0}
+    assert d7["questions_by_plan"] == {"free": 5, "basic": 0, "pro": 7, "premium": 0, "team": 0}
     assert d7["revenue_toman"] == 2_000_000 and d7["revenue_usdt"] == 10.003417
     assert d7["llm_calls"] == 3 and d7["llm_errors"] == 1 and d7["llm_cost_usd"] == 0.03
     assert d7["revenue_usd_equiv"] == round(10.003417 + 2_000_000 / 300_000, 2)
     assert d7["margin_usd"] == round(d7["revenue_usd_equiv"] - 0.03, 2)
     assert body["windows"]["d30"]["llm_calls"] == 3  # the 40-day-old record is outside every window
-    assert body["subscriptions_by_level"] == {"free": 0, "basic": 1, "pro": 4, "premium": 0}
+    assert body["subscriptions_by_level"] == {"free": 0, "basic": 1, "pro": 4, "premium": 0, "team": 0}
     assert body["umami"]["status"] == "not configured"
 
 
@@ -514,7 +514,7 @@ def test_models_tab_mapping_fallbacks_and_bakeoff(tmp_path, monkeypatch):
     client, *_ = make_app()
     body = client.get(BASE + "/models", headers=H()).json()
     by_tier = {m["tier"]: m for m in body["tier_mapping"]}
-    assert by_tier["pro"]["group"] == "vip-pro" and by_tier["premium"]["group"] == "vip-premium"
+    assert by_tier["pro"]["group"] == "vip-pro" and by_tier["premium"]["group"] == "vip-premium" and by_tier["team"]["group"] == "vip-team"
     assert body["config_found"] is True and by_tier["pro"]["fallback_chain"]
     assert body["last_hour"][0]["calls"] == 1 and body["last_24h"][0]["calls"] == 2
     assert body["bakeoff"]["available"] is False and "model_bakeoff.py" in body["bakeoff"]["instructions"]

@@ -298,7 +298,7 @@ export default function HomeGhaziPage() {
           <div className="gl-card mx-auto max-w-3xl p-6 text-center sm:p-10">
             <h2 className="text-xl font-black text-white sm:text-2xl">با رایگان شروع کن، هر وقت خواستی ارتقا بده</h2>
             <ul className="mt-5 flex flex-wrap justify-center gap-2">
-              {(['free', 'basic', 'pro', 'premium'] as const).map((k) => (
+              {(['free', 'basic', 'pro', 'premium', 'team'] as const).map((k) => (
                 <li key={k} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
                   {LEVEL_COPY[k].title}
                 </li>

@@ -334,7 +334,7 @@ function asString(value: unknown): string | null {
 
 function asPlanLevel(value: unknown): PlanLevel | undefined {
   const level = asString(value)?.toLowerCase();
-  return level === "free" || level === "basic" || level === "pro" || level === "premium"
+  return level === "free" || level === "basic" || level === "pro" || level === "premium" || level === "team"
     ? level
     : undefined;
 }

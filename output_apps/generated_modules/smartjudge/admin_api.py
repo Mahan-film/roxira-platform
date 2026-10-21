@@ -58,7 +58,7 @@ RESEARCH_TIMEOUT_S = 900
 JOB_TTL_S = 7200
 MAX_JOBS = 40
 
-PLAN_LEVELS = ("free", "basic", "pro", "premium")
+PLAN_LEVELS = ("free", "basic", "pro", "premium", "team")
 USER_REF_RE = r"^[0-9a-f]{16}$"
 PRIVATE_DATA_RE = re.compile(r"(?<!\d)(?:09\d{9}|\+98\d{10}|\d{10})(?!\d)")
 
@@ -339,15 +339,16 @@ def build_router(
         ent, orders, audits = await asyncio.gather(
             run(store.get_entitlement, user_ref), run(store.orders_for_user, user_ref, 5),
             run(store.list_audit, 5, user_ref))
-        usage = {lvl: _peek(f"rl:chat-day:{lvl}:{identity}") for lvl in ("free", "basic", "pro", "premium", "vip")}
+        usage = {lvl: _peek(f"rl:chat-day:{lvl}:{identity}") for lvl in ("free", "basic", "pro", "premium", "team", "vip")}
         limits = {"free": chat_auth.chat_free_daily_limit(), "basic": chat_auth.chat_basic_daily_limit(),
                   "pro": chat_auth.chat_pro_daily_limit(), "premium": chat_auth.chat_premium_daily_limit(),
+                  "team": chat_auth.chat_team_daily_limit(),
                   "vip": chat_auth.chat_vip_daily_limit()}
         used = {lvl: n for lvl, n in usage.items() if n}
         return {"status": "ok", "kind": kind, "identity_hint": hint, "user_ref": user_ref, "entitlement": ent,
                 "level": _level_of(ent["plan_type"]) if ent and ent.get("active") else "free",
                 "usage_today": {"used_by_level": used, "limits": limits,
-                                "top_model_used": {lvl: _peek(f"rl:top-day:{lvl}:{identity}") for lvl in ("pro", "premium")}},
+                                "top_model_used": {lvl: _peek(f"rl:top-day:{lvl}:{identity}") for lvl in ("pro", "premium", "team")}},
                 "recent_orders": orders, "recent_audit": audits, "grantable_plans": allowed_grant_plans()}
 
     @router.post("/users/entitlement")
@@ -466,7 +467,7 @@ def build_router(
     def _models_view() -> dict:
         groups = hostdata.load_keypool_groups()
         mapping = []
-        for label, plan in (("guest/free", "FREE"), ("basic", "basic"), ("pro", "pro"), ("premium", "premium"),
+        for label, plan in (("guest/free", "FREE"), ("basic", "basic"), ("pro", "pro"), ("premium", "premium"), ("team", "team"),
                             ("legacy VIP", "VIP")):
             group = llm_gateway.model_for(plan)
             mapping.append({"tier": label, "group": group, "fallback_chain": hostdata.fallback_chain(group, groups)})

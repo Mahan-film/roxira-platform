@@ -13,7 +13,7 @@ import { loadPlans, type PlanLimits } from "@/lib/plans-data";
 export const dynamic = "force-dynamic";
 
 const TITLE = "اشتراک و قیمت‌ها | قاضی هوشمند";
-const DESCRIPTION = "قیمت‌ها و امکانات هر طرح قاضی هوشمند؛ رایگان، پایه، حرفه‌ای و ویژه، با اعداد واقعی سامانه.";
+const DESCRIPTION = "قیمت‌ها و امکانات هر طرح قاضی هوشمند؛ رایگان، پایه، حرفه‌ای، ویژه و تیمی، با اعداد واقعی سامانه.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -39,7 +39,7 @@ function perDay(n: number | null): string {
 
 const drafts = (list: string[] | undefined) => draftsText(list);
 
-type Row = { label: string; cells: [string, string, string, string] };
+type Row = { label: string; cells: [string, string, string, string, string] };
 
 function buildRows(l: PlanLimits): Row[] {
   const day = l.chat_messages_per_day;
@@ -48,13 +48,13 @@ function buildRows(l: PlanLimits): Row[] {
   return [
     {
       label: "کیفیت مدل",
-      cells: [LEVEL_COPY.free.model, LEVEL_COPY.basic.model, LEVEL_COPY.pro.model, LEVEL_COPY.premium.model],
+      cells: [LEVEL_COPY.free.model, LEVEL_COPY.basic.model, LEVEL_COPY.pro.model, LEVEL_COPY.premium.model, LEVEL_COPY.team.model],
     },
     ...(day
       ? [
           {
             label: "پرسش در روز",
-            cells: [dayFree, perChatDay(day.basic ?? null), perChatDay(day.pro ?? null), perChatDay(day.premium ?? null)] as Row["cells"],
+            cells: [dayFree, perChatDay(day.basic ?? null), perChatDay(day.pro ?? null), perChatDay(day.premium ?? null), perChatDay(day.team ?? null)] as Row["cells"],
           },
         ]
       : []),
@@ -62,7 +62,7 @@ function buildRows(l: PlanLimits): Row[] {
       ? [
           {
             label: "پاسخ با بهترین مدل هر طرح در روز",
-            cells: ["—", "—", top.pro != null ? `${fa(top.pro)} پاسخ` : "—", top.premium != null ? `${fa(top.premium)} پاسخ` : "—"] as Row["cells"],
+            cells: ["—", "—", top.pro != null ? `${fa(top.pro)} پاسخ` : "—", top.premium != null ? `${fa(top.premium)} پاسخ` : "—", top.team != null ? `${fa(top.team)} پاسخ` : "—"] as Row["cells"],
           },
         ]
       : []),
@@ -73,7 +73,12 @@ function buildRows(l: PlanLimits): Row[] {
         perHour(l.voice_requests_per_hour.basic ?? null),
         perHour(l.voice_requests_per_hour.pro ?? null),
         perHour(l.voice_requests_per_hour.premium ?? null),
+        perHour(l.voice_requests_per_hour.team ?? null),
       ],
+    },
+    {
+      label: "بررسی قرارداد",
+      cells: ["—", "—", "—", "✓", "✓"],
     },
     {
       label: "بارگذاری فایل پرونده",
@@ -82,11 +87,12 @@ function buildRows(l: PlanLimits): Row[] {
         perDay(l.file_uploads_per_day.basic ?? null),
         perDay(l.file_uploads_per_day.pro ?? null),
         perDay(l.file_uploads_per_day.premium ?? null),
+        perDay(l.file_uploads_per_day.team ?? null),
       ],
     },
     {
       label: "پیش‌نویس",
-      cells: [drafts(l.draft_types.free), drafts(l.draft_types.basic), drafts(l.draft_types.pro), drafts(l.draft_types.premium)],
+      cells: [drafts(l.draft_types.free), drafts(l.draft_types.basic), drafts(l.draft_types.pro), drafts(l.draft_types.premium), drafts(l.draft_types.team)],
     },
   ];
 }
@@ -104,7 +110,7 @@ export default async function PlansPage() {
         <header className="space-y-3">
           <h1 className="text-2xl font-semibold">اشتراک و قیمت‌ها</h1>
           <p className="ap-muted leading-7">
-            گفتگوی حقوقی با ورود یا بدون ورود رایگان در دسترس است. اشتراک‌های پایه، حرفه‌ای و ویژه پاسخ‌های بیشتر با مدل‌های قوی‌تر می‌دهند؛ پیش‌نویس رأی و کیفرخواست از طرح حرفه‌ای به بالا فعال است. پاسخ‌ها راهنمای اولیه‌اند و جای مشاوره با وکیل را نمی‌گیرند.
+            گفتگوی حقوقی با ورود یا بدون ورود رایگان در دسترس است. اشتراک‌های پایه، حرفه‌ای، ویژه و تیمی پاسخ‌های بیشتر با مدل‌های قوی‌تر می‌دهند؛ طرح‌های ویژه و تیمی «بررسی قرارداد» هم دارند؛ پیش‌نویس رأی و کیفرخواست از طرح حرفه‌ای به بالا فعال است. پاسخ‌ها راهنمای اولیه‌اند و جای مشاوره با وکیل را نمی‌گیرند.
           </p>
         </header>
 
@@ -141,7 +147,7 @@ export default async function PlansPage() {
             <section aria-labelledby="compare-h" className="space-y-4">
               <h2 id="compare-h" className="text-lg font-semibold">مقایسهٔ امکانات</h2>
               <div className="overflow-x-auto rounded-2xl" style={{ background: "var(--ap-surface)" }} tabIndex={0} role="region" aria-label="جدول مقایسه (قابل پیمایش)">
-                <table className="w-full min-w-[40rem] text-start text-sm">
+                <table className="w-full min-w-[48rem] text-start text-sm">
                   <thead>
                     <tr className="ap-muted">
                       <th scope="col" className="px-4 py-3 text-start font-medium">امکان</th>

@@ -82,6 +82,10 @@ def chat_premium_daily_limit() -> int:
     return _int_env("CHAT_PREMIUM_DAILY_LIMIT", 120)
 
 
+def chat_team_daily_limit() -> int:
+    return _int_env("CHAT_TEAM_DAILY_LIMIT", 200)
+
+
 def pro_top_daily() -> int:
     """Answers per day a PRO user gets on the strong group (vip-pro) before dropping to vip-product."""
     return _int_env("SJ_PRO_TOP_DAILY", 60)
@@ -91,6 +95,11 @@ def premium_top_daily() -> int:
     """Answers per day a PREMIUM user gets on the world-best group (vip-premium) before dropping to vip-pro."""
     # CHAT_PREMIUM_TOP_DAILY_LIMIT is the documented name; SJ_PREMIUM_TOP_DAILY stays as a legacy alias.
     return _int_env("CHAT_PREMIUM_TOP_DAILY_LIMIT", _int_env("SJ_PREMIUM_TOP_DAILY", 8))
+
+
+def team_top_daily() -> int:
+    """Answers per day a TEAM user gets on the world-best group (vip-team) before dropping to vip-pro."""
+    return _int_env("CHAT_TEAM_TOP_DAILY_LIMIT", 20)
 
 
 def voice_anon_hourly_limit() -> int:
@@ -358,7 +367,7 @@ class CurrentUser:
     tier: str = "FREE"
     authenticated: bool = False
     token_invalid: bool = False
-    # free | basic | pro | premium, derived from the active entitlement. tier stays "VIP" for any
+    # free | basic | pro | premium | team, derived from the active entitlement. tier stays "VIP" for any
     # paid level so VIP-gated features keep working; "free" + tier "VIP" = legacy VIP without a level.
     plan_level: str = "free"
 
@@ -452,11 +461,12 @@ def rate_limited(retry_after: int, *, label: str = "error", anonymous: bool = Fa
     )
 
 
-PAID_LEVELS = ("basic", "pro", "premium")
+PAID_LEVELS = ("basic", "pro", "premium", "team")
+CONTRACT_REVIEW_LEVELS = ("premium", "team")
 
 
 def user_level(user: "CurrentUser") -> str:
-    """guest | free | basic | pro | premium | vip (legacy VIP without a plan level)."""
+    """guest | free | basic | pro | premium | team | vip (legacy VIP without a plan level)."""
     if not user.authenticated:
         return "guest"
     if user.plan_level in PAID_LEVELS:
@@ -466,20 +476,20 @@ def user_level(user: "CurrentUser") -> str:
 
 def vip_drafts_allowed(user: "CurrentUser") -> bool:
     """Ruling / indictment drafts: pro, premium and legacy VIP. Basic gets the standard drafts only."""
-    return user_level(user) in ("pro", "premium", "vip")
+    return user_level(user) in ("pro", "premium", "team", "vip")
 
 
 def _daily_limit_for(level: str) -> int:
     return {
         "guest": chat_anon_daily_limit, "free": chat_free_daily_limit, "basic": chat_basic_daily_limit,
-        "pro": chat_pro_daily_limit, "premium": chat_premium_daily_limit, "vip": chat_vip_daily_limit,
+        "pro": chat_pro_daily_limit, "premium": chat_premium_daily_limit, "team": chat_team_daily_limit, "vip": chat_vip_daily_limit,
     }[level]()
 
 
 def daily_chat_key(user: "CurrentUser", ip: str) -> tuple[str, int, str]:
     """(redis key, limit, kind) for the 24 h answered-question counter.
 
-    kind is guest / free / basic / pro / premium / vip (vip = legacy VIP without a level)."""
+    kind is guest / free / basic / pro / premium / team / vip (vip = legacy VIP without a level)."""
     level = user_level(user)
     if level == "guest":
         return f"rl:chat-day:guest:{ip}", chat_anon_daily_limit(), "guest"
@@ -490,18 +500,19 @@ def gateway_plan_for(user: "CurrentUser") -> tuple[str, Optional[str]]:
     """Plan name for ``llm_gateway.model_for`` plus the top-model counter key to refund if no
     answer is produced (None when no top-model cap applies).
 
+    team:    first CHAT_TEAM_TOP_DAILY_LIMIT (default 20) answers/day on vip-team, then vip-pro.
     premium: first CHAT_PREMIUM_TOP_DAILY_LIMIT (default 8) answers/day on vip-premium, then vip-pro.
     pro:     first SJ_PRO_TOP_DAILY answers/day on vip-pro, then vip-product (basic group).
     Other levels map straight to their own group; legacy VIP keeps "VIP"."""
     level = user_level(user)
-    if level in ("premium", "pro"):
-        cap = premium_top_daily() if level == "premium" else pro_top_daily()
+    if level in ("team", "premium", "pro"):
+        cap = {"team": team_top_daily, "premium": premium_top_daily, "pro": pro_top_daily}[level]()
         key = f"rl:top-day:{level}:{user.phone or ''}"
         count, _ = incr(key, DAY_SECONDS)
         if count <= cap:
             return level, key
         decr(key)
-        return ("pro" if level == "premium" else "basic"), None
+        return ("pro" if level in ("premium", "team") else "basic"), None
     if level in ("basic",):
         return "basic", None
     return ("VIP" if level == "vip" else "FREE"), None
@@ -513,7 +524,7 @@ MSG_PREMIUM_TOP_EXHAUSTED = "سهمیهٔ امروز مدل برتر تمام ش
 def top_quota_note(user: "CurrentUser", gateway_plan: str) -> Optional[str]:
     """Persian note for the response metadata when a premium user's answer was routed to the
     pro group because the daily top-model quota is used up (None otherwise)."""
-    if user_level(user) == "premium" and gateway_plan == "pro":
+    if user_level(user) in ("premium", "team") and gateway_plan == "pro":
         return MSG_PREMIUM_TOP_EXHAUSTED
     return None
 
@@ -546,7 +557,7 @@ NEXT_PLAN = {"basic": "SJ_PRO_MONTHLY", "pro": "SJ_PREMIUM_MONTHLY"}
 
 def daily_limit_response(kind: str, retry_after: int, *, label: str = "ERROR") -> JSONResponse:
     retry_after = max(1, int(retry_after))
-    if kind in ("vip", "premium"):
+    if kind in ("vip", "premium", "team"):
         return error_json(429, MSG_DAILY_FAIR_USE, code="DAILY_LIMIT", label=label,
                           headers={"Retry-After": str(retry_after)}, retry_after=retry_after)
     guest = kind == "guest"

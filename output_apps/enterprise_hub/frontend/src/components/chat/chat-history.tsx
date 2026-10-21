@@ -46,7 +46,7 @@ interface ChatHistoryProps {
 type Pending = { kind: "open"; id: string } | { kind: "new" };
 
 export function ChatHistory({ activeId, busy, hasUnsaved, onRestore, onNew }: ChatHistoryProps) {
-  const { isAuthenticated, getAccessToken, logout } = useAuth();
+  const { isAuthenticated, getAccessToken, expireSession } = useAuth();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ConversationSummary[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -58,13 +58,13 @@ export function ChatHistory({ activeId, busy, hasUnsaved, onRestore, onNew }: Ch
   const fail = useCallback(
     (err: unknown, fallback: string) => {
       if (err instanceof ConversationsError && err.status === 401) {
-        logout();
+        expireSession();
         setError(HISTORY_COPY.expired);
       } else {
         setError(fallback);
       }
     },
-    [logout],
+    [expireSession],
   );
 
   const refresh = useCallback(async () => {

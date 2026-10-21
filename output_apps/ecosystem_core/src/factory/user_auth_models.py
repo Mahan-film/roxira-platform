@@ -99,6 +99,7 @@ TIER_ALIASES: Dict[str, str] = {
     "VIP_MONTHLY_PRO": "VIP",
     "VIP_UNLIMITED": "VIP",
     "PREMIUM": "VIP",
+    "TEAM": "VIP",
     "TIER2": "PRO",
     "TIER3": "ENTERPRISE",
     "PLUS": "PRO",

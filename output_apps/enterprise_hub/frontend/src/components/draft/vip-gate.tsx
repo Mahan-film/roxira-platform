@@ -16,7 +16,7 @@ function isVipTier(tier: string | undefined): boolean {
 }
 
 /** Plan levels the server allows ruling / indictment drafts for; legacy VIP has no level. */
-const ENTITLED_PLAN_LEVELS: readonly PlanLevel[] = ["pro", "premium"];
+const ENTITLED_PLAN_LEVELS: readonly PlanLevel[] = ["pro", "premium", "team"];
 
 /** Basic users are tier "VIP" on the server but get a 403 for these drafts, so check the level. */
 function isDraftEntitled(tier: string | undefined, planLevel: PlanLevel | undefined): boolean {
@@ -28,7 +28,7 @@ function isDraftEntitled(tier: string | undefined, planLevel: PlanLevel | undefi
 /**
  * Shows the lock card (real prices from the pricing API + login/upgrade CTA)
  * instead of the form for guests and users below the pro plan, so nobody types a
- * long case before hitting the paywall. The server still enforces pro/premium on submit.
+ * long case before hitting the paywall. The server still enforces pro/premium/team on submit.
  */
 export function VipGate({ children, feature }: { children: ReactNode; feature: string }) {
   const { isAuthenticated, isLoading, user, accessToken, openLogin } = useAuth();

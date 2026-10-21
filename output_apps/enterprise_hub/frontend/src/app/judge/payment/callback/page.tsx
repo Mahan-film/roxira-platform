@@ -45,7 +45,7 @@ function formatExpiry(iso: string | null): string | null {
 /** Make the chat UI see the new plan without a re-login (session is in localStorage). */
 function refreshStoredPlan(planLevel: unknown): void {
   try {
-    if (planLevel !== "basic" && planLevel !== "pro" && planLevel !== "premium") return;
+    if (planLevel !== "basic" && planLevel !== "pro" && planLevel !== "premium" && planLevel !== "team") return;
     const session = loadStoredSession();
     if (!session) return;
     saveStoredSession({

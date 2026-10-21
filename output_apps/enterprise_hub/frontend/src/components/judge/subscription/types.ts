@@ -16,17 +16,19 @@ export interface SubscriptionSelection {
  * `get_calculated_pricing()` in smartjudge_module.py). Any UI option that
  * does not map to one of these must be shown as "coming soon", never wired
  * to a fake/local-only charge. */
-export type PaidLevel = "basic" | "pro" | "premium";
+export type PaidLevel = "basic" | "pro" | "premium" | "team";
 export type BillingPeriod = "monthly" | "yearly";
 
-/** The 4-tier subscription keys (basic/pro/premium × monthly/yearly). */
+/** The 4-tier subscription keys (basic/pro/premium/team × monthly/yearly). */
 export type SubscriptionPlanKey =
   | "SJ_BASIC_MONTHLY"
   | "SJ_BASIC_YEARLY"
   | "SJ_PRO_MONTHLY"
   | "SJ_PRO_YEARLY"
   | "SJ_PREMIUM_MONTHLY"
-  | "SJ_PREMIUM_YEARLY";
+  | "SJ_PREMIUM_YEARLY"
+  | "SJ_TEAM_MONTHLY"
+  | "SJ_TEAM_YEARLY";
 
 /** `VIP_MONTHLY_PRO` is the legacy (grandfathered, = pro) plan: still accepted by the
  * server but no longer offered in the UI. */

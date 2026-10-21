@@ -60,7 +60,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | Package | Name | Versions |
 | --- | --- | --- |
 | backend | @roxira/enterprise-hub | @nestjs/core ^10.4.4, typescript ^5.9.3 |
-| frontend | @roxira/enterprise-hub-frontend | next 16.3.4, react 19.2.8, tailwindcss ^4, typescript ^5 |
+| frontend | @roxira/enterprise-hub-frontend | next 16.4.2, react 19.2.8, tailwindcss ^4, typescript ^5 |
 
 ## Python
 

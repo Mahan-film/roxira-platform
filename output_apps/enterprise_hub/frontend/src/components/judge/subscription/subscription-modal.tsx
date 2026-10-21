@@ -50,6 +50,14 @@ function cardCopy(planType: BackendPlanType): RealPlanCard {
     return { planType, label: "اشتراک ماهانه VIP", description: "جزئیات در صفحهٔ اشتراک و قیمت‌ها." };
   }
   const copy = LEVEL_COPY[level];
+  if (level === "team") {
+    return {
+      planType,
+      label: `اشتراک ${copy.title} (وکلا و تیم‌های حقوقی)`,
+      description:
+        "بررسی قرارداد (ریسک، بندهای ناعادلانه، استناد قانونی، متن پیشنهادی اصلاح)، بالاترین سقف پرسش و بارگذاری، و بهترین مدل‌های دنیا.",
+    };
+  }
   return {
     planType,
     label: `اشتراک ${copy.title}`,
@@ -297,21 +305,27 @@ export function SubscriptionModal({
             <span className="text-[13px] text-[var(--gh-ok)]">سالانه: ۲ ماه رایگان</span>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {offeredPlans.map((planType) => {
               const copy = cardCopy(planType);
               const server = pricing?.plans?.[planType];
               const highlight = initialPlan ? planType === initialPlan : planType === planKey(RECOMMENDED_LEVEL, period);
+              const isTeam = planType.startsWith("SJ_TEAM_");
               return (
                 <article
                   key={planType}
+                  data-plan-level={isTeam ? "team" : undefined}
                   className={`relative flex flex-col rounded-2xl border p-5 ${
-                    highlight
-                      ? "border-[var(--gh-gold)]/50 bg-[var(--gh-gold)]/[0.06]"
-                      : "border-border bg-white/[0.04]"
+                    isTeam ? "sm:col-span-2 lg:col-span-2 " : ""
+                  }${
+                    isTeam
+                      ? "border-[var(--gh-gold)] bg-gradient-to-br from-[var(--gh-gold)]/[0.16] to-[var(--gh-gold)]/[0.04]"
+                      : highlight
+                        ? "border-[var(--gh-gold)]/50 bg-[var(--gh-gold)]/[0.06]"
+                        : "border-border bg-white/[0.04]"
                   }`}
                 >
-                  <h4 className="text-sm font-bold text-foreground">{copy.label}</h4>
+                  <h4 className={`text-sm font-bold ${isTeam ? "text-[var(--gh-gold)]" : "text-foreground"}`}>{copy.label}</h4>
                   <div className="mt-3 flex items-end gap-1.5">
                     {server ? (
                       <span className="text-2xl font-black text-foreground" dir="ltr">
@@ -340,7 +354,7 @@ export function SubscriptionModal({
                     aria-busy={pendingPlan === planType}
                     onClick={() => startCheckout(planType)}
                     className={`mt-5 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gh-cyan)] disabled:cursor-not-allowed disabled:opacity-60 ${
-                      highlight
+                      highlight || isTeam
                         ? "bg-[var(--gh-gold)] text-[var(--gh-on-gold)] hover:bg-[var(--gh-gold-strong)]"
                         : "border border-white/30 bg-white/[0.04] text-foreground hover:border-[var(--gh-cyan)]"
                     }`}

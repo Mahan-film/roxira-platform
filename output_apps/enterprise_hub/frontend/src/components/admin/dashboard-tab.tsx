@@ -2,7 +2,7 @@
 
 import { Badge, Btn, Card, ErrorBox, fa, Notice, Spinner, Stat, TableWrap, Td, Th, useAdminData } from "./admin-ui";
 
-type Level = "free" | "basic" | "pro" | "premium";
+type Level = "free" | "basic" | "pro" | "premium" | "team";
 interface WindowData {
   since: string;
   new_users: number | null;
@@ -47,6 +47,7 @@ const LEVELS: { key: Level; label: string }[] = [
   { key: "basic", label: "پایه" },
   { key: "pro", label: "حرفه‌ای" },
   { key: "premium", label: "ویژه" },
+  { key: "team", label: "تیمی" },
 ];
 
 function usd(n: number | null | undefined): string {

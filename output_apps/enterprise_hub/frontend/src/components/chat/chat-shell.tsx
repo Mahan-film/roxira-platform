@@ -2,9 +2,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { UpgradeCard } from "@/components/chat/upgrade-card";
+import { ContractReviewUpsell } from "@/components/chat/contract-review-upsell";
+import { canReviewContract } from "@/lib/plan-catalog";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
+  FileSearch,
   FileSignature,
   FileText,
   Gavel,
@@ -66,7 +69,9 @@ import {
   EMPTY_FAILURE,
   JUDGE_TRANSCRIBE_PATH,
   MAX_CHAT_CHARS,
+  MAX_CONTRACT_CHARS,
   MAX_RECORDING_MS,
+  MIN_CONTRACT_CHARS,
   NETWORK_FAILURE,
   RetryTimeoutError,
   STT_TIMEOUT_MS,
@@ -236,7 +241,11 @@ export function ChatShell() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const micHint = useMicHint();
   const recoveredRef = useRef(false);
-  const { getAccessToken, isAuthenticated, openLogin, logout } = useAuth();
+  const { getAccessToken, isAuthenticated, openLogin, expireSession, user } = useAuth();
+  // «بررسی قرارداد»: armed by its chip (premium/team); the server re-checks the plan.
+  const canReview = isAuthenticated && canReviewContract(user?.planLevel);
+  const [reviewArmed, setReviewArmed] = useState(false);
+  const [reviewUpsell, setReviewUpsell] = useState(false);
   const recordingTimerRef = useRef<number | null>(null);
   const statusClearRef = useRef<number | null>(null);
 
@@ -382,8 +391,8 @@ export function ChatShell() {
           const headers = authHeaders(getAccessToken());
           let res = await send(headers);
           if (res.status === 401 && Object.keys(headers).length > 0) {
-            // Stale token: same silent guest fallback as the text chat (no login modal).
-            logout();
+            // Expired token (sessions last 3 days): clear it, ask to log in again, and still transcribe as guest.
+            expireSession();
             setGuestNotice(true);
             res = await send(withoutAuthHeader(headers));
           }
@@ -495,9 +504,8 @@ export function ChatShell() {
     const e = err instanceof CaseFileError ? err : null;
     if (e?.code === "ABORTED") return;
     if (e?.status === 401) {
-      logout();
       setAttachments((prev) => prev.filter((a) => a.localId !== localId));
-      askLoginForUpload();
+      expireSession();
       return;
     }
     // Validation/limit errors are final; network/timeout/server failures can be retried by hand.
@@ -646,7 +654,12 @@ export function ChatShell() {
 
   const chatStartedRef = useRef(false);
 
-  const sendChat = async (textToSend: string, baseMsgs: ChatMessage[], requestIdIn?: string) => {
+  const sendChat = async (
+    textToSend: string,
+    baseMsgs: ChatMessage[],
+    requestIdIn?: string,
+    review?: { contractText?: string },
+  ) => {
     if (busyRef.current) return;
     busyRef.current = true;
     const requestId = requestIdIn ?? newRequestId();
@@ -675,6 +688,7 @@ export function ChatShell() {
           conversation_id: conversationId || undefined,
           request_id: requestId,
           ...(contextRef.current.length ? { case_file_ids: contextRef.current.map((f) => f.fileId) } : {}),
+          ...(review ? { review_mode: "contract", ...(review.contractText ? { contract_text: review.contractText } : {}) } : {}),
         },
         onDelta: (piece) => {
           streamed += piece;
@@ -688,9 +702,9 @@ export function ChatShell() {
           setMessages(baseMsgs);
         },
         onRetry: () => setWeakConnection(true),
-        // Stale token: drop it silently; streamChat repeats the request once as a guest.
+        // Expired token: clear the session and open the login dialog; streamChat repeats the request once as a guest.
         onAuthExpired: () => {
-          logout();
+          expireSession();
           setGuestNotice(true);
         },
       });
@@ -725,7 +739,7 @@ export function ChatShell() {
       setWeakConnection(false);
       if (err instanceof ChatHttpError) {
         const failure = failureFromResponse(err.status, err.body);
-        if (failure.kind === "auth") logout(); // never open the login modal automatically
+        if (failure.kind === "auth") expireSession();
         if (!failure.retryable) clearPending();
         finish(errorBubble(failure, textToSend, requestId));
       } else {
@@ -771,7 +785,7 @@ export function ChatShell() {
         {
           token: getAccessToken(),
           onAuthExpired: () => {
-            logout();
+            expireSession();
             setGuestNotice(true);
           },
         },
@@ -827,7 +841,7 @@ export function ChatShell() {
      }
     } catch (err) {
       const failure = err instanceof DraftAssistError ? err.failure : null;
-      if (failure?.kind === "auth") logout();
+      if (failure?.kind === "auth") expireSession();
       setDraft((d) => (d && d.status === "generating" ? { ...d, status: d.missing.length ? "collecting" : "ready" } : d));
       // A failed card refresh stays quiet: its `base` may be older than the visible conversation.
       if (!opts.silent) {
@@ -961,7 +975,7 @@ export function ChatShell() {
     const textToSend =
       customPrompt || inputPrompt || (readyFileIds.length ? (draft ? DRAFT_FILES_PROMPT : DEFAULT_CASE_PROMPT) : "");
     if (!textToSend || !textToSend.trim() || isLoading) return;
-    if (textToSend.length > MAX_CHAT_CHARS) return;
+    if (textToSend.length > (reviewArmed ? MAX_CONTRACT_CHARS : MAX_CHAT_CHARS)) return;
     if (busyRef.current) {
       // Only a silent card refresh can be running here (isLoading is false): wait for it instead of dropping the text.
       for (let i = 0; i < 40 && busyRef.current; i++) await new Promise((r) => setTimeout(r, 200));
@@ -994,6 +1008,28 @@ export function ChatShell() {
       content: textToSend,
       ...(sent.length ? { files: sent.map((a) => a.name) } : {}),
     };
+    if (reviewArmed && !customPrompt) {
+      // Contract review: pasted text goes in `contract_text`; with uploaded files the text is only an instruction.
+      const hasFiles = contextRef.current.length > 0;
+      const pasted = !hasFiles || textToSend.length > MAX_CHAT_CHARS ? textToSend : "";
+      if (!hasFiles && pasted.trim().length < MIN_CONTRACT_CHARS) {
+        setInputPrompt(textToSend);
+        setAttachNotice("برای بررسی قرارداد، متن کامل قرارداد را در کادر بچسبانید یا فایل آن را بارگذاری کنید.");
+        return;
+      }
+      const instruction = pasted || textToSend === DEFAULT_CASE_PROMPT ? "" : textToSend;
+      const reviewMsg: ChatMessage = {
+        role: "user",
+        content: pasted
+          ? `بررسی قرارداد (متن الصاق‌شده، ${pasted.length.toLocaleString("fa-IR")} نویسه)`
+          : instruction || "بررسی قرارداد",
+        ...(sent.length ? { files: sent.map((a) => a.name) } : {}),
+      };
+      setReviewArmed(false);
+      setAttachNotice("");
+      await sendChat(reviewMsg.content, [...messages, reviewMsg], undefined, { contractText: pasted });
+      return;
+    }
     const previous = reviseIdx !== null ? messages[reviseIdx]?.draftResult : undefined;
     if (previous && draft) {
       // «اصلاح کن»: the typed text is an edit instruction for the finished draft.
@@ -1088,7 +1124,25 @@ export function ChatShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  const overLimit = inputPrompt.length > MAX_CHAT_CHARS;
+  const maxInputChars = reviewArmed ? MAX_CONTRACT_CHARS : MAX_CHAT_CHARS;
+  const overLimit = inputPrompt.length > maxInputChars;
+
+  const startContractReview = () => {
+    if (!isAuthenticated) {
+      openLogin({
+        serviceDomain: "GHAZI",
+        title: "ورود به قاضی هوشمند",
+        description: "برای بررسی قرارداد وارد شوید؛ این قابلیت ویژهٔ اشتراک ویژه و تیمی است.",
+      });
+      return;
+    }
+    if (!canReview) {
+      setReviewUpsell((v) => !v);
+      return;
+    }
+    setReviewUpsell(false);
+    setReviewArmed((v) => !v);
+  };
   // Guests see the login nudge only after the first real answer.
   const hasAnswer = messages.some((m, i) => i > 0 && m.role === "assistant" && !m.isError);
 
@@ -1339,7 +1393,44 @@ export function ChatShell() {
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={startContractReview}
+            disabled={isLoading}
+            className="ap-chip"
+            aria-pressed={canReview ? reviewArmed : undefined}
+            data-feature="contract-review"
+            title={canReview ? undefined : "ویژهٔ اشتراک ویژه و تیمی"}
+          >
+            <FileSearch className="size-4 ap-chip-icon" aria-hidden="true" />
+            <span>بررسی قرارداد{canReview ? "" : " (ویژه)"}</span>
+          </button>
         </div>
+
+        {reviewUpsell && !canReview && (
+          <ContractReviewUpsell
+            showLogin={!isAuthenticated}
+            onClose={() => setReviewUpsell(false)}
+            onLogin={() =>
+              openLogin({
+                serviceDomain: "GHAZI",
+                title: "ورود به قاضی هوشمند",
+                description: "کد تأیید به شمارهٔ همراه شما پیامک می‌شود.",
+              })
+            }
+          />
+        )}
+
+        {reviewArmed && canReview && (
+          <p className="ap-notice flex flex-wrap items-center justify-center gap-2 text-center" role="status">
+            <span>
+              حالت بررسی قرارداد فعال است: فایل قرارداد را بارگذاری کنید یا متن کامل آن را در کادر بچسبانید و ارسال کنید.
+            </span>
+            <button type="button" className="ap-link underline" onClick={() => setReviewArmed(false)}>
+              لغو
+            </button>
+          </p>
+        )}
 
         {guestNotice && !isAuthenticated && (
           <p className="ap-notice text-center" role="status">
@@ -1592,13 +1683,13 @@ export function ChatShell() {
         )}
         {attachments.length > 0 && <p className="ap-notice text-center">{CASE_FILE_PRIVACY_NOTICE}</p>}
 
-        {(inputPrompt.length > MAX_CHAT_CHARS * 0.8 || overLimit) && (
+        {(inputPrompt.length > maxInputChars * 0.8 || overLimit) && (
           <div
             className="ap-notice text-end"
             style={overLimit ? { color: "var(--ap-danger)" } : undefined}
             role={overLimit ? "alert" : undefined}
           >
-            {inputPrompt.length.toLocaleString("fa-IR")} / {MAX_CHAT_CHARS.toLocaleString("fa-IR")}
+            {inputPrompt.length.toLocaleString("fa-IR")} / {maxInputChars.toLocaleString("fa-IR")}
             {overLimit ? " — پیام طولانی‌تر از حد مجاز است؛ لطفاً کوتاه‌تر کنید." : ""}
           </div>
         )}

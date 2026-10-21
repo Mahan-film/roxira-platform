@@ -19,7 +19,7 @@ export const unlockSafariAudio = () => {};
 const nowMs = () => Date.now();
 
 export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose }) => {
-  const { getAccessToken, logout } = useAuth();
+  const { getAccessToken, expireSession } = useAuth();
   const [sessionState, setSessionState] = useState<'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING'>('IDLE');
   const [transcription, setTranscription] = useState<string>('');
   const [assistantReply, setAssistantReply] = useState<string>('');
@@ -439,10 +439,10 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       if (userEndedRef.current) return;
 
       if (ev.code === 4401) {
-        // Stale token. Same silent guest fallback as the text chat: no login modal.
+        // Expired token: ask to log in again, and still connect as guest.
         reportVoiceError('ws_4401', 'stale token, retrying as guest');
         if (useToken) {
-          logout();
+          expireSession();
           connectSocket(false);
           return;
         }

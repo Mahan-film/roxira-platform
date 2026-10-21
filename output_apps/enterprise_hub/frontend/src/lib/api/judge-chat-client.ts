@@ -12,6 +12,10 @@ export const JUDGE_CLIENT_ERRORS_PATH = "/api/v1/apps/judge/client-errors";
 
 /** Server-side cap on a single user message. */
 export const MAX_CHAT_CHARS = 6000;
+/** Pasted text limit in «بررسی قرارداد» mode (matches the server cap on `contract_text`). */
+export const MAX_CONTRACT_CHARS = 400_000;
+/** Shortest pasted text accepted as a contract (shorter input is probably an instruction, not a contract). */
+export const MIN_CONTRACT_CHARS = 200;
 /** Client timeout for ONE chat attempt (the server can take 30 s+ on slow links). */
 export const CHAT_TIMEOUT_MS = 90_000;
 /** Total attempts for one question (same request_id each time). */
@@ -98,6 +102,14 @@ export function failureFromResponse(status: number, data: unknown): ChatFailure 
       kind: "auth",
       message: "نشست شما منقضی شده یا نامعتبر است. لطفاً دوباره وارد شوید.",
       retryable: false,
+    };
+  }
+  if (status === 403 && data && typeof data === "object" && (data as Record<string, unknown>).code === "CONTRACT_REVIEW_PLAN_REQUIRED") {
+    return {
+      kind: "rate",
+      message: msg ?? "«بررسی قرارداد» ویژهٔ اشتراک ویژه و تیمی است.",
+      retryable: false,
+      upsell: "upgrade",
     };
   }
   if (status === 429) {

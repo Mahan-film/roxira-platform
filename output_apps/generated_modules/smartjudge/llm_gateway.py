@@ -14,8 +14,8 @@ container ``roxira_keypool``, port 4000).
     SMARTJUDGE_LLM_GATEWAY_MODEL_VIP   group for subscribers (default "vip-product").
                                   If neither tier var is set and the legacy MODEL var is set,
                                   the legacy value serves both tiers (backward compatible).
-    SMARTJUDGE_LLM_GATEWAY_MODEL_BASIC / _PRO / _PREMIUM  groups for the paid plan levels
-                                  (defaults vip-product / vip-pro / vip-premium).
+    SMARTJUDGE_LLM_GATEWAY_MODEL_BASIC / _PRO / _PREMIUM / _TEAM  groups for the paid plan levels
+                                  (defaults vip-product / vip-pro / vip-premium / vip-team).
     SMARTJUDGE_FREE_PAID_FALLBACK 1 = free users may fall back to the direct paid OpenRouter
                                   path when the gateway fails (old behaviour; default off).
     KEYPOOL_MASTER_KEY            gateway auth, sent as the OpenAI api key.
@@ -43,11 +43,14 @@ ENV_MODEL_PREMIUM = "SMARTJUDGE_LLM_GATEWAY_MODEL_PREMIUM"
 DEFAULT_MODEL_BASIC = "vip-product"
 DEFAULT_MODEL_PRO = "vip-pro"
 DEFAULT_MODEL_PREMIUM = "vip-premium"
-PAID_LEVELS = ("basic", "pro", "premium")
+ENV_MODEL_TEAM = "SMARTJUDGE_LLM_GATEWAY_MODEL_TEAM"
+DEFAULT_MODEL_TEAM = "vip-team"
+PAID_LEVELS = ("basic", "pro", "premium", "team")
 _LEVEL_MODEL = {
     "basic": (ENV_MODEL_BASIC, DEFAULT_MODEL_BASIC),
     "pro": (ENV_MODEL_PRO, DEFAULT_MODEL_PRO),
     "premium": (ENV_MODEL_PREMIUM, DEFAULT_MODEL_PREMIUM),
+    "team": (ENV_MODEL_TEAM, DEFAULT_MODEL_TEAM),
 }
 ENV_FREE_PAID_FALLBACK = "SMARTJUDGE_FREE_PAID_FALLBACK"
 DEFAULT_MODEL_FREE = "best-product-free"
@@ -67,7 +70,7 @@ def model() -> str:
 
 
 def is_vip(tier: str | None) -> bool:
-    """True for legacy "VIP" and for every paid plan level (basic / pro / premium)."""
+    """True for legacy "VIP" and for every paid plan level (basic / pro / premium / team)."""
     value = str(tier or "").strip().lower()
     return value == "vip" or value in PAID_LEVELS
 
@@ -75,9 +78,9 @@ def is_vip(tier: str | None) -> bool:
 def model_for(tier: str | None) -> str:
     """Gateway group for a plan.
 
-    ``tier`` is a plan level (free / basic / pro / premium) or the legacy "VIP"/"FREE".
+    ``tier`` is a plan level (free / basic / pro / premium / team) or the legacy "VIP"/"FREE".
     basic/pro/premium -> their own group (env override, else vip-product / vip-pro /
-    vip-premium); legacy VIP -> paid-capable group; everyone else -> free-only group."""
+    vip-premium / vip-team); legacy VIP -> paid-capable group; everyone else -> free-only group."""
     level = str(tier or "").strip().lower()
     if level in _LEVEL_MODEL:
         env_name, default = _LEVEL_MODEL[level]
