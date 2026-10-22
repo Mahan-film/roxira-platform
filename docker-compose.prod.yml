@@ -279,6 +279,8 @@ services:
     build:
       context: ./output_apps/enterprise_hub
       dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     container_name: roxira_enterprise_backend
     restart: always
     mem_limit: 900m
@@ -403,6 +405,7 @@ services:
       context: ./output_apps/enterprise_hub/frontend
       dockerfile: Dockerfile
       args:
+        GIT_SHA: ${GIT_SHA:-unknown}
         NEXT_PUBLIC_UMAMI_WEBSITE_ID: ${NEXT_PUBLIC_UMAMI_WEBSITE_ID:-}
         NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI: ${NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI:-}
         NEST_API_ORIGIN: http://roxira_enterprise_backend:3000

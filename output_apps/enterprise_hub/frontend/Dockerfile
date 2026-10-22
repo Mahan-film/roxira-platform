@@ -34,6 +34,9 @@ ARG NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI=
 ENV NEXT_PUBLIC_UMAMI_WEBSITE_ID=${NEXT_PUBLIC_UMAMI_WEBSITE_ID}
 ENV NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI=${NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI}
 ENV NEXT_TELEMETRY_DISABLED=1
+# Build id shown in client error reports (public value, inlined at build time).
+ARG GIT_SHA=unknown
+ENV NEXT_PUBLIC_GIT_SHA=${GIT_SHA}
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -60,6 +63,10 @@ COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nextjs /app/.next/static ./.next/static
 
 USER nextjs
+
+# Gate 4 (scripts/ops/autodeploy): the commit this image was built from.
+ARG GIT_SHA=unknown
+LABEL org.roxira.git_sha=$GIT_SHA
 
 EXPOSE 3001
 

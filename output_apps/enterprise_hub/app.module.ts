@@ -22,6 +22,7 @@ import { CurrencyModule } from './modules/currency/currency.module';
 import { HealthModule } from './modules/health/health.module';
 import { RadarModule } from './modules/radar/radar.module';
 import { InquiriesModule } from './modules/inquiries/inquiries.module';
+import { ClientErrorsModule } from './modules/client-errors/client-errors.module';
 import { McpModule } from './mcp/mcp.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
@@ -84,6 +85,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     HealthModule,
     RadarModule,
     InquiriesModule,
+    ClientErrorsModule,
     McpModule,
   ],
 })

@@ -58,6 +58,10 @@ COPY package.json ./package.json
 # اسکریپت ازدحام به git و Docker CLI نیاز دارد. علاوه بر این سوکت Docker
 # نیز در همین کانتینر mount می‌شود.
 
+# Gate 4 (scripts/ops/autodeploy): the commit this image was built from.
+ARG GIT_SHA=unknown
+LABEL org.roxira.git_sha=$GIT_SHA
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

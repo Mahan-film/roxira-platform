@@ -6,6 +6,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PwaRegister } from "@/components/pwa/pwa-register";
+import { ClientErrorReporter } from "@/components/observability/client-error-reporter";
 import { buildBrandJsonLd } from "@/lib/seo/laws-schema";
 import { umamiScriptConfig } from "@/lib/analytics/umami";
 
@@ -84,6 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-full flex flex-col font-sans">
         {isGhazi ? <JsonLd id="ghazi-brand-jsonld" data={buildBrandJsonLd()} /> : null}
         {isGhazi ? <PwaRegister /> : null}
+        <ClientErrorReporter />
         {umami ? (
           <Script
             src={umami.src}

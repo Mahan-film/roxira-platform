@@ -22,5 +22,15 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    // Gate 4 only (scripts/ops/autodeploy sets GATE4_WEBKIT=1): CI installs chromium only.
+    ...(process.env.GATE4_WEBKIT
+      ? [
+          {
+            name: 'webkit',
+            testMatch: /app-shell\.spec\.ts/,
+            use: { ...devices['Desktop Safari'] },
+          },
+        ]
+      : []),
   ],
 });

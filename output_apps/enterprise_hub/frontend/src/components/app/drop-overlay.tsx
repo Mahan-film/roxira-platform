@@ -89,6 +89,7 @@ export function DropOverlay() {
     <div
       className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur"
       aria-hidden="true"
+      data-testid="drop-overlay"
     >
       <div className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-indigo-400 bg-indigo-500/10 px-10 py-12 text-center">
         <FileUp className="size-12 text-indigo-400" aria-hidden="true" />

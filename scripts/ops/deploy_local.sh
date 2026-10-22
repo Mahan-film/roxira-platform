@@ -368,6 +368,7 @@ cmd_deploy() {
   rsh "set -euo pipefail; cd '$REMOTE_DIR'
     git fetch origin main
     git merge --ff-only '$TARGET_SHA'
+    export GIT_SHA='$TARGET_SHA'   # image label org.roxira.git_sha (Gate 4 in autodeploy.sh)
     docker compose -f $COMPOSE config -q
     if [ -n '$svcs' ]; then docker compose -f $COMPOSE build $svcs; docker compose -f $COMPOSE up -d --no-deps $svcs; fi
     if [ '$NGINX_CHANGED' = 1 ]; then docker compose -f $COMPOSE up -d --no-deps --force-recreate nginx_gateway

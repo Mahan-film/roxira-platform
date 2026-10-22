@@ -139,3 +139,66 @@ fi
 
 RESULT="ok"
 log "deploy OK: $TARGET_SHORT"
+
+# ---------------------------------------------------------------- Gate 4
+# Post-deploy verification. ALERT ONLY: it never changes RESULT, never rolls back and never
+# makes autodeploy exit non-zero (the deploy itself already passed its smoke test).
+gate4_alert() {
+  log "GATE4 FAIL: $*"
+  python3 "$REPO/scripts/ops/notify/notify.py" "Gate4 ${TARGET_SHORT:0:7}: $*" >/dev/null 2>&1 || true
+}
+
+# (a) Containers that were rebuilt for this deploy must carry the target SHA as image label.
+gate4_sha_check() {
+  local svcs svc container label
+  svcs="$(cat "$STATE_DIR/services" 2>/dev/null || true)"
+  if [ -z "$svcs" ]; then log "gate4: no service was rebuilt; SHA label check skipped"; return 0; fi
+  for svc in $svcs; do
+    case "$svc" in
+      roxira_enterprise_backend|roxira_enterprise_frontend) container="$svc" ;;
+      *) continue ;;
+    esac
+    label="$(docker inspect --format '{{index .Config.Labels "org.roxira.git_sha"}}' "$container" 2>/dev/null || true)"
+    if [ "$label" = "$TARGET" ]; then
+      log "gate4: $container built from ${TARGET_SHORT} (label ok)"
+    else
+      gate4_alert "SHA mismatch on $container: label='${label:-none}' expected='${TARGET_SHORT}'"
+      return 1
+    fi
+  done
+}
+
+# (b) Browser smoke (e2e/tests/app-shell.spec.ts) in chromium and webkit. Skips with a log line
+# when Playwright or a browser is not installed on the server.
+gate4_browser_smoke() {
+  local e2e="$REPO/e2e" cache="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+  local projects=() out
+  if ! command -v npx >/dev/null 2>&1 || [ ! -d "$e2e/node_modules/@playwright/test" ]; then
+    log "gate4: browser smoke SKIPPED (Playwright not installed in $e2e; run npm ci there)"
+    return 0
+  fi
+  ls -d "$cache"/chromium-* >/dev/null 2>&1 && projects+=(--project=chromium)
+  ls -d "$cache"/webkit-* >/dev/null 2>&1 && projects+=(--project=webkit)
+  if [ "${#projects[@]}" -eq 0 ]; then
+    log "gate4: browser smoke SKIPPED (no Playwright browsers in $cache)"
+    return 0
+  fi
+  log "gate4: browser smoke on ${projects[*]}"
+  if out="$(cd "$e2e" && GATE4_BASE_URL="${GATE4_BASE_URL:-https://roxira.ir}" GATE4_WEBKIT=1 \
+      timeout 300 npx playwright test tests/app-shell.spec.ts --reporter=line "${projects[@]}" 2>&1)"; then
+    log "gate4: browser smoke OK"
+  else
+    printf '%s\n' "$out" | tail -n 40
+    gate4_alert "browser smoke failed (uncaught page error or stuck overlay); no rollback performed"
+    return 1
+  fi
+}
+
+gate4() {
+  local rc=0
+  gate4_sha_check || rc=1
+  gate4_browser_smoke || rc=1
+  [ "$rc" -eq 0 ] && log "gate4: all checks passed"
+  return 0
+}
+gate4 || true

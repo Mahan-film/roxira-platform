@@ -23,6 +23,7 @@ import { CommandPalette } from "@/components/app/command-palette";
 import { DropOverlay } from "@/components/app/drop-overlay";
 import { ImportHandoffProvider } from "@/components/app/import-handoff";
 import { useAuth } from "@/components/auth/auth-provider";
+import { ClientErrorReporter } from "@/components/observability/client-error-reporter";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { cn } from "@/lib/utils";
 
@@ -209,6 +210,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
           <DropOverlay />
+          <ClientErrorReporter />
         </div>
       </ImportHandoffProvider>
     </EnterpriseRouteGuard>
