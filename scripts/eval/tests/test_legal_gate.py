@@ -1,5 +1,4 @@
 """Offline tests for scripts/eval/legal_gate.py (no network, no LLM, no Qdrant)."""
-# ruff: noqa: RUF001
 import importlib.util
 import json
 from pathlib import Path
@@ -69,12 +68,48 @@ def test_must_include_phrases_come_from_the_staged_article_text():
 
 
 # ---- retrieval ----------------------------------------------------------------------------
-def test_hit_rank_requires_exact_law_and_article():
+def test_hit_rank_requires_law_and_article():
     c = case()
-    assert lg.hit_rank(c, [row(AMEND, "12"), row(CHEQUE, "3"), row(CHEQUE, "12")]) == 3
-    assert lg.hit_rank(c, [row(AMEND, "12")]) is None  # amendment law is not the base law
+    assert lg.hit_rank(c, [row(CHEQUE, "3"), row(CHEQUE, "12")]) == 2
     assert lg.hit_rank(c, [row(CHEQUE, 12)]) == 1  # int article numbers
     assert lg.hit_rank(c, []) is None
+    # strict mode ignores aliases: the amendment label is not the base law
+    assert lg.hit_rank(c, [row(AMEND, "12"), row(CHEQUE, "3"), row(CHEQUE, "12")], alias_aware=False) == 3
+
+
+def test_law_aliases_match_the_same_law_under_another_name():
+    # base cheque law vs. its ۱۳۹۷ amendment label
+    assert lg.hit_rank(case(arts=("12",)), [row(AMEND, "12")]) == 1
+    assert lg.hit_rank(case(arts=("12",)), [row("قانون صدور چک (اصلاحی ۱۳۹۷)", "12")]) == 1
+    # official vs. short title of the civil procedure law
+    dsp = case(cid="dsp", law="قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی", arts=("48",))
+    assert lg.hit_rank(dsp, [row("قانون آیین دادرسی مدنی", "48")]) == 1
+    assert lg.canonical_law("قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی") == \
+        lg.canonical_law("قانون آیین دادرسی مدنی")
+    # normalisation: ZWNJ / ي ك / Persian digits / parentheses
+    assert lg.canonical_law("قانون صدور چک (اصلاحي ۱۳۹۷)") == lg.canonical_law("قانون صدور چک")
+
+
+def test_alias_does_not_match_a_different_law_with_the_same_article():
+    c = case(law=CHEQUE, arts=("12",))
+    assert lg.hit_rank(c, [row("قانون مدنی", "12")]) is None
+    assert lg.hit_rank(c, [row("قانون آیین دادرسی مدنی", "12")]) is None
+
+
+def test_strict_rank_ignores_aliases():
+    c = case(law=CHEQUE, arts=("12",))
+    assert lg.hit_rank(c, [row(AMEND, "12")], alias_aware=False) is None
+    assert lg.hit_rank(c, [row(AMEND, "12"), row(CHEQUE, "12")], alias_aware=False) == 2
+
+
+def test_replaced_law_alias_needs_a_topic_match():
+    old = "قانون شوراهای حل اختلاف"
+    new = "قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲"
+    c = case(cid="lg-dsp-12", law=old, arts=("12",), must=("رسیدگی",))
+    matching = {"law_name": new, "article_no": "12", "text": "رسیدگی به اختلاف ..."}
+    other = {"law_name": new, "article_no": "12", "text": "موضوع نامرتبط"}
+    assert lg.hit_rank(c, [matching]) == 1
+    assert lg.hit_rank(c, [other]) is None  # do not guess; needs_review for the lawyer
 
 
 def test_norm_handles_digits_and_letters():
@@ -95,6 +130,17 @@ def test_retrieval_report_recall_and_groups():
     assert rep["summary"]["held_out"]["n"] == 1 and rep["summary"]["dev"]["n"] == 2
     assert rep["by_category"]["labor"]["recall@10"] == 0.0
     assert "iran_laws_v3" in lg.render_markdown(rep)
+
+
+def test_report_reports_strict_and_alias_aware_recall():
+    c = case("a", law=CHEQUE, arts=("12",))
+    res = lg.run_retrieval([c], lambda q, k: ([row(AMEND, "12")], [row(AMEND, "12")]))
+    rep = lg.retrieval_report(res)
+    assert rep["summary"]["all"]["kept"]["recall@1"] == 1.0  # alias-aware
+    assert rep["summary"]["all"]["kept_strict"]["recall@1"] == 0.0  # strict
+    assert rep["summary"]["all"]["raw_strict"]["recall@1"] == 0.0
+    assert lg._r5(rep) == 1.0  # the gate scores alias-aware
+    assert "strict in parentheses" in lg.render_markdown(rep)
 
 
 # ---- answer -------------------------------------------------------------------------------

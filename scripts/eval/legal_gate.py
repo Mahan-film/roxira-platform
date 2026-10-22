@@ -11,16 +11,18 @@ Modes (all checks are deterministic, no LLM judge):
   validate   offline: shape of the question file.
   retrieval  NO LLM, 0 USD. Is the expected article in the top-k of the served corpus?
              Reuses the retrieval path of scripts/eval_chat_golden.py (Qdrant search +
-             source_filter). Needs Qdrant + the query embedder, so run it on the server:
+             source_filter). Recall is reported both strict (exact law name) and alias-aware
+             (the same law under another of its names); the gate scores alias-aware. Needs
+             Qdrant + the query embedder, so run it on the server:
                docker run ... python3 scripts/eval/legal_gate.py retrieval [--rerank]
   answer     calls the live chat endpoint; checks must_include, must_not_include, the cited
              article in statutory_basis and latency. PAID path: needs --confirm-spend, has a
              hard cost cap (default and maximum 0.05 USD) and reads the bearer token from the
              environment (ROXIRA_EVAL_TOKEN) only.
   capture    store a retrieval report (stdin, noisy output allowed) as the baseline file.
-  compare    retrieval@5 of a fresh run against a stored baseline; prints a warning when it
-             drops by more than --warn-drop points. Never fails the caller (exit 0) unless
-             --strict is given.
+  compare    retrieval@5 (alias-aware) of a fresh run against a stored baseline; prints a
+             warning when it drops by more than --warn-drop points. Never fails the caller
+             (exit 0) unless --strict is given.
 
 Reports: --json-out / --md-out write files; --json prints one marker line
 (``LEGAL_GATE_JSON {...}``) on stdout so a caller can pull it out of noisy output.
@@ -77,6 +79,65 @@ def norm(text: Any) -> str:
     return _ECG.norm(t).lower()
 
 
+# --------------------------------------------------------------------------- law aliases
+# Canonical law-name aliases, used only when comparing an expected law with a retrieved one.
+# The retrieval engine keeps its own table (_LAW_NAME_ALIASES in
+# output_apps/generated_modules/smartjudge/legal_graph/lightrag_engine.py), but importing it pulls
+# in the whole retrieval stack and it aliases the replaced 1402 law unconditionally; this gate is
+# offline/stdlib-only, so it mirrors just the pairs it needs. Matching is exact after
+# normalisation (ZWNJ, ي/ك, Persian digits, parentheses) — never fuzzy.
+def _law_key(name: Any) -> str:
+    """Law-name key: norm() plus parenthesis stripping so '(اصلاحی ۱۳۹۷)' variants line up."""
+    t = norm(name).replace("(", " ").replace(")", " ")
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _build_law_aliases() -> Dict[str, str]:
+    pairs = (
+        # Official title vs. short title of the same law (expected in the 70-case set).
+        ("قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی", "قانون آیین دادرسی مدنی"),
+        # Base cheque law, its ۱۳۹۷ amendment and the corpus label are one law.
+        ("قانون صدور چک", "قانون صدور چک (اصلاحی ۱۳۹۷)"),
+        ("قانون اصلاح قانون صدور چک (۱۳۹۷)", "قانون صدور چک (اصلاحی ۱۳۹۷)"),
+    )
+    return {_law_key(a): _law_key(c) for a, c in pairs}
+
+
+LAW_ALIASES: Dict[str, str] = _build_law_aliases()
+
+# Replaced laws (not merely renamed): the successor may renumber articles, so the alias is
+# accepted only when the retrieved article text carries the expected topic. lg-dsp-12 expects
+# «قانون شوراهای حل اختلاف» while the corpus holds «قانون شوراهای حل اختلاف و دادگاه‌های صلح
+# مصوب ۱۴۰۲» (the 1402 law replaced the old one). If the topic does not match, the case must be
+# marked needs_review for the lawyer — never guessed (the hub re-captures the baseline).
+_LAW_REPLACED_ALIASES: Tuple[Tuple[str, str], ...] = (
+    (_law_key("قانون شوراهای حل اختلاف"),
+     _law_key("قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲")),
+)
+
+
+def canonical_law(name: Any) -> str:
+    """Canonical key for a law name; unknown names normalise to themselves."""
+    key = _law_key(name)
+    return LAW_ALIASES.get(key, key)
+
+
+def _topic_matches(case: dict, row: dict) -> bool:
+    """Deterministic topic check: does the retrieved article text carry a must_include phrase?"""
+    phrases = [norm(p) for p in case.get("must_include") or [] if norm(p)]
+    if not phrases:
+        return False
+    text = norm(row.get("text") or row.get("summary") or "")
+    return any(p in text for p in phrases)
+
+
+def _replaced_law_match(case: dict, row: dict) -> bool:
+    want = _law_key(case["expected_law"])
+    got = _law_key(row.get("law_name") or row.get("title") or "")
+    return any({want, got} == {old, new} and _topic_matches(case, row)
+               for old, new in _LAW_REPLACED_ALIASES)
+
+
 # --------------------------------------------------------------------------- cases
 def load_cases(path: Path = DEFAULT_SET, split: str = "all") -> List[dict]:
     cases = json.loads(Path(path).read_text(encoding="utf-8"))["cases"]
@@ -112,18 +173,28 @@ def validate(cases: Sequence[dict]) -> List[str]:
 
 
 # --------------------------------------------------------------------------- retrieval
-def row_matches(case: dict, row: dict) -> bool:
-    """Exact law (after normalisation) and one of the expected article numbers."""
-    if norm(row.get("law_name") or row.get("title") or "") != norm(case["expected_law"]):
+def row_matches(case: dict, row: dict, *, alias_aware: bool = True) -> bool:
+    """Expected law and one of the expected article numbers.
+
+    alias_aware maps law-name aliases to one canonical name (and accepts a replaced law only when
+    the article topic matches); strict compares the normalised names exactly.
+    """
+    row_law = row.get("law_name") or row.get("title") or ""
+    if alias_aware:
+        law_ok = (canonical_law(row_law) == canonical_law(case["expected_law"])
+                  or _replaced_law_match(case, row))
+    else:
+        law_ok = norm(row_law) == norm(case["expected_law"])
+    if not law_ok:
         return False
     no = str(row.get("article_no") or "").strip()
     return no in {str(a) for a in case["expected_articles"]}
 
 
-def hit_rank(case: dict, rows: Iterable[dict]) -> Optional[int]:
+def hit_rank(case: dict, rows: Iterable[dict], *, alias_aware: bool = True) -> Optional[int]:
     """1-based rank of the first matching row, None when absent."""
     for i, row in enumerate(rows, 1):
-        if row_matches(case, row):
+        if row_matches(case, row, alias_aware=alias_aware):
             return i
     return None
 
@@ -156,7 +227,7 @@ def engine_retriever(rerank: bool = False) -> Tuple[Retriever, Dict[str, str]]:
     if rerank:
         from output_apps.generated_modules.smartjudge import reranker as rr
 
-        if rr._load() is None:  # noqa: SLF001 - fail loudly rather than mislabel the run
+        if rr._load() is None:
             raise SystemExit("--rerank: reranker model failed to load (is sentence-transformers installed "
                              "and the model cached/downloadable?)")
         meta["reranker"] = os.getenv("SMARTJUDGE_RERANKER_MODEL", "").strip() or rr.DEFAULT_MODEL
@@ -181,6 +252,8 @@ def run_retrieval(cases: Sequence[dict], retriever: Retriever, ks: Sequence[int]
             "id": c["id"], "category": c["category"], "law": c["expected_law"], "held_out": bool(c.get("held_out")),
             "difficulty": c.get("difficulty"),
             "rank_raw": hit_rank(c, raw), "rank_kept": hit_rank(c, kept),
+            "rank_raw_strict": hit_rank(c, raw, alias_aware=False),
+            "rank_kept_strict": hit_rank(c, kept, alias_aware=False),
             "got": [f"{r.get('law_name')}#{r.get('article_no')}" for r in kept[:5]],
         })
     return out
@@ -190,13 +263,20 @@ def _group(results: Sequence[dict], key: str, ks: Sequence[int]) -> Dict[str, di
     groups: Dict[str, List[dict]] = defaultdict(list)
     for r in results:
         groups[str(r[key])].append(r)
-    return {k: {"n": len(v), **_recall([x["rank_kept"] for x in v], ks)} for k, v in sorted(groups.items())}
+    out = {}
+    for k, v in sorted(groups.items()):
+        strict = _recall([x["rank_kept_strict"] for x in v], ks)
+        out[k] = {"n": len(v), **_recall([x["rank_kept"] for x in v], ks),
+                  **{f"{name}_strict": val for name, val in strict.items()}}
+    return out
 
 
 def retrieval_report(results: Sequence[dict], meta: Optional[dict] = None, ks: Sequence[int] = KS) -> dict:
     def block(sub: Sequence[dict]) -> dict:
         return {"n": len(sub), "kept": _recall([r["rank_kept"] for r in sub], ks),
-                "raw": _recall([r["rank_raw"] for r in sub], ks)}
+                "raw": _recall([r["rank_raw"] for r in sub], ks),
+                "kept_strict": _recall([r["rank_kept_strict"] for r in sub], ks),
+                "raw_strict": _recall([r["rank_raw_strict"] for r in sub], ks)}
 
     return {
         "mode": "retrieval", "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -259,7 +339,7 @@ def http_chat(base_url: str, question: str, token: str, timeout: int = 90) -> Tu
         base_url.rstrip("/") + CHAT_PATH, data=json.dumps({"message": question, "tier": "FREE"}).encode(),
         headers=headers, method="POST")
     t0 = time.time()
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - operator-supplied URL
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = json.loads(resp.read())
     return body, (time.time() - t0) * 1000
 
@@ -347,15 +427,23 @@ def render_markdown(report: dict) -> str:
         L.append("Run: " + ", ".join(f"{k}={v}" for k, v in meta.items()))
     if mode == "retrieval":
         ks = report["ks"]
-        L += ["", "## Summary (recall after relevance filter; raw in brackets)", "",
+        L += ["", "## Summary (after relevance filter: alias-aware, strict in parentheses, "
+              "raw pre-filter in square brackets)", "",
               "| split | n | " + " | ".join(f"@{k}" for k in ks) + " |", "|---|---|" + "---|" * len(ks)]
         for name, b in report["summary"].items():
-            cells = [f"{_pct(b['kept'][f'recall@{k}'])} ({_pct(b['raw'][f'recall@{k}'])})" for k in ks]
+            cells = []
+            for k in ks:
+                aware = b.get("kept", {}).get(f"recall@{k}")
+                strict = b.get("kept_strict", {}).get(f"recall@{k}")
+                raw = b.get("raw", {}).get(f"recall@{k}")
+                cells.append(f"{_pct(aware)} ({_pct(strict)}) [{_pct(raw)}]")
             L.append(f"| {name} | {b['n']} | " + " | ".join(cells) + " |")
         for title, key in (("By category", "by_category"), ("By law", "by_law")):
-            L += ["", f"## {title} (recall@5 / @10)", "", "| group | n | @5 | @10 |", "|---|---|---|---|"]
+            L += ["", f"## {title} (alias-aware @5 / @10; strict in parentheses)", "",
+                  "| group | n | @5 | @10 |", "|---|---|---|---|"]
             for g, b in report[key].items():
-                L.append(f"| {g} | {b['n']} | {_pct(b.get('recall@5'))} | {_pct(b.get('recall@10'))} |")
+                L.append(f"| {g} | {b['n']} | {_pct(b.get('recall@5'))} ({_pct(b.get('recall@5_strict'))}) "
+                         f"| {_pct(b.get('recall@10'))} ({_pct(b.get('recall@10_strict'))}) |")
         misses = [c for c in report["cases"] if c["rank_kept"] is None or c["rank_kept"] > 5]
         L += ["", f"## Cases without the expected article in the top 5 ({len(misses)})", ""]
         for c in misses:
@@ -413,7 +501,7 @@ def compare(baseline: Optional[dict], current: dict, warn_drop: float = 5.0) -> 
     """Report lines and a warn flag. Drop is measured in percentage points of retrieval@5."""
     cur = _r5(current)
     n = current["summary"]["all"]["n"]
-    lines = [f"legal gate: retrieval@5 = {_pct(cur)} on {n} questions "
+    lines = [f"legal gate: retrieval@5 (alias-aware) = {_pct(cur)} on {n} questions "
              f"(dev {_pct(current['summary']['dev']['kept'].get('recall@5'))}, "
              f"held-out {_pct(current['summary']['held_out']['kept'].get('recall@5'))}); "
              f"questions are text_verified / lawyer_verified / needs_lawyer"]

@@ -1,0 +1,3 @@
+# corpus law names (one per line); exported from data/legal via scripts/legal_coverage_report.py
+آیین‌نامه آزمایشی نمونه
+قانون آزمایشی دیگر
