@@ -75,12 +75,44 @@ expect eslint-diff-new "$out" 'new errors: src/a\.tsx:react-hooks/rules-of-hooks
 
 # JSON output in dry-run
 printf 'scripts/run.sh\n' >"$T/files"
-"$WB" "$T/wt" --dry-run --files-from "$T/files" --json "$T/out.json" >/dev/null 2>&1
+WORKBENCH_BACKEND=local "$WB" "$T/wt" --dry-run --files-from "$T/files" --json "$T/out.json" >/dev/null 2>&1
 python3 -c '
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d["ok"] is True and d["groups"][0]["name"] == "sh:bash-n" and d["groups"][0]["status"] == "skip", d
+assert d["backend"] == "local", d
 ' "$T/out.json" || { echo "FAIL [json]"; FAIL=1; }
+
+# --emit-groups: machine-readable group list for the daytona backend (no docker)
+printf 'scripts/run.sh\n' >"$T/files"
+"$WB" "$T/wt" --files-from "$T/files" --emit-groups "$T/groups.json" >/dev/null 2>&1
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+g = [x for x in d["groups"] if x["name"] == "sh:bash-n"]
+assert g and g[0]["kind"] == "host" and g[0]["cmd"].startswith("bash -n"), d
+' "$T/groups.json" || { echo "FAIL [emit-groups]"; FAIL=1; }
+
+printf 'output_apps/enterprise_hub/frontend/src/a.tsx\n' >"$T/files"
+"$WB" "$T/wt" --files-from "$T/files" --emit-groups "$T/groups-lint.json" >/dev/null 2>&1
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+g = [x for x in d["groups"] if x["kind"] == "lint"]
+assert g and g[0]["eslint_prefix"] == "npx --no-install eslint" and g[0]["files"] == ["src/a.tsx"], d
+' "$T/groups-lint.json" || { echo "FAIL [emit-groups-lint]"; FAIL=1; }
+
+# daytona backend: a runner that refuses to start -> local fallback, recorded in the JSON
+printf '%s\n' 'import sys' 'sys.exit(3)' >"$T/fake_daytona.py"
+printf 'scripts/run.sh\n' >"$T/files"
+WORKBENCH_BACKEND=daytona WORKBENCH_DAYTONA_RUNNER="$T/fake_daytona.py" \
+  "$WB" "$T/wt" --files-from "$T/files" --json "$T/fallback.json" >/dev/null 2>&1
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["backend"] == "local-fallback", d
+assert d["groups"] and d["groups"][0]["name"] == "sh:bash-n", d
+' "$T/fallback.json" || { echo "FAIL [backend-fallback]"; FAIL=1; }
 
 # wrong arguments exit 2
 set +e; "$WB" >/dev/null 2>&1; rc=$?; set -e

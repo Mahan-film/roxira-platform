@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 # Workbench (factory milestone F1): isolated automatic checks for ONE agent worktree.
 #
-#   workbench.sh <worktree> [--base origin/main] [--json OUT] [--dry-run] [--files-from FILE]
+#   workbench.sh <worktree> [--base origin/main] [--json OUT] [--dry-run] [--files-from FILE] [--emit-groups OUT]
 #
 #   --base REF        diff base (default origin/main); changed = `git diff --name-only REF...HEAD` + uncommitted/untracked
-#   --json OUT        write {groups:[{name,cmd,status,seconds,tail}],ok} to OUT (status pass|fail|skip|timeout)
+#   --json OUT        write {groups:[{name,cmd,status,seconds,tail}],ok,backend} to OUT (status pass|fail|skip|timeout)
 #   --dry-run         print the groups and commands that WOULD run, start no docker/process (used by tests)
 #   --files-from FILE use this newline-separated changed-file list instead of git (tests)
+#   --emit-groups OUT write the selected groups as machine-readable JSON ({groups:[{name,kind,dir,cmd,
+#                     eslint_prefix,files,base_files}],error}) and exit; used by the daytona backend so the check
+#                     commands live in this file only. No docker/process is started.
 # Exit: 0 always, except wrong arguments (2). Callers read "ok" from the JSON / the summary.
+#
+# Backend: WORKBENCH_BACKEND=local|daytona (default local). With daytona the groups are handed to
+#   daytona_runner.py (override the path with WORKBENCH_DAYTONA_RUNNER), which runs them in a disposable
+#   Daytona sandbox instead of docker on this host. When the sandbox cannot start (runner exits 3) the
+#   checks run locally and the JSON records "backend":"local-fallback".
 #
 # Groups are chosen only for what changed:
 #   output_apps/enterprise_hub/frontend/**   tsc --noEmit, eslint <changed ts/tsx/js files> (fails only on NEW errors)
@@ -34,23 +42,27 @@ PYTEST_DIRS_RE='^(scripts/.*/tests/|output_apps/generated_modules/smartjudge/tes
 TEST_FILE_RE='(^|/)test_[^/]*\.py$|_test\.py$'
 WB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ESLINT_DIFF="$WB_DIR/eslint_diff.py"
+BACKEND="${WORKBENCH_BACKEND:-local}"
+DAYTONA_RUNNER="${WORKBENCH_DAYTONA_RUNNER:-$WB_DIR/daytona_runner.py}"
 
 log() { printf '[workbench] %s\n' "$*" >&2; }
 die() { printf '[workbench] ERROR: %s\n' "$*" >&2; exit 2; }
 
-WT="" BASE="origin/main" JSON_OUT="" DRY=0 FILES_FROM=""
+WT="" BASE="origin/main" JSON_OUT="" DRY=0 FILES_FROM="" EMIT_GROUPS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) BASE="${2?--base needs a ref}"; shift ;;
     --json) JSON_OUT="${2?--json needs a path}"; shift ;;
     --dry-run) DRY=1 ;;
     --files-from) FILES_FROM="${2?--files-from needs a path}"; shift ;;
-    -h | --help) sed -n '2,24p' "$0"; exit 0 ;;
+    --emit-groups) EMIT_GROUPS="${2?--emit-groups needs a path}"; shift ;;
+    -h | --help) sed -n '2,32p' "$0"; exit 0 ;;
     -*) die "unknown option: $1 (see --help)" ;;
     *) [ -z "$WT" ] || die "only one worktree argument"; WT="$1" ;;
   esac
   shift
 done
+case "$BACKEND" in local | daytona) ;; *) die "WORKBENCH_BACKEND must be local or daytona (got '$BACKEND')" ;; esac
 [ -n "$WT" ] || die "usage: workbench.sh <worktree> [--base REF] [--json OUT] [--dry-run]"
 [ -d "$WT" ] || die "not a directory: $WT"
 WT="$(cd "$WT" && pwd)"
@@ -141,6 +153,62 @@ if [ ${#SH_FILES[@]} -gt 0 ]; then
   add_group "sh:bash-n" host "" "bash -n $(quote_list "${SH_FILES[@]}")"
 fi
 
+# ---- group list as JSON (--emit-groups; the daytona backend reuses it) --------------------------------------
+# Write the base-branch version of each relative file into a temp dir that mirrors the package layout. Used by
+# the lint comparison (mounted read-only at /base locally) and embedded as base_files for the daytona backend.
+# Files absent on the base (new files) are simply not written.
+build_base() { # $1=outdir $2=package dir $3..=relative files
+  local out="$1" dir="$2"; shift 2
+  local f
+  mkdir -p "$out"
+  for f in "$@"; do
+    if git -c safe.directory='*' -C "$WT" show "$BASE:$dir/$f" >"$TMP/basefile" 2>/dev/null; then
+      mkdir -p "$out/$(dirname "$f")"
+      cp "$TMP/basefile" "$out/$f"
+    fi
+  done
+}
+
+emit_groups_json() { # $1=outfile ; machine-readable group list for the daytona runner
+  local out="$1" i tmp="$TMP/groups.tsv" base_dir files_us
+  : >"$tmp"
+  for ((i = 0; i < ${#G_NAME[@]}; i++)); do
+    base_dir=""
+    if [ "${G_KIND[$i]}" = lint ]; then
+      base_dir="$TMP/emitbase.$i"
+      local lf=()
+      mapfile -t lf < <(printf '%s\n' "${G_LFILES[$i]}")
+      build_base "$base_dir" "${G_DIR[$i]}" ${lf[@]+"${lf[@]}"}
+    fi
+    files_us="$(printf '%s' "${G_LFILES[$i]}" | tr '\n' '\037')"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${G_NAME[$i]}" "${G_KIND[$i]}" "${G_DIR[$i]}" \
+      "${G_CMD[$i]}" "${G_LCMD[$i]}" "$files_us" "$base_dir" >>"$tmp"
+  done
+  WB_TSV="$tmp" WB_OUT="$out" WB_GITERR="${GIT_ERR:-}" python3 -c '
+import json, os, pathlib
+sep = "\x1f"
+groups = []
+for line in open(os.environ["WB_TSV"], encoding="utf-8"):
+    line = line.rstrip("\n")
+    if not line:
+        continue
+    name, kind, d, cmd, lcmd, files, base = (line.split("\t") + [""] * 7)[:7]
+    g = {"name": name, "kind": kind, "dir": d, "cmd": cmd, "eslint_prefix": lcmd,
+         "files": [f for f in files.split(sep) if f]}
+    if kind == "lint" and base:
+        g["base_files"] = {f: (pathlib.Path(base) / f).read_text(errors="replace")
+                           for f in g["files"] if (pathlib.Path(base) / f).is_file()}
+    groups.append(g)
+json.dump({"groups": groups, "error": os.environ.get("WB_GITERR") or None},
+          open(os.environ["WB_OUT"], "w"))
+'
+}
+
+if [ -n "$EMIT_GROUPS" ]; then
+  emit_groups_json "$EMIT_GROUPS"
+  exit 0
+fi
+
 # ---- reporting ----------------------------------------------------------------------------------------------
 R_FILE="$TMP/results.jsonl"; : >"$R_FILE"
 record() { # name cmd status seconds tailfile
@@ -156,10 +224,11 @@ print(json.dumps({"name": e["WB_N"], "cmd": e["WB_C"], "status": e["WB_S"], "sec
 finish() {
   local ok="$1"
   if [ -n "$JSON_OUT" ]; then
-    WB_R="$R_FILE" WB_OK="$ok" python3 -c '
+    WB_R="$R_FILE" WB_OK="$ok" WB_BACKEND="${BACKEND:-local}" python3 -c '
 import json, os
 g = [json.loads(l) for l in open(os.environ["WB_R"]) if l.strip()]
-print(json.dumps({"groups": g, "ok": os.environ["WB_OK"] == "1"}, indent=1))
+print(json.dumps({"groups": g, "ok": os.environ["WB_OK"] == "1",
+                  "backend": os.environ.get("WB_BACKEND", "local")}, indent=1))
 ' >"$JSON_OUT"
   fi
   WB_R="$R_FILE" WB_OK="$ok" python3 -c '
@@ -193,6 +262,32 @@ if [ "$DRY" = 1 ]; then
   finish 1; exit 0
 fi
 
+# ---- daytona backend ----------------------------------------------------------------------------------------
+# Hand the group list to daytona_runner.py, which runs it in a disposable Daytona sandbox. If the sandbox cannot
+# start (exit 3) the checks run locally below and the JSON records "backend":"local-fallback".
+if [ "$BACKEND" = daytona ]; then
+  if [ ${#G_NAME[@]} -eq 0 ]; then
+    log "no check groups apply; not starting a daytona sandbox"
+    BACKEND=local
+  elif [ -f "$DAYTONA_RUNNER" ]; then
+    emit_groups_json "$TMP/groups.json"
+    DAY_ARGS=(--worktree "$WT" --groups "$TMP/groups.json")
+    [ -z "$BASE" ] || DAY_ARGS+=(--base "$BASE")
+    [ -z "$JSON_OUT" ] || DAY_ARGS+=(--json "$JSON_OUT")
+    [ -z "$FILES_FROM" ] || DAY_ARGS+=(--files-from "$FILES_FROM")
+    log "daytona backend: $DAYTONA_RUNNER (groups: $TMP/groups.json)"
+    if python3 "$DAYTONA_RUNNER" "${DAY_ARGS[@]}"; then
+      exit 0
+    else
+      log "daytona backend did not start (exit $?); falling back to local"
+      BACKEND=local-fallback
+    fi
+  else
+    log "daytona backend requested but $DAYTONA_RUNNER is missing; falling back to local"
+    BACKEND=local-fallback
+  fi
+fi
+
 # ---- execution ----------------------------------------------------------------------------------------------
 TO="$(command -v timeout || command -v gtimeout || true)"
 START=$SECONDS
@@ -200,19 +295,6 @@ OK=1
 SEQ=0
 hash12() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-12; }
 
-# Write the base-branch version of each relative file into a temp dir that mirrors the package layout, so it can be
-# mounted read-only at /base in the lint container. Files absent on the base (new files) are simply not written.
-build_base() { # $1=outdir $2=package dir $3..=relative files
-  local out="$1" dir="$2"; shift 2
-  local f
-  mkdir -p "$out"
-  for f in "$@"; do
-    if git -c safe.directory='*' -C "$WT" show "$BASE:$dir/$f" >"$TMP/basefile" 2>/dev/null; then
-      mkdir -p "$out/$(dirname "$f")"
-      cp "$TMP/basefile" "$out/$f"
-    fi
-  done
-}
 HARDEN=(--rm --network none --memory 2g --memory-swap 2g --pids-limit 512 --cap-drop ALL
   --security-opt no-new-privileges --read-only --user 1000:1000 --tmpfs /tmp:rw,exec,nosuid,size=256m,mode=1777
   -e HOME=/tmp)
