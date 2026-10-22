@@ -487,7 +487,7 @@ cmd_migrate() {
   rsh "set -euo pipefail; umask 077; mkdir -p '$BACKUP_DIR'
     docker exec $PG_CONTAINER pg_dump -U $DB_USER -d $DB_NAME -Fc > '$dump'
     [ -s '$dump' ] || { echo 'backup file is empty' >&2; exit 1; }
-    docker exec -i $PG_CONTAINER pg_restore --list < '$dump' | head -n 1 >/dev/null
+    docker exec -i $PG_CONTAINER pg_restore --list < '$dump' >/dev/null  # read the whole TOC: 'head' would SIGPIPE pg_restore under pipefail
     echo \"backup size: \$(stat -c %s '$dump') bytes\"" \
     || { migrate_cleanup; die "backup failed; the migration was NOT run. Remove the partial file $dump on the server if present"; }
 
