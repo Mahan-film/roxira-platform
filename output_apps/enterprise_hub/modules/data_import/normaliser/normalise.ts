@@ -331,5 +331,24 @@ export function normaliseEnumValue(
   if (field.enumValues?.includes(upper)) {
     return upper;
   }
+
+  // Qualified labels such as «دارایی جاری» / «هزینه اداری»: the longest alias that starts the value
+  // (followed by a space or the end) wins. Exact aliases above always take precedence.
+  const valueKey = normaliseKey(fixed);
+  let best: { length: number; canonical: string } | null = null;
+  for (const [aliasKey, canonical] of aliasByKey) {
+    // normaliseKey drops spaces/ZWNJ («دارایی جاری» -> «داراییجاری»), so a plain prefix test is used;
+    // the longest alias wins («سایر درآمدها» before «درآمد»).
+    if (
+      aliasKey &&
+      valueKey.startsWith(aliasKey) &&
+      (!best || aliasKey.length > best.length)
+    ) {
+      best = { length: aliasKey.length, canonical };
+    }
+  }
+  if (best) {
+    return best.canonical;
+  }
   return fixed;
 }

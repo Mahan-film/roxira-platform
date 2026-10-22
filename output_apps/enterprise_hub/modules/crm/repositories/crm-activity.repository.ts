@@ -27,7 +27,8 @@ export class CrmActivityRepository {
     const entities = dataList.map((data) =>
       this.activities.create({ ...data, tenantId }),
     );
-    const saved = await this.activities.save(entities);
+    // chunked: one INSERT of 12k rows exceeds Postgres' 65,535 bind parameters
+    const saved = await this.activities.save(entities, { chunk: 500 });
     return saved.map((entity) => entity.id);
   }
 

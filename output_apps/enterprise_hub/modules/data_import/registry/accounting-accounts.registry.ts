@@ -4,7 +4,7 @@ import {
   AccountingImportAccountInput,
   AccountingService,
 } from '../../accounting/services/accounting.service';
-import { Currency } from '../../currency/enums/currency.enum';
+import { normalizeCurrency } from '../../currency/normaliser/currency-normaliser';
 import {
   AdapterCommitResult,
   CommitRowResult,
@@ -25,15 +25,13 @@ const ACCOUNT_TYPE_ALIASES: Record<string, string> = {
   درآمد: AccountType.REVENUE,
   درآمدها: AccountType.REVENUE,
   هزینه: AccountType.EXPENSE,
+  'بهای تمام شده': AccountType.EXPENSE,
+  'سایر درآمدها': AccountType.REVENUE,
+  'سایر هزینه‌ها': AccountType.EXPENSE,
+  'حقوق صاحبان سهام': AccountType.EQUITY,
+  فروش: AccountType.REVENUE,
   هزینهها: AccountType.EXPENSE,
   'هزینه‌ها': AccountType.EXPENSE,
-};
-
-const CURRENCY_ALIASES: Record<string, string> = {
-  ریال: Currency.IRR,
-  دلار: Currency.USD,
-  یورو: Currency.EUR,
-  درهم: Currency.AED,
 };
 
 /** رجیستری ورود داده دفتر کل حساب‌ها (Chart of Accounts). */
@@ -90,9 +88,9 @@ export class AccountingAccountsRegistry implements EntityImportAdapter {
       key: 'currency',
       labelFa: 'واحد پول',
       required: false,
-      type: 'enum',
-      enumValues: Object.values(Currency),
-      enumAliases: CURRENCY_ALIASES,
+      // Free text, normalised in toInput with the shared currency normaliser (IRR, IRT, USD, EUR, TRY,
+      // AED, CNY, OMR, MULTI and Persian names such as «درهم»); unknown values fall back to IRR.
+      type: 'text',
       synonyms: [
         'currency',
         'DefaultCurrency',
@@ -172,7 +170,10 @@ export class AccountingAccountsRegistry implements EntityImportAdapter {
       accountType: values.accountType as AccountType,
     };
     if (typeof values.currency === 'string' && values.currency) {
-      input.currency = values.currency as Currency;
+      const currency = normalizeCurrency(values.currency);
+      if (currency) {
+        input.currency = currency;
+      }
     }
     return input;
   }

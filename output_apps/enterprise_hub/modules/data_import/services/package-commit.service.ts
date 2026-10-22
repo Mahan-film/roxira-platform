@@ -16,6 +16,7 @@ import { EntityRegistryService } from '../registry/entity-registry.service';
 import { PackageAnalysisService } from './package-analysis.service';
 import { PackageProgressService } from './package-progress.service';
 import { PackageStoreService } from './package-store.service';
+import { DataImportBatchRepository } from '../repositories/data-import-batch.repository';
 
 /** انتخاب یک جدول برای commit از بدنهٔ درخواست. */
 export interface PackageCommitTableInput {
@@ -40,6 +41,7 @@ export class PackageCommitService {
     private readonly analysisService: PackageAnalysisService,
     private readonly registry: EntityRegistryService,
     private readonly progress: PackageProgressService,
+    private readonly batchRepository: DataImportBatchRepository,
   ) {}
 
   /** ثبت انتخاب‌های کاربر در یک دستهٔ ورود واحد. */
@@ -84,6 +86,16 @@ export class PackageCommitService {
     const inserted: Record<string, number> = {};
     const skipped: Record<string, number> = {};
     const errors: string[] = [];
+    // Up to PER_ENTITY_ERRORS messages per entity so one noisy table cannot hide the others.
+    const PER_ENTITY_ERRORS = 10;
+    const errorCount = new Map<string, number>();
+    const addError = (entity: string, message: string): void => {
+      const count = errorCount.get(entity) ?? 0;
+      if (count < PER_ENTITY_ERRORS) {
+        errors.push(`[${entity}] ${message}`);
+      }
+      errorCount.set(entity, count + 1);
+    };
     const batchItems: Array<{ entity: string; ownerId: number | string; rowNumber: number }> =
       [];
     let done = 0;
@@ -125,8 +137,8 @@ export class PackageCommitService {
             table,
             mapping,
           );
-          for (const message of rowErrors.slice(0, PACKAGE_MAX_ERRORS)) {
-            errors.push(message);
+          for (const message of rowErrors) {
+            addError(entity, message);
           }
 
           const { unique, skippedCount } = await this.filterDuplicates(
@@ -146,9 +158,7 @@ export class PackageCommitService {
           }
           inserted[entity] = (inserted[entity] ?? 0) + result.inserted.length;
           for (const failure of result.failed) {
-            if (errors.length < PACKAGE_MAX_ERRORS) {
-              errors.push(failure.message);
-            }
+            addError(entity, `ردیف ${failure.rowNumber}: ${failure.message}`);
           }
 
           done += table.rowCount;
@@ -158,12 +168,39 @@ export class PackageCommitService {
             total,
             inserted,
             skipped,
-            errors: errors.slice(0, PACKAGE_MAX_ERRORS),
+            errors: errors.slice(0, PACKAGE_MAX_ERRORS * 2),
           });
         }
       }
     } finally {
       parsed.close();
+    }
+
+    // Record the whole package as ONE import batch so the existing undo endpoint can remove it.
+    const totalInserted = batchItems.length;
+    if (totalInserted > 0) {
+      await this.batchRepository.createBatch(tenantId, {
+        id: batchId,
+        entity: 'package',
+        fileName: state.fileName,
+        inserted: totalInserted,
+      });
+      const byEntity = new Map<string, Array<{ ownerId: number | string; rowNumber: number }>>();
+      for (const item of batchItems) {
+        const list = byEntity.get(item.entity) ?? [];
+        list.push({ ownerId: item.ownerId, rowNumber: item.rowNumber });
+        byEntity.set(item.entity, list);
+      }
+      for (const [entity, rows] of byEntity) {
+        for (let start = 0; start < rows.length; start += 1000) {
+          await this.batchRepository.addItems(tenantId, batchId, entity, rows.slice(start, start + 1000));
+        }
+      }
+    }
+    for (const [entity, count] of errorCount) {
+      if (count > PER_ENTITY_ERRORS) {
+        errors.push(`[${entity}] … و ${count - PER_ENTITY_ERRORS} خطای دیگر`);
+      }
     }
 
     state.status = 'committed';
@@ -176,7 +213,7 @@ export class PackageCommitService {
       total,
       inserted,
       skipped,
-      errors: errors.slice(0, PACKAGE_MAX_ERRORS),
+      errors: errors.slice(0, PACKAGE_MAX_ERRORS * 2),
     });
 
     this.logger.log(

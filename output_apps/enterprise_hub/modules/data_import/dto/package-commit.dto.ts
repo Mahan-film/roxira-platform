@@ -5,6 +5,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -13,6 +14,8 @@ export class PackageCommitTableDto {
   @IsString()
   name: string;
 
+  // A skipped table may arrive without an entity (null or ""); only imported tables need one.
+  @ValidateIf((table: PackageCommitTableDto) => !table.skip)
   @IsString()
   entity: string;
 

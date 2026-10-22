@@ -117,7 +117,7 @@ export class AccountingRepository {
     const entities = data.map((item) =>
       this.accounts.create({ ...item, tenantId }),
     );
-    return this.accounts.save(entities);
+    return this.accounts.save(entities, { chunk: 500 }); // stay under the bind-parameter limit
   }
 
   /** شناسه حساب‌هایی که سطر سند دارند (ارجاع‌شده؛ undo ممنوع). */

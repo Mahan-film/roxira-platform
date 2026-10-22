@@ -54,7 +54,8 @@ export interface AccountingImportAccountInput {
   code: string;
   name: string;
   accountType: AccountType;
-  currency?: Currency;
+  /** ISO code or IRT / MULTI from the currency normaliser (up to 8 chars). */
+  currency?: string;
 }
 
 /** ورودی سطر افتتاحیه از مسیر ورود داده. */

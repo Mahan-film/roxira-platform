@@ -73,3 +73,40 @@ describe('parseJalaliDate', () => {
     expect(parseJalaliDate('1403/12/31')).toBeNull();
   });
 });
+
+describe('normaliseEnumValue — qualified Persian labels (owner ERP challenge DB)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { normaliseEnumValue } = require('./normalise');
+  const field = {
+    key: 'accountType',
+    labelFa: 'ماهیت حساب',
+    required: true,
+    type: 'enum' as const,
+    enumValues: ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'],
+    enumAliases: {
+      دارایی: 'ASSET',
+      بدهی: 'LIABILITY',
+      سرمایه: 'EQUITY',
+      درآمد: 'REVENUE',
+      هزینه: 'EXPENSE',
+      'بهای تمام شده': 'EXPENSE',
+      'سایر درآمدها': 'REVENUE',
+    },
+  };
+  it.each([
+    ['دارایی جاری', 'ASSET'],
+    ['بدهی جاری', 'LIABILITY'],
+    ['سرمایه', 'EQUITY'],
+    ['درآمد', 'REVENUE'],
+    ['سایر درآمدها', 'REVENUE'],
+    ['بهای تمام شده', 'EXPENSE'],
+    ['هزینه اداری', 'EXPENSE'],
+    ['هزینه مالی', 'EXPENSE'],
+    ['asset', 'ASSET'],
+  ])('%s -> %s', (raw, expected) => {
+    expect(normaliseEnumValue(raw, field)).toBe(expected);
+  });
+  it('leaves an unknown label unchanged', () => {
+    expect(normaliseEnumValue('چیز دیگر', field)).toBe('چیز دیگر');
+  });
+});

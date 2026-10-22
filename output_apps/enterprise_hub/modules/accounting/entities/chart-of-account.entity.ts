@@ -36,7 +36,8 @@ export class ChartOfAccountEntity {
   })
   accountType: AccountType;
 
-  @Column({ type: 'varchar', length: 3, default: 'IRR' })
+  /** ISO code, IRT (toman) or MULTI for multi-currency accounts. */
+  @Column({ type: 'varchar', length: 8, default: 'IRR' })
   currency: string;
 
   /**

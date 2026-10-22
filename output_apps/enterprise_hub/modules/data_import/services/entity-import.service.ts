@@ -1,3 +1,4 @@
+import { PACKAGE_ENTITY_ORDER } from '../constants/package-import.constants';
 import {
   BadRequestException,
   Injectable,
@@ -223,7 +224,15 @@ export class EntityImportService {
 
     let removed = 0;
     const refused: RefusedRow[] = [];
-    for (const [entityKey, ownerIds] of ownerIdsByEntity) {
+    // Undo dependents first (journal lines before accounts, activities before leads): reverse of
+    // the package commit order; unknown entities keep their position at the end.
+    const undoOrder = [...PACKAGE_ENTITY_ORDER].reverse() as string[];
+    const rank = (key: string): number => {
+      const index = undoOrder.indexOf(key);
+      return index === -1 ? undoOrder.length : index;
+    };
+    const orderedUndo = [...ownerIdsByEntity.entries()].sort((a, b) => rank(a[0]) - rank(b[0]));
+    for (const [entityKey, ownerIds] of orderedUndo) {
       const adapter = this.registry.get(entityKey);
       if (!adapter) {
         refused.push(

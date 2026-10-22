@@ -68,7 +68,7 @@ export class DataImportBatchRepository {
         createdAt: new Date(),
       }),
     );
-    await this.items.save(entities);
+    await this.items.save(entities, { chunk: 1000 }); // stay under the bind-parameter limit
   }
 
   /** خواندن یک دسته در محدوده همان مستأجر. */

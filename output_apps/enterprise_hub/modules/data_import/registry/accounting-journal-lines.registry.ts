@@ -1,3 +1,4 @@
+import { normalizeCurrency } from '../../currency/normaliser/currency-normaliser';
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
@@ -19,9 +20,8 @@ import {
  * ردیف‌های خام هر سند بر پایه «شماره سند» گروه می‌شوند و هر گروه به‌صورت یک
  * سند دوطرفهٔ تراز از طریق `AccountingService.createJournalEntry` ثبت می‌شود.
  *
- * فیلدهای چندارزی (currency/amount_fx/fx_rate/party_code روی سطر و
- * currency/fx_rate/amount_fx روی فاکتور) در تسک موازی به سرویس حسابداری اضافه
- * می‌شوند؛ تا آن زمان پشت یک بررسی ویژگی نادیده گرفته می‌شوند.
+ * فیلدهای چندارزی سطر (currency/amount_fx/fx_rate/party_code) به سرویس حسابداری
+ * داده می‌شوند (#810)؛ ارز با نرمال‌ساز مشترک (IRT برای تومان، «درهم» → AED).
  */
 @Injectable()
 export class AccountingJournalLinesRegistry implements EntityImportAdapter {
@@ -204,6 +204,23 @@ export class AccountingJournalLinesRegistry implements EntityImportAdapter {
         };
         if (record.values.description) {
           line.description = String(record.values.description).slice(0, 255);
+        }
+        // Multi-currency fields (#810): the service checks amount_fx * fx_rate ≈ debit + credit in rial.
+        const currency =
+          typeof record.values.currency === 'string'
+            ? normalizeCurrency(record.values.currency)
+            : null;
+        if (currency) {
+          line.currency = currency;
+        }
+        if (typeof record.values.amountFx === 'number') {
+          line.amountFx = record.values.amountFx;
+        }
+        if (typeof record.values.fxRate === 'number') {
+          line.fxRate = record.values.fxRate;
+        }
+        if (record.values.partyCode) {
+          line.partyCode = String(record.values.partyCode).trim().slice(0, 64);
         }
         return line;
       });

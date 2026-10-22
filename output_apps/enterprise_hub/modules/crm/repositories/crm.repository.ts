@@ -63,7 +63,7 @@ export class CrmRepository {
     const entities = dataList.map((data) =>
       this.leads.create({ ...data, tenantId }),
     );
-    return this.leads.save(entities);
+    return this.leads.save(entities, { chunk: 500 }); // stay under the bind-parameter limit
   }
 
   /** مجموعه رایانامه‌های موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
