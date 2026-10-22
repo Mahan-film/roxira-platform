@@ -361,7 +361,7 @@ OK=1
 echo "=== diff stat ($BRANCH vs origin/main) ==="
 ag_git diff --stat "$BASE_REF...$BRANCH"
 echo "=== diff (first 600 lines) ==="
-ag_git diff "$BASE_REF...$BRANCH" | head -n 600
+ag_git diff "$BASE_REF...$BRANCH" | head -n 600 || true  # head closes the pipe on big diffs: SIGPIPE + pipefail must not kill the run
 
 PUSHED=false
 if [ "$PUSH" = 1 ]; then
