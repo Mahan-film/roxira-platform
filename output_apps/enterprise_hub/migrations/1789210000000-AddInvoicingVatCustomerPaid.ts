@@ -18,8 +18,10 @@ export class AddInvoicingVatCustomerPaid1789210000000
 {
   name = 'AddInvoicingVatCustomerPaid1789210000000';
 
-  /** ALTER TYPE ... ADD VALUE در برخی نسخه‌ها داخل تراکنش مجاز نیست. */
-  transaction = false;
+  // No `transaction = false`: the deploy runner uses transaction mode "all", which rejects
+  // per-migration overrides (ForbiddenTransactionModeOverrideError, 2026-10-22). PostgreSQL 12+
+  // allows ALTER TYPE ... ADD VALUE inside a transaction as long as the new value is not used in
+  // the same transaction, and this migration never uses 'PAID'.
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
