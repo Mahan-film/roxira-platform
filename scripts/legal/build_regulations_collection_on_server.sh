@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
-# Build the Qdrant collection iran_regulations_v1 (deregulation-board resolutions + CBI circulars) ON the production server.
-# ساخت کالکشن iran_regulations_v1 (مصوبات هیئت مقررات‌زدایی + بخشنامه‌های بانک مرکزی). سرویس production را عوض نمی‌کند.
+# Build the Qdrant collection iran_regulations_v3 (v2 inputs + the 2026-10-22 ekhtebar.ir circulars) ON the server.
+# ساخت کالکشن iran_regulations_v3 (ورودی‌های v2 به‌همراه بخشنامه‌های اختبار). سرویس production را عوض نمی‌کند.
 #
 #   cd /opt/roxira_platform && bash scripts/legal/build_regulations_collection_on_server.sh [--dry-run] [--rebuild]
 #
-#   --dry-run  preflight + validate + ingest dry-run only; nothing is written.
-#   --rebuild  delete ONLY iran_regulations_v1 (after typing its name on /dev/tty) and build it again.
+#   --dry-run  preflight + validate + ingest dry-run only; nothing is written. The ingest dry run prints a per-file
+#              report of accepted / duplicate / rejected rows (a duplicate lost to an earlier file by
+#              issuer+number+date or normalised title; a rejected line is blank, unparsable, or a relay row shorter
+#              than MIN_RELAY_TEXT_CHARS).
+#   --rebuild  delete ONLY iran_regulations_v3 (after typing its name on /dev/tty) and build it again.
 #
-#   DST=iran_regulations_v2 and BUILD_FILES="file1.jsonl file2.jsonl" override the destination and the input list
-#   (like scripts/legal/build_v4_on_server.sh); running with no env keeps the v1 behaviour. Embeddings use the shared
-#   TEI service (EMBEDDING_URL) with an ingest batch of BATCH (default 4, the TEI per-request limit).
+#   iran_regulations_v3 = the v2 inputs (deregulation board + owner-uploaded CBI circulars) followed by the new
+#   2026-10-22 ekhtebar.ir staged files (scripts/legal/ekhtebar_api.py rows, mapped by ingest_regulations.py).
+#   DST=iran_regulations_vX and BUILD_FILES="file1.jsonl file2.jsonl" override the destination and the input list
+#   (like scripts/legal/build_v4_on_server.sh); running with no env keeps the v3 behaviour. Embeddings use the
+#   shared TEI service (EMBEDDING_URL) with an ingest batch of BATCH (default 4, the TEI per-request limit).
 #
-# Never touches iran_laws_v2/v3 or iran_rulings_v1 (only reads their point counts). Never switches serving: the flag
-# SMARTJUDGE_REGULATIONS_COLLECTION stays unset until the owner runs the printed command. Never prints env values.
-# Design: output_apps/generated_modules/smartjudge/regulations_retrieval.py.
+# Never touches iran_laws_v2/v3 or iran_rulings_v1 (only reads their point counts). Never switches serving: the
+# flag SMARTJUDGE_REGULATIONS_COLLECTION stays unset until the owner runs the printed command. Never prints env
+# values. Design: output_apps/generated_modules/smartjudge/regulations_retrieval.py.
 set -euo pipefail
 
-DST=${DST:-iran_regulations_v1}   # override, e.g. DST=iran_regulations_v2
+DST=${DST:-iran_regulations_v3}   # override, e.g. DST=iran_regulations_v2
 LAWS=iran_laws_v3
 RULINGS=iran_rulings_v1
 QDRANT=${QDRANT_URL:-http://127.0.0.1:6333}
@@ -30,6 +35,8 @@ STAGED=data/legal/staged
 FILES=(
   "$STAGED/deregulation_board_2026-10-13.jsonl"
   "$STAGED/cbi_circulars_2026-10-14.jsonl"
+  "$STAGED/ekhtebar_api_tag_cbi_2026-10-22.jsonl"
+  "$STAGED/ekhtebar_api_tag_sabti_2026-10-22.jsonl"
 )
 # BUILD_FILES="a.jsonl b.jsonl" replaces the list above (lowest priority first). Add the relay rows, e.g.
 #   BUILD_FILES="$STAGED/cbi_circulars_2026-10-14.jsonl $STAGED/iran_relay_2026-10-14.jsonl"
@@ -41,7 +48,7 @@ for arg in "$@"; do
   case $arg in
     --dry-run) DRY=1 ;;
     --rebuild) REBUILD=1 ;;
-    -h|--help) sed -n 2,16p "$0"; exit 0 ;;
+    -h|--help) sed -n 2,21p "$0"; exit 0 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
@@ -131,6 +138,7 @@ run_step() {
 
 step "Validate staged files / اعتبارسنجی فایل‌ها (no writes)"
 run_step "validate regulations" scripts/legal/ingest_regulations.py validate "${FILES[@]}"
+# The dry run prints per-file accepted/duplicate/rejected counts (see the script header) before its plan JSON.
 run_step "apply dry run" scripts/legal/ingest_regulations.py apply "${FILES[@]}" --collection "$DST" --batch "$BATCH" --allow-existing --dry-run
 if [ "$DRY" = 1 ]; then
   echo "[dry-run] stopping before any write. Planned: create $DST (bge-m3, 1024-d, cosine), snapshot it"

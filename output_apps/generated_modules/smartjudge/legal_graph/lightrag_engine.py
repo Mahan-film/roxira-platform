@@ -160,6 +160,22 @@ QDRANT_VECTOR_TOPK = int(os.environ.get("LIGHTRAG_QDRANT_VECTOR_TOPK", "20"))
 # مبنی بر استفاده از جست‌وجوی برداری واقعی هر جا ابعاد سازگار باشد.
 QDRANT_VECTOR_SEARCH_ENABLED = os.environ.get("LIGHTRAG_QDRANT_VECTOR_SEARCH_ENABLED", "1") != "0"
 
+# ── مسیر ترکیبی dense + sparse (BM25) — آزمایشی، پیش‌فرض خاموش ───────────────
+# با ``SMARTJUDGE_HYBRID_SPARSE=1`` جست‌وجوی برداری با Query API و دو prefetch
+# (dense و sparse «bm25») و ادغام RRF انجام می‌شود. اگر کالکشن بردار sparse نداشته
+# باشد یا هر خطایی رخ دهد، بی‌صدا به مسیر dense فعلی تنزل می‌کنیم؛ پیش‌فرض خاموش
+# یعنی هیچ تغییری در رفتار سروینگ. توکنایزر مشترک: ``legal_tokenize``.
+HYBRID_SPARSE_ENV = "SMARTJUDGE_HYBRID_SPARSE"
+HYBRID_SPARSE_VECTOR = os.environ.get("SMARTJUDGE_HYBRID_SPARSE_VECTOR", "bm25")
+HYBRID_DENSE_PREFETCH = int(os.environ.get("SMARTJUDGE_HYBRID_DENSE_PREFETCH", "30"))
+HYBRID_SPARSE_PREFETCH = int(os.environ.get("SMARTJUDGE_HYBRID_SPARSE_PREFETCH", "30"))
+
+
+def hybrid_sparse_enabled() -> bool:
+    """آیا مسیر ترکیبی dense+sparse فعال است؟ (پیش‌فرض خاموش — صفر تغییر رفتار)"""
+    return os.environ.get(HYBRID_SPARSE_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 # ── سرویس مشترک embedding (HuggingFace TEI) ─────────────────────────────────
 # وقتی ``EMBEDDING_URL`` تنظیم است، بردارهای پرس‌وجو از سرویس مشترک TEI گرفته
 # می‌شوند (همان BAAI/bge-m3، نرمال‌شده، cosine 1.0) و دیگر هیچ نسخهٔ محلی
@@ -381,6 +397,7 @@ _PAYLOAD_TEXT_KEYS = (
 _TOKEN_RE = re.compile(r"[\w\u0600-\u06FF]+", re.UNICODE)
 from . import qdrant_cloud as _qcloud  # noqa: E402  (optional read-only cloud replica)
 from . import retrieval_boost as _rb  # noqa: E402  (pure helpers, no circular import)
+from .. import legal_tokenize as _lt  # noqa: E402  (shared sparse tokenizer, stdlib only)
 from .. import reranker as _reranker  # noqa: E402  (optional cross-encoder, flag-gated, never raises)
 _ENACTED_DESPITE_TITLE = (
     "لایحه اصلاحی قانون تجارت",
@@ -910,6 +927,156 @@ async def _qdrant_collection_vector_size(collection: str) -> Optional[int]:
     return None
 
 
+# کش وجود بردار sparse «bm25» در کالکشن (بعد از اولین تشخیص موفق ثابت می‌ماند).
+_collection_sparse_cache: Dict[str, bool] = {}
+_collection_sparse_lock = threading.Lock()
+
+
+async def _qdrant_collection_has_sparse(
+    collection: str, name: str = HYBRID_SPARSE_VECTOR
+) -> bool:
+    """آیا کالکشن بردار sparse نام‌دار ``name`` دارد؟ در شکست/عدم قطعیت ``False``.
+
+    ``False`` یعنی مسیر ترکیبی بی‌صدا به dense تنزل می‌کند (خواستهٔ وظیفه: اگر
+    کالکشن بردار sparse ندارد، همان رفتار فعلی dense بدون هیچ خطایی حفظ شود).
+    """
+    key = f"{collection}\x1f{name}"
+    cached = _collection_sparse_cache.get(key)
+    if cached is not None:
+        return cached
+    try:
+        import httpx
+    except ImportError:
+        return False
+    async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
+        for host, base, hdrs in _qdrant_targets():
+            _qcloud.note_failover(host)
+            url = f"{base}/collections/{collection}"
+            try:
+                response = await client.get(url, headers=hdrs)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("qdrant sparse-probe host %s unreachable: %s", host, exc)
+                continue
+            if getattr(response, "status_code", 0) != 200:
+                return False
+            try:
+                payload = response.json()
+            except Exception:  # noqa: BLE001
+                return False
+            sparse_cfg = (
+                (((payload or {}).get("result") or {}).get("config") or {}).get("params", {})
+                .get("sparse_vectors")
+            )
+            has = isinstance(sparse_cfg, dict) and name in sparse_cfg
+            with _collection_sparse_lock:
+                _collection_sparse_cache[key] = has
+            return has
+    return False
+
+
+def build_hybrid_query_body(
+    dense_vector: Sequence[float],
+    sparse_vector: Dict[str, Any],
+    *,
+    dense_limit: int = HYBRID_DENSE_PREFETCH,
+    sparse_limit: int = HYBRID_SPARSE_PREFETCH,
+    limit: int = 10,
+    point_filter: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """بدنهٔ خالص درخواست Query API: دو prefetch (dense + sparse «bm25») و ادغام RRF.
+
+    بدون I/O تا تست واحد ساختار درخواست را بسنجد (بدون شبکه).
+    """
+    dense_prefetch: Dict[str, Any] = {
+        "query": [float(x) for x in dense_vector],
+        "limit": max(1, dense_limit),
+    }
+    sparse_prefetch: Dict[str, Any] = {
+        "query": sparse_vector,
+        "using": HYBRID_SPARSE_VECTOR,
+        "limit": max(1, sparse_limit),
+    }
+    if point_filter:
+        dense_prefetch["filter"] = point_filter
+        sparse_prefetch["filter"] = point_filter
+    body: Dict[str, Any] = {
+        "prefetch": [dense_prefetch, sparse_prefetch],
+        "query": {"fusion": "rrf"},
+        "limit": max(1, limit),
+        "with_payload": True,
+        "with_vector": False,
+    }
+    if point_filter:
+        body["filter"] = point_filter
+    return body
+
+
+def _extract_query_points(response: Any) -> List[Dict[str, Any]]:
+    """نقاط پاسخ ``points/query`` (هم ``result.points`` و هم ``result`` فهرست را می‌پذیرد)."""
+    try:
+        if getattr(response, "status_code", 0) != 200:
+            return []
+        payload = response.json()
+    except Exception:  # noqa: BLE001
+        return []
+    result = (payload or {}).get("result")
+    if isinstance(result, dict):
+        return result.get("points") or []
+    if isinstance(result, list):
+        return result
+    return []
+
+
+async def _qdrant_hybrid_search_httpx(
+    vector: List[float],
+    text: str,
+    collection: str,
+    limit: int,
+    active_only: Optional[bool] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    """جست‌وجوی ترکیبی dense+sparse با RRF؛ ``None`` یعنی شکست (تنزل به dense)."""
+    global _qdrant_last_reachable
+    indices, values = _lt.query_sparse_vector(text)
+    if not indices:
+        return None
+    body = build_hybrid_query_body(
+        vector,
+        {"indices": indices, "values": values},
+        dense_limit=HYBRID_DENSE_PREFETCH,
+        sparse_limit=HYBRID_SPARSE_PREFETCH,
+        limit=max(1, limit),
+        point_filter=active_point_filter(active_only),
+    )
+    try:
+        import httpx
+    except ImportError:
+        return None
+    async with httpx.AsyncClient(timeout=QDRANT_FALLBACK_TIMEOUT) as client:
+        for host, base, hdrs in _qdrant_targets():
+            _qcloud.note_failover(host)
+            url = f"{base}/collections/{collection}/points/query"
+            try:
+                response = await client.post(url, json=body, headers=hdrs)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("qdrant hybrid-search host %s unreachable: %s", host, exc)
+                continue
+            _qdrant_last_reachable = True
+            if getattr(response, "status_code", 0) != 200:
+                logger.info(
+                    "Qdrant hybrid query HTTP %s on %s -> dense fallback",
+                    response.status_code,
+                    url,
+                )
+                return None
+            points = _extract_query_points(response)
+            return [
+                {**p["payload"], "_vector_score": p.get("score")}
+                for p in points
+                if isinstance(p, dict) and isinstance(p.get("payload"), dict)
+            ]
+    return None
+
+
 async def _qdrant_vector_search_httpx(
     vector: List[float], collection: str, limit: int, active_only: Optional[bool] = None
 ) -> Optional[List[Dict[str, Any]]]:
@@ -978,6 +1145,19 @@ async def _try_vector_search(
         )
         return None
     top_k = max(limit, QDRANT_VECTOR_TOPK)
+    # مسیر ترکیبی (SMARTJUDGE_HYBRID_SPARSE=1، پیش‌فرض خاموش): dense + sparse با RRF.
+    # اگر کالکشن بردار sparse «bm25» نداشته باشد یا جست‌وجو شکست بخورد، بی‌صدا به
+    # همان مسیر dense فعلی تنزل می‌کنیم — پس رفتار پیش‌فرض دقیقاً بدون تغییر است.
+    if hybrid_sparse_enabled():
+        has_sparse = await _qdrant_collection_has_sparse(
+            QDRANT_FALLBACK_COLLECTION, HYBRID_SPARSE_VECTOR
+        )
+        if has_sparse:
+            hybrid = await _qdrant_hybrid_search_httpx(
+                vector, text, QDRANT_FALLBACK_COLLECTION, top_k, active_only
+            )
+            if hybrid is not None:
+                return hybrid
     return await _qdrant_vector_search_httpx(vector, QDRANT_FALLBACK_COLLECTION, top_k, active_only)
 
 
