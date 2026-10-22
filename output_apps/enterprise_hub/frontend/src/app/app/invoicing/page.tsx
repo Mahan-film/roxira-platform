@@ -40,7 +40,9 @@ import {
 } from "@/lib/api/invoicing-client";
 import { getMyTenant } from "@/lib/api/tenants-client";
 import {
+  formatGregorianDate,
   formatJalaliDate,
+  formatLatinMoney,
   formatMoneyRial,
   formatNumber,
 } from "@/lib/fa-format";
@@ -48,6 +50,8 @@ import {
   INVOICE_STATUS_LABELS,
   InvoiceStatus,
   VAT_RATE,
+  invoiceRialEquivalent,
+  isForeignInvoice,
   type InvoiceResponseDto,
 } from "@/types/invoicing";
 
@@ -310,6 +314,11 @@ function InvoicingPage() {
                     const canChange =
                       invoice.status !== InvoiceStatus.PAID &&
                       invoice.status !== InvoiceStatus.CANCELLED;
+                    const foreign = isForeignInvoice(invoice);
+                    const money = (value: number) =>
+                      foreign
+                        ? formatLatinMoney(value, invoice.currency)
+                        : formatMoneyRial(value);
                     return (
                       <TableRow key={invoice.id}>
                         <TableCell className="whitespace-nowrap font-mono text-xs">
@@ -319,16 +328,23 @@ function InvoicingPage() {
                           {invoice.buyerInfo?.name ?? "—"}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {formatJalaliDate(invoice.createdAt)}
+                          {foreign
+                            ? formatGregorianDate(invoice.createdAt)
+                            : formatJalaliDate(invoice.createdAt)}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {formatMoneyRial(invoice.totalAmount)}
+                          {money(invoice.totalAmount)}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-amber-600 dark:text-amber-400">
-                          {formatMoneyRial(invoice.totalTax)}
+                          {money(invoice.totalTax)}
                         </TableCell>
                         <TableCell className="whitespace-nowrap font-medium text-emerald-600 dark:text-emerald-400">
-                          {formatMoneyRial(invoice.finalPayable)}
+                          {money(invoice.finalPayable)}
+                          {foreign && (
+                            <span className="block text-[11px] font-normal text-muted-foreground">
+                              ≈ {formatMoneyRial(invoiceRialEquivalent(invoice))}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={statusVariant(invoice.status)}>

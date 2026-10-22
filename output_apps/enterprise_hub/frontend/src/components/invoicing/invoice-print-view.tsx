@@ -5,14 +5,19 @@ import { CheckCircle2, Pencil, Printer, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  formatGregorianDate,
   formatJalaliDate,
+  formatLatinMoney,
   formatMoneyRial,
   formatNumber,
 } from "@/lib/fa-format";
 import {
+  INVOICE_JURISDICTION_LABELS,
   INVOICE_STATUS_LABELS,
   InvoiceStatus,
   VAT_RATE,
+  invoiceRialEquivalent,
+  isForeignInvoice,
   type InvoiceResponseDto,
 } from "@/types/invoicing";
 
@@ -43,6 +48,13 @@ export function InvoicePrintView({
   const canEdit =
     invoice.status === InvoiceStatus.DRAFT ||
     invoice.status === InvoiceStatus.ISSUED;
+
+  const foreign = isForeignInvoice(invoice);
+  const formatDate = (value?: string | Date | null) =>
+    foreign ? formatGregorianDate(value) : formatJalaliDate(value);
+  const money = (value?: number | null) =>
+    foreign ? formatLatinMoney(value, invoice.currency) : formatMoneyRial(value);
+  const rialEquivalent = foreign ? invoiceRialEquivalent(invoice) : 0;
 
   return (
     <div className="fixed inset-0 z-50 overflow-auto bg-black/70 p-4 print:static print:bg-white print:p-0">
@@ -113,11 +125,11 @@ export function InvoicePrintView({
             <h1 className="text-2xl font-black">صورتحساب فروش</h1>
             <span className="font-mono text-sm">{invoice.taxInvoiceNumber}</span>
             <span className="text-xs text-black/60">
-              تاریخ ثبت: {formatJalaliDate(invoice.createdAt)}
+              تاریخ ثبت: {formatDate(invoice.createdAt)}
             </span>
             {invoice.issuedAt && (
               <span className="text-xs text-black/60">
-                تاریخ صدور: {formatJalaliDate(invoice.issuedAt)}
+                تاریخ صدور: {formatDate(invoice.issuedAt)}
               </span>
             )}
           </div>
@@ -128,9 +140,12 @@ export function InvoicePrintView({
             <span className="font-mono text-xs text-black/60">
               {invoice.currency}
             </span>
+            <span className="text-xs text-black/60">
+              {INVOICE_JURISDICTION_LABELS[invoice.jurisdiction]}
+            </span>
             {invoice.paidAt && (
               <span className="text-xs text-emerald-700">
-                پرداخت‌شده در {formatJalaliDate(invoice.paidAt)}
+                پرداخت‌شده در {formatDate(invoice.paidAt)}
               </span>
             )}
           </div>
@@ -222,19 +237,19 @@ export function InvoicePrintView({
                     {formatNumber(item.quantity)}
                   </td>
                   <td className="border border-black/20 px-2 py-2 text-left">
-                    {formatMoneyRial(item.unitPrice)}
+                    {money(item.unitPrice)}
                   </td>
                   <td className="border border-black/20 px-2 py-2 text-left">
-                    {formatMoneyRial(item.discount)}
+                    {money(item.discount)}
                   </td>
                   <td className="border border-black/20 px-2 py-2 text-left">
                     {formatNumber(rate * 100)}٪
                   </td>
                   <td className="border border-black/20 px-2 py-2 text-left">
-                    {formatMoneyRial(item.tax)}
+                    {money(item.tax)}
                   </td>
                   <td className="border border-black/20 px-2 py-2 text-left font-bold">
-                    {formatMoneyRial(item.total)}
+                    {money(item.total)}
                   </td>
                 </tr>
               );
@@ -246,20 +261,26 @@ export function InvoicePrintView({
           <div className="w-full max-w-sm text-sm">
             <div className="flex items-center justify-between border-b border-black/15 py-1.5">
               <span className="text-black/60">جمع ناخالص</span>
-              <span>{formatMoneyRial(invoice.totalAmount)}</span>
+              <span>{money(invoice.totalAmount)}</span>
             </div>
             <div className="flex items-center justify-between border-b border-black/15 py-1.5">
               <span className="text-black/60">جمع تخفیف</span>
-              <span>{formatMoneyRial(invoice.totalDiscount)}</span>
+              <span>{money(invoice.totalDiscount)}</span>
             </div>
             <div className="flex items-center justify-between border-b border-black/15 py-1.5">
               <span className="text-black/60">جمع مالیات ارزش افزوده</span>
-              <span>{formatMoneyRial(invoice.totalTax)}</span>
+              <span>{money(invoice.totalTax)}</span>
             </div>
             <div className="flex items-center justify-between py-2 text-base font-black">
               <span>مبلغ قابل پرداخت</span>
-              <span>{formatMoneyRial(invoice.finalPayable)}</span>
+              <span>{money(invoice.finalPayable)}</span>
             </div>
+            {foreign && (
+              <div className="flex items-center justify-between py-1 text-xs text-black/60">
+                <span>معادل ریالی</span>
+                <span>≈ {formatMoneyRial(rialEquivalent)}</span>
+              </div>
+            )}
           </div>
         </section>
 

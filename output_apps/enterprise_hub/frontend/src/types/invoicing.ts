@@ -1,4 +1,4 @@
-import { Currency } from "@/types/currency";
+import { Currency, isIranianCurrency } from "@/types/currency";
 
 export enum InvoiceStatus {
   DRAFT = "DRAFT",
@@ -13,6 +13,29 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   [InvoiceStatus.PAID]: "پرداخت‌شده",
   [InvoiceStatus.CANCELLED]: "ابطال‌شده",
 };
+
+/** حوزه قضایی/مالیاتی صورتحساب — منطبق با بک‌اند NestJS. */
+export enum InvoiceJurisdiction {
+  IR = "IR",
+  INTL = "INTL",
+}
+
+export const INVOICE_JURISDICTION_LABELS: Record<InvoiceJurisdiction, string> = {
+  [InvoiceJurisdiction.IR]: "داخلی (IR)",
+  [InvoiceJurisdiction.INTL]: "بین‌المللی (INTL)",
+};
+
+/** ترتیب ارزهای قابل انتخاب در فرم صورتحساب. */
+export const INVOICE_CURRENCIES: Currency[] = [
+  Currency.IRR,
+  Currency.IRT,
+  Currency.USD,
+  Currency.EUR,
+  Currency.AED,
+  Currency.TRY,
+  Currency.CNY,
+  Currency.OMR,
+];
 
 /** نرخ پیش‌فرض مالیات بر ارزش افزوده (VAT) — منطبق با بک‌اند NestJS */
 export const VAT_RATE = 0.1;
@@ -57,6 +80,8 @@ export interface CreateInvoiceDto {
   items: CreateInvoiceItemDto[];
   status?: InvoiceStatus;
   currency?: Currency;
+  jurisdiction?: InvoiceJurisdiction;
+  fxRate?: number;
 }
 
 export type CreateInvoiceRequest = CreateInvoiceDto;
@@ -71,7 +96,10 @@ export interface InvoiceResponseDto {
   buyerInfo: InvoicePartyInfo;
   items: InvoiceItem[];
   currency: Currency;
+  jurisdiction: InvoiceJurisdiction;
   exchangeRate: number;
+  fxRate: number;
+  amountFx: number | null;
   baseCurrency: Currency;
   totalAmount: number;
   totalDiscount: number;
@@ -104,4 +132,25 @@ export interface PaginatedInvoiceResponse {
   total: number;
   page: number;
   limit: number;
+}
+
+/**
+ * آیا صورتحساب با ارز خارجی (غیر ریالی/تومانی) یا حوزه بین‌المللی است؟
+ * چنین صورتحساب‌هایی با ارز خودشان و تاریخ میلادی نمایش داده می‌شوند.
+ */
+export function isForeignInvoice(
+  invoice: Pick<InvoiceResponseDto, "currency" | "jurisdiction">,
+): boolean {
+  return (
+    invoice.jurisdiction === InvoiceJurisdiction.INTL ||
+    !isIranianCurrency(invoice.currency)
+  );
+}
+
+/** معادل ریالی صورتحساب: amount_fx × fx_rate. */
+export function invoiceRialEquivalent(
+  invoice: Pick<InvoiceResponseDto, "amountFx" | "finalPayable" | "fxRate">,
+): number {
+  const amount = invoice.amountFx ?? invoice.finalPayable;
+  return amount * (invoice.fxRate || 0);
 }

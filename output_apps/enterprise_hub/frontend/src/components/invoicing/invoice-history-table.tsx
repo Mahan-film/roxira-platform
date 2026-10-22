@@ -28,8 +28,15 @@ import { cancelInvoice, listInvoices } from "@/lib/api/invoicing-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { formatPersianDate, formatRial } from "@/lib/format";
 import {
+  formatGregorianDate,
+  formatLatinMoney,
+  formatMoneyRial,
+} from "@/lib/fa-format";
+import {
   INVOICE_STATUS_LABELS,
   InvoiceStatus,
+  invoiceRialEquivalent,
+  isForeignInvoice,
   type PaginatedInvoiceResponse,
 } from "@/types/invoicing";
 
@@ -233,53 +240,67 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
                 </TableRow>
               ))
             ) : response && response.data.length > 0 ? (
-              response.data.map((invoice) => (
-                <TableRow key={invoice.id}>
-                  <TableCell className="whitespace-nowrap font-mono text-xs">
-                    {invoice.taxInvoiceNumber}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {invoice.buyerInfo?.name ?? "—"}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {formatPersianDate(invoice.createdAt)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {formatRial(invoice.totalAmount)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {formatRial(invoice.totalDiscount)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-amber-600 dark:text-amber-400">
-                    {formatRial(invoice.totalTax)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap font-medium text-emerald-600 dark:text-emerald-400">
-                    {formatRial(invoice.finalPayable)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(invoice.status)}>
-                      {INVOICE_STATUS_LABELS[invoice.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={
-                        invoice.status === InvoiceStatus.CANCELLED ||
-                        actionId === invoice.id
-                      }
-                      onClick={() =>
-                        handleCancel(invoice.id, invoice.taxInvoiceNumber)
-                      }
-                    >
-                      <BanIcon />
-                      ابطال
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              response.data.map((invoice) => {
+                const foreign = isForeignInvoice(invoice);
+                const money = (value: number) =>
+                  foreign
+                    ? formatLatinMoney(value, invoice.currency)
+                    : formatRial(value);
+                return (
+                  <TableRow key={invoice.id}>
+                    <TableCell className="whitespace-nowrap font-mono text-xs">
+                      {invoice.taxInvoiceNumber}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {invoice.buyerInfo?.name ?? "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {foreign
+                        ? formatGregorianDate(invoice.createdAt)
+                        : formatPersianDate(invoice.createdAt)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {money(invoice.totalAmount)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {money(invoice.totalDiscount)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-amber-600 dark:text-amber-400">
+                      {money(invoice.totalTax)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-medium text-emerald-600 dark:text-emerald-400">
+                      {money(invoice.finalPayable)}
+                      {foreign && (
+                        <span className="block text-[11px] font-normal text-muted-foreground">
+                          ≈ {formatMoneyRial(invoiceRialEquivalent(invoice))}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(invoice.status)}>
+                        {INVOICE_STATUS_LABELS[invoice.status]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={
+                          invoice.status === InvoiceStatus.CANCELLED ||
+                          actionId === invoice.id
+                        }
+                        onClick={() =>
+                          handleCancel(invoice.id, invoice.taxInvoiceNumber)
+                        }
+                      >
+                        <BanIcon />
+                        ابطال
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell

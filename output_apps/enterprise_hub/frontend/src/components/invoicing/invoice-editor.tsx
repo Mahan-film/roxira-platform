@@ -32,11 +32,15 @@ import { createInvoice, updateInvoice } from "@/lib/api/invoicing-client";
 import { listLeads } from "@/lib/api/crm-client";
 import { listStockItems } from "@/lib/api/inventory-client";
 import { ApiClientError } from "@/lib/api/http-client";
-import { formatMoneyRial } from "@/lib/fa-format";
+import { formatLatinMoney, formatMoneyRial } from "@/lib/fa-format";
+import { Currency, isIranianCurrency } from "@/types/currency";
 import type { Lead } from "@/types/crm";
 import type { StockItem } from "@/types/inventory";
 import {
+  INVOICE_CURRENCIES,
+  INVOICE_JURISDICTION_LABELS,
   INVOICE_STATUS_LABELS,
+  InvoiceJurisdiction,
   InvoiceStatus,
   VAT_RATE,
   type CreateInvoiceDto,
@@ -149,7 +153,23 @@ export function InvoiceEditor({
 }: InvoiceEditorProps) {
   const nextLine = useRef(1);
   const isEdit = Boolean(invoice);
-  const fallbackPercent = (defaultVatRate ?? VAT_RATE) * 100;
+
+  const [currency, setCurrency] = useState<Currency>(
+    invoice?.currency ?? Currency.IRR,
+  );
+  const [jurisdiction, setJurisdiction] = useState<InvoiceJurisdiction>(
+    invoice?.jurisdiction ??
+      (isIranianCurrency(invoice?.currency ?? Currency.IRR)
+        ? InvoiceJurisdiction.IR
+        : InvoiceJurisdiction.INTL),
+  );
+  const [fxRate, setFxRate] = useState<string>(
+    invoice?.fxRate && invoice.fxRate > 0 ? String(invoice.fxRate) : "",
+  );
+
+  const isForeign = !isIranianCurrency(currency);
+  const effectiveDefaultVatRate = isForeign ? 0 : defaultVatRate ?? VAT_RATE;
+  const fallbackPercent = effectiveDefaultVatRate * 100;
 
   const [taxInvoiceNumber, setTaxInvoiceNumber] = useState(
     invoice?.taxInvoiceNumber ?? makeInvoiceNumber(),
@@ -178,7 +198,9 @@ export function InvoiceEditor({
         quantity: String(item.quantity),
         unitPrice: String(item.unitPrice),
         discount: String(item.discount ?? 0),
-        vatRate: String(Number(item.vatRate ?? defaultVatRate ?? VAT_RATE) * 100),
+        vatRate: String(
+          Number(item.vatRate ?? effectiveDefaultVatRate) * 100,
+        ),
       }));
     }
     return [createLine("line-0", fallbackPercent)];
@@ -244,6 +266,21 @@ export function InvoiceEditor({
     }));
   }
 
+  function applyCurrency(value: Currency) {
+    setCurrency(value);
+    const iranian = isIranianCurrency(value);
+    setJurisdiction(
+      iranian ? InvoiceJurisdiction.IR : InvoiceJurisdiction.INTL,
+    );
+    const nextPercent = iranian ? (defaultVatRate ?? VAT_RATE) * 100 : 0;
+    setLines((prev) =>
+      prev.map((line) => ({ ...line, vatRate: String(nextPercent) })),
+    );
+    if (iranian) {
+      setFxRate("");
+    }
+  }
+
   function addLine() {
     const id = nextLine.current++;
     setLines((prev) => [...prev, createLine(`line-${id}`, fallbackPercent)]);
@@ -267,6 +304,13 @@ export function InvoiceEditor({
     },
     { gross: 0, discount: 0, tax: 0, total: 0 },
   );
+
+  const fxRateNumber = Number(fxRate) || 0;
+
+  /** قالب‌بندی مبلغ بر مبنای ارز صورتحساب (فارسی برای ریال، لاتین برای ارز خارجی). */
+  function formatAmount(value: number): string {
+    return isForeign ? formatLatinMoney(value, currency) : formatMoneyRial(value);
+  }
 
   function validate(): string[] {
     const messages: string[] = [];
@@ -294,6 +338,9 @@ export function InvoiceEditor({
         messages.push("نرخ مالیات هر سطر باید بین ۰ تا ۱۰۰ درصد باشد.");
         break;
       }
+    }
+    if (isForeign && !(Number(fxRate) > 0)) {
+      messages.push("برای صورتحساب ارزی، نرخ تبدیل به ریال (fxRate) الزامی است.");
     }
     return messages;
   }
@@ -324,6 +371,9 @@ export function InvoiceEditor({
           vatRate: vatRateRatio(line.vatRate),
         })),
       status,
+      currency,
+      jurisdiction,
+      fxRate: isForeign ? Number(fxRate) : undefined,
     };
 
     setIsSubmitting(true);
@@ -423,6 +473,61 @@ export function InvoiceEditor({
                 </option>
                 <option value={InvoiceStatus.ISSUED}>
                   {INVOICE_STATUS_LABELS[InvoiceStatus.ISSUED]}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid gap-2">
+              <Label htmlFor="invoice-currency">ارز صورتحساب</Label>
+              <select
+                id="invoice-currency"
+                value={currency}
+                onChange={(event) =>
+                  applyCurrency(event.target.value as Currency)
+                }
+                className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+              >
+                {INVOICE_CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="invoice-fx">
+                نرخ تبدیل به ریال
+                {isForeign && <span className="text-destructive"> *</span>}
+              </Label>
+              <Input
+                id="invoice-fx"
+                dir="ltr"
+                inputMode="decimal"
+                value={fxRate}
+                disabled={!isForeign}
+                onChange={(event) => setFxRate(event.target.value)}
+                placeholder={isForeign ? "مثلاً 920000" : "—"}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="invoice-jurisdiction">حوزه قضایی</Label>
+              <select
+                id="invoice-jurisdiction"
+                value={jurisdiction}
+                onChange={(event) =>
+                  setJurisdiction(event.target.value as InvoiceJurisdiction)
+                }
+                className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+              >
+                <option value={InvoiceJurisdiction.IR}>
+                  {INVOICE_JURISDICTION_LABELS[InvoiceJurisdiction.IR]}
+                </option>
+                <option value={InvoiceJurisdiction.INTL}>
+                  {INVOICE_JURISDICTION_LABELS[InvoiceJurisdiction.INTL]}
                 </option>
               </select>
             </div>
@@ -552,7 +657,9 @@ export function InvoiceEditor({
                     <TableHead className="min-w-40">کالای انبار</TableHead>
                     <TableHead className="min-w-48">شرح</TableHead>
                     <TableHead className="w-24">تعداد</TableHead>
-                    <TableHead className="w-32">قیمت واحد (ریال)</TableHead>
+                    <TableHead className="w-32">
+                      {isForeign ? `قیمت واحد (${currency})` : "قیمت واحد (ریال)"}
+                    </TableHead>
                     <TableHead className="w-28">تخفیف</TableHead>
                     <TableHead className="w-24">VAT ٪</TableHead>
                     <TableHead className="w-32">مالیات</TableHead>
@@ -633,10 +740,10 @@ export function InvoiceEditor({
                           />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                          {formatMoneyRial(computed.tax)}
+                          {formatAmount(computed.tax)}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm font-medium">
-                          {formatMoneyRial(computed.total)}
+                          {formatAmount(computed.total)}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -661,27 +768,33 @@ export function InvoiceEditor({
           <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-4 text-sm sm:grid-cols-4">
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">جمع ناخالص</span>
-              <span className="font-medium">{formatMoneyRial(totals.gross)}</span>
+              <span className="font-medium">{formatAmount(totals.gross)}</span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">جمع تخفیف</span>
               <span className="font-medium">
-                {formatMoneyRial(totals.discount)}
+                {formatAmount(totals.discount)}
               </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">جمع مالیات ارزش افزوده</span>
               <span className="font-medium text-amber-600 dark:text-amber-400">
-                {formatMoneyRial(totals.tax)}
+                {formatAmount(totals.tax)}
               </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">قابل پرداخت</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                {formatMoneyRial(totals.total)}
+                {formatAmount(totals.total)}
               </span>
             </div>
           </div>
+
+          {isForeign && (
+            <p className="text-xs text-muted-foreground">
+              معادل ریالی (≈ {formatMoneyRial(totals.total * fxRateNumber)})
+            </p>
+          )}
 
           {errors && (
             <Alert variant="destructive">

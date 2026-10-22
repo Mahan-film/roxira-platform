@@ -1,3 +1,4 @@
+import { InvoiceJurisdiction } from './enums/invoice-jurisdiction.enum';
 import 'reflect-metadata';
 import { Job, Queue } from 'bullmq';
 import { AccountResponseDto } from '../accounting/dto/account-response.dto';
@@ -164,6 +165,7 @@ const buildInvoice = (
   id: 'inv-1',
   tenantId: 'tenant-a',
   taxInvoiceNumber: 'TI-1',
+  jurisdiction: InvoiceJurisdiction.IR,
   customerId: null,
   sellerInfo: { name: 'فروشنده' },
   buyerInfo: { name: 'خریدار' },

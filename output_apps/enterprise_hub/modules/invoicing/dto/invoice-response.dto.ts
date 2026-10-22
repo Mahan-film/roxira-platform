@@ -4,6 +4,7 @@ import {
   InvoiceItem,
   InvoicePartyInfo,
 } from '../entities/invoice.entity';
+import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -32,10 +33,29 @@ export class InvoiceResponseDto {
   currency: Currency;
 
   @ApiProperty({
+    enum: InvoiceJurisdiction,
+    description: 'حوزه قضایی/مالیاتی صورتحساب',
+    example: InvoiceJurisdiction.IR,
+  })
+  jurisdiction: InvoiceJurisdiction;
+
+  @ApiProperty({
     description: 'نرخ تبدیل ارز فاکتور به ارز پایه',
     example: 0.00000109,
   })
   exchangeRate: number;
+
+  @ApiProperty({
+    description: 'نرخ تبدیل ارز فاکتور به ریال (amount_fx × fx_rate = معادل ریالی)',
+    example: 1,
+  })
+  fxRate: number;
+
+  @ApiProperty({
+    description: 'مبلغ صورتحساب به ارز مبدأ (amount_fx)',
+    nullable: true,
+  })
+  amountFx: number | null;
 
   @ApiProperty({ enum: Currency, description: 'ارز پایه تجمیع', example: Currency.USD })
   baseCurrency: Currency;

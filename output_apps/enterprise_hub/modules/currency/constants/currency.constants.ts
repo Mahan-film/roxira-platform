@@ -15,13 +15,18 @@ export const CURRENCY_MONEY_SCALE = 2;
  *
  * این نرخ‌ها به‌عنوان fallback داخلی استفاده می‌شوند و در محیط تولید از
  * طریق متغیرهای محیطی قابل بازنویسی هستند (بدون تغییر کد):
- *   CURRENCY_RATE_USD, CURRENCY_RATE_EUR, CURRENCY_RATE_AED, CURRENCY_RATE_IRR
+ *   CURRENCY_RATE_USD, CURRENCY_RATE_EUR, CURRENCY_RATE_AED, CURRENCY_RATE_IRR,
+ *   CURRENCY_RATE_IRT, CURRENCY_RATE_TRY, CURRENCY_RATE_CNY, CURRENCY_RATE_OMR
  */
 export const DEFAULT_RATES_PER_USD: Record<Currency, number> = {
   [Currency.USD]: 1,
   [Currency.EUR]: 0.92,
   [Currency.AED]: 3.6725,
   [Currency.IRR]: 920000,
+  [Currency.IRT]: 92000,
+  [Currency.TRY]: 34.5,
+  [Currency.CNY]: 7.2,
+  [Currency.OMR]: 0.3845,
 };
 
 /** متغیر محیطی متناظر با هر ارز جهت بازنویسی نرخ مرجع. */
@@ -30,6 +35,10 @@ export const CURRENCY_RATE_ENV_KEYS: Record<Currency, string> = {
   [Currency.EUR]: 'CURRENCY_RATE_EUR',
   [Currency.AED]: 'CURRENCY_RATE_AED',
   [Currency.IRR]: 'CURRENCY_RATE_IRR',
+  [Currency.IRT]: 'CURRENCY_RATE_IRT',
+  [Currency.TRY]: 'CURRENCY_RATE_TRY',
+  [Currency.CNY]: 'CURRENCY_RATE_CNY',
+  [Currency.OMR]: 'CURRENCY_RATE_OMR',
 };
 
 /** فراداده نمایشی هر ارز (نماد، نام انگلیسی و تعداد اعشار چاپی). */
@@ -70,6 +79,34 @@ export const CURRENCY_METADATA: Record<Currency, CurrencyMetadata> = {
     decimals: 0,
     isBase: false,
   },
+  [Currency.IRT]: {
+    code: Currency.IRT,
+    name: 'Iranian Toman',
+    symbol: 'تومان',
+    decimals: 0,
+    isBase: false,
+  },
+  [Currency.TRY]: {
+    code: Currency.TRY,
+    name: 'Turkish Lira',
+    symbol: '₺',
+    decimals: 2,
+    isBase: false,
+  },
+  [Currency.CNY]: {
+    code: Currency.CNY,
+    name: 'Chinese Yuan',
+    symbol: '¥',
+    decimals: 2,
+    isBase: false,
+  },
+  [Currency.OMR]: {
+    code: Currency.OMR,
+    name: 'Omani Rial',
+    symbol: 'ر.ع.',
+    decimals: 3,
+    isBase: false,
+  },
 };
 
 /** فهرست ارزهای مجاز (برای اعتبارسنجی DTO). */
@@ -78,4 +115,8 @@ export const SUPPORTED_CURRENCIES: Currency[] = [
   Currency.EUR,
   Currency.AED,
   Currency.IRR,
+  Currency.IRT,
+  Currency.TRY,
+  Currency.CNY,
+  Currency.OMR,
 ];

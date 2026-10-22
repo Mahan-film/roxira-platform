@@ -11,6 +11,15 @@ export const DEFAULT_VAT_RATE = 0.1;
 /** نام سازگار با نسخه قبلی؛ همان نرخ پیش‌فرض ۱۰٪ است. */
 export const VAT_RATE = DEFAULT_VAT_RATE;
 
+/**
+ * نرخ پیش‌فرض VAT صورتحساب‌های بین‌المللی (INTL): صفر، مگر اینکه نرخ هر سطر
+ * به‌صورت صریح داده شود.
+ */
+export const INTL_DEFAULT_VAT_RATE = 0;
+
+/** ضریب تبدیل تومان به ریال (۱ تومان = ۱۰ ریال). */
+export const TOMAN_TO_RIAL = 10;
+
 /** دقت گردن‌دکردن مبالغ ریالی/مالی (تعداد ارقام اعشار) */
 export const MONEY_SCALE = 2;
 

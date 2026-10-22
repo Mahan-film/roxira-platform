@@ -9,6 +9,10 @@ export enum Currency {
   EUR = "EUR",
   AED = "AED",
   IRR = "IRR",
+  IRT = "IRT",
+  TRY = "TRY",
+  CNY = "CNY",
+  OMR = "OMR",
 }
 
 /**
@@ -16,6 +20,14 @@ export enum Currency {
  * باید با `SUPPORTED_CURRENCIES` در بک‌اند هم‌گام بماند.
  */
 export const SUPPORTED_CURRENCIES: Currency[] = Object.values(Currency);
+
+/** ارزهای داخلی (ریال/تومان) که کالای داخلی/جلالی محسوب می‌شوند. */
+export const IRANIAN_CURRENCIES: Currency[] = [Currency.IRR, Currency.IRT];
+
+/** آیا ارز داخلی (ریال/تومان) است؟ */
+export function isIranianCurrency(currency: Currency | string): boolean {
+  return currency === Currency.IRR || currency === Currency.IRT;
+}
 
 export interface CurrencyMetadata {
   code: Currency;
@@ -48,6 +60,10 @@ export const CURRENCY_SYMBOLS: Record<Currency, string> = {
   [Currency.EUR]: "€",
   [Currency.AED]: "AED",
   [Currency.IRR]: "IRR",
+  [Currency.IRT]: "IRT",
+  [Currency.TRY]: "TRY",
+  [Currency.CNY]: "CNY",
+  [Currency.OMR]: "OMR",
 };
 
 /** قالب‌بندی مبلغ بر مبنای ارز (با Intl.NumberFormat انگلیسی). */

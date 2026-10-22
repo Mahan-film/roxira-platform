@@ -19,6 +19,16 @@ const DATE_TIME_FMT = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
 
 const NUMBER_FMT = new Intl.NumberFormat("fa-IR");
 
+const GREGORIAN_DATE_FMT = new Intl.DateTimeFormat("en-GB", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const LATIN_NUMBER_FMT = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 2,
+});
+
 function toDate(value?: string | number | Date | null): Date | null {
   if (value === undefined || value === null || value === "") return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -50,5 +60,27 @@ export function formatNumber(value?: number | null): string {
 export function formatMoneyRial(value?: number | null): string {
   return typeof value === "number" && Number.isFinite(value)
     ? `${NUMBER_FMT.format(value)} ریال`
+    : "—";
+}
+
+/**
+ * Gregorian date in Latin digits, e.g. «22/10/2026» — for international invoices.
+ */
+export function formatGregorianDate(
+  value?: string | number | Date | null,
+): string {
+  const date = toDate(value);
+  return date ? GREGORIAN_DATE_FMT.format(date) : "—";
+}
+
+/**
+ * Foreign-currency money with Latin digits and the ISO code, e.g. «1,250.00 EUR».
+ */
+export function formatLatinMoney(
+  value: number | null | undefined,
+  currency: string,
+): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${LATIN_NUMBER_FMT.format(value)} ${currency}`
     : "—";
 }

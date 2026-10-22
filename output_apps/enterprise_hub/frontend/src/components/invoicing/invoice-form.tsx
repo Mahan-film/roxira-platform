@@ -44,8 +44,13 @@ import { ApiClientError } from "@/lib/api/http-client";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 import { useAuth } from "@/components/auth/auth-provider";
 import { formatRial } from "@/lib/format";
+import { formatLatinMoney } from "@/lib/fa-format";
+import { Currency, isIranianCurrency } from "@/types/currency";
 import {
+  INVOICE_CURRENCIES,
+  INVOICE_JURISDICTION_LABELS,
   INVOICE_STATUS_LABELS,
+  InvoiceJurisdiction,
   InvoiceStatus,
   VAT_RATE,
   type CreateInvoiceDto,
@@ -91,13 +96,13 @@ function createEmptyItem(uid: string): FormItem {
   return { uid, description: "", quantity: "1", unitPrice: "", discount: "0" };
 }
 
-function computeItem(item: FormItem): ComputedItem {
+function computeItem(item: FormItem, vatRate: number = VAT_RATE): ComputedItem {
   const quantity = Number(item.quantity) || 0;
   const unitPrice = Number(item.unitPrice) || 0;
   const discount = Number(item.discount) || 0;
   const gross = quantity * unitPrice;
   const taxable = Math.max(0, gross - discount);
-  const tax = taxable * VAT_RATE;
+  const tax = taxable * vatRate;
   const total = taxable + tax;
   return { gross, discount, taxable, tax, total };
 }
@@ -177,9 +182,32 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
   const nextItemId = useRef(1);
   const [taxInvoiceNumber, setTaxInvoiceNumber] = useState("");
   const [status, setStatus] = useState<InvoiceStatus>(InvoiceStatus.DRAFT);
+  const [currency, setCurrency] = useState<Currency>(Currency.IRR);
+  const [jurisdiction, setJurisdiction] = useState<InvoiceJurisdiction>(
+    InvoiceJurisdiction.IR,
+  );
+  const [fxRate, setFxRate] = useState("");
   const [seller, setSeller] = useState<PartyFormState>(EMPTY_PARTY);
   const [buyer, setBuyer] = useState<PartyFormState>(EMPTY_PARTY);
   const [items, setItems] = useState<FormItem[]>([createEmptyItem("row-0")]);
+
+  const isForeign = !isIranianCurrency(currency);
+  const effectiveVatRate = isForeign ? 0 : VAT_RATE;
+
+  function applyCurrency(value: Currency) {
+    setCurrency(value);
+    const iranian = isIranianCurrency(value);
+    setJurisdiction(
+      iranian ? InvoiceJurisdiction.IR : InvoiceJurisdiction.INTL,
+    );
+    if (iranian) {
+      setFxRate("");
+    }
+  }
+
+  function formatAmount(value: number): string {
+    return isForeign ? formatLatinMoney(value, currency) : formatRial(value);
+  }
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string[] | null>(null);
@@ -213,7 +241,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
 
   const totals = items.reduce(
     (acc, item) => {
-      const computed = computeItem(item);
+      const computed = computeItem(item, effectiveVatRate);
       return {
         gross: acc.gross + computed.gross,
         discount: acc.discount + computed.discount,
@@ -243,6 +271,9 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
     );
     if (!hasValidItem) {
       errors.push("حداقل یک قلم کالا/خدمت با شرح، تعداد و قیمت واحد معتبر لازم است.");
+    }
+    if (isForeign && !(Number(fxRate) > 0)) {
+      errors.push("برای صورتحساب ارزی، نرخ تبدیل به ریال (fxRate) الزامی است.");
     }
     return errors;
   }
@@ -284,6 +315,9 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
           discount: Number(item.discount) || 0,
         })),
       status,
+      currency,
+      jurisdiction,
+      fxRate: isForeign ? Number(fxRate) : undefined,
     };
 
     setIsSubmitting(true);
@@ -323,7 +357,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
             </CardDescription>
           </div>
           <Badge variant="outline" className="text-xs">
-            VAT ۱۰٪
+            VAT {isForeign ? "0%" : "۱۰٪"}
           </Badge>
         </div>
       </CardHeader>
@@ -371,6 +405,59 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <Label>ارز صورتحساب</Label>
+              <Select
+                value={currency}
+                onValueChange={(value) => applyCurrency(value as Currency)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVOICE_CURRENCIES.map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>نرخ تبدیل به ریال{isForeign ? " *" : ""}</Label>
+              <Input
+                dir="ltr"
+                inputMode="decimal"
+                value={fxRate}
+                disabled={!isForeign}
+                onChange={(event) => setFxRate(event.target.value)}
+                placeholder={isForeign ? "مثلاً 920000" : "—"}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>حوزه قضایی</Label>
+              <Select
+                value={jurisdiction}
+                onValueChange={(value) =>
+                  setJurisdiction(value as InvoiceJurisdiction)
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={InvoiceJurisdiction.IR}>
+                    {INVOICE_JURISDICTION_LABELS[InvoiceJurisdiction.IR]}
+                  </SelectItem>
+                  <SelectItem value={InvoiceJurisdiction.INTL}>
+                    {INVOICE_JURISDICTION_LABELS[InvoiceJurisdiction.INTL]}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <PartyFields title="اطلاعات فروشنده" value={seller} onChange={setSeller} />
             <PartyFields title="اطلاعات خریدار" value={buyer} onChange={setBuyer} />
@@ -393,14 +480,14 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
                     <TableHead className="w-24">تعداد</TableHead>
                     <TableHead className="w-36">قیمت واحد</TableHead>
                     <TableHead className="w-32">تخفیف</TableHead>
-                    <TableHead className="w-32">مالیات ۱۰٪</TableHead>
+                    <TableHead className="w-32">مالیات</TableHead>
                     <TableHead className="w-36">جمع سطر</TableHead>
                     <TableHead className="w-12" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((item) => {
-                    const computed = computeItem(item);
+                    const computed = computeItem(item, effectiveVatRate);
                     return (
                       <TableRow key={item.uid}>
                         <TableCell>
@@ -441,10 +528,10 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
                           />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                          {formatRial(computed.tax)}
+                          {formatAmount(computed.tax)}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm font-medium">
-                          {formatRial(computed.total)}
+                          {formatAmount(computed.total)}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -469,25 +556,31 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
           <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-4 text-sm sm:grid-cols-4">
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">جمع ناخالص</span>
-              <span className="font-medium">{formatRial(totals.gross)}</span>
+              <span className="font-medium">{formatAmount(totals.gross)}</span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">جمع تخفیف</span>
-              <span className="font-medium">{formatRial(totals.discount)}</span>
+              <span className="font-medium">{formatAmount(totals.discount)}</span>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground">جمع مالیات ۱۰٪</span>
+              <span className="text-muted-foreground">جمع مالیات</span>
               <span className="font-medium text-amber-600 dark:text-amber-400">
-                {formatRial(totals.tax)}
+                {formatAmount(totals.tax)}
               </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">قابل پرداخت</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                {formatRial(totals.total)}
+                {formatAmount(totals.total)}
               </span>
             </div>
           </div>
+
+          {isForeign && (
+            <p className="text-xs text-muted-foreground">
+              معادل ریالی (≈ {formatRial(totals.total * (Number(fxRate) || 0))})
+            </p>
+          )}
 
           {submitError && (
             <Alert variant="destructive">
@@ -508,7 +601,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
               <AlertTitle>صورتحساب با موفقیت ثبت شد</AlertTitle>
               <AlertDescription>
                 شماره {createdInvoice.taxInvoiceNumber} — مبلغ نهایی قابل پرداخت:{" "}
-                {formatRial(createdInvoice.finalPayable)}
+                {formatAmount(createdInvoice.finalPayable)}
               </AlertDescription>
             </Alert>
           )}

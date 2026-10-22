@@ -21,6 +21,10 @@ const FALLBACK_RATES: Record<Currency, number> = {
   [Currency.EUR]: 0.92,
   [Currency.AED]: 3.6725,
   [Currency.IRR]: 920000,
+  [Currency.IRT]: 92000,
+  [Currency.TRY]: 34.5,
+  [Currency.CNY]: 7.2,
+  [Currency.OMR]: 0.3845,
 };
 
 const FALLBACK_CURRENCIES: Currency[] = [

@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Currency } from '../../currency/enums/currency.enum';
+import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -81,6 +82,18 @@ export class InvoiceEntity {
   @Index()
   @Column({ type: 'varchar', length: 8, default: 'IRR' })
   currency: Currency;
+
+  /**
+   * حوزه قضایی/مالیاتی صورتحساب.
+   * - IR: داخلی (نمایش جلالی/ریالی و VAT پیش‌فرض ۱۰٪).
+   * - INTL: بین‌المللی (ارز خودِ صورتحساب و VAT پیش‌فرض صفر).
+   */
+  @Column({
+    type: 'varchar',
+    length: 8,
+    default: InvoiceJurisdiction.IR,
+  })
+  jurisdiction: InvoiceJurisdiction;
 
   /** نرخ تبدیل ارز اصلی به ارز پایه (واحد ارز پایه به‌ازای ۱ واحد ارز فاکتور). */
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 1 })

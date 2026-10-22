@@ -17,7 +17,9 @@ import { InventoryRepository } from '../../inventory/repositories/inventory.repo
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
 import {
   DEFAULT_VAT_RATE,
+  INTL_DEFAULT_VAT_RATE,
   MONEY_SCALE,
+  TOMAN_TO_RIAL,
 } from '../constants/invoicing.constants';
 import {
   SUITE_EVENT_INVOICE_STATUS_JOB,
@@ -36,6 +38,7 @@ import {
   InvoiceItem,
   InvoicePartyInfo,
 } from '../entities/invoice.entity';
+import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 import { InvoicingRepository } from '../repositories/invoicing.repository';
 
@@ -159,6 +162,53 @@ export class InvoicingService {
     } catch {
       return DEFAULT_VAT_RATE;
     }
+  }
+
+  /** آیا ارز داخلی (ریال/تومان) است؟ */
+  private isIranianCurrency(currency: Currency): boolean {
+    return currency === Currency.IRR || currency === Currency.IRT;
+  }
+
+  /** حوزه قضایی پیش‌فرض بر مبنای ارز: IRR/IRT داخلی، سایر ارزها بین‌المللی. */
+  private defaultJurisdiction(currency: Currency): InvoiceJurisdiction {
+    return this.isIranianCurrency(currency)
+      ? InvoiceJurisdiction.IR
+      : InvoiceJurisdiction.INTL;
+  }
+
+  /**
+   * نرخ تبدیل ارز صورتحساب به ریال (`fx_rate`).
+   * IRR = ۱ و IRT = ۱۰؛ برای سایر ارزها ورودی کاربر الزامی و باید عددی
+   * متناهی و مثبت باشد.
+   */
+  private resolveFxRate(currency: Currency, requested?: number): number {
+    if (currency === Currency.IRT) {
+      return TOMAN_TO_RIAL;
+    }
+    if (currency === Currency.IRR) {
+      return 1;
+    }
+    if (
+      requested === undefined ||
+      requested === null ||
+      !Number.isFinite(requested) ||
+      requested <= 0
+    ) {
+      throw new BadRequestException(
+        'برای صورتحساب به ارز غیر از ریال/تومان، وارد کردن نرخ تبدیل به ریال (fxRate) الزامی است.',
+      );
+    }
+    return requested;
+  }
+
+  /** نرخ پیش‌فرض VAT بر مبنای حوزه: INTL صفر، IR تنظیم مستأجر (۱۰٪). */
+  private defaultVatRateForJurisdiction(
+    jurisdiction: InvoiceJurisdiction,
+    tenantVatRate: number,
+  ): number {
+    return jurisdiction === InvoiceJurisdiction.INTL
+      ? INTL_DEFAULT_VAT_RATE
+      : tenantVatRate;
   }
 
   /**
@@ -338,7 +388,13 @@ export class InvoicingService {
       buyerInfo: entity.buyerInfo,
       items: entity.items,
       currency: entity.currency,
+      jurisdiction: entity.jurisdiction,
       exchangeRate: Number(entity.exchangeRate),
+      fxRate: Number(entity.fxRate),
+      amountFx:
+        entity.amountFx === null || entity.amountFx === undefined
+          ? null
+          : Number(entity.amountFx),
       baseCurrency: entity.baseCurrency,
       totalAmount: Number(entity.totalAmount),
       totalDiscount: Number(entity.totalDiscount),
@@ -377,7 +433,16 @@ export class InvoicingService {
       );
     }
 
-    const defaultVatRate = await this.resolveDefaultVatRate(tenantId);
+    const currency = dto.currency ?? Currency.IRR;
+    const jurisdiction =
+      dto.jurisdiction ?? this.defaultJurisdiction(currency);
+    const tenantVatRate = await this.resolveDefaultVatRate(tenantId);
+    const defaultVatRate = this.defaultVatRateForJurisdiction(
+      jurisdiction,
+      tenantVatRate,
+    );
+    const fxRate = this.resolveFxRate(currency, dto.fxRate);
+
     const items = await this.normalizeItems(tenantId, dto.items, defaultVatRate);
     const { customerId, buyerInfo } = await this.resolveBuyer(
       tenantId,
@@ -386,9 +451,7 @@ export class InvoicingService {
     );
     const totals = this.computeTotals(items);
 
-    const currency = dto.currency ?? Currency.IRR;
     const exchangeRate = this.currencyService.getRate(currency, BASE_CURRENCY);
-    const fxRate = this.currencyService.getRate(currency, Currency.IRR);
     const status = dto.status ?? InvoiceStatus.DRAFT;
 
     const entity = {
@@ -398,8 +461,10 @@ export class InvoicingService {
       buyerInfo,
       items,
       currency,
+      jurisdiction,
       exchangeRate,
       fxRate,
+      amountFx: totals.finalPayable,
       baseCurrency: BASE_CURRENCY,
       totalAmount: totals.totalAmount,
       totalDiscount: totals.totalDiscount,
@@ -544,9 +609,34 @@ export class InvoicingService {
       entity.taxInvoiceNumber = dto.taxInvoiceNumber;
     }
 
-    const defaultVatRate = await this.resolveDefaultVatRate(tenantId);
+    const tenantVatRate = await this.resolveDefaultVatRate(tenantId);
+
+    const previousCurrency = entity.currency;
+    const currencyChanged =
+      dto.currency !== undefined && dto.currency !== previousCurrency;
+    if (currencyChanged) {
+      entity.currency = dto.currency as Currency;
+      entity.exchangeRate = this.currencyService.getRate(
+        entity.currency,
+        BASE_CURRENCY,
+      );
+    }
+
+    if (dto.jurisdiction !== undefined) {
+      entity.jurisdiction = dto.jurisdiction;
+    } else if (currencyChanged) {
+      entity.jurisdiction = this.defaultJurisdiction(entity.currency);
+    }
+
+    if (currencyChanged || dto.fxRate !== undefined) {
+      entity.fxRate = this.resolveFxRate(entity.currency, dto.fxRate);
+    }
 
     if (dto.items !== undefined) {
+      const defaultVatRate = this.defaultVatRateForJurisdiction(
+        entity.jurisdiction,
+        tenantVatRate,
+      );
       const items = await this.normalizeItems(
         tenantId,
         dto.items,
@@ -572,6 +662,21 @@ export class InvoicingService {
       );
     }
 
+    if (currencyChanged) {
+      entity.baseTotalAmount = this.currencyService.round(
+        Number(entity.totalAmount) * Number(entity.exchangeRate),
+        BASE_CURRENCY,
+      );
+      entity.baseTotalTax = this.currencyService.round(
+        Number(entity.totalTax) * Number(entity.exchangeRate),
+        BASE_CURRENCY,
+      );
+      entity.baseFinalPayable = this.currencyService.round(
+        Number(entity.finalPayable) * Number(entity.exchangeRate),
+        BASE_CURRENCY,
+      );
+    }
+
     if (dto.customerId !== undefined || dto.buyerInfo !== undefined) {
       const resolved = await this.resolveBuyer(
         tenantId,
@@ -584,21 +689,12 @@ export class InvoicingService {
     if (dto.sellerInfo !== undefined) {
       entity.sellerInfo = dto.sellerInfo;
     }
-    if (dto.currency !== undefined && dto.currency !== entity.currency) {
-      entity.currency = dto.currency;
-      entity.exchangeRate = this.currencyService.getRate(
-        dto.currency,
-        BASE_CURRENCY,
-      );
-      entity.fxRate = this.currencyService.getRate(
-        dto.currency,
-        Currency.IRR,
-      );
-    }
     if (dto.status !== undefined) {
       entity.status = dto.status;
       this.applyStatusTimestamps(entity, dto.status);
     }
+
+    entity.amountFx = Number(entity.finalPayable);
 
     const saved = await this.invoicingRepository.save(tenantId, entity);
 
@@ -751,6 +847,13 @@ export class InvoicingService {
       };
       if (currency) {
         dto.currency = currency;
+      }
+      if (
+        input.fxRate !== undefined &&
+        Number.isFinite(input.fxRate) &&
+        input.fxRate > 0
+      ) {
+        dto.fxRate = input.fxRate;
       }
 
       const created = await this.create(tenantId, dto);

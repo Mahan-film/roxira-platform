@@ -5,6 +5,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -17,6 +18,10 @@ import {
 } from 'class-validator';
 import { MAX_INVOICE_ITEMS } from '../constants/invoicing.constants';
 import { Currency } from '../../currency/enums/currency.enum';
+import {
+  INVOICE_JURISDICTIONS,
+  InvoiceJurisdiction,
+} from '../enums/invoice-jurisdiction.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -189,11 +194,31 @@ export class CreateInvoiceDto {
 
   @ApiPropertyOptional({
     description:
-      'ارز صورتحساب (پیش‌فرض IRR)؛ برای تسویه بین‌المللی USD/EUR/AED پشتیبانی می‌شود.',
+      'ارز صورتحساب (پیش‌فرض IRR)؛ برای تسویه بین‌المللی USD/EUR/AED/TRY/CNY/OMR پشتیبانی می‌شود.',
     enum: Currency,
     default: Currency.IRR,
   })
   @IsOptional()
   @IsEnum(Currency)
   currency?: Currency;
+
+  @ApiPropertyOptional({
+    description:
+      'حوزه قضایی/مالیاتی صورتحساب (IR داخلی، INTL بین‌المللی). در نبود مقدار از روی ارز تعیین می‌شود.',
+    enum: InvoiceJurisdiction,
+    default: InvoiceJurisdiction.IR,
+  })
+  @IsOptional()
+  @IsIn(INVOICE_JURISDICTIONS)
+  jurisdiction?: InvoiceJurisdiction;
+
+  @ApiPropertyOptional({
+    description:
+      'نرخ تبدیل ارز صورتحساب به ریال (amount_fx × fx_rate = معادل ریالی). برای ارزهای غیر از IRR/IRT الزامی است.',
+    example: 920000,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 6 })
+  @IsPositive()
+  fxRate?: number;
 }
