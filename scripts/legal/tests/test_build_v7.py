@@ -176,6 +176,25 @@ class FakeQdrant:
         return 404, {}
 
 
+class FakeQdrantWithScroll(FakeQdrant):
+    """FakeQdrant seeded with a source collection and read-only scroll support."""
+
+    def __init__(self, src="iran_laws_v6", rows=()):
+        super().__init__()
+        self.src = src
+        self.cols[src] = {b7.ip.point_id(r): {"payload": r} for r in rows}
+
+    def __call__(self, method, url, body=None):
+        if method == "POST" and url.endswith(f"/collections/{self.src}/points/scroll"):
+            return 200, {
+                "result": {
+                    "points": list(self.cols[self.src].values()),
+                    "next_page_offset": None,
+                }
+            }
+        return super().__call__(method, url, body)
+
+
 def fake_embed(texts):
     return [[0.1] * DIM for _ in texts]
 
@@ -264,6 +283,26 @@ def test_main_apply_with_no_base(tmp_path):
     )
     assert rc == 0
     assert len(qd.cols["iran_laws_v7_test"]) == 1
+
+
+def test_main_alias_skips_v6_duplicate_and_reports_alias(tmp_path):
+    v6_law = "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+    staged_law = "قانون بیمه اجباری خسارات وارد شده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+    base_row = _row(v6_law, "1", text=LONG, source="qavanin")
+    qd = FakeQdrantWithScroll(rows=[base_row])
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    src = staged / "sync_sources_2026-10-20_nezamat.jsonl"
+    row = _row(staged_law, "1", text=LONG + "و", status="proposed", source="nezamat")
+    src.write_text(json.dumps(row, ensure_ascii=False), encoding="utf-8")
+    out = tmp_path / "out"
+    rc = b7.main(["--out", str(out), "--files", str(src)], http=qd, embed=fake_embed)
+    assert rc == 0
+    report = json.loads((out / "v7_report.json").read_text(encoding="utf-8"))
+    assert report["dropped"]["already_in_v6_alias"] == 1
+    assert report["selected_rows"] == 0
+    assert report["law_aliases"] == {staged_law: v6_law}
+    assert report["top_new_laws"] == []
 
 
 # ---------------------------------------------------------------- rule 1: routing
@@ -394,6 +433,67 @@ def test_skip_already_in_v6_matches_normalised_text():
     kept, skipped = b7.skip_already_in_v6(staged, base)
     assert skipped == 1
     assert [b7.row_article_no(r) for r in kept] == ["2"]
+
+
+# ---------------------------------------------------------------- law aliases (gate fix)
+def test_canonical_law_key_folds_warde_variants_years_and_masoub():
+    assert b7.canonical_law_key("خسارات وارده") == b7.canonical_law_key("خسارات وارد")
+    assert b7.canonical_law_key("خسارات وارد شده") == b7.canonical_law_key("خسارات وارد")
+    assert b7.canonical_law_key("خسارات وارد شده به") == b7.canonical_law_key("خسارات وارد")
+    base = "قانون نمونه آزمایشی برای آزمون"
+    assert b7.canonical_law_key("قانون نمونه آزمایشی برای آزمون (۱۳۹۵)") == base
+    assert b7.canonical_law_key("قانون نمونه آزمایشی برای آزمون مصوب ۱۳۹۵") == base
+    assert b7.canonical_law_key("قانون  نمونه   آزمایشی برای آزمون") == base
+
+
+def test_law_alias_map_uses_canonical_key_equality():
+    assert b7.law_alias_map(["قانون تجارت (۱۳۹۵)"], ["قانون تجارت"]) == {
+        "قانون تجارت (۱۳۹۵)": "قانون تجارت"
+    }
+
+
+def test_law_alias_map_matches_v6_name_at_or_above_ratio():
+    v6 = "قانون بیمه اجباری خسارات وارده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+    staged = "قانون بیمه اجباری خسارات وارد شده به شخص ثالث در اثر حوادث ناشی از وسایل نقلیه"
+    assert b7.law_alias_map([staged], [v6]) == {staged: v6}
+    assert b7.law_alias_map(["قانون کار"], ["قانون تجارت"]) == {}
+
+
+def test_apply_law_aliases_rewrites_names_without_mutating_input():
+    aliases = {"قانون الف (۱۳۹۵)": "قانون الف"}
+    rows = [_row("قانون الف (۱۳۹۵)", "1"), _row("قانون ب", "1")]
+    mapped = b7.apply_law_aliases(rows, aliases)
+    assert b7.row_law_name(mapped[0]) == "قانون الف"
+    assert b7.row_key(mapped[0]) == b7.row_key(_row("قانون الف", "1"))
+    assert b7.row_law_name(mapped[1]) == "قانون ب"
+    assert b7.row_law_name(rows[0]) == "قانون الف (۱۳۹۵)"
+
+
+def test_skip_v6_article_duplicates_skips_similar_and_flags_difference():
+    base = [_row("قانون تجارت", "1", text=LONG, source="qavanin")]
+    similar = _row("قانون تجارت", "1", text=LONG + "و", source="nezamat")
+    different = _row("قانون تجارت", "1", text="ژ" * 80, source="nezamat")
+    fresh = _row("قانون تجارت", "2", text=LONG, source="nezamat")
+    kept, skipped, conflicts = b7.skip_v6_article_duplicates([similar, different, fresh], base)
+    assert skipped == 1
+    assert [b7.row_article_no(r) for r in kept] == ["2"]
+    assert len(conflicts) == 1
+    key, group = conflicts[0]
+    assert key == b7.row_key(base[0])
+    assert group[0] is base[0] and group[1] is different
+
+
+def test_top_new_laws_ranks_unmapped_by_row_count():
+    rows = [
+        _row("قانون جدید", "1"),
+        _row("قانون جدید", "2"),
+        _row("قانون دیگر", "1"),
+        _row("قانون تجارت", "9"),
+    ]
+    top = b7.top_new_laws(rows, {"قانون تجارت": "قانون تجارت مصوب"})
+    assert top[0] == {"law": "قانون جدید", "rows": 2}
+    assert top[-1] == {"law": "قانون دیگر", "rows": 1}
+    assert all(item["law"] != "قانون تجارت" for item in top)
 
 
 # ---------------------------------------------------------------- rule 1-4 through main

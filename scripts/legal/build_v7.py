@@ -23,6 +23,11 @@ Selection rules (see :func:`split_rows`):
   * news-like titles and «رأی شماره»/«رای شماره» rulings are dropped and counted;
   * rows already present in ``iran_laws_v6`` with the same normalised text are skipped
     (``already_in_v6``);
+  * staged law names are mapped onto an existing v6 law name when their canonical keys are
+    equal or ``difflib`` ratio >= ``LAW_ALIAS_RATIO`` (``law_aliases``); a staged row whose
+    ``(mapped law, article_no)`` is already in v6 is skipped when the text is near-identical
+    (``already_in_v6_alias``), and otherwise kept out of v7 as a conflict (v6 text wins). The
+    top ``TOP_NEW_LAWS`` genuinely new laws by row count are reported (``top_new_laws``);
   * rows are deduped by ``(normalised law_name, article_no)``. Texts whose hard-normalised
     similarity (``difflib`` ratio >= 0.97) is near-identical are the SAME text and only one
     survives, by source priority rc.majlis > qavanin > nezamat > ekhtebar > dotic > others.
@@ -116,6 +121,19 @@ TITLE_RULING_PREFIXES = ("رأی شماره", "رای شماره")
 # Near-identical texts (rule 2): hard-normalised difflib ratio at/above this is the SAME text.
 SIMILARITY_THRESHOLD = 0.97
 SOURCE_PRIORITY = ("rc.majlis", "qavanin", "nezamat", "ekhtebar", "dotic")
+
+# Law-alias gate fix (2026-10-22): a staged row whose law v6 already has under a slightly
+# different name duplicated the whole law in v7 and pushed the v6 rows down the gate ranks.
+LAW_ALIAS_RATIO = 0.90  # canonical-key difflib ratio that maps a staged name to a v6 name
+V6_ALIAS_TEXT_RATIO = 0.90  # same (mapped law, article) at/above this is already_in_v6_alias
+TOP_NEW_LAWS = 20
+
+# Canonical-key folds: the "vaarede" / "vaared shode (be)" variants -> "vaared", the
+# parenthesised years and a trailing "masoub ..." are dropped, then whitespace collapses.
+_PAREN_YEAR_RE = re.compile(r"[\(（][^()（）]*\d[^()（）]*[\)）]")
+_WAREDE_SHODE_RE = re.compile(r"وارد\s+شده(?:\s+به)?")
+_WAREDE_RE = re.compile(r"وارده")
+_MASOOB_RE = re.compile(r"\s*مصوب.*$")
 
 # Output targets: ``--target laws`` -> iran_laws_v7, ``regulations`` -> iran_regulations_v3.
 TARGET_LAWS = "laws"
@@ -228,6 +246,80 @@ def text_ratio(a: str, b: str) -> float:
 def same_text(a: str, b: str, threshold: float = SIMILARITY_THRESHOLD) -> bool:
     """True when two texts are the SAME under hard normalisation (ratio >= threshold)."""
     return text_ratio(a, b) >= threshold
+
+
+# ----------------------------------------------------------------------------- law aliases
+def canonical_law_key(name: str) -> str:
+    """Normalised law name plus the v7 alias folds.
+
+    Folds «وارده»/«وارد شده»/«وارد شده به» to «وارد», drops parenthesised years and a trailing
+    «مصوب ...», then collapses whitespace so a law that v6 and the staged source name
+    differently lands on one key.
+    """
+    norm = ip.norm_name(name)
+    norm = _PAREN_YEAR_RE.sub(" ", norm)
+    norm = _WAREDE_SHODE_RE.sub("وارد", norm)
+    norm = _WAREDE_RE.sub("وارد", norm)
+    norm = _MASOOB_RE.sub("", norm)
+    return re.sub(r"\s+", " ", norm).strip()
+
+
+def law_alias_map(
+    staged_names: list[str], base_names: list[str], *, threshold: float = LAW_ALIAS_RATIO
+) -> dict[str, str]:
+    """Map each staged law name to a v6 law name with an equal or near-equal canonical key.
+
+    Equal canonical keys win; otherwise the closest v6 canonical key at/above ``threshold`` is
+    used. Names that already normalise to the v6 name are not reported (no alias needed).
+    """
+    base_by_key: dict[str, str] = {}
+    for name in base_names:
+        key = canonical_law_key(name)
+        if key:
+            base_by_key.setdefault(key, name)
+    base_items = list(base_by_key.items())
+    aliases: dict[str, str] = {}
+    for name in staged_names:
+        key = canonical_law_key(name)
+        if not key:
+            continue
+        target = base_by_key.get(key)
+        if target is None:
+            best, best_ratio = None, 0.0
+            for base_key, base_name in base_items:
+                ratio = difflib.SequenceMatcher(None, key, base_key).ratio()
+                if ratio > best_ratio:
+                    best, best_ratio = base_name, ratio
+            if best is not None and best_ratio >= threshold:
+                target = best
+        if target is not None and ip.norm_name(target) != ip.norm_name(name):
+            aliases[name] = target
+    return aliases
+
+
+def apply_law_aliases(rows: list[dict], aliases: dict[str, str]) -> list[dict]:
+    """Rewrite staged law names to their v6 alias so (law, article_no) keys line up."""
+    if not aliases:
+        return list(rows)
+    mapped: list[dict] = []
+    for row in rows:
+        name = row_law_name(row)
+        target = aliases.get(name)
+        if target and target != name:
+            row = {**row, "law_name": target}
+        mapped.append(row)
+    return mapped
+
+
+def top_new_laws(
+    rows: list[dict], aliases: dict[str, str], *, limit: int = TOP_NEW_LAWS
+) -> list[dict]:
+    """Top ``limit`` staged laws that did NOT map to a v6 law, by row count."""
+    counts = Counter(
+        row_law_name(r) for r in rows if row_law_name(r) and row_law_name(r) not in aliases
+    )
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return [{"law": name, "rows": n} for name, n in ranked[:limit]]
 
 
 def source_rank(row: dict) -> int:
@@ -603,6 +695,39 @@ def skip_already_in_v6(rows: list[dict], base_rows: list[dict]) -> tuple[list[di
     return kept, skipped
 
 
+def skip_v6_article_duplicates(
+    rows: list[dict], base_rows: list[dict], *, threshold: float = V6_ALIAS_TEXT_RATIO
+) -> tuple[list[dict], int, list[tuple[tuple[str, str], list[dict]]]]:
+    """Drop staged rows whose (mapped law, article_no) is already in ``iran_laws_v6``.
+
+    Run after :func:`apply_law_aliases`, so ``row_key`` lines staged names up with v6. A
+    near-identical text (hard-normalised ratio >= ``threshold``) is the SAME article and is
+    skipped (``already_in_v6_alias``). A larger difference is a real conflict: v6 is kept and
+    the pair is returned for ``v7_conflicts.md`` (staged text never silently replaces v6).
+    """
+    if not base_rows:
+        return list(rows), 0, []
+    index: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for base in base_rows:
+        if row_text(base):
+            index[row_key(base)].append(base)
+    kept: list[dict] = []
+    conflicts: list[tuple[tuple[str, str], list[dict]]] = []
+    skipped = 0
+    for row in rows:
+        key = row_key(row)
+        matches = index.get(key)
+        if not matches:
+            kept.append(row)
+            continue
+        base = matches[0]
+        if text_ratio(row_text(row), row_text(base)) >= threshold:
+            skipped += 1
+        else:
+            conflicts.append((key, [base, row]))
+    return kept, skipped, conflicts
+
+
 def points_count(http, base: str, collection: str) -> int | None:
     status, data = http("GET", f"{base}/collections/{collection}", None)
     if status != 200:
@@ -643,6 +768,8 @@ def build_report(
     conflicts,
     names: list[str],
     unparsable: int,
+    aliases: dict[str, str] | None = None,
+    new_laws: list[dict] | None = None,
 ) -> dict:
     """Dry-run report with a ``laws`` and a ``regulations`` section (target picks the top level)."""
     laws_section = _plan_section(laws, conflicts)
@@ -656,6 +783,8 @@ def build_report(
         "unparsable_lines": unparsable,
         "laws": laws_section,
         "regulations": regs_section,
+        "law_aliases": aliases or {},
+        "top_new_laws": new_laws or [],
     }
     report.update(chosen)
     return report
@@ -666,7 +795,9 @@ def conflicts_markdown(conflicts) -> str:
         "# iran_laws_v7 staged-row conflicts",
         "",
         "Same (law_name, article_no) with more than one text across sources. Not guessed; a",
-        "human decides which source wins before the build. No law text is reproduced here.",
+        "human decides which source wins before the build. A row whose (alias-mapped) law and",
+        "article already exist in v6 is dropped and v6's text is kept (never replaced here). No",
+        "law text is reproduced here.",
         "",
     ]
     if not conflicts:
@@ -804,12 +935,23 @@ def main(argv: list[str] | None = None, *, http=None, embed=None) -> int:
         rows, names, unparsable = load_inputs(files)
         laws, regulations, dropped = split_rows(rows)
         base_rows: list[dict] | None = None
+        aliases: dict[str, str] = {}
+        alias_conflicts: list[tuple[tuple[str, str], list[dict]]] = []
         if args.target == TARGET_LAWS and not args.no_base:
             base = ip.assert_local(args.qdrant)
             base_rows = try_scroll_payloads(http, base, args.src_collection)
+            aliases = law_alias_map(
+                [row_law_name(r) for r in laws],
+                [row_law_name(r) for r in base_rows],
+            )
+            laws = apply_law_aliases(laws, aliases)
             laws, skipped = skip_already_in_v6(laws, base_rows)
             dropped["already_in_v6"] = skipped
-        conflicts = find_conflicts(laws)
+            laws, alias_skipped, alias_conflicts = skip_v6_article_duplicates(laws, base_rows)
+            dropped["already_in_v6_alias"] = alias_skipped
+        conflicts = find_conflicts(laws) + alias_conflicts
+        conflicts.sort(key=lambda item: item[0])
+        new_laws = top_new_laws(laws, aliases) if args.target == TARGET_LAWS else []
         report = build_report(
             target=args.target,
             rows_in=len(rows),
@@ -819,6 +961,8 @@ def main(argv: list[str] | None = None, *, http=None, embed=None) -> int:
             conflicts=conflicts,
             names=names,
             unparsable=unparsable,
+            aliases=aliases,
+            new_laws=new_laws,
         )
         out.mkdir(parents=True, exist_ok=True)
         (out / "v7_conflicts.md").write_text(conflicts_markdown(conflicts), encoding="utf-8")
