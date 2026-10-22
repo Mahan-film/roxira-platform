@@ -18,14 +18,23 @@ export class JournalEntryLineResponseDto {
   @ApiProperty({ description: 'نام حساب' })
   accountName: string;
 
-  @ApiProperty({ enum: Currency, description: 'ارز حساب' })
-  currency: Currency;
+  @ApiProperty({ description: 'ارز سطر (کد متعارف)', example: 'IRR' })
+  currency: string;
 
-  @ApiProperty({ description: 'مبلغ بدهکار (به ارز حساب)' })
+  @ApiProperty({ description: 'مبلغ بدهکار (به ریال — ارز گزارش‌گیری)' })
   debit: number;
 
-  @ApiProperty({ description: 'مبلغ بستانکار (به ارز حساب)' })
+  @ApiProperty({ description: 'مبلغ بستانکار (به ریال — ارز گزارش‌گیری)' })
   credit: number;
+
+  @ApiProperty({ description: 'مبلغ به ارز مبدأ (amount_fx)', nullable: true })
+  amountFx: number | null;
+
+  @ApiProperty({ description: 'نرخ تبدیل ارز مبدأ به ریال', nullable: true })
+  fxRate: number | null;
+
+  @ApiProperty({ description: 'کد طرف حساب/تفضیلی', nullable: true })
+  partyCode: string | null;
 
   @ApiProperty({ description: 'شرح سطر', nullable: true })
   description: string | null;
@@ -50,13 +59,13 @@ export class JournalEntryResponseDto {
   @ApiProperty({ enum: JournalEntryStatus, description: 'وضعیت سند' })
   status: JournalEntryStatus;
 
-  @ApiProperty({ enum: Currency, description: 'ارز سند (مشترک تمام سطرها)' })
-  currency: Currency;
+  @ApiProperty({ description: 'ارز سند (کد متعارف)', example: 'IRR' })
+  currency: string;
 
-  @ApiProperty({ description: 'جمع بدهکار سند (به ارز سند)' })
+  @ApiProperty({ description: 'جمع بدهکار سند (به ریال — ارز گزارش‌گیری)' })
   totalDebit: number;
 
-  @ApiProperty({ description: 'جمع بستانکار سند (به ارز سند)' })
+  @ApiProperty({ description: 'جمع بستانکار سند (به ریال — ارز گزارش‌گیری)' })
   totalCredit: number;
 
   @ApiProperty({ enum: Currency, description: 'ارز پایه تجمیع' })

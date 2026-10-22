@@ -18,6 +18,18 @@ export const MONEY_SCALE = 2;
  */
 export const BALANCE_TOLERANCE = 0.01;
 
+/**
+ * آستانه تحمل تراز سند بر مبنای ریال (ارز گزارش‌گیری).
+ * اختلاف |جمع بدهکار − جمع بستانکار| تا این مقدار (<= ۰٫۵ ریال) پذیرفته است.
+ */
+export const IRR_BALANCE_TOLERANCE = 0.5;
+
+/**
+ * آستانه تحمل اختلاف مبلغ ارزی با معادل ریالی سطر:
+ * |amount_fx × fx_rate − (بدهکار + بستانکار)| تا یک ریال پذیرفته است.
+ */
+export const FX_BALANCE_TOLERANCE = 1;
+
 /** پیشوند پیشنهادی شماره سند حسابداری جهت تولید خودکار در کلاینت */
 export const DEFAULT_JOURNAL_ENTRY_NUMBER_PREFIX = 'JV';
 

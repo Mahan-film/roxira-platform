@@ -13,6 +13,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { IsSupportedCurrency } from '../../currency/normaliser/currency-normaliser';
 import {
   MAX_JOURNAL_LINES,
   MIN_JOURNAL_LINES,
@@ -44,6 +45,47 @@ export class JournalEntryLineDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   credit?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'ارز سطر؛ کد ISO 4217 یا مترادف فارسی/فینگلیش (پیش‌فرض IRR).',
+    example: 'IRR',
+    default: 'IRR',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  @IsSupportedCurrency()
+  currency?: string;
+
+  @ApiPropertyOptional({
+    description: 'مبلغ به ارز مبدأ (amount_fx) برای اسناد چندارزی',
+    example: 100,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 6 })
+  @Min(0)
+  amountFx?: number;
+
+  @ApiPropertyOptional({
+    description: 'نرخ تبدیل ارز مبدأ به ریال (fx_rate)',
+    example: 900000,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 6 })
+  @Min(0)
+  fxRate?: number;
+
+  @ApiPropertyOptional({
+    description: 'کد طرف حساب/تفضیلی (party reference)',
+    example: 'TZ-1001',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  partyCode?: string;
 
   @ApiPropertyOptional({ description: 'شرح سطر', example: 'دریافت نقدی بابت فروش' })
   @IsOptional()

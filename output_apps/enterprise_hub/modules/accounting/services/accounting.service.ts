@@ -7,10 +7,16 @@ import {
 import { FindOptionsWhere, ILike } from 'typeorm';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
+import {
+  NormalisedCurrency,
+  normalizeCurrency,
+} from '../../currency/normaliser/currency-normaliser';
 import { CurrencyService } from '../../currency/services/currency.service';
 import {
   BALANCE_TOLERANCE,
   DEFAULT_CHART_OF_ACCOUNTS,
+  FX_BALANCE_TOLERANCE,
+  IRR_BALANCE_TOLERANCE,
   MONEY_SCALE,
 } from '../constants/accounting.constants';
 import { AccountLedgerResponseDto } from '../dto/account-ledger-response.dto';
@@ -28,6 +34,7 @@ import {
 import {
   QueryAccountLedgerDto,
   QueryJournalEntryDto,
+  QueryTrialBalanceDto,
 } from '../dto/query-journal-entry.dto';
 import {
   TrialBalanceResponseDto,
@@ -57,6 +64,18 @@ export interface AccountingOpeningBalanceInput {
   credit?: number;
   description?: string;
   date?: string;
+}
+
+/** سطر سند پس از عادی‌سازی و اعتبارسنجی در لایه سرویس. */
+interface NormalisedJournalLine {
+  accountCode: string;
+  debit: number;
+  credit: number;
+  description: string | null;
+  currency: NormalisedCurrency;
+  amountFx: number | null;
+  fxRate: number | null;
+  partyCode: string | null;
 }
 
 /**
@@ -95,11 +114,31 @@ export class AccountingService {
       accountId: line.accountId,
       accountCode: line.account?.code ?? '',
       accountName: line.account?.name ?? '',
-      currency: (line.account?.currency as Currency) ?? Currency.IRR,
+      currency:
+        line.currency ?? (line.account?.currency as string) ?? Currency.IRR,
       debit: this.round(Number(line.debit)),
       credit: this.round(Number(line.credit)),
+      amountFx: line.amountFx != null ? Number(line.amountFx) : null,
+      fxRate: line.fxRate != null ? Number(line.fxRate) : null,
+      partyCode: line.partyCode ?? null,
       description: line.description,
     };
+  }
+
+  /**
+   * تبدیل مبلغ ریالی سند به ارز پایه با تحمل ارزهای خارج از دامنه CurrencyService.
+   * ارزهای ناشناخته/غیرقابل‌تبدیل صفر برمی‌گردانند تا ثبت سند مسدود نشود.
+   */
+  private toBaseCurrency(amount: number, currency: string): number {
+    try {
+      return this.currencyService.convert(
+        amount,
+        currency as Currency,
+        BASE_CURRENCY,
+      );
+    } catch {
+      return 0;
+    }
   }
 
   private toEntryDto(entity: JournalEntryEntity): JournalEntryResponseDto {
@@ -128,29 +167,18 @@ export class AccountingService {
       totalDebit,
       totalCredit,
       baseCurrency: BASE_CURRENCY,
-      baseTotalDebit: this.currencyService.convert(
-        totalDebit,
-        entryCurrency,
-        BASE_CURRENCY,
-      ),
-      baseTotalCredit: this.currencyService.convert(
-        totalCredit,
-        entryCurrency,
-        BASE_CURRENCY,
-      ),
+      baseTotalDebit: this.toBaseCurrency(totalDebit, entryCurrency),
+      baseTotalCredit: this.toBaseCurrency(totalCredit, entryCurrency),
       lines,
     };
   }
 
   /**
-   * اعتبارسنجی هر سطر: دقیقاً یکی از بدهکار/بستانکار باید بزرگ‌تر از صفر باشد.
+   * اعتبارسنجی هر سطر: دقیقاً یکی از بدهکار/بستانکار باید بزرگ‌تر از صفر باشد،
+   * ارز سطر باید متعارف باشد و در صورت ارائه هم‌زمان `amount_fx` و `fx_rate`،
+   * معادل ریالی آن‌ها با مبلغ سطر تطبیق کند.
    */
-  private normalizeLine(line: JournalEntryLineDto): {
-    accountCode: string;
-    debit: number;
-    credit: number;
-    description: string | null;
-  } {
+  private normalizeLine(line: JournalEntryLineDto): NormalisedJournalLine {
     const debit = this.round(Number(line.debit ?? 0));
     const credit = this.round(Number(line.credit ?? 0));
 
@@ -171,11 +199,53 @@ export class AccountingService {
       );
     }
 
+    const currency = line.currency
+      ? normalizeCurrency(line.currency)
+      : NormalisedCurrency.IRR;
+    if (!currency) {
+      throw new BadRequestException(
+        `ارز سطر حساب ${line.accountCode} نامعتبر است: ${line.currency}`,
+      );
+    }
+    if (currency === NormalisedCurrency.MULTI) {
+      throw new BadRequestException(
+        'ارز MULTI تنها در سطح حساب مجاز است و در سطرهای سند پذیرفته نمی‌شود.',
+      );
+    }
+
+    const amountFx = line.amountFx != null ? Number(line.amountFx) : null;
+    const fxRate = line.fxRate != null ? Number(line.fxRate) : null;
+    if (amountFx != null && (!Number.isFinite(amountFx) || amountFx < 0)) {
+      throw new BadRequestException(
+        `مبلغ ارزی سطر حساب ${line.accountCode} نامعتبر است.`,
+      );
+    }
+    if (fxRate != null && (!Number.isFinite(fxRate) || fxRate < 0)) {
+      throw new BadRequestException(
+        `نرخ تبدیل سطر حساب ${line.accountCode} نامعتبر است.`,
+      );
+    }
+
+    if (amountFx != null && fxRate != null) {
+      const rialAmount = this.round(debit + credit);
+      const fxAmountInRial = amountFx * fxRate;
+      if (Math.abs(fxAmountInRial - rialAmount) > FX_BALANCE_TOLERANCE) {
+        throw new BadRequestException(
+          `مبلغ ارزی سطر حساب ${line.accountCode} با معادل ریالی آن نمی‌خواند: ` +
+            `amount_fx × fx_rate = ${fxAmountInRial} در برابر ${rialAmount} ریال.`,
+        );
+      }
+    }
+
     return {
       accountCode: line.accountCode,
       debit: hasDebit ? debit : 0,
       credit: hasCredit ? credit : 0,
       description: line.description ?? null,
+      currency,
+      amountFx,
+      fxRate,
+      partyCode: line.partyCode?.trim() || null,
     };
   }
 
@@ -365,9 +435,9 @@ export class AccountingService {
       normalizedLines.reduce((sum, line) => sum + line.credit, 0),
     );
 
-    if (Math.abs(totalDebit - totalCredit) >= BALANCE_TOLERANCE) {
+    if (Math.abs(totalDebit - totalCredit) > IRR_BALANCE_TOLERANCE) {
       throw new BadRequestException(
-        `سند تراز نیست: جمع بدهکار (${totalDebit}) با جمع بستانکار (${totalCredit}) برابر نمی‌باشد.`,
+        `سند تراز نیست: جمع بدهکار (${totalDebit}) با جمع بستانکار (${totalCredit}) بیش از حد مجاز (${IRR_BALANCE_TOLERANCE} ریال) اختلاف دارد.`,
       );
     }
 
@@ -401,22 +471,15 @@ export class AccountingService {
       );
     }
 
-    const entryCurrencies = new Set(
-      uniqueCodes.map((code) => accountByCode.get(code)!.currency),
-    );
-    if (entryCurrencies.size > 1) {
-      throw new BadRequestException(
-        `تمام حساب‌های یک سند باید هم‌ارز باشند؛ ارزهای یافت‌شده: ${Array.from(
-          entryCurrencies,
-        ).join(', ')}`,
-      );
-    }
-
     const lineInputs: JournalLineInput[] = normalizedLines.map((line) => ({
       accountId: accountByCode.get(line.accountCode)!.id,
       debit: line.debit,
       credit: line.credit,
       description: line.description,
+      currency: line.currency,
+      amountFx: line.amountFx,
+      fxRate: line.fxRate,
+      partyCode: line.partyCode,
     }));
 
     const saved = await this.accountingRepository.persistJournalEntry(
@@ -478,12 +541,30 @@ export class AccountingService {
   /**
    * تراز آزمایشی (Trial Balance): جمع بدهکار/بستانکار هر حساب مستقیماً از
    * سطرهای اسناد؛ حساب بدون گردش نیز با مانده صفر نمایش داده می‌شود.
+   *
+   * تراز همیشه بر مبنای ریال (ارز گزارش‌گیری) است. با ارسال `?currency=` تنها
+   * سطرهای همان ارز لحاظ می‌شوند و جمع مبالغ ارزی (amount_fx) و معادل ریالی
+   * آن‌ها نیز برگردانده می‌شود.
    */
-  async getTrialBalance(tenantId: string): Promise<TrialBalanceResponseDto> {
+  async getTrialBalance(
+    tenantId: string,
+    query?: QueryTrialBalanceDto,
+  ): Promise<TrialBalanceResponseDto> {
     await this.ensureDefaultAccounts(tenantId);
+
+    const normalised = query?.currency
+      ? normalizeCurrency(query.currency)
+      : undefined;
+    if (query?.currency && !normalised) {
+      throw new BadRequestException(
+        `ارز فیلتر نامعتبر است: ${query.currency}`,
+      );
+    }
+    const currency = normalised ?? undefined;
+
     const [accounts, rawRows] = await Promise.all([
       this.accountingRepository.findAllAccounts(tenantId),
-      this.accountingRepository.getTrialBalance(tenantId),
+      this.accountingRepository.getTrialBalance(tenantId, currency),
     ]);
 
     const aggregate = new Map(
@@ -547,16 +628,27 @@ export class AccountingService {
       BASE_CURRENCY,
     );
 
+    // جمع‌های ارزی (تنها زمانی معنادار که فیلتر ارز اعمال شده باشد).
+    const totalAmountFx = this.round(
+      rawRows.reduce((sum, row) => sum + Number(row.totalAmountFx ?? 0), 0),
+    );
+    const totalFxInIrr = this.round(
+      rawRows.reduce((sum, row) => sum + Number(row.totalFxInIrr ?? 0), 0),
+    );
+
     return {
       rows,
       totalDebit,
       totalCredit,
-      balanced: Math.abs(totalDebit - totalCredit) < BALANCE_TOLERANCE,
+      balanced: Math.abs(totalDebit - totalCredit) <= IRR_BALANCE_TOLERANCE,
       baseCurrency: BASE_CURRENCY,
       baseTotalDebit,
       baseTotalCredit,
       baseBalanced:
         Math.abs(baseTotalDebit - baseTotalCredit) < BALANCE_TOLERANCE,
+      currency,
+      totalAmountFx,
+      totalFxInIrr,
     };
   }
 

@@ -77,14 +77,28 @@ export class InvoiceEntity {
   @Column({ type: 'jsonb' })
   items: InvoiceItem[];
 
-  /** ارز اصلی صورتحساب (IRR, USD, EUR, AED). */
+  /** ارز اصلی صورتحساب (IRR, IRT, USD, EUR, AED, …). */
   @Index()
-  @Column({ type: 'varchar', length: 3, default: 'IRR' })
+  @Column({ type: 'varchar', length: 8, default: 'IRR' })
   currency: Currency;
 
   /** نرخ تبدیل ارز اصلی به ارز پایه (واحد ارز پایه به‌ازای ۱ واحد ارز فاکتور). */
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 1 })
   exchangeRate: number;
+
+  /** نرخ تبدیل ارز فاکتور به ریال (هسته حسابداری چندارزی). */
+  @Column({ type: 'decimal', precision: 24, scale: 6, name: 'fx_rate', default: 1 })
+  fxRate: number;
+
+  /** مبلغ فاکتور به ارز مبدأ (اختیاری) — ردیابی اسناد چندارزی. */
+  @Column({
+    type: 'decimal',
+    precision: 24,
+    scale: 6,
+    name: 'amount_fx',
+    nullable: true,
+  })
+  amountFx: number | null;
 
   /** ارز پایه مورد استفاده در تجمیع گزارش‌های بین‌المللی (USD). */
   @Column({ type: 'varchar', length: 3, default: 'USD' })

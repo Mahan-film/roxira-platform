@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
 import { AccountType } from '../enums/accounting.enum';
 
@@ -55,4 +55,20 @@ export class TrialBalanceResponseDto {
 
   @ApiProperty({ description: 'آیا دفاتر پس از تبدیل به ارز پایه تراز است؟' })
   baseBalanced: boolean;
+
+  @ApiPropertyOptional({
+    description: 'فیلتر ارز اعمال‌شده روی تراز (در صورت ارسال ?currency=)',
+    example: 'USD',
+  })
+  currency?: string;
+
+  @ApiPropertyOptional({
+    description: 'جمع مبلغ ارزی (amount_fx) سطرهای فیلترشده',
+  })
+  totalAmountFx?: number;
+
+  @ApiPropertyOptional({
+    description: 'جمع معادل ریالی مبلغ ارزی (amount_fx × fx_rate) سطرهای فیلترشده',
+  })
+  totalFxInIrr?: number;
 }

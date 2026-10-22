@@ -27,6 +27,7 @@ import {
 import {
   QueryAccountLedgerDto,
   QueryJournalEntryDto,
+  QueryTrialBalanceDto,
 } from '../dto/query-journal-entry.dto';
 import { TrialBalanceResponseDto } from '../dto/trial-balance-response.dto';
 import { AccountingService } from '../services/accounting.service';
@@ -128,8 +129,12 @@ export class AccountingController {
   @ApiResponse({ status: HttpStatus.OK, type: TrialBalanceResponseDto })
   async getTrialBalance(
     @Req() request: AuthenticatedRequest,
+    @Query() query: QueryTrialBalanceDto,
   ): Promise<TrialBalanceResponseDto> {
-    return this.accountingService.getTrialBalance(this.tenantIdOf(request));
+    return this.accountingService.getTrialBalance(
+      this.tenantIdOf(request),
+      query,
+    );
   }
 
   @Get('accounts/:code/ledger')

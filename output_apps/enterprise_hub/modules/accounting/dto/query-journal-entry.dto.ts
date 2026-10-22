@@ -67,3 +67,20 @@ export class QueryAccountLedgerDto {
   @Max(500)
   limit: number = 100;
 }
+
+/**
+ * DTO فیلتر تراز آزمایشی (GET /enterprise-hub/accounting/trial-balance).
+ *
+ * با ارسال `currency` تنها سطرهای همان ارز در تراز لحاظ می‌شوند و جمع
+ * مبالغ ارزی (amount_fx) و معادل ریالی آن‌ها نیز برگردانده می‌شود.
+ */
+export class QueryTrialBalanceDto {
+  @ApiPropertyOptional({
+    description: 'فیلتر ارز (کد ISO یا مترادف فارسی/فینگلیش)',
+    example: 'USD',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  currency?: string;
+}

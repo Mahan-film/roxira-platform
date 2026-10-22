@@ -57,6 +57,42 @@ export class JournalEntryLineEntity {
   @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
   credit: number;
 
+  /**
+   * ارز سطر (کد متعارف: IRR/IRT/USD/…). مبالغ بدهکار/بستانکار همیشه بر مبنای
+   * ریال (ارز گزارش‌گیری) نگهداری می‌شوند و این ستون ارز مبدأ را ثبت می‌کند.
+   */
+  @Column({ type: 'varchar', length: 8, default: 'IRR' })
+  currency: string;
+
+  /** مبلغ به ارز مبدأ (اختیاری) — برای ردیابی اسناد چندارزی. */
+  @Column({
+    type: 'numeric',
+    precision: 24,
+    scale: 6,
+    name: 'amount_fx',
+    nullable: true,
+  })
+  amountFx: number | null;
+
+  /** نرخ تبدیل ارز مبدأ به ریال (اختیاری). */
+  @Column({
+    type: 'numeric',
+    precision: 24,
+    scale: 6,
+    name: 'fx_rate',
+    nullable: true,
+  })
+  fxRate: number | null;
+
+  /** کد طرف حساب/تفضیلی (party reference) — ارجاع بدون کلید خارجی. */
+  @Column({
+    type: 'varchar',
+    length: 64,
+    name: 'party_code',
+    nullable: true,
+  })
+  partyCode: string | null;
+
   @Column({ type: 'text', nullable: true })
   description: string | null;
 }

@@ -21,6 +21,14 @@ export interface JournalLineInput {
   debit: number;
   credit: number;
   description?: string | null;
+  /** ارز سطر (کد متعارف)؛ پیش‌فرض IRR. */
+  currency?: string;
+  /** مبلغ به ارز مبدأ (اختیاری). */
+  amountFx?: number | null;
+  /** نرخ تبدیل ارز مبدأ به ریال (اختیاری). */
+  fxRate?: number | null;
+  /** کد طرف حساب/تفضیلی (اختیاری). */
+  partyCode?: string | null;
 }
 
 /**
@@ -32,6 +40,8 @@ export interface TrialBalanceRawRow {
   accountType: string;
   totalDebit: string;
   totalCredit: string;
+  totalAmountFx?: string;
+  totalFxInIrr?: string;
 }
 
 /**
@@ -258,6 +268,10 @@ export class AccountingRepository {
           accountId: line.accountId,
           debit: line.debit,
           credit: line.credit,
+          currency: line.currency ?? 'IRR',
+          amountFx: line.amountFx ?? null,
+          fxRate: line.fxRate ?? null,
+          partyCode: line.partyCode ?? null,
           description: line.description ?? null,
         });
         await manager.save(lineEntity);
@@ -282,9 +296,15 @@ export class AccountingRepository {
 
   /**
    * تراز آزمایشی: جمع بدهکار/بستانکار هر حساب به‌صورت مستقیم از سطرهای اسناد.
+   *
+   * خروجی همیشه بر مبنای ریال است؛ با ارسال `currency` تنها سطرهای همان ارز
+   * لحاظ می‌شوند و جمع مبالغ ارزی (amount_fx) و معادل ریالی آن‌ها نیز برمی‌گردد.
    */
-  async getTrialBalance(tenantId: string): Promise<TrialBalanceRawRow[]> {
-    return this.lines
+  async getTrialBalance(
+    tenantId: string,
+    currency?: string,
+  ): Promise<TrialBalanceRawRow[]> {
+    const query = this.lines
       .createQueryBuilder('line')
       .innerJoin('line.account', 'account')
       .select('account.code', 'code')
@@ -292,7 +312,15 @@ export class AccountingRepository {
       .addSelect('account.accountType', 'accountType')
       .addSelect('COALESCE(SUM(line.debit), 0)', 'totalDebit')
       .addSelect('COALESCE(SUM(line.credit), 0)', 'totalCredit')
-      .where('line.tenantId = :tenantId', { tenantId })
+      .addSelect('COALESCE(SUM(line.amountFx), 0)', 'totalAmountFx')
+      .addSelect('COALESCE(SUM(line.amountFx * line.fxRate), 0)', 'totalFxInIrr')
+      .where('line.tenantId = :tenantId', { tenantId });
+
+    if (currency) {
+      query.andWhere('line.currency = :currency', { currency });
+    }
+
+    return query
       .groupBy('account.code')
       .addGroupBy('account.name')
       .addGroupBy('account.accountType')
