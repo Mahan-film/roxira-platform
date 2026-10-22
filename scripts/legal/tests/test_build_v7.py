@@ -17,6 +17,7 @@ sys.modules["build_v7"] = b7
 spec.loader.exec_module(b7)
 
 DIM = 4
+LONG = "متن کامل این سند برای آزمون قواعد انتخاب و مسیریابی در نسخه هفت کافی است"
 
 
 def _row(law, no, text="متن کافی برای عبور از حداقل طول متن این آزمون", **extra):
@@ -263,3 +264,199 @@ def test_main_apply_with_no_base(tmp_path):
     )
     assert rc == 0
     assert len(qd.cols["iran_laws_v7_test"]) == 1
+
+
+# ---------------------------------------------------------------- rule 1: routing
+def test_classify_statute_regulation_ruling_news_empty():
+    assert b7.classify_row({"law_name": "L", "law_type": "LAW", "text": LONG}) == "statute"
+    assert b7.classify_row({"law_name": "L", "text": LONG}) == "statute"
+    assert (
+        b7.classify_row({"law_name": "L", "law_type": "REGULATION", "text": LONG})
+        == "regulation"
+    )
+    assert b7.classify_row({"law_name": "L", "doc_type": "circular", "text": LONG}) == "regulation"
+    assert (
+        b7.classify_row({"law_name": "L", "source": "owner_upload_cbi_circular", "text": LONG})
+        == "regulation"
+    )
+    assert b7.classify_row({"title": "بخشنامه جدید", "text": LONG}) == "regulation"
+    assert b7.classify_row({"title": "یک مقرره", "text": LONG}) == "regulation"
+    assert b7.classify_row({"title": "رأی شماره ۱", "text": LONG}) == "ruling"
+    assert b7.classify_row({"title": "خبر مهم", "text": LONG}) == "news"
+    assert b7.classify_row({"text": LONG}) == "empty"
+
+
+def test_split_routes_statutes_regulations_and_drops_empty():
+    rows = [
+        _row("قانون الف", "1", status="proposed", law_type="LAW", source="nezamat"),
+        {"title": "بخشنامه بانک مرکزی", "text": LONG, "status": "proposed", "source": "cbi_pdf"},
+        {
+            "title": "مقرره‌ای بدون نام قانون",
+            "text": LONG,
+            "status": "proposed",
+            "source": "qavanin",
+        },
+        {"text": LONG, "status": "proposed", "source": "qavanin"},
+    ]
+    laws, regs, dropped = b7.split_rows(rows)
+    assert [b7.row_law_name(r) for r in laws] == ["قانون الف"]
+    assert len(regs) == 2
+    assert dropped["no_name_or_title"] == 1
+
+
+@pytest.mark.parametrize("marker", ["منتشر می شود", "ابلاغ شد", "خبر", "به زودی"])
+def test_news_titles_are_news(marker):
+    assert b7.is_non_statute_kind(_row("L", "1", title=f"قانونی {marker} اینجا")) == "news"
+
+
+@pytest.mark.parametrize("prefix", ["رأی شماره ۱", "رای شماره ۲"])
+def test_ruling_titles_are_rulings(prefix):
+    assert b7.is_non_statute_kind(_row("L", "1", title=f"{prefix} هیئت عمومی")) == "ruling"
+
+
+def test_split_drops_news_and_rulings_separately():
+    rows = [
+        _row("L", "1", status="proposed", title="قانون جدید ابلاغ شد"),
+        _row("L", "2", status="proposed", title="رأی شماره ۱۲ هیئت عمومی"),
+        _row("L", "3", status="proposed", title="خبر مهم درباره قانون"),
+    ]
+    laws, regs, dropped = b7.split_rows(rows)
+    assert laws == [] and regs == []
+    assert dropped["news"] == 2
+    assert dropped["ruling"] == 1
+
+
+# ---------------------------------------------------------------- rule 2: similarity
+def test_normalise_text_removes_zwnj_digits_and_punctuation():
+    a = b7.normalise_text("قانون\u200cتجارت، مادهٔ ۱.")
+    b = b7.normalise_text("قانون تجارت ماده 1")
+    assert a == b == "قانونتجارتماده1"
+
+
+def test_near_identical_texts_are_same_but_real_differences_are_not():
+    body = LONG * 2
+    assert b7.same_text(body, body + "و")
+    assert b7.same_text("متن نخست، کاملاً یکسان!", "متن نخست کاملا یکسان")
+    assert not b7.same_text(body, "متن کاملا متفاوت و بی‌ربط برای این آزمون طولانی")
+
+
+def test_find_conflicts_ignores_near_identical_texts():
+    body = LONG * 2
+    rows = [
+        _row("قانون تجارت", "1", text=body, source="qavanin"),
+        _row("قانون تجارت", "1", text=body + "و", source="nezamat"),
+    ]
+    assert b7.find_conflicts(rows) == []
+
+
+def test_dedupe_source_priority_rc_majlis_beats_qavanin_beats_nezamat():
+    body = LONG * 2
+    qavanin = _row("L", "1", text=body, source="qavanin")
+    majors = _row("L", "1", text=body + "و", source="rc.majlis")
+    nezamat = _row("L", "1", text=body + "ی", source="nezamat")
+    assert b7.dedupe_rows([qavanin, nezamat]) == [qavanin]
+    assert b7.dedupe_rows([qavanin, majors]) == [majors]
+
+
+def test_find_conflicts_keeps_real_difference():
+    rows = [
+        _row("L", "1", text="متن نخست کاملا متفاوت درباره موضوع الف و ب", source="qavanin"),
+        _row("L", "1", text="متن دوم درباره موضوعی دیگر و طولانی تر و متفاوت", source="nezamat"),
+    ]
+    assert len(b7.find_conflicts(rows)) == 1
+
+
+# ---------------------------------------------------------------- rule 4: files / v6
+def test_filter_input_files_applies_staged_exclusions(tmp_path):
+    keep = tmp_path / "sync_sources_x.jsonl"
+    repealed = tmp_path / "sync_sources_x.repealed.jsonl"
+    review = tmp_path / "sync_sources_x_review.jsonl"
+    unity = tmp_path / "unity_rulings_2026.jsonl"
+    for path in (keep, repealed, review, unity):
+        path.write_text("", encoding="utf-8")
+    found = b7.filter_input_files([keep, repealed, review, unity, keep])
+    assert {p.name for p in found} == {"sync_sources_x.jsonl"}
+
+
+def test_is_excluded_file_prefix_and_suffixes():
+    assert b7.is_excluded_file(Path("unity_rulings_2026.jsonl"))
+    assert b7.is_excluded_file(Path("x.repealed.jsonl"))
+    assert b7.is_excluded_file(Path("x_review.jsonl"))
+    assert not b7.is_excluded_file(Path("sync_sources_x.jsonl"))
+
+
+def test_skip_already_in_v6_matches_normalised_text():
+    base = [_row("L", "1", text="متن ثابت قانون در نسخه شش که طولانی است")]
+    staged = [
+        _row("L", "1", text="متن ثابت قانون در نسخه شش که طولانی است", source="nezamat"),
+        _row("L", "2", text="متن تازه دیگر برای نسخه هفت این قانون", source="nezamat"),
+    ]
+    kept, skipped = b7.skip_already_in_v6(staged, base)
+    assert skipped == 1
+    assert [b7.row_article_no(r) for r in kept] == ["2"]
+
+
+# ---------------------------------------------------------------- rule 1-4 through main
+def test_main_dry_run_reports_regulations_section(tmp_path):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    src = staged / "sync_sources_2026-10-20_cbi.jsonl"
+    rows = [
+        {"title": "بخشنامه بانک مرکزی", "text": LONG, "status": "proposed", "source": "cbi_pdf"},
+        _row("قانون الف", "1", status="proposed", source="nezamat"),
+    ]
+    src.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8"
+    )
+    out = tmp_path / "out"
+    qd = FakeQdrant()
+    rc = b7.main(
+        ["--out", str(out), "--files", str(src), "--target", "regulations"],
+        http=qd,
+        embed=fake_embed,
+    )
+    assert rc == 0
+    report = json.loads((out / "v7_report.json").read_text(encoding="utf-8"))
+    assert report["target"] == "regulations"
+    assert report["selected_rows"] == 1
+    assert report["laws"]["selected_rows"] == 1
+    assert report["regulations"]["selected_rows"] == 1
+    assert qd.cols == {}
+
+
+def test_main_files_honours_exclusions(tmp_path):
+    src = tmp_path / "sync_sources_x.repealed.jsonl"
+    src.write_text(json.dumps(_row("L", "1", status="proposed")), encoding="utf-8")
+    out = tmp_path / "out"
+    qd = FakeQdrant()
+    rc = b7.main(["--out", str(out), "--files", str(src)], http=qd, embed=fake_embed)
+    assert rc == 0
+    report = json.loads((out / "v7_report.json").read_text(encoding="utf-8"))
+    assert report["staged_files"] == []
+    assert report["selected_rows"] == 0
+
+
+def test_main_apply_target_regulations_uses_default_collection(tmp_path):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    src = staged / "sync_sources_2026-10-20_cbi.jsonl"
+    reg = {"title": "بخشنامه نمونه", "text": LONG, "status": "proposed", "source": "cbi_pdf"}
+    src.write_text(json.dumps(reg, ensure_ascii=False), encoding="utf-8")
+    out = tmp_path / "out"
+    qd = FakeQdrant()
+    rc = b7.main(
+        [
+            "--out",
+            str(out),
+            "--files",
+            str(src),
+            "--target",
+            "regulations",
+            "--apply",
+            "--no-base",
+        ],
+        http=qd,
+        embed=fake_embed,
+    )
+    assert rc == 0
+    assert len(qd.cols["iran_regulations_v3"]) == 1
