@@ -25,6 +25,7 @@
     "migration:generate": "npm run typeorm -- migration:generate"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1155.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@nestjs/bullmq": "^10.2.0",
     "@nestjs/common": "^10.4.4",
