@@ -37,6 +37,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=offsite_lib.sh
 . "$SCRIPT_DIR/offsite_lib.sh"
+# human <bytes>: readable size for log lines (offsite_lib.sh does not define it).
+declare -F human >/dev/null || human() { numfmt --to=iec "$1" 2>/dev/null || printf "%sB" "$1"; }
 
 for arg in "$@"; do
   case "$arg" in
