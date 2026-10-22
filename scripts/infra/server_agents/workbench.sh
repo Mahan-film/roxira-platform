@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Workbench (factory milestone F1): isolated automatic checks for ONE agent worktree.
 #
-#   workbench.sh <worktree> [--base origin/main] [--json OUT] [--dry-run] [--files-from FILE] [--emit-groups OUT]
+#   workbench.sh <worktree> [--base origin/main] [--json OUT] [--dry-run] [--files-from FILE] [--emit-groups OUT] [--app-e2e]
 #
 #   --base REF        diff base (default origin/main); changed = `git diff --name-only REF...HEAD` + uncommitted/untracked
 #   --json OUT        write {groups:[{name,cmd,status,seconds,tail}],ok,backend} to OUT (status pass|fail|skip|timeout)
@@ -36,13 +36,21 @@
 # Dependencies live in named volumes keyed by lockfile hash (rx-nm-<dir>-<hash12>, rx-py-<hash12>), populated once
 # by a separate container that is the only one with network (npm ci --ignore-scripts / pip install).
 # Timeouts: 8 min per group, 15 min per docker build, 15 min overall (raised when docker builds are selected).
-# Env overrides: WB_NODE_IMAGE, WB_PY_IMAGE, WB_GROUP_TIMEOUT, WB_DOCKER_TIMEOUT, WB_TOTAL_TIMEOUT.
+# Gate 3 (opt-in; browser E2E in an isolated sandbox built from the committed HEAD, docs/strategy/FACTORY_V2_2026-10-22.md):
+#   --app-e2e or WB_APP_E2E=1, AND a changed file under enterprise_hub/frontend/src/app/app, frontend/src/components/app,
+#   modules/data_import, modules/accounting, modules/invoicing or modules/hr (or the E2E tooling itself)  ->  e2e:app
+#   runs scripts/infra/e2e/run_app_e2e.sh HEAD: builds backend + frontend images, throwaway postgres/redis, Chromium and
+#   WebKit through Playwright. Uncommitted changes are NOT included, so commit first. Needs docker, node and network.
+#   Prints `APP_E2E RESULT: PASS|FAIL`; timeout WB_E2E_TIMEOUT (default 2400 s). Off by default because it is slow.
+# Env overrides: WB_NODE_IMAGE, WB_PY_IMAGE, WB_GROUP_TIMEOUT, WB_DOCKER_TIMEOUT, WB_E2E_TIMEOUT, WB_TOTAL_TIMEOUT, WB_APP_E2E.
 set -euo pipefail
 
 NODE_IMAGE="${WB_NODE_IMAGE:-node:20-bookworm-slim}"
 PY_IMAGE="${WB_PY_IMAGE:-python:3.12-slim}"
 GROUP_TIMEOUT="${WB_GROUP_TIMEOUT:-480}"
 DOCKER_TIMEOUT="${WB_DOCKER_TIMEOUT:-900}"
+E2E_TIMEOUT="${WB_E2E_TIMEOUT:-2400}"
+APP_E2E="${WB_APP_E2E:-0}"
 TOTAL_TIMEOUT="${WB_TOTAL_TIMEOUT:-900}"
 HUB_DIR="output_apps/enterprise_hub"
 FE_DIR="output_apps/enterprise_hub/frontend"
@@ -64,7 +72,8 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1 ;;
     --files-from) FILES_FROM="${2?--files-from needs a path}"; shift ;;
     --emit-groups) EMIT_GROUPS="${2?--emit-groups needs a path}"; shift ;;
-    -h | --help) sed -n '2,39p' "$0"; exit 0 ;;
+    --app-e2e) APP_E2E=1 ;;
+    -h | --help) sed -n '2,45p' "$0"; exit 0 ;;
     -*) die "unknown option: $1 (see --help)" ;;
     *) [ -z "$WT" ] || die "only one worktree argument"; WT="$1" ;;
   esac
@@ -108,6 +117,7 @@ fi
 # Docker groups carry G_TAG (the temporary image tag removed after the build).
 G_NAME=() G_KIND=() G_DIR=() G_CMD=() G_LCMD=() G_LFILES=() G_TAG=()
 DOCKER_N=0
+E2E_N=0
 add_group() { G_NAME+=("$1"); G_KIND+=("$2"); G_DIR+=("$3"); G_CMD+=("$4"); G_LCMD+=(""); G_LFILES+=(""); G_TAG+=(""); }
 add_docker_group() { # name dir tag cmd ; the tag must appear in cmd so `docker image rm` can clean it up
   G_NAME+=("$1"); G_KIND+=("docker"); G_DIR+=("$2"); G_CMD+=("$4")
@@ -122,7 +132,7 @@ add_lint_group() { # name dir prefix files...
 quote_list() { local o="" x; for x in "$@"; do o+=" $(printf '%q' "$x")"; done; printf '%s' "${o# }"; }
 exists() { [ -f "$WT/$1" ]; }
 
-FE_ALL=0 HUB_ALL=0 HUB_DOCKER=0 APP_DOCKER=0
+FE_ALL=0 HUB_ALL=0 HUB_DOCKER=0 APP_DOCKER=0 APP_E2E_RELEVANT=0
 FE_LINT=() HUB_REL=() PY_FILES=() PY_TESTS=() SH_FILES=() IGNORED=()
 for f in ${CHANGED[@]+"${CHANGED[@]}"}; do
   case "$f" in
@@ -133,6 +143,13 @@ for f in ${CHANGED[@]+"${CHANGED[@]}"}; do
       HUB_ALL=1
       case "$f" in "$HUB_DIR"/docs/*) ;; *) HUB_DOCKER=1 ;; esac
       case "$f" in *.ts | *.tsx | *.js) exists "$f" && HUB_REL+=("${f#"$HUB_DIR"/}") ;; esac ;;
+  esac
+  # Gate 3 relevance: UI routes/components of the business app and the modules the app E2E exercises.
+  case "$f" in
+    "$FE_DIR"/src/app/app/* | "$FE_DIR"/src/components/app/* | "$HUB_DIR"/modules/data_import/* | \
+      "$HUB_DIR"/modules/accounting/* | "$HUB_DIR"/modules/invoicing/* | "$HUB_DIR"/modules/hr/* | \
+      scripts/infra/e2e/* | e2e/app/* | e2e/playwright.app.config.ts)
+      APP_E2E_RELEVANT=1 ;;
   esac
   # Dockerfile.prod COPY sources (image inputs): output_apps/, src/, run_unified_server.py and these config files.
   case "$f" in
@@ -195,10 +212,16 @@ if [ "$APP_DOCKER" = 1 ]; then
     "docker build --target builder -f Dockerfile.prod -t rx-wb-app-$$ ."
 fi
 
+# Gate 3 (opt-in): browser E2E against a sandbox built from HEAD. The script prints `APP_E2E RESULT: PASS|FAIL`.
+if [ "$APP_E2E" = 1 ] && [ "$APP_E2E_RELEVANT" = 1 ]; then
+  add_group "e2e:app" e2e "." "RX_E2E_REPO=\"\$PWD\" bash ${WB_REL%/server_agents}/e2e/run_app_e2e.sh HEAD"
+  E2E_N=$((E2E_N + 1))
+fi
+
 # Docker builds get DOCKER_TIMEOUT each; widen the overall budget so one build cannot starve the others, unless
 # the caller pinned WB_TOTAL_TIMEOUT.
 if [ "$DOCKER_N" -gt 0 ] && [ -z "${WB_TOTAL_TIMEOUT:-}" ]; then
-  TOTAL_TIMEOUT=$(( DOCKER_N * DOCKER_TIMEOUT + GROUP_TIMEOUT ))
+  TOTAL_TIMEOUT=$(( DOCKER_N * DOCKER_TIMEOUT + E2E_N * E2E_TIMEOUT + GROUP_TIMEOUT ))
 fi
 
 # ---- group list as JSON (--emit-groups; the daytona backend reuses it) --------------------------------------
@@ -300,7 +323,7 @@ if [ "$DRY" = 1 ]; then
   echo "changed: ${#CHANGED[@]} file(s)"
   for ((i = 0; i < ${#G_NAME[@]}; i++)); do
     case "${G_KIND[$i]}" in
-      node | lint) img="$NODE_IMAGE" ;; py) img="$PY_IMAGE" ;; docker) img="docker" ;; *) img="host" ;;
+      node | lint) img="$NODE_IMAGE" ;; py) img="$PY_IMAGE" ;; docker) img="docker" ;; e2e) img="host-e2e" ;; *) img="host" ;;
     esac
     printf 'GROUP %s | image=%s | dir=%s | cmd=%s\n' "${G_NAME[$i]}" "$img" "${G_DIR[$i]:-.}" "${G_CMD[$i]}"
     record "${G_NAME[$i]}" "${G_CMD[$i]}" skip 0 ""
@@ -314,8 +337,8 @@ fi
 # Hand the group list to daytona_runner.py, which runs it in a disposable Daytona sandbox. If the sandbox cannot
 # start (exit 3) the checks run locally below and the JSON records "backend":"local-fallback".
 if [ "$BACKEND" = daytona ]; then
-  if [ "$DOCKER_N" -gt 0 ]; then
-    log "Gate 2 docker groups need the local docker daemon; running all checks locally"
+  if [ "$DOCKER_N" -gt 0 ] || [ "$E2E_N" -gt 0 ]; then
+    log "Gate 2/3 groups need the local docker daemon; running all checks locally"
     BACKEND=local
   elif [ ${#G_NAME[@]} -eq 0 ]; then
     log "no check groups apply; not starting a daytona sandbox"
@@ -401,13 +424,18 @@ run_group() { # index
   : >"$out"
   left=$((TOTAL_TIMEOUT - (SECONDS - START)))
   if [ "$left" -le 0 ]; then echo "overall timeout (${TOTAL_TIMEOUT}s) reached before this group" >"$out"; record "$name" "$cmd" skip 0 "$out"; return; fi
-  gto="$GROUP_TIMEOUT"; [ "$kind" != docker ] || gto="$DOCKER_TIMEOUT"
+  gto="$GROUP_TIMEOUT"; [ "$kind" != docker ] || gto="$DOCKER_TIMEOUT"; [ "$kind" != e2e ] || gto="$E2E_TIMEOUT"
   lim=$gto; [ "$left" -ge "$lim" ] || lim=$left
   if [ -z "$TO" ]; then echo "timeout(1) not found" >"$out"; record "$name" "$cmd" fail 0 "$out"; OK=0; return; fi
   cname="rx-wb-$$-$i"; CONTAINERS+=("$cname")
   case "$kind" in
     host)
       (cd "$WT" && "$TO" -k 5 "$lim" bash -c "$cmd") >"$out" 2>&1 || rc=$? ;;
+    e2e)
+      command -v docker >/dev/null 2>&1 || { echo "docker unavailable" >"$out"; record "$name" "$cmd" fail 0 "$out"; OK=0; return; }
+      (cd "$WT" && "$TO" -k 30 "$lim" bash -c "$cmd") >"$out" 2>&1 || rc=$?
+      # The sandbox removes itself on exit; after a failure or timeout kill make sure nothing is left behind.
+      if [ "$rc" != 0 ]; then (cd "$WT" && bash "${WB_REL%/server_agents}/e2e/sandbox_down.sh") >/dev/null 2>&1 || true; fi ;;
     docker)
       command -v docker >/dev/null 2>&1 || { echo "docker unavailable" >"$out"; record "$name" "$cmd" fail 0 "$out"; OK=0; return; }
       local tag="${G_TAG[$i]}"; [ -z "$tag" ] || IMAGES+=("$tag")

@@ -5,10 +5,14 @@
   "description": "Read-only Playwright smoke tests against the live production site.",
   "scripts": {
     "test": "playwright test",
+    "test:app": "playwright test -c playwright.app.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "report": "playwright show-report"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "1.63.0"
+    "@playwright/test": "1.63.0",
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
   }
 }

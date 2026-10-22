@@ -77,6 +77,28 @@ o="$(run scripts/gone.sh output_apps/enterprise_hub/src/deleted.ts)"   # deleted
 expect del-hub "$o" 'GROUP hub:tsc'
 reject del-no-sh "$o" 'GROUP sh:'
 
+# Gate 3 (opt-in): e2e:app only with --app-e2e / WB_APP_E2E=1 AND an app-relevant changed file
+for f in output_apps/enterprise_hub/frontend/src/app/app/page.tsx output_apps/enterprise_hub/frontend/src/components/app/drop-overlay.tsx \
+  output_apps/enterprise_hub/modules/data_import/x.ts output_apps/enterprise_hub/modules/accounting/x.ts \
+  output_apps/enterprise_hub/modules/invoicing/x.ts output_apps/enterprise_hub/modules/hr/x.ts; do mk "$f"; done
+o="$(run output_apps/enterprise_hub/modules/accounting/x.ts)"
+reject e2e-off-by-default "$o" 'GROUP e2e:app'
+printf '%s\n' output_apps/enterprise_hub/modules/accounting/x.ts >"$T/files"
+o="$(WB_APP_E2E=1 "$WB" "$T/wt" --dry-run --files-from "$T/files" 2>&1)"
+expect e2e-env "$o" 'GROUP e2e:app \| image=host-e2e \| dir=\. \| cmd=RX_E2E_REPO=.*bash .*e2e/run_app_e2e\.sh HEAD'
+for f in output_apps/enterprise_hub/frontend/src/app/app/page.tsx output_apps/enterprise_hub/frontend/src/components/app/drop-overlay.tsx \
+  output_apps/enterprise_hub/modules/data_import/x.ts output_apps/enterprise_hub/modules/invoicing/x.ts output_apps/enterprise_hub/modules/hr/x.ts; do
+  printf '%s\n' "$f" >"$T/files"
+  o="$("$WB" "$T/wt" --dry-run --files-from "$T/files" --app-e2e 2>&1)"
+  expect "e2e-flag-$f" "$o" 'GROUP e2e:app'
+done
+printf '%s\n' output_apps/enterprise_hub/src/b.ts >"$T/files"   # backend file outside the app modules
+o="$("$WB" "$T/wt" --dry-run --files-from "$T/files" --app-e2e 2>&1)"
+reject e2e-irrelevant "$o" 'GROUP e2e:app'
+printf '%s\n' output_apps/enterprise_hub/frontend/src/a.tsx >"$T/files"   # frontend file outside src/app/app
+o="$("$WB" "$T/wt" --dry-run --files-from "$T/files" --app-e2e 2>&1)"
+reject e2e-irrelevant-fe "$o" 'GROUP e2e:app'
+
 # eslint_diff helper: only NEW errors fail (base comparison)
 printf '%s\n' '[{"filePath":"/work/src/a.tsx","messages":[{"ruleId":"react-hooks/rules-of-hooks","severity":2}]}]' >"$T/base.json"
 printf '%s\n' '[{"filePath":"/work/src/a.tsx","messages":[{"ruleId":"react-hooks/rules-of-hooks","severity":2}]}]' >"$T/cur.json"
