@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { ErrorNotice } from "@/components/app/app-ui";
+import { isDatabaseFile, useImportHandoff, type ImportTab } from "@/components/app/import-handoff";
 import { PackageImportWizard } from "@/components/app/package-import-wizard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,25 +72,41 @@ function sampleCell(row: ImportSampleRow, header: string, index: number): string
   return value === null || value === undefined ? "" : String(value);
 }
 
-type ImportMode = "file" | "package";
+type ImportMode = ImportTab;
 
 const MODE_LABELS: Array<[ImportMode, string]> = [
   ["file", "ورود فایل (اکسل، CSV، PDF)"],
   ["package", "انتقال کامل دیتابیس"],
 ];
 
-/** Database packages (.sqlite/.db/.sql/.zip) belong to the whole-database tab. */
-function isPackageFile(file: File): boolean {
-  return /\.(sqlite3?|db|sql|zip)$/i.test(file.name);
-}
-
 export function ImportWizard() {
+  const { pendingFile, pendingTab, setPendingFile, setPendingTab } = useImportHandoff();
   const [mode, setMode] = useState<ImportMode>("file");
   const [handoff, setHandoff] = useState<File | null>(null);
+
+  // A file dropped anywhere in /app (or a palette command) is handed over here.
+  useEffect(() => {
+    if (!pendingFile && !pendingTab) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (pendingFile) {
+      setHandoff(pendingFile);
+      setMode(isDatabaseFile(pendingFile) ? "package" : "file");
+    } else if (pendingTab) {
+      setMode(pendingTab);
+    }
+    setPendingFile(null);
+    setPendingTab(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [pendingFile, pendingTab, setPendingFile, setPendingTab]);
 
   function openPackage(file: File) {
     setHandoff(file);
     setMode("package");
+  }
+
+  function selectMode(next: ImportMode) {
+    setHandoff(null);
+    setMode(next);
   }
 
   return (
@@ -105,7 +122,7 @@ export function ImportWizard() {
             type="button"
             role="tab"
             aria-selected={mode === key}
-            onClick={() => setMode(key)}
+            onClick={() => selectMode(key)}
             className={cn(
               "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
               mode === key
@@ -119,7 +136,11 @@ export function ImportWizard() {
       </div>
 
       {mode === "file" ? (
-        <SingleFileImportWizard onPackageFile={openPackage} />
+        <SingleFileImportWizard
+          initialFile={handoff}
+          onInitialFileUsed={() => setHandoff(null)}
+          onPackageFile={openPackage}
+        />
       ) : (
         <PackageImportWizard
           initialFile={handoff}
@@ -131,8 +152,12 @@ export function ImportWizard() {
 }
 
 function SingleFileImportWizard({
+  initialFile = null,
+  onInitialFileUsed,
   onPackageFile,
 }: {
+  initialFile?: File | null;
+  onInitialFileUsed?: () => void;
   onPackageFile: (file: File) => void;
 }) {
   const [step, setStep] = useState<Step>("upload");
@@ -211,7 +236,7 @@ function SingleFileImportWizard({
   function handleFiles(files: FileList | null) {
     const first = files?.[0];
     if (!first) return;
-    if (isPackageFile(first)) {
+    if (isDatabaseFile(first)) {
       onPackageFile(first);
       return;
     }
@@ -223,6 +248,16 @@ function SingleFileImportWizard({
     // The server re-detects columns for the chosen entity.
     if (file) void runPreview(file, next);
   }
+
+  // A file handed over by the drop-anywhere overlay or the command palette is previewed once.
+  useEffect(() => {
+    if (!initialFile) return;
+    onInitialFileUsed?.();
+    // One-shot start for a file handed over by the parent (an external event, not derived state).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void runPreview(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   const missingRequired = useMemo(() => {
     if (!entityDef) return [] as string[];

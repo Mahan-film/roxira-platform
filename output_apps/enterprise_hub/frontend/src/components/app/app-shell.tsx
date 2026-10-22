@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   ReceiptText,
+  Search,
   UserRound,
   UsersRound,
   Warehouse,
@@ -18,6 +19,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { CommandPalette } from "@/components/app/command-palette";
+import { DropOverlay } from "@/components/app/drop-overlay";
+import { ImportHandoffProvider } from "@/components/app/import-handoff";
 import { useAuth } from "@/components/auth/auth-provider";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { cn } from "@/lib/utils";
@@ -134,58 +138,79 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [openAt, setOpenAt] = useState<string | null>(null);
   const drawerOpen = openAt === pathname;
   const setDrawerOpen = (open: boolean) => setOpenAt(open ? pathname : null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   return (
     <EnterpriseRouteGuard>
-      <div className="dark flex min-h-screen flex-1 bg-background text-foreground">
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-l border-border bg-card/60 p-4 lg:block">
-          <SidebarContent pathname={pathname} />
-        </aside>
+      <ImportHandoffProvider>
+        <div className="dark flex min-h-screen flex-1 bg-background text-foreground">
+          <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-l border-border bg-card/60 p-4 lg:block">
+            <SidebarContent pathname={pathname} />
+          </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur lg:hidden">
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              aria-label="باز کردن منو"
-              aria-expanded={drawerOpen}
-              className="inline-flex size-10 items-center justify-center rounded-xl border border-border"
-            >
-              <Menu className="size-5" aria-hidden="true" />
-            </button>
-            <span className="text-sm font-bold">نرم‌افزار روکسیرا</span>
-          </header>
-
-          <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8">
-            {children}
-          </main>
-        </div>
-
-        {drawerOpen && (
-          <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
-            <button
-              type="button"
-              aria-label="بستن منو"
-              className="absolute inset-0 bg-black/60"
-              onClick={() => setDrawerOpen(false)}
-            />
-            <div className="absolute inset-y-0 right-0 w-72 max-w-[85vw] border-l border-border bg-background p-4 shadow-2xl">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur">
               <button
                 type="button"
-                onClick={() => setDrawerOpen(false)}
-                aria-label="بستن منو"
-                className="absolute top-3 left-3 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+                onClick={() => setDrawerOpen(true)}
+                aria-label="باز کردن منو"
+                aria-expanded={drawerOpen}
+                className="inline-flex size-10 items-center justify-center rounded-xl border border-border lg:hidden"
               >
-                <X className="size-4" aria-hidden="true" />
+                <Menu className="size-5" aria-hidden="true" />
               </button>
-              <SidebarContent
-                pathname={pathname}
-                onNavigate={() => setDrawerOpen(false)}
-              />
-            </div>
+              <span className="text-sm font-bold lg:hidden">نرم‌افزار روکسیرا</span>
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                aria-label="جست‌وجو و فرمان‌ها"
+                className="ms-auto inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Search className="size-4" aria-hidden="true" />
+                <span className="hidden sm:inline">جست‌وجو یا فرمان…</span>
+                <kbd
+                  className="hidden rounded border border-border px-1.5 py-0.5 font-mono text-[10px] sm:inline"
+                  dir="ltr"
+                >
+                  Ctrl K
+                </kbd>
+              </button>
+            </header>
+
+            <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8">
+              {children}
+            </main>
           </div>
-        )}
-      </div>
+
+          {drawerOpen && (
+            <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
+              <button
+                type="button"
+                aria-label="بستن منو"
+                className="absolute inset-0 bg-black/60"
+                onClick={() => setDrawerOpen(false)}
+              />
+              <div className="absolute inset-y-0 right-0 w-72 max-w-[85vw] border-l border-border bg-background p-4 shadow-2xl">
+                <button
+                  type="button"
+                  onClick={() => setDrawerOpen(false)}
+                  aria-label="بستن منو"
+                  className="absolute top-3 left-3 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+                <SidebarContent
+                  pathname={pathname}
+                  onNavigate={() => setDrawerOpen(false)}
+                />
+              </div>
+            </div>
+          )}
+
+          <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+          <DropOverlay />
+        </div>
+      </ImportHandoffProvider>
     </EnterpriseRouteGuard>
   );
 }

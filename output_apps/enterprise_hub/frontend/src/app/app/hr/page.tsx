@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Pencil, Plus, Search, UsersRound } from "lucide-react";
 
 import {
@@ -36,13 +37,22 @@ import {
 } from "@/types/hr";
 
 export default function SuiteHrPage() {
+  return (
+    <Suspense fallback={null}>
+      <HrPage />
+    </Suspense>
+  );
+}
+
+function HrPage() {
+  const searchParams = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [contracts, setContracts] = useState<EmploymentContract[]>([]);
   const [stats, setStats] = useState<HrStats | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);

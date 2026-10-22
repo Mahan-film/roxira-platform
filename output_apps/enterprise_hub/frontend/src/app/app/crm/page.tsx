@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Contact, KanbanSquare, Plus, Search, Table2 } from "lucide-react";
 
 import {
@@ -47,6 +48,15 @@ const PAGE_SIZE = 25;
 type View = "table" | "board";
 
 export default function SuiteCrmPage() {
+  return (
+    <Suspense fallback={null}>
+      <CrmPage />
+    </Suspense>
+  );
+}
+
+function CrmPage() {
+  const searchParams = useSearchParams();
   const [view, setView] = useState<View>("table");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -57,7 +67,7 @@ export default function SuiteCrmPage() {
   const [pipeline, setPipeline] = useState<PipelineStageGroup[]>([]);
   const [stats, setStats] = useState<LeadStats | null>(null);
   const [selected, setSelected] = useState<Lead | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
   const [movingId, setMovingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

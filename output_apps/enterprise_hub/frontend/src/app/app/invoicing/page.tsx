@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Ban,
   CheckCircle2,
@@ -68,6 +69,15 @@ function statusVariant(
 }
 
 export default function SuiteInvoicingPage() {
+  return (
+    <Suspense fallback={null}>
+      <InvoicingPage />
+    </Suspense>
+  );
+}
+
+function InvoicingPage() {
+  const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState<InvoiceResponseDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -79,7 +89,7 @@ export default function SuiteInvoicingPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [defaultVatRate, setDefaultVatRate] = useState(VAT_RATE);
 
-  const [showEditor, setShowEditor] = useState(false);
+  const [showEditor, setShowEditor] = useState(searchParams.get("new") === "1");
   const [editing, setEditing] = useState<InvoiceResponseDto | null>(null);
   const [viewing, setViewing] = useState<InvoiceResponseDto | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
