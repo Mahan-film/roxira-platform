@@ -336,4 +336,22 @@ def test_every_free_entry_outside_free_role_is_public_code_only():
         for entry in (role_data or {}).get("models", []) or []:
             model_id = str(entry.get("id", ""))
             if model_id.endswith(":free") or model_id == "openrouter/free":
+                # Single owner exception (AGENTS.md section 4, 2026-10-14): the last rung of the
+                # VIP `drafting` ladder, see test_drafting_role_ladder_shape.
+                if entry.get("last_resort_free") is True:
+                    assert role == "drafting", (role, model_id)
+                    continue
                 assert entry.get("public_code_only") is True, (role, model_id)
+
+
+def test_drafting_role_ladder_shape():
+    """VIP drafts: paid DeepSeek V4 Pro, then V4.1 Flash, the free model strictly LAST and flagged."""
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    entries = model_registry.role_entries("drafting", real_path)
+    ids = [e["id"] for e in entries]
+    assert ids[:2] == ["deepseek/deepseek-v4-pro", "deepseek/deepseek-v4.1-flash"]
+    free = [e for e in entries if e["id"].endswith(":free")]
+    assert [e["id"] for e in free] == [ids[-1]] and free[0].get("last_resort_free") is True
+    assert len(ids) == 3
+    # sensitive callers using the generic registry helper still never see the :free id
+    assert model_registry.models_for("drafting", True, real_path) == ids[:2]

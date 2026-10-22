@@ -37,6 +37,24 @@ CRIMINAL_PREFIX = "پیشنهاد (غیرقطعی): "
 PUNISHMENT_PLACEHOLDER = "مجازات توسط مرجع صالح تعیین می‌شود"
 
 NONFINAL_PREFIX = CRIMINAL_PREFIX
+
+# Rules for proposed_operative_part (kept as one constant so tests and the prompt share it).
+# The draft stays non-binding; these rules only stop the model from refusing a claim that the
+# facts and evidence clearly support, and make any refusal per-claim instead of all-or-nothing.
+INSUFFICIENT_PHRASE = "اطلاعات کافی نیست"
+OPERATIVE_PART_RULES = (
+    "قواعد نتیجهٔ پیشنهادی (proposed_operative_part):\n"
+    "1) برای هر خواسته‌ای که وقایع و ادلهٔ پیوست آن را پشتیبانی می‌کند، حتماً نتیجهٔ پیشنهادی "
+    "(غیرقطعی) همان خواسته را بنویس، مثلاً پیشنهاد محکومیت خوانده به پرداخت اصل خواسته، "
+    "هزینهٔ دادرسی یا خسارت؛ هر خواسته را در یک بند جدا بیاور.\n"
+    "2) عبارت «" + INSUFFICIENT_PHRASE + "» را فقط برای خواسته‌ای بنویس که یک عنصر ضروری آن "
+    "واقعاً در پرونده نیست (مثلاً مبلغ، سررسید، مطالبه یا سند)، و آن را فقط در همان بند و "
+    "همراه با علت بنویس، نه برای کل پرونده؛ همان کمبود را در missing_information هم بیاور.\n"
+    "3) اگر بخشی از خواسته به داده‌ای بیرون از پرونده وابسته است (مثلاً شاخص بانک مرکزی برای "
+    "خسارت تأخیر تأدیه)، اصل خواسته را پیشنهاد بده و آن بخش را «منوط به محاسبه/احراز» اعلام کن.\n"
+    "4) در legal_reasoning برای هر خواسته یک مورد جدا بیاور و فقط مواد مرتبط از فهرست مجاز را "
+    "در آن استناد کن (بار اثبات، مبنای ماهوی، خسارت، هزینهٔ دادرسی)."
+)
 LATIN_DIGITS_RULE = "همهٔ ارقام را فقط با ارقام لاتین 0-9 بنویس (Use Latin digits)."
 
 # court_type -> display name, party labels (side_a, side_b) and a short structure checklist.
@@ -170,7 +188,7 @@ MAX_EVIDENCE_TEXT = 6000
 MAX_FACTS = 12000
 MAX_CLAIMS = 6000
 MAX_NAME = 300
-MAX_PROMPT_ARTICLES = 12
+MAX_PROMPT_ARTICLES = 14
 MAX_ARTICLE_TEXT = 1500
 
 _STR_KEYS = ("facts_summary", "claims_summary", "proposed_operative_part")
@@ -312,9 +330,8 @@ def _build_prompt(case: RulingCase, articles: List[Dict[str, str]]) -> str:
     return (
         "تو دستیار تهیه «پیش‌نویس غیررسمی و غیرقطعی» برای بررسی انسانی هستی، نه رأی دادگاه.\n"
         "فقط از مواد قانونی فهرست‌شده در زیر به‌عنوان مبنای قانونی مجاز استفاده کن و "
-        "فقط همین مواد را استناد کن. هیچ ماده یا قانون دیگری نساز. "
-        "اگر این مواد برای نتیجه‌گیری کافی نیستند، در proposed_operative_part "
-        "بنویس «اطلاعات کافی نیست» و کمبودها را در missing_information بیاور.\n\n"
+        "فقط همین مواد را استناد کن. هیچ ماده یا قانون دیگری نساز.\n"
+        + OPERATIVE_PART_RULES + "\n\n"
         "مواد قانونی مجاز:\n" + articles_block + "\n\n"
         + extra + LATIN_DIGITS_RULE + "\n"
         "نوع پرونده: " + case.court_type + " (" + meta["name"] + ")\n"
@@ -346,6 +363,11 @@ def _parse_json(raw: Any) -> Any:
         except (ValueError, TypeError):
             return None
     return None
+
+
+def is_parseable_draft(raw: Any) -> bool:
+    """True when ``raw`` holds a JSON object (the router uses this to try the next model otherwise)."""
+    return isinstance(_parse_json(raw), dict)
 
 
 def _is_accepted(verify_citations: Callable[[str], Any], law: str, article: str) -> bool:

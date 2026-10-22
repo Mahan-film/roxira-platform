@@ -12,6 +12,7 @@ model degrades to the next one instead of causing an outage:
     LLM_TIER_FREE    non-sensitive background work (crawler, SEO, tagging)
     LLM_TIER_CHEAP   default chat, classification, query rewriting
     LLM_TIER_STRONG  final legal drafting shown to the customer
+    LLM_TIER_DRAFTING (optional) override of the ``drafting`` role, see complete_ladder()
 
 Hard rules enforced here, not by callers:
 
@@ -534,6 +535,132 @@ async def _post_with_reasoning_fallback(
 
 
 # ---------------------------------------------------------------------------
+# Drafting ladder (VIP drafts: ruling / indictment / paid draft_assistant drafts)
+# ---------------------------------------------------------------------------
+
+DRAFTING_TIER = "drafting"
+DEFAULT_DRAFTING_ATTEMPT_TIMEOUT = 60.0
+DEFAULT_DRAFTING_TOTAL_BUDGET = 150.0
+_MIN_ATTEMPT_SECONDS = 5.0
+
+
+def drafting_total_budget() -> float:
+    """Total wall-clock budget (seconds) of one drafting call, all models included."""
+    return max(10.0, _env_float("LLM_DRAFTING_TOTAL_BUDGET", DEFAULT_DRAFTING_TOTAL_BUDGET))
+
+
+def drafting_attempt_timeout() -> float:
+    return max(_MIN_ATTEMPT_SECONDS, _env_float("LLM_DRAFTING_ATTEMPT_TIMEOUT", DEFAULT_DRAFTING_ATTEMPT_TIMEOUT))
+
+
+def drafting_models() -> list[str]:
+    """Ordered ``drafting`` ladder from config/models.yaml (env ``LLM_TIER_DRAFTING`` overrides).
+
+    The order is never rearranged. A ``:free`` id is kept only when it is the LAST entry, is flagged
+    ``last_resort_free`` in the registry (or comes from the env override), and
+    ``LLM_DRAFTING_ALLOW_FREE_LAST`` is not turned off (AGENTS.md section 4).
+    """
+    allow_free = _env_bool("LLM_DRAFTING_ALLOW_FREE_LAST", True)
+    override = os.environ.get("LLM_TIER_DRAFTING", "").strip()
+    if override:
+        entries = [{"id": m.strip(), "last_resort_free": True} for m in override.split(",") if m.strip()]
+    else:
+        try:
+            entries = [dict(e) for e in model_registry.role_entries(DRAFTING_TIER) if e.get("id")]
+        except model_registry.ModelRegistryError as exc:
+            raise LLMRouterError(f"drafting role unavailable: {exc}", tier=DRAFTING_TIER) from exc
+    out: list[str] = []
+    for i, entry in enumerate(entries):
+        mid = str(entry["id"])
+        if is_free_model(mid):
+            if not (allow_free and entry.get("last_resort_free") is True and i == len(entries) - 1):
+                continue
+        if mid not in out:
+            out.append(mid)
+    if not out:
+        raise LLMRouterError("no usable models configured for the drafting ladder", tier=DRAFTING_TIER)
+    return out
+
+
+async def complete_ladder(
+    messages: list[dict[str, Any]],
+    *,
+    sensitive: bool,
+    tenant: str | None = None,
+    user: str | None = None,
+    feature: str | None = None,
+    attempt_timeout: float | None = None,
+    total_budget: float | None = None,
+    accept: Any = None,
+    **params: Any,
+) -> LLMResult:
+    """Call the ``drafting`` models one by one, in registry order, straight on OpenRouter.
+
+    Deliberately bypasses the free-first key-pool gateway: that layer re-orders everything
+    free-first, but a VIP draft must try the paid quality models first. Each model gets at most
+    ``attempt_timeout`` seconds (LLM_DRAFTING_ATTEMPT_TIMEOUT, default 60) and the whole call at
+    most ``total_budget`` seconds (LLM_DRAFTING_TOTAL_BUDGET, default 150). A timeout, transport
+    error, 4xx/5xx, empty answer, or an answer ``accept(content)`` rejects (e.g. invalid JSON)
+    moves on to the next model. Raises LLMRouterError when every model failed.
+    """
+    for forbidden in ("model", "models", "provider"):
+        if forbidden in params:
+            raise ValueError("pass no model/models/provider; configure the ladder in config/models.yaml")
+    if params.get("stream"):
+        raise ValueError("streaming is not supported by llm_router.complete_ladder")
+    models = drafting_models()
+    per_try = float(attempt_timeout) if attempt_timeout else drafting_attempt_timeout()
+    budget = float(total_budget) if total_budget else drafting_total_budget()
+    t0 = time.monotonic()
+    base = {
+        "tenant": tenant, "user": user, "feature": feature,
+        "sensitive": sensitive, "requested_tier": DRAFTING_TIER,
+    }
+    attempts = 0
+    last_status: int | None = None
+    last_reason = "no attempt made"
+    headers = _headers()
+    for mid in models:
+        remaining = budget - (time.monotonic() - t0)
+        if remaining < _MIN_ATTEMPT_SECONDS:
+            last_reason = "total budget exhausted"
+            break
+        limit = min(per_try, remaining)
+        body: dict[str, Any] = {**params, "model": mid, "messages": messages}
+        if sensitive and not is_free_model(mid) and _env_bool("LLM_SENSITIVE_DENY_DATA_COLLECTION", True):
+            body["provider"] = {"data_collection": "deny"}
+        attempts += 1
+        try:
+            data, _ = await asyncio.wait_for(
+                _post_with_retries(
+                    body, fail_fast_on_429=False, timeout=limit, max_retries=0, headers=headers
+                ),
+                timeout=limit + 1.0,
+            )
+        except asyncio.TimeoutError:
+            last_status, last_reason = None, "timeout"
+        except _CallFailed as exc:
+            last_status, last_reason = exc.status, f"HTTP {exc.status}"
+        else:
+            result = _parse_result(data, DRAFTING_TIER, attempts)
+            if not result.content:
+                last_status, last_reason = None, "empty answer"
+            elif accept is not None and not accept(result.content):
+                last_status, last_reason = None, "answer rejected by validator"
+            else:
+                llm_gateway.log_served("ladder", result.model or mid)
+                _log_usage_background(_usage_record(base, result, models, t0, "ok", 200))
+                return result
+        log.warning("drafting ladder: model=%s failed (%s); trying next", mid, last_reason)
+    failed = LLMResult(content="", model="", tier=DRAFTING_TIER, attempts=attempts)
+    _log_usage_background(_usage_record(base, failed, models, t0, "error", last_status))
+    raise LLMRouterError(
+        f"drafting ladder exhausted after {attempts} attempt(s): {last_reason}",
+        status=last_status, tier=DRAFTING_TIER,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -567,6 +694,13 @@ async def complete(
         raise ValueError("pass a tier, not model/models; configure models via LLM_TIER_*")
     if params.get("stream"):
         raise ValueError("streaming is not supported by llm_router.complete")
+
+    if tier == DRAFTING_TIER:
+        # Fixed paid-first ladder; never the free-first gateway (see complete_ladder).
+        return await complete_ladder(
+            messages, sensitive=sensitive, tenant=tenant, user=user, feature=feature,
+            attempt_timeout=timeout, **params,
+        )
 
     requested_tier = tier
     tier, models = _resolve_models(tier, sensitive)

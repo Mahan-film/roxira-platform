@@ -626,7 +626,7 @@ def test_route_generate_with_missing_fields_asks_instead_of_drafting(monkeypatch
     assert seen == []
 
 
-def test_route_vip_ruling_uses_strong_sensitive(monkeypatch):
+def test_route_vip_ruling_uses_drafting_ladder_sensitive(monkeypatch):
     client, seen, _, _, _ = _route_client(monkeypatch, tier="VIP")
     resp = client.post(
         URL,
@@ -643,7 +643,7 @@ def test_route_vip_ruling_uses_strong_sensitive(monkeypatch):
         },
     )
     assert resp.status_code == 200
-    assert seen and all(s["tier"] == "strong" and s["sensitive"] for s in seen)
+    assert seen and all(s["tier"] == "drafting" and s["sensitive"] for s in seen)
 
 
 def test_route_not_draft_when_no_intent(monkeypatch):
@@ -762,3 +762,14 @@ def test_route_uses_one_resolved_tier_source():
     assert "user.tier" not in section
     assert re.search(r"async def _draft_assist_core\([^)]*\btier: str\)", section, re.S)
     assert section.count("_resolve_subscription_tier") == 1
+
+
+def test_route_vip_generic_draft_uses_drafting_ladder(monkeypatch):
+    client, seen, _, _, _ = _route_client(monkeypatch, tier="VIP")
+    fields = {"facts": "ف", "claims": "رد دعوا", "claimant": CLAIMANT, "court_type": "general_civil"}
+    resp = client.post(
+        URL,
+        json={"action": "generate", "draft_type": "defense", "known_fields": fields, "skip_fields": ["defendant"]},
+    )
+    assert resp.json()["status"] == "draft"
+    assert seen[0]["tier"] == "drafting" and seen[0]["sensitive"] is True

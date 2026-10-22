@@ -113,6 +113,28 @@ roles:
       - id: google/gemini-3.8-flash
         price_per_1m: { in: 0.75, out: 3.75 }
 
+  drafting:
+    description: >
+      Smart Judge VIP drafts (POST /drafts/ruling, /drafts/indictment, paid draft_assistant drafts).
+      Quality first, fixed order, NEVER reordered by the free-first key pool / gateway:
+      llm_router.complete_ladder() calls these models directly in the order below with a per-model
+      attempt timeout (LLM_DRAFTING_ATTEMPT_TIMEOUT, default 60 s) and a total budget
+      (LLM_DRAFTING_TOTAL_BUDGET, default 150 s); a timeout / 5xx / empty or invalid-JSON answer
+      moves on to the next model. Cost is about $0.004 per draft on the first model.
+      The final :free entry is a last resort only (AGENTS.md section 4, owner decision 2026-10-14:
+      test accounts, non-confidential data) and is skipped when LLM_DRAFTING_ALLOW_FREE_LAST=0.
+      Revisit before onboarding paying customers with confidential data.
+    data_policy: standard
+    models:
+      - id: deepseek/deepseek-v4-pro
+        price_per_1m: { in: 0.267, out: 0.533, cache_read: 0.022 }
+      - id: deepseek/deepseek-v4.1-flash
+        price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
+      - id: nvidia/nemotron-3-ultra-550b-a55b:free
+        alias: nemotron-ultra
+        price_per_1m: { in: 0, out: 0 }
+        last_resort_free: true
+
   product:
     description: >
       Smart Judge BASIC paid plan (owner 2026-10-17) -- Claude Haiku 5.5 first, then DeepSeek V4.1 Flash.

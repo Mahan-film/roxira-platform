@@ -243,6 +243,14 @@ VIP_REQUIRED_FRAME = {
     "action": "UPGRADE_PLAN",
 }
 
+# 403 for the VIP-only drafts (ruling / indictment). Same machine-readable keys as VIP_REQUIRED_FRAME
+# (the frontend branches on type == "VIP_REQUIRED"); only the human text differs.
+VIP_DRAFTS_REQUIRED_FRAME = {
+    "type": "VIP_REQUIRED",
+    "message": "تهیهٔ پیش‌نویس رأی و کیفرخواست مخصوص مشترکین پلن حرفه‌ای و بالاتر است؛ برای استفاده از آن اشتراک خود را ارتقا دهید.",
+    "action": "UPGRADE_PLAN",
+}
+
 _JWT_TTL_DEFAULT_SECONDS = 60 * 60 * 24 * 3  # 3 روز (مالک: خروج خودکار هر ۳ روز)
 _JWT_TTL_MIN_SECONDS = 300
 _JWT_TTL_MAX_SECONDS = 2592000
@@ -6368,14 +6376,39 @@ try:
 except ImportError:
     from output_apps.generated_modules.smartjudge import ruling_draft as _ruling_draft
 
+try:
+    from . import drafting_core_articles as _drafting_core
+except ImportError:
+    from output_apps.generated_modules.smartjudge import drafting_core_articles as _drafting_core
+
+try:
+    from .legal_graph.lightrag_engine import fetch_exact_article as _lightrag_fetch_exact_article
+except Exception:  # noqa: BLE001 - engine missing: core articles are simply skipped
+
+    async def _lightrag_fetch_exact_article(law_names, article_no, active_only=None):  # type: ignore[misc]
+        return None
+
 from typing import Literal as _Literal
 
 from pydantic import BaseModel as _BaseModel, ConfigDict as _ConfigDict, Field as _Field
 
-_RULING_MODEL_TIER = "strong"
-_RULING_TIMEOUT_SECONDS = 90.0
+_RULING_MODEL_TIER = "strong"  # label echoed in responses (API contract); calls use _DRAFTING_TIER
+# VIP drafts use the dedicated `drafting` ladder (config/models.yaml): paid DeepSeek V4 Pro, then V4.1 Flash,
+# then the free model last. llm_router.complete(tier="drafting") calls it directly (never the free-first
+# gateway), 60 s per model, 150 s in total (LLM_DRAFTING_ATTEMPT_TIMEOUT / LLM_DRAFTING_TOTAL_BUDGET).
+_DRAFTING_TIER = "drafting"
+_DRAFTING_BRIDGE_MARGIN_SECONDS = 15.0
+_DRAFTING_BRIDGE_FALLBACK_SECONDS = 165.0
 _RULING_RETRIEVE_LIMIT = 8
 _RULING_QUERY_MAX_CHARS = 1500
+
+
+def _drafting_bridge_timeout() -> float:
+    """Seconds a sync draft core may wait for one bridged coroutine: the ladder budget plus a margin."""
+    try:
+        return float(_llm_router.drafting_total_budget()) + _DRAFTING_BRIDGE_MARGIN_SECONDS
+    except Exception:  # noqa: BLE001 - router missing: keep a safe default
+        return _DRAFTING_BRIDGE_FALLBACK_SECONDS
 
 
 class RulingEvidenceItem(_BaseModel):
@@ -6433,17 +6466,38 @@ async def _ruling_retrieve_laws(query: str) -> list:
     return rows
 
 
+async def _core_article_fetch(law_names, article_no):
+    """Exact (law_name, article_no) payload lookup used for the deterministic core articles."""
+    return await _lightrag_fetch_exact_article(
+        law_names, article_no, active_only=CITATION_QDRANT_ACTIVE_ONLY
+    )
+
+
+async def _ruling_retrieve_laws_with_core(query: str, match_text: str) -> list:
+    """Vector retrieval plus the deterministic core articles for the claim type
+    (config/drafting_core_articles.yaml), core first, so the prompt and the citation guard
+    see them. A failed core lookup never fails the draft; a failed main retrieval still does."""
+
+    async def _core() -> list:
+        try:
+            return await _drafting_core.fetch_core_articles(match_text, _core_article_fetch)
+        except Exception:  # noqa: BLE001
+            return []
+
+    retrieved, core = await asyncio.gather(_ruling_retrieve_laws(query), _core())
+    return _drafting_core.merge_articles(core, retrieved, _ruling_draft.MAX_PROMPT_ARTICLES)
+
+
 async def _ruling_complete(prompt: str) -> str:
     # VIP-only drafting always goes through the router (like /draft-assist); the
     # LLM_ROUTER_ENABLED flag gates only the legacy chat call sites.
     routed = await _llm_router.complete(
-        _RULING_MODEL_TIER,
+        _DRAFTING_TIER,
         [{"role": "user", "content": prompt}],
-        sensitive=True,  # case data: keeps the call off :free endpoints
+        sensitive=True,  # case data: paid models first; the free model only as the ladder's last resort
         tenant="smartjudge",
         feature="ruling_draft",
-        timeout=_RULING_TIMEOUT_SECONDS,
-        max_retries=1,
+        accept=_ruling_draft.is_parseable_draft,  # invalid JSON -> next model in the ladder
         temperature=0.2,
         max_tokens=4000,
     )
@@ -6479,7 +6533,7 @@ async def draft_ruling(request: Request, body: RulingDraftRequest):
     # client-supplied body fields are never trusted for the tier.
     tier = await asyncio.to_thread(_resolve_subscription_tier, payload=None, request=request)
     if not _vip_drafts_allowed(request, tier):
-        return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
+        return JSONResponse(status_code=403, content=dict(VIP_DRAFTS_REQUIRED_FRAME))
 
     request_id = str(uuid.uuid4())
     try:
@@ -6505,11 +6559,11 @@ async def draft_ruling(request: Request, body: RulingDraftRequest):
     loop = asyncio.get_running_loop()
 
     def _bridge(coro):
-        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_RULING_TIMEOUT_SECONDS)
+        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_drafting_bridge_timeout())
 
     def _retrieve(c):
         query = (c.claims + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]
-        return _bridge(_ruling_retrieve_laws(query))
+        return _bridge(_ruling_retrieve_laws_with_core(query, c.claims + "\n" + c.facts))
 
     def _call_llm(prompt):
         return _bridge(_ruling_complete(prompt))
@@ -6590,13 +6644,12 @@ async def _indictment_complete(prompt: str) -> str:
     # VIP-only drafting always goes through the router (like /draft-assist); the
     # LLM_ROUTER_ENABLED flag gates only the legacy chat call sites.
     routed = await _llm_router.complete(
-        _RULING_MODEL_TIER,
+        _DRAFTING_TIER,
         [{"role": "user", "content": prompt}],
-        sensitive=True,  # case data: never a :free endpoint
+        sensitive=True,  # case data: paid models first; the free model only as the ladder's last resort
         tenant="smartjudge",
         feature="indictment_draft",
-        timeout=_RULING_TIMEOUT_SECONDS,
-        max_retries=1,
+        accept=_ruling_draft.is_parseable_draft,  # invalid JSON -> next model in the ladder
         temperature=0.2,
         max_tokens=4000,
     )
@@ -6631,7 +6684,7 @@ async def draft_indictment(request: Request, body: IndictmentDraftRequest):
     """پیش‌نویس غیررسمی کیفرخواست؛ همیشه AI_DRAFT_UNVERIFIED یا INSUFFICIENT_BASIS."""
     tier = await asyncio.to_thread(_resolve_subscription_tier, payload=None, request=request)
     if not _vip_drafts_allowed(request, tier):
-        return JSONResponse(status_code=403, content=dict(VIP_REQUIRED_FRAME))
+        return JSONResponse(status_code=403, content=dict(VIP_DRAFTS_REQUIRED_FRAME))
 
     request_id = str(uuid.uuid4())
     try:
@@ -6653,11 +6706,11 @@ async def draft_indictment(request: Request, body: IndictmentDraftRequest):
     loop = asyncio.get_running_loop()
 
     def _bridge(coro):
-        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_RULING_TIMEOUT_SECONDS)
+        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_drafting_bridge_timeout())
 
     def _retrieve(c):
         query = ((c.charges_hint or "") + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]
-        return _bridge(_ruling_retrieve_laws(query))
+        return _bridge(_ruling_retrieve_laws_with_core(query, (c.charges_hint or "") + "\n" + c.facts))
 
     result = await asyncio.to_thread(
         _indictment_draft.generate_indictment_draft,
@@ -6740,9 +6793,9 @@ class DraftAssistRequest(_BaseModel):
 
 
 def _draft_upsell_response(draft_type: str, request_id: Optional[str]) -> JSONResponse:
-    """403 with VIP_REQUIRED_FRAME (same frame as /drafts/ruling) plus a Persian upsell message."""
+    """403 with the drafts frame (same as /drafts/ruling) plus a Persian upsell message."""
     title = _draft_assistant.SCHEMAS[draft_type]["title_fa"]
-    content = dict(VIP_REQUIRED_FRAME)
+    content = dict(VIP_DRAFTS_REQUIRED_FRAME)
     content.update(
         status=_draft_assistant.STATUS_VIP_REQUIRED,
         draft_type=draft_type,
@@ -6762,6 +6815,16 @@ async def _draft_complete(tier: str, system: str, user: str, *, feature: str, ma
         raise RuntimeError("llm router unavailable")
     extract = feature == "draft_extract"
     messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": user}]
+    if tier == _DRAFTING_TIER:
+        # Paid VIP draft: fixed model ladder with its own per-model timeout and total budget.
+        extra: dict = {}
+        if feature in ("ruling_draft", "indictment_draft"):
+            extra["accept"] = _ruling_draft.is_parseable_draft  # structured JSON cores
+        routed = await _llm_router.complete(
+            tier, messages, sensitive=True, tenant="smartjudge", feature=feature,
+            temperature=0.2, max_tokens=max_tokens, **extra,
+        )
+        return routed.content
     routed = await _llm_router.complete(
         tier,
         messages,
@@ -6781,10 +6844,10 @@ async def _draft_structured(kind: str, fields: dict, skipped: list) -> dict:
     loop = asyncio.get_running_loop()
 
     def _bridge(coro):
-        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_RULING_TIMEOUT_SECONDS)
+        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=_drafting_bridge_timeout())
 
     def _llm(prompt):
-        return _bridge(_draft_complete("strong", "", prompt, feature=f"{kind}_draft", max_tokens=4000))
+        return _bridge(_draft_complete(_DRAFTING_TIER, "", prompt, feature=f"{kind}_draft", max_tokens=4000))
 
     def _verify(text):
         return _bridge(_guard_citations(text, use_qdrant=True))
@@ -6793,7 +6856,11 @@ async def _draft_structured(kind: str, fields: dict, skipped: list) -> dict:
         case = _ruling_draft.RulingCase(**_draft_assistant.ruling_case_kwargs(fields, skipped))
 
         def _retrieve(c):
-            return _bridge(_ruling_retrieve_laws((c.claims + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]))
+            return _bridge(
+                _ruling_retrieve_laws_with_core(
+                    (c.claims + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS], c.claims + "\n" + c.facts
+                )
+            )
 
         return await asyncio.to_thread(
             _ruling_draft.generate_ruling_draft, case, retrieve=_retrieve, call_llm=_llm, verify_citations=_verify
@@ -6801,7 +6868,12 @@ async def _draft_structured(kind: str, fields: dict, skipped: list) -> dict:
     case = _indictment_draft.IndictmentCase(**_draft_assistant.indictment_case_kwargs(fields, skipped))
 
     def _retrieve_i(c):
-        return _bridge(_ruling_retrieve_laws(((c.charges_hint or "") + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]))
+        return _bridge(
+            _ruling_retrieve_laws_with_core(
+                ((c.charges_hint or "") + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS],
+                (c.charges_hint or "") + "\n" + c.facts,
+            )
+        )
 
     return await asyncio.to_thread(
         _indictment_draft.generate_indictment_draft,
@@ -6881,7 +6953,8 @@ async def _draft_assist_core(body: DraftAssistRequest, draft_type: str, messages
                 draft_type, await _draft_structured(draft_type, fields, skipped)
             )
         else:
-            router_tier = ROUTER_TIER_BY_PLAN["VIP" if _is_vip_tier(tier) else "FREE"]
+            # Paid plans get the drafting ladder (paid models first); free users keep their cheap tier.
+            router_tier = _DRAFTING_TIER if _is_vip_tier(tier) else ROUTER_TIER_BY_PLAN["FREE"]
             revise = body.revise.model_dump() if body.revise else None
             result = {"status": _draft_assistant.STATUS_DRAFT, **await _draft_assistant.generate_generic_draft(
                 draft_type, fields, skipped, call_llm=_llm, retrieve=_ruling_retrieve_laws,

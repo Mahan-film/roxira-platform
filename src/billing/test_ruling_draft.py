@@ -112,8 +112,9 @@ def test_prompt_contains_only_retrieved_articles_and_caps():
     ]
     out = run(make_case(), llm_json(articles=[{"law_name": "قانون 0", "article_no": "0"}]), rows=rows)
     prompt = out["_prompts"][0]
-    assert "قانون 11 ماده 11" in prompt
-    assert "قانون 12 ماده 12" not in prompt
+    cap = rd.MAX_PROMPT_ARTICLES
+    assert f"قانون {cap - 1} ماده {cap - 1}" in prompt
+    assert f"قانون {cap} ماده {cap}" not in prompt
     assert "x" * 1501 not in prompt
     assert "اطلاعات کافی نیست" in prompt
 

@@ -1,0 +1,110 @@
+schema_version: 1
+checked_at: "2026-10-22"
+# Deterministic "core articles by claim type" for the Smart Judge drafts (ruling / indictment / paid drafts).
+# Read by output_apps/generated_modules/smartjudge/drafting_core_articles.py. Vector search alone missed the
+# governing articles of a plain loan claim (live test 2026-10-22), so when a keyword fires, these articles are
+# fetched by exact (law_name, article_no) payload lookup and merged into the retrieved set BEFORE the prompt.
+# Text is never stored here: an article that the lookup does not return is simply not injected.
+#
+# Fields per rule
+#   id         unique string
+#   label      short Persian label (for logs/docs)
+#   triggers   normalised words/phrases; a leading "=" means WHOLE WORD (plus a plural/ezafe suffix such as ها، های، ی), needed for short
+#              words that are prefixes of unrelated words (رسید vs رسیدگی). Normalised substrings (Persian/Arabic letters, digits and ZWNJ are normalised before matching:
+#              ي->ی, ك->ک, ؤ/ئ/أ/إ/ء dropped to base letters, ZWNJ->space). A trigger fires when it matches at the
+#              START of a word of claims+facts, so "قرض" also fires on "قرضی"/"قرض‌الحسنه".
+#   articles   list of {law_names: [...], article_no: "N"}; law_names are alternative names for the SAME law as
+#              stored in the Qdrant payload (first one that returns the exact article wins).
+#   status     confirmed | needs_lawyer. Only `confirmed` rules are ever fetched. needs_lawyer rules document a
+#              TODO and are skipped until the lawyer confirms them.
+#              confirmed = the article text was read in data/legal/dotic_articles_2026-09-22.jsonl on 2026-10-22
+#              and matches the use below; it is NOT a legal opinion on the claim as a whole.
+#   priority   lower fires/merges first (core articles are capped, see MAX_CORE_ARTICLES in the loader).
+rules:
+  - id: money_claim
+    label: "مطالبه وجه / دین"
+    priority: 10
+    triggers: ["مطالبه وجه", "مطالبه مبلغ", "مطالبه طلب", "مطالبه وام", "مطالبه اصل", "مطالبه دین",
+               "اصل وجه", "اصل خواسته", "پرداخت وجه", "پرداخت مبلغ", "وجه رایج", "بدهی", "مدیون", "مقروض"]
+    articles:
+      - {law_names: ["قانون آیین دادرسی مدنی", "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], article_no: "197"}  # claimant must prove (اصل برائت)
+      - {law_names: ["قانون آیین دادرسی مدنی", "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], article_no: "198"}  # once a debt is proven it is presumed to continue
+      - {law_names: ["قانون مدنی"], article_no: "1257"}                                       # whoever claims a right must prove it
+    status: confirmed
+
+  - id: loan
+    label: "قرض / وام"
+    priority: 20
+    triggers: ["قرض", "=وام", "استقراض", "مقترض", "مقرض"]
+    articles:
+      - {law_names: ["قانون مدنی"], article_no: "648"}   # definition of qard
+      - {law_names: ["قانون مدنی"], article_no: "650"}   # borrower returns the like, regardless of price change
+      - {law_names: ["قانون مدنی"], article_no: "651"}   # lender cannot demand before the agreed term
+    status: confirmed
+
+  - id: loan_grace
+    label: "مهلت یا اقساط قرض به حکم دادگاه"
+    priority: 21
+    triggers: ["قرض", "وام"]
+    articles:
+      - {law_names: ["قانون مدنی"], article_no: "652"}   # judge may grant the borrower time or installments
+    status: needs_lawyer   # TODO needs_lawyer: only relevant when the defendant asks for grace; do not add by default
+
+  - id: delay_damages
+    label: "خسارت تأخیر تأدیه"
+    priority: 30
+    triggers: ["خسارت تاخیر تادیه", "تاخیر تادیه", "تاخیر در تادیه", "خسارت تاخیر", "شاخص قیمت", "=تورم", "نرخ تورم", "شاخص بانک مرکزی"]
+    articles:
+      - {law_names: ["قانون آیین دادرسی مدنی", "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], article_no: "515"}  # claim for damages from delay
+      - {law_names: ["قانون آیین دادرسی مدنی", "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], article_no: "522"}  # cash debts: Central Bank annual index after demand
+    status: confirmed
+
+  - id: delay_damages_proof
+    label: "اثبات زیان در مطالبه خسارت"
+    priority: 31
+    triggers: ["خسارت تاخیر", "تاخیر تادیه", "مطالبه خسارت"]
+    articles:
+      - {law_names: ["قانون آیین دادرسی مدنی", "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], article_no: "520"}
+    status: needs_lawyer   # TODO needs_lawyer: art. 520 (claimant proves the loss) vs the art. 522 index regime for cash debts
+
+  - id: court_costs
+    label: "هزینه دادرسی / حق‌الوکاله"
+    priority: 40
+    triggers: ["هزینه دادرسی", "هزینه ی دادرسی", "هزینه های دادرسی", "حق الوکاله", "خسارات دادرسی", "خسارت دادرسی", "هزینه دادخواست"]
+    articles:
+      - {law_names: ["قانون آیین دادرسی مدنی", "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], article_no: "519"}  # damages of proceedings = fee + lawyer fee + other costs
+      - {law_names: ["قانون آیین دادرسی مدنی", "قانون آیین دادرسی دادگاه‌های عمومی و انقلاب در امور مدنی"], article_no: "515"}
+    status: confirmed
+
+  - id: documentary_evidence
+    label: "ادله کتبی (قرارداد، رسید، سند)"
+    priority: 50
+    triggers: ["=رسید", "=قرارداد", "=سند", "=اسناد", "=فیش", "=امضا", "قراردادنامه"]
+    articles:
+      - {law_names: ["قانون مدنی"], article_no: "1258"}   # kinds of evidence
+      - {law_names: ["قانون مدنی"], article_no: "1284"}   # definition of a document
+      - {law_names: ["قانون مدنی"], article_no: "1301"}   # a signature is evidence against the signer
+    status: confirmed
+
+  - id: ujrat_ol_mesl
+    label: "اجرت‌المثل"
+    priority: 60
+    triggers: ["اجرت المثل", "اجرتالمثل", "اجرت المثل"]
+    articles:
+      - {law_names: ["قانون مدنی"], article_no: "336"}
+      - {law_names: ["قانون مدنی"], article_no: "337"}
+    status: needs_lawyer   # TODO needs_lawyer: which of 336 (acting on another's order) / 337 (using another's property with permission) applies, and the proof rules
+
+  - id: eviction_lease
+    label: "تخلیه / اجاره"
+    priority: 70
+    triggers: ["تخلیه", "مستاجر", "موجر", "اجاره بها", "اجاره نامه"]
+    articles: []
+    status: needs_lawyer   # TODO needs_lawyer: pick the core articles of «قانون روابط موجر و مستاجر ۱۳۷۶» / قانون مدنی (فصل اجاره) once the lawyer lists them; general lease boost already exists in retrieval_boost.py
+
+  - id: dowry_alimony
+    label: "مهریه / نفقه"
+    priority: 80
+    triggers: ["مهریه", "نفقه", "صداق"]
+    articles: []
+    status: needs_lawyer   # TODO needs_lawyer: dowry (قانون نحوه اجرای محکومیت‌های مالی) and nafaqa core articles; covered by retrieval_boost.py "dowry" rule for now

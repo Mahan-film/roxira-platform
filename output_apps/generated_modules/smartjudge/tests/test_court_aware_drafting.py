@@ -201,7 +201,7 @@ def test_indictment_route(client, monkeypatch, capsys):
     assert r.status_code == 200
     d = r.json()
     assert d["status"] == "AI_DRAFT_UNVERIFIED" and d["requires_human_review"] is True
-    assert calls == {"tier": "strong", "sensitive": True}
+    assert calls == {"tier": "drafting", "sensitive": True}
     assert secret not in capsys.readouterr().err
     monkeypatch.setattr(mod, "_resolve_subscription_tier", lambda payload=None, request=None, websocket=None: "FREE")
     assert c.post(url, json={"accused": "الف", "complainant": "ب", "facts": "f"}).status_code == 403

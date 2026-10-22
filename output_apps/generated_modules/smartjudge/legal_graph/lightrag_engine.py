@@ -1617,6 +1617,33 @@ async def exact_article_lookup(
     return [_payload_to_row(p, match_level="QDRANT_EXACT") for p in selected]
 
 
+async def fetch_exact_article(
+    law_names: Sequence[str], article_no: Any, active_only: Optional[bool] = None
+) -> Optional[Dict[str, Any]]:
+    """یک مادهٔ مشخص را با فیلتر دقیق payload (``law_name`` + ``article_no``) بیاور.
+
+    ``law_names`` نام‌های جایگزین همان قانون‌اند؛ اولین نامی که مادهٔ فعال را برگرداند برنده است.
+    فقط ردیفی برمی‌گردد که واقعاً در Qdrant هست و شمارهٔ ماده‌اش دقیقاً همان است
+    (``match_level == "CORE_ARTICLE"``)؛ در غیر این صورت ``None``. هرگز استثنا پرتاب نمی‌کند.
+    Used by drafting_core_articles to inject governing articles into the draft prompt.
+    """
+    wanted = str(article_no).strip().lstrip("0") or "0"
+    for name in law_names:
+        try:
+            point_filter = _exact_article_point_filter(name, wanted, active_only=active_only)
+            payloads = _only_active(await _scroll_by_point_filter(point_filter, 4))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("exact article fetch failed: %s", exc)
+            continue
+        for payload in _dedupe_article_payloads(payloads, 4):
+            if str(_payload_article_no(payload) or "").strip() != wanted:
+                continue
+            if str(payload.get("law_name") or "") != name:
+                continue
+            return _payload_to_row(payload, match_level="CORE_ARTICLE")
+    return None
+
+
 QDRANT_KEYWORD_BOOST_ENABLED = os.environ.get("LIGHTRAG_KEYWORD_BOOST", "1") != "0"
 _BOOST_PER_RULE = 3
 

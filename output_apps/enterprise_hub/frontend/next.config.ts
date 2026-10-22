@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: true },
   // عدم افشای هدر X-Powered-By (نسخهٔ فریم‌ورک) — SECURITY_AUDIT یافتهٔ ۸.
   poweredByHeader: false,
+  // Next's rewrite proxy cuts a request after 30 s by default. Smart Judge drafts
+  // (/api/judge/drafts/*) run a model ladder with up to 150 s in total, so the proxy
+  // must wait longer (nginx allows 300 s).
+  experimental: { proxyTimeout: 180_000 },
   // خروجی مستقل (standalone) برای بیلد/اجرای پروداکشن داخل Docker؛
   // فقط فایل‌های لازم اجرای سرور Next.js را در .next/standalone کپی
   // می‌کند و نیاز به نصب کامل node_modules در ایمیج نهایی را حذف می‌کند.
