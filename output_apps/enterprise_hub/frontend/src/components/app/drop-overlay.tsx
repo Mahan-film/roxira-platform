@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { FileUp } from "lucide-react";
 
 import { isDatabaseFile, useImportHandoff } from "@/components/app/import-handoff";
@@ -18,53 +18,70 @@ function hasFiles(event: DragEvent): boolean {
  */
 export function DropOverlay() {
   const router = useRouter();
+  const pathname = usePathname();
   const { setPendingFile, setPendingTab } = useImportHandoff();
   const [active, setActive] = useState(false);
+  // The import page has its own drop zones; the overlay would only cover them.
+  const onImportPage = pathname?.startsWith("/app/import") ?? false;
 
   useEffect(() => {
-    let depth = 0;
-
-    const onDragEnter = (event: DragEvent) => {
-      if (!hasFiles(event)) return;
-      event.preventDefault();
-      depth += 1;
-      setActive(true);
+    // Browsers (Safari above all) do not fire matching dragenter/dragleave
+    // pairs, and a drop handled by a local drop zone may never reach window, so
+    // counting enter/leave leaves the overlay stuck on screen. dragover fires
+    // continuously while a drag is over the page, so the overlay stays only
+    // while dragover keeps arriving and hides shortly after it stops.
+    let hideTimer: number | undefined;
+    const hide = () => {
+      window.clearTimeout(hideTimer);
+      setActive(false);
     };
+    const keepAlive = () => {
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(hide, 300);
+    };
+
     const onDragOver = (event: DragEvent) => {
       if (!hasFiles(event)) return;
       event.preventDefault();
       if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      if (!onImportPage) setActive(true);
+      keepAlive();
     };
-    const onDragLeave = (event: DragEvent) => {
-      if (!hasFiles(event) && depth === 0) return;
-      depth = Math.max(0, depth - 1);
-      if (depth === 0) setActive(false);
-    };
+    // Capture phase: runs before any local drop zone, even one that stops propagation.
+    const onDropCapture = () => hide();
     const onDrop = (event: DragEvent) => {
       if (!hasFiles(event)) return;
       // A local drop zone (e.g. the import wizard) already handled this drop.
       if (event.defaultPrevented) return;
       event.preventDefault();
-      depth = 0;
-      setActive(false);
       const file = event.dataTransfer?.files?.[0];
       if (!file) return;
       setPendingFile(file);
       setPendingTab(isDatabaseFile(file) ? "package" : "file");
-      router.push("/app/import");
+      if (!onImportPage) router.push("/app/import");
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") hide();
     };
 
-    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragenter", onDragOver);
     window.addEventListener("dragover", onDragOver);
-    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDropCapture, true);
     window.addEventListener("drop", onDrop);
+    window.addEventListener("dragend", hide);
+    window.addEventListener("blur", hide);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("dragenter", onDragEnter);
+      window.clearTimeout(hideTimer);
+      window.removeEventListener("dragenter", onDragOver);
       window.removeEventListener("dragover", onDragOver);
-      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDropCapture, true);
       window.removeEventListener("drop", onDrop);
+      window.removeEventListener("dragend", hide);
+      window.removeEventListener("blur", hide);
+      window.removeEventListener("keydown", onKeyDown);
     };
-  }, [router, setPendingFile, setPendingTab]);
+  }, [router, onImportPage, setPendingFile, setPendingTab]);
 
   if (!active) return null;
 
