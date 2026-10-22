@@ -74,7 +74,13 @@ function healthTone(level: "ok" | "warn" | "error"): string {
   return "ring-rose-500/30 bg-rose-500/5";
 }
 
-export function PackageImportWizard() {
+export function PackageImportWizard({
+  initialFile = null,
+  onInitialFileUsed,
+}: {
+  initialFile?: File | null;
+  onInitialFileUsed?: () => void;
+} = {}) {
   const [phase, setPhase] = useState<PackagePhase>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [packageId, setPackageId] = useState<string | null>(null);
@@ -227,6 +233,16 @@ export function PackageImportWizard() {
     const first = files?.[0];
     if (first) void runUpload(first);
   }
+
+  // A database file dropped on the single-file tab is handed over here and uploaded once.
+  useEffect(() => {
+    if (!initialFile) return;
+    onInitialFileUsed?.();
+    // One-shot start for a file handed over by the parent (an external event, not derived state).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void runUpload(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   function setTableEntity(name: string, entity: string) {
     setTables((list) =>

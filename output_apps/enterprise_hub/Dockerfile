@@ -23,6 +23,7 @@ COPY package.json package-lock.json tsconfig.json ./
 COPY main.ts app.module.ts ./
 COPY modules ./modules
 COPY security ./security
+COPY mcp ./mcp
 
 RUN npm run build
 

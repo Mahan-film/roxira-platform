@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import {
   IMPORT_ACCEPT,
+  PACKAGE_ACCEPT,
   IMPORT_DAILY_FILES,
   IMPORT_MAX_DOC_BYTES,
   IMPORT_MAX_ROWS,
@@ -77,8 +78,19 @@ const MODE_LABELS: Array<[ImportMode, string]> = [
   ["package", "انتقال کامل دیتابیس"],
 ];
 
+/** Database packages (.sqlite/.db/.sql/.zip) belong to the whole-database tab. */
+function isPackageFile(file: File): boolean {
+  return /\.(sqlite3?|db|sql|zip)$/i.test(file.name);
+}
+
 export function ImportWizard() {
   const [mode, setMode] = useState<ImportMode>("file");
+  const [handoff, setHandoff] = useState<File | null>(null);
+
+  function openPackage(file: File) {
+    setHandoff(file);
+    setMode("package");
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -106,12 +118,23 @@ export function ImportWizard() {
         ))}
       </div>
 
-      {mode === "file" ? <SingleFileImportWizard /> : <PackageImportWizard />}
+      {mode === "file" ? (
+        <SingleFileImportWizard onPackageFile={openPackage} />
+      ) : (
+        <PackageImportWizard
+          initialFile={handoff}
+          onInitialFileUsed={() => setHandoff(null)}
+        />
+      )}
     </div>
   );
 }
 
-function SingleFileImportWizard() {
+function SingleFileImportWizard({
+  onPackageFile,
+}: {
+  onPackageFile: (file: File) => void;
+}) {
   const [step, setStep] = useState<Step>("upload");
   const [entities, setEntities] = useState<ImportEntityDef[]>([]);
   const [entitiesError, setEntitiesError] = useState(false);
@@ -187,7 +210,12 @@ function SingleFileImportWizard() {
 
   function handleFiles(files: FileList | null) {
     const first = files?.[0];
-    if (first) void runPreview(first);
+    if (!first) return;
+    if (isPackageFile(first)) {
+      onPackageFile(first);
+      return;
+    }
+    void runPreview(first);
   }
 
   function changeEntity(next: string) {
@@ -321,7 +349,7 @@ function SingleFileImportWizard() {
             <input
               ref={inputRef}
               type="file"
-              accept={IMPORT_ACCEPT}
+              accept={`${IMPORT_ACCEPT},${PACKAGE_ACCEPT}`}
               className="sr-only"
               id="import-file"
               onChange={(e) => handleFiles(e.target.files)}
