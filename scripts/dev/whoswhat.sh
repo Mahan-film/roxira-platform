@@ -9,24 +9,34 @@ set -euo pipefail
 REPO="${ROXIRA_REPO:-Mahan-film/roxira-platform}"
 command -v gh >/dev/null || { echo "gh (GitHub CLI) is required" >&2; exit 1; }
 
+# REST only (gh api): GraphQL is blocked in Claude Code cloud sessions.
 echo "== Claimed tasks (issues labelled in-progress)"
-gh issue list --repo "$REPO" --state open --label in-progress --limit 100 \
-  --json number,title,assignees \
-  -q '.[] | "#\(.number)  [\([.assignees[].login] | join(",") | if . == "" then "UNASSIGNED" else . end)]  \(.title)"' \
+gh api "repos/$REPO/issues?state=open&labels=in-progress&per_page=100" \
+  -q '.[] | select(.pull_request | not) | "#\(.number)  [\([.assignees[].login] | join(",") | if . == "" then "UNASSIGNED" else . end)]  \(.title)"' \
   || true
 
 echo
 echo "== Open pull requests (author, draft?, files)"
-prs_json="$(gh pr list --repo "$REPO" --state open --limit 100 --json number,title,author,isDraft,files)"
-PRS_JSON="$prs_json" python3 - <<'PY'
+prs_json="$(gh api "repos/$REPO/pulls?state=open&per_page=100" \
+  -q '[.[] | {number, title, author: {login: .user.login}, isDraft: .draft}]')"
+files_json="{"
+sep=""
+for n in $(printf '%s' "$prs_json" | python3 -c 'import json,sys; print(" ".join(str(p["number"]) for p in json.load(sys.stdin)))'); do
+  f="$(gh api --paginate "repos/$REPO/pulls/$n/files?per_page=100" -q '.[].filename' | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))')"
+  files_json="$files_json$sep\"$n\": $f"
+  sep=", "
+done
+files_json="$files_json}"
+PRS_JSON="$prs_json" FILES_JSON="$files_json" python3 - <<'PY'
 import collections
 import json
 import os
 
 prs = json.loads(os.environ["PRS_JSON"])
+files_by_pr = json.loads(os.environ["FILES_JSON"])
 touch = collections.defaultdict(list)
 for p in prs:
-    files = [f["path"] for f in p.get("files", [])]
+    files = files_by_pr.get(str(p["number"]), [])
     flag = "draft" if p.get("isDraft") else "ready"
     print("#%s  [%s, %s]  %s  (%d files)" % (p["number"], p["author"]["login"], flag, p["title"], len(files)))
     for f in files:

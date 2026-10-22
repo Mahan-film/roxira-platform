@@ -44,7 +44,7 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
   Owner's 86,031-row Gemini challenge DB (the .sqlite copy is malformed; the .sql works): analysis exact (5 real
   relationships, balance 116.5 trillion rials, all checks ok). **Isolated E2E commit test** (throwaway Postgres/Redis
   on srv1, `/root/rxtest_e2e.sh`, prod schema only): customers 7,998, items 4,000, invoices 16,000 written; **accounts
-  3/31, journal lines 0, CRM activities 0, no undo batch row — being fixed** (account nature mapping from Persian
+  3/31, journal lines 0, CRM activities 0, no undo batch row — fixed in #816** (account nature mapping from Persian
   groups, dependent tables, batch recording).
 - **Cloud**: Cloudflare R2 bucket `roxira-uploads` (object-scoped, IP-restricted token; put/get/delete verified);
   Modal GPU works (workspace `mahanpikasso`, parity cosine 0.99999999; owner caps it at $30/month); Daytona key
@@ -53,9 +53,23 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - **Security**: production npm advisories 0 high/critical (#799). **Dependabot leftovers** only in data/sandboxes,
   templates, projects (not deployed).
 - **Legal corpus v7** built as `iran_laws_v7` (7,295 points) but **not switched** (r@1 72.9 → 67.1 %): duplicate law
-  names (e.g. «وارده» vs «وارد شده»); alias dedupe queued (taskq 36).
+  names (e.g. «وارده» vs «وارد شده»); law-name aliases landed in #818; v7 still not switched.
 - **Known gap**: migrations cannot build a fresh database from zero (the first migration assumes existing tables);
   needed for new environments and the factory.
+
+### 2026-10-22 night — parallel Claude Code cloud sessions (cloud credit, expires 2026-11-05)
+Hub session `session_01MXYgvVaToE8ur3ufjDf8ZB` started child cloud sessions; each opens its own DRAFT PR and
+watches CI; none merges. Cloud sessions cannot reach srv1, the owner's Mac, or Codeberg (network policy).
+Owner rule 2026-10-22: **do not touch the operator agents/bots** (taskq, agent runner, notify bot, Mac relay)
+for now — the factory-v2 and messenger-bot sessions were parked as "[ON HOLD]" draft PRs.
+Running: payroll extension + insurance list, bank statement import + reconciliation, AI assistant (#836),
+fresh-DB baseline migration (#837, closes the known gap above once merged), frontend lint debt + regulations
+card, legal v7 relabel/dedupe, OTP hardening (#366), Malaysia G2 terms + ingestion + landing, Moadian client
+(flag-gated), roles/permissions + tenant API keys, slim app image + key-pool image + pinned Python deps,
+LLM cost per answer + uptime.yml extension + privacy page, product bug sweep, dependency batch + stale PR
+review, missing laws (direct taxes 1366 consolidated, guild 1403). Migration timestamp ranges per session:
+payroll 178927…, bank 178928…, RBAC 178930…, Moadian 178931….
+`scripts/dev/whoswhat.sh` / `claim.sh` use REST only (#835) so they work from cloud sessions.
 
 ## Shipped 2026-10-21
 
@@ -98,7 +112,7 @@ Also: gemini-best quality-first ladder over all AI Studio keys (#699; add GEMINI
 4. **Moadian live integration** (`docs/research/MOADIAN_REQUIREMENTS_2026-10-14.md` §7 gaps: official wire format, token/send/inquiry, per-tenant keys).
 5. **AI Software Factory MVP** (`docs/factory/AI_SOFTWARE_FACTORY_PRODUCT_PLAN_2026-10-14.md`, M1–M6, 26–40 days; tenancy M0 is done). Owner decision pending: shared app shell (recommended) vs app per customer.
 6. AI data import for accounting/inventory/HR/invoices (`docs/factory/AI_DATA_IMPORT_PLAN.md`), dotic full-text parsing, dependency-bump batch (#413 #414 #519–521 #535–538) with a full build, review #345 #389 #392 #432.
-7. **Solo-factory review** (`docs/research/SOLO_FACTORY_REVIEW_2026-10-15.md`), done 2026-10-15: control bot `scripts/ops/notify/` (#676; owner chose **Telegram**; waiting for `NOTIFY_BOT_TOKEN` via set_server_env.sh, then hub sets `NOTIFY_CHAT_ID` from getUpdates and runs `scripts/ops/notify/install.sh --apply`), key-pool cost log `/var/log/roxira-keypool/requests.jsonl` + `cost_report.py` (#677, installed), weekly mutation timer (#678, installed). The cost log found two bugs, both fixed: product chat fell back onto the agents' $5 key (#679, now `private`), and Groq/Mistral rejected the OpenRouter-only `usage`/`reasoning` fields so free models never answered (#680). DMARC: owner adds TXT records by hand (p=none).
+7. **Solo-factory review** (`docs/research/SOLO_FACTORY_REVIEW_2026-10-15.md`), done 2026-10-15: control bot `scripts/ops/notify/` (#676; owner chose **Telegram**; `NOTIFY_BOT_TOKEN`/`NOTIFY_CHAT_ID` are set on srv1 — the tier-4 Telegram backup uses them since 2026-10-22; do not ask the owner for them again), key-pool cost log `/var/log/roxira-keypool/requests.jsonl` + `cost_report.py` (#677, installed), weekly mutation timer (#678, installed). The cost log found two bugs, both fixed: product chat fell back onto the agents' $5 key (#679, now `private`), and Groq/Mistral rejected the OpenRouter-only `usage`/`reasoning` fields so free models never answered (#680). DMARC: owner adds TXT records by hand (p=none).
    Also done 2026-10-15: Hypothesis property tests for the legal parsers (#683); throwaway agent DBs `scripts/infra/agent_db/agent_db.sh` (template = live schema + migrations rows, no data; hourly gc timer) and daily SBOM/vuln scan `roxira-sbom` (#684; summary `/root/deploy-state/sbom/summary.txt`). First scan fixes: Alpine `apk upgrade` in backend/frontend (#685: Critical 10→4, 8→2) and Dependabot #537. Open: key pool image (LiteLLM 1.77.7, 34 Critical in OS libs): `main-v1.83.14-stable.patch.3` breaks `/v1/embeddings` to TEI (tested side by side 2026-10-15), so either a derived image `FROM litellm:1.77.7 + apk upgrade` or wait for a fixed release; app image Debian curl CVEs have no fix yet. Agents' OpenRouter key (`OPENROUTER_API_KEY_AGENTS`) is OUT OF CREDIT: free-tier agents fail on tool-permission rules, so the hub wrote #684 itself.
 8. Ops: LLM observability (Langfuse or LiteLLM logs → cost per answer), Qdrant cleanup of unused collections (keep v3 + v5), external uptime check, privacy page accuracy, old server 5.75.200.67 decommission (owner OK).
 

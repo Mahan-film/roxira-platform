@@ -6,8 +6,8 @@
 #   1. assigns the issue to you and adds the label in-progress
 #   2. creates branch <your-login>/<issue>-<slug> from origin/main in a new worktree
 #   3. pushes an empty commit and opens a DRAFT pull request "Closes #<issue>"
-# Release a claim: gh issue edit <n> --remove-label in-progress --remove-assignee @me
-# See docs/COLLABORATION.md.
+# Release a claim: gh api -X DELETE repos/Mahan-film/roxira-platform/issues/<n>/labels/in-progress
+# See docs/COLLABORATION.md. Uses REST only (gh api): GraphQL is blocked in Claude Code cloud sessions.
 set -euo pipefail
 
 REPO="${ROXIRA_REPO:-Mahan-film/roxira-platform}"
@@ -15,18 +15,18 @@ REPO="${ROXIRA_REPO:-Mahan-film/roxira-platform}"
 
 if [ "$1" = "new" ]; then
   [ $# -ge 2 ] || { echo "usage: $0 new \"Title\" [slug]" >&2; exit 2; }
-  url="$(gh issue create --repo "$REPO" --title "$2" --body "Claimed with scripts/dev/claim.sh. Describe the goal and the acceptance test here.")"
-  issue="${url##*/}"
+  issue="$(gh api -X POST "repos/$REPO/issues" -f title="$2" \
+    -f body="Claimed with scripts/dev/claim.sh. Describe the goal and the acceptance test here." -q .number)"
   slug="${3:-}"
   title="$2"
 else
   issue="$1"
   slug="${2:-}"
-  title="$(gh issue view "$issue" --repo "$REPO" --json title -q .title)"
+  title="$(gh api "repos/$REPO/issues/$issue" -q .title)"
 fi
 
 # Refuse if someone else already claimed it.
-claimed_by="$(gh issue view "$issue" --repo "$REPO" --json assignees,labels \
+claimed_by="$(gh api "repos/$REPO/issues/$issue" \
   -q 'if ([.labels[].name] | index("in-progress")) then ([.assignees[].login] | join(",")) else "" end')"
 me="$(gh api user -q .login)"
 if [ -n "$claimed_by" ] && [ "$claimed_by" != "$me" ]; then
@@ -38,8 +38,10 @@ fi
 [ -n "$slug" ] || slug="task"
 branch="$me/$issue-$slug"
 
-gh label create in-progress --repo "$REPO" --color FBCA04 --description "Someone is working on this (claim.sh)" 2>/dev/null || true
-gh issue edit "$issue" --repo "$REPO" --add-assignee @me --add-label in-progress >/dev/null
+gh api -X POST "repos/$REPO/labels" -f name=in-progress -f color=FBCA04 \
+  -f description="Someone is working on this (claim.sh)" >/dev/null 2>&1 || true
+gh api -X POST "repos/$REPO/issues/$issue/assignees" -f "assignees[]=$me" >/dev/null
+gh api -X POST "repos/$REPO/issues/$issue/labels" -f "labels[]=in-progress" >/dev/null
 
 root="$(git rev-parse --show-toplevel)"
 git -C "$root" fetch -q origin main
@@ -47,10 +49,10 @@ wt="$root/../roxira-wt/$issue-$slug"
 git -C "$root" worktree add -q -b "$branch" "$wt" origin/main
 git -C "$wt" commit -q --allow-empty -m "chore: start #$issue $title"
 git -C "$wt" push -q -u origin "$branch"
-pr="$(gh pr create --repo "$REPO" --draft --base main --head "$branch" \
-  --title "WIP #$issue: $title" --body "Closes #$issue
+pr="$(gh api -X POST "repos/$REPO/pulls" -F draft=true -f base=main -f head="$branch" \
+  -f title="WIP #$issue: $title" -f body="Closes #$issue
 
-Draft opened by scripts/dev/claim.sh so others can see this work is in progress.")"
+Draft opened by scripts/dev/claim.sh so others can see this work is in progress." -q .html_url)"
 
 echo "claimed #$issue"
 echo "worktree: $wt"

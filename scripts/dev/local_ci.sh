@@ -34,8 +34,11 @@ LOCAL_CI_VENV="${LOCAL_CI_VENV:-$HOME/venvs/roxira}"
 if [ -x "$LOCAL_CI_VENV/bin/python" ]; then
   PATH="$LOCAL_CI_VENV/bin:$PATH"
 fi
+# A system pytest without the plugins pyproject.toml needs (pytest-timeout, hypothesis) also
+# counts as missing: cloud containers ship a bare pytest that rejects --timeout.
 if [ "${LOCAL_CI_NO_BOOTSTRAP:-0}" != "1" ] \
-  && { ! command -v ruff >/dev/null 2>&1 || ! command -v pytest >/dev/null 2>&1; }; then
+  && { ! command -v ruff >/dev/null 2>&1 || ! command -v pytest >/dev/null 2>&1 \
+       || ! python3 -c 'import pytest_timeout, hypothesis' >/dev/null 2>&1; }; then
   echo "=== bootstrap: installing CI tools into $LOCAL_CI_VENV (first run only) ==="
   if [ ! -x "$LOCAL_CI_VENV/bin/python" ]; then
     python3 -m venv "$LOCAL_CI_VENV"
