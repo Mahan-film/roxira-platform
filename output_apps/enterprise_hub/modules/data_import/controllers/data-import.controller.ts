@@ -2,8 +2,11 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UploadedFile,
@@ -16,6 +19,7 @@ import {
   ApiBody,
   ApiConsumes,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -26,33 +30,102 @@ import {
 import { UserRole } from '../../auth/enums/user-role.enum';
 import { TenantRole } from '../../tenants/enums/tenant-role.enum';
 import { requireTenantId } from '../../tenants/tenant-context';
-import { DATA_IMPORT_RESOURCE, MAX_UPLOAD_BYTES } from '../constants/data-import.constants';
+import {
+  DATA_IMPORT_RESOURCE,
+  MAX_UPLOAD_BYTES,
+} from '../constants/data-import.constants';
+import { BatchSummaryDto, UndoBatchResponseDto } from '../dto/batch-response.dto';
 import { CommitImportDto } from '../dto/commit-import.dto';
 import { CommitResponseDto } from '../dto/commit-response.dto';
+import { EntityDescriptorDto } from '../dto/entity-descriptor-response.dto';
+import { EntityCommitDto, PreviewRequestDto } from '../dto/entity-commit.dto';
+import { EntityCommitResponseDto } from '../dto/entity-commit-response.dto';
+import { EntityPreviewResponseDto } from '../dto/entity-preview-response.dto';
 import { PreviewResponseDto } from '../dto/preview-response.dto';
 import {
   DataImportService,
   UploadedFilePayload,
 } from '../services/data-import.service';
+import { EntityImportService } from '../services/entity-import.service';
 
 /**
- * کنترلر ورود داده با کمک هوش مصنوعی (MVP سرنخ‌های CRM).
+ * کنترلر ورود داده با کمک هوش مصنوعی.
  *
  * - `POST /enterprise-hub/data-import/crm-leads/preview`: بارگذاری فایل
  *   (multipart، حداکثر ۵ مگابایت؛ CSV/XLSX/PDF متنی/تصویر) و دریافت نگاشت
  *   پیشنهادی.
  * - `POST /enterprise-hub/data-import/crm-leads/commit`: تأیید نگاشت و ورود.
+ * - `GET  /entities`: فهرست موجودیت‌ها و فیلدهای قابل نگاشت.
+ * - `POST /preview`: بارگذاری فایل و تشخیص خودکار موجودیت.
+ * - `POST /:entity/preview`: بارگذاری با موجودیت اجباری.
+ * - `POST /commit`: تأیید نگاشت و ورود نهایی (همه موجودیت‌ها).
+ * - `POST /batches/:batchId/undo`: بازگردانی یک دسته ورود.
+ * - `GET  /batches`: آخرین دسته‌های ورود مستأجر.
+ * مسیرهای قدیمی `crm-leads/preview` و `crm-leads/commit` بدون تغییر باقی
+ * مانده‌اند تا سازگاری حفظ شود.
  *
- * دسترسی فقط برای مدیر پلتفرم (`UserRole.ADMIN`) یا مالک سازمان
- * (`TenantRole.OWNER`). شناسه مستأجر صرفاً از توکن تأییدشده JWT استخراج
- * می‌شود — هرگز از بدنه/کوئری/هدر (Rule #4 - AGENTS.md).
+ * شناسه مستأجر صرفاً از توکن تأییدشده JWT استخراج می‌شود — هرگز از
+ * بدنه/کوئری/هدر (Rule #4 - AGENTS.md).
  */
 @ApiTags('Data Import - ورود داده از نرم‌افزار دیگر')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller(DATA_IMPORT_RESOURCE)
 export class DataImportController {
-  constructor(private readonly dataImportService: DataImportService) {}
+  constructor(
+    private readonly dataImportService: DataImportService,
+    private readonly entityImportService: EntityImportService,
+  ) {}
+
+  @Get('entities')
+  @ApiOperation({ summary: 'فهرست موجودیت‌های قابل ورود و فیلدهای آن‌ها' })
+  @ApiResponse({ status: HttpStatus.OK, type: [EntityDescriptorDto] })
+  listEntities(): EntityDescriptorDto[] {
+    return this.entityImportService.listEntities();
+  }
+
+  @Get('batches')
+  @ApiOperation({ summary: 'آخرین دسته‌های ورود داده مستأجر' })
+  @ApiResponse({ status: HttpStatus.OK, type: [BatchSummaryDto] })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async listBatches(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<BatchSummaryDto[]> {
+    this.assertImportAccess(request);
+    return this.entityImportService.listBatches(this.tenantIdOf(request));
+  }
+
+  @Post('preview')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        entity: { type: 'string' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'پیش‌نمایش فایل و تشخیص خودکار موجودیت' })
+  @ApiResponse({ status: HttpStatus.OK, type: EntityPreviewResponseDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'فایل نامعتبر' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async preview(
+    @Req() request: AuthenticatedRequest,
+    @UploadedFile() file: UploadedFilePayload,
+    @Body() body: PreviewRequestDto,
+  ): Promise<EntityPreviewResponseDto> {
+    this.assertImportAccess(request);
+    return this.entityImportService.preview(
+      this.tenantIdOf(request),
+      file,
+      body?.entity,
+    );
+  }
 
   @Post('crm-leads/preview')
   @HttpCode(HttpStatus.OK)
@@ -76,12 +149,56 @@ export class DataImportController {
     status: HttpStatus.PAYLOAD_TOO_LARGE,
     description: 'حجم فایل بیش از ۵ مگابایت',
   })
-  async preview(
+  async previewCrmLeads(
     @Req() request: AuthenticatedRequest,
     @UploadedFile() file: UploadedFilePayload,
   ): Promise<PreviewResponseDto> {
     this.assertImportAccess(request);
     return this.dataImportService.preview(this.tenantIdOf(request), file);
+  }
+
+  @Post(':entity/preview')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'entity', description: 'کلید موجودیت مقصد' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiOperation({ summary: 'پیش‌نمایش فایل با موجودیت اجباری' })
+  @ApiResponse({ status: HttpStatus.OK, type: EntityPreviewResponseDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'فایل نامعتبر' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async previewForEntity(
+    @Req() request: AuthenticatedRequest,
+    @Param('entity') entity: string,
+    @UploadedFile() file: UploadedFilePayload,
+  ): Promise<EntityPreviewResponseDto> {
+    this.assertImportAccess(request);
+    return this.entityImportService.preview(
+      this.tenantIdOf(request),
+      file,
+      entity,
+    );
+  }
+
+  @Post('commit')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'تأیید نگاشت و ورود نهایی برای یک موجودیت' })
+  @ApiResponse({ status: HttpStatus.OK, type: EntityCommitResponseDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'ورودی نامعتبر' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async commit(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: EntityCommitDto,
+  ): Promise<EntityCommitResponseDto> {
+    this.assertImportAccess(request);
+    return this.entityImportService.commit(this.tenantIdOf(request), dto);
   }
 
   @Post('crm-leads/commit')
@@ -90,12 +207,29 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.OK, type: CommitResponseDto })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'ورودی نامعتبر' })
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
-  async commit(
+  async commitCrmLeads(
     @Req() request: AuthenticatedRequest,
     @Body() dto: CommitImportDto,
   ): Promise<CommitResponseDto> {
     this.assertImportAccess(request);
     return this.dataImportService.commit(this.tenantIdOf(request), dto);
+  }
+
+  @Post('batches/:batchId/undo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'بازگردانی کامل یک دسته ورود داده' })
+  @ApiResponse({ status: HttpStatus.OK, type: UndoBatchResponseDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'ورودی نامعتبر' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async undoBatch(
+    @Req() request: AuthenticatedRequest,
+    @Param('batchId', new ParseUUIDPipe()) batchId: string,
+  ): Promise<UndoBatchResponseDto> {
+    this.assertImportAccess(request);
+    return this.entityImportService.undoBatch(
+      this.tenantIdOf(request),
+      batchId,
+    );
   }
 
   /** شناسه مستأجر فقط از پیلود JWT تأییدشده. */

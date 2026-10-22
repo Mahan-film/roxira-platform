@@ -81,6 +81,35 @@ export class CrmRepository {
     return rows.map((row) => row.email);
   }
 
+  /** مجموعه شماره تلفن‌های موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
+  async findLeadPhones(
+    tenantId: string,
+    phones: string[],
+  ): Promise<string[]> {
+    if (phones.length === 0) {
+      return [];
+    }
+    const rows = await this.leads.find({
+      where: { tenantId, phone: In(phones) },
+      select: { phone: true },
+    });
+    return rows
+      .map((row) => row.phone)
+      .filter((phone): phone is string => phone !== null);
+  }
+
+  /** حذف ردیف‌های یک دسته ورود داده با قید مستأجر (برای undo). */
+  async deleteLeadsByIds(
+    tenantId: string,
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) {
+      return 0;
+    }
+    const result = await this.leads.delete({ tenantId, id: In(ids) });
+    return result.affected ?? 0;
+  }
+
   async saveLead(
     tenantId: string,
     entity: CrmLeadEntity,

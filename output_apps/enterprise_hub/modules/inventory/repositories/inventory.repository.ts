@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
 import { FifoBatchEntity } from '../entities/fifo-batch.entity';
 import { StockItemEntity } from '../entities/stock-item.entity';
@@ -181,6 +181,59 @@ export class InventoryRepository {
     sku: string,
   ): Promise<StockItemEntity | null> {
     return this.stockItems.findOne({ where: { sku, tenantId } });
+  }
+
+  /** شناسه‌های کالای موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
+  async findStockItemSkus(
+    tenantId: string,
+    skus: string[],
+  ): Promise<string[]> {
+    if (skus.length === 0) {
+      return [];
+    }
+    const rows = await this.stockItems.find({
+      where: { tenantId, sku: In(skus) },
+      select: { sku: true },
+    });
+    return rows.map((row) => row.sku);
+  }
+
+  /** شناسه کالاهایی که لایه FIFO (گردش) دارند (ارجاع‌شده؛ undo ممنوع). */
+  async findReferencedStockItemIds(
+    tenantId: string,
+    ids: number[],
+  ): Promise<number[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const items = await this.stockItems.find({
+      where: { tenantId, id: In(ids) },
+      select: { id: true, sku: true },
+    });
+    const skus = items.map((item) => item.sku);
+    if (skus.length === 0) {
+      return [];
+    }
+    const batches = await this.batches.find({
+      where: { tenantId, sku: In(skus) },
+      select: { sku: true },
+    });
+    const referencedSkus = new Set(batches.map((batch) => batch.sku));
+    return items
+      .filter((item) => referencedSkus.has(item.sku))
+      .map((item) => item.id);
+  }
+
+  /** حذف کالاهای یک دسته ورود داده با قید مستأجر (برای undo). */
+  async deleteStockItemsByIds(
+    tenantId: string,
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) {
+      return 0;
+    }
+    const result = await this.stockItems.delete({ tenantId, id: In(ids) });
+    return result.affected ?? 0;
   }
 
   async findAllStockItems(tenantId: string): Promise<StockItemEntity[]> {

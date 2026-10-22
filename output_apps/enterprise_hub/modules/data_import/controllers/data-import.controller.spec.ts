@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { UserRole } from '../../auth/enums/user-role.enum';
 import { TenantRole } from '../../tenants/enums/tenant-role.enum';
 import { DataImportService } from '../services/data-import.service';
+import { EntityImportService } from '../services/entity-import.service';
 import { DataImportController } from './data-import.controller';
 
 const SECRET = 'data-import-test-secret-1234567890';
@@ -31,6 +32,23 @@ describe('DataImportController (access control)', () => {
             commit: jest
               .fn()
               .mockResolvedValue({ imported: 0, skipped: 0, errors: [] }),
+          },
+        },
+        {
+          provide: EntityImportService,
+          useValue: {
+            listEntities: jest.fn().mockReturnValue([]),
+            listBatches: jest.fn().mockResolvedValue([]),
+            preview: jest.fn().mockResolvedValue({}),
+            commit: jest.fn().mockResolvedValue({
+              batchId: 'b',
+              inserted: 0,
+              skippedDuplicates: 0,
+              failed: [],
+            }),
+            undoBatch: jest
+              .fn()
+              .mockResolvedValue({ removed: 0, refused: [] }),
           },
         },
         JwtAuthGuard,

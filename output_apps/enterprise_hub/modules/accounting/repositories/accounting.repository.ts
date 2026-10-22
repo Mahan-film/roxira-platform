@@ -5,6 +5,7 @@ import {
   FindManyOptions,
   FindOptionsWhere,
   ILike,
+  In,
   Repository,
 } from 'typeorm';
 import { JournalEntryStatus } from '../enums/accounting.enum';
@@ -107,6 +108,84 @@ export class AccountingRepository {
       this.accounts.create({ ...item, tenantId }),
     );
     return this.accounts.save(entities);
+  }
+
+  /** شناسه حساب‌هایی که سطر سند دارند (ارجاع‌شده؛ undo ممنوع). */
+  async findReferencedAccountIds(
+    tenantId: string,
+    ids: number[],
+  ): Promise<number[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const rows = await this.lines.find({
+      where: { tenantId, accountId: In(ids) },
+      select: { accountId: true },
+    });
+    return Array.from(new Set(rows.map((row) => row.accountId)));
+  }
+
+  /** حذف حساب‌های یک دسته ورود داده با قید مستأجر (برای undo). */
+  async deleteAccountsByIds(
+    tenantId: string,
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) {
+      return 0;
+    }
+    const result = await this.accounts.delete({ tenantId, id: In(ids) });
+    return result.affected ?? 0;
+  }
+
+  /**
+   * حذف اسناد یک دسته ورود داده و برگرداندن اثر آن‌ها روی مانده حساب‌ها.
+   *
+   * ابتدا اختلاف بدهکار-بستانکار هر حساب از سطرهای اسناد جمع می‌شود، سپس
+   * اسناد (و با CASCADE سطرهایشان) حذف و مانده حساب‌ها به‌اندازه همان اختلاف
+   * کاهش داده می‌شود. کل عملیات در یک Transaction اتمیک است.
+   */
+  async deleteJournalEntriesByIds(
+    tenantId: string,
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) {
+      return 0;
+    }
+    return this.dataSource.transaction(async (manager) => {
+      const entries = await manager.find(JournalEntryEntity, {
+        where: { id: In(ids), tenantId },
+        relations: { lines: true },
+      });
+
+      const deltaByAccount = new Map<number, number>();
+      for (const entry of entries) {
+        for (const line of entry.lines ?? []) {
+          const delta = Number(line.debit) - Number(line.credit);
+          deltaByAccount.set(
+            line.accountId,
+            (deltaByAccount.get(line.accountId) ?? 0) + delta,
+          );
+        }
+      }
+
+      if (entries.length > 0) {
+        await manager.delete(JournalEntryEntity, {
+          id: In(entries.map((entry) => entry.id)),
+          tenantId,
+        });
+      }
+
+      for (const [accountId, delta] of deltaByAccount) {
+        await manager.increment(
+          ChartOfAccountEntity,
+          { id: accountId, tenantId },
+          'balance',
+          -delta,
+        );
+      }
+
+      return entries.length;
+    });
   }
 
   async findEntryByNumber(

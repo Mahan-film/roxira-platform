@@ -49,6 +49,25 @@ import {
 } from '../enums/hr.enum';
 import { HrRepository } from '../repositories/hr.repository';
 
+/** ورودی درج کارمند از مسیر ورود داده (فیلدهای اختیاری خالی می‌مانند). */
+export interface HrImportEmployeeInput {
+  employeeNumber?: string;
+  firstName: string;
+  lastName: string;
+  nationalId: string;
+  fatherName?: string;
+  birthDate?: string;
+  gender?: Gender;
+  mobile: string;
+  email?: string;
+  jobTitle: string;
+  department: string;
+  maritalStatus?: MaritalStatus;
+  dependants?: number;
+  hireDate?: string;
+  bankAccountNumber?: string;
+}
+
 /**
  * منطق کسب‌وکار ماژول منابع انسانی و حقوق و دستمزد.
  *
@@ -238,11 +257,84 @@ export class HrService {
     return this.toEmployeeDto(created);
   }
 
+  /**
+   * درج کارمندان از مسیر ورود داده.
+   *
+   * تشخیص تکراری کد ملی پیش از فراخوانی این متد در لایه ورود داده انجام شده
+   * است؛ در صورت نبود `employeeNumber` سرویس کد پرسنلی یکتا تولید می‌کند.
+   * خروجی، شناسه کارمندان ایجادشده به‌ترتیب ورودی است.
+   */
+  async importEmployees(
+    tenantId: string,
+    inputs: HrImportEmployeeInput[],
+  ): Promise<number[]> {
+    const createdIds: number[] = [];
+    for (const input of inputs) {
+      const employeeNumber =
+        input.employeeNumber?.trim() ||
+        (await this.generateEmployeeNumber(tenantId));
+
+      const created = await this.hrRepository.createEmployee(tenantId, {
+        employeeNumber,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        nationalId: input.nationalId,
+        fatherName: input.fatherName ?? null,
+        birthDate: input.birthDate ?? null,
+        gender: input.gender ?? Gender.MALE,
+        mobile: input.mobile,
+        email: input.email ?? null,
+        jobTitle: input.jobTitle,
+        department: input.department,
+        maritalStatus: input.maritalStatus ?? MaritalStatus.SINGLE,
+        dependants: input.dependants ?? 0,
+        status: EmployeeStatus.ACTIVE,
+        hireDate: input.hireDate ?? new Date().toISOString().slice(0, 10),
+        terminationDate: null,
+        bankAccountNumber: input.bankAccountNumber ?? null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      createdIds.push(created.id);
+    }
+    return createdIds;
+  }
+
+  /** کدهای ملی موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری ورود). */
+  async findExistingNationalIds(
+    tenantId: string,
+    nationalIds: string[],
+  ): Promise<string[]> {
+    return this.hrRepository.findEmployeeNationalIds(tenantId, nationalIds);
+  }
+
+  /**
+   * حذف کارمندان یک دسته ورود داده.
+   * کارمند دارای قرارداد یا فیش حقوقی «ارجاع‌شده» است و حذف نمی‌شود.
+   */
+  async removeImportedEmployees(
+    tenantId: string,
+    ids: number[],
+  ): Promise<{ removed: number; refused: number[] }> {
+    if (ids.length === 0) {
+      return { removed: 0, refused: [] };
+    }
+    const referenced = new Set(
+      await this.hrRepository.findReferencedEmployeeIds(tenantId, ids),
+    );
+    const deletable = ids.filter((id) => !referenced.has(id));
+    const removed = await this.hrRepository.deleteEmployeesByIds(
+      tenantId,
+      deletable,
+    );
+    return { removed, refused: Array.from(referenced) };
+  }
+
   async listEmployees(
     tenantId: string,
     query: QueryEmployeeDto,
-  ): Promise<PaginatedEmployeeResponseDto> {
-    const { page, limit, search, status, department } = query;
+  ): Promise<PaginatedEmployeeResponseDto> {    const { page, limit, search, status, department } = query;
 
     const baseConditions = search
       ? HrRepository.buildEmployeeSearchWhere(tenantId, search)

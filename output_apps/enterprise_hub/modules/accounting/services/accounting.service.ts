@@ -36,11 +36,28 @@ import {
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
-import { JournalEntryStatus } from '../enums/accounting.enum';
+import { AccountType, JournalEntryStatus } from '../enums/accounting.enum';
 import {
   AccountingRepository,
   JournalLineInput,
 } from '../repositories/accounting.repository';
+
+/** ورودی ایجاد حساب از مسیر ورود داده. */
+export interface AccountingImportAccountInput {
+  code: string;
+  name: string;
+  accountType: AccountType;
+  currency?: Currency;
+}
+
+/** ورودی سطر افتتاحیه از مسیر ورود داده. */
+export interface AccountingOpeningBalanceInput {
+  accountCode: string;
+  debit?: number;
+  credit?: number;
+  description?: string;
+  date?: string;
+}
 
 /**
  * سرویس دفتر کل و حسابداری دوطرفه (Double-Entry General Ledger).
@@ -215,6 +232,117 @@ export class AccountingService {
     });
 
     return this.toAccountDto(created);
+  }
+
+  /**
+   * درج حساب‌ها از مسیر ورود داده (بدون بذرگذاری دفتر کل پیش‌فرض).
+   *
+   * برخلاف `createAccount`، این متد دفتر پیش‌فرض را بذر نمی‌کند تا ورود یک
+   * «دفتر کل» کامل جایگزین/تکمیل‌کننده، با کدهای موجود تعارض پیدا نکند.
+   * تشخیص تکراری کد حساب پیش‌تر در لایه ورود داده انجام شده است.
+   */
+  async importAccounts(
+    tenantId: string,
+    inputs: AccountingImportAccountInput[],
+  ): Promise<number[]> {
+    const createdIds: number[] = [];
+    for (const input of inputs) {
+      const existing = await this.accountingRepository.findAccountByCode(
+        tenantId,
+        input.code,
+      );
+      if (existing) {
+        throw new ConflictException(
+          `حسابی با کد ${input.code} قبلاً در دفتر کل ثبت شده است.`,
+        );
+      }
+      const created = await this.accountingRepository.createAccount(tenantId, {
+        code: input.code,
+        name: input.name,
+        accountType: input.accountType,
+        currency: input.currency ?? Currency.IRR,
+        balance: 0,
+      });
+      createdIds.push(created.id);
+    }
+    return createdIds;
+  }
+
+  /** کدهای حساب موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری ورود). */
+  async findExistingAccountCodes(
+    tenantId: string,
+    codes: string[],
+  ): Promise<string[]> {
+    const accounts = await this.accountingRepository.findAccountsByCodes(
+      tenantId,
+      codes,
+    );
+    return accounts.map((account) => account.code);
+  }
+
+  /**
+   * حذف حساب‌های یک دسته ورود داده.
+   * حسابی که سطر سند دارد «ارجاع‌شده» است و حذف نمی‌شود.
+   */
+  async removeImportedAccounts(
+    tenantId: string,
+    ids: number[],
+  ): Promise<{ removed: number; refused: number[] }> {
+    if (ids.length === 0) {
+      return { removed: 0, refused: [] };
+    }
+    const referenced = new Set(
+      await this.accountingRepository.findReferencedAccountIds(tenantId, ids),
+    );
+    const deletable = ids.filter((id) => !referenced.has(id));
+    const removed = await this.accountingRepository.deleteAccountsByIds(
+      tenantId,
+      deletable,
+    );
+    return { removed, refused: Array.from(referenced) };
+  }
+
+  /**
+   * ثبت مانده‌های افتتاحیه به‌صورت یک سند دوطرفه واحد.
+   *
+   * تمام سطرهای ورودی در یک سند قرار می‌گیرند؛ شرط تراز بودن سند توسط
+   * `createJournalEntry` اعمال می‌شود. خروجی شناسه سند ایجادشده است.
+   */
+  async importOpeningBalances(
+    tenantId: string,
+    inputs: AccountingOpeningBalanceInput[],
+  ): Promise<number> {
+    if (inputs.length === 0) {
+      throw new BadRequestException('هیچ سطر افتتاحیه‌ای برای ثبت وجود ندارد.');
+    }
+
+    const date =
+      inputs.find((input) => input.date)?.date ?? new Date().toISOString();
+    const entryNumber = `OB-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const lines: JournalEntryLineDto[] = inputs.map((input) => ({
+      accountCode: input.accountCode,
+      debit: input.debit ?? 0,
+      credit: input.credit ?? 0,
+      description: input.description,
+    }));
+
+    const entry = await this.createJournalEntry(tenantId, {
+      entryNumber,
+      date,
+      description: 'مانده‌های افتتاحیه (ورود داده)',
+      lines,
+    });
+    return entry.id;
+  }
+
+  /** حذف اسناد یک دسته و برگرداندن اثر آن‌ها روی مانده حساب‌ها (undo). */
+  async removeImportedJournalEntries(
+    tenantId: string,
+    ids: number[],
+  ): Promise<{ removed: number; refused: number[] }> {
+    const removed =
+      await this.accountingRepository.deleteJournalEntriesByIds(tenantId, ids);
+    return { removed, refused: [] };
   }
 
   /**

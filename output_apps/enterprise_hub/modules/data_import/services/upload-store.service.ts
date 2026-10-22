@@ -5,6 +5,8 @@ import { UPLOAD_TTL_MS } from '../constants/data-import.constants';
 export interface StoredUpload {
   headers: string[];
   rows: string[][];
+  /** نام فایل اصلی (برای نمایش در دسته‌های ورود). */
+  fileName?: string;
   expiresAt: number;
 }
 
@@ -27,12 +29,13 @@ export class UploadStoreService {
   save(
     tenantId: string,
     uploadId: string,
-    data: { headers: string[]; rows: string[][] },
+    data: { headers: string[]; rows: string[][]; fileName?: string },
   ): void {
     this.sweep();
     this.uploads.set(this.key(tenantId, uploadId), {
       headers: data.headers,
       rows: data.rows,
+      fileName: data.fileName,
       expiresAt: Date.now() + UPLOAD_TTL_MS,
     });
   }

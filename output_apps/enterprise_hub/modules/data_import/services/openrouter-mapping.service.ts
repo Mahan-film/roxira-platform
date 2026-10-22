@@ -141,6 +141,113 @@ export function parseMappingContent(
   return mapping;
 }
 
+/** دستور سیستمی تشخیص موجودیت از روی سربرگ‌ها (فقط کلید معتبر مجاز است). */
+export const ENTITY_CHOICE_PROMPT = [
+  'You classify a spreadsheet by its column headers.',
+  'Return ONLY a JSON object {"entity": "<one of the given keys>"}.',
+  'If unsure, return {"entity": null}. Do not add prose or markdown.',
+].join(' ');
+
+/** ساخت بدنه درخواست تشخیص موجودیت با محدودیت‌های مشترک (۵ ردیف/۴۰ نویسه). */
+export function buildEntityChoiceRequestBody(
+  model: string,
+  entities: ReadonlyArray<{ key: string; labelFa: string }>,
+  headers: string[],
+  sampleRows: string[][],
+): OpenRouterChatRequest {
+  const trimmedRows = sampleRows
+    .slice(0, MAX_SAMPLE_ROWS)
+    .map((row) => row.map((cell) => truncateCell(cell)));
+
+  return {
+    model,
+    temperature: 0,
+    provider: { data_collection: 'deny' },
+    messages: [
+      { role: 'system', content: ENTITY_CHOICE_PROMPT },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          entities: entities.map((entity) => ({
+            key: entity.key,
+            label: entity.labelFa,
+          })),
+          columns: headers,
+          sampleRows: trimmedRows,
+        }),
+      },
+    ],
+  };
+}
+
+/** ساخت بدنه درخواست نگاشت ستون برای فیلدهای یک موجودیت دلخواه. */
+export function buildGenericMappingRequestBody(
+  model: string,
+  fields: ReadonlyArray<{ key: string; labelFa: string }>,
+  headers: string[],
+  sampleRows: string[][],
+): OpenRouterChatRequest {
+  const allowed = fields.map((field) => field.key).join(', ');
+  const systemPrompt = [
+    'You map spreadsheet column headers to the target entity fields.',
+    `Allowed target fields: ${allowed}.`,
+    'Return ONLY a JSON object mapping each source column header (exact string) to one allowed field.',
+    'Omit columns that do not match. Do not add prose, markdown or extra keys.',
+  ].join(' ');
+
+  const trimmedRows = sampleRows
+    .slice(0, MAX_SAMPLE_ROWS)
+    .map((row) => row.map((cell) => truncateCell(cell)));
+
+  return {
+    model,
+    temperature: 0,
+    provider: { data_collection: 'deny' },
+    messages: [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: JSON.stringify({ columns: headers, sampleRows: trimmedRows }),
+      },
+    ],
+  };
+}
+
+/** تبدیل پاسخ مدل به نگاشت معتبر برای فهرست فیلدهای مجاز. */
+export function parseMappingForFields(
+  content: string,
+  headers: string[],
+  allowedFields: readonly string[],
+): Record<string, string> {
+  const object = extractJsonObject(content);
+  const headerSet = new Set(headers);
+  const allowed = new Set(allowedFields);
+  const mapping: Record<string, string> = {};
+  for (const [key, value] of Object.entries(object)) {
+    if (
+      headerSet.has(key) &&
+      typeof value === 'string' &&
+      allowed.has(value)
+    ) {
+      mapping[key] = value;
+    }
+  }
+  return mapping;
+}
+
+/** استخراج کلید موجودیت انتخاب‌شده توسط مدل (یا `null`). */
+export function parseEntityChoice(
+  content: string,
+  keys: readonly string[],
+): string | null {
+  const object = extractJsonObject(content);
+  const value = object.entity;
+  if (typeof value === 'string' && keys.includes(value)) {
+    return value;
+  }
+  return null;
+}
+
 /**
  * سرویس نگاشت ستون‌ها با OpenRouter (تنها درگاه LLM مجاز).
  *
@@ -194,6 +301,87 @@ export class OpenRouterMappingService {
     }
 
     return parseMappingContent(content, headers);
+  }
+
+  /**
+   * نگاشت ستون‌ها برای یک موجودیت دلخواه رجیستری.
+   * فقط سربرگ‌ها و حداکثر ۵ ردیف نمونه (سلول‌های بریده‌شده) ارسال می‌شود.
+   */
+  async proposeMappingForFields(
+    headers: string[],
+    sampleRows: string[][],
+    fields: ReadonlyArray<{ key: string; labelFa: string }>,
+  ): Promise<Record<string, string>> {
+    if (headers.length === 0 || fields.length === 0) {
+      return {};
+    }
+
+    const model = this.resolveModelId();
+    const body = buildGenericMappingRequestBody(
+      model,
+      fields,
+      headers,
+      sampleRows,
+    );
+    const content = await this.requestCompletion(body);
+    return parseMappingForFields(
+      content,
+      headers,
+      fields.map((field) => field.key),
+    );
+  }
+
+  /**
+   * تشخیص موجودیت فایل با مدل زبانی (تنها وقتی امتیاز مترادف‌ها مبهم است).
+   * فقط سربرگ‌ها و حداکثر ۵ ردیف نمونه ارسال و کلید انتخاب‌شده بازگردانده
+   * می‌شود؛ در صورت نامعتبر بودن پاسخ `null`.
+   */
+  async proposeEntity(
+    headers: string[],
+    sampleRows: string[][],
+    entities: ReadonlyArray<{ key: string; labelFa: string }>,
+  ): Promise<string | null> {
+    if (headers.length === 0 || entities.length === 0) {
+      return null;
+    }
+
+    const model = this.resolveModelId();
+    const body = buildEntityChoiceRequestBody(model, entities, headers, sampleRows);
+    const content = await this.requestCompletion(body);
+    return parseEntityChoice(
+      content,
+      entities.map((entity) => entity.key),
+    );
+  }
+
+  /** ارسال بدنه چت‌تکمیل به OpenRouter و بازگرداندن محتوای پاسخ. */
+  private async requestCompletion(
+    body: OpenRouterChatRequest,
+  ): Promise<string> {
+    const apiKey = this.config.get<string>('OPENROUTER_API_KEY', '').trim();
+    if (!apiKey) {
+      throw new Error('OPENROUTER_API_KEY پیکربندی نشده است.');
+    }
+
+    const response = await fetch(OPENROUTER_CHAT_COMPLETIONS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`درخواست OpenRouter ناموفق بود (HTTP ${response.status}).`);
+    }
+
+    const payload = (await response.json()) as OpenRouterChatResponse;
+    const content = payload?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new Error('پاسخ مدل خالی است.');
+    }
+    return content;
   }
 
   /** شناسه مدل نقش `cheap` از `config/models.yaml`. */

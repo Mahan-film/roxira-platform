@@ -4,6 +4,7 @@ import {
   FindManyOptions,
   FindOptionsWhere,
   ILike,
+  In,
   Repository,
 } from 'typeorm';
 import { ContractStatus, EmployeeStatus } from '../enums/hr.enum';
@@ -114,6 +115,59 @@ export class HrRepository {
     employeeNumber: string,
   ): Promise<EmployeeEntity | null> {
     return this.employees.findOne({ where: { employeeNumber, tenantId } });
+  }
+
+  /** کدهای ملی موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
+  async findEmployeeNationalIds(
+    tenantId: string,
+    nationalIds: string[],
+  ): Promise<string[]> {
+    if (nationalIds.length === 0) {
+      return [];
+    }
+    const rows = await this.employees.find({
+      where: { tenantId, nationalId: In(nationalIds) },
+      select: { nationalId: true },
+    });
+    return rows.map((row) => row.nationalId);
+  }
+
+  /** شناسه کارمندانی که قرارداد یا فیش حقوقی دارند (ارجاع‌شده؛ undo ممنوع). */
+  async findReferencedEmployeeIds(
+    tenantId: string,
+    ids: number[],
+  ): Promise<number[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const [contracts, payslips] = await Promise.all([
+      this.contracts.find({
+        where: { tenantId, employeeId: In(ids) },
+        select: { employeeId: true },
+      }),
+      this.payslips.find({
+        where: { tenantId, employeeId: In(ids) },
+        select: { employeeId: true },
+      }),
+    ]);
+    return Array.from(
+      new Set([
+        ...contracts.map((row) => row.employeeId),
+        ...payslips.map((row) => row.employeeId),
+      ]),
+    );
+  }
+
+  /** حذف کارمندان یک دسته ورود داده با قید مستأجر (برای undo). */
+  async deleteEmployeesByIds(
+    tenantId: string,
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) {
+      return 0;
+    }
+    const result = await this.employees.delete({ tenantId, id: In(ids) });
+    return result.affected ?? 0;
   }
 
   async findAndCountEmployees(

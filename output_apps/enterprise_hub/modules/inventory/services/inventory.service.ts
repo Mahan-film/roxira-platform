@@ -39,6 +39,16 @@ import {
 } from '../errors/inventory.errors';
 import { InventoryRepository } from '../repositories/inventory.repository';
 
+/** ورودی درج کالا از مسیر ورود داده. */
+export interface InventoryImportItemInput {
+  sku: string;
+  barcode: string;
+  name: string;
+  quantity?: number;
+  minQuantity?: number;
+  batchNumber?: string;
+}
+
 /**
  * سرویس انبارداری سازمانی چند‌انباره و قیمت‌گذاری FIFO.
  *
@@ -214,6 +224,70 @@ export class InventoryService {
     });
 
     return this.toStockItemResponse(created, 0);
+  }
+
+  /**
+   * درج کالاها از مسیر ورود داده.
+   * تشخیص تکراری SKU پیش از فراخوانی در لایه ورود داده انجام شده است.
+   * خروجی، شناسه کالاهای ایجادشده به‌ترتیب ورودی است.
+   */
+  async importStockItems(
+    tenantId: string,
+    inputs: InventoryImportItemInput[],
+  ): Promise<number[]> {
+    const createdIds: number[] = [];
+    for (const input of inputs) {
+      const existing = await this.inventoryRepository.findStockItemBySku(
+        tenantId,
+        input.sku,
+      );
+      if (existing) {
+        throw new ConflictException(
+          `کالایی با شناسه ${input.sku} قبلاً در فهرست انبار ثبت شده است.`,
+        );
+      }
+
+      const created = await this.inventoryRepository.createStockItem(tenantId, {
+        sku: input.sku,
+        barcode: input.barcode,
+        name: input.name,
+        quantity: this.roundQuantity(input.quantity ?? 0),
+        minQuantity: this.roundQuantity(input.minQuantity ?? 0),
+        batchNumber: input.batchNumber ?? null,
+      });
+      createdIds.push(created.id);
+    }
+    return createdIds;
+  }
+
+  /** SKU‌های موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری ورود). */
+  async findExistingSkus(
+    tenantId: string,
+    skus: string[],
+  ): Promise<string[]> {
+    return this.inventoryRepository.findStockItemSkus(tenantId, skus);
+  }
+
+  /**
+   * حذف کالاهای یک دسته ورود داده.
+   * کالایی که گردش/FIFO دارد «ارجاع‌شده» است و حذف نمی‌شود.
+   */
+  async removeImportedItems(
+    tenantId: string,
+    ids: number[],
+  ): Promise<{ removed: number; refused: number[] }> {
+    if (ids.length === 0) {
+      return { removed: 0, refused: [] };
+    }
+    const referenced = new Set(
+      await this.inventoryRepository.findReferencedStockItemIds(tenantId, ids),
+    );
+    const deletable = ids.filter((id) => !referenced.has(id));
+    const removed = await this.inventoryRepository.deleteStockItemsByIds(
+      tenantId,
+      deletable,
+    );
+    return { removed, refused: Array.from(referenced) };
   }
 
   async updateStockItem(
