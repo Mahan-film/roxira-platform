@@ -5,10 +5,12 @@ import {
   ArrayMinSize,
   IsArray,
   IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -69,10 +71,29 @@ export class InvoicePartyInfoDto {
  * فیلدهای tax و total اختیاری‌اند و در سرویس به‌صورت معتبر بازمحاسبه می‌شوند.
  */
 export class InvoiceItemDto {
-  @ApiProperty({ description: 'شرح کالا یا خدمت', example: 'خدمات مشاوره فنی' })
+  @ApiPropertyOptional({
+    description: 'شناسه کالای انبار (اختیاری) برای پیوند سطر به موجودی',
+    example: 12,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  itemId?: number;
+
+  @ApiPropertyOptional({ description: 'شناسه یکتای کالا (SKU) در انبار', example: 'SKU-1001' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  sku?: string;
+
+  @ApiPropertyOptional({
+    description: 'شرح کالا یا خدمت؛ در صورت انتخاب کالا از انبار خودکار پر می‌شود.',
+    example: 'خدمات مشاوره فنی',
+  })
+  @IsOptional()
   @IsString()
   @MaxLength(512)
-  description: string;
+  description?: string;
 
   @ApiProperty({ description: 'تعداد/مقدار', example: 2, minimum: 0.001 })
   @IsNumber({ maxDecimalPlaces: 3 })
@@ -89,6 +110,19 @@ export class InvoiceItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   discount?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'نرخ مالیات بر ارزش افزوده سطر؛ نسبت (۰٫۱ = ۱۰٪) یا درصد (۱۰). در نبود مقدار، تنظیم مستأجر (پیش‌فرض ۱۰٪) اعمال می‌شود.',
+    example: 0.1,
+    minimum: 0,
+    maximum: 100,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(100)
+  vatRate?: number;
 
   @ApiPropertyOptional({ description: 'مالیات سطر (بازمحاسبه سمت سرور)', example: 900000 })
   @IsOptional()
@@ -117,10 +151,24 @@ export class CreateInvoiceDto {
   @Type(() => InvoicePartyInfoDto)
   sellerInfo: InvoicePartyInfoDto;
 
-  @ApiProperty({ type: InvoicePartyInfoDto, description: 'اطلاعات خریدار' })
+  @ApiPropertyOptional({
+    description:
+      'اطلاعات خریدار؛ در صورت ارسال customerId اختیاری است و از سرنخ CRM تکمیل می‌شود.',
+    type: InvoicePartyInfoDto,
+  })
+  @IsOptional()
   @ValidateNested()
   @Type(() => InvoicePartyInfoDto)
-  buyerInfo: InvoicePartyInfoDto;
+  buyerInfo?: InvoicePartyInfoDto;
+
+  @ApiPropertyOptional({
+    description: 'شناسه سرنخ/مشتری CRM برای پیوند صورتحساب به خریدار',
+    example: 42,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  customerId?: number;
 
   @ApiProperty({ type: [InvoiceItemDto], description: 'اقلام کالا/خدمت صورتحساب' })
   @IsArray()

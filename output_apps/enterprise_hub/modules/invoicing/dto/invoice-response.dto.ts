@@ -16,6 +16,9 @@ export class InvoiceResponseDto {
   @ApiProperty({ description: 'شماره یکتای صورتحساب مالیاتی' })
   taxInvoiceNumber: string;
 
+  @ApiProperty({ description: 'شناسه سرنخ/مشتری CRM', nullable: true })
+  customerId: number | null;
+
   @ApiProperty({ description: 'اطلاعات فروشنده', type: Object })
   sellerInfo: InvoicePartyInfo;
 
@@ -43,7 +46,7 @@ export class InvoiceResponseDto {
   @ApiProperty({ description: 'جمع کل تخفیف‌ها' })
   totalDiscount: number;
 
-  @ApiProperty({ description: 'جمع کل مالیات (۹٪ ارزش افزوده)' })
+  @ApiProperty({ description: 'جمع کل مالیات ارزش افزوده (نرخ هر سطر)' })
   totalTax: number;
 
   @ApiProperty({ description: 'مبلغ نهایی قابل پرداخت' })
@@ -60,6 +63,12 @@ export class InvoiceResponseDto {
 
   @ApiProperty({ enum: InvoiceStatus, description: 'وضعیت صورتحساب' })
   status: InvoiceStatus;
+
+  @ApiProperty({ description: 'زمان صدور رسمی', nullable: true })
+  issuedAt: Date | null;
+
+  @ApiProperty({ description: 'زمان تسویه کامل', nullable: true })
+  paidAt: Date | null;
 
   @ApiProperty({ description: 'تاریخ ثبت صورتحساب در سیستم' })
   createdAt: Date;

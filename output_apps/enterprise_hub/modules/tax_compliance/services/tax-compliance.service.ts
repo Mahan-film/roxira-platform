@@ -269,6 +269,7 @@ export class TaxComplianceService {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discount: item.discount,
+        vatRate: item.vatRate,
         tax: item.tax,
         total: item.total,
       })),

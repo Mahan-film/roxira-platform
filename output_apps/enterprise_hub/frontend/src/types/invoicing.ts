@@ -3,17 +3,19 @@ import { Currency } from "@/types/currency";
 export enum InvoiceStatus {
   DRAFT = "DRAFT",
   ISSUED = "ISSUED",
+  PAID = "PAID",
   CANCELLED = "CANCELLED",
 }
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   [InvoiceStatus.DRAFT]: "پیش‌نویس",
   [InvoiceStatus.ISSUED]: "صادرشده",
+  [InvoiceStatus.PAID]: "پرداخت‌شده",
   [InvoiceStatus.CANCELLED]: "ابطال‌شده",
 };
 
-/** نرخ مالیات بر ارزش افزوده (VAT) - منطبق با ثابت VAT_RATE در بک‌اند NestJS */
-export const VAT_RATE = 0.09;
+/** نرخ پیش‌فرض مالیات بر ارزش افزوده (VAT) — منطبق با بک‌اند NestJS */
+export const VAT_RATE = 0.1;
 
 export interface InvoicePartyInfo {
   name: string;
@@ -26,25 +28,32 @@ export interface InvoicePartyInfo {
 }
 
 export interface InvoiceItem {
+  itemId?: number | null;
+  sku?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;
   discount: number;
+  vatRate: number;
   tax: number;
   total: number;
 }
 
 export interface CreateInvoiceItemDto {
-  description: string;
+  itemId?: number;
+  sku?: string;
+  description?: string;
   quantity: number;
   unitPrice: number;
   discount?: number;
+  vatRate?: number;
 }
 
 export interface CreateInvoiceDto {
   taxInvoiceNumber: string;
   sellerInfo: InvoicePartyInfo;
-  buyerInfo: InvoicePartyInfo;
+  buyerInfo?: InvoicePartyInfo;
+  customerId?: number;
   items: CreateInvoiceItemDto[];
   status?: InvoiceStatus;
   currency?: Currency;
@@ -52,9 +61,12 @@ export interface CreateInvoiceDto {
 
 export type CreateInvoiceRequest = CreateInvoiceDto;
 
+export type UpdateInvoiceDto = Partial<CreateInvoiceDto>;
+
 export interface InvoiceResponseDto {
   id: string;
   taxInvoiceNumber: string;
+  customerId: number | null;
   sellerInfo: InvoicePartyInfo;
   buyerInfo: InvoicePartyInfo;
   items: InvoiceItem[];
@@ -69,6 +81,8 @@ export interface InvoiceResponseDto {
   baseTotalTax: number;
   baseFinalPayable: number;
   status: InvoiceStatus;
+  issuedAt: string | null;
+  paidAt: string | null;
   createdAt: string;
 }
 
@@ -79,6 +93,7 @@ export interface QueryInvoiceDto {
   limit?: number;
   status?: InvoiceStatus;
   taxInvoiceNumber?: string;
+  search?: string;
   currency?: Currency;
 }
 

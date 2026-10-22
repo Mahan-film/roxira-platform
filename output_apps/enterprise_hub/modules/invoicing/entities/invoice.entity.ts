@@ -28,10 +28,16 @@ export interface InvoicePartyInfo {
  * فیلدهای tax و total در سرویس به‌صورت معتبر محاسبه و جایگزین می‌شوند.
  */
 export interface InvoiceItem {
+  /** شناسه کالای انبار (اختیاری) — پیوند سطر به `erp_stock_items`. */
+  itemId?: number | null;
+  /** شناسه یکتای کالا (SKU) در زمان صدور صورتحساب. */
+  sku?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;
   discount: number;
+  /** نرخ مالیات بر ارزش افزوده سطر (نسبت؛ ۰٫۱ = ۱۰٪). */
+  vatRate: number;
   tax: number;
   total: number;
 }
@@ -56,6 +62,11 @@ export class InvoiceEntity {
 
   @Column({ type: 'varchar', length: 64 })
   taxInvoiceNumber: string;
+
+  /** پیوند اختیاری به سرنخ/مشتری CRM (`crm_leads.id`) در همان مستأجر. */
+  @Index()
+  @Column({ type: 'int', name: 'customer_id', nullable: true })
+  customerId: number | null;
 
   @Column({ type: 'jsonb' })
   sellerInfo: InvoicePartyInfo;
@@ -106,6 +117,14 @@ export class InvoiceEntity {
   @Index()
   @Column({ type: 'enum', enum: InvoiceStatus, default: InvoiceStatus.DRAFT })
   status: InvoiceStatus;
+
+  /** زمان صدور رسمی صورتحساب (اولین گذر از DRAFT به ISSUED/PAID). */
+  @Column({ type: 'timestamp', name: 'issued_at', nullable: true })
+  issuedAt: Date | null;
+
+  /** زمان تسویه کامل صورتحساب. */
+  @Column({ type: 'timestamp', name: 'paid_at', nullable: true })
+  paidAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

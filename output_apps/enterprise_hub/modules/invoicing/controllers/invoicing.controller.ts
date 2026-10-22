@@ -25,6 +25,7 @@ import {
 import { CreateInvoiceDto } from '../dto/create-invoice.dto';
 import { InvoiceResponseDto } from '../dto/invoice-response.dto';
 import { QueryInvoiceDto } from '../dto/query-invoice.dto';
+import { UpdateInvoiceDto } from '../dto/update-invoice.dto';
 import { InvoicingService } from '../services/invoicing.service';
 
 /**
@@ -54,7 +55,7 @@ export class InvoicingController {
   @ApiOperation({
     summary: 'صدور صورتحساب مالیاتی جدید',
     description:
-      'ایجاد صورتحساب همراه با محاسبه آنی مالیات بر ارزش افزوده ۹٪، جمع‌بندی خودکار مبالغ و کنترل یکتایی شماره صورتحساب.',
+      'ایجاد صورتحساب همراه با محاسبه آنی مالیات بر ارزش افزوده هر سطر (پیش‌فرض ۱۰٪)، جمع‌بندی خودکار مبالغ و کنترل یکتایی شماره صورتحساب.',
   })
   @ApiResponse({ status: HttpStatus.CREATED, type: InvoiceResponseDto })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'ورودی نامعتبر' })
@@ -85,6 +86,35 @@ export class InvoicingController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<InvoiceResponseDto> {
     return this.invoicingService.findOne(this.tenantIdOf(request), id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'ویرایش صورتحساب',
+    description:
+      'در صورت ارسال اقلام، مالیات هر سطر و جمع‌بندی دوباره در سمت سرور محاسبه می‌شود.',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: InvoiceResponseDto })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'صورتحساب یافت نشد' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'شماره تکراری یا وضعیت غیرقابل ویرایش' })
+  async update(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateInvoiceDto,
+  ): Promise<InvoiceResponseDto> {
+    return this.invoicingService.update(this.tenantIdOf(request), id, dto);
+  }
+
+  @Patch(':id/pay')
+  @ApiOperation({ summary: 'ثبت پرداخت صورتحساب' })
+  @ApiResponse({ status: HttpStatus.OK, type: InvoiceResponseDto })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'صورتحساب یافت نشد' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'صورتحساب قبلاً پرداخت یا ابطال شده است' })
+  async pay(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<InvoiceResponseDto> {
+    return this.invoicingService.pay(this.tenantIdOf(request), id);
   }
 
   @Patch(':id/cancel')

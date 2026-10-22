@@ -45,6 +45,6 @@ import { TenantsService } from './services/tenants.service';
   ],
   controllers: [TenantsController],
   providers: [TenantsService, TenantsRepository, AuthRepository, JwtAuthGuard],
-  exports: [TenantsService],
+  exports: [TenantsService, TenantsRepository],
 })
 export class TenantsModule {}

@@ -36,6 +36,7 @@ export class InvoicingRepository {
       { id: entity.id, tenantId },
       {
         taxInvoiceNumber: entity.taxInvoiceNumber,
+        customerId: entity.customerId,
         sellerInfo: entity.sellerInfo,
         buyerInfo: entity.buyerInfo,
         items: entity.items,
@@ -50,6 +51,8 @@ export class InvoicingRepository {
         baseTotalTax: entity.baseTotalTax,
         baseFinalPayable: entity.baseFinalPayable,
         status: entity.status,
+        issuedAt: entity.issuedAt,
+        paidAt: entity.paidAt,
       },
     );
     entity.tenantId = tenantId;
@@ -78,5 +81,47 @@ export class InvoicingRepository {
       ...options,
       where: { ...where, tenantId },
     });
+  }
+
+  /**
+   * جست‌وجوی مستأجرمحور در شماره صورتحساب و نام خریدار.
+   * فیلترهای وضعیت/ارز به‌صورت ترکیبی و همه با قید `tenantId` اعمال می‌شوند.
+   */
+  async searchAndCount(
+    tenantId: string,
+    options: {
+      search: string;
+      status?: InvoiceEntity['status'];
+      currency?: InvoiceEntity['currency'];
+      skip: number;
+      take: number;
+    },
+  ): Promise<[InvoiceEntity[], number]> {
+    const query = this.repository
+      .createQueryBuilder('invoice')
+      .where('invoice.tenantId = :tenantId', { tenantId });
+
+    if (options.search) {
+      const pattern = `%${options.search}%`;
+      query.andWhere(
+        "(invoice.taxInvoiceNumber ILIKE :pattern OR invoice.buyerInfo ->> 'name' ILIKE :pattern)",
+        { pattern },
+      );
+    }
+    if (options.status) {
+      query.andWhere('invoice.status = :status', { status: options.status });
+    }
+    if (options.currency) {
+      query.andWhere('invoice.currency = :currency', {
+        currency: options.currency,
+      });
+    }
+
+    query
+      .orderBy('invoice.createdAt', 'DESC')
+      .skip(options.skip)
+      .take(options.take);
+
+    return query.getManyAndCount();
   }
 }

@@ -3,6 +3,7 @@ import {
   InvoiceResponseDto,
   PaginatedInvoiceResponse,
   QueryInvoiceDto,
+  UpdateInvoiceDto,
 } from "@/types/invoicing";
 import { apiRequest } from "@/lib/api/http-client";
 import { API_PROXY_BASE_PATH, INVOICING_RESOURCE_PATH } from "@/lib/api/config";
@@ -14,7 +15,7 @@ const INVOICING_ENDPOINT = `${API_PROXY_BASE_PATH}/${INVOICING_RESOURCE_PATH}`;
 /**
  * صدور صورتحساب مالیاتی جدید.
  * منطبق با `InvoicingController.create` (POST /enterprise-hub/invoicing).
- * مالیات ۹٪ و جمع‌بندی مبالغ در سمت سرور بازمحاسبه می‌شوند.
+ * مالیات ۱۰٪ و جمع‌بندی مبالغ در سمت سرور بازمحاسبه می‌شوند.
  */
 export async function createInvoice(
   payload: CreateInvoiceDto,
@@ -42,6 +43,7 @@ export async function listInvoices(
       limit: params.limit,
       status: params.status,
       taxInvoiceNumber: params.taxInvoiceNumber,
+      search: params.search,
       currency: params.currency,
     },
     signal,
@@ -60,6 +62,36 @@ export async function getInvoice(
     method: "GET",
     signal,
   });
+}
+
+/**
+ * ویرایش صورتحساب.
+ * منطبق با `InvoicingController.update` (PATCH /enterprise-hub/invoicing/:id).
+ */
+export async function updateInvoice(
+  id: string,
+  payload: UpdateInvoiceDto,
+  signal?: AbortSignal,
+): Promise<InvoiceResponseDto> {
+  return apiRequest<InvoiceResponseDto>(`${INVOICING_ENDPOINT}/${id}`, {
+    method: "PATCH",
+    body: payload,
+    signal,
+  });
+}
+
+/**
+ * ثبت پرداخت صورتحساب.
+ * منطبق با `InvoicingController.pay` (PATCH /enterprise-hub/invoicing/:id/pay).
+ */
+export async function payInvoice(
+  id: string,
+  signal?: AbortSignal,
+): Promise<InvoiceResponseDto> {
+  return apiRequest<InvoiceResponseDto>(
+    `${INVOICING_ENDPOINT}/${id}/pay`,
+    { method: "PATCH", signal },
+  );
 }
 
 /**

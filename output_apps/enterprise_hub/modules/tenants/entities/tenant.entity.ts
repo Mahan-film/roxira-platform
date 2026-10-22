@@ -30,6 +30,20 @@ export class TenantEntity {
   @Column({ type: 'boolean', default: true, name: 'is_active' })
   isActive: boolean;
 
+  /** نرخ پیش‌فرض VAT سازمان به‌صورت نسبت (۰٫۱ = ۱۰٪). */
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 4,
+    name: 'default_vat_rate',
+    default: 0.1,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string | null) => (value === null ? 0.1 : Number(value)),
+    },
+  })
+  defaultVatRate: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

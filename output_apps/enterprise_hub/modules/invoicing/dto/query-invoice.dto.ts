@@ -34,6 +34,14 @@ export class QueryInvoiceDto {
   @MaxLength(64)
   taxInvoiceNumber?: string;
 
+  @ApiPropertyOptional({
+    description: 'جست‌وجوی جزئی در شماره صورتحساب یا نام خریدار',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  search?: string;
+
   @ApiPropertyOptional({ description: 'فیلتر بر اساس ارز صورتحساب', enum: Currency })
   @IsOptional()
   @IsEnum(Currency)

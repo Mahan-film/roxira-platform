@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -24,9 +25,14 @@ import {
 import { AddTenantMemberDto } from '../dto/add-tenant-member.dto';
 import { TenantMeResponseDto } from '../dto/tenant-me-response.dto';
 import { TenantMemberResponseDto } from '../dto/tenant-member-response.dto';
+import { UpdateTenantSettingsDto } from '../dto/update-tenant-settings.dto';
 import { TenantRole } from '../enums/tenant-role.enum';
 import { TenantsService } from '../services/tenants.service';
-import { requireTenantId, requireTenantOwner } from '../tenant-context';
+import {
+  requireTenantAdmin,
+  requireTenantId,
+  requireTenantOwner,
+} from '../tenant-context';
 
 /** تبدیل claim متنی توکن به نقش سازمانی شناخته‌شده (یا null). */
 function toTenantRole(value: string | null | undefined): TenantRole | null {
@@ -66,6 +72,23 @@ export class TenantsController {
     if (!tenant) {
       throw new ForbiddenException('سازمانی برای حساب شما یافت نشد.');
     }
+    return TenantMeResponseDto.fromEntity(
+      tenant,
+      toTenantRole(request.user?.tenantRole),
+    );
+  }
+
+  @Patch('me/settings')
+  @ApiOperation({ summary: 'به‌روزرسانی تنظیمات سازمان (نرخ پیش‌فرض VAT)' })
+  @ApiResponse({ status: HttpStatus.OK, type: TenantMeResponseDto })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی مدیریتی لازم است' })
+  async updateSettings(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: UpdateTenantSettingsDto,
+  ): Promise<TenantMeResponseDto> {
+    const tenantId = requireTenantId(request);
+    requireTenantAdmin(request);
+    const tenant = await this.tenantsService.updateSettings(tenantId, dto);
     return TenantMeResponseDto.fromEntity(
       tenant,
       toTenantRole(request.user?.tenantRole),

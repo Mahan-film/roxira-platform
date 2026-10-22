@@ -178,6 +178,9 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
               <SelectItem value={InvoiceStatus.ISSUED}>
                 {INVOICE_STATUS_LABELS[InvoiceStatus.ISSUED]}
               </SelectItem>
+              <SelectItem value={InvoiceStatus.PAID}>
+                {INVOICE_STATUS_LABELS[InvoiceStatus.PAID]}
+              </SelectItem>
               <SelectItem value={InvoiceStatus.CANCELLED}>
                 {INVOICE_STATUS_LABELS[InvoiceStatus.CANCELLED]}
               </SelectItem>

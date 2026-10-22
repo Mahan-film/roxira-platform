@@ -168,7 +168,7 @@ function PartyFields({
  * فرم صدور صورتحساب مالیاتی هوشمند.
  *
  * - اقلام کالا/خدمت به‌صورت داینامیک قابل افزودن/حذف هستند.
- * - مالیات ۹٪ و جمع هر سطر و جمع‌بندی نهایی به‌صورت آنی محاسبه و نمایش
+ * - مالیات ۱۰٪ و جمع هر سطر و جمع‌بندی نهایی به‌صورت آنی محاسبه و نمایش
  *   داده می‌شود (منبع نهایی، بازمحاسبه سرور است).
  * - متصل به `POST /enterprise-hub/invoicing` از طریق کلاینت تایپ‌سیف.
  */
@@ -318,12 +318,12 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
           <div>
             <CardTitle>صدور فاکتور هوشمند</CardTitle>
             <CardDescription className="mt-1">
-              محاسبه آنی مالیات بر ارزش افزوده ۹٪ و جمع‌بندی خودکار مبالغ در سمت
+              محاسبه آنی مالیات بر ارزش افزوده ۱۰٪ و جمع‌بندی خودکار مبالغ در سمت
               سرور.
             </CardDescription>
           </div>
           <Badge variant="outline" className="text-xs">
-            VAT ۹٪
+            VAT ۱۰٪
           </Badge>
         </div>
       </CardHeader>
@@ -393,7 +393,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
                     <TableHead className="w-24">تعداد</TableHead>
                     <TableHead className="w-36">قیمت واحد</TableHead>
                     <TableHead className="w-32">تخفیف</TableHead>
-                    <TableHead className="w-32">مالیات ۹٪</TableHead>
+                    <TableHead className="w-32">مالیات ۱۰٪</TableHead>
                     <TableHead className="w-36">جمع سطر</TableHead>
                     <TableHead className="w-12" />
                   </TableRow>
@@ -476,7 +476,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
               <span className="font-medium">{formatRial(totals.discount)}</span>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground">جمع مالیات ۹٪</span>
+              <span className="text-muted-foreground">جمع مالیات ۱۰٪</span>
               <span className="font-medium text-amber-600 dark:text-amber-400">
                 {formatRial(totals.tax)}
               </span>

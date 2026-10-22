@@ -20,6 +20,8 @@ export interface TenantMe {
   name: string;
   slug: string;
   tenantRole: TenantRole | null;
+  /** نرخ پیش‌فرض VAT سازمان به‌صورت نسبت (۰٫۱ = ۱۰٪) */
+  defaultVatRate?: number;
 }
 
 /** عضو سازمان — GET /tenants/members */

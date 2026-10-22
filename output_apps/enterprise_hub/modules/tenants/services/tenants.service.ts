@@ -9,6 +9,7 @@ import { UserEntity } from '../../auth/entities/user.entity';
 import { AuthServiceDomain } from '../../auth/enums/auth-service.enum';
 import { AuthRepository } from '../../auth/repositories/auth.repository';
 import { AddTenantMemberDto } from '../dto/add-tenant-member.dto';
+import { UpdateTenantSettingsDto } from '../dto/update-tenant-settings.dto';
 import { TenantEntity } from '../entities/tenant.entity';
 import { TenantsRepository } from '../repositories/tenants.repository';
 
@@ -48,6 +49,21 @@ export class TenantsService {
   /** سازمان جاری کاربر بر اساس شناسه مستأجر تأییدشده JWT. */
   async findMyTenant(tenantId: string): Promise<TenantEntity | null> {
     return this.tenantsRepository.findById(tenantId);
+  }
+
+  /** به‌روزرسانی تنظیمات سازمان (فعلاً نرخ پیش‌فرض VAT). */
+  async updateSettings(
+    tenantId: string,
+    dto: UpdateTenantSettingsDto,
+  ): Promise<TenantEntity> {
+    const tenant = await this.tenantsRepository.updateDefaultVatRate(
+      tenantId,
+      dto.defaultVatRate,
+    );
+    if (!tenant) {
+      throw new NotFoundException('سازمانی برای حساب شما یافت نشد.');
+    }
+    return tenant;
   }
 
   /** فهرست اعضای سازمان؛ فقط کاربران همان مستأجر بازگردانده می‌شوند. */

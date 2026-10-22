@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ReceiptText,
   UserRound,
   UsersRound,
   Warehouse,
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app/hr", label: "کارکنان (HR)", icon: UsersRound, nested: true },
   { href: "/app/inventory", label: "کالا و انبار", icon: Warehouse, nested: true },
   { href: "/app/accounting", label: "حساب‌ها", icon: BookOpenCheck, nested: true },
+  { href: "/app/invoicing", label: "صورتحساب‌ها", icon: ReceiptText, nested: true },
   { href: "/app/import", label: "ورود داده (import)", icon: FileUp, nested: true },
 ];
 
