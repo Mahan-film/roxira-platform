@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -50,6 +51,24 @@ import { HrService } from '../services/hr.service';
  * درخواست (Rule #4 - AGENTS.md). تمام فراخوانی‌های سرویس با همان شناسه مستأجر
  * انجام می‌شود تا سند خودکار حقوق نیز در دفتر همان سازمان ثبت گردد.
  */
+/** Optional numeric id from a query string: empty -> undefined; Persian/Arabic digits accepted. */
+export function parseOptionalId(raw?: string): number | undefined {
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  const ascii = String(raw)
+    .trim()
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  if (ascii === '' || ascii === 'undefined' || ascii === 'null') {
+    return undefined;
+  }
+  if (!/^\d+$/.test(ascii)) {
+    throw new BadRequestException('شناسه کارمند باید عدد باشد.');
+  }
+  return Number(ascii);
+}
+
 @ApiTags('HR - منابع انسانی و حقوق و دستمزد')
 @Controller('enterprise-hub/hr')
 export class HrController {
@@ -132,10 +151,14 @@ export class HrController {
   @ApiResponse({ status: HttpStatus.OK, type: [ContractResponseDto] })
   async listContracts(
     @Req() request: AuthenticatedRequest,
-    @Query('employeeId', new ParseIntPipe({ optional: true }))
-    employeeId?: number,
+    @Query('employeeId') employeeIdRaw?: string,
   ): Promise<ContractResponseDto[]> {
-    return this.hrService.listContracts(this.tenantIdOf(request), employeeId);
+    // ParseIntPipe({ optional: true }) is not honoured by our NestJS version: GET /hr/contracts without a
+    // filter returned 400 "numeric string is expected" (owner-reported banner on /app/hr, reproduced 2026-10-22).
+    return this.hrService.listContracts(
+      this.tenantIdOf(request),
+      parseOptionalId(employeeIdRaw),
+    );
   }
 
   @Get('contracts/:id')
