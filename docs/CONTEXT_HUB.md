@@ -30,6 +30,7 @@ Generate a single pasteable bundle with `bash scripts/dev/context_pack.sh` (see 
 ## 3. Strategy documents (newest first) and status
 | Document | Topic | Status |
 | --- | --- | --- |
+| [strategy/QUALITY_SYSTEM_2026-10-22.md](strategy/QUALITY_SYSTEM_2026-10-22.md) | Why bugs reached the owner; gates G3 (E2E Chromium+WebKit) / G4 (post-deploy), client error reporting, definition of done | Binding; G3/G4 in progress |
 | [strategy/FACTORY_V2_2026-10-22.md](strategy/FACTORY_V2_2026-10-22.md) | Software factory v2: lanes, build/E2E/post-deploy gates, Daytona, budgets | Design; gates 2-4 next |
 | [strategy/SUITE_V2_COMPOSABLE_2026-10-22.md](strategy/SUITE_V2_COMPOSABLE_2026-10-22.md) | Adopt/defer/reject: Docling, MCP, LangGraph, AG-UI, Blnk/Formance, ERPNext, Daytona, cloud accounts | MCP built; Daytona optional backend built; Docling-on-Modal next (Modal GPU verified) |
 | [strategy/ROXIRA_BUSINESS_SUITE_2026-10-22.md](strategy/ROXIRA_BUSINESS_SUITE_2026-10-22.md) | Business suite on our own NestJS modules, AI import pipeline, phases | Phase 1 live; phase 2 partly (invoicing+VAT, multi-currency, DB import) |
