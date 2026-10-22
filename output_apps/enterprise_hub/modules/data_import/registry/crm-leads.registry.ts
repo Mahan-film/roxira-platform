@@ -43,21 +43,28 @@ export class CrmLeadsRegistry implements EntityImportAdapter {
       labelFa: 'نام و نام خانوادگی',
       required: true,
       type: 'text',
-      synonyms: LEAD_FIELD_SYNONYMS.fullName,
+      synonyms: [
+        ...LEAD_FIELD_SYNONYMS.fullName,
+        'NameHesab',
+        'Name',
+        'نام حساب',
+        'طرف حساب',
+        'نام مشتری',
+      ],
     },
     {
       key: 'email',
       labelFa: 'رایانامه',
       required: true,
       type: 'email',
-      synonyms: LEAD_FIELD_SYNONYMS.email,
+      synonyms: [...LEAD_FIELD_SYNONYMS.email, 'Email'],
     },
     {
       key: 'phone',
       labelFa: 'تلفن',
       required: false,
       type: 'phone',
-      synonyms: LEAD_FIELD_SYNONYMS.phone,
+      synonyms: [...LEAD_FIELD_SYNONYMS.phone, 'Telephone', 'Mobile'],
     },
     {
       key: 'company',
@@ -87,14 +94,14 @@ export class CrmLeadsRegistry implements EntityImportAdapter {
       labelFa: 'کارشناس مسئول',
       required: false,
       type: 'text',
-      synonyms: LEAD_FIELD_SYNONYMS.owner,
+      synonyms: [...LEAD_FIELD_SYNONYMS.owner, 'KarshenasName', 'کارشناس'],
     },
     {
       key: 'notes',
       labelFa: 'توضیحات',
       required: false,
       type: 'text',
-      synonyms: LEAD_FIELD_SYNONYMS.notes,
+      synonyms: [...LEAD_FIELD_SYNONYMS.notes, 'Tozihat', 'توضیحات مذاکره'],
     },
   ];
 

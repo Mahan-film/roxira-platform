@@ -31,8 +31,8 @@ export class DataImportBatchItemEntity {
   @Column({ type: 'varchar', length: 64 })
   entity: string;
 
-  @Column({ type: 'integer', name: 'owner_id' })
-  ownerId: number;
+  @Column({ type: 'varchar', length: 64, name: 'owner_id' })
+  ownerId: string;
 
   @Column({ type: 'integer', name: 'row_number' })
   rowNumber: number;

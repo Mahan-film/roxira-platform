@@ -34,6 +34,7 @@ import {
   DATA_IMPORT_RESOURCE,
   maxUploadBytes,
 } from '../constants/data-import.constants';
+import { maxPackageBytes } from '../constants/package-import.constants';
 import { BatchSummaryDto, UndoBatchResponseDto } from '../dto/batch-response.dto';
 import { CommitImportDto } from '../dto/commit-import.dto';
 import { CommitResponseDto } from '../dto/commit-response.dto';
@@ -41,12 +42,20 @@ import { EntityDescriptorDto } from '../dto/entity-descriptor-response.dto';
 import { EntityCommitDto, PreviewRequestDto } from '../dto/entity-commit.dto';
 import { EntityCommitResponseDto } from '../dto/entity-commit-response.dto';
 import { EntityPreviewResponseDto } from '../dto/entity-preview-response.dto';
+import { PackageCommitDto } from '../dto/package-commit.dto';
+import {
+  PackageCommitResponseDto,
+  PackageCreatedDto,
+  PackageProgressDto,
+  PackageStatusDto,
+} from '../dto/package-response.dto';
 import { PreviewResponseDto } from '../dto/preview-response.dto';
 import {
   DataImportService,
   UploadedFilePayload,
 } from '../services/data-import.service';
 import { EntityImportService } from '../services/entity-import.service';
+import { PackageImportService } from '../services/package-import.service';
 
 /**
  * کنترلر ورود داده با کمک هوش مصنوعی.
@@ -75,6 +84,7 @@ export class DataImportController {
   constructor(
     private readonly dataImportService: DataImportService,
     private readonly entityImportService: EntityImportService,
+    private readonly packageImportService: PackageImportService,
   ) {}
 
   @Get('entities')
@@ -232,11 +242,80 @@ export class DataImportController {
     );
   }
 
+  @Post('packages')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: maxPackageBytes() } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiOperation({
+    summary: 'بارگذاری بستهٔ دیتابیس (SQLite/SQL/ZIP) و شروع تحلیل',
+  })
+  @ApiResponse({ status: HttpStatus.ACCEPTED, type: PackageCreatedDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'فایل نامعتبر' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async createPackage(
+    @Req() request: AuthenticatedRequest,
+    @UploadedFile() file: UploadedFilePayload,
+  ): Promise<PackageCreatedDto> {
+    this.assertImportAccess(request);
+    return this.packageImportService.createPackage(this.tenantIdOf(request), file);
+  }
+
+  @Get('packages/:id')
+  @ApiOperation({ summary: 'وضعیت و نتیجهٔ تحلیل بستهٔ دیتابیس' })
+  @ApiResponse({ status: HttpStatus.OK, type: PackageStatusDto })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'بسته یافت نشد' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async getPackage(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<PackageStatusDto> {
+    this.assertImportAccess(request);
+    return this.packageImportService.getPackage(this.tenantIdOf(request), id);
+  }
+
+  @Post('packages/:id/commit')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'ثبت نهایی بستهٔ دیتابیس و ساخت دستهٔ ورود' })
+  @ApiResponse({ status: HttpStatus.ACCEPTED, type: PackageCommitResponseDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'ورودی نامعتبر' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async commitPackage(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: PackageCommitDto,
+  ): Promise<PackageCommitResponseDto> {
+    this.assertImportAccess(request);
+    return this.packageImportService.commitPackage(
+      this.tenantIdOf(request),
+      id,
+      dto,
+    );
+  }
+
+  @Get('packages/:id/progress')
+  @ApiOperation({ summary: 'پیشرفت ثبت نهایی بستهٔ دیتابیس' })
+  @ApiResponse({ status: HttpStatus.OK, type: PackageProgressDto })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async getPackageProgress(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<PackageProgressDto> {
+    this.assertImportAccess(request);
+    return this.packageImportService.getProgress(this.tenantIdOf(request), id);
+  }
+
   /** شناسه مستأجر فقط از پیلود JWT تأییدشده. */
   private tenantIdOf(request: AuthenticatedRequest): string {
     return requireTenantId(request);
   }
-
   /** اجازه ورود داده: مدیر پلتفرم یا مالک سازمان. */
   private assertImportAccess(request: AuthenticatedRequest): void {
     const isAdmin = request.user?.role === UserRole.ADMIN;

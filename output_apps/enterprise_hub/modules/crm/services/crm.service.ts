@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { MONEY_SCALE } from '../constants/crm.constants';
 import { AddLeadNoteDto } from '../dto/add-lead-note.dto';
@@ -34,10 +35,24 @@ import {
   PIPELINE_STAGE_ORDER,
   PipelineStage,
 } from '../enums/crm.enums';
+import { CrmActivityRepository } from '../repositories/crm-activity.repository';
 import { CrmRepository } from '../repositories/crm.repository';
 
 /** حداقل اطلاعات لازم برای غنی‌سازی خروجی سرنخ با تعداد تماس. */
 type LeadWithCount = { lead: CrmLeadEntity; contactCount: number };
+
+/** ورودی درج یک فعالیت CRM از مسیر ورود بستهٔ دیتابیس. */
+export interface CrmActivityImportInput {
+  partyCode?: string;
+  date?: string;
+  owner?: string;
+  channel?: string;
+  stage?: string;
+  currency?: string;
+  amount?: number;
+  probability?: number;
+  notes?: string;
+}
 
 /**
  * سرویس مدیریت ارتباط با مشتریان (CRM) و پایپ‌لاین سرنخ‌ها.
@@ -49,7 +64,11 @@ type LeadWithCount = { lead: CrmLeadEntity; contactCount: number };
  */
 @Injectable()
 export class CrmService {
-  constructor(private readonly crmRepository: CrmRepository) {}
+  constructor(
+    private readonly crmRepository: CrmRepository,
+    @Optional()
+    private readonly activityRepository?: CrmActivityRepository,
+  ) {}
 
   private roundMoney(value: number): number {
     const factor = 10 ** MONEY_SCALE;
@@ -443,5 +462,49 @@ export class CrmService {
         ),
       };
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // فعالیت‌ها (Activities) — ورود بستهٔ دیتابیس
+  // ---------------------------------------------------------------------------
+
+  /** درج گروهی فعالیت‌های CRM و بازگرداندن شناسهٔ آن‌ها (برای دستهٔ undo). */
+  async importActivities(
+    tenantId: string,
+    inputs: CrmActivityImportInput[],
+  ): Promise<number[]> {
+    if (!this.activityRepository) {
+      throw new NotFoundException('ذخیره‌سازی فعالیت‌های CRM فعال نیست.');
+    }
+    if (inputs.length === 0) {
+      return [];
+    }
+    return this.activityRepository.createActivities(
+      tenantId,
+      inputs.map((input) => ({
+        partyCode: input.partyCode?.trim() || null,
+        activityDate: input.date?.trim() || null,
+        owner: input.owner?.trim() || null,
+        channel: input.channel?.trim() || null,
+        stage: input.stage?.trim() || null,
+        currency: input.currency?.trim() || null,
+        amount: typeof input.amount === 'number' ? input.amount : null,
+        probability:
+          typeof input.probability === 'number' ? input.probability : null,
+        notes: input.notes?.trim() || null,
+      })),
+    );
+  }
+
+  /** حذف فعالیت‌های یک دسته ورود داده (undo). */
+  async removeImportedActivities(
+    tenantId: string,
+    ids: Array<number | string>,
+  ): Promise<{ removed: number }> {
+    if (!this.activityRepository) {
+      return { removed: 0 };
+    }
+    const removed = await this.activityRepository.deleteByIds(tenantId, ids);
+    return { removed };
   }
 }

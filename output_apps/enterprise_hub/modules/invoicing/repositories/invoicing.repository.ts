@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindManyOptions, FindOptionsWhere, Repository } from 'typeorm';
+import { FindManyOptions, FindOptionsWhere, In, Repository } from 'typeorm';
 import { InvoiceEntity } from '../entities/invoice.entity';
 
 /**
@@ -70,6 +70,15 @@ export class InvoicingRepository {
     return this.repository.findOne({
       where: { taxInvoiceNumber, tenantId },
     });
+  }
+
+  /** حذف گروهی صورتحساب‌های یک دسته ورود داده با قید مستأجر (برای undo). */
+  async deleteByIds(tenantId: string, ids: string[]): Promise<number> {
+    if (ids.length === 0) {
+      return 0;
+    }
+    const result = await this.repository.delete({ tenantId, id: In(ids) });
+    return result.affected ?? 0;
   }
 
   async findAndCount(

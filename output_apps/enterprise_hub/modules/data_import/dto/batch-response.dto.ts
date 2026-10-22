@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 /** یک ردیف که هنگام undo به‌دلیل ارجاع‌شدن حذف نشده است. */
 export class RefusedRowDto {
   @ApiProperty({ description: 'شناسه ردیف در ماژول مالک' })
-  ownerId: number;
+  ownerId: number | string;
 
   @ApiProperty({ description: 'دلیل امتناع از حذف' })
   message: string;

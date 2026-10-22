@@ -44,10 +44,13 @@ export interface NormalisedRecord {
   values: Record<string, unknown>;
 }
 
+/** شناسهٔ ردیف در جدول ماژول مالک (عددی برای بیشتر موجودیت‌ها، UUID برای صورتحساب). */
+export type ImportOwnerId = number | string;
+
 /** نتیجه درج یک ردیف: شناسه ردیف در جدول ماژول مالک. */
 export interface CommitRowResult {
   rowNumber: number;
-  ownerId: number;
+  ownerId: ImportOwnerId;
 }
 
 /** شکست درج یک ردیف در ماژول مالک. */
@@ -64,7 +67,7 @@ export interface AdapterCommitResult {
 
 /** ردیفی که هنگام undo به‌دلیل ارجاع‌شدن حذف نمی‌شود. */
 export interface RefusedRow {
-  ownerId: number;
+  ownerId: ImportOwnerId;
   message: string;
 }
 
@@ -95,5 +98,5 @@ export interface EntityImportAdapter {
     tenantId: string,
     records: NormalisedRecord[],
   ): Promise<AdapterCommitResult>;
-  undo(tenantId: string, ownerIds: number[]): Promise<UndoOutcome>;
+  undo(tenantId: string, ownerIds: ImportOwnerId[]): Promise<UndoOutcome>;
 }

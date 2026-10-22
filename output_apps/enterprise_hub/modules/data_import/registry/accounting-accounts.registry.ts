@@ -48,7 +48,7 @@ export class AccountingAccountsRegistry implements EntityImportAdapter {
       labelFa: 'کد حساب',
       required: true,
       type: 'text',
-      synonyms: ['code', 'account code', 'کد حساب', 'کد'],
+      synonyms: ['code', 'account code', 'AccountCode', 'کد حساب', 'کد'],
     },
     {
       key: 'name',
@@ -58,6 +58,8 @@ export class AccountingAccountsRegistry implements EntityImportAdapter {
       synonyms: [
         'name',
         'account name',
+        'AccountName',
+        'NameHesab',
         'title',
         'نام حساب',
         'عنوان حساب',
@@ -75,6 +77,9 @@ export class AccountingAccountsRegistry implements EntityImportAdapter {
         'accountType',
         'account type',
         'type',
+        'Nature',
+        'Mahyat',
+        'AccountGroup',
         'ماهیت حساب',
         'نوع حساب',
         'نوع',
@@ -88,7 +93,14 @@ export class AccountingAccountsRegistry implements EntityImportAdapter {
       type: 'enum',
       enumValues: Object.values(Currency),
       enumAliases: CURRENCY_ALIASES,
-      synonyms: ['currency', 'واحد پول', 'ارز'],
+      synonyms: [
+        'currency',
+        'DefaultCurrency',
+        'Arz',
+        'VahedPoolPishfarz',
+        'واحد پول',
+        'ارز',
+      ],
     },
   ];
 

@@ -6,7 +6,7 @@ import { DataImportBatchEntity } from '../entities/data-import-batch.entity';
 
 /** ورودی یک ردیف درج‌شده برای ثبت در دسته. */
 export interface ImportBatchItemInput {
-  ownerId: number;
+  ownerId: number | string;
   rowNumber: number;
 }
 
@@ -63,7 +63,7 @@ export class DataImportBatchRepository {
         tenantId,
         batchId,
         entity: entityKey,
-        ownerId: row.ownerId,
+        ownerId: String(row.ownerId),
         rowNumber: row.rowNumber,
         createdAt: new Date(),
       }),

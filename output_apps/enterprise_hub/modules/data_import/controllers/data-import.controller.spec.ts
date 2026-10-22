@@ -11,6 +11,7 @@ import { UserRole } from '../../auth/enums/user-role.enum';
 import { TenantRole } from '../../tenants/enums/tenant-role.enum';
 import { DataImportService } from '../services/data-import.service';
 import { EntityImportService } from '../services/entity-import.service';
+import { PackageImportService } from '../services/package-import.service';
 import { DataImportController } from './data-import.controller';
 
 const SECRET = 'data-import-test-secret-1234567890';
@@ -52,6 +53,31 @@ describe('DataImportController (access control)', () => {
           },
         },
         JwtAuthGuard,
+        {
+          provide: PackageImportService,
+          useValue: {
+            createPackage: jest
+              .fn()
+              .mockResolvedValue({ packageId: 'p', status: 'analyzing' }),
+            getPackage: jest.fn().mockResolvedValue({
+              packageId: 'p',
+              status: 'analyzing',
+              tables: [],
+              relationships: [],
+              health: { checks: [] },
+              currencies: [],
+            }),
+            commitPackage: jest.fn().mockResolvedValue({ batchId: 'b' }),
+            getProgress: jest.fn().mockResolvedValue({
+              phase: 'ready',
+              done: 0,
+              total: 0,
+              inserted: {},
+              skipped: {},
+              errors: [],
+            }),
+          },
+        },
         ...GLOBAL_GUARD_PROVIDERS,
       ],
     }).compile();

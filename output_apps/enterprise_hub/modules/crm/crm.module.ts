@@ -6,7 +6,9 @@ import { JWT_DEFAULT_EXPIRES_IN } from '../auth/constants/auth.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CrmController } from './controllers/crm.controller';
 import { ContactMessageEntity } from './entities/contact-message.entity';
+import { CrmActivityEntity } from './entities/crm-activity.entity';
 import { CrmLeadEntity } from './entities/crm-lead.entity';
+import { CrmActivityRepository } from './repositories/crm-activity.repository';
 import { CrmRepository } from './repositories/crm.repository';
 import { CrmService } from './services/crm.service';
 
@@ -26,7 +28,11 @@ import { CrmService } from './services/crm.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CrmLeadEntity, ContactMessageEntity]),
+    TypeOrmModule.forFeature([
+      CrmLeadEntity,
+      ContactMessageEntity,
+      CrmActivityEntity,
+    ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -42,7 +48,7 @@ import { CrmService } from './services/crm.service';
     }),
   ],
   controllers: [CrmController],
-  providers: [CrmService, CrmRepository, JwtAuthGuard],
-  exports: [CrmService, CrmRepository],
+  providers: [CrmService, CrmRepository, CrmActivityRepository, JwtAuthGuard],
+  exports: [CrmService, CrmRepository, CrmActivityRepository],
 })
 export class CrmModule {}

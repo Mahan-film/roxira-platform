@@ -40,6 +40,20 @@ interface InvoiceTotals {
   finalPayable: number;
 }
 
+/** ورودی درج یک صورتحساب از مسیر ورود بستهٔ دیتابیس. */
+export interface InvoicingImportInput {
+  number: string;
+  type?: string;
+  date?: string;
+  partyCode?: string;
+  currency?: string;
+  amount?: number;
+  fxRate?: number;
+  vat?: number;
+  totalRial?: number;
+  status?: string;
+}
+
 /**
  * سرویس صورتحساب مالیاتی هوشمند (Smart Invoicing).
  *
@@ -578,5 +592,88 @@ export class InvoicingService {
     const saved = await this.invoicingRepository.save(tenantId, entity);
 
     return this.toResponseDto(saved);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ورود بستهٔ دیتابیس (Database package import)
+  // ---------------------------------------------------------------------------
+
+  /** شماره‌های صورتحساب موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
+  async findExistingInvoiceNumbers(
+    tenantId: string,
+    numbers: string[],
+  ): Promise<string[]> {
+    const found: string[] = [];
+    for (const number of numbers) {
+      const existing = await this.invoicingRepository.findByTaxInvoiceNumber(
+        tenantId,
+        number,
+      );
+      if (existing) {
+        found.push(existing.taxInvoiceNumber);
+      }
+    }
+    return found;
+  }
+
+  /**
+   * درج صورتحساب‌ها از مسیر ورود بستهٔ دیتابیس.
+   *
+   * هر ردیف به یک اقلام خلاصه نگاشت می‌شود؛ مبلغ از ستون‌های مبلغ/جمع نهایی
+   * گرفته می‌شود. فیلدهای چندارزی صورتحساب در تسک موازی اضافه می‌شوند و تا آن
+   * زمان فقط ارزهای پشتیبانی‌شدهٔ سرویس پذیرفته می‌شود.
+   */
+  async importInvoices(
+    tenantId: string,
+    inputs: InvoicingImportInput[],
+  ): Promise<string[]> {
+    const ids: string[] = [];
+    const supported = new Set<string>(Object.values(Currency));
+
+    for (const input of inputs) {
+      const unitPrice = Math.max(
+        input.amount ?? input.totalRial ?? 0,
+        0.01,
+      );
+      const currency =
+        input.currency && supported.has(input.currency)
+          ? (input.currency as Currency)
+          : undefined;
+
+      const dto: CreateInvoiceDto = {
+        taxInvoiceNumber: input.number,
+        sellerInfo: { name: 'نامشخص' },
+        buyerInfo: {
+          name: input.partyCode ? `طرف حساب ${input.partyCode}` : 'نامشخص',
+        },
+        items: [
+          {
+            description: `ورود بسته (${input.number})`,
+            quantity: 1,
+            unitPrice,
+          },
+        ],
+      };
+      if (currency) {
+        dto.currency = currency;
+      }
+
+      const created = await this.create(tenantId, dto);
+      ids.push(created.id);
+    }
+
+    return ids;
+  }
+
+  /** حذف صورتحساب‌های یک دسته ورود داده (undo). */
+  async removeImportedInvoices(
+    tenantId: string,
+    ids: Array<number | string>,
+  ): Promise<{ removed: number }> {
+    const removed = await this.invoicingRepository.deleteByIds(
+      tenantId,
+      ids.map((id) => String(id)),
+    );
+    return { removed };
   }
 }

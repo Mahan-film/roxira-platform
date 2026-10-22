@@ -32,6 +32,7 @@ import {
 import { EntityRegistryService } from '../registry/entity-registry.service';
 import {
   EntityImportAdapter,
+  ImportOwnerId,
   NormalisedRecord,
   RefusedRow,
 } from '../registry/import-registry.types';
@@ -213,10 +214,10 @@ export class EntityImportService {
     }
 
     const items = await this.batchRepository.findItems(tenantId, batchId);
-    const ownerIdsByEntity = new Map<string, number[]>();
+    const ownerIdsByEntity = new Map<string, ImportOwnerId[]>();
     for (const item of items) {
       const list = ownerIdsByEntity.get(item.entity) ?? [];
-      list.push(item.ownerId);
+      list.push(EntityImportService.normalizeOwnerId(item.ownerId));
       ownerIdsByEntity.set(item.entity, list);
     }
 
@@ -263,6 +264,14 @@ export class EntityImportService {
   // ---------------------------------------------------------------------------
   // کمکی‌ها
   // ---------------------------------------------------------------------------
+
+  /** بازگرداندن شناسه ردیف ذخیره‌شده در دسته به نوع عددی/رشته‌ای اصلی. */
+  private static normalizeOwnerId(ownerId: string | number): ImportOwnerId {
+    if (typeof ownerId === 'number') {
+      return ownerId;
+    }
+    return /^\d+$/.test(ownerId) ? Number(ownerId) : ownerId;
+  }
 
   private parseFile(file?: UploadedFilePayload): ParsedCsv {
     if (!file || !file.buffer) {
