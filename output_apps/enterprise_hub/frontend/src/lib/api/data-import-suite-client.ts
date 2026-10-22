@@ -8,8 +8,21 @@
  *   POST /enterprise-hub/data-import/commit
  *   POST /enterprise-hub/data-import/batches/:batchId/undo
  *   GET  /enterprise-hub/data-import/batches
+ *
+ * Whole-database migration ("database package import") shares the same base:
+ *
+ *   POST /enterprise-hub/data-import/packages            (multipart: file)
+ *   GET  /enterprise-hub/data-import/packages/:id
+ *   POST /enterprise-hub/data-import/packages/:id/commit
+ *   GET  /enterprise-hub/data-import/packages/:id/progress
  */
-import { ApiClientError, apiRequest, apiUpload } from "@/lib/api/http-client";
+import {
+  ApiClientError,
+  apiRequest,
+  apiUpload,
+  apiUploadWithProgress,
+  type UploadProgressOptions,
+} from "@/lib/api/http-client";
 import {
   API_PROXY_BASE_PATH,
   DATA_IMPORT_RESOURCE_PATH,
@@ -172,4 +185,184 @@ export function listImportBatches(
   signal?: AbortSignal,
 ): Promise<ImportBatch[]> {
   return apiRequest<ImportBatch[]>(`${BASE}/batches`, { signal });
+}
+
+/* ------------------------------------------------------------------ *
+ * Database package import (whole-company migration)
+ * ------------------------------------------------------------------ */
+
+/** پسوندهای مجاز بستهٔ دیتابیس. */
+export const PACKAGE_ACCEPT = ".sqlite,.sqlite3,.db,.sql,.zip";
+
+/** سقف حجم بستهٔ دیتابیس: ۴۰ مگابایت (هماهنگ با IMPORT_MAX_PACKAGE_BYTES). */
+export const PACKAGE_MAX_BYTES = 40 * 1024 * 1024;
+
+const PACKAGE_EXTENSIONS = ["sqlite", "sqlite3", "db", "sql", "zip"];
+
+export type ImportPackageStatus =
+  | "analyzing"
+  | "ready"
+  | "failed"
+  | "committing"
+  | "committed";
+
+export interface ImportPackageColumn {
+  name: string;
+  type: string;
+  sample: Array<string | number | null>;
+}
+
+export interface ImportPackageTable {
+  name: string;
+  rowCount: number;
+  columns: ImportPackageColumn[];
+  detectedEntity: string | null;
+  confidence: number;
+  mapping: Record<string, string | null>;
+  skipped?: boolean;
+  reason?: string;
+}
+
+export interface ImportPackageRelationship {
+  fromTable: string;
+  fromColumn: string;
+  toTable: string;
+  toColumn: string;
+  matchRatio: number;
+  declared: boolean;
+}
+
+export type ImportHealthLevel = "ok" | "warn" | "error";
+
+export interface ImportPackageHealthCheck {
+  key: string;
+  level: ImportHealthLevel;
+  titleFa: string;
+  detailFa: string;
+  value?: string | number;
+}
+
+export interface ImportPackageCurrency {
+  raw: string;
+  normalized: string;
+  count: number;
+}
+
+export interface ImportPackageDetail {
+  packageId: string;
+  status: ImportPackageStatus;
+  error?: string;
+  tables: ImportPackageTable[];
+  relationships: ImportPackageRelationship[];
+  health: { checks: ImportPackageHealthCheck[] };
+  currencies: ImportPackageCurrency[];
+}
+
+export interface ImportPackageCreated {
+  packageId: string;
+  status: "analyzing";
+}
+
+export interface ImportPackageCommitTable {
+  name: string;
+  entity: string;
+  mapping: Record<string, string | null>;
+  skip?: boolean;
+}
+
+export interface ImportPackageCommitRequest {
+  tables: ImportPackageCommitTable[];
+}
+
+export interface ImportPackageCommitResult {
+  batchId: string;
+}
+
+export interface ImportPackageProgress {
+  phase: string;
+  done: number;
+  total: number;
+  inserted: Record<string, number>;
+  skipped: Record<string, number>;
+  errors: string[];
+}
+
+/** برچسب فارسی کلیدهای شناخته‌شدهٔ موجودیت‌ها (پشتیبان فهرست سرور). */
+export const PACKAGE_ENTITY_LABELS: Record<string, string> = {
+  "crm-leads": "سرنخ‌های CRM",
+  "hr-employees": "کارکنان",
+  "inventory-items": "کالاها",
+  "accounting-accounts": "حساب‌ها",
+  "accounting-opening-balances": "موجودی اولیه حساب‌ها",
+  "accounting-journal-lines": "ردیف اسناد حسابداری",
+  "sales-invoices": "فاکتورهای فروش",
+  "crm-activities": "فعالیت‌های CRM",
+};
+
+/** برچسب فارسی یک کلید موجودیت؛ در نبود نگاشت، خود کلید بازگردانده می‌شود. */
+export function packageEntityLabel(key: string): string {
+  return PACKAGE_ENTITY_LABELS[key] ?? key;
+}
+
+/** Returns a Persian error message when the package file cannot be imported, else null. */
+export function validatePackageFile(file: File): string | null {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!PACKAGE_EXTENSIONS.includes(ext)) {
+    return "فرمت بسته پشتیبانی نمی‌شود. فقط sqlite، sqlite3، db، sql و zip پذیرفته می‌شود.";
+  }
+  if (file.size === 0) {
+    return "فایل خالی است.";
+  }
+  if (file.size > PACKAGE_MAX_BYTES) {
+    return "حجم بستهٔ دیتابیس بیش از ۴۰ مگابایت است.";
+  }
+  return null;
+}
+
+/** بارگذاری بستهٔ دیتابیس و آغاز تحلیل در پس‌زمینه. */
+export function createImportPackage(
+  file: File,
+  options: UploadProgressOptions = {},
+): Promise<ImportPackageCreated> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiUploadWithProgress<ImportPackageCreated>(
+    `${BASE}/packages`,
+    form,
+    options,
+  );
+}
+
+/** وضعیت و نتیجهٔ تحلیل یک بسته. */
+export function getImportPackage(
+  packageId: string,
+  signal?: AbortSignal,
+): Promise<ImportPackageDetail> {
+  return apiRequest<ImportPackageDetail>(
+    `${BASE}/packages/${encodeURIComponent(packageId)}`,
+    { signal },
+  );
+}
+
+/** ثبت بسته در دیتابیس (صف‌بندی‌شده) و دریافت شناسهٔ دستهٔ ورود. */
+export function commitImportPackage(
+  packageId: string,
+  payload: ImportPackageCommitRequest,
+  signal?: AbortSignal,
+): Promise<ImportPackageCommitResult> {
+  return apiRequest<ImportPackageCommitResult>(
+    `${BASE}/packages/${encodeURIComponent(packageId)}/commit`,
+    { method: "POST", body: payload, signal },
+  );
+}
+
+/** پیشرفت ثبت هر موجودیت در بسته. */
+export function getImportPackageProgress(
+  packageId: string,
+  signal?: AbortSignal,
+): Promise<ImportPackageProgress> {
+  return apiRequest<ImportPackageProgress>(
+    `${BASE}/packages/${encodeURIComponent(packageId)}/progress`,
+    { signal },
+  );
 }

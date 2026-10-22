@@ -10,7 +10,7 @@ export default function SuiteImportPage() {
     <>
       <PageHeader
         title="ورود داده"
-        description="خروجی نرم‌افزار قبلی، فایل اکسل، PDF یا عکس را رها کنید؛ مشتریان، کارکنان، کالاها و حساب‌ها خودکار ثبت می‌شوند"
+        description="خروجی نرم‌افزار قبلی، فایل اکسل، PDF یا عکس را رها کنید یا کل دیتابیس را یک‌جا منتقل کنید؛ مشتریان، کارکنان، کالاها و حساب‌ها خودکار ثبت می‌شوند"
         icon={<FileUp className="size-6 text-indigo-500" />}
       />
       <ImportWizard />

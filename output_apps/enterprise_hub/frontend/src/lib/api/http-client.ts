@@ -191,3 +191,66 @@ export async function apiUpload<TResponse>(
 
   return (await response.json()) as TResponse;
 }
+
+export interface UploadProgressOptions {
+  signal?: AbortSignal;
+  /** Called with the upload percentage (۰ تا ۱۰۰) while the file is sent. */
+  onProgress?: (percent: number) => void;
+}
+
+/**
+ * مثل `apiUpload` اما با گزارش درصد بارگذاری. چون `fetch` در مرورگر
+ * رویداد پیشرفت آپلود نمی‌دهد، اینجا از `XMLHttpRequest` استفاده می‌شود.
+ * هدر Content-Type عمداً تنظیم نمی‌شود تا مرورگر boundary را اضافه کند.
+ */
+export function apiUploadWithProgress<TResponse>(
+  path: string,
+  formData: FormData,
+  options: UploadProgressOptions = {},
+): Promise<TResponse> {
+  return new Promise<TResponse>((resolve, reject) => {
+    if (options.signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path);
+    xhr.responseType = "json";
+
+    const token = readStoredAccessToken();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    options.signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && options.onProgress) {
+        options.onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      const status = xhr.status;
+      let body: unknown = xhr.response;
+      if (body === null || body === undefined) {
+        try {
+          body = JSON.parse(xhr.responseText) as unknown;
+        } catch {
+          body = {};
+        }
+      }
+      if (status >= 200 && status < 300) {
+        resolve(body as TResponse);
+      } else {
+        reject(
+          new ApiClientError(status, (body ?? {}) as Partial<NestValidationErrorBody>),
+        );
+      }
+    };
+    xhr.onerror = () =>
+      reject(new ApiClientError(0, { message: "ارتباط با سرور برقرار نشد." }));
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+
+    xhr.send(formData);
+  });
+}

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { ErrorNotice } from "@/components/app/app-ui";
+import { PackageImportWizard } from "@/components/app/package-import-wizard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,7 +70,48 @@ function sampleCell(row: ImportSampleRow, header: string, index: number): string
   return value === null || value === undefined ? "" : String(value);
 }
 
+type ImportMode = "file" | "package";
+
+const MODE_LABELS: Array<[ImportMode, string]> = [
+  ["file", "ورود فایل (اکسل، CSV، PDF)"],
+  ["package", "انتقال کامل دیتابیس"],
+];
+
 export function ImportWizard() {
+  const [mode, setMode] = useState<ImportMode>("file");
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div
+        role="tablist"
+        aria-label="نوع ورود داده"
+        className="flex flex-wrap gap-2 rounded-2xl bg-muted/40 p-1"
+      >
+        {MODE_LABELS.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={mode === key}
+            onClick={() => setMode(key)}
+            className={cn(
+              "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+              mode === key
+                ? "bg-background font-bold text-foreground shadow-sm ring-1 ring-border"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "file" ? <SingleFileImportWizard /> : <PackageImportWizard />}
+    </div>
+  );
+}
+
+function SingleFileImportWizard() {
   const [step, setStep] = useState<Step>("upload");
   const [entities, setEntities] = useState<ImportEntityDef[]>([]);
   const [entitiesError, setEntitiesError] = useState(false);
