@@ -1,6 +1,6 @@
 # System map (what exists)
 
-Canonical inventory for a fresh chat. Written 2026-09-30 by the hub; payments/auth/CRM/mail rows refreshed 2026-10-20 (other rows still reflect 2026-09-30). Current status lives in `docs/STATE.md`;
+Canonical inventory for a fresh chat. Written 2026-09-30 by the hub; §2 (production server) refreshed 2026-10-22, payments/auth/mail rows 2026-10-20 (other rows may be older). Current status lives in `docs/STATE.md`;
 the derivable facts (compose, nginx, workflows, versions, model ids) are in `docs/SYSTEM_INVENTORY.generated.md`
 (regenerate: `python3 scripts/gen_system_inventory.py`). Anything not checked is marked UNVERIFIED. Key NAMES only, never values.
 
@@ -15,45 +15,36 @@ the derivable facts (compose, nginx, workflows, versions, model ids) are in `doc
 - Priority (STRATEGY §1): Smart Judge earns revenue; Roxira OS is the platform. Reliability of Smart Judge comes first.
 - Owner-facing FAQ in Persian: `docs/OWNER_GUIDE_FA.md`.
 
-## 2. Production server
+## 2. Production server (refreshed 2026-10-22)
 | Item | Value |
 | --- | --- |
-| Host | `roxira-prod` = `91.107.248.99` (srv1.roxira.net, Ubuntu 26.04 arm64; old host 5.75.200.67 until decommission) |
-| Repo | `/opt/roxira_platform`; deployed commit 64478f3 on 2026-09-30 |
-| Drift | main is ahead: #135, #149, #150, #151 and later are merged but NOT deployed |
-| Exposed ports | 22, 80, 443 only (ufw; `roxira-docker-firewall.service` blocks 6432/3000/4000/4001 on eth0). Compose publishes app ports on 127.0.0.1 only |
-| Secrets | `/opt/roxira_platform/.env`; backups of it in `/root/env-backups/` (never in repo) |
+| Host | `roxira-prod` = `91.107.248.99` (srv1.roxira.net, Ubuntu 26.04 arm64, 4 vCPU / 7.7 GB RAM + zram + 4 GB swapfile / 75 GB disk; old host 5.75.200.67 until decommission) |
+| Repo | `/opt/roxira_platform`, deployed automatically: `roxira-autodeploy.timer` every 5 min (backup, migrate, smoke against the local origin, legal gate, auto-rollback; `docs/ops/AUTODEPLOY.md`); status `/root/deploy-state/autodeploy-last.json` |
+| Exposed ports | 22, 80, 443 only (ufw; Cloudflare-only on 80/443). Compose publishes app ports on 127.0.0.1 only |
+| Secrets | `/opt/roxira_platform/.env` (set with `scripts/ops/set_server_env.sh`); backups in `/root/env-backups/` (never in repo) |
+| Resource plan | `docs/strategy/LEAN_ARCHITECTURE_2026-10-22.md`: memory caps on every compose service, query embeddings on Cloudflare Workers AI, disk guard, `vm.swappiness=20` |
 
-Running containers (13):
+Running containers (16):
 | Container | Image / origin | Role |
 | --- | --- | --- |
-| roxira_nginx_prod | nginx:alpine (compose `nginx_gateway`) | TLS gateway, routes both domains; run `nginx -s reload` after any recreate |
-| roxira_app_prod | enterprise_app image (compose) | Python AI core (FastAPI, port 8000) |
-| roxira_enterprise_frontend | started with `docker run`, NOT compose (W8 to migrate) | Next.js site (3001) |
-| roxira_enterprise_backend | compose | NestJS enterprise API (3000) |
-| roxira_pgbouncer | edoburu/pgbouncer (compose) | Postgres pooling, port 6432 |
-| roxira_postgres_prod | postgres:17-alpine (compose) | Main DB `enterprise_db` |
-| roxira_redis_prod | redis:7-alpine (compose) | Cache/queues |
-| roxira_qdrant_prod | qdrant/qdrant (compose) | Vector store |
-| roxira_twenty_crm, roxira_twenty_db (postgres:16-alpine), roxira_twenty_redis | not in `docker-compose.prod.yml` | Twenty CRM stack, 0 workspaces as of 2026-10-20; nightly sync from our DB built in `scripts/ops/crm/` (`docs/ops/CRM_SYNC.md`). Compose file for it: UNVERIFIED |
-| roxira_mail | not in `docker-compose.prod.yml` (2026-10-20) | Postfix + DKIM (selector rx1) for account-verification mail from `mail.ghazihoushmand.ir` |
-| roxira_sandbox_saas-portal-v2, roxira_sandbox_smart-accounting | not in compose; sources in `data/sandboxes/` | Auto-generated sandbox apps (Software Foundry) |
+| roxira_nginx_prod | nginx:alpine (compose) | TLS gateway for all domains; edge-cache headers for /laws, /regulations, /guides, sitemaps |
+| roxira_app_prod | enterprise_app (compose) | Python AI core (FastAPI 8000), Smart Judge; `EMBED_BACKEND=cf` |
+| roxira_enterprise_frontend | compose | Next.js site (3001): ghazihoushmand.ir, roxira.ir (incl. business suite `/app`), roxira.net |
+| roxira_enterprise_backend | compose | NestJS enterprise API (3000): tenants, CRM, HR, accounting, inventory, invoicing, tax compliance, data import |
+| roxira_postgres_prod / roxira_pgbouncer | postgres:17-alpine / pgbouncer (compose) | Main DB `enterprise_db` + pooling (6432) |
+| roxira_redis_prod | redis:7-alpine (compose) | Cache, rate limits, daily caps |
+| roxira_qdrant_prod | qdrant v1.19 (compose) | Vectors: `iran_laws_v6`, `iran_regulations_v2`, `iran_rulings_v1` (nightly replica to Qdrant Cloud) |
+| roxira_embeddings | TEI bge-m3 (compose) | Fallback query embedder and corpus builds |
+| roxira_keypool | LiteLLM (127.0.0.1:4000) | Model key pool / ladders (`config/key_pool.yaml`) |
+| roxira_research, research-stack-searxng/valkey | services/research | Research service 127.0.0.1:8090 |
+| roxira_umami | umami 3.4 | Analytics |
+| roxira_mail | boky/postfix | Verification mail (DKIM rx1) |
+| roxira_docker_socket_proxy | tecnativa | Read-only docker API for the owner console |
+Stopped on purpose: Twenty CRM (3 containers, data volumes kept; replaced by our own suite; restart command in `/root/deploy-state/disk-guard.log`), crawl4ai.
 
-Timers and cron (on the host):
-| What | When | Notes |
-| --- | --- | --- |
-| roxira-autodaemon.timer | every 30 min | Health audit only; a server daemon pushes to `main` about every 30 min (fetch before work) |
-| roxira-radar.timer | every 6 h | Tech radar scan (`docs/ops/roxira-radar.*`) |
-| roxira-worker.timer | disabled | Removed for security |
-| cron 03:30 | daily | Legal crawler `scripts/run_periodic_crawler.py` via `scripts/ops/with_env.py` |
-| cron hourly | hourly | `scripts/auto_backup_daemon.sh` (backup); a daily pull copies backups to the Mac (`scripts/ops/pull_backups_to_mac.sh`) |
-| cron 04:30 | daily | `scripts/daily_tech_scout.sh` |
-| roxira-usdt-poll.timer | every minute | USDT-TRC20 payment poller, runs in the app container |
-| roxira-crm-sync.timer | daily 03:30 UTC | Twenty CRM sync; built, owner must create the API key first |
+Timers (host, `systemctl list-timers | grep roxira`): autodeploy (5 min), disk-guard (hourly), monitor-synthetic / monitor-logs (5 min), monitor-daily, usdt-poll (1 min), telegram-offsite (04:15 UTC, encrypted pg dump to the owner's Telegram), neon-offsite (nightly restore check), codeberg-mirror (hourly), qdrant-replica, backup-dr-run/check/report (restic), admin-snapshot, marketing-publish, kpi-weekly, credit-watch, cf-refresh, sbom, selfimprove, radar, docker-prune, agentdb-gc, autodaemon. Agent queue: `roxira-taskq.service` (`scripts/infra/server_agents/taskq.py`).
 
-Deploy: STRATEGY §7 (git pull --ff-only, `compose config -q`, dry import, `up -d --no-deps <svc>`, nginx reload, verify). Merged but NOT installed on prod: `scripts/ops/deploy.sh` (auto-rollback), `rollback.sh`, `backup.sh`, `deploy/systemd/roxira-backup.*`, compose healthchecks (#81). Restore drill: `docs/ops/RESTORE_DRILL.md`.
-
-NOT automated: deploys (owner yes, then hub-run), DB migrations, kernel reboot, `.env` changes, systemd installs, frontend container (docker run), Twenty/sandbox stacks, backup restore tests (monthly by hand), key rotation, uptime alerts beyond the `uptime.yml` GitHub issue.
+NOT automated: kernel reboot, `.env` changes (owner runs `set_server_env.sh` for secrets), installing new systemd units (hub does it after merge), restore drills of the restic DR set (Neon restore is automatic), key rotation.
 
 ## 3. Architecture
 | Layer | Tech | Where | Versions (repo) |
