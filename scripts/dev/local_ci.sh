@@ -19,6 +19,14 @@ done
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# Git hooks run with repo-local vars exported (GIT_DIR, GIT_INDEX_FILE, GIT_PREFIX, ...;
+# a push from a worktree sets GIT_DIR=<main>/.git/worktrees/<name>). Tests that build
+# throwaway repos would inherit them and run `git init --bare` / `reset --hard` against
+# this repo, flipping core.bare=true in the shared .git/config. We are at the top level
+# now, so plain repo discovery finds the same repo without them.
+# shellcheck disable=SC2046
+unset $(git rev-parse --local-env-vars)
+
 # Self-bootstrap: if ruff or pytest are missing, create a private virtualenv once
 # (LOCAL_CI_VENV, default ~/venvs/roxira), install the CI tools there and use it.
 # Set LOCAL_CI_NO_BOOTSTRAP=1 to disable.

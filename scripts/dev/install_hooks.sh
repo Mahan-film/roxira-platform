@@ -23,6 +23,10 @@ if [ "${SKIP_LOCAL_CI:-0}" = "1" ]; then
   exit 0
 fi
 ROOT="$(git rev-parse --show-toplevel)"
+# Drop GIT_DIR & co. that git exports to hooks (local_ci.sh also does this).
+# shellcheck disable=SC2046
+unset $(git rev-parse --local-env-vars)
+cd "$ROOT"
 exec "$ROOT/scripts/dev/local_ci.sh"
 HOOK_EOF
 chmod +x "$HOOK"
