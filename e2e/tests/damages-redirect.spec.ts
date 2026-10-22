@@ -5,16 +5,12 @@ import { test, expect } from '@playwright/test';
 // dropping the path the user actually clicked (nav link "محاسبه‌گر قضایی و
 // خسارت"). This asserts the redirect now preserves the path.
 //
-// NOTE: this exercises the middleware.ts fix from this PR. It will only
-// pass once that change is deployed to the server the E2E_BASE_URL points
-// at (read-only: we only follow a redirect, no writes).
-test('/damages redirects to roxira.ir/damages, not the bare homepage', async ({ page, baseURL }) => {
+// The redirect is NOT followed (issue #375): loading roxira.ir from the CI
+// runner timed out, and only the Location header matters here. Read-only.
+test('/damages redirects to roxira.ir/damages, not the bare homepage', async ({ request, baseURL }) => {
   test.skip(!!baseURL && !baseURL.includes('ghazihoushmand'), 'only meaningful on the ghazi domain');
 
-  const response = await page.goto('/damages');
-  expect(response, 'no response received for /damages').not.toBeNull();
-
-  const finalUrl = new URL(page.url());
-  expect(finalUrl.hostname).toBe('roxira.ir');
-  expect(finalUrl.pathname).toBe('/damages');
+  const response = await request.get('/damages', { maxRedirects: 0 });
+  expect(response.status()).toBe(307);
+  expect(response.headers()['location']).toBe('https://roxira.ir/damages');
 });
