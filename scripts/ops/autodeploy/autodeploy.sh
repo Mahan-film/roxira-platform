@@ -171,7 +171,7 @@ gate4_sha_check() {
 # (b) Browser smoke (e2e/tests/app-shell.spec.ts) in chromium and webkit. Skips with a log line
 # when Playwright or a browser is not installed on the server.
 gate4_browser_smoke() {
-  local e2e="$REPO/e2e" cache="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+  local e2e="$REPO/e2e" cache="${PLAYWRIGHT_BROWSERS_PATH:-${HOME:-/root}/.cache/ms-playwright}"
   local projects=() out
   if ! command -v npx >/dev/null 2>&1 || [ ! -d "$e2e/node_modules/@playwright/test" ]; then
     log "gate4: browser smoke SKIPPED (Playwright not installed in $e2e; run npm ci there)"
@@ -201,4 +201,6 @@ gate4() {
   [ "$rc" -eq 0 ] && log "gate4: all checks passed"
   return 0
 }
-gate4 || true
+# Subshell: a bug in Gate 4 (e.g. an unset variable under `set -u`) must never turn a good deploy
+# into "failed". The systemd unit runs without HOME, which npx/Playwright need.
+( export HOME="${HOME:-/root}"; gate4 ) || log "gate4: crashed (ignored; deploy result unchanged)"
