@@ -4,7 +4,7 @@
 #   install.sh            show preconditions and the plan; changes nothing (exit 0)
 #   install.sh --apply    create DKIM keys if missing, start the container, print the DNS records and SMTP_* values
 #
-# Keys live in $MAIL_DKIM_DIR (default /var/lib/roxira-mail/dkim), outside the repo, mode 711/600, generated
+# Keys live in $MAIL_DKIM_DIR (default /var/lib/roxira-mail/dkim), outside the repo, mode 750/600 (owner opendkim 101:104), generated
 # once and never overwritten. The private keys are never printed. No host port is published.
 set -euo pipefail
 
@@ -64,7 +64,7 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$NAME"; then log "$NA
 if [ "${#PROBLEMS[@]}" -gt 0 ]; then log "${#PROBLEMS[@]} blocker(s) listed above."; fi
 
 if [ "$APPLY" != 1 ]; then
-  log "dry-run only. Would: mkdir -p $MAIL_DKIM_DIR (711); openssl genrsa 2048 per missing domain (600);"
+  log "dry-run only. Would: mkdir -p $MAIL_DKIM_DIR (750, 101:104); openssl genrsa 2048 per missing domain (600);"
   log "docker compose -f $COMPOSE -p roxira-mail up -d; then print DNS records and SMTP_* values."
   log "Re-run with --apply once there are no blockers."
   exit 0
@@ -73,7 +73,11 @@ if [ "${#PROBLEMS[@]}" -gt 0 ]; then log "ERROR: refusing to apply with blockers
 
 umask 077
 mkdir -p "$MAIL_DKIM_DIR"
-chmod 711 "$MAIL_DKIM_DIR"   # opendkim (non-root) must traverse it; keys stay 600
+# The image's opendkim.sh runs as opendkim (uid 101, gid 104 in boky/postfix) and must LIST this dir:
+# with 711 its `find` failed, it decided there were no keys and never started, so mail left unsigned
+# (DMARC dkim=fail, 2026-10-22). Owner opendkim, 750; keys stay 600.
+chown 101:104 "$MAIL_DKIM_DIR"
+chmod 750 "$MAIL_DKIM_DIR"
 for d in "${DOMAINS[@]}"; do
   if [ ! -f "$MAIL_DKIM_DIR/$d.private" ]; then
     openssl genrsa -out "$MAIL_DKIM_DIR/$d.private" 2048 2>/dev/null
