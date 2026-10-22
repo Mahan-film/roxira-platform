@@ -460,3 +460,10 @@ def test_main_apply_target_regulations_uses_default_collection(tmp_path):
     )
     assert rc == 0
     assert len(qd.cols["iran_regulations_v3"]) == 1
+
+
+def test_embed_text_is_truncated_for_the_embedder_only():
+    row = {"text": "ا" * 9000}
+    assert len(b7.embed_text(row)) == b7.EMBED_CHARS == 2000
+    assert len(row["text"]) == 9000
+    assert b7.embed_text({}) == ""

@@ -526,6 +526,17 @@ def cf_embed(texts: list[str], *, post=_cf_post_json) -> list[list[float]]:
     raise Refusal(f"CF embed failed after {CF_EMBED_RETRIES + 1} attempts: {last}")
 
 
+# Same cut as the v6/regulation builds (EMBED_CHARS in ingest_regulations.py / docs/infra/MODAL_EMBED_PARITY.md):
+# the embedding sees the first 2000 chars; the full text stays in the payload. Workers AI also rejects
+# inputs over 8192 tokens (HTTP 400 "Sequence too long", found on the first --apply run 2026-10-22).
+EMBED_CHARS = 2000
+
+
+def embed_text(row: dict) -> str:
+    """Text sent to the embedder for one row (truncated; the payload keeps the full text)."""
+    return str(row.get("text") or "")[:EMBED_CHARS]
+
+
 def make_embedder(backend: str | None = None):
     """Return an embed callable: CF first with TEI/local fallback when ``EMBED_BACKEND=cf``."""
     chosen = (
@@ -712,7 +723,7 @@ def apply(
     created = False
     for start in range(0, len(merged), batch):
         chunk = merged[start : start + batch]
-        vectors = embed([str(row.get("text") or "") for row in chunk])
+        vectors = embed([embed_text(row) for row in chunk])
         if len(vectors) != len(chunk):
             raise Refusal("embed function returned a wrong number of vectors")
         if not created:
