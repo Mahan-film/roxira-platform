@@ -1,6 +1,6 @@
 > **Plan: `docs/strategy/MASTER_PLAN_2026-10-16.md` (v2: factory first, then a global business via the Malaysian company; Track I Iran / Track G global). Owner decisions are in §0.**
 
-> **Last update: 2026-10-22. NEW CHAT? Read this file, then `docs/HANDOFF_2026-10-15.md` (older context; the section "Shipped 2026-10-16..20" below supersedes it). Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
+> **Last update: 2026-10-22 (evening). NEW CHAT / OTHER AI? Start at `docs/CONTEXT_HUB.md`, then read this file, then `docs/HANDOFF_2026-10-15.md` (older context; the section "Shipped 2026-10-16..20" below supersedes it). Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
 
 # Current state (read this first)
 
@@ -29,6 +29,33 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - **Business suite** (`docs/strategy/ROXIRA_BUSINESS_SUITE_2026-10-22.md`): own NestJS modules (not ERPNext/Odoo). Live: app at **roxira.ir/app** (dashboard, CRM leads + pipeline, HR employees/contracts, inventory, accounting accounts/trial balance/journal, import wizard; Jalali dates) (#784); **AI import for every entity** (crm-leads, hr-employees, inventory-items, accounting-accounts, accounting-opening-balances; auto-detect, Persian/Jalali/rial normaliser, duplicate checks, import batches with undo; tables `data_import_batches`/`_items` with tenant_id) (#790); PDF and photo import via a vision model with `data_collection: deny` (#786). **Twenty CRM stopped** (data kept; restart command in `/root/deploy-state/disk-guard.log`).
 - **Backups**: tier 4 = daily encrypted pg dump to the owner's Telegram (`roxira-telegram-offsite.timer` 04:15 UTC, age recipient `/etc/roxira-backup-age.pub`, private key only on the Mac; restore verified; `docs/ops/TELEGRAM_BACKUP.md`).
 - **Monitor**: synthetic chat probe bypasses only the guest daily cap with `MONITOR_BYPASS_TOKEN` (#785). Agent runner no longer dies on diffs > 600 lines (#783).
+
+### 2026-10-22 afternoon/evening
+- **Deploy incident**: every backend deploy from #807 to #812 failed (Dockerfile did not copy the new `mcp/` dir)
+  and was rolled back; the owner saw the old UI. Fixed in #813 (`COPY mcp ./mcp`). Lesson: a merge is not a deploy —
+  check `autodeploy-last.json` / `autodeploy-failed-shas`, and build the image when adding a top-level dir.
+- **Pricing**: `/pricing/plans` took ~20 s (Tetherland timeout, Nobitex DNS, old Wallex path 404, no failure cache,
+  async route). #814: Tetherland(2 s) → Wallex markets → Exir → Ramzinex → Nobitex, 5-min failure backoff, sync
+  routes. Now 0.02 s; USDT ≈ 271,000 toman.
+- **Business suite**: multi-currency accounting core (#810: line currency/amount_fx/fx_rate/party_code, invoice
+  currency, currency normaliser), whole-database import (#811 UI, #812 backend: SQLite/.sql/.zip, entity detection,
+  relationship inference, 8 health checks; .sql/.zip dropped on the file tab switch to the database tab, #813),
+  MCP server `/enterprise-hub/mcp` (#807), invoicing + VAT (#795), import limits 10/15 MB (#798).
+  Owner's 86,031-row Gemini challenge DB (the .sqlite copy is malformed; the .sql works): analysis exact (5 real
+  relationships, balance 116.5 trillion rials, all checks ok). **Isolated E2E commit test** (throwaway Postgres/Redis
+  on srv1, `/root/rxtest_e2e.sh`, prod schema only): customers 7,998, items 4,000, invoices 16,000 written; **accounts
+  3/31, journal lines 0, CRM activities 0, no undo batch row — being fixed** (account nature mapping from Persian
+  groups, dependent tables, batch recording).
+- **Cloud**: Cloudflare R2 bucket `roxira-uploads` (object-scoped, IP-restricted token; put/get/delete verified);
+  Modal GPU works (workspace `mahanpikasso`, parity cosine 0.99999999; owner caps it at $30/month); Daytona key
+  verified and an optional Daytona workbench backend merged (#804, not enabled yet).
+- **Mail**: OpenDKIM never started (key dir 711) → all mail unsigned; fixed (750, owner opendkim), verified signed.
+- **Security**: production npm advisories 0 high/critical (#799). **Dependabot leftovers** only in data/sandboxes,
+  templates, projects (not deployed).
+- **Legal corpus v7** built as `iran_laws_v7` (7,295 points) but **not switched** (r@1 72.9 → 67.1 %): duplicate law
+  names (e.g. «وارده» vs «وارد شده»); alias dedupe queued (taskq 36).
+- **Known gap**: migrations cannot build a fresh database from zero (the first migration assumes existing tables);
+  needed for new environments and the factory.
 
 ## Shipped 2026-10-21
 
