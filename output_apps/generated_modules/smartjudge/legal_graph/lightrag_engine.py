@@ -25,6 +25,7 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -168,6 +169,22 @@ EMBEDDING_URL_ENV = "EMBEDDING_URL"
 EMBEDDING_HTTP_BATCH_SIZE = int(os.environ.get("EMBEDDING_HTTP_BATCH_SIZE", "16"))
 EMBEDDING_HTTP_TIMEOUT = float(os.environ.get("EMBEDDING_HTTP_TIMEOUT", "30"))
 EMBEDDING_HTTP_RETRIES = int(os.environ.get("EMBEDDING_HTTP_RETRIES", "2"))
+
+# ── بک‌اند embedding پرس‌وجو: Cloudflare Workers AI (انتخابی) ────────────────
+# با ``EMBED_BACKEND=cf`` بردار پرس‌وجو از Workers AI با مدل ``@cf/baai/bge-m3``
+# گرفته می‌شود — همان مدل ۱۰۲۴بعدی و L2-نرمال‌شدهٔ TEI. پیش‌فرض ``tei`` است
+# (هیچ تغییری تا وقتی توکن مالک تنظیم نشود و تست parity قبول نشود). در هر خطا،
+# پاسخ غیر۲۰۰، ابعاد نادرست یا نبود متغیر محیطی، یک هشدار (بدون توکن) ثبت و به
+# مسیر TEI/local تنزل می‌کنیم.
+EMBED_BACKEND_ENV = "EMBED_BACKEND"
+CF_ACCOUNT_ID_ENV = "CF_ACCOUNT_ID"
+CF_AI_TOKEN_ENV = "CF_AI_TOKEN"
+CF_EMBED_MODEL = "@cf/baai/bge-m3"
+CF_EMBED_DIM = 1024
+CF_EMBED_URL_TEMPLATE = (
+    "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/" + CF_EMBED_MODEL
+)
+CF_EMBED_TIMEOUT = float(os.environ.get("CF_EMBED_TIMEOUT", "3"))
 
 _rag_lock = threading.Lock()
 _rag_instance: Any = None
@@ -683,6 +700,104 @@ def _embed_texts_http(texts: List[str]) -> List[List[float]]:
     return vectors
 
 
+def embed_backend() -> str:
+    """بک‌اند embedding پرس‌وجو: ``cf`` یا پیش‌فرض ``tei``."""
+    return os.environ.get(EMBED_BACKEND_ENV, "").strip().lower() or "tei"
+
+
+def _l2_normalise(vector: Sequence[float]) -> List[float]:
+    """بردار را L2-نرمال می‌کند (TEI با ``normalize=true`` همین را برمی‌گرداند)."""
+    norm = math.sqrt(sum(float(x) * float(x) for x in vector))
+    if norm <= 0.0:
+        return [float(x) for x in vector]
+    return [float(x) / norm for x in vector]
+
+
+def _extract_cf_vectors(payload: Any) -> List[List[float]]:
+    """بردارها را از پاسخ Workers AI بیرون می‌کشد — هم ``data`` و هم ``response``.
+
+    شکل قطعی در مستندات ambiguous است، پس هر دو کلید، هم داخل ``result`` و هم در
+    سطح بالای پاسخ بررسی می‌شود.
+    """
+    if not isinstance(payload, dict):
+        return []
+    for container in (payload.get("result"), payload):
+        if not isinstance(container, dict):
+            continue
+        for key in ("data", "response"):
+            value = container.get(key)
+            if isinstance(value, list) and all(isinstance(vector, list) for vector in value):
+                return [[float(x) for x in vector] for vector in value]
+    return []
+
+
+def _cf_account_id() -> str:
+    return os.environ.get(CF_ACCOUNT_ID_ENV, "").strip()
+
+
+def _cf_ai_token() -> str:
+    return os.environ.get(CF_AI_TOKEN_ENV, "").strip()
+
+
+def _cf_post_json(
+    url: str, payload: Dict[str, Any], timeout: float, token: str
+) -> Tuple[int, Any]:
+    """POST امضاشده به Workers AI؛ ``(status, parsed)`` (در تست‌ها mock می‌شود)."""
+    import urllib.request
+
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        status = int(getattr(response, "status", 200) or 200)
+        raw = response.read().decode("utf-8") or "{}"
+    return status, json.loads(raw)
+
+
+def _embed_texts_cf(texts: List[str]) -> List[List[float]]:
+    """embed پرس‌وجو از Cloudflare Workers AI (``@cf/baai/bge-m3``، L2-نرمال‌شده).
+
+    نبود متغیر محیطی، خطای شبکه/مهلت، پاسخ غیر۲۰۰، تعداد نادرست و ابعاد نامنطبق
+    همگی با استثنا اعلام می‌شوند تا فراخوان به مسیر TEI/local تنزل کند. توکن هرگز
+    لاگ نمی‌شود.
+    """
+    account = _cf_account_id()
+    token = _cf_ai_token()
+    if not account or not token:
+        raise RuntimeError("CF backend selected but CF_ACCOUNT_ID/CF_AI_TOKEN are unset")
+    url = CF_EMBED_URL_TEMPLATE.format(account=account)
+    status, payload = _cf_post_json(url, {"text": list(texts)}, CF_EMBED_TIMEOUT, token)
+    if status != 200:
+        raise RuntimeError(f"CF embed returned HTTP {status}")
+    vectors = _extract_cf_vectors(payload)
+    if len(vectors) != len(texts):
+        raise RuntimeError(f"CF embed returned {len(vectors)} vectors for {len(texts)} texts")
+    for vector in vectors:
+        if len(vector) != CF_EMBED_DIM:
+            raise RuntimeError(f"CF embed dims {len(vector)} != {CF_EMBED_DIM}")
+    return [_l2_normalise(vector) for vector in vectors]
+
+
+def _embed_cache_key(text: str) -> str:
+    """کلید کش: متن پرس‌وجوی نرمال‌شده (فاصله/خط‌های تکراری یکی‌شده)."""
+    return " ".join(str(text).split())
+
+
+def _embed_query_cf(text: str) -> Optional[List[float]]:
+    """بردار پرس‌وجو از CF؛ در هر خطا ``None`` (یک هشدار، بدون توکن)."""
+    try:
+        return _embed_texts_cf([text])[0]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Cloudflare embedding backend unavailable -> TEI fallback: %s", exc)
+        return None
+
+
 def warm_up_embedder() -> bool:
     """Load the embedder and run one encode so the first user request is not cold."""
     return _embed_query_sync("warm up") is not None
@@ -695,13 +810,25 @@ async def warm_up_embedder_async() -> bool:
 def _embed_query_sync(text: str) -> Optional[List[float]]:
     """رشته را embed می‌کند؛ در نبود مدل/سرویس یا شکست، ``None``.
 
-    با ``EMBEDDING_URL`` از سرویس مشترک TEI گرفته می‌شود (بدون بارگذاری مدل محلی)؛
-    در غیر این صورت دقیقاً مسیر فعلی sentence-transformers اجرا می‌شود.
+    با ``EMBED_BACKEND=cf`` ابتدا Cloudflare Workers AI امتحان می‌شود و در هر خطا
+    (یک هشدار، بدون توکن) به مسیر زیر تنزل می‌کند. با ``EMBEDDING_URL`` بردار از
+    سرویس مشترک TEI گرفته می‌شود (بدون بارگذاری مدل محلی)؛ در غیر این صورت دقیقاً
+    مسیر فعلی sentence-transformers اجرا می‌شود.
     """
+    key = _embed_cache_key(text)
     if _embed_cache is not None:
-        hit = _embed_cache.get(text)
+        hit = _embed_cache.get(key)
         if hit is not None:
             return list(hit)
+    if embed_backend() == "cf":
+        t0 = time.perf_counter()
+        result = _embed_query_cf(text)
+        if result is not None:
+            if _chat_fast is not None:
+                _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
+            if _embed_cache is not None:
+                _embed_cache.set(key, result)
+            return result
     if embedding_url():
         try:
             t0 = time.perf_counter()
@@ -709,7 +836,7 @@ def _embed_query_sync(text: str) -> Optional[List[float]]:
             if _chat_fast is not None:
                 _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
             if _embed_cache is not None:
-                _embed_cache.set(text, result)
+                _embed_cache.set(key, result)
             return result
         except Exception as exc:  # noqa: BLE001
             logger.warning("Shared embedding service failed -> scroll fallback: %s", exc)
@@ -724,7 +851,7 @@ def _embed_query_sync(text: str) -> Optional[List[float]]:
         if _chat_fast is not None:
             _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
         if _embed_cache is not None:
-            _embed_cache.set(text, result)
+            _embed_cache.set(key, result)
         return result
     except Exception as exc:  # noqa: BLE001
         logger.warning("Query embedding failed -> scroll fallback: %s", exc)

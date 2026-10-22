@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile.prod
     container_name: roxira_app_prod
     restart: always
+    mem_limit: 1200m
+    mem_reservation: 600m
     security_opt:
       - no-new-privileges:true
     # FastAPI AI Core (پورت ۸۰۰۰) فقط روی loopback هاست منتشر می‌شود تا
@@ -114,6 +116,8 @@ services:
     image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     container_name: roxira_postgres_prod
     restart: always
+    mem_limit: 1024m
+    mem_reservation: 512m
     security_opt:
       - no-new-privileges:true
     environment:
@@ -148,6 +152,8 @@ services:
     image: edoburu/pgbouncer@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd
     container_name: roxira_pgbouncer
     restart: always
+    mem_limit: 128m
+    mem_reservation: 64m
     security_opt:
       - no-new-privileges:true
     environment:
@@ -190,6 +196,8 @@ services:
     image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     container_name: roxira_redis_prod
     restart: always
+    mem_limit: 256m
+    mem_reservation: 128m
     security_opt:
       - no-new-privileges:true
     ports:
@@ -214,6 +222,8 @@ services:
     image: qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc
     container_name: roxira_qdrant_prod
     restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
     security_opt:
       - no-new-privileges:true
     ports:
@@ -250,6 +260,7 @@ services:
     volumes:
       - /var/lib/roxira/tei-cache:/data
     mem_limit: 3500m
+    mem_reservation: 1024m
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
       interval: 15s
@@ -270,6 +281,8 @@ services:
       dockerfile: Dockerfile
     container_name: roxira_enterprise_backend
     restart: always
+    mem_limit: 900m
+    mem_reservation: 450m
     env_file:
       - .env
     environment:
@@ -345,6 +358,8 @@ services:
     image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
     container_name: roxira_docker_socket_proxy
     restart: always
+    mem_limit: 64m
+    mem_reservation: 32m
     environment:
       CONTAINERS: 1
       POST: 0
@@ -394,6 +409,8 @@ services:
         JUDGE_API_ORIGIN: http://roxira_app_prod:8000
     container_name: roxira_enterprise_frontend
     restart: always
+    mem_limit: 600m
+    mem_reservation: 300m
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -422,6 +439,8 @@ services:
     image: nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
     container_name: roxira_nginx_prod
     restart: always
+    mem_limit: 128m
+    mem_reservation: 64m
     security_opt:
       - no-new-privileges:true
     ports:
