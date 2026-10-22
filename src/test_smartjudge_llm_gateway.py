@@ -60,6 +60,8 @@ def env(monkeypatch):
         "SMARTJUDGE_LLM_GATEWAY", "SMARTJUDGE_LLM_GATEWAY_MODEL", "KEYPOOL_MASTER_KEY",
         "LLM_USAGE_DSN", "LLM_USAGE_LOG_PATH", "REDIS_URL", "REDIS_HOST",
         "LLM_REASONING_CHEAP", "LLM_SENSITIVE_DENY_DATA_COLLECTION",
+        "SMARTJUDGE_LLM_GATEWAY_MODEL_FREE", "SMARTJUDGE_LLM_GATEWAY_MODEL_VIP",
+        "SMARTJUDGE_FREE_PAID_FALLBACK",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", DIRECT_KEY)
@@ -126,7 +128,7 @@ def test_flag_on_calls_gateway_with_model_and_key(monkeypatch):
     [req] = script.gateway_requests()
     assert req.url.path == "/v1/chat/completions"
     body = json.loads(req.content)
-    assert body["model"] == "agent-strong-free"
+    assert body["model"] == "best-product-free"  # no plan -> free-only group (#713)
     assert "models" not in body and "provider" not in body
     assert req.headers["authorization"] == f"Bearer {GW_KEY}"
     assert res.content == "gw"
@@ -150,7 +152,17 @@ def test_gateway_error_falls_back_to_direct(monkeypatch):
 
 
 # ---- streaming chat path ----------------------------------------------------
-def test_stream_flag_off_uses_direct(monkeypatch):
+def test_stream_flag_off_free_user_never_reaches_paid(monkeypatch):
+    # Owner rule (#713): a FREE user gets no direct paid OpenRouter call.
+    calls = []
+    _install_opener(monkeypatch, calls)
+    outcome, kind = run(m._llm_stream_answer(MESSAGES, "FREE", False, 50, 0.2))
+    assert kind == "free_no_paid" and outcome.text == ""
+    assert calls == []
+
+
+def test_stream_flag_off_uses_direct_with_paid_fallback_switch(monkeypatch):
+    monkeypatch.setenv("SMARTJUDGE_FREE_PAID_FALLBACK", "1")
     calls = []
     _install_opener(monkeypatch, calls)
     outcome, kind = run(m._llm_stream_answer(MESSAGES, "FREE", False, 50, 0.2))
@@ -166,19 +178,30 @@ def test_stream_flag_on_calls_gateway_with_model_and_key(monkeypatch):
     _install_opener(monkeypatch, calls)
     outcome, kind = run(m._llm_stream_answer(MESSAGES, "FREE", False, 50, 0.2))
     assert kind == "ok" and outcome.text == "بخش پاسخ"
-    assert outcome.model == "agent-strong-free"
-    assert calls == [{"model": "agent-strong-free", "gateway": True, "key": GW_KEY}]
+    assert outcome.model == "best-product-free"
+    assert calls == [{"model": "best-product-free", "gateway": True, "key": GW_KEY}]
 
 
-def test_stream_gateway_error_falls_back_to_direct(monkeypatch):
+def test_stream_gateway_error_free_user_gets_free_no_paid(monkeypatch):
     monkeypatch.setenv("SMARTJUDGE_LLM_GATEWAY", GATEWAY_BASE)
     monkeypatch.setenv("KEYPOOL_MASTER_KEY", GW_KEY)
     calls = []
     _install_opener(monkeypatch, calls, fail_gateway=True)
     outcome, kind = run(m._llm_stream_answer(MESSAGES, "FREE", False, 50, 0.2))
+    assert kind == "free_no_paid" and outcome.text == ""
+    assert calls == [{"model": "best-product-free", "gateway": True, "key": GW_KEY}]
+
+
+def test_stream_gateway_error_falls_back_to_direct(monkeypatch):
+    monkeypatch.setenv("SMARTJUDGE_LLM_GATEWAY", GATEWAY_BASE)
+    monkeypatch.setenv("KEYPOOL_MASTER_KEY", GW_KEY)
+    monkeypatch.setenv("SMARTJUDGE_FREE_PAID_FALLBACK", "1")
+    calls = []
+    _install_opener(monkeypatch, calls, fail_gateway=True)
+    outcome, kind = run(m._llm_stream_answer(MESSAGES, "FREE", False, 50, 0.2))
     assert kind == "ok" and outcome.text == "بخش پاسخ"
     assert outcome.model == m._FREE_PRIMARY
-    assert calls[0] == {"model": "agent-strong-free", "gateway": True, "key": GW_KEY}
+    assert calls[0] == {"model": "best-product-free", "gateway": True, "key": GW_KEY}
     assert calls[1] == {"model": m._FREE_PRIMARY, "gateway": False, "key": DIRECT_KEY}
 
 

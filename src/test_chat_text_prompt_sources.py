@@ -59,11 +59,11 @@ def test_text_prompt_differs_from_voice_and_has_grounding_rules(monkeypatch):
     basic = pl.build_text_prompt_basic(True)
     for prompt in (text, basic):
         assert prompt != pl.VOICE_SYSTEM_PROMPT
-        assert "۲۵ کلمه" not in prompt
+        assert "۲ تا ۴ جمله" not in prompt  # the voice brevity rule (#744)
         for needle in ("خلاصه پاسخ", "مبنای قانونی", "نکات عملی", "هشدار مشورتی",
                        "یافت نشد", "هرگز شمارهٔ ماده", "آخرین اصلاحیه"):
             assert needle in prompt
-    assert "۲۵ کلمه" in pl.VOICE_SYSTEM_PROMPT
+    assert "۲ تا ۴ جمله" in pl.VOICE_SYSTEM_PROMPT
 
 
 def test_golden_set_valid():

@@ -14,7 +14,8 @@ HEADERS = [
     'add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;',
     "add_header Content-Security-Policy-Report-Only \"default-src 'self'; img-src 'self' data: https:; "
     "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
-    "connect-src 'self' wss: https:; frame-ancestors 'self'\" always;",
+    "connect-src 'self' wss: https:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; "
+    "form-action 'self'\" always;",
 ]
 
 

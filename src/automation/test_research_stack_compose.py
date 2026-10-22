@@ -26,4 +26,6 @@ def test_research_stack_compose_configuration() -> None:
     assert "SEARXNG_SECRET:-" not in compose_text
     assert "SEARXNG_SECRET-" not in compose_text
     assert "json" in settings["search"]["formats"]
-    assert settings["server"]["limiter"] is True
+    # Internal-only instance (no public port): the limiter 429s our own research service (#613).
+    assert settings["server"]["limiter"] is False
+    assert settings["server"]["public_instance"] is False

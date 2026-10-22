@@ -27,7 +27,7 @@ def _tron_address(seed: str) -> str:
     return out
 
 
-OUR = _tron_address("ours")
+OUR = "TRqUrxAxPuiJEAhAqoFFaR4N94kLiNV1fw"  # == _tron_address("ours"); a literal keeps import side-effect free
 PLANS = {
     "SJ_PRO_MONTHLY": {"name": "pro", "usd": 10.0, "price_rial": 1},
     "SINGLE_DRAFT": {"name": "draft", "price_rial": 1},

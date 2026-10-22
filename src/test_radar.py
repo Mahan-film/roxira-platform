@@ -8,9 +8,15 @@ import time
 import pytest
 
 _PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "ops" / "radar" / "radar.py"
-_spec = importlib.util.spec_from_file_location("radar_under_test", _PATH)
-radar = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(radar)
+radar = None  # loaded by the fixture below, not at import (src/test_ci_quarantine_guard.py)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _load_radar():
+    global radar
+    spec = importlib.util.spec_from_file_location("radar_under_test", _PATH)
+    radar = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(radar)
 
 NOW = 1_790_000_000.0  # fixed clock
 DAY = 86400
@@ -139,11 +145,11 @@ def test_llm_does_nothing_without_key():
 
 
 def test_llm_second_call_refused_after_cost_reaches_cap():
-    post = _fake_post(cost=0.049)
+    post = _fake_post(cost=0.0497)
     b = radar.RunBudget(0.05)
     llm = radar.LLM(b, "k", post=post)
     assert llm.ask("cheap", "s", "u", "one") is not None
-    assert llm.ask("cheap", "s", "u" * 3000, "two") is None  # est would pass the cap
+    assert llm.ask("cheap", "s", "u" * 3000, "two") is None  # spent + est (~0.0006) would pass the cap
     assert len(post.calls) == 1 and b.stopped and b.spent <= 0.05 + 1e-9
 
 
@@ -206,7 +212,7 @@ def test_openrouter_diff_price_drop_retired_new_and_gemini_pro_skipped():
 
 def test_registry_parser_reads_real_models_yaml():
     reg = radar.load_registry_prices()
-    assert reg["deepseek/deepseek-v4.1-flash"]["in"] == pytest.approx(0.30)
+    assert reg["deepseek/deepseek-v4.1-flash"]["in"] == pytest.approx(0.036)
     assert "cheap" in reg["deepseek/deepseek-v4.1-flash"]["roles"]
     assert reg["qwen/qwen3.8-27b:free"]["in"] == 0
 

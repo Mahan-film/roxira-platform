@@ -13,8 +13,11 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parent
 SKIP_DIRS = {"venv", "node_modules", "__pycache__"}
 SAFE_NODES = (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-# Calls allowed in module-level assignments: pure path/container construction.
-PURE_CALLS = {"Path", "resolve", "with_name", "joinpath", "set", "frozenset", "tuple", "dict"}
+# Calls allowed in module-level assignments: pure path/container/value construction.
+PURE_CALLS = {
+    "Path", "resolve", "with_name", "joinpath", "set", "frozenset", "tuple", "dict",
+    "datetime", "timedelta", "which",
+}
 
 
 def _call_name(call: ast.Call) -> str:
@@ -77,5 +80,6 @@ def test_safe_statement_detection():
     assert _is_safe_statement(ast.parse("import os").body[0])
     assert _is_safe_statement(ast.parse("X = 1").body[0])
     assert _is_safe_statement(ast.parse("ROOT = Path(__file__).resolve().parent").body[0])
+    assert _is_safe_statement(ast.parse("T0 = dt.datetime(2026, 1, 1)").body[0])
     assert not _is_safe_statement(ast.parse("engine = Engine()").body[0])
     assert not _is_safe_statement(ast.parse("print('x')").body[0])

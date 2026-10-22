@@ -49,9 +49,13 @@ def test_crm_repository_scopes_every_method_by_tenant():
 
     methods = {
         "createLead",
+        "createLeads",
         "saveLead",
         "findLeadById",
         "findLeadByEmail",
+        "findLeadEmails",
+        "findLeadPhones",
+        "deleteLeadsByIds",
         "findLeadsAndCount",
         "findAllLeads",
         "countAllLeads",
@@ -130,7 +134,8 @@ def test_crm_controller_is_guarded_and_reads_tenant_from_jwt():
     assert "AuthenticatedRequest" in controller
     assert "JwtAuthGuard," in controller
     assert "from '../../auth/guards/jwt-auth.guard'" in controller
-    assert "request.user?.sub" in controller
+    assert "from '../../tenants/tenant-context'" in controller
+    assert "return requireTenantId(request);" in controller
     assert controller.count("@Req() request: AuthenticatedRequest") >= 10
     assert (
         controller.count("this.tenantIdOf(request)") >= 10
@@ -140,6 +145,17 @@ def test_crm_controller_is_guarded_and_reads_tenant_from_jwt():
     assert "dto.tenant" not in lowered
     assert "query.tenant" not in lowered
     assert "body.tenant" not in lowered
+
+    # requireTenantId: the verified JWT tenant claim only, fail-closed, never the user id.
+    context = (
+        _crm_root().parent / "tenants/tenant-context.ts"
+    ).read_text()
+    start = context.index("export function requireTenantId(")
+    helper = context[start : context.index("\n}\n", start)]
+    assert "const tenantId = request.user?.tenantId;" in helper
+    assert "throw new ForbiddenException(" in helper
+    for forbidden in ("request.user?.sub", "request.body", "request.query", "request.headers"):
+        assert forbidden not in helper, forbidden
 
 
 def test_crm_dtos_reject_a_tenant_field():
