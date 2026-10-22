@@ -70,6 +70,18 @@ export class InvoiceResponseDto {
   @ApiProperty({ description: 'زمان تسویه کامل', nullable: true })
   paidAt: Date | null;
 
+  @ApiProperty({ description: 'شناسه سند حسابداری صدور', nullable: true })
+  journalEntryId: number | null;
+
+  @ApiProperty({ description: 'شناسه سند حسابداری تسویه', nullable: true })
+  paidJournalEntryId: number | null;
+
+  @ApiProperty({ description: 'شناسه سند حسابداری ابطال', nullable: true })
+  reversalJournalEntryId: number | null;
+
+  @ApiProperty({ description: 'آخرین خطای ثبت خودکار (در صورت وجود)', nullable: true })
+  postingError: string | null;
+
   @ApiProperty({ description: 'تاریخ ثبت صورتحساب در سیستم' })
   createdAt: Date;
 }

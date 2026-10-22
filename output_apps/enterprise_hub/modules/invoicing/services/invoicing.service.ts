@@ -2,9 +2,12 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { FindOptionsWhere, ILike } from 'typeorm';
 import { CrmRepository } from '../../crm/repositories/crm.repository';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
@@ -16,6 +19,10 @@ import {
   DEFAULT_VAT_RATE,
   MONEY_SCALE,
 } from '../constants/invoicing.constants';
+import {
+  SUITE_EVENT_INVOICE_STATUS_JOB,
+  SUITE_EVENTS_QUEUE,
+} from '../constants/suite-events.constants';
 import {
   CreateInvoiceDto,
   InvoiceItemDto,
@@ -64,6 +71,8 @@ export interface InvoicingImportInput {
  */
 @Injectable()
 export class InvoicingService {
+  private readonly logger = new Logger(InvoicingService.name);
+
   constructor(
     private readonly invoicingRepository: InvoicingRepository,
     private readonly currencyService: CurrencyService,
@@ -71,7 +80,37 @@ export class InvoicingService {
     @Optional()
     private readonly inventoryRepository?: InventoryRepository,
     @Optional() private readonly tenantsRepository?: TenantsRepository,
+    @Optional()
+    @InjectQueue(SUITE_EVENTS_QUEUE)
+    private readonly suiteEventsQueue?: Queue,
   ) {}
+
+  /**
+   * انتشار رویداد تغییر وضعیت صورتحساب در صف `suite-events` (Rule #5).
+   * در نبود صف (محیط تست)، بی‌صدا نادیده گرفته می‌شود.
+   */
+  private async emitStatusEvent(
+    tenantId: string,
+    invoiceId: string,
+    status: InvoiceStatus,
+  ): Promise<void> {
+    if (!this.suiteEventsQueue) {
+      return;
+    }
+    try {
+      await this.suiteEventsQueue.add(
+        SUITE_EVENT_INVOICE_STATUS_JOB,
+        { tenantId, invoiceId, status },
+        { removeOnComplete: true, removeOnFail: true },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to enqueue ${status} event for invoice ${invoiceId}: ${
+          (error as Error).message
+        }`,
+      );
+    }
+  }
 
   /** گرد کردن مبالغ ریالی تا ۲ رقم اعشار. */
   private round(value: number): number {
@@ -311,6 +350,10 @@ export class InvoicingService {
       status: entity.status,
       issuedAt: entity.issuedAt ?? null,
       paidAt: entity.paidAt ?? null,
+      journalEntryId: entity.journalEntryId ?? null,
+      paidJournalEntryId: entity.paidJournalEntryId ?? null,
+      reversalJournalEntryId: entity.reversalJournalEntryId ?? null,
+      postingError: entity.postingError ?? null,
       createdAt: entity.createdAt,
     };
   }
@@ -345,6 +388,7 @@ export class InvoicingService {
 
     const currency = dto.currency ?? Currency.IRR;
     const exchangeRate = this.currencyService.getRate(currency, BASE_CURRENCY);
+    const fxRate = this.currencyService.getRate(currency, Currency.IRR);
     const status = dto.status ?? InvoiceStatus.DRAFT;
 
     const entity = {
@@ -355,6 +399,7 @@ export class InvoicingService {
       items,
       currency,
       exchangeRate,
+      fxRate,
       baseCurrency: BASE_CURRENCY,
       totalAmount: totals.totalAmount,
       totalDiscount: totals.totalDiscount,
@@ -380,6 +425,11 @@ export class InvoicingService {
     this.applyStatusTimestamps(entity, status);
 
     const saved = await this.invoicingRepository.create(tenantId, entity);
+
+    if (status === InvoiceStatus.ISSUED || status === InvoiceStatus.PAID) {
+      await this.emitStatusEvent(tenantId, saved.id, status);
+    }
+
     return this.toResponseDto(saved);
   }
 
@@ -476,6 +526,8 @@ export class InvoicingService {
       );
     }
 
+    const previousStatus = entity.status;
+
     if (
       dto.taxInvoiceNumber !== undefined &&
       dto.taxInvoiceNumber !== entity.taxInvoiceNumber
@@ -538,6 +590,10 @@ export class InvoicingService {
         dto.currency,
         BASE_CURRENCY,
       );
+      entity.fxRate = this.currencyService.getRate(
+        dto.currency,
+        Currency.IRR,
+      );
     }
     if (dto.status !== undefined) {
       entity.status = dto.status;
@@ -545,7 +601,37 @@ export class InvoicingService {
     }
 
     const saved = await this.invoicingRepository.save(tenantId, entity);
+
+    if (dto.status !== undefined && entity.status !== previousStatus) {
+      await this.emitStatusTransition(
+        tenantId,
+        saved.id,
+        previousStatus,
+        entity.status,
+      );
+    }
+
     return this.toResponseDto(saved);
+  }
+
+  /** انتشار رویداد مناسب بر اساس گذر وضعیت (صدور/تسویه/ابطال). */
+  private async emitStatusTransition(
+    tenantId: string,
+    invoiceId: string,
+    previousStatus: InvoiceStatus,
+    nextStatus: InvoiceStatus,
+  ): Promise<void> {
+    if (nextStatus === InvoiceStatus.ISSUED) {
+      await this.emitStatusEvent(tenantId, invoiceId, InvoiceStatus.ISSUED);
+    } else if (nextStatus === InvoiceStatus.PAID) {
+      await this.emitStatusEvent(tenantId, invoiceId, InvoiceStatus.PAID);
+    } else if (
+      nextStatus === InvoiceStatus.CANCELLED &&
+      (previousStatus === InvoiceStatus.ISSUED ||
+        previousStatus === InvoiceStatus.PAID)
+    ) {
+      await this.emitStatusEvent(tenantId, invoiceId, InvoiceStatus.CANCELLED);
+    }
   }
 
   /**
@@ -571,6 +657,7 @@ export class InvoicingService {
     }
 
     const saved = await this.invoicingRepository.save(tenantId, entity);
+    await this.emitStatusEvent(tenantId, saved.id, InvoiceStatus.PAID);
     return this.toResponseDto(saved);
   }
 
@@ -588,8 +675,16 @@ export class InvoicingService {
       throw new ConflictException('این صورتحساب قبلاً ابطال شده است.');
     }
 
+    const previousStatus = entity.status;
     entity.status = InvoiceStatus.CANCELLED;
     const saved = await this.invoicingRepository.save(tenantId, entity);
+
+    if (
+      previousStatus === InvoiceStatus.ISSUED ||
+      previousStatus === InvoiceStatus.PAID
+    ) {
+      await this.emitStatusEvent(tenantId, saved.id, InvoiceStatus.CANCELLED);
+    }
 
     return this.toResponseDto(saved);
   }

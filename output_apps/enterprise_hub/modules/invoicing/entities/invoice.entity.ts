@@ -140,6 +140,25 @@ export class InvoiceEntity {
   @Column({ type: 'timestamp', name: 'paid_at', nullable: true })
   paidAt: Date | null;
 
+  /**
+   * شناسه سند حسابداری صدور (debit AR / credit Sales + VAT).
+   * مقدارِ غیرتهی به‌عنوان نشانگر «قبلاً ثبت شده» برای ایدمپوتنسی استفاده می‌شود.
+   */
+  @Column({ type: 'int', name: 'journal_entry_id', nullable: true })
+  journalEntryId: number | null;
+
+  /** شناسه سند حسابداری تسویه (debit Cash/Bank / credit AR). */
+  @Column({ type: 'int', name: 'paid_journal_entry_id', nullable: true })
+  paidJournalEntryId: number | null;
+
+  /** شناسه سند حسابداری ابطال (برگشت سند صدور). */
+  @Column({ type: 'int', name: 'reversal_journal_entry_id', nullable: true })
+  reversalJournalEntryId: number | null;
+
+  /** آخرین خطای ثبت خودکار رویدادها؛ در صورت موفقیت پاک می‌شود. */
+  @Column({ type: 'text', name: 'posting_error', nullable: true })
+  postingError: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

@@ -63,6 +63,29 @@ export class InvoicingRepository {
     return this.repository.findOne({ where: { id, tenantId } });
   }
 
+  /**
+   * به‌روزرسانی فقط ستون‌های ثبت رویدادها (سند حسابداری/خطا) با قید مستأجر.
+   *
+   * این متد عمداً جدا از `save` است تا هنگام ثبت ناهمزمان رویداد، سایر فیلدهای
+   * صورتحساب بازنویسی نشوند و نوشتن همیشه فقط روی ردیف همان سازمان اثر بگذارد
+   * (Rule #4 - AGENTS.md: جداسازی مستأجر).
+   */
+  async updatePosting(
+    tenantId: string,
+    id: string,
+    data: Partial<
+      Pick<
+        InvoiceEntity,
+        | 'journalEntryId'
+        | 'paidJournalEntryId'
+        | 'reversalJournalEntryId'
+        | 'postingError'
+      >
+    >,
+  ): Promise<void> {
+    await this.repository.update({ id, tenantId }, data);
+  }
+
   async findByTaxInvoiceNumber(
     tenantId: string,
     taxInvoiceNumber: string,
