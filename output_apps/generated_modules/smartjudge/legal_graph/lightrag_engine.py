@@ -56,6 +56,11 @@ try:  # pragma: no cover - وابسته به محیط نصب
 except Exception as exc:  # noqa: BLE001
     LIGHTRAG_AVAILABLE = False
     LIGHTRAG_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+    # One clear startup line (issue #79): without the package every query is Qdrant-only.
+    logger.warning(
+        "LightRAG unavailable (%s); legal graph retrieval runs in qdrant_vector mode only",
+        LIGHTRAG_IMPORT_ERROR,
+    )
     LightRAG = None  # type: ignore
     QueryParam = None  # type: ignore
     openai_complete_if_cache = None  # type: ignore
@@ -1931,10 +1936,15 @@ def rag_query_sync(query_text: str, mode: Optional[str] = None, top_k: int = 6) 
 def lightrag_health() -> dict:
     """وضعیت موتور LightRAG برای اندپوینت سلامت و پایش عملیاتی."""
     entities = graph_entity_count()
+    ready = is_ready()
+    qdrant_only = entities <= 0 or not ready
     return {
         "engine": "lightrag-hku",
+        # Truthful summary first (issue #79): which engine actually answers queries.
+        "lightrag": "available" if LIGHTRAG_AVAILABLE else "unavailable",
+        "mode": "qdrant_vector" if qdrant_only else "lightrag",
         "available": LIGHTRAG_AVAILABLE,
-        "ready": is_ready(),
+        "ready": ready,
         "import_error": LIGHTRAG_IMPORT_ERROR,
         "init_error": _rag_init_error,
         "llm_model": LIGHTRAG_LLM_MODEL,
@@ -1950,7 +1960,7 @@ def lightrag_health() -> dict:
             "collection": QDRANT_FALLBACK_COLLECTION,
             "host": QDRANT_HOST,
             "port": QDRANT_PORT,
-            "active": entities <= 0 or not is_ready(),
+            "active": qdrant_only,
             **qdrant_fallback_state(),
         },
         "install_hint": "pip install lightrag-hku",
