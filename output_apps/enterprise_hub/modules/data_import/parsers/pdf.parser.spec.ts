@@ -71,4 +71,15 @@ describe('parsePdf', () => {
     const noText = 'BT /F1 12 Tf 1 0 0 1 72 720 Tm ET';
     expect(() => parsePdf(makeTextPdf(noText))).toThrow(ScannedPdfError);
   });
+
+  it('rejects a PDF larger than the configured document limit', () => {
+    process.env.IMPORT_MAX_DOC_BYTES = '16';
+    try {
+      expect(() => parsePdf(makeTextPdf(TWO_COLUMN_CONTENT))).toThrow(
+        PdfParseError,
+      );
+    } finally {
+      delete process.env.IMPORT_MAX_DOC_BYTES;
+    }
+  });
 });

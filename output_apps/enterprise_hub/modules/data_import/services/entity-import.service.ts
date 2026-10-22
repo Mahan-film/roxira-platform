@@ -8,9 +8,10 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 import {
   ALLOWED_UPLOAD_EXTENSIONS,
-  MAX_IMPORT_ROWS,
   MAX_REPORTED_ERRORS,
   MAX_SAMPLE_ROWS,
+  maxImportRows,
+  maxSheetBytes,
 } from '../constants/data-import.constants';
 import { BatchSummaryDto, UndoBatchResponseDto } from '../dto/batch-response.dto';
 import { EntityCommitDto } from '../dto/entity-commit.dto';
@@ -37,6 +38,7 @@ import {
 import { OpenRouterMappingService } from './openrouter-mapping.service';
 import { UploadedFilePayload } from './data-import.service';
 import { UploadStoreService } from './upload-store.service';
+import { DailyImportQuotaService } from './daily-import-quota.service';
 
 /** نتیجه ساخت نگاشت یک موجودیت. */
 interface ResolvedMapping {
@@ -63,6 +65,7 @@ export class EntityImportService {
     private readonly openRouter: OpenRouterMappingService,
     private readonly uploadStore: UploadStoreService,
     private readonly batchRepository: DataImportBatchRepository,
+    private readonly quota: DailyImportQuotaService,
   ) {}
 
   /** فهرست موجودیت‌های قابل ورود و فیلدهای آن‌ها. */
@@ -76,10 +79,12 @@ export class EntityImportService {
     file?: UploadedFilePayload,
     forcedEntity?: string,
   ): Promise<EntityPreviewResponseDto> {
+    await this.quota.assertWithinQuota(tenantId);
     const parsed = this.parseFile(file);
-    if (parsed.rows.length > MAX_IMPORT_ROWS) {
+    const rowLimit = maxImportRows();
+    if (parsed.rows.length > rowLimit) {
       throw new BadRequestException(
-        `حداکثر ${MAX_IMPORT_ROWS} ردیف در هر بارگذاری مجاز است.`,
+        `حداکثر ${rowLimit} ردیف در هر بارگذاری مجاز است.`,
       );
     }
 
@@ -140,6 +145,8 @@ export class EntityImportService {
     }
     this.assertMappingFields(adapter, dto.mapping);
 
+    await this.quota.assertWithinQuota(tenantId);
+
     const { records, errors } = this.buildRecords(adapter, {
       headers: upload.headers,
       rows: upload.rows,
@@ -182,6 +189,7 @@ export class EntityImportService {
     }
 
     this.uploadStore.remove(tenantId, dto.uploadId);
+    await this.quota.recordImport(tenantId);
 
     return {
       batchId,
@@ -268,6 +276,13 @@ export class EntityImportService {
       !(file.mimetype ?? '').toLowerCase().includes('spreadsheetml')
     ) {
       throw new BadRequestException('فقط فایل‌های CSV و XLSX پذیرفته می‌شوند.');
+    }
+
+    const sizeLimit = maxSheetBytes();
+    if (file.buffer.length > sizeLimit) {
+      throw new BadRequestException(
+        `حجم فایل بیش از ${Math.round(sizeLimit / 1024 / 1024)} مگابایت است.`,
+      );
     }
 
     try {

@@ -11,14 +11,14 @@
  *      تبدیل می‌کند و به حرف ستون (A، B، …، AA) احترام می‌گذارد تا سلول‌های
  *      خالی جای خود را حفظ کنند.
  *
- * محدودیت‌ها همانند CSV است: حداکثر ۵ مگابایت و ۵۰۰۰ ردیف داده. هر محتوای
- * ZIP غیرمنتظره با پیام فارسی روشن رد می‌شود.
+ * محدودیت‌ها همانند CSV است: سقف حجم صفحه‌گسترده (پیش‌فرض ۱۰ مگابایت) و سقف
+ * ردیف (پیش‌فرض ۲۰٬۰۰۰). هر محتوای ZIP غیرمنتظره با پیام فارسی روشن رد می‌شود.
  */
 
 import { inflateRawSync } from 'zlib';
 import {
-  MAX_IMPORT_ROWS,
-  MAX_UPLOAD_BYTES,
+  maxImportRows,
+  maxSheetBytes,
 } from '../constants/data-import.constants';
 
 /** خروجی تجزیه: سربرگ‌ها و ردیف‌های داده (به‌ترتیب ستون‌ها). */
@@ -485,14 +485,17 @@ function readRows(sheet: XmlNode, sharedStrings: string[] | null): string[][] {
 /**
  * تجزیه فایل XLSX (بافر) به سربرگ و ردیف‌های داده.
  *
- * محدودیت حجم (۵ مگابایت) و تعداد ردیف داده (۵۰۰۰) همانند CSV اعمال می‌شود و
- * ردیف‌های کاملاً خالی حذف، سلول‌ها trim و طول ردیف‌ها با سربرگ هم‌تراز
- * می‌گردد.
+ * محدودیت حجم (پیش‌فرض ۱۰ مگابایت) و تعداد ردیف داده (پیش‌فرض ۲۰٬۰۰۰) همانند
+ * CSV اعمال می‌شود و ردیف‌های کاملاً خالی حذف، سلول‌ها trim و طول ردیف‌ها با
+ * سربرگ هم‌تراز می‌گردد. تنها نخستین برگه خوانده می‌شود.
  */
 export function parseXlsx(input: Buffer): ParsedXlsx {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
-  if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new XlsxParseError('حجم فایل اکسل بیش از ۵ مگابایت است.');
+  const sizeLimit = maxSheetBytes();
+  if (buffer.length > sizeLimit) {
+    throw new XlsxParseError(
+      `حجم فایل اکسل بیش از ${Math.round(sizeLimit / 1024 / 1024)} مگابایت است.`,
+    );
   }
 
   const entries = readCentralDirectory(buffer);
@@ -521,9 +524,10 @@ export function parseXlsx(input: Buffer): ParsedXlsx {
 
   const headers = cleaned[0];
   const dataRows = cleaned.slice(1);
-  if (dataRows.length > MAX_IMPORT_ROWS) {
+  const rowLimit = maxImportRows();
+  if (dataRows.length > rowLimit) {
     throw new XlsxParseError(
-      `حداکثر ${MAX_IMPORT_ROWS} ردیف در هر بارگذاری مجاز است.`,
+      `حداکثر ${rowLimit} ردیف در هر بارگذاری مجاز است.`,
     );
   }
 

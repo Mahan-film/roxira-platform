@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  MAX_IMPORT_ROWS,
+  maxImportRows,
   MAX_VISION_PAGES,
   OPENROUTER_CHAT_COMPLETIONS_URL,
   VISION_MODEL_ROLE,
@@ -131,8 +131,9 @@ export function parseVisionTableContent(content: string): ParsedTable {
     );
   }
 
-  if (rows.length > MAX_IMPORT_ROWS) {
-    throw new Error(`حداکثر ${MAX_IMPORT_ROWS} ردیف در هر بارگذاری مجاز است.`);
+  const rowLimit = maxImportRows();
+  if (rows.length > rowLimit) {
+    throw new Error(`حداکثر ${rowLimit} ردیف در هر بارگذاری مجاز است.`);
   }
 
   return { headers, rows };

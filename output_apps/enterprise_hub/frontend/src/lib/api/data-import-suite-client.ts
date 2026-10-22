@@ -76,9 +76,25 @@ export interface ImportBatch {
 }
 
 export const IMPORT_ACCEPT = ".xlsx,.csv,.pdf,.jpg,.jpeg,.png";
-export const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 
-const ALLOWED_EXTENSIONS = ["xlsx", "csv", "pdf", "jpg", "jpeg", "png"];
+/** سقف حجم صفحه‌گسترده (XLSX/CSV): ۱۰ مگابایت. */
+export const IMPORT_MAX_SHEET_BYTES = 10 * 1024 * 1024;
+
+/** سقف حجم PDF/تصویر: ۱۵ مگابایت. */
+export const IMPORT_MAX_DOC_BYTES = 15 * 1024 * 1024;
+
+/** سقف بزرگ‌ترین نوع فایل (برای اعلام کلی در رابط کاربری). */
+export const IMPORT_MAX_BYTES = IMPORT_MAX_DOC_BYTES;
+
+/** سقف تعداد ردیف هر فایل: ۲۰٬۰۰۰. */
+export const IMPORT_MAX_ROWS = 20000;
+
+/** سقف تعداد فایل ورودی روزانه هر سازمان: ۲۰. */
+export const IMPORT_DAILY_FILES = 20;
+
+const SHEET_EXTENSIONS = ["xlsx", "csv"];
+const DOC_EXTENSIONS = ["pdf", "jpg", "jpeg", "png"];
+const ALLOWED_EXTENSIONS = [...SHEET_EXTENSIONS, ...DOC_EXTENSIONS];
 
 /** Returns a Persian error message when the file cannot be imported, else null. */
 export function validateImportFile(file: File): string | null {
@@ -86,11 +102,15 @@ export function validateImportFile(file: File): string | null {
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
     return "فرمت فایل پشتیبانی نمی‌شود. فقط xlsx، csv، pdf، jpg و png پذیرفته می‌شود.";
   }
-  if (file.size > IMPORT_MAX_BYTES) {
-    return "حجم فایل بیش از ۵ مگابایت است.";
-  }
   if (file.size === 0) {
     return "فایل خالی است.";
+  }
+  const isSheet = SHEET_EXTENSIONS.includes(ext);
+  const maxBytes = isSheet ? IMPORT_MAX_SHEET_BYTES : IMPORT_MAX_DOC_BYTES;
+  if (file.size > maxBytes) {
+    return isSheet
+      ? "حجم فایل اکسل/CSV بیش از ۱۰ مگابایت است."
+      : "حجم فایل PDF/تصویر بیش از ۱۵ مگابایت است.";
   }
   return null;
 }

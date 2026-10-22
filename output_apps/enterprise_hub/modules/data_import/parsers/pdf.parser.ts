@@ -22,8 +22,8 @@
 
 import { inflateSync } from 'zlib';
 import {
-  MAX_IMPORT_ROWS,
-  MAX_UPLOAD_BYTES,
+  maxDocBytes,
+  maxImportRows,
 } from '../constants/data-import.constants';
 
 /** خروجی مشترک همه تجزیه‌کننده‌ها: سربرگ‌ها و ردیف‌های داده. */
@@ -789,9 +789,10 @@ function itemsToTable(items: TextItem[]): ParsedTable {
 
   const headers = tableRows[0];
   const dataRows = tableRows.slice(1);
-  if (dataRows.length > MAX_IMPORT_ROWS) {
+  const rowLimit = maxImportRows();
+  if (dataRows.length > rowLimit) {
     throw new PdfParseError(
-      `حداکثر ${MAX_IMPORT_ROWS} ردیف در هر بارگذاری مجاز است.`,
+      `حداکثر ${rowLimit} ردیف در هر بارگذاری مجاز است.`,
     );
   }
 
@@ -831,14 +832,17 @@ function pageContentRefs(
 /**
  * تجزیه PDF متنی (بافر) به سربرگ و ردیف‌های جدول.
  *
- * حجم بیش از ۵ مگابایت، فایل نامعتبر و PDF اسکن‌شده (بدون متن) با خطای فارسی
- * رد می‌شوند. برای PDF اسکن‌شده `ScannedPdfError` پرتاب می‌شود تا فراخوان
- * پیام اختصاصی «تصویر بفرستید» را نشان دهد.
+ * حجم بیش از سقف سند (پیش‌فرض ۱۵ مگابایت)، فایل نامعتبر و PDF اسکن‌شده
+ * (بدون متن) با خطای فارسی رد می‌شوند. برای PDF اسکن‌شده `ScannedPdfError`
+ * پرتاب می‌شود تا فراخوان پیام اختصاصی «تصویر بفرستید» را نشان دهد.
  */
 export function parsePdf(input: Buffer): ParsedTable {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
-  if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new PdfParseError('حجم فایل PDF بیش از ۵ مگابایت است.');
+  const sizeLimit = maxDocBytes();
+  if (buffer.length > sizeLimit) {
+    throw new PdfParseError(
+      `حجم فایل PDF بیش از ${Math.round(sizeLimit / 1024 / 1024)} مگابایت است.`,
+    );
   }
   if (!isPdf(buffer)) {
     throw new PdfParseError(INVALID_PDF_MESSAGE);

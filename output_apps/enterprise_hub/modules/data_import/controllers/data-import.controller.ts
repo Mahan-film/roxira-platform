@@ -32,7 +32,7 @@ import { TenantRole } from '../../tenants/enums/tenant-role.enum';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
   DATA_IMPORT_RESOURCE,
-  MAX_UPLOAD_BYTES,
+  maxUploadBytes,
 } from '../constants/data-import.constants';
 import { BatchSummaryDto, UndoBatchResponseDto } from '../dto/batch-response.dto';
 import { CommitImportDto } from '../dto/commit-import.dto';
@@ -52,8 +52,8 @@ import { EntityImportService } from '../services/entity-import.service';
  * کنترلر ورود داده با کمک هوش مصنوعی.
  *
  * - `POST /enterprise-hub/data-import/crm-leads/preview`: بارگذاری فایل
- *   (multipart، حداکثر ۵ مگابایت؛ CSV/XLSX/PDF متنی/تصویر) و دریافت نگاشت
- *   پیشنهادی.
+ *   (multipart، XLSX/CSV تا ۱۰ مگابایت و PDF/تصویر تا ۱۵ مگابایت) و دریافت
+ *   نگاشت پیشنهادی.
  * - `POST /enterprise-hub/data-import/crm-leads/commit`: تأیید نگاشت و ورود.
  * - `GET  /entities`: فهرست موجودیت‌ها و فیلدهای قابل نگاشت.
  * - `POST /preview`: بارگذاری فایل و تشخیص خودکار موجودیت.
@@ -98,7 +98,7 @@ export class DataImportController {
   @Post('preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
+    FileInterceptor('file', { limits: { fileSize: maxUploadBytes() } }),
   )
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -130,7 +130,7 @@ export class DataImportController {
   @Post('crm-leads/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
+    FileInterceptor('file', { limits: { fileSize: maxUploadBytes() } }),
   )
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -147,7 +147,7 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
   @ApiResponse({
     status: HttpStatus.PAYLOAD_TOO_LARGE,
-    description: 'حجم فایل بیش از ۵ مگابایت',
+    description: 'حجم فایل بیش از سقف مجاز است',
   })
   async previewCrmLeads(
     @Req() request: AuthenticatedRequest,
@@ -160,7 +160,7 @@ export class DataImportController {
   @Post(':entity/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
+    FileInterceptor('file', { limits: { fileSize: maxUploadBytes() } }),
   )
   @ApiConsumes('multipart/form-data')
   @ApiParam({ name: 'entity', description: 'کلید موجودیت مقصد' })

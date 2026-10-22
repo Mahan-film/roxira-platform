@@ -65,6 +65,12 @@ function makeService() {
     findItems: jest.fn().mockResolvedValue([]),
     markUndone: jest.fn().mockResolvedValue(undefined),
     removeItems: jest.fn().mockResolvedValue(undefined),
+    countCreatedSince: jest.fn().mockResolvedValue(0),
+  };
+  const quota = {
+    assertWithinQuota: jest.fn().mockResolvedValue(undefined),
+    recordImport: jest.fn().mockResolvedValue(undefined),
+    usedToday: jest.fn().mockResolvedValue(0),
   };
 
   const service = new EntityImportService(
@@ -72,9 +78,10 @@ function makeService() {
     openRouter as never,
     uploadStore as never,
     batchRepository as never,
+    quota as never,
   );
 
-  return { service, adapter, openRouter, uploadStore, batchRepository };
+  return { service, adapter, openRouter, uploadStore, batchRepository, quota };
 }
 
 function csvFile(content: string, name = 'employees.csv'): UploadedFilePayload {
@@ -149,11 +156,21 @@ describe('EntityImportService.preview', () => {
     const { service } = makeService();
     await expect(service.preview('tenant-1', undefined)).rejects.toThrow();
   });
+
+  it('rejects the preview when the daily file cap is reached', async () => {
+    const { service, quota } = makeService();
+    quota.assertWithinQuota.mockRejectedValue(new Error('daily cap reached'));
+
+    await expect(
+      service.preview('tenant-1', csvFile('کد ملی,نام\n۰۰۷۹۵۴۱۲۳۴,علی')),
+    ).rejects.toThrow('daily cap reached');
+  });
 });
 
 describe('EntityImportService.commit', () => {
   it('imports, skips duplicates and records the batch', async () => {
-    const { service, adapter, uploadStore, batchRepository } = makeService();
+    const { service, adapter, uploadStore, batchRepository, quota } =
+      makeService();
     uploadStore.get.mockReturnValue(
       storedUpload(
         ['کد ملی', 'نام'],
@@ -189,6 +206,26 @@ describe('EntityImportService.commit', () => {
       expect.arrayContaining([{ ownerId: 100, rowNumber: 2 }]),
     );
     expect(uploadStore.remove).toHaveBeenCalled();
+    expect(quota.recordImport).toHaveBeenCalledWith('tenant-1');
+  });
+
+  it('rejects the import when the daily file cap is reached', async () => {
+    const { service, uploadStore, quota, adapter } = makeService();
+    uploadStore.get.mockReturnValue(
+      storedUpload(['کد ملی', 'نام'], [['0079541234', 'علی']]),
+    );
+    quota.assertWithinQuota.mockRejectedValue(new Error('daily cap reached'));
+
+    await expect(
+      service.commit('tenant-1', {
+        uploadId: '11111111-1111-4111-8111-111111111111',
+        entity: 'hr-employees',
+        mapping: { 'کد ملی': 'nationalId', نام: 'firstName' },
+      }),
+    ).rejects.toThrow('daily cap reached');
+
+    expect(adapter.commit).not.toHaveBeenCalled();
+    expect(quota.recordImport).not.toHaveBeenCalled();
   });
 
   it('reports validation errors per row', async () => {

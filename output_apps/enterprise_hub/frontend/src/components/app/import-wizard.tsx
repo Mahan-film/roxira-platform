@@ -24,6 +24,10 @@ import {
 } from "@/components/ui/table";
 import {
   IMPORT_ACCEPT,
+  IMPORT_DAILY_FILES,
+  IMPORT_MAX_DOC_BYTES,
+  IMPORT_MAX_ROWS,
+  IMPORT_MAX_SHEET_BYTES,
   commitImport,
   importErrorMessage,
   listImportBatches,
@@ -266,8 +270,11 @@ export function ImportWizard() {
               {busy ? "در حال تحلیل فایل..." : "فایل خود را اینجا رها کنید"}
             </p>
             <p className="max-w-md text-sm text-muted-foreground">
-              فایل اکسل، CSV، PDF یا عکس دفتر و لیست‌های قبلی‌تان (حداکثر ۵ مگابایت). سیستم نوع داده را تشخیص
-              می‌دهد و ستون‌ها را خودکار جفت می‌کند؛ قبل از ثبت، همه چیز را می‌بینید.
+              فایل اکسل و CSV تا {formatNumber(IMPORT_MAX_SHEET_BYTES / 1024 / 1024)} مگابایت
+              و {formatNumber(IMPORT_MAX_ROWS)} ردیف، و PDF یا عکس تا{" "}
+              {formatNumber(IMPORT_MAX_DOC_BYTES / 1024 / 1024)} مگابایت (حداکثر{" "}
+              {formatNumber(IMPORT_DAILY_FILES)} فایل در روز برای هر سازمان). سیستم نوع داده را
+              تشخیص می‌دهد و ستون‌ها را خودکار جفت می‌کند؛ قبل از ثبت، همه چیز را می‌بینید.
             </p>
             <input
               ref={inputRef}

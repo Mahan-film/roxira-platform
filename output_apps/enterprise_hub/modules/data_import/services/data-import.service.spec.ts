@@ -326,17 +326,29 @@ describe('DataImportService.preview', () => {
     );
   });
 
-  it('rejects files larger than 5 MB', async () => {
+  it('rejects a CSV larger than the env-configured spreadsheet limit', async () => {
     const { service } = makeService();
-    const big = Buffer.alloc(5 * 1024 * 1024 + 1);
-    await expect(
-      service.preview('tenant-1', {
-        originalname: 'big.csv',
-        mimetype: 'text/csv',
-        size: big.length,
-        buffer: big,
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    process.env.IMPORT_MAX_SHEET_BYTES = '16';
+    try {
+      await expect(
+        service.preview('tenant-1', csvFile('name,email\nSara,s@x.com', 'big.csv')),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    } finally {
+      delete process.env.IMPORT_MAX_SHEET_BYTES;
+    }
+  });
+
+  it('rejects a PDF larger than the env-configured document limit', async () => {
+    const { service, vision } = makeService();
+    process.env.IMPORT_MAX_DOC_BYTES = '10';
+    try {
+      await expect(service.preview('tenant-1', pdfFile())).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(vision.extractTable).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.IMPORT_MAX_DOC_BYTES;
+    }
   });
 
   it('rejects a missing file', async () => {
@@ -346,9 +358,9 @@ describe('DataImportService.preview', () => {
     );
   });
 
-  it('rejects files with more than 5000 rows', async () => {
+  it('rejects files with more than the configured row limit', async () => {
     const { service } = makeService();
-    const rows = Array.from({ length: 5001 }, () => 'x,y').join('\n');
+    const rows = Array.from({ length: 20001 }, () => 'x,y').join('\n');
     await expect(
       service.preview('tenant-1', csvFile(`name,email\n${rows}`)),
     ).rejects.toBeInstanceOf(BadRequestException);

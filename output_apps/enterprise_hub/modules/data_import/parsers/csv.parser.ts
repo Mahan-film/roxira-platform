@@ -4,8 +4,11 @@
  * در `package.json` این پکیج هیچ کتابخانه‌ای مثل `xlsx` یا `papaparse` وجود
  * ندارد؛ بنابراین نسخه MVP فقط فایل CSV را می‌پذیرد (فایل XLSX با پیام روشن
  * رد می‌شود). این پیاده‌سازی از نقل‌قول‌های دوگانه، جداکننده‌های داخل
- * نقل‌قول، خط‌پایان CRLF و BOM پشتیبانی می‌کند.
+ * نقل‌قول، خط‌پایان CRLF و BOM پشتیبانی می‌کند. شمار ردیف‌ها در حین پیمایش
+ * یک‌بارمصرف محدود می‌شود تا حافظه کران‌دار بماند.
  */
+
+import { maxImportRows } from '../constants/data-import.constants';
 
 /** خروجی تجزیه: سربرگ‌ها و ردیف‌های داده (به‌ترتیب ستون‌ها). */
 export interface ParsedCsv {
@@ -39,9 +42,13 @@ export function detectDelimiter(text: string): string {
  * تجزیه متن CSV به سربرگ و ردیف‌ها.
  *
  * سلول‌ها trim می‌شوند، ردیف‌های کاملاً خالی حذف و طول هر ردیف با تعداد
- * سربرگ‌ها هم‌تراز می‌شود.
+ * سربرگ‌ها هم‌تراز می‌شود. به‌محض عبور از سقف ردیف (`maxRows`، پیش‌فرض
+ * `IMPORT_MAX_ROWS`) تجزیه با خطای فارسی متوقف می‌شود تا حافظه کران‌دار بماند.
  */
-export function parseCsv(input: string): ParsedCsv {
+export function parseCsv(
+  input: string,
+  maxRows: number = maxImportRows(),
+): ParsedCsv {
   const text = input.replace(/^\uFEFF/, '');
   if (!text.trim()) {
     throw new CsvParseError('فایل خالی است.');
@@ -49,6 +56,11 @@ export function parseCsv(input: string): ParsedCsv {
 
   const delimiter = detectDelimiter(text);
   const records: string[][] = [];
+  /**
+   * سربرگ + سقف ردیف + یک ردیف رواداری (خط خالی انتهایی). این سقف فقط برای
+   * کران‌دار نگه‌داشتن حافظه است؛ حد دقیق در سرویس اعمال می‌شود.
+   */
+  const maxRecords = maxRows + 2;
   let record: string[] = [];
   let field = '';
   let inQuotes = false;
@@ -91,6 +103,11 @@ export function parseCsv(input: string): ParsedCsv {
     if (char === '\n') {
       record.push(field);
       records.push(record);
+      if (records.length > maxRecords) {
+        throw new CsvParseError(
+          `حداکثر ${maxRows} ردیف در هر بارگذاری مجاز است.`,
+        );
+      }
       field = '';
       record = [];
       index += 1;
@@ -104,6 +121,11 @@ export function parseCsv(input: string): ParsedCsv {
   if (field.length > 0 || record.length > 0) {
     record.push(field);
     records.push(record);
+    if (records.length > maxRecords) {
+      throw new CsvParseError(
+        `حداکثر ${maxRows} ردیف در هر بارگذاری مجاز است.`,
+      );
+    }
   }
 
   const cleaned = records

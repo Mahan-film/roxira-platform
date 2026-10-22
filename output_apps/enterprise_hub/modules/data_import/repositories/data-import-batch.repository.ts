@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThanOrEqual, Repository } from 'typeorm';
 import { DataImportBatchItemEntity } from '../entities/data-import-batch-item.entity';
 import { DataImportBatchEntity } from '../entities/data-import-batch.entity';
 
@@ -97,6 +97,13 @@ export class DataImportBatchRepository {
     batchId: string,
   ): Promise<DataImportBatchItemEntity[]> {
     return this.items.find({ where: { tenantId, batchId } });
+  }
+
+  /** شمارش دسته‌های ورود ایجادشده یک مستأجر از یک زمان مشخص تا کنون. */
+  async countCreatedSince(tenantId: string, since: Date): Promise<number> {
+    return this.batches.count({
+      where: { tenantId, createdAt: MoreThanOrEqual(since) },
+    });
   }
 
   /** علامت‌گذاری دسته به‌عنوان بازگردانی‌شده. */

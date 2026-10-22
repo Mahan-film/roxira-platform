@@ -12,14 +12,69 @@
  * - شناسه مستأجر فقط از `requireTenantId(request)` خوانده می‌شود.
  */
 
+import type { ImportFileKind } from '../parsers/file-kind';
+
 /** مسیر پایه کنترلر ورود داده در لایه NestJS. */
 export const DATA_IMPORT_RESOURCE = 'enterprise-hub/data-import';
 
-/** حداکثر حجم فایل بارگذاری‌شده: ۵ مگابایت. */
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+/**
+ * خواندن یک سقف مثبت از متغیر محیطی؛ در صورت نبود/نامعتبر بودن، مقدار
+ * پیش‌فرض برگردانده می‌شود. در زمان فراخوانی خوانده می‌شود تا قابل تنظیم و
+ * قابل آزمون باشد.
+ */
+function readPositiveLimit(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+  const value = Number.parseInt(raw, 10);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
 
-/** حداکثر تعداد ردیف قابل پردازش در هر فایل. */
-export const MAX_IMPORT_ROWS = 5000;
+/** سقف پیش‌فرض حجم فایل‌های صفحه‌گسترده (XLSX/CSV): ۱۰ مگابایت. */
+export const DEFAULT_MAX_SHEET_BYTES = 10 * 1024 * 1024;
+
+/** سقف پیش‌فرض حجم PDF/تصویر: ۱۵ مگابایت. */
+export const DEFAULT_MAX_DOC_BYTES = 15 * 1024 * 1024;
+
+/** سقف پیش‌فرض تعداد ردیف هر فایل: ۲۰٬۰۰۰. */
+export const DEFAULT_MAX_IMPORT_ROWS = 20000;
+
+/** سقف پیش‌فرض تعداد فایل ورودی روزانه هر مستأجر: ۲۰. */
+export const DEFAULT_DAILY_IMPORT_FILES = 20;
+
+/** حداکثر حجم فایل صفحه‌گسترده (XLSX/CSV) — پیش‌فرض ۱۰ مگابایت. */
+export function maxSheetBytes(): number {
+  return readPositiveLimit('IMPORT_MAX_SHEET_BYTES', DEFAULT_MAX_SHEET_BYTES);
+}
+
+/** حداکثر حجم فایل PDF/تصویر — پیش‌فرض ۱۵ مگابایت. */
+export function maxDocBytes(): number {
+  return readPositiveLimit('IMPORT_MAX_DOC_BYTES', DEFAULT_MAX_DOC_BYTES);
+}
+
+/**
+ * سقف حجمی سخت برای لایه multer؛ بزرگ‌ترین سقف از دو نوع فایل انتخاب می‌شود و
+ * کنترل دقیق per-kind پس از تشخیص نوع فایل در سرویس انجام می‌گیرد.
+ */
+export function maxUploadBytes(): number {
+  return Math.max(maxSheetBytes(), maxDocBytes());
+}
+
+/** حداکثر تعداد ردیف قابل پردازش در هر فایل — پیش‌فرض ۲۰٬۰۰۰. */
+export function maxImportRows(): number {
+  return readPositiveLimit('IMPORT_MAX_ROWS', DEFAULT_MAX_IMPORT_ROWS);
+}
+
+/** سقف تعداد فایل ورودی روزانه هر مستأجر — پیش‌فرض ۲۰. */
+export function dailyImportFileLimit(): number {
+  return readPositiveLimit('IMPORT_DAILY_FILES', DEFAULT_DAILY_IMPORT_FILES);
+}
+
+/** سقف حجمی مناسب هر نوع فایل: صفحه‌گسترده ۱۰MB و سند/تصویر ۱۵MB. */
+export function maxBytesForKind(kind: ImportFileKind): number {
+  return kind === 'csv' || kind === 'xlsx' ? maxSheetBytes() : maxDocBytes();
+}
 
 /** تعداد ردیف نمونه‌ای که برای نگاشت به LLM فرستاده می‌شود. */
 export const MAX_SAMPLE_ROWS = 5;

@@ -6,10 +6,10 @@ import {
   CRM_LEAD_FIELDS,
   CrmLeadField,
   IMPORT_BATCH_SIZE,
-  MAX_IMPORT_ROWS,
   MAX_REPORTED_ERRORS,
   MAX_SAMPLE_ROWS,
-  MAX_UPLOAD_BYTES,
+  maxBytesForKind,
+  maxImportRows,
 } from '../constants/data-import.constants';
 import { CreateLeadDto } from '../../crm/dto/create-lead.dto';
 import { PipelineStage } from '../../crm/enums/crm.enums';
@@ -119,6 +119,14 @@ export class DataImportService {
       file.mimetype ?? '',
     );
 
+    const sizeLimit = maxBytesForKind(kind);
+    if (file.buffer.length > sizeLimit) {
+      const megabytes = Math.round(sizeLimit / 1024 / 1024);
+      throw new BadRequestException(
+        `حجم فایل بیش از ${megabytes} مگابایت است.`,
+      );
+    }
+
     if (kind === 'csv') {
       return this.parseCsvOrThrow(file.buffer.toString('utf8'));
     }
@@ -174,15 +182,13 @@ export class DataImportService {
     if (!file || !file.buffer) {
       throw new BadRequestException('فایلی بارگذاری نشده است.');
     }
-    if (file.buffer.length > MAX_UPLOAD_BYTES) {
-      throw new BadRequestException('حجم فایل بیش از ۵ مگابایت است.');
-    }
 
     const parsed = await this.parseUpload(file);
 
-    if (parsed.rows.length > MAX_IMPORT_ROWS) {
+    const rowLimit = maxImportRows();
+    if (parsed.rows.length > rowLimit) {
       throw new BadRequestException(
-        `حداکثر ${MAX_IMPORT_ROWS} ردیف در هر بارگذاری مجاز است.`,
+        `حداکثر ${rowLimit} ردیف در هر بارگذاری مجاز است.`,
       );
     }
 

@@ -218,4 +218,18 @@ describe('parseXlsx', () => {
     ]);
     expect(() => parseXlsx(zip)).toThrow(XlsxParseError);
   });
+
+  it('rejects an XLSX larger than the configured sheet limit', () => {
+    process.env.IMPORT_MAX_SHEET_BYTES = '16';
+    try {
+      const sheet = sheetXml(
+        '<row r="1"><c r="A1" t="inlineStr"><is><t>name</t></is></c></row>' +
+          '<row r="2"><c r="A2" t="inlineStr"><is><t>Sara</t></is></c></row>',
+      );
+      const zip = makeZip([{ name: 'xl/worksheets/sheet1.xml', data: sheet }]);
+      expect(() => parseXlsx(zip)).toThrow(XlsxParseError);
+    } finally {
+      delete process.env.IMPORT_MAX_SHEET_BYTES;
+    }
+  });
 });

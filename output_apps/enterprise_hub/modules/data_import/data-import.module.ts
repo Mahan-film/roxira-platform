@@ -23,6 +23,7 @@ import { InventoryItemsRegistry } from './registry/inventory-items.registry';
 import { DataImportBatchRepository } from './repositories/data-import-batch.repository';
 import { DataImportRepository } from './repositories/data-import.repository';
 import { DataImportService } from './services/data-import.service';
+import { DailyImportQuotaService } from './services/daily-import-quota.service';
 import { EntityImportService } from './services/entity-import.service';
 import { OpenRouterMappingService } from './services/openrouter-mapping.service';
 import { OpenRouterVisionService } from './services/openrouter-vision.service';
@@ -72,6 +73,7 @@ import { UploadStoreService } from './services/upload-store.service';
     DataImportRepository,
     EntityImportService,
     DataImportBatchRepository,
+    DailyImportQuotaService,
     OpenRouterMappingService,
     OpenRouterVisionService,
     UploadStoreService,
