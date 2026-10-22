@@ -2107,8 +2107,19 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
     # Daily fair-use / upsell limit (fixed 24 h). Counted only for real answered questions:
     # the fast-path replies above already returned, and the count is refunded if no answer is produced.
+    # A valid X-Roxira-Monitor token plus the monitor's "synthetic-" request_id skips ONLY the
+    # guest/free daily quota so synthetic probes are not counted in usage stats and never trip the
+    # guest cap; the anonymous hourly limit above still applies. The token is never logged.
+    monitor_probe = (
+        chat_auth.monitor_request(request)
+        and str(payload.get("request_id") or "").startswith("synthetic-")
+    )
     daily_key, daily_limit, daily_kind = chat_auth.daily_chat_key(user, client_ip_for_limits)
-    daily_ok, daily_left = await asyncio.to_thread(chat_auth.count_daily_chat, daily_key, daily_limit)
+    if monitor_probe and daily_kind in ("guest", "free"):
+        daily_ok, daily_left = True, 0
+    else:
+        daily_ok, daily_left = await asyncio.to_thread(
+            chat_auth.count_daily_chat, daily_key, daily_limit)
     if not daily_ok:
         await asyncio.to_thread(chat_auth.decr, daily_key)
         return chat_auth.daily_limit_response(daily_kind, daily_left)

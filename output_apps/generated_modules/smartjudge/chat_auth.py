@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -484,6 +485,35 @@ def _daily_limit_for(level: str) -> int:
         "guest": chat_anon_daily_limit, "free": chat_free_daily_limit, "basic": chat_basic_daily_limit,
         "pro": chat_pro_daily_limit, "premium": chat_premium_daily_limit, "team": chat_team_daily_limit, "vip": chat_vip_daily_limit,
     }[level]()
+
+
+# Synthetic monitor bypass: the X-Roxira-Monitor header matched against MONITOR_BYPASS_TOKEN
+# (constant-time) skips ONLY the daily guest/free quota so monitoring probes never trip the
+# guest cap. The feature is off unless the token is at least 32 chars. Never log either value.
+MONITOR_BYPASS_HEADER = "x-roxira-monitor"
+MONITOR_BYPASS_MIN_LEN = 32
+
+
+def monitor_bypass_token(env_token: Optional[str] = None) -> str:
+    """Configured MONITOR_BYPASS_TOKEN, or "" when the feature is off (unset or too short)."""
+    token = os.environ.get("MONITOR_BYPASS_TOKEN", "") if env_token is None else env_token
+    return token if len(token) >= MONITOR_BYPASS_MIN_LEN else ""
+
+
+def monitor_token_ok(header_value: Optional[str], env_token: Optional[str] = None) -> bool:
+    """Constant-time comparison of an ``X-Roxira-Monitor`` value against the bypass token."""
+    token = monitor_bypass_token(env_token)
+    if not token or not header_value:
+        return False
+    return hmac.compare_digest(str(header_value), token)
+
+
+def monitor_request(request: Any) -> bool:
+    """True when ``request`` carries a valid X-Roxira-Monitor bypass token."""
+    headers = getattr(request, "headers", None) if request is not None else None
+    if headers is None:
+        return False
+    return monitor_token_ok(headers.get(MONITOR_BYPASS_HEADER))
 
 
 def daily_chat_key(user: "CurrentUser", ip: str) -> tuple[str, int, str]:

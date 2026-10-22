@@ -6,8 +6,8 @@ Stdlib only. Alerts by e-mail only on state change plus a reminder every 2 h.
 Usage: synthetic_check.py [--once] [--dry-run] [--force-chat] [--state PATH]
 Env (names only): MONITOR_DOMAINS, MONITOR_CHAT_BASE, MONITOR_CHAT_INTERVAL_MIN,
 MONITOR_CHAT_TIMEOUT_S, MONITOR_CERT_WARN_DAYS, MONITOR_DISK_WARN_PCT,
-MONITOR_CHECK_DISK, MONITOR_STATE_FILE, MONITOR_SILENCE, BACKUP_SMTP_USER,
-BACKUP_SMTP_PASS, BACKUP_NOTIFY_TO.
+MONITOR_CHECK_DISK, MONITOR_STATE_FILE, MONITOR_SILENCE, MONITOR_BYPASS_TOKEN,
+BACKUP_SMTP_USER, BACKUP_SMTP_PASS, BACKUP_NOTIFY_TO.
 """
 
 from __future__ import annotations
@@ -32,6 +32,13 @@ DEFAULT_DOMAINS = "ghazihoushmand.ir,roxira.ir,roxira.net"
 CHAT_QUESTION = "مهلت تجدیدنظرخواهی از رأی دادگاه حقوقی چند روز است؟"
 SANITY_MARKERS = ("۲۰", "20", "بیست")
 HTTP_TIMEOUT_S = 5.0
+MONITOR_BYPASS_MIN_LEN = 32
+
+
+def monitor_bypass_token() -> str:
+    """MONITOR_BYPASS_TOKEN when set and >= 32 chars; "" otherwise (feature off, matches the app)."""
+    token = os.environ.get("MONITOR_BYPASS_TOKEN", "")
+    return token if len(token) >= MONITOR_BYPASS_MIN_LEN else ""
 
 
 def env_f(name: str, default: float) -> float:
@@ -91,8 +98,15 @@ def check_health(base: str):
     return False, detail
 
 
-def evaluate_chat_reply(status: int, body: bytes, took: float, limit: float):
-    """Pure verdict for a chat response (unit-tested)."""
+def evaluate_chat_reply(status: int, body: bytes, took: float, limit: float,
+                        bypass_configured: bool = False):
+    """Pure verdict for a chat response (unit-tested).
+
+    Without a bypass token a 429 is the guest/free daily cap: a WARN "quota" result, not an
+    outage. With a token configured a 429 means the bypass is not working, so it stays a failure.
+    """
+    if status == 429 and not bypass_configured:
+        return True, f"WARN quota: http status=429 in {took:.1f}s"
     if status != 200:
         return False, f"http status={status} in {took:.1f}s"
     try:
@@ -110,12 +124,15 @@ def evaluate_chat_reply(status: int, body: bytes, took: float, limit: float):
 
 def check_chat(base: str):
     limit = env_f("MONITOR_CHAT_TIMEOUT_S", 45)
+    token = monitor_bypass_token()
     payload = json.dumps({"message": CHAT_QUESTION, "request_id": "synthetic-" + uuid.uuid4().hex[:12]}).encode()
     headers = {"Content-Type": "application/json", "User-Agent": "roxira-synthetic-monitor"}
+    if token:
+        headers["X-Roxira-Monitor"] = token
     verdict = (False, "not run")
     for attempt in (1, 2):
         status, body, took = http(f"{base}/api/v1/apps/judge/chat", limit + 5, payload, headers)
-        verdict = evaluate_chat_reply(status, body, took, limit)
+        verdict = evaluate_chat_reply(status, body, took, limit, bypass_configured=bool(token))
         if verdict[0]:
             return verdict
         if attempt == 1:
