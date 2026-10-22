@@ -39,7 +39,8 @@ import {
  * کنترلر ورود داده با کمک هوش مصنوعی (MVP سرنخ‌های CRM).
  *
  * - `POST /enterprise-hub/data-import/crm-leads/preview`: بارگذاری فایل
- *   (multipart، حداکثر ۵ مگابایت) و دریافت نگاشت پیشنهادی.
+ *   (multipart، حداکثر ۵ مگابایت؛ CSV/XLSX/PDF متنی/تصویر) و دریافت نگاشت
+ *   پیشنهادی.
  * - `POST /enterprise-hub/data-import/crm-leads/commit`: تأیید نگاشت و ورود.
  *
  * دسترسی فقط برای مدیر پلتفرم (`UserRole.ADMIN`) یا مالک سازمان
@@ -65,7 +66,9 @@ export class DataImportController {
       properties: { file: { type: 'string', format: 'binary' } },
     },
   })
-  @ApiOperation({ summary: 'پیش‌نمایش فایل و نگاشت پیشنهادی ستون‌های سرنخ' })
+  @ApiOperation({
+    summary: 'پیش‌نمایش فایل (CSV/XLSX/PDF/تصویر) و نگاشت پیشنهادی ستون‌های سرنخ',
+  })
   @ApiResponse({ status: HttpStatus.OK, type: PreviewResponseDto })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'فایل نامعتبر' })
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })

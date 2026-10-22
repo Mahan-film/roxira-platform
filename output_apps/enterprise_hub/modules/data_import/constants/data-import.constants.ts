@@ -6,8 +6,9 @@
  *
  * قواعد سخت (Rule #4 - AGENTS.md):
  * - داده مشتری هرگز به مدل رایگان/`may_log` فرستاده نمی‌شود؛ تنها تماس مجاز
- *   OpenRouter با کلید سروری `OPENROUTER_API_KEY`، مدل نقش `cheap` از
- *   `config/models.yaml` و بدنه درخواست با `provider.data_collection: "deny"`.
+ *   OpenRouter با کلید سروری `OPENROUTER_API_KEY`، مدل نقش `cheap` (نگاشت) یا
+ *   `vision` (استخراج جدول از تصویر) از `config/models.yaml` و بدنه درخواست با
+ *   `provider.data_collection: "deny"`.
  * - شناسه مستأجر فقط از `requireTenantId(request)` خوانده می‌شود.
  */
 
@@ -42,8 +43,33 @@ export const OPENROUTER_CHAT_COMPLETIONS_URL =
 /** نقش مدل ارزان در `config/models.yaml` برای نگاشت ستون‌ها. */
 export const CHEAP_MODEL_ROLE = 'cheap';
 
+/**
+ * نقش مدل بینایی در `config/models.yaml` برای استخراج جدول از تصویر
+ * (فاکتور/دفتر اسکن‌شده یا عکس). همان الگوی نقش `cheap` خوانده می‌شود؛ هیچ
+ * شناسه‌ای hardcode نمی‌شود.
+ */
+export const VISION_MODEL_ROLE = 'vision';
+
+/** حداکثر تعداد صفحه/تصویری که به مدل بینایی فرستاده می‌شود. */
+export const MAX_VISION_PAGES = 5;
+
+/** MIME typeهای تصویری مجاز برای استخراج جدول با مدل بینایی. */
+export const ALLOWED_IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+
 /** پسوندهای مجاز فایل بارگذاری‌شده. */
-export const ALLOWED_UPLOAD_EXTENSIONS = ['.csv', '.xlsx'] as const;
+export const ALLOWED_UPLOAD_EXTENSIONS = [
+  '.csv',
+  '.xlsx',
+  '.pdf',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+] as const;
 
 /**
  * فیلدهای قابل‌نگاشت سرنخ CRM (منطبق بر `CreateLeadDto`).

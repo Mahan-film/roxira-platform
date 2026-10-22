@@ -70,12 +70,12 @@ export function buildMappingRequestBody(
 }
 
 /**
- * استخراج نخستین شناسه مدل نقش `cheap` از متن `config/models.yaml`.
- * تجزیه سبک و هدفمند (بدون وابستگی YAML) چون فقط به همین یک نقش نیاز است.
+ * استخراج نخستین شناسه مدل یک نقش از متن `config/models.yaml`.
+ * تجزیه سبک و هدفمند (بدون وابستگی YAML) چون فقط به شناسه نقش نیاز است.
  */
-export function readCheapModelId(yamlText: string): string | null {
+export function readRoleModelId(yamlText: string, role: string): string | null {
   const lines = yamlText.split(/\r?\n/);
-  let inCheapRole = false;
+  let inRole = false;
 
   for (const raw of lines) {
     const withoutComment = raw.replace(/#.*$/, '');
@@ -87,11 +87,11 @@ export function readCheapModelId(yamlText: string): string | null {
 
     const roleMatch = /^([A-Za-z0-9_]+):\s*$/.exec(trimmed);
     if (roleMatch && indent === 2) {
-      inCheapRole = roleMatch[1] === CHEAP_MODEL_ROLE;
+      inRole = roleMatch[1] === role;
       continue;
     }
 
-    if (inCheapRole) {
+    if (inRole) {
       const idMatch = /^-\s*id:\s*(\S+)\s*$/.exec(trimmed);
       if (idMatch) {
         return idMatch[1].replace(/^['"]|['"]$/g, '');
@@ -99,6 +99,11 @@ export function readCheapModelId(yamlText: string): string | null {
     }
   }
   return null;
+}
+
+/** شناسه مدل نقش `cheap` (نگاشت ستون‌ها) از متن `config/models.yaml`. */
+export function readCheapModelId(yamlText: string): string | null {
+  return readRoleModelId(yamlText, CHEAP_MODEL_ROLE);
 }
 
 /** استخراج شیء JSON از پاسخ مدل (پاک‌سازی بلوک code fence). */

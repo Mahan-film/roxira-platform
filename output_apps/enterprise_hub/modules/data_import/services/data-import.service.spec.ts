@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { deflateRawSync } from 'zlib';
 import { DataImportService, UploadedFilePayload } from './data-import.service';
 import { OpenRouterMappingService } from './openrouter-mapping.service';
+import { OpenRouterVisionService } from './openrouter-vision.service';
 import { UploadStoreService, StoredUpload } from './upload-store.service';
 import { DataImportRepository } from '../repositories/data-import.repository';
 import { CommitImportDto } from '../dto/commit-import.dto';
@@ -18,6 +19,10 @@ interface OpenRouterMock {
   proposeMapping: jest.Mock;
 }
 
+interface VisionMock {
+  extractTable: jest.Mock;
+}
+
 interface UploadStoreMock {
   save: jest.Mock;
   get: jest.Mock;
@@ -28,6 +33,7 @@ function makeService(): {
   service: DataImportService;
   repository: RepositoryMock;
   openRouter: OpenRouterMock;
+  vision: VisionMock;
   uploadStore: UploadStoreMock;
 } {
   const repository: RepositoryMock = {
@@ -37,6 +43,7 @@ function makeService(): {
     createLead: jest.fn().mockResolvedValue(1),
   };
   const openRouter: OpenRouterMock = { proposeMapping: jest.fn() };
+  const vision: VisionMock = { extractTable: jest.fn() };
   const uploadStore: UploadStoreMock = {
     save: jest.fn(),
     get: jest.fn(),
@@ -46,8 +53,9 @@ function makeService(): {
     repository as unknown as DataImportRepository,
     openRouter as unknown as OpenRouterMappingService,
     uploadStore as unknown as UploadStoreService,
+    vision as unknown as OpenRouterVisionService,
   );
-  return { service, repository, openRouter, uploadStore };
+  return { service, repository, openRouter, vision, uploadStore };
 }
 
 function csvFile(content: string, name = 'leads.csv'): UploadedFilePayload {
@@ -139,6 +147,64 @@ function storedUpload(
   return { headers, rows, expiresAt: Date.now() + 60_000 };
 }
 
+/** ساخت PDF متنی کمینه با دو ستون و یک ردیف داده. */
+function makeTextPdf(content: string): Buffer {
+  const data = Buffer.from(content, 'latin1');
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ' +
+      '/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n',
+    `4 0 obj\n<< /Length ${data.length} >>\nstream\n${content}\nendstream\nendobj\n`,
+    '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
+  ];
+  return Buffer.from(
+    `%PDF-1.4\n${objects.join('')}trailer\n<< /Root 1 0 R /Size 6 >>\n%%EOF\n`,
+    'latin1',
+  );
+}
+
+function pdfFile(): UploadedFilePayload {
+  const content = [
+    'BT /F1 12 Tf',
+    '1 0 0 1 72 720 Tm (full name) Tj',
+    '1 0 0 1 260 720 Tm (email) Tj',
+    '1 0 0 1 72 700 Tm (Sara) Tj',
+    '1 0 0 1 260 700 Tm (sara@x.com) Tj',
+    'ET',
+  ].join('\n');
+  const buffer = makeTextPdf(content);
+  return {
+    originalname: 'leads.pdf',
+    mimetype: 'application/pdf',
+    size: buffer.length,
+    buffer,
+  };
+}
+
+function scannedPdfFile(): UploadedFilePayload {
+  const buffer = makeTextPdf('BT /F1 12 Tf 1 0 0 1 72 720 Tm ET');
+  return {
+    originalname: 'scan.pdf',
+    mimetype: 'application/pdf',
+    size: buffer.length,
+    buffer,
+  };
+}
+
+/** تصویر PNG کمینه (فقط امضای بایتی کافی است؛ محتوا به مدل mock می‌رود). */
+function imageFile(): UploadedFilePayload {
+  const buffer = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02, 0x03,
+  ]);
+  return {
+    originalname: 'ledger.png',
+    mimetype: 'image/png',
+    size: buffer.length,
+    buffer,
+  };
+}
+
 describe('DataImportService.preview', () => {
   it('falls back to the deterministic synonym map when the LLM fails', async () => {
     const { service, openRouter, uploadStore } = makeService();
@@ -210,6 +276,67 @@ describe('DataImportService.preview', () => {
     const result = await service.preview('tenant-1', xlsxFile('export.dat'));
 
     expect(result.headers).toEqual(['name', 'email']);
+  });
+
+  it('parses a text PDF upload without calling the vision model', async () => {
+    const { service, openRouter, vision } = makeService();
+    openRouter.proposeMapping.mockResolvedValue({});
+
+    const result = await service.preview('tenant-1', pdfFile());
+
+    expect(result.headers).toEqual(['full name', 'email']);
+    expect(result.sampleRows).toEqual([['Sara', 'sara@x.com']]);
+    expect(vision.extractTable).not.toHaveBeenCalled();
+  });
+
+  it('rejects a scanned PDF with a Persian message', async () => {
+    const { service } = makeService();
+    await expect(
+      service.preview('tenant-1', scannedPdfFile()),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('sends an image to the vision model and uses its table', async () => {
+    const { service, openRouter, vision } = makeService();
+    openRouter.proposeMapping.mockResolvedValue({});
+    vision.extractTable.mockResolvedValue({
+      headers: ['name', 'email'],
+      rows: [['Sara', 'sara@x.com']],
+    });
+
+    const result = await service.preview('tenant-1', imageFile());
+
+    expect(vision.extractTable).toHaveBeenCalledWith([
+      expect.objectContaining({ mimeType: 'image/png' }),
+    ]);
+    expect(result.headers).toEqual(['name', 'email']);
+    expect(result.sampleRows).toEqual([['Sara', 'sara@x.com']]);
+  });
+
+  it('rejects an unknown file type', async () => {
+    const { service } = makeService();
+    const file: UploadedFilePayload = {
+      originalname: 'notes.txt',
+      mimetype: 'text/plain',
+      size: 4,
+      buffer: Buffer.from('junk'),
+    };
+    await expect(service.preview('tenant-1', file)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('rejects files larger than 5 MB', async () => {
+    const { service } = makeService();
+    const big = Buffer.alloc(5 * 1024 * 1024 + 1);
+    await expect(
+      service.preview('tenant-1', {
+        originalname: 'big.csv',
+        mimetype: 'text/csv',
+        size: big.length,
+        buffer: big,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects a missing file', async () => {

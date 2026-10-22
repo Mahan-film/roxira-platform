@@ -2,6 +2,7 @@ import {
   buildMappingRequestBody,
   parseMappingContent,
   readCheapModelId,
+  readRoleModelId,
   truncateCell,
 } from './openrouter-mapping.service';
 
@@ -82,5 +83,31 @@ describe('readCheapModelId', () => {
     expect(readCheapModelId('roles:\n  free:\n    models:\n      - id: x')).toBe(
       null,
     );
+  });
+});
+
+describe('readRoleModelId', () => {
+  const yamlFixture = [
+    'roles:',
+    '  cheap:',
+    '    models:',
+    '      - id: deepseek/deepseek-v4.1-flash',
+    '  vision:',
+    '    data_policy: standard',
+    '    models:',
+    '      - id: google/gemini-3.8-flash',
+  ].join('\n');
+
+  it('returns the first model id under any role', () => {
+    expect(readRoleModelId(yamlFixture, 'vision')).toBe(
+      'google/gemini-3.8-flash',
+    );
+    expect(readRoleModelId(yamlFixture, 'cheap')).toBe(
+      'deepseek/deepseek-v4.1-flash',
+    );
+  });
+
+  it('returns null for an unknown role', () => {
+    expect(readRoleModelId(yamlFixture, 'nope')).toBeNull();
   });
 });

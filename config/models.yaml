@@ -276,6 +276,9 @@ roles:
       Persian OCR of scanned/photographed case files (case_files.py). Receives
       customer case data, so only paid models (never :free); requests also send
       provider.data_collection=deny. Gemini Pro is banned by owner policy.
+      Also read by the enterprise_hub AI data import
+      (modules/data_import/services/openrouter-vision.service.ts) to extract a
+      {headers, rows} table from a scanned/photo invoice or ledger.
     data_policy: standard
     models:
       # Same id the legacy documents/document_processor.py vision tier already

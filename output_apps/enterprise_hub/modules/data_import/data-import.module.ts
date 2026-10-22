@@ -8,6 +8,7 @@ import { DataImportController } from './controllers/data-import.controller';
 import { DataImportRepository } from './repositories/data-import.repository';
 import { DataImportService } from './services/data-import.service';
 import { OpenRouterMappingService } from './services/openrouter-mapping.service';
+import { OpenRouterVisionService } from './services/openrouter-vision.service';
 import { UploadStoreService } from './services/upload-store.service';
 
 /**
@@ -15,7 +16,8 @@ import { UploadStoreService } from './services/upload-store.service';
  *
  * Layer Boundaries (طبق AGENTS.md):
  * - Controller: مسیریابی HTTP + بارگذاری فایل + کنترل دسترسی.
- * - Service: تجزیه CSV، نگاشت ستون‌ها، اعتبارسنجی و ورود گروهی.
+ * - Service: تجزیه CSV/XLSX/PDF متنی و استخراج جدول از تصویر (مدل بینایی)،
+ *   نگاشت ستون‌ها، اعتبارسنجی و ورود گروهی.
  * - Repository: تنها لایه نوشتن، از طریق `CrmRepository` موجود.
  *
  * `CrmModule` فقط برای دسترسی به `CrmRepository` import می‌شود تا ردیف‌ها با
@@ -44,6 +46,7 @@ import { UploadStoreService } from './services/upload-store.service';
     DataImportService,
     DataImportRepository,
     OpenRouterMappingService,
+    OpenRouterVisionService,
     UploadStoreService,
     JwtAuthGuard,
   ],

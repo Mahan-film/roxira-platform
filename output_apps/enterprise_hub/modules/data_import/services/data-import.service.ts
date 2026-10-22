@@ -1,16 +1,15 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { ValidationError, validate } from 'class-validator';
-import * as path from 'path';
 import { randomUUID } from 'crypto';
 import {
-  ALLOWED_UPLOAD_EXTENSIONS,
   CRM_LEAD_FIELDS,
   CrmLeadField,
   IMPORT_BATCH_SIZE,
   MAX_IMPORT_ROWS,
   MAX_REPORTED_ERRORS,
   MAX_SAMPLE_ROWS,
+  MAX_UPLOAD_BYTES,
 } from '../constants/data-import.constants';
 import { CreateLeadDto } from '../../crm/dto/create-lead.dto';
 import { PipelineStage } from '../../crm/enums/crm.enums';
@@ -25,13 +24,19 @@ import {
   PreviewResponseDto,
 } from '../dto/preview-response.dto';
 import { buildFallbackMapping } from '../mapping/lead-field-synonyms';
-import { ParsedCsv, parseCsv } from '../parsers/csv.parser';
+import { parseCsv } from '../parsers/csv.parser';
+import { imageMimeType, sniffFileKind } from '../parsers/file-kind';
+import { parsePdf, ParsedTable, ScannedPdfError } from '../parsers/pdf.parser';
 import { parseXlsx } from '../parsers/xlsx.parser';
 import {
   DataImportRepository,
   ImportLeadData,
 } from '../repositories/data-import.repository';
 import { OpenRouterMappingService } from './openrouter-mapping.service';
+import {
+  OpenRouterVisionService,
+  VisionImage,
+} from './openrouter-vision.service';
 import { UploadStoreService } from './upload-store.service';
 
 /** شکل حداقلی فایل بارگذاری‌شده که به سرویس نیاز داریم. */
@@ -52,8 +57,9 @@ interface ValidatedRow {
 /**
  * سرویس ورود داده با کمک هوش مصنوعی (MVP سرنخ‌های CRM).
  *
- * - `preview`: فایل CSV یا XLSX را تجزیه می‌کند، نمونه‌ای محدود (۵ ردیف/۴۰ نویسه) به
- *   مدل می‌دهد و نگاشت پیشنهادی را با نگاشت قطعی مترادف‌ها پشتیبان‌سازی می‌کند.
+ * - `preview`: فایل CSV/XLSX/PDF متنی یا تصویر را تجزیه می‌کند، نمونه‌ای محدود
+ *   (۵ ردیف/۴۰ نویسه) به مدل می‌دهد و نگاشت پیشنهادی را با نگاشت قطعی
+ *   مترادف‌ها پشتیبان‌سازی می‌کند.
  * - `commit`: هر ردیف را با قواعد `CreateLeadDto` اعتبارسنجی کرده، تکراری‌های
  *   (مستأجر، رایانامه) را رد و بقیه را گروهی درج می‌کند.
  *
@@ -68,6 +74,7 @@ export class DataImportService {
     private readonly repository: DataImportRepository,
     private readonly openRouter: OpenRouterMappingService,
     private readonly uploadStore: UploadStoreService,
+    private readonly vision: OpenRouterVisionService,
   ) {}
 
   private roundMoney(value: number): number {
@@ -76,7 +83,7 @@ export class DataImportService {
   }
 
   /** تجزیه CSV با تبدیل خطا به پاسخ ۴۰۰ فارسی. */
-  private parseCsvOrThrow(text: string): ParsedCsv {
+  private parseCsvOrThrow(text: string): ParsedTable {
     try {
       return parseCsv(text);
     } catch (error) {
@@ -87,7 +94,7 @@ export class DataImportService {
   }
 
   /** تجزیه XLSX با تبدیل خطا به پاسخ ۴۰۰ فارسی. */
-  private parseXlsxOrThrow(buffer: Buffer): ParsedCsv {
+  private parseXlsxOrThrow(buffer: Buffer): ParsedTable {
     try {
       return parseXlsx(buffer);
     } catch (error) {
@@ -97,13 +104,66 @@ export class DataImportService {
     }
   }
 
-  /** تشخیص فایل XLSX بر پایه پسوند یا MIME type. */
-  private isXlsxFile(file: UploadedFilePayload): boolean {
-    const extension = path.extname(file.originalname ?? '').toLowerCase();
-    if (extension === '.xlsx') {
-      return true;
+  /**
+   * تجزیه فایل بارگذاری‌شده به `{headers, rows}` بر پایه «محتوای واقعی»
+   * (mime sniffing، نه فقط پسوند):
+   * - CSV/XLSX: پارسرهای موجود.
+   * - PDF متنی: استخراج متن/جدول بدون وابستگی؛ PDF اسکن‌شده رد می‌شود چون
+   *   رندرکننده JS خالص در دسترس نیست.
+   * - تصویر (JPG/PNG/WEBP): ارسال به مدل بینایی و دریافت جدول JSON.
+   */
+  private async parseUpload(file: UploadedFilePayload): Promise<ParsedTable> {
+    const kind = sniffFileKind(
+      file.buffer,
+      file.originalname ?? '',
+      file.mimetype ?? '',
+    );
+
+    if (kind === 'csv') {
+      return this.parseCsvOrThrow(file.buffer.toString('utf8'));
     }
-    return (file.mimetype ?? '').toLowerCase().includes('spreadsheetml');
+    if (kind === 'xlsx') {
+      return this.parseXlsxOrThrow(file.buffer);
+    }
+    if (kind === 'pdf') {
+      try {
+        return parsePdf(file.buffer);
+      } catch (error) {
+        if (error instanceof ScannedPdfError) {
+          throw new BadRequestException(
+            'این PDF اسکن‌شده است و متن قابل استخراج ندارد؛ لطفاً تصویر صفحه (JPG/PNG/WEBP) را بارگذاری کنید.',
+          );
+        }
+        throw new BadRequestException(
+          error instanceof Error ? error.message : 'خطا در تجزیه فایل PDF.',
+        );
+      }
+    }
+    if (kind === 'image') {
+      const mimeType = imageMimeType(file.buffer);
+      if (!mimeType) {
+        throw new BadRequestException(
+          'فرمت تصویر پشتیبانی نمی‌شود؛ فقط JPG، PNG یا WEBP مجاز است.',
+        );
+      }
+      const image: VisionImage = {
+        mimeType,
+        base64: file.buffer.toString('base64'),
+      };
+      try {
+        return await this.vision.extractTable([image]);
+      } catch (error) {
+        throw new BadRequestException(
+          error instanceof Error
+            ? error.message
+            : 'استخراج جدول از تصویر ناموفق بود.',
+        );
+      }
+    }
+
+    throw new BadRequestException(
+      'فقط فایل‌های CSV، XLSX، PDF و تصویر (JPG/PNG/WEBP) پذیرفته می‌شوند.',
+    );
   }
 
   /** پیش‌نمایش فایل و نگاشت پیشنهادی ستون‌ها. */
@@ -114,20 +174,11 @@ export class DataImportService {
     if (!file || !file.buffer) {
       throw new BadRequestException('فایلی بارگذاری نشده است.');
     }
-
-    const extension = path.extname(file.originalname ?? '').toLowerCase();
-    if (
-      !ALLOWED_UPLOAD_EXTENSIONS.includes(
-        extension as (typeof ALLOWED_UPLOAD_EXTENSIONS)[number],
-      ) &&
-      !(file.mimetype ?? '').toLowerCase().includes('spreadsheetml')
-    ) {
-      throw new BadRequestException('فقط فایل‌های CSV و XLSX پذیرفته می‌شوند.');
+    if (file.buffer.length > MAX_UPLOAD_BYTES) {
+      throw new BadRequestException('حجم فایل بیش از ۵ مگابایت است.');
     }
 
-    const parsed = this.isXlsxFile(file)
-      ? this.parseXlsxOrThrow(file.buffer)
-      : this.parseCsvOrThrow(file.buffer.toString('utf8'));
+    const parsed = await this.parseUpload(file);
 
     if (parsed.rows.length > MAX_IMPORT_ROWS) {
       throw new BadRequestException(
