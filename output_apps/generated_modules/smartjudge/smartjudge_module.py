@@ -4492,7 +4492,7 @@ async def chat_stream(request: Request, payload: dict = Body(default=None)):
 # استعلام زنده ماتریس قیمت‌های دلاری-تومانی پلن‌ها
 # ------------------------------------------------------------------------------
 @router.get("/pricing/plans")
-async def get_plans_pricing():
+def get_plans_pricing():  # sync on purpose: FastAPI runs it in the threadpool, so a slow rate fetch never blocks the event loop
     try:
         from .currency_engine import currency_engine
     except ImportError:
@@ -4509,7 +4509,7 @@ async def get_plans_pricing():
 # استعلام زنده ماتریس قیمت‌های دلاری-تومانی و نرخ لحظه‌ای ارز
 # ------------------------------------------------------------------------------
 @router.get("/pricing/matrix")
-async def get_realtime_pricing_matrix():
+def get_realtime_pricing_matrix():  # sync on purpose: FastAPI runs it in the threadpool, so a slow rate fetch never blocks the event loop
     try:
         from .currency_engine import currency_engine
     except ImportError:
