@@ -2,7 +2,8 @@
 """Daytona backend for the workbench checks (factory F1 / suite v2, docs/factory/DAYTONA.md).
 
 Runs the SAME check groups the local workbench uses (tsc/eslint/jest/ruff/pytest) inside a disposable
-Daytona sandbox instead of Docker on srv1. The group list is produced by `workbench.sh --emit-groups`
+Daytona sandbox instead of Docker on srv1. Gate 2 `docker` groups need a daemon the sandbox does not have,
+so they are reported as skip here and still run on the local backend. The group list is produced by `workbench.sh --emit-groups`
 (or passed in with `--groups`), so the check commands themselves are never duplicated here; this module
 only provides the remote plumbing.
 
@@ -264,6 +265,8 @@ def run_groups(client: Client, sandbox: Any, groups: list[dict], group_timeout: 
                 result = _run_lint(client, sandbox, group, limit, node_ready)
             elif kind == "py":
                 result = _run_py(client, sandbox, group, limit, py_ready)
+            elif kind == "docker":
+                raise SkipGroup("skip:docker builds run on the local backend only")
             else:
                 result = client.exec(sandbox, cmd, cwd=REMOTE_WORK, env=_base_env(), timeout=limit)
         except SkipGroup as exc:

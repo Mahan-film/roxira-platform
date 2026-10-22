@@ -220,6 +220,15 @@ def test_py_group_skips_without_requirements():
     assert ok is True and results[0]["status"] == "skip"
 
 
+def test_docker_group_is_skipped_remotely():
+    # Gate 2 docker builds need a docker daemon; the sandbox has none, so they are reported as skip, not fail.
+    group = {"name": "docker:backend", "kind": "docker", "dir": "output_apps/enterprise_hub",
+             "cmd": "docker build --target builder .", "eslint_prefix": "", "files": []}
+    client = FakeClient()
+    results, ok = dr.run_groups(client, {"id": "s"}, [group], 60, 900)
+    assert ok is True and results[0]["status"] == "skip" and "local backend" in results[0]["tail"]
+
+
 def test_slot_guard_respects_the_limit(tmp_path):
     guard = dr.SlotGuard(tmp_path / "slots", 1)
     assert guard.acquire() is True

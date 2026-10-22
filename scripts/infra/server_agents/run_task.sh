@@ -393,7 +393,9 @@ CHECKS_JSON="" CHECKS_OK="" CHECKS_NOTE=""
 if [ "$NO_CHECKS" = 0 ] && [ "$SMOKE" = 0 ] && [ ${#FILES[@]} -gt 0 ] && [ -x "$HERE/workbench.sh" ] && [ -d "$WT" ]; then
   CHECKS_JSON="${LOG%.log}.checks.json"
   log "workbench: checking $WT (json: $CHECKS_JSON)"
-  { timeout --kill-after=30 960 "$HERE/workbench.sh" "$WT" --base "$BASE_REF" --json "$CHECKS_JSON" >&2; } 2>&1 || true
+  # Gate 2 builds up to one docker image per changed service (15 min each, see workbench.sh); the backstop must
+  # outlast them, so it is larger than the old 16 min and shares workbench's WB_TOTAL_TIMEOUT override.
+  { timeout --kill-after=30 "${WB_TOTAL_TIMEOUT:-3600}" "$HERE/workbench.sh" "$WT" --base "$BASE_REF" --json "$CHECKS_JSON" >&2; } 2>&1 || true
   if [ -s "$CHECKS_JSON" ]; then
     CHECKS_OK="$(python3 -c 'import json,sys; print("true" if json.load(open(sys.argv[1])).get("ok") else "false")' "$CHECKS_JSON" 2>/dev/null || true)"
     CHECKS_NOTE="$(python3 -c '

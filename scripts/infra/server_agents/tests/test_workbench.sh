@@ -10,6 +10,7 @@ FAIL=0
 
 mk() { mkdir -p "$T/wt/$(dirname "$1")"; : >"$T/wt/$1"; }
 for f in output_apps/enterprise_hub/frontend/src/a.tsx output_apps/enterprise_hub/frontend/src/c.tsx output_apps/enterprise_hub/src/b.ts \
+  output_apps/enterprise_hub/mcp/mcp.module.ts output_apps/enterprise_hub/docs/a.md \
   output_apps/generated_modules/smartjudge/mod.py output_apps/generated_modules/smartjudge/tests/test_mod.py \
   output_apps/generated_modules/smartjudge/tests/test_other.py scripts/x/tool.py scripts/x/tests/test_tool.py \
   src/test_danger.py src/lib.py scripts/run.sh docs/a.md; do mk "$f"; done
@@ -25,8 +26,11 @@ reject() {
 o="$(run output_apps/enterprise_hub/frontend/src/a.tsx)"
 expect fe-tsc "$o" 'GROUP frontend:tsc .*node:20-bookworm-slim.*npx --no-install tsc --noEmit -p \.'
 expect fe-eslint "$o" 'GROUP frontend:eslint .*eslint src/a\.tsx'
+expect fe-docker "$o" 'GROUP docker:frontend .*image=docker.*--target builder.*frontend/Dockerfile'
 reject fe-no-hub "$o" 'GROUP hub:'
 reject fe-no-py "$o" 'GROUP py:'
+reject fe-no-docker-backend "$o" 'GROUP docker:backend'
+reject fe-no-copy-coverage "$o" 'GROUP dockerfile:copy-coverage'
 
 o="$(run output_apps/enterprise_hub/frontend/src/a.tsx output_apps/enterprise_hub/frontend/src/c.tsx)"
 expect fe-eslint-multi "$o" 'GROUP frontend:eslint .*node:20-bookworm-slim.*eslint src/a\.tsx src/c\.tsx'
@@ -34,7 +38,19 @@ expect fe-eslint-multi "$o" 'GROUP frontend:eslint .*node:20-bookworm-slim.*esli
 o="$(run output_apps/enterprise_hub/src/b.ts)"
 expect hub-tsc "$o" 'GROUP hub:tsc'
 expect hub-jest "$o" 'GROUP hub:jest .*--findRelatedTests src/b\.ts --passWithNoTests'
+expect hub-docker "$o" 'GROUP docker:backend .*image=docker.*--target builder.*output_apps/enterprise_hub/Dockerfile.*output_apps/enterprise_hub'
+expect hub-copy-coverage "$o" 'GROUP dockerfile:copy-coverage .*dockerfile_copy_coverage\.py'
+expect hub-docker-app "$o" 'GROUP docker:app .*image=docker.*--target builder.*Dockerfile\.prod'
 reject hub-no-fe "$o" 'GROUP frontend:'
+reject hub-no-docker-fe "$o" 'GROUP docker:frontend'
+
+o="$(run output_apps/enterprise_hub/docs/a.md)"   # hub docs do not affect the backend/frontend image
+reject hubdocs-no-docker "$o" 'GROUP docker:(backend|frontend)'
+reject hubdocs-no-copy "$o" 'GROUP dockerfile:copy-coverage'
+
+o="$(run Dockerfile.prod)"   # the Python app image's own Dockerfile
+expect prod-docker-app "$o" 'GROUP docker:app .*--target builder.*Dockerfile\.prod'
+reject prod-no-backend "$o" 'GROUP docker:backend'
 
 o="$(run output_apps/generated_modules/smartjudge/mod.py)"
 expect py-block "$o" 'GROUP py:ruff-blocking .*F821,F822,F823,E9'
@@ -101,6 +117,17 @@ d = json.load(open(sys.argv[1]))
 g = [x for x in d["groups"] if x["kind"] == "lint"]
 assert g and g[0]["eslint_prefix"] == "npx --no-install eslint" and g[0]["files"] == ["src/a.tsx"], d
 ' "$T/groups-lint.json" || { echo "FAIL [emit-groups-lint]"; FAIL=1; }
+
+printf 'output_apps/enterprise_hub/src/b.ts\n' >"$T/files"
+"$WB" "$T/wt" --files-from "$T/files" --emit-groups "$T/groups-docker.json" >/dev/null 2>&1
+python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+g = [x for x in d["groups"] if x["name"] == "docker:backend"]
+assert g and g[0]["kind"] == "docker" and "--target builder" in g[0]["cmd"], d
+cov = [x for x in d["groups"] if x["name"] == "dockerfile:copy-coverage"]
+assert cov and cov[0]["kind"] == "host", d
+' "$T/groups-docker.json" || { echo "FAIL [emit-groups-docker]"; FAIL=1; }
 
 # daytona backend: a runner that refuses to start -> local fallback, recorded in the JSON
 printf '%s\n' 'import sys' 'sys.exit(3)' >"$T/fake_daytona.py"
