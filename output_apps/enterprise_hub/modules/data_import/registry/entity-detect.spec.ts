@@ -71,6 +71,15 @@ describe('detectEntity', () => {
     expect(result.ambiguous).toBe(false);
   });
 
+  it('ignores extra source columns when the required fields are covered', () => {
+    const result = detectEntity(
+      ['نام', 'ایمیل', 'انبار', 'توضیحات', 'کد قدیمی', 'تاریخ ثبت', 'شعبه'],
+      [CRM, HR],
+    );
+    expect(result.key).toBe('crm-leads');
+    expect(result.confidence).toBe(1);
+  });
+
   it('flags ambiguity when two entities score equally', () => {
     const result = detectEntity(['نام', 'کد ملی'], [CRM, HR]);
     expect(result.ambiguous).toBe(true);

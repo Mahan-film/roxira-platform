@@ -38,10 +38,51 @@ export function scoreEntityHeaders(
   return score;
 }
 
+/** شناسه فیلدهای موجودیت که دست‌کم یک ستون منطبق دارند. */
+function matchedFieldKeys(
+  headers: string[],
+  adapter: EntityImportAdapter,
+): Set<string> {
+  const index = synonymIndex(adapter.fields);
+  const matched = new Set<string>();
+  for (const header of headers) {
+    const field = header ? index.get(normaliseKey(header)) : undefined;
+    if (field) {
+      matched.add(field);
+    }
+  }
+  return matched;
+}
+
+/**
+ * Detection confidence (0..1): how many of the entity's REQUIRED fields the headers cover, lowered when
+ * a runner-up entity scores close to the winner. Extra source columns we do not import (warehouse,
+ * notes, ...) no longer pull it down: a correctly detected 13-column goods table used to show 23%.
+ */
+function detectionConfidence(
+  headers: string[],
+  adapter: EntityImportAdapter,
+  bestScore: number,
+  secondScore: number,
+): number {
+  if (bestScore <= 0) {
+    return 0;
+  }
+  const required = adapter.fields.filter((field) => field.required);
+  const matched = matchedFieldKeys(headers, adapter);
+  const coverage =
+    required.length > 0
+      ? required.filter((field) => matched.has(field.key)).length /
+        required.length
+      : 1;
+  const margin = Math.min(1, 0.5 + (bestScore - secondScore) / bestScore);
+  return Math.round(coverage * margin * 100) / 100;
+}
+
 /** نتیجه تشخیص خودکار موجودیت. */
 export interface EntityDetection {
   key: string | null;
-  /** نسبت سربرگ‌های منطبق به کل سربرگ‌های غیرخالی (۰..۱). */
+  /** پوشش فیلدهای الزامی موجودیت، با کسر در صورت نزدیکی رقیب (۰..۱). */
   confidence: number;
   /**
    * آیا بهترین امتیاز مبهم است؟ (صفر، یا برابر با امتیاز رقیب)
@@ -73,10 +114,10 @@ export function detectEntity(
 
   const best = scored[0];
   const second = scored[1];
-  const nonEmptyHeaders = headers.filter((header) => header && header.trim())
-    .length;
-  const confidence =
-    nonEmptyHeaders > 0 ? best.score / nonEmptyHeaders : 0;
+  const bestAdapter = adapters.find((adapter) => adapter.key === best.key);
+  const confidence = bestAdapter
+    ? detectionConfidence(headers, bestAdapter, best.score, second?.score ?? 0)
+    : 0;
   const ambiguous =
     best.score === 0 || (second !== undefined && second.score >= best.score);
 
