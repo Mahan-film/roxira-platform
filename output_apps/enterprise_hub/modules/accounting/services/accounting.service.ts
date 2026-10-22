@@ -261,7 +261,7 @@ export class AccountingService {
     if (count > 0) {
       return;
     }
-    await this.accountingRepository.createAccounts(
+    await this.accountingRepository.insertMissingAccounts(
       tenantId,
       DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
         code: account.code,

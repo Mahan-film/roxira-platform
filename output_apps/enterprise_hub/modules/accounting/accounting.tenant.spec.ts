@@ -90,6 +90,21 @@ class InMemoryAccountingRepository {
     return entity;
   }
 
+  async insertMissingAccounts(
+    tenantId: string,
+    data: Partial<ChartOfAccountEntity>[],
+  ): Promise<void> {
+    const existing = new Set(
+      this.accounts
+        .filter((row) => row.tenantId === tenantId)
+        .map((row) => row.code),
+    );
+    await this.createAccounts(
+      tenantId,
+      data.filter((item) => !existing.has(item.code as string)),
+    );
+  }
+
   async createAccounts(
     tenantId: string,
     data: Partial<ChartOfAccountEntity>[],

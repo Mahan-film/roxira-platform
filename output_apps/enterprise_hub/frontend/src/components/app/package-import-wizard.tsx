@@ -184,8 +184,11 @@ export function PackageImportWizard({
         if (cancelled) return;
         setDetail(data);
         setProgress(prog);
-        if (data.status === "committed") setPhase("done");
-        else if (data.status === "failed") {
+        if (data.status === "committed") {
+          setPhase("done");
+          // The commit recorded an undo batch: show it under «ورودهای اخیر».
+          loadBatches();
+        } else if (data.status === "failed") {
           setError(data.error ?? "ثبت بسته ناموفق بود.");
           setPhase("review");
         }
@@ -202,7 +205,7 @@ export function PackageImportWizard({
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [phase, packageId]);
+  }, [phase, packageId, loadBatches]);
 
   async function runUpload(target: File) {
     const invalid = validatePackageFile(target);

@@ -120,6 +120,30 @@ export class AccountingRepository {
     return this.accounts.save(entities, { chunk: 500 }); // stay under the bind-parameter limit
   }
 
+  /**
+   * Inserts accounts whose (tenant, code) does not exist yet and silently skips the rest
+   * (ON CONFLICT DO NOTHING). Concurrent first requests of a new tenant all try to seed the
+   * default chart; a plain insert made all but one fail with a unique-key 500.
+   */
+  async insertMissingAccounts(
+    tenantId: string,
+    data: Partial<ChartOfAccountEntity>[],
+  ): Promise<void> {
+    if (data.length === 0) {
+      return;
+    }
+    const entities = data.map((item) =>
+      this.accounts.create({ ...item, tenantId }),
+    );
+    await this.accounts
+      .createQueryBuilder()
+      .insert()
+      .into(ChartOfAccountEntity)
+      .values(entities)
+      .orIgnore()
+      .execute();
+  }
+
   /** شناسه حساب‌هایی که سطر سند دارند (ارجاع‌شده؛ undo ممنوع). */
   async findReferencedAccountIds(
     tenantId: string,
