@@ -60,6 +60,19 @@ export async function getEmployee(
   });
 }
 
+/** ویرایش پرونده کارمند — PATCH /enterprise-hub/hr/employees/:id */
+export async function updateEmployee(
+  id: number,
+  payload: Partial<CreateEmployeeDto>,
+  signal?: AbortSignal,
+): Promise<Employee> {
+  return apiRequest<Employee>(`${HR_ENDPOINT}/employees/${id}`, {
+    method: "PATCH",
+    body: payload,
+    signal,
+  });
+}
+
 /** فهرست قراردادهای حقوقی — GET /enterprise-hub/hr/contracts */
 export async function listContracts(
   employeeId?: number,

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { Loader2, Search, UsersRound } from "lucide-react";
 
+import { AppEntryLink } from "@/components/app/app-entry-link";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { EmployeeForm } from "@/components/hr/employee-form";
 import { EmployeeTable } from "@/components/hr/employee-table";
@@ -115,6 +116,7 @@ export default function HrPage() {
               /enterprise-hub/hr
             </code>
           </p>
+          <AppEntryLink href="/app/hr" />
         </div>
 
         {errorMessage && (

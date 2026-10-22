@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import Link from "next/link";
 import { FileSpreadsheet, Loader2, Search, UsersRound } from "lucide-react";
 
+import { AppEntryLink } from "@/components/app/app-entry-link";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { CrmStats, PipelineBreakdown } from "@/components/crm/crm-stats";
 import { KanbanBoard } from "@/components/crm/kanban-board";
@@ -136,6 +137,7 @@ export default function CrmPage() {
               /enterprise-hub/crm
             </code>
           </p>
+          <AppEntryLink href="/app/crm" />
           <Link
             href="/crm/import"
             className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3.5 py-2 text-xs font-bold text-indigo-300 transition-colors hover:bg-indigo-500/20"

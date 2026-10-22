@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { BookOpenCheck, Layers, ShieldCheck, Sparkles } from "lucide-react";
 
+import { AppEntryLink } from "@/components/app/app-entry-link";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { AccountingStats } from "@/components/accounting/accounting-stats";
 import { AccountLedgerPanel } from "@/components/accounting/account-ledger-panel";
@@ -83,6 +84,7 @@ export default function AccountingPage() {
               /enterprise-hub/accounting
             </code>
           </p>
+          <AppEntryLink href="/app/accounting" />
         </div>
 
         {errorMessage && (

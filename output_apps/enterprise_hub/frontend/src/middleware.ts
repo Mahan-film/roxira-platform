@@ -29,6 +29,7 @@ const ROXIRA_ONLY_PATHS = [
   "/hr",
   "/radar",
   "/admin",
+  "/app",
 ];
 
 /** مسیرهای «قاضی هوشمند» که روی دامنه‌های روکسیرا سرو نمی‌شوند (نشت برند). */
@@ -122,6 +123,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (domain === "roxira_net") {
+    // نرم‌افزار کسب‌وکار (/app) فقط روی roxira.ir سرو می‌شود
+    if (hasPrefix(pathname, "/app")) {
+      return NextResponse.redirect(new URL(pathname + request.nextUrl.search, "https://roxira.ir"));
+    }
     // ریشه دامنه بین‌المللی = پورتال انگلیسی B2B
     if (pathname === "/") {
       const url = request.nextUrl.clone();
@@ -161,6 +166,8 @@ export const config = {
     "/hr/:path*",
     "/radar/:path*",
     "/admin/:path*",
+    "/app",
+    "/app/:path*",
     "/en/:path*",
     "/laws/:path*",
     "/regulations/:path*",

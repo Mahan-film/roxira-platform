@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { Layers, Search, Sparkles, TriangleAlert, Warehouse } from "lucide-react";
 
+import { AppEntryLink } from "@/components/app/app-entry-link";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { FifoValuationReport } from "@/components/inventory/fifo-valuation-report";
 import { InventoryAdminPanel } from "@/components/inventory/inventory-admin-panel";
@@ -119,6 +120,7 @@ export default function InventoryPage() {
               /enterprise-hub/inventory
             </code>
           </p>
+          <AppEntryLink href="/app/inventory" />
         </div>
 
         {errorMessage && (

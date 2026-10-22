@@ -59,6 +59,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        // نرم‌افزار کسب‌وکار (پشت ورود): هرگز کش نشود (نه مرورگر، نه CDN/nginx)
+        source: "/app/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
+      },
+      {
+        source: "/app",
+        headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
+      },
+    ];
+  },
   async redirects() {
     return [
       {
