@@ -125,7 +125,7 @@ class ShellBuilders(unittest.TestCase):
 
     def test_dry_runs_need_no_secrets(self):
         env = {"BACKUP_ENV_FILE": "/nonexistent", "ROXIRA_SERVER_ENV_FILE": "/nonexistent"}
-        for script, args in (("neon_offsite.sh", []), ("codeberg_mirror.sh", []), ("restore_drill.sh", ["neon"]), ("install_offsite.sh", [])):
+        for script, args in (("neon_offsite.sh", []), ("codeberg_mirror.sh", []), ("restore_drill.sh", ["neon"]), ("install_offsite.sh", []), ("telegram_offsite.sh", [])):
             flag = [] if script == "install_offsite.sh" else ["--dry-run"]
             r = subprocess.run(["bash", script, *flag, *args], capture_output=True, text=True, cwd=HERE, env={**os.environ, **env})
             self.assertEqual(r.returncode, 0, f"{script}: {r.stderr}")
@@ -202,6 +202,42 @@ class NeonMultiAccount(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("pooler", r.stderr)
         self.assertNotIn("Sup3rS3cretPw", r.stderr)
+
+
+class TelegramOffsite(unittest.TestCase):
+    """telegram_offsite.sh: offline dry-run plan and the never-send-unencrypted guard."""
+
+    NONE = {"ROXIRA_SERVER_ENV_FILE": "/nonexistent", "BACKUP_ENV_FILE": "/nonexistent"}
+
+    def test_dry_run_plan_and_token_not_leaked(self):
+        token = "123456:AAfakeTokenValue0123456789abcdef"
+        r = bash(
+            "bash telegram_offsite.sh --dry-run",
+            {**self.NONE, "NOTIFY_BOT_TOKEN": token, "NOTIFY_CHAT_ID": "555"},
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("age -R", r.stdout)
+        self.assertIn("45m", r.stdout)
+        self.assertIn("bot***/sendDocument", r.stdout)
+        self.assertNotIn(token, r.stdout + r.stderr)
+
+    def test_missing_recipient_is_refused_before_send(self):
+        with tempfile.TemporaryDirectory() as bindir, tempfile.TemporaryDirectory() as miss:
+            for tool in ("docker", "age", "curl", "split"):
+                p = Path(bindir, tool)
+                p.write_text("#!/bin/sh\nexit 0\n")
+                p.chmod(0o755)
+            env = {
+                **self.NONE,
+                "NOTIFY_BOT_TOKEN": "fake-token-value",
+                "NOTIFY_CHAT_ID": "",
+                "TELEGRAM_BACKUP_CHAT_ID": "",
+                "TELEGRAM_AGE_RECIPIENTS_FILE": str(Path(miss, "absent.pub")),
+                "PATH": bindir + os.pathsep + os.environ["PATH"],
+            }
+            r = bash("bash telegram_offsite.sh", env)
+            self.assertEqual(r.returncode, 1, r.stderr + r.stdout)
+            self.assertIn("refusing to send an unencrypted dump", r.stderr)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+# Daily 04:15 UTC: the Telegram convenience tier (never the primary; see docs/ops/TELEGRAM_BACKUP.md).
+[Unit]
+Description=Run the Telegram off-site database backup daily at 04:15 UTC
+
+[Timer]
+OnCalendar=*-*-* 04:15:00 UTC
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

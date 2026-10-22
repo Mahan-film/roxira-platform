@@ -1,0 +1,19 @@
+# Daily Telegram off-site database backup (tier 4). Installed by hand:
+# install -m 644 scripts/ops/backup/roxira-telegram-offsite.service /etc/systemd/system/
+# NOTIFY_BOT_TOKEN / NOTIFY_CHAT_ID / NOTIFY_BOT_API are read by the script from
+# /opt/roxira_platform/.env (by name; the file is never exported wholesale).
+# See docs/ops/TELEGRAM_BACKUP.md.
+[Unit]
+Description=Roxira off-site database backup to Telegram
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/opt/roxira_platform/scripts/ops/backup/telegram_offsite.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=1h
