@@ -22,7 +22,7 @@ every extra provider is another thing that can break (see QUALITY_SYSTEM_2026-10
 | Codeberg mirror, R2 storage, Qdrant Cloud fallback, Neon off-site copy | Keep (already live) | — |
 | Modal for Docling, Daytona for heavy batch jobs | Adopt (in progress: taskq 45, factory v2) | Moves heavy work off srv1 |
 | Daytona for crawling Iranian government sites | **Reject** | Those sites block non-Iranian IPs; crawling runs on the owner's Mac relay (`ir.roxira.iranrelay`) for that reason |
-| Several free accounts per provider to multiply free quotas | **Reject as a strategy** | Free tiers generally forbid multiple accounts to get around limits; a ban hits every key at once. Multiple keys stay for failover only; paid cheap models (DeepSeek) are the real fallback |
+| 3–4 keys per provider | Keep (owner-confirmed 2026-10-22: several keys/projects inside ONE account, checked against each provider's terms) | Spread across keys for resilience and per-key limits; rotate via the key pool; paid cheap models (DeepSeek) remain the last fallback |
 | Supabase hot standby, Zilliz cold backup, 4 Qdrant clusters, 4 Neon projects | **Reject** | Duplicates existing backups, adds moving parts and data copies; no measured need |
 | Tavily / Exa / Firecrawl live web search in the legal answer path | **Reject for answers**, keep for research agents | Legal answers must cite our vetted sources (ekhtebar, nezamat, qavanin); open web adds wrong or outdated law |
 | Nemotron content-safety step on every request | Defer | Adds latency to every chat; `chat_safety.py` exists. Revisit with abuse data |
