@@ -190,11 +190,12 @@ export class PackageStoreService {
     await fs.mkdir(this.packageDir(state.tenantId, state.packageId), {
       recursive: true,
     });
-    await fs.writeFile(
-      this.metaPath(state.tenantId, state.packageId),
-      JSON.stringify(state),
-      'utf8',
-    );
+    // Atomic replace: a status poll that reads meta.json while the analysis job rewrites it used
+    // to see a truncated file, fail JSON.parse and answer 404 (seen in the E2E sandbox).
+    const target = this.metaPath(state.tenantId, state.packageId);
+    const temp = `${target}.${process.pid}.${Date.now()}.tmp`;
+    await fs.writeFile(temp, JSON.stringify(state), 'utf8');
+    await fs.rename(temp, target);
   }
 
   /** خواندن بایت‌های فایل اصلی بسته. */

@@ -606,11 +606,9 @@ export class AccountingService {
       rows.reduce(
         (sum, row) =>
           sum +
-          this.currencyService.convert(
-            row.totalDebit,
-            row.currency,
-            BASE_CURRENCY,
-          ),
+          // Ledger debit/credit are always stored in rial (IRR), whatever the account's
+          // default currency (USD, MULTI, ...), so the base conversion is IRR -> USD.
+          this.toBaseCurrency(row.totalDebit, Currency.IRR),
         0,
       ),
       BASE_CURRENCY,
@@ -619,11 +617,7 @@ export class AccountingService {
       rows.reduce(
         (sum, row) =>
           sum +
-          this.currencyService.convert(
-            row.totalCredit,
-            row.currency,
-            BASE_CURRENCY,
-          ),
+          this.toBaseCurrency(row.totalCredit, Currency.IRR),
         0,
       ),
       BASE_CURRENCY,
@@ -730,11 +724,8 @@ export class AccountingService {
       ),
       closingBalance,
       baseCurrency: BASE_CURRENCY,
-      baseClosingBalance: this.currencyService.convert(
-        closingBalance,
-        account.currency as Currency,
-        BASE_CURRENCY,
-      ),
+      // closingBalance is in rial (ledger amounts), not in the account's default currency.
+      baseClosingBalance: this.toBaseCurrency(closingBalance, Currency.IRR),
       entries: limited,
     };
   }
