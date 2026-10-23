@@ -23,10 +23,16 @@ Selection rules (see :func:`split_rows`):
   * news-like titles and «رأی شماره»/«رای شماره» rulings are dropped and counted;
   * rows already present in ``iran_laws_v6`` with the same normalised text are skipped
     (``already_in_v6``);
-  * staged law names are mapped onto an existing v6 law name when their canonical keys are
-    equal or ``difflib`` ratio >= ``LAW_ALIAS_RATIO`` (``law_aliases``); a staged row whose
+  * staged law names are mapped onto an existing v6 law name when their canonical keys
+    (``law_names.py``: letters, digits, ZWNJ, diacritics, «وارده»/«وارد شده», years, «مصوب»)
+    are equal, or the ``difflib`` ratio is >= ``LAW_ALIAS_RATIO`` and both names carry the same
+    years/ordinals/amendment marker (``law_aliases``). Staged spellings of the same NEW law are
+    folded onto one name as well; every rewrite is listed in ``law_name_merges`` and
+    ``<out>/v7_law_name_merges.md``. A staged row whose
     ``(mapped law, article_no)`` is already in v6 is skipped when the text is near-identical
-    (``already_in_v6_alias``), and otherwise kept out of v7 as a conflict (v6 text wins). The
+    (``already_in_v6_alias``), and otherwise kept out of v7 as a conflict (v6 text wins) —
+    unless the law is named with ``--replace-law``: then its v6 rows are left out and the
+    staged rows of that law win (``replaced_laws`` in the report). The
     top ``TOP_NEW_LAWS`` genuinely new laws by row count are reported (``top_new_laws``);
   * rows are deduped by ``(normalised law_name, article_no)``. Texts whose hard-normalised
     similarity (``difflib`` ratio >= 0.97) is near-identical are the SAME text and only one
@@ -47,6 +53,9 @@ Safety:
   build_v7.py --out /tmp/v7 [--files FILE ...]                  # laws dry-run (default)
   build_v7.py --out /tmp/v7 --target regulations [--files ...]  # regulations dry-run
   EMBED_BACKEND=cf build_v7.py --apply --collection iran_laws_v7 --out /tmp/v7
+  build_v7.py --out /tmp/v7 --replace-law "قانون اصلاح قانون نظام صنفی کشور"  # re-split law
+
+Runbook (rebuild on srv1 + legal gate before switching): docs/legal/BUILD_V7.md.
 """
 
 from __future__ import annotations
@@ -83,6 +92,7 @@ def _load(name: str, rel: str):
 
 ip = _load("ingest_pipeline", "scripts/legal/ingest_pipeline.py")
 bc = _load("build_collection", "scripts/legal/build_collection.py")
+ln = _load("law_names", "scripts/legal/law_names.py")
 Refusal = ip.Refusal
 
 STAGED_DIR = ROOT / "data" / "legal" / "staged"
@@ -127,13 +137,6 @@ SOURCE_PRIORITY = ("rc.majlis", "qavanin", "nezamat", "ekhtebar", "dotic")
 LAW_ALIAS_RATIO = 0.90  # canonical-key difflib ratio that maps a staged name to a v6 name
 V6_ALIAS_TEXT_RATIO = 0.90  # same (mapped law, article) at/above this is already_in_v6_alias
 TOP_NEW_LAWS = 20
-
-# Canonical-key folds: the "vaarede" / "vaared shode (be)" variants -> "vaared", the
-# parenthesised years and a trailing "masoub ..." are dropped, then whitespace collapses.
-_PAREN_YEAR_RE = re.compile(r"[\(（][^()（）]*\d[^()（）]*[\)）]")
-_WAREDE_SHODE_RE = re.compile(r"وارد\s+شده(?:\s+به)?")
-_WAREDE_RE = re.compile(r"وارده")
-_MASOOB_RE = re.compile(r"\s*مصوب.*$")
 
 # Output targets: ``--target laws`` -> iran_laws_v7, ``regulations`` -> iran_regulations_v3.
 TARGET_LAWS = "laws"
@@ -250,18 +253,13 @@ def same_text(a: str, b: str, threshold: float = SIMILARITY_THRESHOLD) -> bool:
 
 # ----------------------------------------------------------------------------- law aliases
 def canonical_law_key(name: str) -> str:
-    """Normalised law name plus the v7 alias folds.
+    """Canonical law-name key (``law_names.canonical_law_key``).
 
-    Folds «وارده»/«وارد شده»/«وارد شده به» to «وارد», drops parenthesised years and a trailing
-    «مصوب ...», then collapses whitespace so a law that v6 and the staged source name
-    differently lands on one key.
+    Folds Arabic/Persian letters, digits, ZWNJ/spaces, diacritics, «وارده»/«وارد شده (به)» to
+    «وارد», parenthesised years, «با اصلاحات بعدی» and a trailing «مصوب ...»; «(اصلاحی 1392)»
+    stays part of the key so an amended text never folds into its base law.
     """
-    norm = ip.norm_name(name)
-    norm = _PAREN_YEAR_RE.sub(" ", norm)
-    norm = _WAREDE_SHODE_RE.sub("وارد", norm)
-    norm = _WAREDE_RE.sub("وارد", norm)
-    norm = _MASOOB_RE.sub("", norm)
-    return re.sub(r"\s+", " ", norm).strip()
+    return ln.canonical_law_key(name)
 
 
 def law_alias_map(
@@ -269,32 +267,55 @@ def law_alias_map(
 ) -> dict[str, str]:
     """Map each staged law name to a v6 law name with an equal or near-equal canonical key.
 
-    Equal canonical keys win; otherwise the closest v6 canonical key at/above ``threshold`` is
-    used. Names that already normalise to the v6 name are not reported (no alias needed).
+    Equal canonical keys win; otherwise the closest v6 key at/above ``threshold`` that shares
+    the same years/ordinals/amendment marker is used (``law_names.alias_to_base``). Names that
+    already are the v6 name are not reported (no alias needed). Order-independent.
     """
-    base_by_key: dict[str, str] = {}
-    for name in base_names:
-        key = canonical_law_key(name)
-        if key:
-            base_by_key.setdefault(key, name)
-    base_items = list(base_by_key.items())
-    aliases: dict[str, str] = {}
-    for name in staged_names:
-        key = canonical_law_key(name)
-        if not key:
-            continue
-        target = base_by_key.get(key)
-        if target is None:
-            best, best_ratio = None, 0.0
-            for base_key, base_name in base_items:
-                ratio = difflib.SequenceMatcher(None, key, base_key).ratio()
-                if ratio > best_ratio:
-                    best, best_ratio = base_name, ratio
-            if best is not None and best_ratio >= threshold:
-                target = best
-        if target is not None and ip.norm_name(target) != ip.norm_name(name):
-            aliases[name] = target
-    return aliases
+    merges = ln.alias_to_base(staged_names, base_names, threshold=threshold)
+    return {m["from"]: m["to"] for m in merges}
+
+
+def drop_replaced_laws(
+    base_rows: list[dict], staged: list[dict], names: list[str]
+) -> tuple[list[dict], dict[str, dict]]:
+    """Leave the v6 rows of each ``--replace-law`` out of v7; the staged rows of that law win.
+
+    Used when a law's v6 rows are wrong as a whole (e.g. the guild amendment rows labelled
+    «ماده 27 قانون اصلاح قانون نظام صنفی کشور», re-split by ``split_rc_law_articles.py``): the
+    v6-wins conflict rule would otherwise keep the old rows. Names match on the canonical key.
+    Refuses when a replaced law has no staged rows, so a law can never vanish from v7.
+    """
+    if not names:
+        return list(base_rows), {}
+    wanted = {canonical_law_key(n): n for n in names}
+    kept: list[dict] = []
+    report = {n: {"v6_rows_removed": 0, "staged_rows": 0} for n in names}
+    for row in base_rows:
+        name = wanted.get(canonical_law_key(row_law_name(row)))
+        if name is None:
+            kept.append(row)
+        else:
+            report[name]["v6_rows_removed"] += 1
+    for row in staged:
+        name = wanted.get(canonical_law_key(row_law_name(row)))
+        if name is not None:
+            report[name]["staged_rows"] += 1
+    empty = [n for n, r in report.items() if r["staged_rows"] == 0]
+    if empty:
+        raise Refusal(f"refused: --replace-law without staged rows: {', '.join(empty)}")
+    return kept, report
+
+
+def staged_law_merges(
+    staged_names: list[str], aliases: dict[str, str], *, threshold: float = LAW_ALIAS_RATIO
+) -> list[dict]:
+    """Fold staged spellings of the same NEW law (no v6 counterpart) onto one name.
+
+    Names already mapped onto v6 (``aliases``) are left out; see ``law_names.merge_staged``
+    for the ``{"from", "to", "kind", "ratio", "rows"}`` entries.
+    """
+    rest = [n for n in staged_names if n and n not in aliases]
+    return ln.merge_staged(rest, threshold=threshold)
 
 
 def apply_law_aliases(rows: list[dict], aliases: dict[str, str]) -> list[dict]:
@@ -770,6 +791,7 @@ def build_report(
     unparsable: int,
     aliases: dict[str, str] | None = None,
     new_laws: list[dict] | None = None,
+    name_merges: list[dict] | None = None,
 ) -> dict:
     """Dry-run report with a ``laws`` and a ``regulations`` section (target picks the top level)."""
     laws_section = _plan_section(laws, conflicts)
@@ -785,6 +807,7 @@ def build_report(
         "regulations": regs_section,
         "law_aliases": aliases or {},
         "top_new_laws": new_laws or [],
+        "law_name_merges": name_merges or [],
     }
     report.update(chosen)
     return report
@@ -918,10 +941,20 @@ def main(argv: list[str] | None = None, *, http=None, embed=None) -> int:
     ap.add_argument("--qdrant", default=ip.DEFAULT_QDRANT)
     ap.add_argument("--src-collection", default="iran_laws_v6")
     ap.add_argument("--no-base", action="store_true", help="build from staged rows only")
+    ap.add_argument(
+        "--replace-law",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="leave this law's v6 rows out; its staged rows win (repeatable)",
+    )
     ap.add_argument("--batch", type=int, default=BATCH)
     args = ap.parse_args(argv)
     if args.apply and args.dry_run:
         print("--apply and --dry-run are mutually exclusive", file=sys.stderr)
+        return 2
+    if args.replace_law and (args.no_base or args.target != TARGET_LAWS):
+        print("--replace-law needs the v6 base (--target laws, no --no-base)", file=sys.stderr)
         return 2
     try:
         if http is None:
@@ -937,14 +970,25 @@ def main(argv: list[str] | None = None, *, http=None, embed=None) -> int:
         base_rows: list[dict] | None = None
         aliases: dict[str, str] = {}
         alias_conflicts: list[tuple[tuple[str, str], list[dict]]] = []
+        v6_merges: list[dict] = []
+        replaced: dict[str, dict] = {}
+        name_merges: list[dict] = []
         if args.target == TARGET_LAWS and not args.no_base:
             base = ip.assert_local(args.qdrant)
             base_rows = try_scroll_payloads(http, base, args.src_collection)
-            aliases = law_alias_map(
+            base_rows, replaced = drop_replaced_laws(base_rows, laws, args.replace_law)
+            v6_merges = ln.alias_to_base(
                 [row_law_name(r) for r in laws],
                 [row_law_name(r) for r in base_rows],
+                threshold=LAW_ALIAS_RATIO,
             )
+            aliases = {m["from"]: m["to"] for m in v6_merges}
             laws = apply_law_aliases(laws, aliases)
+        if args.target == TARGET_LAWS:
+            staged_merges = staged_law_merges([row_law_name(r) for r in laws], aliases)
+            laws = apply_law_aliases(laws, {m["from"]: m["to"] for m in staged_merges})
+            name_merges = sorted(v6_merges + staged_merges, key=lambda m: m["from"])
+        if base_rows is not None:
             laws, skipped = skip_already_in_v6(laws, base_rows)
             dropped["already_in_v6"] = skipped
             laws, alias_skipped, alias_conflicts = skip_v6_article_duplicates(laws, base_rows)
@@ -963,9 +1007,14 @@ def main(argv: list[str] | None = None, *, http=None, embed=None) -> int:
             unparsable=unparsable,
             aliases=aliases,
             new_laws=new_laws,
+            name_merges=name_merges,
         )
+        report["replaced_laws"] = replaced
         out.mkdir(parents=True, exist_ok=True)
         (out / "v7_conflicts.md").write_text(conflicts_markdown(conflicts), encoding="utf-8")
+        (out / "v7_law_name_merges.md").write_text(
+            ln.merges_markdown(name_merges), encoding="utf-8"
+        )
         if not args.apply:
             report["mode"] = "dry-run"
             report["collection"] = None

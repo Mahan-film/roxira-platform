@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location(
     "build_v7", ROOT / "scripts" / "legal" / "build_v7.py"
@@ -305,6 +304,86 @@ def test_main_alias_skips_v6_duplicate_and_reports_alias(tmp_path):
     assert report["top_new_laws"] == []
 
 
+def test_main_merges_staged_spellings_of_a_new_law_and_writes_the_merge_report(tmp_path):
+    big, small = "قانون حمایت از خانواده", "قانون حمايت از خانواده (۱۳۹۱)"
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    src = staged / "sync_sources_2026-10-20_nezamat.jsonl"
+    rows = [
+        _row(big, "1", text=LONG, status="proposed", source="nezamat"),
+        _row(big, "2", text=LONG + " دو", status="proposed", source="nezamat"),
+        _row(small, "1", text=LONG, status="proposed", source="ekhtebar"),
+    ]
+    src.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
+    out = tmp_path / "out"
+    argv = ["--out", str(out), "--files", str(src), "--no-base"]
+    rc = b7.main(argv, http=FakeQdrant(), embed=fake_embed)
+    assert rc == 0
+    report = json.loads((out / "v7_report.json").read_text(encoding="utf-8"))
+    assert report["law_name_merges"] == [
+        {"from": small, "to": big, "kind": "staged_key", "ratio": 1.0, "rows": 1}
+    ]
+    assert report["by_law"] == {big: 3}
+    assert report["deduped_rows"] == 2, "article 1 from both spellings is one article now"
+    md = (out / "v7_law_name_merges.md").read_text(encoding="utf-8")
+    assert f"| {small} | {big} | staged_key | 1.0 | 1 |" in md
+
+
+def test_main_keeps_relabelled_guild_amendment_apart_from_the_v6_base_law(tmp_path):
+    v6_law, amended = "قانون نظام صنفی کشور", "قانون نظام صنفی کشور (اصلاحی 1392)"
+    qd = FakeQdrantWithScroll(rows=[_row(v6_law, "27", text=LONG, source="qavanin")])
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    src = staged / "rc_laws_2026-10-22.jsonl"
+    row = _row(amended, "27", text=LONG + " متن اصلاحی", status="proposed", source="rc.majlis")
+    src.write_text(json.dumps(row, ensure_ascii=False), encoding="utf-8")
+    out = tmp_path / "out"
+    rc = b7.main(["--out", str(out), "--files", str(src)], http=qd, embed=fake_embed)
+    assert rc == 0
+    report = json.loads((out / "v7_report.json").read_text(encoding="utf-8"))
+    assert report["law_aliases"] == {} and report["law_name_merges"] == []
+    assert report["selected_rows"] == 1 and report["conflict_keys"] == 0
+    assert report["by_law"] == {amended: 1}
+
+
+def test_main_replace_law_drops_v6_rows_and_takes_the_staged_ones(tmp_path):
+    law = "قانون اصلاح قانون نظام صنفی کشور"
+    old = _row(law, "27", text=LONG, source="rc.majlis.ir relay")
+    other = _row("قانون کار", "1", text=LONG + " کار", source="qavanin")
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    src = staged / "rc_laws_2026-10-22.jsonl"
+    fresh = "محل دایر شده بدون پروانه کسب با درخواست اتحادیه و تأیید کمیسیون پلمب می شود"
+    new = _row(law, "27", text=fresh, staging_status="proposed", source="rc.majlis")
+    src.write_text(json.dumps(new, ensure_ascii=False), encoding="utf-8")
+
+    def run(name, *extra):
+        qd = FakeQdrantWithScroll(rows=[old, other])
+        out = tmp_path / name
+        argv = ["--out", str(out), "--files", str(src), "--apply", "--collection", "v7t", *extra]
+        assert b7.main(argv, http=qd, embed=fake_embed) == 0
+        report = json.loads((out / "v7_report.json").read_text(encoding="utf-8"))
+        texts = {p["payload"]["law_name"]: p["payload"]["text"] for p in qd.cols["v7t"].values()}
+        return report, texts
+
+    report, texts = run("default")
+    assert report["conflict_keys"] == 1 and texts[law] == LONG, "default: v6 text wins"
+    report, texts = run("replace", "--replace-law", law)
+    assert report["replaced_laws"] == {law: {"v6_rows_removed": 1, "staged_rows": 1}}
+    assert report["conflict_keys"] == 0
+    assert texts == {law: fresh, "قانون کار": LONG + " کار"}
+
+
+def test_replace_law_refuses_a_law_without_staged_rows():
+    with pytest.raises(b7.Refusal):
+        b7.drop_replaced_laws([_row("قانون الف", "1")], [_row("قانون ب", "1")], ["قانون الف"])
+
+
+def test_main_replace_law_needs_the_v6_base(tmp_path):
+    argv = ["--out", str(tmp_path / "o"), "--no-base", "--replace-law", "قانون الف"]
+    assert b7.main(argv, http=FakeQdrant(), embed=fake_embed) == 2
+
+
 # ---------------------------------------------------------------- rule 1: routing
 def test_classify_statute_regulation_ruling_news_empty():
     assert b7.classify_row({"law_name": "L", "law_type": "LAW", "text": LONG}) == "statute"
@@ -440,7 +519,7 @@ def test_canonical_law_key_folds_warde_variants_years_and_masoub():
     assert b7.canonical_law_key("خسارات وارده") == b7.canonical_law_key("خسارات وارد")
     assert b7.canonical_law_key("خسارات وارد شده") == b7.canonical_law_key("خسارات وارد")
     assert b7.canonical_law_key("خسارات وارد شده به") == b7.canonical_law_key("خسارات وارد")
-    base = "قانون نمونه آزمایشی برای آزمون"
+    base = b7.canonical_law_key("قانون نمونه آزمایشی برای آزمون")
     assert b7.canonical_law_key("قانون نمونه آزمایشی برای آزمون (۱۳۹۵)") == base
     assert b7.canonical_law_key("قانون نمونه آزمایشی برای آزمون مصوب ۱۳۹۵") == base
     assert b7.canonical_law_key("قانون  نمونه   آزمایشی برای آزمون") == base
