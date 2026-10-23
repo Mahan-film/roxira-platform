@@ -203,7 +203,7 @@ def otp(monkeypatch):
         return True
 
     monkeypatch.setattr(mod, "_deliver_verification_code", fake_deliver)
-    monkeypatch.setattr(mod.secrets, "randbelow", lambda n: 4321)  # code 14321
+    monkeypatch.setattr(mod.secrets, "randbelow", lambda n: 432178)  # code 432178
 
     def send(phone=PHONE):
         resp = asyncio.run(mod.send_auth_otp(_Req(), {"phone": phone}))
@@ -232,8 +232,41 @@ def test_otp_max_five_sends_per_hour(otp, clock):
     statuses = []
     for _ in range(6):
         statuses.append(send()[0])
-        clock["t"] += 61
+        clock["t"] += 601  # past the 10-minute window, still inside the hour
     assert statuses == [200] * 5 + [429]
+
+
+def test_otp_max_three_sends_per_ten_minutes(otp, clock):
+    send, _ = otp
+    statuses = []
+    for _ in range(4):
+        statuses.append(send()[0])
+        clock["t"] += 61  # past the resend cooldown
+    assert statuses == [200] * 3 + [429]
+    clock["t"] += 600
+    assert send()[0] == 200
+
+
+def test_otp_code_is_six_digits(otp, monkeypatch):
+    send, _ = otp
+    monkeypatch.setattr(mod.secrets, "randbelow", lambda n: 42)  # leading zeros kept
+    sent = []
+
+    async def capture(phone, code, template=None):
+        sent.append(code)
+        return True
+
+    monkeypatch.setattr(mod, "_deliver_verification_code", capture)
+    send()
+    assert sent == ["000042"]
+
+
+def test_otp_unknown_and_wrong_code_get_the_same_error(otp):
+    send, verify = otp
+    unknown = verify("432178", phone="09120000999")
+    send()
+    wrong = verify("000000")
+    assert unknown == wrong and unknown[0] == 400
 
 
 def test_otp_per_ip_send_limit(otp, monkeypatch):
@@ -246,24 +279,24 @@ def test_otp_per_ip_send_limit(otp, monkeypatch):
 def test_otp_five_wrong_attempts_invalidate_code(otp):
     send, verify = otp
     send()
-    assert [verify("00000")[0] for _ in range(4)] == [400] * 4
-    assert verify("00000")[0] == 429  # fifth wrong guess burns the code
-    status, body = verify("14321")  # even the right code no longer works
+    assert [verify("000000")[0] for _ in range(4)] == [400] * 4
+    assert verify("000000")[0] == 429  # fifth wrong guess burns the code
+    status, body = verify("432178")  # even the right code no longer works
     assert status == 400 and "منقضی" in body["message"]
 
 
 def test_otp_correct_code_issues_token_and_is_single_use(otp):
     send, verify = otp
     send()
-    status, body = verify("14321")
+    status, body = verify("432178")
     assert status == 200 and body["token"] and body["user"]["phone"] == PHONE
-    assert verify("14321")[0] == 400
+    assert verify("432178")[0] == 400
 
 
 def test_otp_master_code_rejected(otp):
     send, verify = otp
     send()
-    assert verify("12345")[0] == 400
+    assert verify("123456")[0] == 400
 
 
 def test_otp_code_never_in_responses(otp, monkeypatch):
@@ -276,14 +309,14 @@ def test_otp_code_never_in_responses(otp, monkeypatch):
 
     monkeypatch.setattr(mod, "_deliver_verification_code", undelivered)
     _, body = send()
-    assert "14321" not in json.dumps(body) and "dev_code" not in body
+    assert "432178" not in json.dumps(body) and "dev_code" not in body
 
 
 def test_otp_stored_hashed_not_plain(otp):
     send, _ = otp
     send()
     stored = json.dumps(chat_auth.kv_get(f"otp:code:{PHONE}"))
-    assert "14321" not in stored
+    assert "432178" not in stored
 
 
 def test_single_otp_handler_pair():
@@ -317,3 +350,64 @@ def test_one_off_entitlement_does_not_grant_subscription_level():
     assert mod._plan_level_from_plan_types(["SINGLE_DRAFT", "VOICE_PACK_10MIN"]) == "free"
     assert not mod._is_vip_tier("SINGLE_DRAFT")
     assert mod._plan_level_from_plan_types(["SINGLE_DRAFT", "SJ_PRO_MONTHLY"]) == "pro"
+
+
+# ---------------- OTP send hardening (issue #366 review) ----------------
+def test_otp_failed_sms_costs_nothing(otp, clock, monkeypatch):
+    send, _ = otp
+
+    async def failing(phone, code, template=None):
+        return False
+
+    real = mod._deliver_verification_code
+    monkeypatch.setattr(mod, "_deliver_verification_code", failing)
+    for _ in range(6):  # no cooldown held, no cap consumed by undelivered sends
+        assert send()[0] == 200
+    assert chat_auth.peek(f"otp:sent10m:{PHONE}") == 0
+    monkeypatch.setattr(mod, "_deliver_verification_code", real)
+    assert send()[0] == 200
+
+
+def test_otp_blocked_attempts_do_not_extend_lock(otp, clock):
+    send, _ = otp
+    assert send()[0] == 200
+    for _ in range(5):  # all blocked by the cooldown
+        assert send()[0] == 429
+    assert chat_auth.peek(f"otp:sent10m:{PHONE}") == 1
+    clock["t"] += 61
+    assert send()[0] == 200
+
+
+def test_otp_empty_jwt_secret_fails_closed(otp, monkeypatch):
+    send, verify = otp
+    monkeypatch.setattr(mod, "JWT_SECRET", b"")
+    status, body = send()
+    assert status == 503 and body["code"] == "AUTH_UNAVAILABLE"
+    assert verify("432178")[0] == 503
+    assert chat_auth.peek(f"otp:sent10m:{PHONE}") == 0
+
+
+def test_otp_ip_ignores_forged_cf_header_and_public_peer_headers():
+    class R:
+        def __init__(self, host, headers):
+            self.client = type("C", (), {"host": host})()
+            self.headers = headers
+
+    assert chat_auth.safe_request_ip(R("172.18.0.2", {"x-real-ip": "1.1.1.1", "cf-connecting-ip": "6.6.6.6"})) == "1.1.1.1"
+    assert chat_auth.safe_request_ip(R("172.18.0.2", {"cf-connecting-ip": "6.6.6.6"})) == "172.18.0.2"
+    assert chat_auth.safe_request_ip(R("8.8.8.8", {"x-real-ip": "1.1.1.1"})) == "8.8.8.8"
+
+
+def test_otp_per_ip_cap_survives_cf_header_rotation(otp, monkeypatch):
+    monkeypatch.setenv("OTP_IP_SEND_LIMIT_PER_HOUR", "2")
+
+    class Req:
+        def __init__(self, i):
+            self.headers = {"host": "x", "x-real-ip": "5.5.5.5", "cf-connecting-ip": f"6.6.6.{i}"}
+            self.client = type("C", (), {"host": "172.18.0.2"})()
+
+    codes = []
+    for i in range(3):
+        resp = asyncio.run(mod.send_auth_otp(Req(i), {"phone": f"0912000020{i}"}))
+        codes.append(getattr(resp, "status_code", 200))
+    assert codes == [200, 200, 429]

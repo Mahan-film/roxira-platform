@@ -381,15 +381,92 @@ def _dispatch_kavenegar(receptor: str, token: str, template: str) -> Dict[str, A
     except Exception as exc:
         return {"delivered": False, "receptor": receptor, "template": template,
                 "http_status": None, "error": str(exc)}
+# OTP rules (issue #366): the `code` column holds an HMAC digest, never the code itself.
+OTP_MAX_FAILED_ATTEMPTS = 5
+OTP_SENDS_PER_PHONE_10_MIN = 3
+OTP_SENDS_PER_IP_HOUR = 10
+OTP_RESEND_COOLDOWN_SECONDS = 60
+OTP_GENERIC_ERROR = "کد تأیید نامعتبر یا منقضی است؛ لطفاً دوباره تلاش کنید یا کد جدید بگیرید."
+OTP_SEND_LIMITED = "تعداد درخواست کد بیش از حد مجاز است؛ لطفاً بعداً دوباره تلاش کنید."
+
+
+def _require_jwt_secret() -> str:
+    """Fail closed: never hash OTPs (or sign anything) with an empty HMAC key."""
+    if not JWT_SECRET:
+        logger.error("[AUTH] JWT_SECRET is empty; refusing OTP operation")
+        raise HTTPException(status_code=503, detail="سرویس احراز هویت موقتاً در دسترس نیست.")
+    return JWT_SECRET
+
+
+def _otp_digest(phone: str, code: str) -> str:
+    key = _require_jwt_secret().encode("utf-8")
+    return hmac.new(key, f"unifiedauth-otp:{phone}:{code}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _client_ip(request: Request) -> str:
+    """Real client IP behind nginx (shared rule, see chat_auth.safe_request_ip)."""
+    from output_apps.generated_modules.smartjudge import chat_auth
+
+    return chat_auth.safe_request_ip(request)
+
+
+def _otp_send_gate(phone: str, ip: str) -> Optional[str]:
+    """Return None when a send is allowed, else a reason ("ip" | "phone" | "cooldown").
+
+    Per-IP: every attempt counts. Per-phone: only *delivered* sends count (see
+    _otp_record_send) plus a short resend cooldown, so failed or blocked attempts by a
+    stranger can never extend a victim's lock. The cooldown is claimed atomically here.
+    """
+    from output_apps.generated_modules.smartjudge import chat_auth
+
+    ip_count, _ = chat_auth.incr(f"ua:otp:send:ip:{ip}", 3600)
+    if ip_count > OTP_SENDS_PER_IP_HOUR:
+        return "ip"
+    sent_key = f"ua:otp:sent:phone:{phone}"
+    if chat_auth.peek(sent_key) >= OTP_SENDS_PER_PHONE_10_MIN:
+        if chat_auth.ttl(sent_key) == 0:  # counter without a TTL: heal instead of locking forever
+            chat_auth.kv_delete(sent_key)
+        else:
+            return "phone"
+    if OTP_RESEND_COOLDOWN_SECONDS > 0 and not chat_auth.set_nx(
+        f"ua:otp:cd:phone:{phone}", OTP_RESEND_COOLDOWN_SECONDS
+    ):
+        return "cooldown"
+    return None
+
+
+def _otp_record_send(phone: str, delivered: bool) -> None:
+    from output_apps.generated_modules.smartjudge import chat_auth
+
+    if delivered:
+        chat_auth.incr(f"ua:otp:sent:phone:{phone}", 600)
+    else:
+        chat_auth.kv_delete(f"ua:otp:cd:phone:{phone}")  # a failed SMS costs the user nothing
+
+
+def _otp_count_attempt(phone: str) -> int:
+    from output_apps.generated_modules.smartjudge import chat_auth
+
+    count, _ = chat_auth.incr(f"ua:otp:att:{phone}", OTP_TTL_SECONDS)
+    return count
+
+
+def _otp_reset_attempts(phone: str) -> None:
+    from output_apps.generated_modules.smartjudge import chat_auth
+
+    chat_auth.kv_delete(f"ua:otp:att:{phone}")
+
+
 def _store_otp(phone: str, code: str) -> None:
     expires = time.time() + OTP_TTL_SECONDS
     with _db_lock, _get_conn() as conn:
         conn.execute("DELETE FROM otps WHERE phone = ?", (phone,))
         conn.execute(
             "INSERT INTO otps (phone, code, expires_at) VALUES (?, ?, ?)",
-            (phone, code, expires),
+            (phone, _otp_digest(phone, code), expires),
         )
         conn.commit()
+    _otp_reset_attempts(phone)
 
 
 def _read_otp(phone: str) -> Optional[Dict[str, Any]]:
@@ -416,6 +493,10 @@ async def request_otp(req: OTPRequest, request: Request):
     if len(phone) != 11 or not phone.startswith("09"):
         raise HTTPException(status_code=400, detail="شماره تلفن همراه معتبر نیست.")
 
+    _require_jwt_secret()
+    if _otp_send_gate(phone, _client_ip(request)) is not None:
+        raise HTTPException(status_code=429, detail=OTP_SEND_LIMITED)
+
     service = _detect_service(request, req.target_service)
     template = _template_for(service, request.headers.get("host"))
 
@@ -424,6 +505,10 @@ async def request_otp(req: OTPRequest, request: Request):
 
     result = _dispatch_kavenegar(receptor=phone, token=code, template=template)
     delivered = bool(result.get("delivered"))
+    _otp_record_send(phone, delivered)
+    if not delivered:
+        logger.warning("[AUTH] OTP SMS not delivered (template=%s, http_status=%s)",
+                       template, result.get("http_status"))
 
     return {
         "status": "OTP_DISPATCHED" if delivered else "OTP_STORED_SMS_DEGRADED",
@@ -432,14 +517,12 @@ async def request_otp(req: OTPRequest, request: Request):
         "sms_template": template,
         "sms_delivered": delivered,
         "sms_channel": "kavenegar",
-        "provider_response": result.get("provider_response"),
         "expires_in_seconds": OTP_TTL_SECONDS,
         "message": (
             f"کد تأیید ۶ رقمی از طریق کاوه‌نگار (قالب {template}) به شماره {phone} ارسال شد."
             if delivered
             else "کد تأیید تولید شد؛ اما ارسال پیامک با خطا مواجه شد. با پشتیبانی تماس بگیرید."
         ),
-        **( {"dispatch_error": result.get("error")} if not delivered else {} ),
     }
 
 
@@ -448,15 +531,22 @@ async def request_otp(req: OTPRequest, request: Request):
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post("/verify-otp")
 async def verify_otp(req: OTPVerify):
+    _require_jwt_secret()
     phone = _normalize_iran_phone(req.phone_number)
     entry = _read_otp(phone)
     if not entry or time.time() > float(entry.get("expires_at", 0) or 0):
         _delete_otp(phone)
-        raise HTTPException(status_code=400, detail="کد تأیید منقضی شده است؛ مجدداً درخواست کنید.")
-    if not hmac.compare_digest(str(entry["code"]), (req.code or "").strip()):
-        raise HTTPException(status_code=400, detail="کد تأیید وارد شده نامعتبر است.")
+        raise HTTPException(status_code=400, detail=OTP_GENERIC_ERROR)
+    # every verify is counted before the compare, so parallel guesses cannot pass the limit
+    if _otp_count_attempt(phone) > OTP_MAX_FAILED_ATTEMPTS:
+        _delete_otp(phone)  # burn the code: a new one must be requested
+        _otp_reset_attempts(phone)
+        raise HTTPException(status_code=400, detail=OTP_GENERIC_ERROR)
+    if not hmac.compare_digest(str(entry["code"]), _otp_digest(phone, (req.code or "").strip())):
+        raise HTTPException(status_code=400, detail=OTP_GENERIC_ERROR)
 
     _delete_otp(phone)
+    _otp_reset_attempts(phone)
 
     user = get_user(phone) or create_user(username=phone, phone=phone, full_name=None, role="LEGAL_USER")
 

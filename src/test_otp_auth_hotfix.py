@@ -12,7 +12,7 @@ from output_apps.generated_modules.smartjudge import chat_auth
 from output_apps.generated_modules.smartjudge import smartjudge_module as mod
 
 PHONE = "09120000001"
-GOOD = "54321"
+GOOD = "654321"
 
 
 def _verify(code):
@@ -28,7 +28,7 @@ def _status(resp):
 
 
 def test_wrong_code_rejected():
-    assert _status(_verify("00000")) == 400
+    assert _status(_verify("000000")) == 400
 
 
 def test_master_code_12345_rejected():

@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString, Length, Matches } from 'class-validator';
-import { IR_MOBILE_REGEX, OTP_CODE_LENGTH } from '../constants/auth.constants';
+import { IR_MOBILE_REGEX } from '../constants/auth.constants';
 import { AuthServiceDomain } from '../enums/auth-service.enum';
 import { normalizeIranianMobile } from '../utils/phone.util';
 
@@ -20,12 +20,13 @@ export class VerifyOtpDto {
   phone: string;
 
   @ApiProperty({
-    description: 'کد یک‌بارمصرف ۵ رقمی ارسال‌شده از طریق پیامک',
-    example: '48321',
+    description: 'کد یک‌بارمصرف ۶ رقمی ارسال‌شده از طریق پیامک',
+    example: '483217',
   })
   @Transform(({ value }) => String(value ?? '').trim())
-  @Matches(new RegExp(`^\\d{${OTP_CODE_LENGTH}}$`), {
-    message: `کد تأیید باید ${OTP_CODE_LENGTH} رقم باشد.`,
+  // 5 or 6 digits for one release so cached clients keep working; codes issued are 6.
+  @Matches(/^\d{5,6}$/, {
+    message: 'کد تأیید باید ۵ یا ۶ رقم باشد.',
   })
   code: string;
 

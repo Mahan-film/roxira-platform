@@ -27,7 +27,7 @@ Rules for the text:
   no link, no signature line).
 - Keep one blank line before the last line.
 - The domain must be the exact host the site is served from (no `https://`, no `www.`).
-- Do not put any other number in the message, so a pasted SMS still yields only the 5-digit code.
+- Do not put any other number in the message, so a pasted SMS still yields only the 6-digit code.
 
 ## 2. Activate the new template
 
@@ -36,7 +36,7 @@ Rules for the text:
    `KAVENEGAR_TEMPLATE_GHAZI=ghazi-verify-v2`
    The default when unset is `ghazi-verify`.
 3. Restart the AI core container (owner approval is required for production restarts), then
-   request a code and confirm the message ends with `@ghazihoushmand.ir #12345`.
+   request a code and confirm the message ends with `@ghazihoushmand.ir #123456`.
 4. Keep the old template registered until the check passes so it can be rolled back by
    restoring the previous env value.
 
@@ -58,5 +58,5 @@ Ghazi template cannot be reused. Create a second template and point
 - Android Chrome: the code appears in the field and the login is submitted automatically
   (needs the domain line above; otherwise the user just types or pastes the code).
 - iOS Safari: the keyboard offers the code (`autocomplete="one-time-code"`); the form
-  submits as soon as 5 digits are present.
-- Pasting a whole SMS text extracts the 5-digit code.
+  submits as soon as 6 digits are present.
+- Pasting a whole SMS text extracts the 6-digit code.

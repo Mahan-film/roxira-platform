@@ -1,4 +1,6 @@
 import {
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -6,12 +8,19 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { randomInt } from 'crypto';
+import { createHmac, randomInt, timingSafeEqual } from 'crypto';
 import {
   JWT_DEFAULT_EXPIRES_IN_SECONDS,
+  OTP_ATTEMPTS_REDIS_PREFIX,
   OTP_CODE_LENGTH,
+  OTP_GENERIC_ERROR,
   OTP_MAX_ATTEMPTS,
   OTP_REDIS_PREFIX,
+  OTP_RESEND_COOLDOWN_SECONDS,
+  OTP_SEND_LIMIT_ERROR,
+  OTP_SEND_LIMIT_PER_IP,
+  OTP_SEND_LIMIT_PER_PHONE,
+  OTP_SEND_LIMIT_REDIS_PREFIX,
   OTP_TTL_SECONDS,
   REDIS_CLIENT,
 } from '../constants/auth.constants';
@@ -31,11 +40,23 @@ import { TenantsService } from '../../tenants/services/tenants.service';
 import { KavenegarService } from './kavenegar.service';
 
 interface OtpRecord {
-  code: string;
-  attempts: number;
+  /** HMAC-SHA256 of phone + code; the code itself is never stored. */
+  hash: string;
   domain: AuthServiceDomain;
   issuedAt: number;
 }
+
+/** Atomic fixed-window counter: INCR, and (re)arm the TTL when new or missing. */
+const COUNT_IN_WINDOW_LUA = `
+local c = redis.call('INCR', KEYS[1])
+if c == 1 or redis.call('TTL', KEYS[1]) < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return c`;
+
+/** Mask a phone for logs: 09121234567 -> 0912***67. */
+const maskPhone = (phone: string): string =>
+  phone.length > 6 ? `${phone.slice(0, 4)}***${phone.slice(-2)}` : '***';
 
 interface JwtPayload {
   sub: string;
@@ -50,8 +71,10 @@ interface JwtPayload {
  * سرویس احراز هویت پیامکی (Auth & Kavenegar OTP).
  *
  * منطق کسب‌وکار کامل اینجا متمرکز است:
- *   • تولید کد امن ۵ رقمی با CSPRNG (crypto.randomInt)
- *   • ذخیره در Redis با انقضای ۱۲۰ ثانیه + شمارنده تلاش ضد Brute-Force
+ *   • تولید کد امن ۶ رقمی با CSPRNG (crypto.randomInt)
+ *   • ذخیره فقط هش HMAC کد در Redis با انقضای ۱۲۰ ثانیه، مقایسه زمان‌ثابت
+ *   • شمارنده اتمیک تلاش (حداکثر ۵) و محدودیت ارسال به‌ازای شماره و IP
+ *   • پیام خطای یکسان برای همه شکست‌ها؛ کد هرگز در پاسخ یا لاگ نمی‌آید
  *   • ارسال پیامک با قالب اختصاصی هر دامنه از طریق کاوه‌نگار
  *   • ایجاد/بازیابی کاربر و صدور توکن امضاشده JWT (سشن کاربری)
  *
@@ -95,10 +118,105 @@ export class AuthService {
     return `${OTP_REDIS_PREFIX}${phone}`;
   }
 
-  /** تولید کد امن ۵ رقمی با مولد اعداد تصادفی رمزنگاری‌شده. */
+  private attemptsKey(phone: string): string {
+    return `${OTP_ATTEMPTS_REDIS_PREFIX}${phone}`;
+  }
+
+  /** تولید کد امن ۶ رقمی با مولد اعداد تصادفی رمزنگاری‌شده. */
   private generateOtp(): string {
     const max = 10 ** OTP_CODE_LENGTH;
     return String(randomInt(0, max)).padStart(OTP_CODE_LENGTH, '0');
+  }
+
+  /** HMAC keyed with JWT_SECRET, so a Redis dump cannot be brute-forced offline. */
+  private hashOtp(phone: string, code: string): string {
+    return createHmac('sha256', this.config.getOrThrow<string>('JWT_SECRET'))
+      .update(`otp:${phone}:${code}`)
+      .digest('hex');
+  }
+
+  private static sameHash(expected: unknown, supplied: string): boolean {
+    if (typeof expected !== 'string' || expected.length !== supplied.length) {
+      return false;
+    }
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(supplied));
+  }
+
+  /**
+   * Count one event in a fixed window; true when the limit is exceeded.
+   * INCR and EXPIRE run in one Lua script (atomic), and a key that somehow has
+   * no TTL (-1) gets one on the next hit, so a crash can never lock out forever.
+   */
+  private async overLimit(
+    key: string,
+    limit: number,
+    windowSeconds: number,
+  ): Promise<boolean> {
+    const count = Number(
+      await this.redis.eval(COUNT_IN_WINDOW_LUA, 1, key, windowSeconds),
+    );
+    return count > limit;
+  }
+
+  /** Successful sends recorded for a phone; heals a stuck key that lost its TTL. */
+  private async phoneSendCount(key: string): Promise<number> {
+    const count = Number((await this.redis.get(key)) ?? 0);
+    if (count > 0 && (await this.redis.ttl(key)) === -1) {
+      await this.redis.expire(key, OTP_SEND_LIMIT_PER_PHONE.windowSeconds);
+    }
+    return count;
+  }
+
+  /**
+   * Gate a send. Per-IP: every attempt counts. Per-phone: only *delivered*
+   * sends count (see recordSendResult) plus a short resend cooldown, so a
+   * stranger cannot lock a victim out with failed or blocked attempts.
+   * Returns the cooldown key to release when the SMS fails.
+   */
+  private async assertSendAllowed(phone: string, ip?: string): Promise<string> {
+    if (
+      ip &&
+      (await this.overLimit(
+        `${OTP_SEND_LIMIT_REDIS_PREFIX}ip:${ip}`,
+        OTP_SEND_LIMIT_PER_IP.limit,
+        OTP_SEND_LIMIT_PER_IP.windowSeconds,
+      ))
+    ) {
+      throw new HttpException(OTP_SEND_LIMIT_ERROR, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const sentKey = `${OTP_SEND_LIMIT_REDIS_PREFIX}phone:${phone}`;
+    if ((await this.phoneSendCount(sentKey)) >= OTP_SEND_LIMIT_PER_PHONE.limit) {
+      throw new HttpException(OTP_SEND_LIMIT_ERROR, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const cooldownKey = `${OTP_SEND_LIMIT_REDIS_PREFIX}cd:${phone}`;
+    const acquired = await this.redis.set(
+      cooldownKey,
+      '1',
+      'EX',
+      OTP_RESEND_COOLDOWN_SECONDS,
+      'NX',
+    );
+    if (acquired === null) {
+      throw new HttpException(OTP_SEND_LIMIT_ERROR, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    return cooldownKey;
+  }
+
+  private async recordSendResult(
+    phone: string,
+    cooldownKey: string,
+    delivered: boolean,
+  ): Promise<void> {
+    if (delivered) {
+      await this.redis.eval(
+        COUNT_IN_WINDOW_LUA,
+        1,
+        `${OTP_SEND_LIMIT_REDIS_PREFIX}phone:${phone}`,
+        OTP_SEND_LIMIT_PER_PHONE.windowSeconds,
+      );
+    } else {
+      await this.redis.del(cooldownKey);
+    }
   }
 
   /**
@@ -109,18 +227,20 @@ export class AuthService {
   async sendOtp(
     dto: SendOtpDto,
     host?: string,
+    ip?: string,
   ): Promise<SendOtpResponseDto> {
     const domain = this.resolveServiceDomain(dto.serviceDomain, host);
     const phone = dto.phone;
+    const cooldownKey = await this.assertSendAllowed(phone, ip);
     const code = this.generateOtp();
 
     const record: OtpRecord = {
-      code,
-      attempts: 0,
+      hash: this.hashOtp(phone, code),
       domain,
       issuedAt: Date.now(),
     };
 
+    await this.redis.del(this.attemptsKey(phone));
     await this.redis.set(
       this.otpKey(phone),
       JSON.stringify(record),
@@ -134,8 +254,10 @@ export class AuthService {
       domain,
     );
 
+    await this.recordSendResult(phone, cooldownKey, smsDelivered === true);
+
     this.logger.log(
-      `[AUTH] OTP صادر شد | phone=${phone} | domain=${domain} | smsDelivered=${smsDelivered} | ttl=${OTP_TTL_SECONDS}s`,
+      `[AUTH] OTP صادر شد | phone=${maskPhone(phone)} | domain=${domain} | smsDelivered=${smsDelivered} | ttl=${OTP_TTL_SECONDS}s`,
     );
 
     return {
@@ -157,12 +279,11 @@ export class AuthService {
     const domain = this.resolveServiceDomain(dto.serviceDomain, host);
     const phone = dto.phone;
     const key = this.otpKey(phone);
+    const attemptsKey = this.attemptsKey(phone);
 
     const raw = await this.redis.get(key);
     if (!raw) {
-      throw new UnauthorizedException(
-        'کد تأیید منقضی شده یا یافت نشد؛ لطفاً دوباره درخواست کنید.',
-      );
+      throw new UnauthorizedException(OTP_GENERIC_ERROR);
     }
 
     let record: OtpRecord;
@@ -170,22 +291,25 @@ export class AuthService {
       record = JSON.parse(raw) as OtpRecord;
     } catch {
       await this.redis.del(key);
-      throw new UnauthorizedException('کد تأیید نامعتبر است.');
+      throw new UnauthorizedException(OTP_GENERIC_ERROR);
     }
 
-    if (record.code !== dto.code) {
-      record.attempts += 1;
-      if (record.attempts >= OTP_MAX_ATTEMPTS) {
-        await this.redis.del(key);
-        throw new UnauthorizedException(
-          'تعداد تلاش‌های ناموفق بیش از حد مجاز شد؛ لطفاً کد جدید درخواست کنید.',
-        );
-      }
-      await this.redis.set(key, JSON.stringify(record), 'KEEPTTL');
-      throw new UnauthorizedException('کد تأیید نادرست است.');
+    // Every verify counts before the compare (atomic INCR), so parallel guesses
+    // cannot slip past the limit; the 6th try fails even with the right code.
+    if (await this.overLimit(attemptsKey, OTP_MAX_ATTEMPTS, OTP_TTL_SECONDS)) {
+      await this.redis.del(key, attemptsKey);
+      throw new UnauthorizedException(OTP_GENERIC_ERROR);
     }
 
-    await this.redis.del(key);
+    if (!AuthService.sameHash(record.hash, this.hashOtp(phone, dto.code))) {
+      throw new UnauthorizedException(OTP_GENERIC_ERROR);
+    }
+
+    // Single use: only the request that actually deletes the code wins.
+    if ((await this.redis.del(key)) === 0) {
+      throw new UnauthorizedException(OTP_GENERIC_ERROR);
+    }
+    await this.redis.del(attemptsKey);
 
     const { user } = await this.authRepository.findOrCreateByPhone(
       phone,
@@ -196,7 +320,9 @@ export class AuthService {
 
     const session = await this.issueSessionForUser(user);
 
-    this.logger.log(`[AUTH] ورود موفق | phone=${phone} | userId=${user.id}`);
+    this.logger.log(
+      `[AUTH] ورود موفق | phone=${maskPhone(phone)} | userId=${user.id}`,
+    );
 
     return session;
   }

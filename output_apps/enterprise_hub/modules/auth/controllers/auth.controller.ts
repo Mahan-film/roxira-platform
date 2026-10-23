@@ -6,6 +6,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Ip,
   Post,
   Req,
 } from '@nestjs/common';
@@ -69,15 +70,17 @@ export class AuthController {
   @ApiOperation({
     summary: 'ارسال کد یک‌بارمصرف پیامکی',
     description:
-      'تولید کد امن ۵ رقمی، ذخیره در Redis با انقضای ۱۲۰ ثانیه و ارسال پیامک با قالب ghazi-verify (دامنه قاضی) یا roxira-verify (دامنه روکسیرا) از طریق کاوه‌نگار.',
+      'تولید کد امن ۶ رقمی، ذخیره هش آن در Redis با انقضای ۱۲۰ ثانیه و ارسال پیامک با قالب ghazi-verify (دامنه قاضی) یا roxira-verify (دامنه روکسیرا) از طریق کاوه‌نگار.',
   })
   @ApiResponse({ status: HttpStatus.OK, type: SendOtpResponseDto })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'شماره همراه نامعتبر' })
+  @ApiResponse({ status: HttpStatus.TOO_MANY_REQUESTS, description: 'محدودیت ارسال کد' })
   async sendOtp(
     @Body() dto: SendOtpDto,
+    @Ip() ip: string,
     @Headers('host') host?: string,
   ): Promise<SendOtpResponseDto> {
-    return this.authService.sendOtp(dto, host);
+    return this.authService.sendOtp(dto, host, ip);
   }
 
   @Public()

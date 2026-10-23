@@ -1,7 +1,7 @@
 // Static content for the customer guide (/guide). No secrets, no backend field names.
 // Facts here were checked against the chat client and backend limits:
 //   guest chat 10 msg/hour, guest voice 5/hour, logged-in voice 60/hour,
-//   message cap 6000 chars, recording cap 120 s, OTP 5 digits / 3 min / 60 s resend.
+//   message cap 6000 chars, recording cap 120 s, OTP 6 digits / 3 min / 60 s resend.
 
 /**
  * Case-file upload (PDF / image / DOCX) ships in a parallel change.
@@ -67,7 +67,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     steps: [
       "روی «ورود» در بالای صفحه بزنید.",
       "شماره همراه ایرانی را با قالب 09xxxxxxxxx (۱۱ رقم) وارد کنید و «دریافت کد تأیید» را بزنید.",
-      "کد ۵ رقمی را از پیامک وارد کنید. کد حدود ۳ دقیقه معتبر است.",
+      "کد ۶ رقمی را از پیامک وارد کنید. کد حدود ۳ دقیقه معتبر است.",
       "بعد از ورود، سقف‌های مهمان برای شما اعمال نمی‌شود و گفتگو به حساب شما وصل است.",
     ],
     bullets: [

@@ -248,18 +248,26 @@ def _mem_prune() -> None:
                     _mem.pop(key, None)
 
 
+_INCR_LUA = """
+local c = redis.call('INCR', KEYS[1])
+local t = redis.call('TTL', KEYS[1])
+if c == 1 or t < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+  t = tonumber(ARGV[1])
+end
+return {c, t}
+"""
+
+
 def incr(key: str, window_s: int) -> tuple[int, int]:
     """Atomically count one event in a fixed window. Returns (count, seconds_left)."""
     client = _get_redis()
     if client is not None:
         try:
-            pipe = client.pipeline()
-            pipe.incr(key)
-            pipe.ttl(key)
-            count, ttl = pipe.execute()
-            if count == 1 or ttl is None or ttl < 0:
-                client.expire(key, window_s)
-                ttl = window_s
+            # one atomic script: a crash can never leave a counter without a TTL, and a
+            # key that already lost its TTL (-1) is re-armed on the next hit (self-heal)
+            count, ttl = client.eval(_INCR_LUA, 1, key, int(window_s))
+            ttl = int(ttl) if int(ttl) > 0 else window_s
             return int(count), int(ttl)
         except Exception:
             _redis_failed()
@@ -287,6 +295,23 @@ def decr(key: str) -> None:
         item = _mem_get(key)
         if item is not None:
             item[0] = max(0, int(item[0]) - 1)
+
+
+def peek(key: str) -> int:
+    """Current ``incr`` counter value without counting (0 when absent)."""
+    client = _get_redis()
+    if client is not None:
+        try:
+            value = client.get(key)
+            return int(value) if value else 0
+        except Exception:
+            _redis_failed()
+    with _mem_lock:
+        item = _mem_get(key)
+        try:
+            return int(item[0]) if item else 0
+        except (TypeError, ValueError):
+            return 0
 
 
 def ttl(key: str) -> int:
@@ -422,6 +447,34 @@ def client_ip(headers: Mapping[str, str], client_host: Optional[str]) -> str:
     if forwarded:
         return forwarded[-1][:64]  # last hop = what our own proxy saw
     return (client_host or "unknown")[:64]
+
+
+def safe_request_ip(request: Any) -> str:
+    """Client IP for security caps (OTP sends). Stricter than ``request_ip``.
+
+    nginx (real_ip_header CF-Connecting-IP, Cloudflare ranges only) overwrites X-Real-IP
+    with the resolved client address, so that header is trusted when the TCP peer is on a
+    private network (our proxy). CF-Connecting-IP is never used: nginx does not overwrite
+    it, so a client can forge it. A public TCP peer means the port is exposed directly, so
+    all forwarding headers are ignored.
+    """
+    import ipaddress
+
+    peer = getattr(getattr(request, "client", None), "host", None) or ""
+    try:
+        peer_ip = ipaddress.ip_address(peer)
+        trusted = peer_ip.is_private or peer_ip.is_loopback or peer_ip.is_link_local
+    except ValueError:
+        trusted = True  # non-IP peer (e.g. the test client): no TCP evidence either way
+    if trusted:
+        headers = request.headers
+        real = (headers.get("x-real-ip") or "").strip()
+        if real:
+            return real[:64]
+        forwarded = [p.strip() for p in (headers.get("x-forwarded-for") or "").split(",") if p.strip()]
+        if forwarded:
+            return forwarded[-1][:64]  # nginx appends the address it saw as the last hop
+    return (peer or "unknown")[:64]
 
 
 def request_ip(request: Any) -> str:

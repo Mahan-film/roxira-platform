@@ -60,7 +60,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
       setDevCode(result.devCode);
       setSuccessMsg(
         result.deliveryConfirmed
-          ? "کد تأیید ۵ رقمی به شماره همراه شما ارسال شد."
+          ? "کد تأیید ۶ رقمی به شماره همراه شما ارسال شد."
           : "کد تأیید صادر شد. در صورت عدم دریافت پیامک، دوباره تلاش کنید.",
       );
     } catch (err) {
@@ -176,15 +176,15 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
         ) : (
           <form onSubmit={handleVerifyOtp} className="mt-5 space-y-4">
             <div>
-              <label className="mb-1.5 block text-right text-xs text-slate-300">کد تأیید ۵ رقمی</label>
+              <label className="mb-1.5 block text-right text-xs text-slate-300">کد تأیید ۶ رقمی</label>
               <div className="relative">
                 <input
                   type="text"
                   dir="ltr"
-                  maxLength={5}
-                  placeholder="• • • • •"
+                  maxLength={6}
+                  placeholder="• • • • • •"
                   value={otpCode}
-                  onChange={(e) => setOtpCode(normalizeOtpCode(e.target.value).slice(0, 5))}
+                  onChange={(e) => setOtpCode(normalizeOtpCode(e.target.value).slice(0, 6))}
                   className="w-full rounded-2xl border border-slate-700 bg-slate-900/90 px-4 py-3 text-center font-mono text-xl tracking-widest text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   autoFocus
                 />
@@ -194,7 +194,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
             <button
               type="submit"
-              disabled={loading || otpCode.length !== 5}
+              disabled={loading || otpCode.length !== 6}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-emerald-500 disabled:opacity-50"
             >
               {loading ? <Loader2 className="size-5 animate-spin" /> : "تأیید و ورود به سامانه"}

@@ -154,7 +154,7 @@ def test_otp_handlers_do_not_block_event_loop(monkeypatch):
                 ticks += 1
 
         task = asyncio.create_task(ticker())
-        resp = await mod.verify_auth_otp({"phone": "09120000033", "code": "12345"}, Req())
+        resp = await mod.verify_auth_otp({"phone": "09120000033", "code": "123456"}, Req())
         task.cancel()
         return resp, ticks
 

@@ -6004,6 +6004,10 @@ _OTP_TTL_SECONDS = 180
 _OTP_MAX_ATTEMPTS = 5          # wrong guesses per issued code, then the code is invalidated
 _OTP_RESEND_COOLDOWN_SECONDS = 60
 _OTP_MAX_SENDS_PER_HOUR = 5    # per phone
+_OTP_MAX_SENDS_PER_10_MIN = 3  # per phone (issue #366)
+_OTP_SENT_10M_KEY = "otp:sent10m:{phone}"  # delivered sends only
+_OTP_SENT_1H_KEY = "otp:sent1h:{phone}"
+_OTP_GENERIC_ERROR = "کد تأیید نامعتبر یا منقضی است؛ لطفاً دوباره تلاش کنید یا کد جدید بگیرید."
 
 
 def _otp_ip_send_limit() -> int:
@@ -6014,8 +6018,23 @@ def _otp_ip_verify_limit() -> int:
     return chat_auth._int_env("OTP_IP_VERIFY_LIMIT_PER_HOUR", 30)
 
 
+class _OtpUnavailable(Exception):
+    """JWT_SECRET is empty: OTP hashing would use an empty HMAC key."""
+
+
+def _otp_secret_missing_response() -> JSONResponse:
+    print("[AUTH][OTP] JWT_SECRET is empty; refusing OTP operation", file=sys.stderr)
+    return JSONResponse(status_code=503, content={
+        "status": "error", "code": "AUTH_UNAVAILABLE",
+        "message": "سرویس احراز هویت موقتاً در دسترس نیست."})
+
+
 def _otp_digest(phone: str, code: str) -> str:
-    return hashlib.sha256(f"smartjudge-otp:{phone}:{code}".encode("utf-8")).hexdigest()
+    if not JWT_SECRET:  # fail closed: never hash with an empty key
+        raise _OtpUnavailable()
+    # keyed: a leaked Redis dump cannot be brute-forced over the 10**6 code space
+    return hmac.new(JWT_SECRET, f"smartjudge-otp:{phone}:{code}".encode("utf-8"),
+                    hashlib.sha256).hexdigest()
 
 
 def _otp_store(phone: str, code: str) -> None:
@@ -6177,20 +6196,35 @@ async def send_auth_otp(request: Request, payload: dict = Body(...)):
     if not _is_valid_phone(phone):
         return JSONResponse(status_code=400, content={"status": "error", "message": "شماره همراه نامعتبر است."})
 
+    if not JWT_SECRET:
+        return _otp_secret_missing_response()
+
     # --- rate limits (checked before any code is generated or SMS is paid for) ---
+    # Per-IP counts every attempt. Per-phone caps and the resend cooldown only bind after
+    # a *delivered* SMS (see below), so a stranger's blocked or failed attempts can never
+    # lock a victim's phone out. The cooldown is claimed last and released on a failed SMS.
+    ip_ok, ip_left = await chat_auth.acheck_limit("otp-send-ip", chat_auth.safe_request_ip(request), _otp_ip_send_limit())
+    if not ip_ok:
+        return _otp_rate_limited(ip_left, chat_auth.rate_limited_message(ip_left))
+    for key, cap in ((_OTP_SENT_10M_KEY, _OTP_MAX_SENDS_PER_10_MIN), (_OTP_SENT_1H_KEY, _OTP_MAX_SENDS_PER_HOUR)):
+        counter = key.format(phone=phone)
+        if await asyncio.to_thread(chat_auth.peek, counter) >= cap:
+            left = await chat_auth.attl(counter)
+            if left == 0:  # counter without a TTL: heal instead of locking forever
+                await chat_auth.akv_delete(counter)
+                continue
+            return _otp_rate_limited(left, "تعداد درخواست کد برای این شماره بیش از حد مجاز است. بعداً دوباره تلاش کنید.")
     if not await chat_auth.aset_nx(f"otp:cd:{phone}", _OTP_RESEND_COOLDOWN_SECONDS):
         left = await chat_auth.attl(f"otp:cd:{phone}") or _OTP_RESEND_COOLDOWN_SECONDS
         return _otp_rate_limited(left, f"لطفاً {left} ثانیه دیگر برای ارسال مجدد کد صبر کنید.")
-    ip_ok, ip_left = await chat_auth.acheck_limit("otp-send-ip", chat_auth.request_ip(request), _otp_ip_send_limit())
-    if not ip_ok:
-        return _otp_rate_limited(ip_left, chat_auth.rate_limited_message(ip_left))
-    ph_ok, ph_left = await chat_auth.acheck_limit("otp-send-phone", phone, _OTP_MAX_SENDS_PER_HOUR)
-    if not ph_ok:
-        return _otp_rate_limited(ph_left, "تعداد درخواست کد برای این شماره بیش از حد مجاز است. بعداً دوباره تلاش کنید.")
 
-    # تولید کد یک‌بارمصرف ۵ رقمی با منبع تصادفی رمزنگاری‌شده
-    otp_code = f"{secrets.randbelow(90000) + 10000}"
-    await asyncio.to_thread(_otp_store, phone, otp_code)
+    # تولید کد یک‌بارمصرف ۶ رقمی با منبع تصادفی رمزنگاری‌شده
+    otp_code = f"{secrets.randbelow(1_000_000):06d}"
+    try:
+        await asyncio.to_thread(_otp_store, phone, otp_code)
+    except _OtpUnavailable:
+        await chat_auth.akv_delete(f"otp:cd:{phone}")
+        return _otp_secret_missing_response()
 
     req_host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").lower()
     service_req = str(payload.get("service") or "").upper()
@@ -6203,8 +6237,11 @@ async def send_auth_otp(request: Request, payload: dict = Body(...)):
         delivered = False
 
     if delivered:
+        await chat_auth.aincr(_OTP_SENT_10M_KEY.format(phone=phone), 600)
+        await chat_auth.aincr(_OTP_SENT_1H_KEY.format(phone=phone), chat_auth.HOUR_SECONDS)
         print(f"[AUTH][OTP-SENT] phone={_mask_phone(phone)}", file=sys.stdout)
     else:
+        await chat_auth.akv_delete(f"otp:cd:{phone}")  # a failed SMS costs the user nothing
         print(f"[AUTH][OTP-NOT-DELIVERED] phone={_mask_phone(phone)}", file=sys.stdout)
         if _dev_echo_enabled():
             # local development only: the code goes to the server log, NEVER the response
@@ -6227,14 +6264,17 @@ async def verify_auth_otp(payload: dict = Body(...), request: Request = None):
     if not _is_valid_phone(phone):
         return JSONResponse(status_code=400, content={"status": "error", "message": "شماره همراه نامعتبر است."})
 
+    if not JWT_SECRET:
+        return _otp_secret_missing_response()
+
     if request is not None:
-        ok, left = await chat_auth.acheck_limit("otp-verify-ip", chat_auth.request_ip(request), _otp_ip_verify_limit())
+        ok, left = await chat_auth.acheck_limit("otp-verify-ip", chat_auth.safe_request_ip(request), _otp_ip_verify_limit())
         if not ok:
             return _otp_rate_limited(left, chat_auth.rate_limited_message(left))
 
     record = await chat_auth.akv_get(f"otp:code:{phone}")
     if not record:
-        return JSONResponse(status_code=400, content={"status": "error", "message": "کد تأیید منقضی شده یا درخواست نشده است."})
+        return JSONResponse(status_code=400, content={"status": "error", "message": _OTP_GENERIC_ERROR})
 
     attempts, _ = await chat_auth.aincr(f"otp:att:{phone}", _OTP_TTL_SECONDS)
     if attempts > _OTP_MAX_ATTEMPTS:
@@ -6246,7 +6286,7 @@ async def verify_auth_otp(payload: dict = Body(...), request: Request = None):
             # last allowed guess failed: burn the code so it cannot be brute-forced
             await chat_auth.akv_delete(f"otp:code:{phone}", f"otp:att:{phone}")
             return _otp_rate_limited(60, "تعداد تلاش‌های ناموفق بیش از حد مجاز است. لطفاً کد جدید دریافت کنید.")
-        return JSONResponse(status_code=400, content={"status": "error", "message": "کد تأیید وارد شده صحیح نمی‌باشد."})
+        return JSONResponse(status_code=400, content={"status": "error", "message": _OTP_GENERIC_ERROR})
 
     # احراز موفق: مصرف کد و صدور توکن JWT تمیز
     await chat_auth.akv_delete(f"otp:code:{phone}", f"otp:att:{phone}")

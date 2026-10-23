@@ -60,19 +60,19 @@ async function withNetworkRetry<T>(call: () => Promise<T>, onRetry: () => void):
     }
   }
 }
-const OTP_LENGTH = 5;
+const OTP_LENGTH = 6;
 /** Give up waiting for the SMS auto-read after this long. */
 const WEBOTP_TIMEOUT_MS = 120_000;
 
 /**
- * Pull the 5-digit code out of whatever was typed, autofilled or pasted
+ * Pull the 6-digit code out of whatever was typed, autofilled or pasted
  * (a whole SMS included). Persian/Arabic digits are normalised, spaces ignored.
  */
 function extractOtp(raw: string): string {
   const spaced = Array.from(raw)
     .map((ch) => normalizeOtpCode(ch) || " ")
     .join("");
-  const run = spaced.match(/(?<!\d)\d{5}(?!\d)/);
+  const run = spaced.match(/(?<!\d)\d{6}(?!\d)/);
   if (run) return run[0];
   return normalizeOtpCode(raw).slice(0, OTP_LENGTH);
 }
@@ -96,7 +96,7 @@ interface LoginModalProps {
  * مودال ورود پیامکی سامانه قاضی هوشمند.
  *
  * جریان دو مرحله‌ای (PHONE → OTP):
- *   ۱) ورود شماره همراه ایران (09xxxxxxxxx) و ارسال کد ۵ رقمی
+ *   ۱) ورود شماره همراه ایران (09xxxxxxxxx) و ارسال کد ۶ رقمی
  *   ۲) ورود کد و صدور سشن JWT
  *
  * نکتهٔ حیاتی مسیرها:
@@ -114,7 +114,7 @@ export function LoginModal({
   onAuthenticated,
   serviceDomain,
   title = "ورود به سامانه",
-  description = "شماره همراه خود را وارد کنید؛ کد تأیید ۵ رقمی پیامک می‌شود.",
+  description = "شماره همراه خود را وارد کنید؛ کد تأیید ۶ رقمی پیامک می‌شود.",
 }: LoginModalProps) {
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [phone, setPhone] = useState("");
@@ -375,8 +375,8 @@ export function LoginModal({
     async (event: React.FormEvent) => {
       event.preventDefault();
       const cleanCode = extractOtp(code);
-      if (cleanCode.length < 4) {
-        setError(["کد تأیید باید ۵ رقم باشد."]);
+      if (cleanCode.length !== OTP_LENGTH) {
+        setError(["کد تأیید باید ۶ رقم باشد."]);
         return;
       }
       await submitCode(cleanCode);
@@ -384,7 +384,7 @@ export function LoginModal({
     [code, submitCode],
   );
 
-  // Auto-submit once the field holds exactly 5 digits (typed, pasted, autofilled or WebOTP).
+  // Auto-submit once the field holds exactly 6 digits (typed, pasted, autofilled or WebOTP).
   useEffect(() => {
     if (!open || step !== "code" || loading) return;
     if (code.length < OTP_LENGTH) submittedCodeRef.current = null;
@@ -580,7 +580,7 @@ export function LoginModal({
 
               <div className="space-y-2">
                 <Label htmlFor="auth-code" className="text-slate-300">
-                  کد تأیید ۵ رقمی
+                  کد تأیید ۶ رقمی
                 </Label>
                 <Input
                   id="auth-code"
@@ -593,7 +593,7 @@ export function LoginModal({
                     setCode(extractOtp(event.clipboardData.getData("text")));
                   }}
                   maxLength={200}
-                  placeholder="- - - - -"
+                  placeholder="- - - - - -"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   autoFocus
@@ -642,7 +642,7 @@ export function LoginModal({
                 <Button
                   type="submit"
                   variant="outline"
-                  disabled={loading || code.length !== 5}
+                  disabled={loading || code.length !== OTP_LENGTH}
                   className="h-10 w-full border-white/10 bg-transparent text-slate-200"
                 >
                   تلاش دوباره
@@ -651,7 +651,7 @@ export function LoginModal({
 
               <Button
                 type="submit"
-                disabled={loading || code.length !== 5}
+                disabled={loading || code.length !== OTP_LENGTH}
                 className={`h-11 w-full ${primaryBtn}`}
               >
                 {loading ? (
