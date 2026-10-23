@@ -31,7 +31,31 @@ def _prices(models_path=None) -> dict:
     return out
 
 
-def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
+def _params(d: kc.Deployment, prices: dict, values: dict[str, str] | None) -> dict:
+    """litellm_params of one deployment (key as an os.environ/ reference, never a value)."""
+    params = {"model": d.litellm_model, "api_key": "none" if d.keyless else f"os.environ/{d.key_env}"}
+    if d.api_base:
+        params["api_base"] = kc.fill_url(d.api_base, values, d.url_vars)
+    if d.rpm:
+        params["rpm"] = d.rpm
+    if d.tpm:
+        params["tpm"] = d.tpm
+    # Every deployment carries a weight: simple-shuffle reads the first deployment's keys only, so a rank
+    # mixing providers with and without rpm would starve the ones without (weight = rpm unless overridden).
+    params["weight"] = d.weight
+    if d.extra_body:  # e.g. data_collection=deny on the private/paid providers, sort=price per model
+        params["extra_body"] = d.extra_body
+    if d.tier != "paid":  # free tiers cost us nothing; LiteLLM would log the list price
+        params["input_cost_per_token"] = params["output_cost_per_token"] = 0.0
+    elif d.model in prices:  # LiteLLM has no price for some ids: give ours
+        params["input_cost_per_token"], params["output_cost_per_token"] = prices[d.model]
+    elif d.price:  # provider-native paid id (not in models.yaml): price_per_1m on the key_pool spec
+        params["input_cost_per_token"], params["output_cost_per_token"] = d.price
+    return params
+
+
+def render(pool: dict, names: set[str] | None = None, models_path=None, values: dict[str, str] | None = None) -> dict:
+    """values: non-secret `env_vars` (e.g. CF_ACCOUNT_ID) filled into api_base URLs; keys stay references."""
     gw = pool.get("gateway", {})
     prices = _prices(models_path)
     model_list = []
@@ -52,20 +76,7 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
             for r in ranks[1:]:
                 fallbacks.append({names_by_rank[r]: [names_by_rank[x] for x in ranks if x > r] + list(g.get("fallback") or [])})
             for d in deps:
-                api_key = "none" if d.keyless else f"os.environ/{d.key_env}"
-                params = {"model": d.litellm_model, "api_key": api_key}
-                if d.api_base:
-                    params["api_base"] = d.api_base
-                if d.rpm:
-                    params["rpm"] = d.rpm
-                if d.tpm:
-                    params["tpm"] = d.tpm
-                if d.extra_body:  # e.g. data_collection=deny on the private/paid providers, sort=price per model
-                    params["extra_body"] = d.extra_body
-                if d.tier != "paid":
-                    params["input_cost_per_token"] = params["output_cost_per_token"] = 0.0
-                elif d.model in prices:
-                    params["input_cost_per_token"], params["output_cost_per_token"] = prices[d.model]
+                params = _params(d, prices, values)
                 params.update(kc.merge_dicts(g.get("litellm_params") or {}, d.params))  # group (e.g. reasoning_effort), then per-model
                 info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
                 model_list.append({"model_name": names_by_rank[d.order], "litellm_params": params, "model_info": info})
@@ -78,20 +89,7 @@ def render(pool: dict, names: set[str] | None = None, models_path=None) -> dict:
             fallbacks.append({group: [f"{group}-paid"]})
         for d in deps:
             name = f"{group}-paid" if split and d.tier == "paid" else group
-            api_key = "none" if d.keyless else f"os.environ/{d.key_env}"
-            params = {"model": d.litellm_model, "api_key": api_key}
-            if d.api_base:
-                params["api_base"] = d.api_base
-            if d.rpm:
-                params["rpm"] = d.rpm
-            if d.tpm:
-                params["tpm"] = d.tpm
-            if d.extra_body:
-                params["extra_body"] = d.extra_body
-            if d.tier != "paid":  # free tiers cost us nothing; LiteLLM would log the list price
-                params["input_cost_per_token"] = params["output_cost_per_token"] = 0.0
-            elif d.model in prices:  # LiteLLM has no price for some ids: give ours
-                params["input_cost_per_token"], params["output_cost_per_token"] = prices[d.model]
+            params = _params(d, prices, values)
             params.update(d.params)  # per-model litellm_params
             info = {"id": f"{group}:{d.provider}:{d.key_env}:{d.model}", "tier": d.tier, "data_policy": d.data_policy}
             if d.mode:
@@ -124,10 +122,14 @@ def main() -> int:
     a = ap.parse_args()
     try:
         pool = kc.load_pool(a.pool)
-        names = None
+        names = values = None
         if a.env_file:
-            names = set(kc.parse_env_names(a.env_file, kc.all_key_names(pool)))
-        cfg = render(pool, names)
+            got = kc.parse_env_names(a.env_file, kc.all_key_names(pool))
+            names = set(got)
+            # only the non-secret URL settings (env_vars) are used as values; keys stay os.environ/ refs
+            url_vars = {v for prov in pool["providers"].values() for v in prov.get("env_vars", [])}
+            values = {n: v for n, v in got.items() if n in url_vars}
+        cfg = render(pool, names, values=values)
     except kc.PoolError as exc:
         print(f"render_litellm: {exc}", file=sys.stderr)
         return 2

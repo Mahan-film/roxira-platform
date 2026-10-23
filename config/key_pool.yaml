@@ -13,7 +13,20 @@
 #   {role: agent_runner, alias: groq-strong}   one entry picked by its alias in models.yaml
 #   {id: some-native-id}                  provider-native id (unverified)
 #
-# Limits are per KEY per model. `status: unverified` = written from memory of the provider's
+# KEYS (owner decision 2026-10-22, final): use EVERY key the owner has, on every provider, both as
+# fallback (a key/provider that errors or hits 429 cools down and traffic moves on) and concurrently
+# (load spread over all keys). Every provider has up to 4 slots: NAME, NAME_2, NAME_3, NAME_4. Unset
+# slots are skipped at render time, so a provider with no key set is inert. Add a key on the server
+# with `bash scripts/ops/set_server_env.sh NAME_2` (docs/infra/KEY_POOL.md), then `install.sh --apply`.
+#   keys:      every set slot is its own deployment.
+#   keys_any:  first entry with any set slot wins; an entry is one name or a list of slots (all set slots used).
+#   env_vars:  non-secret settings the provider URL needs (e.g. {CF_ACCOUNT_ID}); provider is skipped until set.
+#
+# Limits are per KEY per model. The owner sets each key's own limit with an optional
+#   limits_per_key: {GROQ_API_KEY_4: {rpm: 60, tpm: 12000, weight: 60}}
+# merged over the provider's `limits`. `weight` (default: rpm, else 1) is that key's share of its rank:
+# within a rank, ALL keys of ALL providers serving that model share the load (simple-shuffle, weighted).
+# `status: unverified` = written from memory of the provider's
 # public docs; re-check before trusting them for capacity planning. The gateway also adapts
 # at runtime: a 429 puts that deployment in cooldown and traffic moves to the next one.
 #
@@ -36,12 +49,15 @@
 #                      nemotron-super :free, nemotron-lightning :free). Falls back to agent-strong-free then paid.
 #   agent-free         backward-compatible alias of agent-strong-free (same deployments).
 #   agent-free-paid    paid DeepSeek Flash only; the shared last-resort fallback for the free groups.
+#   candidates         unverified new providers (Cerebras, NIM, Cloudflare, DeepSeek direct, Chutes, Together,
+#                      Fireworks). Customer-facing groups (product-free, best-product*, vip-*, private) must NOT list
+#                      them and nothing customer-facing falls back here; they graduate per docs/infra/KEY_POOL.md.
 #   private            customer/case data. `require` makes the renderer and the client REFUSE to build the
 #                      group if it contains a may_log provider, a free-tier provider or a :free model id.
 #                      Today that leaves only OpenRouter paid DeepSeek (+ data_collection=deny).
 
 schema_version: 1
-checked_at: "2026-10-13"
+checked_at: "2026-10-22"
 
 gateway:
   # LiteLLM proxy, docker, bound to 127.0.0.1 only. Port 4000 is reserved for gateways (AGENTS.md section 7).
@@ -70,7 +86,7 @@ providers:
     data_policy: may_log
     base_url: https://api.groq.com/openai/v1
     litellm_prefix: groq
-    keys: [GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEY_3]   # every set key is its own deployment
+    keys: [GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEY_3, GROQ_API_KEY_4]   # every set key is its own deployment
     models:
       - {role: agent_runner, alias: groq-strong}   # openai/gpt-oss-120b
       - {role: agent_runner, alias: groq-fast}     # openai/gpt-oss-20b
@@ -81,7 +97,7 @@ providers:
     data_policy: may_log
     base_url: https://api.sambanova.ai/v1
     litellm_prefix: sambanova
-    keys: [SAMBANOVA_API_KEY]
+    keys: [SAMBANOVA_API_KEY, SAMBANOVA_API_KEY_2, SAMBANOVA_API_KEY_3, SAMBANOVA_API_KEY_4]
     models:
       - {id: gpt-oss-120b}   # unverified native id
     limits: {rpm: 20, tpm: 100000, rpd: unverified, status: unverified}
@@ -118,7 +134,10 @@ providers:
     data_policy: may_log
     base_url: https://openrouter.ai/api/v1
     litellm_prefix: openrouter
-    keys_any: [OPENROUTER_API_KEY_AGENTS, OPENROUTER_API_KEY]   # first one that is set
+    # :free models cost nothing, so every OpenRouter key serves them (agents workspace and product workspace).
+    # The :free daily cap is per ACCOUNT, so extra keys of one account add resilience, not quota.
+    keys: [OPENROUTER_API_KEY_AGENTS, OPENROUTER_API_KEY_AGENTS_2, OPENROUTER_API_KEY_AGENTS_3, OPENROUTER_API_KEY_AGENTS_4,
+           OPENROUTER_API_KEY, OPENROUTER_API_KEY_2, OPENROUTER_API_KEY_3, OPENROUTER_API_KEY_4]
     models:
       - {id: "google/gemma-4-31b-it:free"}
       - {id: "nvidia/nemotron-3-super-120b-a12b:free"}
@@ -132,7 +151,10 @@ providers:
     data_policy: no_train
     base_url: https://openrouter.ai/api/v1
     litellm_prefix: openrouter
-    keys_any: [OPENROUTER_API_KEY_AGENTS, OPENROUTER_API_KEY]
+    # Paid agent spend stays on the agents keys (all of them); the product key only when no agents key is set.
+    keys_any:
+      - [OPENROUTER_API_KEY_AGENTS, OPENROUTER_API_KEY_AGENTS_2, OPENROUTER_API_KEY_AGENTS_3, OPENROUTER_API_KEY_AGENTS_4]
+      - OPENROUTER_API_KEY
     models:
       - {role: cheap, take: 2}   # deepseek/deepseek-v4.1-flash, then v4-flash-0731
     limits: {rpm: 200, tpm: unverified, rpd: unlimited, status: unverified}
@@ -144,12 +166,93 @@ providers:
     data_policy: no_train
     base_url: https://openrouter.ai/api/v1
     litellm_prefix: openrouter
-    keys: [OPENROUTER_API_KEY]   # prod key only; the _AGENTS workspace allows data-training endpoints
+    # Product-workspace keys only (data-training endpoints disabled); the _AGENTS workspace allows them.
+    # Name a key OPENROUTER_API_KEY_2/_3/_4 ONLY if it belongs to the product workspace.
+    keys: [OPENROUTER_API_KEY, OPENROUTER_API_KEY_2, OPENROUTER_API_KEY_3, OPENROUTER_API_KEY_4]
     models:
       - {role: cheap, take: 2}   # deepseek/deepseek-v4.1-flash, then v4-flash-0731
     limits: {rpm: 200, tpm: unverified, rpd: unlimited, status: unverified}
     extra_body:
       provider: {data_collection: deny, allow_fallbacks: true}
+
+  # ---- Providers added 2026-10-22 (owner: use every key). Each is inert until one of its keys is set.
+  # Model ids: checked on 2026-10-22 against the providers' docs through web search (secondary sources);
+  # the live /models lists could not be fetched from the build sandbox, so every id is `unverified` until
+  # `python3 scripts/infra/key_pool/inventory.py --probe` returns ok for it on the server.
+  cerebras:
+    tier: free
+    data_policy: may_log   # terms not read by the owner yet
+    base_url: https://api.cerebras.ai/v1
+    litellm_prefix: cerebras
+    keys: [CEREBRAS_API_KEY, CEREBRAS_API_KEY_2, CEREBRAS_API_KEY_3, CEREBRAS_API_KEY_4]
+    models:
+      - {id: gpt-oss-120b}   # unverified (docs: reasoning in a separate field, like Groq)
+    limits: {rpm: 30, tpm: 60000, rpd: 14400, status: unverified}
+
+  nvidia-nim:   # build.nvidia.com hosted endpoints (NVIDIA developer program, free credits / rate limit)
+    tier: free
+    data_policy: may_log
+    base_url: https://integrate.api.nvidia.com/v1
+    litellm_prefix: nvidia_nim
+    keys: [NVIDIA_API_KEY, NVIDIA_API_KEY_2, NVIDIA_API_KEY_3, NVIDIA_API_KEY_4]
+    models:
+      - {id: openai/gpt-oss-120b}   # unverified
+      - {id: openai/gpt-oss-20b}    # unverified
+    limits: {rpm: 40, tpm: unverified, rpd: unverified, status: unverified}
+
+  cloudflare-ai:   # Workers AI, OpenAI-compatible route; the account id is part of the URL (not a secret)
+    tier: free
+    data_policy: may_log
+    base_url: https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1
+    api_base: https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1
+    litellm_prefix: openai
+    env_vars: [CF_ACCOUNT_ID]
+    keys: [CF_AI_TOKEN, CF_AI_TOKEN_2, CF_AI_TOKEN_3, CF_AI_TOKEN_4]   # tokens with the Workers AI permission
+    models:
+      - {id: "@cf/openai/gpt-oss-120b"}   # unverified on /chat/completions (Cloudflare docs show it on /responses)
+      - {id: "@cf/openai/gpt-oss-20b"}    # unverified
+    limits: {rpm: 300, tpm: unverified, rpd: unverified, status: unverified}   # free plan = 10k neurons/day per account
+
+  deepseek:   # DeepSeek's own API (paid, pay as you go). NOT for `private`: terms allow use of prompts.
+    tier: paid
+    data_policy: may_log
+    base_url: https://api.deepseek.com/v1
+    litellm_prefix: deepseek
+    keys: [DEEPSEEK_API_KEY, DEEPSEEK_API_KEY_2, DEEPSEEK_API_KEY_3, DEEPSEEK_API_KEY_4]
+    models:
+      - {id: deepseek-chat, price_per_1m: {in: 0.28, out: 0.42}}   # unverified id/price (current V3.x/V4 non-thinking alias)
+    limits: {rpm: 60, tpm: unverified, rpd: unlimited, status: unverified}
+
+  chutes:   # pay per token since 2025; OpenAI-compatible
+    tier: paid
+    data_policy: may_log
+    base_url: https://llm.chutes.ai/v1
+    api_base: https://llm.chutes.ai/v1
+    litellm_prefix: openai
+    keys: [CHUTES_API_KEY, CHUTES_API_KEY_2, CHUTES_API_KEY_3, CHUTES_API_KEY_4]
+    models:
+      - {id: openai/gpt-oss-120b, price_per_1m: {in: 0.09, out: 0.36}}   # unverified: some listings show a -TEE suffix
+    limits: {rpm: 60, tpm: unverified, rpd: unverified, status: unverified}
+
+  together:
+    tier: paid
+    data_policy: may_log
+    base_url: https://api.together.xyz/v1
+    litellm_prefix: together_ai
+    keys: [TOGETHER_API_KEY, TOGETHER_API_KEY_2, TOGETHER_API_KEY_3, TOGETHER_API_KEY_4]
+    models:
+      - {id: openai/gpt-oss-120b, price_per_1m: {in: 0.15, out: 0.60}}   # unverified
+    limits: {rpm: 60, tpm: unverified, rpd: unverified, status: unverified}
+
+  fireworks:
+    tier: paid
+    data_policy: may_log
+    base_url: https://api.fireworks.ai/inference/v1
+    litellm_prefix: fireworks_ai
+    keys: [FIREWORKS_API_KEY, FIREWORKS_API_KEY_2, FIREWORKS_API_KEY_3, FIREWORKS_API_KEY_4]
+    models:
+      - {id: accounts/fireworks/models/gpt-oss-120b, price_per_1m: {in: 0.15, out: 0.60}}   # unverified
+    limits: {rpm: 60, tpm: unverified, rpd: unverified, status: unverified}
 
   local-tei:
     # Shared local TEI container `roxira_embeddings`, OpenAI-compatible at /v1 with BAAI/bge-m3.
@@ -176,20 +279,25 @@ snippets:
 groups:
   agent-strong-free:
     description: Strong models for code, docs and dev tasks. Free providers only, paid DeepSeek Flash as last resort.
-    providers: [groq, sambanova, mistral, gemini, openrouter-free]
+    providers: [groq, sambanova, mistral, gemini, openrouter-free, cerebras, nvidia-nim, cloudflare-ai]
     models:                            # restrict each provider to the strong tier
       groq: [{role: agent_runner, alias: groq-strong}]
       sambanova: [{id: gpt-oss-120b}]
       mistral: [{id: mistral-medium-latest}, {id: mistral-code-latest}]
       gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
+      cerebras: [{id: gpt-oss-120b}]
+      nvidia-nim: [{id: openai/gpt-oss-120b}]
+      cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b"}]
     fallback: [gemini-best]
 
   agent-light-free:
     description: Cheap models for light code, docs and dev tasks. Free providers only, falls back to strong then paid.
-    providers: [groq, mistral, openrouter-free]
+    providers: [groq, mistral, openrouter-free, nvidia-nim, cloudflare-ai]
     models:
       groq: [{role: agent_runner, alias: groq-fast}]
+      nvidia-nim: [{id: openai/gpt-oss-20b}]
+      cloudflare-ai: [{id: "@cf/openai/gpt-oss-20b"}]
       mistral: [{id: mistral-small-latest}, {id: ministral-8b-latest}]
       openrouter-free:
         - {id: "google/gemma-4-31b-it:free"}
@@ -199,13 +307,16 @@ groups:
 
   agent-free:   # backward-compatible alias of agent-strong-free (same deployments, same fallback)
     description: Alias of agent-strong-free kept for callers that still ask for `agent-free`.
-    providers: [groq, sambanova, mistral, gemini, openrouter-free]
+    providers: [groq, sambanova, mistral, gemini, openrouter-free, cerebras, nvidia-nim, cloudflare-ai]
     models:
       groq: [{role: agent_runner, alias: groq-strong}]
       sambanova: [{id: gpt-oss-120b}]
       mistral: [{id: mistral-medium-latest}, {id: mistral-code-latest}]
       gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
+      cerebras: [{id: gpt-oss-120b}]
+      nvidia-nim: [{id: openai/gpt-oss-120b}]
+      cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b"}]
     fallback: [agent-free-paid]
 
   product-free:   # Smart Judge chat (owner decision 2026-10-14: free first). Only models that return a clean
@@ -362,7 +473,7 @@ groups:
   best-all:   # the same idea for agents and tools (public work only: free tiers may log)
     description: Cross-provider quality ladder for agents, ending on paid DeepSeek.
     ordered: true
-    providers: [gemini, groq, mistral, sambanova]
+    providers: [gemini, groq, mistral, sambanova, cerebras, nvidia-nim, cloudflare-ai]
     models:
       gemini:
         - {id: gemini-4-argon, needs_billing: true, rank: 1}
@@ -375,17 +486,24 @@ groups:
         - {id: gemini-3.5-flash-lite, rank: 11}
       groq: [{role: agent_runner, alias: groq-strong, rank: 5}]
       sambanova: [{id: gpt-oss-120b, rank: 5}]
+      cerebras: [{id: gpt-oss-120b, rank: 5}]
+      nvidia-nim: [{id: openai/gpt-oss-120b, rank: 5}]
+      cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b", rank: 5}]
       mistral: [{id: mistral-medium-latest, rank: 7}, {id: mistral-code-latest, rank: 10}]
     fallback: [agent-free-paid]
 
   agent-free-paid:   # cheap paid agent step (2026-10-17): GLM-5.3 Flash first, then DeepSeek V4.1 Flash
-    description: Cheap paid step (GLM-5.3 Flash, then DeepSeek V4.1 Flash). Shared last-resort fallback for the free agent groups.
+    description: Cheap paid step (GLM-5.3 Flash, then DeepSeek on OpenRouter + direct keys, then paid gpt-oss-120b). Shared last-resort fallback for the free agent groups.
     ordered: true
-    providers: [openrouter-paid]
+    providers: [openrouter-paid, deepseek, chutes, together, fireworks]
     models:
       openrouter-paid:
         - {role: cheap_agent, alias: glm-flash, rank: 1}
         - {role: cheap_agent, alias: ds-flash, rank: 2, extra_body: *sort_price}
+      deepseek: [{id: deepseek-chat, rank: 2}]            # DeepSeek direct keys share the DeepSeek rank
+      chutes: [{id: openai/gpt-oss-120b, rank: 3}]        # then paid gpt-oss-120b on every remaining paid key
+      together: [{id: openai/gpt-oss-120b, rank: 3}]
+      fireworks: [{id: accounts/fireworks/models/gpt-oss-120b, rank: 3}]
 
   summarize-cheap:   # compress long uploaded case files before the main model (no app wiring yet).
                      # ScaleDown first ($0.04/M in, $0 out, 1M context), then the free ladder: never stops.
@@ -397,6 +515,21 @@ groups:
       openrouter-private:
         - {role: summarize, alias: summarize, rank: 1}
     fallback: [best-product-free]
+
+  candidates:   # NOT customer-facing: unverified providers wait here until they graduate (docs/infra/KEY_POOL.md).
+                # No product group falls back to this group; callers must ask for it by name (probes, bake-offs).
+    description: Unverified new providers (Cerebras, NVIDIA NIM, Cloudflare, DeepSeek direct, Chutes, Together, Fireworks). Public/dev data only.
+    ordered: true
+    providers: [cerebras, nvidia-nim, cloudflare-ai, deepseek, chutes, together, fireworks]
+    models:
+      cerebras: [{id: gpt-oss-120b, rank: 1}]
+      nvidia-nim: [{id: openai/gpt-oss-120b, rank: 1}]
+      cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b", rank: 1}]
+      deepseek: [{id: deepseek-chat, rank: 2}]
+      chutes: [{id: openai/gpt-oss-120b, rank: 3}]
+      together: [{id: openai/gpt-oss-120b, rank: 3}]
+      fireworks: [{id: accounts/fireworks/models/gpt-oss-120b, rank: 3}]
+    fallback: []
 
   private:
     description: Customer or case data. No free tier, no may_log provider, no :free model id.

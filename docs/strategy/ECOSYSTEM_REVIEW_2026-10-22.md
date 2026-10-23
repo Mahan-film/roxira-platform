@@ -27,7 +27,32 @@ every extra provider is another thing that can break (see QUALITY_SYSTEM_2026-10
 | Tavily / Exa / Firecrawl live web search in the legal answer path | **Reject for answers**, keep for research agents | Legal answers must cite our vetted sources (ekhtebar, nezamat, qavanin); open web adds wrong or outdated law |
 | Nemotron content-safety step on every request | Defer | Adds latency to every chat; `chat_safety.py` exists. Revisit with abuse data |
 | Inkling:free 1M context for very long case files | Adopt as an experiment | Real gap (500-page files). Free + may-log is allowed for test data now (AGENTS.md §4); must pass the model bake-off before use |
-| SambaNova as an extra fast fallback | Adopt in the registry (1 key) | Cheap resilience behind Groq |
+| SambaNova as an extra fast fallback | Adopt, up to 4 keys (superseded by the owner decision below) | Cheap resilience behind Groq |
 | R2 lifecycle: delete temporary uploads after 14 days | Adopt | Keeps storage under the 10 GB free tier; needs the owner to add the rule in the Cloudflare dashboard (our token is object-scoped) |
 | int8 quantization of local Qdrant | Reject now | ~57 MB RAM in use; no gain |
 | Sending case files to many free providers | Reject | Spreads customer data; must be revisited before real paying customers anyway |
+
+## Owner decision (final), 2026-10-22: use every key
+
+The owner decided to use **every API key he has, on every provider**, both as fallback and concurrently. He
+holds 3–4 keys per provider inside one account and sets each key's limit himself. Implemented in
+`config/key_pool.yaml` (docs/infra/KEY_POOL.md):
+
+- Every provider has 4 key slots (`NAME`, `NAME_2`, `NAME_3`, `NAME_4`); unset slots are skipped when the gateway
+  config is rendered, so a provider with no key is inert. Added slots: Groq `_4`, SambaNova `_2.._4`, OpenRouter
+  agents `_2.._4` and product `_2.._4`.
+- New providers (each inert until a key is set; model ids marked unverified until the inventory probe passes on
+  the server): Cerebras, NVIDIA NIM (build.nvidia.com), Cloudflare Workers AI (`CF_ACCOUNT_ID` + `CF_AI_TOKEN*`),
+  DeepSeek direct API, Chutes, Together, Fireworks. The last four are paid and only sit in paid steps.
+- Within a ladder rank, all keys of all providers serving that model share the load (weighted simple-shuffle;
+  weight = the key's rpm unless the owner sets `limits_per_key`). A 429 or error cools that one deployment for 60 s
+  and traffic moves on; when the whole rank fails the ladder drops to the next rank. Ladders still end where they
+  did: product ladders on the product key (`private`), agent ladders on paid DeepSeek, free users never on paid.
+- Data policy unchanged (AGENTS.md section 4): free / may-log providers are allowed for product traffic while all
+  customers are test accounts; the `private` group still refuses every free or may-log provider (DeepSeek direct
+  included) and uses only product-workspace OpenRouter keys with `data_collection=deny`.
+- Inventory and health: `python3 scripts/infra/key_pool/inventory.py` lists which slots are set (names only);
+  `--probe` sends one 1-token call per set key.
+
+This supersedes the "Sending case files to many free providers: Reject" row above for test-account data only;
+that row applies again before real paying customers with confidential data.

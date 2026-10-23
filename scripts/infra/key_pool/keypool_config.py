@@ -42,6 +42,9 @@ class Deployment:
     api_base: str | None = None
     rpm: int | None = None
     tpm: int | None = None
+    weight: int = 1  # share of a rank's traffic (simple-shuffle); per key, from limits / limits_per_key
+    price: tuple[float, float] | None = None  # usd per input / output token, from a spec's price_per_1m
+    url_vars: tuple[str, ...] = ()  # provider `env_vars`: the only names ever filled into base_url / api_base
     extra_body: dict[str, Any] = field(default_factory=dict)
     params: dict[str, Any] = field(default_factory=dict)  # per-model litellm_params (e.g. Anthropic cache_control)
 
@@ -112,22 +115,71 @@ def resolve_models(specs: list[dict[str, Any]], models_path: pathlib.Path | None
     return [mid for mid, _ in resolve_model_specs(specs, models_path)]
 
 
+def _key_sets(prov: dict[str, Any]) -> list[list[str]]:
+    """`keys_any` entries as lists: a plain name is a set of one, a list is a set of key slots."""
+    return [[e] if isinstance(e, str) else list(e) for e in prov.get("keys_any", [])]
+
+
+def provider_key_names(prov: dict[str, Any]) -> list[str]:
+    """Every key slot NAME a provider declares (`keys` and all `keys_any` sets), in order."""
+    out: list[str] = []
+    for k in list(prov.get("keys", [])) + [k for s in _key_sets(prov) for k in s]:
+        if k not in out:
+            out.append(k)
+    return out
+
+
 def provider_keys(prov: dict[str, Any], names: set[str] | None) -> list[str]:
     """Key env-var NAMES to use. names=None means 'assume all are set' (offline render/tests).
 
+    `keys`: every set slot is its own deployment (unset slots are skipped).
+    `keys_any`: the first entry with at least one set slot wins; an entry is one name or a list of
+    slots, and every set slot of the winning list is used (e.g. all agents keys, else the prod key).
     A provider with no `keys`/`keys_any` (or only empty ones) needs no key at all: it is
-    always available and gets the NO_KEY sentinel.
+    always available and gets the NO_KEY sentinel. A provider whose `env_vars` (non-secret
+    settings such as an account id in the URL) are not all set gets no key either.
     """
+    if names is not None and any(v not in names for v in prov.get("env_vars", [])):
+        return []
     explicit = list(prov.get("keys", []))
     if explicit:
         return [k for k in explicit if names is None or k in names]
-    any_of = list(prov.get("keys_any", []))
-    if any_of:
-        for k in any_of:
-            if names is None or k in names:
-                return [k]
+    sets = _key_sets(prov)
+    if sets:
+        for s in sets:
+            got = [k for k in s if names is None or k in names]
+            if got:
+                return got
         return []
     return [NO_KEY]
+
+
+def key_limits(prov: dict[str, Any], key_env: str) -> dict[str, Any]:
+    """Provider `limits`, with the owner's per-key override (`limits_per_key: {KEY_NAME: {...}}`) on top."""
+    lim = dict(prov.get("limits") or {})
+    lim.update((prov.get("limits_per_key") or {}).get(key_env) or {})
+    return lim
+
+
+def key_weight(lim: dict[str, Any]) -> int:
+    """Traffic share of one deployment: explicit `weight`, else its rpm, else 1.
+
+    Every deployment gets a weight because LiteLLM's simple-shuffle looks at the FIRST deployment of
+    a group only: if it has rpm and another has none, that other one gets weight 0 and never runs.
+    """
+    w = _num(lim.get("weight"))
+    if w is None:
+        w = _num(lim.get("rpm"))
+    return max(1, w or 1)
+
+
+def fill_url(url: str, values: dict[str, str] | None, allowed: tuple[str, ...] | list[str] = ()) -> str:
+    """Put non-secret `env_vars` (e.g. {CF_ACCOUNT_ID}) into a URL. Only names in `allowed` are filled,
+    so a key can never end up in a URL; a missing value leaves the placeholder (offline render)."""
+    for n in allowed:
+        if (values or {}).get(n):
+            url = url.replace("{" + n + "}", values[n])
+    return url
 
 
 def validate_group(name: str, group: dict[str, Any], deps: list[Deployment]) -> None:
@@ -173,7 +225,6 @@ def group_deployments(
         if prov is None:
             raise PoolError(f"group {group}: unknown provider {pname!r}")
         keys = provider_keys(prov, names)
-        lim = prov.get("limits", {})
         api_base = prov.get("api_base")
         for model, spec in resolve_model_specs(select.get(pname, prov["models"]), models_path):
             if not keys:
@@ -182,13 +233,21 @@ def group_deployments(
                 continue  # e.g. Gemini Pro: zero quota on free AI Studio keys until billing is enabled
             order += 1
             rank = int(spec["rank"]) if spec.get("rank") is not None else order  # cross-provider quality ladder
+            price = None
+            # price_per_1m on the group spec, else on the provider's own spec of that id
+            p = spec.get("price_per_1m") or next(
+                (m.get("price_per_1m") for m in prov["models"] if m.get("id") == model and m.get("price_per_1m")), {})
+            if isinstance(p.get("in"), (int, float)) and isinstance(p.get("out"), (int, float)):
+                price = (p["in"] / 1e6, p["out"] / 1e6)
             for k in keys:
+                lim = key_limits(prov, k)
                 out.append(
                     Deployment(
                         group=group, provider=pname, tier=prov["tier"], data_policy=prov["data_policy"],
                         base_url=prov["base_url"], litellm_prefix=prov["litellm_prefix"], key_env=k,
                         model=model, order=rank, mode=spec.get("mode"), api_base=api_base,
-                        rpm=_num(lim.get("rpm")), tpm=_num(lim.get("tpm")),
+                        rpm=_num(lim.get("rpm")), tpm=_num(lim.get("tpm")), weight=key_weight(lim), price=price,
+                        url_vars=tuple(prov.get("env_vars", [])),
                         extra_body=merge_dicts(prov.get("extra_body") or {}, spec.get("extra_body") or {}),
                         params=copy.deepcopy(spec.get("litellm_params") or {}),
                     )
@@ -200,7 +259,7 @@ def group_deployments(
 def all_key_names(pool: dict[str, Any]) -> list[str]:
     seen: list[str] = []
     for prov in pool["providers"].values():
-        for k in list(prov.get("keys", [])) + list(prov.get("keys_any", [])):
+        for k in provider_key_names(prov) + list(prov.get("env_vars", [])):
             if k not in seen:
                 seen.append(k)
     master = pool.get("gateway", {}).get("master_key_env")

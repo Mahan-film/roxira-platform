@@ -47,12 +47,40 @@ bash scripts/infra/key_pool/health.sh             # ok / 429 / fail per provider
 - After merging a change to this file or `cost_logger.py`, run on the server:
   `bash scripts/infra/key_pool/install.sh --apply`.
 
+## Every key, every provider (owner decision 2026-10-22)
+- Each provider has 4 key slots: `NAME`, `NAME_2`, `NAME_3`, `NAME_4`. Unset slots are skipped at render, so a
+  provider with no key set is inert. Providers: Groq, SambaNova, Mistral, Gemini, OpenRouter (agents and product
+  workspaces), Cerebras, NVIDIA NIM, Cloudflare Workers AI, DeepSeek, Chutes, Together, Fireworks.
+- Load sharing: in a ladder rank every key of every provider that serves that model is one LiteLLM deployment of
+  the same group, picked by weighted simple-shuffle (weight = the key's rpm, or `weight`). A 429/error cools that
+  deployment for 60 s; when the whole rank fails the router moves to the next rank, and the ladder ends as before.
+- Per-key limits (the owner sets them): under the provider,
+  `limits_per_key: {GROQ_API_KEY_4: {rpm: 60, tpm: 12000, weight: 60}}`, merged over `limits`.
+- OpenRouter: `OPENROUTER_API_KEY*` = product workspace (data training off; the only keys `private` uses),
+  `OPENROUTER_API_KEY_AGENTS*` = agents workspace. `:free` models use all of them; paid agent steps use the agents
+  keys (the product key only if no agents key is set).
+- Inventory: `python3 scripts/infra/key_pool/inventory.py [--env-file /opt/roxira_platform/.env]` lists every slot
+  per provider as set/unset (names only). `--probe` sends one 1-token call per set key (paid providers: ~1 token).
+
 ## Add a key or provider
-- Extra key for an existing provider: add its env var name to the provider's `keys:` list, set it with
-  `set_server_env.sh`, re-run `install.sh --apply`.
-- New provider: add a block under `providers:` (tier, data_policy, base_url, litellm_prefix, keys, models, limits),
-  list it in a group. Mark `may_log` unless you have read the terms. Run
-  `python3 -m pytest scripts/infra/key_pool/tests/test_key_pool.py` (never over `src/`).
+- Extra key for an existing provider: put it in the next free slot with
+  `bash scripts/ops/set_server_env.sh GROQ_API_KEY_4` (docs/ops/ADD_LLM_KEY.md), check it with
+  `inventory.py --probe --provider groq`, then `bash scripts/infra/key_pool/install.sh --apply`.
+- New provider: add a block under `providers:` (tier, data_policy, base_url, litellm_prefix, 4 key slots, models,
+  limits), list it in the groups/ranks that serve its models. Mark `may_log` unless you have read the terms. A URL
+  that needs a non-secret setting uses `{NAME}` plus `env_vars: [NAME]` (Cloudflare account id). Run
+  `python3 -m pytest scripts/infra/key_pool/tests` (never over `src/`).
+
+## Graduating a new provider to the product groups
+New providers (Cerebras, NVIDIA NIM, Cloudflare Workers AI, DeepSeek direct, Chutes, Together, Fireworks) are
+unverified. Until they graduate they sit only in the agent/builder groups (`agent-*`, `best-all`, `agent-free-paid`)
+and in the `candidates` group; they must NOT be listed in `product-free`, `best-product*`, `vip-*`,
+`summarize-cheap` or `private`, and no customer-facing group may fall back to `candidates`.
+To graduate one: (1) `inventory.py --probe --provider <name>` returns ok for every model id it serves, (2) it wins
+or ties in a bake-off against the current product ladder (clean `content`, no leaked reasoning, latency under the
+chat first-token budget), (3) its terms are read and `data_policy` is set honestly (DeepSeek direct stays out of
+`vip-product` and `private` unless it is `no_train`). Then add it to the product group in `config/key_pool.yaml`
+and update `test_unverified_providers_stay_out_of_customer_facing_groups`.
 
 ## Reuse in a NEW project
 ```bash

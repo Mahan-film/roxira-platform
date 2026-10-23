@@ -336,3 +336,190 @@ def test_summarize_cheap_then_free_ladder_and_cheap_agent_order():
     assert [m for m, _ in _chain(cfg, "summarize-cheap")] == ["scaledown/summarize"]
     assert fb["summarize-cheap"] == ["best-product-free"]
     assert [m for m, _ in _chain(cfg, "agent-free-paid")] == ["z-ai/glm-5.3-flash", "deepseek/deepseek-v4.1-flash"]
+
+
+# ---- every key of every provider (owner decision 2026-10-22) ----
+
+SLOT_PROVIDERS = ["groq", "sambanova", "mistral", "gemini", "cerebras", "nvidia-nim", "cloudflare-ai",
+                  "deepseek", "chutes", "together", "fireworks", "openrouter-private"]
+NEW_PROVIDERS = {"cerebras", "nvidia-nim", "cloudflare-ai", "deepseek", "chutes", "together", "fireworks"}
+
+
+def _fb(cfg):
+    return {k: v for d in cfg["router_settings"]["fallbacks"] for k, v in d.items()}
+
+
+def test_every_provider_has_four_key_slots():
+    p = pool()
+    for name in SLOT_PROVIDERS:
+        keys = p["providers"][name]["keys"]
+        base = keys[0]
+        assert keys == [base, f"{base}_2", f"{base}_3", f"{base}_4"], name
+    names = kc.all_key_names(p)
+    assert "CF_ACCOUNT_ID" in names and "DEEPSEEK_API_KEY_4" in names and "OPENROUTER_API_KEY_AGENTS_4" in names
+
+
+def test_unset_slots_skipped_and_all_set_slots_rendered():
+    cfg = render_litellm.render(pool(), {"GROQ_API_KEY", "GROQ_API_KEY_3", "KEYPOOL_MASTER_KEY"})
+    keys = {m["litellm_params"]["api_key"] for m in cfg["model_list"] if m["model_name"] == "agent-strong-free"}
+    assert keys == {"os.environ/GROQ_API_KEY", "os.environ/GROQ_API_KEY_3"}
+    all_groq = {f"GROQ_API_KEY{s}" for s in ("", "_2", "_3", "_4")}
+    cfg = render_litellm.render(pool(), all_groq | {"KEYPOOL_MASTER_KEY"})
+    keys = {m["litellm_params"]["api_key"] for m in cfg["model_list"] if m["model_name"] == "agent-strong-free"}
+    assert keys == {f"os.environ/{k}" for k in all_groq}
+
+
+def test_new_providers_are_inert_without_keys():
+    cfg = render_litellm.render(pool(), set(FAKE_ENV))
+    assert not any(m["model_info"]["id"].split(":")[1] in NEW_PROVIDERS for m in cfg["model_list"])
+    # and every one of them renders once a key is set
+    p = pool()
+    names = {p["providers"][n]["keys"][0] for n in NEW_PROVIDERS} | {"CF_ACCOUNT_ID", "KEYPOOL_MASTER_KEY"}
+    cfg = render_litellm.render(p, names)
+    assert {m["model_info"]["id"].split(":")[1] for m in cfg["model_list"]} >= NEW_PROVIDERS
+
+
+def test_rank_shares_load_across_all_keys_of_all_providers():
+    names = {"GROQ_API_KEY", "GROQ_API_KEY_2", "CEREBRAS_API_KEY", "NVIDIA_API_KEY", "NVIDIA_API_KEY_2", "GEMINI_API_KEY",
+             "KEYPOOL_MASTER_KEY"}
+    cfg = render_litellm.render(pool(), names)
+    fb = _fb(cfg)
+    chain = ["best-product-free"] + fb["best-product-free"]
+    rank = next(n for n in chain if any(m["model_name"] == n and m["litellm_params"]["model"].startswith("groq/")
+                                        for m in cfg["model_list"]))
+    deps = [m for m in cfg["model_list"] if m["model_name"] == rank]
+    # unverified providers (Cerebras, NIM) share no customer-facing rank until they graduate (docs/infra/KEY_POOL.md)
+    assert {m["litellm_params"]["api_key"] for m in deps} == {"os.environ/GROQ_API_KEY", "os.environ/GROQ_API_KEY_2"}
+    assert {m["litellm_params"]["model"].split("/")[0] for m in deps} == {"groq"}
+    # while the agent ladder (public data only) does share the rank across them
+    agent = [m for m in cfg["model_list"] if m["model_name"].startswith("best-all")]
+    assert {m["litellm_params"]["model"].split("/")[0] for m in agent} >= {"groq", "cerebras", "nvidia_nim"}
+    # simple-shuffle only looks at the first deployment's keys: every deployment must carry a weight
+    assert all(isinstance(m["litellm_params"]["weight"], int) and m["litellm_params"]["weight"] > 0
+               for m in cfg["model_list"])
+    assert fb["best-product-free"][-1] != "private"  # still no paid step for free users
+    tiers = {m["model_info"]["tier"] for m in cfg["model_list"] if m["model_name"] in chain}
+    assert tiers == {"free"}
+
+
+def test_limits_per_key_override():
+    p = pool()
+    p["providers"]["groq"]["limits_per_key"] = {"GROQ_API_KEY_2": {"rpm": 90, "weight": 5}, "GROQ_API_KEY_4": {"tpm": 1}}
+    cfg = render_litellm.render(p, {"GROQ_API_KEY", "GROQ_API_KEY_2", "GROQ_API_KEY_4", "KEYPOOL_MASTER_KEY"})
+    got = {m["litellm_params"]["api_key"]: m["litellm_params"] for m in cfg["model_list"]
+           if m["model_name"] == "agent-strong-free"}
+    assert (got["os.environ/GROQ_API_KEY"]["rpm"], got["os.environ/GROQ_API_KEY"]["weight"]) == (30, 30)
+    assert (got["os.environ/GROQ_API_KEY_2"]["rpm"], got["os.environ/GROQ_API_KEY_2"]["weight"]) == (90, 5)
+    assert (got["os.environ/GROQ_API_KEY_4"]["tpm"], got["os.environ/GROQ_API_KEY_4"]["rpm"]) == (1, 30)
+
+
+def test_cloudflare_needs_account_id_and_never_puts_a_key_in_the_url():
+    p = pool()
+    cfg = render_litellm.render(p, {"CF_AI_TOKEN", "KEYPOOL_MASTER_KEY"})
+    assert not any("cloudflare" in str(m["litellm_params"].get("api_base")) for m in cfg["model_list"])
+    cfg = render_litellm.render(p, {"CF_AI_TOKEN", "CF_AI_TOKEN_2", "CF_ACCOUNT_ID", "KEYPOOL_MASTER_KEY"},
+                                values={"CF_ACCOUNT_ID": "acc123", "CF_AI_TOKEN": "secret-token"})
+    cf = [m["litellm_params"] for m in cfg["model_list"] if "cloudflare" in str(m["litellm_params"].get("api_base"))]
+    assert cf and all(x["api_base"] == "https://api.cloudflare.com/client/v4/accounts/acc123/ai/v1" for x in cf)
+    assert {x["api_key"] for x in cf} == {"os.environ/CF_AI_TOKEN", "os.environ/CF_AI_TOKEN_2"}
+    assert "secret-token" not in str(cfg)
+
+
+def test_openrouter_paid_uses_all_agents_keys_else_prod():
+    p = pool()
+    deps = kc.group_deployments(p, "agent-free-paid", {"OPENROUTER_API_KEY", "OPENROUTER_API_KEY_AGENTS_2",
+                                                       "OPENROUTER_API_KEY_AGENTS_3"})
+    assert {d.key_env for d in deps} == {"OPENROUTER_API_KEY_AGENTS_2", "OPENROUTER_API_KEY_AGENTS_3"}
+    deps = kc.group_deployments(p, "agent-free-paid", {"OPENROUTER_API_KEY"})
+    assert {d.key_env for d in deps} == {"OPENROUTER_API_KEY"}
+
+
+def test_private_group_stays_product_keys_only_and_refuses_new_free_or_may_log():
+    p = pool()
+    every = set(kc.all_key_names(p))
+    deps = kc.group_deployments(p, "private", every)
+    assert {d.key_env for d in deps} == {"OPENROUTER_API_KEY", "OPENROUTER_API_KEY_2", "OPENROUTER_API_KEY_3",
+                                         "OPENROUTER_API_KEY_4"}
+    assert all(d.provider == "openrouter-private" and d.extra_body["provider"]["data_collection"] == "deny" for d in deps)
+    for bad in ("deepseek", "cerebras", "nvidia-nim", "cloudflare-ai", "chutes", "together", "fireworks"):
+        q = pool()
+        q["groups"]["private"]["providers"] = ["openrouter-private", bad]
+        with pytest.raises(kc.PoolError):
+            kc.group_deployments(q, "private", every)
+
+
+def test_paid_ladders_include_direct_and_extra_paid_keys():
+    p = pool()
+    names = {"OPENROUTER_API_KEY", "OPENROUTER_API_KEY_AGENTS", "DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY_2",
+             "TOGETHER_API_KEY", "FIREWORKS_API_KEY", "CHUTES_API_KEY", "KEYPOOL_MASTER_KEY"}
+    cfg = render_litellm.render(p, names)
+    fb = _fb(cfg)
+    assert fb["agent-free-paid"] == ["agent-free-paid__r2", "agent-free-paid__r3"]
+    r2 = [m["litellm_params"] for m in cfg["model_list"] if m["model_name"] == "agent-free-paid__r2"]
+    assert {x["model"] for x in r2} == {"openrouter/deepseek/deepseek-v4.1-flash", "deepseek/deepseek-chat"}
+    assert len(r2) == 3  # 1 agents key + 2 DeepSeek keys
+    r3 = [m["litellm_params"] for m in cfg["model_list"] if m["model_name"] == "agent-free-paid__r3"]
+    assert {x["model"].split("/")[0] for x in r3} == {"openai", "together_ai", "fireworks_ai"}
+    assert all(x["input_cost_per_token"] > 0 for x in r2 + r3)
+    vip2 = [m["litellm_params"]["model"] for m in cfg["model_list"] if m["model_name"] == "vip-product__r2"]
+    assert "deepseek/deepseek-chat" not in vip2   # paid subscribers stay on the product key (no_train)
+    assert fb["vip-product"] == ["vip-product__r2", "best-product-free"]
+
+
+def test_inventory_dry_run_lists_names_only_and_probe_uses_one_token():
+    import inventory
+    env = {"GROQ_API_KEY": "fake-secret-1", "GROQ_API_KEY_3": "fake-secret-3", "CF_AI_TOKEN": "fake-cf"}
+    lines: list[str] = []
+    assert inventory.inventory(pool(), env, out=lines.append) == 1  # CF token set without CF_ACCOUNT_ID
+    text = "\n".join(lines)
+    assert "fake-" not in text
+    assert "GROQ_API_KEY_2                   unset" in text and "would probe" in text
+    assert "needs CF_ACCOUNT_ID" in text
+    calls = []
+
+    def post(url, headers, body, timeout):
+        calls.append((url, body["max_tokens"]))
+        return (429 if headers["Authorization"].endswith("3") else 200), {}
+
+    lines.clear()
+    rc = inventory.inventory(pool(), {k: v for k, v in env.items() if k.startswith("GROQ")}, probe=True,
+                             post=post, out=lines.append)
+    assert rc == 1 and len(calls) == 2 and all(mt == 1 for _, mt in calls)
+    assert any("GROQ_API_KEY_3" in ln and "429" in ln for ln in lines)
+    assert "fake-" not in "\n".join(lines)
+
+
+def test_client_weighted_shuffle_prefers_heavier_keys():
+    heavy = kc.Deployment("g", "a", "free", "may_log", "u", "x", "HEAVY", "m", 1, weight=99)
+    light = kc.Deployment("g", "b", "free", "may_log", "u", "x", "LIGHT", "m", 1, weight=1)
+    rng = random.Random(7)
+    first = [llm_pool.ordered([light, heavy], rng)[0].key_env for _ in range(300)]
+    assert first.count("HEAVY") > 250
+
+
+CUSTOMER_FACING = ["product-free", "gemini-best-product", "best-product", "best-product-free", "vip-product", "vip-pro",
+                   "vip-premium", "vip-team", "summarize-cheap", "private"]
+
+
+def test_unverified_providers_stay_out_of_customer_facing_groups():
+    p = pool()
+    every = set(kc.all_key_names(p)) | {"KEYPOOL_MASTER_KEY"}
+    cfg = render_litellm.render(p, every, values={"CF_ACCOUNT_ID": "acc123"})
+    fb = _fb(cfg)
+    reach = set()
+    todo = list(CUSTOMER_FACING)
+    while todo:
+        g = todo.pop()
+        if g in reach:
+            continue
+        reach.add(g)
+        todo.extend(fb.get(g, []))
+    assert "candidates" not in reach
+    bad = {"cerebras", "nvidia_nim", "deepseek", "together_ai", "fireworks_ai"}
+    for m in cfg["model_list"]:
+        name = m["model_name"].split("__")[0]
+        if name in reach:
+            assert m["litellm_params"]["model"].split("/")[0] not in bad, (name, m["litellm_params"]["model"])
+            assert "llm.chutes.ai" not in str(m["litellm_params"].get("api_base"))
+            assert "cloudflare" not in str(m["litellm_params"].get("api_base"))
+    assert any(m["model_name"].startswith("candidates") for m in cfg["model_list"])

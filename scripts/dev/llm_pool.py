@@ -100,11 +100,12 @@ def default_state_path() -> str:
 
 
 def ordered(deps: list[kc.Deployment], rng: random.Random) -> list[kc.Deployment]:
-    """Keep provider order; shuffle among deployments of the same order (the Groq keys)."""
+    """Keep rank order; within a rank, a weighted shuffle of every key of every provider (weight = per-key limit)."""
     out: list[kc.Deployment] = []
     for o in sorted({d.order for d in deps}):
         tier = [d for d in deps if d.order == o]
-        rng.shuffle(tier)
+        # Efraimidis-Spirakis: sort by u^(1/w), so a key with twice the weight comes first twice as often
+        tier.sort(key=lambda d: rng.random() ** (1.0 / max(1, d.weight)), reverse=True)
         out.extend(tier)
     return out
 
@@ -150,7 +151,7 @@ def chat(
         body: dict[str, Any] = {"model": d.model, "messages": messages, "max_tokens": max_tokens}
         body.update(d.extra_body)
         headers = {"Authorization": f"Bearer {env[d.key_env]}", "Content-Type": "application/json"}
-        status, data = post(d.base_url.rstrip("/") + "/chat/completions", headers, body, timeout)
+        status, data = post(kc.fill_url(d.base_url, env, d.url_vars).rstrip("/") + "/chat/completions", headers, body, timeout)
         if status == 200 and data:
             try:
                 return data["choices"][0]["message"]["content"] or "", f"{d.provider}/{d.model}"
@@ -193,12 +194,12 @@ def health(pool: dict[str, Any], env: dict[str, str], gateway: str | None, post:
             if ck in seen:
                 continue
             seen.add(ck)
-            st, _ = post(d.base_url.rstrip("/") + "/chat/completions",
+            st, _ = post(kc.fill_url(d.base_url, env, d.url_vars).rstrip("/") + "/chat/completions",
                          {"Authorization": f"Bearer {env[d.key_env]}", "Content-Type": "application/json"},
                          {"model": d.model, "messages": ping, "max_tokens": 5, **d.extra_body}, 30.0)
             print(f"{d.provider:16s} {d.key_env:26s} {d.model:34s} {'ok' if st == 200 else '429' if st == 429 else 'fail'}")
             bad += st != 200
-    missing = [p for p in pool["providers"] if not any(k in env for k in pool["providers"][p].get("keys", []) + pool["providers"][p].get("keys_any", []))]
+    missing = [p for p, prov in pool["providers"].items() if kc.provider_key_names(prov) and not kc.provider_keys(prov, set(env))]
     for p in missing:
         print(f"{p:16s} (no key set)")
     return 1 if bad else 0
