@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { Fingerprint, KeyRound, Loader2, LogOut, ShieldCheck, X } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -20,17 +20,19 @@ import { ApiClientError } from "@/lib/api/http-client";
  * دکمه ورود امن با Passkey (WebAuthn) برای پورتال بین‌المللی roxira.net.
  * در صورت پشتیبانی مرورگر، امکان ورود بیومتریک/سخت‌افزاری را فراهم می‌کند.
  */
+const noopSubscribe = () => () => {};
+
 export function PasskeyLoginButton() {
   const { user, isAuthenticated, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [supported, setSupported] = useState(true);
+  // Browser capability: assumed supported on the server, read once on the client.
+  const supported = useSyncExternalStore(noopSubscribe, isWebAuthnSupported, () => true);
   const [platformAvailable, setPlatformAvailable] = useState(false);
 
   useEffect(() => {
-    setSupported(isWebAuthnSupported());
     void isPlatformAuthenticatorAvailable().then(setPlatformAvailable);
   }, []);
 

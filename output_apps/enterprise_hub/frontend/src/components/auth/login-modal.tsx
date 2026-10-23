@@ -144,8 +144,7 @@ export function LoginModal({
     : "bg-[#0071e3] text-white hover:bg-[#0077ed]";
   const primaryIcon = isGhazi ? "bg-[var(--gh-gold)] text-[var(--gh-on-gold)]" : "bg-[#0071e3] text-white";
 
-  useEffect(() => {
-    if (!open) return;
+  function resetForm() {
     setStep("phone");
     setCode("");
     setError(null);
@@ -157,7 +156,17 @@ export function LoginModal({
     setNetworkFailed(false);
     setOrganizationName("");
     setTab("phone");
-  }, [open]);
+  }
+
+  // Reset the form each time the dialog opens (state adjusted during render,
+  // not in an effect, so there is no extra render with stale fields).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      resetForm();
+    }
+  }
 
   useEffect(() => {
     if (!open || isEnterprise) return;

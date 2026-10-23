@@ -53,35 +53,31 @@ export default function RadarPage() {
     return "ارتباط با سرور برقرار نشد. لطفاً چند لحظه بعد دوباره تلاش کنید.";
   }, []);
 
+  // Callers that refresh an already-loaded report set isReportLoading first;
+  // the initial load starts with it already true.
   const loadReport = useCallback(
-    async (signal?: AbortSignal) => {
-      setIsReportLoading(true);
-      try {
-        setReport(await getRadarReport(signal));
-      } catch (error) {
-        const message = describeError(error);
-        if (message) setErrorMessage(message);
-      } finally {
-        setIsReportLoading(false);
-      }
-    },
+    (signal?: AbortSignal) =>
+      getRadarReport(signal)
+        .then(setReport, (error: unknown) => {
+          const message = describeError(error);
+          if (message) setErrorMessage(message);
+        })
+        .finally(() => setIsReportLoading(false)),
     [describeError],
   );
 
   const loadStatuses = useCallback(
-    async (signal?: AbortSignal) => {
-      try {
-        const [scoutStatus, swarmStatus] = await Promise.all([
-          getScoutStatus(signal),
-          getSwarmStatus(signal),
-        ]);
-        setScout(scoutStatus);
-        setSwarm(swarmStatus);
-      } catch (error) {
-        const message = describeError(error);
-        if (message) setErrorMessage(message);
-      }
-    },
+    (signal?: AbortSignal) =>
+      Promise.all([getScoutStatus(signal), getSwarmStatus(signal)]).then(
+        ([scoutStatus, swarmStatus]) => {
+          setScout(scoutStatus);
+          setSwarm(swarmStatus);
+        },
+        (error: unknown) => {
+          const message = describeError(error);
+          if (message) setErrorMessage(message);
+        },
+      ),
     [describeError],
   );
 
@@ -102,6 +98,7 @@ export default function RadarPage() {
         const status = await getScoutStatus();
         setScout(status);
         if (status.status !== "RUNNING") {
+          setIsReportLoading(true);
           void loadReport();
         }
       } catch {
@@ -176,6 +173,7 @@ export default function RadarPage() {
           <Button
             variant="outline"
             onClick={() => {
+              setIsReportLoading(true);
               void loadReport();
               void loadStatuses();
             }}

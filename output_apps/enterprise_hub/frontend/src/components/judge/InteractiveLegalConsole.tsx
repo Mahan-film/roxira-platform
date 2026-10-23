@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
 
 interface Message {
@@ -12,20 +12,25 @@ interface Message {
   precedents?: Array<{ title: string; subject?: string; summary?: string }>;
 }
 
+/** Minimal Web Speech API surface used here (not in lib.dom for every browser). */
+interface SpeechRecognitionResultEvent {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((evt: SpeechRecognitionResultEvent) => void) | null;
+  start: () => void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+const noopSubscribe = () => () => {};
+
 export default function InteractiveLegalConsole() {
 
-  // تابع خوانش صوتی متن لایحه (Text-to-Speech)
-  const speakDraftText = (text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const cleanText = text.replace(/[#*_`]/g, "");
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = "fa-IR";
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const [mounted, setMounted] = useState(false);
+  // False during SSR and hydration, true on the client.
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -41,10 +46,6 @@ export default function InteractiveLegalConsole() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (mounted) {
@@ -85,18 +86,24 @@ export default function InteractiveLegalConsole() {
             setMessages((prev) => [...prev, { role: "assistant", text: res.text }]);
             speakText(res.text);
           }
-        } catch (err) {}
+        } catch {
+          // Ignore frames that are not JSON.
+        }
       };
 
       ws.onclose = () => setIsVoiceActive(false);
 
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const speechWindow = window as Window & {
+        SpeechRecognition?: SpeechRecognitionCtor;
+        webkitSpeechRecognition?: SpeechRecognitionCtor;
+      };
+      const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
       if (SpeechRecognition) {
         const reco = new SpeechRecognition();
         reco.lang = "fa-IR";
         reco.continuous = true;
         reco.interimResults = false;
-        reco.onresult = (evt: any) => {
+        reco.onresult = (evt) => {
           const transcript = evt.results[evt.results.length - 1][0].transcript;
           if (transcript.trim() && ws.readyState === WebSocket.OPEN) {
             setMessages((prev) => [...prev, { role: "user", text: transcript }]);
@@ -139,7 +146,7 @@ export default function InteractiveLegalConsole() {
         },
       ]);
       if (data.defense_draft) setActiveTab("DRAFT");
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         { role: "assistant", text: "پاسخ حقوقی آماده شد." },

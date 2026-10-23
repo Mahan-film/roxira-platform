@@ -64,4 +64,4 @@ failing test is fixed or quarantined with an issue the same day, never skipped s
 | G4 GIT_SHA labels + post-deploy browser smoke + alert | in progress |
 | Client error reporting endpoint + reporter | in progress |
 | 13 red Python unit tests | in progress (separate session) |
-| Lint debt: 20 eslint errors (React 19 `set-state-in-effect`, refs in render) | next, via taskq |
+| Lint debt: 20 eslint errors (React 19 `set-state-in-effect`, refs in render) | fixed (0 errors), PR #845 |

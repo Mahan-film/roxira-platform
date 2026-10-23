@@ -78,7 +78,9 @@ export function LeadDetailPanel({
   onClose,
 }: LeadDetailPanelProps) {
   const [contacts, setContacts] = useState<ContactMessage[]>([]);
-  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  /** Lead whose contact list has finished loading; any other lead shows the spinner. */
+  const [contactsLeadId, setContactsLeadId] = useState<typeof lead.id | null>(null);
+  const isLoadingContacts = contactsLeadId !== lead.id;
   const [isChangingStage, setIsChangingStage] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [isSavingContact, setIsSavingContact] = useState(false);
@@ -90,19 +92,19 @@ export function LeadDetailPanel({
   const [channel, setChannel] = useState<ContactChannel>(ContactChannel.PHONE);
 
   const loadContacts = useCallback(
-    async (signal?: AbortSignal) => {
-      setIsLoadingContacts(true);
-      try {
-        const result = await listContactRecords(lead.id, signal);
-        setContacts(result.data);
-      } catch (error) {
-        if (!(error instanceof DOMException)) {
-          setErrorMessage(extractErrorMessages(error).join(" | "));
-        }
-      } finally {
-        setIsLoadingContacts(false);
-      }
-    },
+    (signal?: AbortSignal) =>
+      listContactRecords(lead.id, signal)
+        .then(
+          (result) => setContacts(result.data),
+          (error: unknown) => {
+            if (!(error instanceof DOMException)) {
+              setErrorMessage(extractErrorMessages(error).join(" | "));
+            }
+          },
+        )
+        .finally(() => {
+          if (!signal?.aborted) setContactsLeadId(lead.id);
+        }),
     [lead.id],
   );
 

@@ -13,11 +13,15 @@ const normalizeDigits = (str: string) => {
   return res.replace(/[^0-9]/g, '');
 };
 
+interface PilotOnboardingResponse {
+  welcome_message?: string;
+}
+
 export default function LawyersPilotPage() {
   const [fullName, setFullName] = useState("");
   const [licenseNo, setLicenseNo] = useState("");
   const [phone, setPhone] = useState("");
-  const [status, setStatus] = useState<any>(null);
+  const [status, setStatus] = useState<PilotOnboardingResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -31,9 +35,9 @@ export default function LawyersPilotPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ full_name: fullName, license_no: licenseNo, phone }),
       });
-      const data = await res.json();
+      const data = (await res.json()) as PilotOnboardingResponse;
       setStatus(data);
-    } catch (e) {
+    } catch {
       setError("خطا در ثبت اطلاعات. لطفاً دوباره تلاش کنید.");
     } finally {
       setLoading(false);

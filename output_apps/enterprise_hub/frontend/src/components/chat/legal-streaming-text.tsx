@@ -19,25 +19,21 @@ interface LegalStreamingTextProps {
  * Features professional typing effects, legal paragraph structure, and animated indicators.
  */
 export function LegalStreamingText({ content, isStreaming, className, variant = "legal", onComplete }: LegalStreamingTextProps) {
-  const [displayedContent, setDisplayedContent] = useState("");
   const [typingIndex, setTypingIndex] = useState(0);
   const [cursorVisible, setCursorVisible] = useState(true);
+  // Outside streaming the whole text shows at once.
+  const shownLength = isStreaming ? Math.min(typingIndex, content.length) : content.length;
+  const displayedContent = content.slice(0, shownLength);
 
   // Typing effect for streaming content
   useEffect(() => {
-    if (!isStreaming) {
-      setDisplayedContent(content);
-      setTypingIndex(content.length);
-      return;
-    }
+    if (!isStreaming) return;
 
     if (typingIndex < content.length) {
       // Reveal several characters per tick for long answers (about 3 s max).
       const step = Math.max(1, Math.ceil(content.length / 200));
       const timer = setTimeout(() => {
-        const next = Math.min(content.length, typingIndex + step);
-        setDisplayedContent(content.slice(0, next));
-        setTypingIndex(next);
+        setTypingIndex(Math.min(content.length, typingIndex + step));
       }, 15); // Typing speed in milliseconds
       return () => clearTimeout(timer);
     }
@@ -119,7 +115,7 @@ export function LegalStreamingText({ content, isStreaming, className, variant = 
           </span>
           <span className="text-slate-500">•</span>
           <span className="text-slate-400 text-[10px]">
-            {Math.round((typingIndex / Math.max(content.length, 1)) * 100)}%
+            {Math.round((shownLength / Math.max(content.length, 1)) * 100)}%
           </span>
         </div>
       )}

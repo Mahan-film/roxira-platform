@@ -220,21 +220,22 @@ export function CommandPalette({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onOpenChange]);
 
-  // Reset the query and focus the input each time the palette opens.
+  // Reset the query each time the palette opens (adjusted during render).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setQuery("");
+      setActiveIndex(0);
+    }
+  }
+
+  // Focus the input each time the palette opens.
   useEffect(() => {
     if (!open) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuery("");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setActiveIndex(0);
     const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, [open]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setActiveIndex(0);
-  }, [query]);
 
   useEffect(() => {
     const active = listRef.current?.querySelector<HTMLElement>(
@@ -285,7 +286,10 @@ export function CommandPalette({
           <input
             ref={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveIndex(0);
+            }}
             onKeyDown={onInputKeyDown}
             role="combobox"
             aria-expanded="true"

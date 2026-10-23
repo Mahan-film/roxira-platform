@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Layers3, X } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,14 +36,19 @@ export function StockBatchesPanel({
   onClose,
 }: StockBatchesPanelProps) {
   const [batches, setBatches] = useState<FifoBatch[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  /** Request key (sku + refresh) whose answer has arrived; any other key is loading. */
+  const requestKey = `${sku}:${refreshKey}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const isLoading = loadedKey !== requestKey;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const load = useCallback((signal?: AbortSignal) => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    listStockItemBatches(sku, signal)
-      .then((response) => setBatches(response))
+  useEffect(() => {
+    const controller = new AbortController();
+    listStockItemBatches(sku, controller.signal)
+      .then((response) => {
+        setBatches(response);
+        setErrorMessage(null);
+      })
       .catch((error) => {
         if (error instanceof DOMException) return;
         setErrorMessage(
@@ -52,14 +57,11 @@ export function StockBatchesPanel({
             : "ارتباط با سرور برقرار نشد.",
         );
       })
-      .finally(() => setIsLoading(false));
-  }, [sku]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadedKey(requestKey);
+      });
     return () => controller.abort();
-  }, [load, refreshKey]);
+  }, [sku, requestKey]);
 
   const totalRemaining = batches.reduce(
     (sum, batch) => sum + batch.quantityRemaining,
@@ -92,7 +94,7 @@ export function StockBatchesPanel({
         </div>
       </CardHeader>
       <CardContent>
-        {errorMessage && (
+        {errorMessage && !isLoading && (
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>خطا در دریافت لایه‌های FIFO</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>

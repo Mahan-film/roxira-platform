@@ -3,7 +3,6 @@ import Link from "next/link";
 import { PortalMobileNav } from "@/components/layout/portal-mobile-nav";
 import {
   ArrowLeft,
-  Boxes,
   Building2,
   Cpu,
   ExternalLink,

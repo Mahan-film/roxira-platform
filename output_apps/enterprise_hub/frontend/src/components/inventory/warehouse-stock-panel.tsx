@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Building2, Warehouse } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -41,47 +41,39 @@ export function WarehouseStockPanel({
   warehouses,
   refreshKey,
 }: WarehouseStockPanelProps) {
-  const [selectedId, setSelectedId] = useState<number | null>(
-    warehouses.length > 0 ? warehouses[0].id : null,
-  );
+  const [pickedId, setPickedId] = useState<number | null>(null);
+  // Fall back to the first warehouse until the user picks one.
+  const selectedId = pickedId ?? (warehouses.length > 0 ? warehouses[0].id : null);
   const [stock, setStock] = useState<WarehouseStockResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  /** Request key (warehouse + refresh) whose answer has arrived; any other key is loading. */
+  const requestKey = selectedId === null ? null : `${selectedId}:${refreshKey}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const isLoading = requestKey !== null && loadedKey !== requestKey;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (selectedId === null && warehouses.length > 0) {
-      setSelectedId(warehouses[0].id);
-    }
-  }, [warehouses, selectedId]);
-
-  const loadStock = useCallback(
-    (id: number, signal?: AbortSignal) => {
-      setIsLoading(true);
-      setErrorMessage(null);
-      getWarehouseStock(id, signal)
-        .then((response) => setStock(response))
-        .catch((error) => {
-          if (error instanceof DOMException) return;
-          setErrorMessage(
-            error instanceof ApiClientError
-              ? error.details.join(" | ")
-              : "ارتباط با سرور برقرار نشد.",
-          );
-        })
-        .finally(() => setIsLoading(false));
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (selectedId === null) {
-      setStock(null);
-      return;
-    }
+    if (selectedId === null) return;
     const controller = new AbortController();
-    loadStock(selectedId, controller.signal);
+    getWarehouseStock(selectedId, controller.signal)
+      .then((response) => {
+        setStock(response);
+        setErrorMessage(null);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException) return;
+        setErrorMessage(
+          error instanceof ApiClientError
+            ? error.details.join(" | ")
+            : "ارتباط با سرور برقرار نشد.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadedKey(requestKey);
+      });
     return () => controller.abort();
-  }, [selectedId, loadStock, refreshKey]);
+  }, [selectedId, requestKey]);
+
+  const visibleStock = selectedId === null ? null : stock;
 
   return (
     <Card>
@@ -95,7 +87,7 @@ export function WarehouseStockPanel({
             <Select<string>
               value={selectedId !== null ? String(selectedId) : null}
               onValueChange={(value) =>
-                setSelectedId(value ? Number(value) : null)
+                setPickedId(value ? Number(value) : null)
               }
             >
               <SelectTrigger className="w-full">
@@ -123,7 +115,7 @@ export function WarehouseStockPanel({
           </Alert>
         )}
 
-        {errorMessage && (
+        {errorMessage && !isLoading && requestKey !== null && (
           <Alert variant="destructive">
             <AlertTitle>خطا در استعلام موجودی</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
@@ -132,22 +124,22 @@ export function WarehouseStockPanel({
 
         {isLoading ? (
           <Skeleton className="h-40 w-full" />
-        ) : stock ? (
+        ) : visibleStock ? (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-lg border bg-muted/20 p-3">
                 <span className="text-xs text-muted-foreground">نام انبار</span>
-                <p className="font-semibold">{stock.warehouseName}</p>
+                <p className="font-semibold">{visibleStock.warehouseName}</p>
               </div>
               <div className="rounded-lg border bg-muted/20 p-3">
                 <span className="text-xs text-muted-foreground">تعداد اقلام</span>
                 <p className="font-semibold">
-                  {stock.itemCount.toLocaleString("fa-IR")}
+                  {visibleStock.itemCount.toLocaleString("fa-IR")}
                 </p>
               </div>
               <div className="rounded-lg border bg-muted/20 p-3">
                 <span className="text-xs text-muted-foreground">ارزش کل انبار</span>
-                <p className="font-semibold">{formatRial(stock.totalValue)}</p>
+                <p className="font-semibold">{formatRial(visibleStock.totalValue)}</p>
               </div>
             </div>
 
@@ -163,8 +155,8 @@ export function WarehouseStockPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stock.rows.length > 0 ? (
-                    stock.rows.map((row) => (
+                  {visibleStock.rows.length > 0 ? (
+                    visibleStock.rows.map((row) => (
                       <TableRow key={row.sku}>
                         <TableCell className="font-mono text-xs">
                           {row.sku}

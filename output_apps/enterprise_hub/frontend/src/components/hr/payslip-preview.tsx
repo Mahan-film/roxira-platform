@@ -97,7 +97,9 @@ function PreviewRow({
  */
 export function PayslipPreview({ employee, onIssued }: PayslipPreviewProps) {
   const [contract, setContract] = useState<EmploymentContract | null>(null);
-  const [isLoadingContract, setIsLoadingContract] = useState(true);
+  /** Employee whose contract has finished loading; null while a (re)load runs. */
+  const [contractEmployeeId, setContractEmployeeId] = useState<Employee["id"] | null>(null);
+  const isLoadingContract = contractEmployeeId !== employee.id;
   const [calculation, setCalculation] = useState<PayrollCalculation | null>(
     null,
   );
@@ -113,28 +115,30 @@ export function PayslipPreview({ employee, onIssued }: PayslipPreviewProps) {
   const [otherDeductions, setOtherDeductions] = useState("0");
 
   const loadContract = useCallback(
-    async (signal?: AbortSignal) => {
-      setIsLoadingContract(true);
-      setErrorMessage(null);
-      try {
-        const contracts = await listContracts(employee.id, signal);
-        const active =
-          contracts.find((item) => item.status === ContractStatus.ACTIVE) ??
-          contracts[0] ??
-          null;
-        setContract(active);
-        setCalculation(null);
-        setIssuedPayslip(null);
-      } catch (error) {
-        if (error instanceof ApiClientError) {
-          setErrorMessage(error.details.join(" | "));
-        } else if (!(error instanceof DOMException)) {
-          setErrorMessage("دریافت قراردادهای کارمند ناموفق بود.");
-        }
-      } finally {
-        setIsLoadingContract(false);
-      }
-    },
+    (signal?: AbortSignal) =>
+      listContracts(employee.id, signal)
+        .then(
+          (contracts) => {
+            const active =
+              contracts.find((item) => item.status === ContractStatus.ACTIVE) ??
+              contracts[0] ??
+              null;
+            setErrorMessage(null);
+            setContract(active);
+            setCalculation(null);
+            setIssuedPayslip(null);
+          },
+          (error: unknown) => {
+            if (error instanceof ApiClientError) {
+              setErrorMessage(error.details.join(" | "));
+            } else if (!(error instanceof DOMException)) {
+              setErrorMessage("دریافت قراردادهای کارمند ناموفق بود.");
+            }
+          },
+        )
+        .finally(() => {
+          if (!signal?.aborted) setContractEmployeeId(employee.id);
+        }),
     [employee.id],
   );
 
@@ -231,7 +235,11 @@ export function PayslipPreview({ employee, onIssued }: PayslipPreviewProps) {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => void loadContract()}
+          onClick={() => {
+            setContractEmployeeId(null);
+            setErrorMessage(null);
+            void loadContract();
+          }}
         >
           <RefreshCw className="size-3.5" />
           بازخوانی

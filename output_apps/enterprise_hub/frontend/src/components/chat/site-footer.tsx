@@ -1,4 +1,3 @@
-import { Mail, Phone, Scale } from "lucide-react";
 
 /**
  * فوتر رسمی سامانه قاضی هوشمند (ghazihoushmand.ir)

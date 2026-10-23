@@ -53,7 +53,7 @@ export default function LegalChatConsole({ conversationId = 'default_conv' }: Le
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: 'خطا در برقراری ارتباط با مستشار قضایی.' }]);
       }
-    } catch (e) {
+    } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'خطا در ارتباط با سرور.' }]);
     } finally {
       setIsLoading(false);
@@ -153,7 +153,7 @@ export default function LegalChatConsole({ conversationId = 'default_conv' }: Le
     if (activeRecorderRef.current && activeRecorderRef.current.state !== 'inactive') {
       try {
         activeRecorderRef.current.stop();
-      } catch (e) {}
+      } catch {}
     }
     if (activeStreamRef.current) {
       activeStreamRef.current.getTracks().forEach(t => t.stop());

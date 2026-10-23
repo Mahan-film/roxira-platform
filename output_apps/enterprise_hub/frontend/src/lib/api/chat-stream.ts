@@ -37,6 +37,8 @@ export interface ChatDoneBody {
   defense_draft?: string;
   success_probability?: string;
   statutory_basis?: unknown[];
+  /** Circulars / resolutions (smartjudge regulations_retrieval.public_view). */
+  regulations?: unknown[];
   [key: string]: unknown;
 }
 

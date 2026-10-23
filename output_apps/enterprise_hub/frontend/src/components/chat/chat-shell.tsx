@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
 import { UpgradeCard } from "@/components/chat/upgrade-card";
 import { ContractReviewUpsell } from "@/components/chat/contract-review-upsell";
@@ -72,6 +72,7 @@ import {
 } from "@/lib/api/case-files-client";
 import { LegalStreamingText } from "./legal-streaming-text";
 import { CaseFileRefChips, parseCaseFileRefs, type CaseFileRef } from "./case-file-refs";
+import { RegulationCards, parseRegulations, type RegulationRef } from "./regulation-cards";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   EMPTY_FAILURE,
@@ -135,6 +136,8 @@ type ChatMessage = {
   draft?: string;
   probability?: string;
   statutory_basis?: StatutoryItem[];
+  /** Circulars and resolutions (`regulations` field), shown as their own card. */
+  regulations?: RegulationRef[];
   /** Page-level sources from uploaded case files. */
   case_file_refs?: CaseFileRef[];
   /** Typewriter animation still running for this (fresh) answer. */
@@ -271,8 +274,11 @@ export function ChatShell() {
   const pendingCheckRef = useRef<DraftRunOpts | null>(null);
   const startDraftRef = useRef<(type: DraftType) => Promise<boolean>>(async () => false);
 
-  messagesRef.current = messages;
-  draftRef.current = draft;
+  // Mirror the latest state into refs after commit for timers and async handlers.
+  useLayoutEffect(() => {
+    messagesRef.current = messages;
+    draftRef.current = draft;
+  }, [messages, draft]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -743,6 +749,7 @@ export function ChatShell() {
         draft: data.defense_draft,
         probability: data.success_probability,
         statutory_basis: Array.isArray(data.statutory_basis) ? (data.statutory_basis as StatutoryItem[]) : undefined,
+        regulations: parseRegulations(data.regulations),
         case_file_refs: parseCaseFileRefs(data.case_file_refs),
         // text already streamed live: no typewriter replay
         animating: !streamed,
@@ -927,7 +934,9 @@ export function ChatShell() {
     // Without context a cheap "check" call is enough (it still enforces the VIP rule before any typing).
     return runDraft({ action: hasContext ? "assist" : "check", type, base, prev: null, edits: {}, intro: true });
   };
-  startDraftRef.current = startDraft;
+  useLayoutEffect(() => {
+    startDraftRef.current = startDraft;
+  });
 
   const sendDraftTurn = async (userMsg: ChatMessage): Promise<boolean> => {
     if (!draft) return true;
@@ -1021,7 +1030,6 @@ export function ChatShell() {
     if (!action) return;
     const t = window.setTimeout(() => void startDraftRef.current(action.key), 0);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftParam]);
 
   const handleSendMessage = async (customPrompt?: string) => {
@@ -1350,6 +1358,8 @@ export function ChatShell() {
                   </ul>
                 </div>
               )}
+
+              {msg.role === "assistant" && msg.regulations && <RegulationCards items={msg.regulations} />}
             </div>
           </div>
         ))}

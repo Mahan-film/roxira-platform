@@ -1,9 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { liveVoiceUrl, micFailure, reportVoiceError } from '@/lib/api/judge-chat-client';
 import { Phone, PhoneOff, Mic, Volume2, AlertCircle, Send } from 'lucide-react';
+
+// Cache-busted once per page load so a deploy's new worklet is picked up.
+const PCM_WORKLET_URL = `/worklets/pcm-processor.js?v=${Date.now()}`;
 
 interface LiveVoiceModalProps {
   isOpen: boolean;
@@ -103,11 +106,6 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       }, timeoutMs);
     }
   };
-
-  useEffect(() => {
-    if (!isOpen) cleanupSession();
-    return () => cleanupSession();
-  }, [isOpen]);
 
   const base64ToBytes = (base64Audio: string): Uint8Array => {
     const binaryString = window.atob(base64Audio);
@@ -317,7 +315,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       if (!audioCtx.audioWorklet) {
         throw new Error('AudioWorklet unsupported');
       }
-      await audioCtx.audioWorklet.addModule(`/worklets/pcm-processor.js?v=${Date.now()}`);
+      await audioCtx.audioWorklet.addModule(PCM_WORKLET_URL);
 
       const source = audioCtx.createMediaStreamSource(stream);
       const worklet = new AudioWorkletNode(audioCtx, 'pcm-processor', {
@@ -500,7 +498,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     turnCompletePendingRef.current = false;
     if (currentSourceRef.current) {
       currentSourceRef.current.onended = null;
-      try { currentSourceRef.current.stop(); } catch (e) {}
+      try { currentSourceRef.current.stop(); } catch {}
       currentSourceRef.current = null;
     }
     masterGainRef.current = null;
@@ -509,7 +507,7 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
       workletNodeRef.current = null;
     }
     if (audioContextRef.current) {
-      try { audioContextRef.current.close(); } catch(e){}
+      try { audioContextRef.current.close(); } catch {}
       audioContextRef.current = null;
     }
     if (streamRef.current) {
@@ -519,10 +517,16 @@ export const LiveVoiceModal: React.FC<LiveVoiceModalProps> = ({ isOpen, onClose 
     if (socketRef.current) {
       const ws = socketRef.current;
       socketRef.current = null; // detach first so onclose does not trigger a reconnect
-      try { ws.close(); } catch (e) {}
+      try { ws.close(); } catch {}
     }
     setSessionState('IDLE');
   };
+
+  const endSession = useEffectEvent(() => cleanupSession());
+  useEffect(() => {
+    if (!isOpen) endSession();
+    return () => endSession();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
