@@ -54,8 +54,11 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
   templates, projects (not deployed).
 - **Legal corpus v7** built as `iran_laws_v7` (7,295 points) but **not switched** (r@1 72.9 → 67.1 %): duplicate law
   names (e.g. «وارده» vs «وارد شده»); law-name aliases landed in #818; v7 still not switched.
-- **Known gap**: migrations cannot build a fresh database from zero (the first migration assumes existing tables);
-  needed for new environments and the factory.
+- **Fresh database from zero**: baseline migration `1789000000000-LegacyBaseline` creates the 7 tables the old
+  Python layers made before TypeORM (fin_chart_of_accounts, fin_journal_entries, erp_warehouses, erp_stock_items,
+  inventory_fifo_batches, crm_leads, contact_messages), each guarded by `to_regclass(...) IS NULL` (no-op on prod).
+  Check: `bash scripts/dev/fresh_db_migrate.sh` (also run by `scripts/dev/local_ci.sh` when migrations change). Python core tables
+  (chat_*, payment_orders, graph_nodes, ...) are still created by the Python code itself, not by migrations.
 
 ### 2026-10-22 night — parallel Claude Code cloud sessions (cloud credit, expires 2026-11-05)
 Hub session `session_01MXYgvVaToE8ur3ufjDf8ZB` started child cloud sessions; each opens its own DRAFT PR and

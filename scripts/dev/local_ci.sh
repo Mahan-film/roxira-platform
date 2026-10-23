@@ -197,6 +197,27 @@ else
   skip_step "frontend" "no changes under output_apps/enterprise_hub/frontend"
 fi
 
+# fresh DB migrations: build the hub DB from zero on a throwaway Postgres 17 container
+# (scripts/dev/fresh_db_migrate.sh). Only when migrations or the data source changed.
+step_fresh_db() {
+  if [ ! -d output_apps/enterprise_hub/node_modules ]; then
+    (cd output_apps/enterprise_hub && npm ci --ignore-scripts --no-audit --no-fund) || return 1
+  fi
+  bash scripts/dev/fresh_db_migrate.sh
+}
+
+if changed_matches '^output_apps/enterprise_hub/(migrations/|data-source\.ts$)|^scripts/dev/fresh_db_migrate\.sh$'; then
+  if ! have docker || ! docker info >/dev/null 2>&1; then
+    skip_step "fresh DB migrations" "docker not available (start docker, then run scripts/dev/fresh_db_migrate.sh)"
+  elif ! have npm; then
+    skip_step "fresh DB migrations" "npm not installed"
+  else
+    run_step "fresh DB migrations" step_fresh_db
+  fi
+else
+  skip_step "fresh DB migrations" "no changes under enterprise_hub/migrations or data-source.ts"
+fi
+
 echo
 echo "================ LOCAL CI SUMMARY ================"
 for s in "${PASS[@]+"${PASS[@]}"}"; do echo "PASS  $s"; done
