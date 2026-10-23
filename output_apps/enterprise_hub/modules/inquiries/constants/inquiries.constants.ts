@@ -26,3 +26,6 @@ export const INQUIRY_EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /** الگوی پایه شماره تماس (اعتبارسنجی لایه سرویس). */
 export const INQUIRY_PHONE_REGEX = /^[0-9+\-\s()]{7,20}$/;
+
+/** منبع فرم فهرست انتظار پایلوت حقوقی مالزی؛ ثبت بدون رضایت صریح پذیرفته نمی‌شود. */
+export const MY_LEGAL_WAITLIST_SOURCE = 'my-legal-waitlist';

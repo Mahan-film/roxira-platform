@@ -149,4 +149,38 @@ describe('InquiriesService', () => {
     expect(result).toMatchObject({ total: 1, page: 2, limit: 10 });
     expect(result.data).toHaveLength(1);
   });
+
+  describe('waitlist consent', () => {
+    const base: CreateInquiryDto = {
+      name: 'Aisyah',
+      phone: '+60 12-345 6789',
+      email: 'a@example.my',
+      source: 'my-legal-waitlist',
+    };
+
+    it('rejects the Malaysia waitlist without explicit consent', async () => {
+      await expect(service.create(base)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.create({ ...base, consent: false, consentVersion: 'v1' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.create({ ...base, consent: true }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('stores the consent version and time with the message', async () => {
+      repository.create.mockResolvedValue(buildEntity());
+      await service.create({
+        ...base,
+        message: 'Notes: x',
+        consent: true,
+        consentVersion: 'my-waitlist-consent-2026-10-23',
+      });
+      const saved = repository.create.mock.calls[0][0];
+      expect(saved.message).toMatch(
+        /^Notes: x\n\[consent: my-waitlist-consent-2026-10-23 at \d{4}-\d{2}-\d{2}T/,
+      );
+    });
+  });
 });

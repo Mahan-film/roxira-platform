@@ -1,0 +1,167 @@
+{
+  "_comment": "Malaysia (MY) pilot allowlist for scripts/legal/ingest_pipeline.py --allowlist. Source and gate: docs/research/global/MALAYSIA_AGC_TERMS_2026-10-22.md. All entries are 'proposed': act numbers are unconfirmed on the AGC portal and AGC reuse permission is pending, so they are excluded unless --allow-proposed is given (internal evaluation only).",
+  "schema_version": 1,
+  "jurisdiction": "MY",
+  "laws": [
+    {
+      "name": "Contracts Act 1950",
+      "act_no": "Act 136",
+      "practice_area": "contracts",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Specific Relief Act 1950",
+      "act_no": "Act 137",
+      "practice_area": "remedies",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Limitation Act 1953",
+      "act_no": "Act 254",
+      "practice_area": "civil litigation",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Civil Law Act 1956",
+      "act_no": "Act 67",
+      "practice_area": "civil / torts",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Evidence Act 1950",
+      "act_no": "Act 56",
+      "practice_area": "litigation",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Courts of Judicature Act 1964",
+      "act_no": "Act 91",
+      "practice_area": "procedure, appeals",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Subordinate Courts Act 1948",
+      "act_no": "Act 92",
+      "practice_area": "procedure, jurisdiction",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Employment Act 1955",
+      "act_no": "Act 265",
+      "practice_area": "employment",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Industrial Relations Act 1967",
+      "act_no": "Act 177",
+      "practice_area": "employment disputes",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Companies Act 2016",
+      "act_no": "Act 777",
+      "practice_area": "corporate",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Personal Data Protection Act 2010",
+      "act_no": "Act 709",
+      "practice_area": "data protection",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Consumer Protection Act 1999",
+      "act_no": "Act 599",
+      "practice_area": "consumer",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Hire-Purchase Act 1967",
+      "act_no": "Act 212",
+      "practice_area": "consumer credit",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Insolvency Act 1967",
+      "act_no": "Act 360",
+      "practice_area": "debt recovery",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "National Land Code",
+      "act_no": "Act 828",
+      "practice_area": "land, conveyancing",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Housing Development (Control and Licensing) Act 1966",
+      "act_no": "Act 118",
+      "practice_area": "property",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Strata Management Act 2013",
+      "act_no": "Act 757",
+      "practice_area": "strata",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Law Reform (Marriage and Divorce) Act 1976",
+      "act_no": "Act 164",
+      "practice_area": "family",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Probate and Administration Act 1959",
+      "act_no": "Act 97",
+      "practice_area": "estates",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    },
+    {
+      "name": "Distribution Act 1958",
+      "act_no": "Act 300",
+      "practice_area": "estates (intestacy)",
+      "status": "proposed",
+      "enacted": true,
+      "act_no_confirmed": false
+    }
+  ]
+}

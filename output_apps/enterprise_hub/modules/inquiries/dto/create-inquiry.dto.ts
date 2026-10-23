@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsEmail,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -53,4 +55,21 @@ export class CreateInquiryDto {
   @IsString()
   @MaxLength(64)
   source?: string;
+
+  @ApiPropertyOptional({
+    description: 'رضایت کاربر به ذخیره اطلاعات برای تماس (فهرست انتظار الزامی است)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  consent?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'نسخه متن رضایت‌نامه‌ای که کاربر دیده است',
+    example: 'my-waitlist-consent-2026-10-23',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  @Matches(/^[A-Za-z0-9._-]+$/)
+  consentVersion?: string;
 }

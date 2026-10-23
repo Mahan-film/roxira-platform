@@ -3,6 +3,7 @@ import {
   DEFAULT_INQUIRY_SOURCE,
   INQUIRY_EMAIL_REGEX,
   INQUIRY_PHONE_REGEX,
+  MY_LEGAL_WAITLIST_SOURCE,
   SALES_NOTIFY_EMAIL_ENV,
 } from '../constants/inquiries.constants';
 import { CreateInquiryDto } from '../dto/create-inquiry.dto';
@@ -61,16 +62,30 @@ export class InquiriesService {
       throw new BadRequestException('رایانامه معتبر نیست.');
     }
 
+    const source = dto.source?.trim() || DEFAULT_INQUIRY_SOURCE;
+    const consentRequired = source === MY_LEGAL_WAITLIST_SOURCE;
+    if (consentRequired && (dto.consent !== true || !dto.consentVersion)) {
+      throw new BadRequestException('رضایت صریح برای ثبت‌نام لازم است.');
+    }
+    const createdAt = new Date();
+    // No consent column yet: record it with the message so it is kept with the row.
+    const consentLine =
+      dto.consent === true && dto.consentVersion
+        ? `[consent: ${dto.consentVersion} at ${createdAt.toISOString()}]`
+        : null;
+    const message =
+      [dto.message?.trim(), consentLine].filter(Boolean).join('\n') || null;
+
     const created = await this.inquiriesRepository.create({
       tenantId: null,
       name,
       company: dto.company?.trim() || null,
       phone,
       email,
-      message: dto.message?.trim() || null,
-      source: dto.source?.trim() || DEFAULT_INQUIRY_SOURCE,
+      message,
+      source,
       status: InquiryStatus.NEW,
-      createdAt: new Date(),
+      createdAt,
     });
 
     this.notifySales(created);
