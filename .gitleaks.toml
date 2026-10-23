@@ -17,3 +17,13 @@ paths = [
 [[allowlists]]
 description = "Dummy values used only by the CI compose check"
 paths = ['''^ci/compose\.env$''']
+
+[[allowlists]]
+description = "Legal consolidation specs: \"law_key\" is a law identifier, not a credential"
+paths = ['''^config/legal_consolidation/[^/]+\.json$''']
+regexes = ['''"law_key":\s*"[a-z0-9_]+"''']
+
+[[allowlists]]
+description = "Empty placeholders in .env.example (NAME_KEY= with no value)"
+paths = ['''^\.env\.example$''']
+regexes = ['''^[A-Z0-9_]+=\s*$''']
