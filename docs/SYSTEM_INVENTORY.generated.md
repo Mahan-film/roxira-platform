@@ -89,6 +89,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | reviewer | qwen/qwen3.8-27b:free, deepseek/deepseek-v4.1-flash, qwen/qwen3-coder |
 | strong | deepseek/deepseek-v4-pro, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
 | stt | openai/whisper-large-v3, openai/whisper-large-v3-turbo, openai/gpt-audio |
+| stt_direct | groq:whisper-large-v3, mistral:voxtral-mini-latest, gemini:gemini-flash-latest |
 | summarize | scaledown/summarize |
 | tts | edge-tts:fa-IR-FaridNeural |
 | vision | google/gemini-3.8-flash |

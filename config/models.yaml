@@ -281,6 +281,30 @@ roles:
           is a second, pre-existing degradation this PR flags but does not
           fix, to keep this change small.
 
+  stt_direct:
+    description: >
+      Provider-native speech-to-text ids called directly (not through OpenRouter) by
+      output_apps/generated_modules/smartjudge/voice_stt.py, one entry per provider as
+      "<provider>:<native id>". Each provider is tried with every key slot set in the
+      environment (<PROVIDER>_API_KEY, _2.._4) and per-key cooldown. Not OpenRouter ids,
+      hence catalogue_listed: false (scripts/check_models.py skips them).
+    data_policy: standard
+    models:
+      - id: groq:whisper-large-v3
+        price_per_1m: null
+        catalogue_listed: false
+        note: Groq free tier, OpenAI-compatible /audio/transcriptions; Persian is in Whisper's set.
+      - id: mistral:voxtral-mini-latest
+        price_per_1m: null
+        catalogue_listed: false
+        note: >
+          Mistral /v1/audio/transcriptions. Persian is not on Voxtral's documented language list
+          (unverified quality), so voice_stt.py sends no language hint and keeps it behind Groq.
+      - id: gemini:gemini-flash-latest
+        price_per_1m: null
+        catalogue_listed: false
+        note: Gemini generateContent with inline audio (AI Studio keys, free tier); id verified 2026-10-13 in key_pool.yaml.
+
   tts:
     description: Text-to-speech for the voice pipeline (Persian/Farsi required).
     data_policy: standard

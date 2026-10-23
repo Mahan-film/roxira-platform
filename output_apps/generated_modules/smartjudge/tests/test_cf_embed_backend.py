@@ -7,6 +7,7 @@ import logging
 
 import pytest
 
+from output_apps.generated_modules.smartjudge import key_rotation
 from output_apps.generated_modules.smartjudge.legal_graph import lightrag_engine as eng
 
 SECRET = "cf-token-must-never-appear"
@@ -20,7 +21,9 @@ def _isolate(monkeypatch):
     monkeypatch.setattr(eng, "_embed_cache", cache)
     monkeypatch.setattr(eng, "_embedder_instance", None)
     monkeypatch.setattr(eng, "_embedder_load_failed", False)
+    key_rotation.COOLDOWNS.reset()
     yield
+    key_rotation.COOLDOWNS.reset()
 
 
 def _cf_env(monkeypatch):

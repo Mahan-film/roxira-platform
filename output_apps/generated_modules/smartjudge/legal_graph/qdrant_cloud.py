@@ -2,9 +2,14 @@
 
 Inert unless QDRANT_CLOUD_URL is set. The API key (QDRANT_CLOUD_API_KEY) is read from the
 environment at call time and is never logged. Spare accounts are read from QDRANT_CLOUD_URL_2..4 /
-QDRANT_CLOUD_API_KEY_2..4 and are tried in order after the first cluster. Only read calls
-(search / scroll / collection info) go through the targets returned here; nothing in the app
-writes to the replica.
+QDRANT_CLOUD_API_KEY_2..4 and are tried in order after the first cluster: on a connection error
+or a non-200 answer (401, 404 collection missing, 429, 5xx) the read moves on to the next cluster.
+Only read calls (search / scroll / collection info) go through the targets returned here; nothing
+in the app writes to the replica.
+
+Health per cluster: every read records its outcome (``record`` / ``skip_cloud_response``) and
+``cloud_health()`` reports, per label, the last success / failure and the failure streak, without
+URL or key. ``probe_clusters()`` actively checks each cluster (GET /collections) on demand.
 
 Pure stdlib, no imports from the rest of the package (no circular imports).
 """
@@ -28,6 +33,11 @@ Target = Tuple[str, str, Dict[str, str]]
 
 _last_log_at: float = 0.0
 _log_lock = threading.Lock()
+
+# label -> {"ok_at", "fail_at", "error", "streak", "requests"} (monotonic times, no URL, no key)
+_health: Dict[str, Dict[str, object]] = {}
+_health_lock = threading.Lock()
+PROBE_TIMEOUT_SECONDS = 3.0
 
 
 def _env_names(index: int) -> Tuple[str, str]:
@@ -89,6 +99,91 @@ def note_failover(label: str, now: Optional[float] = None) -> bool:
     return True
 
 
+def is_cloud(label: str) -> bool:
+    return label.startswith("qdrant-cloud")
+
+
+def record(label: str, ok: bool, error: str = "", now: Optional[float] = None) -> None:
+    """Remember one read outcome for a cloud cluster (local hosts are ignored)."""
+    if not is_cloud(label):
+        return
+    t = time.monotonic() if now is None else now
+    with _health_lock:
+        row = _health.setdefault(label, {"ok_at": None, "fail_at": None, "error": "", "streak": 0, "requests": 0})
+        row["requests"] = int(row["requests"]) + 1  # type: ignore[call-overload]
+        if ok:
+            row["ok_at"], row["streak"], row["error"] = t, 0, ""
+        else:
+            row["fail_at"], row["error"] = t, error[:80]
+            row["streak"] = int(row["streak"]) + 1  # type: ignore[call-overload]
+        first_failure = not ok and row["streak"] == 1
+    if first_failure:  # once per failure streak, not per request
+        logger.warning("Qdrant Cloud cluster %s failed: %s", label, error[:80])
+
+
+def skip_cloud_response(label: str, status: int) -> bool:
+    """Record a cloud cluster's HTTP answer; True when it failed and the next target should be tried.
+
+    Local hosts always return False, so their behaviour (a non-200 ends the read) is unchanged.
+    """
+    if not is_cloud(label):
+        return False
+    ok = status == 200
+    record(label, ok, "" if ok else f"HTTP {status}")
+    return not ok
+
+
+def cloud_health(now: Optional[float] = None) -> List[Dict[str, object]]:
+    """One row per configured cluster: ``status`` is ok / failing / unused. No URL, no key."""
+    t = time.monotonic() if now is None else now
+    rows: List[Dict[str, object]] = []
+    for label, _url, headers in cloud_targets():
+        with _health_lock:
+            row = dict(_health.get(label) or {})
+        ok_at, fail_at = row.get("ok_at"), row.get("fail_at")
+        if ok_at is None and fail_at is None:
+            status = "unused"
+        elif fail_at is not None and (ok_at is None or fail_at > ok_at):  # type: ignore[operator]
+            status = "failing"
+        else:
+            status = "ok"
+        rows.append({
+            "label": label,
+            "api_key_set": bool(headers.get("api-key")),
+            "status": status,
+            "last_ok_age_seconds": round(t - ok_at, 1) if ok_at is not None else None,  # type: ignore[operator]
+            "last_failure_age_seconds": round(t - fail_at, 1) if fail_at is not None else None,  # type: ignore[operator]
+            "last_error": row.get("error") or "",
+            "failure_streak": row.get("streak") or 0,
+            "requests": row.get("requests") or 0,
+        })
+    return rows
+
+
+def probe_clusters(timeout: float = PROBE_TIMEOUT_SECONDS) -> List[Dict[str, object]]:
+    """Actively check every configured cluster (GET /collections, read-only) and return ``cloud_health()``.
+
+    Network I/O: call it from an admin/ops path or a worker thread, not per user request.
+    """
+    import urllib.error
+    import urllib.request
+
+    for label, url, headers in cloud_targets():
+        request = urllib.request.Request(f"{url}/collections", headers=headers, method="GET")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                status = int(getattr(response, "status", 200) or 200)
+        except urllib.error.HTTPError as exc:
+            status = int(exc.code)
+        except Exception as exc:  # noqa: BLE001
+            record(label, False, type(exc).__name__)
+            continue
+        skip_cloud_response(label, status)
+    return cloud_health()
+
+
 def _reset_for_tests() -> None:
     global _last_log_at
     _last_log_at = 0.0
+    with _health_lock:
+        _health.clear()

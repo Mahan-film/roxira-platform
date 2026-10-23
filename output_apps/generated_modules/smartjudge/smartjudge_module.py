@@ -24,6 +24,7 @@ from output_apps.generated_modules.smartjudge import case_files as _case_files
 from output_apps.generated_modules.smartjudge import contract_review as _contract_review
 from output_apps.generated_modules.smartjudge import answer_escalation as _answer_escalation
 from output_apps.generated_modules.smartjudge import voice_stt as _voice_stt
+from output_apps.generated_modules.smartjudge import voice_tts as _voice_tts
 from output_apps.generated_modules.smartjudge import small_talk as _small_talk
 from output_apps.generated_modules.smartjudge import legal_notes as _legal_notes
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
@@ -2731,6 +2732,14 @@ def _tts_mp3_to_pcm16(data: bytes) -> bytes:
         return b""
 
 
+def _azure_tts_configured() -> bool:
+    """True only when an Azure Speech key (+ region) is set; otherwise TTS stays on the inline edge-tts path."""
+    try:
+        return bool(_voice_tts.azure_slots())
+    except Exception:
+        return False
+
+
 async def _voice_synthesize_pcm16(text: str) -> bytes:
     """TTS → PCM خطی ۱۶ کیلوهرتز مونو. در نبود سرویس، بایت تهی برمی‌گرداند.
 
@@ -2741,19 +2750,26 @@ async def _voice_synthesize_pcm16(text: str) -> bytes:
         return b""
     if VOICE_SYNTHETIC_TONES_ENABLED:  # pragma: no cover - سیاست: همیشه غیرفعال
         raise RuntimeError("تولید تُن مصنوعی طبق سیاست غیرفعال است")
-    try:
-        import edge_tts
-    except Exception:
-        return b""
-    try:
-        communicate = edge_tts.Communicate(text[:1200], "fa-IR-FaridNeural", rate="+22%")
-        buffer = bytearray()
-        async for chunk in communicate.stream():
-            if chunk.get("type") == "audio":
-                buffer.extend(chunk["data"])
-    except Exception as exc:
-        print(f"[SMARTJUDGE][VOICE-TTS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
-        return b""
+    buffer = bytearray()
+    if _azure_tts_configured():
+        try:
+            azure_audio, _provider = await _voice_tts.synthesize_mp3(text[:1200], voices=("fa-IR-FaridNeural",), rate="+22%")
+            buffer.extend(azure_audio)
+        except Exception as exc:
+            print(f"[SMARTJUDGE][VOICE-TTS-AZURE-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+    if not buffer:  # default path (and the fallback for any Azure error): the original inline edge-tts
+        try:
+            import edge_tts
+        except Exception:
+            return b""
+        try:
+            communicate = edge_tts.Communicate(text[:1200], "fa-IR-FaridNeural", rate="+22%")
+            async for chunk in communicate.stream():
+                if chunk.get("type") == "audio":
+                    buffer.extend(chunk["data"])
+        except Exception as exc:
+            print(f"[SMARTJUDGE][VOICE-TTS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+            return b""
     if not buffer:
         return b""
     return await asyncio.to_thread(_tts_mp3_to_pcm16, bytes(buffer))
@@ -4025,6 +4041,16 @@ async def generate_speech(request: Request, payload: dict = Body(...),
     # Microsoft Neural TTS (edge-tts). Reachability from the server is fine but latency varies
     # (1-5 s), so: hard timeout per attempt, one retry, a fallback voice, a real Content-Length
     # (iOS Safari is picky about chunked audio) and a machine-readable error code.
+    # Azure Speech (voice_tts.synthesize_mp3) is used only when its key env is set; any error there
+    # falls back to the original inline edge-tts path below.
+    if _azure_tts_configured():
+        try:
+            audio, _provider = await _voice_tts.synthesize_mp3(clean_text, rate="+22%")
+            if audio:
+                return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
+        except Exception as exc:
+            print(f"[SMARTJUDGE][TTS-AZURE-EXC] {type(exc).__name__}: {exc}", file=sys.stderr)
+
     try:
         import edge_tts
     except Exception as exc:

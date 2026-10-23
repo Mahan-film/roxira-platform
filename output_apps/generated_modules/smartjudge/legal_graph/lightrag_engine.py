@@ -197,6 +197,10 @@ EMBEDDING_HTTP_RETRIES = int(os.environ.get("EMBEDDING_HTTP_RETRIES", "2"))
 # (هیچ تغییری تا وقتی توکن مالک تنظیم نشود و تست parity قبول نشود). در هر خطا،
 # پاسخ غیر۲۰۰، ابعاد نادرست یا نبود متغیر محیطی، یک هشدار (بدون توکن) ثبت و به
 # مسیر TEI/local تنزل می‌کنیم.
+# چند کلید (تصمیم مالک ۲۰۲۶-۱۰-۲۲): ``CF_AI_TOKEN``، ``_2`` .. ``_4`` (هر کدام با
+# ``CF_ACCOUNT_ID_<n>`` یا ``CF_ACCOUNT_ID`` مشترک)، سپس میزبان‌های اختیاری bge-m3
+# (Modal / DeepInfra / Chutes، ``_bge_hosts``)، با cooldown هر توکن روی 429/5xx/401.
+# فقط bge-m3: مدل دیگر فضای برداری دیگری است (نگاه کنید به INVARIANT پایین‌تر).
 EMBED_BACKEND_ENV = "EMBED_BACKEND"
 CF_ACCOUNT_ID_ENV = "CF_ACCOUNT_ID"
 CF_AI_TOKEN_ENV = "CF_AI_TOKEN"
@@ -404,6 +408,7 @@ from . import qdrant_cloud as _qcloud  # noqa: E402  (optional read-only cloud r
 from . import retrieval_boost as _rb  # noqa: E402  (pure helpers, no circular import)
 from .. import legal_tokenize as _lt  # noqa: E402  (shared sparse tokenizer, stdlib only)
 from .. import reranker as _reranker  # noqa: E402  (optional cross-encoder, flag-gated, never raises)
+from .. import key_rotation as _kr  # noqa: E402  (key slots + per-key cooldown, stdlib only)
 _ENACTED_DESPITE_TITLE = (
     "لایحه اصلاحی قانون تجارت",
     "لایحه قانونی اصلاح قسمتی از قانون تجارت",
@@ -764,7 +769,12 @@ def _cf_ai_token() -> str:
 def _cf_post_json(
     url: str, payload: Dict[str, Any], timeout: float, token: str
 ) -> Tuple[int, Any]:
-    """POST امضاشده به Workers AI؛ ``(status, parsed)`` (در تست‌ها mock می‌شود)."""
+    """POST امضاشده به Workers AI؛ ``(status, parsed)`` (در تست‌ها mock می‌شود).
+
+    پاسخ HTTP غیر۲xx به‌صورت ``(status, {})`` برمی‌گردد (نه استثنا) تا cooldown هر توکن
+    بر اساس کد وضعیت (429/5xx/401) تنظیم شود.
+    """
+    import urllib.error
     import urllib.request
 
     request = urllib.request.Request(
@@ -776,34 +786,276 @@ def _cf_post_json(
         },
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        status = int(getattr(response, "status", 200) or 200)
-        raw = response.read().decode("utf-8") or "{}"
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status = int(getattr(response, "status", 200) or 200)
+            raw = response.read().decode("utf-8") or "{}"
+    except urllib.error.HTTPError as exc:
+        return int(exc.code), {}
     return status, json.loads(raw)
 
 
-def _embed_texts_cf(texts: List[str]) -> List[List[float]]:
+def _check_bge_vectors(vectors: List[List[float]], n_texts: int, host: str) -> List[List[float]]:
+    """تعداد و ابعاد (۱۰۲۴) را می‌سنجد و L2-نرمال می‌کند؛ در ناسازگاری استثنا."""
+    if len(vectors) != n_texts:
+        raise RuntimeError(f"{host} embed returned {len(vectors)} vectors for {n_texts} texts")
+    for vector in vectors:
+        if len(vector) != CF_EMBED_DIM:
+            raise RuntimeError(f"{host} embed dims {len(vector)} != {CF_EMBED_DIM}")
+    return [_l2_normalise(vector) for vector in vectors]
+
+
+def _embed_texts_cf(
+    texts: List[str], account: Optional[str] = None, token: Optional[str] = None
+) -> List[List[float]]:
     """embed پرس‌وجو از Cloudflare Workers AI (``@cf/baai/bge-m3``، L2-نرمال‌شده).
 
+    بدون آرگومان، حساب/توکن اصلی (``CF_ACCOUNT_ID``/``CF_AI_TOKEN``) خوانده می‌شود.
     نبود متغیر محیطی، خطای شبکه/مهلت، پاسخ غیر۲۰۰، تعداد نادرست و ابعاد نامنطبق
-    همگی با استثنا اعلام می‌شوند تا فراخوان به مسیر TEI/local تنزل کند. توکن هرگز
-    لاگ نمی‌شود.
+    همگی با استثنا اعلام می‌شوند تا فراخوان به حساب بعدی یا مسیر TEI/local تنزل کند.
+    توکن هرگز لاگ نمی‌شود.
     """
-    account = _cf_account_id()
-    token = _cf_ai_token()
+    account = _cf_account_id() if account is None else account
+    token = _cf_ai_token() if token is None else token
     if not account or not token:
         raise RuntimeError("CF backend selected but CF_ACCOUNT_ID/CF_AI_TOKEN are unset")
     url = CF_EMBED_URL_TEMPLATE.format(account=account)
     status, payload = _cf_post_json(url, {"text": list(texts)}, CF_EMBED_TIMEOUT, token)
     if status != 200:
-        raise RuntimeError(f"CF embed returned HTTP {status}")
-    vectors = _extract_cf_vectors(payload)
-    if len(vectors) != len(texts):
-        raise RuntimeError(f"CF embed returned {len(vectors)} vectors for {len(texts)} texts")
-    for vector in vectors:
-        if len(vector) != CF_EMBED_DIM:
-            raise RuntimeError(f"CF embed dims {len(vector)} != {CF_EMBED_DIM}")
-    return [_l2_normalise(vector) for vector in vectors]
+        raise _EmbedHTTPError(status, f"CF embed returned HTTP {status}")
+    return _check_bge_vectors(_extract_cf_vectors(payload), len(texts), "CF")
+
+
+class _EmbedHTTPError(RuntimeError):
+    def __init__(self, status: int, message: str) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+# ── میزبان‌های جایگزین bge-m3 (فقط BAAI/bge-m3) ─────────────────────────────
+# INVARIANT: every host in this chain must serve BAAI/bge-m3 (dense, 1024 dims, L2-normalised).
+# The Qdrant collections were embedded with bge-m3; a vector from any other model lives in a
+# different vector space, still has a plausible shape, and silently returns wrong neighbours.
+# Never add a host here that runs another model (a 1024-dim e5/jina model passes the dim check).
+DEEPINFRA_EMBED_URL = "https://api.deepinfra.com/v1/openai/embeddings"
+BGE_M3_MODEL_ID = "BAAI/bge-m3"  # embedding model, not a chat model (cf. scripts/infra/modal_embed.py)
+EMBED_REMOTE_BUDGET_S = float(os.environ.get("EMBED_REMOTE_BUDGET_S", "6"))
+
+
+def _cf_slots() -> List[Tuple[str, Any, str]]:
+    """``(provider, token slot, account)`` per Workers AI token: ``CF_AI_TOKEN``, ``_2`` .. ``_4``.
+
+    هر ``CF_AI_TOKEN_<n>`` با ``CF_ACCOUNT_ID_<n>`` جفت می‌شود و در نبودش با
+    ``CF_ACCOUNT_ID`` (چند توکن روی یک حساب).
+    """
+    shared = _cf_account_id()
+    out: List[Tuple[str, Any, str]] = []
+    for slot in _kr.env_slots(CF_AI_TOKEN_ENV):
+        suffix = slot.name[len(CF_AI_TOKEN_ENV):]
+        account = os.environ.get(f"{CF_ACCOUNT_ID_ENV}{suffix}", "").strip() or shared
+        if account:
+            out.append(("cf-embed", slot, account))
+    return out
+
+
+def _bge_hosts() -> List[Tuple[str, str, Any, str]]:
+    """Other bge-m3 hosts, each only when its env is set: ``(provider, url, slot|None, shape)``.
+
+    * Modal: ``MODAL_EMBED_URL`` (a TEI-compatible ``/embed`` web endpoint running bge-m3),
+      optional bearer ``MODAL_EMBED_TOKEN``;
+    * DeepInfra: ``DEEPINFRA_API_KEY``, ``_2`` .. ``_4`` (OpenAI-compatible, ``BAAI/bge-m3``);
+    * Chutes: ``CHUTES_EMBED_URL`` (an OpenAI-compatible embeddings URL of a bge-m3 chute) with
+      ``CHUTES_API_KEY``, ``_2`` .. ``_4``.
+    """
+    out: List[Tuple[str, str, Any, str]] = []
+    modal_url = os.environ.get("MODAL_EMBED_URL", "").strip().rstrip("/")
+    if modal_url.startswith("https://"):
+        token = os.environ.get("MODAL_EMBED_TOKEN", "").strip()
+        slot = _kr.KeySlot("MODAL_EMBED_TOKEN", token) if token else _kr.KeySlot("MODAL_EMBED_URL", "")
+        out.append(("modal-embed", modal_url, slot, "tei"))
+    for slot in _kr.env_slots("DEEPINFRA_API_KEY"):
+        out.append(("deepinfra-embed", DEEPINFRA_EMBED_URL, slot, "openai"))
+    chutes_url = os.environ.get("CHUTES_EMBED_URL", "").strip()
+    if chutes_url.startswith("https://"):
+        for slot in _kr.env_slots("CHUTES_API_KEY"):
+            out.append(("chutes-embed", chutes_url, slot, "openai"))
+    return out
+
+
+def _extract_any_vectors(payload: Any) -> List[List[float]]:
+    """TEI (فهرست بردارها) یا OpenAI (``data[i].embedding``)."""
+    if isinstance(payload, list) and all(isinstance(v, list) for v in payload):
+        return [[float(x) for x in v] for v in payload]
+    if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+        rows = sorted(payload["data"], key=lambda r: r.get("index", 0) if isinstance(r, dict) else 0)
+        return [[float(x) for x in r["embedding"]] for r in rows if isinstance(r, dict) and isinstance(r.get("embedding"), list)]
+    return []
+
+
+def _host_post_json(url: str, payload: Dict[str, Any], timeout: float, token: str) -> Tuple[int, Any]:
+    """POST به میزبان bge-m3؛ ``(status, parsed)`` مثل ``_cf_post_json`` (در تست‌ها mock می‌شود)."""
+    import urllib.error
+    import urllib.request
+
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status = int(getattr(response, "status", 200) or 200)
+            raw = response.read().decode("utf-8") or "{}"
+    except urllib.error.HTTPError as exc:
+        return int(exc.code), {}
+    return status, json.loads(raw)
+
+
+def _embed_texts_host(texts: List[str], provider: str, url: str, token: str, shape: str) -> List[List[float]]:
+    if shape == "tei":
+        status, payload = _host_post_json(f"{url}/embed", {"inputs": list(texts), "normalize": True}, CF_EMBED_TIMEOUT, token)
+    else:
+        status, payload = _host_post_json(url, {"model": BGE_M3_MODEL_ID, "input": list(texts)}, CF_EMBED_TIMEOUT, token)
+    if status != 200:
+        raise _EmbedHTTPError(status, f"{provider} returned HTTP {status}")
+    return _check_bge_vectors(_extract_any_vectors(payload), len(texts), provider)
+
+
+# ── محافظ فضای برداری ───────────────────────────────────────────────────────
+# A fallback PROVIDER (different from the primary one) may serve queries only after its embedding of a
+# fixed probe sentence matches the primary's (cosine >= 0.99). Checked once per process and provider;
+# a mismatch disables that provider for the life of the process. A transient failure of the check is
+# not a verdict (retried next time, the fallback is skipped meanwhile). Several tokens of one provider
+# (e.g. Cloudflare accounts) are the same model and need no check.
+EMBED_GUARD_PROBE = "ماده ۱۰ قانون مدنی: قراردادهای خصوصی نسبت به کسانی که آن را منعقد نموده‌اند، در صورتی که مخالف صریح قانون نباشد، نافذ است."
+EMBED_GUARD_MIN_COSINE = 0.99
+_embed_guard_lock = threading.Lock()
+_embed_guard_ref: Optional[List[float]] = None
+_embed_guard_verdict: Dict[str, bool] = {}
+
+
+def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
+    if len(a) != len(b) or not a:
+        return -1.0
+    dot = sum(float(x) * float(y) for x, y in zip(a, b))
+    na = math.sqrt(sum(float(x) * float(x) for x in a))
+    nb = math.sqrt(sum(float(y) * float(y) for y in b))
+    return dot / (na * nb) if na > 0.0 and nb > 0.0 else -1.0
+
+
+def _embed_guard_reset() -> None:
+    """Forget the verdicts (tests, or after a deliberate re-index)."""
+    global _embed_guard_ref
+    with _embed_guard_lock:
+        _embed_guard_ref = None
+        _embed_guard_verdict.clear()
+
+
+def _embed_guard_reference(attempts: List[Tuple[str, Any, Any]]) -> Optional[List[float]]:
+    """The probe embedded by the primary provider (first in the chain), else by the local TEI; cached."""
+    global _embed_guard_ref
+    if _embed_guard_ref is not None:
+        return _embed_guard_ref
+    primary = attempts[0][0] if attempts else ""
+    for provider, _slot, call in attempts:
+        if provider != primary:
+            continue
+        try:
+            _embed_guard_ref = call([EMBED_GUARD_PROBE])[0]
+            return _embed_guard_ref
+        except Exception as exc:  # noqa: BLE001
+            logger.info("embed guard: primary %s probe failed: %s", provider, type(exc).__name__)
+    if embedding_url():
+        try:
+            result = _embed_post_json(
+                f"{embedding_url()}/embed", {"inputs": [EMBED_GUARD_PROBE], "normalize": True}, EMBED_REMOTE_BUDGET_S
+            )
+            _embed_guard_ref = [float(x) for x in result[0]]
+            return _embed_guard_ref
+        except Exception as exc:  # noqa: BLE001
+            logger.info("embed guard: local TEI probe failed: %s", type(exc).__name__)
+    return None
+
+
+def _embed_guard_allows(provider: str, call: Any, attempts: List[Tuple[str, Any, Any]]) -> Optional[bool]:
+    """True: same vector space as the primary. False: disabled for this process. None: could not tell now."""
+    with _embed_guard_lock:
+        if provider in _embed_guard_verdict:
+            return _embed_guard_verdict[provider]
+        ref = _embed_guard_reference(attempts)
+        if ref is None:
+            return None
+        try:
+            probe = call([EMBED_GUARD_PROBE])[0]
+        except Exception as exc:  # noqa: BLE001 - not a verdict
+            logger.info("embed guard: %s probe failed: %s", provider, type(exc).__name__)
+            return None
+        cosine = _cosine(ref, probe)
+        ok = cosine >= EMBED_GUARD_MIN_COSINE
+        _embed_guard_verdict[provider] = ok
+        if not ok:
+            logger.warning("embed guard: %s disabled, probe cosine %.3f < %.2f (other vector space)",
+                           provider, cosine, EMBED_GUARD_MIN_COSINE)
+        return ok
+
+
+def _embed_remote_chain(texts: List[str]) -> Tuple[Optional[List[List[float]]], str]:
+    """Workers AI over every token, then the other bge-m3 hosts; ``(vectors, provider)``.
+
+    Slots in cooldown (429/5xx/401 or a network error, key_rotation.py) are skipped; the
+    whole chain stops after ``EMBED_REMOTE_BUDGET_S`` so the TEI/local fallback still runs
+    in time. Returns ``(None, reason)`` when nothing answered. Never logs a token.
+    """
+    attempts: List[Tuple[str, Any, Any]] = []
+    for provider, slot, account in _cf_slots():
+        attempts.append((provider, slot, lambda t, s=slot, a=account: _embed_texts_cf(t, a, s.value)))
+    for provider, url, slot, shape in _bge_hosts():
+        attempts.append(
+            (provider, slot, lambda t, u=url, s=slot, sh=shape, p=provider: _embed_texts_host(t, p, u, s.value, sh))
+        )
+    if not attempts:
+        return None, "no CF_ACCOUNT_ID/CF_AI_TOKEN or other bge-m3 host configured"
+    started = time.monotonic()
+    tried = 0
+    reason = "all bge-m3 hosts cooling down"
+    for provider, slot, call in attempts:
+        if _kr.COOLDOWNS.cooling(provider, slot.name):
+            continue
+        if tried and time.monotonic() - started > EMBED_REMOTE_BUDGET_S:
+            reason = "remote embed budget spent"
+            break
+        if provider != attempts[0][0]:
+            allowed = _embed_guard_allows(provider, call, attempts)
+            if not allowed:
+                reason = f"{provider}: " + ("vector space differs from the primary" if allowed is False
+                                            else "vector space not confirmed yet")
+                continue
+        tried += 1
+        try:
+            vectors = call(texts)
+        except _EmbedHTTPError as exc:
+            _kr.COOLDOWNS.fail(provider, slot.name, _kr.cooldown_for_status(exc.status), f"HTTP {exc.status}")
+            reason = f"{provider} {slot.name}: {exc}"
+            logger.info("bge-m3 host failed: %s", reason)
+            continue
+        except (OSError, TimeoutError) as exc:  # network / timeout (URLError is an OSError)
+            _kr.COOLDOWNS.fail(provider, slot.name, _kr.COOLDOWN_NETWORK_S, type(exc).__name__)
+            reason = f"{provider} {slot.name}: {type(exc).__name__}"
+            logger.info("bge-m3 host failed: %s", reason)
+            continue
+        except Exception as exc:  # noqa: BLE001 - bad shape/dims: the host, not the key
+            reason = f"{provider} {slot.name}: {exc}"
+            logger.info("bge-m3 host failed: %s", reason)
+            continue
+        _kr.COOLDOWNS.ok(provider, slot.name)
+        return vectors, provider
+    return None, reason
+
+
+def bge_hosts_state() -> Dict[str, Any]:
+    """Configured bge-m3 slots and the ones cooling down (names only) for the health endpoint."""
+    names = [f"{p}:{s.name}" for p, s, _a in _cf_slots()] + [f"{p}:{s.name}" for p, _u, s, _sh in _bge_hosts()]
+    cooling = [r for r in _kr.COOLDOWNS.snapshot() if str(r["provider"]).endswith("-embed")]
+    return {"backend": embed_backend(), "model": "BAAI/bge-m3", "slots": names, "cooling": cooling}
 
 
 def _embed_cache_key(text: str) -> str:
@@ -812,12 +1064,15 @@ def _embed_cache_key(text: str) -> str:
 
 
 def _embed_query_cf(text: str) -> Optional[List[float]]:
-    """بردار پرس‌وجو از CF؛ در هر خطا ``None`` (یک هشدار، بدون توکن)."""
+    """بردار پرس‌وجو از زنجیرهٔ bge-m3 راه‌دور (CF و میزبان‌های دیگر)؛ در شکست ``None``."""
     try:
-        return _embed_texts_cf([text])[0]
+        vectors, why = _embed_remote_chain([text])
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Cloudflare embedding backend unavailable -> TEI fallback: %s", exc)
+        vectors, why = None, str(exc)
+    if vectors is None:
+        logger.warning("Cloudflare embedding backend unavailable -> TEI fallback: %s", why)
         return None
+    return vectors[0]
 
 
 def warm_up_embedder() -> bool:
@@ -904,7 +1159,10 @@ async def _qdrant_collection_vector_size(collection: str) -> Optional[int]:
                 response = await client.get(url, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant collection-info host %s unreachable: %s", host, exc)
+                _qcloud.record(host, False, type(exc).__name__)
                 continue
+            if _qcloud.skip_cloud_response(host, getattr(response, "status_code", 0)):
+                continue  # a failing cloud cluster: try the next one
             if getattr(response, "status_code", 0) != 200:
                 return None
             try:
@@ -961,7 +1219,10 @@ async def _qdrant_collection_has_sparse(
                 response = await client.get(url, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant sparse-probe host %s unreachable: %s", host, exc)
+                _qcloud.record(host, False, type(exc).__name__)
                 continue
+            if _qcloud.skip_cloud_response(host, getattr(response, "status_code", 0)):
+                continue  # a failing cloud cluster: try the next one
             if getattr(response, "status_code", 0) != 200:
                 return False
             try:
@@ -1064,7 +1325,10 @@ async def _qdrant_hybrid_search_httpx(
                 response = await client.post(url, json=body, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant hybrid-search host %s unreachable: %s", host, exc)
+                _qcloud.record(host, False, type(exc).__name__)
                 continue
+            if _qcloud.skip_cloud_response(host, getattr(response, "status_code", 0)):
+                continue  # a failing cloud cluster: try the next one
             _qdrant_last_reachable = True
             if getattr(response, "status_code", 0) != 200:
                 logger.info(
@@ -1110,7 +1374,10 @@ async def _qdrant_vector_search_httpx(
                 response = await client.post(url, json=body, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant vector-search host %s unreachable: %s", host, exc)
+                _qcloud.record(host, False, type(exc).__name__)
                 continue
+            if _qcloud.skip_cloud_response(host, getattr(response, "status_code", 0)):
+                continue  # a failing cloud cluster: try the next one
             _qdrant_last_reachable = True
             if getattr(response, "status_code", 0) != 200:
                 logger.warning("Qdrant vector search HTTP %s on %s", response.status_code, url)
@@ -1188,6 +1455,7 @@ def qdrant_fallback_state() -> Dict[str, Any]:
         "cooldown_seconds": QDRANT_RETRY_COOLDOWN,
         "suppressed": _qdrant_probe_suppressed(),
         "last_failure_age_seconds": round(age, 2) if age is not None else None,
+        "cloud_clusters": _qcloud.cloud_health(),
     }
 
 
@@ -1220,7 +1488,10 @@ async def _qdrant_scroll_httpx(query: str, limit: int, active_only: Optional[boo
                 response = await client.post(url, json=body, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant host %s unreachable: %s", host, exc)
+                _qcloud.record(host, False, type(exc).__name__)
                 continue
+            if _qcloud.skip_cloud_response(host, getattr(response, "status_code", 0)):
+                continue  # a failing cloud cluster: try the next one
             _qdrant_last_reachable = True
             rows = _extract_points(response)
             if rows:
@@ -1247,7 +1518,9 @@ def _qdrant_scroll_urllib(query: str, limit: int, active_only: Optional[bool] = 
                 payload = json.loads(response.read().decode("utf-8") or "{}")
         except Exception as exc:  # noqa: BLE001
             logger.debug("qdrant (urllib) host %s unreachable: %s", host, exc)
+            _qcloud.record(host, False, type(exc).__name__)
             continue
+        _qcloud.record(host, True)
         _qdrant_last_reachable = True
         points = ((payload or {}).get("result") or {}).get("points") or []
         rows = [p.get("payload") for p in points if isinstance(p.get("payload"), dict)]
@@ -1498,7 +1771,10 @@ async def _scroll_by_point_filter(point_filter: Dict[str, Any], limit: int) -> L
                 response = await client.post(url, json=body, headers=hdrs)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("qdrant exact-scroll host %s unreachable: %s", host, exc)
+                _qcloud.record(host, False, type(exc).__name__)
                 continue
+            if _qcloud.skip_cloud_response(host, getattr(response, "status_code", 0)):
+                continue  # a failing cloud cluster: try the next one
             _qdrant_last_reachable = True
             return _extract_points(response)
     return []
@@ -1530,7 +1806,9 @@ def _scroll_by_point_filter_urllib(
                 payload = json.loads(response.read().decode("utf-8") or "{}")
         except Exception as exc:  # noqa: BLE001
             logger.debug("qdrant exact-scroll (urllib) host %s unreachable: %s", host, exc)
+            _qcloud.record(host, False, type(exc).__name__)
             continue
+        _qcloud.record(host, True)
         _qdrant_last_reachable = True
         points = ((payload or {}).get("result") or {}).get("points") or []
         return [p.get("payload") for p in points if isinstance(p.get("payload"), dict)]
@@ -1990,6 +2268,7 @@ def lightrag_health() -> dict:
             "active": qdrant_only,
             **qdrant_fallback_state(),
         },
+        "query_embedding": bge_hosts_state(),
         "install_hint": "pip install lightrag-hku",
     }
 

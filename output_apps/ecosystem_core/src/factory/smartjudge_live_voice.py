@@ -368,26 +368,37 @@ async def synthesize_speech_persian(text: str) -> str:
     sw = Stopwatch()
     first_byte_ms = None
     try:
-        import edge_tts
-        comm = edge_tts.Communicate(text, "fa-IR-DilaraNeural", rate="+15%")
-        buf = bytearray()
-        async def _stream():
-            nonlocal first_byte_ms
-            async for chunk in comm.stream():
-                if chunk["type"] == "audio":
-                    if first_byte_ms is None:
-                        first_byte_ms = sw.elapsed_ms()
-                    buf.extend(chunk["data"])
-            return base64.b64encode(buf).decode("utf-8")
-        return await asyncio.wait_for(_stream(), timeout=12.0)
-    except Exception as e:
-        # Was a bare `except Exception: return ""` with no logging (W20
-        # diagnosis): a missing/broken edge-tts install failed 100% of turns
-        # silently, with nothing in `docker logs` to point at it. Printing
-        # here costs nothing (no transcript/PII, just the exception) and is
-        # the only signal an owner has without VOICE_TIMING_LOG-level tracing.
-        print(f"[TTS-WARN] {e}", file=sys.stderr)
-        return ""
+        try:
+            import edge_tts
+            comm = edge_tts.Communicate(text, "fa-IR-DilaraNeural", rate="+15%")
+            buf = bytearray()
+            async def _stream():
+                nonlocal first_byte_ms
+                async for chunk in comm.stream():
+                    if chunk["type"] == "audio":
+                        if first_byte_ms is None:
+                            first_byte_ms = sw.elapsed_ms()
+                        buf.extend(chunk["data"])
+                return base64.b64encode(buf).decode("utf-8")
+            clip = await asyncio.wait_for(_stream(), timeout=12.0)
+            if clip:
+                return clip
+        except Exception as e:
+            # Was a bare `except Exception: return ""` with no logging (W20
+            # diagnosis): a missing/broken edge-tts install failed 100% of turns
+            # silently, with nothing in `docker logs` to point at it. Printing
+            # here costs nothing (no transcript/PII, just the exception) and is
+            # the only signal an owner has without VOICE_TIMING_LOG-level tracing.
+            print(f"[TTS-WARN] {e}", file=sys.stderr)
+        try:
+            # edge-tts failed or was silent: the Azure Speech key slots, when configured (voice_tts.py).
+            from output_apps.generated_modules.smartjudge import voice_tts
+
+            audio, _provider = await voice_tts.fallback_mp3(text, "fa-IR-DilaraNeural", "+15%")
+            return base64.b64encode(audio).decode("utf-8") if audio else ""
+        except Exception as e:
+            print(f"[TTS-WARN] fallback: {type(e).__name__}", file=sys.stderr)
+            return ""
     finally:
         log_voice_timing("tts", tts_first_byte_ms=first_byte_ms, tts_total_ms=sw.elapsed_ms())
 

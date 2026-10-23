@@ -13,7 +13,20 @@ import time
 import httpx
 import pytest
 
-from output_apps.generated_modules.smartjudge import model_registry, voice_stt
+from output_apps.generated_modules.smartjudge import key_rotation, model_registry, voice_stt
+
+
+@pytest.fixture(autouse=True)
+def _only_the_openrouter_key_passed_in(monkeypatch):
+    """These tests cover the OpenRouter chain: no key slot from the environment, fresh cooldowns."""
+    for base in ("ASSEMBLYAI_API_KEY", "GROQ_API_KEY", "MISTRAL_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY"):
+        for name in (base, f"{base}_2", f"{base}_3", f"{base}_4"):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("ASSEMBLYAI_API_KEYS", raising=False)
+    monkeypatch.delenv("VOICE_STT_ORDER", raising=False)
+    key_rotation.COOLDOWNS.reset()
+    yield
+    key_rotation.COOLDOWNS.reset()
 
 
 def _install_transport(monkeypatch, handler):
