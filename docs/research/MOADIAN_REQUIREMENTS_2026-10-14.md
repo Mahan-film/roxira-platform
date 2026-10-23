@@ -155,3 +155,126 @@ Moadian wire format or any live integration. No code was changed.
 | 21-day issuance-to-registration deadline tracking | Missing | No deadline/aging logic in the module. |
 | E-ledger (دفاتر تجاری الکترونیکی) six-month upload | Missing | No module or flow exists for e-ledger export/upload. |
 | Predefined Moadian status codes / response mapping | Missing | Only a 5-value internal enum (`enums/tax-compliance.enum.ts:21-27`); no official code table. |
+
+## 8. Wire format (API v2) and implementation — 2026-10-22
+
+Implemented behind `MOADIAN_ENABLED=false` in
+`output_apps/enterprise_hub/modules/tax_compliance/` (Moadian* files). This section records
+the wire format the code follows, where it comes from, and what is still unverified.
+
+### 8.1 Sources and confidence
+
+The official INTAMEDIA documents («دستورالعمل فنی نحوه اتصال به سامانه مودیان» and the
+error-code PDF) are only hosted on Iranian hosts (tax.gov.ir, intamedia.ir, rahrokh.com,
+bodjex.ir, finto.ir, karlancer.com), which were **not reachable** from the build environment.
+The format below was therefore taken from **three independent public SDKs that agree with
+each other**, read as source code:
+
+| Source | What it gave |
+| --- | --- |
+| npm `@paybuy/moadian-sdk` 0.3.14 (`dist/moadian.sdk.js`, `utils/*.js`, `interface/*.d.ts`, `enum/*.d.ts`) — https://www.npmjs.com/package/@paybuy/moadian-sdk | v2 endpoints, JWS/JWE headers, packet field names, enum codes, inquiry response shape |
+| npm `taxapi` 1.1.0 (`dist/v1/utils/taxid.js`, `verhoeff.js`) — https://www.npmjs.com/package/taxapi | tax ID layout, Verhoeff control string; sandbox/production base URLs |
+| PyPI `moadian` 1.0.4 (`src/moadian/utils.py`, `verhoeff.py`) — https://pypi.org/project/moadian/ | tax ID layout (independent Python implementation; used to compute our test vectors) |
+| GitHub PR describing the same layout — https://github.com/masein/accounting-assistant-web/pull/131 | confirms memory id (6) + hex days (5) + hex serial (10) + Verhoeff |
+| Verhoeff algorithm — https://en.wikipedia.org/wiki/Verhoeff_algorithm | tables; textbook vectors `236→3`, `12345→1` |
+| RFC 7515 (JWS), RFC 7516 (JWE) | compact serialisation, JWE AAD = ASCII(BASE64URL(protected header)) |
+
+Items marked **UNVERIFIED** below should be checked against the official PDF before
+`MOADIAN_ENABLED=true` in production.
+
+### 8.2 Base URLs and endpoints
+
+- Sandbox: `https://sandboxrc.tax.gov.ir/requestsmanager/api/v2` (our default, `MOADIAN_BASE_URL`).
+- Production: `https://tp.tax.gov.ir/requestsmanager/api/v2`.
+- The older v1 API (`/req/api/self-tsp/sync/GET_TOKEN`, packet with `uid/packetType/retry/data/encryptionKeyId/symmetricKey/iv`) is **not** used.
+
+| Call | Method / path | Auth |
+| --- | --- | --- |
+| Nonce | `GET /nonce?timeToLive=20` → `{nonce, expDate}` | none |
+| Server info (tax org encryption key) | `GET /server-information` → `{serverTime, publicKeys:[{id, key, algorithm:'RSA', purpose:1}]}` | Bearer |
+| Send | `POST /invoice` body `[{payload: <JWE>, header: {requestTraceId: <uid>, fiscalId: <memoryId>}}]` → `{timestamp, result:[{uid, referenceNumber, …}]}` | Bearer |
+| Inquiry | `GET /inquiry-by-reference-id?referenceIds=…` or `GET /inquiry-by-uid?uidList=…&fiscalId=…` → `[{referenceNumber, uid, status, data:{error[], warning[], success}}]` | Bearer |
+| Other (not used yet) | `/inquiry`, `/fiscal-information?memoryId=`, `/taxpayer?economicCode=` | Bearer |
+
+Errors on non-2xx: `{timestamp, requestTraceId, errors:[{errorCode, detail}]}`. Our client treats
+5xx/429/network as retryable (BullMQ backoff) and 4xx as a final `FAILED`.
+
+### 8.3 Token
+
+`Authorization: Bearer <JWS>` where the JWS payload is `{nonce, clientId: <memoryId>}`
+(direct sending; a trusted company would use its own client id — **not implemented**).
+A fresh nonce is fetched for every authenticated call.
+
+### 8.4 JWS (signature) and JWE (encryption)
+
+- JWS compact, protected header
+  `{"alg":"RS256","typ":"jose","x5c":[<cert base64 DER>],"sigT":"YYYY-MM-DDTHH:mm:ssZ","crit":["sigT"],"cty":"text/plain"}`,
+  payload = `JSON.stringify(packet)`. Same header for the token and the invoice.
+  **UNVERIFIED:** whether `typ` must be `jose` (lower case) — all SDKs use it.
+- JWE compact over the JWS string: `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":<publicKeys[0].id>}`,
+  key = `publicKeys[0].key` (base64 SPKI). Implemented with Node `crypto` only
+  (`utils/moadian-jose.util.ts`), no new dependency.
+- The taxpayer key needs a **CA-issued certificate** (x5c), not just a key pair: the CSR from
+  `POST /tax-compliance/keys` goes to the CA, and the issued certificate + private key are then
+  stored with `PUT /tax-compliance/moadian/credentials`.
+
+### 8.5 Invoice packet
+
+`{header, body[], payments[]}` with the official short keys. Mapping in
+`utils/moadian-packet.mapper.ts`:
+
+| Field | Our value |
+| --- | --- |
+| `taxid` | §8.6 |
+| `indatim`, `indati2m` | `issuedAt` (epoch ms) |
+| `inty` | 1 if buyer has national id / economic code, else 2 |
+| `inno` | internal serial, 10 hex chars (**UNVERIFIED:** SDKs differ — some send the decimal serial) |
+| `inp` / `ins` | 1 (sale) / 1 (main). Corrective/cancel/return (`irtaxid`) not implemented |
+| `tins` | seller economic code (credential, else `sellerInfo.economicCode`) |
+| `tob`, `bid`, `tinb` | buyer type from national-id length (10 → 1 natural, 11 → 2 legal), national id, economic code; null for type 2 |
+| `bpc` (buyer postal code) | null — not stored yet (§7.2) |
+| body `sstid` | tenant default 13-digit id (`defaultSstid`) — per-item id not stored yet (§7.2) |
+| body `sstt, am, mu, fee` | description, quantity, tenant default unit, unit price in rials |
+| body `prdis, dis, adis` | `am×fee`, discount, `prdis−dis` |
+| body `vra, vam` | `vatRate×100` and stored line `tax` (VAT per line, #795/#823) |
+| body `tsstam` | `adis + vam` |
+| `tprdis, tdis, tadis, tvam, todam, tbill` | sums; `todam=0`, `tbill = tadis + tvam` |
+| `setm`, `cap`, `insp` | tenant settlement method (1 cash → `cap=tbill`, 2 credit → `insp=tbill`) |
+| `payments` | `[]` |
+
+Amounts are integer rials: `round(amount × fxRate)` (IRR → 1, IRT → 10). Only `IR`
+jurisdiction invoices in `ISSUED`/`PAID` are accepted. Gold/contract/export-only fields are null.
+**UNVERIFIED:** whether the server rejects `null` for `consfee/spro/bros/tcpbs` on pattern 1.
+
+### 8.6 Tax ID (شماره منحصربه‌فرد مالیاتی), 22 characters
+
+```
+taxid   = memoryId(6) + hex(days, 5) + hex(serial, 10) + verhoeff(control)   (upper case)
+days    = floor(indatim / 86 400 000)            # UTC days since 1970-01-01
+control = digits(memoryId) + pad(days, 6) + pad(serial, 12)
+digits(memoryId): each letter replaced by its decimal ASCII code (A → 65), digits kept
+```
+
+Vectors (pinned in `moadian.spec.ts`, computed with the PyPI reference implementation):
+`A1B2C3 / 2026-10-22T08:30Z / 1 → A1B2C30510C00000000019`,
+`A11216 / 2023-05-01 / 123456 → A1121604C16000001E2401`,
+`ZZZ999 / 2026-01-01T23:59:59Z / 0xFFFFFFFFFF → ZZZ99904FE6FFFFFFFFFF3`.
+**UNVERIFIED:** whether the day count uses UTC or Tehran local midnight (the JS SDKs use UTC;
+the Python SDK uses the naive local date). Invoices issued 00:00–03:30 Tehran time may differ.
+
+### 8.7 Storage, queue and status
+
+- `moadian_credentials` (one row per tenant): memory id, economic code, certificate, private key
+  sealed with AES-256-GCM (`MOADIAN_KEY_ENCRYPTION_KEY`, AAD = tenant id), defaults, serial counter.
+- `moadian_submissions` (one row per invoice per tenant): uid, taxid, serial, reference number,
+  status `QUEUED → SENT → SUCCESS | FAILED` (or `ERROR` after transport retries), errors/warnings.
+- BullMQ queue `moadian`: `moadian.send` then `moadian.poll` every `MOADIAN_POLL_DELAY_MS`
+  up to `MOADIAN_MAX_POLLS`. Job payloads hold only tenant id + submission id.
+- Endpoints (tenant admin only): `PUT|GET /enterprise-hub/tax-compliance/moadian/credentials`,
+  `POST …/moadian/invoices/:invoiceId/submit`, `GET …/moadian/invoices/:invoiceId/status`.
+
+### 8.8 Still open after this change
+
+Per-item `sstid` and unit, buyer postal code, corrective/cancel invoices (`ins` 2/3, `irtaxid`),
+trusted-company sending, 21-day deadline tracking, e-ledger, official error-code table, and a
+first real sandbox run with a test memory id + CA certificate (needs the owner's کارپوشه).
