@@ -64,7 +64,7 @@ documents = [
 # در نبود آن، بازیابی به لایهٔ SQL بومی dual_retrieval تنزل می‌کند.
 legal-graph = [
     "lightrag-hku==1.5.7",
-    "openai==3.29.0",
+    "openai==3.22.1",
 ]
 
 # ── سرور MCP رادار فناوری (W9 Phase B) ──────────────────────────────────────
