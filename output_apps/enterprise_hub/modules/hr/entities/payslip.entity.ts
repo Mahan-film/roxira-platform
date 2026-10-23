@@ -10,6 +10,7 @@ import {
 import { PayslipStatus } from '../enums/hr.enum';
 import { numericTransformer } from './numeric-column.transformer';
 import { EmployeeEntity } from './employee.entity';
+import { PayrollRunEntity } from './payroll-run.entity';
 
 /**
  * فیش حقوقی ماهانه (Payroll Payslip).
@@ -113,6 +114,149 @@ export class PayslipEntity {
     transformer: numericTransformer,
   })
   overtimeAmount: number;
+
+  /** Payroll run this payslip belongs to (null for single legacy payslips). */
+  @Index()
+  @Column({ type: 'integer', name: 'payroll_run_id', nullable: true })
+  payrollRunId: number | null;
+
+  @ManyToOne(() => PayrollRunEntity, (run) => run.payslips, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'payroll_run_id' })
+  payrollRun?: PayrollRunEntity;
+
+  /** Seniority base (پایه سنوات). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'seniority_amount',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  seniorityAmount: number;
+
+  /** Night-shift premium (35%). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'night_shift_amount',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  nightShiftAmount: number;
+
+  /** Holiday / Friday work (+40%). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'holiday_amount',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  holidayAmount: number;
+
+  /** Unpaid absence deduction. */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'absence_deduction',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  absenceDeduction: number;
+
+  /** Wage subject to social-security premium (capped). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'insurable_wage',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  insurableWage: number;
+
+  /** Employer social-security share (20%). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'employer_insurance',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  employerInsurance: number;
+
+  /** Unemployment insurance, employer-paid (3%). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'unemployment_insurance',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  unemploymentInsurance: number;
+
+  /** Paid days in the month (insurance list). */
+  @Column({
+    type: 'numeric',
+    precision: 8,
+    scale: 2,
+    name: 'work_days',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  workDays: number;
+
+  /** Overtime hours entered for the run. */
+  @Column({
+    type: 'numeric',
+    precision: 8,
+    scale: 2,
+    name: 'overtime_hours',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  overtimeHours: number;
+
+  /** Night-shift hours entered for the run. */
+  @Column({
+    type: 'numeric',
+    precision: 8,
+    scale: 2,
+    name: 'night_hours',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  nightHours: number;
+
+  /** Holiday hours entered for the run. */
+  @Column({
+    type: 'numeric',
+    precision: 8,
+    scale: 2,
+    name: 'holiday_hours',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  holidayHours: number;
+
+  /** Unpaid absence days entered for the run. */
+  @Column({
+    type: 'numeric',
+    precision: 8,
+    scale: 2,
+    name: 'absence_days',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  absenceDays: number;
 
   @Column({
     type: 'numeric',

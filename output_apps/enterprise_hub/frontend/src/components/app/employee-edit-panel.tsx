@@ -24,6 +24,9 @@ export function EmployeeEditPanel({ employee, onSaved, onClose }: EmployeeEditPa
   const [email, setEmail] = useState(employee.email ?? "");
   const [jobTitle, setJobTitle] = useState(employee.jobTitle);
   const [department, setDepartment] = useState(employee.department);
+  const [insuranceNumber, setInsuranceNumber] = useState(
+    employee.insuranceNumber ?? "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +42,7 @@ export function EmployeeEditPanel({ employee, onSaved, onClose }: EmployeeEditPa
         email: email.trim() || undefined,
         jobTitle: jobTitle.trim(),
         department: department.trim(),
+        insuranceNumber: insuranceNumber.trim() || undefined,
       });
       onSaved(updated);
     } catch (err) {
@@ -55,6 +59,7 @@ export function EmployeeEditPanel({ employee, onSaved, onClose }: EmployeeEditPa
     ["ایمیل", email, setEmail, "email", true],
     ["عنوان شغلی", jobTitle, setJobTitle, "job", false],
     ["واحد / دپارتمان", department, setDepartment, "dept", false],
+    ["شماره بیمه", insuranceNumber, setInsuranceNumber, "insurance", true],
   ];
 
   return (

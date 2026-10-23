@@ -94,6 +94,7 @@ export interface Employee {
   hireDate: string;
   terminationDate: string | null;
   bankAccountNumber: string | null;
+  insuranceNumber?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -114,6 +115,7 @@ export interface CreateEmployeeDto {
   dependants?: number;
   hireDate?: string;
   bankAccountNumber?: string;
+  insuranceNumber?: string;
 }
 
 export interface EmploymentContract {
@@ -186,6 +188,19 @@ export interface Payslip {
   foodAllowance: number;
   childAllowance: number;
   overtimeAmount: number;
+  payrollRunId?: number | null;
+  seniorityAmount?: number;
+  nightShiftAmount?: number;
+  holidayAmount?: number;
+  absenceDeduction?: number;
+  insurableWage?: number;
+  employerInsurance?: number;
+  unemploymentInsurance?: number;
+  workDays?: number;
+  overtimeHours?: number;
+  nightHours?: number;
+  holidayHours?: number;
+  absenceDays?: number;
   grossPay: number;
   insuranceDeduction: number;
   incomeTax: number;
@@ -245,4 +260,80 @@ export interface HrStats {
   totalDeductions: number;
   totalPayslips: number;
   averageNetPay: number;
+}
+
+// ---------------------------------------------------------------------------
+// Monthly payroll runs (POST/GET /enterprise-hub/hr/payroll-runs)
+// ---------------------------------------------------------------------------
+
+export type PayrollRunStatus = "DRAFT" | "POSTED";
+
+export interface PayrollRunItem {
+  employeeId: number;
+  overtimeHours?: number;
+  nightHours?: number;
+  holidayHours?: number;
+  absenceDays?: number;
+  otherDeductions?: number;
+}
+
+export interface CreatePayrollRunDto {
+  periodYear: number;
+  periodMonth: number;
+  items?: PayrollRunItem[];
+}
+
+export interface PayrollRunSkipped {
+  employeeId: number;
+  employeeFullName: string;
+  reason: string;
+}
+
+/** Statutory payroll rates of a Jalali year (GET payroll-rates/:year); only the fields the UI uses. */
+export interface PayrollRates {
+  year: number;
+  source: string;
+  /** false until the owner/accountant confirmed the figures against the official circular. */
+  verified: boolean;
+}
+
+export interface PayrollRun {
+  id: number;
+  periodYear: number;
+  periodMonth: number;
+  status: PayrollRunStatus;
+  statusLabel: string;
+  ratesYear: number;
+  employeeCount: number;
+  totalGross: number;
+  totalInsurable: number;
+  totalEmployeeInsurance: number;
+  totalEmployerInsurance: number;
+  totalUnemploymentInsurance: number;
+  totalIncomeTax: number;
+  totalOtherDeductions: number;
+  totalNet: number;
+  journalEntryId: number | null;
+  journalEntryNumber: string | null;
+  postedAt: string | null;
+  createdAt: string;
+  payslips: Payslip[];
+  skipped: PayrollRunSkipped[];
+}
+
+export interface InsuranceListQuery {
+  workshopCode: string;
+  workshopName: string;
+  employerName: string;
+  workshopAddress?: string;
+  contractRow?: string;
+  listNumber?: string;
+}
+
+export interface InsuranceList {
+  workshopFileName: string;
+  workshopFile: string;
+  workersFileName: string;
+  workersFile: string;
+  warnings: string[];
 }

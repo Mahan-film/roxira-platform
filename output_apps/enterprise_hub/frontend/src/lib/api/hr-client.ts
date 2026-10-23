@@ -2,12 +2,17 @@ import {
   CalculatePayrollDto,
   CreateContractDto,
   CreateEmployeeDto,
+  CreatePayrollRunDto,
   Employee,
   EmploymentContract,
   HrStats,
+  InsuranceList,
+  InsuranceListQuery,
   IssuePayslipDto,
   PaginatedResponse,
   PayrollCalculation,
+  PayrollRates,
+  PayrollRun,
   Payslip,
   QueryEmployeeDto,
   QueryPayslipDto,
@@ -143,6 +148,72 @@ export async function listPayslips(
 export async function getHrStats(signal?: AbortSignal): Promise<HrStats> {
   return apiRequest<HrStats>(`${HR_ENDPOINT}/stats`, {
     method: "GET",
+    signal,
+  });
+}
+
+/** نرخ‌های قانونی حقوق یک سال شمسی — GET /enterprise-hub/hr/payroll-rates/:year */
+export async function getPayrollRates(
+  year: number,
+  signal?: AbortSignal,
+): Promise<PayrollRates> {
+  return apiRequest<PayrollRates>(`${HR_ENDPOINT}/payroll-rates/${year}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/** محاسبه یا محاسبه مجدد حقوق ماه — POST /enterprise-hub/hr/payroll-runs */
+export async function createPayrollRun(
+  payload: CreatePayrollRunDto,
+  signal?: AbortSignal,
+): Promise<PayrollRun> {
+  return apiRequest<PayrollRun>(`${HR_ENDPOINT}/payroll-runs`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+/** فهرست اجراهای ماهانه حقوق — GET /enterprise-hub/hr/payroll-runs */
+export async function listPayrollRuns(signal?: AbortSignal): Promise<PayrollRun[]> {
+  return apiRequest<PayrollRun[]>(`${HR_ENDPOINT}/payroll-runs`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/** جزئیات اجرای حقوق — GET /enterprise-hub/hr/payroll-runs/:id */
+export async function getPayrollRun(
+  id: number,
+  signal?: AbortSignal,
+): Promise<PayrollRun> {
+  return apiRequest<PayrollRun>(`${HR_ENDPOINT}/payroll-runs/${id}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/** ثبت سند حسابداری اجرای حقوق — POST /enterprise-hub/hr/payroll-runs/:id/post */
+export async function postPayrollRun(
+  id: number,
+  signal?: AbortSignal,
+): Promise<PayrollRun> {
+  return apiRequest<PayrollRun>(`${HR_ENDPOINT}/payroll-runs/${id}/post`, {
+    method: "POST",
+    signal,
+  });
+}
+
+/** لیست بیمه (DSKKAR00/DSKWOR00) — GET /enterprise-hub/hr/payroll-runs/:id/insurance-list */
+export async function getInsuranceList(
+  id: number,
+  query: InsuranceListQuery,
+  signal?: AbortSignal,
+): Promise<InsuranceList> {
+  return apiRequest<InsuranceList>(`${HR_ENDPOINT}/payroll-runs/${id}/insurance-list`, {
+    method: "GET",
+    searchParams: { ...query },
     signal,
   });
 }

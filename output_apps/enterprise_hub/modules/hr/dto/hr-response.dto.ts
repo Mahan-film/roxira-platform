@@ -29,6 +29,8 @@ export class EmployeeResponseDto {
   @ApiProperty() hireDate: string;
   @ApiProperty({ nullable: true }) terminationDate: string | null;
   @ApiProperty({ nullable: true }) bankAccountNumber: string | null;
+  @ApiProperty({ nullable: true, description: 'شماره بیمه تأمین اجتماعی' })
+  insuranceNumber: string | null;
   @ApiProperty() createdAt: string;
   @ApiProperty() updatedAt: string;
 }
@@ -91,6 +93,21 @@ export class PayslipResponseDto {
   @ApiProperty() foodAllowance: number;
   @ApiProperty() childAllowance: number;
   @ApiProperty() overtimeAmount: number;
+  @ApiProperty({ nullable: true }) payrollRunId: number | null;
+  @ApiProperty({ description: 'پایه سنوات' }) seniorityAmount: number;
+  @ApiProperty({ description: 'فوق‌العاده شب‌کاری' }) nightShiftAmount: number;
+  @ApiProperty({ description: 'کار در روز تعطیل' }) holidayAmount: number;
+  @ApiProperty({ description: 'کسر غیبت' }) absenceDeduction: number;
+  @ApiProperty({ description: 'دستمزد مشمول بیمه' }) insurableWage: number;
+  @ApiProperty({ description: 'بیمه سهم کارفرما (۲۰٪)' })
+  employerInsurance: number;
+  @ApiProperty({ description: 'بیمه بیکاری (۳٪، سهم کارفرما)' })
+  unemploymentInsurance: number;
+  @ApiProperty() workDays: number;
+  @ApiProperty() overtimeHours: number;
+  @ApiProperty() nightHours: number;
+  @ApiProperty() holidayHours: number;
+  @ApiProperty() absenceDays: number;
   @ApiProperty() grossPay: number;
   @ApiProperty() insuranceDeduction: number;
   @ApiProperty() incomeTax: number;

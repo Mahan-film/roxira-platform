@@ -118,4 +118,13 @@ export class CreateEmployeeDto {
   @IsString()
   @MaxLength(32)
   bankAccountNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'شماره بیمه تأمین اجتماعی (برای لیست بیمه)',
+    example: '0012345678',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{1,20}$/, { message: 'شماره بیمه باید فقط شامل رقم باشد.' })
+  insuranceNumber?: string;
 }

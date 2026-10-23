@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  DataSource,
+  EntityManager,
   FindManyOptions,
   FindOptionsWhere,
   ILike,
@@ -10,6 +12,7 @@ import {
 import { ContractStatus, EmployeeStatus } from '../enums/hr.enum';
 import { EmployeeEntity } from '../entities/employee.entity';
 import { EmploymentContractEntity } from '../entities/employment-contract.entity';
+import { PayrollRunEntity } from '../entities/payroll-run.entity';
 import { PayslipEntity } from '../entities/payslip.entity';
 
 /**
@@ -46,7 +49,25 @@ export class HrRepository {
     private readonly contracts: Repository<EmploymentContractEntity>,
     @InjectRepository(PayslipEntity)
     private readonly payslips: Repository<PayslipEntity>,
+    @InjectRepository(PayrollRunEntity)
+    private readonly payrollRuns: Repository<PayrollRunEntity>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  /** Runs `work` in one database transaction (commit on success, rollback on throw). */
+  async runInTransaction<T>(
+    work: (manager: EntityManager) => Promise<T>,
+  ): Promise<T> {
+    return this.dataSource.transaction(work);
+  }
+
+  private runs(manager?: EntityManager): Repository<PayrollRunEntity> {
+    return manager ? manager.getRepository(PayrollRunEntity) : this.payrollRuns;
+  }
+
+  private slips(manager?: EntityManager): Repository<PayslipEntity> {
+    return manager ? manager.getRepository(PayslipEntity) : this.payslips;
+  }
 
   // ---------------------------------------------------------------------------
   // کارمندان (Employees)
@@ -89,6 +110,7 @@ export class HrRepository {
         hireDate: entity.hireDate,
         terminationDate: entity.terminationDate,
         bankAccountNumber: entity.bankAccountNumber,
+        insuranceNumber: entity.insuranceNumber,
         updatedAt: entity.updatedAt,
       },
     );
@@ -375,6 +397,164 @@ export class HrRepository {
         totalTax: '0',
         totalOtherDeductions: '0',
       }
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Payroll runs (every query is scoped by tenantId)
+  // ---------------------------------------------------------------------------
+
+  /** Active employees of the tenant (payroll-run population). */
+  async findActiveEmployees(tenantId: string): Promise<EmployeeEntity[]> {
+    return this.employees.find({
+      where: { tenantId, status: EmployeeStatus.ACTIVE },
+      order: { id: 'ASC' },
+    });
+  }
+
+  /** Active contracts of the given employees, newest first. */
+  async findActiveContractsByEmployeeIds(
+    tenantId: string,
+    employeeIds: number[],
+  ): Promise<EmploymentContractEntity[]> {
+    if (employeeIds.length === 0) {
+      return [];
+    }
+    return this.contracts.find({
+      where: {
+        tenantId,
+        status: ContractStatus.ACTIVE,
+        employeeId: In(employeeIds),
+      },
+      order: { startDate: 'DESC', id: 'DESC' },
+    });
+  }
+
+  /** All payslips of a period (run payslips and legacy single payslips). */
+  async findPayslipsOfPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+  ): Promise<PayslipEntity[]> {
+    return this.payslips.find({
+      where: { tenantId, periodYear, periodMonth },
+    });
+  }
+
+  async findPayrollRunById(
+    tenantId: string,
+    id: number,
+    manager?: EntityManager,
+  ): Promise<PayrollRunEntity | null> {
+    return this.runs(manager).findOne({ where: { id, tenantId } });
+  }
+
+  async findPayrollRunByPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+    manager?: EntityManager,
+  ): Promise<PayrollRunEntity | null> {
+    return this.runs(manager).findOne({
+      where: { tenantId, periodYear, periodMonth },
+    });
+  }
+
+  async listPayrollRuns(tenantId: string): Promise<PayrollRunEntity[]> {
+    return this.payrollRuns.find({
+      where: { tenantId },
+      order: { periodYear: 'DESC', periodMonth: 'DESC' },
+      take: 120,
+    });
+  }
+
+  async createPayrollRun(
+    tenantId: string,
+    data: Partial<PayrollRunEntity>,
+    manager?: EntityManager,
+  ): Promise<PayrollRunEntity> {
+    const repo = this.runs(manager);
+    const entity = repo.create({ ...data, tenantId });
+    return repo.save(entity);
+  }
+
+  async savePayrollRun(
+    tenantId: string,
+    entity: PayrollRunEntity,
+    manager?: EntityManager,
+  ): Promise<PayrollRunEntity> {
+    // Tenant-scoped update: another tenant's id changes 0 rows.
+    await this.runs(manager).update(
+      { id: entity.id, tenantId },
+      {
+        status: entity.status,
+        ratesYear: entity.ratesYear,
+        employeeCount: entity.employeeCount,
+        totalGross: entity.totalGross,
+        totalInsurable: entity.totalInsurable,
+        totalEmployeeInsurance: entity.totalEmployeeInsurance,
+        totalEmployerInsurance: entity.totalEmployerInsurance,
+        totalUnemploymentInsurance: entity.totalUnemploymentInsurance,
+        totalIncomeTax: entity.totalIncomeTax,
+        totalOtherDeductions: entity.totalOtherDeductions,
+        totalNet: entity.totalNet,
+        journalEntryId: entity.journalEntryId,
+        journalEntryNumber: entity.journalEntryNumber,
+        postedAt: entity.postedAt,
+        updatedAt: entity.updatedAt,
+      },
+    );
+    entity.tenantId = tenantId;
+    return entity;
+  }
+
+  async findPayslipsByRun(
+    tenantId: string,
+    payrollRunId: number,
+  ): Promise<PayslipEntity[]> {
+    return this.payslips.find({
+      where: { tenantId, payrollRunId },
+      relations: { employee: true },
+      order: { employeeId: 'ASC' },
+    });
+  }
+
+  async createPayslips(
+    tenantId: string,
+    rows: Partial<PayslipEntity>[],
+    manager?: EntityManager,
+  ): Promise<PayslipEntity[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+    const repo = this.slips(manager);
+    const entities = rows.map((row) => repo.create({ ...row, tenantId }));
+    return repo.save(entities);
+  }
+
+  /** Remove the payslips of a DRAFT run before recalculating it. */
+  async deletePayslipsByRun(
+    tenantId: string,
+    payrollRunId: number,
+    manager?: EntityManager,
+  ): Promise<number> {
+    const result = await this.slips(manager).delete({ tenantId, payrollRunId });
+    return result.affected ?? 0;
+  }
+
+  /** Mark all payslips of a run with a status and journal entry. */
+  async markRunPayslips(
+    tenantId: string,
+    payrollRunId: number,
+    changes: Pick<
+      PayslipEntity,
+      'status' | 'journalEntryId' | 'journalEntryNumber' | 'issuedAt'
+    >,
+    manager?: EntityManager,
+  ): Promise<void> {
+    await this.slips(manager).update(
+      { tenantId, payrollRunId },
+      { ...changes, updatedAt: new Date() },
     );
   }
 

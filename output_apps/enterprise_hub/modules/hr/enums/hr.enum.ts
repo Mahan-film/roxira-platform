@@ -56,6 +56,15 @@ export enum PayslipStatus {
   PAID = 'PAID',
 }
 
+/**
+ * Monthly payroll run status. DRAFT: recalculable; POSTED: journal entry
+ * created in accounting, payslips frozen.
+ */
+export enum PayrollRunStatus {
+  DRAFT = 'DRAFT',
+  POSTED = 'POSTED',
+}
+
 /** برچسب‌های فارسی انواع شمارشی جهت پاسخ‌های API و UI */
 export const GENDER_LABELS: Record<Gender, string> = {
   [Gender.MALE]: 'مرد',
@@ -90,4 +99,9 @@ export const PAYSLIP_STATUS_LABELS: Record<PayslipStatus, string> = {
   [PayslipStatus.DRAFT]: 'پیش‌نویس',
   [PayslipStatus.ISSUED]: 'صادرشده',
   [PayslipStatus.PAID]: 'پرداخت‌شده',
+};
+
+export const PAYROLL_RUN_STATUS_LABELS: Record<PayrollRunStatus, string> = {
+  [PayrollRunStatus.DRAFT]: 'پیش‌نویس',
+  [PayrollRunStatus.POSTED]: 'ثبت‌شده در حسابداری',
 };

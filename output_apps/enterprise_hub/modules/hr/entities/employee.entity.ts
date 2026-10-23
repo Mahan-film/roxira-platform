@@ -101,6 +101,15 @@ export class EmployeeEntity {
   @Column({ type: 'date', name: 'termination_date', nullable: true })
   terminationDate: string | null;
 
+  /** Social-security insurance number (شماره بیمه), used by the insurance list. */
+  @Column({
+    type: 'varchar',
+    length: 20,
+    name: 'insurance_number',
+    nullable: true,
+  })
+  insuranceNumber: string | null;
+
   @Column({
     type: 'varchar',
     length: 32,

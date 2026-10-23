@@ -511,6 +511,18 @@ export class AccountingService {
     return this.toEntryDto(saved);
   }
 
+  /** Header of a tenant's journal entry by its exact number, or null. */
+  async findJournalEntryByNumber(
+    tenantId: string,
+    entryNumber: string,
+  ): Promise<{ id: number; entryNumber: string } | null> {
+    const entry = await this.accountingRepository.findEntryByNumber(
+      tenantId,
+      entryNumber,
+    );
+    return entry ? { id: entry.id, entryNumber: entry.entryNumber } : null;
+  }
+
   async findAllJournalEntries(
     tenantId: string,
     query: QueryJournalEntryDto,

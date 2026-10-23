@@ -1,8 +1,9 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Pencil, Plus, Search, UsersRound } from "lucide-react";
+import { Pencil, Plus, Search, UsersRound, Wallet } from "lucide-react";
 
 import {
   EmptyImportState,
@@ -16,7 +17,7 @@ import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { EmployeeForm } from "@/components/hr/employee-form";
 import { HrStatsCards } from "@/components/hr/hr-stats";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -96,10 +97,16 @@ function HrPage() {
         description="پرونده کارکنان و قراردادهای حقوقی"
         icon={<UsersRound className="size-6 text-indigo-500" />}
         actions={
-          <Button onClick={() => setShowForm((v) => !v)} aria-expanded={showForm}>
-            <Plus />
-            کارمند جدید
-          </Button>
+          <div className="flex gap-2">
+            <Link href="/app/hr/payroll" className={buttonVariants({ variant: "outline" })}>
+              <Wallet />
+              حقوق ماهانه
+            </Link>
+            <Button onClick={() => setShowForm((v) => !v)} aria-expanded={showForm}>
+              <Plus />
+              کارمند جدید
+            </Button>
+          </div>
         }
       />
 

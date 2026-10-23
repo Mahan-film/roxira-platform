@@ -20,7 +20,7 @@ import { ContractType } from '../enums/hr.enum';
  * (POST /enterprise-hub/hr/contracts).
  *
  * اجزای حقوق در صورت عدم ارسال با پیش‌فرض‌های قانونی
- * (`DEFAULT_HOUSING_ALLOWANCE` و `DEFAULT_FOOD_ALLOWANCE`) پر می‌شوند.
+ * (حق مسکن و بن سال شروع قرارداد از `constants/payroll-rates.ts`) پر می‌شوند.
  */
 export class CreateContractDto {
   @ApiProperty({ description: 'شناسه کارمند', example: 1 })

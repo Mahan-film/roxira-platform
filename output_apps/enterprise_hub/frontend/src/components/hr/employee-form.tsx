@@ -54,6 +54,7 @@ export function EmployeeForm({ onCreated }: EmployeeFormProps) {
   const [dependants, setDependants] = useState("0");
   const [email, setEmail] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [insuranceNumber, setInsuranceNumber] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[] | null>(null);
@@ -120,6 +121,7 @@ export function EmployeeForm({ onCreated }: EmployeeFormProps) {
         hireDate: hireDate || undefined,
         email: email.trim() || undefined,
         bankAccountNumber: bankAccountNumber.trim() || undefined,
+        insuranceNumber: insuranceNumber.trim() || undefined,
       });
 
       setSuccessMessage(
@@ -296,6 +298,17 @@ export function EmployeeForm({ onCreated }: EmployeeFormProps) {
                 value={bankAccountNumber}
                 onChange={(event) => setBankAccountNumber(event.target.value)}
                 maxLength={32}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="hr-insurance">شماره بیمه تأمین اجتماعی (اختیاری)</Label>
+              <Input
+                id="hr-insurance"
+                dir="ltr"
+                inputMode="numeric"
+                value={insuranceNumber}
+                onChange={(event) => setInsuranceNumber(event.target.value)}
+                maxLength={20}
               />
             </div>
           </div>

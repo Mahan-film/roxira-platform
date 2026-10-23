@@ -37,9 +37,17 @@ import {
   CalculatePayrollDto,
   IssuePayslipDto,
 } from '../dto/payroll.dto';
+import {
+  CreatePayrollRunDto,
+  InsuranceListQueryDto,
+  InsuranceListResponseDto,
+  PayrollRatesResponseDto,
+  PayrollRunResponseDto,
+} from '../dto/payroll-run.dto';
 import { QueryEmployeeDto, QueryPayslipDto } from '../dto/query-hr.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
 import { HrService } from '../services/hr.service';
+import { PayrollRunService } from '../services/payroll-run.service';
 
 /**
  * کنترلر منابع انسانی و حقوق و دستمزد.
@@ -72,7 +80,10 @@ export function parseOptionalId(raw?: string): number | undefined {
 @ApiTags('HR - منابع انسانی و حقوق و دستمزد')
 @Controller('enterprise-hub/hr')
 export class HrController {
-  constructor(private readonly hrService: HrService) {}
+  constructor(
+    private readonly hrService: HrService,
+    private readonly payrollRunService: PayrollRunService,
+  ) {}
 
   /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
   private tenantIdOf(request: AuthenticatedRequest): string {
@@ -223,6 +234,88 @@ export class HrController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<PayslipResponseDto> {
     return this.hrService.findOnePayslip(this.tenantIdOf(request), id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // اجرای ماهانه حقوق، سند حسابداری و لیست بیمه
+  // ---------------------------------------------------------------------------
+
+  @Get('payroll-rates/:year')
+  @ApiOperation({ summary: 'نرخ‌ها و مبالغ قانونی حقوق یک سال شمسی' })
+  @ApiResponse({ status: HttpStatus.OK, type: PayrollRatesResponseDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'سال تعریف نشده' })
+  getPayrollRates(
+    @Req() request: AuthenticatedRequest,
+    @Param('year', ParseIntPipe) year: number,
+  ): PayrollRatesResponseDto {
+    this.tenantIdOf(request);
+    return this.payrollRunService.getRates(year);
+  }
+
+  @Post('payroll-runs')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'محاسبه یا محاسبه مجدد حقوق ماه (پیش‌نویس) برای همه پرسنل فعال',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: PayrollRunResponseDto })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'حقوق این ماه قبلاً ثبت شده' })
+  async createPayrollRun(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CreatePayrollRunDto,
+  ): Promise<PayrollRunResponseDto> {
+    return this.payrollRunService.createOrRecalculate(
+      this.tenantIdOf(request),
+      dto,
+    );
+  }
+
+  @Get('payroll-runs')
+  @ApiOperation({ summary: 'فهرست اجراهای ماهانه حقوق' })
+  @ApiResponse({ status: HttpStatus.OK, type: [PayrollRunResponseDto] })
+  async listPayrollRuns(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PayrollRunResponseDto[]> {
+    return this.payrollRunService.listRuns(this.tenantIdOf(request));
+  }
+
+  @Get('payroll-runs/:id')
+  @ApiOperation({ summary: 'جزئیات اجرای حقوق و فیش‌ها' })
+  @ApiResponse({ status: HttpStatus.OK, type: PayrollRunResponseDto })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'یافت نشد' })
+  async getPayrollRun(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<PayrollRunResponseDto> {
+    return this.payrollRunService.findRun(this.tenantIdOf(request), id);
+  }
+
+  @Post('payroll-runs/:id/post')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'ثبت سند حسابداری تراز اجرای حقوق و قفل آن' })
+  @ApiResponse({ status: HttpStatus.OK, type: PayrollRunResponseDto })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'قبلاً ثبت شده' })
+  async postPayrollRun(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<PayrollRunResponseDto> {
+    return this.payrollRunService.postRun(this.tenantIdOf(request), id);
+  }
+
+  @Get('payroll-runs/:id/insurance-list')
+  @ApiOperation({
+    summary: 'لیست بیمه تأمین اجتماعی (DSKKAR00 / DSKWOR00، متن CSV)',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: InsuranceListResponseDto })
+  async getInsuranceList(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: InsuranceListQueryDto,
+  ): Promise<InsuranceListResponseDto> {
+    return this.payrollRunService.insuranceList(
+      this.tenantIdOf(request),
+      id,
+      query,
+    );
   }
 
   // ---------------------------------------------------------------------------

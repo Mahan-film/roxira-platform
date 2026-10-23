@@ -8,18 +8,14 @@ import { FindOptionsWhere } from 'typeorm';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import {
   CONTRACT_NUMBER_PREFIX,
-  DEFAULT_FOOD_ALLOWANCE,
-  DEFAULT_HOUSING_ALLOWANCE,
-  EMPLOYEE_INSURANCE_RATE,
   EMPLOYEE_NUMBER_PREFIX,
-  INCOME_TAX_BRACKETS,
-  INCOME_TAX_MONTHLY_EXEMPTION,
   MONEY_SCALE,
   PAYROLL_BANK_ACCOUNT_CODE,
   PAYROLL_EXPENSE_ACCOUNT_CODE,
   PAYROLL_PAYABLE_ACCOUNT_CODE,
   PAYSLIP_NUMBER_PREFIX,
 } from '../constants/hr.constants';
+import { resolvePayrollRates } from '../constants/payroll-rates';
 import {
   ContractResponseDto,
   EmployeeResponseDto,
@@ -48,6 +44,8 @@ import {
   PayslipStatus,
 } from '../enums/hr.enum';
 import { HrRepository } from '../repositories/hr.repository';
+import { gregorianToJalali } from './jalali-period';
+import { calculatePayroll } from './payroll-calculator';
 
 /** ورودی درج کارمند از مسیر ورود داده (فیلدهای اختیاری خالی می‌مانند). */
 export interface HrImportEmployeeInput {
@@ -132,6 +130,7 @@ export class HrService {
       hireDate: entity.hireDate,
       terminationDate: this.toIso(entity.terminationDate),
       bankAccountNumber: entity.bankAccountNumber,
+      insuranceNumber: entity.insuranceNumber ?? null,
       createdAt: this.toIso(entity.createdAt) ?? '',
       updatedAt: this.toIso(entity.updatedAt) ?? '',
     };
@@ -164,7 +163,7 @@ export class HrService {
     };
   }
 
-  private toPayslipDto(entity: PayslipEntity): PayslipResponseDto {
+  toPayslipDto(entity: PayslipEntity): PayslipResponseDto {
     const employee = entity.employee;
     return {
       id: entity.id,
@@ -182,6 +181,21 @@ export class HrService {
       foodAllowance: this.round(Number(entity.foodAllowance)),
       childAllowance: this.round(Number(entity.childAllowance)),
       overtimeAmount: this.round(Number(entity.overtimeAmount)),
+      payrollRunId: entity.payrollRunId ?? null,
+      seniorityAmount: this.round(Number(entity.seniorityAmount ?? 0)),
+      nightShiftAmount: this.round(Number(entity.nightShiftAmount ?? 0)),
+      holidayAmount: this.round(Number(entity.holidayAmount ?? 0)),
+      absenceDeduction: this.round(Number(entity.absenceDeduction ?? 0)),
+      insurableWage: this.round(Number(entity.insurableWage ?? 0)),
+      employerInsurance: this.round(Number(entity.employerInsurance ?? 0)),
+      unemploymentInsurance: this.round(
+        Number(entity.unemploymentInsurance ?? 0),
+      ),
+      workDays: Number(entity.workDays ?? 0),
+      overtimeHours: Number(entity.overtimeHours ?? 0),
+      nightHours: Number(entity.nightHours ?? 0),
+      holidayHours: Number(entity.holidayHours ?? 0),
+      absenceDays: Number(entity.absenceDays ?? 0),
       grossPay: this.round(Number(entity.grossPay)),
       insuranceDeduction: this.round(Number(entity.insuranceDeduction)),
       incomeTax: this.round(Number(entity.incomeTax)),
@@ -250,6 +264,7 @@ export class HrService {
       hireDate: dto.hireDate ?? new Date().toISOString().slice(0, 10),
       terminationDate: null,
       bankAccountNumber: dto.bankAccountNumber ?? null,
+      insuranceNumber: dto.insuranceNumber ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -431,6 +446,9 @@ export class HrService {
       ...(dto.bankAccountNumber !== undefined
         ? { bankAccountNumber: dto.bankAccountNumber }
         : {}),
+      ...(dto.insuranceNumber !== undefined
+        ? { insuranceNumber: dto.insuranceNumber }
+        : {}),
       updatedAt: new Date(),
     });
 
@@ -476,6 +494,9 @@ export class HrService {
       );
     }
 
+    const rates = resolvePayrollRates(
+      gregorianToJalali(dto.startDate)?.jy ?? Number.MAX_SAFE_INTEGER,
+    );
     const contract = await this.hrRepository.createContract(tenantId, {
       contractNumber,
       employeeId: employee.id,
@@ -486,11 +507,11 @@ export class HrService {
       department: dto.department ?? employee.department,
       baseSalary: this.round(dto.baseSalary),
       housingAllowance: this.round(
-        dto.housingAllowance ?? DEFAULT_HOUSING_ALLOWANCE,
+        dto.housingAllowance ?? rates.housingAllowance,
       ),
-      foodAllowance: this.round(dto.foodAllowance ?? DEFAULT_FOOD_ALLOWANCE),
+      foodAllowance: this.round(dto.foodAllowance ?? rates.foodAllowance),
       childAllowance: this.round(dto.childAllowance ?? 0),
-      insuranceRate: dto.insuranceRate ?? EMPLOYEE_INSURANCE_RATE,
+      insuranceRate: dto.insuranceRate ?? rates.employeeInsuranceRate,
       isInsuranceSubject: dto.isInsuranceSubject ?? true,
       status: ContractStatus.ACTIVE,
       description: dto.description ?? null,
@@ -532,72 +553,36 @@ export class HrService {
   // ---------------------------------------------------------------------------
 
   /**
-   * محاسبه مالیات بر حقوق بر اساس پله‌های تصاعدی روی درآمد مشمول
-   * (پس از کسر معافیت ماهانه).
-   */
-  private calculateIncomeTax(taxableIncome: number): number {
-    if (taxableIncome <= 0) {
-      return 0;
-    }
-    let remaining = taxableIncome;
-    let lower = 0;
-    let tax = 0;
-    for (const bracket of INCOME_TAX_BRACKETS) {
-      if (remaining <= 0) {
-        break;
-      }
-      const width = bracket.limit - lower;
-      const slice =
-        width === Number.POSITIVE_INFINITY
-          ? remaining
-          : Math.min(remaining, width);
-      tax += slice * bracket.rate;
-      remaining -= slice;
-      lower = bracket.limit;
-    }
-    return this.round(tax);
-  }
-
-  /**
-   * موتور محاسبه حقوق: اجزای حقوق و مزایا → ناخالص → کسر بیمه ۷٪ سهم
-   * کارگر → مالیات بر حقوق → خالص پرداختی.
+   * Single-payslip calculation on a contract: delegates to the shared engine
+   * (services/payroll-calculator.ts) used by the monthly payroll run.
    */
   private computePayroll(
     contract: EmploymentContractEntity,
-    options: { overtimeAmount?: number; otherDeductions?: number },
+    options: {
+      overtimeAmount?: number;
+      otherDeductions?: number;
+      periodYear?: number;
+    },
   ): Omit<PayrollCalculationResponseDto, 'employeeFullName' | 'employeeId'> {
-    const baseSalary = this.round(Number(contract.baseSalary));
-    const housingAllowance = this.round(Number(contract.housingAllowance));
-    const foodAllowance = this.round(Number(contract.foodAllowance));
-    const childAllowance = this.round(Number(contract.childAllowance));
-    const overtimeAmount = this.round(options.overtimeAmount ?? 0);
-    const otherDeductions = this.round(options.otherDeductions ?? 0);
-
-    const grossPay = this.round(
-      baseSalary +
-        housingAllowance +
-        foodAllowance +
-        childAllowance +
-        overtimeAmount,
+    // Same engine and versioned rates as the monthly payroll run; the contract
+    // may override the employee insurance rate.
+    const rates = resolvePayrollRates(
+      options.periodYear ?? Number.MAX_SAFE_INTEGER,
     );
+    const result = calculatePayroll({
+      rates: { ...rates, employeeInsuranceRate: Number(contract.insuranceRate) },
+      monthlyBaseWage: Number(contract.baseSalary),
+      housingAllowance: Number(contract.housingAllowance),
+      foodAllowance: Number(contract.foodAllowance),
+      childAllowanceOverride: Number(contract.childAllowance),
+      children: 0,
+      seniorityYears: 0,
+      fixedOvertimeAmount: options.overtimeAmount,
+      otherDeductions: options.otherDeductions,
+      insuranceSubject: contract.isInsuranceSubject,
+    });
 
-    const insuranceDeduction = contract.isInsuranceSubject
-      ? this.round(grossPay * Number(contract.insuranceRate))
-      : 0;
-
-    const taxableIncome = this.round(
-      Math.max(0, grossPay - insuranceDeduction),
-    );
-
-    const incomeTax = this.calculateIncomeTax(
-      Math.max(0, taxableIncome - INCOME_TAX_MONTHLY_EXEMPTION),
-    );
-
-    const netPay = this.round(
-      grossPay - insuranceDeduction - incomeTax - otherDeductions,
-    );
-
-    if (netPay < 0) {
+    if (result.netPay < 0) {
       throw new BadRequestException(
         'جمع کسورات از جمع حقوق و مزایا بیشتر است؛ محاسبه حقوق معتبر نیست.',
       );
@@ -605,17 +590,17 @@ export class HrService {
 
     return {
       contractId: contract.id,
-      baseSalary,
-      housingAllowance,
-      foodAllowance,
-      childAllowance,
-      overtimeAmount,
-      grossPay,
-      insuranceDeduction,
-      taxableIncome,
-      incomeTax,
-      otherDeductions,
-      netPay,
+      baseSalary: result.baseWage,
+      housingAllowance: result.housingAllowance,
+      foodAllowance: result.foodAllowance,
+      childAllowance: result.childAllowance,
+      overtimeAmount: result.overtimeAmount,
+      grossPay: result.grossPay,
+      insuranceDeduction: result.employeeInsurance,
+      taxableIncome: result.taxableIncome,
+      incomeTax: result.incomeTax,
+      otherDeductions: result.otherDeductions,
+      netPay: result.netPay,
     };
   }
 
@@ -725,6 +710,7 @@ export class HrService {
     const calculation = this.computePayroll(contract, {
       overtimeAmount: dto.overtimeAmount,
       otherDeductions: dto.otherDeductions,
+      periodYear: dto.periodYear,
     });
 
     if (calculation.grossPay <= 0) {

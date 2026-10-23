@@ -523,7 +523,7 @@ describe('HrService — payroll journal lands in the same tenant', () => {
 describe('HrController — tenant access rules', () => {
   const setup = async () => {
     const { service } = buildService();
-    const controller = new HrController(service);
+    const controller = new HrController(service, {} as never);
     const { employee } = await createEmployeeWithContract(service, 'tenant-a');
     return { controller, employeeId: employee.id };
   };
@@ -603,6 +603,8 @@ describe('HrRepository — tenant scoping', () => {
       employees as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
     );
 
     await repository.findEmployeeById('tenant-a', 1);
@@ -621,6 +623,8 @@ describe('HrRepository — tenant scoping', () => {
       employees as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
     );
 
     await repository.createEmployee('tenant-a', { firstName: 'سارا' });
@@ -635,6 +639,8 @@ describe('HrRepository — tenant scoping', () => {
     const employees = { update: jest.fn(async () => undefined) };
     const repository = new HrRepository(
       employees as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -656,6 +662,8 @@ describe('HrRepository — tenant scoping', () => {
       {} as never,
       {} as never,
       payslips as never,
+      {} as never,
+      {} as never,
     );
 
     await repository.findPayslipByPeriod('tenant-a', 7, 1405, 1);

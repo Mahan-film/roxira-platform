@@ -4,9 +4,11 @@ import { AccountingModule } from '../accounting/accounting.module';
 import { HrController } from './controllers/hr.controller';
 import { EmployeeEntity } from './entities/employee.entity';
 import { EmploymentContractEntity } from './entities/employment-contract.entity';
+import { PayrollRunEntity } from './entities/payroll-run.entity';
 import { PayslipEntity } from './entities/payslip.entity';
 import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
+import { PayrollRunService } from './services/payroll-run.service';
 
 /**
  * ماژول جامع منابع انسانی و حقوق و دستمزد (HR & Payroll).
@@ -17,7 +19,8 @@ import { HrService } from './services/hr.service';
  *   فیش و هماهنگی ثبت سند خودکار).
  * - Repository: تنها لایه با دسترسی مستقیم به جداول HR.
  *
- * جداول متصل: `hr_employees`، `hr_employment_contracts` و `hr_payslips`.
+ * جداول متصل: `hr_employees`، `hr_employment_contracts`، `hr_payslips` و
+ * `hr_payroll_runs` (اجرای ماهانه حقوق).
  * برای ثبت سند هزینه حقوق در دفتر روزنامه، `AccountingModule` (که
  * `AccountingService` را export می‌کند) import می‌شود؛ این وابستگی یک‌طرفه
  * است و هیچ چرخه‌ای ایجاد نمی‌کند (Rule #1 - AGENTS.md).
@@ -28,11 +31,12 @@ import { HrService } from './services/hr.service';
       EmployeeEntity,
       EmploymentContractEntity,
       PayslipEntity,
+      PayrollRunEntity,
     ]),
     AccountingModule,
   ],
   controllers: [HrController],
-  providers: [HrService, HrRepository],
+  providers: [HrService, PayrollRunService, HrRepository],
   exports: [HrService],
 })
 export class HrModule {}
