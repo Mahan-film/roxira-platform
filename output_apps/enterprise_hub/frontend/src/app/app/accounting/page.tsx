@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BookOpenCheck } from "lucide-react";
+import Link from "next/link";
+import { BookOpenCheck, Landmark } from "lucide-react";
 
 import {
   EmptyImportState,
@@ -14,6 +15,7 @@ import { AccountingStats } from "@/components/accounting/accounting-stats";
 import { JournalEntriesTable } from "@/components/accounting/journal-entries-table";
 import { TrialBalanceTable } from "@/components/accounting/trial-balance-table";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -65,6 +67,12 @@ export default function SuiteAccountingPage() {
         title="حساب‌ها"
         description="سرفصل حساب‌ها، تراز آزمایشی و دفتر روزنامه"
         icon={<BookOpenCheck className="size-6 text-indigo-500" />}
+        actions={
+          <Link href="/app/accounting/bank" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Landmark aria-hidden="true" />
+            بانک و مغایرت‌گیری
+          </Link>
+        }
       />
 
       <ErrorNotice title="خطا در دریافت اطلاعات دفتر کل" message={error} />

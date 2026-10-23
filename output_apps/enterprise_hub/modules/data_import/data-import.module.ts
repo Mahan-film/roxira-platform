@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { JWT_DEFAULT_EXPIRES_IN } from '../auth/constants/auth.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccountingModule } from '../accounting/accounting.module';
+import { BankingModule } from '../banking/banking.module';
 import { CrmModule } from '../crm/crm.module';
 import { HrModule } from '../hr/hr.module';
 import { InventoryModule } from '../inventory/inventory.module';
@@ -18,6 +19,7 @@ import { PackageImportProcessor } from './processors/package-import.processor';
 import { AccountingAccountsRegistry } from './registry/accounting-accounts.registry';
 import { AccountingJournalLinesRegistry } from './registry/accounting-journal-lines.registry';
 import { AccountingOpeningBalancesRegistry } from './registry/accounting-opening-balances.registry';
+import { BankStatementRegistry } from './registry/bank-statement.registry';
 import { CrmActivitiesRegistry } from './registry/crm-activities.registry';
 import { CrmLeadsRegistry } from './registry/crm-leads.registry';
 import {
@@ -61,6 +63,7 @@ import { UploadStoreService } from './services/upload-store.service';
     InventoryModule,
     AccountingModule,
     InvoicingModule,
+    BankingModule,
     BullModule.registerQueue({ name: PACKAGE_QUEUE_NAME }),
     TypeOrmModule.forFeature([
       DataImportBatchEntity,
@@ -105,6 +108,7 @@ import { UploadStoreService } from './services/upload-store.service';
     AccountingJournalLinesRegistry,
     SalesInvoicesRegistry,
     CrmActivitiesRegistry,
+    BankStatementRegistry,
     {
       provide: ENTITY_IMPORT_ADAPTERS,
       useFactory: (
@@ -116,6 +120,7 @@ import { UploadStoreService } from './services/upload-store.service';
         accountingJournalLines: AccountingJournalLinesRegistry,
         salesInvoices: SalesInvoicesRegistry,
         crmActivities: CrmActivitiesRegistry,
+        bankStatement: BankStatementRegistry,
       ) => [
         crmLeads,
         hrEmployees,
@@ -125,6 +130,7 @@ import { UploadStoreService } from './services/upload-store.service';
         accountingJournalLines,
         salesInvoices,
         crmActivities,
+        bankStatement,
       ],
       inject: [
         CrmLeadsRegistry,
@@ -135,6 +141,7 @@ import { UploadStoreService } from './services/upload-store.service';
         AccountingJournalLinesRegistry,
         SalesInvoicesRegistry,
         CrmActivitiesRegistry,
+        BankStatementRegistry,
       ],
     },
     JwtAuthGuard,

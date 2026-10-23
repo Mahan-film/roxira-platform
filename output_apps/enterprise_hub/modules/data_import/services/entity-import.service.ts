@@ -29,6 +29,7 @@ import { normaliseAndValidate } from '../registry/field-validation';
 import {
   buildEntityFallbackMapping,
   detectEntity,
+  locateHeaderRow,
 } from '../registry/entity-detect';
 import { EntityRegistryService } from '../registry/entity-registry.service';
 import {
@@ -166,7 +167,9 @@ export class EntityImportService {
       records,
     );
 
-    const result = await adapter.commit(tenantId, unique);
+    const result = await adapter.commit(tenantId, unique, {
+      bankAccountId: dto.bankAccountId,
+    });
     for (const failure of result.failed) {
       failed.push({ row: failure.rowNumber, message: failure.message });
     }
@@ -303,11 +306,14 @@ export class EntityImportService {
       );
     }
 
+    // Title rows above the table (bank statements) are skipped by locating the header row.
+    const locateHeader = (rows: string[][]) =>
+      locateHeaderRow(rows, this.registry.all());
     try {
       if (this.isXlsxFile(file)) {
-        return parseXlsx(file.buffer);
+        return parseXlsx(file.buffer, locateHeader);
       }
-      return parseCsv(file.buffer.toString('utf8'));
+      return parseCsv(file.buffer.toString('utf8'), maxImportRows(), locateHeader);
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error ? error.message : 'خطا در تجزیه فایل.',

@@ -20,6 +20,7 @@ import {
   maxImportRows,
   maxSheetBytes,
 } from '../constants/data-import.constants';
+import { HeaderLocator, safeHeaderIndex } from './csv.parser';
 
 /** خروجی تجزیه: سربرگ‌ها و ردیف‌های داده (به‌ترتیب ستون‌ها). */
 export interface ParsedXlsx {
@@ -489,7 +490,10 @@ function readRows(sheet: XmlNode, sharedStrings: string[] | null): string[][] {
  * CSV اعمال می‌شود و ردیف‌های کاملاً خالی حذف، سلول‌ها trim و طول ردیف‌ها با
  * سربرگ هم‌تراز می‌گردد. تنها نخستین برگه خوانده می‌شود.
  */
-export function parseXlsx(input: Buffer): ParsedXlsx {
+export function parseXlsx(
+  input: Buffer,
+  locateHeader?: HeaderLocator,
+): ParsedXlsx {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
   const sizeLimit = maxSheetBytes();
   if (buffer.length > sizeLimit) {
@@ -522,8 +526,9 @@ export function parseXlsx(input: Buffer): ParsedXlsx {
     throw new XlsxParseError('فایل هیچ ردیف داده‌ای ندارد.');
   }
 
-  const headers = cleaned[0];
-  const dataRows = cleaned.slice(1);
+  const headerIndex = safeHeaderIndex(cleaned, locateHeader);
+  const headers = cleaned[headerIndex];
+  const dataRows = cleaned.slice(headerIndex + 1);
   const rowLimit = maxImportRows();
   if (dataRows.length > rowLimit) {
     throw new XlsxParseError(

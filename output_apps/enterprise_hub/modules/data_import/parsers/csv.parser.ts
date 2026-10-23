@@ -16,6 +16,24 @@ export interface ParsedCsv {
   rows: string[][];
 }
 
+/**
+ * Picks the header row among the first rows of a sheet (title rows above the table, e.g. bank
+ * statements). Returns an index into the non-empty rows; 0 keeps the old behaviour.
+ */
+export type HeaderLocator = (rows: string[][]) => number;
+
+/** Clamps a locator result to a valid row index (anything odd falls back to the first row). */
+export function safeHeaderIndex(
+  rows: string[][],
+  locateHeader?: HeaderLocator,
+): number {
+  if (!locateHeader) {
+    return 0;
+  }
+  const index = locateHeader(rows);
+  return Number.isInteger(index) && index > 0 && index < rows.length ? index : 0;
+}
+
 /** خطای تجزیه فایل CSV. */
 export class CsvParseError extends Error {}
 
@@ -24,18 +42,33 @@ export class CsvParseError extends Error {}
  * جداکننده‌های پشتیبانی‌شده: `,`، `;`، تب و `|`.
  */
 export function detectDelimiter(text: string): string {
-  const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
   const candidates = [',', ';', '\t', '|'];
-  let best = ',';
-  let bestCount = -1;
-  for (const candidate of candidates) {
-    const count = firstLine.split(candidate).length - 1;
-    if (count > bestCount) {
-      bestCount = count;
-      best = candidate;
+  const pick = (line: string): { delimiter: string; count: number } => {
+    let best = ',';
+    let bestCount = -1;
+    for (const candidate of candidates) {
+      const count = line.split(candidate).length - 1;
+      if (count > bestCount) {
+        bestCount = count;
+        best = candidate;
+      }
+    }
+    return { delimiter: best, count: bestCount };
+  };
+  const lines = text.split(/\r?\n/, 20);
+  const first = pick(lines[0] ?? '');
+  if (first.count > 0) {
+    return first.delimiter;
+  }
+  // A title line above the table (bank statements): use the line with the most separators.
+  let fallback = first;
+  for (const line of lines.slice(1)) {
+    const candidate = pick(line);
+    if (candidate.count > fallback.count) {
+      fallback = candidate;
     }
   }
-  return best;
+  return fallback.delimiter;
 }
 
 /**
@@ -48,6 +81,7 @@ export function detectDelimiter(text: string): string {
 export function parseCsv(
   input: string,
   maxRows: number = maxImportRows(),
+  locateHeader?: HeaderLocator,
 ): ParsedCsv {
   const text = input.replace(/^\uFEFF/, '');
   if (!text.trim()) {
@@ -136,8 +170,9 @@ export function parseCsv(
     throw new CsvParseError('فایل هیچ ردیف داده‌ای ندارد.');
   }
 
-  const headerRow = cleaned[0];
-  const dataRows = cleaned.slice(1);
+  const headerIndex = safeHeaderIndex(cleaned, locateHeader);
+  const headerRow = cleaned[headerIndex];
+  const dataRows = cleaned.slice(headerIndex + 1);
   const headers = headerRow.map((header) => header);
 
   const rows = dataRows.map((row) => {

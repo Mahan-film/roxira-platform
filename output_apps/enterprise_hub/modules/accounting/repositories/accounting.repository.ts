@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   DataSource,
+  EntityManager,
   FindManyOptions,
   FindOptionsWhere,
   ILike,
@@ -77,6 +78,13 @@ export class AccountingRepository {
 
   async findAllAccounts(tenantId: string): Promise<ChartOfAccountEntity[]> {
     return this.accounts.find({ where: { tenantId }, order: { code: 'ASC' } });
+  }
+
+  async findAccountById(
+    tenantId: string,
+    id: number,
+  ): Promise<ChartOfAccountEntity | null> {
+    return this.accounts.findOne({ where: { id, tenantId } });
   }
 
   async findAccountByCode(
@@ -274,8 +282,12 @@ export class AccountingRepository {
       status: JournalEntryStatus;
     },
     lineInputs: JournalLineInput[],
+    outerManager?: EntityManager,
   ): Promise<JournalEntryEntity> {
-    return this.dataSource.transaction(async (manager) => {
+    // With an outer manager the caller owns the transaction (atomic with other writes).
+    const run = <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> =>
+      outerManager ? work(outerManager) : this.dataSource.transaction(work);
+    return run(async (manager) => {
       const headerEntity = manager.create(JournalEntryEntity, {
         tenantId,
         entryNumber: header.entryNumber,
@@ -350,6 +362,35 @@ export class AccountingRepository {
       .addGroupBy('account.accountType')
       .orderBy('account.code', 'ASC')
       .getRawMany<TrialBalanceRawRow>();
+  }
+
+  /**
+   * سطرهای مشخص یک حساب (با اطلاعات سند) برای تطبیق بانکی؛ فقط سطرهای همین
+   * مستأجر و همین حساب برمی‌گردند.
+   */
+  async findLedgerLinesByIds(
+    tenantId: string,
+    accountId: number,
+    lineIds: number[],
+  ): Promise<LedgerRawRow[]> {
+    if (lineIds.length === 0) {
+      return [];
+    }
+    return this.lines
+      .createQueryBuilder('line')
+      .innerJoin('line.journalEntry', 'entry')
+      .select('line.id', 'id')
+      .addSelect('line.journalEntryId', 'journalEntryId')
+      .addSelect('entry.entryNumber', 'entryNumber')
+      .addSelect('entry.date', 'date')
+      .addSelect('entry.description', 'entryDescription')
+      .addSelect('line.description', 'lineDescription')
+      .addSelect('line.debit', 'debit')
+      .addSelect('line.credit', 'credit')
+      .where('line.tenantId = :tenantId', { tenantId })
+      .andWhere('line.accountId = :accountId', { accountId })
+      .andWhere('line.id IN (:...lineIds)', { lineIds })
+      .getRawMany<LedgerRawRow>();
   }
 
   /**

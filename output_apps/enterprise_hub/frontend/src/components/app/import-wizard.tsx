@@ -44,10 +44,15 @@ import {
   type ImportPreview,
   type ImportSampleRow,
 } from "@/lib/api/data-import-suite-client";
+import { listBankAccounts } from "@/lib/api/banking-client";
 import { formatJalaliDateTime, formatNumber } from "@/lib/fa-format";
 import { cn } from "@/lib/utils";
+import { BANK_LABELS, type BankAccount } from "@/types/banking";
 
 type Step = "upload" | "review" | "done";
+
+/** Registry key of the bank statement entity; it needs a target bank account on commit. */
+const BANK_STATEMENT_ENTITY = "bank-statement";
 
 const STEP_LABELS: Array<[Step, string]> = [
   ["upload", "۱. بارگذاری فایل"],
@@ -58,6 +63,7 @@ const STEP_LABELS: Array<[Step, string]> = [
 /** Where to send the user after a successful import (entity keys come from the backend registry). */
 function entityRoute(entity: string): string | null {
   const key = entity.toLowerCase();
+  if (key === BANK_STATEMENT_ENTITY) return "/app/accounting/bank";
   if (/lead|customer|contact|crm/.test(key)) return "/app/crm";
   if (/employee|staff|hr/.test(key)) return "/app/hr";
   if (/item|product|stock|inventory|warehouse/.test(key)) return "/app/inventory";
@@ -177,6 +183,8 @@ function SingleFileImportWizard({
   const [batchesError, setBatchesError] = useState<string | null>(null);
   const [undoConfirm, setUndoConfirm] = useState<string | null>(null);
   const [undoing, setUndoing] = useState<string | null>(null);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[] | null>(null);
+  const [bankAccountId, setBankAccountId] = useState<number | null>(null);
 
   const loadBatches = useCallback((signal?: AbortSignal) => {
     listImportBatches(signal)
@@ -201,6 +209,24 @@ function SingleFileImportWizard({
     loadBatches(controller.signal);
     return () => controller.abort();
   }, [loadBatches]);
+
+  const isBankStatement = entity === BANK_STATEMENT_ENTITY;
+
+  // Bank statements go into one of the tenant's bank accounts; load them once when needed.
+  useEffect(() => {
+    if (!isBankStatement || bankAccounts !== null) return;
+    const controller = new AbortController();
+    listBankAccounts(controller.signal)
+      .then((accounts) => {
+        setBankAccounts(accounts);
+        setBankAccountId((current) => current ?? accounts[0]?.id ?? null);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setBankAccounts([]);
+      });
+    return () => controller.abort();
+  }, [isBankStatement, bankAccounts]);
 
   const entityDef = useMemo(
     () => entities.find((e) => e.key === entity) ?? null,
@@ -287,6 +313,7 @@ function SingleFileImportWizard({
         uploadId: preview.uploadId,
         entity,
         mapping,
+        bankAccountId: isBankStatement ? (bankAccountId ?? undefined) : undefined,
       });
       setResult(data);
       setStep("done");
@@ -323,7 +350,11 @@ function SingleFileImportWizard({
   }
 
   const canCommit =
-    !busy && missingRequired.length === 0 && duplicateTargets.size === 0 && Boolean(entity);
+    !busy &&
+    missingRequired.length === 0 &&
+    duplicateTargets.size === 0 &&
+    Boolean(entity) &&
+    (!isBankStatement || bankAccountId !== null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -442,6 +473,32 @@ function SingleFileImportWizard({
                     ))}
                   </select>
                 </label>
+                {isBankStatement && bankAccounts !== null && bankAccounts.length > 0 && (
+                  <label className="flex items-center gap-2">
+                    <span>حساب بانکی:</span>
+                    <select
+                      value={bankAccountId ?? ""}
+                      disabled={busy}
+                      onChange={(e) => setBankAccountId(Number(e.target.value))}
+                      aria-label="حساب بانکی مقصد"
+                      className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+                    >
+                      {bankAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name} — {BANK_LABELS[account.bankCode]} — {account.accountNumber}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {isBankStatement && bankAccounts !== null && bankAccounts.length === 0 && (
+                  <span className="text-amber-600">
+                    حساب بانکی تعریف نشده است.{" "}
+                    <Link href="/app/accounting/bank" className="underline">
+                      تعریف حساب بانکی
+                    </Link>
+                  </span>
+                )}
                 {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
               </div>
             </CardContent>

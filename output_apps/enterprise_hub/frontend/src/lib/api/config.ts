@@ -42,6 +42,8 @@ export const HR_RESOURCE_PATH = "enterprise-hub/hr";
 /** مسیر پایه‌ی کنترلر Radar (رادار فناوری و ازدحام ایجنت‌ها) در NestJS */
 export const RADAR_RESOURCE_PATH = "enterprise-hub/radar";
 
+/** Bank accounts and bank reconciliation (NestJS BankingModule). */
+export const BANKING_RESOURCE_PATH = "enterprise-hub/banking";
 /** مسیر پایه‌ی کنترلر دستیار هوشمند روی داده‌های سازمان در NestJS */
 export const ASSISTANT_RESOURCE_PATH = "enterprise-hub/assistant";
 

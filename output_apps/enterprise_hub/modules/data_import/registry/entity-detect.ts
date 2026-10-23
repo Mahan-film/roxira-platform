@@ -152,3 +152,36 @@ export function buildEntityFallbackMapping(
   }
   return mapping;
 }
+
+/** How many leading rows are searched for the real header row. */
+export const HEADER_SCAN_ROWS = 15;
+
+/**
+ * Finds the header row when a sheet starts with title rows (bank name, account number, period:
+ * typical for Iranian bank statement exports). The row with the best synonym score across all
+ * entities wins, but only when it beats the first row by at least two recognised columns, so
+ * ordinary files keep row 0 as their header.
+ */
+export function locateHeaderRow(
+  rows: string[][],
+  adapters: EntityImportAdapter[],
+  maxScan: number = HEADER_SCAN_ROWS,
+): number {
+  if (rows.length < 2 || adapters.length === 0) {
+    return 0;
+  }
+  const score = (row: string[]) =>
+    Math.max(...adapters.map((adapter) => scoreEntityHeaders(row, adapter)));
+  const firstScore = score(rows[0]);
+  let bestIndex = 0;
+  let bestScore = firstScore;
+  const limit = Math.min(rows.length - 1, maxScan);
+  for (let index = 1; index < limit; index += 1) {
+    const rowScore = score(rows[index]);
+    if (rowScore > bestScore) {
+      bestScore = rowScore;
+      bestIndex = index;
+    }
+  }
+  return bestScore >= firstScore + 2 ? bestIndex : 0;
+}

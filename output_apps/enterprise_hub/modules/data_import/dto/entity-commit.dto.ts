@@ -1,10 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  Min,
   MinLength,
   ValidationOptions,
   registerDecorator,
@@ -71,4 +74,14 @@ export class EntityCommitDto {
   @IsObject({ message: 'نگاشت ستون‌ها باید یک شیء باشد.' })
   @IsEntityFieldMapping()
   mapping: Record<string, string | null>;
+
+  @ApiPropertyOptional({
+    description: 'حساب بانکی مقصد (فقط برای موجودیت bank-statement)',
+    example: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'شناسه حساب بانکی نامعتبر است.' })
+  @Min(1)
+  bankAccountId?: number;
 }

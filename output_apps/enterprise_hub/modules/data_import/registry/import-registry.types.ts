@@ -77,6 +77,12 @@ export interface UndoOutcome {
   refused: RefusedRow[];
 }
 
+/** Extra commit options chosen in the import wizard (only some entities use them). */
+export interface AdapterCommitContext {
+  /** Target bank account for `bank-statement` rows. */
+  bankAccountId?: number;
+}
+
 /**
  * آداپتور یک موجودیت برای ورود داده.
  *
@@ -97,6 +103,7 @@ export interface EntityImportAdapter {
   commit(
     tenantId: string,
     records: NormalisedRecord[],
+    context?: AdapterCommitContext,
   ): Promise<AdapterCommitResult>;
   undo(tenantId: string, ownerIds: ImportOwnerId[]): Promise<UndoOutcome>;
 }

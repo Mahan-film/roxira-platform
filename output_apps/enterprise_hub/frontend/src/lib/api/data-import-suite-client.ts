@@ -70,6 +70,8 @@ export interface ImportCommitRequest {
   uploadId: string;
   entity: string;
   mapping: Record<string, string | null>;
+  /** Target bank account (only for the `bank-statement` entity). */
+  bankAccountId?: number;
 }
 
 export interface ImportCommitResult {

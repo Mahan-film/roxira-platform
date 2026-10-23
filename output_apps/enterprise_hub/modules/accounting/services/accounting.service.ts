@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FindOptionsWhere, ILike } from 'typeorm';
+import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
 import {
@@ -65,6 +65,18 @@ export interface AccountingOpeningBalanceInput {
   credit?: number;
   description?: string;
   date?: string;
+}
+
+/** سطر دفتر یک حساب برای ماژول‌های مصرف‌کننده (تطبیق بانکی). */
+export interface LedgerLineView {
+  id: number;
+  journalEntryId: number;
+  entryNumber: string;
+  date: Date;
+  description: string | null;
+  entryDescription: string;
+  debit: number;
+  credit: number;
 }
 
 /** سطر سند پس از عادی‌سازی و اعتبارسنجی در لایه سرویس. */
@@ -424,6 +436,7 @@ export class AccountingService {
   async createJournalEntry(
     tenantId: string,
     dto: CreateJournalEntryDto,
+    manager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId);
 
@@ -492,6 +505,7 @@ export class AccountingService {
         status: JournalEntryStatus.POSTED,
       },
       lineInputs,
+      manager,
     );
 
     return this.toEntryDto(saved);
@@ -645,6 +659,52 @@ export class AccountingService {
       totalAmountFx,
       totalFxInIrr,
     };
+  }
+
+  /** حساب دفتر کل با شناسه (فقط همین مستأجر)؛ برای اتصال حساب بانکی. */
+  async findAccountById(
+    tenantId: string,
+    id: number,
+  ): Promise<AccountResponseDto | null> {
+    await this.ensureDefaultAccounts(tenantId);
+    const account = await this.accountingRepository.findAccountById(
+      tenantId,
+      id,
+    );
+    return account ? this.toAccountDto(account) : null;
+  }
+
+  /**
+   * سطرهای دفتر یک حساب (با شناسه سطر) برای تطبیق بانکی؛ مبالغ عددی ریالی.
+   * با `lineIds` فقط همان سطرها (در همین حساب و مستأجر) برمی‌گردند.
+   */
+  async listLedgerLines(
+    tenantId: string,
+    accountId: number,
+    options: { fromDate?: Date; toDate?: Date; lineIds?: number[] } = {},
+  ): Promise<LedgerLineView[]> {
+    const rows = options.lineIds
+      ? await this.accountingRepository.findLedgerLinesByIds(
+          tenantId,
+          accountId,
+          options.lineIds,
+        )
+      : await this.accountingRepository.getAccountLedger(
+          tenantId,
+          accountId,
+          options.fromDate,
+          options.toDate,
+        );
+    return rows.map((row) => ({
+      id: Number(row.id),
+      journalEntryId: Number(row.journalEntryId),
+      entryNumber: row.entryNumber,
+      date: new Date(row.date),
+      description: row.lineDescription ?? row.entryDescription,
+      entryDescription: row.entryDescription,
+      debit: this.round(Number(row.debit)),
+      credit: this.round(Number(row.credit)),
+    }));
   }
 
   /**
