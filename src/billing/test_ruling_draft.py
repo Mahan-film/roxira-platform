@@ -305,3 +305,25 @@ def test_validation_error_does_not_leak_content():
 def test_module_is_valid_python_311():
     src = Path(rd.__file__).read_text(encoding="utf-8")
     ast.parse(src, feature_version=(3, 11))
+
+
+def test_unverified_article_mention_stripped_from_operative_part_and_reasoning():
+    # The guard rejected «ماده 35 قانون ثبت»; its mention must not survive in the free text.
+    resp = llm_json(
+        operative="پیشنهاد محکومیت با رعایت سقف موضوع ماده 35 قانون ثبت و ماده ۲۱۹ قانون مدنی",
+        legal_reasoning=[{
+            "issue": "الزام",
+            "articles": [{"law_name": "قانون مدنی", "article_no": "219"}],
+            "reasoning": "طبق ماده 219 و ماده ۳۵ قانون ثبت",
+        }],
+    )
+    out = run(make_case(), resp)
+    assert_invariants(out)
+    assert out["status"] == "AI_DRAFT_UNVERIFIED"
+    part = out["proposed_operative_part"]
+    assert "35" not in part and "۳۵" not in part
+    assert "219" in part
+    assert rd.UNVERIFIED_MENTION in part
+    reasoning = out["legal_reasoning"][0]["reasoning"]
+    assert "35" not in reasoning and "219" in reasoning
+    assert any("تأیید نشد" in m for m in out["missing_information"])

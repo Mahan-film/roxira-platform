@@ -53,8 +53,31 @@ OPERATIVE_PART_RULES = (
     "3) اگر بخشی از خواسته به داده‌ای بیرون از پرونده وابسته است (مثلاً شاخص بانک مرکزی برای "
     "خسارت تأخیر تأدیه)، اصل خواسته را پیشنهاد بده و آن بخش را «منوط به محاسبه/احراز» اعلام کن.\n"
     "4) در legal_reasoning برای هر خواسته یک مورد جدا بیاور و فقط مواد مرتبط از فهرست مجاز را "
-    "در آن استناد کن (بار اثبات، مبنای ماهوی، خسارت، هزینهٔ دادرسی)."
+    "در آن استناد کن (بار اثبات، مبنای ماهوی، خسارت، هزینهٔ دادرسی).\n"
+    "5) در متن نتیجهٔ پیشنهادی و استدلال، به هیچ ماده، سقف، نرخ یا درصدی اشاره نکن که در فهرست "
+    "مواد مجاز نیست."
 )
+# «ماده N» mentions in free text; a mention whose number is not among the verified articles is
+# replaced, so a citation rejected by the guard cannot survive inside the operative part.
+_ARTICLE_MENTION_RE = re.compile(r"ماده(?:\s*ی|\s*ٔ)?\s*([0-9۰-۹٠-٩]+)")
+UNVERIFIED_MENTION = "[استناد تأییدنشده حذف شد]"
+_FA_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def _strip_unverified_mentions(text: str, verified_numbers: set) -> Tuple[str, bool]:
+    changed = False
+
+    def _sub(match: "re.Match[str]") -> str:
+        nonlocal changed
+        number = str(int(match.group(1).translate(_FA_DIGITS)))
+        if number in verified_numbers:
+            return match.group(0)
+        changed = True
+        return UNVERIFIED_MENTION
+
+    return _ARTICLE_MENTION_RE.sub(_sub, text or ""), changed
+
+
 LATIN_DIGITS_RULE = "همهٔ ارقام را فقط با ارقام لاتین 0-9 بنویس (Use Latin digits)."
 
 # court_type -> display name, party labels (side_a, side_b) and a short structure checklist.
@@ -507,6 +530,22 @@ def generate_ruling_draft(
 
     if not reasoning_out:
         return _insufficient(missing + ["هیچ ماده قانونی معتبر و تأییدشده‌ای باقی نماند"], removed)
+
+    verified_numbers = {
+        str(int(re.sub(r"\D", "", str(a["article_no"]).translate(_FA_DIGITS)) or 0))
+        for item in reasoning_out
+        for a in item["articles"]
+    }
+    stripped_any = False
+    for item in reasoning_out:
+        item["reasoning"], changed = _strip_unverified_mentions(item["reasoning"], verified_numbers)
+        stripped_any = stripped_any or changed
+    result["proposed_operative_part"], changed = _strip_unverified_mentions(
+        result["proposed_operative_part"], verified_numbers
+    )
+    stripped_any = stripped_any or changed
+    if stripped_any:
+        missing.append("اشاره به ماده‌ای که تأیید نشد از متن پیش‌نویس حذف شد")
 
     result["legal_reasoning"] = reasoning_out
     if case.court_type in CRIMINAL_COURT_TYPES:
