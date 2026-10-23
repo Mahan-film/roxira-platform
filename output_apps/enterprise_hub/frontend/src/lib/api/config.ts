@@ -42,6 +42,9 @@ export const HR_RESOURCE_PATH = "enterprise-hub/hr";
 /** مسیر پایه‌ی کنترلر Radar (رادار فناوری و ازدحام ایجنت‌ها) در NestJS */
 export const RADAR_RESOURCE_PATH = "enterprise-hub/radar";
 
+/** مسیر پایه‌ی کنترلر دستیار هوشمند روی داده‌های سازمان در NestJS */
+export const ASSISTANT_RESOURCE_PATH = "enterprise-hub/assistant";
+
 /** مسیر نسبی سمت مرورگر که توسط rewrite در next.config.ts پروکسی می‌شود */
 export const API_PROXY_BASE_PATH = "/api/backend";
 

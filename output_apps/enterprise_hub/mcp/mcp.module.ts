@@ -27,5 +27,6 @@ import { McpToolsService } from './mcp-tools.service';
   ],
   controllers: [McpController],
   providers: [McpToolsService, McpHttpHandler],
+  exports: [McpToolsService],
 })
 export class McpModule {}

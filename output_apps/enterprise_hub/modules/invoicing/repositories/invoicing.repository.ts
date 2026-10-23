@@ -159,4 +159,76 @@ export class InvoicingRepository {
 
     return query.getManyAndCount();
   }
+
+  /**
+   * جمع مبالغ صورتحساب‌های یک مستأجر به تفکیک ارز و وضعیت (فقط خواندنی).
+   *
+   * تاریخ مبنا زمان صدور است و برای پیش‌نویس‌ها زمان ایجاد. همه فیلترها با
+   * پارامتر bind می‌شوند و قید `tenantId` همیشه اعمال می‌شود (Rule #4).
+   */
+  async summarize(
+    tenantId: string,
+    options: {
+      statuses: InvoiceEntity['status'][];
+      from?: Date;
+      to?: Date;
+      buyerSearch?: string;
+    },
+  ): Promise<InvoiceSummaryRow[]> {
+    const query = this.repository
+      .createQueryBuilder('invoice')
+      .select('invoice.currency', 'currency')
+      .addSelect('invoice.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(invoice.finalPayable), 0)', 'total')
+      .addSelect('COALESCE(SUM(invoice.totalTax), 0)', 'tax')
+      .where('invoice.tenantId = :tenantId', { tenantId })
+      .andWhere('invoice.status IN (:...statuses)', {
+        statuses: options.statuses,
+      });
+
+    if (options.from) {
+      query.andWhere('COALESCE(invoice.issuedAt, invoice.createdAt) >= :from', {
+        from: options.from,
+      });
+    }
+    if (options.to) {
+      query.andWhere('COALESCE(invoice.issuedAt, invoice.createdAt) < :to', {
+        to: options.to,
+      });
+    }
+    if (options.buyerSearch) {
+      query.andWhere("invoice.buyerInfo ->> 'name' ILIKE :buyer", {
+        buyer: `%${options.buyerSearch.replace(/[\\%_]/g, '\\$&')}%`,
+      });
+    }
+
+    const rows = await query
+      .groupBy('invoice.currency')
+      .addGroupBy('invoice.status')
+      .getRawMany<{
+        currency: string;
+        status: InvoiceEntity['status'];
+        count: string;
+        total: string;
+        tax: string;
+      }>();
+
+    return rows.map((row) => ({
+      currency: row.currency as InvoiceEntity['currency'],
+      status: row.status,
+      count: Number(row.count),
+      total: Number(row.total),
+      tax: Number(row.tax),
+    }));
+  }
+}
+
+/** یک ردیف خلاصه صورتحساب‌ها (به تفکیک ارز و وضعیت). */
+export interface InvoiceSummaryRow {
+  currency: InvoiceEntity['currency'];
+  status: InvoiceEntity['status'];
+  count: number;
+  total: number;
+  tax: number;
 }

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  MessageSquareText,
   ReceiptText,
   Search,
   UserRound,
@@ -25,6 +26,7 @@ import { ImportHandoffProvider } from "@/components/app/import-handoff";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ClientErrorReporter } from "@/components/observability/client-error-reporter";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
+import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -43,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app/accounting", label: "حساب‌ها", icon: BookOpenCheck, nested: true },
   { href: "/app/invoicing", label: "صورتحساب‌ها", icon: ReceiptText, nested: true },
   { href: "/app/import", label: "ورود داده (import)", icon: FileUp, nested: true },
+  { href: "/app/assistant", label: "دستیار هوشمند", icon: MessageSquareText, nested: false },
 ];
 
 function isActive(pathname: string, item: NavItem): boolean {
@@ -58,6 +61,10 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const { user, logout } = useAuth();
+  const assistantEnabled = useAssistantEnabled() === true;
+  const navItems = NAV_ITEMS.filter(
+    (item) => assistantEnabled || item.href !== "/app/assistant",
+  );
   return (
     <div className="flex h-full flex-col gap-4">
       <Link
@@ -77,7 +84,7 @@ function SidebarContent({
       </Link>
 
       <nav aria-label="منوی نرم‌افزار" className="flex flex-1 flex-col gap-1">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const active = isActive(pathname, item);
           const Icon = item.icon;
           return (

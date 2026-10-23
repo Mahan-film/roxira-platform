@@ -8,6 +8,7 @@ import {
   Database,
   FileUp,
   LayoutDashboard,
+  MessageSquareText,
   Plus,
   ReceiptText,
   Search,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { useImportHandoff } from "@/components/app/import-handoff";
+import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { cn } from "@/lib/utils";
 
 interface CommandAction {
@@ -67,6 +69,8 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
+  const assistantEnabled = useAssistantEnabled() === true;
+
   const actions = useMemo<CommandAction[]>(() => {
     const go = (href: string) => () => {
       onOpenChange(false);
@@ -78,7 +82,7 @@ export function CommandPalette({
       onOpenChange(false);
       router.push("/app/import");
     };
-    return [
+    const all: CommandAction[] = [
       {
         id: "dashboard",
         labelFa: "داشبورد",
@@ -136,6 +140,14 @@ export function CommandPalette({
         run: go("/app/import"),
       },
       {
+        id: "assistant",
+        labelFa: "دستیار هوشمند",
+        labelEn: "AI assistant",
+        keywords: ["دستیار", "پرسش", "هوش مصنوعی", "assistant", "ai", "ask"],
+        icon: MessageSquareText,
+        run: go("/app/assistant"),
+      },
+      {
         id: "new-lead",
         labelFa: "سرنخ جدید",
         labelEn: "New lead",
@@ -176,7 +188,8 @@ export function CommandPalette({
         run: goImport("package"),
       },
     ];
-  }, [onOpenChange, router, setPendingFile, setPendingTab]);
+    return all.filter((action) => assistantEnabled || action.id !== "assistant");
+  }, [assistantEnabled, onOpenChange, router, setPendingFile, setPendingTab]);
 
   const results = useMemo(() => {
     const q = query.trim();

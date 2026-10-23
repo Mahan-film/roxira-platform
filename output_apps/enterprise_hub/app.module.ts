@@ -24,6 +24,7 @@ import { RadarModule } from './modules/radar/radar.module';
 import { InquiriesModule } from './modules/inquiries/inquiries.module';
 import { ClientErrorsModule } from './modules/client-errors/client-errors.module';
 import { McpModule } from './mcp/mcp.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
   (file) => {
@@ -87,6 +88,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     InquiriesModule,
     ClientErrorsModule,
     McpModule,
+    AssistantModule,
   ],
 })
 export class AppModule {}

@@ -40,7 +40,10 @@ import {
 } from '../entities/invoice.entity';
 import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
-import { InvoicingRepository } from '../repositories/invoicing.repository';
+import {
+  InvoiceSummaryRow,
+  InvoicingRepository,
+} from '../repositories/invoicing.repository';
 
 /** مجموع‌های محاسبه‌شده سمت سرور برای اقلام صورتحساب. */
 interface InvoiceTotals {
@@ -783,6 +786,25 @@ export class InvoicingService {
     }
 
     return this.toResponseDto(saved);
+  }
+
+  /**
+   * خلاصه فقط‌خواندنی صورتحساب‌ها به تفکیک ارز و وضعیت (دستیار هوشمند).
+   * مبالغ به ارز خود صورتحساب‌اند و تبدیل نمی‌شوند.
+   */
+  async summarize(
+    tenantId: string,
+    options: {
+      statuses: InvoiceStatus[];
+      from?: Date;
+      to?: Date;
+      buyerSearch?: string;
+    },
+  ): Promise<InvoiceSummaryRow[]> {
+    if (options.statuses.length === 0) {
+      return [];
+    }
+    return this.invoicingRepository.summarize(tenantId, options);
   }
 
   // ---------------------------------------------------------------------------
