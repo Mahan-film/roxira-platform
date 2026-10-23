@@ -12,6 +12,8 @@ No secrets in the repo; e-mail reuses `BACKUP_SMTP_USER`, `BACKUP_SMTP_PASS`, `B
 | `judge-health` (`/api/v1/apps/judge/health`, fallback `/health`) | synthetic_check | 5 min | neither returns 200 |
 | `chat` real round-trip with `request_id` `synthetic-*` | synthetic_check | 15 min (`MONITOR_CHAT_INTERVAL_MIN`) | not 200, empty `reply`, >= 45 s, or reply lacks "۲۰"/"20"/"بیست" (one retry) |
 | `tls:<domain>` certificate | synthetic_check | 5 min | < 21 days left (`MONITOR_CERT_WARN_DAYS`) |
+| `site:<host/path>` extra pages, opt-in via `MONITOR_PATHS` (empty by default; e.g. `roxira.ir/app` once confirmed to return 200 from srv1) | synthetic_check | 5 min | not 200 or >= 5 s (one retry) |
+| `domain:<domain>` registration expiry via WHOIS (`domain_expiry.py`, .ir/.net/.com) | synthetic_check | 6 h (`MONITOR_WHOIS_INTERVAL_H`) | < 30 days left (`MONITOR_DOMAIN_WARN_DAYS`) or not registered; no WHOIS answer = skipped, never an alert |
 | `disk:/` (server only, `MONITOR_CHECK_DISK=1`) | synthetic_check | 5 min | > 85 % (`MONITOR_DISK_WARN_PCT`) |
 | `logs:api-5xx` (app and nginx logs) | log_watch | 5 min, 10 min window | > 3 5xx on `/api/` (`MONITOR_5XX_MAX`) |
 | `logs:client-errors` (`[CLIENT-ERROR]`) | log_watch | same | > 10 (`MONITOR_CLIENT_ERR_MAX`) |

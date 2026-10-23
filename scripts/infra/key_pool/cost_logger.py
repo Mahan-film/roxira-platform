@@ -6,8 +6,11 @@ Wired in by render_litellm.py as `cost_logger.proxy_handler_instance` when
 $KEYPOOL_COST_LOG (default /logs/requests.jsonl); the host directory /var/log/roxira-keypool
 is bind-mounted there by docker-compose.keypool.yml.
 
-Only counts, costs, timing and model ids are written. Prompts, responses, keys, headers and
-user ids are NEVER logged. Logging must never break a request: every path is wrapped in
+Only counts, costs, timing and model ids are written, plus the cost-attribution tags the app
+sends as request `metadata` (llm_gateway.tag(): `roxira_answer_id`, `roxira_feature`,
+`roxira_tenant`, `roxira_plan`; whitelisted and length-capped here) and the deployment's
+free/paid tier from its model_info. Prompts, responses, keys, headers and user ids are NEVER
+logged. Logging must never break a request: every path is wrapped in
 try/except and errors are swallowed.
 """
 from __future__ import annotations
@@ -29,6 +32,15 @@ except Exception:  # pragma: no cover - only when litellm is absent
 
 DEFAULT_LOG_PATH = "/logs/requests.jsonl"
 DEFAULT_MAX_BYTES = 200 * 1024 * 1024
+# request metadata key -> record field. Nothing else from metadata is ever written.
+TAG_KEYS = {
+    "roxira_answer_id": "answer_id",
+    "roxira_feature": "feature",
+    "roxira_tenant": "tenant",
+    "roxira_plan": "plan",
+}
+_TAG_MAX = 64
+_TAG_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-")
 
 
 def _num(value: Any) -> int:
@@ -52,6 +64,44 @@ def _latency_ms(start_time: Any, end_time: Any) -> int:
     except Exception:
         return 0
     return max(0, int(round(delta * 1000)))
+
+
+def _tag_value(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return "".join(ch for ch in value if ch in _TAG_CHARS)[:_TAG_MAX]
+
+
+def _tags(
+    kw: dict[str, Any], slo: dict[str, Any], litellm_params: dict[str, Any]
+) -> dict[str, str]:
+    """The whitelisted roxira_* request tags, wherever this LiteLLM build put them."""
+    sources: list[Any] = []
+    slo_meta = slo.get("metadata")
+    if isinstance(slo_meta, dict):
+        sources.append(slo_meta.get("requester_metadata"))
+    lp_meta = litellm_params.get("metadata")
+    if isinstance(lp_meta, dict):
+        sources.extend([lp_meta.get("requester_metadata"), lp_meta])
+    kw_meta = kw.get("metadata")
+    if isinstance(kw_meta, dict):
+        sources.extend([kw_meta.get("requester_metadata"), kw_meta])
+    out = {field: "" for field in TAG_KEYS.values()}
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        for key, field in TAG_KEYS.items():
+            if not out[field]:
+                out[field] = _tag_value(src.get(key))
+    return out
+
+
+def _tier(litellm_params: dict[str, Any], kw: dict[str, Any]) -> str:
+    """'free' / 'paid' from the deployment's model_info (render_litellm sets it); '' if unknown."""
+    for info in (litellm_params.get("model_info"), kw.get("model_info")):
+        if isinstance(info, dict) and info.get("tier") in ("free", "paid"):
+            return str(info["tier"])
+    return ""
 
 
 def build_record(
@@ -102,6 +152,7 @@ def build_record(
     if not math.isfinite(cost) or cost < 0:
         cost = 0.0
 
+    tags = _tags(kw, slo, litellm_params)
     return {
         "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "model_group": model_group,
@@ -113,6 +164,8 @@ def build_record(
         "latency_ms": _latency_ms(start_time, end_time),
         "success": bool(success),
         "error": type(error).__name__ if error is not None else "",
+        "tier": _tier(litellm_params, kw),
+        **tags,
     }
 
 

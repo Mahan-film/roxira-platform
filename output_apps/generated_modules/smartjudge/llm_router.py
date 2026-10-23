@@ -732,6 +732,12 @@ async def complete(
         gw_body["messages"] = messages
         # No OpenRouter-only `reasoning`/`usage` here: Groq and Mistral reject unknown body fields (HTTP 400).
         gw_body.pop("usage", None)
+        # Cost attribution in the key-pool log; a call outside an answer context is its own answer.
+        llm_gateway.tag(
+            gw_body, feature=feature, tenant=tenant, plan=plan,
+            **({} if llm_gateway.call_tags().get("roxira_answer_id")
+               else {"answer_id": llm_gateway.new_answer_id()}),
+        )
         try:
             data, attempts = await _post_with_reasoning_fallback(
                 gw_body, fail_fast_on_429=False, timeout=timeout, max_retries=max_retries,

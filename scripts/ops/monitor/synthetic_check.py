@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Synthetic production monitor: HTTP, judge health, real chat round-trip, TLS, disk.
+"""Synthetic production monitor: HTTP, judge health, real chat round-trip, TLS, domain expiry, disk.
 
 Stdlib only. Alerts by e-mail only on state change plus a reminder every 2 h.
 
 Usage: synthetic_check.py [--once] [--dry-run] [--force-chat] [--state PATH]
 Env (names only): MONITOR_DOMAINS, MONITOR_CHAT_BASE, MONITOR_CHAT_INTERVAL_MIN,
-MONITOR_CHAT_TIMEOUT_S, MONITOR_CERT_WARN_DAYS, MONITOR_DISK_WARN_PCT,
+MONITOR_CHAT_TIMEOUT_S, MONITOR_CERT_WARN_DAYS, MONITOR_DISK_WARN_PCT, MONITOR_PATHS,
+MONITOR_DOMAIN_WARN_DAYS, MONITOR_WHOIS_INTERVAL_H,
 MONITOR_CHECK_DISK, MONITOR_STATE_FILE, MONITOR_SILENCE, MONITOR_BYPASS_TOKEN,
 BACKUP_SMTP_USER, BACKUP_SMTP_PASS, BACKUP_NOTIFY_TO.
 """
@@ -26,9 +27,14 @@ import uuid
 from http.client import HTTPException
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import domain_expiry  # noqa: E402
 import monitor_common as mc  # noqa: E402
 
 DEFAULT_DOMAINS = "ghazihoushmand.ir,roxira.ir,roxira.net"
+# Extra pages that must answer 200, as host/path (comma separated), e.g. "roxira.ir/app".
+# Opt-in (empty by default): set MONITOR_PATHS only after confirming the page returns 200
+# from srv1 (not a 401 or a redirect to a login page).
+DEFAULT_PATHS = ""
 CHAT_QUESTION = "مهلت تجدیدنظرخواهی از رأی دادگاه حقوقی چند روز است؟"
 SANITY_MARKERS = ("۲۰", "20", "بیست")
 HTTP_TIMEOUT_S = 5.0
@@ -71,6 +77,11 @@ def _guard(fn, *args):
         return fn(*args)
     except Exception as exc:  # noqa: BLE001 - one broken check must not stop the run
         return False, f"unexpected {type(exc).__name__}: {mc.scrub(str(exc), 80)}"
+
+
+def whois_due(state: dict, now: float, interval_h: float) -> bool:
+    """WHOIS only every few hours: registries rate-limit and expiry moves in days."""
+    return now - state.get("last_whois_ts", 0) >= interval_h * 3600 - 30
 
 
 def check_site(domain: str):
@@ -174,6 +185,16 @@ def run(args) -> int:
         for d in domains:
             results[f"site:{d}"] = _guard(check_site, d)
             results[f"tls:{d}"] = _guard(check_cert, d, warn_days)
+        for p in os.environ.get("MONITOR_PATHS", DEFAULT_PATHS).split(","):
+            if p.strip():
+                results[f"site:{p.strip()}"] = _guard(check_site, p.strip().rstrip("/"))
+        if whois_due(state, now, env_f("MONITOR_WHOIS_INTERVAL_H", 6)):
+            domain_warn = env_f("MONITOR_DOMAIN_WARN_DAYS", 30)
+            for d in domains:
+                verdict = _guard(domain_expiry.check_domain_expiry, d, domain_warn)
+                if verdict is not None:  # no WHOIS answer: skip, keep the previous state
+                    results[f"domain:{d}"] = verdict
+            state["last_whois_ts"] = now
         results["judge-health"] = _guard(check_health, base)
         if chat_due(state, now, env_f("MONITOR_CHAT_INTERVAL_MIN", 15), args.force_chat):
             results["chat"] = _guard(check_chat, base)

@@ -1,0 +1,15 @@
+% This is the IRNIC Whois server v1.6.2.
+% Available on web at http://whois.nic.ir/
+% Find the terms and conditions of use on http://www.nic.ir/
+
+domain:		ghazihoushmand.ir
+ascii:		ghazihoushmand.ir
+remarks:	(Domain Holder) EXAMPLE HOLDER
+holder-c:	ex00-irnic
+admin-c:	ex00-irnic
+tech-c:		ex00-irnic
+nserver:	ns1.example-dns.com
+nserver:	ns2.example-dns.com
+last-updated:	2026-10-22
+expire-date:	2026-11-10
+source:		IRNIC # Filtered

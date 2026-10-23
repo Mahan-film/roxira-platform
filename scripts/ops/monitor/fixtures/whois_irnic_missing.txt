@@ -1,0 +1,3 @@
+% This is the IRNIC Whois server v1.6.2.
+%ERROR:101: no entries found
+% No entries found for the selected source(s).

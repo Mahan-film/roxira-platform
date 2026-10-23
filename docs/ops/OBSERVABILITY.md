@@ -138,6 +138,43 @@ Window: the last 7 days, UTC, ending at the run time. Each section fails soft an
 | Agent queue | `taskq.db` (`TASKQ_DB`, opened `mode=ro`) | done, failed, attempts, average attempts per task, queued and running now |
 | Deploys | `/root/deploy-state/*.json*` (`AUTODEPLOY_STATE_DIR`) | records in the window, ok and failed, last result |
 
+### Cost per answer (LLM call tags)
+
+**Opt-in: off until `SMARTJUDGE_LLM_CALL_TAGS=1`** (the owner turns it on after the smoke test
+below). When on, every Smart Judge request to the key-pool gateway carries LiteLLM request `metadata`
+(`llm_gateway.tag()`): `roxira_answer_id`, `roxira_feature`, `roxira_tenant`, `roxira_plan`.
+LiteLLM keeps it out of the provider call (it only forwards `metadata` with
+`enable_preview_features`, which the key pool never sets) and `cost_logger.py` writes these
+whitelisted keys plus the deployment's free/paid `tier` into `requests.jsonl`.
+- Answer id: chat uses the client `request_id` (else a random id) for every call of one answer,
+  including gateway retries and fallbacks; ruling and indictment drafts use their `request_id`;
+  any other gateway call through `llm_router.complete` is its own answer. Feature names:
+  `chat`, `consult`, `consult_voice`, `chat_stream`, `contract_summary`, `ruling_draft`,
+  `indictment_draft`, `*_draft`, ... (the `feature=` the caller passes).
+- Prerequisite: the key pool must load the new `cost_logger.py` (bind-mounted from the repo; run
+  `bash scripts/infra/key_pool/install.sh --apply` after the merge so the container restarts).
+- Smoke test before turning it on (on srv1; the key never leaves the server): send one request
+  with `metadata` to each free group and confirm HTTP 200 and a tagged line in the log:
+  ```bash
+  source /opt/roxira_platform/.env
+  for g in best-product-free product-free; do
+    curl -s -o /dev/null -w "$g %{http_code}\n" http://127.0.0.1:4000/v1/chat/completions \
+      -H "Authorization: Bearer $KEYPOOL_MASTER_KEY" -H 'Content-Type: application/json' \
+      -d "{\"model\":\"$g\",\"messages\":[{\"role\":\"user\",\"content\":\"سلام\"}],\"max_tokens\":20,\"metadata\":{\"roxira_answer_id\":\"smoke-$g\",\"roxira_feature\":\"smoke\"}}"
+  done
+  grep '"answer_id":"smoke-' /var/log/roxira-keypool/requests.jsonl | tail -n 4
+  ```
+  Expect `200` for both groups and lines with `"answer_id":"smoke-…"`, `"success":true` and a
+  Groq/Gemini/Mistral deployment. Repeat until a Groq and a Mistral deployment have each served
+  one (simple-shuffle picks per request). Then set `SMARTJUDGE_LLM_CALL_TAGS=1` and recreate
+  `enterprise_app`. Rollback: unset it and recreate.
+- `cost_report.py` prints per feature (calls, answers, cost, cost per answer, p50/p95 answer
+  latency), per answer (mean/p50/p95/max cost, top 3) and the free vs paid share;
+  `--weekly-fa` prints a Persian 7-day summary (plain text; not wired to any bot).
+- Not in this log: calls that go straight to OpenRouter (case-file OCR/summaries, the document
+  processor's vision OCR, and the business suite's AI import in `enterprise_hub`), because they
+  never pass the key pool. Their cost is only on the OpenRouter dashboard.
+
 The report never prints tokens or prompts. It goes through `notify.send()`, which scrubs phone numbers, e-mails,
 IPs and long tokens, and is a silent no-op when the bot is not configured.
 

@@ -103,3 +103,40 @@ def test_size_guard_rotates_keeping_one(monkeypatch, tmp_path):
     _run(logger.async_log_success_event(_kwargs(), _Resp(), None, None))
     assert path.exists()
     assert pathlib.Path(str(path) + ".1").exists()
+
+
+def test_request_tags_and_tier_are_logged_whitelisted(monkeypatch, tmp_path):
+    path = tmp_path / "requests.jsonl"
+    monkeypatch.setenv("KEYPOOL_COST_LOG", str(path))
+    kwargs = _kwargs()
+    requester = {
+        "roxira_answer_id": "req-42", "roxira_feature": "chat", "roxira_plan": "pro",
+        "roxira_tenant": "00000000-0000-0000-0000-000000000001",
+        "user_phone": "09120000000", "roxira_note": "SECRET NOTE",
+    }
+    kwargs["standard_logging_object"]["metadata"] = {"requester_metadata": requester}
+    kwargs["litellm_params"]["model_info"] = {"id": "x", "tier": "free", "data_policy": "may_log"}
+    _run(cost_logger.CostLogger().async_log_success_event(kwargs, _Resp(), None, None))
+
+    text = path.read_text(encoding="utf-8")
+    rec = json.loads(text.strip())
+    assert rec["answer_id"] == "req-42"
+    assert rec["feature"] == "chat"
+    assert rec["plan"] == "pro"
+    assert rec["tenant"] == "00000000-0000-0000-0000-000000000001"
+    assert rec["tier"] == "free"
+    for forbidden in ("09120000000", "SECRET NOTE", "user_phone", "roxira_note", "may_log"):
+        assert forbidden not in text
+
+
+def test_tags_from_litellm_params_metadata_are_sanitised(monkeypatch, tmp_path):
+    path = tmp_path / "requests.jsonl"
+    monkeypatch.setenv("KEYPOOL_COST_LOG", str(path))
+    kwargs = _kwargs()
+    kwargs["litellm_params"]["metadata"] = {
+        "roxira_answer_id": 'a"b c\n' + "x" * 200, "roxira_feature": ["not", "a", "string"],
+    }
+    _run(cost_logger.CostLogger().async_log_success_event(kwargs, _Resp(), None, None))
+    rec = json.loads(path.read_text(encoding="utf-8").strip())
+    assert rec["answer_id"] == "abc" + "x" * 61
+    assert rec["feature"] == "" and rec["tier"] == ""

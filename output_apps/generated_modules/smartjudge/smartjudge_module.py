@@ -93,6 +93,7 @@ import secrets
 import base64
 import struct
 import asyncio
+import contextlib
 import contextvars
 from typing import Optional, List, Any
 from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile, Depends, Form
@@ -1686,10 +1687,14 @@ async def _run_consult(payload: dict, request, user, stream_cb=None):
     request_id = chat_auth.extract_request_id(payload, request.headers if request is not None else None)
     timing: dict = {}
     token = _chat_timing.set(timing)
+    # One answer id for every gateway call of this answer (key-pool cost log, cost_report.py).
+    tags = (_llm_gateway.call_context(answer_id=request_id or _llm_gateway.new_answer_id(), feature="chat")
+            if _llm_gateway is not None else contextlib.nullcontext())
     try:
-        if request_id and not user.token_invalid:
-            return await _consult_idempotent(payload, request, user, request_id, stream_cb)
-        return await _consult_core(payload, request, user, *([stream_cb] if stream_cb else []))
+        with tags:
+            if request_id and not user.token_invalid:
+                return await _consult_idempotent(payload, request, user, request_id, stream_cb)
+            return await _consult_core(payload, request, user, *([stream_cb] if stream_cb else []))
     finally:
         _chat_timing.reset(token)
         # one line per request; never the message text or phone
@@ -1807,6 +1812,7 @@ def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature
             if reasoning is not None:
                 body["reasoning"] = reasoning
         if gateway:
+            _llm_gateway.tag(body)  # answer id / feature / plan from _run_consult's call_context
             url = _llm_gateway.chat_completions_url()
             headers = _llm_gateway.headers()
         else:
@@ -1850,11 +1856,12 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
     # Free-first key-pool gateway (SMARTJUDGE_LLM_GATEWAY), if configured. A
     # failure here (network/5xx/timeout) falls back to the direct path below.
     if _gateway_ready():
-        gw_outcome = await _chat_fast.stream_with_fallback(
-            [(_llm_gateway.model_for(gateway_plan or selected_tier), ttft_s or CHAT_TTFT_FAST_S)],
-            _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, {}, gateway=True),
-            on_delta, total_timeout=total_timeout or CHAT_LLM_TOTAL_S,
-        )
+        with _llm_gateway.call_context(plan=gateway_plan or selected_tier):
+            gw_outcome = await _chat_fast.stream_with_fallback(
+                [(_llm_gateway.model_for(gateway_plan or selected_tier), ttft_s or CHAT_TTFT_FAST_S)],
+                _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, {}, gateway=True),
+                on_delta, total_timeout=total_timeout or CHAT_LLM_TOTAL_S,
+            )
         if gw_outcome.text:
             _llm_gateway.log_served("gateway", gw_outcome.model)
             return gw_outcome, "ok"
@@ -4082,7 +4089,7 @@ def _apply_cache_control(msgs: List[dict]) -> List[dict]:
 
 
 async def _openrouter_stream(model: str, messages: List[dict], usage_out: Optional[dict] = None,
-                             *, gateway: bool = False):
+                             *, gateway: bool = False, answer_id: Optional[str] = None):
     """استریم توکن‌به‌توکن؛ مسیر مستقیم OpenRouter یا gateway آزاد-اول (async generator)."""
     if gateway:
         url = _llm_gateway.chat_completions_url()
@@ -4104,6 +4111,8 @@ async def _openrouter_stream(model: str, messages: List[dict], usage_out: Option
         "temperature": 0.3,
         "usage": {"include": True},
     }
+    if gateway:
+        _llm_gateway.tag(body, feature="chat_stream", plan="VIP", answer_id=answer_id)
     timeout = httpx.Timeout(120.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream("POST", url, json=body, headers=headers) as resp:
@@ -4453,12 +4462,13 @@ async def chat_stream(request: Request, payload: dict = Body(default=None)):
 
         last_error = None
         attempts = []
+        answer_id = _llm_gateway.new_answer_id() if _llm_gateway is not None else None
         if _gateway_ready():  # free-first key-pool gateway first, direct models as fallback
             attempts.append((_llm_gateway.model_for("VIP"), True))  # route is VIP-gated
         attempts += [(cfg["primary_model"], False), (cfg["fallback_model"], False)]
         for model, via_gateway in attempts:
             usage_out: dict = {}
-            stream_kwargs = {"gateway": True} if via_gateway else {}
+            stream_kwargs = {"gateway": True, "answer_id": answer_id} if via_gateway else {}
             try:
                 async for chunk in _openrouter_stream(model, messages, usage_out, **stream_kwargs):
                     yield _sse_frame("delta", {"content": _chat_safety.to_latin_digits(chunk)})
@@ -6611,13 +6621,16 @@ async def draft_ruling(request: Request, body: RulingDraftRequest):
     def _verify(text):
         return _bridge(_guard_citations(text, use_qdrant=True))
 
-    result = await asyncio.to_thread(
-        _ruling_draft.generate_ruling_draft,
-        case,
-        retrieve=_retrieve,
-        call_llm=_call_llm,
-        verify_citations=_verify,
-    )
+    tags = (_llm_gateway.call_context(answer_id=request_id)
+            if _llm_gateway is not None else contextlib.nullcontext())
+    with tags:  # asyncio.to_thread and the _bridge tasks inherit the answer id
+        result = await asyncio.to_thread(
+            _ruling_draft.generate_ruling_draft,
+            case,
+            retrieve=_retrieve,
+            call_llm=_call_llm,
+            verify_citations=_verify,
+        )
     print(
         f"[SMARTJUDGE][RULING-DRAFT] request_id={request_id} status={result.get('status')}",
         file=sys.stderr,
@@ -6752,13 +6765,16 @@ async def draft_indictment(request: Request, body: IndictmentDraftRequest):
         query = ((c.charges_hint or "") + "\n" + c.facts)[:_RULING_QUERY_MAX_CHARS]
         return _bridge(_ruling_retrieve_laws_with_core(query, (c.charges_hint or "") + "\n" + c.facts))
 
-    result = await asyncio.to_thread(
-        _indictment_draft.generate_indictment_draft,
-        case,
-        retrieve=_retrieve,
-        call_llm=lambda prompt: _bridge(_indictment_complete(prompt)),
-        verify_citations=lambda text: _bridge(_guard_citations(text, use_qdrant=True)),
-    )
+    tags = (_llm_gateway.call_context(answer_id=request_id)
+            if _llm_gateway is not None else contextlib.nullcontext())
+    with tags:  # asyncio.to_thread and the _bridge tasks inherit the answer id
+        result = await asyncio.to_thread(
+            _indictment_draft.generate_indictment_draft,
+            case,
+            retrieve=_retrieve,
+            call_llm=lambda prompt: _bridge(_indictment_complete(prompt)),
+            verify_citations=lambda text: _bridge(_guard_citations(text, use_qdrant=True)),
+        )
     print(
         f"[SMARTJUDGE][INDICTMENT-DRAFT] request_id={request_id} status={result.get('status')}",
         file=sys.stderr,

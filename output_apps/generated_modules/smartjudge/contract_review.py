@@ -141,6 +141,7 @@ async def _pool_summary_chunk(chunk: str) -> str:
         "temperature": 0.0,
         "max_tokens": 1500,
     }
+    llm_gateway.tag(body, feature="contract_summary")
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=5.0)) as client:
             resp = await client.post(llm_gateway.chat_completions_url(), json=body, headers=llm_gateway.headers())

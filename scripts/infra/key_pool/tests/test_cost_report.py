@@ -84,3 +84,81 @@ def test_short_report_caps_lines(tmp_path, capsys):
     assert cost_report.main(["--file", str(path), "--short"]) == 0
     out = capsys.readouterr().out
     assert len(out.splitlines()) <= 12
+
+
+# ---- tagged log (answer / feature / tier), fixtures/requests_tagged.jsonl ----------------
+TAGGED = HERE.parent / "fixtures" / "requests_tagged.jsonl"
+TAGGED_NOW = datetime(2026, 10, 15, 12, 0, tzinfo=timezone.utc)
+
+
+def _tagged():
+    return cost_report.load_records(TAGGED, now=TAGGED_NOW)
+
+
+def test_tier_uses_logged_tier_then_infers():
+    assert cost_report.tier_of({"tier": "free", "response_cost": 1.0}) == "free"
+    assert cost_report.tier_of({"deployment": "g:openrouter-paid:K:m"}) == "paid"
+    assert cost_report.tier_of({"deployment": "g:openrouter-private:K:m"}) == "paid"
+    assert cost_report.tier_of({"deployment": "g:groq:K:m", "response_cost": 0.0}) == "free"
+    assert cost_report.tier_of({"deployment": "g:groq:K:m", "response_cost": 0.01}) == "paid"
+    assert cost_report.tier_of({"deployment": "d1"}) == "unknown"
+
+
+def test_per_answer_cost_sums_every_call_of_the_answer():
+    agg = cost_report.aggregate(_tagged())
+    assert agg["calls"] == 7
+    ans = agg["answers"]
+    assert ans["answers"] == 3  # ans-a (free retry + free), ans-b (paid), ans-c (2 summary chunks)
+    assert ans["paid_answers"] == 2
+    assert ans["cost_mean"] == pytest.approx(0.006 / 3)
+    assert ans["cost_p50"] == pytest.approx(0.002)
+    assert ans["cost_max"] == pytest.approx(0.004)
+    assert [a["answer_id"] for a in ans["top"]] == ["ans-b", "ans-c", "ans-a"]
+    top_a = ans["top"][2]
+    assert top_a["calls"] == 2 and top_a["latency"] == pytest.approx(4000) and top_a["success"]
+    assert agg["untagged_calls"] == 2
+
+
+def test_per_feature_and_free_paid_share():
+    agg = cost_report.aggregate(_tagged())
+    feats = {f["feature"]: f for f in agg["features"]}
+    assert set(feats) == {"chat", "contract_summary", "untagged"}
+    chat = feats["chat"]
+    assert chat["calls"] == 3 and chat["answers"] == 2
+    assert chat["total_cost"] == pytest.approx(0.004)
+    assert chat["cost_mean"] == pytest.approx(0.002)
+    assert chat["latency_p50"] == pytest.approx(5000)  # answers took 4000 ms and 6000 ms
+    assert feats["contract_summary"]["cost_mean"] == pytest.approx(0.002)
+    assert feats["untagged"]["answers"] == 0
+    assert agg["features"][0]["feature"] == "chat"  # most expensive first
+
+    tiers = agg["tiers"]
+    assert tiers["free"]["calls"] == 3 and tiers["free"]["cost"] == 0.0
+    assert tiers["paid"]["calls"] == 4
+    assert tiers["paid"]["cost"] == pytest.approx(0.0062)
+
+
+def test_full_report_lists_features_and_answers():
+    text = cost_report.format_report(cost_report.aggregate(_tagged()), "fixture")
+    assert "free vs paid: calls 42.9% free / 57.1% paid" in text
+    assert "answers: 3 (2 touched paid)" in text
+    assert "per feature:" in text and "contract_summary" in text
+    assert "top answers by cost:" in text and "ans-b" in text
+
+
+def test_weekly_persian_summary(tmp_path, capsys):
+    text = cost_report.format_weekly_fa(cost_report.aggregate(_tagged()))
+    assert text.startswith("📊 گزارش هفتگی هزینهٔ مدل‌ها (۷ روز اخیر)")
+    assert "فراخوانی‌ها: ۷" in text
+    assert "سهم مدل‌های رایگان: ۴۲.۹٪" in text
+    assert "پاسخ‌ها: ۳" in text
+    assert "• chat: ۰.۰۰۴۰ دلار، ۲ پاسخ" in text
+    assert not any(ch.isdigit() and ch in "0123456789" for ch in text.replace("chat", ""))
+    assert "ans-" not in text  # no answer ids in the owner message
+
+    empty = cost_report.format_weekly_fa(cost_report.aggregate([]))
+    assert "هیچ فراخوانی ثبت نشده" in empty
+
+    assert cost_report.main(["--file", str(tmp_path / "missing.jsonl"), "--weekly-fa"]) == 0
+    assert "هیچ فراخوانی" in capsys.readouterr().out
+

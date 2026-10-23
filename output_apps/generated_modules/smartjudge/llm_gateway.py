@@ -20,16 +20,30 @@ container ``roxira_keypool``, port 4000).
                                   path when the gateway fails (old behaviour; default off).
     KEYPOOL_MASTER_KEY            gateway auth, sent as the OpenAI api key.
 
+    SMARTJUDGE_LLM_CALL_TAGS      1 = attach the cost-attribution ``metadata`` (default OFF until
+                                  the owner has smoke-tested the free providers with it).
+
 This module never makes a network call and never logs a key. Callers keep their
 existing direct OpenRouter path as the fallback when the gateway fails, so chat
 never breaks.
+
+Cost attribution: every gateway request body gets a ``metadata`` dict with the
+answer id, feature, tenant and plan of the call (``tag()``). LiteLLM consumes it
+(it is not forwarded to the provider unless ``enable_preview_features`` is on,
+which the key pool never sets) and the key pool's cost_logger writes the
+whitelisted ``roxira_*`` keys into requests.jsonl, so cost_report.py can sum
+cost per answer and per feature. Entry points set the answer id once with
+``call_context()``; every gateway call made inside it inherits the id.
 """
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import logging
 import os
 import re
+import uuid
 
 logger = logging.getLogger("llm_gateway")
 
@@ -139,6 +153,69 @@ def headers() -> dict[str, str]:
     if key:
         headers["Authorization"] = f"Bearer {key}"
     return headers
+
+
+ENV_CALL_TAGS = "SMARTJUDGE_LLM_CALL_TAGS"
+# Keys the key-pool cost_logger whitelists; nothing else from metadata is ever logged.
+TAG_FIELDS = ("answer_id", "feature", "tenant", "plan")
+_TAG_SAFE = re.compile(r"[^A-Za-z0-9._:-]")
+_TAG_MAX = 64
+_call_ctx: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
+    "roxira_llm_call_ctx", default=None
+)
+
+
+def _clean_tag(value: object) -> str:
+    """Short ASCII id only: anything else (Persian text, spaces, quotes) is dropped."""
+    if value is None:
+        return ""
+    return _TAG_SAFE.sub("", str(value))[:_TAG_MAX]
+
+
+def new_answer_id() -> str:
+    return uuid.uuid4().hex
+
+
+@contextlib.contextmanager
+def call_context(**fields: object):
+    """Attach answer_id/feature/tenant/plan to every gateway call made inside the block.
+
+    Nested blocks add to (and override) the outer fields. Unknown field names are ignored.
+    """
+    merged = dict(_call_ctx.get() or {})
+    for name, value in fields.items():
+        cleaned = _clean_tag(value)
+        if name in TAG_FIELDS and cleaned:
+            merged[name] = cleaned
+    token = _call_ctx.set(merged)
+    try:
+        yield merged
+    finally:
+        _call_ctx.reset(token)
+
+
+def call_tags(**overrides: object) -> dict[str, str]:
+    """The current context's tags plus explicit overrides, as ``roxira_<field>`` keys."""
+    merged = dict(_call_ctx.get() or {})
+    for name, value in overrides.items():
+        cleaned = _clean_tag(value)
+        if name in TAG_FIELDS and cleaned:
+            merged[name] = cleaned
+    return {f"roxira_{name}": merged[name] for name in TAG_FIELDS if merged.get(name)}
+
+
+def tag(body: dict, **overrides: object) -> dict:
+    """Add the cost-attribution ``metadata`` to a gateway request body (in place; returned).
+
+    Only for bodies sent to the key-pool gateway: the direct OpenRouter path never gets it.
+    """
+    if os.environ.get(ENV_CALL_TAGS, "").strip().lower() not in ("1", "true", "yes", "on"):
+        return body
+    tags = call_tags(**overrides)
+    if tags:
+        meta = body.get("metadata")
+        body["metadata"] = {**(meta if isinstance(meta, dict) else {}), **tags}
+    return body
 
 
 def log_served(path: str, model_name: str | None) -> None:
