@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle, Home, MessageSquare, RotateCw } from "lucide-react";
 
+import { reportClientError } from "@/lib/observability/client-error-reporter";
+
 export default function GlobalError({
   error,
   reset,
@@ -12,7 +14,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error(error);
+    reportClientError("boundary", error);
   }, [error]);
 
   return (

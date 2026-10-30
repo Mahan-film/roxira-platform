@@ -236,12 +236,12 @@ function InvoicingPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
               <div className="relative flex-1 sm:max-w-sm">
-                <Search className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute top-1/2 start-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
                   placeholder="جست‌وجوی شماره صورتحساب یا نام خریدار"
-                  className="pr-8"
+                  className="ps-8"
                   aria-label="جست‌وجوی صورتحساب"
                 />
               </div>
