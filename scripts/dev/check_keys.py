@@ -4,9 +4,9 @@
 Load keys first:  set -a; source ~/Secrets/roxira/roxira.env; set +a
 Run:              python3 scripts/dev/check_keys.py
 
-Keys are read from environment variables only. Each present key gets ONE
-minimal authenticated request (10 s timeout, sequential). Output is one line
-per service: ``NAME  STATUS  <latency ms>``. No key value, header or response
+Keys are read from environment variables only. Each present key, including the
+numbered slots NAME_2..NAME_9, gets ONE minimal authenticated request (10 s
+timeout, sequential). Output is one line per key: ``NAME  STATUS  <latency ms>``. No key value, header or response
 body is ever printed; exceptions are reduced to class name / HTTP status.
 Exit code is always 0.
 """
@@ -57,7 +57,7 @@ SIMPLE = [
     ("CEREBRAS", "CEREBRAS_API_KEY", "GET", "https://api.cerebras.ai/v1/models", _bearer, None),
     (
         "BRAVE",
-        "BRAVE_SEARCH_API_KEY",
+        "BRAVE_SEARCH_API_KEY|BRAVE_API_KEY",
         "GET",
         "https://api.search.brave.com/res/v1/web/search?q=test&count=1",
         lambda k: {"X-Subscription-Token": k, "Accept": "application/json"},
@@ -71,15 +71,14 @@ SIMPLE = [
         lambda k: {"x-api-key": k},
         {"query": "test", "numResults": 1},
     ),
-    # UNSURE: Jina has a dashboard balance API but its URL is not confidently known;
-    # s.jina.ai search is used instead (consumes a few tokens).
+    # One embedding call: consumes a few tokens. s.jina.ai timed out from both hosts on 2026-10-30.
     (
         "JINA",
         "JINA_API_KEY",
-        "GET",
-        "https://s.jina.ai/?q=test",
-        lambda k: {**_bearer(k), "Accept": "application/json"},
-        None,
+        "POST",
+        "https://api.jina.ai/v1/embeddings",
+        _bearer,
+        {"model": "jina-embeddings-v3", "input": ["test"]},
     ),
     # UNSURE: v1 path; Firecrawl also ships /v2/team/credit-usage.
     (
@@ -90,18 +89,60 @@ SIMPLE = [
         _bearer,
         None,
     ),
+    (
+        "GEMINI",
+        "GEMINI_API_KEY",
+        "GET",
+        "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1",
+        lambda k: {"x-goog-api-key": k},
+        None,
+    ),
+    ("DAYTONA", "DAYTONA_API_KEY", "GET", "https://app.daytona.io/api/sandbox", _bearer, None),
+    (
+        "CLOUDFLARE",
+        "CF_AI_TOKEN",
+        "GET",
+        "https://api.cloudflare.com/client/v4/user/tokens/verify",
+        _bearer,
+        None,
+    ),
+    (
+        "CODEBERG",
+        "CODEBERG_TOKEN",
+        "GET",
+        "https://codeberg.org/api/v1/repos/search?limit=1",  # the mirror token has no user scope
+        lambda k: {"Authorization": f"token {k}"},
+        None,
+    ),
+    (
+        "KAVENEGAR",
+        "KAVENEGAR_API_KEY",
+        "GET",
+        "https://api.kavenegar.com/v1/{key}/account/info.json",
+        lambda k: {},
+        None,
+    ),
+    ("SMS_IR", "SMS_IR_API_KEY", "GET", "https://api.sms.ir/v1/credit", lambda k: {"x-api-key": k}, None),
+    ("TELEGRAM", "NOTIFY_BOT_TOKEN", "GET", "https://api.telegram.org/bot{key}/getMe", lambda k: {}, None),
+    (
+        "TELEGRAM_CH",
+        "TELEGRAM_CHANNEL_BOT_TOKEN",
+        "GET",
+        "https://api.telegram.org/bot{key}/getMe",
+        lambda k: {},
+        None,
+    ),
 ]
 
 # Comma-separated key lists, tested by position.
 LISTS = [
     (
         "TAVILY",
-        "TAVILY_API_KEYS",
-        "POST",
-        # UNSURE: Bearer auth on /search is documented; costs 1 credit per key.
-        "https://api.tavily.com/search",
+        "TAVILY_API_KEYS|TAVILY_KEYS",
+        "GET",
+        "https://api.tavily.com/usage",
         _bearer,
-        {"query": "test", "max_results": 1},
+        None,
     ),
     (
         "ASSEMBLYAI",
@@ -113,7 +154,23 @@ LISTS = [
     ),
 ]
 
-PRESENCE_ONLY = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "KAVENEGAR_API_KEY"]
+# (name, url var, key var), checked for every numbered slot.
+QDRANT_CLUSTERS = ("QDRANT_CLOUD", "QDRANT_CLOUD_URL", "QDRANT_CLOUD_API_KEY")
+
+PRESENCE_ONLY = [
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "TINYFISH_API_KEY",
+    "MODAL_TOKEN_ID",
+    "R2_ACCESS_KEY_ID",
+    "NEON_BACKUP_URL",
+]
+SLOTS = ("", *(f"_{n}" for n in range(2, 10)))
+
+
+def first_set(names: str) -> str:
+    """Value of the first variable set among ``A|B`` alternatives."""
+    return next((v.strip() for v in map(os.environ.get, names.split("|")) if v and v.strip()), "")
 
 
 def probe(
@@ -125,7 +182,7 @@ def probe(
 ) -> tuple[str, int]:
     """Return (status, latency_ms). Never leaks key material."""
     data = None
-    hdrs = dict(headers)
+    hdrs = {"User-Agent": "curl/8.5.0", **headers}  # Groq's edge rejects Python-urllib with 403
     if body is not None:
         data = json.dumps(body).encode()
         hdrs["Content-Type"] = "application/json"
@@ -205,21 +262,29 @@ def main() -> int:
         print(_line(name, status, latency, extra))
 
     for name, var, method, url, hdr, body in SIMPLE:
-        key = os.environ.get(var, "").strip()
-        if not key:
+        keys = [(s, first_set("|".join(v + s for v in var.split("|")))) for s in SLOTS]
+        keys = [(s, k) for s, k in keys if k]
+        if not keys:
             emit(name, "SKIP(not set)")
-            continue
-        status, ms = probe(method, url, hdr(key), body, ctx)
-        emit(name, status, ms)
+        for slot, key in keys:
+            status, ms = probe(method, url.replace("{key}", key), hdr(key), body, ctx)
+            emit(name + slot, status, ms)
 
     for name, var, method, url, hdr, body in LISTS:
-        keys = [k.strip() for k in os.environ.get(var, "").split(",") if k.strip()]
+        keys = [k.strip() for k in first_set(var).split(",") if k.strip()]
         if not keys:
             emit(name, "SKIP(not set)")
             continue
         for i, key in enumerate(keys, 1):
             status, ms = probe(method, url, hdr(key), body, ctx)
             emit(f"{name}#{i}", status, ms)
+
+    name, url_var, key_var = QDRANT_CLUSTERS
+    for slot in SLOTS:
+        base, key = first_set(url_var + slot), first_set(key_var + slot)
+        if base and key:
+            status, ms = probe("GET", base.rstrip("/") + "/collections", {"api-key": key}, None, ctx)
+            emit(name + slot, status, ms)
 
     # OmniRoute: local gateway (Mac/agent side only). Key and URL are never printed.
     om_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()

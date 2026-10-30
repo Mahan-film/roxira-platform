@@ -1,6 +1,6 @@
 > **Plan: `docs/strategy/MASTER_PLAN_2026-10-16.md` (v2: factory first, then a global business via the Malaysian company; Track I Iran / Track G global). Owner decisions are in §0.**
 
-> **Last update: 2026-10-22 (evening). NEW CHAT / OTHER AI? Start at `docs/CONTEXT_HUB.md`, then read this file, then `docs/HANDOFF_2026-10-15.md` (older context; the section "Shipped 2026-10-16..20" below supersedes it). Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
+> **Last update: 2026-10-30. NEW CHAT / OTHER AI? Start at `docs/CONTEXT_HUB.md`, then read this file, then `docs/HANDOFF_2026-10-15.md` (older context; the section "Shipped 2026-10-16..20" below supersedes it). Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
 
 # Current state (read this first)
 
@@ -19,6 +19,39 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - **Roxira portal** roxira.ir/.net: honest copy, no prices, pre-registration form stored (`enterprise_inquiries`). Enterprise modules (CRM, invoicing, accounting, HR, inventory, damages, tax compliance) are **tenant-isolated** (migrations 1789120000000–1789190000000); access = platform ADMIN or tenant OWNER (`requireTenantAdmin`). `/team` (members), CRM AI import (CSV + xlsx, `/crm/import`). Owner account = ADMIN + OWNER of the default tenant `00000000-…0001`.
 - **Infra**: key pool LiteLLM `127.0.0.1:4000` (groups agent-strong-free, agent-light-free, product-free, agent-free-paid, private, embeddings; simple-shuffle — never usage-based-routing-v2), query embeddings via Cloudflare Workers AI with TEI fallback (TEI batch <= 4), research service `127.0.0.1:8090` (searx + tavily, `query_domains`), Xray REALITY VPN on 8443, backups/monitor/selfimprove timers.
 - **Owner's Mac**: `ir.roxira.lawwatch` (ekhtebar, 6 h) + **`ir.roxira.iranrelay`** (regulation.tax.gov.ir, dotic.ir, rc.majlis.ir; Sat–Thu 09:30 & 11:00 Tehran, VPN must be OFF) both write to `~/Developer/roxira-lawwatch/data/legal/staged/` and `relay_publish.sh` opens a data PR; `ir.roxira.reposync` fast-forwards `~/Developer/roxira-platform` every 30 min and resets `core.bare` (it flips to true after app worktree cleanups — run `git --git-dir=~/Developer/roxira-platform/.git config core.bare false` if git says "must be run in a work tree").
+
+## 2026-10-30 (P0 factory hardening, #882, audit `docs/strategy/FACTORY_GAP_AUDIT_2026-10-30.md`)
+- **Agent sandbox installed on srv1** (`ROXIRA_AGENT_SANDBOX=1`, `roxira-agent-egress.service`, table `inet roxira_agent`):
+  `scripts/infra/server_agents/agent_sandbox.sh`, `agent_egress.nft`, `install_agent_sandbox.sh` (`--remove` undoes it).
+  All 23 control checks passed, and a gateway smoke run passed on 2026-10-30 (`agent-light-free`, 34 s). Its 5 files were copied from #883 by hand,
+  because #883 is not merged. uid 999 (`roxira-agent`) is shared with the Redis containers, so `PrivatePIDs=yes` is required.
+- **Autodeploy cannot ship right now**: `/opt/roxira_platform` has about 35 uncommitted changes from 2026-10-24/25 (root:
+  `nginx.conf`, compose files, `models.yaml`, smartjudge, frontend), and `deploy_local.sh` refuses a dirty tree, so the next
+  commit on `main` will fail and be recorded as a failed SHA. Safe copy: branch `srv1-snapshot-2026-10-30` (eb6961de, 40
+  files including the #883 sandbox files, not for merge as is). These changes are live: the frontend and mail containers
+  were recreated after them, the running nginx has the `invoices` config, and `roxira_app_prod` restarted on 2026-10-24
+  with the repo mounted. Do not clean the tree: the next deploy would remove live features.
+- **Snapshot review**: frontend files match PR #871, now without the default `SANDBOX_JWT_SECRET` (set it on srv1 or token
+  routes fail closed), with limits on the two mail routes and the live judge nginx limit; about 18 eslint errors remain
+  (Antigravity A8). Mail is #885. Python is #884, safeguards restored, local CI green; VIP drafts return to V4 Pro first.
+  Merge order: #871 and #884 and #885, then reconcile srv1's tree; srv1 still runs the old code until then.
+- **Zilliz**: 5 keys in `roxira.env`, `scripts/ops/zilliz_ping.sh` reached all 5 on 2026-10-30, 0 collections. Not used by
+  the product.
+- **Egress firewall bug, fixed 2026-10-30**: the first ruleset rejected socketless kernel packets, which broke IPv6
+  neighbor discovery and slowed host monitors by 6 s from about 16:50 UTC. The `jump agent` ruleset is loaded on srv1,
+  23 of 23 sandbox checks pass and IPv6 works. Users saw 0.35 s throughout.
+- **DR backup fixed 2026-10-30**: it had failed hourly since 2026-10-22 because the stopped `roxira_twenty_db` was in the
+  list; `BACKUP_PG_CONTAINERS=roxira_postgres_prod` is now in `/etc/roxira/backup.env`, last run OK. Mode is local-only with
+  1 hourly and 0 daily sets. Disk has 14 GB free, under the 15 GB floor.
+- **Keys**: full list and jobs in `docs/infra/KEY_INVENTORY.md`.
+- **Key pool is stale**: `config/key_pool.yaml` changed on 2026-10-23 (#853), `generated/` on srv1 is from 2026-10-21, so
+  "use every key" is not live until `install.sh --apply`. Image still 1.77.7 (45 Critical); candidate `v1.105.1` untested
+  because the side-by-side test was blocked by the session's permission layer.
+- **Antigravity**: owner runs it by hand and relays reports; Claude reviews every diff (`docs/antigravity/TASKS.md`).
+  `agy/a1` accepted, `agy/a5` rejected (use A5R). Neither is pushed.
+- **Backlog**: relay PRs are cumulative. Every line of #867-#870 and #872-#876 is in #877 (verified), so merge #877 and
+  close the others; not done yet, the session permission layer blocked the merge. Of 13 failed taskq rows, 12 match
+  features shipped by other routes (by name, not diffed); #46 `models-long-sambanova` is still unresolved.
 
 ## Shipped 2026-10-22
 

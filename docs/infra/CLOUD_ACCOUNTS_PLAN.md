@@ -138,4 +138,4 @@ Neon: already configured via `NEON_BACKUP_URL` (#758). Optional spare accounts `
 are restored to and verified as ordered fallbacks (same direct-connection rule); see
 `docs/ops/OFFSITE_BACKUP.md`. Nothing else to set.
 
-Zilliz: nothing to set. Do not create keys until needed.
+Zilliz: 5 keys set on the Mac on 2026-10-30, jobs in `docs/infra/KEY_INVENTORY.md`.

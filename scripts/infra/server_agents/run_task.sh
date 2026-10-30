@@ -26,6 +26,7 @@ ETC_DIR="${ROXIRA_ETC_DIR:-/etc/roxira}"
 STATE="${ROXIRA_AGENTS_HOME:-/var/lib/roxira-agents}"
 AGENT_USER="${ROXIRA_AGENT_USER-roxira-agent}"
 OPENCODE_BIN="${OPENCODE_BIN:-opencode}"
+AGENT_SANDBOX="${ROXIRA_AGENT_SANDBOX:-0}"   # 1 = run the agent in agent_sandbox.sh (set by install_agent_sandbox.sh)
 CONFIG="$ETC_DIR/opencode-agents.json"
 ALIASES="$ETC_DIR/agent-aliases.tsv"
 ENV_FILE="$ETC_DIR/agents.env"
@@ -276,6 +277,12 @@ ag_git sparse-checkout set --no-cone '/*' '!/data/' '!/database_snapshots/' '!/s
   '!/opencode.json' '!/opencode.jsonc' '!/repomix-output.xml' '!.env*' '!*.sql' '!*.tar.gz' '!*.snapshot' >/dev/null 2>&1
 ag_git read-tree -mu HEAD
 log "worktree $WT on $BRANCH (base $(ag_git rev-parse --short "$BASE_REF")), model $MODEL_REF, timeout ${TIMEOUT}s"
+if [ "$AGENT_SANDBOX" = 1 ]; then
+  [ -n "$AGENT_USER" ] || die "the agent sandbox needs an agent user"
+  # shellcheck source=agent_sandbox.sh
+  source "$HERE/agent_sandbox.sh"
+  sandbox_check "$WT" >&2 || die "sandbox control test failed: agent not started"
+fi
 
 export HOME="$STATE/home" XDG_CONFIG_HOME="$STATE/xdg/config" XDG_DATA_HOME="$STATE/xdg/data" \
   XDG_CACHE_HOME="$STATE/xdg/cache" XDG_STATE_HOME="$STATE/xdg/state"
@@ -291,13 +298,30 @@ EVENTS=()
 RATE_BACKOFF="${ROXIRA_RATE_BACKOFF:-30}"
 CUR="$LOG.cur"
 
+run_sandboxed() { # agent_sandbox.sh: keys go through a root-only env file, never argv or unit properties
+  local unit="roxira-agent-${BRANCH#agent/}" envf
+  envf="$(mktemp /run/roxira-agent-env.XXXXXX)"
+  sandbox_env_file "$envf" HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME OPENCODE_DISABLE_AUTOUPDATE \
+    OPENCODE_DISABLE_MODELS_FETCH OPENCODE_DISABLE_PROJECT_CONFIG OPENCODE_CONFIG_CONTENT GROQ_API_KEY \
+    OPENROUTER_API_KEY_AGENTS KEYPOOL_MASTER_KEY
+  timeout --kill-after=15 "$TIMEOUT" bash -c 'source "$1"; shift; sandbox_run "$@"' _ "$HERE/agent_sandbox.sh" \
+    "$unit" "$WT" "$((TIMEOUT + 30))" "$envf" "$(command -v "$OPENCODE_BIN")" run -m "$MODEL_REF" "$PROMPT" \
+    </dev/null >"$CUR" 2>&1 || EXIT=$?
+  rm -f "$envf"
+  if [ "$EXIT" = 124 ]; then systemctl stop "$unit.service" 2>/dev/null || true; fi
+}
+
 run_opencode() {
   OPENCODE_CONFIG_CONTENT="$(make_overlay)"; export OPENCODE_CONFIG_CONTENT
   if [ "$KEYVAR" = GROQ_API_KEY ]; then export GROQ_API_KEY="${GKEYS[$KEY_I]}"; else unset GROQ_API_KEY; fi
   EXIT=0
   : >"$CUR"; if [ -n "$AGENT_USER" ]; then chown "$AGENT_USER" "$CUR"; fi
-  timeout --kill-after=15 "$TIMEOUT" ${RUNNER[@]+"${RUNNER[@]}"} "$OPENCODE_BIN" run -m "$MODEL_REF" "$PROMPT" \
-    </dev/null >"$CUR" 2>&1 || EXIT=$?
+  if [ "$AGENT_SANDBOX" = 1 ]; then
+    run_sandboxed
+  else
+    timeout --kill-after=15 "$TIMEOUT" ${RUNNER[@]+"${RUNNER[@]}"} "$OPENCODE_BIN" run -m "$MODEL_REF" "$PROMPT" \
+      </dev/null >"$CUR" 2>&1 || EXIT=$?
+  fi
   cat "$CUR" >>"$LOG"
   unset GROQ_API_KEY
 }

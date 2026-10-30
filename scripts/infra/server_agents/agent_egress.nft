@@ -1,0 +1,25 @@
+#!/usr/sbin/nft -f
+# Network limits for the roxira-agent uid only. Other users and containers never match this chain.
+# Priority -200 runs before Docker's DNAT, so rules see the address the agent asked for.
+# Remove with: nft delete table inet roxira_agent
+table inet roxira_agent
+delete table inet roxira_agent
+
+table inet roxira_agent {
+  chain output {
+    type filter hook output priority -200; policy accept;
+    # A positive match on purpose: kernel packets (IPv6 neighbor discovery, resets) have no socket.
+    # "meta skuid != x return" skips such a packet past the return, and the final reject then drops it.
+    meta skuid "roxira-agent" jump agent
+  }
+
+  chain agent {
+    ct state established,related accept
+    ip daddr 127.0.0.53 meta l4proto { tcp, udp } th dport 53 accept
+    ip daddr 127.0.0.1 tcp dport 4000 accept
+    ip daddr { 127.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 } counter reject
+    ip6 daddr { ::1, fc00::/7, fe80::/10 } counter reject
+    tcp dport 443 accept
+    counter reject
+  }
+}

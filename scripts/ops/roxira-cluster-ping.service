@@ -1,0 +1,7 @@
+[Unit]
+Description=Roxira ping of Zilliz and Qdrant Cloud clusters
+
+[Service]
+Type=oneshot
+Environment=ROXIRA_ENV_FILE=/opt/roxira_platform/.env
+ExecStart=/bin/bash /opt/roxira_platform/scripts/ops/cluster_ping.sh

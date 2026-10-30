@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily ping of Zilliz and Qdrant Cloud clusters
+
+[Timer]
+OnCalendar=*-*-* 04:20:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
