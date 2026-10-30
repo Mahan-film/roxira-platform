@@ -24,27 +24,50 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_MODULE = ROOT / "output_apps" / "generated_modules" / "smartjudge" / "model_registry.py"
 
-# family -> fnmatch globs matched against the provider prefix (lowercase).
+# family -> fnmatch globs matched against one id segment (lowercase): a provider prefix ("deepseek/...",
+# "z-ai/...") or a bare model name ("gpt-oss-120b", "gemini-best", "llama-3.3-70b").
 FAMILY_ALIASES: dict[str, tuple[str, ...]] = {
     "deepseek": ("deepseek*",),
-    "qwen": ("qwen*", "alibaba*"),
+    "qwen": ("qwen*", "alibaba*", "qwq*"),
     "glm": ("glm*", "z-ai", "zai*"),
-    "openai": ("openai*",),
-    "google": ("google*", "gemini*"),
+    "openai": ("openai*", "gpt-*", "gpt5*", "o[0-9]", "o[0-9]-*"),
+    "google": ("google*", "gemini*", "gemma*"),
     "anthropic": ("anthropic*", "claude*"),
-    "mistral": ("mistral*",),
+    "mistral": ("mistral*", "ministral*", "codestral*", "voxtral*", "mixtral*"),
     "meta": ("meta*", "llama*"),
     "xiaomi": ("xiaomi*", "mimo*"),
+    "nvidia": ("nvidia*", "nemotron*"),
+    "moonshot": ("moonshot*", "kimi*"),
 }
+# Hosts and routers that only carry someone else's model: skipped when a later segment names the vendor.
+WRAPPERS = ("openrouter", "groq", "keypool", "together*", "fireworks", "cerebras", "sambanova", "nvidia-nim", "cloudflare*",
+            "huggingface", "@cf", "models", "accounts", "fireworks*", "inference", "hf")
+
+
+def _alias_of(segment: str) -> str | None:
+    for name, globs in FAMILY_ALIASES.items():
+        if any(fnmatch.fnmatch(segment, g) for g in globs):
+            return name
+    return None
 
 
 def family(model_id: str) -> str:
-    """Family of a model id: provider prefix before the first slash, alias-folded."""
-    prefix = str(model_id).strip().lower().split("/", 1)[0]
-    for name, globs in FAMILY_ALIASES.items():
-        if any(fnmatch.fnmatch(prefix, g) for g in globs):
-            return name
-    return prefix
+    """Vendor family of a model id, alias-folded. Works for "vendor/model", "host/vendor/model" and bare names
+    ("gpt-oss-120b"). Unknown ids fall back to their first non-wrapper segment, so two unknowns only match when equal."""
+    segments = [s for s in str(model_id).strip().lower().split("/") if s]
+    for seg in segments:
+        found = _alias_of(seg)
+        if found:
+            return found
+    for seg in segments:
+        if not any(fnmatch.fnmatch(seg, w) for w in WRAPPERS):
+            return seg
+    return segments[0] if segments else ""
+
+
+def known_family(model_id: str) -> bool:
+    """True when the id resolves to a vendor in FAMILY_ALIASES (group names like keypool/agent-strong-free do not)."""
+    return any(_alias_of(s) for s in str(model_id).strip().lower().split("/") if s)
 
 
 def same_family(a: str, b: str) -> bool:

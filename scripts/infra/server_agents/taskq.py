@@ -233,6 +233,8 @@ class Worker:
         self.reviews: dict[int, subprocess.Popen] = {}
 
     def recover(self) -> None:
+        for t in self.db.execute("SELECT id FROM tasks WHERE status='done' AND review='running'").fetchall():
+            update(self.db, t["id"], review="error (interrupted by restart)")  # its reviewer process is gone
         for t in self.db.execute("SELECT * FROM tasks WHERE status='running'").fetchall():
             if not alive(t["pid"]):
                 update(self.db, t["id"], status="queued", pid=None)
@@ -262,6 +264,11 @@ class Worker:
                 attempts[lane_budget.lane_name(r["lane"])] = attempts.get(lane_budget.lane_name(r["lane"]), 0) + 1
         records = lane_budget.read_records(lane_budget.cost_logs(cfg), since)
         spend = lane_budget.lane_spend(records, windows, list(cfg.get("agent_model_groups") or []), now)
+        # direct OpenRouter spend (ds-flash/strong) is not in the cost log: it is measured per attempt (direct_usd)
+        for r in self.db.execute("SELECT lane, SUM(direct_usd) AS usd FROM attempts WHERE COALESCE(end_ts, ts)>=? AND direct_usd IS NOT NULL "
+                                 "GROUP BY lane", (since,)):
+            lane = lane_budget.lane_name(r["lane"])
+            spend.setdefault(lane, {"usd": 0.0, "tokens": 0.0})["usd"] += r["usd"] or 0.0
         return spend, attempts
 
     def record_cost(self, tid: int) -> None:
@@ -273,7 +280,7 @@ class Worker:
         if first is None:
             return
         cfg = lane_budget.load_config()
-        rows = self.db.execute("SELECT task_id, ts, end_ts FROM attempts WHERE lane!='review' AND (end_ts IS NULL OR end_ts>=?)", (first,)).fetchall()
+        rows = self.db.execute("SELECT task_id, ts, end_ts FROM attempts WHERE end_ts IS NULL OR end_ts>=?", (first,)).fetchall()
         records = lane_budget.read_records(lane_budget.cost_logs(cfg), first)
         spend = lane_budget.task_spend(records, [(r["task_id"], r["ts"], r["end_ts"]) for r in rows],
                                        list(cfg.get("agent_model_groups") or []), time.time()).get(tid, {})
@@ -357,9 +364,13 @@ class Worker:
             update(self.db, tid, status="done", done_ts=time.time(), pid=None, reason=None, branch=rec.get("branch"),
                    worktree=rec.get("worktree"), files=json.dumps(rec.get("files")),
                    checks=json.dumps(rec.get("checks")) if rec.get("checks") is not None else None, patch=patch)
-            notify(f"تسک {t['slug']}: انجام شد، مرحله {info['step']}")
             if patch and os.environ.get("TASKQ_REVIEW", "1") != "0":
+                # Rule: `done` = the agent finished and the checks passed. A task is ACCEPTED (counted in reports,
+                # fit for a PR) only when its review did not fail; while the review runs it is in_review.
+                notify(f"تسک {t['slug']}: آماده، در انتظار بازبینی، مرحله {info['step']}")
                 self.start_review(t, patch, rec, info)
+            else:
+                notify(f"تسک {t['slug']}: انجام شد (بدون بازبینی)، مرحله {info['step']}")
             return
         with open(t["work_file"], "a", encoding="utf-8") as fh:
             fh.write(f"\n\nprevious attempt failed: {reason}\n")
@@ -411,7 +422,8 @@ class Worker:
         self.record_cost(tid)
         update(self.db, tid, review=f"{verdict} (exit {proc.returncode})")
         slug = self.db.execute("SELECT slug FROM tasks WHERE id=?", (tid,)).fetchone()["slug"]
-        notify(f"تسک {slug}: بازبینی {verdict}")
+        notify(f"تسک {slug}: بازبینی {verdict}" + (" — رد شد، PR نزنید" if verdict == "fail" else
+               " — بررسی نشد، قبل از PR دستی ببینید" if verdict != "pass" else " — تأیید شد"))
 
     def reap(self) -> None:
         for tid, info in list(self.running.items()):
@@ -519,7 +531,7 @@ def cmd_retry(db, a) -> int:
     if t["status"] not in ("failed", "cancelled", "done"):
         print(f"task is {t['status']}; cancel it first", file=sys.stderr)
         return 1
-    update(db, a.id, status="queued", step_idx=0, attempts=0, pid=None, reason=None, work_file=None)
+    update(db, a.id, status="queued", step_idx=0, attempts=0, pid=None, reason=None, work_file=None, review=None, done_ts=None)
     return 0
 
 
@@ -544,7 +556,13 @@ def weekly_summary(db: sqlite3.Connection, days: float = 7, now: float | None = 
     since = (now or time.time()) - days * 86400
     rows = db.execute("SELECT * FROM tasks WHERE (status='done' AND COALESCE(done_ts, updated)>=?) "
                       "OR (status='failed' AND updated>=?)", (since, since)).fetchall()
-    done = [r for r in rows if r["status"] == "done"]
+    finished = [r for r in rows if r["status"] == "done"]
+    # A patch the cross-family reviewer failed is not an accepted task: it moves to `rejected` and its cost to waste.
+    # error/skipped/missing reviews stay accepted but are counted as `unreviewed`.
+    verdict = lambda r: (r["review"] or "none").split(" ")[0]  # noqa: E731
+    in_review = [r for r in finished if verdict(r) == "running"]  # not accepted yet: the verdict is still pending
+    done = [r for r in finished if verdict(r) not in ("fail", "running")]
+    rejected = [r for r in finished if verdict(r) == "fail"]
     failed = [r for r in rows if r["status"] == "failed"]
     lanes: dict[str, dict] = {}
     for r in done:
@@ -553,14 +571,16 @@ def weekly_summary(db: sqlite3.Connection, days: float = 7, now: float | None = 
         ln["usd"] += r["cost_usd"]
     usd = sum(r["cost_usd"] for r in done)
     reviews: dict[str, int] = {}
-    for r in done:
-        v = (r["review"] or "none").split(" ")[0]
-        reviews[v] = reviews.get(v, 0) + 1
-    return {"days": days, "accepted": len(done), "failed": len(failed), "accepted_usd": round(usd, 6),
+    for r in finished:
+        reviews[verdict(r)] = reviews.get(verdict(r), 0) + 1
+    return {"days": days, "accepted": len(done), "failed": len(failed), "rejected_by_review": len(rejected),
+            "in_review": len(in_review),
+            "unreviewed": sum(1 for r in done if verdict(r) != "pass"),
+            "accepted_usd": round(usd, 6),
             "usd_per_accepted": round(usd / len(done), 6) if done else None,
-            "wasted_usd": round(sum(r["cost_usd"] for r in failed), 6),
+            "wasted_usd": round(sum(r["cost_usd"] for r in failed + rejected), 6),
             "tokens": sum(r["tokens"] for r in done),
-            "unmetered_attempts": sum(r["unmetered"] for r in done + failed),
+            "unmetered_attempts": sum(r["unmetered"] for r in done + failed + rejected),
             "attempts_per_accepted": round(sum(r["attempts"] for r in done) / len(done), 2) if done else None,
             "lanes": lanes, "reviews": reviews,
             "failed_reasons": [f"#{r['id']} {r['slug']}: {(r['reason'] or '')[:120]}" for r in failed][:5]}
@@ -570,11 +590,11 @@ def format_weekly_fa(w: dict) -> str:
     """Persian owner text for the weekly report (used by taskq.py report --fa and key_pool/cost_report.py --weekly-fa)."""
     fa = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
     n = lambda v: str(v).translate(fa)  # noqa: E731
-    if not w["accepted"] and not w["failed"]:
+    if not w["accepted"] and not w["failed"] and not w["rejected_by_review"]:
         return f"🏭 کارخانهٔ ایجنت‌ها ({n(int(w['days']))} روز اخیر): هیچ تسکی پایان نیافت."
     per = "-" if w["usd_per_accepted"] is None else n(f"{w['usd_per_accepted']:.4f}")
     lines = [f"🏭 کارخانهٔ ایجنت‌ها ({n(int(w['days']))} روز اخیر)",
-             f"تسک پذیرفته‌شده: {n(w['accepted'])}؛ ناموفق: {n(w['failed'])}",
+             f"تسک پذیرفته‌شده: {n(w['accepted'])}؛ ناموفق: {n(w['failed'])}؛ ردشده در بازبینی: {n(w['rejected_by_review'])}؛ در انتظار بازبینی: {n(w['in_review'])}",
              f"هزینهٔ هر تسک پذیرفته‌شده: {per} دلار (جمع {n(format(w['accepted_usd'], '.4f'))} دلار)؛ "
              f"هزینهٔ تسک‌های ناموفق: {n(format(w['wasted_usd'], '.4f'))} دلار"]
     if w["unmetered_attempts"]:
@@ -594,7 +614,8 @@ def cmd_report(db, a) -> int:
 
 def format_weekly_en(w: dict) -> str:
     per = "n/a" if w["usd_per_accepted"] is None else f"${w['usd_per_accepted']:.4f}"
-    out = [f"taskq last {w['days']:g} days: {w['accepted']} accepted, {w['failed']} failed",
+    out = [f"taskq last {w['days']:g} days: {w['accepted']} accepted ({w['unreviewed']} without a passing review), "
+           f"{w['failed']} failed, {w['rejected_by_review']} rejected by the reviewer, {w['in_review']} still in review",
            f"cost per accepted task {per} (total ${w['accepted_usd']:.4f}, {w['tokens']} tokens, "
            f"{w['attempts_per_accepted']} attempts each); failed tasks cost ${w['wasted_usd']:.4f}"]
     if w["unmetered_attempts"]:
@@ -608,7 +629,7 @@ def cmd_backfill(db, a) -> int:
     """Fill cost_usd/tokens/unmetered/done_ts for tasks that ran before cost tracking. Attempts without end_ts get an
     estimated window: from their start to the next attempt of the same task, or to the task's last update."""
     tasks = {r["id"]: r for r in db.execute("SELECT * FROM tasks")}
-    att = db.execute("SELECT task_id, ts, end_ts, step FROM attempts WHERE lane!='review' ORDER BY task_id, ts").fetchall()
+    att = db.execute("SELECT task_id, ts, end_ts, step, lane FROM attempts ORDER BY task_id, ts").fetchall()
     wins = []
     for i, r in enumerate(att):
         nxt = next((b["ts"] for b in att[i + 1:] if b["task_id"] == r["task_id"]), None)
@@ -621,10 +642,12 @@ def cmd_backfill(db, a) -> int:
     spend = lane_budget.task_spend(lane_budget.read_records(lane_budget.cost_logs(cfg), min(w[1] for w in wins)), wins,
                                    list(cfg.get("agent_model_groups") or []), time.time())
     for tid, t in tasks.items():
-        steps = [r["step"] for r in att if r["task_id"] == tid]
+        steps = [r["step"] for r in att if r["task_id"] == tid and r["lane"] != "review"]
         sp = spend.get(tid, {})
-        cols = dict(cost_usd=round(sp.get("usd", 0.0), 6), tokens=int(sp.get("tokens", 0)),
-                    unmetered=sum(1 for st in steps if st not in METERED_STEPS))
+        direct = db.execute("SELECT COALESCE(SUM(direct_usd), 0) FROM attempts WHERE task_id=?", (tid,)).fetchone()[0]
+        measured = db.execute("SELECT COUNT(*) FROM attempts WHERE task_id=? AND direct_usd IS NOT NULL", (tid,)).fetchone()[0]
+        cols = dict(cost_usd=round(sp.get("usd", 0.0) + direct, 6), tokens=int(sp.get("tokens", 0)),
+                    unmetered=max(sum(1 for st in steps if st not in METERED_STEPS) - measured, 0))
         if t["status"] == "done" and not t["done_ts"]:
             cols["done_ts"] = t["updated"]
         if not a.dry_run:

@@ -15,6 +15,10 @@ SANDBOX_HIDE=(/opt/roxira_platform /root /home /etc/roxira /etc/ssh /etc/letsenc
   /var/lib/roxira-marketing /var/lib/roxira-mirror /var/lib/roxira-monitor /var/lib/roxira-mutation
   /var/lib/roxira-offsite /var/lib/roxira-selfimprove)
 
+# Orchestrator state the agent has no business reading: other runs' logs and prompts, the task queue DB, patches,
+# reviews and plans. Other agents' worktrees are hidden by a tmpfs over worktrees/ with only this run's WORKDIR bound back in.
+SANDBOX_HIDE_STATE=(logs taskq taskq.db taskq.db-journal taskq.db-wal taskq.db-shm patches reviews plans)
+
 sandbox_props() { # WORKDIR RUNTIME_SECONDS -> one property per line
   local wd="$1" secs="${2:-1800}" p
   cat <<EOF
@@ -47,6 +51,12 @@ CPUQuota=${AGENT_SANDBOX_CPU:-150%}
 TasksMax=512
 EOF
   for p in "${SANDBOX_HIDE[@]}"; do printf 'InaccessiblePaths=-%s\n' "$p"; done
+  for p in "${SANDBOX_HIDE_STATE[@]}"; do printf 'InaccessiblePaths=-%s/%s\n' "$SANDBOX_STATE" "$p"; done
+  case "$wd" in
+    "$SANDBOX_STATE"/worktrees/*)
+      printf 'TemporaryFileSystem=%s/worktrees:ro\n' "$SANDBOX_STATE"
+      printf 'BindPaths=%s\n' "$wd" ;;
+  esac
 }
 
 sandbox_env_file() { # PATH NAME... -> root-only file with the named variables, read by systemd before it drops to the agent user

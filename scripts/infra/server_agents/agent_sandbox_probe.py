@@ -7,7 +7,9 @@ import sys
 LOCAL_HOST = "127.0.0.1"
 GATEWAY_PORT = 4000
 BLOCKED_PORTS = (22, 3000, 3001, 5432, 6333, 6379, 6432, 8000, 8090)
-HIDDEN_PATHS = ("/opt/roxira_platform/.env", "/root", "/etc/roxira", "/var/lib/docker", "/var/lib/roxira-factory")
+HIDDEN_PATHS = ("/opt/roxira_platform/.env", "/root", "/etc/roxira", "/var/lib/docker", "/var/lib/roxira-factory",
+                "/var/lib/roxira-agents/logs", "/var/lib/roxira-agents/taskq", "/var/lib/roxira-agents/taskq.db")
+STATE_WORKTREES = "/var/lib/roxira-agents/worktrees"
 READONLY_DIRS = ("/usr", "/etc", "/var/lib/roxira-agents/patches")
 
 
@@ -63,6 +65,12 @@ def main() -> int:
     results += [(f"hidden {path}", not can_read(path)) for path in HIDDEN_PATHS]
     results += [(f"read-only {path}", not can_write(path)) for path in READONLY_DIRS]
     results.append(("docker socket blocked", not can_use_docker()))
+    # other runs' worktrees are hidden: only this run's directory is visible under worktrees/
+    if workdir.startswith(STATE_WORKTREES + "/"):
+        others = [d for d in os.listdir(STATE_WORKTREES) if os.path.join(STATE_WORKTREES, d) != workdir]
+        results.append(("other worktrees hidden", not others))
+    secrets = [k for k in ("OPENROUTER_API_KEY_AGENTS", "KEYPOOL_MASTER_KEY", "GROQ_API_KEY") if os.environ.get(k)]
+    results.append(("no API key in the check environment", not secrets))
     for name, passed in results:
         print(("ok   " if passed else "FAIL ") + name)
     return 0 if all(passed for _, passed in results) else 1

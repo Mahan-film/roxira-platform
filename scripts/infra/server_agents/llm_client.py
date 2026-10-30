@@ -8,7 +8,7 @@ Two transports:
     with the key from the env var named by $FACTORY_LLM_KEY_VAR (default
     OPENROUTER_API_KEY_AGENTS). Model ids come from config/models.yaml via the caller.
 
-Every HTTP call appends one line to $ROXIRA_AGENTS_HOME/logs/llm_calls.jsonl in the key-pool
+Every direct (non-gateway) HTTP call appends one line to $ROXIRA_AGENTS_HOME/logs/llm_calls.jsonl in the key-pool
 cost-log format (scripts/infra/key_pool/cost_logger.py) plus a `lane` field, so taskq's per-lane
 budgets (lane_budget.py) count it. Prompts and replies are never logged.
 """
@@ -72,10 +72,16 @@ def run_model_cmd(cmd: str, prompt: str, timeout: int = 900) -> str:
     return res.stdout
 
 
-def endpoint() -> tuple[str, str, bool]:
+def endpoint(via: str | None = None) -> tuple[str, str, bool]:
     """(chat-completions URL, key, is_gateway). $FACTORY_LLM_URL + $FACTORY_LLM_KEY_VAR override everything; else the
     key-pool gateway when KEYPOOL_MASTER_KEY is set (free providers first, the only route open from the agent
-    sandbox); else OpenRouter direct with OPENROUTER_API_KEY_AGENTS."""
+    sandbox); else OpenRouter direct with OPENROUTER_API_KEY_AGENTS. `via` forces one route: "gateway" serves
+    key-pool GROUP names only (agent-strong-free, ...), "openrouter" serves OpenRouter model ids."""
+    if via == "openrouter":
+        return DEFAULT_URL, os.environ.get("OPENROUTER_API_KEY_AGENTS", ""), False
+    if via == "gateway":
+        return (os.environ.get("AGENT_GATEWAY_URL", DEFAULT_GATEWAY).rstrip("/") + "/chat/completions",
+                os.environ.get("KEYPOOL_MASTER_KEY", ""), True)
     url = os.environ.get("FACTORY_LLM_URL")
     if url:
         return url, os.environ.get(os.environ.get("FACTORY_LLM_KEY_VAR", "KEYPOOL_MASTER_KEY"), ""), False
@@ -93,31 +99,33 @@ def chat(model: str, system: str, prompt: str, *, lane: str, model_cmd: str | No
 
 
 def chat_full(model: str, system: str, prompt: str, *, lane: str, model_cmd: str | None = None,
-              max_tokens: int = 8000, timeout: int = 600, task: int | None = None) -> tuple[str, str]:
+              max_tokens: int = 8000, timeout: int = 600, task: int | None = None,
+              via: str | None = None) -> tuple[str, str]:
     """(reply text, model that actually served it). `model` may be a gateway group name; the served model comes
     from the response, so the caller can check the vendor family. model_cmd replies report `model` itself."""
     if model_cmd:
         return run_model_cmd(model_cmd, f"{system}\n\n{prompt}", timeout), model
-    url, key, gateway = endpoint()
+    url, key, gateway = endpoint(via)
     if not key:
-        raise LLMError("no API key in the environment (KEYPOOL_MASTER_KEY / OPENROUTER_API_KEY_AGENTS)")
-    body = {"model": model, "max_tokens": max_tokens, "temperature": 0, "usage": {"include": True},
+        raise LLMError(f"no API key for route {via or 'default'} (KEYPOOL_MASTER_KEY / OPENROUTER_API_KEY_AGENTS)")
+    body = {"model": model, "max_tokens": max_tokens, "temperature": 0,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]}
+    if not gateway:
+        body["usage"] = {"include": True}  # OpenRouter extension (returns the cost); the LiteLLM gateway must not get it
     req = urllib.request.Request(url, data=json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     start = time.monotonic()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            header_cost = resp.headers.get("x-litellm-response-cost")  # the gateway reports cost here, not in usage
     except Exception as exc:
-        log_call(model, lane, {}, int((time.monotonic() - start) * 1000), False, type(exc).__name__, task)
+        if not gateway:
+            log_call(model, lane, {}, int((time.monotonic() - start) * 1000), False, type(exc).__name__, task)
         raise LLMError(f"HTTP call failed: {type(exc).__name__}") from exc
     usage = dict(data.get("usage")) if isinstance(data.get("usage"), dict) else {}
-    if header_cost and not usage.get("cost"):
-        usage["cost"] = header_cost
     served = str(data.get("model") or model)
-    log_call(served, lane, usage, int((time.monotonic() - start) * 1000), True, "", task)
+    if not gateway:  # a gateway call is already in the key-pool cost log (requests.jsonl): logging it here would count it twice
+        log_call(served, lane, usage, int((time.monotonic() - start) * 1000), True, "", task)
     try:
         text = data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError) as exc:

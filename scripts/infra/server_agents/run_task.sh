@@ -301,9 +301,9 @@ CUR="$LOG.cur"
 run_sandboxed() { # agent_sandbox.sh: keys go through a root-only env file, never argv or unit properties
   local unit="roxira-agent-${BRANCH#agent/}" envf
   envf="$(mktemp /run/roxira-agent-env.XXXXXX)"
+  # only the key the chosen route needs ($KEYVAR); the other keys stay out of the agent's environment
   sandbox_env_file "$envf" HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME OPENCODE_DISABLE_AUTOUPDATE \
-    OPENCODE_DISABLE_MODELS_FETCH OPENCODE_DISABLE_PROJECT_CONFIG OPENCODE_CONFIG_CONTENT GROQ_API_KEY \
-    OPENROUTER_API_KEY_AGENTS KEYPOOL_MASTER_KEY
+    OPENCODE_DISABLE_MODELS_FETCH OPENCODE_DISABLE_PROJECT_CONFIG OPENCODE_CONFIG_CONTENT "$KEYVAR"
   timeout --kill-after=15 "$TIMEOUT" bash -c 'source "$1"; shift; sandbox_run "$@"' _ "$HERE/agent_sandbox.sh" \
     "$unit" "$WT" "$((TIMEOUT + 30))" "$envf" "$(command -v "$OPENCODE_BIN")" run -m "$MODEL_REF" "$PROMPT" \
     </dev/null >"$CUR" 2>&1 || EXIT=$?

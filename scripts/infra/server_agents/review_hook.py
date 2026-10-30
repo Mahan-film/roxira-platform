@@ -7,9 +7,11 @@ with a model from a DIFFERENT family than the author.
 
 - Checklist: .claude/skills/review-diff/SKILL.md (the skill's front matter is stripped), so the hook and
   the skill never drift apart.
-- Reviewer model: first entry of the `reviewer` role in config/models.yaml (via model_registry.py) whose
-  family differs from --author-model (families from scripts/dev/check_reviewer_family.py).
-  `public_code_only` entries are used only with --public. No different-family entry -> exit 2.
+- Reviewer model: `reviewer` role of config/models.yaml (via model_registry.py), file order (free first), skipping
+  entries of the author's family (families from scripts/dev/check_reviewer_family.py). `public_code_only` entries are
+  used only with --public. Role ids go to OpenRouter by id; the key-pool gateway serves GROUP names only, so it is
+  used through `agent-strong-free` (public code) and `agent-free-paid`, and only when the author's family is known.
+  A reply is accepted only if the model that served it is in another family. Nothing eligible -> exit 2.
 - The diff is untrusted data: it is framed behind a boundary and the model is told not to follow it.
 - Output: JSON {verdict: pass|fail|error, reviewer, author_model, items: [{name, status, note}]};
   exit 0 pass, 1 fail, 2 error. Calls are logged in lane `review` (llm_client.py) so taskq's
@@ -34,6 +36,7 @@ import llm_client  # noqa: E402
 
 SKILL = ROOT / ".claude" / "skills" / "review-diff" / "SKILL.md"
 MAX_DIFF_CHARS = 60000
+PAID_GROUP = "agent-free-paid"  # key-pool group: GLM-5.3 Flash then DeepSeek Flash; the family check rejects the DeepSeek fallback
 FREE_GROUP = "agent-strong-free"  # key-pool group of free strong models (config/key_pool.yaml); may_log: public code only
 SYSTEM = ("You are a code reviewer. You review a diff written by another model against a fixed checklist. "
           "Reply with JSON only.")
@@ -75,18 +78,43 @@ def pick_reviewer(entries: list[dict], author_model: str, public: bool) -> str |
     return next(iter(candidates(entries, author_model, public)), None)
 
 
-def review(cands: list[str], author_model: str, public: bool, prompt: str, *, model_cmd: str | None = None,
-           task: int | None = None) -> tuple[str, dict]:
-    """(reviewer that answered, verdict). Tries each role entry through the gateway in order, then (public code
-    only) the free gateway group. A reply is accepted only when the model that served it is not in the author's
-    family: the gateway may fall back to the author's own vendor, and that review would be worthless."""
+def is_free(entry: dict) -> bool:
+    price = entry.get("price_per_1m") or {}
+    return str(entry.get("id", "")).endswith(":free") or (price.get("in") == 0 and price.get("out") == 0)
+
+
+def plan(cands: list[str], author_model: str, public: bool, free: set[str] | None = None) -> list[tuple[str, str]]:
+    """(route, model) tries, free first. The key-pool gateway serves GROUP names only, never raw model ids, so
+    role entries from config/models.yaml go to OpenRouter by id (taskq runs outside the agent sandbox), and the
+    gateway is used through its groups. Group tries need a KNOWN author family: their serving model is only
+    learnt from the reply, and without a known author family it could not be checked. `agent-strong-free` may
+    log prompts: public code only."""
     fam = families()
-    tries = list(cands) + ([FREE_GROUP] if public else [])
+    groups_ok = bool(author_model) and fam.known_family(author_model)
+    free = free or set()
+    tries: list[tuple[str, str]] = []
+    if groups_ok and public:
+        tries.append(("gateway", FREE_GROUP))
+    # AGENTS.md §4, free first: every free role entry, then paid role entries (models.yaml order inside each),
+    # and the paid gateway group only after all of those failed.
+    tries += [("openrouter", c) for c in cands if c in free]
+    tries += [("openrouter", c) for c in cands if c not in free]
+    if groups_ok:
+        tries.append(("gateway", PAID_GROUP))
+    return tries
+
+
+def review(cands: list[str], author_model: str, public: bool, prompt: str, *, model_cmd: str | None = None,
+           task: int | None = None, free: set[str] | None = None) -> tuple[str, dict]:
+    """(reviewer that answered, verdict). A reply counts only when the model that actually served it is not in
+    the author's family: a gateway group can fall back to the author's own vendor, and that review is worthless."""
+    fam = families()
+    tries = plan(cands, author_model, public, free)
     last = "no reviewer from a different family in config/models.yaml"
-    for model in tries:
+    for via, model in tries:
         try:
             text, served = llm_client.chat_full(model, SYSTEM, prompt, lane="review", model_cmd=model_cmd,
-                                                max_tokens=2000, task=task)
+                                                max_tokens=2000, task=task, via=via)
         except llm_client.LLMError as exc:
             last = f"{model}: {exc}"
             continue
@@ -94,7 +122,7 @@ def review(cands: list[str], author_model: str, public: bool, prompt: str, *, mo
             last = f"{model} was served by {served}, the author's family; review rejected"
             continue
         return served, parse_verdict(text)
-    return tries[0] if tries else "", {"verdict": "error", "items": [], "note": last}
+    return (tries[0][1] if tries else ""), {"verdict": "error", "items": [], "note": last}
 
 
 def checklist(skill: Path = SKILL) -> str:
@@ -188,15 +216,17 @@ def main(argv: list[str] | None = None) -> int:
 
     entries = registry().role_entries("reviewer", Path(a.registry) if a.registry else None)
     cands = candidates(entries, a.author_model, a.public)
+    tries = plan(cands, a.author_model, a.public, {str(e["id"]) for e in entries if is_free(e)})
     result: dict = {"author_model": a.author_model, "reviewer": cands[0] if cands else None}
-    if not cands and not a.public:
+    if not tries:
         result.update(verdict="error", items=[], note="no reviewer from a different family in config/models.yaml")
     else:
         prompt = build_prompt(read_diff(a), read_checks(a.checks_file), checklist())
         if a.dry_run:
-            print(f"reviewers: {cands + ([FREE_GROUP] if a.public else [])} (author {a.author_model})\n\n{prompt}")
+            print(f"reviewers: {tries} (author {a.author_model})\n\n{prompt}")
             return 0
-        reviewer, verdict = review(cands, a.author_model, a.public, prompt, model_cmd=a.model_cmd, task=a.task_id)
+        reviewer, verdict = review(cands, a.author_model, a.public, prompt, model_cmd=a.model_cmd, task=a.task_id,
+                                   free={str(e["id"]) for e in entries if is_free(e)})
         result.update(reviewer=reviewer, **verdict)
     text = json.dumps(result, ensure_ascii=False, indent=2)
     if a.out:

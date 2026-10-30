@@ -27,6 +27,7 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - Measured on srv1's real queue (copy of `taskq.db` + `requests.jsonl`, read-only): 46 tasks, 60 attempts, last activity 2026-10-22. 52 of 60
   attempts (87 %) were `ds-flash` direct to OpenRouter, so the gateway log saw $0.00 and 166k tokens for them: the old key-pool numbers hid
   almost all paid agent spend. That is why direct steps are now metered from the OpenRouter key usage.
+- Follow-up fixes (review of #891): reviewer routes role ids to OpenRouter and groups to the gateway; lane budgets and backfill include direct spend; a failed review is not an accepted task; family check handles bare ids; sandbox gets only the route's key and cannot see logs/taskq.db/other worktrees (verify with `agent_sandbox.sh check` on srv1).
 - Failed task #46 cause: OpenRouter agents key daily limit ($5.00) hit mid-edit, work was complete and checks passed. Retry it on srv1.
 
 ## 2026-10-30 (P0 factory hardening, #882, audit `docs/strategy/FACTORY_GAP_AUDIT_2026-10-30.md`)

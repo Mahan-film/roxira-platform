@@ -40,3 +40,22 @@ def test_env_file_quotes_values_and_is_private(tmp_path):
     subprocess.run(["bash", "-c", code], check=True, env=env)
     assert target.read_text() == "A_VALUE='it\\'s \\\\ {\"x\":1}'\n"
     assert target.stat().st_mode & 0o777 == 0o600
+
+
+def test_props_hide_orchestrator_state_and_other_worktrees():
+    lines = subprocess.run(["bash", str(SCRIPT), "props", "/var/lib/roxira-agents/worktrees/t1", "60"], check=True,
+                           capture_output=True, text=True).stdout.splitlines()
+    for name in ("logs", "taskq", "taskq.db", "patches", "reviews"):
+        assert f"InaccessiblePaths=-/var/lib/roxira-agents/{name}" in lines
+    assert "TemporaryFileSystem=/var/lib/roxira-agents/worktrees:ro" in lines
+    assert "BindPaths=/var/lib/roxira-agents/worktrees/t1" in lines
+    assert any(line.startswith("ReadWritePaths=/var/lib/roxira-agents/worktrees/t1 ") for line in lines)
+
+
+def test_run_task_passes_only_the_routes_key_to_the_sandbox():
+    text = (SCRIPT.parent / "run_task.sh").read_text()
+    call = text[text.index("sandbox_env_file \"$envf\""):]
+    call = call[: call.index("timeout --kill-after")]
+    assert '"$KEYVAR"' in call
+    for key in ("OPENROUTER_API_KEY_AGENTS", "KEYPOOL_MASTER_KEY", "GROQ_API_KEY"):
+        assert key not in call
