@@ -265,3 +265,41 @@ def test_cost_log_tries_again_when_a_free_provider_reports_no_usage(tmp_path):
     ctx = SimpleNamespace(http=http, sleep=lambda _s: None)
     result = up.check_cost_log(ctx, 1, "k", tmp_path, ["g"])
     assert result.status == "PASS" and len(calls) == 2
+
+
+def _cost_ctx(tmp_path, behaviour):
+    """behaviour(group, n) -> None (no record) | prompt_tokens int | 'leak'."""
+    log = tmp_path / "logs" / "requests.jsonl"
+    log.parent.mkdir(exist_ok=True)
+    calls = []
+
+    def http(_method, _url, _key, body):
+        calls.append(body["model"])
+        what = behaviour(body["model"], len(calls))
+        if what is not None:
+            rec = {"answer_id": body["metadata"]["roxira_answer_id"], "model_group": body["model"], "prompt_tokens": what,
+                   "completion_tokens": 1, "response_cost": 0.0, "tier": "free"}
+            with log.open("a") as f:
+                f.write(json.dumps(rec) + "\n")
+        return 200, {}
+
+    return SimpleNamespace(http=http, sleep=lambda _s: None), calls
+
+
+def test_cost_log_moves_to_next_group_on_zero_usage(tmp_path):
+    ctx, calls = _cost_ctx(tmp_path, lambda g, n: 5 if g == "b" else 0)
+    result = up.check_cost_log(ctx, 1, "k", tmp_path, ["a", "b"])
+    assert result.status == "PASS" and calls == ["a", "b"]
+
+
+def test_cost_log_moves_to_next_group_when_record_not_flushed(tmp_path):
+    ctx, calls = _cost_ctx(tmp_path, lambda g, n: 3 if g == "b" else None)
+    result = up.check_cost_log(ctx, 1, "k", tmp_path, ["a", "b"])
+    assert result.status == "PASS" and calls == ["a", "b"]
+
+
+def test_cost_log_fails_when_no_group_has_usage(tmp_path):
+    ctx, calls = _cost_ctx(tmp_path, lambda g, n: 0)
+    result = up.check_cost_log(ctx, 1, "k", tmp_path, ["a", "b"])
+    assert result.status == "FAIL" and "prompt_tokens is 0" in result.detail
+    assert len(calls) == 2 * up.COST_LOG_ATTEMPTS  # every group tried, every round

@@ -40,7 +40,8 @@ import yaml  # noqa: E402
 PROJECT = "roxira-keypool"
 CONTAINER = "roxira_keypool"
 CANARY = "roxira_keypool_canary"
-COST_LOG_ATTEMPTS = 4
+COST_LOG_ATTEMPTS = 2  # rounds over all free groups
+RETRYABLE_COST = ("prompt_tokens is 0", "no record with answer_id")
 NETWORK = "roxira_platform_roxira_net"
 COMPOSE = HERE / "docker-compose.keypool.yml"
 GEN = HERE / "generated"
@@ -322,22 +323,21 @@ def check_ladders(ctx: Ctx, port: int, key: str, pool: dict[str, Any], cfg: dict
 
 
 def check_cost_log(ctx: Ctx, port: int, key: str, stage: pathlib.Path, groups: list[str]) -> Result:
-    """One logged call with real usage is enough: some free providers return none, on the old image too."""
+    """One logged call with real usage is enough. Some free providers return no usage (old image too) and a
+    record may not be flushed yet, so move on to the NEXT group in both cases, for COST_LOG_ATTEMPTS rounds."""
     secret = "CANARY-PROMPT-MUST-NOT-BE-LOGGED"
     last = Result("cost logging", "FAIL", "no chat answered, nothing to log")
     for attempt in range(COST_LOG_ATTEMPTS):
-        tag = f"canary-{int(time.time())}-{attempt}"
         for g in groups:
+            tag = f"canary-{int(time.time())}-{attempt}-{g}"
             status, _ = ctx.http("POST", f"http://127.0.0.1:{port}/v1/chat/completions", key,
                                  {"model": g, "max_tokens": 8, "metadata": {"roxira_answer_id": tag, "roxira_feature": "canary"},
                                   "messages": [{"role": "user", "content": secret}]})
-            if status == 200:
-                break
-        else:
-            continue
-        last = read_cost_record(ctx, stage / "logs" / "requests.jsonl", tag, secret)
-        if "prompt_tokens is 0" not in last.detail:
-            return last
+            if status != 200:
+                continue
+            last = read_cost_record(ctx, stage / "logs" / "requests.jsonl", tag, secret)
+            if not any(m in last.detail for m in RETRYABLE_COST):
+                return last
     return last
 
 
