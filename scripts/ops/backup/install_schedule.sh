@@ -20,6 +20,9 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 UNIT_DIR="${UNIT_DIR:-/etc/systemd/system}"
 SAVE_ROOT="${SCHEDULE_SAVE_DIR:-/var/lib/roxira-backup/unit-backup}"
 SYSTEMCTL="${SYSTEMCTL:-systemctl}"
+ENV_FILE="${BACKUP_ENV_FILE:-/etc/roxira/backup.env}"
+MARK_BEGIN="# BEGIN roxira-schedule-2026-10-30"
+MARK_END="# END roxira-schedule-2026-10-30"
 
 # source path -> unit name
 SRC=(
@@ -43,18 +46,44 @@ run() { if [ "$MODE" = "--dry-run" ]; then printf 'dry-run: %s\n' "$*"; else "$@
 [ "$MODE" = "--dry-run" ] || [ "$(id -u)" = 0 ] || [ "${SCHEDULE_TEST:-0}" = 1 ] || { log "ERROR: needs root"; exit 1; }
 
 if [ "$MODE" = "--rollback" ]; then
-  last="$(find "$SAVE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -n 1)"
-  [ -n "$last" ] || { log "ERROR: no saved unit files under $SAVE_ROOT"; exit 1; }
-  log "restoring unit files from $last"
+  # The OLDEST save with a manifest is the state before the first install; a repeated --apply never becomes the target.
+  last=""
+  while IFS= read -r d; do
+    [ -f "$d/manifest" ] && { last="$d"; break; }
+  done < <(find "$SAVE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+  [ -n "$last" ] || { log "ERROR: no saved state with a manifest under $SAVE_ROOT; nothing is changed"; exit 1; }
+  # Validate everything first: a unit that cannot be restored is never removed, and nothing changes on any error.
+  while read -r kind u; do
+    case "$kind" in
+      saved) [ -f "$last/$u" ] || { log "ERROR: $last/$u is listed but missing; nothing is changed"; exit 1; } ;;
+      absent | env) ;;
+      *) log "ERROR: bad manifest line '$kind $u'; nothing is changed"; exit 1 ;;
+    esac
+  done <"$last/manifest"
+  log "restoring from $last"
   for t in "${NEW_TIMERS[@]}"; do $SYSTEMCTL disable --now "$t" 2>/dev/null || true; done
-  for f in "$last"/*; do
-    [ -f "$f" ] || continue
-    install -m 644 "$f" "$UNIT_DIR/$(basename "$f")"
-  done
-  for u in roxira-backup-dr-pgcfg.service roxira-backup-dr-pgcfg.timer roxira-backup-dr-drill.service \
-    roxira-backup-dr-drill.timer roxira-cleanup.service roxira-cleanup.timer; do
-    [ -e "$last/$u" ] || rm -f -- "$UNIT_DIR/$u"   # these did not exist before the install
-  done
+  while read -r kind u; do
+    case "$kind" in
+      saved) install -m 644 "$last/$u" "$UNIT_DIR/$u" ;;
+      absent) rm -f -- "$UNIT_DIR/$u" ;;   # did not exist before the install, and the manifest says so
+    esac
+  done <"$last/manifest"
+  # drop the retention block so the hourly timer keeps its old 6 + 3 sets again
+  if [ -f "$ENV_FILE" ]; then
+    python3 - "$ENV_FILE" "$MARK_BEGIN" "$MARK_END" <<'PY'
+import sys
+path, begin, end = sys.argv[1:]
+out, skip = [], False
+for line in open(path).read().splitlines(keepends=True):
+    if line.strip() == begin:
+        skip = True
+    elif line.strip() == end:
+        skip = False
+    elif not skip:
+        out.append(line)
+open(path, "w").write("".join(out))
+PY
+  fi
   $SYSTEMCTL daemon-reload
   $SYSTEMCTL restart roxira-backup-dr-run.timer roxira-telegram-offsite.timer
   log "rolled back: run timer hourly, telegram daily, pgcfg/drill/cleanup timers removed"
@@ -62,23 +91,58 @@ if [ "$MODE" = "--rollback" ]; then
 fi
 
 for f in "${SRC[@]}"; do [ -r "$f" ] || { log "ERROR: missing $f (is the repo on srv1 up to date?)"; exit 1; }; done
-log "preflight: ports and tools"
-for t in age python3 docker; do command -v "$t" >/dev/null || log "WARNING: $t not found on PATH"; done
-command -v age-keygen >/dev/null || log "WARNING: age-keygen missing, the restore drill will fail (apt install age)"
-if [ -r /etc/roxira/backup.env ]; then
-  grep -qE '^(BACKUP_R2_ENDPOINT|BACKUP_S3_ENDPOINT)=.+' /etc/roxira/backup.env \
-    || log "WARNING: no R2 endpoint in /etc/roxira/backup.env (BACKUP_R2_* or BACKUP_S3_*): pgcfg will report NOT_CONFIGURED"
-  grep -qE '^BACKUP_AGE_RECIPIENT=.+' /etc/roxira/backup.env || log "WARNING: BACKUP_AGE_RECIPIENT not set: pgcfg/drill/offsite will refuse to run"
+
+log "preflight"
+ERRORS=0
+err() { log "ERROR: $*"; ERRORS=$((ERRORS + 1)); }
+for t in age age-keygen python3 docker; do command -v "$t" >/dev/null || log "WARNING: $t not found on PATH (the drill and uploads need age, age-keygen, python3, docker)"; done
+if [ ! -r "$ENV_FILE" ]; then
+  err "$ENV_FILE is not readable: the 2-set retention cannot be written and R2/age settings cannot be checked"
+else
+  for n in BACKUP_R2_ENDPOINT BACKUP_R2_BUCKET BACKUP_R2_ACCESS_KEY_ID BACKUP_R2_SECRET_ACCESS_KEY BACKUP_AGE_RECIPIENT; do
+    grep -qE "^(export[[:space:]]+)?${n}=.+" "$ENV_FILE" || err "$n is not set in $ENV_FILE"
+  done
+fi
+if [ "$ERRORS" -gt 0 ]; then
+  if [ "$MODE" = "--apply" ]; then
+    log "refusing to install: without these the daily run would be the only copy and the report would be STALE. Nothing was changed."
+    exit 1
+  fi
+  log "dry-run: --apply would refuse until the errors above are fixed"
 fi
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-log "saving current unit files to $SAVE_ROOT/$stamp"
-run install -d -m 700 "$SAVE_ROOT/$stamp"
+dir="$SAVE_ROOT/$stamp"
+manifest=""
 for f in "${SRC[@]}"; do
   u="$(basename "$f")"
-  if [ -e "$UNIT_DIR/$u" ]; then run cp -p "$UNIT_DIR/$u" "$SAVE_ROOT/$stamp/$u"; fi
+  if [ ! -e "$UNIT_DIR/$u" ]; then manifest+="absent $u"$'\n'
+  elif ! cmp -s "$f" "$UNIT_DIR/$u"; then manifest+="saved $u"$'\n'
+  fi
 done
+if [ -f "$ENV_FILE" ] && ! grep -qF "$MARK_BEGIN" "$ENV_FILE"; then manifest+="env backup.env"$'\n'; fi
+if [ -n "$manifest" ]; then
+  log "saving what will change to $dir"
+  run install -d -m 700 "$dir"
+  while read -r kind u; do
+    case "$kind" in
+      saved) run cp -p "$UNIT_DIR/$u" "$dir/$u" ;;
+      env) run cp -p "$ENV_FILE" "$dir/backup.env" ;;
+    esac
+  done <<<"$manifest"
+  if [ "$MODE" = "--apply" ]; then printf '%s' "$manifest" >"$dir/manifest"; fi
+else
+  log "units and retention already installed; nothing to save"
+fi
 for f in "${SRC[@]}"; do run install -m 644 "$f" "$UNIT_DIR/$(basename "$f")"; done
+# Retention follows the schedule: 2 local sets only once the run timer is daily (the script default stays 6 + 3).
+if [ -f "$ENV_FILE" ] && ! grep -qF "$MARK_BEGIN" "$ENV_FILE"; then
+  if [ "$MODE" = "--apply" ]; then
+    printf '\n%s\nBACKUP_KEEP_HOURLY=2\nBACKUP_KEEP_DAILY=0\n%s\n' "$MARK_BEGIN" "$MARK_END" >>"$ENV_FILE"
+  else
+    printf 'dry-run: append BACKUP_KEEP_HOURLY=2 / BACKUP_KEEP_DAILY=0 block to %s\n' "$ENV_FILE"
+  fi
+fi
 run $SYSTEMCTL daemon-reload
 for t in "${ALL_TIMERS[@]}"; do run $SYSTEMCTL enable "$t"; run $SYSTEMCTL restart "$t"; done
 
@@ -86,6 +150,7 @@ log "cleanup dry run (nothing is deleted):"
 bash "$REPO/scripts/ops/cleanup_2d.sh" --dry-run || true
 if [ "$MODE" = "--dry-run" ]; then
   log "dry-run only. Apply with: sudo bash $0 --apply"
+  [ "$ERRORS" = 0 ] || exit 1
 else
   log "installed. Check: systemctl list-timers 'roxira-backup-dr*' 'roxira-telegram*' 'roxira-cleanup*'"
   log "first R2 copy now: systemctl start roxira-backup-dr-pgcfg.service; then the drill: systemctl start roxira-backup-dr-drill.service"

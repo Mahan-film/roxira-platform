@@ -247,7 +247,7 @@ def env_age_hours(value: str, now: datetime) -> float | None:
 
 
 def freshness(sets: list[dict], status: dict, now: datetime, max_set_h: float, max_r2_h: float,
-              max_drill_h: float) -> dict:
+              max_drill_h: float, expect_r2: bool = False, expect_drill: bool = False) -> dict:
     """Age of the newest set / R2 copy / restore drill against what the schedule allows.
     `problems` lists every age that is over its limit; the report fails on any of them."""
     latest = next((s for s in sets if s["latest"]), sets[0] if sets else None)
@@ -259,12 +259,16 @@ def freshness(sets: list[dict], status: dict, now: datetime, max_set_h: float, m
         problems.append("no local backup set found")
     elif set_age > max_set_h:
         problems.append(f"latest local set is {set_age:.1f} h old (limit {max_set_h:g} h)")
+    if expect_r2 and status.get("R2_LAST_RESULT") is None and r2_age is None:
+        problems.append("R2 copy expected (timer enabled) but no result was ever recorded")
     if status.get("R2_LAST_RESULT") is not None or r2_age is not None:
         if r2_age is None or r2_age > max_r2_h:
             problems.append("R2 copy is " + ("missing" if r2_age is None else f"{r2_age:.1f} h old")
                             + f" (limit {max_r2_h:g} h)")
         if status.get("R2_LAST_RESULT", "OK") != "OK":
             problems.append("last R2 upload failed: " + status.get("R2_LAST_ERROR", "unknown"))
+    if expect_drill and status.get("DRILL_RESULT") is None:
+        problems.append("restore drill expected (timer enabled) but no result was ever recorded")
     if status.get("DRILL_RESULT") is not None:
         if status["DRILL_RESULT"] != "OK":
             problems.append("last restore drill FAILED")
@@ -492,7 +496,8 @@ def cmd_report(a) -> int:
     fresh = freshness(sets, status, datetime.now(timezone.utc),
                       float(os.environ.get("BACKUP_MAX_SET_AGE_H", "30")),
                       float(os.environ.get("BACKUP_MAX_R2_AGE_H", "3")),
-                      float(os.environ.get("BACKUP_MAX_DRILL_AGE_H", "192")))
+                      float(os.environ.get("BACKUP_MAX_DRILL_AGE_H", "192")),
+                      a.expect_r2, a.expect_drill)
     m = build_report_manifest(date, a.host or os.uname().nodename, status, sets, a.disk_pct, caps, off, fresh)
     md = render_report_md(m)
     if a.out_dir:
@@ -550,6 +555,7 @@ def main() -> int:
     r.add_argument("--status-env"); r.add_argument("--check-env"); r.add_argument("--sets-dir")
     r.add_argument("--out-dir"); r.add_argument("--date"); r.add_argument("--host")
     r.add_argument("--disk-pct", type=int); r.add_argument("--hash-max-mb", type=float, default=512)
+    r.add_argument("--expect-r2", action="store_true"); r.add_argument("--expect-drill", action="store_true")
     r.add_argument("--r2-env"); r.add_argument("--drill-env")
     r.add_argument("--offsite-manifest"); r.add_argument("--attach", action="append", default=[])
     r.add_argument("--dry-run", action="store_true")

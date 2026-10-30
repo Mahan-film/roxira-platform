@@ -64,9 +64,11 @@ STAGE="$LOCAL_DIR/stage"
 SETS_DIR="$LOCAL_DIR/sets"
 # Local retention (docs/ops/BACKUP_RETENTION.md): newest KEEP_HOURLY sets + the newest set of each of the
 # KEEP_DAILY latest UTC days. BACKUP_KEEP_LOCAL_SETS is the old name of KEEP_HOURLY (still honoured).
-# The full set now runs once a day, so "2 sets" = the newest two (no extra daily sets).
-KEEP_HOURLY="${BACKUP_KEEP_HOURLY:-${BACKUP_KEEP_LOCAL_SETS:-2}}"
-KEEP_DAILY="${BACKUP_KEEP_DAILY:-0}"
+# Defaults stay at the hourly-era values: install_schedule.sh --apply writes BACKUP_KEEP_HOURLY=2 / BACKUP_KEEP_DAILY=0
+# into /etc/roxira/backup.env together with the daily timer, so a pull alone never shrinks retention while the
+# old hourly timer still runs.
+KEEP_HOURLY="${BACKUP_KEEP_HOURLY:-${BACKUP_KEEP_LOCAL_SETS:-6}}"
+KEEP_DAILY="${BACKUP_KEEP_DAILY:-3}"
 MIN_FREE_GB="${BACKUP_MIN_FREE_GB:-15}"   # below this: keep only the newest set and send an alert
 STATE_DIR="${BACKUP_STATE_DIR:-/var/lib/roxira-backup}"
 STATUS_FILE="$STATE_DIR/status.env"
@@ -77,7 +79,7 @@ LOG_FILE="${BACKUP_LOG_FILE:-/var/log/roxira_backup_dr.log}"
 DISK_WARN="${BACKUP_DISK_WARN_PCT:-85}"
 DISK_ABORT="${BACKUP_DISK_ABORT_PCT:-95}"
 ALERT_COOLDOWN_MIN="${BACKUP_ALERT_COOLDOWN_MIN:-360}"
-PRUNE_HOUR_UTC="${BACKUP_PRUNE_HOUR_UTC:-03}"
+R2_TOOLS="${BACKUP_R2_TOOLS:-$SCRIPT_DIR/r2_tools.py}"
 BUNDLE_DOW="${BACKUP_BUNDLE_DOW:-7}"          # 1=Mon .. 7=Sun
 BUNDLE_MAX_BYTES="${BACKUP_BUNDLE_MAX_BYTES:-20971520}"
 EMAIL_OFFSITE="${BACKUP_EMAIL_OFFSITE:-off}"     # off | daily | weekly (weekly uses BUNDLE_DOW)
@@ -436,8 +438,9 @@ mode_run() {
 
   step "5/6 retention (forget --prune, once a day)"
   for r in ${repos[@]+"${repos[@]}"}; do
-    if [ "$DRY_RUN" = "1" ]; then echo "[dry-run] restic forget --keep-hourly 24 --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune (repo $r) at ${PRUNE_HOUR_UTC}h UTC"; continue; fi
-    if [ "$(date -u +%H)" = "$PRUNE_HOUR_UTC" ] || [ ! -f "$STATE_DIR/last_prune_$r" ]; then
+    if [ "$DRY_RUN" = "1" ]; then echo "[dry-run] restic forget --keep-hourly 24 --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune (repo $r) when the last prune is older than 20 h"; continue; fi
+    # due when the last successful prune is older than 20 h (a daily 01:07 run never hits a fixed hour)
+    if [ -z "$(find "$STATE_DIR/last_prune_$r" -mmin -1200 2>/dev/null)" ]; then
       if restic_on "$r" forget --host roxira-prod --keep-hourly 24 --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune >/dev/null 2>&1; then
         touch "$STATE_DIR/last_prune_$r"
       else
@@ -516,7 +519,8 @@ build_payload() {
   STAGE="$saved"
   if [ "${#FAILS[@]}" -gt "$before" ]; then
     rc=1
-  elif ! tar -cf - -C "$work" pg configs ${extras[@]+"-C" "/" "${extras[@]}"} 2>/dev/null | age -r "$recipient" -o "$dest"; then
+  elif ! { tar --warning=no-file-changed -cf - -C "$work" pg configs ${extras[@]+"-C" "/" "${extras[@]}"} 2>/dev/null \
+    || [ $? -eq 1 ]; } | age -r "$recipient" -o "$dest"; then   # tar exit 1 = "file changed while reading" (extra paths)
     FAILS+=("age encryption of the payload failed"); rc=1
   fi
   [[ "$work" == "$STATE_DIR"/payload.* ]] && rm -rf -- "$work"
@@ -524,20 +528,26 @@ build_payload() {
 }
 
 mode_pgcfg() {
-  local ts hour dest rc=0 key
-  ts="$(stamp)"; hour="$(date -u +%H)"
+  local ts dest rc=0 key
+  ts="$(stamp)"
   dest="$STATE_DIR/pgcfg/$ts.tar.age"
   if [ "$DRY_RUN" = "1" ]; then
     echo "[dry-run] pgcfg: fresh pg_dump -Fc of $PG_CONTAINERS + configs tar | age -r \$BACKUP_AGE_RECIPIENT -> $dest"
-    echo "[dry-run] pgcfg: r2_tools.py put -> ${BACKUP_R2_PREFIX:-pgcfg}/hourly/$ts.tar.age (+ /daily/ at ${PRUNE_HOUR_UTC}h UTC), prune at ${PRUNE_HOUR_UTC}h UTC"
+    echo "[dry-run] pgcfg: r2_tools.py put -> ${BACKUP_R2_PREFIX:-pgcfg}/hourly/$ts.tar.age (+ /daily/ and R2 prune on the first successful run of each UTC day)"
     return 0
   fi
   mkdir -p "$STATE_DIR/pgcfg"; chmod 700 "$STATE_DIR/pgcfg"
   exec 8>"${BACKUP_PGCFG_LOCK_FILE:-/var/lock/roxira-backup-pgcfg.lock}"
   flock -n 8 || { log "another pgcfg run is active; exiting"; exit 0; }
   umask 077
-  command -v age >/dev/null || die "age not installed"
-  [ -n "${BACKUP_AGE_RECIPIENT:-}" ] || die "BACKUP_AGE_RECIPIENT unset: an unencrypted payload is never uploaded"
+  # Record the failure before dying, so the report shows FAIL instead of a missing file.
+  if ! command -v age >/dev/null; then
+    env_write "$R2_FILE" "R2_LAST_RESULT=FAIL" "R2_LAST_ERROR=age not installed"; die "age not installed"
+  fi
+  if [ -z "${BACKUP_AGE_RECIPIENT:-}" ]; then
+    env_write "$R2_FILE" "R2_LAST_RESULT=FAIL" "R2_LAST_ERROR=BACKUP_AGE_RECIPIENT unset"
+    die "BACKUP_AGE_RECIPIENT unset: an unencrypted payload is never uploaded"
+  fi
   if [ -z "${BACKUP_R2_ENDPOINT:-${BACKUP_S3_ENDPOINT:-}}" ]; then
     warn "R2 not configured (BACKUP_R2_* / BACKUP_S3_*); nothing uploaded"
     env_write "$R2_FILE" "R2_LAST_RESULT=NOT_CONFIGURED" "R2_LAST_ERROR=R2 settings missing"
@@ -553,12 +563,22 @@ $(printf ' - %s\n' "${FAILS[@]}")"
     rm -f -- "$dest"; exit 1
   fi
   key="${BACKUP_R2_PREFIX:-pgcfg}"
-  if python3 -I "$SCRIPT_DIR/r2_tools.py" put "$dest" "$key/hourly/$ts.tar.age" \
-    && { [ "$hour" != "$PRUNE_HOUR_UTC" ] || python3 -I "$SCRIPT_DIR/r2_tools.py" put "$dest" "$key/daily/$ts.tar.age"; }; then
+  # Daily copy and prune are tied to "first successful run of the UTC day" (marker files), not to a clock hour, so a
+  # missed hour or a late catch-up run cannot skip them.
+  local today daily_mark="$STATE_DIR/r2_daily_day" prune_mark="$STATE_DIR/r2_prune_day"
+  today="$(date -u +%F)"
+  if python3 -I "$R2_TOOLS" put "$dest" "$key/hourly/$ts.tar.age"; then
+    if [ "$(cat "$daily_mark" 2>/dev/null)" != "$today" ]; then
+      if python3 -I "$R2_TOOLS" put "$dest" "$key/daily/$ts.tar.age"; then
+        echo "$today" >"$daily_mark"
+      else
+        WARNS+=("R2 daily copy failed (retried next hour)")
+      fi
+    fi
     env_write "$R2_FILE" "R2_LAST_RESULT=OK" "R2_LAST_OK=$ts" "R2_LAST_BYTES=$(stat -c %s "$dest")"
     log "r2 ok: $key/hourly/$ts.tar.age $(human "$(stat -c %s "$dest")")"
-    if [ "$hour" = "$PRUNE_HOUR_UTC" ]; then
-      python3 -I "$SCRIPT_DIR/r2_tools.py" prune || WARNS+=("R2 retention prune failed")
+    if [ "$(cat "$prune_mark" 2>/dev/null)" != "$today" ]; then
+      if python3 -I "$R2_TOOLS" prune; then echo "$today" >"$prune_mark"; else WARNS+=("R2 retention prune failed (retried next hour)"); fi
     fi
   else
     rc=1
@@ -570,22 +590,26 @@ $(printf ' - %s\n' "${FAILS[@]}")"
 }
 
 mode_drill() {
-  local work key rc=0 res=OK err=""
+  local work="" rc=0 res=OK err="" recipient=""
   if [ "$DRY_RUN" = "1" ]; then
     echo "[dry-run] drill: age-keygen (throwaway) -> fresh payload encrypted to it -> restore_drill.sh payload -> scratch postgres, pass/fail -> $DRILL_FILE"
     return 0
   fi
-  command -v age-keygen >/dev/null || die "age-keygen not installed"
   mkdir -p "$STATE_DIR"
-  work="$(mktemp -d "$STATE_DIR/drill.XXXXXX")"; chmod 700 "$work"
-  age-keygen -o "$work/id.key" >/dev/null 2>&1 || die "age-keygen failed"
-  if build_payload "$work/payload.tar.age" "$(age-keygen -y "$work/id.key")"; then
+  # Every failure below ends in DRILL_RESULT=FAIL and the work dir is always removed (no die between mktemp and cleanup).
+  if ! command -v age-keygen >/dev/null; then
+    res=FAIL; err="age-keygen not installed"
+  elif ! work="$(mktemp -d "$STATE_DIR/drill.XXXXXX")"; then
+    res=FAIL; err="cannot create the drill work dir"
+  elif ! { chmod 700 "$work" && age-keygen -o "$work/id.key" >/dev/null 2>&1 && recipient="$(age-keygen -y "$work/id.key")" && [ -n "$recipient" ]; }; then
+    res=FAIL; err="age-keygen failed"
+  elif build_payload "$work/payload.tar.age" "$recipient"; then
     nice -n 15 bash "$SCRIPT_DIR/restore_drill.sh" payload "$work/payload.tar.age" --identity "$work/id.key" || rc=$?
     [ "$rc" = 0 ] || { res=FAIL; err="restore drill exit $rc"; }
   else
     res=FAIL; err="payload build failed: ${FAILS[*]}"
   fi
-  [[ "$work" == "$STATE_DIR"/drill.* ]] && rm -rf -- "$work"
+  [ -n "$work" ] && [[ "$work" == "$STATE_DIR"/drill.* ]] && rm -rf -- "$work"
   env_write "$DRILL_FILE" "DRILL_RESULT=$res" "DRILL_AT=$(stamp)" "DRILL_KIND=pipeline (throwaway key)" "DRILL_ERROR=$err"
   [ "$res" = OK ] || alert "restore drill FAILED" "$err
 See: journalctl -u roxira-backup-dr-drill -n 100"
@@ -645,7 +669,12 @@ mode_report() {
   fi
   local off_args=()
   [ -f "$STATE_DIR/offsite/manifest-last.json" ] && off_args=(--offsite-manifest "$STATE_DIR/offsite/manifest-last.json")
-  python3 "$SCRIPT_DIR/email_offsite.py" report --status-env "$STATUS_FILE" --check-env "$CHECK_FILE" \
+  local expect=()
+  # The R2 copy / drill are expected once their timers are enabled: a missing result file then means "never ran or
+  # died before writing", which must not read as OK. BACKUP_EXPECT_R2 / BACKUP_EXPECT_DRILL=1|0 override.
+  if [ "${BACKUP_EXPECT_R2:-$(systemctl is-enabled roxira-backup-dr-pgcfg.timer >/dev/null 2>&1 && echo 1 || echo 0)}" = 1 ]; then expect+=(--expect-r2); fi
+  if [ "${BACKUP_EXPECT_DRILL:-$(systemctl is-enabled roxira-backup-dr-drill.timer >/dev/null 2>&1 && echo 1 || echo 0)}" = 1 ]; then expect+=(--expect-drill); fi
+  python3 "$SCRIPT_DIR/email_offsite.py" report ${expect[@]+"${expect[@]}"} --status-env "$STATUS_FILE" --check-env "$CHECK_FILE" \
     --r2-env "$R2_FILE" --drill-env "$DRILL_FILE" --sets-dir "$SETS_DIR" --out-dir "$out_dir" --date "$date_s" --host "$(hostname)" --disk-pct "${pct:-0}" \
     ${off_args[@]+"${off_args[@]}"} ${extra[@]+"${extra[@]}"} || rc=$?
   [ "$rc" = 0 ] || warn "report email not sent (rc=$rc)"

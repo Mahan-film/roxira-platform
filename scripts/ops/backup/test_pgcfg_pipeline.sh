@@ -38,7 +38,9 @@ EOS
 cat >"$T/bin/tar" <<'EOS'
 #!/bin/bash
 a=(); for x in "$@"; do case "$x" in --warning=*) ;; *) a+=("$x") ;; esac; done
-exec /usr/bin/tar "${a[@]}"
+/usr/bin/tar "${a[@]}"; rc=$?
+[ -n "${FAKE_TAR_RC:-}" ] && exit "$FAKE_TAR_RC"
+exit "$rc"
 EOS
 chmod +x "$T/bin/"*
 # the drill's `psql` fallthrough needs stdin; docker stub above handles it.
@@ -67,6 +69,47 @@ rc=0; bash "$HERE/server_backup.sh" drill >/dev/null 2>&1 || rc=$?
 check "drill fails when pg is down" "[ $rc != 0 ]"
 check "drill.env says FAIL" "grep -q \"DRILL_RESULT='FAIL'\" '$T/state/drill.env'"
 mv "$T/bin/docker.bak" "$T/bin/docker"
+
+# 3b. age-keygen failure: DRILL_RESULT=FAIL written, work dir removed
+REAL_KEYGEN="$(command -v age-keygen)"
+printf '#!/bin/sh\n[ -n "$FAKE_KEYGEN_FAIL" ] && exit 1\nexec "%s" "$@"\n' "$REAL_KEYGEN" >"$T/bin/age-keygen"; chmod +x "$T/bin/age-keygen"
+rm -f "$T/state/drill.env"
+rc=0; FAKE_KEYGEN_FAIL=1 bash "$HERE/server_backup.sh" drill >"$T/o.txt" 2>&1 || rc=$?
+check "keygen failure: drill exits non-zero" "[ $rc != 0 ]"
+check "keygen failure: drill.env says FAIL" "grep -q \"DRILL_RESULT='FAIL'\" '$T/state/drill.env' && grep -q 'age-keygen failed' '$T/state/drill.env'"
+check "keygen failure: no drill dir leaked" "! ls -d '$T'/state/drill.?????? >/dev/null 2>&1"
+
+# 4. R2 upload: daily copy + prune once per UTC day (not tied to a clock hour), hourly every run
+cat >"$T/fake_r2.py" <<'EOS'
+import os, sys
+open(os.environ["R2_CALLS"], "a").write(" ".join(sys.argv[1:]) + "\n")
+EOS
+export BACKUP_R2_TOOLS="$T/fake_r2.py" R2_CALLS="$T/r2calls" BACKUP_R2_ENDPOINT="https://x.r2.cloudflarestorage.com"
+: >"$T/r2calls"
+rc=0; bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
+check "pgcfg with R2 passes" "[ $rc = 0 ]"
+check "first run of the day writes hourly + daily + prune" "[ \$(grep -c 'put .*hourly/' '$T/r2calls') = 1 ] && [ \$(grep -c 'put .*daily/' '$T/r2calls') = 1 ] && grep -qx prune '$T/r2calls'"
+rc=0; bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
+check "second run the same day writes only hourly" "[ \$(grep -c 'put .*hourly/' '$T/r2calls') = 2 ] && [ \$(grep -c 'put .*daily/' '$T/r2calls') = 1 ] && [ \$(grep -cx prune '$T/r2calls') = 1 ]"
+echo 2000-01-01 >"$T/state/r2_daily_day"; echo 2000-01-01 >"$T/state/r2_prune_day"
+rc=0; bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
+check "a missed day is caught up by the next run" "[ \$(grep -c 'put .*daily/' '$T/r2calls') = 2 ] && [ \$(grep -cx prune '$T/r2calls') = 2 ]"
+check "R2 status OK" "grep -q \"R2_LAST_RESULT='OK'\" '$T/state/r2.env'"
+
+# 5. tar exit 1 (file changed while reading) is not a failure
+rc=0; FAKE_TAR_RC=1 bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
+check "tar exit 1 tolerated" "[ $rc = 0 ]"
+rc=0; FAKE_TAR_RC=2 bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
+check "tar exit 2 still fails" "[ $rc != 0 ]"
+
+# 6. missing recipient records FAIL instead of leaving no file
+rm -f "$T/state/r2.env"
+rc=0; BACKUP_AGE_RECIPIENT="" bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
+check "no recipient: exit non-zero" "[ $rc != 0 ]"
+check "no recipient: r2.env says FAIL" "grep -q \"R2_LAST_RESULT='FAIL'\" '$T/state/r2.env'"
+
+# 7. retention defaults stay at the hourly-era values until the installer writes the env block
+check "script default retention is 6 + 3" "grep -q 'BACKUP_KEEP_LOCAL_SETS:-6' '$HERE/server_backup.sh' && grep -q 'BACKUP_KEEP_DAILY:-3' '$HERE/server_backup.sh'"
 
 [ "$fail" = 0 ] || { echo "--- last output:"; cat "$T/drill.out" "$T/o.txt" 2>/dev/null; }
 exit "$fail"

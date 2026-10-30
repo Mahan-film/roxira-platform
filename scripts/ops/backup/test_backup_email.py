@@ -191,6 +191,21 @@ class T(unittest.TestCase):
         m = self._report("20261030T010700Z", ok + "DRILL_RESULT='FAIL'\nDRILL_AT='20261030T050000Z'\n", now)
         self.assertIn("restore drill FAILED", m["freshness"]["problems"][0])
 
+    def test_missing_results_fail_when_expected(self):
+        from datetime import datetime, timezone
+        now = datetime(2026, 10, 30, 6, 30, tzinfo=timezone.utc)
+        d = Path(tempfile.mkdtemp(dir=self.d))
+        (d / "20261030T010700Z").mkdir()
+        (d / "latest").symlink_to(d / "20261030T010700Z")
+        sets = eo.scan_sets(d, 1024)
+        st = eo.parse_status_env("LAST_RESULT='OK'\nBACKUP_MODE='local-only'\n")
+        quiet = eo.freshness(sets, st, now, 30, 3, 192)
+        self.assertEqual(quiet["problems"], [])  # features not installed: nothing expected
+        loud = eo.freshness(sets, st, now, 30, 3, 192, expect_r2=True, expect_drill=True)
+        self.assertEqual(len(loud["problems"]), 2)
+        m = eo.build_report_manifest("2026-10-30", "h", st, sets, 40, eo.Caps(), None, loud)
+        self.assertEqual(m["status"], "STALE")
+
     def test_report_message_utf8_filenames(self):
         m = eo.make_message("تست", "سلام", "a@x.test", "b@x.test", [("backup-report-d.md", "# سلام".encode())])
         att = next(m.iter_attachments())

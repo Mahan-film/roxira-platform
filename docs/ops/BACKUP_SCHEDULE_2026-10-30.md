@@ -7,12 +7,12 @@ hourly recovery point lives off the server, and the disk cleans itself.
 
 | Timer | Before | After | What it does |
 |---|---|---|---|
-| `roxira-backup-dr-run` | hourly :07 | **daily 01:07** | Full local set (Postgres, Qdrant snapshots, Redis, meta, configs). **2 sets kept** (was 6 hourly + 3 daily). |
-| `roxira-backup-dr-pgcfg` | n/a | **hourly :37** | Fresh `pg_dump -Fc` + config tarball, `age`-encrypted to `BACKUP_AGE_RECIPIENT`, uploaded to R2 (`pgcfg/hourly/`). Keeps 7 days hourly; the 03:xx copy is also written to `pgcfg/daily/` and kept 30 days. |
+| `roxira-backup-dr-run` | hourly :07 | **daily 01:07** | Full local set (Postgres, Qdrant snapshots, Redis, meta, configs). **2 sets kept** (was 6 hourly + 3 daily). The script default stays 6 + 3; `install_schedule.sh --apply` writes `BACKUP_KEEP_HOURLY=2` / `BACKUP_KEEP_DAILY=0` into `/etc/roxira/backup.env` (marked block, removed by `--rollback`), so a `git pull` alone never shrinks retention. |
+| `roxira-backup-dr-pgcfg` | n/a | **hourly :37** | Fresh `pg_dump -Fc` + config tarball, `age`-encrypted to `BACKUP_AGE_RECIPIENT`, uploaded to R2 (`pgcfg/hourly/`). Keeps 7 days hourly; the first successful run of each UTC day also writes `pgcfg/daily/` (kept 30 days) and prunes R2; this is tracked by marker files, so a missed hour is caught up by the next run. |
 | `roxira-telegram-offsite` | daily 04:15 | **every 6 h** (04, 10, 16, 22 :15) | Encrypted fresh Postgres dump to Telegram (unchanged script). |
 | `roxira-backup-dr-report` | 06:30 | 06:30 | Daily e-mail report. `BACKUP_EMAIL_OFFSITE=daily` mails the encrypted payload, inside `email_caps`. |
 | `roxira-backup-dr-drill` | n/a | **weekly Sun 05:10** | Restore drill, see below. |
-| `roxira-backup-dr-check` | Sun 04:30 | Sun 04:30 | `restic check` (only meaningful when a restic repository exists). |
+| `roxira-backup-dr-check` | Sun 04:30 | Sun 04:30 | `restic check` (only meaningful when a restic repository exists). The restic `forget --prune` now runs when the last prune is older than 20 h, not at a fixed clock hour. |
 | `roxira-neon-offsite` / qdrant replica | 02:41 / 03:10 | unchanged | |
 | `roxira-cleanup` | n/a | **every 2 days 05:40** | `scripts/ops/cleanup_2d.sh --apply`. |
 
@@ -25,6 +25,7 @@ Recovery point for Postgres: 1 hour (R2), 6 hours (Telegram), 1 day (e-mail, loc
   `BACKUP_MAX_R2_AGE_H` (3 h), or the drill older than `BACKUP_MAX_DRILL_AGE_H` (192 h), the status becomes **STALE**, the
   subject says `ATTENTION STALE`, and a "Stale or failed copies" section lists each reason. The 2026-10-30 e-mail, built from the
   2026-10-22 set, would have said the set is about 8 days old (limit 30 h) and failed.
+- When the pgcfg or drill timer is enabled, a missing `r2.env` / `drill.env` counts as a problem (STALE), not as OK (`BACKUP_EXPECT_R2` / `BACKUP_EXPECT_DRILL` = 0|1 override). Right after install the drill shows this until its first run; start it once with `systemctl start roxira-backup-dr-drill.service`.
 - `restic_check` is `not applicable` in `local-only` mode (no restic repository), not `never`.
 - The e-mail payload and the Telegram dump are built from a **fresh dump taken for that mail**, not from `sets/latest`.
   The offsite manifest carries `built_at` and the report prints it.
@@ -60,13 +61,13 @@ one appears. Default mode is `--dry-run`; the timer runs `--apply`. Log: `/root/
 ssh roxira-prod 'sudo bash /opt/roxira_platform/scripts/ops/backup/install_schedule.sh --apply'
 ```
 
-It saves the current unit files to `/var/lib/roxira-backup/unit-backup/<time>/`, installs the units, enables the five
+It refuses (and changes nothing) when `/etc/roxira/backup.env` is unreadable or lacks `BACKUP_R2_ENDPOINT`, `BACKUP_R2_BUCKET`, `BACKUP_R2_ACCESS_KEY_ID`, `BACKUP_R2_SECRET_ACCESS_KEY` or `BACKUP_AGE_RECIPIENT`; the dry run exits non-zero in that case. Otherwise it saves the current unit files to `/var/lib/roxira-backup/unit-backup/<time>/`, installs the units, enables the five
 timers and prints a cleanup dry run. Run it without `--apply` first to see the plan (changes nothing).
 
 Prerequisites it warns about: `age` and `age-keygen` installed on srv1; `BACKUP_AGE_RECIPIENT` and the R2 settings in
 `/etc/roxira/backup.env`: `BACKUP_R2_ENDPOINT`, `BACKUP_R2_BUCKET`, `BACKUP_R2_ACCESS_KEY_ID`, `BACKUP_R2_SECRET_ACCESS_KEY`
 (optional `BACKUP_R2_PREFIX`, default `pgcfg`). The existing `BACKUP_S3_*` names are accepted as a fallback, but they also
-switch `run` to restic mode, so prefer the `BACKUP_R2_*` names. Until they exist, `pgcfg` records `NOT_CONFIGURED` and
+switch `run` to restic mode, so prefer the `BACKUP_R2_*` names. If `age` or the recipient is missing, `pgcfg` and the drill record `FAIL` in their status file. Until R2 settings exist, `pgcfg` records `NOT_CONFIGURED` and
 the daily report says STALE.
 
 ## Rollback (one command)
@@ -75,7 +76,7 @@ the daily report says STALE.
 ssh roxira-prod 'sudo bash /opt/roxira_platform/scripts/ops/backup/install_schedule.sh --rollback'
 ```
 
-Restores the saved unit files (run timer hourly, Telegram daily), disables and removes the pgcfg, drill and cleanup units.
+Uses the oldest save that has a `manifest` (units that existed before, units that did not). It validates the manifest first and refuses, changing nothing, if a listed file is missing or no manifest exists, so it can never delete a unit it cannot restore. Restores the saved unit files (run timer hourly, Telegram daily), disables and removes the pgcfg, drill and cleanup units.
 R2 objects stay (delete by hand if wanted). Local sets: the next run keeps 2 until `BACKUP_KEEP_HOURLY` / `BACKUP_KEEP_DAILY`
 are set in `/etc/roxira/backup.env`.
 
