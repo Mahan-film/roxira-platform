@@ -15,7 +15,7 @@ services:
     hostname: mail.ghazihoushmand.ir
     restart: unless-stopped
     environment:
-      ALLOWED_SENDER_DOMAINS: "ghazihoushmand.ir roxira.ir"
+      ALLOWED_SENDER_DOMAINS: "ghazihoushmand.ir roxira.ir roxira.net"
       POSTFIX_myhostname: mail.ghazihoushmand.ir
       POSTFIX_mynetworks: "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
       DKIM_SELECTOR: rx1
