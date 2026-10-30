@@ -1,0 +1,4 @@
+```json
+{"items": [{"name": "secrets", "status": "fail", "note": "hardcoded token in config.ts"},
+ {"name": "auth_payments", "status": "pass", "note": ""}], "verdict": "fail"}
+```

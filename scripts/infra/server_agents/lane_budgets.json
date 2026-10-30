@@ -1,0 +1,14 @@
+{
+  "_comment": "Per-lane daily caps for taskq.py (docs/factory/COST_AND_REVIEW.md). Day = UTC day. usd/tokens come from the key-pool cost log; attempts from taskq's own table. 0 or missing = no cap.",
+  "cost_log": "/var/log/roxira-keypool/requests.jsonl",
+  "agent_model_groups": ["agent-*", "best-*", "keypool/*"],
+  "global": {"attempts_per_day": 60},
+  "default": {"usd_per_day": 1.0, "tokens_per_day": 4000000, "attempts_per_day": 15},
+  "lanes": {
+    "be": {"usd_per_day": 2.0, "tokens_per_day": 8000000, "attempts_per_day": 20},
+    "fe": {"usd_per_day": 2.0, "tokens_per_day": 8000000, "attempts_per_day": 20},
+    "data": {"usd_per_day": 1.0, "tokens_per_day": 4000000, "attempts_per_day": 10},
+    "test": {"usd_per_day": 1.0, "tokens_per_day": 4000000, "attempts_per_day": 15},
+    "review": {"usd_per_day": 0.5, "tokens_per_day": 3000000, "attempts_per_day": 40}
+  }
+}

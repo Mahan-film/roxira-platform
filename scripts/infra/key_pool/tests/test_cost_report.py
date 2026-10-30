@@ -162,3 +162,23 @@ def test_weekly_persian_summary(tmp_path, capsys):
     assert cost_report.main(["--file", str(tmp_path / "missing.jsonl"), "--weekly-fa"]) == 0
     assert "هیچ فراخوانی" in capsys.readouterr().out
 
+
+
+def test_weekly_includes_taskq_block(tmp_path, monkeypatch, capsys):
+    import sqlite3
+    import sys
+    import time
+    sys.path.insert(0, str(pathlib.Path(cost_report.__file__).resolve().parents[1] / "server_agents"))
+    import taskq
+    monkeypatch.setenv("TASKQ_DB", str(tmp_path / "q.db"))
+    monkeypatch.setenv("ROXIRA_AGENTS_HOME", str(tmp_path))
+    assert cost_report.taskq_weekly_fa() == ""  # no DB yet: nothing printed, nothing created
+    assert not (tmp_path / "q.db").exists()
+    db = taskq.connect()
+    db.execute("INSERT INTO tasks (slug, task_file, ladder, status, cost_usd, created, updated, done_ts) "
+               "VALUES ('x', 'f', '[]', 'done', 0.25, ?, ?, ?)", (time.time(), time.time(), time.time()))
+    db.commit()
+    db.close()
+    assert cost_report.main(["--file", str(tmp_path / "missing.jsonl"), "--weekly-fa"]) == 0
+    out = capsys.readouterr().out
+    assert "هزینهٔ هر تسک پذیرفته‌شده" in out and "۰٫۲۵۰۰" in out or "۰.۲۵۰۰" in out

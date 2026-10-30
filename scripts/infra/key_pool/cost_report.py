@@ -362,6 +362,26 @@ def format_weekly_fa(agg: dict[str, Any], days: int = WEEKLY_DAYS) -> str:
     return "\n".join(lines)
 
 
+def taskq_weekly_fa(days: int = WEEKLY_DAYS) -> str:
+    """Persian "cost per accepted task" block from the agent task queue (taskq.py weekly_summary); '' when there
+    is no queue DB here or anything goes wrong. Opens the DB read-only, never creates it."""
+    path = Path(os.environ.get("TASKQ_DB") or Path(os.environ.get("ROXIRA_AGENTS_HOME", "/var/lib/roxira-agents")) / "taskq.db")
+    if not path.is_file():
+        return ""
+    try:
+        import importlib.util
+        import sqlite3
+        spec = importlib.util.spec_from_file_location(
+            "taskq", Path(__file__).resolve().parents[1] / "server_agents" / "taskq.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+        db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        db.row_factory = sqlite3.Row
+        return mod.format_weekly_fa(mod.weekly_summary(db, days))
+    except Exception:  # noqa: BLE001 - the model-cost report must still print
+        return ""
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Key-pool cost/latency report from requests.jsonl.")
     ap.add_argument("--file", default=None, help="requests.jsonl (default $KEYPOOL_COST_LOG)")
@@ -372,7 +392,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     src = Path(args.file or report_path())
     if args.weekly_fa:
-        print(format_weekly_fa(aggregate(load_records(src, days=WEEKLY_DAYS))))
+        text = format_weekly_fa(aggregate(load_records(src, days=WEEKLY_DAYS)))
+        print(text + ("\n\n" + extra if (extra := taskq_weekly_fa()) else ""))
         return 0
     records = load_records(src, today=args.today, days=args.days)
     print(format_report(aggregate(records), str(src), short=args.short))

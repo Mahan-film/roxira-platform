@@ -1,0 +1,5 @@
+{"items": [{"name": "secrets", "status": "pass", "note": "none added"},
+ {"name": "auth_payments", "status": "pass", "note": "not touched"},
+ {"name": "input_validation", "status": "pass", "note": "DTO present"},
+ {"name": "migrations", "status": "pass", "note": "none"},
+ {"name": "tests_and_gates", "status": "pass", "note": "jest green"}], "verdict": "pass"}

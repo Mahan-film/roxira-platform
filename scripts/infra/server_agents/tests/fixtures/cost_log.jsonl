@@ -1,0 +1,7 @@
+{"ts":"2026-10-22T08:00:00.000Z","model_group":"agent-strong-free","deployment":"groq-1","provider":"groq","prompt_tokens":1000,"completion_tokens":500,"response_cost":0.0,"latency_ms":900,"success":true,"error":""}
+{"ts":"2026-10-22T08:10:00.000Z","model_group":"agent-strong-free","deployment":"or-ds","provider":"openrouter","prompt_tokens":3000,"completion_tokens":1000,"response_cost":0.40,"latency_ms":900,"success":true,"error":""}
+{"ts":"2026-10-22T08:10:00.000Z","model_group":"product-cheap","deployment":"or-ds","provider":"openrouter","prompt_tokens":9000,"completion_tokens":9000,"response_cost":5.0,"latency_ms":900,"success":true,"error":""}
+{"ts":"2026-10-22T11:00:00.000Z","model_group":"agent-light-free","deployment":"x","provider":"x","prompt_tokens":100,"completion_tokens":100,"response_cost":9.0,"latency_ms":1,"success":true,"error":""}
+{"ts":"2026-10-21T08:10:00.000Z","model_group":"agent-strong-free","deployment":"or-ds","provider":"openrouter","prompt_tokens":1,"completion_tokens":1,"response_cost":7.0,"latency_ms":1,"success":true,"error":""}
+{"ts":"2026-10-22T09:00:00.000Z","model_group":"qwen/qwen3.8-27b:free","deployment":"q","provider":"qwen","prompt_tokens":2000,"completion_tokens":300,"response_cost":0.25,"latency_ms":1,"success":true,"error":"","lane":"review"}
+not json

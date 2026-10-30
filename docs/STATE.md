@@ -20,6 +20,15 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - **Infra**: key pool LiteLLM `127.0.0.1:4000` (groups agent-strong-free, agent-light-free, product-free, agent-free-paid, private, embeddings; simple-shuffle — never usage-based-routing-v2), query embeddings via Cloudflare Workers AI with TEI fallback (TEI batch <= 4), research service `127.0.0.1:8090` (searx + tavily, `query_domains`), Xray REALITY VPN on 8443, backups/monitor/selfimprove timers.
 - **Owner's Mac**: `ir.roxira.lawwatch` (ekhtebar, 6 h) + **`ir.roxira.iranrelay`** (regulation.tax.gov.ir, dotic.ir, rc.majlis.ir; Sat–Thu 09:30 & 11:00 Tehran, VPN must be OFF) both write to `~/Developer/roxira-lawwatch/data/legal/staged/` and `relay_publish.sh` opens a data PR; `ir.roxira.reposync` fast-forwards `~/Developer/roxira-platform` every 30 min and resets `core.bare` (it flips to true after app worktree cleanups — run `git --git-dir=~/Developer/roxira-platform/.git config core.bare false` if git says "must be run in a work tree").
 
+## 2026-10-30 (P1 factory cost and review, `docs/factory/COST_AND_REVIEW.md`)
+- taskq now records cost per task (`cost_usd`, `tokens`, `unmetered`), shows it in `taskq.py report` and in `cost_report.py --weekly-fa`,
+  enforces per-lane daily budgets (`lane_budgets.json`, `taskq.py budget`, revived from #843) and reviews every accepted patch with a
+  different-family `reviewer` model through the key pool. Not live until merged and deployed; server steps are in the doc and the PR.
+- Measured on srv1's real queue (copy of `taskq.db` + `requests.jsonl`, read-only): 46 tasks, 60 attempts, last activity 2026-10-22. 52 of 60
+  attempts (87 %) were `ds-flash` direct to OpenRouter, so the gateway log saw $0.00 and 166k tokens for them: the old key-pool numbers hid
+  almost all paid agent spend. That is why direct steps are now metered from the OpenRouter key usage.
+- Failed task #46 cause: OpenRouter agents key daily limit ($5.00) hit mid-edit, work was complete and checks passed. Retry it on srv1.
+
 ## 2026-10-30 (P0 factory hardening, #882, audit `docs/strategy/FACTORY_GAP_AUDIT_2026-10-30.md`)
 - **Agent sandbox installed on srv1** (`ROXIRA_AGENT_SANDBOX=1`, `roxira-agent-egress.service`, table `inet roxira_agent`):
   `scripts/infra/server_agents/agent_sandbox.sh`, `agent_egress.nft`, `install_agent_sandbox.sh` (`--remove` undoes it).
