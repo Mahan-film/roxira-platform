@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -246,3 +247,21 @@ def test_rollback_without_backup(tmp_path):
     f = Fake(tmp_path)
     rc, out = run(f, tmp_path, "--rollback")
     assert rc == 2 and "no backup" in out
+
+
+def test_cost_log_tries_again_when_a_free_provider_reports_no_usage(tmp_path):
+    log = tmp_path / "logs" / "requests.jsonl"
+    log.parent.mkdir()
+    calls = []
+
+    def http(_method, _url, _key, body):
+        calls.append(body)
+        rec = {"answer_id": body["metadata"]["roxira_answer_id"], "model_group": "g", "prompt_tokens": len(calls) - 1,
+               "completion_tokens": 1, "response_cost": 0.0, "tier": "free"}
+        with log.open("a") as f:
+            f.write(json.dumps(rec) + "\n")
+        return 200, {}
+
+    ctx = SimpleNamespace(http=http, sleep=lambda _s: None)
+    result = up.check_cost_log(ctx, 1, "k", tmp_path, ["g"])
+    assert result.status == "PASS" and len(calls) == 2

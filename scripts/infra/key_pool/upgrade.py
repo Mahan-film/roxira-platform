@@ -40,6 +40,7 @@ import yaml  # noqa: E402
 PROJECT = "roxira-keypool"
 CONTAINER = "roxira_keypool"
 CANARY = "roxira_keypool_canary"
+COST_LOG_ATTEMPTS = 4
 NETWORK = "roxira_platform_roxira_net"
 COMPOSE = HERE / "docker-compose.keypool.yml"
 GEN = HERE / "generated"
@@ -321,17 +322,26 @@ def check_ladders(ctx: Ctx, port: int, key: str, pool: dict[str, Any], cfg: dict
 
 
 def check_cost_log(ctx: Ctx, port: int, key: str, stage: pathlib.Path, groups: list[str]) -> Result:
-    tag = f"canary-{int(time.time())}"
+    """One logged call with real usage is enough: some free providers return none, on the old image too."""
     secret = "CANARY-PROMPT-MUST-NOT-BE-LOGGED"
-    for g in groups:
-        status, _ = ctx.http("POST", f"http://127.0.0.1:{port}/v1/chat/completions", key,
-                             {"model": g, "max_tokens": 8, "metadata": {"roxira_answer_id": tag, "roxira_feature": "canary"},
-                              "messages": [{"role": "user", "content": secret}]})
-        if status == 200:
-            break
-    else:
-        return Result("cost logging", "FAIL", "no chat answered, nothing to log")
-    path = stage / "logs" / "requests.jsonl"
+    last = Result("cost logging", "FAIL", "no chat answered, nothing to log")
+    for attempt in range(COST_LOG_ATTEMPTS):
+        tag = f"canary-{int(time.time())}-{attempt}"
+        for g in groups:
+            status, _ = ctx.http("POST", f"http://127.0.0.1:{port}/v1/chat/completions", key,
+                                 {"model": g, "max_tokens": 8, "metadata": {"roxira_answer_id": tag, "roxira_feature": "canary"},
+                                  "messages": [{"role": "user", "content": secret}]})
+            if status == 200:
+                break
+        else:
+            continue
+        last = read_cost_record(ctx, stage / "logs" / "requests.jsonl", tag, secret)
+        if "prompt_tokens is 0" not in last.detail:
+            return last
+    return last
+
+
+def read_cost_record(ctx: Ctx, path: pathlib.Path, tag: str, secret: str) -> Result:
     for _ in range(10):
         text = path.read_text(encoding="utf-8", errors="ignore") if path.exists() else ""
         for line in text.splitlines():
