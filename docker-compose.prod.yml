@@ -425,6 +425,7 @@ services:
       - HOSTNAME=0.0.0.0
       - NEST_API_ORIGIN=http://roxira_enterprise_backend:3000
       - JUDGE_API_ORIGIN=http://roxira_app_prod:8000
+      - SANDBOX_JWT_SECRET=${SANDBOX_JWT_SECRET:-}
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:

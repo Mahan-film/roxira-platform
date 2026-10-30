@@ -8,30 +8,37 @@ import {
   Currency,
   CurrencyRate,
   formatCurrency,
+  isIranianCurrency,
 } from "@/types/currency";
 
 /**
  * پنل تعاملی تسویه چندارزی برای پورتال بین‌المللی.
  * نرخ‌ها از قرارداد `GET /enterprise-hub/currency/rates` خوانده می‌شوند و
- * کاربر می‌تواند ارز تسویه را سوئیچ کند (USD/EUR/AED/IRR).
+ * کاربر می‌تواند ارز تسویه را سوئیچ کند (USD/EUR/GBP/AED/MYR/TRY/CNY/OMR).
  */
 
 const FALLBACK_RATES: Record<Currency, number> = {
   [Currency.USD]: 1,
   [Currency.EUR]: 0.92,
+  [Currency.GBP]: 0.79,
   [Currency.AED]: 3.6725,
-  [Currency.IRR]: 920000,
-  [Currency.IRT]: 92000,
+  [Currency.MYR]: 4.45,
   [Currency.TRY]: 34.5,
   [Currency.CNY]: 7.2,
   [Currency.OMR]: 0.3845,
+  [Currency.IRR]: 0,
+  [Currency.IRT]: 0,
 };
 
 const FALLBACK_CURRENCIES: Currency[] = [
   Currency.USD,
   Currency.EUR,
+  Currency.GBP,
   Currency.AED,
-  Currency.IRR,
+  Currency.MYR,
+  Currency.TRY,
+  Currency.CNY,
+  Currency.OMR,
 ];
 
 export function EnSettlementPanel() {
@@ -52,11 +59,15 @@ export function EnSettlementPanel() {
         const nextRates = { ...FALLBACK_RATES } as Record<Currency, number>;
         const codes: Currency[] = [];
         response.rates.forEach((rate: CurrencyRate) => {
+          if (isIranianCurrency(rate.code)) return;
           nextRates[rate.code] = rate.unitsPerUsd;
           codes.push(rate.code);
         });
         setRates(nextRates);
-        if (codes.length > 0) setCurrencies(codes);
+        if (codes.length > 0) {
+          const mergedCodes = Array.from(new Set([...codes, ...FALLBACK_CURRENCIES]));
+          setCurrencies(mergedCodes.filter((c) => !isIranianCurrency(c)));
+        }
         setAsOf(response.asOf);
       })
       .catch(() => {
@@ -110,12 +121,12 @@ export function EnSettlementPanel() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4">
           {currencies.map((code) => (
             <div key={code} className="bg-card px-3 py-3">
               <p className="font-mono text-[11px] text-slate-400">
                 1 USD = {new Intl.NumberFormat("en-US", {
-                  maximumFractionDigits: code === Currency.IRR ? 0 : 4,
+                  maximumFractionDigits: 4,
                 }).format(rates[code] || 0)}{" "}
                 {code}
               </p>

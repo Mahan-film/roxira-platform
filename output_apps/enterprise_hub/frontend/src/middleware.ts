@@ -123,9 +123,9 @@ export function middleware(request: NextRequest) {
   }
 
   if (domain === "roxira_net") {
-    // نرم‌افزار کسب‌وکار (/app) فقط روی roxira.ir سرو می‌شود
-    if (hasPrefix(pathname, "/app")) {
-      return NextResponse.redirect(new URL(pathname + request.nextUrl.search, "https://roxira.ir"));
+    // مسیرهای داخلی سازمانی در پورتال بین‌المللی به ریشه بازگردانده می‌شوند تا هیچ نشت دامنه‌ای به دامنه .ir رخ ندهد
+    if (hasPrefix(pathname, "/app") || ROXIRA_ONLY_PATHS.some((path) => hasPrefix(pathname, path))) {
+      return NextResponse.redirect(new URL("/", request.nextUrl));
     }
     // ریشه دامنه بین‌المللی = پورتال انگلیسی B2B
     if (pathname === "/") {

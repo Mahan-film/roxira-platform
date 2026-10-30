@@ -7,12 +7,14 @@
 export enum Currency {
   USD = "USD",
   EUR = "EUR",
+  GBP = "GBP",
   AED = "AED",
-  IRR = "IRR",
-  IRT = "IRT",
+  MYR = "MYR",
   TRY = "TRY",
   CNY = "CNY",
   OMR = "OMR",
+  IRR = "IRR",
+  IRT = "IRT",
 }
 
 /**
@@ -20,6 +22,18 @@ export enum Currency {
  * باید با `SUPPORTED_CURRENCIES` در بک‌اند هم‌گام بماند.
  */
 export const SUPPORTED_CURRENCIES: Currency[] = Object.values(Currency);
+
+/** فهرست ارزهای مجاز پورتال بین‌المللی (بدون ارزهای تحریمی/محلی). */
+export const INTERNATIONAL_CURRENCIES: Currency[] = [
+  Currency.USD,
+  Currency.EUR,
+  Currency.GBP,
+  Currency.AED,
+  Currency.MYR,
+  Currency.TRY,
+  Currency.CNY,
+  Currency.OMR,
+];
 
 /** ارزهای داخلی (ریال/تومان) که کالای داخلی/جلالی محسوب می‌شوند. */
 export const IRANIAN_CURRENCIES: Currency[] = [Currency.IRR, Currency.IRT];
@@ -58,12 +72,14 @@ export interface ExchangeRatesResponse {
 export const CURRENCY_SYMBOLS: Record<Currency, string> = {
   [Currency.USD]: "$",
   [Currency.EUR]: "€",
+  [Currency.GBP]: "£",
   [Currency.AED]: "AED",
-  [Currency.IRR]: "IRR",
-  [Currency.IRT]: "IRT",
+  [Currency.MYR]: "RM",
   [Currency.TRY]: "TRY",
   [Currency.CNY]: "CNY",
   [Currency.OMR]: "OMR",
+  [Currency.IRR]: "IRR",
+  [Currency.IRT]: "IRT",
 };
 
 /** قالب‌بندی مبلغ بر مبنای ارز (با Intl.NumberFormat انگلیسی). */
