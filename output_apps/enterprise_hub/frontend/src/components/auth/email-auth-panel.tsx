@@ -186,7 +186,7 @@ export function EmailAuthPanel({ onSession }: EmailAuthPanelProps) {
       <Button
         type="submit"
         disabled={loading}
-        className="h-11 w-full bg-[#fbbf24] font-bold text-[#05080f] hover:bg-[#f59e0b]"
+        className="h-11 w-full bg-[var(--gh-gold)] font-bold text-[var(--gh-on-gold)] hover:bg-[var(--gh-gold-strong)]"
       >
         {loading ? (
           <Loader2 className="size-4 animate-spin" />
@@ -202,15 +202,15 @@ export function EmailAuthPanel({ onSession }: EmailAuthPanelProps) {
       <div className="flex items-center justify-between text-xs">
         {mode === "login" ? (
           <>
-            <button type="button" onClick={() => switchMode("register")} className="text-[#38bdf8] hover:underline">
+            <button type="button" onClick={() => switchMode("register")} className="text-[var(--gh-cyan)] hover:underline">
               حساب ندارید؟ ثبت‌نام
             </button>
-            <button type="button" onClick={() => switchMode("forgot")} className="text-[#38bdf8] hover:underline">
+            <button type="button" onClick={() => switchMode("forgot")} className="text-[var(--gh-cyan)] hover:underline">
               فراموشی رمز
             </button>
           </>
         ) : (
-          <button type="button" onClick={() => switchMode("login")} className="text-[#38bdf8] hover:underline">
+          <button type="button" onClick={() => switchMode("login")} className="text-[var(--gh-cyan)] hover:underline">
             بازگشت به ورود
           </button>
         )}
