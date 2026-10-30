@@ -16,7 +16,7 @@ while [ $# -gt 0 ]; do case "$1" in
   *) die "unknown arg: $1" ;; esac; shift; done
 [ -n "$SNI" ] || SNI="${DEST%%:*}"
 [ -n "$HOST" ] || die "--host (public IP or DNS name clients connect to) is required"
-valid_host "$HOST"; valid_host "$SNI"; valid_host "${DEST%%:*}"; valid_port "$PORT"
+valid_dest "$DEST"; valid_host "$HOST"; valid_host "$SNI"; valid_host "${DEST%%:*}"; valid_port "$PORT"
 IFS=, read -r -a CL <<<"$CLIENTS"; for c in "${CL[@]}"; do valid_name "$c"; done
 
 log "plan: xray $XRAY_VERSION ($XRAY_ASSET) port $PORT dest $DEST sni $SNI host $HOST clients ${CLIENTS}"

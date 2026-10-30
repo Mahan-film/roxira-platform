@@ -75,3 +75,6 @@ nginx/generated/*
 !nginx/generated/.keep.conf
 nginx/ssl-default/
 .venv-crawl/
+
+# nginx vhosts generated on the server (sandbox runner, scripts/infra/vpn/add_paths.sh); never tracked
+nginx/sandboxes/

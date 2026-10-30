@@ -28,7 +28,7 @@ __CLIENTS__
         }
       },
       "sniffing": { "enabled": true, "destOverride": ["http", "tls"], "routeOnly": true }
-    }
+    }__EXTRA_INBOUNDS__
   ],
   "outbounds": [
     { "protocol": "freedom", "tag": "direct", "settings": { "domainStrategy": "UseIPv4" } },
