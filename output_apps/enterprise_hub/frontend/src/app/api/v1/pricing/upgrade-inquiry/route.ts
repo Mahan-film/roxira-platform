@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { escapeHtml, headerText } from "@/lib/mail-safe";
 import crypto from "crypto";
 import net from "net";
 
@@ -105,7 +107,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email.trim() : "";
-    const company = typeof body.company === "string" ? body.company.trim() : "Enterprise Client";
+    const company = headerText(typeof body.company === "string" ? body.company : "Enterprise Client");
+    const companyHtml = escapeHtml(company);
     const plan = typeof body.plan === "string" ? body.plan.toLowerCase() : "pro";
     const settlementMethod =
       typeof body.settlementMethod === "string" ? body.settlementMethod : "usdt_usdc";
@@ -147,7 +150,7 @@ export async function POST(request: Request) {
 
     <div style="background:#05070e;border:1px solid #312e81;border-radius:10px;padding:16px;margin:20px 0;font-size:13px;">
       <div style="color:#818cf8;font-weight:bold;margin-bottom:8px;">INVOICE DETAILS</div>
-      <div style="color:#cbd5e1;">Entity: <strong>${company}</strong></div>
+      <div style="color:#cbd5e1;">Entity: <strong>${companyHtml}</strong></div>
       <div style="color:#cbd5e1;">Tier: <strong>${planName}</strong></div>
       <div style="color:#cbd5e1;">Amount Due: <strong style="color:#34d399;">${planPrice}</strong></div>
       <div style="color:#cbd5e1;">Settlement Method: <strong>${settlementName}</strong></div>
@@ -170,7 +173,7 @@ export async function POST(request: Request) {
 <body style="font-family:sans-serif;padding:20px;">
   <h2>🔔 New Plan Upgrade Inquiry Received</h2>
   <p><strong>Proforma ID:</strong> ${proformaId}</p>
-  <p><strong>Company:</strong> ${company}</p>
+  <p><strong>Company:</strong> ${companyHtml}</p>
   <p><strong>Email:</strong> ${email}</p>
   <p><strong>Plan:</strong> ${planName} (${planPrice})</p>
   <p><strong>Settlement:</strong> ${settlementName}</p>

@@ -435,7 +435,7 @@ def _entitlement_tier(phone: str) -> Optional[str]:
 def _tier_and_level_for_phone(phone: str) -> tuple:
     """(tier, plan_level). Allow-listed phones are VIP."""
     norm = normalize_phone(phone)
-    if phone in VIP_PHONE_ALLOWLIST or norm in VIP_PHONE_ALLOWLIST or "09129367796" in (phone, norm):
+    if phone in VIP_PHONE_ALLOWLIST or norm in VIP_PHONE_ALLOWLIST:
         return "VIP", "pro"
     return _entitlement_info(phone) or _entitlement_info(norm) or ("FREE", "free")
 
