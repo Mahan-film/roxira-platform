@@ -93,19 +93,15 @@ roles:
 
   strong:
     description: Final legal drafting and reasoning shown to the customer -- harder
-      chat turns and legal drafts on every plan (W24). No anthropic/claude-sonnet-5
-      here by owner decision (2026-09-28); Sonnet stays only in the builder
-      `reviewer`/`architect` roles below, never in the product runtime.
+      chat turns and legal drafts on every plan (W24). Primary is DeepSeek V4.1
+      Flash (1017 snapshot) with 1M context, 86% cheaper prompt caching ($0.003/1M),
+      and sharp, definitive legal drafting per owner directive (2026-10-24).
     data_policy: standard
     models:
-      # W24 owner priority order: DeepSeek V4 Pro, then GLM-5.3, then Kimi K3,
-      # then Gemini 3.8 Flash as the last, cheapest-but-lowest-priority
-      # fallback. Prices verified LIVE 2026-09-29 (openrouter.ai/api/v1/models,
-      # issue #103): only v4-pro moved (0.955/1.911 -> 0.936294/1.872588);
-      # GLM-5.3 (1.40/4.40), Kimi K3 (3.00/15.00) and Gemini 3.8 Flash
-      # (0.75/3.75) were already current.
-      - id: deepseek/deepseek-v4-pro
-        price_per_1m: { in: 0.267, out: 0.533, cache_read: 0.022 }
+      - id: deepseek/deepseek-v4.1-flash-1017
+        price_per_1m: { in: 0.15, out: 0.60, cache_read: 0.003 }
+      - id: deepseek/deepseek-v4.1-flash
+        price_per_1m: { in: 0.02, out: 1.00, cache_read: 0.015 }
       - id: z-ai/glm-5.3
         price_per_1m: { in: 0.079, out: 4.80 }
       - id: moonshotai/kimi-k3
@@ -417,33 +413,27 @@ roles:
       so a single vendor's blind spot or outage does not silently pass its own
       bad output. Enforced by scripts/dev/check_reviewer_family.py.
     data_policy: standard
-    # Owner policy (2026-10-10), model priority for builder reviews:
+    # Owner policy: model priority for builder reviews:
     #   1) `:free` models, ONLY for non-sensitive input (public-repo code, docs),
     #      never customer/case data;
     #   2) deepseek/deepseek-v4.1-flash;
     #   3) other cheap models.
-    # Gemini Pro is forbidden everywhere; Gemini Flash only when essential.
-    # anthropic/claude-sonnet-5 and google/gemini-3.8-flash were removed from
-    # this role by the same owner decision (cost).
-    #
-    # Family tradeoff: the executor is DeepSeek, so the different-family entry
-    # today is the free qwen model. If that model fails, the list falls through
-    # to deepseek/deepseek-v4.1-flash (same family as the executor) BEFORE the
-    # non-DeepSeek qwen/qwen3-coder, because the owner's priority order puts
-    # DeepSeek second. So a same-family review happens whenever the free model is
-    # unavailable. Accepted tradeoff; revisit if it causes a bad auto-merge.
+    # Gemini Pro and Qwen Coder are forbidden everywhere by owner directive.
     #
     # `public_code_only: true` marks an entry that may only receive public-repo
     # code/docs, never customer/case data. Enforced by the guard test in
     # src/test_model_registry.py, not by the runtime.
     models:
-      - id: qwen/qwen3.8-27b:free
+      - id: meta-llama/llama-3.3-70b-instruct:free
         price_per_1m: { in: 0, out: 0 }
         public_code_only: true
       - id: deepseek/deepseek-v4.1-flash
         price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
-      - id: qwen/qwen3-coder
-        price_per_1m: { in: 0.30, out: 1.00 }
+      - id: mistralai/mistral-small-24b-instruct-2501:free
+        price_per_1m: { in: 0, out: 0 }
+        public_code_only: true
+      - id: z-ai/glm-5.3
+        price_per_1m: { in: 0.079, out: 4.80 }
 
   mechanical:
     description: >

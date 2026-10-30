@@ -86,8 +86,8 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | product | anthropic/claude-haiku-5.5, deepseek/deepseek-v4.1-flash |
 | product_premium | anthropic/claude-opus-5, moonshotai/kimi-k3 |
 | product_pro | deepseek/deepseek-v4-pro, anthropic/claude-haiku-5.5, z-ai/glm-5.3 |
-| reviewer | qwen/qwen3.8-27b:free, deepseek/deepseek-v4.1-flash, qwen/qwen3-coder |
-| strong | deepseek/deepseek-v4-pro, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
+| reviewer | meta-llama/llama-3.3-70b-instruct:free, deepseek/deepseek-v4.1-flash, mistralai/mistral-small-24b-instruct-2501:free, z-ai/glm-5.3 |
+| strong | deepseek/deepseek-v4.1-flash-1017, deepseek/deepseek-v4.1-flash, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
 | stt | openai/whisper-large-v3, openai/whisper-large-v3-turbo, openai/gpt-audio |
 | stt_direct | groq:whisper-large-v3, mistral:voxtral-mini-latest, gemini:gemini-flash-latest |
 | summarize | scaledown/summarize |

@@ -125,6 +125,11 @@ class Cooldowns:
             self._until.pop((provider, slot), None)
             self._reason.pop((provider, slot), None)
 
+    def clear(self) -> None:
+        with self._lock:
+            self._until.clear()
+            self._reason.clear()
+
     def order(self, provider: str, slots: Sequence[KeySlot], now: Optional[float] = None) -> List[KeySlot]:
         """Healthy slots first (original order), cooling ones last: a last resort, never dropped."""
         healthy = [s for s in slots if not self.cooling(provider, s.name, now)]

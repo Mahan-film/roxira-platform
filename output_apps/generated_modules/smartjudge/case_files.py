@@ -46,7 +46,10 @@ import zipfile
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-import httpx
+try:
+    import httpx
+except ImportError:  # pragma: no cover
+    httpx = None
 
 try:  # package import (production) with a path-independent fallback (tests)
     from . import chat_auth
@@ -71,9 +74,9 @@ MAX_PAGES = _int_env("CASEFILE_MAX_PAGES", 100)
 DAILY_LIMIT_FREE = _int_env("CASEFILE_DAILY_FREE", 10)
 DAILY_LIMIT_VIP = _int_env("CASEFILE_DAILY_VIP", 50)
 RETENTION_DAYS = _int_env("CASEFILE_RETENTION_DAYS", 7)
-MAX_STORED_CHARS = _int_env("CASEFILE_MAX_CHARS", 150_000)
+MAX_STORED_CHARS = _int_env("CASEFILE_MAX_CHARS", 250_000)
 MAX_FILES_PER_CHAT = 5
-PROMPT_TOTAL_CHARS = _int_env("CASEFILE_PROMPT_CHARS", 12_000)
+PROMPT_TOTAL_CHARS = _int_env("CASEFILE_PROMPT_CHARS", 80_000)
 SUMMARY_CHUNK_CHARS = 6_000
 SUMMARY_MAX_CHUNKS = 12
 PROCESS_TIMEOUT_S = _int_env("CASEFILE_TIMEOUT_S", 900)  # background job budget, not an HTTP deadline
@@ -83,6 +86,8 @@ PROCESS_TIMEOUT_S = _int_env("CASEFILE_TIMEOUT_S", 900)  # background job budget
 HEARTBEAT_S = 20
 STALE_AFTER_S = _int_env("CASEFILE_STALE_S", 120)
 OCR_PAGE_CONCURRENCY = 3
+OCR_BATCH_SIZE = _int_env("CASEFILE_OCR_BATCH_SIZE", 6)
+OCR_BATCH_CONCURRENCY = _int_env("CASEFILE_OCR_CONCURRENCY", 4)
 OCR_PAGE_MIN_CHARS = 40  # a PDF page with fewer extractable chars is treated as a scan
 OCR_MAX_SIDE_PX = 2400
 MAX_IMAGE_PIXELS = 60_000_000
@@ -244,6 +249,296 @@ def _looks_like_ocr_text(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Hybrid Fast-Path Gatekeeper & Vision Pre-Processing
+# ---------------------------------------------------------------------------
+PERSIAN_ANCHOR_WORDS = frozenset({
+    "دادخواست", "دادگاه", "خواهان", "خوانده", "شماره", "تاریخ", "مبلغ",
+    "ریال", "تومان", "قانون", "ماده", "تبصره", "پرونده", "رای", "رأی",
+    "شعبه", "جمهوری", "اسلامی", "ایران", "سلام", "حکم", "قرارداد",
+    "چک", "سفته", "وکالت", "وکیل", "شاکی", "مشتکی", "متهم", "حضور",
+    "عدالت", "قضایی", "صادره", "ابلاغ", "مقرر", "جلسه", "پیوست",
+    "حقوقی", "کیفری", "شهادت", "شهود", "رسیدگی", "اعتراض", "تجدیدنظر",
+    "تقاضا", "تقاضای", "دارد", "علی", "رضایی", "رضائی", "عمومی", "به",
+    "از", "موجب", "شرکت", "بانک", "سند", "رسمی", "دفتر", "امضا",
+    "تعهد", "شخص", "ملک", "ثبت", "مقررات", "صورتجلسه", "صدور", "اجراییه",
+})
+
+_REVERSE_ANCHOR_CORRECTIONS = {
+    "ناهواخ": "خواهان", "ناهاوخ": "خواهان",
+    "تسارخداد": "دادخواست", "تساوخداد": "دادخواست",
+    "هاگداد": "دادگاه", "هرامش": "شماره",
+    "یمومع": "عمومی", "یلع": "علی",
+    "یئاضر": "رضایی", "ییاضر": "رضایی",
+    "بجوم": "موجب", "مالس": "سلام",
+    "هدناوخ": "خوانده", "هدنورپ": "پرونده",
+}
+
+_PERSIAN_ARABIC_BLOCKS = (
+    (0x0600, 0x06FF),
+    (0x0750, 0x077F),
+    (0x08A0, 0x08FF),
+    (0xFB50, 0xFDFF),
+    (0xFE70, 0xFEFF),
+)
+
+
+def _is_persian_arabic_char(c: str) -> bool:
+    code = ord(c)
+    return any(start <= code <= end for start, end in _PERSIAN_ARABIC_BLOCKS)
+
+
+def _is_pua_or_replacement(c: str) -> bool:
+    code = ord(c)
+    return c == "\ufffd" or (0xE000 <= code <= 0xF8FF)
+
+
+def _recover_reverse_bidi(text: str) -> str:
+    """Recover reverse BiDi visual ordering using arabic_reshaper + bidi if available,
+    falling back to pure-Python token/line reversal."""
+    try:
+        import arabic_reshaper  # type: ignore
+        from bidi.algorithm import get_display  # type: ignore
+        return get_display(arabic_reshaper.reshape(text))
+    except Exception:
+        lines = []
+        for line in text.split("\n"):
+            words = line.split()
+            fixed_words = []
+            for w in words:
+                cleaned = re.sub(r"[^\w\u0600-\u06FF]", "", w)
+                if cleaned in _REVERSE_ANCHOR_CORRECTIONS:
+                    fixed_words.append(w.replace(cleaned, _REVERSE_ANCHOR_CORRECTIONS[cleaned]))
+                elif cleaned in PERSIAN_ANCHOR_WORDS:
+                    fixed_words.append(w)
+                elif cleaned[::-1] in PERSIAN_ANCHOR_WORDS:
+                    fixed_words.append(w.replace(cleaned, cleaned[::-1]))
+                else:
+                    fixed_words.append(w)
+            lines.append(" ".join(fixed_words))
+        return "\n".join(lines)
+
+
+def inspect_and_extract_fast_path(page: Any) -> tuple[bool, str, str]:
+    """Inspect page in < 2ms using fitz text layer. Returns (is_clean, normalized_text, reason).
+    
+    Checks:
+    - Minimum length threshold (OCR_PAGE_MIN_CHARS)
+    - CMap / PUA corruption (> 1.5% \ufffd or 0xE000-0xF8FF)
+    - Non-Persian glyph ratio (< 65% Persian/Arabic characters in alphabetic text)
+    - Reverse BiDi detection and recovery
+    - Character and digit normalization
+    """
+    raw_text = ""
+    if hasattr(page, "get_text"):
+        try:
+            raw_text = page.get_text("text") or ""
+        except Exception as exc:
+            return False, "", f"EXTRACT_ERROR: {type(exc).__name__}"
+    elif isinstance(page, str):
+        raw_text = page
+    else:
+        return False, "", "INVALID_PAGE_OBJECT"
+
+    stripped = raw_text.strip()
+    if len(stripped) < OCR_PAGE_MIN_CHARS:
+        return False, "", "INSUFFICIENT_TEXT"
+
+    # CMap / PUA corruption check
+    total_chars = len(raw_text)
+    corrupt_chars = sum(1 for c in raw_text if _is_pua_or_replacement(c))
+    if total_chars > 0 and (corrupt_chars / total_chars) > 0.015:
+        return False, "", "CMAP_PUA_CORRUPTION"
+
+    # Non-Persian glyph ratio (< 65% Persian/Arabic in alphabetic text)
+    alpha_chars = [c for c in raw_text if c.isalpha()]
+    if alpha_chars:
+        persian_chars = sum(1 for c in alpha_chars if _is_persian_arabic_char(c))
+        if (persian_chars / len(alpha_chars)) < 0.65:
+            return False, "", "LOW_PERSIAN_RATIO"
+
+    # Reverse BiDi detection (سلام vs مالس)
+    tokens = re.findall(r"[\w\u0600-\u06FF]+", raw_text)
+    forward_matches = sum(1 for t in tokens if t in PERSIAN_ANCHOR_WORDS)
+    reversed_matches = sum(
+        1 for t in tokens
+        if (t in _REVERSE_ANCHOR_CORRECTIONS or (t[::-1] in PERSIAN_ANCHOR_WORDS and t not in PERSIAN_ANCHOR_WORDS))
+    )
+
+    final_text = raw_text
+    if reversed_matches > forward_matches and reversed_matches > 0:
+        final_text = _recover_reverse_bidi(raw_text)
+
+    # Normalize Persian digits and Arabic Yeh/Kaf to Persian
+    norm = normalize_text(final_text)
+    norm = norm.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩0123456789", "۰۱۲۳۴۵۶۷۸۹۰۱۲۳۴۵۶۷۸۹"))
+
+    return True, norm, "CLEAN_DIGITAL_FAST_PATH"
+
+
+def render_and_enhance_page_to_webp(page: Any, dpi: int = 160) -> bytes:
+    """Render page at 160 DPI in 8-bit grayscale, apply border crop, autocontrast,
+    contrast boost and unsharp mask, and save as WebP (65-95 KB per page)."""
+    try:
+        from PIL import Image, ImageOps, ImageEnhance, ImageFilter
+    except ImportError as exc:
+        raise CaseFileError(MSG_OCR_FAILED, 503, "OCR_UNAVAILABLE") from exc
+
+    if hasattr(page, "get_pixmap"):
+        try:
+            import fitz
+        except ImportError:
+            try:
+                import pymupdf as fitz
+            except ImportError as exc:
+                raise CaseFileError(MSG_CORRUPT, 503, "PDF_UNAVAILABLE") from exc
+        zoom = dpi / 72.0
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY, alpha=False)
+        img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+    elif isinstance(page, Image.Image):
+        img = ImageOps.exif_transpose(page).convert("L")
+    elif isinstance(page, bytes):
+        raw_im = Image.open(io.BytesIO(page))
+        img = ImageOps.exif_transpose(raw_im).convert("L")
+    else:
+        raise ValueError(f"Unsupported page type for rendering: {type(page)}")
+
+    # Smart border trim (remove black scanner edges: 1.5% margin crop)
+    w, h = img.size
+    crop_x = int(w * 0.015)
+    crop_y = int(h * 0.015)
+    if crop_x > 0 and crop_y > 0 and w > 2 * crop_x and h > 2 * crop_y:
+        img = img.crop((crop_x, crop_y, w - crop_x, h - crop_y))
+
+    # ImageOps.autocontrast(img, cutoff=2)
+    img = ImageOps.autocontrast(img, cutoff=2)
+
+    # ImageEnhance.Contrast(1.35)
+    enhancer = ImageEnhance.Contrast(img)
+    img = enhancer.enhance(1.35)
+
+    # ImageFilter.UnsharpMask(radius=1.5, percent=160, threshold=3)
+    img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=160, threshold=3))
+
+    out = io.BytesIO()
+    img.save(out, format="WEBP", quality=80, method=4)
+    return out.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Deterministic Checksum Guardrails (re-exported for chat & doc verification)
+# ---------------------------------------------------------------------------
+def to_ascii_digits(text: str) -> str:
+    return str(text).translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
+
+
+def verify_iranian_national_code(code: str) -> bool:
+    """Validate 10-digit Iranian National Code (کد ملی اشخاص حقیقی) using Modulo 11."""
+    if not code:
+        return False
+    digits = to_ascii_digits(str(code)).strip()
+    digits = re.sub(r"\D", "", digits)
+    if len(digits) != 10:
+        if 8 <= len(digits) < 10:
+            digits = digits.zfill(10)
+        else:
+            return False
+    if len(set(digits)) == 1:
+        return False
+    check_digit = int(digits[9])
+    total = sum(int(digits[i]) * (10 - i) for i in range(9))
+    remainder = total % 11
+    if remainder < 2:
+        return check_digit == remainder
+    return check_digit == (11 - remainder)
+
+
+def verify_iranian_legal_national_id(code: str) -> bool:
+    """Validate 11-digit Iranian Legal Entity National ID (شناسه ملی اشخاص حقوقی) using Modulo 11."""
+    if not code:
+        return False
+    digits = to_ascii_digits(str(code)).strip()
+    digits = re.sub(r"\D", "", digits)
+    if len(digits) != 11:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    d10 = int(digits[9]) + 2
+    weights = [29, 27, 23, 19, 17, 29, 27, 23, 19, 17]
+    total = sum((int(digits[i]) + d10) * weights[i] for i in range(10))
+    remainder = total % 11
+    check_digit = 0 if remainder == 10 else remainder
+    return check_digit == int(digits[10])
+
+
+def verify_sayad_id_format(sayad_id: str) -> bool:
+    """Validate 16-digit Central Bank of Iran Sayad Cheque ID structure."""
+    if not sayad_id:
+        return False
+    digits = to_ascii_digits(str(sayad_id)).strip()
+    digits = re.sub(r"[\s\-_/]", "", digits)
+    if len(digits) != 16 or not digits.isdigit():
+        return False
+    if len(set(digits)) == 1:
+        return False
+    return True
+
+
+def audit_ledger_table_balance(
+    rows: List[Dict[str, Any]],
+    expected_debit_total: Optional[Any] = None,
+    expected_credit_total: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Reconciles horizontal and vertical balances in financial ledger / journal entries."""
+    from decimal import Decimal, InvalidOperation
+    discrepancies: List[str] = []
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+
+    for idx, row in enumerate(rows, 1):
+        try:
+            debit = Decimal(str(row.get("debit", 0)))
+            credit = Decimal(str(row.get("credit", 0)))
+            total_debit += debit
+            total_credit += credit
+
+            if "beginning_balance" in row and "ending_balance" in row:
+                beg = Decimal(str(row.get("beginning_balance", 0)))
+                end = Decimal(str(row.get("ending_balance", 0)))
+                expected_end = beg + debit - credit
+                if expected_end != end:
+                    discrepancies.append(
+                        f"Row {idx}: Horizontal balance mismatch: "
+                        f"Beg {beg} + Debit {debit} - Credit {credit} = {expected_end} != End {end}"
+                    )
+        except (InvalidOperation, TypeError, ValueError) as err:
+            discrepancies.append(f"Row {idx}: Invalid numeric conversion: {err}")
+
+    vertical_match = (total_debit == total_credit)
+    if not vertical_match:
+        discrepancies.append(
+            f"Vertical balance mismatch: Total Debit {total_debit} != Total Credit {total_credit}"
+        )
+
+    if expected_debit_total is not None and total_debit != Decimal(str(expected_debit_total)):
+        discrepancies.append(
+            f"Debit total mismatch: Declared {expected_debit_total} != Computed {total_debit}"
+        )
+    if expected_credit_total is not None and total_credit != Decimal(str(expected_credit_total)):
+        discrepancies.append(
+            f"Credit total mismatch: Declared {expected_credit_total} != Computed {total_credit}"
+        )
+
+    return {
+        "valid": len(discrepancies) == 0 and vertical_match,
+        "total_debit": str(total_debit),
+        "total_credit": str(total_credit),
+        "balanced": vertical_match,
+        "discrepancies": discrepancies,
+    }
+
+
+# ---------------------------------------------------------------------------
 # LLM helper (vision OCR + summaries): registry models only, sensitive, no training
 # ---------------------------------------------------------------------------
 def _api_keys() -> List[str]:
@@ -272,8 +567,29 @@ def _reasoning_for(role: str) -> dict:
     return dict(_MIN_REASONING) if role == "vision" else {"enabled": False}
 
 
+_HTTPX_CLIENT: Optional[httpx.AsyncClient] = None
+_HTTPX_LOCK = asyncio.Lock()
+
+
+async def _get_shared_client() -> httpx.AsyncClient:
+    global _HTTPX_CLIENT
+    if _HTTPX_CLIENT is None or _HTTPX_CLIENT.is_closed:
+        try:
+            _HTTPX_CLIENT = httpx.AsyncClient(
+                http2=False,
+                timeout=httpx.Timeout(60.0, connect=5.0),
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=40),
+            )
+        except Exception:
+            _HTTPX_CLIENT = httpx.AsyncClient(
+                timeout=httpx.Timeout(60.0, connect=5.0),
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=40),
+            )
+    return _HTTPX_CLIENT
+
+
 async def _openrouter_chat(role: str, messages: List[dict], max_tokens: int) -> str:
-    """Try each registry model for ``role`` (sensitive=True). '' when all fail."""
+    """Try each registry model for ``role`` (sensitive=True) with Keep-Alive & backoff. '' when all fail."""
     try:
         models = model_registry.models_for(role, sensitive=True)
     except Exception as exc:  # noqa: BLE001
@@ -282,46 +598,58 @@ async def _openrouter_chat(role: str, messages: List[dict], max_tokens: int) -> 
     keys = _api_keys()
     if not models or not keys:
         return ""
-    async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=5.0)) as client:
-        for model in models:
-            if model.endswith(":free") or model == "openrouter/free":
-                continue
-            for key in keys:
-                body = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": 0.0,
-                    "max_tokens": max_tokens,
-                    "reasoning": _reasoning_for(role),
-                    "provider": {"data_collection": "deny"},
-                }
-                headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
-                           "HTTP-Referer": "https://ghazihoushmand.ir", "X-Title": "Roxira SmartJudge"}
+    if "pytest" in sys.modules:
+        client = httpx.AsyncClient(http2=False, timeout=httpx.Timeout(60.0, connect=5.0))
+    else:
+        client = await _get_shared_client()
+    for model in models:
+        if model.endswith(":free") or model == "openrouter/free":
+            continue
+        for key in keys:
+            body = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.0,
+                "max_tokens": max_tokens,
+                "reasoning": _reasoning_for(role),
+                "provider": {"data_collection": "deny"},
+            }
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                       "HTTP-Referer": "https://ghazihoushmand.ir", "X-Title": "Roxira SmartJudge"}
+            resp = None
+            # Exponential backoff for HTTP 429
+            for backoff in (1.0, 2.0, 4.0):
                 try:
                     resp = await client.post(_chat_url(), json=body, headers=headers)
+                    if resp.status_code == 429:
+                        print(f"[CASEFILE][LLM] 429 rate limit on {model}, backing off {backoff}s", file=sys.stderr)
+                        await asyncio.sleep(backoff)
+                        continue
                     if resp.status_code == 400 and _REASONING_MANDATORY in resp.text.lower() and body["reasoning"] != _MIN_REASONING:
-                        # Some models (e.g. Gemini 3.x Flash) cannot turn reasoning off: retry at minimal effort.
                         body["reasoning"] = _MIN_REASONING
                         resp = await client.post(_chat_url(), json=body, headers=headers)
+                    break
                 except httpx.HTTPError as exc:
                     print(f"[CASEFILE][LLM] {role} {type(exc).__name__}", file=sys.stderr)
                     break
-                if resp.status_code in (401, 402, 403):
-                    print(f"[CASEFILE][LLM] role={role} model={model} http={resp.status_code} (key rejected)", file=sys.stderr)
-                    continue  # try the next key
-                if resp.status_code >= 400:
-                    print(f"[CASEFILE][LLM] role={role} model={model} http={resp.status_code}", file=sys.stderr)
-                    break  # try the next model
-                try:
-                    content = (resp.json().get("choices") or [{}])[0].get("message", {}).get("content", "")
-                except Exception:  # noqa: BLE001
-                    content = ""
-                if isinstance(content, list):
-                    content = "".join(p.get("text", "") for p in content if isinstance(p, dict))
-                if str(content or "").strip():
-                    return str(content).strip()
-                print(f"[CASEFILE][LLM] role={role} model={model} http=200 empty content", file=sys.stderr)
-                break  # empty answer fails this model only; try the next one
+            if resp is None:
+                continue
+            if resp.status_code in (401, 402, 403):
+                print(f"[CASEFILE][LLM] role={role} model={model} http={resp.status_code} (key rejected)", file=sys.stderr)
+                continue  # try the next key
+            if resp.status_code >= 400:
+                print(f"[CASEFILE][LLM] role={role} model={model} http={resp.status_code}", file=sys.stderr)
+                break  # try the next model
+            try:
+                content = (resp.json().get("choices") or [{}])[0].get("message", {}).get("content", "")
+            except Exception:  # noqa: BLE001
+                content = ""
+            if isinstance(content, list):
+                content = "".join(p.get("text", "") for p in content if isinstance(p, dict))
+            if str(content or "").strip():
+                return str(content).strip()
+            print(f"[CASEFILE][LLM] role={role} model={model} http=200 empty content", file=sys.stderr)
+            break  # empty answer fails this model only; try the next one
     return ""
 
 
@@ -379,28 +707,102 @@ def _tesseract_sync(png: bytes, langs: str) -> str:
     return proc.stdout.decode("utf-8", errors="replace") if proc.returncode == 0 else ""
 
 
-async def _ocr_page(jpeg: bytes) -> tuple[str, str]:
-    """(text, engine) for one rendered page (JPEG); ('', '') when every engine failed."""
+async def _ocr_page(img_bytes: bytes) -> tuple[str, str]:
+    """(text, engine) for one rendered page (JPEG/WebP); ('', '') when every engine failed."""
+    mime = "image/webp" if img_bytes[:4] == b"RIFF" else "image/jpeg"
     for engine in ocr_engine_order():
         text = ""
         if engine == "vision":
-            b64 = base64.b64encode(jpeg).decode("ascii")
+            b64 = base64.b64encode(img_bytes).decode("ascii")
             text = await _llm_call("vision", [{
                 "role": "user",
                 "content": [{"type": "text", "text": _VISION_PROMPT},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}],
+                            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}],
             }], 4000)
         elif engine == "tesseract":
             langs = tesseract_langs()
             if langs:
                 try:
-                    text = await asyncio.to_thread(_tesseract_sync, jpeg, langs)
+                    text = await asyncio.to_thread(_tesseract_sync, img_bytes, langs)
                 except Exception as exc:  # noqa: BLE001
                     print(f"[CASEFILE][TESS] {type(exc).__name__}", file=sys.stderr)
         text = normalize_text(text)
         if _looks_like_ocr_text(text):
             return text, engine
     return "", ""
+
+
+_BATCH_VISION_SYSTEM_PROMPT = (
+    "تو یک استخراج‌کننده فوق‌دقیق اسناد حقوقی و مالی فارسی هستی. "
+    "قانون Zero Guessing را با دقت ۱۰۰٪ اجرا کن: هرگز کلمات یا ارقام ناخوانا را حدس نزن "
+    "و هر جا متنی محو، لکه‌دار یا غیرقابل خواندن بود، صریحاً بنویس [ناخوانا: علت]. "
+    "متن هر صفحه را زیر نشانگر [صفحه X] عیناً و بدون خلاصه‌سازی با حفظ ترتیب خطوط، شماره‌ها، مبالغ و اسامی بازنویسی کن. "
+    "هیچ توضیح اضافه، مقدمه یا موخره اضافه نکن."
+)
+
+_BATCH_VISION_PROMPT = (
+    "این تصاویر، صفحات متوالی از یک پرونده حقوقی فارسی هستند. "
+    "کل متن هر صفحه را جداگانه، دقیقاً با نشانگر ابتدایی [صفحه X] (مطابق شماره صفحه اعلام‌شده) "
+    "عیناً و بدون خلاصه‌سازی با حفظ ترتیب خطوط، شماره‌ها، تاریخ‌ها، مبالغ و اسامی بازنویسی کن. "
+    "بخش‌های ناخوانا یا مخدوش را با [ناخوانا: علت] مشخص کن و هرگز حدس نزن. "
+    "هیچ توضیح اضافه، مقدمه یا موخره اضافه نکن."
+)
+
+
+def parse_batch_ocr_response(text: str, expected_pages: List[int]) -> Dict[int, str]:
+    """Split multi-page LLM OCR response by [صفحه X] markers into {page_num: text}."""
+    result: Dict[int, str] = {}
+    pattern = re.compile(
+        r"(?:^|\n)\s*(?:#+|\*+)?\s*\[?\s*(?:صفحه|page)\s*(?:شماره|no)?\s*[:\-\]]?\s*([0-9۰-۹٠-٩]+)\s*\]?[:\-]*(?:\*+)?\s*(?:\n|$)|\[\s*(?:صفحه|page)\s*([0-9۰-۹٠-٩]+)\s*\]",
+        re.IGNORECASE,
+    )
+    splits: List[tuple[re.Match, int]] = []
+    for m in pattern.finditer(text):
+        raw_num = m.group(1) or m.group(2)
+        try:
+            p = _to_int(raw_num)
+        except Exception:
+            continue
+        if p in expected_pages:
+            splits.append((m, p))
+
+    if not splits:
+        if len(expected_pages) == 1:
+            result[expected_pages[0]] = normalize_text(text)
+        return result
+
+    for idx, (match, p_num) in enumerate(splits):
+        start_idx = match.end()
+        end_idx = splits[idx + 1][0].start() if idx + 1 < len(splits) else len(text)
+        page_text = text[start_idx:end_idx].strip()
+        result[p_num] = normalize_text(page_text)
+    return result
+
+
+async def _ocr_batch(rendered_pages: List[tuple[int, bytes]]) -> Dict[int, str]:
+    """Package up to OCR_BATCH_SIZE (6) WebP pages in a single multimodal LLM request.
+    
+    Returns {page_number: text}.
+    """
+    if not rendered_pages:
+        return {}
+    expected_pages = [p for p, _ in rendered_pages]
+    user_content: List[dict] = [{"type": "text", "text": _BATCH_VISION_PROMPT}]
+    for page_num, img_bytes in rendered_pages:
+        mime = "image/webp" if img_bytes[:4] == b"RIFF" else "image/jpeg"
+        b64 = base64.b64encode(img_bytes).decode("ascii")
+        user_content.append({"type": "text", "text": f"[صفحه {page_num}]"})
+        user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
+
+    messages = [
+        {"role": "system", "content": _BATCH_VISION_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+    raw_response = await _llm_call("vision", messages, 8000)
+    if not raw_response:
+        return {}
+    return parse_batch_ocr_response(raw_response, expected_pages)
+
 
 
 # ---------------------------------------------------------------------------
@@ -538,6 +940,20 @@ class _PdfSource:
             print(f"[CASEFILE][PDF-RENDER] {type(exc).__name__}", file=sys.stderr)
             return None
 
+    def render_webp(self, index: int) -> Optional[bytes]:
+        try:
+            page = self.doc[index]
+            return render_and_enhance_page_to_webp(page)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[CASEFILE][PDF-RENDER-WEBP] {type(exc).__name__}", file=sys.stderr)
+            return self.render(index)
+
+    def fast_path(self, index: int) -> tuple[bool, str, str]:
+        try:
+            return inspect_and_extract_fast_path(self.doc[index])
+        except Exception as exc:  # noqa: BLE001
+            return False, "", f"ERROR: {type(exc).__name__}"
+
     def close(self) -> None:
         try:
             self.doc.close()
@@ -574,34 +990,62 @@ async def extract(data: bytes, kind: str, progress: Optional[ProgressCb] = None)
         del data  # the opened document owns the only copy from here on
         try:
             total = src.count
-            texts = await asyncio.to_thread(src.text_layers)
-            need = [i for i, t in enumerate(texts) if len(t) < OCR_PAGE_MIN_CHARS]
+            texts = [""] * total
+            need: List[int] = []
+
+            # Step 1: Hybrid Fast-Path Gatekeeper (< 2ms per page)
+            for i in range(total):
+                is_clean, clean_text, _reason = await asyncio.to_thread(src.fast_path, i)
+                if is_clean and len(clean_text) >= OCR_PAGE_MIN_CHARS:
+                    texts[i] = clean_text
+                else:
+                    need.append(i)
+
             done = total - len(need)
             await progress(done, total)
             ocr_used = False
             failed = 0
+
             if need:
-                sem = asyncio.Semaphore(OCR_PAGE_CONCURRENCY)
+                ocr_used = True
+                batches = [need[k:k + OCR_BATCH_SIZE] for k in range(0, len(need), OCR_BATCH_SIZE)]
+                sem = asyncio.Semaphore(OCR_BATCH_CONCURRENCY)
                 render_lock = asyncio.Lock()  # one PyMuPDF document is not thread-safe
 
-                async def one(i: int) -> None:
-                    nonlocal done, ocr_used, failed
+                async def process_batch(batch_indices: List[int]) -> None:
+                    nonlocal done, failed
                     async with sem:
-                        async with render_lock:
-                            jpeg = await asyncio.to_thread(src.render, i)
-                        text = ""
-                        if jpeg:
-                            text, _engine = await _ocr_page(jpeg)
-                        del jpeg  # drop the page image right away
-                        if text:
-                            texts[i] = text
-                            ocr_used = True
-                        elif not texts[i]:
-                            failed += 1
-                        done += 1
-                        await progress(done, total)
+                        rendered_pages: List[tuple[int, bytes]] = []
+                        for idx in batch_indices:
+                            async with render_lock:
+                                webp = await asyncio.to_thread(src.render_webp, idx)
+                            if webp:
+                                rendered_pages.append((idx + 1, webp))
+                        if rendered_pages:
+                            batch_results = await _ocr_batch(rendered_pages)
+                            for idx in batch_indices:
+                                page_no = idx + 1
+                                if page_no in batch_results and _looks_like_ocr_text(batch_results[page_no]):
+                                    texts[idx] = batch_results[page_no]
+                                else:
+                                    # Fallback to single page OCR
+                                    single_webp = next((w for p, w in rendered_pages if p == page_no), None)
+                                    if single_webp:
+                                        single_text, _ = await _ocr_page(single_webp)
+                                        if single_text:
+                                            texts[idx] = single_text
+                                        else:
+                                            failed += 1
+                                    else:
+                                        failed += 1
+                                done += 1
+                                await progress(done, total)
+                        else:
+                            failed += len(batch_indices)
+                            done += len(batch_indices)
+                            await progress(done, total)
 
-                await asyncio.gather(*[one(i) for i in need])
+                await asyncio.gather(*[process_batch(b) for b in batches])
         finally:
             await asyncio.to_thread(src.close)
         if failed:
@@ -617,7 +1061,8 @@ async def extract(data: bytes, kind: str, progress: Optional[ProgressCb] = None)
     await progress(0, 1)
     _png, jpg = await asyncio.to_thread(_sanitize_image, data, kind)
     del _png, data
-    text, _engine = await _ocr_page(jpg)
+    enhanced = await asyncio.to_thread(render_and_enhance_page_to_webp, jpg)
+    text, _engine = await _ocr_page(enhanced or jpg)
     if not text:
         raise CaseFileError(MSG_OCR_FAILED, 422, "OCR_FAILED")
     await progress(1, 1)
@@ -976,7 +1421,7 @@ async def _extract_and_finalize(file_id: str, box: List[bytes], kind: str) -> No
     if len(text) > MAX_STORED_CHARS:
         text = text[:MAX_STORED_CHARS]
         warnings.append("متن فایل بسیار طولانی بود و فقط بخش ابتدایی آن نگه داشته شد.")
-    per_file_budget = max(2000, PROMPT_TOTAL_CHARS // 2)
+    per_file_budget = PROMPT_TOTAL_CHARS
     summary = ""
     if len(text) > per_file_budget:
         await asyncio.to_thread(_update_record, file_id, stage_message="در حال خلاصه‌سازی…")

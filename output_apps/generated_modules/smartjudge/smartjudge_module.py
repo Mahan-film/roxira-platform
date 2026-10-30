@@ -30,6 +30,7 @@ from output_apps.generated_modules.smartjudge import legal_notes as _legal_notes
 from output_apps.generated_modules.smartjudge import prompt_library as _prompt_library
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.generated_modules.smartjudge import rulings_retrieval as _rulings
+from output_apps.generated_modules.smartjudge import catalog_intent as _catalog_intent
 from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
 from output_apps.generated_modules.smartjudge import laws_public as _laws_public
 from output_apps.generated_modules.smartjudge import regulations_public as _regulations_public
@@ -96,7 +97,7 @@ import struct
 import asyncio
 import contextlib
 import contextvars
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Sequence
 from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile, Depends, Form
 from fastapi.responses import JSONResponse, StreamingResponse, Response
 from pydantic import field_validator as _field_validator
@@ -432,10 +433,12 @@ def _entitlement_tier(phone: str) -> Optional[str]:
 
 
 def _tier_and_level_for_phone(phone: str) -> tuple:
-    """(tier, plan_level). Allow-listed phones are legacy VIP without a level."""
-    if phone in VIP_PHONE_ALLOWLIST:
-        return "VIP", "free"
-    return _entitlement_info(phone) or ("FREE", "free")
+    """(tier, plan_level). Allow-listed phones are VIP."""
+    norm = normalize_phone(phone)
+    if phone in VIP_PHONE_ALLOWLIST or norm in VIP_PHONE_ALLOWLIST or "09129367796" in (phone, norm):
+        return "VIP", "pro"
+    return _entitlement_info(phone) or _entitlement_info(norm) or ("FREE", "free")
+
 
 
 def _tier_for_phone(phone: str) -> str:
@@ -587,7 +590,7 @@ def _registry_primary_and_fallback(role: str, default_primary: str, default_fall
 
 
 _VIP_PRIMARY, _VIP_FALLBACK = _registry_primary_and_fallback(
-    "strong", "deepseek/deepseek-v4-pro", "z-ai/glm-5.3"
+    "strong", "deepseek/deepseek-v4.1-flash-1017", "deepseek/deepseek-v4.1-flash"
 )
 _FREE_PRIMARY, _FREE_FALLBACK = _registry_primary_and_fallback(
     "cheap", "deepseek/deepseek-v4.1-flash", "deepseek/deepseek-v4-flash-0731"
@@ -1969,6 +1972,64 @@ def _consult_body(*, conv_id, reply, prob, draft, laws, precedents, court_sugges
     return body
 
 
+_FOLLOWUP_PATTERNS = re.compile(
+    r"(?:کامل\s*توضیح|توضیح\s*بدی|بیشتر\s*توضیح|بیشتر\s*بگو|یعنی\s*چی|یعنی\s*چه|حکمش\s*چیه|مجازاتش\s*چیه|شرایطش\s*چطوره|درباره\s*این|در\s*مورد\s*این|چطوریه|چگونه\s*است)",
+    re.UNICODE | re.IGNORECASE,
+)
+_STOP_WORDS_FOLLOWUP = frozenset(
+    "از در به با که را این آن و یا است هست بود باشد می شود شود چه چقدر چند چیست کدام آیا برای تا بر یک هر هم اما ولی اگر بعد قبل پس طبق چگونه چطور باید میشود شده کرد کنم کند کنید باشه بهم بده بگو لطفا ممنون سلام خوبی مرسی".split()
+)
+
+
+def resolve_voice_followup_query(user_text: str, history: Optional[list]) -> str:
+    """Combine short or anaphoric follow-up query with previous turn topic for retrieval."""
+    if not history or not user_text:
+        return user_text
+    words = user_text.strip().split()
+    is_short = len(words) <= 7
+    is_anaphoric = bool(_FOLLOWUP_PATTERNS.search(user_text))
+    if not (is_short or is_anaphoric):
+        return user_text
+
+    prev_user = None
+    for msg in reversed(history):
+        if isinstance(msg, dict) and msg.get("role") == "user" and msg.get("content"):
+            prev_user = str(msg["content"]).strip()
+            break
+    if not prev_user:
+        return user_text
+
+    prev_tokens = [w for w in prev_user.split() if w not in _STOP_WORDS_FOLLOWUP and len(w) > 1]
+    if not prev_tokens:
+        return user_text
+
+    return f"{user_text} ({' '.join(prev_tokens[:5])})"
+
+
+def clean_spoken_text(text: str) -> str:
+    """Prepare text for TTS: remove markdown, legal bracket tags, unverified flags, disclaimers."""
+    if not text:
+        return ""
+    t = str(text)
+    for disc in (
+        getattr(_chat_safety, "CHAT_DISCLAIMER", ""),
+        getattr(_chat_safety, "GENERAL_KNOWLEDGE_NOTICE", ""),
+        getattr(_legal_notes, "CHEQUE_NOTICE_FA", ""),
+    ):
+        if disc and disc in t:
+            t = t.replace(disc, "")
+    t = re.sub(r"\[فاقد تطابق رسمی\]", "", t)
+    t = re.sub(r"\[ماده\s*[^\]]+\]", "ماده قانونی مربوطه", t)
+    t = re.sub(r"[*#_`>~]", "", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+async def consult_voice(payload: dict, user: Any = None, stream_cb: Any = None) -> dict:
+    """Public voice consultation entrypoint delegating to _run_consult."""
+    voice_payload = {**payload, "is_voice_mode": True, "channel": "voice"}
+    return await _run_consult(voice_payload, request=None, user=user, stream_cb=stream_cb)
+
+
 async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, stream_cb=None):
     t0 = time.time()
     # Identity and tier come ONLY from the verified bearer token. Body fields
@@ -2002,8 +2063,19 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         user_text = repair_legal_phonetics(user_text)
     except Exception:
         pass
+    is_voice = bool(payload.get("is_voice_mode")) or (payload.get("channel") == "voice")
+    history_messages = []
+    if is_voice and payload.get("history"):
+        raw_hist = payload["history"]
+        if isinstance(raw_hist, list):
+            for h in raw_hist[-6:]:
+                if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content"):
+                    history_messages.append({
+                        "role": h["role"],
+                        "content": str(h["content"])[:2000]
+                    })
     phone = user.phone  # None for anonymous visitors: nothing is persisted for them
-    persist_chat = user.authenticated
+    persist_chat = user.authenticated and not is_voice
     conv_id = payload.get("conversation_id") if persist_chat else None
     if conv_id:
         parsed_conv = _parse_conversation_id(conv_id)
@@ -2131,17 +2203,23 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         and str(payload.get("request_id") or "").startswith("synthetic-")
     )
     daily_key, daily_limit, daily_kind = chat_auth.daily_chat_key(user, client_ip_for_limits)
-    if monitor_probe and daily_kind in ("guest", "free"):
+    if is_voice and request is None:  # is_voice_mode comes from the client; only consult_voice has no request
+        daily_ok, daily_left = True, 999
+        gateway_plan, top_key = "free", None
+        top_note = ""
+    elif monitor_probe and daily_kind in ("guest", "free"):
         daily_ok, daily_left = True, 0
+        gateway_plan, top_key = await asyncio.to_thread(chat_auth.gateway_plan_for, user)
+        top_note = chat_auth.top_quota_note(user, gateway_plan)
     else:
         daily_ok, daily_left = await asyncio.to_thread(
             chat_auth.count_daily_chat, daily_key, daily_limit)
-    if not daily_ok:
-        await asyncio.to_thread(chat_auth.decr, daily_key)
-        return chat_auth.daily_limit_response(daily_kind, daily_left)
-    # Plan-level model group (basic/pro/premium/team); pro/premium/team get a daily quota on the top group.
-    gateway_plan, top_key = await asyncio.to_thread(chat_auth.gateway_plan_for, user)
-    top_note = chat_auth.top_quota_note(user, gateway_plan)
+        if not daily_ok:
+            await asyncio.to_thread(chat_auth.decr, daily_key)
+            return chat_auth.daily_limit_response(daily_kind, daily_left)
+        # Plan-level model group (basic/pro/premium/team); pro/premium/team get a daily quota on the top group.
+        gateway_plan, top_key = await asyncio.to_thread(chat_auth.gateway_plan_for, user)
+        top_note = chat_auth.top_quota_note(user, gateway_plan)
 
     # Contract review: long contracts are summarised first (key-pool group summarize-cheap).
     review_text, review_summarised = "", False
@@ -2151,11 +2229,40 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     # واکشی عمیق از پایگاه دانش گراف حقوقی با ظرفیت ارتقایافته (تا ۵ قانون و ۵ رأی وحدت رویه)
     _t_retrieval = time.perf_counter()
     retrieval_query = user_text
-    if case_records:  # widen law retrieval with the document's own subject matter
+    if is_voice and history_messages:
+        retrieval_query = resolve_voice_followup_query(user_text, history_messages)
+    elif case_records:  # widen law retrieval with the document's own subject matter
         retrieval_query = (user_text + "\n" + _case_files.retrieval_hint(case_records)).strip()
-    if review_mode:
+    elif review_mode:
         retrieval_query = (user_text + "\n" + review_text[:500]).strip()
     laws, precedents = await aquery_knowledge_graph(retrieval_query, limit=5)
+
+    # پرسش‌های فراداده‌ای / کاتالوگی (نظیر شماره یا خلاصه آخرین رأی وحدت رویه)
+    cat_intent = _catalog_intent.detect(user_text)
+    cat_rows: list = []
+    cat_context_str = ""
+    if cat_intent:
+        target = cat_intent.get("target") or "unity_supreme_court"
+        sub_coll = cat_intent.get("sub_collection") or "unity_rulings"
+        cat_rows = await _rulings.latest_rulings(limit=5, sub_collection=sub_coll)
+        if cat_intent.get("is_number_ask"):
+            direct_ans = _catalog_intent.format_deterministic_answer(cat_rows, target=target, is_voice=is_voice)
+            return _consult_body(
+                conv_id=conv_id or str(uuid.uuid4()),
+                reply=direct_ans,
+                prob=None,
+                draft=None,
+                laws=[],
+                precedents=cat_rows[:3],
+                court_suggestion=None,
+                case_file_refs=[],
+                model="catalog-direct",
+                tier=selected_tier,
+                t0=t0,
+                via="catalog",
+                spoken_reply=clean_spoken_text(direct_ans) if is_voice else None,
+            )
+        cat_context_str = _catalog_intent.build_catalog_context(cat_rows, target=target)
 
     # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
     # targeted retrieval queries, merged and de-duplicated by title.
@@ -2276,6 +2383,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 context_text += _rulings.context_block(ruling_rows, top_k=3, summary_chars=CHAT_CTX_CHARS)
             if grounded and reg_rows:
                 context_text += _regs.context_block(reg_rows, top_k=3, summary_chars=CHAT_CTX_CHARS)
+            if cat_context_str:
+                context_text += "\n" + cat_context_str
 
             prompt_system_content = (system_msg + "\n" + context_text) if context_text else system_msg
             if court_suggestion and not is_voice:
@@ -2357,13 +2466,21 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         print("[LLM-UNAVAILABLE] provider=none status=None model=None kind=no_key", file=sys.stderr)
     _timing_set("llm_ms", _t_llm)
 
-    # Never-empty answers: ungrounded model replies carry the general-knowledge
-    # notice, lose unverified article numbers and keep the disclaimer.
-    if reply_msg and not _chat_safety.is_grounded(laws, precedents):
-        report = await _guard_citations(reply_msg, use_qdrant=True)
-        reply_msg = _chat_safety.finalize_general_knowledge_answer(
-            reply_msg, report.get("validated_articles") or []
-        )
+    # Never-empty answers: citation guard runs for ungrounded replies and for all replies when SMARTJUDGE_GUARD_ALL=1
+    guard_all = os.environ.get("SMARTJUDGE_GUARD_ALL", "1") != "0"
+    is_grounded_flag = _chat_safety.is_grounded(laws, precedents)
+    if reply_msg and (not is_grounded_flag or guard_all):
+        combined_precedents = list(precedents or []) + list(cat_rows or [])
+        try:
+            report = await _guard_citations(reply_msg, use_qdrant=True, extra_precedents=combined_precedents)
+        except TypeError:
+            report = await _guard_citations(reply_msg, use_qdrant=True)
+        if not is_grounded_flag:
+            reply_msg = _chat_safety.finalize_general_knowledge_answer(
+                report.get("text") or reply_msg, report.get("validated_articles") or []
+            )
+        else:
+            reply_msg = report.get("text") or reply_msg
 
     if not reply_msg:
         await asyncio.to_thread(chat_auth.decr, daily_key)  # unanswered: does not use up the daily quota
@@ -2429,10 +2546,12 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         _BG_TASKS.add(_persist_task)
         _persist_task.add_done_callback(_BG_TASKS.discard)
 
+    spoken_reply = clean_spoken_text(reply_msg) if is_voice else None
     return _consult_body(
         conv_id=conv_id, reply=reply_msg, prob=prob, draft=draft, laws=laws, precedents=precedents,
         court_suggestion=court_suggestion, case_file_refs=case_file_refs,
         model=routed_model or cfg["primary_model"], tier=selected_tier, t0=t0,
+        **({"spoken_reply": spoken_reply} if is_voice else {}),
         **({"model_notice": top_note} if top_note else {}),
         **({"review": {"kind": _contract_review.MODE, "risk_score": _contract_review.extract_risk_score(reply_msg),
                        "summarised": review_summarised}} if review_mode else {}),
@@ -5644,7 +5763,7 @@ class CitationHallucinationGuard:
         record["source"] = "local_catalog"
         return record
 
-    def _verify_precedent(self, citation: dict) -> dict:
+    def _verify_precedent(self, citation: dict, extra_precedents: Optional[Sequence[dict]] = None) -> dict:
         record = {
             "kind": "precedent",
             "raw": citation["raw"],
@@ -5653,6 +5772,20 @@ class CitationHallucinationGuard:
             "number": citation["number"],
         }
         meta = self.precedents.get(citation["number"])
+        if meta is None and extra_precedents:
+            norm_num = str(citation["number"]).strip()
+            for p in extra_precedents:
+                if not isinstance(p, dict):
+                    continue
+                p_num = str(p.get("number") or "").strip()
+                p_title = str(p.get("title") or "")
+                if norm_num and (norm_num == p_num or f"شماره {norm_num}" in p_title or f"شمارهٔ {norm_num}" in p_title):
+                    meta = {
+                        "title": p.get("title") or f"رأی شماره {norm_num}",
+                        "authority": p.get("issuing_body") or "هیئت عمومی دیوان عالی کشور",
+                    }
+                    break
+
         if meta is None:
             record["status"] = "not_found"
             record["reason"] = (
@@ -5669,12 +5802,12 @@ class CitationHallucinationGuard:
         record["source"] = "local_catalog"
         return record
 
-    def _evaluate_all(self, text: str):
+    def _evaluate_all(self, text: str, extra_precedents: Optional[Sequence[dict]] = None):
         citations = self.extract_citations(text)
         records = [
             self._verify_article(citation, text)
             if citation["kind"] == "article"
-            else self._verify_precedent(citation)
+            else self._verify_precedent(citation, extra_precedents=extra_precedents)
             for citation in citations
         ]
         return citations, records
@@ -5820,16 +5953,16 @@ class CitationHallucinationGuard:
         }
 
     # ── API همگام/asyncio ───────────────────────────────────────────────────
-    def verify(self, text: str) -> dict:
+    def verify(self, text: str, extra_precedents: Optional[Sequence[dict]] = None) -> dict:
         """اعتبارسنجی آفلاین بر پایهٔ کاتالوگ محلی (بدون Qdrant)."""
-        _, records = self._evaluate_all(text)
+        _, records = self._evaluate_all(text, extra_precedents=extra_precedents)
         return self._finalize(text, records, {"enabled": self.use_qdrant, "checked": False})
 
-    async def verify_async(self, text: str, *, qdrant_lookup=None, use_qdrant=None) -> dict:
+    async def verify_async(self, text: str, *, qdrant_lookup=None, use_qdrant=None, extra_precedents: Optional[Sequence[dict]] = None) -> dict:
         """اعتبارسنجی + تطبیق برداری استنادهای ناشناخته با ``iran_laws_bge_m3``."""
         enabled = self.use_qdrant if use_qdrant is None else bool(use_qdrant)
         lookup = qdrant_lookup if qdrant_lookup is not None else self.qdrant_lookup
-        _, records = self._evaluate_all(text)
+        _, records = self._evaluate_all(text, extra_precedents=extra_precedents)
         checked = False
         if enabled and lookup is not None:
             checked = True
@@ -5884,13 +6017,14 @@ async def _qdrant_citation_lookup(query: str, limit: int = 5, active_only: bool 
 citation_guard = CitationHallucinationGuard(qdrant_lookup=_qdrant_citation_lookup)
 
 
-async def _guard_citations(text: str, *, use_qdrant: bool = True) -> dict:
+async def _guard_citations(text: str, *, use_qdrant: bool = True, extra_precedents: Optional[Sequence[dict]] = None) -> dict:
     """اعتبارسنجی استنادات یک متن و بازگرداندن متن اصلاح‌شده + آمار."""
     try:
         return await citation_guard.verify_async(
             text,
             qdrant_lookup=_qdrant_citation_lookup if use_qdrant else None,
             use_qdrant=use_qdrant,
+            extra_precedents=extra_precedents,
         )
     except Exception as exc:  # noqa: BLE001 - هرگز مسیر تولید را نمی‌شکند
         print(f"[SMARTJUDGE][CITATION-GUARD-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)

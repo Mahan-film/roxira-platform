@@ -28,6 +28,7 @@ services:
       - ./scripts/infra/server_agents:/app/scripts/infra/server_agents:ro
       # tab 4: tier -> group fallback chains (env-var names only, no keys inside)
       - ./config/key_pool.yaml:/app/config/key_pool.yaml:ro
+      - ./config/models.yaml:/app/config/models.yaml:ro
       # tab 1/4: LLM cost + latency log written by the key-pool gateway (no prompts in it)
       - /var/log/roxira-keypool:/var/log/roxira-keypool:ro
       # tab 4: model bake-off reports (*.md)

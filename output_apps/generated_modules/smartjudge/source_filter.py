@@ -53,7 +53,7 @@ def min_source_score() -> float:
 
 
 def is_placeholder(row: Any) -> bool:
-    return isinstance(row, dict) and str(row.get("match_level") or "") == "FALLBACK"
+    return isinstance(row, dict) and str(row.get("match_level") or "") in ("FALLBACK", "FALLBACK_ACTIVE_PRECEDENT")
 
 
 def strip_placeholders(rows: Optional[Iterable[Any]]) -> List[Any]:
@@ -66,7 +66,7 @@ def filter_relevant(rows: Optional[Iterable[Any]], min_score: Optional[float] = 
     cutoff = min_source_score() if min_score is None else min_score
     out: List[Any] = []
     for r in strip_placeholders(rows):
-        if str(r.get("match_level") or "") == "HIGH_DOCTRINE":
+        if str(r.get("match_level") or "") in ("HIGH_DOCTRINE", "FALLBACK_ACTIVE_PRECEDENT"):
             continue
         if not _rb.is_relevant(r, cutoff):
             continue

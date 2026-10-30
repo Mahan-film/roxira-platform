@@ -59,9 +59,10 @@ def is_grounded(laws: Any, precedents: Any = None) -> bool:
     """True when retrieval gave at least one real (non-placeholder) row."""
     for rows in (laws, precedents):
         for row in rows or []:
-            if isinstance(row, dict) and str(row.get("match_level") or "") != "FALLBACK":
+            if isinstance(row, dict) and str(row.get("match_level") or "") not in ("FALLBACK", "FALLBACK_ACTIVE_PRECEDENT", "HIGH_DOCTRINE"):
                 return True
     return False
+
 
 
 def _verified_numbers(validated: Iterable[Any]) -> set:

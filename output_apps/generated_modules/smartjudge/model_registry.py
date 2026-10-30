@@ -25,9 +25,11 @@ REGISTRY_PATH = pathlib.Path(__file__).resolve().parents[3] / "config" / "models
 
 logger = logging.getLogger(__name__)
 
-# Owner policy (2026-10-10): Gemini Pro is forbidden everywhere. Matches
-# gemini-2.5-pro, gemini-3.1-pro, "Gemini Pro", etc. Flash ids do not match.
-_FORBIDDEN_ID_RE = re.compile(r"gemini[-_ .]*[0-9.]*[-_ ]*pro", re.IGNORECASE)
+# Owner policy (2026-10-10 & 2026-10-24): Gemini Pro and Qwen Coder variants are
+# forbidden everywhere. Flash and general instruct ids remain permitted.
+_FORBIDDEN_ID_RE = re.compile(
+    r"(gemini[-_ .]*[0-9.]*[-_ ]*pro|qwen[-_ .]*[0-9.]*[-_ ]*coder)", re.IGNORECASE
+)
 
 
 class ModelRegistryError(RuntimeError):

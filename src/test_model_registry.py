@@ -222,13 +222,14 @@ def test_cheap_role_primary_is_deepseek_v4_1_flash():
 
 
 def test_strong_role_priority_order_and_no_sonnet():
-    """Owner decision (2026-09-28): DeepSeek V4 Pro, then GLM-5.3, then
-    Kimi K3, then Gemini 3.8 Flash -- and no anthropic/claude-sonnet-5
+    """Owner directive (2026-10-24): DeepSeek V4.1 Flash first, then GLM-5.3,
+    Kimi K3 and Gemini 3.8 Flash -- and no anthropic/claude-sonnet-5
     anywhere in the product runtime (it stays only in builder roles)."""
     real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
     models = model_registry.role_models("strong", real_path)
     assert models == [
-        "deepseek/deepseek-v4-pro",
+        "deepseek/deepseek-v4.1-flash-1017",
+        "deepseek/deepseek-v4.1-flash",
         "z-ai/glm-5.3",
         "moonshotai/kimi-k3",
         "google/gemini-3.8-flash",

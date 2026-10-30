@@ -70,7 +70,7 @@ _FALLBACK_TIER_MODELS = {
     "nvidia/nemotron-3-super-120b-a12b:free",
     "cheap": "deepseek/deepseek-v4.1-flash,deepseek/deepseek-v4-flash-0731,"
     "qwen/qwen3.8-flash,google/gemini-3.1-flash-lite",
-    "strong": "deepseek/deepseek-v4-pro,z-ai/glm-5.3,moonshotai/kimi-k3,google/gemini-3.8-flash",
+    "strong": "deepseek/deepseek-v4.1-flash-1017,deepseek/deepseek-v4.1-flash,z-ai/glm-5.3,moonshotai/kimi-k3,google/gemini-3.8-flash",
 }
 
 

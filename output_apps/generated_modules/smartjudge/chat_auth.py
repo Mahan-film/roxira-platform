@@ -732,6 +732,11 @@ async def gate_voice_ws(websocket: Any) -> bool:
         if not ok:
             reject = (4429, rate_limited_message(left, anonymous=not user.authenticated), "RATE_LIMITED")
     if reject is None:
+        try:
+            if hasattr(websocket, "state"):
+                websocket.state.user = user
+        except Exception:
+            pass
         return True
     close_code, message, code = reject
     await websocket.accept()
@@ -739,6 +744,12 @@ async def gate_voice_ws(websocket: Any) -> bool:
         {"type": "ERROR", "status": "error", "code": code, "message": message}, ensure_ascii=False))
     await websocket.close(code=close_code)
     return False
+
+
+def voice_ws_user(headers: Mapping[str, str], query_params: Optional[Mapping[str, str]] = None) -> CurrentUser:
+    """Resolve CurrentUser for WebSocket connections via headers or ?token= query parameter."""
+    return authenticate(headers, query_params)
+
 
 
 # ---------------------------------------------------------------------------
