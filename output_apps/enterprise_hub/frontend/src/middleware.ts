@@ -123,6 +123,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (domain === "roxira_net") {
+    // /admin must stay a plain 404 on every domain (deploy smoke test), never a redirect.
+    if (hasPrefix(pathname, "/admin")) {
+      return NextResponse.next();
+    }
     // مسیرهای داخلی سازمانی در پورتال بین‌المللی به ریشه بازگردانده می‌شوند تا هیچ نشت دامنه‌ای به دامنه .ir رخ ندهد
     if (hasPrefix(pathname, "/app") || ROXIRA_ONLY_PATHS.some((path) => hasPrefix(pathname, path))) {
       return NextResponse.redirect(new URL("/", request.nextUrl));
