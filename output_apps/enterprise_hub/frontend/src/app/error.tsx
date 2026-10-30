@@ -6,6 +6,8 @@ import { AlertTriangle, Home, RotateCw } from "lucide-react";
 
 import { reportClientError } from "@/lib/observability/client-error-reporter";
 
+import { reportClientError } from "@/lib/observability/client-error-reporter";
+
 export default function GlobalError({
   error,
   reset,
