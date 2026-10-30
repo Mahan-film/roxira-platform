@@ -1,9 +1,10 @@
-# Daily 04:15 UTC: the Telegram convenience tier (never the primary; see docs/ops/TELEGRAM_BACKUP.md).
+# Every 6 hours (04:15, 10:15, 16:15, 22:15 UTC): the Telegram convenience tier (never the primary; see docs/ops/TELEGRAM_BACKUP.md).
+# Each run takes its own fresh pg_dump; it never sends an older set.
 [Unit]
-Description=Run the Telegram off-site database backup daily at 04:15 UTC
+Description=Run the Telegram off-site database backup every 6 hours
 
 [Timer]
-OnCalendar=*-*-* 04:15:00 UTC
+OnCalendar=*-*-* 04/6:15:00 UTC
 RandomizedDelaySec=120
 Persistent=true
 

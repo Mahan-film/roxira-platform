@@ -180,6 +180,8 @@ def build_offsite_manifest(date: str, host: str, src_name: str, src_size: int, s
         "note": note,
         "encryption": "age (recipient: owner public key); decrypt with the private key backup-age.key",
         "source": {"name": src_name, "bytes": src_size, "sha256": src_sha},
+        "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "data": "fresh pg_dump taken for this mail (not copied from a local set)",
         "part_bytes_max": caps.part_bytes,
         "parts": [{"index": p.index, "total": p.total, "name": p.name, "bytes": p.size, "sha256": p.sha256}
                   for p in parts],
@@ -230,18 +232,71 @@ def scan_sets(sets_dir: Path, hash_max_bytes: int) -> list[dict]:
     return sets
 
 
+SET_TS = "%Y%m%dT%H%M%SZ"
+
+
+def set_age_hours(name: str, now: datetime) -> float | None:
+    try:
+        return (now - datetime.strptime(name, SET_TS).replace(tzinfo=timezone.utc)).total_seconds() / 3600
+    except ValueError:
+        return None
+
+
+def env_age_hours(value: str, now: datetime) -> float | None:
+    return set_age_hours(value, now) if value else None
+
+
+def freshness(sets: list[dict], status: dict, now: datetime, max_set_h: float, max_r2_h: float,
+              max_drill_h: float) -> dict:
+    """Age of the newest set / R2 copy / restore drill against what the schedule allows.
+    `problems` lists every age that is over its limit; the report fails on any of them."""
+    latest = next((s for s in sets if s["latest"]), sets[0] if sets else None)
+    set_age = set_age_hours(latest["name"], now) if latest else None
+    r2_age = env_age_hours(status.get("R2_LAST_OK", ""), now)
+    drill_age = env_age_hours(status.get("DRILL_AT", ""), now)
+    problems = []
+    if set_age is None:
+        problems.append("no local backup set found")
+    elif set_age > max_set_h:
+        problems.append(f"latest local set is {set_age:.1f} h old (limit {max_set_h:g} h)")
+    if status.get("R2_LAST_RESULT") is not None or r2_age is not None:
+        if r2_age is None or r2_age > max_r2_h:
+            problems.append("R2 copy is " + ("missing" if r2_age is None else f"{r2_age:.1f} h old")
+                            + f" (limit {max_r2_h:g} h)")
+        if status.get("R2_LAST_RESULT", "OK") != "OK":
+            problems.append("last R2 upload failed: " + status.get("R2_LAST_ERROR", "unknown"))
+    if status.get("DRILL_RESULT") is not None:
+        if status["DRILL_RESULT"] != "OK":
+            problems.append("last restore drill FAILED")
+        elif drill_age is None or drill_age > max_drill_h:
+            problems.append(f"restore drill is older than {max_drill_h:g} h")
+    return {"set_name": latest["name"] if latest else None, "set_age_h": set_age,
+            "set_max_age_h": max_set_h, "r2_age_h": r2_age, "r2_max_age_h": max_r2_h,
+            "r2_result": status.get("R2_LAST_RESULT", "not configured"),
+            "drill_result": status.get("DRILL_RESULT", "never"), "drill_at": status.get("DRILL_AT", "n/a"),
+            "drill_age_h": drill_age, "problems": problems}
+
+
 def build_report_manifest(date: str, host: str, status: dict, sets: list[dict], disk_pct, caps: Caps,
-                          offsite: dict | None = None) -> dict:
+                          offsite: dict | None = None, fresh: dict | None = None) -> dict:
+    result = status.get("LAST_RESULT", "UNKNOWN")
+    fresh = fresh or {"problems": []}
+    if result == "OK" and fresh["problems"]:
+        result = "STALE"
+    local_only = status.get("BACKUP_MODE") == "local-only"
     return {
         "kind": "report", "version": 1, "date": date, "host": host,
-        "status": status.get("LAST_RESULT", "UNKNOWN"),
+        "status": result,
+        "freshness": fresh,
         "last_ok": status.get("LAST_OK", "never"),
         "duration_s": status.get("DURATION_S"),
         "staged_bytes": int(status["STAGE_BYTES"]) if status.get("STAGE_BYTES", "").isdigit() else None,
         "backup_mode": status.get("BACKUP_MODE", "unknown"),
         "restic": {k[5:]: {"snapshot": v, "added": status.get("ADDED_" + k[5:], "n/a")}
                    for k, v in status.items() if k.startswith("SNAP_")},
-        "restic_check": {"result": status.get("CHECK_RESULT", "never"), "at": status.get("CHECK_AT", "n/a")},
+        # restic_check means nothing without a restic repository: None is rendered as "not applicable".
+        "restic_check": None if local_only else
+        {"result": status.get("CHECK_RESULT", "never"), "at": status.get("CHECK_AT", "n/a")},
         "warnings": status.get("WARNINGS", ""),
         "last_error": status.get("LAST_ERROR", ""),
         "disk_used_pct": disk_pct,
@@ -249,6 +304,20 @@ def build_report_manifest(date: str, host: str, status: dict, sets: list[dict], 
         "email_caps": asdict(caps),
         "offsite_email": offsite,
     }
+
+
+def _age(h) -> str:
+    return "n/a" if h is None else f"{h:.1f} h"
+
+
+def _freshness_rows(f: dict | None) -> list[str]:
+    if not f or "set_name" not in f:
+        return []
+    rows = [f"| Latest local set | {f['set_name']} ({_age(f['set_age_h'])} old, limit {f['set_max_age_h']:g} h) |"]
+    if f["r2_result"] != "not configured":
+        rows.append(f"| R2 copy (hourly) | {f['r2_result']}, {_age(f['r2_age_h'])} old, limit {f['r2_max_age_h']:g} h |")
+    rows.append(f"| Restore drill | {f['drill_result']} ({f['drill_at']}) |")
+    return rows
 
 
 def render_report_md(m: dict) -> str:
@@ -261,12 +330,17 @@ def render_report_md(m: dict) -> str:
          f"| Staged size | {human(m['staged_bytes']) if m['staged_bytes'] is not None else '?'} |",
          f"| Disk used | {m['disk_used_pct'] if m['disk_used_pct'] is not None else '?'} % |",
          f"| Mode | {m['backup_mode']} |",
-         f"| Restic check | {m['restic_check']['result']} ({m['restic_check']['at']}) |",
+         "| Restic check | " + ("not applicable (local-only mode, no restic repository)"
+                                  if m["restic_check"] is None else
+                                  f"{m['restic_check']['result']} ({m['restic_check']['at']})") + " |",
+         *_freshness_rows(m.get("freshness")),
          f"| Warnings | {m['warnings'] or 'none'} |", f"| Last error | {m['last_error'] or 'none'} |", ""]
     if m["restic"]:
         L += ["## Restic repositories", "", "| Repo | Snapshot | Added |", "|---|---|---|"]
         L += [f"| {k} | {v['snapshot']} | {v['added']} |" for k, v in m["restic"].items()]
         L.append("")
+    if m.get("freshness", {}).get("problems"):
+        L += ["## Stale or failed copies", ""] + [f"- **{p}**" for p in m["freshness"]["problems"]] + [""]
     L += ["## Local sets", "", "| Set | Latest | Size | Files |", "|---|---|---|---|"]
     L += [f"| {s['name']} | {'yes' if s['latest'] else ''} | {human(s['bytes'])} | {s['file_count']} |"
           for s in m["sets"]] or ["| (none) | | | |"]
@@ -283,11 +357,16 @@ def render_report_md(m: dict) -> str:
         L += ["## Offsite by e-mail", "", f"- Status: **{off['status']}**"]
         if off.get("note"):
             L.append(f"- Note: {off['note']}")
+        if off.get("built_at"):
+            L.append(f"- Built from a fresh dump at {off['built_at']}")
         if off.get("parts"):
             L.append(f"- Parts: {len(off['parts'])}, total {human(sum(p['bytes'] for p in off['parts']))}")
         L.append("")
     L += ["## Next steps", ""]
-    if ok:
+    if m["status"] == "STALE":
+        L += ["- The backup is older than the schedule allows. Read `Stale or failed copies` above, then "
+              "`systemctl list-timers 'roxira-backup-dr*'` and `journalctl -u roxira-backup-dr-run -n 100`."]
+    elif ok:
         L.append("- Nothing to do. Keep `backup-age.key` safe; without it the mailed parts cannot be decrypted.")
     else:
         L += ["- Read `last error` above, then `journalctl -u roxira-backup-dr-run -n 100` on the server.",
@@ -405,12 +484,16 @@ def cmd_report(a) -> int:
     caps = Caps.from_env()
     date = a.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     status = {}
-    for f in (a.status_env, a.check_env):
+    for f in (a.status_env, a.check_env, a.r2_env, a.drill_env):
         if f and Path(f).is_file():
             status.update(parse_status_env(Path(f).read_text(errors="replace")))
     sets = scan_sets(Path(a.sets_dir), int(a.hash_max_mb * MB)) if a.sets_dir else []
     off = json.loads(Path(a.offsite_manifest).read_text()) if a.offsite_manifest and Path(a.offsite_manifest).is_file() else None
-    m = build_report_manifest(date, a.host or os.uname().nodename, status, sets, a.disk_pct, caps, off)
+    fresh = freshness(sets, status, datetime.now(timezone.utc),
+                      float(os.environ.get("BACKUP_MAX_SET_AGE_H", "30")),
+                      float(os.environ.get("BACKUP_MAX_R2_AGE_H", "3")),
+                      float(os.environ.get("BACKUP_MAX_DRILL_AGE_H", "192")))
+    m = build_report_manifest(date, a.host or os.uname().nodename, status, sets, a.disk_pct, caps, off, fresh)
     md = render_report_md(m)
     if a.out_dir:
         Path(a.out_dir).mkdir(parents=True, exist_ok=True)
@@ -467,6 +550,7 @@ def main() -> int:
     r.add_argument("--status-env"); r.add_argument("--check-env"); r.add_argument("--sets-dir")
     r.add_argument("--out-dir"); r.add_argument("--date"); r.add_argument("--host")
     r.add_argument("--disk-pct", type=int); r.add_argument("--hash-max-mb", type=float, default=512)
+    r.add_argument("--r2-env"); r.add_argument("--drill-env")
     r.add_argument("--offsite-manifest"); r.add_argument("--attach", action="append", default=[])
     r.add_argument("--dry-run", action="store_true")
     o = sub.add_parser("offsite")

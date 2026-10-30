@@ -1,4 +1,4 @@
-# Daily Telegram off-site database backup (tier 4). Installed by hand:
+# Telegram (every 6 hours) off-site database backup (tier 4). Installed by hand:
 # install -m 644 scripts/ops/backup/roxira-telegram-offsite.service /etc/systemd/system/
 # NOTIFY_BOT_TOKEN / NOTIFY_CHAT_ID / NOTIFY_BOT_API are read by the script from
 # /opt/roxira_platform/.env (by name; the file is never exported wholesale).

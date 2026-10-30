@@ -1,8 +1,10 @@
 [Unit]
-Description=Roxira DR backup hourly (RPO 1h)
+Description=Roxira DR backup, full local set (daily 01:07 UTC; was hourly)
 
 [Timer]
-OnCalendar=*-*-* *:07:00
+# Daily since 2026-10-30: the hourly copy is now roxira-backup-dr-pgcfg (Postgres + configs to R2).
+# Sits clear of neon 02:41 and the qdrant replica 03:10.
+OnCalendar=*-*-* 01:07:00 UTC
 Persistent=true
 RandomizedDelaySec=120
 

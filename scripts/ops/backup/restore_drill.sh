@@ -6,6 +6,11 @@
 # Usage:
 #   restore_drill.sh [--dry-run] neon  [DB ...]            # pull bk_<db> from Neon, restore into scratch
 #   restore_drill.sh [--dry-run] file  DUMP.dump.age DB --identity KEYFILE   # from a local encrypted dump
+#   restore_drill.sh [--dry-run] payload PAYLOAD.tar.age --identity KEYFILE  # hourly Postgres+configs payload:
+#                                         decrypt, untar, restore EVERY pg dump, check the config tarball reads
+#   restore_drill.sh [--dry-run] r2 --identity KEYFILE   # download the newest R2 payload first, then as above.
+#                                         Run this on the Mac (the private key never reaches srv1).
+# Exit 0 = PASS, 1 = FAIL; the last log line says "restore drill passed" or "restore drill FAILED".
 # Env: NEON_BACKUP_URL (direct string; read from env only), default DBs "enterprise_db umami",
 #      DRILL_MIN_ROWS (1: the biggest table must have at least this many rows).
 # Works on the server or on the owner's Mac (needs docker; `file` mode also needs age).
@@ -20,13 +25,14 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
     --identity) IDENTITY="${2:?--identity needs a key file}"; shift ;;
-    -h | --help) sed -n '2,12p' "$0"; exit 0 ;;
-    neon | file) MODE="$1" ;;
-    *) if [ "$MODE" = file ] && [ -z "$FILE" ]; then FILE="$1"; elif [ "$MODE" = file ] && [ -z "$FILE_DB" ]; then FILE_DB="$1"; else DBS_ARG+=("$1"); fi ;;
+    -h | --help) sed -n '2,20p' "$0"; exit 0 ;;
+    neon | file | payload | r2) MODE="$1" ;;
+    *) if [ "$MODE" = payload ] && [ -z "$FILE" ]; then FILE="$1"
+       elif [ "$MODE" = file ] && [ -z "$FILE" ]; then FILE="$1"; elif [ "$MODE" = file ] && [ -z "$FILE_DB" ]; then FILE_DB="$1"; else DBS_ARG+=("$1"); fi ;;
   esac
   shift
 done
-[ -n "$MODE" ] || die "mode required: neon | file (see --help)"
+[ -n "$MODE" ] || die "mode required: neon | file | payload | r2 (see --help)"
 
 NAME="roxira-drill-$$"
 MIN_ROWS="${DRILL_MIN_ROWS:-1}"
@@ -34,7 +40,9 @@ export REDACT_ENV_NAMES="NEON_BACKUP_URL NEON_TARGET_URL"
 
 if [ "$DRY_RUN" = "1" ]; then
   echo "[dry-run] docker run -d --name $NAME --tmpfs /var/lib/postgresql -e PGDATA=/var/lib/postgresql/data -e POSTGRES_PASSWORD=<random> $PG_CLIENT_IMAGE   (no published ports)"
-  if [ "$MODE" = neon ]; then
+  if [ "$MODE" = payload ] || [ "$MODE" = r2 ]; then
+    echo "[dry-run] ${MODE}: [r2_tools.py latest + get] age -d -i <identity> | tar -x; for every pg/<container>/<db>.dump: createdb + pg_restore --no-owner --no-acl in $NAME, smoke queries; tar -tzf configs/configs.tar.gz"
+  elif [ "$MODE" = neon ]; then
     echo "[dry-run] per DB: pg_dump -Fc from Neon bk_<db> (client container, URL via env name) | docker exec -i $NAME pg_restore --no-owner --no-acl"
   else
     echo "[dry-run] age -d -i <identity> $FILE | docker exec -i $NAME pg_restore --no-owner --no-acl"
@@ -94,6 +102,43 @@ if [ "$MODE" = neon ]; then
       FAIL=1
     fi
   done
+elif [ "$MODE" = payload ] || [ "$MODE" = r2 ]; then
+  [ -f "$IDENTITY" ] || die "$MODE mode needs --identity KEYFILE"
+  command -v age >/dev/null || die "age not found"
+  if [ "$MODE" = r2 ]; then
+    load_names BACKUP_R2_ENDPOINT BACKUP_R2_BUCKET BACKUP_R2_ACCESS_KEY_ID BACKUP_R2_SECRET_ACCESS_KEY BACKUP_R2_PREFIX
+    latest_line="$(python3 -I "$SCRIPT_DIR/r2_tools.py" latest "${BACKUP_R2_PREFIX:-pgcfg}/hourly/")" || die "no R2 payload found"
+    FILE="$TMPDIR_DRILL/payload.tar.age"
+    python3 -I "$SCRIPT_DIR/r2_tools.py" get "${latest_line%% *}" "$FILE" || die "R2 download failed"
+    log "downloaded ${latest_line%% *} (age ${latest_line##* } s)"
+  fi
+  [ -f "$FILE" ] || die "payload file missing"
+  mkdir -p "$TMPDIR_DRILL/x"
+  if ! age -d -i "$IDENTITY" "$FILE" | tar -x -C "$TMPDIR_DRILL/x" 2>"$TMPDIR_DRILL/dec.err"; then
+    log "DRILL FAILED (decrypt/untar): $(head -c 300 "$TMPDIR_DRILL/dec.err" | tr '\n' ' ')"; FAIL=1
+  else
+    n=0
+    for dump in "$TMPDIR_DRILL"/x/pg/*/*.dump; do
+      [ -f "$dump" ] || continue
+      n=$((n + 1))
+      db="$(basename "$dump" .dump)"
+      [[ "$db" =~ ^[A-Za-z0-9_]{1,40}$ ]] || { log "bad db name $db"; FAIL=1; continue; }
+      sdb="$(printf '%s' "$db" | tr 'A-Z' 'a-z')_$n"   # unique per dump even if two containers share a name
+      log "[$sdb] restoring $(basename "$(dirname "$dump")")/$db"
+      if restore_stream_into_scratch "$sdb" <"$dump"; then
+        smoke "$sdb" && log "[$sdb] DRILL OK" || { log "[$sdb] DRILL FAILED (smoke)"; FAIL=1; }
+      else
+        log "[$sdb] DRILL FAILED (restore): $(head -c 300 "$TMPDIR_DRILL/restore.err" | tr '\n' ' ')"; FAIL=1
+      fi
+    done
+    [ "$n" -ge 1 ] || { log "DRILL FAILED: no Postgres dump in the payload"; FAIL=1; }
+    if [ -s "$TMPDIR_DRILL/x/configs/configs.tar.gz" ] && tar -tzf "$TMPDIR_DRILL/x/configs/configs.tar.gz" >/dev/null 2>&1; then
+      log "config tarball readable"
+    else
+      log "DRILL FAILED: config tarball missing or unreadable"; FAIL=1
+    fi
+    rm -rf -- "$TMPDIR_DRILL/x"
+  fi
 else
   [ -f "$FILE" ] && [ -n "$FILE_DB" ] && [ -f "$IDENTITY" ] || die "file mode needs: DUMP.dump.age DB --identity KEYFILE"
   command -v age >/dev/null 2>&1 || die "age not found"

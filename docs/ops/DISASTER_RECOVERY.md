@@ -7,7 +7,7 @@ Inventory basis: `docs/infra/INFRA_MAP_2026-10-09.md`, `docs/research/BEST_PRACT
 
 | Target | Value | How it is met |
 |---|---|---|
-| RPO (max data loss) | 1 hour | hourly timer `roxira-backup-dr-run.timer`, offsite push each run |
+| RPO (max data loss) | 1 hour | hourly `roxira-backup-dr-pgcfg.timer` (encrypted Postgres + configs to R2); since 2026-10-30 the full local set is daily, see `docs/ops/BACKUP_SCHEDULE_2026-10-30.md` |
 | RTO (time to recover) | under 4 hours | `scripts/infra/bootstrap_new_server.sh --restore` (= bootstrap + `restore.sh --full`); data set is small (about 0.3 GB of DB/vector data) so restore time is dominated by apt/docker install and DNS |
 | Copies | 3-2-1 | live server + server-local dump sets + Mac (daily pull into an encrypted restic repo); optional Cloudflare R2 as the off-site third. A Hetzner Storage Box is supported but not required (see section 11) |
 | Encryption | at rest everywhere | restic AES-256 repos; config bundle by age; local server dumps are plain on the server disk (same trust as the DB itself) |

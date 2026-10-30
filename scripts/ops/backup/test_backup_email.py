@@ -145,6 +145,52 @@ class T(unittest.TestCase):
         self.assertIn(hashlib.sha256(b"abc").hexdigest(), md)
         json.dumps(m)
 
+    def _report(self, set_name, status_text, now):
+        d = Path(tempfile.mkdtemp(dir=self.d))
+        (d / set_name).mkdir()
+        (d / "latest").symlink_to(d / set_name)
+        sets = eo.scan_sets(d, 1024)
+        st = eo.parse_status_env(status_text)
+        fresh = eo.freshness(sets, st, now, 30, 3, 192)
+        return eo.build_report_manifest("2026-10-30", "h", st, sets, 40, eo.Caps(), None, fresh)
+
+    def test_stale_set_fails_and_says_age(self):
+        from datetime import datetime, timezone
+        now = datetime(2026, 10, 30, 6, 30, tzinfo=timezone.utc)
+        m = self._report("20261022T000700Z", "LAST_RESULT='OK'\nBACKUP_MODE='local-only'\n", now)
+        self.assertEqual(m["status"], "STALE")
+        self.assertGreater(m["freshness"]["set_age_h"], 190)
+        md = eo.render_report_md(m)
+        self.assertIn("20261022T000700Z", md)
+        self.assertIn("old, limit 30 h", md)
+        self.assertIn("ATTENTION", md)
+
+    def test_fresh_set_passes_and_local_only_hides_restic_check(self):
+        from datetime import datetime, timezone
+        now = datetime(2026, 10, 30, 6, 30, tzinfo=timezone.utc)
+        m = self._report("20261030T010700Z", "LAST_RESULT='OK'\nBACKUP_MODE='local-only'\n", now)
+        self.assertEqual(m["status"], "OK")
+        self.assertIsNone(m["restic_check"])
+        self.assertIn("not applicable (local-only", eo.render_report_md(m))
+
+    def test_restic_mode_keeps_restic_check(self):
+        from datetime import datetime, timezone
+        now = datetime(2026, 10, 30, 6, 30, tzinfo=timezone.utc)
+        m = self._report("20261030T010700Z", "LAST_RESULT='OK'\nBACKUP_MODE='restic'\nCHECK_RESULT='OK'\n", now)
+        self.assertEqual(m["restic_check"]["result"], "OK")
+
+    def test_r2_and_drill_staleness(self):
+        from datetime import datetime, timezone
+        now = datetime(2026, 10, 30, 6, 30, tzinfo=timezone.utc)
+        ok = "LAST_RESULT='OK'\nBACKUP_MODE='local-only'\n"
+        m = self._report("20261030T010700Z", ok + "R2_LAST_RESULT='OK'\nR2_LAST_OK='20261030T060000Z'\n"
+                         "DRILL_RESULT='OK'\nDRILL_AT='20261026T050000Z'\n", now)
+        self.assertEqual(m["status"], "OK")
+        m = self._report("20261030T010700Z", ok + "R2_LAST_RESULT='OK'\nR2_LAST_OK='20261030T010000Z'\n", now)
+        self.assertEqual(m["status"], "STALE")
+        m = self._report("20261030T010700Z", ok + "DRILL_RESULT='FAIL'\nDRILL_AT='20261030T050000Z'\n", now)
+        self.assertIn("restore drill FAILED", m["freshness"]["problems"][0])
+
     def test_report_message_utf8_filenames(self):
         m = eo.make_message("تست", "سلام", "a@x.test", "b@x.test", [("backup-report-d.md", "# سلام".encode())])
         att = next(m.iter_attachments())

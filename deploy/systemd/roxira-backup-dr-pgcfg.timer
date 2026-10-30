@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira hourly encrypted Postgres + configs copy to R2 (RPO 1h, minute :37)
+
+[Timer]
+OnCalendar=*-*-* *:37:00 UTC
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

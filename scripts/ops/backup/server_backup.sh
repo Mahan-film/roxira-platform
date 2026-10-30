@@ -6,14 +6,22 @@
 # Replaces the DB part of scripts/auto_backup_daemon.sh and scripts/ops/backup.sh; those can be
 # retired once this has run cleanly for a few days (see docs/ops/DISASTER_RECOVERY.md).
 #
+# Schedule (docs/strategy/MASTER_STRATEGY_2026-10-30.md section 2):
+#   run     daily      full local set (Qdrant snapshots included), 2 sets kept
+#   pgcfg   hourly     fresh Postgres dump + configs, age-encrypted, uploaded to R2 (7 d hourly, 30 d daily)
+#   offsite daily      same payload, mailed in parts (inside email_caps)
+#   drill   weekly     decrypt a fresh payload with a throwaway key and test-restore it into a scratch Postgres
+#
 # Local-only mode: with no restic repository configured (no Storage Box, no S3) and
-# BACKUP_ALLOW_LOCAL_ONLY=1, `run` still writes the hourly consistent dump set (+ a config tarball)
+# BACKUP_ALLOW_LOCAL_ONLY=1, `run` still writes the consistent dump set (+ a config tarball)
 # under sets/<timestamp> with KEEP_LOCAL_SETS rotation and records LAST_RESULT=OK. The owner's Mac
 # pulls sets/latest daily (scripts/ops/backup/mac_pull.sh). Without that flag, "no repository" is a FAIL.
 #
 # Usage: server_backup.sh [--dry-run] <mode>
 #   init      create the restic repositories that do not exist yet (one-time, idempotent)
-#   run       dump + stage + restic backup + (daily) forget --prune     [hourly timer]
+#   run       dump + stage + restic backup + (daily) forget --prune     [daily timer]
+#   pgcfg     fresh pg_dump + configs -> age -> R2, then R2 retention     [hourly timer]
+#   drill     restore drill: fresh payload -> throwaway age key -> scratch Postgres, pass/fail  [weekly timer]
 #   report    daily status email; on the bundle weekday also attach the age-encrypted config bundle
 #   check     restic check --read-data-subset=5% on every repository     [weekly timer]
 #   bundle    build the age-encrypted config bundle only (prints its path)
@@ -41,12 +49,12 @@ fi
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
-    init|run|report|check|bundle|offsite) MODE="$arg" ;;
+    -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+    init|run|report|check|bundle|offsite|pgcfg|drill) MODE="$arg" ;;
     *) die "unknown argument: $arg" ;;
   esac
 done
-[ -n "$MODE" ] || [ -n "$SELF_TEST_DIR" ] || die "mode required: init|run|report|check|bundle|offsite (see --help)"
+[ -n "$MODE" ] || [ -n "$SELF_TEST_DIR" ] || die "mode required: init|run|report|check|bundle|offsite|pgcfg|drill (see --help)"
 
 [ -n "$SELF_TEST_DIR" ] || load_env
 
@@ -56,11 +64,14 @@ STAGE="$LOCAL_DIR/stage"
 SETS_DIR="$LOCAL_DIR/sets"
 # Local retention (docs/ops/BACKUP_RETENTION.md): newest KEEP_HOURLY sets + the newest set of each of the
 # KEEP_DAILY latest UTC days. BACKUP_KEEP_LOCAL_SETS is the old name of KEEP_HOURLY (still honoured).
-KEEP_HOURLY="${BACKUP_KEEP_HOURLY:-${BACKUP_KEEP_LOCAL_SETS:-6}}"
-KEEP_DAILY="${BACKUP_KEEP_DAILY:-3}"
+# The full set now runs once a day, so "2 sets" = the newest two (no extra daily sets).
+KEEP_HOURLY="${BACKUP_KEEP_HOURLY:-${BACKUP_KEEP_LOCAL_SETS:-2}}"
+KEEP_DAILY="${BACKUP_KEEP_DAILY:-0}"
 MIN_FREE_GB="${BACKUP_MIN_FREE_GB:-15}"   # below this: keep only the newest set and send an alert
 STATE_DIR="${BACKUP_STATE_DIR:-/var/lib/roxira-backup}"
 STATUS_FILE="$STATE_DIR/status.env"
+R2_FILE="$STATE_DIR/r2.env"         # written only by mode_pgcfg
+DRILL_FILE="$STATE_DIR/drill.env"   # written only by mode_drill
 CHECK_FILE="$STATE_DIR/check.env"   # written only by mode_check; status.env is rewritten hourly by mode_run
 LOG_FILE="${BACKUP_LOG_FILE:-/var/log/roxira_backup_dr.log}"
 DISK_WARN="${BACKUP_DISK_WARN_PCT:-85}"
@@ -382,7 +393,7 @@ mode_run() {
     status_set STAGE_BYTES "$(du -sb "$STAGE" | cut -f1)"
   fi
 
-  step "3/6 local rotation (hardlinked sets: ${KEEP_HOURLY} hourly + ${KEEP_DAILY} daily)"
+  step "3/6 local rotation (hardlinked sets: newest ${KEEP_HOURLY} + ${KEEP_DAILY} daily)"
   if [ "${#FAILS[@]}" -eq 0 ]; then
     run mkdir -p "$SETS_DIR"
     run cp -al "$STAGE" "$SETS_DIR/$started"
@@ -481,28 +492,125 @@ mode_bundle() {
   echo "$out"
 }
 
+# env_write FILE KEY=VALUE...: atomically rewrite a small status file; keys not given are dropped.
+env_write() {
+  local f="$1" kv tmp="$1.new"
+  shift
+  : >"$tmp"
+  for kv in "$@"; do printf "%s='%s'\n" "${kv%%=*}" "$(printf '%s' "${kv#*=}" | tr -d "'\n")" >>"$tmp"; done
+  mv "$tmp" "$f"
+}
+
+# build_payload DEST RECIPIENT: take a FRESH pg_dump of every Postgres container plus the config tarball and
+# write them as one age-encrypted tar to DEST. Never reads the local sets, so it is as old as "now", not
+# as old as the last daily set. Returns 1 (and FAILS says why) when any dump or the config tar failed.
+build_payload() {
+  local dest="$1" recipient="$2" work saved="$STAGE" before="${#FAILS[@]}" rc=0 x extras=()
+  for x in ${BUILD_EXTRA_PATHS:-}; do [ -e "$x" ] && extras+=("${x#/}"); done
+  mkdir -p "$STATE_DIR"
+  work="$(mktemp -d "$STATE_DIR/payload.XXXXXX")" || return 1
+  chmod 700 "$work"
+  STAGE="$work"
+  dump_postgres
+  dump_configs
+  STAGE="$saved"
+  if [ "${#FAILS[@]}" -gt "$before" ]; then
+    rc=1
+  elif ! tar -cf - -C "$work" pg configs ${extras[@]+"-C" "/" "${extras[@]}"} 2>/dev/null | age -r "$recipient" -o "$dest"; then
+    FAILS+=("age encryption of the payload failed"); rc=1
+  fi
+  [[ "$work" == "$STATE_DIR"/payload.* ]] && rm -rf -- "$work"
+  return "$rc"
+}
+
+mode_pgcfg() {
+  local ts hour dest rc=0 key
+  ts="$(stamp)"; hour="$(date -u +%H)"
+  dest="$STATE_DIR/pgcfg/$ts.tar.age"
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] pgcfg: fresh pg_dump -Fc of $PG_CONTAINERS + configs tar | age -r \$BACKUP_AGE_RECIPIENT -> $dest"
+    echo "[dry-run] pgcfg: r2_tools.py put -> ${BACKUP_R2_PREFIX:-pgcfg}/hourly/$ts.tar.age (+ /daily/ at ${PRUNE_HOUR_UTC}h UTC), prune at ${PRUNE_HOUR_UTC}h UTC"
+    return 0
+  fi
+  mkdir -p "$STATE_DIR/pgcfg"; chmod 700 "$STATE_DIR/pgcfg"
+  exec 8>"${BACKUP_PGCFG_LOCK_FILE:-/var/lock/roxira-backup-pgcfg.lock}"
+  flock -n 8 || { log "another pgcfg run is active; exiting"; exit 0; }
+  umask 077
+  command -v age >/dev/null || die "age not installed"
+  [ -n "${BACKUP_AGE_RECIPIENT:-}" ] || die "BACKUP_AGE_RECIPIENT unset: an unencrypted payload is never uploaded"
+  if [ -z "${BACKUP_R2_ENDPOINT:-${BACKUP_S3_ENDPOINT:-}}" ]; then
+    warn "R2 not configured (BACKUP_R2_* / BACKUP_S3_*); nothing uploaded"
+    env_write "$R2_FILE" "R2_LAST_RESULT=NOT_CONFIGURED" "R2_LAST_ERROR=R2 settings missing"
+    return 0
+  fi
+  # keep earlier success time across a failure so the report shows how old the newest R2 copy really is
+  local last_ok=""
+  [ -r "$R2_FILE" ] && last_ok="$(sed -n "s/^R2_LAST_OK='\(.*\)'$/\1/p" "$R2_FILE")"
+  if ! build_payload "$dest" "$BACKUP_AGE_RECIPIENT"; then
+    env_write "$R2_FILE" "R2_LAST_RESULT=FAIL" "R2_LAST_ERROR=${FAILS[*]}" "R2_LAST_OK=$last_ok"
+    alert "R2 payload FAILED" "Hourly Postgres+configs payload failed:
+$(printf ' - %s\n' "${FAILS[@]}")"
+    rm -f -- "$dest"; exit 1
+  fi
+  key="${BACKUP_R2_PREFIX:-pgcfg}"
+  if python3 -I "$SCRIPT_DIR/r2_tools.py" put "$dest" "$key/hourly/$ts.tar.age" \
+    && { [ "$hour" != "$PRUNE_HOUR_UTC" ] || python3 -I "$SCRIPT_DIR/r2_tools.py" put "$dest" "$key/daily/$ts.tar.age"; }; then
+    env_write "$R2_FILE" "R2_LAST_RESULT=OK" "R2_LAST_OK=$ts" "R2_LAST_BYTES=$(stat -c %s "$dest")"
+    log "r2 ok: $key/hourly/$ts.tar.age $(human "$(stat -c %s "$dest")")"
+    if [ "$hour" = "$PRUNE_HOUR_UTC" ]; then
+      python3 -I "$SCRIPT_DIR/r2_tools.py" prune || WARNS+=("R2 retention prune failed")
+    fi
+  else
+    rc=1
+    env_write "$R2_FILE" "R2_LAST_RESULT=FAIL" "R2_LAST_ERROR=upload failed" "R2_LAST_OK=$last_ok"
+    alert "R2 upload FAILED" "Upload of $key/hourly/$ts.tar.age failed. See: journalctl -u roxira-backup-dr-pgcfg -n 80"
+  fi
+  rm -f -- "$dest"
+  return "$rc"
+}
+
+mode_drill() {
+  local work key rc=0 res=OK err=""
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] drill: age-keygen (throwaway) -> fresh payload encrypted to it -> restore_drill.sh payload -> scratch postgres, pass/fail -> $DRILL_FILE"
+    return 0
+  fi
+  command -v age-keygen >/dev/null || die "age-keygen not installed"
+  mkdir -p "$STATE_DIR"
+  work="$(mktemp -d "$STATE_DIR/drill.XXXXXX")"; chmod 700 "$work"
+  age-keygen -o "$work/id.key" >/dev/null 2>&1 || die "age-keygen failed"
+  if build_payload "$work/payload.tar.age" "$(age-keygen -y "$work/id.key")"; then
+    nice -n 15 bash "$SCRIPT_DIR/restore_drill.sh" payload "$work/payload.tar.age" --identity "$work/id.key" || rc=$?
+    [ "$rc" = 0 ] || { res=FAIL; err="restore drill exit $rc"; }
+  else
+    res=FAIL; err="payload build failed: ${FAILS[*]}"
+  fi
+  [[ "$work" == "$STATE_DIR"/drill.* ]] && rm -rf -- "$work"
+  env_write "$DRILL_FILE" "DRILL_RESULT=$res" "DRILL_AT=$(stamp)" "DRILL_KIND=pipeline (throwaway key)" "DRILL_ERROR=$err"
+  [ "$res" = OK ] || alert "restore drill FAILED" "$err
+See: journalctl -u roxira-backup-dr-drill -n 100"
+  [ "$res" = OK ]
+}
+
 mode_offsite() {
-  # Encrypt (age, owner public key) a tar of: latest Postgres dumps, configs, extra paths; split; mail the parts.
-  local day work payload latest out rc=0 list=() p
+  # Mail a FRESH age-encrypted payload (Postgres dump taken now + configs + extra paths), split into parts.
+  local day work payload rc=0
   day="$(date -u +%F)"
   work="$STATE_DIR/offsite"
   payload="$work/roxira-offsite-$day.tar.age"
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] tar latest pg dumps + configs + BACKUP_EMAIL_EXTRA_PATHS | age -r \$BACKUP_AGE_RECIPIENT -> $payload"
+    echo "[dry-run] build_payload (fresh pg_dump + configs) | age -r \$BACKUP_AGE_RECIPIENT -> $payload"
     echo "[dry-run] email_offsite.py offsite --input $payload (caps: BACKUP_EMAIL_PART_MB/MAX_MAILS/MAX_DAY_MB)"
     return 0
   fi
   [ -n "${BACKUP_AGE_RECIPIENT:-}" ] || { warn "BACKUP_AGE_RECIPIENT unset; offsite skipped"; return 1; }
   command -v age >/dev/null || { warn "age not installed; offsite skipped"; return 1; }
-  latest="$(readlink -f "$SETS_DIR/latest" 2>/dev/null || true)"
-  [ -d "$latest" ] || { warn "no local set to mail"; return 1; }
   mkdir -p "$work"; chmod 700 "$work"
   find "$work" -maxdepth 1 -type f -mtime +2 -delete 2>/dev/null || true
-  for p in "$latest/pg" "$REPO_DIR/.env" "$REPO_DIR/docker/research-stack/.env" "$REPO_DIR/docker-compose.prod.yml" \
-    "$REPO_DIR/docker/research-stack/docker-compose.yml" "$REPO_DIR/nginx.conf" /etc/nginx/conf.d /etc/roxira/backup.env $EMAIL_EXTRA_PATHS; do
-    [ -e "$p" ] && list+=("$p")
-  done
-  tar -czf - --warning=no-file-changed "${list[@]}" 2>/dev/null | age -r "$BACKUP_AGE_RECIPIENT" -o "$payload"
+  # BACKUP_EMAIL_EXTRA_PATHS (e.g. the legal-corpus JSONL dir) go into the same tar, so one age stream restores all.
+  if ! BUILD_EXTRA_PATHS="$EMAIL_EXTRA_PATHS" build_payload "$payload" "$BACKUP_AGE_RECIPIENT"; then
+    warn "fresh payload failed: ${FAILS[*]}"; rm -f -- "$payload"; return 1
+  fi
   python3 "$SCRIPT_DIR/email_offsite.py" offsite --input "$payload" --work-dir "$work/parts" \
     --state-file "$STATE_DIR/email_day.json" || rc=$?
   # Normal runs write the manifest under parts/, the OVER_CAP path writes it in $work.
@@ -538,7 +646,7 @@ mode_report() {
   local off_args=()
   [ -f "$STATE_DIR/offsite/manifest-last.json" ] && off_args=(--offsite-manifest "$STATE_DIR/offsite/manifest-last.json")
   python3 "$SCRIPT_DIR/email_offsite.py" report --status-env "$STATUS_FILE" --check-env "$CHECK_FILE" \
-    --sets-dir "$SETS_DIR" --out-dir "$out_dir" --date "$date_s" --host "$(hostname)" --disk-pct "${pct:-0}" \
+    --r2-env "$R2_FILE" --drill-env "$DRILL_FILE" --sets-dir "$SETS_DIR" --out-dir "$out_dir" --date "$date_s" --host "$(hostname)" --disk-pct "${pct:-0}" \
     ${off_args[@]+"${off_args[@]}"} ${extra[@]+"${extra[@]}"} || rc=$?
   [ "$rc" = 0 ] || warn "report email not sent (rc=$rc)"
 }
@@ -571,4 +679,6 @@ case "$MODE" in
   check) mode_check ;;
   bundle) mode_bundle ;;
   offsite) mode_offsite ;;
+  pgcfg) mode_pgcfg ;;
+  drill) mode_drill ;;
 esac

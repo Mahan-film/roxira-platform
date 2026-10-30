@@ -1,0 +1,13 @@
+[Unit]
+Description=Roxira hourly encrypted Postgres + configs copy to R2
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/opt/roxira_platform/scripts/ops/backup/server_backup.sh pgcfg
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=30min

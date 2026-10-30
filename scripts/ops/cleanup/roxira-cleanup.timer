@@ -1,0 +1,11 @@
+# Every 2 days at 05:40 UTC (odd days of the month; the day after the 31st is the 1st, so a 1-day gap happens once a month).
+[Unit]
+Description=Run the Roxira automatic cleanup every 2 days
+
+[Timer]
+OnCalendar=*-*-01/2 05:40:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

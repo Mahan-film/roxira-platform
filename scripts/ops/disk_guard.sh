@@ -24,7 +24,7 @@
 #
 # Env overrides (defaults are the production paths): DF_BIN, DOCKER_BIN, DU_BIN, GIT_BIN, SUDO_BIN,
 # TASKQ_DB, WORKTREE_ROOT, REPO_GIT, AGENT_USER, DEPLOY_STATE, LOG_FILE, NOTIFY_BIN, ROOT_MOUNT,
-# THRESHOLD_CLEANUP, THRESHOLD_ALERT, KEEP_STORAGE, WORKTREE_MAX_AGE_DAYS.
+# THRESHOLD_CLEANUP, THRESHOLD_ALERT, KEEP_STORAGE, WORKTREE_MAX_AGE_DAYS, WORKTREES_ONLY (1 = skip the build-cache prune).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -128,7 +128,9 @@ if [ "$use_before" -lt "$THRESHOLD_CLEANUP" ]; then
   exit 0
 fi
 
-if command -v "$DOCKER_BIN" >/dev/null 2>&1; then
+if [ "${WORKTREES_ONLY:-0}" = 1 ]; then
+  log "WORKTREES_ONLY=1: skipping the build-cache prune (cleanup_2d.sh does its own)"
+elif command -v "$DOCKER_BIN" >/dev/null 2>&1; then
   log "pruning docker build cache (keep-storage $KEEP_STORAGE; images/volumes/containers untouched)"
   run "$DOCKER_BIN" builder prune -f --keep-storage "$KEEP_STORAGE" || log "WARNING: build-cache prune failed"
 else

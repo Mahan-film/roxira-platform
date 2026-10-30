@@ -1,0 +1,14 @@
+# Automatic cleanup of srv1 (docs/strategy/MASTER_STRATEGY_2026-10-30.md section 3). Never touches volumes,
+# data/, ~/Backups, :prev images or running containers. Installed by scripts/ops/backup/install_schedule.sh.
+[Unit]
+Description=Roxira automatic cleanup (build cache, dangling and rxtest images, journal, finished agent worktrees)
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+EnvironmentFile=-/opt/roxira_platform/.env
+ExecStart=/usr/bin/env bash /opt/roxira_platform/scripts/ops/cleanup_2d.sh --apply
+TimeoutStartSec=30min
+Nice=15
+IOSchedulingClass=idle

@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira backup restore drill weekly (Sunday 05:10 UTC, before the 06:30 report)
+
+[Timer]
+OnCalendar=Sun *-*-* 05:10:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
