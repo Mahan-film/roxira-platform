@@ -32,10 +32,10 @@ function VerifyEmail() {
   }, [token]);
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0B111F] p-8 text-center shadow-2xl">
+    <div className="w-full max-w-md rounded-2xl border border-[var(--gh-border)] bg-[var(--gh-bg-2)] p-8 text-center shadow-2xl">
       {state.kind === "loading" && (
         <>
-          <Loader2 className="mx-auto size-10 animate-spin text-[#fbbf24]" />
+          <Loader2 className="mx-auto size-10 animate-spin text-[var(--gh-gold)]" />
           <p className="mt-4 text-sm text-slate-300">در حال تأیید ایمیل…</p>
         </>
       )}
@@ -58,7 +58,7 @@ function VerifyEmail() {
       )}
       <Link
         href="/"
-        className="mt-6 inline-block rounded-xl bg-[#fbbf24] px-6 py-2.5 text-sm font-bold text-[#05080f] hover:bg-[#f59e0b]"
+        className="mt-6 inline-block rounded-xl bg-[var(--gh-gold)] px-6 py-2.5 text-sm font-bold text-[var(--gh-on-gold)] hover:bg-[var(--gh-gold-strong)]"
       >
         ورود به قاضی هوشمند
       </Link>
@@ -68,8 +68,8 @@ function VerifyEmail() {
 
 export default function VerifyEmailPage() {
   return (
-    <main dir="rtl" className="flex min-h-screen items-center justify-center bg-[#05080f] p-4">
-      <Suspense fallback={<Loader2 className="size-8 animate-spin text-[#fbbf24]" />}>
+    <main dir="rtl" className="ghazi-theme flex min-h-screen items-center justify-center bg-[var(--gh-bg)] p-4">
+      <Suspense fallback={<Loader2 className="size-8 animate-spin text-[var(--gh-gold)]" />}>
         <VerifyEmail />
       </Suspense>
     </main>

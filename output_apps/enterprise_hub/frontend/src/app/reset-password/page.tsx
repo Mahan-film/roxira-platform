@@ -47,7 +47,7 @@ function ResetPassword() {
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0B111F] p-8 shadow-2xl">
+    <div className="w-full max-w-md rounded-2xl border border-[var(--gh-border)] bg-[var(--gh-bg-2)] p-8 shadow-2xl">
       {done ? (
         <div className="text-center">
           <CheckCircle2 className="mx-auto size-10 text-emerald-400" />
@@ -55,7 +55,7 @@ function ResetPassword() {
           <p className="mt-2 text-sm text-slate-300">اکنون با رمز جدید وارد شوید (برگهٔ ایمیل).</p>
           <Link
             href="/"
-            className="mt-6 inline-block rounded-xl bg-[#fbbf24] px-6 py-2.5 text-sm font-bold text-[#05080f] hover:bg-[#f59e0b]"
+            className="mt-6 inline-block rounded-xl bg-[var(--gh-gold)] px-6 py-2.5 text-sm font-bold text-[var(--gh-on-gold)] hover:bg-[var(--gh-gold-strong)]"
           >
             ورود به قاضی هوشمند
           </Link>
@@ -102,12 +102,12 @@ function ResetPassword() {
           <Button
             type="submit"
             disabled={loading}
-            className="h-11 w-full bg-[#fbbf24] font-bold text-[#05080f] hover:bg-[#f59e0b]"
+            className="h-11 w-full bg-[var(--gh-gold)] font-bold text-[var(--gh-on-gold)] hover:bg-[var(--gh-gold-strong)]"
           >
             {loading ? <Loader2 className="size-4 animate-spin" /> : "ذخیرهٔ رمز جدید"}
           </Button>
           <p className="text-center text-xs">
-            <Link href="/" className="text-[#38bdf8] hover:underline">
+            <Link href="/" className="text-[var(--gh-cyan)] hover:underline">
               بازگشت به صفحهٔ اصلی
             </Link>
           </p>
@@ -119,8 +119,8 @@ function ResetPassword() {
 
 export default function ResetPasswordPage() {
   return (
-    <main dir="rtl" className="flex min-h-screen items-center justify-center bg-[#05080f] p-4">
-      <Suspense fallback={<Loader2 className="size-8 animate-spin text-[#fbbf24]" />}>
+    <main dir="rtl" className="ghazi-theme flex min-h-screen items-center justify-center bg-[var(--gh-bg)] p-4">
+      <Suspense fallback={<Loader2 className="size-8 animate-spin text-[var(--gh-gold)]" />}>
         <ResetPassword />
       </Suspense>
     </main>

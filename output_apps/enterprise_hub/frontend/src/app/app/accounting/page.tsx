@@ -17,6 +17,7 @@ import { TrialBalanceTable } from "@/components/accounting/trial-balance-table";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -100,14 +101,24 @@ export default function SuiteAccountingPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {accounts.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-mono text-xs">{a.code}</TableCell>
-                    <TableCell className="font-medium">{a.name}</TableCell>
-                    <TableCell>{ACCOUNT_TYPE_LABELS[a.accountType]}</TableCell>
-                    <TableCell>{formatMoneyRial(a.balance)}</TableCell>
-                  </TableRow>
-                ))}
+                {loading && accounts.length === 0
+                  ? Array.from({ length: 6 }).map((_, index) => (
+                      <TableRow key={`skeleton-${index}`}>
+                        {Array.from({ length: 4 }).map((__, cellIndex) => (
+                          <TableCell key={cellIndex}>
+                            <Skeleton className="h-4 w-full" />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  : accounts.map((a) => (
+                      <TableRow key={a.id}>
+                        <TableCell className="font-mono text-xs">{a.code}</TableCell>
+                        <TableCell className="font-medium">{a.name}</TableCell>
+                        <TableCell>{ACCOUNT_TYPE_LABELS[a.accountType]}</TableCell>
+                        <TableCell>{formatMoneyRial(a.balance)}</TableCell>
+                      </TableRow>
+                    ))}
               </TableBody>
             </Table>
           </Card>
