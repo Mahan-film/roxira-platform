@@ -89,3 +89,13 @@ export OPENAI_API_KEY=$KEYPOOL_MASTER_KEY
 # model = group name: "agent-free" for dev work, "private" for customer data
 ```
 Any OpenAI SDK works unchanged. Without the gateway copy `llm_pool.py`/`key_pool.yaml` or call `llm.sh`.
+
+## Upgrading the LiteLLM image
+
+`python3 scripts/infra/key_pool/upgrade.py` (run on srv1 from the repo checkout). Default = canary only: it
+renders the current `config/key_pool.yaml`, starts the pinned `gateway.image` beside the live gateway on a free
+loopback port (14010-14014), tests models list, chat, `/v1/embeddings` to TEI (single, batch, float, parity with the
+live gateway), ladders and cost logging, prints a PASS/FAIL table and removes the canary. `--plan` changes nothing,
+`--apply` switches `127.0.0.1:4000` only if the table is all PASS (backup in `generated/.rollback/`, automatic
+rollback if the live smoke test fails), `--rollback` restores the newest backup by the old image ID. Disk guard:
+refuses below 5.5 GB free before the pull and below 1.5 GB after it. The old image is never removed by the script.
