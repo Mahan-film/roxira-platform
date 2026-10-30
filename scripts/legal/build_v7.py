@@ -651,12 +651,27 @@ def embed_text(row: dict) -> str:
 
 
 def make_embedder(backend: str | None = None):
-    """Return an embed callable: CF first with TEI/local fallback when ``EMBED_BACKEND=cf``."""
+    """Return an embed callable: CF first with TEI/local fallback when ``EMBED_BACKEND=cf``.
+
+    ``EMBED_BACKEND=modal`` sends batches to the Modal GPU function (scripts/infra/modal_embed.py), but only
+    after the parity test passed once and the operator set ``MODAL_PARITY_OK=1``
+    (docs/infra/MODAL_EMBED_PARITY.md). Any Modal failure falls back to TEI/local.
+    """
     chosen = (
         backend if backend is not None else os.environ.get("EMBED_BACKEND", "")
     ).strip().lower()
 
+    if chosen == "modal" and os.environ.get("MODAL_PARITY_OK", "").strip() != "1":
+        raise Refusal(
+            "EMBED_BACKEND=modal needs MODAL_PARITY_OK=1 after the parity test (docs/infra/MODAL_EMBED_PARITY.md)"
+        )
+
     def _embed(texts: list[str]) -> list[list[float]]:
+        if chosen == "modal":
+            try:
+                return ip._embed_modal(texts)
+            except Exception as exc:  # noqa: BLE001
+                print(f"warning: Modal embed unavailable ({exc}); TEI/local fallback", file=sys.stderr)
         if chosen == "cf":
             try:
                 return cf_embed(texts)

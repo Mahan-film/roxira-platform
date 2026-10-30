@@ -169,3 +169,95 @@ def test_httpx_search_falls_over_to_cloud(monkeypatch):
     assert rows[0]["law_name"] == "y"
     assert calls[-1][1] == {"api-key": "k-test"}
     assert all(h == {} for _, h in calls[:-1])
+
+
+def test_rulings_scroll_falls_over_to_cloud(monkeypatch):
+    from output_apps.generated_modules.smartjudge import rulings_retrieval as rr
+
+    monkeypatch.setenv("QDRANT_CLOUD_URL", CLOUD)
+    monkeypatch.setenv("QDRANT_CLOUD_API_KEY", "k-test")
+    rr._LATEST_CACHE.clear()
+    calls = []
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {"result": {"points": [{"payload": {"ruling_no": "77", "date": "1404/01/01"}}]}}
+
+    class Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            calls.append((url, headers))
+            if url.startswith(CLOUD):
+                return Resp()
+            raise ConnectionError("refused")
+
+    monkeypatch.setitem(sys.modules, "httpx", types.SimpleNamespace(AsyncClient=Client))
+    rows = asyncio.run(rr.latest_rulings(limit=5, sub_collection=None, coll_name="iran_rulings_v1"))
+    assert any(u.startswith(CLOUD) for u, _ in calls)
+    assert calls[-1][1] == {"api-key": "k-test"}
+    assert rows
+
+
+def _scroll_client(pages, sent):
+    class Resp:
+        status_code = 200
+
+        def __init__(self, body):
+            self._b = body
+
+        def json(self):
+            return {"result": self._b}
+
+    class Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            sent.append(dict(json))
+            return Resp(pages[len(sent) - 1] if len(sent) <= len(pages) else {"points": []})
+
+    return Client
+
+
+def test_rulings_scroll_sends_server_filter_and_pages(monkeypatch):
+    from output_apps.generated_modules.smartjudge import rulings_retrieval as rr
+
+    rr._LATEST_CACHE.clear()
+    sent = []
+    pages = [
+        {"points": [{"payload": {"sub_collection": "unity_rulings", "ruling_no": "1"}}], "next_page_offset": 7},
+        {"points": [{"payload": {"sub_collection": "unity_rulings", "ruling_no": "2"}}]},
+    ]
+    monkeypatch.setitem(sys.modules, "httpx", types.SimpleNamespace(AsyncClient=_scroll_client(pages, sent)))
+    rows = asyncio.run(rr.latest_rulings(limit=5, sub_collection="unity_rulings", coll_name="iran_rulings_v1"))
+    assert len(rows) == 2
+    assert "filter" in sent[0] and sent[1]["offset"] == 7
+
+
+def test_rulings_empty_result_is_not_cached(monkeypatch):
+    from output_apps.generated_modules.smartjudge import rulings_retrieval as rr
+
+    rr._LATEST_CACHE.clear()
+    monkeypatch.setitem(
+        sys.modules, "httpx", types.SimpleNamespace(AsyncClient=_scroll_client([{"points": []}], []))
+    )
+    monkeypatch.chdir("/")
+    monkeypatch.setattr(rr.os.path, "exists", lambda p: False)
+    rows = asyncio.run(rr.latest_rulings(limit=5, sub_collection="admin_court_board", coll_name="x"))
+    assert rows == [] and not rr._LATEST_CACHE

@@ -263,6 +263,20 @@ def parse_and_sort(rows: Iterable[dict]) -> List[dict]:
 
 
 _LATEST_CACHE: Dict[str, tuple[float, List[dict]]] = {}
+_SCROLL_PAGE = 500
+_SCROLL_MAX_PAGES = 10
+
+
+def _scroll_filter(sub_collection: Optional[str]) -> Optional[dict]:
+    """Server-side narrowing for the latest-rulings scroll, so the page limit cannot hide matching rows."""
+    if sub_collection in ("unity_rulings", "unity_supreme_court"):
+        pairs = [("sub_collection", "unity_rulings"), ("ruling_type", "unity_supreme_court")]
+    elif sub_collection in ("admin_court_board", "admin_court"):
+        pairs = [("sub_collection", "admin_court_board"), ("ruling_type", "admin_court"),
+                 ("ruling_type", "admin_court_board")]
+    else:
+        return None
+    return {"should": [{"key": k, "match": {"value": v}} for k, v in pairs]}
 _CACHE_TTL_S = 600.0
 
 
@@ -289,15 +303,42 @@ async def latest_rulings(
     try:
         from output_apps.generated_modules.smartjudge.legal_graph import lightrag_engine as eng
         import httpx
-        url = f"{eng.QDRANT_URL.rstrip('/')}/collections/{coll}/points/scroll"
+        body: Dict[str, Any] = {"limit": _SCROLL_PAGE, "with_payload": True, "with_vector": False}
+        server_filter = _scroll_filter(sub_collection)
+        if server_filter:
+            body["filter"] = server_filter
         async with httpx.AsyncClient(timeout=4.0) as client:
-            resp = await client.post(url, json={"limit": 200, "with_payload": True, "with_vector": False})
-            if resp.status_code == 200:
-                points = resp.json().get("result", {}).get("points", [])
-                for pt in points:
-                    payload = pt.get("payload")
-                    if isinstance(payload, dict):
-                        raw_payloads.append(payload)
+            # Local Qdrant first, then the read-only Qdrant Cloud replicas (same targets as the vector search).
+            for host, base, hdrs in eng._qdrant_targets():
+                try:
+                    pages = 0
+                    page_body = dict(body)
+                    while pages < _SCROLL_MAX_PAGES:
+                        resp = await client.post(
+                            f"{base}/collections/{coll}/points/scroll", json=page_body, headers=hdrs
+                        )
+                        if pages == 0 and eng._qcloud.skip_cloud_response(host, getattr(resp, "status_code", 0)):
+                            break
+                        if resp.status_code != 200:
+                            break
+                        result = resp.json().get("result", {})
+                        for pt in result.get("points", []):
+                            payload = pt.get("payload")
+                            if isinstance(payload, dict):
+                                raw_payloads.append(payload)
+                        pages += 1
+                        nxt = result.get("next_page_offset")
+                        if not nxt:
+                            break
+                        page_body["offset"] = nxt
+                    if pages:
+                        eng._qcloud.record(host, True)
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("rulings scroll host %s unreachable: %s", host, exc)
+                    eng._qcloud.record(host, False, type(exc).__name__)
+                    continue
+                if raw_payloads:
+                    break
     except Exception as exc:
         logger.debug("Qdrant scroll offline or failed: %s", exc)
 
@@ -348,6 +389,7 @@ async def latest_rulings(
     # 4. Sort descending by date and number
     sorted_items = parse_and_sort(filtered)
     rows = [payload_to_row(p) for p in sorted_items[:limit]]
-    _LATEST_CACHE[cache_key] = (now, rows)
+    if rows:  # never cache an empty answer: a transient outage would hide rulings for the whole TTL
+        _LATEST_CACHE[cache_key] = (now, rows)
     return rows
 

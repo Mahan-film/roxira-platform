@@ -646,3 +646,29 @@ def test_embed_text_is_truncated_for_the_embedder_only():
     assert len(b7.embed_text(row)) == b7.EMBED_CHARS == 2000
     assert len(row["text"]) == 9000
     assert b7.embed_text({}) == ""
+
+
+# ---------------------------------------------------------------- Modal batch embedding gate
+def test_modal_backend_refused_without_parity_marker(monkeypatch):
+    monkeypatch.delenv("MODAL_PARITY_OK", raising=False)
+    with pytest.raises(b7.Refusal):
+        b7.make_embedder("modal")
+
+
+def test_modal_backend_used_after_parity_and_falls_back_on_error(monkeypatch):
+    monkeypatch.setenv("MODAL_PARITY_OK", "1")
+    calls = []
+
+    def fake_modal(texts):
+        calls.append("modal")
+        return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setattr(b7.ip, "_embed_modal", fake_modal)
+    assert b7.make_embedder("modal")(["a", "b"]) == [[1.0, 0.0], [1.0, 0.0]]
+
+    def broken(texts):
+        raise RuntimeError("quota")
+
+    monkeypatch.setattr(b7.ip, "_embed_modal", broken)
+    monkeypatch.setattr(b7.ip, "default_embed", lambda texts: [[0.0, 1.0] for _ in texts])
+    assert b7.make_embedder("modal")(["a"]) == [[0.0, 1.0]]
