@@ -25,18 +25,9 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
   `scripts/infra/server_agents/agent_sandbox.sh`, `agent_egress.nft`, `install_agent_sandbox.sh` (`--remove` undoes it).
   All 23 control checks passed, and a gateway smoke run passed on 2026-10-30 (`agent-light-free`, 34 s). Its 5 files were copied from #883 by hand,
   because #883 is not merged. uid 999 (`roxira-agent`) is shared with the Redis containers, so `PrivatePIDs=yes` is required.
-- **Autodeploy cannot ship right now**: `/opt/roxira_platform` has about 35 uncommitted changes from 2026-10-24/25 (root:
-  `nginx.conf`, compose files, `models.yaml`, smartjudge, frontend), and `deploy_local.sh` refuses a dirty tree, so the next
-  commit on `main` will fail and be recorded as a failed SHA. Safe copy: branch `srv1-snapshot-2026-10-30` (eb6961de, 40
-  files including the #883 sandbox files, not for merge as is). These changes are live: the frontend and mail containers
-  were recreated after them, the running nginx has the `invoices` config, and `roxira_app_prod` restarted on 2026-10-24
-  with the repo mounted. Do not clean the tree: the next deploy would remove live features.
-- **Snapshot review**: frontend files match PR #871, now without the default `SANDBOX_JWT_SECRET` (set it on srv1 or token
-  routes fail closed), with limits on the two mail routes and the live judge nginx limit; about 18 eslint errors remain
-  (Antigravity A8). Mail is #885. Python is #884, safeguards restored, local CI green; VIP drafts return to V4 Pro first.
-  Merge order: #871 and #884 and #885, then reconcile srv1's tree; srv1 still runs the old code until then.
-- **Zilliz**: 5 keys in `roxira.env`, `scripts/ops/zilliz_ping.sh` reached all 5 on 2026-10-30, 0 collections. Not used by
-  the product.
+- **srv1 reconciled and deployed 2026-10-30**: main 8587906d is live with clean tree, smoke and Gate 4 passed. #871, #884,
+  #885, #883 and #887 merged. The first attempt rolled back on `roxira.net/admin`; #887 fixed it. srv1's old edits remain
+  in branch `srv1-snapshot-2026-10-30` and stash `srv1-pre-merge-2026-10-30`. VIP drafts use V4 Pro first.
 - **Egress firewall bug, fixed 2026-10-30**: the first ruleset rejected socketless kernel packets, which broke IPv6
   neighbor discovery and slowed host monitors by 6 s from about 16:50 UTC. The `jump agent` ruleset is loaded on srv1,
   23 of 23 sandbox checks pass and IPv6 works. Users saw 0.35 s throughout.

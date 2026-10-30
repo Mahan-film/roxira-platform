@@ -25,7 +25,8 @@ Results are from 2026-10-30, server 32 OK and 0 FAIL. "Mac only" means the serve
 | Qdrant Cloud | 1 (`3b06`) | server | OK | Nightly replica, failover | Slots `_2`..`_4` |
 | Qdrant Cloud `f866` (`_2`) | 1 | Mac only | OK | Ping only | Second laws replica |
 | Qdrant Cloud `boys` (`_3`) | 1 | Mac only | OK | Ping only | Third replica or personal projects |
-| Zilliz | 5 | Mac only | OK, 0 collections | Ping only | See below |
+| Qdrant Cloud `f6ed` (`_4`) | 1 | Mac, server after copy | OK | Ping | Fourth replica or global product |
+| Zilliz | 5 | Mac and server | OK, 0 collections | Ping only | See below |
 | Cloudflare AI | 1 | both | OK | Workers AI | Free extra rung |
 | R2 | 1 pair | server | Not tested, backups use it | Backups | Keep |
 | Neon | 1 | server | Used by nightly job | Offsite backup | Keep |

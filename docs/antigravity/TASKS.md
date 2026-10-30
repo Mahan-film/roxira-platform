@@ -86,6 +86,24 @@ the effect's dependency array, so typing in the AI box sends one request per key
 the AI verification on its existing submit handler. Keep `aiQuery` in `params` by reading it through a `useRef`, so
 `eslint` stays at 0 errors and 0 warnings. Change only that file.
 
+### A9. Tokens on the legal page shell
+From `origin/main`, id `a9`. In `src/components/legal/legal-page-shell.tsx`, replace raw colours such as `#050505` with the
+matching `.ghazi-theme` variables only if that class is already on the page root. If it is not, stop and report. Only
+`className` values may change, and the visual result must stay the same.
+
+### A10. Report tokens on the root error pages
+From `origin/main`, id `a10`. In `src/app/error.tsx` and `src/app/not-found.tsx`, replace `console.error(error)` with
+`reportClientError("boundary", error)` from `@/lib/observability/client-error-reporter` where an `error` prop exists.
+Change nothing else. `not-found.tsx` has no `error` prop: leave it unchanged.
+
+### A11. Add a missing error page for /judge
+From `origin/main`, id `a11`. Add `src/app/judge/error.tsx` following `src/app/chat/error.tsx`, with a link back to `/judge`.
+Change no other file.
+
+### A12. Logical properties on invoicing search
+From `origin/main`, id `a12`. In `src/app/app/invoicing/page.tsx`, change `right-2.5` to `start-2.5` on the search icon and
+`pr-8` to `ps-8` on the input. Change only those two classes.
+
 ### A5. Empty states in the business app (done, rejected: use A5R)
 `crm`, `hr` and `hr/payroll` already show an empty state. `inventory`, `invoicing` and `accounting` should too. Copy
 the crm pattern: when a list is empty, show one short Persian line and one action button or link that already exists
