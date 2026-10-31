@@ -12,11 +12,22 @@ export interface PackageColumn {
   type: string;
 }
 
+/**
+ * پیشنهاد خودِ خواننده برای موجودیت/نگاشت (مثلاً IIF یا OFX که ساختار آن‌ها در مشخصات رسمی
+ * تعریف شده است). تحلیل، این پیشنهاد را بر حدس مبتنی بر سربرگ ترجیح می‌دهد.
+ */
+export interface TableHint {
+  entity: string;
+  mapping: Record<string, string | null>;
+  reasonFa: string;
+}
+
 /** خوانندهٔ صفحه‌ای یک جدول؛ هرگز بیش از یک صفحه از یک جدول را در حافظه نمی‌خواهد. */
 export interface PackageTableReader {
   name: string;
   columns: PackageColumn[];
   rowCount: number;
+  hint?: TableHint;
   readPage(offset: number, limit: number): Record<string, unknown>[];
 }
 
@@ -33,6 +44,10 @@ export interface PackageRelationship {
 export interface ParsedPackage {
   tables: PackageTableReader[];
   relationships: PackageRelationship[];
+  /** شناسهٔ قالبِ تشخیص‌داده‌شده از روی محتوا (readers/reader.types.ts). */
+  formatId?: string;
+  /** یادداشت‌های فارسی خواننده (رمزگذاری، دستورهای نادیده‌گرفته‌شده، اصلاح حروف…). */
+  notes?: string[];
   close(): void;
 }
 
@@ -82,6 +97,7 @@ export class InMemoryTableReader implements PackageTableReader {
     readonly name: string,
     headers: string[],
     private readonly rows: string[][],
+    readonly hint?: TableHint,
   ) {
     const sample = rows.slice(0, 50);
     this.columns = headers.map((header, index) => ({

@@ -18,6 +18,7 @@
  */
 import {
   ApiClientError,
+  apiPutRaw,
   apiRequest,
   apiUpload,
   apiUploadWithProgress,
@@ -194,12 +195,17 @@ export function listImportBatches(
  * ------------------------------------------------------------------ */
 
 /** پسوندهای مجاز بستهٔ دیتابیس. */
-export const PACKAGE_ACCEPT = ".sqlite,.sqlite3,.db,.sql,.zip";
+export const PACKAGE_ACCEPT = "";
 
-/** سقف حجم بستهٔ دیتابیس: ۴۰ مگابایت (هماهنگ با IMPORT_MAX_PACKAGE_BYTES). */
-export const PACKAGE_MAX_BYTES = 40 * 1024 * 1024;
+/** سقف حجم هر فایل در بارگذاری تکه‌ای: ۱۲۰ مگابایت (هماهنگ با IMPORT_MAX_FILE_BYTES سرور). */
+export const PACKAGE_MAX_BYTES = 120 * 1024 * 1024;
 
-const PACKAGE_EXTENSIONS = ["sqlite", "sqlite3", "db", "sql", "zip"];
+/** سقف جمع حجم یک بستهٔ چندفایلی/پوشه: ۲۰۰ مگابایت و ۲۰۰ فایل. */
+export const PACKAGE_MAX_TOTAL_BYTES = 200 * 1024 * 1024;
+export const PACKAGE_MAX_FILES = 200;
+
+/** اندازهٔ هر تکه: ۴ مگابایت (کمتر از سقف ۱۰ مگابایتی پروکسی Next). */
+export const PACKAGE_CHUNK_BYTES = 4 * 1024 * 1024;
 
 export type ImportPackageStatus =
   | "analyzing"
@@ -223,6 +229,17 @@ export interface ImportPackageTable {
   mapping: Record<string, string | null>;
   skipped?: boolean;
   reason?: string;
+  mappingSource?: "heuristic" | "reader" | "profile" | "memory";
+  profileId?: string;
+  profileEvidence?: "proven" | "heuristic";
+  notesFa?: string[];
+  moneyUnit?: {
+    unit: "rial" | "toman" | "unknown";
+    toRial: number | null;
+    evidence: string;
+    column?: string;
+  };
+  dateSystem?: "jalali" | "gregorian" | "mixed" | "unknown";
 }
 
 export interface ImportPackageRelationship {
@@ -258,6 +275,8 @@ export interface ImportPackageDetail {
   relationships: ImportPackageRelationship[];
   health: { checks: ImportPackageHealthCheck[] };
   currencies: ImportPackageCurrency[];
+  /** قالب تشخیص‌داده‌شده از محتوا + یادداشت‌های خواننده. */
+  format?: { id: string; notes: string[] };
 }
 
 export interface ImportPackageCreated {
@@ -270,10 +289,55 @@ export interface ImportPackageCommitTable {
   entity: string;
   mapping: Record<string, string | null>;
   skip?: boolean;
+  /** ضریب تبدیل مبلغ‌های بدون واحد به ریال (۱۰ = تومان). */
+  moneyToRial?: number;
 }
 
 export interface ImportPackageCommitRequest {
   tables: ImportPackageCommitTable[];
+  /** فقط مدیر/مالک: ثبت با وجود عدم‌تراز. سرور دوباره می‌سنجد. */
+  confirmImbalance?: boolean;
+}
+
+export interface ImportTableReconciliation {
+  name: string;
+  entity: string;
+  rowCount: number;
+  validRows: number;
+  invalidRows: number;
+  duplicateRowsInFile: number;
+  unmappedColumns: string[];
+  moneyToRial: number;
+  totals?: { debit: number; credit: number; difference: number };
+  unbalancedVouchers?: number;
+  unbalancedSample?: Array<{ voucher: string; difference: number }>;
+  warningsFa: string[];
+}
+
+export interface ImportReconciliationReport {
+  key: string;
+  tables: ImportTableReconciliation[];
+  totals: { debit: number; credit: number; difference: number };
+  balanced: boolean;
+  blockersFa: string[];
+  warningsFa: string[];
+}
+
+export type ImportSupportStatus =
+  | "supported"
+  | "partial"
+  | "heuristic"
+  | "guide"
+  | "unsupported";
+
+export interface ImportSupportRow {
+  id: string;
+  group: string;
+  titleFa: string;
+  extensions: string[];
+  status: ImportSupportStatus;
+  detailFa: string;
+  fixture?: string;
 }
 
 export interface ImportPackageCommitResult {
@@ -306,19 +370,115 @@ export function packageEntityLabel(key: string): string {
   return PACKAGE_ENTITY_LABELS[key] ?? key;
 }
 
-/** Returns a Persian error message when the package file cannot be imported, else null. */
+/** پیام خطای فارسی برای فایلی که نمی‌شود فرستاد؛ قالب را سرور از روی «محتوا» تشخیص می‌دهد، نه پسوند. */
 export function validatePackageFile(file: File): string | null {
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (!PACKAGE_EXTENSIONS.includes(ext)) {
-    return "فرمت بسته پشتیبانی نمی‌شود. فقط sqlite، sqlite3، db، sql و zip پذیرفته می‌شود.";
-  }
   if (file.size === 0) {
     return "فایل خالی است.";
   }
   if (file.size > PACKAGE_MAX_BYTES) {
-    return "حجم بستهٔ دیتابیس بیش از ۴۰ مگابایت است.";
+    return `حجم فایل «${file.name}» بیش از ${Math.round(PACKAGE_MAX_BYTES / 1024 / 1024)} مگابایت است.`;
   }
   return null;
+}
+
+/** اعتبارسنجی مجموعهٔ فایل‌ها (پوشه یا چند فایل). */
+export function validatePackageFiles(files: File[]): string | null {
+  if (files.length === 0) return "فایلی انتخاب نشده است.";
+  if (files.length > PACKAGE_MAX_FILES) {
+    return `حداکثر ${PACKAGE_MAX_FILES} فایل در هر بسته مجاز است.`;
+  }
+  const total = files.reduce((sum, f) => sum + f.size, 0);
+  if (total > PACKAGE_MAX_TOTAL_BYTES) {
+    return `مجموع حجم فایل‌ها بیش از ${Math.round(PACKAGE_MAX_TOTAL_BYTES / 1024 / 1024)} مگابایت است.`;
+  }
+  for (const file of files) {
+    const invalid = validatePackageFile(file);
+    if (invalid) return invalid;
+  }
+  return null;
+}
+
+interface UploadStatus {
+  uploadId: string;
+  chunkSize: number;
+  totalChunks: number;
+  missing: number[];
+}
+
+const CHUNK_RETRIES = 3;
+
+/**
+ * بارگذاری تکه‌ای و قابل‌ازسرگیری یک فایل. اگر اتصال قطع شود، وضعیت سرور خوانده می‌شود و فقط تکه‌های
+ * جاافتاده دوباره فرستاده می‌شوند. شناسهٔ بارگذاری برگردانده می‌شود.
+ */
+export async function uploadFileChunked(
+  file: File,
+  options: UploadProgressOptions = {},
+): Promise<string> {
+  const init = await apiRequest<UploadStatus>(`${BASE}/uploads`, {
+    method: "POST",
+    body: { fileName: file.name, size: file.size, chunkSize: PACKAGE_CHUNK_BYTES },
+    signal: options.signal,
+  });
+  let status = init;
+  let sent = init.totalChunks - init.missing.length;
+  for (let attempt = 0; status.missing.length > 0; attempt += 1) {
+    if (attempt > CHUNK_RETRIES) {
+      throw new ApiClientError(0, { message: "ارتباط با سرور بارها قطع شد؛ بارگذاری ناتمام ماند." });
+    }
+    try {
+      for (const index of status.missing) {
+        const blob = file.slice(index * status.chunkSize, (index + 1) * status.chunkSize);
+        await apiPutRaw<UploadStatus>(
+          `${BASE}/uploads/${encodeURIComponent(init.uploadId)}/chunks/${index}`,
+          blob,
+          options.signal,
+        );
+        sent += 1;
+        options.onProgress?.(Math.round((sent / init.totalChunks) * 100));
+      }
+      status = { ...status, missing: [] };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      if (error instanceof ApiClientError && error.statusCode >= 400 && error.statusCode < 500) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+      status = await apiRequest<UploadStatus>(
+        `${BASE}/uploads/${encodeURIComponent(init.uploadId)}`,
+        { signal: options.signal },
+      );
+      sent = status.totalChunks - status.missing.length;
+    }
+  }
+  return init.uploadId;
+}
+
+/** ساخت بسته از بارگذاری‌های تکه‌ای کامل (یک فایل، چند فایل یا پوشه). */
+export function createImportPackageFromUploads(
+  uploadIds: string[],
+  signal?: AbortSignal,
+): Promise<ImportPackageCreated> {
+  return apiRequest<ImportPackageCreated>(`${BASE}/packages/from-uploads`, {
+    method: "POST",
+    body: { uploadIds },
+    signal,
+  });
+}
+
+/** مغایرت‌گیری پیش از ثبت. */
+export function reconcileImportPackage(
+  packageId: string,
+  payload: ImportPackageCommitRequest,
+  signal?: AbortSignal,
+): Promise<ImportReconciliationReport> {
+  return apiRequest<ImportReconciliationReport>(
+    `${BASE}/packages/${encodeURIComponent(packageId)}/reconcile`,
+    { method: "POST", body: payload, signal },
+  );
+}
+
+/** جدول صادقانهٔ قالب‌های پشتیبانی‌شده (از سرور؛ منبع حقیقت). */
+export function listImportFormats(signal?: AbortSignal): Promise<ImportSupportRow[]> {
+  return apiRequest<ImportSupportRow[]>(`${BASE}/formats`, { signal });
 }
 
 /** بارگذاری بستهٔ دیتابیس و آغاز تحلیل در پس‌زمینه. */

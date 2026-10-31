@@ -13,6 +13,11 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { InvoicingModule } from '../invoicing/invoicing.module';
 import { PACKAGE_QUEUE_NAME } from './constants/package-import.constants';
 import { DataImportController } from './controllers/data-import.controller';
+import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.entity';
+import { ImportMappingMemoryRepository } from './repositories/import-mapping-memory.repository';
+import { ChunkedUploadService } from './services/chunked-upload.service';
+import { MappingMemoryService } from './services/mapping-memory.service';
+import { PackageReconciliationService } from './services/package-reconciliation.service';
 import { DataImportBatchItemEntity } from './entities/data-import-batch-item.entity';
 import { DataImportBatchEntity } from './entities/data-import-batch.entity';
 import { PackageImportProcessor } from './processors/package-import.processor';
@@ -68,6 +73,7 @@ import { UploadStoreService } from './services/upload-store.service';
     TypeOrmModule.forFeature([
       DataImportBatchEntity,
       DataImportBatchItemEntity,
+      ImportMappingMemoryEntity,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -99,6 +105,10 @@ import { UploadStoreService } from './services/upload-store.service';
     PackageCommitService,
     PackageImportService,
     PackageImportProcessor,
+    ChunkedUploadService,
+    PackageReconciliationService,
+    MappingMemoryService,
+    ImportMappingMemoryRepository,
     EntityRegistryService,
     CrmLeadsRegistry,
     HrEmployeesRegistry,

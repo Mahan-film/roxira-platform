@@ -40,6 +40,27 @@ export class PackageTableStatusDto {
 
   @ApiProperty({ required: false })
   reason?: string;
+
+  @ApiProperty({ required: false, description: 'امضای سربرگ‌ها برای حافظهٔ نگاشت' })
+  signature?: string;
+
+  @ApiProperty({ required: false, enum: ['heuristic', 'reader', 'profile', 'memory'] })
+  mappingSource?: 'heuristic' | 'reader' | 'profile' | 'memory';
+
+  @ApiProperty({ required: false })
+  profileId?: string;
+
+  @ApiProperty({ required: false, enum: ['proven', 'heuristic'] })
+  profileEvidence?: 'proven' | 'heuristic';
+
+  @ApiProperty({ required: false, type: [String] })
+  notesFa?: string[];
+
+  @ApiProperty({ required: false, type: Object, description: 'واحد مبلغ تشخیص‌داده‌شده (rial/toman/unknown)' })
+  moneyUnit?: { unit: 'rial' | 'toman' | 'unknown'; toRial: number | null; evidence: string; column?: string };
+
+  @ApiProperty({ required: false, enum: ['jalali', 'gregorian', 'mixed', 'unknown'] })
+  dateSystem?: 'jalali' | 'gregorian' | 'mixed' | 'unknown';
 }
 
 export class PackageRelationshipDto {
@@ -126,6 +147,9 @@ export class PackageStatusDto {
 
   @ApiProperty({ type: [PackageCurrencyDto] })
   currencies: PackageCurrencyDto[];
+
+  @ApiProperty({ required: false, type: Object, description: 'قالب تشخیص‌داده‌شده از محتوا + یادداشت‌های خواننده' })
+  format?: { id: string; notes: string[] };
 }
 
 export class PackageCommitResponseDto {
@@ -151,4 +175,28 @@ export class PackageProgressDto {
 
   @ApiProperty({ type: [String] })
   errors: string[];
+}
+
+export class TableReconciliationDto {
+  @ApiProperty() name: string;
+  @ApiProperty() entity: string;
+  @ApiProperty() rowCount: number;
+  @ApiProperty() validRows: number;
+  @ApiProperty() invalidRows: number;
+  @ApiProperty() duplicateRowsInFile: number;
+  @ApiProperty({ type: [String] }) unmappedColumns: string[];
+  @ApiProperty() moneyToRial: number;
+  @ApiProperty({ required: false, type: Object }) totals?: { debit: number; credit: number; difference: number };
+  @ApiProperty({ required: false }) unbalancedVouchers?: number;
+  @ApiProperty({ required: false, type: [Object] }) unbalancedSample?: Array<{ voucher: string; difference: number }>;
+  @ApiProperty({ type: [String] }) warningsFa: string[];
+}
+
+export class ReconciliationReportDto {
+  @ApiProperty() key: string;
+  @ApiProperty({ type: [TableReconciliationDto] }) tables: TableReconciliationDto[];
+  @ApiProperty({ type: Object }) totals: { debit: number; credit: number; difference: number };
+  @ApiProperty() balanced: boolean;
+  @ApiProperty({ type: [String] }) blockersFa: string[];
+  @ApiProperty({ type: [String] }) warningsFa: string[];
 }

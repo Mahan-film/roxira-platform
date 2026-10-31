@@ -1,9 +1,13 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import * as fsSync from 'fs';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { analysePackage } from '../analysis/package-analysis';
+import { enrichTables } from '../analysis/enrich';
 import { ParsedPackage } from '../parsers/package-source.types';
-import { openSqlDump, SqlDumpParseError } from '../parsers/sql-dump.parser';
-import { openSqlite, SqliteParseError } from '../parsers/sqlite.parser';
-import { parseZipPackage, ZipPackageError } from '../parsers/zip.parser';
+import { SqlDumpParseError } from '../parsers/sql-dump.parser';
+import { SqliteParseError } from '../parsers/sqlite.parser';
+import { ZipPackageError } from '../parsers/zip.parser';
+import { readFormat, readFormatAs, readMultiFiles } from '../readers/format-registry';
+import { MappingMemoryService } from './mapping-memory.service';
 import { EntityRegistryService } from '../registry/entity-registry.service';
 import {
   PackageKind,
@@ -23,22 +27,34 @@ export class PackageAnalysisService {
   constructor(
     private readonly store: PackageStoreService,
     private readonly registry: EntityRegistryService,
+    @Optional() private readonly memory?: MappingMemoryService,
   ) {}
 
-  /** تجزیهٔ بایت‌های بسته به جداول صفحه‌ای بر پایهٔ نوع آن. */
+  /** تجزیهٔ بایت‌های بسته به جداول صفحه‌ای؛ قالب از روی «محتوا» تشخیص داده می‌شود. */
   async parsePackageBuffer(
     buffer: Buffer,
     fileName: string,
     kind?: PackageKind,
   ): Promise<ParsedPackage> {
-    const resolved = kind ?? detectPackageKind(fileName, buffer);
-    if (resolved === 'sqlite') {
-      return openSqlite(buffer);
+    return kind && kind !== 'multi' && kind !== 'unknown'
+      ? readFormatAs(kind, buffer, fileName)
+      : readFormat(buffer, fileName);
+  }
+
+  /** باز کردن بستهٔ ذخیره‌شده (تک‌فایلی یا چندفایلی) به جداول صفحه‌ای. */
+  async openPackage(state: PackageState): Promise<ParsedPackage> {
+    if (state.kind === 'multi' && state.parts) {
+      const parts = state.parts;
+      return readMultiFiles(parts.length, (index) => {
+        try {
+          return { name: parts[index], buffer: fsSync.readFileSync(this.store.partFilePath(state.tenantId, state.packageId, index)) };
+        } catch {
+          return null;
+        }
+      });
     }
-    if (resolved === 'sql') {
-      return openSqlDump(buffer.toString('utf8'));
-    }
-    return parseZipPackage(buffer);
+    const buffer = await this.store.readSource(state.tenantId, state.packageId);
+    return this.parsePackageBuffer(buffer, state.fileName, state.kind);
   }
 
   /** تحلیل کامل یک بسته و ثبت وضعیت «آماده» یا «ناموفق». */
@@ -47,20 +63,23 @@ export class PackageAnalysisService {
     if (!state) {
       throw new BadRequestException('این بسته یافت نشد یا منقضی شده است.');
     }
-    const buffer = await this.store.readSource(tenantId, packageId);
 
     try {
-      const parsed = await this.parsePackageBuffer(
-        buffer,
-        state.fileName,
-        state.kind,
-      );
+      const parsed = await this.openPackage(state);
       try {
-        state.analysis = analysePackage(
+        const analysis = analysePackage(
           parsed.tables,
           this.registry.all(),
           parsed.relationships,
         );
+        analysis.tables = await enrichTables(
+          parsed.tables,
+          analysis.tables,
+          this.registry.all(),
+          this.memory ? (signature) => this.memory!.recall(tenantId, signature) : undefined,
+        );
+        analysis.format = { id: parsed.formatId ?? state.kind, notes: parsed.notes ?? [] };
+        state.analysis = analysis;
         state.status = 'ready';
         state.error = undefined;
       } finally {

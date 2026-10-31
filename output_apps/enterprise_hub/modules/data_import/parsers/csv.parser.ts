@@ -119,8 +119,10 @@ export function parseCsv(
       continue;
     }
 
-    if (char === '"') {
+    if (char === '"' && field.trim() === '') {
+      // RFC 4180: a quote opens a quoted field only at the start of the field; 5" or ="x" stay literal.
       inQuotes = true;
+      field = '';
       index += 1;
       continue;
     }

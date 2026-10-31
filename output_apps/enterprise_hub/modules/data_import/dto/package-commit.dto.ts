@@ -2,6 +2,8 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsIn,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -28,6 +30,12 @@ export class PackageCommitTableDto {
   @IsOptional()
   @IsBoolean()
   skip?: boolean;
+
+  /** ضریب تبدیل مبلغ‌های بدون واحد به ریال: ۱ ریال، ۱۰ تومان، ۱۰۰۰ هزار ریال، … */
+  @IsOptional()
+  @IsNumber()
+  @IsIn([1, 10, 1000, 10000, 1000000, 10000000])
+  moneyToRial?: number;
 }
 
 /** بدنهٔ درخواست ثبت نهایی بسته. */
@@ -36,4 +44,12 @@ export class PackageCommitDto {
   @ValidateNested({ each: true })
   @Type(() => PackageCommitTableDto)
   tables: PackageCommitTableDto[];
+
+  /**
+   * تأیید ثبت با وجود عدم‌تراز در مغایرت‌گیری. فقط وقتی اثر دارد که فراخواننده مدیر پلتفرم یا
+   * مالک سازمان باشد؛ سرور خودش تراز را دوباره می‌سنجد و به ادعای کلاینت اعتماد نمی‌کند.
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirmImbalance?: boolean;
 }

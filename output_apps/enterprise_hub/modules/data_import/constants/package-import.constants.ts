@@ -97,3 +97,44 @@ export function packageTmpRoot(): string {
   }
   return path.join(os.tmpdir(), 'roxira-import');
 }
+
+/* ---------------------- بارگذاری تکه‌ای (chunked) و سقف‌ها ---------------------- */
+
+/** سقف پیش‌فرض هر فایل در بارگذاری تکه‌ای: ۱۲۰ مگابایت (خواننده‌ها کل فایل را در حافظه می‌خوانند). */
+export const DEFAULT_MAX_CHUNKED_FILE_BYTES = 120 * 1024 * 1024;
+
+/** سقف پیش‌فرض جمع بایت‌های یک بستهٔ چندفایلی: ۲۰۰ مگابایت. */
+export const DEFAULT_MAX_MULTI_PACKAGE_BYTES = 200 * 1024 * 1024;
+
+/** سقف پیش‌فرض کل فضای موقت ورود داده روی دیسک: ۲ گیگابایت. */
+export const DEFAULT_MAX_TMP_BYTES = 2 * 1024 * 1024 * 1024;
+
+/** کف فضای آزاد دیسک که بارگذاری هرگز زیر آن نمی‌رود: ۴ گیگابایت. */
+export const DEFAULT_MIN_FREE_DISK_BYTES = 4 * 1024 * 1024 * 1024;
+
+/** اندازهٔ تکه: پیش‌فرض ۸ مگابایت، حداقل ۲۵۶ کیلوبایت. */
+export const DEFAULT_CHUNK_BYTES = 8 * 1024 * 1024;
+export const MIN_CHUNK_BYTES = 256 * 1024;
+export const MAX_CHUNK_BYTES = 8 * 1024 * 1024;
+
+/** حداکثر تعداد فایل در یک بستهٔ چندفایلی (پوشه). */
+export const MAX_MULTI_FILES = 200;
+
+/** حداکثر بارگذاری‌های ناتمام همزمان هر مستأجر. */
+export const MAX_ACTIVE_UPLOADS_PER_TENANT = 250;
+
+export function maxChunkedFileBytes(): number {
+  return readPositiveLimit('IMPORT_MAX_FILE_BYTES', DEFAULT_MAX_CHUNKED_FILE_BYTES);
+}
+
+export function maxMultiPackageBytes(): number {
+  return readPositiveLimit('IMPORT_MAX_MULTI_BYTES', DEFAULT_MAX_MULTI_PACKAGE_BYTES);
+}
+
+export function maxTmpBytes(): number {
+  return readPositiveLimit('IMPORT_TMP_MAX_BYTES', DEFAULT_MAX_TMP_BYTES);
+}
+
+export function minFreeDiskBytes(): number {
+  return readPositiveLimit('IMPORT_MIN_FREE_DISK_BYTES', DEFAULT_MIN_FREE_DISK_BYTES);
+}

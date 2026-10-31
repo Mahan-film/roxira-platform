@@ -1,0 +1,7 @@
+<html><head><meta charset="utf-8"></head><body><table>
+<tr><th>شماره سند</th><th>تاریخ</th><th>کد حساب</th><th>بدهکار</th><th>بستانکار</th><th>شرح</th></tr>
+<tr><td>JV-1</td><td>1403/07/15</td><td>1101</td><td>5000000</td><td>0</td><td>دریافت نقدی</td></tr>
+<tr><td>JV-1</td><td>1403/07/15</td><td>4101</td><td>0</td><td>5000000</td><td>فروش نقدی</td></tr>
+<tr><td>JV-2</td><td>1403/07/16</td><td>5101</td><td>1200000</td><td>0</td><td>هزینه حمل</td></tr>
+<tr><td>JV-2</td><td>1403/07/16</td><td>1101</td><td>0</td><td>1200000</td><td>پرداخت نقدی</td></tr>
+</table></body></html>

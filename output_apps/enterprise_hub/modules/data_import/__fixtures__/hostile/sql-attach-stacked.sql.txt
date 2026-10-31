@@ -1,0 +1,5 @@
+PRAGMA foreign_keys=OFF;
+CREATE TABLE t(a);
+INSERT INTO t VALUES(1);
+ATTACH DATABASE '/etc/passwd' AS x;
+DROP TABLE t;

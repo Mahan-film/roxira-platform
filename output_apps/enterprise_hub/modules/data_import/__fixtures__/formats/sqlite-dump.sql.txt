@@ -1,0 +1,6 @@
+PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE accounts (code TEXT, name TEXT, type TEXT);
+INSERT INTO accounts VALUES('1101','صندوق','asset');
+INSERT INTO accounts VALUES('4101','فروش','revenue');
+COMMIT;

@@ -240,6 +240,37 @@ function formatIso(gy: number, gm: number, gd: number): string {
   ).padStart(2, '0')}`;
 }
 
+const JALALI_MONTH_NAMES: Record<string, number> = {
+  فروردین: 1,
+  اردیبهشت: 2,
+  خرداد: 3,
+  تیر: 4,
+  مرداد: 5,
+  شهریور: 6,
+  مهر: 7,
+  آبان: 8,
+  آذر: 9,
+  دی: 10,
+  بهمن: 11,
+  اسفند: 12,
+};
+
+/** «۱۵ مهر ۱۴۰۳» → ISO؛ فقط وقتی سال جلالی صریح است. */
+function parseJalaliWithMonthName(fixed: string): string | null {
+  const m = /^(\d{1,2})\s+([\u0600-\u06ff]+)\s+(1[2-6]\d{2})$/.exec(fixed.replace(/[\u200c]/g, ' ').replace(/\s+/g, ' '));
+  const month = m ? JALALI_MONTH_NAMES[m[2]] : undefined;
+  if (!m || !month) {
+    return null;
+  }
+  const year = Number(m[3]);
+  const day = Number(m[1]);
+  if (day < 1 || day > jalaliMonthLength(year, month)) {
+    return null;
+  }
+  const g = jalaliToGregorian(year, month, day);
+  return formatIso(g.gy, g.gm, g.gd);
+}
+
 /**
  * تجزیه تاریخ جلالی یا میلادی به ISO میلادی (`YYYY-MM-DD`).
  *
@@ -252,9 +283,16 @@ export function parseJalaliDate(value: string): string | null {
     return null;
   }
 
-  const match = /^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})(?:[T\s].*)?$/.exec(fixed);
+  let match = /^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})(?:[T\s].*)?$/.exec(fixed);
   if (!match) {
-    return null;
+    // Day-first Jalali ("15/07/1403") is only accepted when the year is unmistakably Jalali.
+    const dayFirst = /^(\d{1,2})[/.-](\d{1,2})[/.-](1[2-6]\d{2})(?:[T\s].*)?$/.exec(fixed);
+    if (dayFirst) {
+      match = [dayFirst[0], dayFirst[3], dayFirst[2], dayFirst[1]] as unknown as RegExpExecArray;
+    }
+  }
+  if (!match) {
+    return parseJalaliWithMonthName(fixed);
   }
 
   const year = Number(match[1]);

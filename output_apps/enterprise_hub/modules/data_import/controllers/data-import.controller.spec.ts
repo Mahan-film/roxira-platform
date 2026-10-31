@@ -13,6 +13,7 @@ import { accessTestProviders } from '../../../test/support/access-stub';
 import { DataImportService } from '../services/data-import.service';
 import { EntityImportService } from '../services/entity-import.service';
 import { PackageImportService } from '../services/package-import.service';
+import { ChunkedUploadService } from '../services/chunked-upload.service';
 import { DataImportController } from './data-import.controller';
 
 const SECRET = 'data-import-test-secret-1234567890';
@@ -56,6 +57,7 @@ describe('DataImportController (access control)', () => {
           },
         },
         JwtAuthGuard,
+        { provide: ChunkedUploadService, useValue: {} },
         {
           provide: PackageImportService,
           useValue: {

@@ -1,20 +1,16 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   PACKAGE_ENTITY_ORDER,
   PACKAGE_MAX_ERRORS,
 } from '../constants/package-import.constants';
-import { iterateRows } from '../analysis/package-analysis';
-import {
-  PackageTableReader,
-  stringifyCell,
-  ParsedPackage,
-} from '../parsers/package-source.types';
-import { normaliseAndValidate } from '../registry/field-validation';
+import { buildRecords, concreteMapping } from '../analysis/record-builder';
+import { ParsedPackage } from '../parsers/package-source.types';
 import {
   EntityImportAdapter,
   NormalisedRecord,
 } from '../registry/import-registry.types';
 import { EntityRegistryService } from '../registry/entity-registry.service';
+import { MappingMemoryService } from './mapping-memory.service';
 import { PackageAnalysisService } from './package-analysis.service';
 import { PackageProgressService } from './package-progress.service';
 import { PackageStoreService } from './package-store.service';
@@ -26,6 +22,8 @@ export interface PackageCommitTableInput {
   entity: string;
   mapping: Record<string, string | null>;
   skip?: boolean;
+  /** ضریب تبدیل مبلغ‌های بدون واحد به ریال (۱۰ برای تومان)؛ از مغایرت‌گیری می‌آید. */
+  moneyToRial?: number;
 }
 
 /**
@@ -44,6 +42,7 @@ export class PackageCommitService {
     private readonly registry: EntityRegistryService,
     private readonly progress: PackageProgressService,
     private readonly batchRepository: DataImportBatchRepository,
+    @Optional() private readonly memory?: MappingMemoryService,
   ) {}
 
   /** ثبت انتخاب‌های کاربر در یک دستهٔ ورود واحد. */
@@ -89,12 +88,7 @@ export class PackageCommitService {
 
     let parsed: ParsedPackage;
     try {
-      const buffer = await this.store.readSource(tenantId, packageId);
-      parsed = await this.analysisService.parsePackageBuffer(
-        buffer,
-        state.fileName,
-        state.kind,
-      );
+      parsed = await this.analysisService.openPackage(state);
     } catch (error) {
       await this.batchRepository.removeBatch(tenantId, batchId);
       throw error;
@@ -143,15 +137,16 @@ export class PackageCommitService {
             continue;
           }
 
-          const mapping = this.concreteMapping(
+          const mapping = concreteMapping(
             adapter,
             selection.mapping,
             analysis?.mapping ?? {},
           );
-          const { records, errors: rowErrors } = this.buildRecords(
+          const { records, errors: rowErrors } = buildRecords(
             adapter,
             table,
             mapping,
+            { moneyToRial: selection.moneyToRial },
           );
           for (const message of rowErrors) {
             addError(entity, message);
@@ -232,6 +227,17 @@ export class PackageCommitService {
       }
     }
 
+    if (this.memory && totalInserted > 0) {
+      for (const selection of selections) {
+        const analysed = state.analysis?.tables.find((t) => t.name === selection.name);
+        if (analysed?.signature && selection.entity) {
+          const effective =
+            Object.keys(selection.mapping ?? {}).length > 0 ? selection.mapping : analysed.mapping;
+          await this.memory.remember(tenantId, analysed.signature, selection.entity, effective);
+        }
+      }
+    }
+
     state.status = 'committed';
     state.batchId = batchId;
     await this.store.writeState(state);
@@ -267,77 +273,6 @@ export class PackageCommitService {
       }
     }
     return ordered;
-  }
-
-  /** ادغام نگاشت ارسالی کاربر با نگاشت پیشنهادی تحلیل. */
-  private concreteMapping(
-    adapter: EntityImportAdapter,
-    provided: Record<string, string | null>,
-    fallback: Record<string, string | null>,
-  ): Record<string, string> {
-    const known = new Set(adapter.fields.map((field) => field.key));
-    const result: Record<string, string> = {};
-    const source =
-      Object.keys(provided).length > 0 ? provided : fallback;
-    for (const [column, field] of Object.entries(source)) {
-      if (field && known.has(field)) {
-        result[column] = field;
-      }
-    }
-    return result;
-  }
-
-  /** ساخت ردیف‌های نرمال‌شده از یک جدول بر پایهٔ نگاشت فیلدها. */
-  private buildRecords(
-    adapter: EntityImportAdapter,
-    table: PackageTableReader,
-    mapping: Record<string, string>,
-  ): { records: NormalisedRecord[]; errors: string[] } {
-    const columnByField = new Map<string, string>();
-    for (const [column, field] of Object.entries(mapping)) {
-      if (field && !columnByField.has(field)) {
-        columnByField.set(field, column);
-      }
-    }
-    const records: NormalisedRecord[] = [];
-    const errors: string[] = [];
-    let rowNumber = 1;
-
-    for (const row of iterateRows(table)) {
-      rowNumber += 1;
-      const values: Record<string, unknown> = {};
-      let valid = true;
-
-      for (const field of adapter.fields) {
-        const column = columnByField.get(field.key);
-        const raw =
-          column === undefined ? '' : stringifyCell(row[column]).trim();
-        if (raw === '') {
-          if (field.required) {
-            valid = false;
-            if (errors.length < PACKAGE_MAX_ERRORS) {
-              errors.push(`ردیف ${rowNumber}: ${field.labelFa} الزامی است.`);
-            }
-          }
-          continue;
-        }
-        const { value, error } = normaliseAndValidate(field, raw);
-        if (error) {
-          valid = false;
-          if (errors.length < PACKAGE_MAX_ERRORS) {
-            errors.push(`ردیف ${rowNumber}: ${error}`);
-          }
-          continue;
-        }
-        values[field.key] = value;
-      }
-
-      if (valid) {
-        records.push({ rowNumber, values });
-      }
-    }
-
-    return { records, errors };
   }
 
   /** رد کردن تکراری‌ها بر پایهٔ کلید طبیعی موجودیت. */

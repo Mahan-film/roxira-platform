@@ -1,21 +1,26 @@
-import { AccessAction, AccessModule } from '../../access/catalogue';
+import { AccessAction, AccessModule, permissionOf } from '../../access/catalogue';
+import { AccessRequest, requireAccess } from '../../access/access-context';
 import { ModuleAccess } from '../../access/decorators';
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  ParseIntPipe,
+  PayloadTooLargeException,
   Post,
+  Put,
   Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
+import { IncomingMessage } from 'http';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -34,7 +39,10 @@ import {
   DATA_IMPORT_RESOURCE,
   maxUploadBytes,
 } from '../constants/data-import.constants';
-import { maxPackageBytes } from '../constants/package-import.constants';
+import { MAX_CHUNK_BYTES, maxPackageBytes } from '../constants/package-import.constants';
+import { InitUploadDto, PackageFromUploadsDto, UploadStatusDto } from '../dto/chunked-upload.dto';
+import { ChunkedUploadService } from '../services/chunked-upload.service';
+import { SUPPORT_MATRIX, SupportRow } from '../support-matrix';
 import { BatchSummaryDto, UndoBatchResponseDto } from '../dto/batch-response.dto';
 import { CommitImportDto } from '../dto/commit-import.dto';
 import { CommitResponseDto } from '../dto/commit-response.dto';
@@ -49,6 +57,7 @@ import {
   PackageCreatedDto,
   PackageProgressDto,
   PackageStatusDto,
+  ReconciliationReportDto,
 } from '../dto/package-response.dto';
 import { PreviewResponseDto } from '../dto/preview-response.dto';
 import {
@@ -87,6 +96,7 @@ export class DataImportController {
     private readonly dataImportService: DataImportService,
     private readonly entityImportService: EntityImportService,
     private readonly packageImportService: PackageImportService,
+    private readonly chunkedUpload: ChunkedUploadService,
   ) {}
 
   @Get('entities')
@@ -289,6 +299,7 @@ export class DataImportController {
       this.tenantIdOf(request),
       id,
       dto,
+      { canOverrideImbalance: this.canOverrideImbalance(request), userId: request.user?.sub },
     );
   }
 
@@ -303,8 +314,99 @@ export class DataImportController {
     return this.packageImportService.getProgress(this.tenantIdOf(request), id);
   }
 
+  @Get('formats')
+  @ApiOperation({ summary: 'جدول صادقانهٔ قالب‌های پشتیبانی‌شده (منبع حقیقت UI و docs)' })
+  listFormats(): readonly SupportRow[] {
+    return SUPPORT_MATRIX;
+  }
+
+  @Post('packages/:id/reconcile')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'مغایرت‌گیری پیش از ثبت: تعداد، جمع بدهکار/بستانکار، تکراری، ستون‌های بی‌نگاشت' })
+  @ApiResponse({ status: HttpStatus.OK, type: ReconciliationReportDto })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async reconcilePackage(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: PackageCommitDto,
+  ): Promise<ReconciliationReportDto> {
+    return this.packageImportService.reconcile(this.tenantIdOf(request), id, dto);
+  }
+
+  @Post('uploads')
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 600, ttl: 60_000 } })
+  @ApiOperation({ summary: 'شروع بارگذاری تکه‌ای و قابل‌ازسرگیری یک فایل' })
+  @ApiResponse({ status: HttpStatus.CREATED, type: UploadStatusDto })
+  async initUpload(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: InitUploadDto,
+  ): Promise<UploadStatusDto> {
+    return this.chunkedUpload.init(this.tenantIdOf(request), dto);
+  }
+
+  @Get('uploads/:uploadId')
+  @Throttle({ default: { limit: 600, ttl: 60_000 } })
+  @ApiOperation({ summary: 'وضعیت بارگذاری (تکه‌های رسیده/جاافتاده) برای ازسرگیری' })
+  @ApiResponse({ status: HttpStatus.OK, type: UploadStatusDto })
+  async uploadStatus(
+    @Req() request: AuthenticatedRequest,
+    @Param('uploadId') uploadId: string,
+  ): Promise<UploadStatusDto> {
+    return this.chunkedUpload.status(this.tenantIdOf(request), uploadId);
+  }
+
+  @Put('uploads/:uploadId/chunks/:index')
+  @Throttle({ default: { limit: 600, ttl: 60_000 } })
+  @ApiConsumes('application/octet-stream')
+  @ApiOperation({ summary: 'ارسال یک تکه (بدنهٔ خام، حداکثر ۸ مگابایت؛ ارسال دوباره بی‌ضرر است)' })
+  @ApiResponse({ status: HttpStatus.OK, type: UploadStatusDto })
+  async putChunk(
+    @Req() request: AuthenticatedRequest & IncomingMessage,
+    @Param('uploadId') uploadId: string,
+    @Param('index', new ParseIntPipe()) index: number,
+  ): Promise<UploadStatusDto> {
+    const body = await readCappedBody(request, MAX_CHUNK_BYTES);
+    return this.chunkedUpload.writeChunk(this.tenantIdOf(request), uploadId, index, body);
+  }
+
+  @Post('packages/from-uploads')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'ساخت بسته از بارگذاری‌های تکه‌ای کامل (یک فایل، چند فایل یا پوشه)' })
+  @ApiResponse({ status: HttpStatus.ACCEPTED, type: PackageCreatedDto })
+  async createPackageFromUploads(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: PackageFromUploadsDto,
+  ): Promise<PackageCreatedDto> {
+    return this.packageImportService.createFromUploads(this.tenantIdOf(request), dto.uploadIds);
+  }
+
   /** شناسه مستأجر فقط از پیلود JWT تأییدشده. */
   private tenantIdOf(request: AuthenticatedRequest): string {
     return requireTenantId(request);
   }
+
+  /** ثبت با وجود عدم‌تراز به دسترسی مدیریتی ورود داده نیاز دارد، نه فقط دسترسی ایجاد. */
+  private canOverrideImbalance(request: AccessRequest): boolean {
+    return requireAccess(request).permissions.has(permissionOf(AccessModule.DATA_IMPORT, AccessAction.ADMIN));
+  }
+}
+
+/** خواندن بدنهٔ خام درخواست با سقف سخت؛ از سقف عبور کند، اتصال قطع می‌شود. */
+function readCappedBody(request: IncomingMessage, limit: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let received = 0;
+    request.on('data', (chunk: Buffer) => {
+      received += chunk.length;
+      if (received > limit) {
+        request.destroy();
+        reject(new PayloadTooLargeException(`اندازهٔ تکه بیش از ${Math.round(limit / 1024 / 1024)} مگابایت است.`));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on('end', () => resolve(Buffer.concat(chunks)));
+    request.on('error', reject);
+  });
 }

@@ -43,6 +43,23 @@ export interface PackageTableAnalysis {
   mapping: Record<string, string | null>;
   skipped?: boolean;
   reason?: string;
+  /** امضای سربرگ‌ها (برای حافظهٔ نگاشت هر مستأجر). */
+  signature?: string;
+  /** منشأ نگاشت: حدس سربرگ، پیشنهاد خواننده (IIF/OFX)، پروفایل محصول، یا حافظهٔ مستأجر. */
+  mappingSource?: 'heuristic' | 'reader' | 'profile' | 'memory';
+  profileId?: string;
+  profileEvidence?: 'proven' | 'heuristic';
+  /** توضیح فارسی منشأ نگاشت یا هشدار پروفایل. */
+  notesFa?: string[];
+  /** واحد مبلغ تشخیص‌داده‌شده برای ستون‌های پولی نگاشت‌شده؛ `unknown` یعنی باید تأیید شود. */
+  moneyUnit?: {
+    unit: 'rial' | 'toman' | 'unknown';
+    toRial: number | null;
+    evidence: string;
+    column?: string;
+  };
+  /** تقویم ستون‌های تاریخ نگاشت‌شده. */
+  dateSystem?: 'jalali' | 'gregorian' | 'mixed' | 'unknown';
 }
 
 export interface PackageRelationshipAnalysis extends PackageRelationship {
@@ -69,7 +86,14 @@ export interface PackageCurrencyCount {
   count: number;
 }
 
+export interface PackageFormatInfo {
+  id: string;
+  notes: string[];
+}
+
 export interface PackageAnalysis {
+  /** قالب تشخیص‌داده‌شده از محتوا و یادداشت‌های خواننده (رمزگذاری، اصلاح حروف، دستورهای نادیده‌گرفته‌شده). */
+  format?: PackageFormatInfo;
   tables: PackageTableAnalysis[];
   relationships: PackageRelationshipAnalysis[];
   health: PackageHealth;

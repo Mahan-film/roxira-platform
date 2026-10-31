@@ -535,7 +535,7 @@ describe("end-to-end: upload → preview → commit → undo per format", () => 
     30000,
   );
 
-  it("rejects a MySQL dump at upload with the Persian guidance (status failed)", async () => {
+  it("a MySQL dump with no data rows fails with Persian guidance (dumps are now parsed, not rejected)", async () => {
     const h = buildHarness();
     const created = await h.service.createPackage("t", {
       originalname: "dump.sql",
@@ -545,7 +545,7 @@ describe("end-to-end: upload → preview → commit → undo per format", () => 
     });
     const status = await h.service.getPackage("t", created.packageId);
     expect(status.status).toBe("failed");
-    expect(status.error).toMatch(/MySQL/);
+    expect(status.error).toMatch(/INSERT/);
     fs.rmSync(h.root, { recursive: true, force: true });
     delete process.env.IMPORT_TMP_DIR;
   });

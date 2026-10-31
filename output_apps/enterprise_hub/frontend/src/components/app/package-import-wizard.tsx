@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 
 import { ErrorNotice } from "@/components/app/app-ui";
+import { ImportSupportTable } from "@/components/app/import-support-table";
+import { ReconciliationPanel } from "@/components/app/import-reconciliation-panel";
+import { collectDroppedFiles } from "@/lib/import-dropped-files";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +37,11 @@ import {
   PACKAGE_ENTITY_LABELS,
   PACKAGE_MAX_BYTES,
   commitImportPackage,
-  createImportPackage,
+  createImportPackageFromUploads,
+  reconcileImportPackage,
+  uploadFileChunked,
+  validatePackageFiles,
+  type ImportReconciliationReport,
   getImportPackage,
   getImportPackageProgress,
   importErrorMessage,
@@ -42,7 +49,6 @@ import {
   listImportEntities,
   packageEntityLabel,
   undoImportBatch,
-  validatePackageFile,
   type ImportBatch,
   type ImportPackageCommitTable,
   type ImportEntityDef,
@@ -96,6 +102,11 @@ export function PackageImportWizard({
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
+  const [report, setReport] = useState<ImportReconciliationReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [confirmImbalance, setConfirmImbalance] = useState(false);
 
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [batchesError, setBatchesError] = useState<string | null>(null);
@@ -207,8 +218,8 @@ export function PackageImportWizard({
     };
   }, [phase, packageId, loadBatches]);
 
-  async function runUpload(target: File) {
-    const invalid = validatePackageFile(target);
+  async function runUpload(targets: File[]) {
+    const invalid = validatePackageFiles(targets);
     if (invalid) {
       setError(invalid);
       return;
@@ -216,11 +227,21 @@ export function PackageImportWizard({
     setBusy(true);
     setError(null);
     setUploadPercent(0);
-    setFile(target);
+    setFile(targets[0]);
     try {
-      const created = await createImportPackage(target, {
-        onProgress: setUploadPercent,
-      });
+      // Each file goes up in resumable 4 MB chunks (a dropped connection only resends what is missing).
+      const ids: string[] = [];
+      const total = targets.reduce((sum, f) => sum + f.size, 0);
+      let done = 0;
+      for (const target of targets) {
+        const id = await uploadFileChunked(target, {
+          onProgress: (percent) =>
+            setUploadPercent(Math.round(((done + (target.size * percent) / 100) / total) * 100)),
+        });
+        done += target.size;
+        ids.push(id);
+      }
+      const created = await createImportPackageFromUploads(ids);
       setPackageId(created.packageId);
       setUploadPercent(100);
       setPhase("analyzing");
@@ -232,9 +253,9 @@ export function PackageImportWizard({
     }
   }
 
-  function handleFiles(files: FileList | null) {
-    const first = files?.[0];
-    if (first) void runUpload(first);
+  function handleFiles(files: FileList | File[] | null) {
+    const list = files ? Array.from(files) : [];
+    if (list.length > 0) void runUpload(list);
   }
 
   // A database file dropped on the single-file tab is handed over here and uploaded once.
@@ -243,7 +264,7 @@ export function PackageImportWizard({
     onInitialFileUsed?.();
     // One-shot start for a file handed over by the parent (an external event, not derived state).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void runUpload(initialFile);
+    void runUpload([initialFile]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFile]);
 
@@ -275,13 +296,57 @@ export function PackageImportWizard({
   const missingEntities = tables.filter((t) => !t.skip && !t.entity);
   const mappedCount = tables.filter((t) => !t.skip && t.entity).length;
 
+  // Reconciliation is recomputed (server-side, debounced) whenever the mapping or unit changes.
+  const selectionJson = JSON.stringify(
+    tables.map((t) => ({
+      name: t.name,
+      entity: t.entity,
+      mapping: t.mapping,
+      skip: t.skip,
+      moneyToRial: t.moneyToRial,
+    })),
+  );
+  useEffect(() => {
+    if (phase !== "review" || !packageId || mappedCount === 0 || missingEntities.length > 0) {
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setReportLoading(true);
+      setReportError(null);
+      reconcileImportPackage(
+        packageId,
+        { tables: JSON.parse(selectionJson) as ImportPackageCommitTable[] },
+        controller.signal,
+      )
+        .then((r) => {
+          setReport(r);
+          if (r.balanced) setConfirmImbalance(false);
+        })
+        .catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          setReport(null);
+          setReportError(importErrorMessage(err));
+        })
+        .finally(() => setReportLoading(false));
+    }, 400);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, packageId, selectionJson]);
+
   const canCommit =
     phase === "review" &&
     !busy &&
     !hasError &&
     missingEntities.length === 0 &&
     mappedCount > 0 &&
-    (!hasWarn || warnConfirmed);
+    (!hasWarn || warnConfirmed) &&
+    report !== null &&
+    !reportLoading &&
+    (report.balanced || confirmImbalance);
 
   async function handleCommit() {
     if (!packageId) return;
@@ -294,7 +359,9 @@ export function PackageImportWizard({
           entity: t.entity,
           mapping: t.mapping,
           skip: t.skip,
+          moneyToRial: t.moneyToRial,
         })),
+        confirmImbalance: confirmImbalance || undefined,
       });
       setBatchId(res.batchId);
       setPhase("committing");
@@ -315,6 +382,9 @@ export function PackageImportWizard({
     setTables([]);
     setExpanded({});
     setWarnConfirmed(false);
+    setReport(null);
+    setReportError(null);
+    setConfirmImbalance(false);
     setUploadPercent(0);
     setError(null);
     loadBatches();
@@ -370,7 +440,8 @@ export function PackageImportWizard({
           onDrop={(e) => {
             e.preventDefault();
             setDragging(false);
-            handleFiles(e.dataTransfer.files);
+            const transfer = e.dataTransfer;
+            void collectDroppedFiles(transfer).then(handleFiles);
           }}
           className={cn(
             "flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed px-6 py-16 text-center transition-colors",
@@ -388,29 +459,48 @@ export function PackageImportWizard({
             {busy ? "در حال بارگذاری بسته..." : "بستهٔ کامل کسب‌وکار را اینجا رها کنید"}
           </p>
           <p className="max-w-md text-sm text-muted-foreground">
-            فایل دیتابیس (sqlite، db)، خروجی SQL یا فایل فشردهٔ CSV/XLSX تا{" "}
-            {formatNumber(PACKAGE_MAX_BYTES / 1024 / 1024)} مگابایت. سیستم ساختار
-            جدول‌ها، روابط، واحدها و سلامت داده را تحلیل می‌کند و قبل از انتقال همه
-            چیز را نشان می‌دهد.
+            تقریباً هر خروجی حسابداری: اکسل (xls، xlsx، ods)، CSV/TSV، DBF، JSON/XML،
+            دامپ SQL (MySQL، PostgreSQL، SQLite، T-SQL)، QuickBooks IIF، OFX/QBO، ZIP — یا یک پوشهٔ کامل.
+            قالب از روی محتوا تشخیص داده می‌شود. هر فایل تا{" "}
+            {formatNumber(PACKAGE_MAX_BYTES / 1024 / 1024)} مگابایت، به‌صورت تکه‌ای و ازسرگیری‌پذیر.
+            پیش از هر انتقال، گزارش مغایرت‌گیری نشان داده می‌شود.
           </p>
           <input
             ref={inputRef}
             type="file"
-            accept={PACKAGE_ACCEPT}
+            accept={PACKAGE_ACCEPT || undefined}
+            multiple
             className="sr-only"
             id="package-import-file"
             onChange={(e) => handleFiles(e.target.files)}
           />
-          <Button
-            size="lg"
-            disabled={busy}
-            onClick={() => inputRef.current?.click()}
-          >
-            انتخاب بسته
-          </Button>
-          <span className="text-xs text-muted-foreground" dir="ltr">
-            sqlite · sqlite3 · db · sql · zip
-          </span>
+          <input
+            ref={(node) => {
+              folderRef.current = node;
+              if (node) node.setAttribute("webkitdirectory", "");
+            }}
+            type="file"
+            className="sr-only"
+            id="package-import-folder"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button
+              size="lg"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+            >
+              انتخاب فایل‌ها
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              disabled={busy}
+              onClick={() => folderRef.current?.click()}
+            >
+              انتخاب پوشه
+            </Button>
+          </div>
           {busy && (
             <div className="mt-2 w-full max-w-sm">
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -426,6 +516,8 @@ export function PackageImportWizard({
           )}
         </div>
       )}
+
+      {phase === "upload" && <ImportSupportTable />}
 
       {phase === "analyzing" && (
         <Card>
@@ -455,6 +547,17 @@ export function PackageImportWizard({
             <CardContent className="text-sm text-muted-foreground">
               جدول‌های شناسایی‌شده را بررسی کنید. نوع موجودیت هر جدول را می‌توانید
               تغییر دهید یا جدول‌های نامرتبط را نادیده بگیرید.
+              {detail.format && (
+                <ul className="mt-2 list-disc ps-5 text-xs">
+                  <li>
+                    قالب تشخیص‌داده‌شده از روی محتوا:{" "}
+                    <span dir="ltr">{detail.format.id}</span>
+                  </li>
+                  {detail.format.notes.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
 
@@ -515,6 +618,53 @@ export function PackageImportWizard({
                       {meta?.reason && (
                         <span className="text-xs text-amber-400">{meta.reason}</span>
                       )}
+                      {meta?.mappingSource && meta.mappingSource !== "heuristic" && (
+                        <Badge variant="secondary">
+                          {meta.mappingSource === "memory"
+                            ? "از حافظهٔ نگاشت سازمان"
+                            : meta.mappingSource === "reader"
+                              ? "نگاشت از مشخصات قالب"
+                              : meta.profileEvidence === "proven"
+                                ? "پروفایل تأییدشده"
+                                : "پروفایل حدسی"}
+                        </Badge>
+                      )}
+                      {meta?.moneyUnit && (
+                        <label className="flex items-center gap-1 text-xs">
+                          <span className="text-muted-foreground">
+                            واحد مبلغ{meta.moneyUnit.unit === "unknown" ? " (تعیین نشده)" : ""}:
+                          </span>
+                          <select
+                            value={String(
+                              t.moneyToRial ?? meta.moneyUnit.toRial ?? 1,
+                            )}
+                            disabled={busy}
+                            onChange={(e) =>
+                              setTables((list) =>
+                                list.map((x) =>
+                                  x.name === t.name
+                                    ? { ...x, moneyToRial: Number(e.target.value) }
+                                    : x,
+                                ),
+                              )
+                            }
+                            aria-label={`واحد مبلغ ${t.name}`}
+                            className="h-7 rounded-lg border border-input bg-background px-1 text-xs"
+                          >
+                            <option value="1">ریال</option>
+                            <option value="10">تومان</option>
+                            <option value="1000">هزار ریال</option>
+                            <option value="10000">هزار تومان</option>
+                            <option value="1000000">میلیون ریال</option>
+                            <option value="10000000">میلیون تومان</option>
+                          </select>
+                        </label>
+                      )}
+                      {meta?.notesFa?.map((note) => (
+                        <span key={note} className="basis-full text-xs text-muted-foreground">
+                          {note}
+                        </span>
+                      ))}
                       <div className="ms-auto flex flex-wrap items-center gap-3">
                         <label className="flex items-center gap-2 text-sm">
                           <span className="text-muted-foreground">نوع:</span>
@@ -754,6 +904,14 @@ export function PackageImportWizard({
               </CardContent>
             </Card>
           )}
+
+          <ReconciliationPanel
+            report={report}
+            loading={reportLoading}
+            error={reportError}
+            confirmImbalance={confirmImbalance}
+            onConfirmImbalance={setConfirmImbalance}
+          />
 
           <div className="flex flex-wrap gap-2">
             <Button disabled={!canCommit} onClick={handleCommit}>

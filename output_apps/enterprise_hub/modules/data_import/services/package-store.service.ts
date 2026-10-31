@@ -10,14 +10,14 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import {
   PACKAGE_TTL_MS,
-  PACKAGE_UPLOAD_EXTENSIONS,
   packageTmpRoot,
 } from '../constants/package-import.constants';
 
 /** فاصلهٔ اجرای جاروکننده: ۱۵ دقیقه. */
 const PACKAGE_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 import { PackageAnalysis } from '../analysis/package-analysis';
-import { FOREIGN_BINARY_MESSAGE } from '../parsers/sql-dump.parser';
+import { detectFormat, UNKNOWN_FORMAT_MESSAGE } from '../readers/format-registry';
+import { FormatId, UnsupportedFormatError } from '../readers/reader.types';
 
 /** وضعیت چرخهٔ عمر یک بستهٔ دیتابیس. */
 export type PackageStatus =
@@ -27,8 +27,8 @@ export type PackageStatus =
   | 'committing'
   | 'committed';
 
-/** نوع منبع بسته. */
-export type PackageKind = 'sqlite' | 'sql' | 'zip';
+/** نوع منبع بسته: شناسهٔ قالبِ تشخیص‌داده‌شده از روی محتوا (readers/reader.types.ts). */
+export type PackageKind = FormatId;
 
 /** وضعیت کامل یک بسته که روی دیسک موقت نگه داشته می‌شود. */
 export interface PackageState {
@@ -42,6 +42,10 @@ export interface PackageState {
   error?: string;
   analysis?: PackageAnalysis;
   batchId?: string;
+  /** برای بستهٔ چندفایلی (پوشه/انتخاب چندتایی): نام اصلی هر فایل به ترتیب `parts/<n>.bin`. */
+  parts?: string[];
+  /** آخرین گزارش مغایرت‌گیری (کلید = هش انتخاب‌ها) تا commit دوباره محاسبه نکند. */
+  reconciliation?: { key: string; report: unknown };
 }
 
 /** فایل بارگذاری‌شدهٔ حداقلی موردنیاز. */
@@ -52,60 +56,32 @@ export interface PackageUpload {
   buffer: Buffer;
 }
 
-function isZip(buffer: Buffer): boolean {
-  return (
-    buffer.length >= 4 &&
-    buffer[0] === 0x50 &&
-    buffer[1] === 0x4b &&
-    (buffer[2] === 0x03 || buffer[2] === 0x05 || buffer[2] === 0x07)
-  );
+/** پسوند امن برای نام فایل روی دیسک (فقط حروف/رقم کوتاه؛ هرگز مسیر یا نویسهٔ کنترلی). */
+export function safeExtension(fileName: string): string {
+  const ext = path.extname(fileName ?? '').toLowerCase();
+  return /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : '.bin';
 }
 
-function isSqliteHeader(buffer: Buffer): boolean {
-  return (
-    buffer.length >= 16 &&
-    buffer.subarray(0, 16).toString('latin1') === 'SQLite format 3\u0000'
-  );
-}
-
-/** پسوندهای پشتیبان باینری دیتابیس‌های دیگر (SQL Server / PostgreSQL). */
-const FOREIGN_BINARY_EXTENSIONS = ['.bak', '.mdf', '.ldf', '.ndf', '.dump', '.backup'];
-
-/** SQL Server backup (MTF) starts with "TAPE"; pg_dump custom format starts with "PGDMP". */
-function isForeignBinary(fileName: string, buffer: Buffer): boolean {
-  const lower = (fileName ?? '').toLowerCase();
-  if (FOREIGN_BINARY_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
-    return true;
-  }
-  const magic = buffer.subarray(0, 5).toString('latin1');
-  return magic === 'PGDMP' || magic.startsWith('TAPE');
-}
-
-/** تشخیص نوع بسته از محتوا و پسوند. */
+/**
+ * تشخیص نوع بسته از «محتوا» (پسوند فقط تساوی‌شکن است). قالب‌هایی که عمداً خوانده نمی‌شوند
+ * (Access، .bak، PGDMP، PDF/تصویر) با راهنمای فارسی و `BadRequestException` رد می‌شوند.
+ */
 export function detectPackageKind(fileName: string, buffer: Buffer): PackageKind {
-  if (isForeignBinary(fileName, buffer)) {
-    throw new BadRequestException(FOREIGN_BINARY_MESSAGE);
+  const detection = detectFormat(buffer, fileName);
+  if (!detection.reader) {
+    throw new BadRequestException(UNKNOWN_FORMAT_MESSAGE);
   }
-  if (isSqliteHeader(buffer)) {
-    return 'sqlite';
+  if (detection.id === 'access' || detection.id === 'mssql-backup' || detection.id === 'pg-custom' || detection.id === 'pdf' || detection.id === 'image') {
+    try {
+      detection.reader.read(buffer, { fileName, depth: 0 });
+    } catch (error) {
+      if (error instanceof UnsupportedFormatError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
-  if (isZip(buffer)) {
-    return 'zip';
-  }
-  const lower = (fileName ?? '').toLowerCase();
-  if (lower.endsWith('.sql')) {
-    return 'sql';
-  }
-  if (
-    lower.endsWith('.sqlite') ||
-    lower.endsWith('.sqlite3') ||
-    lower.endsWith('.db')
-  ) {
-    return 'sqlite';
-  }
-  throw new BadRequestException(
-    'نوع بسته پشتیبانی نمی‌شود؛ فقط .sqlite/.sqlite3/.db، .sql و .zip مجاز است.',
-  );
+  return detection.id;
 }
 
 /**
@@ -219,7 +195,7 @@ export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
     extension: string,
   ): string {
     const ext = extension.startsWith('.') ? extension : `.${extension}`;
-    return path.join(this.packageDir(tenantId, packageId), `source${ext}`);
+    return path.join(this.packageDir(tenantId, packageId), `source${safeExtension(ext)}`);
   }
 
   /** ذخیرهٔ فایل بسته و ساخت وضعیت اولیهٔ «در حال تحلیل». */
@@ -237,19 +213,7 @@ export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const extension = path.extname(file.originalname ?? '').toLowerCase();
-    if (isForeignBinary(file.originalname, file.buffer)) {
-      throw new BadRequestException(FOREIGN_BINARY_MESSAGE);
-    }
-    if (
-      !PACKAGE_UPLOAD_EXTENSIONS.includes(
-        extension as (typeof PACKAGE_UPLOAD_EXTENSIONS)[number],
-      )
-    ) {
-      throw new BadRequestException(
-        'فقط فایل‌های .sqlite/.sqlite3/.db، .sql و .zip پذیرفته می‌شوند.',
-      );
-    }
+    const extension = safeExtension(file.originalname);
     const kind = detectPackageKind(file.originalname, file.buffer);
 
     const packageId = randomUUID();
@@ -271,6 +235,77 @@ export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
     };
     await this.writeState(state);
     return state;
+  }
+
+  /**
+   * ساخت بسته از فایلی که پیش‌تر (بارگذاری تکه‌ای) روی دیسک موقت کامل شده است. فایل جابه‌جا می‌شود
+   * (rename، بدون کپی)؛ برای تشخیص قالب یک بار در حافظه خوانده می‌شود و سقف آن همان سقف هر فایل است.
+   */
+  async createPackageFromDisk(
+    tenantId: string,
+    filePath: string,
+    originalName: string,
+  ): Promise<PackageState> {
+    const buffer = await fs.readFile(filePath);
+    const kind = detectPackageKind(originalName, buffer);
+    const packageId = randomUUID();
+    await fs.mkdir(this.packageDir(tenantId, packageId), { recursive: true });
+    await fs.rename(filePath, this.sourcePath(tenantId, packageId, safeExtension(originalName)));
+    const state: PackageState = {
+      packageId,
+      tenantId,
+      fileName: originalName || 'package',
+      kind,
+      size: buffer.length,
+      createdAt: Date.now(),
+      status: 'analyzing',
+    };
+    await this.writeState(state);
+    return state;
+  }
+
+  /** بستهٔ چندفایلی (رها کردن پوشه یا چند فایل): هر فایل به‌صورت `parts/<n>.bin` نگه داشته می‌شود. */
+  async createMultiPackage(
+    tenantId: string,
+    files: Array<{ name: string; filePath: string; size: number }>,
+  ): Promise<PackageState> {
+    if (files.length === 0) {
+      throw new BadRequestException('هیچ فایلی انتخاب نشده است.');
+    }
+    const packageId = randomUUID();
+    const dir = path.join(this.packageDir(tenantId, packageId), 'parts');
+    await fs.mkdir(dir, { recursive: true });
+    const names: string[] = [];
+    let size = 0;
+    for (const [index, file] of files.entries()) {
+      await fs.rename(file.filePath, path.join(dir, `${index}.bin`));
+      names.push(file.name);
+      size += file.size;
+    }
+    const state: PackageState = {
+      packageId,
+      tenantId,
+      fileName: names.length === 1 ? names[0] : `${names.length} files`,
+      kind: 'multi',
+      size,
+      createdAt: Date.now(),
+      status: 'analyzing',
+      parts: names,
+    };
+    await this.writeState(state);
+    return state;
+  }
+
+  /** مسیر یکی از فایل‌های بستهٔ چندفایلی روی دیسک موقت. */
+  partFilePath(tenantId: string, packageId: string, index: number): string {
+    return path.join(this.packageDir(tenantId, packageId), 'parts', `${index}.bin`);
+  }
+
+  /** خواندن یکی از فایل‌های بستهٔ چندفایلی. */
+  async readPart(tenantId: string, packageId: string, index: number): Promise<Buffer> {
+    return fs.readFile(
+      path.join(this.packageDir(tenantId, packageId), 'parts', `${index}.bin`),
+    );
   }
 
   /** خواندن وضعیت بسته در محدودهٔ همان مستأجر (با بررسی TTL). */
@@ -312,7 +347,7 @@ export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
     if (!state) {
       throw new BadRequestException('این بسته یافت نشد یا منقضی شده است.');
     }
-    const extension = path.extname(state.fileName ?? '').toLowerCase();
+    const extension = safeExtension(state.fileName);
     try {
       return await fs.readFile(this.sourcePath(tenantId, packageId, extension));
     } catch {

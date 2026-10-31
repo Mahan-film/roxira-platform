@@ -18,3 +18,5 @@ What works today:
 To add real support, someone with a licensed copy needs to export the persons / items / chart-of-accounts
 lists and attach the files (or screenshots of the headers). Then add the headers to
 `mapping/lead-field-synonyms.ts` and the matching registry synonyms, with a test that uses the sample file.
+
+> Update 2026-10-31: the full format table (generated, tested) is in `docs/IMPORT_SUPPORT.md`; the per-tenant mapping memory now remembers a confirmed mapping for the next upload with the same headers. Still no proven Sepidar/Hamkaran/Rahkaran/Mahak profile.

@@ -267,3 +267,29 @@ export function apiUploadWithProgress<TResponse>(
     xhr.send(formData);
   }));
 }
+
+/**
+ * ارسال بدنهٔ خام (octet-stream) با PUT برای بارگذاری تکه‌ای؛ همان منطق توکن و خطای `apiRequest`.
+ */
+export async function apiPutRaw<TResponse>(
+  path: string,
+  body: Blob,
+  signal?: AbortSignal,
+): Promise<TResponse> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/octet-stream",
+  };
+  const token = await getFreshAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(path, {
+    method: "PUT",
+    headers,
+    body,
+    signal,
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  return (await response.json()) as TResponse;
+}

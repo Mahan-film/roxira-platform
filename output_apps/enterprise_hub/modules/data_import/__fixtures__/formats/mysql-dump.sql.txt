@@ -1,0 +1,24 @@
+-- MySQL dump 10.13  Distrib 8.0.36, for Linux (x86_64)
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET NAMES utf8mb4 */;
+DROP TABLE IF EXISTS `accounts`;
+CREATE TABLE `accounts` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `code` varchar(20) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `type` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_code` (`code`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4;
+LOCK TABLES `accounts` WRITE;
+INSERT INTO `accounts` VALUES (1,'1101','صندوق','asset'),(2,'4101','فروش \'نقدی\'','revenue'),(3,'5101','O''Brien; test\nline2',NULL);
+UNLOCK TABLES;
+CREATE TABLE `journal_lines` (
+  `id` int NOT NULL,
+  `voucher_no` varchar(20),
+  `account_code` varchar(20),
+  `debit` decimal(18,2),
+  `credit` decimal(18,2),
+  CONSTRAINT `fk_acc` FOREIGN KEY (`account_code`) REFERENCES `accounts` (`code`)
+) ENGINE=InnoDB;
+INSERT INTO `journal_lines` VALUES (1,'JV-1','1101',5000000.00,0.00),(2,'JV-1','4101',0.00,5000000.00);

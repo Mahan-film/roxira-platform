@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/table";
 import {
   IMPORT_ACCEPT,
-  PACKAGE_ACCEPT,
   IMPORT_DAILY_FILES,
   IMPORT_MAX_DOC_BYTES,
   IMPORT_MAX_ROWS,
@@ -415,7 +414,7 @@ function SingleFileImportWizard({
             <input
               ref={inputRef}
               type="file"
-              accept={`${IMPORT_ACCEPT},${PACKAGE_ACCEPT}`}
+              accept={IMPORT_ACCEPT}
               className="sr-only"
               id="import-file"
               onChange={(e) => handleFiles(e.target.files)}

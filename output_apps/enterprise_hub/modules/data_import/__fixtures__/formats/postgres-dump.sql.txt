@@ -1,0 +1,20 @@
+--
+-- PostgreSQL database dump
+--
+SET statement_timeout = 0;
+SET client_encoding = 'UTF8';
+CREATE TABLE public.accounts (
+    id integer NOT NULL,
+    code character varying(20) NOT NULL,
+    name text,
+    type text
+);
+CREATE FUNCTION public.touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.x := 1; RETURN NEW; END; $$;
+COPY public.accounts (id, code, name, type) FROM stdin;
+1	1101	صندوق	asset
+2	4101	فروش\tنقدی	revenue
+3	5101	\N	expense
+\.
+CREATE TABLE public.journal_lines (voucher_no text, account_code text, debit numeric, credit numeric);
+INSERT INTO public.journal_lines (voucher_no, account_code, debit, credit) VALUES ('JV-1', '1101', 5000000, 0), ('JV-1', '4101', 0, 5000000);
+ALTER TABLE ONLY public.journal_lines ADD CONSTRAINT fk_acc FOREIGN KEY (account_code) REFERENCES public.accounts(code);

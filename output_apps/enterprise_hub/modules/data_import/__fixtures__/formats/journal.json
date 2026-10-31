@@ -1,0 +1,53 @@
+{
+ "accounts": [
+  {
+   "code": "1101",
+   "name": "صندوق",
+   "type": "asset"
+  },
+  {
+   "code": "4101",
+   "name": "فروش",
+   "type": "revenue"
+  },
+  {
+   "code": "5101",
+   "name": "هزینه حمل",
+   "type": "expense"
+  }
+ ],
+ "journal": [
+  {
+   "voucherNo": "JV-1",
+   "date": "1403/07/15",
+   "accountCode": "1101",
+   "debit": 5000000,
+   "credit": 0,
+   "description": "دریافت نقدی"
+  },
+  {
+   "voucherNo": "JV-1",
+   "date": "1403/07/15",
+   "accountCode": "4101",
+   "debit": 0,
+   "credit": 5000000,
+   "description": "فروش نقدی"
+  },
+  {
+   "voucherNo": "JV-2",
+   "date": "1403/07/16",
+   "accountCode": "5101",
+   "debit": 1200000,
+   "credit": 0,
+   "description": "هزینه حمل"
+  },
+  {
+   "voucherNo": "JV-2",
+   "date": "1403/07/16",
+   "accountCode": "1101",
+   "debit": 0,
+   "credit": 1200000,
+   "description": "پرداخت نقدی"
+  }
+ ]
+}

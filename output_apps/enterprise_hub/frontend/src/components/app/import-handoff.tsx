@@ -11,9 +11,9 @@ import {
 /** Import wizard tabs: single file vs whole-database package. */
 export type ImportTab = "file" | "package";
 
-/** Database packages (.sqlite/.db/.sql/.zip) belong to the whole-database tab. */
+/** Database packages and every non-single-file format (.sqlite/.sql/.zip/.xls/.ods/.dbf/.iif/.ofx/…) belong to the whole-database tab. */
 export function isDatabaseFile(file: File): boolean {
-  return /\.(sqlite3?|db|sql|zip)$/i.test(file.name);
+  return /\.(sqlite3?|db|sql|zip|xls|ods|dbf|tsv|json|xml|iif|ofx|qbo|qfx|mdb|accdb|bak|mdf|dump)$/i.test(file.name);
 }
 
 interface ImportHandoffValue {

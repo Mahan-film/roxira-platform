@@ -1,3 +1,4 @@
+import { maskValue } from '../masking';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
@@ -53,7 +54,7 @@ export function buildMappingRequestBody(
 ): OpenRouterChatRequest {
   const trimmedRows = sampleRows
     .slice(0, MAX_SAMPLE_ROWS)
-    .map((row) => row.map((cell) => truncateCell(cell)));
+    .map((row) => row.map((cell) => maskValue(truncateCell(cell))));
 
   return {
     model,
@@ -157,7 +158,7 @@ export function buildEntityChoiceRequestBody(
 ): OpenRouterChatRequest {
   const trimmedRows = sampleRows
     .slice(0, MAX_SAMPLE_ROWS)
-    .map((row) => row.map((cell) => truncateCell(cell)));
+    .map((row) => row.map((cell) => maskValue(truncateCell(cell))));
 
   return {
     model,
@@ -197,7 +198,7 @@ export function buildGenericMappingRequestBody(
 
   const trimmedRows = sampleRows
     .slice(0, MAX_SAMPLE_ROWS)
-    .map((row) => row.map((cell) => truncateCell(cell)));
+    .map((row) => row.map((cell) => maskValue(truncateCell(cell))));
 
   return {
     model,

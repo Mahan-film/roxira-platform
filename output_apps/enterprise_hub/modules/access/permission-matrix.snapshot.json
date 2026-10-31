@@ -453,6 +453,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/data-import/formats (DataImportController.listFormats)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/data-import/packages/:id (DataImportController.getPackage)": {
     "policy": "data_import:read",
     "owner": true,
@@ -465,6 +476,17 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/packages/:id/progress (DataImportController.getPackageProgress)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/uploads/:uploadId (DataImportController.uploadStatus)": {
     "policy": "data_import:read",
     "owner": true,
     "admin": true,
@@ -1532,7 +1554,40 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/data-import/packages/:id/reconcile (DataImportController.reconcilePackage)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/packages/from-uploads (DataImportController.createPackageFromUploads)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/data-import/preview (DataImportController.preview)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/uploads (DataImportController.initUpload)": {
     "policy": "data_import:create",
     "owner": true,
     "admin": true,
@@ -1830,6 +1885,17 @@
     "owner": true,
     "admin": true,
     "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/data-import/uploads/:uploadId/chunks/:index (DataImportController.putChunk)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,

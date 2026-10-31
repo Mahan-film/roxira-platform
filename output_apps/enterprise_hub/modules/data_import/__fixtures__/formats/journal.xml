@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ledger>
+  <line voucher="JV-1"><date>1403/07/15</date><account>1101</account><debit>5000000</debit><credit>0</credit><memo>دریافت نقدی</memo></line>
+  <line voucher="JV-1"><date>1403/07/15</date><account>4101</account><debit>0</debit><credit>5000000</credit><memo>فروش نقدی</memo></line>
+  <line voucher="JV-2"><date>1403/07/16</date><account>5101</account><debit>1200000</debit><credit>0</credit><memo>هزینه حمل</memo></line>
+  <line voucher="JV-2"><date>1403/07/16</date><account>1101</account><debit>0</debit><credit>1200000</credit><memo>پرداخت نقدی</memo></line>
+</ledger>
