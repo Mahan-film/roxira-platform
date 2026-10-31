@@ -17,6 +17,7 @@ import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.enti
 import { ImportMappingMemoryRepository } from './repositories/import-mapping-memory.repository';
 import { ChunkedUploadService } from './services/chunked-upload.service';
 import { MappingMemoryService } from './services/mapping-memory.service';
+import { PackageOcrService } from './services/package-ocr.service';
 import { PackageReconciliationService } from './services/package-reconciliation.service';
 import { DataImportBatchItemEntity } from './entities/data-import-batch-item.entity';
 import { DataImportBatchEntity } from './entities/data-import-batch.entity';
@@ -107,6 +108,7 @@ import { UploadStoreService } from './services/upload-store.service';
     PackageImportProcessor,
     ChunkedUploadService,
     PackageReconciliationService,
+    PackageOcrService,
     MappingMemoryService,
     ImportMappingMemoryRepository,
     EntityRegistryService,

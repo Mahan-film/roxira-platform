@@ -276,7 +276,7 @@ export interface ImportPackageDetail {
   health: { checks: ImportPackageHealthCheck[] };
   currencies: ImportPackageCurrency[];
   /** قالب تشخیص‌داده‌شده از محتوا + یادداشت‌های خواننده. */
-  format?: { id: string; notes: string[] };
+  format?: { id: string; notes: string[]; ocr?: boolean };
 }
 
 export interface ImportPackageCreated {
@@ -472,6 +472,48 @@ export function reconcileImportPackage(
 ): Promise<ImportReconciliationReport> {
   return apiRequest<ImportReconciliationReport>(
     `${BASE}/packages/${encodeURIComponent(packageId)}/reconcile`,
+    { method: "POST", body: payload, signal },
+  );
+}
+
+export interface ImportReviewVoucher {
+  voucherNo: string;
+  date: string;
+  sourceTable: string;
+  lines: Array<{ accountCode: string; description: string; debit: number; credit: number }>;
+  debit: number;
+  credit: number;
+  balanced: boolean;
+}
+
+export interface ImportReviewGroup {
+  bucket: string;
+  labelFa: string;
+  rows: number;
+  validRows: number;
+  invalidRows: number;
+  tables: Array<{ name: string; entity: string }>;
+  sample: Array<Record<string, unknown>>;
+  errorsFa: string[];
+}
+
+export interface ImportPackageReview {
+  ocr: boolean;
+  key: string;
+  groups: ImportReviewGroup[];
+  skippedTables: string[];
+  vouchers: { total: number; unbalanced: number; page: number; pageSize: number; items: ImportReviewVoucher[] };
+}
+
+/** بازبینی پیش از ثبت: گروه‌ها و یک صفحه از همهٔ سندهای پیشنهادی. */
+export function reviewImportPackage(
+  packageId: string,
+  payload: ImportPackageCommitRequest,
+  page: number,
+  signal?: AbortSignal,
+): Promise<ImportPackageReview> {
+  return apiRequest<ImportPackageReview>(
+    `${BASE}/packages/${encodeURIComponent(packageId)}/review?page=${page}`,
     { method: "POST", body: payload, signal },
   );
 }

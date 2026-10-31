@@ -10,7 +10,8 @@ import { mssqlScriptReader, mysqlDumpReader, postgresDumpReader } from './sql-du
 import { iifReader, ofxReader } from './accounting-formats.reader';
 import { createZipReader, mergeFiles, sqliteReader, sqliteSqlReader, xlsxReader } from './container.readers';
 import { dbfReader } from './dbf.reader';
-import { accessReader, imageReader, mssqlBackupReader, pdfReader, pgCustomReader } from './guide-only.readers';
+import { accessReader, imageReader, mssqlBackupReader, pgCustomReader } from './guide-only.readers';
+import { pdfReader } from './pdf.reader';
 import { odsReader } from './ods.reader';
 import { FormatId, FormatReader, ReaderError } from './reader.types';
 import { csvReader, fixedWidthReader, htmlTableReader, jsonReader, xmlReader } from './text-formats.reader';

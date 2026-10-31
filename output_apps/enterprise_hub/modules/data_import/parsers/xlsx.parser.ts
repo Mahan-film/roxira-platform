@@ -453,6 +453,49 @@ function readRows(sheet: XmlNode, sharedStrings: string[] | null): string[][] {
   return rows;
 }
 
+/** One sheet to header + rows; null when it holds no data. */
+function readSheetTable(
+  buffer: Buffer,
+  entry: ZipEntry,
+  sharedStrings: string[] | null,
+  locateHeader?: HeaderLocator,
+): ParsedXlsx | null {
+  const sheet = parseXml(extractEntry(buffer, entry).toString('utf8'));
+  const worksheet =
+    sheet.tagName === 'worksheet' ? sheet : firstChild(sheet, 'worksheet');
+  if (!worksheet) {
+    throw new XlsxParseError(INVALID_XLSX_MESSAGE);
+  }
+
+  const cleaned = readRows(worksheet, sharedStrings)
+    .map((row) => row.map((cell) => cell.trim()))
+    .filter((row) => row.some((cell) => cell.length > 0));
+
+  if (cleaned.length === 0) {
+    return null;
+  }
+
+  const headerIndex = safeHeaderIndex(cleaned, locateHeader);
+  const headers = cleaned[headerIndex];
+  const dataRows = cleaned.slice(headerIndex + 1);
+  const rowLimit = maxImportRows();
+  if (dataRows.length > rowLimit) {
+    throw new XlsxParseError(
+      `حداکثر ${rowLimit} ردیف در هر بارگذاری مجاز است.`,
+    );
+  }
+
+  const rows = dataRows.map((row) => {
+    const normalized = row.slice(0, headers.length);
+    while (normalized.length < headers.length) {
+      normalized.push('');
+    }
+    return normalized;
+  });
+
+  return { headers, rows };
+}
+
 /* --------------------------------- API عمومی --------------------------------- */
 
 /**
@@ -483,41 +526,88 @@ export function parseXlsx(
   if (!sheetEntry) {
     throw new XlsxParseError(INVALID_XLSX_MESSAGE);
   }
-
-  const sheet = parseXml(extractEntry(buffer, sheetEntry).toString('utf8'));
-  const worksheet =
-    sheet.tagName === 'worksheet' ? sheet : firstChild(sheet, 'worksheet');
-  if (!worksheet) {
-    throw new XlsxParseError(INVALID_XLSX_MESSAGE);
-  }
-
-  const sharedStrings = readSharedStrings(buffer, entries);
-
-  const cleaned = readRows(worksheet, sharedStrings)
-    .map((row) => row.map((cell) => cell.trim()))
-    .filter((row) => row.some((cell) => cell.length > 0));
-
-  if (cleaned.length === 0) {
+  const table = readSheetTable(buffer, sheetEntry, readSharedStrings(buffer, entries), locateHeader);
+  if (!table) {
     throw new XlsxParseError('فایل هیچ ردیف داده‌ای ندارد.');
   }
+  return table;
+}
 
-  const headerIndex = safeHeaderIndex(cleaned, locateHeader);
-  const headers = cleaned[headerIndex];
-  const dataRows = cleaned.slice(headerIndex + 1);
-  const rowLimit = maxImportRows();
-  if (dataRows.length > rowLimit) {
+/** Visible sheets in workbook order, as (name, zip path). Without a usable workbook.xml: every worksheet part. */
+function listSheets(buffer: Buffer, entries: Map<string, ZipEntry>): { sheets: Array<{ name: string; path: string }>; hidden: number } {
+  const workbookEntry = entries.get('xl/workbook.xml');
+  const relsEntry = entries.get('xl/_rels/workbook.xml.rels');
+  const sheets: Array<{ name: string; path: string }> = [];
+  let hidden = 0;
+  if (workbookEntry && relsEntry) {
+    const workbook = parseXml(extractEntry(buffer, workbookEntry).toString('utf8'));
+    const root = workbook.tagName === 'workbook' ? workbook : firstChild(workbook, 'workbook');
+    const rels = parseXml(extractEntry(buffer, relsEntry).toString('utf8'));
+    const relsRoot = rels.tagName === 'Relationships' ? rels : firstChild(rels, 'Relationships');
+    for (const sheet of firstChild(root, 'sheets')?.children ?? []) {
+      if (sheet.tagName !== 'sheet') {
+        continue;
+      }
+      if (sheet.attrs.state && sheet.attrs.state !== 'visible') {
+        hidden += 1;
+        continue;
+      }
+      const target = relsRoot?.children.find(
+        (child) => child.tagName === 'Relationship' && child.attrs.Id === sheet.attrs['r:id'],
+      )?.attrs.Target;
+      if (target) {
+        const entryPath = resolveTarget('xl', target);
+        if (entries.has(entryPath)) {
+          sheets.push({ name: sheet.attrs.name || `Sheet${sheets.length + 1}`, path: entryPath });
+        }
+      }
+    }
+  }
+  if (sheets.length === 0 && hidden === 0) {
+    [...entries.keys()]
+      .filter((name) => /^xl\/worksheets\/[^/]+\.xml$/.test(name))
+      .sort((x, y) => x.localeCompare(y, 'en', { numeric: true }))
+      .forEach((entryPath, index) => sheets.push({ name: `Sheet${index + 1}`, path: entryPath }));
+  }
+  return { sheets, hidden };
+}
+
+export interface ParsedSheet extends ParsedXlsx {
+  name: string;
+}
+
+/** Every visible sheet with data. The size and inflate budgets are shared; the row cap applies to the whole file. */
+export function parseXlsxSheets(
+  input: Buffer,
+  locateHeader?: HeaderLocator,
+  budget?: InflateBudget,
+): { sheets: ParsedSheet[]; hiddenSheets: number } {
+  const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  const sizeLimit = maxSheetBytes();
+  if (buffer.length > sizeLimit) {
     throw new XlsxParseError(
-      `حداکثر ${rowLimit} ردیف در هر بارگذاری مجاز است.`,
+      `حجم فایل اکسل بیش از ${Math.round(sizeLimit / 1024 / 1024)} مگابایت است.`,
     );
   }
-
-  const rows = dataRows.map((row) => {
-    const normalized = row.slice(0, headers.length);
-    while (normalized.length < headers.length) {
-      normalized.push('');
+  activeBudget = budget ?? { remaining: maxInflatedBytes() };
+  const entries = readCentralDirectory(buffer);
+  const { sheets: listed, hidden } = listSheets(buffer, entries);
+  const sharedStrings = readSharedStrings(buffer, entries);
+  const sheets: ParsedSheet[] = [];
+  let total = 0;
+  for (const { name, path } of listed) {
+    const table = readSheetTable(buffer, entries.get(path) as ZipEntry, sharedStrings, locateHeader);
+    if (!table) {
+      continue;
     }
-    return normalized;
-  });
-
-  return { headers, rows };
+    total += table.rows.length;
+    if (total > maxImportRows()) {
+      throw new XlsxParseError(`حداکثر ${maxImportRows()} ردیف در هر بارگذاری مجاز است.`);
+    }
+    sheets.push({ name, ...table });
+  }
+  if (sheets.length === 0) {
+    throw new XlsxParseError('فایل هیچ ردیف داده‌ای ندارد.');
+  }
+  return { sheets, hiddenSheets: hidden };
 }

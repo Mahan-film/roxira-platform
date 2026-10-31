@@ -20,6 +20,7 @@ import {
 import { ErrorNotice } from "@/components/app/app-ui";
 import { ImportSupportTable } from "@/components/app/import-support-table";
 import { ReconciliationPanel } from "@/components/app/import-reconciliation-panel";
+import { ImportReviewPanel } from "@/components/app/import-review-panel";
 import { collectDroppedFiles } from "@/lib/import-dropped-files";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -104,6 +105,7 @@ export function PackageImportWizard({
   const inputRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
   const [report, setReport] = useState<ImportReconciliationReport | null>(null);
+  const [reviewedSelection, setReviewedSelection] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [confirmImbalance, setConfirmImbalance] = useState(false);
@@ -337,9 +339,14 @@ export function PackageImportWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, packageId, selectionJson]);
 
+  // OCR data is only a proposal: the server refuses the commit until this exact selection was reviewed.
+  const needsReview = Boolean(detail?.format?.ocr);
+  const reviewDone = !needsReview || reviewedSelection === selectionJson;
+
   const canCommit =
     phase === "review" &&
     !busy &&
+    reviewDone &&
     !hasError &&
     missingEntities.length === 0 &&
     mappedCount > 0 &&
@@ -903,6 +910,16 @@ export function PackageImportWizard({
                 </Table>
               </CardContent>
             </Card>
+          )}
+
+          {packageId && mappedCount > 0 && missingEntities.length === 0 && (
+            <ImportReviewPanel
+              key={selectionJson}
+              packageId={packageId}
+              selectionJson={selectionJson}
+              required={needsReview}
+              onReviewed={setReviewedSelection}
+            />
           )}
 
           <ReconciliationPanel

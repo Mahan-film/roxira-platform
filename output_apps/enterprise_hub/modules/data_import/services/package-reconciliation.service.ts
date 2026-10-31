@@ -1,3 +1,4 @@
+import { buildReview, PackageReview } from '../analysis/review';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   ReconcileSelection,
@@ -17,6 +18,35 @@ export class PackageReconciliationService {
     private readonly analysisService: PackageAnalysisService,
     private readonly registry: EntityRegistryService,
   ) {}
+
+  /** صفحهٔ بازبینی: گروه‌بندی و همهٔ سندهای پیشنهادی. برای بستهٔ OCR پیش‌شرط ثبت است. */
+  async review(
+    tenantId: string,
+    packageId: string,
+    selections: ReconcileSelection[],
+    page: number,
+  ): Promise<PackageReview & { ocr: boolean; key: string }> {
+    const state = await this.store.getState(tenantId, packageId);
+    if (!state) {
+      throw new NotFoundException('این بسته یافت نشد یا منقضی شده است.');
+    }
+    if (!state.analysis || state.status !== 'ready') {
+      throw new BadRequestException('این بسته آمادهٔ بازبینی نیست؛ ابتدا تحلیل باید کامل شود.');
+    }
+    const parsed = await this.analysisService.openPackage(state);
+    try {
+      const review = buildReview(parsed.tables, state.analysis, this.registry.all(), selections, page);
+      const key = selectionKey(selections);
+      const fresh = await this.store.getState(tenantId, packageId);
+      if (fresh) {
+        fresh.reviewedKey = key;
+        await this.store.writeState(fresh);
+      }
+      return { ...review, ocr: Boolean(state.ocr), key };
+    } finally {
+      parsed.close();
+    }
+  }
 
   async reconcile(
     tenantId: string,

@@ -1,3 +1,4 @@
+import type { OcrResult } from './package-ocr.service';
 import {
   BadRequestException,
   Injectable,
@@ -46,6 +47,10 @@ export interface PackageState {
   parts?: string[];
   /** آخرین گزارش مغایرت‌گیری (کلید = هش انتخاب‌ها) تا commit دوباره محاسبه نکند. */
   reconciliation?: { key: string; report: unknown };
+  /** جدول‌های OCR یک PDF اسکن‌شده یا تصویر؛ مدل فقط یک بار صدا زده می‌شود. */
+  ocr?: OcrResult;
+  /** کلید انتخاب‌هایی که صفحهٔ بازبینی برایشان ساخته شد؛ ثبت دادهٔ OCR بدون آن مسدود است. */
+  reviewedKey?: string;
 }
 
 /** فایل بارگذاری‌شدهٔ حداقلی موردنیاز. */
@@ -71,7 +76,7 @@ export function detectPackageKind(fileName: string, buffer: Buffer): PackageKind
   if (!detection.reader) {
     throw new BadRequestException(UNKNOWN_FORMAT_MESSAGE);
   }
-  if (detection.id === 'access' || detection.id === 'mssql-backup' || detection.id === 'pg-custom' || detection.id === 'pdf' || detection.id === 'image') {
+  if (detection.id === 'access' || detection.id === 'mssql-backup' || detection.id === 'pg-custom') {
     try {
       detection.reader.read(buffer, { fileName, depth: 0 });
     } catch (error) {

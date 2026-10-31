@@ -30,7 +30,7 @@ export const SUPPORT_MATRIX: readonly SupportRow[] = [
   { id: 'xml', group: 'text', titleFa: 'XML', extensions: ['.xml'], status: 'supported', detailFa: 'رکوردهای تکرارشونده به جدول تبدیل می‌شوند. DTD/ENTITY به‌دلایل امنیتی رد می‌شود.', fixture: 'formats/journal.xml' },
   { id: 'html-table', group: 'sheet', titleFa: 'جدول HTML با پسوند xls', extensions: ['.xls', '.html'], status: 'supported', detailFa: 'خروجی «اکسل» بسیاری از نرم‌افزارها در واقع HTML است.', fixture: 'formats/journal-table.xls' },
   { id: 'xls', group: 'sheet', titleFa: 'اکسل قدیمی XLS (BIFF8)', extensions: ['.xls'], status: 'supported', detailFa: 'همهٔ برگه‌ها، تاریخ‌ها، رشته‌های اشتراکی. رمزدار و نسخه‌های قدیمی‌تر از Excel 97 رد می‌شوند.', fixture: 'formats/journal.xls' },
-  { id: 'xlsx', group: 'sheet', titleFa: 'اکسل XLSX', extensions: ['.xlsx'], status: 'partial', detailFa: 'فقط برگهٔ اول خوانده می‌شود؛ برگه‌های دیگر را جداگانه یا در ZIP بفرستید.', fixture: 'formats/journal.xlsx' },
+  { id: 'xlsx', group: 'sheet', titleFa: 'اکسل XLSX', extensions: ['.xlsx'], status: 'supported', detailFa: 'همهٔ برگه‌های نمایان، هر برگه یک جدول؛ برگه‌های پنهان خوانده نمی‌شوند و در یادداشت می‌آیند.', fixture: 'formats/multi-sheet.xlsx' },
   { id: 'ods', group: 'sheet', titleFa: 'OpenDocument ODS', extensions: ['.ods'], status: 'supported', detailFa: 'همهٔ برگه‌ها؛ تکرار سطر/ستون انفجاری رد می‌شود.', fixture: 'formats/journal.ods' },
   { id: 'dbf', group: 'database', titleFa: 'DBF (dBase / FoxPro / Clipper)', extensions: ['.dbf'], status: 'supported', detailFa: 'فایل memo (.dbt/.fpt) خوانده نمی‌شود. Iran System رد می‌شود.', fixture: 'formats/journal.dbf' },
   { id: 'sqlite', group: 'database', titleFa: 'دیتابیس SQLite', extensions: ['.sqlite', '.db'], status: 'supported', detailFa: 'فقط خواندن جدول‌ها.', fixture: 'erp_multicurrency_small.sqlite' },
@@ -50,7 +50,8 @@ export const SUPPORT_MATRIX: readonly SupportRow[] = [
   { id: 'mssql-backup', group: 'database', titleFa: 'پشتیبان SQL Server (.bak / .mdf)', extensions: ['.bak', '.mdf', '.ldf'], status: 'guide', detailFa: 'نیازمند سندباکس جدا (طراحی در docs/plan.md)؛ فعلاً راهنما: Generate Scripts به .sql.', fixture: 'formats/stub-sqlserver.bak.bin' },
   { id: 'pg-custom', group: 'database', titleFa: 'پشتیبان باینری PostgreSQL (pg_dump -Fc)', extensions: ['.dump', '.backup'], status: 'guide', detailFa: 'با pg_restore -f به متن تبدیل کنید.', fixture: 'formats/stub-pgdump-custom.dump' },
   { id: 'iran-system', group: 'text', titleFa: 'متن با رمزگذاری Iran System', extensions: ['.txt', '.csv'], status: 'guide', detailFa: 'جدول تأییدشده‌ای نداریم و رمزگشایی اشتباه نام‌ها را خراب می‌کند؛ با راهنمای خروجی UTF-8 رد می‌شود.', fixture: 'formats/iran-system-like.csv' },
-  { id: 'pdf-image', group: 'other', titleFa: 'PDF و تصویر', extensions: ['.pdf', '.png', '.jpg'], status: 'partial', detailFa: 'در «ورود فایل تکی» با مدل بینایی؛ تصویر را نمی‌توان ماسک کرد.' },
+  { id: 'pdf-text', group: 'other', titleFa: 'PDF متنی', extensions: ['.pdf'], status: 'partial', detailFa: 'جدول از لایهٔ متن بدون هیچ مدل هوش مصنوعی خوانده می‌شود. فقط با فایل ساختگی آزمایش شده؛ ستون‌بندی PDF واقعی بانک یا نرم‌افزار باید در بازبینی کنترل شود.', fixture: 'formats/journal-text.pdf' },
+  { id: 'pdf-scan', group: 'other', titleFa: 'PDF اسکن‌شده و عکس (OCR)', extensions: ['.pdf', '.png', '.jpg', '.webp'], status: 'partial', detailFa: 'با نقش vision در config/models.yaml خوانده می‌شود، تا ۳۰ صفحه، فقط صفحه‌های JPEG داخل PDF. تصویر قابل ماسک نیست و با data_collection: deny به مدل می‌رود. هرگز خودکار ثبت نمی‌شود: سرور بدون ساخت صفحهٔ بازبینی برای همان انتخاب، ثبت را رد می‌کند. دقت OCR فارسی با مدل زنده اندازه‌گیری نشده است. داخل ZIP پشتیبانی نمی‌شود.', fixture: 'formats/scanned.pdf' },
   { id: 'mt940', group: 'accounting', titleFa: 'SWIFT MT940 / CAMT.053', extensions: ['.sta', '.xml'], status: 'unsupported', detailFa: 'پشتیبانی نمی‌شود.' },
   { id: 'sync', group: 'other', titleFa: 'همگام‌سازی پیوسته با نرم‌افزار دیگر', extensions: [], status: 'unsupported', detailFa: 'ادعا نمی‌شود: ورود یک‌بارهٔ فایل است و با یک دسته قابل بازگردانی (undo) است.' },
 ];
@@ -62,6 +63,11 @@ const STATUS_FA: Record<SupportStatus, string> = {
   guide: '🧭 فقط راهنما',
   unsupported: '⛔ پشتیبانی نمی‌شود',
 };
+
+const REQUIRED_SAMPLES = ['سپیدار', 'همکاران سیستم', 'راهکاران', 'محک'].map((product) => ({
+  product,
+  files: 'خروجی اکسل یا CSV: سرفصل حساب‌ها، تراز آزمایشی، دفتر روزنامه با چند سند، مانده‌های افتتاحیه، اشخاص، کالا و موجودی',
+}));
 
 export function renderSupportMarkdown(): string {
   const lines = [
@@ -79,6 +85,16 @@ export function renderSupportMarkdown(): string {
       (r) =>
         `| ${r.titleFa} | ${r.extensions.map((e) => `\`${e}\``).join(' ') || '—'} | ${STATUS_FA[r.status]} | ${r.detailFa} | ${r.fixture ? `\`${r.fixture}\`` : '—'} |`,
     ),
+    '',
+    '## فایل‌های نمونه‌ای که برای پروفایل نرم‌افزارهای ایرانی لازم است',
+    '',
+    'هیچ پروفایلی برای سپیدار، همکاران سیستم، راهکاران یا محک ادعا نمی‌شود، چون خروجی واقعی آن‌ها را نداریم. برای ساخت هر پروفایل این خروجی‌ها از یک نسخهٔ واقعی لازم است (داده می‌تواند آزمایشی یا ناشناس‌شده باشد):',
+    '',
+    '| نرم‌افزار | فایل‌های لازم |',
+    '|---|---|',
+    ...REQUIRED_SAMPLES.map((s) => `| ${s.product} | ${s.files} |`),
+    '',
+    'همراه هر فایل، نسخهٔ نرم‌افزار و مسیر منوی خروجی را هم بنویسید. برای OCR نیز چند عکس و PDF اسکن‌شدهٔ واقعی فارسی لازم است تا دقت اندازه‌گیری شود.',
     '',
   ];
   return lines.join('\n');

@@ -13,6 +13,7 @@ import {
   PayloadTooLargeException,
   Post,
   Put,
+  Query,
   Req,
   UploadedFile,
   UseGuards,
@@ -51,7 +52,7 @@ import { EntityDescriptorDto } from '../dto/entity-descriptor-response.dto';
 import { EntityCommitDto, PreviewRequestDto } from '../dto/entity-commit.dto';
 import { EntityCommitResponseDto } from '../dto/entity-commit-response.dto';
 import { EntityPreviewResponseDto } from '../dto/entity-preview-response.dto';
-import { PackageCommitDto } from '../dto/package-commit.dto';
+import { PackageCommitDto, PackageReviewQueryDto } from '../dto/package-commit.dto';
 import {
   PackageCommitResponseDto,
   PackageCreatedDto,
@@ -331,6 +332,19 @@ export class DataImportController {
     @Body() dto: PackageCommitDto,
   ): Promise<ReconciliationReportDto> {
     return this.packageImportService.reconcile(this.tenantIdOf(request), id, dto);
+  }
+
+  @Post('packages/:id/review')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'بازبینی پیش از ثبت: سرفصل، افتتاحیه، اشخاص، کالا و همهٔ سندهای پیشنهادی (صفحه‌به‌صفحه)' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
+  async reviewPackage(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query() query: PackageReviewQueryDto,
+    @Body() dto: PackageCommitDto,
+  ) {
+    return this.packageImportService.review(this.tenantIdOf(request), id, dto, query.page ?? 1);
   }
 
   @Post('uploads')

@@ -1,0 +1,38 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 476 >>
+stream
+BT /F1 10 Tf
+1 0 0 1 72 720 Tm (date) Tj
+1 0 0 1 150 720 Tm (account) Tj
+1 0 0 1 230 720 Tm (debit) Tj
+1 0 0 1 310 720 Tm (credit) Tj
+1 0 0 1 390 720 Tm (description) Tj
+1 0 0 1 72 702 Tm (2024-10-06) Tj
+1 0 0 1 150 702 Tm (1101) Tj
+1 0 0 1 230 702 Tm (1000) Tj
+1 0 0 1 310 702 Tm (0) Tj
+1 0 0 1 390 702 Tm (cash sale) Tj
+1 0 0 1 72 684 Tm (2024-10-06) Tj
+1 0 0 1 150 684 Tm (4101) Tj
+1 0 0 1 230 684 Tm (0) Tj
+1 0 0 1 310 684 Tm (1000) Tj
+1 0 0 1 390 684 Tm (cash sale) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+trailer
+<< /Root 1 0 R /Size 6 >>
+%%EOF

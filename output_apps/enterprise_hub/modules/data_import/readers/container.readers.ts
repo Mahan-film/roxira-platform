@@ -4,7 +4,7 @@ import {
   PACKAGE_MAX_UNCOMPRESSED_BYTES,
   PACKAGE_MAX_ZIP_FILES,
 } from '../constants/package-import.constants';
-import { parseXlsx } from '../parsers/xlsx.parser';
+import { parseXlsxSheets } from '../parsers/xlsx.parser';
 import { openSqlDump } from '../parsers/sql-dump.parser';
 import { isSqliteHeader, openSqlite } from '../parsers/sqlite.parser';
 import {
@@ -80,11 +80,15 @@ export const xlsxReader: FormatReader = {
     return names && isXlsxNames(names) ? 0.95 : 0;
   },
   read(buffer) {
-    const parsed = parseXlsx(buffer, pickHeaderRow);
+    const { sheets, hiddenSheets } = parseXlsxSheets(buffer, pickHeaderRow);
     const notes = new TableNotes();
-    const table = buildTable('Sheet1', [parsed.headers, ...parsed.rows], notes);
-    return packageOf('xlsx', [table], notes, [
-      'فقط برگهٔ اولِ فایل XLSX خوانده می‌شود؛ برگه‌های دیگر را جداگانه یا در ZIP بفرستید.',
+    const used = new Set<string>();
+    const tables = sheets.map((sheet) =>
+      buildTable(uniqueTableName(sanitiseTableName(sheet.name), used), [sheet.headers, ...sheet.rows], notes),
+    );
+    return packageOf('xlsx', tables, notes, [
+      ...(sheets.length > 1 ? [`${sheets.length} برگه خوانده شد؛ هر برگه یک جدول است.`] : []),
+      ...(hiddenSheets > 0 ? [`${hiddenSheets} برگهٔ پنهان خوانده نشد.`] : []),
     ]);
   },
 };

@@ -3,11 +3,14 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNumber,
   IsObject,
   IsOptional,
   IsString,
   Matches,
+  Max,
+  Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -52,4 +55,14 @@ export class PackageCommitDto {
   @IsOptional()
   @IsBoolean()
   confirmImbalance?: boolean;
+}
+
+/** شمارهٔ صفحهٔ سندهای پیشنهادی در بازبینی. */
+export class PackageReviewQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  page?: number;
 }

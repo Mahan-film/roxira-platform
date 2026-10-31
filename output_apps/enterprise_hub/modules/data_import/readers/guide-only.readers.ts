@@ -21,9 +21,9 @@ export const PG_CUSTOM_MESSAGE =
   'این پشتیبان باینری PostgreSQL (pg_dump -Fc) است. آن را با «pg_restore -f out.sql فایل.dump» ' +
   'یا «pg_dump --format=plain» به متن تبدیل کنید و فایل ‎.sql را بفرستید.';
 
+/** Reached only where OCR cannot run: inside a ZIP or a multi-file upload. A single upload goes through PackageOcrService. */
 export const PDF_IMAGE_MESSAGE =
-  'PDF و تصویر در «ورود فایل تکی» (استخراج جدول با هوش مصنوعی) پردازش می‌شوند، نه در ورود بسته. ' +
-  'همان فایل را در بخش ورود فایل تکی بفرستید.';
+  'تصویر و PDF اسکن‌شده داخل ZIP یا چندفایلی خوانده نمی‌شوند؛ هر کدام را جداگانه بارگذاری کنید تا با OCR خوانده و سپس بازبینی شوند.';
 
 function extension(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -66,10 +66,6 @@ export const mssqlBackupReader = guide('mssql-backup', 'پشتیبان SQL Serve
 
 export const pgCustomReader = guide('pg-custom', 'پشتیبان باینری PostgreSQL', ['.dump', '.backup'], PG_CUSTOM_MESSAGE, (buffer) =>
   buffer.length >= 5 && buffer.subarray(0, 5).toString('latin1') === 'PGDMP' ? 0.98 : 0,
-);
-
-export const pdfReader = guide('pdf', 'PDF', ['.pdf'], PDF_IMAGE_MESSAGE, (buffer, name) =>
-  sniffFileKind(buffer, name) === 'pdf' ? 0.99 : 0,
 );
 
 export const imageReader = guide('image', 'تصویر', ['.png', '.jpg', '.jpeg', '.webp'], PDF_IMAGE_MESSAGE, (buffer, name) =>

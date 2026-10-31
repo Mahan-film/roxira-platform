@@ -17,7 +17,7 @@ import {
   maxMultiPackageBytes,
   maxPackageBytes,
 } from '../constants/package-import.constants';
-import { ReconciliationReport } from '../analysis/reconciliation';
+import { ReconciliationReport, selectionKey } from '../analysis/reconciliation';
 import { ChunkedUploadService } from './chunked-upload.service';
 import { PackageReconciliationService } from './package-reconciliation.service';
 import { PackageCommitDto } from '../dto/package-commit.dto';
@@ -122,6 +122,14 @@ export class PackageImportService {
     return this.reconciliation.reconcile(tenantId, packageId, dto.tables ?? []);
   }
 
+  /** گروه‌بندی بسته و همهٔ سندهای پیشنهادی پیش از ثبت. */
+  review(tenantId: string, packageId: string, dto: PackageCommitDto, page: number) {
+    if (!this.reconciliation) {
+      throw new BadRequestException('بازبینی فعال نیست.');
+    }
+    return this.reconciliation.review(tenantId, packageId, dto.tables ?? [], page);
+  }
+
   /** بارگذاری بسته و قرار دادن آن در صف تحلیل. */
   async createPackage(
     tenantId: string,
@@ -175,6 +183,14 @@ export class PackageImportService {
       throw new BadRequestException('هیچ جدولی برای ثبت انتخاب نشده است.');
     }
     await this.quota.assertWithinQuota(tenantId);
+
+    // OCR output is only a proposal: the server itself must have shown this exact selection for review.
+    if (state.ocr && state.reviewedKey !== selectionKey(dto.tables)) {
+      throw new ConflictException({
+        code: 'REVIEW_REQUIRED',
+        message: 'این داده با OCR خوانده شده است؛ ابتدا همهٔ سندهای پیشنهادی را بازبینی کنید.',
+      });
+    }
 
     // Server-side gate: the client's report is never trusted. An imbalance blocks the commit unless
     // the platform admin / tenant owner explicitly confirms it (and that is logged).

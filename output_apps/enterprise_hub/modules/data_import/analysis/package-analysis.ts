@@ -89,6 +89,7 @@ export interface PackageCurrencyCount {
 export interface PackageFormatInfo {
   id: string;
   notes: string[];
+  ocr?: boolean;
 }
 
 export interface PackageAnalysis {

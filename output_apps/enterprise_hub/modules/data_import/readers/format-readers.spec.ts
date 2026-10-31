@@ -124,10 +124,17 @@ describe('tabular readers', () => {
     expect(rowsOf(pkg, 'journal')[0]['بدهکار']).toBe('5000000');
   });
 
-  it('xlsx: first sheet, with the honest note', async () => {
+  it('xlsx: a SheetJS workbook keeps both sheets', async () => {
     const pkg = await readFormat(load('journal.xlsx'), 'j.xlsx');
-    expect(rowsOf(pkg)).toHaveLength(4);
-    expect(pkg.notes?.join(' ')).toMatch(/برگهٔ اول/);
+    expect(pkg.tables.map((t) => t.name)).toEqual(['journal', 'accounts']);
+    expect(rowsOf(pkg, 'journal')).toHaveLength(4);
+  });
+
+  it('xlsx: every visible sheet becomes a table named after the sheet', async () => {
+    const pkg = await readFormat(load('multi-sheet.xlsx'), 'm.xlsx');
+    expect(pkg.tables.map((t) => t.name)).toEqual(['سرفصل', 'اسناد', 'کالا']);
+    expect(rowsOf(pkg, 'اسناد')[1]['بستانکار']).toBe('1000');
+    expect(pkg.notes?.join(' ')).toMatch(/۳|3/);
   });
 
   it('dbf', async () => {

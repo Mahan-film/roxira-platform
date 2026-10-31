@@ -7,7 +7,10 @@ import { SqlDumpParseError } from '../parsers/sql-dump.parser';
 import { SqliteParseError } from '../parsers/sqlite.parser';
 import { ZipPackageError } from '../parsers/zip.parser';
 import { readFormat, readFormatAs, readMultiFiles } from '../readers/format-registry';
+import { buildTable, TableNotes } from '../readers/tabular';
+import { packageOf } from '../readers/text-formats.reader';
 import { MappingMemoryService } from './mapping-memory.service';
+import { OcrResult, PackageOcrService } from './package-ocr.service';
 import { EntityRegistryService } from '../registry/entity-registry.service';
 import {
   PackageKind,
@@ -28,6 +31,7 @@ export class PackageAnalysisService {
     private readonly store: PackageStoreService,
     private readonly registry: EntityRegistryService,
     @Optional() private readonly memory?: MappingMemoryService,
+    @Optional() private readonly ocr?: PackageOcrService,
   ) {}
 
   /** تجزیهٔ بایت‌های بسته به جداول صفحه‌ای؛ قالب از روی «محتوا» تشخیص داده می‌شود. */
@@ -43,6 +47,9 @@ export class PackageAnalysisService {
 
   /** باز کردن بستهٔ ذخیره‌شده (تک‌فایلی یا چندفایلی) به جداول صفحه‌ای. */
   async openPackage(state: PackageState): Promise<ParsedPackage> {
+    if (state.ocr) {
+      return this.ocrPackage(state.ocr);
+    }
     if (state.kind === 'multi' && state.parts) {
       const parts = state.parts;
       return readMultiFiles(parts.length, (index) => {
@@ -57,6 +64,29 @@ export class PackageAnalysisService {
     return this.parsePackageBuffer(buffer, state.fileName, state.kind);
   }
 
+  /** A read-once OCR result as ordinary tables, so analysis, review and commit need no special path. */
+  private ocrPackage(result: OcrResult): ParsedPackage {
+    const notes = new TableNotes();
+    const tables = result.tables.map((table, index) =>
+      buildTable(`OCR ${index + 1}`, [table.headers, ...table.rows], notes),
+    );
+    return packageOf(result.source === 'image' ? 'image' : 'pdf', tables, notes, [
+      `این داده با OCR از ${result.pages} تصویر خوانده شده و پیش از ثبت باید سند به سند بازبینی شود.`,
+    ]);
+  }
+
+  /** The vision model is called here once; openPackage then reuses the stored tables. */
+  private async runOcr(state: PackageState): Promise<void> {
+    if (state.ocr || !this.ocr || state.kind === 'multi') {
+      return;
+    }
+    const buffer = await this.store.readSource(state.tenantId, state.packageId);
+    const pages = this.ocr.pagesOf(buffer, state.fileName);
+    if (pages) {
+      state.ocr = await this.ocr.read(pages);
+    }
+  }
+
   /** تحلیل کامل یک بسته و ثبت وضعیت «آماده» یا «ناموفق». */
   async analyze(tenantId: string, packageId: string): Promise<PackageState> {
     const state = await this.store.getState(tenantId, packageId);
@@ -65,6 +95,7 @@ export class PackageAnalysisService {
     }
 
     try {
+      await this.runOcr(state);
       const parsed = await this.openPackage(state);
       try {
         const analysis = analysePackage(
@@ -78,7 +109,7 @@ export class PackageAnalysisService {
           this.registry.all(),
           this.memory ? (signature) => this.memory!.recall(tenantId, signature) : undefined,
         );
-        analysis.format = { id: parsed.formatId ?? state.kind, notes: parsed.notes ?? [] };
+        analysis.format = { id: parsed.formatId ?? state.kind, notes: parsed.notes ?? [], ocr: Boolean(state.ocr) };
         state.analysis = analysis;
         state.status = 'ready';
         state.error = undefined;

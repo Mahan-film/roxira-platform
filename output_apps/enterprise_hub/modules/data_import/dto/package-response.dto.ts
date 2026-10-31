@@ -149,7 +149,7 @@ export class PackageStatusDto {
   currencies: PackageCurrencyDto[];
 
   @ApiProperty({ required: false, type: Object, description: 'قالب تشخیص‌داده‌شده از محتوا + یادداشت‌های خواننده' })
-  format?: { id: string; notes: string[] };
+  format?: { id: string; notes: string[]; ocr?: boolean };
 }
 
 export class PackageCommitResponseDto {
