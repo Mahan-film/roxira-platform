@@ -84,3 +84,20 @@ export function formatLatinMoney(
     ? `${LATIN_NUMBER_FMT.format(value)} ${currency}`
     : "—";
 }
+
+const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
+
+/**
+ * Report amount, exact for the decimal strings the API sends above the safe number range.
+ * Accounting style: negatives in brackets. Works on text, so nothing passes through a float.
+ */
+export function formatReportMoney(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const text = String(value);
+  const negative = text.startsWith("-");
+  const [integer, fraction] = text.replace("-", "").split(".");
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, "٬");
+  const kept = fraction && !/^0+$/.test(fraction) ? `${grouped}٫${fraction.padEnd(2, "0")}` : grouped;
+  const persian = kept.replace(/\d/g, (digit) => PERSIAN_DIGITS[Number(digit)]);
+  return negative ? `(${persian})` : persian;
+}

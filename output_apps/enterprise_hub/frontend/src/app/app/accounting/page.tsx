@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { BookOpenCheck, Landmark } from "lucide-react";
+import { BookOpenCheck, CalendarRange, FileBarChart, Gauge, Landmark, Wallet } from "lucide-react";
 
 import {
   EmptyImportState,
@@ -69,10 +69,28 @@ export default function SuiteAccountingPage() {
         description="سرفصل حساب‌ها، تراز آزمایشی و دفتر روزنامه"
         icon={<BookOpenCheck className="size-6 text-indigo-500" />}
         actions={
-          <Link href="/app/accounting/bank" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <Landmark aria-hidden="true" />
-            بانک و مغایرت‌گیری
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/app/accounting/dashboard" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <Gauge aria-hidden="true" />
+              داشبورد
+            </Link>
+            <Link href="/app/accounting/reports" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <FileBarChart aria-hidden="true" />
+              گزارش‌ها
+            </Link>
+            <Link href="/app/accounting/fiscal-years" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <CalendarRange aria-hidden="true" />
+              سال مالی
+            </Link>
+            <Link href="/app/accounting/petty-cash" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <Wallet aria-hidden="true" />
+              تنخواه
+            </Link>
+            <Link href="/app/accounting/bank" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <Landmark aria-hidden="true" />
+              بانک و مغایرت‌گیری
+            </Link>
+          </div>
         }
       />
 

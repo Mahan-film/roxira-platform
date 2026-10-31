@@ -158,6 +158,31 @@ export async function apiRequest<TResponse>(
   return (await response.json()) as TResponse;
 }
 
+/** Authenticated file download: returns the body, the caller saves it. Errors match `apiRequest`. */
+export async function apiDownloadWithParams(
+  path: string,
+  searchParams?: RequestOptions["searchParams"],
+): Promise<Blob> {
+  const url = buildUrl(path, searchParams);
+  const send = (token: string | null): Promise<Response> =>
+    fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      cache: "no-store",
+    });
+  const token = await getFreshAccessToken();
+  let response = await send(token);
+  if (response.status === 401 && token) {
+    const renewed = await refreshStoredSession(true);
+    if (renewed.status === "ok") {
+      response = await send(renewed.session.accessToken);
+    }
+  }
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  return response.blob();
+}
+
 /**
  * دریافت پاسخ متنی (مثلاً CSV) با همان توکن و خطای `apiRequest`.
  */
