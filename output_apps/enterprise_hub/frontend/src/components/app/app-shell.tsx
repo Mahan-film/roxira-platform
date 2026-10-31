@@ -22,6 +22,7 @@ import {
   Warehouse,
   X,
   Contact,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,6 +58,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app/inventory", label: "کالا و انبار", icon: Warehouse, nested: true, module: "inventory" },
   { href: "/app/accounting", label: "حساب‌ها", icon: BookOpenCheck, nested: true, module: "accounting" },
   { href: "/app/invoicing", label: "صورتحساب‌ها", icon: ReceiptText, nested: true, module: "invoicing" },
+  { href: "/app/tax", label: "مالیات و مودیان", icon: Landmark, nested: true, module: "tax" },
   { href: "/app/import", label: "ورود داده (import)", icon: FileUp, nested: true, module: "data_import" },
   { href: "/app/assistant", label: "دستیار هوشمند", icon: MessageSquareText, nested: false, module: "assistant" },
   { href: "/app/settings/members", label: "اعضا و نقش‌ها", icon: Settings, nested: true, module: "members" },

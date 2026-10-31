@@ -36,6 +36,15 @@ export class MoadianController {
     return requireTenantId(request);
   }
 
+  @Get('status')
+  @ApiOperation({
+    summary: 'وضعیت پرچم اتصال زنده و ثبت‌بودن اطلاعات اتصال',
+    description: 'حتی وقتی MOADIAN_ENABLED خاموش است پاسخ می‌دهد.',
+  })
+  async getStatus(@Req() request: AuthenticatedRequest): Promise<{ enabled: boolean; configured: boolean }> {
+    return this.moadianService.getStatus(this.tenantIdOf(request));
+  }
+
   @RequireAction(AccessAction.ADMIN)
   @Put('credentials')
   @ApiOperation({

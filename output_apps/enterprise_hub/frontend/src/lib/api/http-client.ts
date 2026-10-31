@@ -159,6 +159,30 @@ export async function apiRequest<TResponse>(
 }
 
 /**
+ * دریافت پاسخ متنی (مثلاً CSV) با همان توکن و خطای `apiRequest`.
+ */
+export async function apiRequestText(
+  path: string,
+  options: RequestOptions = {},
+): Promise<string> {
+  const url = buildUrl(path, options.searchParams);
+  const headers: Record<string, string> = {};
+  const token = await getFreshAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    signal: options.signal,
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  return response.text();
+}
+
+/**
  * ارسال `multipart/form-data` (بارگذاری فایل) با همان منطق توکن و خطای
  * `apiRequest`. هدر Content-Type عمداً تنظیم نمی‌شود تا مرورگر boundary را
  * خودش اضافه کند.

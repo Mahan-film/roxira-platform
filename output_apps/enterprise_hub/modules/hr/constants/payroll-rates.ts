@@ -131,7 +131,13 @@ export const PAYROLL_RATES_BY_YEAR: Readonly<Record<number, PayrollYearRates>> =
         'Budget Law 1405 wage tax (monthly exemption 400,000,000 IRR; 10/15/20/25/30% ' +
         'bands at 800M/1,000M/1,200M/1,400M). Figures cross-checked against secondary ' +
         'sources (sepidarsystem.com, e-estekhdam.com, asriran.com, 2026-10-22); ' +
-        're-verify against the official circular before relying on them in production.',
+        'Checked 2026-10-31 (docs/research/TAX_SEASONAL_AND_RATES_2026-10-31.md): min daily wage ' +
+        '5,541,850 and housing 30,000,000 match the decree text published on ekhtebar.ir (dated ' +
+        '1404-12-24); seniority is 166,666/day there (about 5,000,000/month, kept); the 22,000,000 ' +
+        'food figure is garbled on that page and not independently confirmed; the wage-tax ' +
+        'brackets are NOT confirmed (only the 400,000,000 IRR monthly exemption is corroborated). ' +
+        'Stays verified:false until the brackets and food allowance are checked against the ' +
+        'official circular.',
       minDailyWage: 5_541_850,
       housingAllowance: 30_000_000,
       foodAllowance: 22_000_000,

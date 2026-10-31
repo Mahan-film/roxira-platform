@@ -74,6 +74,12 @@ export class MoadianService {
     return String(this.config.get<string>(MOADIAN_ENV.ENABLED) ?? 'false').toLowerCase() === 'true';
   }
 
+  /** Flag + whether this tenant has stored credentials; never throws when the flag is off. */
+  async getStatus(tenantId: string): Promise<{ enabled: boolean; configured: boolean }> {
+    const credential = await this.repository.findCredential(tenantId);
+    return { enabled: this.isEnabled(), configured: credential !== null };
+  }
+
   private numberSetting(name: string, fallback: number): number {
     const raw = Number(this.config.get<string>(name));
     return Number.isFinite(raw) && raw > 0 ? raw : fallback;

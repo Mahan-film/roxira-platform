@@ -1,15 +1,19 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { InvoiceEntity } from '../invoicing/entities/invoice.entity';
 import { InvoicingModule } from '../invoicing/invoicing.module';
 import { MOADIAN_QUEUE } from './constants/moadian.constants';
 import { MoadianController } from './controllers/moadian.controller';
+import { SeasonalReportController } from './controllers/seasonal-report.controller';
 import { TaxComplianceController } from './controllers/tax-compliance.controller';
 import { MoadianCredentialEntity } from './entities/moadian-credential.entity';
 import { MoadianSubmissionEntity } from './entities/moadian-submission.entity';
 import { TaxInvoiceSignatureEntity } from './entities/tax-invoice-signature.entity';
 import { TaxSigningKeyEntity } from './entities/tax-signing-key.entity';
 import { MoadianProcessor } from './processors/moadian.processor';
+import { SeasonalReportRepository } from './reports/seasonal-report.repository';
+import { SeasonalReportService } from './reports/seasonal-report.service';
 import { MoadianRepository } from './repositories/moadian.repository';
 import { TaxComplianceRepository } from './repositories/tax-compliance.repository';
 import { MoadianApiClient } from './services/moadian-api.client';
@@ -35,11 +39,12 @@ import { TaxComplianceService } from './services/tax-compliance.service';
       TaxInvoiceSignatureEntity,
       MoadianCredentialEntity,
       MoadianSubmissionEntity,
+      InvoiceEntity,
     ]),
     InvoicingModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
   ],
-  controllers: [TaxComplianceController, MoadianController],
+  controllers: [TaxComplianceController, MoadianController, SeasonalReportController],
   providers: [
     TaxComplianceService,
     TaxComplianceRepository,
@@ -47,6 +52,8 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     MoadianRepository,
     MoadianApiClient,
     MoadianProcessor,
+    SeasonalReportService,
+    SeasonalReportRepository,
   ],
   exports: [TaxComplianceService],
 })
