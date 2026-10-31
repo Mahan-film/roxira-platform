@@ -121,8 +121,8 @@ compute_services() {
   return 0
 }
 
-# Test helpers such as test/migrations/*.sh change no schema, so they never gate a deploy.
-migration_files() { grep -Ei '(^|/)migrations?/|\.sql$' <<<"$CHANGED" | grep -Ev '(^|/)test/' || true; }
+# Test helpers and migrations/data/ (seed values imported by a migration) are not migrations themselves.
+migration_files() { grep -Ei '(^|/)migrations?/|\.sql$' <<<"$CHANGED" | grep -Ev '(^|/)test/|/migrations/data/' || true; }
 
 env_names_needed() {  # NAMES ONLY, from the new code
   {
