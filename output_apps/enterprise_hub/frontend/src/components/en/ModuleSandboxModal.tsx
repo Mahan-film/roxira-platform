@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState } from "react";
 
 export type ModuleKey =
   | "invoicing"
@@ -28,42 +28,30 @@ const TAB_LABELS: Record<ModuleKey, string> = {
 
 const MODULE_META: Record<
   ModuleKey,
-  { title: string; badge: string; endpoint: string; color: string }
+  { title: string; color: string }
 > = {
   invoicing: {
     title: "E-Invoicing & VAT Engine",
-    badge: "POST /api/v1/invoicing/issue",
-    endpoint: "https://roxira.net/api/backend/invoices",
     color: "text-indigo-400 border-indigo-500/30 bg-indigo-500/10",
   },
   accounting: {
     title: "Double-Entry General Ledger",
-    badge: "POST /api/v1/accounting/journal",
-    endpoint: "https://roxira.net/api/backend/accounting/entries",
     color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
   },
   inventory: {
     title: "Multi-Warehouse FIFO Control",
-    badge: "GET /api/v1/inventory/fifo-valuation",
-    endpoint: "https://roxira.net/api/backend/inventory/stock",
     color: "text-amber-400 border-amber-500/30 bg-amber-500/10",
   },
   crm: {
     title: "Enterprise CRM & Kanban Pipeline",
-    badge: "PATCH /api/v1/crm/deals/:id/stage",
-    endpoint: "https://roxira.net/api/backend/crm/pipeline",
     color: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10",
   },
   penalty: {
     title: "Late-Payment Penalty Calculator",
-    badge: "POST /api/v1/damages/calculate",
-    endpoint: "https://roxira.net/api/backend/damages/compute",
     color: "text-rose-400 border-rose-500/30 bg-rose-500/10",
   },
   ai: {
-    title: "AI Knowledge Core (GraphRAG)",
-    badge: "POST /api/v1/ai/graph-query",
-    endpoint: "https://roxira.net/api/backend/ai/query",
+    title: "AI Knowledge Core (demo)",
     color: "text-purple-400 border-purple-500/30 bg-purple-500/10",
   },
 };
@@ -74,31 +62,6 @@ export default function ModuleSandboxModal({
   onSelectModule,
   onRequestApiClick,
 }: ModuleSandboxModalProps) {
-  // --- Live Server Cryptographic Audit Verification ---
-  const [serverAuditHash, setServerAuditHash] = useState<string>("sha256:9f84c...31a0");
-  const [isVerifying, setIsVerifying] = useState<boolean>(false);
-
-  const verifyOnServer = useCallback(async (moduleKey: ModuleKey, params: Record<string, unknown>) => {
-    setIsVerifying(true);
-    try {
-      const res = await fetch("/api/v1/sandbox/verify-computation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ module: moduleKey, params }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.auditHash) {
-          setServerAuditHash(data.auditHash);
-        }
-      }
-    } catch {
-      // Keep existing hash on network failure
-    } finally {
-      setIsVerifying(false);
-    }
-  }, []);
-
   // --- 1. E-Invoicing State ---
   const [invoiceItems, setInvoiceItems] = useState([
     { id: 1, desc: "Cross-Border Settlement Gateway License", qty: 1, price: 8500 },
@@ -144,58 +107,11 @@ export default function ModuleSandboxModal({
   const [aiQuery, setAiQuery] = useState(
     "What are the VAT compliance rules for cross-border EUR-to-AED settlement?"
   );
-  const aiQueryRef = useRef(aiQuery);
   const [aiResult, setAiResult] = useState({
     answer:
-      "Under Roxira Multi-Jurisdiction Tax Engine v4.2, cross-border B2B settlements between EU VAT-registered entities and UAE Free Zone counterparts qualify for Reverse-Charge mechanism (0% withholding), provided a valid TRN/VAT ID is cryptographically verified in the invoice payload.",
-    nodes: ["EU-VAT-Directive-Art196", "UAE-FTA-B2B-ReverseCharge", "Schema:InvoicePayload.taxId"],
-    confidence: "98.4%",
+      "Demo only: no AI model is queried here. Press the button to see the placeholder text.",
   });
 
-  // Trigger server verification when active module or primary values change
-  useEffect(() => {
-    if (!activeModule) return;
-    let params: Record<string, unknown> = {};
-    if (activeModule === "invoicing") params = { itemsCount: invoiceItems.length, vatRate };
-    else if (activeModule === "accounting") params = { entriesCount: ledgerEntries.length };
-    else if (activeModule === "inventory") params = { warehouse: selectedWarehouse, dispatchQty };
-    else if (activeModule === "crm") params = { dealsCount: deals.length };
-    else if (activeModule === "penalty") params = { principal, overdueDays, annualIndexRate };
-    else if (activeModule === "ai") params = { query: aiQueryRef.current };
-
-    let cancelled = false;
-    fetch("/api/v1/sandbox/verify-computation", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ module: activeModule, params }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.auditHash) {
-          setServerAuditHash(data.auditHash);
-        }
-      })
-      .catch(() => {
-        // Keep existing hash on network failure
-      })
-      .finally(() => {
-        if (!cancelled) setIsVerifying(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeModule,
-    invoiceItems.length,
-    vatRate,
-    ledgerEntries.length,
-    selectedWarehouse,
-    dispatchQty,
-    deals,
-    principal,
-    overdueDays,
-    annualIndexRate,
-  ]);
 
   if (!activeModule) return null;
 
@@ -233,7 +149,7 @@ export default function ModuleSandboxModal({
           <div className="flex items-center gap-3">
             <span className="h-3 w-3 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
-              Interactive Enterprise Sandbox (Live Preview)
+              Interactive demo: sample data, calculated in your browser only
             </span>
           </div>
           <button
@@ -250,7 +166,6 @@ export default function ModuleSandboxModal({
             <button
               key={key}
               onClick={() => {
-                setIsVerifying(true);
                 onSelectModule(key);
               }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
@@ -270,24 +185,14 @@ export default function ModuleSandboxModal({
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <span>{meta.title}</span>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${meta.color}`}>
-                Interactive Mode
+                Demo
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Production Endpoint: <code className="text-indigo-300 font-mono">{meta.endpoint}</code>
+              Demo with sample data. Nothing is sent to a server or saved.
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <span className="text-xs font-mono rounded bg-white/5 border border-white/10 px-2.5 py-1 text-slate-300">
-              {meta.badge}
-            </span>
-            <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
-              <span>Audit Hash:</span>
-              <span className="text-indigo-300 font-semibold">{serverAuditHash}</span>
-              <span className={isVerifying ? "text-amber-400 animate-pulse" : "text-emerald-400"}>
-                {isVerifying ? "● Verifying" : "✓ Verified"}
-              </span>
-            </div>
           </div>
         </div>
 
@@ -299,7 +204,7 @@ export default function ModuleSandboxModal({
               <div className="lg:col-span-2 space-y-4">
                 <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                   <h4 className="text-sm font-medium text-slate-200 mb-3">
-                    Invoice Line Items (VAT-Compliant Schema)
+                    Invoice Line Items (demo)
                   </h4>
                   <div className="space-y-2">
                     {invoiceItems.map((item) => (
@@ -321,7 +226,6 @@ export default function ModuleSandboxModal({
                             onClick={() => {
                               const updated = invoiceItems.filter((i) => i.id !== item.id);
                               setInvoiceItems(updated);
-                              verifyOnServer("invoicing", { itemsCount: updated.length, vatRate });
                             }}
                             className="text-rose-400 hover:text-rose-300"
                           >
@@ -362,7 +266,6 @@ export default function ModuleSandboxModal({
                         setInvoiceItems(updated);
                         setNewItemDesc("");
                         setNewItemPrice("");
-                        verifyOnServer("invoicing", { itemsCount: updated.length, vatRate });
                       }}
                       className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-medium text-white transition"
                     >
@@ -374,7 +277,7 @@ export default function ModuleSandboxModal({
 
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-col justify-between space-y-4">
                 <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-slate-200">Real-Time Tax Summary</h4>
+                  <h4 className="text-sm font-medium text-slate-200">Tax Summary (demo)</h4>
                   <div className="flex justify-between text-xs text-slate-400">
                     <span>Net Subtotal</span>
                     <span className="font-mono text-white">€{subtotal.toFixed(2)}</span>
@@ -386,7 +289,6 @@ export default function ModuleSandboxModal({
                       onChange={(e) => {
                         const newRate = Number(e.target.value);
                         setVatRate(newRate);
-                        verifyOnServer("invoicing", { itemsCount: invoiceItems.length, vatRate: newRate });
                       }}
                       className="rounded border border-white/15 bg-black px-2 py-1 text-xs text-white"
                     >
@@ -404,10 +306,6 @@ export default function ModuleSandboxModal({
                     <span>Gross Total (EUR)</span>
                     <span className="font-mono text-emerald-400">€{invoiceTotal.toFixed(2)}</span>
                   </div>
-                </div>
-                <div className="rounded-lg bg-black/50 p-2.5 text-[11px] font-mono text-slate-400 flex items-center justify-between">
-                  <span>Server Audit Hash:</span>
-                  <span className="text-indigo-400">{serverAuditHash}</span>
                 </div>
               </div>
             </div>
@@ -493,7 +391,6 @@ export default function ModuleSandboxModal({
                     setAccTitle("");
                     setAccDebit("");
                     setAccCredit("");
-                    verifyOnServer("accounting", { entriesCount: updated.length });
                   }}
                   className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-1.5 text-xs font-medium text-white transition"
                 >
@@ -513,7 +410,6 @@ export default function ModuleSandboxModal({
                     value={selectedWarehouse}
                     onChange={(e) => {
                       setSelectedWarehouse(e.target.value);
-                      verifyOnServer("inventory", { warehouse: e.target.value, dispatchQty });
                     }}
                     className="rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white"
                   >
@@ -535,7 +431,6 @@ export default function ModuleSandboxModal({
                     onChange={(e) => {
                       const newQty = Number(e.target.value);
                       setDispatchQty(newQty);
-                      verifyOnServer("inventory", { warehouse: selectedWarehouse, dispatchQty: newQty });
                     }}
                     className="w-64 accent-amber-400"
                   />
@@ -615,7 +510,6 @@ export default function ModuleSandboxModal({
                                         : item
                                     );
                                     setDeals(updated);
-                                    verifyOnServer("crm", { dealId: deal.id, targetStage });
                                   }}
                                   className="rounded bg-white/5 hover:bg-cyan-500/20 px-1.5 py-0.5 text-[10px] text-slate-300"
                                 >
@@ -643,7 +537,6 @@ export default function ModuleSandboxModal({
                     onChange={(e) => {
                       const val = Number(e.target.value);
                       setPrincipal(val);
-                      verifyOnServer("penalty", { principal: val, overdueDays, annualIndexRate });
                     }}
                     className="w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-white font-mono"
                   />
@@ -656,7 +549,6 @@ export default function ModuleSandboxModal({
                     onChange={(e) => {
                       const val = Number(e.target.value);
                       setOverdueDays(val);
-                      verifyOnServer("penalty", { principal, overdueDays: val, annualIndexRate });
                     }}
                     className="w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-white font-mono"
                   />
@@ -672,7 +564,6 @@ export default function ModuleSandboxModal({
                     onChange={(e) => {
                       const val = Number(e.target.value);
                       setAnnualIndexRate(val);
-                      verifyOnServer("penalty", { principal, overdueDays, annualIndexRate: val });
                     }}
                     className="w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-white font-mono"
                   />
@@ -700,8 +591,8 @@ export default function ModuleSandboxModal({
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-4">
-                  Formula: Principal × (IndexRate / 100) × (OverdueDays / 365). Compliant with
-                  commercial arbitration standards.
+                  Formula: Principal × (IndexRate / 100) × (OverdueDays / 365). Illustrative
+                  calculation only, not legal or financial advice.
                 </p>
               </div>
             </div>
@@ -715,51 +606,28 @@ export default function ModuleSandboxModal({
                   type="text"
                   value={aiQuery}
                   onChange={(e) => {
-                    aiQueryRef.current = e.target.value;
                     setAiQuery(e.target.value);
                   }}
                   className="flex-1 rounded-xl border border-white/15 bg-black/50 px-4 py-2.5 text-xs text-white"
-                  placeholder="Ask the GraphRAG compliance & financial engine..."
+                  placeholder="Type a question (demo only)"
                 />
                 <button
                   onClick={() => {
                     setAiResult({
-                      answer: `GraphRAG synthesized response for "${aiQuery}": Cross-border ledger entries are automatically normalized against daily ECB & Central Bank reference feeds with full audit lineage stored in Qdrant vector shards.`,
-                      nodes: [
-                        "GraphNode:CrossBorderSettlement",
-                        "VectorShard:Compliance-2026-v4",
-                        "Policy:ISO-20022-Audit",
-                      ],
-                      confidence: "99.1%",
+                      answer: `Placeholder for "${aiQuery}". This demo does not run a knowledge engine and gives no tax or legal advice.`,
                     });
-                    verifyOnServer("ai", { query: aiQuery });
                   }}
                   className="rounded-xl bg-purple-600 hover:bg-purple-500 px-5 py-2.5 text-xs font-medium text-white transition"
                 >
-                  Run GraphRAG
+                  Show placeholder
                 </button>
               </div>
 
               <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-purple-300">
-                    Synthesized Knowledge Dispatch
-                  </span>
-                  <span className="font-mono text-emerald-400">
-                    Confidence: {aiResult.confidence}
-                  </span>
-                </div>
+                <span className="font-semibold text-purple-300">
+                  Placeholder output (not generated by a model)
+                </span>
                 <p className="text-slate-200 leading-relaxed">{aiResult.answer}</p>
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {aiResult.nodes.map((node) => (
-                    <span
-                      key={node}
-                      className="rounded-md bg-black/50 border border-white/10 px-2.5 py-1 font-mono text-[11px] text-purple-300"
-                    >
-                      🔗 {node}
-                    </span>
-                  ))}
-                </div>
               </div>
             </div>
           )}
@@ -768,8 +636,7 @@ export default function ModuleSandboxModal({
         {/* Footer CTA */}
         <div className="border-t border-white/10 bg-[#070910] px-6 py-4 flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs text-slate-400">
-            Production database writes require a scoped{" "}
-            <code className="text-slate-200">Bearer JWT</code> token.
+            This is a demo with sample data. Tell us what you need and we will contact you.
           </p>
           <div className="flex items-center gap-3">
             <button
@@ -779,7 +646,7 @@ export default function ModuleSandboxModal({
               }}
               className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-medium text-white transition"
             >
-              Connect via API / Get Scoped JWT →
+              Request early access →
             </button>
           </div>
         </div>

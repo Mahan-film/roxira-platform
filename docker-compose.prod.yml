@@ -424,6 +424,7 @@ services:
       - PORT=3001
       - HOSTNAME=0.0.0.0
       - NEST_API_ORIGIN=http://roxira_enterprise_backend:3000
+      - LEAD_NOTIFY_EMAIL=${LEAD_NOTIFY_EMAIL:-}
       - JUDGE_API_ORIGIN=http://roxira_app_prod:8000
       - SANDBOX_JWT_SECRET=${SANDBOX_JWT_SECRET:-}
     ports:

@@ -94,9 +94,9 @@ export function EnSettlementPanel() {
           FX &amp; settlement
         </div>
         <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-          Issue invoices and post ledger entries in the settlement currency of
-          your choice. The platform normalizes amounts through a central
-          exchange-rate service so consolidated reporting stays accurate.
+          Pick a settlement currency to preview how amounts convert at reference
+          rates. Normalizing invoices and ledger entries into one reporting
+          currency is planned for the accounting suite, which is in development.
         </p>
 
         <div>

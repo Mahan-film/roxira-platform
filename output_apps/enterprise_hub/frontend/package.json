@@ -7,7 +7,8 @@
     "prebuild": "node scripts/copy-coverage-manifest.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test src/lib/upgrade-inquiry.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
