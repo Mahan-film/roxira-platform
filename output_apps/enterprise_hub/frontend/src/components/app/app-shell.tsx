@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Banknote,
   BookOpenCheck,
   ClipboardList,
   FileUp,
@@ -57,6 +58,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app/hr", label: "کارکنان (HR)", icon: UsersRound, nested: true, module: "hr" },
   { href: "/app/inventory", label: "کالا و انبار", icon: Warehouse, nested: true, module: "inventory" },
   { href: "/app/accounting", label: "حساب‌ها", icon: BookOpenCheck, nested: true, module: "accounting" },
+  { href: "/app/cheques", label: "چک‌ها", icon: Banknote, nested: true, module: "cheques" },
   { href: "/app/invoicing", label: "صورتحساب‌ها", icon: ReceiptText, nested: true, module: "invoicing" },
   { href: "/app/tax", label: "مالیات و مودیان", icon: Landmark, nested: true, module: "tax" },
   { href: "/app/import", label: "ورود داده (import)", icon: FileUp, nested: true, module: "data_import" },

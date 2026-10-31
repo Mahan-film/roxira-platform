@@ -535,6 +535,39 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/cheques/ (ChequesController.list)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/cheques/:id (ChequesController.get)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/cheques/due (ChequesController.due)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/crm/leads (CrmController.listLeads)": {
     "policy": "crm:read",
     "owner": true,
@@ -1817,6 +1850,28 @@
   },
   "POST /enterprise-hub/banking/statement-lines/:id/match (BankingController.match)": {
     "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/ (ChequesController.create)": {
+    "policy": "cheques:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/:id/transition (ChequesController.transition)": {
+    "policy": "cheques:post",
     "owner": true,
     "admin": true,
     "accountant": true,

@@ -64,3 +64,6 @@ export const JUDGE_RESOURCE_PATH = "api/v1/apps/judge";
  * می‌شود (پرهیز از CORS و عدم افشای آدرس واقعی سرویس پایتون).
  */
 export const JUDGE_API_PROXY_BASE_PATH = "/api/judge";
+
+/** Cheque register (received/issued cheques, lifecycle, due list) in NestJS */
+export const CHEQUES_RESOURCE_PATH = "enterprise-hub/cheques";
