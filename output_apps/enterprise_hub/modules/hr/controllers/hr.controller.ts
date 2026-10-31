@@ -245,12 +245,11 @@ export class HrController {
   @ApiOperation({ summary: 'نرخ‌ها و مبالغ قانونی حقوق یک سال شمسی' })
   @ApiResponse({ status: HttpStatus.OK, type: PayrollRatesResponseDto })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'سال تعریف نشده' })
-  getPayrollRates(
+  async getPayrollRates(
     @Req() request: AuthenticatedRequest,
     @Param('year', ParseIntPipe) year: number,
-  ): PayrollRatesResponseDto {
-    this.tenantIdOf(request);
-    return this.payrollRunService.getRates(year);
+  ): Promise<PayrollRatesResponseDto> {
+    return this.payrollRunService.getRates(this.tenantIdOf(request), year);
   }
 
   @Post('payroll-runs')

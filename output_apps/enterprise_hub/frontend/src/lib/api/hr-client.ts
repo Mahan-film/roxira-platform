@@ -16,6 +16,8 @@ import {
   Payslip,
   QueryEmployeeDto,
   QueryPayslipDto,
+  SetStatutoryParameterDto,
+  StatutoryParameter,
 } from "@/types/hr";
 import { apiRequest } from "@/lib/api/http-client";
 import { API_PROXY_BASE_PATH, HR_RESOURCE_PATH } from "@/lib/api/config";
@@ -160,6 +162,27 @@ export async function getPayrollRates(
   return apiRequest<PayrollRates>(`${HR_ENDPOINT}/payroll-rates/${year}`, {
     method: "GET",
     signal,
+  });
+}
+
+/** مقادیر قانونی جاری یک سال — GET /enterprise-hub/hr/statutory-parameters/:year */
+export async function listStatutoryParameters(
+  year: number,
+  signal?: AbortSignal,
+): Promise<StatutoryParameter[]> {
+  return apiRequest<StatutoryParameter[]>(`${HR_ENDPOINT}/statutory-parameters/${year}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/** ثبت نسخه جدید یک مقدار قانونی — PUT /enterprise-hub/hr/statutory-parameters */
+export async function setStatutoryParameter(
+  payload: SetStatutoryParameterDto,
+): Promise<StatutoryParameter[]> {
+  return apiRequest<StatutoryParameter[]>(`${HR_ENDPOINT}/statutory-parameters`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
   });
 }
 

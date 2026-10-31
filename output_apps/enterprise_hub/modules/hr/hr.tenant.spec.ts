@@ -13,6 +13,7 @@ import { PayslipEntity } from './entities/payslip.entity';
 import { ContractStatus, EmployeeStatus } from './enums/hr.enum';
 import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
+import { fakeStatutory } from './statutory/__fixtures__/seeded-rates';
 
 const requestWith = (user: unknown): AuthenticatedRequest =>
   ({ user }) as unknown as AuthenticatedRequest;
@@ -347,7 +348,7 @@ const buildService = () => {
   return {
     repository,
     accountingService,
-    service: new HrService(repository, accountingService),
+    service: new HrService(repository, accountingService, fakeStatutory()),
   };
 };
 

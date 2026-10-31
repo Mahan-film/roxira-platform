@@ -5,24 +5,24 @@ Code: `output_apps/enterprise_hub/modules/hr/`.
 
 ## Where the numbers live
 
-All statutory rates and amounts are in **one** file, versioned by Jalali year:
-`modules/hr/constants/payroll-rates.ts` (`PAYROLL_RATES_BY_YEAR`). Each year has a
-`source` string. To add 1406, copy the 1405 entry, change the values and the source.
-A payroll run for a year that is not configured is refused (HTTP 400).
+Every statutory figure is a row in `statutory_parameters`, keyed by country, fiscal year, key and
+effective date, with a `source`, a `source_kind` and a `verified` flag per value. Code holds key names
+only (`modules/hr/statutory/statutory-catalogue.ts`). Rules:
 
-1405 values (Supreme Labour Council decree of 1404-12-24 and Budget Law 1405, taken from
-secondary sources on 2026-10-22; **re-check against the official circular**):
+- `tenant_id` NULL is the platform default, seeded once by migration 1789410000000 from
+  `modules/hr/statutory/statutory-seed.ts`. An organisation's edit is a new row with its own tenant id.
+- Rows are append-only (database trigger); an edit inserts the next `version`.
+- The value in force on a date is the latest effective date not after it; on the same date a tenant
+  row beats the default and the highest version wins. Payroll reads as of the last day of the month.
+- `GET /enterprise-hub/hr/statutory-parameters/:year` reads (`hr:read`). `PUT
+  /enterprise-hub/hr/statutory-parameters` writes (`hr:admin`, owner and admin only) and records the
+  old and new value in the audit log. UI: `/app/hr/statutory`.
+- A payroll run for a year with no rows is refused (HTTP 400), as is a year missing a required key.
+- To add 1406, add a migration with the new rows.
 
-| Item | 1405 |
-| --- | --- |
-| Minimum daily / monthly wage | 5,541,850 / 166,255,500 IRR |
-| Housing allowance (حق مسکن) | 30,000,000 IRR |
-| Worker food allowance (بن کارگری) | 22,000,000 IRR |
-| Child allowance (حق اولاد) | 3 × minimum daily wage per child |
-| Seniority base (پایه سنوات) | 5,000,000 IRR per full year of service |
-| Insurance | employee 7%, employer 20% + unemployment 3% (= 23%) |
-| Insurable wage ceiling | 7 × minimum monthly wage |
-| Wage tax (monthly) | 0% to 400M, 10% to 800M, 15% to 1,000M, 20% to 1,200M, 25% to 1,400M, 30% above |
+Only the six values of circular 6682 (minimum daily wage, the two other-level figures, seniority,
+consumables allowance, marriage allowance) are `verified`. Everything else is listed in
+`docs/hr/STATUTORY_OPEN_ITEMS.md`, and the payroll page warns with the count of unverified values.
 
 ## Calculation rules (`services/payroll-calculator.ts`)
 

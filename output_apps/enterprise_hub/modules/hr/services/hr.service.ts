@@ -15,7 +15,7 @@ import {
   PAYROLL_PAYABLE_ACCOUNT_CODE,
   PAYSLIP_NUMBER_PREFIX,
 } from '../constants/hr.constants';
-import { resolvePayrollRates } from '../constants/payroll-rates';
+import { StatutoryService } from '../statutory/statutory.service';
 import {
   ContractResponseDto,
   EmployeeResponseDto,
@@ -84,6 +84,7 @@ export class HrService {
   constructor(
     private readonly hrRepository: HrRepository,
     private readonly accountingService: AccountingService,
+    private readonly statutory: StatutoryService,
   ) {}
 
   private round(value: number): number {
@@ -494,8 +495,9 @@ export class HrService {
       );
     }
 
-    const rates = resolvePayrollRates(
-      gregorianToJalali(dto.startDate)?.jy ?? Number.MAX_SAFE_INTEGER,
+    const rates = await this.statutory.ratesForLatestUpTo(
+      tenantId,
+      gregorianToJalali(dto.startDate)?.jy,
     );
     const contract = await this.hrRepository.createContract(tenantId, {
       contractNumber,
@@ -556,18 +558,22 @@ export class HrService {
    * Single-payslip calculation on a contract: delegates to the shared engine
    * (services/payroll-calculator.ts) used by the monthly payroll run.
    */
-  private computePayroll(
+  private async computePayroll(
+    tenantId: string,
     contract: EmploymentContractEntity,
     options: {
       overtimeAmount?: number;
       otherDeductions?: number;
       periodYear?: number;
     },
-  ): Omit<PayrollCalculationResponseDto, 'employeeFullName' | 'employeeId'> {
+  ): Promise<
+    Omit<PayrollCalculationResponseDto, 'employeeFullName' | 'employeeId'>
+  > {
     // Same engine and versioned rates as the monthly payroll run; the contract
     // may override the employee insurance rate.
-    const rates = resolvePayrollRates(
-      options.periodYear ?? Number.MAX_SAFE_INTEGER,
+    const rates = await this.statutory.ratesForLatestUpTo(
+      tenantId,
+      options.periodYear,
     );
     const result = calculatePayroll({
       rates: { ...rates, employeeInsuranceRate: Number(contract.insuranceRate) },
@@ -669,7 +675,7 @@ export class HrService {
       dto.employeeId,
     );
 
-    const calculation = this.computePayroll(contract, {
+    const calculation = await this.computePayroll(tenantId, contract, {
       overtimeAmount: dto.overtimeAmount,
       otherDeductions: dto.otherDeductions,
     });
@@ -707,7 +713,7 @@ export class HrService {
       );
     }
 
-    const calculation = this.computePayroll(contract, {
+    const calculation = await this.computePayroll(tenantId, contract, {
       overtimeAmount: dto.overtimeAmount,
       otherDeductions: dto.otherDeductions,
       periodYear: dto.periodYear,

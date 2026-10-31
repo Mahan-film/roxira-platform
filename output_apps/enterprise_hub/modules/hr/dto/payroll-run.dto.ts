@@ -185,9 +185,11 @@ export class PayrollRatesResponseDto {
   @ApiProperty() source: string;
   @ApiProperty({
     description:
-      'آیا نرخ‌های این سال توسط مالک/حسابدار با بخشنامه رسمی تأیید شده است؟',
+      'آیا همه مقادیر جاری این سال با متن رسمی تطبیق و تأیید شده‌اند؟',
   })
   verified: boolean;
+  @ApiProperty({ type: [String], description: 'کلید مقادیر تأییدنشده' })
+  unverifiedKeys: string[];
   @ApiProperty() minDailyWage: number;
   @ApiProperty() minMonthlyWage: number;
   @ApiProperty() housingAllowance: number;

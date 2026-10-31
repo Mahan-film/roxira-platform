@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AccessModule } from '../access/access.module';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
 import { HrController } from './controllers/hr.controller';
 import { EmployeeEntity } from './entities/employee.entity';
@@ -9,6 +11,10 @@ import { PayslipEntity } from './entities/payslip.entity';
 import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
 import { PayrollRunService } from './services/payroll-run.service';
+import { StatutoryController } from './statutory/statutory.controller';
+import { StatutoryParameterEntity } from './statutory/statutory-parameter.entity';
+import { StatutoryRepository } from './statutory/statutory.repository';
+import { StatutoryService } from './statutory/statutory.service';
 
 /**
  * ماژول جامع منابع انسانی و حقوق و دستمزد (HR & Payroll).
@@ -32,11 +38,20 @@ import { PayrollRunService } from './services/payroll-run.service';
       EmploymentContractEntity,
       PayslipEntity,
       PayrollRunEntity,
+      StatutoryParameterEntity,
     ]),
+    AccessModule,
     AccountingModule,
   ],
-  controllers: [HrController],
-  providers: [HrService, PayrollRunService, HrRepository],
+  controllers: [HrController, StatutoryController],
+  providers: [
+    HrService,
+    PayrollRunService,
+    HrRepository,
+    StatutoryService,
+    StatutoryRepository,
+    TenantScope,
+  ],
   exports: [HrService],
 })
 export class HrModule {}

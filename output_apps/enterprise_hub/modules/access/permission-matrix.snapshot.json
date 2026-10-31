@@ -805,6 +805,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/hr/statutory-parameters/:year (StatutoryController.list)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/statutory-parameters/:year/:key/history (StatutoryController.history)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/items (InventoryController.listStockItems)": {
     "policy": "inventory:read",
     "owner": true,
@@ -2314,6 +2336,17 @@
     "owner": true,
     "admin": true,
     "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/hr/statutory-parameters/ (StatutoryController.set)": {
+    "policy": "hr:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,

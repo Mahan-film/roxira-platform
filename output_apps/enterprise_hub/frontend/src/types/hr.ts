@@ -293,8 +293,10 @@ export interface PayrollRunSkipped {
 export interface PayrollRates {
   year: number;
   source: string;
-  /** false until the owner/accountant confirmed the figures against the official circular. */
+  /** true only when every value in force is verified against an official text. */
   verified: boolean;
+  /** Keys of the values in force that are not verified. */
+  unverifiedKeys: string[];
 }
 
 export interface PayrollRun {
@@ -336,4 +338,26 @@ export interface InsuranceList {
   workersFileName: string;
   workersFile: string;
   warnings: string[];
+}
+
+/** One statutory value in force, with its source and verification state. */
+export interface StatutoryParameter {
+  key: string;
+  label: string;
+  value: unknown;
+  effectiveFrom: string;
+  version: number;
+  source: string;
+  sourceKind: "OFFICIAL" | "REPORT" | "LEGACY" | "TENANT";
+  verified: boolean;
+  tenantOverride: boolean;
+}
+
+export interface SetStatutoryParameterDto {
+  fiscalYear: number;
+  key: string;
+  value: unknown;
+  effectiveFrom?: string;
+  source: string;
+  verified: boolean;
 }

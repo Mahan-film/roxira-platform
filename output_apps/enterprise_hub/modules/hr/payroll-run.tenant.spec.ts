@@ -25,6 +25,7 @@ import {
 import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
 import { PayrollRunService } from './services/payroll-run.service';
+import { fakeStatutory } from './statutory/__fixtures__/seeded-rates';
 
 /** Accounting fake: keeps a per-tenant chart and rejects unbalanced entries. */
 class FakeAccountingService {
@@ -304,11 +305,13 @@ const setup = () => {
   const hrService = new HrService(
     repo as unknown as HrRepository,
     accounting as unknown as AccountingService,
+    fakeStatutory(),
   );
   const service = new PayrollRunService(
     repo as unknown as HrRepository,
     hrService,
     accounting as unknown as AccountingService,
+    fakeStatutory(),
   );
   return { repo, accounting, hrService, service };
 };
@@ -343,7 +346,7 @@ describe('PayrollRunService — calculation and posting', () => {
     const first = run.payslips.find((p) => p.employeeId === a1.id)!;
     expect(first.overtimeHours).toBe(10);
     expect(first.overtimeAmount).toBeGreaterThan(0);
-    expect(first.seniorityAmount).toBe(5_000_000 * 2);
+    expect(first.seniorityAmount).toBe(166_667 * 30 * 2);
     expect(first.status).toBe(PayslipStatus.DRAFT);
     expect(run.totalNet).toBe(
       run.totalGross -
@@ -456,10 +459,12 @@ describe('PayrollRunService — calculation and posting', () => {
     expect(repo.payslips).toHaveLength(0);
   });
 
-  it('exposes the rates verification flag (1404 verified, 1405 not)', () => {
+  it('reports each unverified value, not a blanket flag', async () => {
     const { service } = setup();
-    expect(service.getRates(1404).verified).toBe(true);
-    expect(service.getRates(1405).verified).toBe(false);
+    const rates = await service.getRates('tenant-a', 1405);
+    expect(rates.verified).toBe(false);
+    expect(rates.unverifiedKeys).toContain('wage_tax_annual_brackets');
+    expect(rates.unverifiedKeys).not.toContain('min_daily_wage');
   });
 
   it('refuses a year without configured rates', async () => {

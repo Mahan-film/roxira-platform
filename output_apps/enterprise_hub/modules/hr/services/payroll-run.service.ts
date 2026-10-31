@@ -11,7 +11,6 @@ import {
   PAYROLL_RUN_ENTRY_PREFIX,
   PAYSLIP_NUMBER_PREFIX,
 } from '../constants/hr.constants';
-import { getPayrollRates, PayrollYearRates } from '../constants/payroll-rates';
 import {
   CreatePayrollRunDto,
   InsuranceListQueryDto,
@@ -31,6 +30,8 @@ import {
   PayslipStatus,
 } from '../enums/hr.enum';
 import { HrRepository } from '../repositories/hr.repository';
+import { PayrollYearRates } from '../statutory/payroll-rates';
+import { StatutoryService } from '../statutory/statutory.service';
 import { HrService } from './hr.service';
 import { buildInsuranceList, InsuranceListWorker } from './insurance-list';
 import {
@@ -65,7 +66,7 @@ interface JournalLine {
  * Monthly payroll runs per tenant per Jalali month (Business suite phase 2).
  *
  * Calculation is delegated to the pure `calculatePayroll` engine with the
- * statutory rates of the period's year (`constants/payroll-rates.ts`).
+ * statutory values in force for the period (`StatutoryService`).
  * Every repository call carries the tenant id from the verified JWT.
  */
 @Injectable()
@@ -74,24 +75,32 @@ export class PayrollRunService {
     private readonly hrRepository: HrRepository,
     private readonly hrService: HrService,
     private readonly accountingService: AccountingService,
+    private readonly statutory: StatutoryService,
   ) {}
 
-  private requireRates(year: number): PayrollYearRates {
-    const rates = getPayrollRates(year);
-    if (!rates) {
+  private async requireRates(
+    tenantId: string,
+    year: number,
+    month?: number,
+  ): Promise<PayrollYearRates> {
+    if (!(await this.statutory.hasYear(tenantId, year))) {
       throw new BadRequestException(
         `نرخ‌های قانونی حقوق برای سال ${year} تعریف نشده است.`,
       );
     }
-    return rates;
+    return this.statutory.ratesFor(tenantId, year, month);
   }
 
-  getRates(year: number): PayrollRatesResponseDto {
-    const rates = this.requireRates(year);
+  async getRates(
+    tenantId: string,
+    year: number,
+  ): Promise<PayrollRatesResponseDto> {
+    const rates = await this.requireRates(tenantId, year);
     return {
       year: rates.year,
       source: rates.source,
       verified: rates.verified,
+      unverifiedKeys: rates.unverifiedKeys,
       minDailyWage: rates.minDailyWage,
       minMonthlyWage: rates.minMonthlyWage,
       housingAllowance: rates.housingAllowance,
@@ -157,7 +166,11 @@ export class PayrollRunService {
     tenantId: string,
     dto: CreatePayrollRunDto,
   ): Promise<PayrollRunResponseDto> {
-    const rates = this.requireRates(dto.periodYear);
+    const rates = await this.requireRates(
+      tenantId,
+      dto.periodYear,
+      dto.periodMonth,
+    );
     const items = new Map<number, PayrollRunItemDto>();
     for (const item of dto.items ?? []) {
       items.set(item.employeeId, item);
@@ -501,7 +514,11 @@ export class PayrollRunService {
     query: InsuranceListQueryDto,
   ): Promise<InsuranceListResponseDto> {
     const run = await this.requireRun(tenantId, id);
-    const rates = this.requireRates(run.ratesYear);
+    const rates = await this.requireRates(
+      tenantId,
+      run.ratesYear,
+      run.periodMonth,
+    );
     const payslips = await this.hrRepository.findPayslipsByRun(tenantId, id);
     const periodStart = isoDate(
       jalaliMonthStart(run.periodYear, run.periodMonth),

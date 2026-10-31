@@ -1,4 +1,4 @@
-import { getPayrollRates, PayrollYearRates } from './constants/payroll-rates';
+import { seededRates } from './statutory/__fixtures__/seeded-rates';
 import {
   buildInsuranceList,
   InsuranceListWorker,
@@ -16,7 +16,7 @@ import {
   serviceYears,
 } from './services/payroll-calculator';
 
-const rates1405 = getPayrollRates(1405) as PayrollYearRates;
+const rates1405 = seededRates(1405);
 
 const minimumWageWorker = {
   rates: rates1405,
@@ -37,8 +37,8 @@ describe('payroll rates 1405', () => {
     ).toBeCloseTo(0.23);
   });
 
-  it('returns null for an unconfigured year', () => {
-    expect(getPayrollRates(1399)).toBeNull();
+  it('takes seniority from the daily figure of circular 6682', () => {
+    expect(rates1405.seniorityPerYear).toBe(166_667 * 30);
   });
 });
 
@@ -59,21 +59,21 @@ describe('progressiveTax', () => {
 describe('calculatePayroll', () => {
   it('computes a minimum-wage worker with seniority and one child', () => {
     const result = calculatePayroll(minimumWageWorker);
-    expect(result.seniorityAmount).toBe(10_000_000);
+    expect(result.seniorityAmount).toBe(10_000_020);
     expect(result.childAllowance).toBe(16_625_550);
-    expect(result.grossPay).toBe(244_881_050);
+    expect(result.grossPay).toBe(244_881_070);
     // Child allowance is not subject to insurance premium.
-    expect(result.insurableWage).toBe(228_255_500);
-    expect(result.employeeInsurance).toBe(15_977_885);
-    expect(result.employerInsurance).toBe(45_651_100);
-    expect(result.unemploymentInsurance).toBe(6_847_665);
+    expect(result.insurableWage).toBe(228_255_520);
+    expect(result.employeeInsurance).toBe(15_977_886);
+    expect(result.employerInsurance).toBe(45_651_104);
+    expect(result.unemploymentInsurance).toBe(6_847_666);
     expect(result.incomeTax).toBe(0);
-    expect(result.netPay).toBe(244_881_050 - 15_977_885);
+    expect(result.netPay).toBe(244_881_070 - 15_977_886);
     expect(result.workDays).toBe(30);
   });
 
   it('pays overtime at +40%, night at 35% and holiday work at +40%', () => {
-    const hourly = (166_255_500 + 10_000_000) / 220;
+    const hourly = (166_255_500 + 10_000_020) / 220;
     const result = calculatePayroll({
       ...minimumWageWorker,
       overtimeHours: 10,
@@ -84,7 +84,7 @@ describe('calculatePayroll', () => {
     expect(result.nightShiftAmount).toBe(Math.round(20 * hourly * 0.35));
     expect(result.holidayAmount).toBe(Math.round(8 * hourly * 1.4));
     expect(result.grossPay).toBe(
-      244_881_050 +
+      244_881_070 +
         result.overtimeAmount +
         result.nightShiftAmount +
         result.holidayAmount,
@@ -93,10 +93,10 @@ describe('calculatePayroll', () => {
 
   it('deducts unpaid absence days and reports paid days', () => {
     const result = calculatePayroll({ ...minimumWageWorker, absenceDays: 3 });
-    const daily = (166_255_500 + 10_000_000 + 30_000_000 + 22_000_000) / 30;
+    const daily = (166_255_500 + 10_000_020 + 30_000_000 + 22_000_000) / 30;
     expect(result.absenceDeduction).toBe(Math.round(daily * 3));
     expect(result.workDays).toBe(27);
-    expect(result.grossPay).toBe(244_881_050 - result.absenceDeduction);
+    expect(result.grossPay).toBe(244_881_070 - result.absenceDeduction);
   });
 
   it('caps the insurable wage and taxes high salaries progressively', () => {
@@ -128,7 +128,7 @@ describe('calculatePayroll', () => {
     expect(result.insurableWage).toBe(0);
     expect(result.employeeInsurance).toBe(0);
     expect(result.employerInsurance).toBe(0);
-    expect(result.netPay).toBe(244_881_050 - 1_000_000);
+    expect(result.netPay).toBe(244_881_070 - 1_000_000);
   });
 
   it('uses a contract child-allowance override instead of the child count', () => {
@@ -176,12 +176,12 @@ describe('buildInsuranceList', () => {
     startDate: '',
     endDate: '',
     workDays: 30,
-    dailyWage: (166_255_500 + 10_000_000) / 30,
-    insurableWage: 228_255_500,
-    grossPay: 244_881_050,
-    employeeInsurance: 15_977_885,
-    employerInsurance: 45_651_100,
-    unemploymentInsurance: 6_847_665,
+    dailyWage: (166_255_500 + 10_000_020) / 30,
+    insurableWage: 228_255_520,
+    grossPay: 244_881_070,
+    employeeInsurance: 15_977_886,
+    employerInsurance: 45_651_104,
+    unemploymentInsurance: 6_847_666,
   };
 
   it('emits DSKKAR00 header totals and DSKWOR00 worker rows', () => {
@@ -205,10 +205,10 @@ describe('buildInsuranceList', () => {
     expect(kar.DSK_MM).toBe('07');
     expect(kar.DSK_NUM).toBe('2');
     expect(kar.DSK_TDD).toBe('60');
-    expect(kar.DSK_TMASH).toBe(String(2 * 228_255_500));
-    expect(kar.DSK_TBIME).toBe(String(2 * 15_977_885));
-    expect(kar.DSK_TKOSO).toBe(String(2 * 45_651_100));
-    expect(kar.DSK_BIC).toBe(String(2 * 6_847_665));
+    expect(kar.DSK_TMASH).toBe(String(2 * 228_255_520));
+    expect(kar.DSK_TBIME).toBe(String(2 * 15_977_886));
+    expect(kar.DSK_TKOSO).toBe(String(2 * 45_651_104));
+    expect(kar.DSK_BIC).toBe(String(2 * 6_847_666));
     expect(kar.DSK_RATE).toBe('23');
 
     const lines = files.workersFile.trim().split('\r\n');
@@ -219,7 +219,7 @@ describe('buildInsuranceList', () => {
     // Comma inside a value is quoted.
     expect(lines[1]).toContain('"کارگر, ساده"');
     // MAH = daily × days, MAZ = rest of the insurable wage.
-    expect(lines[1]).toContain(',176255500,52000000,228255500,244881050,');
+    expect(lines[1]).toContain(',176255520,52000000,228255520,244881070,');
     expect(files.warnings).toHaveLength(1);
     expect(files.warnings[0]).toContain('0098765432');
   });

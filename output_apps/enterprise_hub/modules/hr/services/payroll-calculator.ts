@@ -1,4 +1,4 @@
-import { PayrollYearRates, TaxBracket } from '../constants/payroll-rates';
+import { PayrollYearRates, TaxBracket } from '../statutory/payroll-rates';
 
 /**
  * Pure payroll engine (no I/O): one employee, one Jalali month.

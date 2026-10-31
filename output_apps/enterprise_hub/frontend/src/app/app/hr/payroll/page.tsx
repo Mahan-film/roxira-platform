@@ -91,13 +91,13 @@ export default function PayrollPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  // Rates-verification flag per Jalali year; a year missing from the map is not (yet) known.
-  const [ratesVerified, setRatesVerified] = useState<Record<number, boolean>>({});
+  // Unverified statutory keys per Jalali year; a year missing from the map is not (yet) known.
+  const [unverified, setUnverified] = useState<Record<number, string[]>>({});
 
   useEffect(() => {
     const controller = new AbortController();
     getPayrollRates(year, controller.signal)
-      .then((rates) => setRatesVerified((prev) => ({ ...prev, [year]: rates.verified })))
+      .then((rates) => setUnverified((prev) => ({ ...prev, [year]: rates.unverifiedKeys })))
       .catch(() => {
         // Unknown year or network error: the calculation itself reports the real problem.
       });
@@ -188,7 +188,7 @@ export default function PayrollPage() {
 
       <ErrorNotice title="عملیات حقوق انجام نشد" message={error} />
 
-      {ratesVerified[year] === false && (
+      {(unverified[year]?.length ?? 0) > 0 && (
         <div
           role="alert"
           className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
@@ -198,9 +198,12 @@ export default function PayrollPage() {
             تأییدنشده
           </Badge>
           <span>
-            نرخ‌های قانونی سال {formatNumber(year).replace(/٬/g, "")} (حداقل مزد، مالیات، بیمه) هنوز با بخشنامه
-            رسمی تطبیق و تأیید نشده‌اند؛ پیش از ثبت سند، حسابدار آن‌ها را بررسی کند.
+            {formatNumber(unverified[year].length)} مقدار قانونی سال {formatNumber(year).replace(/٬/g, "")} با متن
+            رسمی تطبیق نشده است؛ پیش از ثبت سند، حسابدار آن‌ها را بررسی کند.
           </span>
+          <Link href="/app/hr/statutory" className="underline underline-offset-4">
+            مشاهده مقادیر و منابع
+          </Link>
         </div>
       )}
 
