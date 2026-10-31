@@ -49,6 +49,10 @@ export class JournalEntryEntity {
   })
   status: JournalEntryStatus;
 
+  /** Set on a reversing entry: the posted entry it reverses (unique per tenant). */
+  @Column({ type: 'integer', name: 'reverses_entry_id', nullable: true })
+  reversesEntryId: number | null;
+
   @OneToMany(() => JournalEntryLineEntity, (line) => line.journalEntry, {
     cascade: true,
   })

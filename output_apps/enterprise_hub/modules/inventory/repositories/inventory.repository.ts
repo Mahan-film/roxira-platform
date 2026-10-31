@@ -354,6 +354,14 @@ export class InventoryRepository {
   // تراکنش‌های اتمیک ورود/خروج کالا
   // ---------------------------------------------------------------------------
 
+  /** Runs `work` in the caller's transaction when given, otherwise in a new one. */
+  private runInTransaction<T>(
+    work: (manager: EntityManager) => Promise<T>,
+    outerManager?: EntityManager,
+  ): Promise<T> {
+    return outerManager ? work(outerManager) : this.dataSource.transaction(work);
+  }
+
   /**
    * ورود کالا: ایجاد لایه FIFO جدید + افزایش موجودی کالا در یک Transaction.
    * در صورت نبود کالا یا انبار، کل تراکنش Rollback می‌شود.
@@ -361,8 +369,9 @@ export class InventoryRepository {
   async persistInbound(
     tenantId: string,
     input: InboundPersistInput,
+    outerManager?: EntityManager,
   ): Promise<InboundPersistResult> {
-    return this.dataSource.transaction(async (manager) => {
+    return this.runInTransaction(async (manager) => {
       const item = await manager.findOne(StockItemEntity, {
         where: { sku: input.sku, tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -391,7 +400,7 @@ export class InventoryRepository {
       const savedItem = await manager.save(item);
 
       return { item: savedItem, batch: savedBatch };
-    });
+    }, outerManager);
   }
 
   /**
@@ -401,8 +410,9 @@ export class InventoryRepository {
   async persistOutbound(
     tenantId: string,
     input: OutboundPersistInput,
+    outerManager?: EntityManager,
   ): Promise<OutboundPersistResult> {
-    return this.dataSource.transaction(async (manager) => {
+    return this.runInTransaction(async (manager) => {
       const item = await manager.findOne(StockItemEntity, {
         where: { sku: input.sku, tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -467,7 +477,7 @@ export class InventoryRepository {
       const savedItem = await manager.save(item);
 
       return { item: savedItem, layers };
-    });
+    }, outerManager);
   }
 
   private async assertWarehouseExists(

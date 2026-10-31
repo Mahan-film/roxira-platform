@@ -13,21 +13,31 @@ import { JournalEntryStatus } from '../enums/accounting.enum';
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
+import { PeriodLockEntity } from '../entities/period-lock.entity';
+import { minorToDecimal } from '../money';
+import {
+  DuplicateEntryNumberError,
+  LockedPeriodError,
+} from '../exceptions/ledger.exceptions';
+
+/** Advisory-lock namespace shared by posting (shared) and period lock/unlock (exclusive). */
+const LEDGER_LOCK_NAMESPACE = 7001;
 
 /**
  * ورودی سطر سند برای پرسیستنس در Transaction واحد.
  */
 export interface JournalLineInput {
   accountId: number;
-  debit: number;
-  credit: number;
+  /** Exact integer minor units; never a float. */
+  debitMinor: bigint;
+  creditMinor: bigint;
   description?: string | null;
   /** ارز سطر (کد متعارف)؛ پیش‌فرض IRR. */
   currency?: string;
-  /** مبلغ به ارز مبدأ (اختیاری). */
-  amountFx?: number | null;
-  /** نرخ تبدیل ارز مبدأ به ریال (اختیاری). */
-  fxRate?: number | null;
+  /** مبلغ به ارز مبدأ (اختیاری)، رشته دهدهی دقیق (۶ رقم اعشار). */
+  amountFx?: string | null;
+  /** نرخ تبدیل ارز مبدأ به ریال (اختیاری)، رشته دهدهی دقیق. */
+  fxRate?: string | null;
   /** کد طرف حساب/تفضیلی (اختیاری). */
   partyCode?: string | null;
 }
@@ -63,6 +73,9 @@ export interface LedgerRawRow {
  * لایه Repository — تنها نقطه دسترسی به جداول مالی برای ماژول Accounting.
  * Controller/Service هرگز نباید مستقیماً به TypeORM Repository دسترسی داشته
  * باشند (Rule #3 - AGENTS.md: Repository Pattern).
+ *
+ * Every read/write that can run inside a caller's transaction takes an optional `manager`; when
+ * given, ALL statements of the call use it (nothing silently falls back to the pool connection).
  */
 @Injectable()
 export class AccountingRepository {
@@ -73,11 +86,43 @@ export class AccountingRepository {
     private readonly entries: Repository<JournalEntryEntity>,
     @InjectRepository(JournalEntryLineEntity)
     private readonly lines: Repository<JournalEntryLineEntity>,
+    @InjectRepository(PeriodLockEntity)
+    private readonly locks: Repository<PeriodLockEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
-  async findAllAccounts(tenantId: string): Promise<ChartOfAccountEntity[]> {
-    return this.accounts.find({ where: { tenantId }, order: { code: 'ASC' } });
+  private accountsRepo(manager?: EntityManager): Repository<ChartOfAccountEntity> {
+    return manager ? manager.getRepository(ChartOfAccountEntity) : this.accounts;
+  }
+
+  private entriesRepo(manager?: EntityManager): Repository<JournalEntryEntity> {
+    return manager ? manager.getRepository(JournalEntryEntity) : this.entries;
+  }
+
+  private linesRepo(manager?: EntityManager): Repository<JournalEntryLineEntity> {
+    return manager ? manager.getRepository(JournalEntryLineEntity) : this.lines;
+  }
+
+  private locksRepo(manager?: EntityManager): Repository<PeriodLockEntity> {
+    return manager ? manager.getRepository(PeriodLockEntity) : this.locks;
+  }
+
+  /** Runs `work` in one transaction (the caller's, if a manager is passed). */
+  transaction<T>(
+    work: (manager: EntityManager) => Promise<T>,
+    outerManager?: EntityManager,
+  ): Promise<T> {
+    return outerManager ? work(outerManager) : this.dataSource.transaction(work);
+  }
+
+  async findAllAccounts(
+    tenantId: string,
+    manager?: EntityManager,
+  ): Promise<ChartOfAccountEntity[]> {
+    return this.accountsRepo(manager).find({
+      where: { tenantId },
+      order: { code: 'ASC' },
+    });
   }
 
   async findAccountById(
@@ -97,17 +142,18 @@ export class AccountingRepository {
   async findAccountsByCodes(
     tenantId: string,
     codes: string[],
+    manager?: EntityManager,
   ): Promise<ChartOfAccountEntity[]> {
     if (codes.length === 0) {
       return [];
     }
-    return this.accounts.find({
+    return this.accountsRepo(manager).find({
       where: codes.map((code) => ({ code, tenantId })),
     });
   }
 
-  async countAccounts(tenantId: string): Promise<number> {
-    return this.accounts.count({ where: { tenantId } });
+  async countAccounts(tenantId: string, manager?: EntityManager): Promise<number> {
+    return this.accountsRepo(manager).count({ where: { tenantId } });
   }
 
   async createAccount(
@@ -136,14 +182,14 @@ export class AccountingRepository {
   async insertMissingAccounts(
     tenantId: string,
     data: Partial<ChartOfAccountEntity>[],
+    manager?: EntityManager,
   ): Promise<void> {
     if (data.length === 0) {
       return;
     }
-    const entities = data.map((item) =>
-      this.accounts.create({ ...item, tenantId }),
-    );
-    await this.accounts
+    const repo = this.accountsRepo(manager);
+    const entities = data.map((item) => repo.create({ ...item, tenantId }));
+    await repo
       .createQueryBuilder()
       .insert()
       .into(ChartOfAccountEntity)
@@ -179,71 +225,50 @@ export class AccountingRepository {
     return result.affected ?? 0;
   }
 
-  /**
-   * حذف اسناد یک دسته ورود داده و برگرداندن اثر آن‌ها روی مانده حساب‌ها.
-   *
-   * ابتدا اختلاف بدهکار-بستانکار هر حساب از سطرهای اسناد جمع می‌شود، سپس
-   * اسناد (و با CASCADE سطرهایشان) حذف و مانده حساب‌ها به‌اندازه همان اختلاف
-   * کاهش داده می‌شود. کل عملیات در یک Transaction اتمیک است.
-   */
-  async deleteJournalEntriesByIds(
-    tenantId: string,
-    ids: number[],
-  ): Promise<number> {
-    if (ids.length === 0) {
-      return 0;
-    }
-    return this.dataSource.transaction(async (manager) => {
-      const entries = await manager.find(JournalEntryEntity, {
-        where: { id: In(ids), tenantId },
-        relations: { lines: true },
-      });
-
-      const deltaByAccount = new Map<number, number>();
-      for (const entry of entries) {
-        for (const line of entry.lines ?? []) {
-          const delta = Number(line.debit) - Number(line.credit);
-          deltaByAccount.set(
-            line.accountId,
-            (deltaByAccount.get(line.accountId) ?? 0) + delta,
-          );
-        }
-      }
-
-      if (entries.length > 0) {
-        await manager.delete(JournalEntryEntity, {
-          id: In(entries.map((entry) => entry.id)),
-          tenantId,
-        });
-      }
-
-      for (const [accountId, delta] of deltaByAccount) {
-        await manager.increment(
-          ChartOfAccountEntity,
-          { id: accountId, tenantId },
-          'balance',
-          -delta,
-        );
-      }
-
-      return entries.length;
-    });
-  }
-
   async findEntryByNumber(
     tenantId: string,
     entryNumber: string,
+    manager?: EntityManager,
   ): Promise<JournalEntryEntity | null> {
-    return this.entries.findOne({ where: { entryNumber, tenantId } });
+    return this.entriesRepo(manager).findOne({
+      where: { entryNumber, tenantId },
+    });
+  }
+
+  /** The reversing entry of `entryId`, if one was posted. */
+  async findReversalOf(
+    tenantId: string,
+    entryId: number,
+    manager?: EntityManager,
+  ): Promise<JournalEntryEntity | null> {
+    return this.entriesRepo(manager).findOne({
+      where: { tenantId, reversesEntryId: entryId },
+    });
   }
 
   async findEntryById(
     tenantId: string,
     id: number,
+    manager?: EntityManager,
   ): Promise<JournalEntryEntity | null> {
-    return this.entries.findOne({
+    return this.entriesRepo(manager).findOne({
       where: { id, tenantId },
       relations: { lines: true },
+    });
+  }
+
+  async findEntriesByIds(
+    tenantId: string,
+    ids: number[],
+    manager?: EntityManager,
+  ): Promise<JournalEntryEntity[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.entriesRepo(manager).find({
+      where: { tenantId, id: In(ids) },
+      relations: { lines: true },
+      order: { id: 'ASC' },
     });
   }
 
@@ -271,7 +296,17 @@ export class AccountingRepository {
 
   /**
    * ثبت اتمیک سرصفحه سند، سطرها و به‌روزرسانی مانده حساب‌ها در یک Transaction.
-   * در صورت بروز هر خطا، کل عملیات Rollback می‌شود تا دفاتر هرگز ناتراز نشوند.
+   *
+   *  - Takes the tenant's ledger advisory lock in SHARED mode (period lock/unlock takes it
+   *    exclusively), so "check period is open" and "insert" cannot interleave with a lock.
+   *  - The header is inserted with ON CONFLICT DO NOTHING: a duplicate (tenant, number) is
+   *    reported as `DuplicateEntryNumberError` without raising a Postgres error, so a caller's
+   *    outer transaction is never left in the aborted state.
+   *  - Balance updates are applied one account at a time in ascending account id order, so two
+   *    concurrent entries touching the same accounts cannot deadlock.
+   *
+   * @throws LockedPeriodError the date is inside an active period lock.
+   * @throws DuplicateEntryNumberError the entry number (or the reversal of the same entry) exists.
    */
   async persistJournalEntry(
     tenantId: string,
@@ -280,53 +315,210 @@ export class AccountingRepository {
       date: Date;
       description: string;
       status: JournalEntryStatus;
+      reversesEntryId?: number | null;
     },
     lineInputs: JournalLineInput[],
     outerManager?: EntityManager,
   ): Promise<JournalEntryEntity> {
-    // With an outer manager the caller owns the transaction (atomic with other writes).
-    const run = <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> =>
-      outerManager ? work(outerManager) : this.dataSource.transaction(work);
-    return run(async (manager) => {
-      const headerEntity = manager.create(JournalEntryEntity, {
+    return this.transaction(async (manager) => {
+      await this.lockLedgerShared(tenantId, manager);
+      await this.assertDateOpen(tenantId, header.date, manager);
+
+      const inserted: Array<{ id: number }> = (
+        await manager
+          .createQueryBuilder()
+          .insert()
+          .into(JournalEntryEntity)
+          .values({
+            tenantId,
+            entryNumber: header.entryNumber,
+            date: header.date,
+            description: header.description,
+            status: header.status,
+            reversesEntryId: header.reversesEntryId ?? null,
+          })
+          .orIgnore()
+          .returning('id')
+          .execute()
+      ).raw;
+      if (inserted.length === 0) {
+        throw new DuplicateEntryNumberError(header.entryNumber);
+      }
+      const entryId = inserted[0].id;
+
+      const lineRows = lineInputs.map((line) => ({
         tenantId,
-        entryNumber: header.entryNumber,
-        date: header.date,
-        description: header.description,
-        status: header.status,
-      });
-      const savedHeader = await manager.save(headerEntity);
-
-      for (const line of lineInputs) {
-        const lineEntity = manager.create(JournalEntryLineEntity, {
-          tenantId,
-          journalEntryId: savedHeader.id,
-          accountId: line.accountId,
-          debit: line.debit,
-          credit: line.credit,
-          currency: line.currency ?? 'IRR',
-          amountFx: line.amountFx ?? null,
-          fxRate: line.fxRate ?? null,
-          partyCode: line.partyCode ?? null,
-          description: line.description ?? null,
-        });
-        await manager.save(lineEntity);
-
-        // مانده حساب با علامت بدهکار-مثبت نگهداری می‌شود؛ قید مستأجر ضامن
-        // آن است که فقط مانده حساب همین سازمان تغییر کند.
-        await manager.increment(
-          ChartOfAccountEntity,
-          { id: line.accountId, tenantId },
-          'balance',
-          line.debit - line.credit,
-        );
+        journalEntryId: entryId,
+        accountId: line.accountId,
+        debit: minorToDecimal(line.debitMinor),
+        credit: minorToDecimal(line.creditMinor),
+        currency: line.currency ?? 'IRR',
+        amountFx: line.amountFx ?? null,
+        fxRate: line.fxRate ?? null,
+        partyCode: line.partyCode ?? null,
+        description: line.description ?? null,
+      }));
+      for (let offset = 0; offset < lineRows.length; offset += 200) {
+        await manager
+          .createQueryBuilder()
+          .insert()
+          .into(JournalEntryLineEntity)
+          .values(lineRows.slice(offset, offset + 200))
+          .execute();
       }
 
-      const persisted = await manager.findOne(JournalEntryEntity, {
-        where: { id: savedHeader.id, tenantId },
+      // Debit-positive balances, applied in a fixed order (ascending account id).
+      const deltaByAccount = new Map<number, bigint>();
+      for (const line of lineInputs) {
+        deltaByAccount.set(
+          line.accountId,
+          (deltaByAccount.get(line.accountId) ?? 0n) +
+            line.debitMinor -
+            line.creditMinor,
+        );
+      }
+      const accountIds = Array.from(deltaByAccount.keys()).sort((a, b) => a - b);
+      for (const accountId of accountIds) {
+        // `pg` returns `[rows, rowCount]` for UPDATE, plain rows for SELECT.
+        const result: unknown[] = await manager.query(
+          `UPDATE "fin_chart_of_accounts" SET "balance" = "balance" + $1::numeric
+            WHERE "id" = $2 AND "tenant_id" = $3 RETURNING "id"`,
+          [minorToDecimal(deltaByAccount.get(accountId)!), accountId, tenantId],
+        );
+        const updated = Array.isArray(result[0]) ? result[0] : result;
+        if (updated.length !== 1) {
+          throw new Error(
+            `Account ${accountId} not found for tenant while posting entry ${header.entryNumber}.`,
+          );
+        }
+      }
+
+      return (await manager.findOne(JournalEntryEntity, {
+        where: { id: entryId, tenantId },
         relations: { lines: true },
-      });
-      return persisted as JournalEntryEntity;
+      })) as JournalEntryEntity;
+    }, outerManager);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Period locks
+  // ---------------------------------------------------------------------------
+
+  /** Shared advisory lock: held by every posting until its transaction ends. */
+  private async lockLedgerShared(
+    tenantId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    await manager.query(
+      `SELECT pg_advisory_xact_lock_shared($1, hashtext($2))`,
+      [LEDGER_LOCK_NAMESPACE, tenantId],
+    );
+  }
+
+  /** Exclusive advisory lock: waits for in-flight postings and blocks new ones. */
+  private async lockLedgerExclusive(
+    tenantId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    await manager.query(`SELECT pg_advisory_xact_lock($1, hashtext($2))`, [
+      LEDGER_LOCK_NAMESPACE,
+      tenantId,
+    ]);
+  }
+
+  /** @throws LockedPeriodError when `date` lies inside an active lock of the tenant. */
+  async assertDateOpen(
+    tenantId: string,
+    date: Date,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const locked = await this.findActiveLockCovering(tenantId, date, manager);
+    if (locked) {
+      throw new LockedPeriodError(this.dayOf(date));
+    }
+  }
+
+  async findActiveLockCovering(
+    tenantId: string,
+    date: Date,
+    manager?: EntityManager,
+  ): Promise<PeriodLockEntity | null> {
+    // The calendar day is computed by PostgreSQL from the same bound value the INSERT uses, so
+    // this check and the BEFORE INSERT trigger can never disagree about the day (time zones).
+    return this.locksRepo(manager)
+      .createQueryBuilder('lock')
+      .where('lock.tenantId = :tenantId', { tenantId })
+      .andWhere('lock.unlockedAt IS NULL')
+      .andWhere(
+        'CAST(CAST(:date AS timestamp) AS date) BETWEEN lock.periodStart AND lock.periodEnd',
+        { date },
+      )
+      .getOne();
+  }
+
+  private dayOf(date: Date): string {
+    return date.toISOString().slice(0, 10);
+  }
+
+  async createPeriodLock(
+    tenantId: string,
+    data: {
+      periodStart: string;
+      periodEnd: string;
+      reason: string | null;
+      lockedBy: string;
+    },
+  ): Promise<PeriodLockEntity> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.lockLedgerExclusive(tenantId, manager);
+      return manager.save(
+        manager.create(PeriodLockEntity, { ...data, tenantId }),
+      );
+    });
+  }
+
+  /** Returns null when the lock does not exist for this tenant or is already unlocked. */
+  async unlockPeriod(
+    tenantId: string,
+    id: number,
+    data: { unlockedBy: string; unlockReason: string },
+  ): Promise<PeriodLockEntity | null> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.lockLedgerExclusive(tenantId, manager);
+      const rows: unknown[] = (
+        await manager
+          .createQueryBuilder()
+          .update(PeriodLockEntity)
+          .set({
+            unlockedAt: () => 'now()',
+            unlockedBy: data.unlockedBy,
+            unlockReason: data.unlockReason,
+          })
+          .where('id = :id AND tenant_id = :tenantId AND unlocked_at IS NULL', {
+            id,
+            tenantId,
+          })
+          .returning('id')
+          .execute()
+      ).raw;
+      if (rows.length === 0) {
+        return null;
+      }
+      return manager.findOne(PeriodLockEntity, { where: { id, tenantId } });
+    });
+  }
+
+  async findPeriodLock(
+    tenantId: string,
+    id: number,
+  ): Promise<PeriodLockEntity | null> {
+    return this.locks.findOne({ where: { id, tenantId } });
+  }
+
+  async listPeriodLocks(tenantId: string): Promise<PeriodLockEntity[]> {
+    return this.locks.find({
+      where: { tenantId },
+      order: { lockedAt: 'DESC', id: 'DESC' },
     });
   }
 
@@ -335,6 +527,7 @@ export class AccountingRepository {
    *
    * خروجی همیشه بر مبنای ریال است؛ با ارسال `currency` تنها سطرهای همان ارز
    * لحاظ می‌شوند و جمع مبالغ ارزی (amount_fx) و معادل ریالی آن‌ها نیز برمی‌گردد.
+   * Sums are PostgreSQL numeric, returned as exact decimal strings.
    */
   async getTrialBalance(
     tenantId: string,

@@ -328,8 +328,8 @@ class FakeAccountingService {
         date: new Date(`${dto.date}T00:00:00Z`),
         description: line.description ?? null,
         entryDescription: dto.description,
-        debit: line.debit ?? 0,
-        credit: line.credit ?? 0,
+        debit: Number(line.debit ?? 0),
+        credit: Number(line.credit ?? 0),
       });
       return { id, accountId: account.id };
     });

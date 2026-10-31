@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindManyOptions, FindOptionsWhere, In, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  FindManyOptions,
+  FindOptionsWhere,
+  In,
+  Repository,
+} from 'typeorm';
 import { InvoiceEntity } from '../entities/invoice.entity';
 
 /**
@@ -17,7 +24,29 @@ export class InvoicingRepository {
   constructor(
     @InjectRepository(InvoiceEntity)
     private readonly repository: Repository<InvoiceEntity>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  /** Runs `work` in one database transaction. */
+  transaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return this.dataSource.transaction(work);
+  }
+
+  /**
+   * Loads the invoice with a row lock (`SELECT ... FOR UPDATE`) inside the caller's transaction.
+   * A concurrent posting of the same invoice waits here and then sees the committed posting
+   * columns, so stock and ledger are never posted twice.
+   */
+  async findByIdForPosting(
+    tenantId: string,
+    id: string,
+    manager: EntityManager,
+  ): Promise<InvoiceEntity | null> {
+    return manager.findOne(InvoiceEntity, {
+      where: { id, tenantId },
+      lock: { mode: 'pessimistic_write' },
+    });
+  }
 
   async create(
     tenantId: string,
@@ -85,8 +114,12 @@ export class InvoicingRepository {
         | 'postingError'
       >
     >,
+    manager?: EntityManager,
   ): Promise<void> {
-    await this.repository.update({ id, tenantId }, data);
+    const repository = manager
+      ? manager.getRepository(InvoiceEntity)
+      : this.repository;
+    await repository.update({ id, tenantId }, data);
   }
 
   async findByTaxInvoiceNumber(

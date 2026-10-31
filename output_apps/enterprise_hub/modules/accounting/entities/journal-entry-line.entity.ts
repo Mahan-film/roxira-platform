@@ -52,10 +52,10 @@ export class JournalEntryLineEntity {
   account: ChartOfAccountEntity;
 
   @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
-  debit: number;
+  debit: string;
 
   @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
-  credit: number;
+  credit: string;
 
   /**
    * ارز سطر (کد متعارف: IRR/IRT/USD/…). مبالغ بدهکار/بستانکار همیشه بر مبنای
@@ -72,7 +72,7 @@ export class JournalEntryLineEntity {
     name: 'amount_fx',
     nullable: true,
   })
-  amountFx: number | null;
+  amountFx: string | null;
 
   /** نرخ تبدیل ارز مبدأ به ریال (اختیاری). */
   @Column({
@@ -82,7 +82,7 @@ export class JournalEntryLineEntity {
     name: 'fx_rate',
     nullable: true,
   })
-  fxRate: number | null;
+  fxRate: string | null;
 
   /** کد طرف حساب/تفضیلی (party reference) — ارجاع بدون کلید خارجی. */
   @Column({

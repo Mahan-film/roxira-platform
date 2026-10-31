@@ -104,7 +104,7 @@ const buildService = () => {
 describe('InvoicingRepository — tenant scoping', () => {
   it('scopes findById by tenantId', async () => {
     const typeormRepository = { findOne: jest.fn(async () => null) };
-    const repository = new InvoicingRepository(typeormRepository as never);
+    const repository = new InvoicingRepository(typeormRepository as never, {} as never);
 
     await repository.findById('tenant-a', 'invoice-1');
 
@@ -115,7 +115,7 @@ describe('InvoicingRepository — tenant scoping', () => {
 
   it('scopes findByTaxInvoiceNumber by tenantId', async () => {
     const typeormRepository = { findOne: jest.fn(async () => null) };
-    const repository = new InvoicingRepository(typeormRepository as never);
+    const repository = new InvoicingRepository(typeormRepository as never, {} as never);
 
     await repository.findByTaxInvoiceNumber('tenant-a', 'TI-1');
 
@@ -129,7 +129,7 @@ describe('InvoicingRepository — tenant scoping', () => {
       create: jest.fn((data: unknown) => data),
       save: jest.fn(async (data: unknown) => data),
     };
-    const repository = new InvoicingRepository(typeormRepository as never);
+    const repository = new InvoicingRepository(typeormRepository as never, {} as never);
 
     await repository.create('tenant-a', { taxInvoiceNumber: 'TI-1' });
 
@@ -141,7 +141,7 @@ describe('InvoicingRepository — tenant scoping', () => {
 
   it('updates by (id, tenantId) so a foreign id affects zero rows', async () => {
     const typeormRepository = { update: jest.fn(async () => undefined) };
-    const repository = new InvoicingRepository(typeormRepository as never);
+    const repository = new InvoicingRepository(typeormRepository as never, {} as never);
 
     await repository.save('tenant-a', {
       id: 'invoice-1',
@@ -158,7 +158,7 @@ describe('InvoicingRepository — tenant scoping', () => {
     const typeormRepository = {
       findAndCount: jest.fn(async () => [[], 0]),
     };
-    const repository = new InvoicingRepository(typeormRepository as never);
+    const repository = new InvoicingRepository(typeormRepository as never, {} as never);
 
     await repository.findAndCount('tenant-a', {
       where: { status: InvoiceStatus.DRAFT },

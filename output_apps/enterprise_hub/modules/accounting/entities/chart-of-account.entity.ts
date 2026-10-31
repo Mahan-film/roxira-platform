@@ -44,8 +44,12 @@ export class ChartOfAccountEntity {
    * مانده حساب با علامت بدهکار-مثبت (debit-positive).
    * در سرویس به‌صورت اتمیک همراه با ثبت هر سند دوطرفه به‌روزرسانی می‌شود.
    */
-  @Column({ type: 'double precision', default: 0 })
-  balance: number;
+  /**
+   * Debit-positive running balance, a cache of SUM(debit - credit) over the account's lines.
+   * numeric(18,2) (returned by `pg` as a string): never read it as a float.
+   */
+  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  balance: string;
 
   @OneToMany(() => JournalEntryLineEntity, (line) => line.account)
   lines: JournalEntryLineEntity[];

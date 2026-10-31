@@ -9,6 +9,7 @@ import {
   JournalLineInput,
 } from './repositories/accounting.repository';
 import { AccountingService } from './services/accounting.service';
+import { minorToDecimal } from './money';
 
 /** سرویس ارز ساختگی (بدون ConfigService) برای تست‌های واحد. */
 const currencyService = {
@@ -64,7 +65,7 @@ class FakeAccountingRepository {
         ...item,
         id: ++this.seq,
         tenantId,
-        balance: item.balance ?? 0,
+        balance: item.balance ?? '0',
       } as ChartOfAccountEntity;
       this.accounts.push(entity);
       return entity;
@@ -110,8 +111,8 @@ class FakeAccountingRepository {
         journalEntryId: entry.id,
         accountId: input.accountId,
         account,
-        debit: input.debit,
-        credit: input.credit,
+        debit: minorToDecimal(input.debitMinor),
+        credit: minorToDecimal(input.creditMinor),
         currency: input.currency ?? 'IRR',
         amountFx: input.amountFx ?? null,
         fxRate: input.fxRate ?? null,
@@ -137,7 +138,7 @@ const baseEntry = (entryNumber: string, lines: object[]) => ({
   lines,
 });
 
-describe('AccountingService — IRR balance tolerance', () => {
+describe('AccountingService — exact balance (no tolerance)', () => {
   it('accepts a balanced IRR entry', async () => {
     const service = buildService();
     const entry = await service.createJournalEntry(
@@ -152,7 +153,7 @@ describe('AccountingService — IRR balance tolerance', () => {
     expect(entry.totalCredit).toBe(1_000);
   });
 
-  it('accepts an imbalance of exactly 0.5 rial', async () => {
+  it('rejects even a 0.5 rial imbalance (entries must balance exactly)', async () => {
     const service = buildService();
     await expect(
       service.createJournalEntry(
@@ -162,7 +163,7 @@ describe('AccountingService — IRR balance tolerance', () => {
           { accountCode: '4010', credit: 1_000 },
         ]) as never,
       ),
-    ).resolves.toBeDefined();
+    ).rejects.toThrow(/تراز نیست/);
   });
 
   it('rejects an imbalance greater than 0.5 rial with a Persian message', async () => {

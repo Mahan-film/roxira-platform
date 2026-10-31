@@ -5,12 +5,12 @@ import {
 } from '@nestjs/common';
 import { AccountingService } from '../modules/accounting/services/accounting.service';
 import {
-  BALANCE_TOLERANCE,
   MONEY_SCALE,
 } from '../modules/accounting/constants/accounting.constants';
 import { AccountLedgerResponseDto } from '../modules/accounting/dto/account-ledger-response.dto';
 import { JournalEntryLineDto } from '../modules/accounting/dto/create-journal-entry.dto';
 import { QueryAccountLedgerDto } from '../modules/accounting/dto/query-journal-entry.dto';
+import { sumMinor } from '../modules/accounting/money';
 import { TrialBalanceResponseDto } from '../modules/accounting/dto/trial-balance-response.dto';
 import { CreateLeadDto } from '../modules/crm/dto/create-lead.dto';
 import {
@@ -359,7 +359,7 @@ export class McpToolsService {
       lines.reduce((sum, line) => sum + line.credit, 0),
     );
 
-    if (Math.abs(totalDebit - totalCredit) >= BALANCE_TOLERANCE) {
+    if (sumMinor(lines.map((l) => l.debit)) !== sumMinor(lines.map((l) => l.credit))) {
       throw new BadRequestException(
         `سند تراز نیست: جمع بدهکار (${totalDebit}) با جمع بستانکار (${totalCredit}) برابر نیست.`,
       );

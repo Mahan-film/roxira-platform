@@ -5,6 +5,7 @@ import { AccountingController } from './controllers/accounting.controller';
 import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
 import { JournalEntryEntity } from './entities/journal-entry.entity';
+import { PeriodLockEntity } from './entities/period-lock.entity';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { AccountingService } from './services/accounting.service';
 
@@ -26,6 +27,7 @@ import { AccountingService } from './services/accounting.service';
       ChartOfAccountEntity,
       JournalEntryEntity,
       JournalEntryLineEntity,
+      PeriodLockEntity,
     ]),
     CurrencyModule,
   ],

@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
 import { CreateWarehouseDto } from '../dto/create-warehouse.dto';
@@ -420,6 +421,7 @@ export class InventoryService {
   async receiveStock(
     tenantId: string,
     dto: InboundStockDto,
+    manager?: EntityManager,
   ): Promise<StockMovementResultDto> {
     const batchNumber = dto.batchNumber ?? this.generateBatchNumber(dto.sku);
 
@@ -430,7 +432,7 @@ export class InventoryService {
         unitPurchaseCost: dto.unitPurchaseCost,
         warehouseId: dto.warehouseId ?? null,
         batchNumber,
-      });
+      }, manager);
 
       const layer: MovementLayerDto = {
         batchId: result.batch.id,
@@ -464,13 +466,14 @@ export class InventoryService {
   async issueStock(
     tenantId: string,
     dto: OutboundStockDto,
+    manager?: EntityManager,
   ): Promise<StockMovementResultDto> {
     try {
       const result = await this.inventoryRepository.persistOutbound(tenantId, {
         sku: dto.sku,
         quantity: dto.quantity,
         warehouseId: dto.warehouseId ?? null,
-      });
+      }, manager);
 
       const layers: MovementLayerDto[] = result.layers.map((layer) => ({
         batchId: layer.batchId,

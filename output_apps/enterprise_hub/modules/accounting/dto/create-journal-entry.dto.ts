@@ -5,14 +5,13 @@ import {
   ArrayMinSize,
   IsArray,
   IsISO8601,
-  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
-  Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { IsMoneyAmount } from './money.validator';
 import { IsSupportedCurrency } from '../../currency/normaliser/currency-normaliser';
 import {
   MAX_JOURNAL_LINES,
@@ -34,17 +33,13 @@ export class JournalEntryLineDto {
 
   @ApiPropertyOptional({ description: 'مبلغ بدهکار (ریال)', example: 1000000, default: 0 })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  debit?: number;
+  @IsMoneyAmount()
+  debit?: number | string;
 
   @ApiPropertyOptional({ description: 'مبلغ بستانکار (ریال)', example: 0, default: 0 })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  credit?: number;
+  @IsMoneyAmount()
+  credit?: number | string;
 
   @ApiPropertyOptional({
     description:
@@ -63,20 +58,16 @@ export class JournalEntryLineDto {
     example: 100,
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 6 })
-  @Min(0)
-  amountFx?: number;
+  @IsMoneyAmount(6)
+  amountFx?: number | string;
 
   @ApiPropertyOptional({
     description: 'نرخ تبدیل ارز مبدأ به ریال (fx_rate)',
     example: 900000,
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 6 })
-  @Min(0)
-  fxRate?: number;
+  @IsMoneyAmount(6)
+  fxRate?: number | string;
 
   @ApiPropertyOptional({
     description: 'کد طرف حساب/تفضیلی (party reference)',

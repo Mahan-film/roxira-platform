@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
 import { AccountType } from '../enums/accounting.enum';
+import { Money } from '../money';
 
 /**
  * یک سطر تراز آزمایشی (Trial Balance) به تفکیک حساب.
@@ -19,13 +20,13 @@ export class TrialBalanceRowDto {
   currency: Currency;
 
   @ApiProperty({ description: 'جمع بدهکار حساب (به ارز حساب)' })
-  totalDebit: number;
+  totalDebit: Money;
 
   @ApiProperty({ description: 'جمع بستانکار حساب (به ارز حساب)' })
-  totalCredit: number;
+  totalCredit: Money;
 
   @ApiProperty({ description: 'مانده حساب با علامت بدهکار-مثبت (به ارز حساب)' })
-  balance: number;
+  balance: Money;
 }
 
 /**
@@ -36,10 +37,10 @@ export class TrialBalanceResponseDto {
   rows: TrialBalanceRowDto[];
 
   @ApiProperty({ description: 'جمع کل بدهکار (به تفکیک ارز هر حساب)' })
-  totalDebit: number;
+  totalDebit: Money;
 
   @ApiProperty({ description: 'جمع کل بستانکار (به تفکیک ارز هر حساب)' })
-  totalCredit: number;
+  totalCredit: Money;
 
   @ApiProperty({ description: 'آیا دفاتر تراز است؟' })
   balanced: boolean;
@@ -65,10 +66,10 @@ export class TrialBalanceResponseDto {
   @ApiPropertyOptional({
     description: 'جمع مبلغ ارزی (amount_fx) سطرهای فیلترشده',
   })
-  totalAmountFx?: number;
+  totalAmountFx?: Money;
 
   @ApiPropertyOptional({
     description: 'جمع معادل ریالی مبلغ ارزی (amount_fx × fx_rate) سطرهای فیلترشده',
   })
-  totalFxInIrr?: number;
+  totalFxInIrr?: Money;
 }

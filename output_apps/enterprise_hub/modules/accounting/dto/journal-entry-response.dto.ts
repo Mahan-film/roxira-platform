@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
 import { JournalEntryStatus } from '../enums/accounting.enum';
+import { Money } from '../money';
 
 /**
  * DTO خروجی یک سطر سند دوطرفه.
@@ -22,10 +23,10 @@ export class JournalEntryLineResponseDto {
   currency: string;
 
   @ApiProperty({ description: 'مبلغ بدهکار (به ریال — ارز گزارش‌گیری)' })
-  debit: number;
+  debit: Money;
 
   @ApiProperty({ description: 'مبلغ بستانکار (به ریال — ارز گزارش‌گیری)' })
-  credit: number;
+  credit: Money;
 
   @ApiProperty({ description: 'مبلغ به ارز مبدأ (amount_fx)', nullable: true })
   amountFx: number | null;
@@ -63,10 +64,10 @@ export class JournalEntryResponseDto {
   currency: string;
 
   @ApiProperty({ description: 'جمع بدهکار سند (به ریال — ارز گزارش‌گیری)' })
-  totalDebit: number;
+  totalDebit: Money;
 
   @ApiProperty({ description: 'جمع بستانکار سند (به ریال — ارز گزارش‌گیری)' })
-  totalCredit: number;
+  totalCredit: Money;
 
   @ApiProperty({ enum: Currency, description: 'ارز پایه تجمیع' })
   baseCurrency: Currency;

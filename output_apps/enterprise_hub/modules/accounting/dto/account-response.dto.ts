@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
 import { AccountType } from '../enums/accounting.enum';
+import { Money } from '../money';
 
 /**
  * DTO خروجی حساب دفتر کل.
@@ -22,5 +23,5 @@ export class AccountResponseDto {
   currency: Currency;
 
   @ApiProperty({ description: 'مانده حساب با علامت بدهکار-مثبت' })
-  balance: number;
+  balance: Money;
 }

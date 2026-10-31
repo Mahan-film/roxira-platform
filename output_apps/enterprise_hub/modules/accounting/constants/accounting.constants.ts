@@ -12,23 +12,8 @@ export const MIN_JOURNAL_LINES = 2;
 /** دقت ریالی مبالغ (تعداد ارقام اعشار) */
 export const MONEY_SCALE = 2;
 
-/**
- * آستانه تحمل اختلاف تراز سند (به دلیل محدودیت نمایش اعشاری اعداد اعشاری).
- * اگر قدرمطلق (جمع بدهکار − جمع بستانکار) از این مقدار کمتر باشد، سند تراز است.
- */
-export const BALANCE_TOLERANCE = 0.01;
-
-/**
- * آستانه تحمل تراز سند بر مبنای ریال (ارز گزارش‌گیری).
- * اختلاف |جمع بدهکار − جمع بستانکار| تا این مقدار (<= ۰٫۵ ریال) پذیرفته است.
- */
-export const IRR_BALANCE_TOLERANCE = 0.5;
-
-/**
- * آستانه تحمل اختلاف مبلغ ارزی با معادل ریالی سطر:
- * |amount_fx × fx_rate − (بدهکار + بستانکار)| تا یک ریال پذیرفته است.
- */
-export const FX_BALANCE_TOLERANCE = 1;
+/** Decimal places of an FX amount / rate (numeric(24,6)). */
+export const FX_SCALE = 6;
 
 /** پیشوند پیشنهادی شماره سند حسابداری جهت تولید خودکار در کلاینت */
 export const DEFAULT_JOURNAL_ENTRY_NUMBER_PREFIX = 'JV';

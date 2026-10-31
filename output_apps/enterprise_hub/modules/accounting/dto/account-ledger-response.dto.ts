@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
 import { AccountResponseDto } from './account-response.dto';
+import { Money } from '../money';
 
 /**
  * یک ردیف گردش حساب (Account Ledger Line) به همراه مانده تجمعی.
@@ -22,13 +23,13 @@ export class AccountLedgerLineDto {
   description: string;
 
   @ApiProperty({ description: 'مبلغ بدهکار (ریال)' })
-  debit: number;
+  debit: Money;
 
   @ApiProperty({ description: 'مبلغ بستانکار (ریال)' })
-  credit: number;
+  credit: Money;
 
   @ApiProperty({ description: 'مانده تجمعی تا این ردیف (بدهکار-مثبت)' })
-  runningBalance: number;
+  runningBalance: Money;
 }
 
 /**
@@ -39,16 +40,16 @@ export class AccountLedgerResponseDto {
   account: AccountResponseDto;
 
   @ApiProperty({ description: 'مانده افتتاح بازه' })
-  openingBalance: number;
+  openingBalance: Money;
 
   @ApiProperty({ description: 'جمع بدهکار بازه (ریال)' })
-  totalDebit: number;
+  totalDebit: Money;
 
   @ApiProperty({ description: 'جمع بستانکار بازه (ریال)' })
-  totalCredit: number;
+  totalCredit: Money;
 
   @ApiProperty({ description: 'مانده اختتام بازه' })
-  closingBalance: number;
+  closingBalance: Money;
 
   @ApiProperty({ enum: Currency, description: 'ارز پایه تجمیع بین‌المللی' })
   baseCurrency: Currency;

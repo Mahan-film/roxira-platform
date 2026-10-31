@@ -31,6 +31,15 @@ class FakeInvoicingRepository {
     );
   }
 
+  /** No real transaction here (rollback is covered by the PostgreSQL integration spec). */
+  async transaction<T>(work: (manager: unknown) => Promise<T>): Promise<T> {
+    return work({});
+  }
+
+  async findByIdForPosting(tenantId: string, id: string): Promise<InvoiceEntity | null> {
+    return this.findById(tenantId, id);
+  }
+
   async updatePosting(
     tenantId: string,
     id: string,
@@ -256,14 +265,15 @@ describe('InvoicePostingService — ISSUED', () => {
     expect(inventory.issueStock).toHaveBeenCalledWith(
       'tenant-a',
       expect.objectContaining({ sku: 'SKU-3', quantity: 2 }),
+      expect.anything(),
     );
 
     const dto = journalDto(accounting.createJournalEntry, 0);
     expect(dto.entryNumber).toBe('INV-inv-1-ISSUED');
     expect(dto.lines).toEqual([
-      expect.objectContaining({ accountCode: '1020', debit: 1100 }),
-      expect.objectContaining({ accountCode: '4010', credit: 1000 }),
-      expect.objectContaining({ accountCode: '2020', credit: 100 }),
+      expect.objectContaining({ accountCode: '1020', debit: '1100.00' }),
+      expect.objectContaining({ accountCode: '4010', credit: '1000.00' }),
+      expect.objectContaining({ accountCode: '2020', credit: '100.00' }),
     ]);
 
     expect(repo.rows[0].journalEntryId).toBe(101);
@@ -290,9 +300,9 @@ describe('InvoicePostingService — ISSUED', () => {
 
     const dto = journalDto(accounting.createJournalEntry, 0);
     expect(dto.lines).toEqual([
-      expect.objectContaining({ accountCode: '1020', debit: 1100 * 920000 }),
-      expect.objectContaining({ accountCode: '4010', credit: 1000 * 920000 }),
-      expect.objectContaining({ accountCode: '2020', credit: 100 * 920000 }),
+      expect.objectContaining({ accountCode: '1020', debit: '1012000000.00' }),
+      expect.objectContaining({ accountCode: '4010', credit: '920000000.00' }),
+      expect.objectContaining({ accountCode: '2020', credit: '92000000.00' }),
     ]);
   });
 
@@ -336,8 +346,8 @@ describe('InvoicePostingService — PAID', () => {
     const dto = journalDto(accounting.createJournalEntry, 0);
     expect(dto.entryNumber).toBe('INV-inv-1-PAID');
     expect(dto.lines).toEqual([
-      expect.objectContaining({ accountCode: '1010', debit: 1100 }),
-      expect.objectContaining({ accountCode: '1020', credit: 1100 }),
+      expect.objectContaining({ accountCode: '1010', debit: '1100.00' }),
+      expect.objectContaining({ accountCode: '1020', credit: '1100.00' }),
     ]);
     expect(repo.rows[0].paidJournalEntryId).toBe(101);
   });
@@ -381,9 +391,9 @@ describe('InvoicePostingService — CANCELLED', () => {
     const dto = journalDto(accounting.createJournalEntry, 0);
     expect(dto.entryNumber).toBe('INV-inv-1-CANCEL');
     expect(dto.lines).toEqual([
-      expect.objectContaining({ accountCode: '4010', debit: 1000 }),
-      expect.objectContaining({ accountCode: '2020', debit: 100 }),
-      expect.objectContaining({ accountCode: '1020', credit: 1100 }),
+      expect.objectContaining({ accountCode: '4010', debit: '1000.00' }),
+      expect.objectContaining({ accountCode: '2020', debit: '100.00' }),
+      expect.objectContaining({ accountCode: '1020', credit: '1100.00' }),
     ]);
     expect(inventory.receiveStock).toHaveBeenCalledWith(
       'tenant-a',
@@ -392,6 +402,7 @@ describe('InvoicePostingService — CANCELLED', () => {
         quantity: 2,
         unitPurchaseCost: 500,
       }),
+      expect.anything(),
     );
     expect(repo.rows[0].reversalJournalEntryId).toBe(101);
   });

@@ -21,6 +21,12 @@ import { AccountResponseDto } from '../dto/account-response.dto';
 import { CreateAccountDto } from '../dto/create-account.dto';
 import { CreateJournalEntryDto } from '../dto/create-journal-entry.dto';
 import {
+  LockPeriodDto,
+  PeriodLockResponseDto,
+  UnlockPeriodDto,
+} from '../dto/period-lock.dto';
+import { ReverseJournalEntryDto } from '../dto/reverse-journal-entry.dto';
+import {
   JournalEntryResponseDto,
   PaginatedJournalEntryResponseDto,
 } from '../dto/journal-entry-response.dto';
@@ -51,6 +57,11 @@ export class AccountingController {
   private tenantIdOf(request: AuthenticatedRequest): string {
     requireTenantAdmin(request);
     return requireTenantId(request);
+  }
+
+  /** Authenticated user id recorded in the lock audit trail. */
+  private actorOf(request: AuthenticatedRequest): string {
+    return String(request.user?.sub ?? 'unknown').slice(0, 64);
   }
 
   @Get('accounts')
@@ -90,6 +101,78 @@ export class AccountingController {
   ): Promise<JournalEntryResponseDto> {
     return this.accountingService.createJournalEntry(
       this.tenantIdOf(request),
+      dto,
+    );
+  }
+
+  @Post('journal-entries/:id/reverse')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'برگشت سند ثبت‌شده',
+    description:
+      'سند ثبت‌شده هرگز ویرایش یا حذف نمی‌شود؛ اصلاح فقط با سند معکوس جدید انجام می‌شود.',
+  })
+  @ApiResponse({ status: HttpStatus.CREATED, type: JournalEntryResponseDto })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'سند یافت نشد' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'سند قبلاً برگشت خورده است' })
+  async reverseJournalEntry(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReverseJournalEntryDto,
+  ): Promise<JournalEntryResponseDto> {
+    return this.accountingService.reverseJournalEntry(
+      this.tenantIdOf(request),
+      id,
+      dto,
+    );
+  }
+
+  @Get('period-locks')
+  @ApiOperation({
+    summary: 'فهرست قفل‌های دوره (شامل تاریخچه بازگشایی)',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: [PeriodLockResponseDto] })
+  async listPeriodLocks(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PeriodLockResponseDto[]> {
+    return this.accountingService.listPeriodLocks(this.tenantIdOf(request));
+  }
+
+  @Post('period-locks')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'قفل یک بازه تاریخی',
+    description:
+      'تا بازگشایی، هیچ سندی (ثبت، برگشت یا ورود داده) با تاریخ داخل بازه پذیرفته نمی‌شود (423).',
+  })
+  @ApiResponse({ status: HttpStatus.CREATED, type: PeriodLockResponseDto })
+  async lockPeriod(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: LockPeriodDto,
+  ): Promise<PeriodLockResponseDto> {
+    const tenantId = this.tenantIdOf(request);
+    return this.accountingService.lockPeriod(tenantId, this.actorOf(request), dto);
+  }
+
+  @Post('period-locks/:id/unlock')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'بازگشایی یک قفل دوره',
+    description: 'ردیف قفل حذف نمی‌شود؛ بازگشایی با دلیل و کاربر ثبت می‌شود.',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: PeriodLockResponseDto })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'قفل یافت نشد' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'قبلاً باز شده است' })
+  async unlockPeriod(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UnlockPeriodDto,
+  ): Promise<PeriodLockResponseDto> {
+    const tenantId = this.tenantIdOf(request);
+    return this.accountingService.unlockPeriod(
+      tenantId,
+      this.actorOf(request),
+      id,
       dto,
     );
   }

@@ -5,6 +5,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
+import {
+  fromDb,
+  fromMinor,
+  minorToDecimal,
+  Money,
+  MoneyFormatError,
+  parseScaled,
+  scaledToDecimal,
+  toMinor,
+} from '../money';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
 import {
@@ -13,12 +23,20 @@ import {
 } from '../../currency/normaliser/currency-normaliser';
 import { CurrencyService } from '../../currency/services/currency.service';
 import {
-  BALANCE_TOLERANCE,
   DEFAULT_CHART_OF_ACCOUNTS,
-  FX_BALANCE_TOLERANCE,
-  IRR_BALANCE_TOLERANCE,
-  MONEY_SCALE,
+  FX_SCALE,
 } from '../constants/accounting.constants';
+import {
+  DuplicateEntryNumberError,
+  LockedPeriodError,
+  PeriodLockedException,
+} from '../exceptions/ledger.exceptions';
+import {
+  LockPeriodDto,
+  PeriodLockResponseDto,
+  UnlockPeriodDto,
+} from '../dto/period-lock.dto';
+import { PeriodLockEntity } from '../entities/period-lock.entity';
 import { AccountLedgerResponseDto } from '../dto/account-ledger-response.dto';
 import { AccountResponseDto } from '../dto/account-response.dto';
 import { CreateAccountDto } from '../dto/create-account.dto';
@@ -82,14 +100,19 @@ export interface LedgerLineView {
 /** سطر سند پس از عادی‌سازی و اعتبارسنجی در لایه سرویس. */
 interface NormalisedJournalLine {
   accountCode: string;
-  debit: number;
-  credit: number;
+  /** Exact integer minor units. */
+  debitMinor: bigint;
+  creditMinor: bigint;
   description: string | null;
   currency: NormalisedCurrency;
-  amountFx: number | null;
-  fxRate: number | null;
+  /** Exact decimal strings (6 decimals) or null. */
+  amountFx: string | null;
+  fxRate: string | null;
   partyCode: string | null;
 }
+
+/** Minor units as a JS number for consumers that need one (base-currency conversion, banking). */
+const asNumber = (minor: bigint): number => Number(minorToDecimal(minor));
 
 /**
  * سرویس دفتر کل و حسابداری دوطرفه (Double-Entry General Ledger).
@@ -105,11 +128,6 @@ export class AccountingService {
     private readonly currencyService: CurrencyService,
   ) {}
 
-  private round(value: number): number {
-    const factor = 10 ** MONEY_SCALE;
-    return Math.round((value + Number.EPSILON) * factor) / factor;
-  }
-
   private toAccountDto(entity: ChartOfAccountEntity): AccountResponseDto {
     return {
       id: entity.id,
@@ -117,7 +135,7 @@ export class AccountingService {
       name: entity.name,
       accountType: entity.accountType,
       currency: entity.currency as Currency,
-      balance: this.round(Number(entity.balance)),
+      balance: fromMinor(fromDb(entity.balance)),
     };
   }
 
@@ -129,8 +147,8 @@ export class AccountingService {
       accountName: line.account?.name ?? '',
       currency:
         line.currency ?? (line.account?.currency as string) ?? Currency.IRR,
-      debit: this.round(Number(line.debit)),
-      credit: this.round(Number(line.credit)),
+      debit: fromMinor(fromDb(line.debit)),
+      credit: fromMinor(fromDb(line.credit)),
       amountFx: line.amountFx != null ? Number(line.amountFx) : null,
       fxRate: line.fxRate != null ? Number(line.fxRate) : null,
       partyCode: line.partyCode ?? null,
@@ -155,17 +173,11 @@ export class AccountingService {
   }
 
   private toEntryDto(entity: JournalEntryEntity): JournalEntryResponseDto {
-    const lines = (entity.lines ?? [])
-      .slice()
-      .sort((a, b) => a.id - b.id)
-      .map((line) => this.toLineDto(line));
+    const sortedLines = (entity.lines ?? []).slice().sort((a, b) => a.id - b.id);
+    const lines = sortedLines.map((line) => this.toLineDto(line));
 
-    const totalDebit = this.round(
-      lines.reduce((sum, line) => sum + line.debit, 0),
-    );
-    const totalCredit = this.round(
-      lines.reduce((sum, line) => sum + line.credit, 0),
-    );
+    const debitMinor = sortedLines.reduce((sum, l) => sum + fromDb(l.debit), 0n);
+    const creditMinor = sortedLines.reduce((sum, l) => sum + fromDb(l.credit), 0n);
 
     const entryCurrency =
       lines.length > 0 ? lines[0].currency : Currency.IRR;
@@ -177,11 +189,11 @@ export class AccountingService {
       description: entity.description,
       status: entity.status,
       currency: entryCurrency,
-      totalDebit,
-      totalCredit,
+      totalDebit: fromMinor(debitMinor),
+      totalCredit: fromMinor(creditMinor),
       baseCurrency: BASE_CURRENCY,
-      baseTotalDebit: this.toBaseCurrency(totalDebit, entryCurrency),
-      baseTotalCredit: this.toBaseCurrency(totalCredit, entryCurrency),
+      baseTotalDebit: this.toBaseCurrency(asNumber(debitMinor), entryCurrency),
+      baseTotalCredit: this.toBaseCurrency(asNumber(creditMinor), entryCurrency),
       lines,
     };
   }
@@ -192,15 +204,27 @@ export class AccountingService {
    * معادل ریالی آن‌ها با مبلغ سطر تطبیق کند.
    */
   private normalizeLine(line: JournalEntryLineDto): NormalisedJournalLine {
-    const debit = this.round(Number(line.debit ?? 0));
-    const credit = this.round(Number(line.credit ?? 0));
+    const amount = (value: Money | undefined): bigint => {
+      try {
+        return value == null ? 0n : toMinor(value);
+      } catch (error) {
+        if (error instanceof MoneyFormatError) {
+          throw new BadRequestException(
+            `مبلغ سطر حساب ${line.accountCode} نامعتبر است: ${error.message}`,
+          );
+        }
+        throw error;
+      }
+    };
+    const debitMinor = amount(line.debit);
+    const creditMinor = amount(line.credit);
 
-    if (debit < 0 || credit < 0) {
+    if (debitMinor < 0n || creditMinor < 0n) {
       throw new BadRequestException('مبالغ بدهکار و بستانکار نمی‌توانند منفی باشند.');
     }
 
-    const hasDebit = debit > 0;
-    const hasCredit = credit > 0;
+    const hasDebit = debitMinor > 0n;
+    const hasCredit = creditMinor > 0n;
     if (hasDebit && hasCredit) {
       throw new BadRequestException(
         `سطر حساب ${line.accountCode} نمی‌تواند هم‌زمان بدهکار و بستانکار باشد.`,
@@ -226,38 +250,44 @@ export class AccountingService {
       );
     }
 
-    const amountFx = line.amountFx != null ? Number(line.amountFx) : null;
-    const fxRate = line.fxRate != null ? Number(line.fxRate) : null;
-    if (amountFx != null && (!Number.isFinite(amountFx) || amountFx < 0)) {
-      throw new BadRequestException(
-        `مبلغ ارزی سطر حساب ${line.accountCode} نامعتبر است.`,
-      );
-    }
-    if (fxRate != null && (!Number.isFinite(fxRate) || fxRate < 0)) {
-      throw new BadRequestException(
-        `نرخ تبدیل سطر حساب ${line.accountCode} نامعتبر است.`,
-      );
-    }
+    const scaled = (value: Money | undefined, label: string): bigint | null => {
+      if (value == null) {
+        return null;
+      }
+      try {
+        return parseScaled(value, FX_SCALE);
+      } catch {
+        throw new BadRequestException(
+          `${label} سطر حساب ${line.accountCode} نامعتبر است.`,
+        );
+      }
+    };
+    const amountFx = scaled(line.amountFx, 'مبلغ ارزی');
+    const fxRate = scaled(line.fxRate, 'نرخ تبدیل');
 
     if (amountFx != null && fxRate != null) {
-      const rialAmount = this.round(debit + credit);
-      const fxAmountInRial = amountFx * fxRate;
-      if (Math.abs(fxAmountInRial - rialAmount) > FX_BALANCE_TOLERANCE) {
+      // Exact rule, no tolerance: amount_fx x fx_rate rounded half-up to the cent must equal the
+      // rial amount of the line. (scale 6 x scale 6 = scale 12; cents are scale 2.)
+      const product = amountFx * fxRate;
+      const divisor = 10n ** BigInt(2 * FX_SCALE - 2);
+      const fxAmountMinor = (product + divisor / 2n) / divisor;
+      const rialMinor = debitMinor + creditMinor;
+      if (fxAmountMinor !== rialMinor) {
         throw new BadRequestException(
           `مبلغ ارزی سطر حساب ${line.accountCode} با معادل ریالی آن نمی‌خواند: ` +
-            `amount_fx × fx_rate = ${fxAmountInRial} در برابر ${rialAmount} ریال.`,
+            `amount_fx × fx_rate = ${minorToDecimal(fxAmountMinor)} در برابر ${minorToDecimal(rialMinor)} ریال.`,
         );
       }
     }
 
     return {
       accountCode: line.accountCode,
-      debit: hasDebit ? debit : 0,
-      credit: hasCredit ? credit : 0,
+      debitMinor: hasDebit ? debitMinor : 0n,
+      creditMinor: hasCredit ? creditMinor : 0n,
       description: line.description ?? null,
       currency,
-      amountFx,
-      fxRate,
+      amountFx: amountFx != null ? scaledToDecimal(amountFx, FX_SCALE) : null,
+      fxRate: fxRate != null ? scaledToDecimal(fxRate, FX_SCALE) : null,
       partyCode: line.partyCode?.trim() || null,
     };
   }
@@ -268,8 +298,11 @@ export class AccountingService {
    * جایگزین بذرگذاری سراسری قبلی در Migration شده است تا هر سازمان دفتر کل
    * مستقل خود را داشته باشد؛ هیچ ردیفی برای سازمان دیگر ساخته نمی‌شود.
    */
-  private async ensureDefaultAccounts(tenantId: string): Promise<void> {
-    const count = await this.accountingRepository.countAccounts(tenantId);
+  private async ensureDefaultAccounts(
+    tenantId: string,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const count = await this.accountingRepository.countAccounts(tenantId, manager);
     if (count > 0) {
       return;
     }
@@ -280,8 +313,9 @@ export class AccountingService {
         name: account.name,
         accountType: account.accountType,
         currency: Currency.IRR,
-        balance: 0,
+        balance: '0',
       })),
+      manager,
     );
   }
 
@@ -311,7 +345,7 @@ export class AccountingService {
       name: dto.name,
       accountType: dto.accountType,
       currency: dto.currency ?? Currency.IRR,
-      balance: 0,
+      balance: '0',
     });
 
     return this.toAccountDto(created);
@@ -344,7 +378,7 @@ export class AccountingService {
         name: input.name,
         accountType: input.accountType,
         currency: input.currency ?? Currency.IRR,
-        balance: 0,
+        balance: '0',
       });
       createdIds.push(created.id);
     }
@@ -418,50 +452,122 @@ export class AccountingService {
     return entry.id;
   }
 
-  /** حذف اسناد یک دسته و برگرداندن اثر آن‌ها روی مانده حساب‌ها (undo). */
+  /**
+   * Undo of an import batch: a posted entry is never deleted. Each entry that is not yet reversed
+   * gets a reversing entry (dated like the original, so the original period is restored), all in
+   * one transaction. If any of them lies in a locked period nothing is posted and the whole undo
+   * is refused (423) with the entry numbers and the way out (unlock the period first).
+   * Entries that already have a reversal count as removed, so retrying an undo is idempotent.
+   */
   async removeImportedJournalEntries(
     tenantId: string,
     ids: number[],
   ): Promise<{ removed: number; refused: number[] }> {
-    const removed =
-      await this.accountingRepository.deleteJournalEntriesByIds(tenantId, ids);
-    return { removed, refused: [] };
+    const unique = Array.from(new Set(ids));
+    return this.accountingRepository.transaction(async (manager) => {
+      const entries = await this.accountingRepository.findEntriesByIds(
+        tenantId,
+        unique,
+        manager,
+      );
+      const pending: JournalEntryEntity[] = [];
+      let alreadyReversed = 0;
+      for (const entry of entries) {
+        if (entry.reversesEntryId != null) {
+          continue; // a reversal is not itself an imported entry
+        }
+        const reversal = await this.accountingRepository.findReversalOf(
+          tenantId,
+          entry.id,
+          manager,
+        );
+        if (reversal) {
+          alreadyReversed += 1;
+        } else {
+          pending.push(entry);
+        }
+      }
+
+      const locked: string[] = [];
+      for (const entry of pending) {
+        const lock = await this.accountingRepository.findActiveLockCovering(
+          tenantId,
+          new Date(entry.date),
+          manager,
+        );
+        if (lock) {
+          locked.push(
+            `${entry.entryNumber} (${new Date(entry.date).toISOString().slice(0, 10)}, locked ${lock.periodStart}..${lock.periodEnd})`,
+          );
+        }
+      }
+      if (locked.length > 0) {
+        throw new PeriodLockedException(
+          `Import rollback refused: ${locked.length} entr${locked.length === 1 ? 'y is' : 'ies are'} in a locked period and nothing was changed: ` +
+            `${locked.slice(0, 10).join(', ')}${locked.length > 10 ? ', ...' : ''}. ` +
+            'Unlock the period (POST period-locks/:id/unlock) and retry, or leave the entries in place.',
+        );
+      }
+
+      for (const entry of pending) {
+        await this.reverseWithin(
+          tenantId,
+          entry.id,
+          {
+            date: new Date(entry.date).toISOString(),
+            reason: 'import rollback',
+          },
+          manager,
+        );
+      }
+      return { removed: pending.length + alreadyReversed, refused: [] };
+    });
   }
 
   /**
    * ثبت سند حسابداری دوطرفه.
-   * شروط پذیرش: حداقل دو سطر، هر سطر یک‌طرفه، جمع بدهکار = جمع بستانکار،
-   * شماره سند یکتا و تمام کدهای حساب موجود.
+   * شروط پذیرش: حداقل دو سطر، هر سطر یک‌طرفه، جمع بدهکار = جمع بستانکار (دقیق، بدون
+   * تحمل)، شماره سند یکتا، تمام کدهای حساب موجود و تاریخ خارج از دوره قفل‌شده.
+   *
+   * With `manager` the call joins the caller's transaction: every read and write uses it and a
+   * duplicate number is reported without aborting that transaction.
    */
   async createJournalEntry(
     tenantId: string,
     dto: CreateJournalEntryDto,
     manager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
-    await this.ensureDefaultAccounts(tenantId);
+    return this.postEntry(tenantId, dto, null, manager);
+  }
+
+  private async postEntry(
+    tenantId: string,
+    dto: CreateJournalEntryDto,
+    reversesEntryId: number | null,
+    manager?: EntityManager,
+  ): Promise<JournalEntryResponseDto> {
+    await this.ensureDefaultAccounts(tenantId, manager);
 
     const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
 
-    const totalDebit = this.round(
-      normalizedLines.reduce((sum, line) => sum + line.debit, 0),
-    );
-    const totalCredit = this.round(
-      normalizedLines.reduce((sum, line) => sum + line.credit, 0),
-    );
+    // Exact check in integer minor units: a posted entry must balance to the cent.
+    const debitMinor = normalizedLines.reduce((sum, l) => sum + l.debitMinor, 0n);
+    const creditMinor = normalizedLines.reduce((sum, l) => sum + l.creditMinor, 0n);
 
-    if (Math.abs(totalDebit - totalCredit) > IRR_BALANCE_TOLERANCE) {
+    if (debitMinor !== creditMinor) {
       throw new BadRequestException(
-        `سند تراز نیست: جمع بدهکار (${totalDebit}) با جمع بستانکار (${totalCredit}) بیش از حد مجاز (${IRR_BALANCE_TOLERANCE} ریال) اختلاف دارد.`,
+        `سند تراز نیست: جمع بدهکار (${minorToDecimal(debitMinor)}) با جمع بستانکار (${minorToDecimal(creditMinor)}) برابر نیست.`,
       );
     }
 
-    if (totalDebit <= 0) {
+    if (debitMinor <= 0n) {
       throw new BadRequestException('مبلغ سند باید بزرگ‌تر از صفر باشد.');
     }
 
     const existing = await this.accountingRepository.findEntryByNumber(
       tenantId,
       dto.entryNumber,
+      manager,
     );
     if (existing) {
       throw new ConflictException(
@@ -475,6 +581,7 @@ export class AccountingService {
     const accounts = await this.accountingRepository.findAccountsByCodes(
       tenantId,
       uniqueCodes,
+      manager,
     );
     const accountByCode = new Map(accounts.map((account) => [account.code, account]));
 
@@ -487,8 +594,8 @@ export class AccountingService {
 
     const lineInputs: JournalLineInput[] = normalizedLines.map((line) => ({
       accountId: accountByCode.get(line.accountCode)!.id,
-      debit: line.debit,
-      credit: line.credit,
+      debitMinor: line.debitMinor,
+      creditMinor: line.creditMinor,
       description: line.description,
       currency: line.currency,
       amountFx: line.amountFx,
@@ -496,19 +603,232 @@ export class AccountingService {
       partyCode: line.partyCode,
     }));
 
-    const saved = await this.accountingRepository.persistJournalEntry(
-      tenantId,
-      {
-        entryNumber: dto.entryNumber,
-        date: dto.date ? new Date(dto.date) : new Date(),
-        description: dto.description,
-        status: JournalEntryStatus.POSTED,
-      },
-      lineInputs,
-      manager,
-    );
+    let saved: JournalEntryEntity;
+    try {
+      saved = await this.accountingRepository.persistJournalEntry(
+        tenantId,
+        {
+          entryNumber: dto.entryNumber,
+          date: dto.date ? new Date(dto.date) : new Date(),
+          description: dto.description,
+          status: JournalEntryStatus.POSTED,
+          reversesEntryId,
+        },
+        lineInputs,
+        manager,
+      );
+    } catch (error) {
+      if (error instanceof LockedPeriodError) {
+        throw new PeriodLockedException(
+          `Posting refused: ${error.date} is inside a locked accounting period.`,
+        );
+      }
+      // A concurrent writer won the (tenant, number) unique index; reported, not thrown by PG.
+      if (error instanceof DuplicateEntryNumberError) {
+        throw new ConflictException(
+          `سندی با شماره ${dto.entryNumber} قبلاً ثبت شده است.`,
+        );
+      }
+      throw error;
+    }
 
     return this.toEntryDto(saved);
+  }
+
+  /**
+   * Reverse a posted entry. Posted entries are never edited or deleted: the correction is a new
+   * entry with debit and credit swapped, linked through `reverses_entry_id`.
+   *  - a reversal cannot be reversed (400);
+   *  - an entry is reversed at most once (409, enforced by a unique index);
+   *  - the number is `<number>-REV` when it fits the 64-char column, otherwise `REV-<id>`.
+   */
+  async reverseJournalEntry(
+    tenantId: string,
+    id: number,
+    options: { date?: string; reason?: string } = {},
+  ): Promise<JournalEntryResponseDto> {
+    return this.accountingRepository.transaction((manager) =>
+      this.reverseWithin(tenantId, id, options, manager),
+    );
+  }
+
+  private async reverseWithin(
+    tenantId: string,
+    id: number,
+    options: { date?: string; reason?: string },
+    manager: EntityManager,
+  ): Promise<JournalEntryResponseDto> {
+    const original = await this.accountingRepository.findEntryById(
+      tenantId,
+      id,
+      manager,
+    );
+    if (!original) {
+      throw new NotFoundException(`سند حسابداری با شناسه ${id} یافت نشد.`);
+    }
+    if (original.status !== JournalEntryStatus.POSTED) {
+      throw new BadRequestException('فقط سند ثبت‌شده قابل برگشت است.');
+    }
+    if (original.reversesEntryId != null) {
+      throw new BadRequestException(
+        'سند برگشتی قابل برگشت دوباره نیست؛ در صورت نیاز سند اصلاحی جدید ثبت کنید.',
+      );
+    }
+    const already = await this.accountingRepository.findReversalOf(
+      tenantId,
+      original.id,
+      manager,
+    );
+    if (already) {
+      throw new ConflictException(
+        `سند ${original.entryNumber} قبلاً با سند ${already.entryNumber} برگشت خورده است.`,
+      );
+    }
+
+    const lines: JournalEntryLineDto[] = (original.lines ?? [])
+      .slice()
+      .sort((a, b) => a.id - b.id)
+      .map((line) => ({
+        accountCode: line.account.code,
+        debit: minorToDecimal(fromDb(line.credit)),
+        credit: minorToDecimal(fromDb(line.debit)),
+        description: line.description ?? undefined,
+        currency: line.currency,
+        amountFx: line.amountFx != null ? line.amountFx : undefined,
+        fxRate: line.fxRate != null ? line.fxRate : undefined,
+        partyCode: line.partyCode ?? undefined,
+      }));
+    const reason = options.reason?.trim();
+    const entryNumber = await this.reversalNumber(tenantId, original, manager);
+    try {
+      return await this.postEntry(
+        tenantId,
+        {
+          entryNumber,
+          date: options.date,
+          description:
+            `برگشت سند ${original.entryNumber}` + (reason ? `: ${reason}` : ''),
+          lines,
+        } as CreateJournalEntryDto,
+        original.id,
+        manager,
+      );
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        // Lost a race with another reversal of the same entry? Report that, not the number.
+        const raced = await this.accountingRepository.findReversalOf(
+          tenantId,
+          original.id,
+          manager,
+        );
+        if (raced) {
+          throw new ConflictException(
+            `سند ${original.entryNumber} قبلاً با سند ${raced.entryNumber} برگشت خورده است.`,
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
+  /** `<number>-REV` if it fits (<= 64 chars) and is free, else `REV-<id>` (then a unique suffix). */
+  private async reversalNumber(
+    tenantId: string,
+    original: JournalEntryEntity,
+    manager: EntityManager,
+  ): Promise<string> {
+    const candidates = [
+      `${original.entryNumber}-REV`,
+      `REV-${original.id}`,
+      `REV-${original.id}-${Date.now().toString(36)}`,
+    ];
+    for (const candidate of candidates) {
+      if (candidate.length > 64) {
+        continue;
+      }
+      const taken = await this.accountingRepository.findEntryByNumber(
+        tenantId,
+        candidate,
+        manager,
+      );
+      if (!taken) {
+        return candidate;
+      }
+    }
+    throw new ConflictException(
+      `شماره سند برگشتی برای ${original.entryNumber} قابل تولید نیست.`,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Period locks
+  // ---------------------------------------------------------------------------
+
+  private toLockDto(entity: PeriodLockEntity): PeriodLockResponseDto {
+    return {
+      id: entity.id,
+      periodStart: entity.periodStart,
+      periodEnd: entity.periodEnd,
+      reason: entity.reason,
+      lockedBy: entity.lockedBy,
+      lockedAt: entity.lockedAt,
+      active: entity.unlockedAt == null,
+      unlockedAt: entity.unlockedAt,
+      unlockedBy: entity.unlockedBy,
+      unlockReason: entity.unlockReason,
+    };
+  }
+
+  /** Locks an inclusive date range: nothing can be posted or reversed into it until unlocked. */
+  async lockPeriod(
+    tenantId: string,
+    actor: string,
+    dto: LockPeriodDto,
+  ): Promise<PeriodLockResponseDto> {
+    const valid = (day: string): boolean =>
+      new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) === day;
+    if (!valid(dto.periodStart) || !valid(dto.periodEnd)) {
+      throw new BadRequestException('periodStart/periodEnd must be real calendar days.');
+    }
+    if (dto.periodStart > dto.periodEnd) {
+      throw new BadRequestException('periodStart must not be after periodEnd.');
+    }
+    const created = await this.accountingRepository.createPeriodLock(tenantId, {
+      periodStart: dto.periodStart,
+      periodEnd: dto.periodEnd,
+      reason: dto.reason?.trim() || null,
+      lockedBy: actor,
+    });
+    return this.toLockDto(created);
+  }
+
+  /** Unlocks (the row stays as audit trail); a reason is mandatory. */
+  async unlockPeriod(
+    tenantId: string,
+    actor: string,
+    id: number,
+    dto: UnlockPeriodDto,
+  ): Promise<PeriodLockResponseDto> {
+    const existing = await this.accountingRepository.findPeriodLock(tenantId, id);
+    if (!existing) {
+      throw new NotFoundException(`قفل دوره با شناسه ${id} یافت نشد.`);
+    }
+    if (existing.unlockedAt != null) {
+      throw new ConflictException('این دوره قبلاً باز شده است.');
+    }
+    const updated = await this.accountingRepository.unlockPeriod(tenantId, id, {
+      unlockedBy: actor,
+      unlockReason: dto.reason.trim(),
+    });
+    if (!updated) {
+      throw new ConflictException('این دوره قبلاً باز شده است.');
+    }
+    return this.toLockDto(updated);
+  }
+
+  async listPeriodLocks(tenantId: string): Promise<PeriodLockResponseDto[]> {
+    const locks = await this.accountingRepository.listPeriodLocks(tenantId);
+    return locks.map((lock) => this.toLockDto(lock));
   }
 
   /** Header of a tenant's journal entry by its exact number, or null. */
@@ -597,76 +917,57 @@ export class AccountingService {
     const aggregate = new Map(
       rawRows.map((row) => [
         row.code,
-        {
-          totalDebit: this.round(Number(row.totalDebit)),
-          totalCredit: this.round(Number(row.totalCredit)),
-        },
+        { debit: fromDb(row.totalDebit), credit: fromDb(row.totalCredit) },
       ]),
     );
 
-    const rows: TrialBalanceRowDto[] = accounts.map((account) => {
-      const totals = aggregate.get(account.code) ?? {
-        totalDebit: 0,
-        totalCredit: 0,
-      };
-      return {
-        code: account.code,
-        name: account.name,
-        accountType: account.accountType,
-        currency: account.currency as Currency,
-        totalDebit: totals.totalDebit,
-        totalCredit: totals.totalCredit,
-        balance: this.round(totals.totalDebit - totals.totalCredit),
-      };
+    const rowMinors = accounts.map((account) => {
+      const totals = aggregate.get(account.code) ?? { debit: 0n, credit: 0n };
+      return { account, ...totals };
     });
+    const rows: TrialBalanceRowDto[] = rowMinors.map(({ account, debit, credit }) => ({
+      code: account.code,
+      name: account.name,
+      accountType: account.accountType,
+      currency: account.currency as Currency,
+      totalDebit: fromMinor(debit),
+      totalCredit: fromMinor(credit),
+      balance: fromMinor(debit - credit),
+    }));
 
-    const totalDebit = this.round(
-      rows.reduce((sum, row) => sum + row.totalDebit, 0),
-    );
-    const totalCredit = this.round(
-      rows.reduce((sum, row) => sum + row.totalCredit, 0),
-    );
+    const totalDebitMinor = rowMinors.reduce((sum, row) => sum + row.debit, 0n);
+    const totalCreditMinor = rowMinors.reduce((sum, row) => sum + row.credit, 0n);
 
-    // تجمیع بین‌المللی: تبدیل بدهکار/بستانکار هر حساب به ارز پایه (USD).
-    const baseTotalDebit = this.currencyService.round(
-      rows.reduce(
-        (sum, row) =>
-          sum +
-          // Ledger debit/credit are always stored in rial (IRR), whatever the account's
-          // default currency (USD, MULTI, ...), so the base conversion is IRR -> USD.
-          this.toBaseCurrency(row.totalDebit, Currency.IRR),
-        0,
-      ),
-      BASE_CURRENCY,
+    // Ledger debit/credit are always stored in rial (IRR), whatever the account's default
+    // currency (USD, MULTI, ...), so the base conversion is IRR -> USD of the exact totals.
+    const baseTotalDebit = this.toBaseCurrency(
+      asNumber(totalDebitMinor),
+      Currency.IRR,
     );
-    const baseTotalCredit = this.currencyService.round(
-      rows.reduce(
-        (sum, row) =>
-          sum +
-          this.toBaseCurrency(row.totalCredit, Currency.IRR),
-        0,
-      ),
-      BASE_CURRENCY,
+    const baseTotalCredit = this.toBaseCurrency(
+      asNumber(totalCreditMinor),
+      Currency.IRR,
     );
 
     // جمع‌های ارزی (تنها زمانی معنادار که فیلتر ارز اعمال شده باشد).
-    const totalAmountFx = this.round(
-      rawRows.reduce((sum, row) => sum + Number(row.totalAmountFx ?? 0), 0),
+    const totalAmountFx = fromMinor(
+      rawRows.reduce((sum, row) => sum + fromDb(row.totalAmountFx), 0n),
     );
-    const totalFxInIrr = this.round(
-      rawRows.reduce((sum, row) => sum + Number(row.totalFxInIrr ?? 0), 0),
+    const totalFxInIrr = fromMinor(
+      rawRows.reduce((sum, row) => sum + fromDb(row.totalFxInIrr), 0n),
     );
 
+    const balanced = totalDebitMinor === totalCreditMinor;
     return {
       rows,
-      totalDebit,
-      totalCredit,
-      balanced: Math.abs(totalDebit - totalCredit) <= IRR_BALANCE_TOLERANCE,
+      totalDebit: fromMinor(totalDebitMinor),
+      totalCredit: fromMinor(totalCreditMinor),
+      balanced,
       baseCurrency: BASE_CURRENCY,
       baseTotalDebit,
       baseTotalCredit,
-      baseBalanced:
-        Math.abs(baseTotalDebit - baseTotalCredit) < BALANCE_TOLERANCE,
+      // Both base totals are the same conversion of the exact IRR totals: they match iff those do.
+      baseBalanced: balanced,
       currency,
       totalAmountFx,
       totalFxInIrr,
@@ -714,8 +1015,8 @@ export class AccountingService {
       date: new Date(row.date),
       description: row.lineDescription ?? row.entryDescription,
       entryDescription: row.entryDescription,
-      debit: this.round(Number(row.debit)),
-      credit: this.round(Number(row.credit)),
+      debit: asNumber(fromDb(row.debit)),
+      credit: asNumber(fromDb(row.credit)),
     }));
   }
 
@@ -743,20 +1044,20 @@ export class AccountingService {
     const fromDate = query.fromDate ? new Date(query.fromDate) : undefined;
     const toDate = query.toDate ? new Date(query.toDate) : undefined;
 
-    let runningBalance = 0;
+    let runningMinor = 0n;
     const computed = rawRows.map((row) => {
-      const debit = Number(row.debit);
-      const credit = Number(row.credit);
-      runningBalance = this.round(runningBalance + debit - credit);
+      const debit = fromDb(row.debit);
+      const credit = fromDb(row.credit);
+      runningMinor += debit - credit;
       return {
         id: row.id,
         journalEntryId: row.journalEntryId,
         entryNumber: row.entryNumber,
         date: row.date,
         description: row.lineDescription ?? row.entryDescription,
-        debit: this.round(debit),
-        credit: this.round(credit),
-        runningBalance,
+        debit,
+        credit,
+        running: runningMinor,
       };
     });
 
@@ -771,34 +1072,35 @@ export class AccountingService {
 
     const openingBeforeRange = computed
       .filter((row) => (fromDate ? new Date(row.date) < fromDate : false))
-      .reduce((sum, row) => this.round(sum + row.debit - row.credit), 0);
+      .reduce((sum, row) => sum + row.debit - row.credit, 0n);
 
-    const openingBalance =
+    const openingMinor =
       limited.length > 0
-        ? this.round(
-            limited[0].runningBalance - (limited[0].debit - limited[0].credit),
-          )
+        ? limited[0].running - (limited[0].debit - limited[0].credit)
         : openingBeforeRange;
 
-    const closingBalance =
-      limited.length > 0
-        ? limited[limited.length - 1].runningBalance
-        : openingBeforeRange;
+    const closingMinor =
+      limited.length > 0 ? limited[limited.length - 1].running : openingBeforeRange;
 
     return {
       account: this.toAccountDto(account),
-      openingBalance,
-      totalDebit: this.round(
-        limited.reduce((sum, row) => sum + row.debit, 0),
-      ),
-      totalCredit: this.round(
-        limited.reduce((sum, row) => sum + row.credit, 0),
-      ),
-      closingBalance,
+      openingBalance: fromMinor(openingMinor),
+      totalDebit: fromMinor(limited.reduce((sum, row) => sum + row.debit, 0n)),
+      totalCredit: fromMinor(limited.reduce((sum, row) => sum + row.credit, 0n)),
+      closingBalance: fromMinor(closingMinor),
       baseCurrency: BASE_CURRENCY,
       // closingBalance is in rial (ledger amounts), not in the account's default currency.
-      baseClosingBalance: this.toBaseCurrency(closingBalance, Currency.IRR),
-      entries: limited,
+      baseClosingBalance: this.toBaseCurrency(asNumber(closingMinor), Currency.IRR),
+      entries: limited.map((row) => ({
+        id: row.id,
+        journalEntryId: row.journalEntryId,
+        entryNumber: row.entryNumber,
+        date: row.date,
+        description: row.description,
+        debit: fromMinor(row.debit),
+        credit: fromMinor(row.credit),
+        runningBalance: fromMinor(row.running),
+      })),
     };
   }
 }

@@ -26,7 +26,7 @@ describe('InvoicingRepository.summarize (assistant read model)', () => {
     ]);
     const repository = new InvoicingRepository({
       createQueryBuilder: () => builder,
-    } as never);
+    } as never, {} as never);
 
     const from = new Date('2026-08-22T20:30:00Z');
     const rows = await repository.summarize('tenant-a', {

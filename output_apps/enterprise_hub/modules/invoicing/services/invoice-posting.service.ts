@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
+import { minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
 import { AccountResponseDto } from '../../accounting/dto/account-response.dto';
 import { JournalEntryLineDto } from '../../accounting/dto/create-journal-entry.dto';
 import { AccountType } from '../../accounting/enums/accounting.enum';
@@ -81,11 +83,35 @@ export class InvoicePostingService {
     }
 
     try {
-      await this.recordOutboundMovements(invoice);
-      const entry = await this.createIssuedJournalEntry(invoice);
-      await this.invoicingRepository.updatePosting(invoice.tenantId, invoice.id, {
-        journalEntryId: entry.id,
-        postingError: null,
+      // Accounts are resolved (and created if missing) before the transaction: that step is
+      // idempotent and must not be rolled back together with a failed posting.
+      const accounts = await this.resolveAccounts(invoice.tenantId, [
+        RECEIVABLE_ACCOUNT,
+        SALES_ACCOUNT,
+        VAT_ACCOUNT,
+      ]);
+      // One transaction: stock deduction, journal entry and the posting marker commit together
+      // or not at all, and the invoice row lock makes a concurrent run wait and then no-op.
+      await this.invoicingRepository.transaction(async (manager) => {
+        const locked = await this.invoicingRepository.findByIdForPosting(
+          invoice.tenantId,
+          invoice.id,
+          manager,
+        );
+        if (
+          !locked ||
+          (locked.journalEntryId !== null && locked.journalEntryId !== undefined)
+        ) {
+          return;
+        }
+        await this.recordOutboundMovements(locked, manager);
+        const entry = await this.createIssuedJournalEntry(locked, accounts, manager);
+        await this.invoicingRepository.updatePosting(
+          locked.tenantId,
+          locked.id,
+          { journalEntryId: entry.id, postingError: null },
+          manager,
+        );
       });
     } catch (error) {
       await this.recordPostingError(invoice, error);
@@ -121,36 +147,53 @@ export class InvoicePostingService {
     }
 
     try {
-      const receivable = this.rialAmount(invoice, invoice.finalPayable);
+      const { receivableMinor } = this.computeAmounts(invoice);
+      const receivable = minorToDecimal(receivableMinor);
       const [cashCode, receivableCode] = await this.resolveAccounts(
         invoice.tenantId,
         [CASH_BANK_ACCOUNT, RECEIVABLE_ACCOUNT],
       );
 
-      const entry = await this.accountingService.createJournalEntry(
-        invoice.tenantId,
-        {
-          entryNumber: this.entryNumber(invoice, 'PAID'),
-          date: this.entryDate(invoice.paidAt ?? invoice.issuedAt),
-          description: `تسویه صورتحساب ${invoice.taxInvoiceNumber}`,
-          lines: [
-            {
-              accountCode: cashCode,
-              debit: receivable,
-              description: 'دریافت نقدی/بانکی بابت صورتحساب',
-            },
-            {
-              accountCode: receivableCode,
-              credit: receivable,
-              description: 'تسویه حساب‌های دریافتنی',
-            },
-          ],
-        },
-      );
-
-      await this.invoicingRepository.updatePosting(invoice.tenantId, invoice.id, {
-        paidJournalEntryId: entry.id,
-        postingError: null,
+      await this.invoicingRepository.transaction(async (manager) => {
+        const locked = await this.invoicingRepository.findByIdForPosting(
+          invoice.tenantId,
+          invoice.id,
+          manager,
+        );
+        if (
+          !locked ||
+          (locked.paidJournalEntryId !== null &&
+            locked.paidJournalEntryId !== undefined)
+        ) {
+          return;
+        }
+        const entry = await this.accountingService.createJournalEntry(
+          locked.tenantId,
+          {
+            entryNumber: this.entryNumber(locked, 'PAID'),
+            date: this.entryDate(locked.paidAt ?? locked.issuedAt),
+            description: `تسویه صورتحساب ${locked.taxInvoiceNumber}`,
+            lines: [
+              {
+                accountCode: cashCode,
+                debit: receivable,
+                description: 'دریافت نقدی/بانکی بابت صورتحساب',
+              },
+              {
+                accountCode: receivableCode,
+                credit: receivable,
+                description: 'تسویه حساب‌های دریافتنی',
+              },
+            ],
+          },
+          manager,
+        );
+        await this.invoicingRepository.updatePosting(
+          locked.tenantId,
+          locked.id,
+          { paidJournalEntryId: entry.id, postingError: null },
+          manager,
+        );
       });
     } catch (error) {
       await this.recordPostingError(invoice, error);
@@ -181,51 +224,68 @@ export class InvoicePostingService {
     }
 
     try {
-      const receivable = this.rialAmount(invoice, invoice.finalPayable);
-      const salesBase = this.rialAmount(
-        invoice,
-        invoice.finalPayable - invoice.totalTax,
-      );
-      const vat = this.rialAmount(invoice, invoice.totalTax);
       const [salesCode, vatCode, receivableCode] = await this.resolveAccounts(
         invoice.tenantId,
         [SALES_ACCOUNT, VAT_ACCOUNT, RECEIVABLE_ACCOUNT],
       );
 
-      const lines: JournalEntryLineDto[] = [
-        {
-          accountCode: salesCode,
-          debit: salesBase,
-          description: 'برگشت درآمد فروش',
-        },
-      ];
-      if (vat > 0) {
+      await this.invoicingRepository.transaction(async (manager) => {
+        const locked = await this.invoicingRepository.findByIdForPosting(
+          invoice.tenantId,
+          invoice.id,
+          manager,
+        );
+        if (
+          !locked ||
+          (locked.reversalJournalEntryId !== null &&
+            locked.reversalJournalEntryId !== undefined) ||
+          locked.journalEntryId === null ||
+          locked.journalEntryId === undefined
+        ) {
+          return;
+        }
+
+        // Exactly the amounts of the issued entry (same function), with debit/credit swapped.
+        const amounts = this.computeAmounts(locked);
+        const lines: JournalEntryLineDto[] = [];
+        if (amounts.salesMinor > 0n) {
+          lines.push({
+            accountCode: salesCode,
+            debit: minorToDecimal(amounts.salesMinor),
+            description: 'برگشت درآمد فروش',
+          });
+        }
+        if (amounts.vatMinor > 0n) {
+          lines.push({
+            accountCode: vatCode,
+            debit: minorToDecimal(amounts.vatMinor),
+            description: 'برگشت مالیات بر ارزش افزوده',
+          });
+        }
         lines.push({
-          accountCode: vatCode,
-          debit: vat,
-          description: 'برگشت مالیات بر ارزش افزوده',
+          accountCode: receivableCode,
+          credit: minorToDecimal(amounts.receivableMinor),
+          description: 'برگشت حساب‌های دریافتنی',
         });
-      }
-      lines.push({
-        accountCode: receivableCode,
-        credit: receivable,
-        description: 'برگشت حساب‌های دریافتنی',
-      });
 
-      const entry = await this.accountingService.createJournalEntry(
-        invoice.tenantId,
-        {
-          entryNumber: this.entryNumber(invoice, 'CANCEL'),
-          date: this.entryDate(invoice.issuedAt),
-          description: `ابطال صورتحساب ${invoice.taxInvoiceNumber}`,
-          lines,
-        },
-      );
+        const entry = await this.accountingService.createJournalEntry(
+          locked.tenantId,
+          {
+            entryNumber: this.entryNumber(locked, 'CANCEL'),
+            date: this.entryDate(locked.issuedAt),
+            description: `ابطال صورتحساب ${locked.taxInvoiceNumber}`,
+            lines,
+          },
+          manager,
+        );
 
-      await this.restoreInboundMovements(invoice);
-      await this.invoicingRepository.updatePosting(invoice.tenantId, invoice.id, {
-        reversalJournalEntryId: entry.id,
-        postingError: null,
+        await this.restoreInboundMovements(locked, manager);
+        await this.invoicingRepository.updatePosting(
+          locked.tenantId,
+          locked.id,
+          { reversalJournalEntryId: entry.id, postingError: null },
+          manager,
+        );
       });
     } catch (error) {
       await this.recordPostingError(invoice, error);
@@ -233,33 +293,47 @@ export class InvoicePostingService {
   }
 
   /** ثبت خروج انبار برای هر سطر پیوند‌خورده به کالای انبار. */
-  private async recordOutboundMovements(invoice: InvoiceEntity): Promise<void> {
+  private async recordOutboundMovements(
+    invoice: InvoiceEntity,
+    manager: EntityManager,
+  ): Promise<void> {
     for (const line of invoice.items ?? []) {
       if (!this.isLinkedLine(line)) {
         continue;
       }
-      await this.inventoryService.issueStock(invoice.tenantId, {
-        sku: line.sku as string,
-        quantity: line.quantity,
-        reference: `فاکتور ${invoice.taxInvoiceNumber}`,
-      });
+      await this.inventoryService.issueStock(
+        invoice.tenantId,
+        {
+          sku: line.sku as string,
+          quantity: line.quantity,
+          reference: `فاکتور ${invoice.taxInvoiceNumber}`,
+        },
+        manager,
+      );
     }
   }
 
   /** ورود مجدد کالا به انبار برای بازگرداندن موجودی هنگام ابطال. */
-  private async restoreInboundMovements(invoice: InvoiceEntity): Promise<void> {
+  private async restoreInboundMovements(
+    invoice: InvoiceEntity,
+    manager: EntityManager,
+  ): Promise<void> {
     const fxRate = this.resolveFxRate(invoice);
     for (const line of invoice.items ?? []) {
       if (!this.isLinkedLine(line)) {
         continue;
       }
       const unitCost = this.round(line.unitPrice * fxRate);
-      await this.inventoryService.receiveStock(invoice.tenantId, {
-        sku: line.sku as string,
-        quantity: line.quantity,
-        unitPurchaseCost: unitCost > 0 ? unitCost : 1,
-        reference: `ابطال فاکتور ${invoice.taxInvoiceNumber}`,
-      });
+      await this.inventoryService.receiveStock(
+        invoice.tenantId,
+        {
+          sku: line.sku as string,
+          quantity: line.quantity,
+          unitPurchaseCost: unitCost > 0 ? unitCost : 1,
+          reference: `ابطال فاکتور ${invoice.taxInvoiceNumber}`,
+        },
+        manager,
+      );
     }
   }
 
@@ -277,48 +351,70 @@ export class InvoicePostingService {
 
   /**
    * ساخت سند صدور: بدهکار حساب‌های دریافتنی، بستانکار فروش و مالیات پرداختنی.
-   * مبالغ به ریال (ارز صورتحساب × نرخ تبدیل) محاسبه می‌شوند.
+   * Amounts come from `computeAmounts`, the same function cancellation uses, so the two entries
+   * always mirror each other exactly (sales is the plug: receivable - VAT).
    */
-  private async createIssuedJournalEntry(invoice: InvoiceEntity) {
-    const receivable = this.rialAmount(invoice, invoice.finalPayable);
-    const salesBase = this.rialAmount(
-      invoice,
-      invoice.finalPayable - invoice.totalTax,
-    );
-    const vat = this.rialAmount(invoice, invoice.totalTax);
-    const [receivableCode, salesCode, vatCode] = await this.resolveAccounts(
-      invoice.tenantId,
-      [RECEIVABLE_ACCOUNT, SALES_ACCOUNT, VAT_ACCOUNT],
-    );
+  private async createIssuedJournalEntry(
+    invoice: InvoiceEntity,
+    accounts: string[],
+    manager: EntityManager,
+  ) {
+    const [receivableCode, salesCode, vatCode] = accounts;
+    const { receivableMinor, salesMinor, vatMinor } = this.computeAmounts(invoice);
 
     const lines: JournalEntryLineDto[] = [
       {
         accountCode: receivableCode,
-        debit: receivable,
+        debit: minorToDecimal(receivableMinor),
         description: `صدور صورتحساب ${invoice.taxInvoiceNumber}`,
       },
     ];
-    if (salesBase > 0) {
+    if (salesMinor > 0n) {
       lines.push({
         accountCode: salesCode,
-        credit: salesBase,
+        credit: minorToDecimal(salesMinor),
         description: 'درآمد فروش',
       });
     }
-    if (vat > 0) {
+    if (vatMinor > 0n) {
       lines.push({
         accountCode: vatCode,
-        credit: vat,
+        credit: minorToDecimal(vatMinor),
         description: 'مالیات بر ارزش افزوده پرداختنی',
       });
     }
 
-    return this.accountingService.createJournalEntry(invoice.tenantId, {
-      entryNumber: this.entryNumber(invoice, 'ISSUED'),
-      date: this.entryDate(invoice.issuedAt),
-      description: `صدور صورتحساب ${invoice.taxInvoiceNumber}`,
-      lines,
-    });
+    return this.accountingService.createJournalEntry(
+      invoice.tenantId,
+      {
+        entryNumber: this.entryNumber(invoice, 'ISSUED'),
+        date: this.entryDate(invoice.issuedAt),
+        description: `صدور صورتحساب ${invoice.taxInvoiceNumber}`,
+        lines,
+      },
+      manager,
+    );
+  }
+
+  /**
+   * The rial amounts of an invoice in exact minor units. Receivable and VAT are each converted
+   * once (invoice currency x fx rate, half-up to the cent); sales is the plug so the entry and its
+   * cancellation balance to the cent whatever the FX rounding does.
+   */
+  private computeAmounts(invoice: InvoiceEntity): {
+    receivableMinor: bigint;
+    vatMinor: bigint;
+    salesMinor: bigint;
+  } {
+    const receivableMinor = this.rialMinor(invoice, invoice.finalPayable);
+    const vatMinor = this.rialMinor(invoice, invoice.totalTax);
+    const salesMinor = receivableMinor - vatMinor;
+    if (salesMinor < 0n) {
+      throw new Error(
+        `Invoice ${invoice.taxInvoiceNumber}: VAT exceeds the payable amount.`,
+      );
+    }
+    return { receivableMinor, vatMinor, salesMinor };
   }
 
   /**
@@ -373,9 +469,13 @@ export class InvoicePostingService {
     return byCode ? byCode.code : null;
   }
 
-  /** مبلغ ریالی: مبلغ ارز صورتحساب × نرخ تبدیل ریالی (پیش‌فرض ۱). */
-  private rialAmount(invoice: InvoiceEntity, amount: number): number {
-    return this.round(Number(amount ?? 0) * this.resolveFxRate(invoice));
+  /** Rial minor units: invoice-currency amount x fx rate (6 decimals), rounded half-up. */
+  private rialMinor(invoice: InvoiceEntity, amount: number): bigint {
+    const amountMinor = toMinor(this.round(Number(amount ?? 0)));
+    const rate = parseScaled(this.resolveFxRate(invoice).toFixed(6), 6);
+    const product = amountMinor * rate;
+    const divisor = 1_000_000n;
+    return (product + (product < 0n ? -divisor / 2n : divisor / 2n)) / divisor;
   }
 
   private resolveFxRate(invoice: InvoiceEntity): number {

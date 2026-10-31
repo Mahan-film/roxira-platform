@@ -22,6 +22,7 @@ import {
   TrialBalanceRawRow,
 } from './repositories/accounting.repository';
 import { AccountingService } from './services/accounting.service';
+import { fromDb, minorToDecimal } from './money';
 
 const requestWith = (user: unknown): AuthenticatedRequest =>
   ({ user }) as unknown as AuthenticatedRequest;
@@ -181,15 +182,16 @@ class InMemoryAccountingRepository {
         journalEntryId: entry.id,
         accountId: line.accountId,
         account: account ?? undefined,
-        debit: line.debit,
-        credit: line.credit,
+        debit: minorToDecimal(line.debitMinor),
+        credit: minorToDecimal(line.creditMinor),
         description: line.description ?? null,
       } as JournalEntryLineEntity;
       this.lines.push(lineEntity);
       entry.lines.push(lineEntity);
       if (account) {
-        account.balance =
-          Number(account.balance) + line.debit - line.credit;
+        account.balance = minorToDecimal(
+          fromDb(account.balance) + line.debitMinor - line.creditMinor,
+        );
       }
     }
 
@@ -286,6 +288,7 @@ describe('AccountingRepository — tenant scoping', () => {
       entries as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await repository.findEntryById('tenant-a', 1);
@@ -300,6 +303,7 @@ describe('AccountingRepository — tenant scoping', () => {
     const accounts = { findOne: jest.fn(async () => null) };
     const repository = new AccountingRepository(
       accounts as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -322,6 +326,7 @@ describe('AccountingRepository — tenant scoping', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await repository.createAccount('tenant-a', { code: '9000' });
@@ -337,6 +342,7 @@ describe('AccountingRepository — tenant scoping', () => {
     const repository = new AccountingRepository(
       {} as never,
       entries as never,
+      {} as never,
       {} as never,
       {} as never,
     );
