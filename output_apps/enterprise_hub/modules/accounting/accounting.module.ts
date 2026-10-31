@@ -3,19 +3,23 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CurrencyModule } from '../currency/currency.module';
 import { AccountingController } from './controllers/accounting.controller';
 import { FiscalYearController } from './controllers/fiscal-year.controller';
+import { PettyCashController } from './controllers/petty-cash.controller';
 import { ReportsController } from './controllers/reports.controller';
 import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
 import { FiscalYearEntity } from './entities/fiscal-year.entity';
 import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
 import { JournalEntryEntity } from './entities/journal-entry.entity';
 import { PeriodLockEntity } from './entities/period-lock.entity';
+import { PettyCashFundEntity, PettyCashTransactionEntity } from './entities/petty-cash.entity';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { FiscalYearRepository } from './repositories/fiscal-year.repository';
 import { LedgerReportRepository } from './repositories/ledger-report.repository';
+import { PettyCashRepository } from './repositories/petty-cash.repository';
 import { AccountingService } from './services/accounting.service';
 import { ChartTemplateService } from './services/chart-template.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { FiscalYearService } from './services/fiscal-year.service';
+import { PettyCashService } from './services/petty-cash.service';
 import { ReportExportService } from './services/report-export.service';
 
 /**
@@ -38,10 +42,12 @@ import { ReportExportService } from './services/report-export.service';
       JournalEntryLineEntity,
       PeriodLockEntity,
       FiscalYearEntity,
+      PettyCashFundEntity,
+      PettyCashTransactionEntity,
     ]),
     CurrencyModule,
   ],
-  controllers: [AccountingController, FiscalYearController, ReportsController],
+  controllers: [AccountingController, FiscalYearController, PettyCashController, ReportsController],
   providers: [
     AccountingService,
     AccountingRepository,
@@ -50,6 +56,8 @@ import { ReportExportService } from './services/report-export.service';
     FiscalYearRepository,
     FiscalYearService,
     LedgerReportRepository,
+    PettyCashRepository,
+    PettyCashService,
     ReportExportService,
   ],
   exports: [AccountingService],
