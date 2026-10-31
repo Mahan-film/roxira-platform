@@ -84,6 +84,36 @@ export class MailService {
     return this.send(to, subject, text);
   }
 
+  /** Notice to the owner about a new lead. The body holds contact details, so it is never logged. */
+  async sendLeadNotice(
+    to: string,
+    lead: {
+      id: number;
+      name: string;
+      company: string | null;
+      phone: string | null;
+      email: string | null;
+      message: string | null;
+      source: string | null;
+      createdAt: Date;
+    },
+  ): Promise<boolean> {
+    const lines = [
+      `Name: ${lead.name}`,
+      `Company: ${lead.company ?? '-'}`,
+      `Phone: ${lead.phone ?? '-'}`,
+      `Email: ${lead.email ?? '-'}`,
+      `Source: ${lead.source ?? '-'}`,
+      `Reference: ${lead.id}`,
+      `Time: ${lead.createdAt.toISOString()}`,
+    ];
+    if (lead.message) {
+      lines.push('', lead.message);
+    }
+    // source comes from the public form, so it stays out of the mail headers
+    return this.send(to, `[LEAD] #${lead.id}`, lines.join('\n'));
+  }
+
   private async send(to: string, subject: string, text: string): Promise<boolean> {
     try {
       await this.getTransporter().sendMail({

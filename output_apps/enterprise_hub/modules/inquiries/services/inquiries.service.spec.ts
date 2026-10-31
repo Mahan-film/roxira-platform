@@ -1,4 +1,5 @@
 import { BadRequestException, Logger } from '@nestjs/common';
+import { MailService } from '../../auth/services/mail.service';
 import { CreateInquiryDto } from '../dto/create-inquiry.dto';
 import { EnterpriseInquiryEntity } from '../entities/enterprise-inquiry.entity';
 import { InquiryStatus } from '../enums/inquiry-status.enum';
@@ -28,13 +29,16 @@ describe('InquiriesService', () => {
     create: jest.fn(),
     findAndCount: jest.fn(),
   };
+  const mail = { sendLeadNotice: jest.fn() };
   let service: InquiriesService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    delete process.env.SALES_NOTIFY_EMAIL;
+    delete process.env.LEAD_NOTIFY_EMAIL;
+    mail.sendLeadNotice.mockResolvedValue(true);
     service = new InquiriesService(
       repository as unknown as InquiriesRepository,
+      mail as unknown as MailService,
     );
   });
 
@@ -116,35 +120,62 @@ describe('InquiriesService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('logs a sales notification when SALES_NOTIFY_EMAIL is set', async () => {
-    process.env.SALES_NOTIFY_EMAIL = 'sales@roxira.ir';
-    repository.create.mockResolvedValue(buildEntity());
-    const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+  describe('lead notice', () => {
+    const lead = { name: 'علی', phone: '09120000000', email: 'ali@example.com' };
+    const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-    await service.create({
-      name: 'علی',
-      phone: '09120000000',
-      email: 'ali@example.com',
+    it('mails the stored lead to LEAD_NOTIFY_EMAIL', async () => {
+      process.env.LEAD_NOTIFY_EMAIL = ' owner@roxira.net ';
+      const entity = buildEntity();
+      repository.create.mockResolvedValue(entity);
+
+      await service.create(lead);
+
+      expect(mail.sendLeadNotice).toHaveBeenCalledWith('owner@roxira.net', entity);
     });
 
-    expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sales@roxira.ir'),
-    );
-    logSpy.mockRestore();
-  });
-
-  it('does not log a notification when SALES_NOTIFY_EMAIL is unset', async () => {
-    repository.create.mockResolvedValue(buildEntity());
-    const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
-
-    await service.create({
-      name: 'علی',
-      phone: '09120000000',
-      email: 'ali@example.com',
+    it('sends nothing when the mailbox is unset or invalid', async () => {
+      repository.create.mockResolvedValue(buildEntity());
+      await service.create(lead);
+      process.env.LEAD_NOTIFY_EMAIL = 'not-a-mailbox';
+      await service.create(lead);
+      expect(mail.sendLeadNotice).not.toHaveBeenCalled();
     });
 
-    expect(logSpy).not.toHaveBeenCalled();
-    logSpy.mockRestore();
+    it('leaves upgrade leads to the frontend route that already mails them', async () => {
+      process.env.LEAD_NOTIFY_EMAIL = 'owner@roxira.net';
+      repository.create.mockResolvedValue(buildEntity({ source: 'upgrade-inquiry-pro' }));
+      await service.create(lead);
+      expect(mail.sendLeadNotice).not.toHaveBeenCalled();
+    });
+
+    it('answers before the mail finishes', async () => {
+      process.env.LEAD_NOTIFY_EMAIL = 'owner@roxira.net';
+      repository.create.mockResolvedValue(buildEntity());
+      mail.sendLeadNotice.mockReturnValue(new Promise(() => undefined));
+      await expect(service.create(lead)).resolves.toMatchObject({ id: 1 });
+    });
+
+    it.each([
+      ['returns false', () => mail.sendLeadNotice.mockResolvedValue(false)],
+      ['rejects', () => mail.sendLeadNotice.mockRejectedValue(new Error('smtp down'))],
+    ])('keeps the form working and logs no contact data when mail %s', async (_, arrange) => {
+      process.env.LEAD_NOTIFY_EMAIL = 'owner@roxira.net';
+      arrange();
+      repository.create.mockResolvedValue(buildEntity());
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+
+      await expect(service.create(lead)).resolves.toMatchObject({ id: 1 });
+      await flush();
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const logged = String(warnSpy.mock.calls[0][0]);
+      expect(logged).toContain('#1');
+      for (const secret of ['سارا', '09121234567', 'sara@example.com']) {
+        expect(logged).not.toContain(secret);
+      }
+      warnSpy.mockRestore();
+    });
   });
 
   it('lists inquiries with pagination metadata', async () => {

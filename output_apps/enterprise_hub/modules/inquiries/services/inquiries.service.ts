@@ -1,10 +1,12 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { MailService } from '../../auth/services/mail.service';
 import {
   DEFAULT_INQUIRY_SOURCE,
   INQUIRY_EMAIL_REGEX,
   INQUIRY_PHONE_REGEX,
+  LEAD_NOTIFY_EMAIL_ENV,
   MY_LEGAL_WAITLIST_SOURCE,
-  SALES_NOTIFY_EMAIL_ENV,
+  UPGRADE_INQUIRY_SOURCE_PREFIX,
 } from '../constants/inquiries.constants';
 import { CreateInquiryDto } from '../dto/create-inquiry.dto';
 import {
@@ -28,7 +30,10 @@ import { InquiriesRepository } from '../repositories/inquiries.repository';
 export class InquiriesService {
   private readonly logger = new Logger(InquiriesService.name);
 
-  constructor(private readonly inquiriesRepository: InquiriesRepository) {}
+  constructor(
+    private readonly inquiriesRepository: InquiriesRepository,
+    private readonly mail: MailService,
+  ) {}
 
   private toResponse(
     inquiry: EnterpriseInquiryEntity,
@@ -111,16 +116,25 @@ export class InquiriesService {
   }
 
   /**
-   * اطلاع‌رسانی به فروش. در بک‌اند NestJS هیچ helper ارسال ایمیل موجود نیست،
-   * بنابراین فقط یک لاگ ثبت می‌شود (بدون ارسال واقعی)؛ به‌محض افزودن سرویس
-   * ایمیل، همین نقطه به آن متصل می‌شود.
+   * Mails the owner about a new lead. Not awaited, so a slow or broken mail
+   * server never delays or fails the form; the row is already stored. Logs carry
+   * the id and source only, never contact details.
    */
   private notifySales(inquiry: EnterpriseInquiryEntity): void {
-    const recipient = process.env[SALES_NOTIFY_EMAIL_ENV]?.trim();
-    if (!recipient) {
+    const recipient = process.env[LEAD_NOTIFY_EMAIL_ENV]?.trim();
+    if (!recipient || !INQUIRY_EMAIL_REGEX.test(recipient)) {
       return;
     }
-    // No PII in logs: id and source only; details are in the admin list.
-    this.logger.log(`new enterprise inquiry #${inquiry.id} (source=${inquiry.source ?? '-'}) notify=${recipient}`);
+    if (inquiry.source?.startsWith(UPGRADE_INQUIRY_SOURCE_PREFIX)) {
+      return;
+    }
+    const warn = () =>
+      this.logger.warn(`lead notice not sent for inquiry #${inquiry.id} (source=${inquiry.source ?? '-'})`);
+    this.mail
+      .sendLeadNotice(recipient, inquiry)
+      .then((sent) => {
+        if (!sent) warn();
+      })
+      .catch(warn);
   }
 }

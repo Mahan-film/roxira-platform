@@ -15,8 +15,11 @@ export const INQUIRY_THROTTLE = { ttl: 3_600_000, limit: 5 } as const;
 /** منبع پیش‌فرض درخواست وقتی کلاینت مقداری ارسال نکرده باشد. */
 export const DEFAULT_INQUIRY_SOURCE = 'enterprise-hub';
 
-/** نام متغیر محیطی گیرنده اطلاع‌رسانی فروش. */
-export const SALES_NOTIFY_EMAIL_ENV = 'SALES_NOTIFY_EMAIL';
+/** Mailbox that receives a notice for every new lead (same variable the frontend uses). */
+export const LEAD_NOTIFY_EMAIL_ENV = 'LEAD_NOTIFY_EMAIL';
+
+/** The Next.js upgrade-inquiry route mails the owner itself, so these leads are not mailed twice. */
+export const UPGRADE_INQUIRY_SOURCE_PREFIX = 'upgrade-inquiry-';
 
 /** حداکثر طول متن پیام درخواست. */
 export const MAX_INQUIRY_MESSAGE_LENGTH = 4000;
