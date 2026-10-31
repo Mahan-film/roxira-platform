@@ -47,9 +47,8 @@ export async function POST(request: Request) {
 
   if (
     name.length < 2 ||
-    company.length < 2 ||
     !PHONE_RE.test(phone) ||
-    !EMAIL_RE.test(email)
+    (email !== "" && !EMAIL_RE.test(email))
   ) {
     return NextResponse.json({ error: "validation_failed" }, { status: 422 });
   }
@@ -74,9 +73,9 @@ export async function POST(request: Request) {
       headers: forwardHeaders,
       body: JSON.stringify({
         name,
-        company,
         phone,
-        email,
+        ...(company ? { company } : {}),
+        ...(email ? { email } : {}),
         ...(message ? { message } : {}),
         source,
       }),

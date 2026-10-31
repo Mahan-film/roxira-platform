@@ -22,6 +22,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
+import { isoToJalaliInput } from "@/lib/jalali";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -69,9 +71,11 @@ function createEmptyLine(uid: string): FormLine {
   return { uid, accountCode: "", debit: "", credit: "", description: "" };
 }
 
-function toLocalDatetimeInput(date: Date): string {
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+/** Today's local date as a Gregorian ISO date (yyyy-mm-dd). */
+function todayIso(): string {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
 /**
@@ -89,7 +93,9 @@ export function JournalEntryForm({
   const { isAuthenticated, openLogin } = useAuth();
   const nextLineId = useRef(2);
   const [entryNumber, setEntryNumber] = useState("");
-  const [date, setDate] = useState(() => toLocalDatetimeInput(new Date()));
+  const [date, setDate] = useState(todayIso);
+  // Remounts the date field after a reset so it shows the new value.
+  const [dateKey, setDateKey] = useState(0);
   const [description, setDescription] = useState("");
   const [lines, setLines] = useState<FormLine[]>([
     createEmptyLine("line-0"),
@@ -119,7 +125,7 @@ export function JournalEntryForm({
 
   function generateEntryNumber() {
     const now = new Date();
-    const year = now.getFullYear();
+    const year = isoToJalaliInput(now).slice(0, 4);
     const serial = String(now.getTime()).slice(-6);
     setEntryNumber(`JV-${year}-${serial}`);
   }
@@ -186,7 +192,8 @@ export function JournalEntryForm({
 
     const payload: CreateJournalEntryDto = {
       entryNumber: entryNumber.trim(),
-      date: date ? new Date(date).toISOString() : undefined,
+      // Noon local time keeps the Jalali day stable across time zones.
+      date: date ? new Date(`${date}T12:00:00`).toISOString() : undefined,
       description: description.trim(),
       lines: lines
         .filter(
@@ -212,7 +219,8 @@ export function JournalEntryForm({
       setCreatedEntry(result);
       setEntryNumber("");
       setDescription("");
-      setDate(toLocalDatetimeInput(new Date()));
+      setDate(todayIso());
+      setDateKey((key) => key + 1);
       setLines([
         createEmptyLine(`line-${nextLineId.current++}`),
         createEmptyLine(`line-${nextLineId.current++}`),
@@ -249,8 +257,12 @@ export function JournalEntryForm({
               آرتیکل‌های بدهکار/بستانکار با کنترل آنی تراز و اعتبارسنجی سرور.
             </CardDescription>
           </div>
-          <Badge variant={isBalanced ? "default" : "destructive"} className="text-xs">
-            {isBalanced ? "سند تراز است" : "سند ناتراز"}
+          <Badge variant={isBalanced || (totalDebit === 0 && totalCredit === 0) ? "default" : "destructive"} className="text-xs">
+            {totalDebit === 0 && totalCredit === 0
+              ? "سند خالی"
+              : isBalanced
+                ? "سند تراز است"
+                : "سند ناتراز"}
           </Badge>
         </div>
       </CardHeader>
@@ -279,11 +291,7 @@ export function JournalEntryForm({
             </div>
             <div className="grid gap-2">
               <Label>تاریخ سند</Label>
-              <Input
-                type="datetime-local"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-              />
+              <JalaliDateInput key={dateKey} value={date} onChange={setDate} />
             </div>
             <div className="grid gap-2">
               <Label>شرح سند</Label>
@@ -406,7 +414,7 @@ export function JournalEntryForm({
               <span className="text-muted-foreground">اختلاف تراز</span>
               <span
                 className={
-                  isBalanced
+                  difference < 0.01
                     ? "font-bold text-emerald-600 dark:text-emerald-400"
                     : "font-bold text-rose-600 dark:text-rose-400"
                 }

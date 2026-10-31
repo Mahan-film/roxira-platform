@@ -164,10 +164,7 @@ export default function RadarPage() {
               مرکز فرماندهی رادار فناوری
             </h1>
             <p className="text-sm text-muted-foreground">
-              کاوش زنده وب، سنتز راهبردی و ارکستراسیون ۱۰ ایجنت موازی — متصل به{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                /enterprise-hub/radar
-              </code>
+              کاوش زنده وب، سنتز راهبردی و ارکستراسیون ۱۰ ایجنت موازی
             </p>
           </div>
           <Button

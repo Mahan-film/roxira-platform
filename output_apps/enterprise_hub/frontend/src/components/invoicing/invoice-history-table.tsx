@@ -168,6 +168,7 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
           </form>
 
           <Select<string>
+            items={{ [ALL_STATUSES]: "همه وضعیت‌ها", ...INVOICE_STATUS_LABELS }}
             value={statusFilter}
             onValueChange={(value) => {
               setStatusFilter((value ?? ALL_STATUSES) as StatusFilter);

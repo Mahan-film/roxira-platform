@@ -100,6 +100,15 @@ describe('InquiriesService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
+  it('accepts an inquiry with a phone number and no email', async () => {
+    repository.create.mockResolvedValue(buildEntity());
+
+    await service.create({ name: 'علی', phone: '09120000000' });
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ email: null, company: null }),
+    );
+  });
+
   it('rejects an invalid email address', async () => {
     await expect(
       service.create({ name: 'علی', phone: '09120000000', email: 'not-an-email' }),

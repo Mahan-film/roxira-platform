@@ -30,6 +30,8 @@ const ROXIRA_ONLY_PATHS = [
   "/radar",
   "/admin",
   "/app",
+  "/login",
+  "/signup",
 ];
 
 /** مسیرهای «قاضی هوشمند» که روی دامنه‌های روکسیرا سرو نمی‌شوند (نشت برند). */
@@ -122,6 +124,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(pathname + request.nextUrl.search, "https://ghazihoushmand.ir"));
   }
 
+  // Legal research is a Smart Judge product, not part of the Roxira business suite.
+  if (hasPrefix(pathname, "/en/malaysia-lawyers")) {
+    return NextResponse.redirect(new URL("/en", request.nextUrl));
+  }
+
   if (domain === "roxira_net") {
     // /admin must stay a plain 404 on every domain (deploy smoke test), never a redirect.
     if (hasPrefix(pathname, "/admin")) {
@@ -172,6 +179,8 @@ export const config = {
     "/admin/:path*",
     "/app",
     "/app/:path*",
+    "/login",
+    "/signup",
     "/en/:path*",
     "/laws/:path*",
     "/regulations/:path*",

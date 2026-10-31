@@ -341,6 +341,7 @@ export function TaxCompliancePanel({ refreshKey = 0 }: TaxCompliancePanelProps) 
           </form>
 
           <Select<string>
+            items={{ [ALL_STATUSES]: "همه وضعیت‌ها", ...TAX_SUBMISSION_STATUS_LABELS }}
             value={statusFilter}
             onValueChange={(value) => {
               setStatusFilter((value ?? ALL_STATUSES) as TaxStatusFilter);

@@ -16,10 +16,6 @@ export default function DamagesHistoryPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             محاسبه رسمی بر پایه شاخص بانک مرکزی و ماده ۵۲۲ قانون آیین دادرسی مدنی،
-            متصل به{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs" dir="ltr">
-              POST/GET /enterprise-hub/damages
-            </code>
           </p>
         </div>
 

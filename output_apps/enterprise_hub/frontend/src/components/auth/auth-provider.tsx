@@ -15,6 +15,7 @@ import {
   AuthSession,
   AuthUser,
   clearStoredSession,
+  inferServiceDomain,
   loadStoredSession,
   saveStoredSession,
   StoredAuthSession,
@@ -162,9 +163,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const expireSession = useCallback(() => {
     discardSession();
     pendingRef.current = null;
+    const serviceDomain = inferServiceDomain();
     setModalOptions({
-      serviceDomain: "GHAZI",
-      title: "ورود به قاضی هوشمند",
+      serviceDomain,
+      title: serviceDomain === "GHAZI" ? "ورود به قاضی هوشمند" : "ورود به حساب روکسیرا",
       description: SESSION_EXPIRED_MESSAGE,
     });
     setLoginOpen(true);

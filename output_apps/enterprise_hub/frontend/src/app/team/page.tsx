@@ -48,7 +48,7 @@ const IRANIAN_MOBILE_REGEX = /^09\d{9}$/;
  * سازمان فعال است (سرور نیز مستقلاً با `requireTenantOwner` آن را اعمال
  * می‌کند).
  */
-export default function TeamPage() {
+function TeamPageContent() {
   const [tenant, setTenant] = useState<TenantMe | null>(null);
   const [members, setMembers] = useState<TenantMember[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -141,7 +141,7 @@ export default function TeamPage() {
   }
 
   return (
-    <EnterpriseRouteGuard>
+    <>
       <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
         <SiteHeader />
         <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -151,10 +151,7 @@ export default function TeamPage() {
               سازمان و اعضا
             </h1>
             <p className="text-sm text-muted-foreground">
-              مشاهده سازمان جاری، فهرست اعضا و مدیریت دسترسی‌ها — متصل به{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                /tenants
-              </code>
+              مشاهده سازمان جاری، فهرست اعضا و مدیریت دسترسی‌ها
             </p>
           </div>
 
@@ -337,6 +334,19 @@ export default function TeamPage() {
         </main>
         <RoxiraFooter />
       </div>
+    </>
+  );
+}
+
+/**
+ * The guard must wrap the page, not live inside it: data loading starts when the
+ * content mounts, and that must happen after the session is ready, otherwise the
+ * first requests go out without a token and fail with 401.
+ */
+export default function TeamPage() {
+  return (
+    <EnterpriseRouteGuard>
+      <TeamPageContent />
     </EnterpriseRouteGuard>
   );
 }

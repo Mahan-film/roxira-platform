@@ -14,6 +14,22 @@ const ROXIRA_NET_LLMS_TXT = `# Roxira International
 - Email: info@roxira.net
 `;
 
+const ROXIRA_IR_LLMS_TXT = `# روکسیرا (Roxira)
+> نرم‌افزار ماژولار مدیریت کسب‌وکار برای سازمان‌های ایرانی: حسابداری، صورتحساب و مالیات، انبار، منابع انسانی و CRM. هر ماژول جداگانه خریداری می‌شود.
+
+## وضعیت
+- همه ماژول‌ها در نسخه آزمایشی هستند و پس از ورود در پورتال قابل بررسی‌اند.
+- اتصال به سامانه مودیان در مرحله آزمایشی است.
+- وب‌سرویس عمومی و کلید API منتشر نشده است.
+
+## تماس
+- وب‌سایت: https://roxira.ir
+- ثبت‌نام: https://roxira.ir/signup
+- تماس: https://roxira.ir/contact
+- ایمیل: info@roxira.ir
+- تلفن: 09129367796
+`;
+
 const GHAZI_LLMS_TXT = `# قاضی هوشمند (Smart Judge Platform)
 > پلتفرم تحلیل داده‌های حقوقی، تدوین راهبرد دادرسی و پایگاه جامع قوانین معتبر ایران.
 
@@ -39,8 +55,11 @@ const GHAZI_LLMS_TXT = `# قاضی هوشمند (Smart Judge Platform)
 export async function GET(request: NextRequest) {
   const host = request.headers.get("host")?.toLowerCase() || "";
   const isRoxiraNet = host.includes("roxira.net");
+  const isGhazi = host.includes("ghazihoushmand") || host.includes("smartjudge") || host.startsWith("ghazi");
 
-  const content = isRoxiraNet ? ROXIRA_NET_LLMS_TXT : GHAZI_LLMS_TXT;
+  // Only the Smart Judge domain serves the legal product description; roxira.ir (and
+  // any unknown host) gets the business-software one, same as the middleware default.
+  const content = isRoxiraNet ? ROXIRA_NET_LLMS_TXT : isGhazi ? GHAZI_LLMS_TXT : ROXIRA_IR_LLMS_TXT;
 
   return new NextResponse(content, {
     headers: {

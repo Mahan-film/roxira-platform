@@ -26,7 +26,7 @@ import type { ChartOfAccount, TrialBalanceResponse } from "@/types/accounting";
  * آزمایشی/گردش حساب‌ها، دفتر معین و دفتر روزنامه — همه متصل به ماژول
  * `enterprise-hub/accounting` در لایه NestJS.
  */
-export default function AccountingPage() {
+function AccountingPageContent() {
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [trialBalance, setTrialBalance] = useState<TrialBalanceResponse | null>(
     null,
@@ -69,7 +69,7 @@ export default function AccountingPage() {
   }
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -79,10 +79,7 @@ export default function AccountingPage() {
             حسابداری دوبل و دفتر روزنامه سازمانی
           </h1>
           <p className="text-sm text-muted-foreground">
-            ثبت اسناد تراز، تراز آزمایشی و گردش حساب‌ها — متصل به{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-              /enterprise-hub/accounting
-            </code>
+            ثبت اسناد تراز، تراز آزمایشی و گردش حساب‌ها
           </p>
           <AppEntryLink href="/app/accounting" />
         </div>
@@ -158,6 +155,19 @@ export default function AccountingPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </>
+  );
+}
+
+/**
+ * The guard must wrap the page, not live inside it: data loading starts when the
+ * content mounts, and that must happen after the session is ready, otherwise the
+ * first requests go out without a token and fail with 401.
+ */
+export default function AccountingPage() {
+  return (
+    <EnterpriseRouteGuard requireAdmin>
+      <AccountingPageContent />
     </EnterpriseRouteGuard>
   );
 }

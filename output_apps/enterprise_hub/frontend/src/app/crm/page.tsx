@@ -33,7 +33,7 @@ import type {
  * فرم ثبت سرنخ و پنل جزئیات (یادداشت و سوابق تماس) — همه متصل به ماژول
  * `enterprise-hub/crm` در لایه NestJS.
  */
-export default function CrmPage() {
+function CrmPageContent() {
   const [pipeline, setPipeline] = useState<PipelineStageGroup[]>([]);
   const [stats, setStats] = useState<LeadStats | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -121,7 +121,7 @@ export default function CrmPage() {
   }, [pipeline, search]);
 
   return (
-    <EnterpriseRouteGuard>
+    <>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -132,10 +132,6 @@ export default function CrmPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             ثبت و پیگیری سرنخ‌ها، مدیریت سوابق تماس و تحلیل ریالی فرصت‌های باز
-            — متصل به{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-              /enterprise-hub/crm
-            </code>
           </p>
           <AppEntryLink href="/app/crm" />
           <Link
@@ -203,6 +199,19 @@ export default function CrmPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </>
+  );
+}
+
+/**
+ * The guard must wrap the page, not live inside it: data loading starts when the
+ * content mounts, and that must happen after the session is ready, otherwise the
+ * first requests go out without a token and fail with 401.
+ */
+export default function CrmPage() {
+  return (
+    <EnterpriseRouteGuard>
+      <CrmPageContent />
     </EnterpriseRouteGuard>
   );
 }

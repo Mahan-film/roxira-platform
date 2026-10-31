@@ -39,14 +39,7 @@ export default function InvoicingPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             مدیریت و صدور صورتحساب مالیاتی با محاسبه آنی مالیات ۱۰٪ و امضای
-            الکترونیک سامانه مودیان — متصل به{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-              /enterprise-hub/invoicing
-            </code>{" "}
-            و{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-              /enterprise-hub/tax-compliance
-            </code>
+            الکترونیک و آماده‌سازی برای سامانه مودیان
           </p>
         </div>
 

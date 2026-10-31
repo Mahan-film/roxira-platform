@@ -1,22 +1,17 @@
 import Link from "next/link";
-import { Boxes, Cpu, FileCheck2, Layers, Mail, MapPin, Phone, ShieldCheck } from "lucide-react";
+import { Mail, Phone, ShieldCheck } from "lucide-react";
 
 import { EnamadBadge } from "@/components/layout/EnamadBadge";
 
 const PLATFORM_LINKS = [
   { href: "/accounting", label: "حسابداری دوطرفه" },
-  { href: "/invoicing", label: "انطباق مالیاتی (سامانه مودیان)" },
-  { href: "/inventory", label: "انبارداری و ERP" },
+  { href: "/invoicing", label: "صورتحساب و مالیات" },
+  { href: "/inventory", label: "انبار و موجودی" },
   { href: "/crm", label: "مدیریت مشتریان (CRM)" },
-  { href: "/contact", label: "درخواست دمو" },
-  { href: "/docs", label: "مستندات وب‌سرویس و API" },
-];
-
-const MODULES = [
-  { href: "/accounting", label: "دفتر کل و گزارش‌های مالی", icon: Layers },
-  { href: "/invoicing", label: "صورتحساب و امضای الکترونیک", icon: FileCheck2 },
-  { href: "/inventory", label: "موجودی و بهای تمام‌شده", icon: Boxes },
-  { href: "/contact", label: "درخواست دمو و استقرار", icon: Cpu },
+  { href: "/hr", label: "منابع انسانی و حقوق" },
+  { href: "/signup", label: "ثبت‌نام" },
+  { href: "/login", label: "ورود" },
+  { href: "/contact", label: "تماس" },
 ];
 
 /**
@@ -37,15 +32,14 @@ export function RoxiraFooter() {
               R
             </span>
             <div>
-              <div className="text-sm font-bold text-white">رکسایرا</div>
+              <div className="text-sm font-bold text-white">روکسیرا</div>
               <div className="font-mono text-[10px] text-slate-500" dir="ltr">
-                Roxira Enterprise OS
+                Roxira
               </div>
             </div>
           </div>
           <p className="text-xs leading-relaxed">
-            زیرساخت ابری یکپارچه سازمانی؛ از حسابداری و انبارداری و انطباق مالیاتی تا کارخانه
-            نرم‌افزار خودمختار و اتصال امن به وب‌سرویس‌های سازمانی.
+            نرم‌افزار ماژولار مدیریت کسب‌وکار: حسابداری، صورتحساب و مالیات، انبار، منابع انسانی و CRM. هر ماژول جداگانه خریداری می‌شود.
           </p>
         </div>
 
@@ -85,35 +79,12 @@ export function RoxiraFooter() {
                 info@roxira.ir
               </a>
             </li>
-            <li className="flex items-start gap-2 leading-relaxed">
-              <MapPin className="mt-0.5 size-3.5 shrink-0 text-indigo-300" />
-              <span>
-                تهران، فرمانیه، خیابان سعیدی، بن‌بست گلریز، پلاک ۱، واحد ۵
-              </span>
-            </li>
           </ul>
         </div>
 
         <div className="space-y-3">
-          <h4 className="text-sm font-bold text-white">ماژول‌های سازمانی</h4>
-          <ul className="space-y-2.5 text-xs">
-            {MODULES.map((module) => {
-              const Icon = module.icon;
-              return (
-                <li key={module.label}>
-                  <Link
-                    href={module.href}
-                    className="flex items-center gap-2 transition-colors hover:text-indigo-300"
-                  >
-                    <Icon className="size-3.5 shrink-0 text-indigo-300" />
-                    {module.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          <div className="pt-2">
+          <h4 className="text-sm font-bold text-white">اعتماد و امنیت</h4>
+          <div>
             <EnamadBadge domain="roxira" />
             <span className="mt-2 flex items-center gap-1 text-[10px] font-bold text-slate-500">
               <ShieldCheck className="size-3 text-emerald-400" />
@@ -125,7 +96,7 @@ export function RoxiraFooter() {
 
       <div className="border-t border-white/10">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-4 text-center text-[11px] text-slate-500 sm:flex-row sm:px-6 sm:text-right">
-          <span>© ۱۴۰۵ رکسایرا — تمامی امتیازات مادی و معنوی محفوظ است.</span>
+          <span>© ۱۴۰۵ روکسیرا — تمامی امتیازات مادی و معنوی محفوظ است.</span>
           <span className="font-mono" dir="ltr">
             <a href="https://roxira.ir" className="transition-colors hover:text-indigo-300">
               roxira.ir

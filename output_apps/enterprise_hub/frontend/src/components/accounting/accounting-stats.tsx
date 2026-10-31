@@ -10,6 +10,7 @@ import {
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatRial } from "@/lib/format";
+import { LEDGER_STATUS_LABELS, ledgerStatus } from "@/lib/ledger-status";
 import type { TrialBalanceResponse } from "@/types/accounting";
 
 interface AccountingStatsProps {
@@ -24,7 +25,9 @@ export function AccountingStats({ trialBalance }: AccountingStatsProps) {
   const accountCount = trialBalance?.rows.length ?? 0;
   const totalDebit = trialBalance?.totalDebit ?? 0;
   const totalCredit = trialBalance?.totalCredit ?? 0;
-  const balanced = trialBalance?.balanced ?? false;
+  const status = ledgerStatus(trialBalance);
+  const alarming = status === "unbalanced";
+  const balanced = !alarming;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -85,7 +88,7 @@ export function AccountingStats({ trialBalance }: AccountingStatsProps) {
                   : "text-lg font-bold text-rose-600 dark:text-rose-400"
               }
             >
-              {balanced ? "تراز" : "ناتراز"}
+              {LEDGER_STATUS_LABELS[status]}
             </span>
           </div>
           <span

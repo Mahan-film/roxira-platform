@@ -39,7 +39,7 @@ import {
  * صدور فیش حقوقی (با ثبت خودکار سند هزینه در دفتر روزنامه) و سابقه فیش‌ها
  * — همه متصل به ماژول `enterprise-hub/hr` در لایه NestJS.
  */
-export default function HrPage() {
+function HrPageContent() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stats, setStats] = useState<HrStats | null>(null);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
@@ -100,7 +100,7 @@ export default function HrPage() {
   }
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -111,10 +111,7 @@ export default function HrPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             کارگزینی پرسنل، احکام حقوقی، محاسبه حقوق (بن خواربار، حق مسکن،
-            بیمه ۷٪ و مالیات پله‌ای) و صدور فیش با ثبت خودکار سند — متصل به{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-              /enterprise-hub/hr
-            </code>
+            بیمه ۷٪ و مالیات پله‌ای) و صدور فیش با ثبت خودکار سند
           </p>
           <AppEntryLink href="/app/hr" />
         </div>
@@ -216,6 +213,19 @@ export default function HrPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </>
+  );
+}
+
+/**
+ * The guard must wrap the page, not live inside it: data loading starts when the
+ * content mounts, and that must happen after the session is ready, otherwise the
+ * first requests go out without a token and fail with 401.
+ */
+export default function HrPage() {
+  return (
+    <EnterpriseRouteGuard requireAdmin>
+      <HrPageContent />
     </EnterpriseRouteGuard>
   );
 }

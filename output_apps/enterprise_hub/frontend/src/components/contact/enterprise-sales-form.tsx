@@ -8,48 +8,42 @@ type SubmitStatus = "idle" | "submitting" | "success" | "error";
 const INQUIRY_ENDPOINT =
   process.env.NEXT_PUBLIC_SALES_INQUIRY_ENDPOINT ?? "/api/v1/enterprise/inquiry";
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const PHONE_RE = /^[0-9+\-\s]{7,20}$/;
+
+const SUBMIT_FAILED = "ارسال درخواست ناموفق بود. دوباره تلاش کنید یا با ۰۹۱۲۹۳۶۷۷۹۶ تماس بگیرید.";
+
+const MODULE_OPTIONS = [
+  "حسابداری",
+  "صورتحساب و مالیات",
+  "انبار",
+  "منابع انسانی",
+  "CRM",
+  "تطبیق بانکی",
+];
+
+const INPUT_CLASS =
+  "mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60";
 
 interface EnterpriseSalesFormProps {
   source?: string;
-  submitLabel?: string;
-}
-
-interface FormState {
-  name: string;
-  company: string;
-  phone: string;
-  email: string;
-  message: string;
 }
 
 interface FormErrors {
   name?: string;
-  company?: string;
   phone?: string;
-  email?: string;
 }
 
-function validate(form: FormState): FormErrors {
-  const errors: FormErrors = {};
-  if (form.name.trim().length < 2) errors.name = "نام و نام خانوادگی را وارد کنید.";
-  if (form.company.trim().length < 2) errors.company = "نام شرکت را وارد کنید.";
-  if (!PHONE_RE.test(form.phone.trim())) errors.phone = "شماره تماس معتبر وارد کنید.";
-  if (!EMAIL_RE.test(form.email.trim())) errors.email = "ایمیل سازمانی معتبر وارد کنید.";
-  return errors;
+/** Phones are often typed with a Persian or Arabic keyboard. */
+function toLatinDigits(value: string): string {
+  return value
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
 }
-
-const EMPTY_FORM: FormState = {
-  name: "",
-  company: "",
-  phone: "",
-  email: "",
-  message: "",
-};
 
 export function EnterpriseSalesForm({ source }: EnterpriseSalesFormProps) {
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [modules, setModules] = useState<string[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [status, setStatus] = useState<SubmitStatus>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -57,15 +51,20 @@ export function EnterpriseSalesForm({ source }: EnterpriseSalesFormProps) {
 
   const submitting = status === "submitting";
 
-  const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const toggleModule = (label: string) => {
+    setModules((prev) =>
+      prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label],
+    );
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting) return;
 
-    const nextErrors = validate(form);
+    const normalizedPhone = toLatinDigits(phone).trim();
+    const nextErrors: FormErrors = {};
+    if (name.trim().length < 2) nextErrors.name = "نام خود را وارد کنید.";
+    if (!PHONE_RE.test(normalizedPhone)) nextErrors.phone = "شماره تماس معتبر وارد کنید.";
     setErrors(nextErrors);
     setSubmitError(null);
     if (Object.keys(nextErrors).length > 0) {
@@ -79,30 +78,26 @@ export function EnterpriseSalesForm({ source }: EnterpriseSalesFormProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name.trim(),
-          company: form.company.trim(),
-          phone: form.phone.trim(),
-          email: form.email.trim(),
-          message: form.message.trim(),
-          source: source ?? "enterprise-demo",
+          name: name.trim(),
+          phone: normalizedPhone,
+          message: modules.length > 0 ? `ماژول‌های مورد نظر: ${modules.join("، ")}` : "",
+          source: source ?? "contact",
         }),
       });
-      const data = (await res.json().catch(() => null)) as
-        | { reference?: string; error?: string }
-        | null;
-      if (!res.ok) {
-        throw new Error(data?.error ?? `HTTP ${res.status}`);
-      }
+      const data = (await res.json().catch(() => null)) as { reference?: string } | null;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setReference(data?.reference ?? `RQ-${Date.now().toString(36).toUpperCase()}`);
       setStatus("success");
-    } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "ارسال درخواست ناموفق بود.");
+    } catch {
+      setSubmitError(SUBMIT_FAILED);
       setStatus("error");
     }
   };
 
   const reset = () => {
-    setForm(EMPTY_FORM);
+    setName("");
+    setPhone("");
+    setModules([]);
     setErrors({});
     setSubmitError(null);
     setReference(null);
@@ -111,13 +106,13 @@ export function EnterpriseSalesForm({ source }: EnterpriseSalesFormProps) {
 
   if (status === "success" && reference) {
     return (
-      <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/[0.06] p-8 text-center">
+      <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/[0.06] p-6 text-center sm:p-8">
         <span className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-300">
           <CheckCircle2 className="size-6" />
         </span>
         <h2 className="mt-4 text-lg font-black text-white">درخواست شما ثبت شد</h2>
         <p className="mt-2 text-xs leading-relaxed text-slate-400">
-          کارشناس رکسایرا در اولین فرصت کاری برای هماهنگی دمو و دسترسی اولیه با شما تماس می‌گیرد.
+          کارشناس روکسیرا در اولین فرصت کاری با شما تماس می‌گیرد.
         </p>
         <p className="mt-4 inline-block rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2 font-mono text-xs text-slate-200">
           کد پیگیری: {reference}
@@ -142,36 +137,20 @@ export function EnterpriseSalesForm({ source }: EnterpriseSalesFormProps) {
       className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:p-8"
     >
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <div className="sm:col-span-2">
+        <div>
           <label htmlFor="name" className="text-xs font-semibold text-slate-300">
-            نام و نام خانوادگی
+            نام
           </label>
           <input
             id="name"
             type="text"
-            value={form.name}
+            autoComplete="name"
+            value={name}
             disabled={submitting}
-            onChange={(event) => update("name", event.target.value)}
-            placeholder="مثال: سارا محمدی"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
+            onChange={(event) => setName(event.target.value)}
+            className={INPUT_CLASS}
           />
           {errors.name && <p className="mt-1.5 text-[11px] text-rose-400">{errors.name}</p>}
-        </div>
-
-        <div className="sm:col-span-2">
-          <label htmlFor="company" className="text-xs font-semibold text-slate-300">
-            نام شرکت
-          </label>
-          <input
-            id="company"
-            type="text"
-            value={form.company}
-            disabled={submitting}
-            onChange={(event) => update("company", event.target.value)}
-            placeholder="مثال: شرکت داده‌پردازان نوین"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
-          />
-          {errors.company && <p className="mt-1.5 text-[11px] text-rose-400">{errors.company}</p>}
         </div>
 
         <div>
@@ -182,46 +161,42 @@ export function EnterpriseSalesForm({ source }: EnterpriseSalesFormProps) {
             id="phone"
             type="tel"
             dir="ltr"
-            value={form.phone}
+            autoComplete="tel"
+            value={phone}
             disabled={submitting}
-            onChange={(event) => update("phone", event.target.value)}
+            onChange={(event) => setPhone(event.target.value)}
             placeholder="0912 000 0000"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 font-mono text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
+            className={`${INPUT_CLASS} font-mono`}
           />
           {errors.phone && <p className="mt-1.5 text-[11px] text-rose-400">{errors.phone}</p>}
         </div>
 
-        <div>
-          <label htmlFor="email" className="text-xs font-semibold text-slate-300">
-            ایمیل سازمانی
-          </label>
-          <input
-            id="email"
-            type="email"
-            dir="ltr"
-            value={form.email}
-            disabled={submitting}
-            onChange={(event) => update("email", event.target.value)}
-            placeholder="name@company.com"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 font-mono text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
-          />
-          {errors.email && <p className="mt-1.5 text-[11px] text-rose-400">{errors.email}</p>}
-        </div>
-
-        <div className="sm:col-span-2">
-          <label htmlFor="message" className="text-xs font-semibold text-slate-300">
-            توضیحات (اختیاری)
-          </label>
-          <textarea
-            id="message"
-            rows={3}
-            value={form.message}
-            disabled={submitting}
-            onChange={(event) => update("message", event.target.value)}
-            placeholder="اندازه سازمان، ماژول‌های مورد نیاز و بازه زمانی مدنظر"
-            className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-indigo-400/60 disabled:opacity-60"
-          />
-        </div>
+        <fieldset className="sm:col-span-2">
+          <legend className="text-xs font-semibold text-slate-300">
+            به کدام ماژول‌ها نیاز دارید؟ (اختیاری)
+          </legend>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {MODULE_OPTIONS.map((label) => {
+              const selected = modules.includes(label);
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={submitting}
+                  onClick={() => toggleModule(label)}
+                  className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
+                    selected
+                      ? "border-indigo-400/60 bg-indigo-500/20 text-white"
+                      : "border-white/10 bg-slate-950/70 text-slate-300 hover:border-white/25"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
       </div>
 
       {status === "error" && submitError && (
@@ -244,7 +219,7 @@ export function EnterpriseSalesForm({ source }: EnterpriseSalesFormProps) {
         ) : (
           <>
             <Send className="size-4" />
-            درخواست دمو و دسترسی اولیه
+            درخواست تماس
           </>
         )}
       </button>

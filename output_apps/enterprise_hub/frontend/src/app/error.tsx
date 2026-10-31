@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { AlertTriangle, Home, MessageSquare, RotateCw } from "lucide-react";
+import { AlertTriangle, Home, RotateCw } from "lucide-react";
 
 import { reportClientError } from "@/lib/observability/client-error-reporter";
 
@@ -54,13 +54,6 @@ export default function GlobalError({
           >
             <Home className="size-4" />
             صفحهٔ اصلی
-          </Link>
-          <Link
-            href="/chat"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-amber-500 to-orange-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-600/30 transition-transform hover:-translate-y-0.5"
-          >
-            <MessageSquare className="size-4" />
-            گفتگو با قاضی هوشمند
           </Link>
         </div>
       </div>

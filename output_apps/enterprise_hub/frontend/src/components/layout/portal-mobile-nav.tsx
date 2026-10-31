@@ -9,11 +9,11 @@ export interface PortalNavLink {
   label: string;
 }
 
-/** Hamburger menu for the roxira.ir portal headers (the desktop nav is hidden below md). */
+/** Hamburger menu for the roxira.ir portal headers (the desktop nav is hidden below xl). */
 export function PortalMobileNav({ links }: { links: PortalNavLink[] }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="md:hidden">
+    <div className="xl:hidden">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

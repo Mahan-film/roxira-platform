@@ -21,8 +21,22 @@ export enum InvoiceJurisdiction {
 }
 
 export const INVOICE_JURISDICTION_LABELS: Record<InvoiceJurisdiction, string> = {
-  [InvoiceJurisdiction.IR]: "داخلی (IR)",
-  [InvoiceJurisdiction.INTL]: "بین‌المللی (INTL)",
+  [InvoiceJurisdiction.IR]: "داخلی (ایران)",
+  [InvoiceJurisdiction.INTL]: "بین‌المللی",
+};
+
+/** Persian names for the currencies offered on an invoice (the code stays visible). */
+export const CURRENCY_LABELS: Record<string, string> = {
+  IRR: "ریال (IRR)",
+  IRT: "تومان (IRT)",
+  USD: "دلار آمریکا (USD)",
+  EUR: "یورو (EUR)",
+  GBP: "پوند (GBP)",
+  AED: "درهم امارات (AED)",
+  MYR: "رینگیت مالزی (MYR)",
+  TRY: "لیر ترکیه (TRY)",
+  CNY: "یوان چین (CNY)",
+  OMR: "ریال عمان (OMR)",
 };
 
 /** ترتیب ارزهای قابل انتخاب در فرم صورتحساب. */

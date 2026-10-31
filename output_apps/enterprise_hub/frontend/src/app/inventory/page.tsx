@@ -44,7 +44,7 @@ const ITEMS_PAGE_SIZE = 100;
  * جدول کالاهای موجود با هشدار کسری، استعلام موجودی انبارها و گزارش ارزش
  * موجودی — همه متصل به ماژول `enterprise-hub/inventory` در لایه NestJS.
  */
-export default function InventoryPage() {
+function InventoryPageContent() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseModel[]>([]);
   const [valuation, setValuation] = useState<FifoValuationResponse | null>(null);
@@ -104,7 +104,7 @@ export default function InventoryPage() {
   const lowStockCount = valuation?.lowStockCount ?? 0;
 
   return (
-    <EnterpriseRouteGuard>
+    <>
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -115,10 +115,7 @@ export default function InventoryPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             مدیریت چند‌انباره کالاها، ورود/خروج با مصرف First-In-First-Out و
-            گزارش ارزش موجودی — متصل به{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-              /enterprise-hub/inventory
-            </code>
+            گزارش ارزش موجودی
           </p>
           <AppEntryLink href="/app/inventory" />
         </div>
@@ -241,6 +238,19 @@ export default function InventoryPage() {
       </main>
       <RoxiraFooter />
     </div>
+    </>
+  );
+}
+
+/**
+ * The guard must wrap the page, not live inside it: data loading starts when the
+ * content mounts, and that must happen after the session is ready, otherwise the
+ * first requests go out without a token and fail with 401.
+ */
+export default function InventoryPage() {
+  return (
+    <EnterpriseRouteGuard>
+      <InventoryPageContent />
     </EnterpriseRouteGuard>
   );
 }

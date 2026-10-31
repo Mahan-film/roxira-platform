@@ -50,7 +50,7 @@ export class InquiriesService {
   async create(dto: CreateInquiryDto): Promise<InquiryResponseDto> {
     const name = dto.name.trim();
     const phone = dto.phone.trim();
-    const email = dto.email.trim().toLowerCase();
+    const email = dto.email?.trim().toLowerCase() || null;
 
     if (name.length < 2) {
       throw new BadRequestException('نام تماس معتبر نیست.');
@@ -58,7 +58,7 @@ export class InquiriesService {
     if (!INQUIRY_PHONE_REGEX.test(phone)) {
       throw new BadRequestException('شماره تماس معتبر نیست.');
     }
-    if (!INQUIRY_EMAIL_REGEX.test(email)) {
+    if (email && !INQUIRY_EMAIL_REGEX.test(email)) {
       throw new BadRequestException('رایانامه معتبر نیست.');
     }
 

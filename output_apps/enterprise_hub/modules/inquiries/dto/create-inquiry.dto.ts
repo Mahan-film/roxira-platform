@@ -33,10 +33,11 @@ export class CreateInquiryDto {
   @MaxLength(50)
   phone: string;
 
-  @ApiProperty({ description: 'رایانامه سازمانی', example: 'sara@example.com' })
+  @ApiPropertyOptional({ description: 'رایانامه سازمانی', example: 'sara@example.com' })
+  @IsOptional()
   @IsEmail()
   @MaxLength(150)
-  email: string;
+  email?: string;
 
   @ApiPropertyOptional({
     description: 'توضیحات و نیازمندی‌های سازمان',

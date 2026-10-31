@@ -60,14 +60,14 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: "Roxira International B2B Hub",
       description:
-        "Cloud enterprise platform for cross-border invoicing, multi-currency settlement, accounting, inventory and API integration.",
+        "Modular business software: accounting, invoicing and tax, inventory, HR and CRM. Each module is bought separately.",
     };
   }
 
   return {
-    title: "پورتال خدمات سازمانی روکسیرا",
+    title: "روکسیرا | نرم‌افزار ماژولار مدیریت کسب‌وکار",
     description:
-      "محاسبه خسارت تاخیر تادیه، صدور فاکتور سازمانی و مستندات API — پورتال خدمات سازمانی روکسیرا",
+      "حسابداری، صورتحساب و مالیات، انبار، منابع انسانی و CRM؛ هر ماژول جداگانه. پورتال سازمانی روکسیرا.",
   };
 }
 

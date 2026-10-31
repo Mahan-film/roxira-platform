@@ -47,6 +47,7 @@ import { formatRial } from "@/lib/format";
 import { formatLatinMoney } from "@/lib/fa-format";
 import { Currency, isIranianCurrency } from "@/types/currency";
 import {
+  CURRENCY_LABELS,
   INVOICE_CURRENCIES,
   INVOICE_JURISDICTION_LABELS,
   INVOICE_STATUS_LABELS,
@@ -357,7 +358,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
             </CardDescription>
           </div>
           <Badge variant="outline" className="text-xs">
-            VAT {isForeign ? "0%" : "۱۰٪"}
+            مالیات {isForeign ? "۰٪" : "۱۰٪"}
           </Badge>
         </div>
       </CardHeader>
@@ -387,6 +388,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
             <div className="grid gap-2">
               <Label>وضعیت اولیه</Label>
               <Select
+                items={INVOICE_STATUS_LABELS}
                 value={status}
                 onValueChange={(value) => setStatus(value as InvoiceStatus)}
               >
@@ -409,6 +411,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
             <div className="grid gap-2">
               <Label>ارز صورتحساب</Label>
               <Select
+                items={CURRENCY_LABELS}
                 value={currency}
                 onValueChange={(value) => applyCurrency(value as Currency)}
               >
@@ -418,7 +421,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
                 <SelectContent>
                   {INVOICE_CURRENCIES.map((code) => (
                     <SelectItem key={code} value={code}>
-                      {code}
+                      {CURRENCY_LABELS[code] ?? code}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -438,6 +441,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
             <div className="grid gap-2">
               <Label>حوزه قضایی</Label>
               <Select
+                items={INVOICE_JURISDICTION_LABELS}
                 value={jurisdiction}
                 onValueChange={(value) =>
                   setJurisdiction(value as InvoiceJurisdiction)
