@@ -110,3 +110,23 @@ export enum ReportLine {
   NON_OPERATING_INCOME = 'NON_OPERATING_INCOME',
   INCOME_TAX = 'INCOME_TAX',
 }
+
+export enum PettyCashFundStatus {
+  ACTIVE = 'ACTIVE',
+  CLOSED = 'CLOSED',
+}
+
+/** CHARGE fills the fund, RETURN gives cash back, EXPENSE is a receipt the custodian paid. */
+export enum PettyCashKind {
+  CHARGE = 'CHARGE',
+  RETURN = 'RETURN',
+  EXPENSE = 'EXPENSE',
+}
+
+/** An EXPENSE is PENDING until settled; CHARGE and RETURN post at once. */
+export enum PettyCashStatus {
+  PENDING = 'PENDING',
+  SETTLED = 'SETTLED',
+  POSTED = 'POSTED',
+  VOID = 'VOID',
+}

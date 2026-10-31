@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CurrencyModule } from '../currency/currency.module';
 import { AccountingController } from './controllers/accounting.controller';
 import { FiscalYearController } from './controllers/fiscal-year.controller';
+import { ReportsController } from './controllers/reports.controller';
 import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
 import { FiscalYearEntity } from './entities/fiscal-year.entity';
 import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
@@ -13,7 +14,9 @@ import { FiscalYearRepository } from './repositories/fiscal-year.repository';
 import { LedgerReportRepository } from './repositories/ledger-report.repository';
 import { AccountingService } from './services/accounting.service';
 import { ChartTemplateService } from './services/chart-template.service';
+import { FinancialReportsService } from './services/financial-reports.service';
 import { FiscalYearService } from './services/fiscal-year.service';
+import { ReportExportService } from './services/report-export.service';
 
 /**
  * ماژول حسابداری دوطرفه و دفتر روزنامه سازمانی
@@ -38,14 +41,16 @@ import { FiscalYearService } from './services/fiscal-year.service';
     ]),
     CurrencyModule,
   ],
-  controllers: [AccountingController, FiscalYearController],
+  controllers: [AccountingController, FiscalYearController, ReportsController],
   providers: [
     AccountingService,
     AccountingRepository,
     ChartTemplateService,
+    FinancialReportsService,
     FiscalYearRepository,
     FiscalYearService,
     LedgerReportRepository,
+    ReportExportService,
   ],
   exports: [AccountingService],
 })

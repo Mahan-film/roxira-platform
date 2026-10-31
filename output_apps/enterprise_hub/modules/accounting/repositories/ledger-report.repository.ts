@@ -132,17 +132,20 @@ export class LedgerReportRepository {
     );
   }
 
-  /** Opening, debit and credit totals for the account set in the period, ignoring the row limit. */
+  /**
+   * Opening, debit and credit totals for the account set in the period, ignoring the row limit.
+   * Opening entries count as opening balance here too, so a ledger agrees with the trial balance.
+   */
   async ledgerTotals(
     tenantId: string,
     filter: LedgerFilter,
   ): Promise<{ opening: string; debit: string; credit: string; count: string }> {
     const party = filter.partyCode ? `AND l.party_code = $5` : '';
     const rows = await this.dataSource.query(
-      `SELECT COALESCE(SUM(l.debit - l.credit) FILTER (WHERE ${DAY} < $3), 0) AS "opening",
-              COALESCE(SUM(l.debit) FILTER (WHERE ${DAY} >= $3), 0) AS "debit",
-              COALESCE(SUM(l.credit) FILTER (WHERE ${DAY} >= $3), 0) AS "credit",
-              COUNT(*) FILTER (WHERE ${DAY} >= $3) AS "count"
+      `SELECT COALESCE(SUM(l.debit - l.credit) FILTER (WHERE ${DAY} < $3 OR ${KIND} = 'OPENING'), 0) AS "opening",
+              COALESCE(SUM(l.debit) FILTER (WHERE ${DAY} >= $3 AND ${KIND} <> 'OPENING'), 0) AS "debit",
+              COALESCE(SUM(l.credit) FILTER (WHERE ${DAY} >= $3 AND ${KIND} <> 'OPENING'), 0) AS "credit",
+              COUNT(*) FILTER (WHERE ${DAY} >= $3 AND ${KIND} <> 'OPENING') AS "count"
          FROM fin_journal_entry_lines l
          JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
         WHERE l.tenant_id = $1 AND l.account_id = ANY($2) AND e.status = 'POSTED' AND ${NOT_PAIR}
@@ -163,7 +166,7 @@ export class LedgerReportRepository {
          JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
          JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
         WHERE l.tenant_id = $1 AND l.account_id = ANY($2) AND e.status = 'POSTED' AND ${NOT_PAIR}
-          AND ${DAY} >= $3 AND ${DAY} <= $4 ${party}
+          AND ${DAY} >= $3 AND ${DAY} <= $4 AND ${KIND} <> 'OPENING' ${party}
         ORDER BY e.date ASC, l.id ASC
         LIMIT $5`,
       [tenantId, filter.accountIds, filter.from, filter.to, filter.limit, ...(filter.partyCode ? [filter.partyCode] : [])],
