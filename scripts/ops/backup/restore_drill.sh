@@ -71,7 +71,13 @@ smoke() { # <db>
   lines="$(scratch_psql "$db" <<<"$sql")" || return 1
   printf '%s\n' "$lines" | sed 's/^/    /' >&2
   biggest="$(printf '%s\n' "$lines" | awk -F'|' 'BEGIN{m=0} {if ($2+0>m) m=$2+0} END{print m}')"
-  [ "$biggest" -ge "$MIN_ROWS" ] || { log "[$db] largest table has only $biggest rows (< $MIN_ROWS)"; return 1; }
+  if [ "$biggest" -lt "$MIN_ROWS" ]; then
+    # Template databases hold a schema and no rows by design.
+    case " ${DRILL_ALLOW_EMPTY_DBS:-agentdb_template} " in
+      *" ${db%_[0-9]*} "*) log "[$db] empty by design, schema restored"; return 0 ;;
+    esac
+    log "[$db] largest table has only $biggest rows (< $MIN_ROWS)"; return 1
+  fi
   return 0
 }
 
