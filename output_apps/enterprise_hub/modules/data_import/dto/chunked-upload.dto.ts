@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
-import { MAX_MULTI_FILES } from '../constants/package-import.constants';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
+import { MAX_CHUNK_BYTES, MAX_MULTI_FILES, MIN_CHUNK_BYTES } from '../constants/package-import.constants';
 
 export class InitUploadDto {
   @ApiProperty()
@@ -17,11 +17,13 @@ export class InitUploadDto {
   @ApiPropertyOptional({ description: 'اندازهٔ تکه (۲۵۶KB تا ۸MB)' })
   @IsOptional()
   @IsInt()
+  @Min(MIN_CHUNK_BYTES)
+  @Max(MAX_CHUNK_BYTES)
   chunkSize?: number;
 
   @ApiPropertyOptional({ description: 'SHA-256 فایل کامل (هگز) برای راستی‌آزمایی' })
   @IsOptional()
-  @IsString()
+  @Matches(/^[0-9a-f]{64}$/i)
   sha256?: string;
 }
 

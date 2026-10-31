@@ -34,7 +34,9 @@ trap cleanup EXIT
 
 # Port reservation policy (AGENTS.md §7): never bind to a port in use.
 port_in_use() {
-  if command -v ss >/dev/null 2>&1; then
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+  elif command -v ss >/dev/null 2>&1; then
     ss -tln | awk '{print $4}' | grep -Eq "[:.]$1\$"
   else
     local hex; hex="$(printf '%04X' "$1")"

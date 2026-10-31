@@ -279,7 +279,7 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
   async getPackage(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<PackageStatusDto> {
     return this.packageImportService.getPackage(this.tenantIdOf(request), id);
   }
@@ -292,7 +292,7 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
   async commitPackage(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: PackageCommitDto,
   ): Promise<PackageCommitResponseDto> {
     return this.packageImportService.commitPackage(
@@ -309,7 +309,7 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
   async getPackageProgress(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<PackageProgressDto> {
     return this.packageImportService.getProgress(this.tenantIdOf(request), id);
   }
@@ -327,7 +327,7 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
   async reconcilePackage(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: PackageCommitDto,
   ): Promise<ReconciliationReportDto> {
     return this.packageImportService.reconcile(this.tenantIdOf(request), id, dto);
@@ -351,7 +351,7 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.OK, type: UploadStatusDto })
   async uploadStatus(
     @Req() request: AuthenticatedRequest,
-    @Param('uploadId') uploadId: string,
+    @Param('uploadId', new ParseUUIDPipe()) uploadId: string,
   ): Promise<UploadStatusDto> {
     return this.chunkedUpload.status(this.tenantIdOf(request), uploadId);
   }
@@ -363,7 +363,7 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.OK, type: UploadStatusDto })
   async putChunk(
     @Req() request: AuthenticatedRequest & IncomingMessage,
-    @Param('uploadId') uploadId: string,
+    @Param('uploadId', new ParseUUIDPipe()) uploadId: string,
     @Param('index', new ParseIntPipe()) index: number,
   ): Promise<UploadStatusDto> {
     const body = await readCappedBody(request, MAX_CHUNK_BYTES);
