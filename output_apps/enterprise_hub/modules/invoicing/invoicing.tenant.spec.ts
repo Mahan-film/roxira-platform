@@ -238,20 +238,6 @@ describe('InvoicingController — tenant access rules', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('denies a plain MEMBER (403)', async () => {
-    const { controller, invoiceId } = await setup();
-
-    await expect(
-      controller.findOne(
-        requestWith({
-          tenantId: 'tenant-a',
-          role: UserRole.USER,
-          tenantRole: TenantRole.MEMBER,
-        }),
-        invoiceId,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
 
   it('allows the platform ADMIN of the owning tenant', async () => {
     const { controller, invoiceId } = await setup();

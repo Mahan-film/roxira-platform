@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess } from '../../access/decorators';
 import {
   Body,
   Controller,
@@ -27,8 +29,6 @@ import {
   AuthenticatedRequest,
   JwtAuthGuard,
 } from '../../auth/guards/jwt-auth.guard';
-import { UserRole } from '../../auth/enums/user-role.enum';
-import { TenantRole } from '../../tenants/enums/tenant-role.enum';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
   DATA_IMPORT_RESOURCE,
@@ -80,6 +80,7 @@ import { PackageImportService } from '../services/package-import.service';
 @ApiTags('Data Import - ورود داده از نرم‌افزار دیگر')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+@ModuleAccess(AccessModule.DATA_IMPORT)
 @Controller(DATA_IMPORT_RESOURCE)
 export class DataImportController {
   constructor(
@@ -102,7 +103,6 @@ export class DataImportController {
   async listBatches(
     @Req() request: AuthenticatedRequest,
   ): Promise<BatchSummaryDto[]> {
-    this.assertImportAccess(request);
     return this.entityImportService.listBatches(this.tenantIdOf(request));
   }
 
@@ -130,7 +130,6 @@ export class DataImportController {
     @UploadedFile() file: UploadedFilePayload,
     @Body() body: PreviewRequestDto,
   ): Promise<EntityPreviewResponseDto> {
-    this.assertImportAccess(request);
     return this.entityImportService.preview(
       this.tenantIdOf(request),
       file,
@@ -164,7 +163,6 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @UploadedFile() file: UploadedFilePayload,
   ): Promise<PreviewResponseDto> {
-    this.assertImportAccess(request);
     return this.dataImportService.preview(this.tenantIdOf(request), file);
   }
 
@@ -190,7 +188,6 @@ export class DataImportController {
     @Param('entity', EntityKeyPipe) entity: string,
     @UploadedFile() file: UploadedFilePayload,
   ): Promise<EntityPreviewResponseDto> {
-    this.assertImportAccess(request);
     return this.entityImportService.preview(
       this.tenantIdOf(request),
       file,
@@ -208,7 +205,6 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: EntityCommitDto,
   ): Promise<EntityCommitResponseDto> {
-    this.assertImportAccess(request);
     return this.entityImportService.commit(this.tenantIdOf(request), dto);
   }
 
@@ -222,7 +218,6 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: CommitImportDto,
   ): Promise<CommitResponseDto> {
-    this.assertImportAccess(request);
     return this.dataImportService.commit(this.tenantIdOf(request), dto);
   }
 
@@ -236,7 +231,6 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @Param('batchId', new ParseUUIDPipe()) batchId: string,
   ): Promise<UndoBatchResponseDto> {
-    this.assertImportAccess(request);
     return this.entityImportService.undoBatch(
       this.tenantIdOf(request),
       batchId,
@@ -265,7 +259,6 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @UploadedFile() file: UploadedFilePayload,
   ): Promise<PackageCreatedDto> {
-    this.assertImportAccess(request);
     return this.packageImportService.createPackage(this.tenantIdOf(request), file);
   }
 
@@ -278,7 +271,6 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
   ): Promise<PackageStatusDto> {
-    this.assertImportAccess(request);
     return this.packageImportService.getPackage(this.tenantIdOf(request), id);
   }
 
@@ -293,7 +285,6 @@ export class DataImportController {
     @Param('id') id: string,
     @Body() dto: PackageCommitDto,
   ): Promise<PackageCommitResponseDto> {
-    this.assertImportAccess(request);
     return this.packageImportService.commitPackage(
       this.tenantIdOf(request),
       id,
@@ -309,22 +300,11 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
   ): Promise<PackageProgressDto> {
-    this.assertImportAccess(request);
     return this.packageImportService.getProgress(this.tenantIdOf(request), id);
   }
 
   /** شناسه مستأجر فقط از پیلود JWT تأییدشده. */
   private tenantIdOf(request: AuthenticatedRequest): string {
     return requireTenantId(request);
-  }
-  /** اجازه ورود داده: مدیر پلتفرم یا مالک سازمان. */
-  private assertImportAccess(request: AuthenticatedRequest): void {
-    const isAdmin = request.user?.role === UserRole.ADMIN;
-    const isOwner = request.user?.tenantRole === TenantRole.OWNER;
-    if (!isAdmin && !isOwner) {
-      throw new ForbiddenException(
-        'ورود داده فقط برای مدیر پلتفرم یا مالک سازمان مجاز است.',
-      );
-    }
   }
 }

@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess } from '../../access/decorators';
 import {
   Body,
   Controller,
@@ -53,6 +55,7 @@ import { CrmService } from '../services/crm.service';
 @ApiTags('CRM - مدیریت مشتریان و پایپ‌لاین فروش')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+@ModuleAccess(AccessModule.CRM)
 @Controller('enterprise-hub/crm')
 export class CrmController {
   constructor(private readonly crmService: CrmService) {}

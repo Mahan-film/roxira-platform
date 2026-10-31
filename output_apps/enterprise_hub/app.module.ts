@@ -11,6 +11,7 @@ import {
 import { DamagesModule } from './modules/damages/damages.module';
 import { InvoicingModule } from './modules/invoicing/invoicing.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
+import { AccessModule } from './modules/access/access.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { CrmModule } from './modules/crm/crm.module';
@@ -76,6 +77,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     DamagesModule,
     InvoicingModule,
     AccountingModule,
+    AccessModule,
     AuthModule,
     TenantsModule,
     InventoryModule,

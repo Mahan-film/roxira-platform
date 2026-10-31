@@ -10,8 +10,14 @@ export class AuthUserDto {
   @ApiProperty({ example: '0b0f6a24-6d5f-4f5b-9f8e-2e5a3c1d7b90' })
   id: string;
 
-  @ApiProperty({ example: '09121234567' })
-  phone: string;
+  @ApiProperty({ example: '09121234567', nullable: true, description: 'Null for accounts created with email/username.' })
+  phone: string | null;
+
+  @ApiProperty({ example: 'jane.doe', nullable: true })
+  username: string | null;
+
+  @ApiProperty({ description: 'True when the account can sign in with a password.' })
+  hasPassword: boolean;
 
   @ApiProperty({ example: 'کاربر روکسیرا', nullable: true })
   displayName: string | null;
@@ -31,9 +37,11 @@ export class AuthUserDto {
   static fromEntity(entity: UserEntity): AuthUserDto {
     return {
       id: entity.id,
-      phone: entity.phone,
+      phone: entity.phone ?? null,
+      username: entity.username ?? null,
+      hasPassword: Boolean(entity.passwordUpdatedAt),
       displayName: entity.displayName,
-      email: entity.email,
+      email: entity.loginEmail ?? entity.email,
       role: entity.role,
       serviceDomain: entity.serviceDomain,
       createdAt: entity.createdAt,
@@ -54,8 +62,16 @@ export class AuthSessionDto {
   })
   accessToken: string;
 
-  @ApiProperty({ description: 'مدت اعتبار توکن بر حسب ثانیه', example: 604800 })
+  @ApiProperty({ description: 'مدت اعتبار توکن بر حسب ثانیه', example: 900 })
   expiresIn: number;
+
+  @ApiProperty({
+    description: 'Rotating refresh token; exchange it at POST /auth/refresh before the access token expires.',
+  })
+  refreshToken: string;
+
+  @ApiProperty({ description: 'Refresh token lifetime in seconds', example: 2592000 })
+  refreshExpiresIn: number;
 
   @ApiProperty({ type: AuthUserDto })
   user: AuthUserDto;
@@ -82,4 +98,16 @@ export class SendOtpResponseDto {
 
   @ApiProperty({ example: 'roxira-verify' })
   template: string;
+}
+
+/** Returned by login endpoints instead of tokens when the account has TOTP enabled. */
+export class MfaChallengeDto {
+  @ApiProperty({ example: true })
+  mfaRequired: true;
+
+  @ApiProperty({ description: 'Opaque value to send to POST /auth/login/mfa with the code.' })
+  challenge: string;
+
+  @ApiProperty({ example: 300 })
+  expiresIn: number;
 }

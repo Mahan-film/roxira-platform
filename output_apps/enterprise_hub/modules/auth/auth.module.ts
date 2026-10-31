@@ -6,15 +6,26 @@ import {
   JWT_DEFAULT_EXPIRES_IN,
 } from './constants/auth.constants';
 import { TenantsModule } from '../tenants/tenants.module';
+import { AccessModule } from '../access/access.module';
 import { AuthController } from './controllers/auth.controller';
 import { UserEntity } from './entities/user.entity';
 import { PasskeyCredentialEntity } from './entities/passkey-credential.entity';
+import { RefreshTokenEntity } from './entities/refresh-token.entity';
+import { UserTotpEntity } from './entities/user-totp.entity';
+import { TotpRepository } from './repositories/totp.repository';
+import { TotpService } from './services/totp.service';
+import { LoginChallengeService } from './services/login-challenge.service';
+import { SessionsService } from './services/sessions.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { redisClientProvider } from './providers/redis.provider';
 import { AuthRepository } from './repositories/auth.repository';
 import { PasskeyRepository } from './repositories/passkey.repository';
+import { RefreshTokenRepository } from './repositories/refresh-token.repository';
 import { AuthService } from './services/auth.service';
 import { KavenegarService } from './services/kavenegar.service';
+import { MailService } from './services/mail.service';
+import { PasswordAuthService } from './services/password-auth.service';
+import { RefreshTokenService } from './services/refresh-token.service';
 import { WebAuthnService } from './services/webauthn.service';
 
 /**
@@ -34,8 +45,14 @@ import { WebAuthnService } from './services/webauthn.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity, PasskeyCredentialEntity]),
+    TypeOrmModule.forFeature([
+      UserEntity,
+      PasskeyCredentialEntity,
+      RefreshTokenEntity,
+      UserTotpEntity,
+    ]),
     TenantsModule,
+    AccessModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -57,6 +74,14 @@ import { WebAuthnService } from './services/webauthn.service';
     AuthRepository,
     PasskeyRepository,
     KavenegarService,
+    MailService,
+    PasswordAuthService,
+    RefreshTokenService,
+    RefreshTokenRepository,
+    TotpRepository,
+    TotpService,
+    LoginChallengeService,
+    SessionsService,
     JwtAuthGuard,
     redisClientProvider,
   ],

@@ -539,20 +539,6 @@ describe('HrController — tenant access rules', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('denies a plain MEMBER (403)', async () => {
-    const { controller, employeeId } = await setup();
-
-    await expect(
-      controller.getEmployee(
-        requestWith({
-          tenantId: 'tenant-a',
-          role: UserRole.USER,
-          tenantRole: TenantRole.MEMBER,
-        }),
-        employeeId,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
 
   it('allows the platform ADMIN of the owning tenant', async () => {
     const { controller, employeeId } = await setup();

@@ -1,3 +1,5 @@
+import { requireModulePermission } from '../modules/access/access-context';
+import { AccessAction, AccessModule } from '../modules/access/catalogue';
 import {
   BadRequestException,
   ForbiddenException,
@@ -35,7 +37,6 @@ import { AuthenticatedRequest } from '../modules/auth/guards/jwt-auth.guard';
 import { UserRole } from '../modules/auth/enums/user-role.enum';
 import { TenantRole } from '../modules/tenants/enums/tenant-role.enum';
 import {
-  requireTenantAdmin,
   requireTenantId,
 } from '../modules/tenants/tenant-context';
 import { Proposal } from './proposal.types';
@@ -103,7 +104,7 @@ export interface StockItemsPage {
  * هر ابزار فقط از سرویس ماژول مالک استفاده می‌کند (هیچ SQL خامی اجرا نمی‌شود،
  * Rule #3 - AGENTS.md) و شناسه مستأجر «تنها» از `requireTenantId(request)`
  * خوانده می‌شود؛ هرگز از ورودی ابزار (Rule #4 - AGENTS.md). ابزارهای مدیریتی
- * (منابع انسانی و حسابداری) همان `requireTenantAdmin` کنترلرهای REST را اعمال
+ * (منابع انسانی و حسابداری) همان AccessGuard کنترلرهای REST را اعمال
  * می‌کنند. ابزارهای propose هیچ نوشتنی انجام نمی‌دهند و تنها اعتبارسنجی/پیشنهاد
  * برمی‌گردانند.
  */
@@ -134,22 +135,6 @@ export class McpToolsService {
     return Math.min(Math.max(parsed, 1), MAX_TOOL_ROWS);
   }
 
-  /** دسترسی مدیریتی همانند کنترلرهای منابع انسانی و حسابداری. */
-  private assertAdmin(request: AuthenticatedRequest): void {
-    requireTenantAdmin(request);
-  }
-
-  /** اجازه ورود داده: مدیر پلتفرم یا مالک سازمان (هم‌ارز کنترلر ورود داده). */
-  private assertImportAccess(request: AuthenticatedRequest): void {
-    const isAdmin = request.user?.role === UserRole.ADMIN;
-    const isOwner = request.user?.tenantRole === TenantRole.OWNER;
-    if (!isAdmin && !isOwner) {
-      throw new ForbiddenException(
-        'ورود داده فقط برای مدیر پلتفرم یا مالک سازمان مجاز است.',
-      );
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // ابزارهای خواندنی (read)
   // ---------------------------------------------------------------------------
@@ -159,6 +144,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     input: CrmListLeadsInput,
   ): Promise<PaginatedLeadsResponseDto> {
+    requireModulePermission(request, AccessModule.CRM, AccessAction.READ);
     const tenantId = requireTenantId(request);
     return this.crmService.listLeads(tenantId, {
       page: 1,
@@ -173,6 +159,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     input: IdInput,
   ): Promise<LeadResponseDto> {
+    requireModulePermission(request, AccessModule.CRM, AccessAction.READ);
     const tenantId = requireTenantId(request);
     return this.crmService.getLead(tenantId, input.id);
   }
@@ -182,7 +169,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     input: ListQueryInput,
   ): Promise<PaginatedEmployeeResponseDto> {
-    this.assertAdmin(request);
+    requireModulePermission(request, AccessModule.HR, AccessAction.READ);
     const tenantId = requireTenantId(request);
     return this.hrService.listEmployees(tenantId, {
       page: 1,
@@ -196,6 +183,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     input: ListQueryInput,
   ): Promise<StockItemsPage> {
+    requireModulePermission(request, AccessModule.INVENTORY, AccessAction.READ);
     const tenantId = requireTenantId(request);
     return this.inventoryService.listStockItems(tenantId, {
       page: 1,
@@ -210,6 +198,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     input: WarehouseStockInput,
   ): Promise<WarehouseStockResponseDto> {
+    requireModulePermission(request, AccessModule.INVENTORY, AccessAction.READ);
     const tenantId = requireTenantId(request);
     return this.inventoryService.getWarehouseStock(tenantId, input.warehouseId);
   }
@@ -218,7 +207,7 @@ export class McpToolsService {
   async accountingTrialBalance(
     request: AuthenticatedRequest,
   ): Promise<TrialBalanceResponseDto> {
-    this.assertAdmin(request);
+    requireModulePermission(request, AccessModule.ACCOUNTING, AccessAction.READ);
     const tenantId = requireTenantId(request);
     return this.accountingService.getTrialBalance(tenantId);
   }
@@ -228,7 +217,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     input: AccountLedgerInput,
   ): Promise<AccountLedgerResponseDto> {
-    this.assertAdmin(request);
+    requireModulePermission(request, AccessModule.ACCOUNTING, AccessAction.READ);
     const tenantId = requireTenantId(request);
     return this.accountingService.getAccountLedger(tenantId, input.code, {
       limit: this.limit(input.limit, MAX_TOOL_ROWS),
@@ -244,7 +233,7 @@ export class McpToolsService {
   async importListBatches(
     request: AuthenticatedRequest,
   ): Promise<BatchSummaryDto[]> {
-    this.assertImportAccess(request);
+    requireModulePermission(request, AccessModule.DATA_IMPORT, AccessAction.READ);
     const tenantId = requireTenantId(request);
     return this.entityImportService.listBatches(tenantId);
   }
@@ -258,6 +247,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     fields: CreateLeadDto,
   ): Promise<Proposal<'crm.lead', CreateLeadDto>> {
+    requireModulePermission(request, AccessModule.CRM, AccessAction.CREATE);
     const tenantId = requireTenantId(request);
     const email = fields.email.trim().toLowerCase();
     const existing = await this.crmService.listLeads(tenantId, {
@@ -283,7 +273,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     fields: CreateEmployeeDto,
   ): Promise<Proposal<'hr.employee', CreateEmployeeDto>> {
-    this.assertAdmin(request);
+    requireModulePermission(request, AccessModule.HR, AccessAction.CREATE);
     const tenantId = requireTenantId(request);
     const existing = await this.hrService.listEmployees(tenantId, {
       page: 1,
@@ -313,7 +303,7 @@ export class McpToolsService {
     request: AuthenticatedRequest,
     input: { lines: JournalEntryLineDto[] },
   ): Proposal<'accounting.journal', ProposedJournalPayload> {
-    this.assertAdmin(request);
+    requireModulePermission(request, AccessModule.ACCOUNTING, AccessAction.CREATE);
     requireTenantId(request);
 
     if (!Array.isArray(input.lines) || input.lines.length < 2) {

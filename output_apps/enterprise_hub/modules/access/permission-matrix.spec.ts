@@ -1,0 +1,277 @@
+import 'reflect-metadata';
+import { ExecutionContext } from '@nestjs/common';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
+import * as fs from 'fs';
+import * as path from 'path';
+import { AccessStub } from '../../test/support/access-stub';
+import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
+import { ROLES_KEY } from '../auth/decorators/roles.decorator';
+import { AccessGuard } from './access.guard';
+import { AccessAction, AccessModule, CORE_MODULES, SYSTEM_ROLES, SystemRole } from './catalogue';
+import { ACCESS_ACTION_KEY, ACCESS_MODULE_KEY, ANY_MEMBER_KEY, AUTH_ONLY_KEY, actionForMethod } from './decorators';
+
+/**
+ * Permission matrix over EVERY controller in the app: each route must declare
+ * a policy, and the real AccessGuard is run for every route x system role.
+ * The outcome is pinned in permission-matrix.snapshot.json, so any change to who
+ * can do what shows up in review. Regenerate with UPDATE_PERMISSION_MATRIX=1.
+ */
+
+const ROOT = path.resolve(__dirname, '../..');
+const SNAPSHOT = path.join(__dirname, 'permission-matrix.snapshot.json');
+const HTTP = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD'];
+
+function controllerFiles(dir: string, out: string[] = []): string[] {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (e.name === 'node_modules' || e.name === 'dist' || e.name === 'frontend' || e.name === 'test') continue;
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) controllerFiles(full, out);
+    else if (/\.controller\.ts$/.test(e.name)) out.push(full);
+  }
+  return out;
+}
+
+interface Route {
+  id: string;
+  controller: Function;
+  handler: Function;
+  method: string;
+  url: string;
+}
+
+function loadRoutes(): Route[] {
+  const routes: Route[] = [];
+  for (const file of controllerFiles(ROOT)) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require(file) as Record<string, unknown>;
+    for (const exported of Object.values(mod)) {
+      if (typeof exported !== 'function' || Reflect.getMetadata(PATH_METADATA, exported) === undefined) continue;
+      const base = Reflect.getMetadata(PATH_METADATA, exported) as string | string[];
+      const proto = exported.prototype as Record<string, unknown>;
+      for (const name of Object.getOwnPropertyNames(proto)) {
+        const handler = proto[name];
+        if (name === 'constructor' || typeof handler !== 'function') continue;
+        const verb = Reflect.getMetadata(METHOD_METADATA, handler) as number | undefined;
+        if (verb === undefined) continue;
+        const sub = Reflect.getMetadata(PATH_METADATA, handler) as string | string[];
+        const url = `/${[Array.isArray(base) ? base[0] : base, Array.isArray(sub) ? sub[0] : sub].join('/')}`.replace(/\/+/g, '/');
+        routes.push({
+          id: `${HTTP[verb]} ${url} (${exported.name}.${name})`,
+          controller: exported,
+          handler: handler as Function,
+          method: HTTP[verb],
+          url,
+        });
+      }
+    }
+  }
+  return routes.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+const routes = loadRoutes();
+const reflector = new Reflector();
+
+type Kind = 'public' | 'authOnly' | 'platformAdmin' | 'anyMember' | 'module' | 'none';
+function classify(r: Route): { kind: Kind; module?: AccessModule; action?: AccessAction } {
+  const targets = [r.handler, r.controller];
+  if (reflector.getAllAndOverride(IS_PUBLIC_KEY, targets)) return { kind: 'public' };
+  if (reflector.getAllAndOverride(AUTH_ONLY_KEY, targets)) return { kind: 'authOnly' };
+  const roles = reflector.getAllAndOverride<unknown[]>(ROLES_KEY, targets);
+  if (roles?.length) return { kind: 'platformAdmin' };
+  if (reflector.getAllAndOverride(ANY_MEMBER_KEY, targets)) return { kind: 'anyMember' };
+  const module = reflector.getAllAndOverride<AccessModule>(ACCESS_MODULE_KEY, targets);
+  if (!module) return { kind: 'none' };
+  const action =
+    reflector.getAllAndOverride<AccessAction>(ACCESS_ACTION_KEY, [r.handler]) ?? actionForMethod(r.method);
+  return { kind: 'module', module, action };
+}
+
+const TENANT = 'tenant-1';
+
+async function allowed(
+  r: Route,
+  setup: (stub: AccessStub) => void,
+  user: Record<string, unknown> = { sub: 'u1', tenantId: TENANT, sid: 's1', mfa: false },
+): Promise<boolean> {
+  const stub = new AccessStub();
+  setup(stub);
+  const guard = new AccessGuard(reflector, stub as never);
+  const request = { method: r.method, originalUrl: r.url, url: r.url, user: { ...user } };
+  const context = {
+    getHandler: () => r.handler,
+    getClass: () => r.controller,
+    switchToHttp: () => ({ getRequest: () => request }),
+  } as unknown as ExecutionContext;
+  try {
+    return await guard.canActivate(context);
+  } catch {
+    return false;
+  }
+}
+
+const roleKeys = SYSTEM_ROLES.map((r) => r.key);
+
+describe('permission matrix (every controller)', () => {
+  it('finds the controllers of the app', () => {
+    const names = new Set(routes.map((r) => r.controller.name));
+    for (const expected of [
+      'AccountingController', 'BankingController', 'CrmController', 'HrController', 'InventoryController',
+      'InvoicingController', 'DamagesController', 'TaxComplianceController', 'MoadianController',
+      'DataImportController', 'AssistantController', 'McpController', 'TenantsController', 'AuthController',
+      'OrgController', 'InvitationsController', 'EntitlementsAdminController', 'RadarController',
+    ]) {
+      expect(names).toContain(expected);
+    }
+    expect(routes.length).toBeGreaterThan(100);
+  });
+
+  it('every route declares an access policy (default deny otherwise)', () => {
+    const missing = routes.filter((r) => classify(r).kind === 'none').map((r) => r.id);
+    expect(missing).toEqual([]);
+  });
+
+  it('a route without a policy is refused by the guard even for an owner', async () => {
+    class Bare {
+      get(): void {}
+    }
+    const r: Route = { id: 'bare', controller: Bare, handler: Bare.prototype.get, method: 'GET', url: '/bare' };
+    await expect(allowed(r, (s) => s.grant('u1', TENANT, 'owner'))).resolves.toBe(false);
+  });
+
+  const moduleRoutes = routes.filter((r) => classify(r).kind === 'module');
+
+  describe.each(roleKeys)('role %s', (role) => {
+    it('matches the permission catalogue on every module route', async () => {
+      const wrong: string[] = [];
+      for (const r of moduleRoutes) {
+        const { module, action } = classify(r);
+        const ok = await allowed(r, (s) => s.grant('u1', TENANT, role));
+        const def = SYSTEM_ROLES.find((x) => x.key === role)!;
+        const expected = def.permissions.includes(`${module!}:${action!}` as never);
+        if (ok !== expected) wrong.push(`${r.id} expected ${expected} got ${ok}`);
+      }
+      expect(wrong).toEqual([]);
+    });
+  });
+
+  describe('isolation of access decisions', () => {
+    it('no membership -> denied on every module route, allowed on @AuthOnly routes', async () => {
+      for (const r of routes) {
+        const k = classify(r).kind;
+        if (k === 'module' || k === 'anyMember') {
+          expect(await allowed(r, () => undefined)).toBe(false);
+        }
+        if (k === 'authOnly') {
+          expect(await allowed(r, () => undefined)).toBe(true);
+        }
+      }
+    });
+
+    it('a JWT claiming another tenant id gains nothing (membership is per tenant)', async () => {
+      for (const r of moduleRoutes) {
+        const ok = await allowed(r, (s) => s.grant('u1', 'tenant-A', 'owner'), {
+          sub: 'u1', tenantId: 'tenant-B', sid: 's1', mfa: true,
+        });
+        expect(ok).toBe(false);
+      }
+    });
+
+    it('owner is allowed on every module route; an un-bought module blocks everyone except core modules', async () => {
+      for (const r of moduleRoutes) {
+        const { module } = classify(r);
+        expect(await allowed(r, (s) => s.grant('u1', TENANT, 'owner'))).toBe(true);
+        const none = await allowed(r, (s) => s.grant('u1', TENANT, 'owner', { entitled: [] }));
+        expect(none).toBe(CORE_MODULES.includes(module!));
+      }
+    });
+
+    it('a revoked session or a removed member is refused at once', async () => {
+      const r = moduleRoutes[0];
+      const stub = new AccessStub();
+      stub.grant('u1', TENANT, 'owner');
+      stub.dead.add('s1');
+      const guard = new AccessGuard(reflector, stub as never);
+      const ctx = {
+        getHandler: () => r.handler,
+        getClass: () => r.controller,
+        switchToHttp: () => ({ getRequest: () => ({ method: r.method, url: '/', user: { sub: 'u1', tenantId: TENANT, sid: 's1' } }) }),
+      } as unknown as ExecutionContext;
+      await expect(guard.canActivate(ctx)).rejects.toThrow(/Session ended/);
+    });
+
+    it('mandatory 2FA: a session without a second factor is refused, with one it is allowed', async () => {
+      for (const r of moduleRoutes) {
+        const need = (s: AccessStub) => s.grant('u1', TENANT, 'owner', { require2fa: true });
+        expect(await allowed(r, need, { sub: 'u1', tenantId: TENANT, sid: 's1', mfa: false })).toBe(false);
+        expect(await allowed(r, need, { sub: 'u1', tenantId: TENANT, sid: 's1', mfa: true })).toBe(true);
+      }
+    });
+  });
+
+  describe('named expectations from the product brief', () => {
+    const can = async (role: string, module: AccessModule, action: AccessAction): Promise<boolean> => {
+      const r = moduleRoutes.find((x) => {
+        const c = classify(x);
+        return c.module === module && c.action === action;
+      });
+      if (!r) throw new Error(`no route for ${module}:${action}`);
+      return allowed(r, (s) => s.grant('u1', TENANT, role));
+    };
+
+    it('sales only: CRM yes, accounting/HR/banking no', async () => {
+      expect(await can(SystemRole.SALES, AccessModule.CRM, AccessAction.CREATE)).toBe(true);
+      expect(await can(SystemRole.SALES, AccessModule.ACCOUNTING, AccessAction.READ)).toBe(false);
+      expect(await can(SystemRole.SALES, AccessModule.HR, AccessAction.READ)).toBe(false);
+      expect(await can(SystemRole.SALES, AccessModule.BANKING, AccessAction.READ)).toBe(false);
+    });
+
+    it('cheque reviewer: may read banking, may not post or touch anything else', async () => {
+      expect(await can(SystemRole.CHEQUE_REVIEWER, AccessModule.BANKING, AccessAction.READ)).toBe(true);
+      expect(await can(SystemRole.CHEQUE_REVIEWER, AccessModule.BANKING, AccessAction.POST)).toBe(false);
+      expect(await can(SystemRole.CHEQUE_REVIEWER, AccessModule.ACCOUNTING, AccessAction.READ)).toBe(false);
+      expect(await can(SystemRole.CHEQUE_REVIEWER, AccessModule.CRM, AccessAction.READ)).toBe(false);
+    });
+
+    it('read only: no write, approve, post or admin anywhere', async () => {
+      for (const r of moduleRoutes) {
+        const { action } = classify(r);
+        if (action !== AccessAction.READ) {
+          expect(await allowed(r, (s) => s.grant('u1', TENANT, SystemRole.READ_ONLY))).toBe(false);
+        }
+      }
+    });
+
+    it('only owner and admin can manage members, roles and structure', async () => {
+      for (const role of roleKeys) {
+        const ok = await can(role, AccessModule.MEMBERS, AccessAction.ADMIN);
+        expect(ok).toBe(role === SystemRole.OWNER || role === SystemRole.ADMIN);
+      }
+    });
+
+    it('only an owner can change the organisation security policy; only owner/admin read the audit log', async () => {
+      for (const role of roleKeys) {
+        expect(await can(role, AccessModule.SECURITY, AccessAction.ADMIN)).toBe(role === SystemRole.OWNER);
+        expect(await can(role, AccessModule.AUDIT, AccessAction.READ)).toBe(
+          role === SystemRole.OWNER || role === SystemRole.ADMIN,
+        );
+      }
+    });
+  });
+
+  it('matches the committed snapshot (review any change to who can do what)', async () => {
+    const matrix: Record<string, Record<string, boolean | string>> = {};
+    for (const r of routes) {
+      const c = classify(r);
+      const row: Record<string, boolean | string> = { policy: c.kind === 'module' ? `${c.module}:${c.action}` : c.kind };
+      if (c.kind === 'module' || c.kind === 'anyMember') {
+        for (const role of roleKeys) row[role] = await allowed(r, (s) => s.grant('u1', TENANT, role));
+      }
+      matrix[r.id] = row;
+    }
+    if (process.env.UPDATE_PERMISSION_MATRIX === '1' || !fs.existsSync(SNAPSHOT)) {
+      fs.writeFileSync(SNAPSHOT, `${JSON.stringify(matrix, null, 2)}\n`);
+    }
+    expect(matrix).toEqual(JSON.parse(fs.readFileSync(SNAPSHOT, 'utf8')));
+  });
+});

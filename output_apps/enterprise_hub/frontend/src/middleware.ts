@@ -134,8 +134,13 @@ export function middleware(request: NextRequest) {
     if (hasPrefix(pathname, "/admin")) {
       return NextResponse.next();
     }
+    // The Persian suite (`/app/*`) is Iran-only; international users get the English
+    // account panel at `/en/app` instead of a dead end.
+    if (hasPrefix(pathname, "/app")) {
+      return NextResponse.redirect(new URL("/en/app", request.nextUrl));
+    }
     // مسیرهای داخلی سازمانی در پورتال بین‌المللی به ریشه بازگردانده می‌شوند تا هیچ نشت دامنه‌ای به دامنه .ir رخ ندهد
-    if (hasPrefix(pathname, "/app") || ROXIRA_ONLY_PATHS.some((path) => hasPrefix(pathname, path))) {
+    if (ROXIRA_ONLY_PATHS.some((path) => hasPrefix(pathname, path))) {
       return NextResponse.redirect(new URL("/", request.nextUrl));
     }
     // ریشه دامنه بین‌المللی = پورتال انگلیسی B2B

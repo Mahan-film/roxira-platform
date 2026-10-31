@@ -19,7 +19,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { useAccess } from "@/components/app/access-provider";
 import { useImportHandoff } from "@/components/app/import-handoff";
+import type { AccessActionKey, AccessModuleKey } from "@/types/access";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +73,7 @@ export function CommandPalette({
 
   const assistantEnabled = useAssistantEnabled() === true;
 
+  const { can } = useAccess();
   const actions = useMemo<CommandAction[]>(() => {
     const go = (href: string) => () => {
       onOpenChange(false);
@@ -188,8 +191,19 @@ export function CommandPalette({
         run: goImport("package"),
       },
     ];
-    return all.filter((action) => assistantEnabled || action.id !== "assistant");
-  }, [assistantEnabled, onOpenChange, router, setPendingFile, setPendingTab]);
+    // UX only: hide commands for modules the organisation does not have or the role cannot use.
+    const needs: Record<string, [AccessModuleKey, AccessActionKey]> = {
+      crm: ["crm", "read"], hr: ["hr", "read"], inventory: ["inventory", "read"], accounting: ["accounting", "read"],
+      invoicing: ["invoicing", "read"], import: ["data_import", "read"], assistant: ["assistant", "read"],
+      "new-lead": ["crm", "create"], "new-employee": ["hr", "create"], "new-invoice": ["invoicing", "create"],
+      "import-file": ["data_import", "create"], "import-database": ["data_import", "create"],
+    };
+    return all.filter((action) => {
+      if (!assistantEnabled && action.id === "assistant") return false;
+      const need = needs[action.id];
+      return !need || can(need[0], need[1]);
+    });
+  }, [assistantEnabled, can, onOpenChange, router, setPendingFile, setPendingTab]);
 
   const results = useMemo(() => {
     const q = query.trim();

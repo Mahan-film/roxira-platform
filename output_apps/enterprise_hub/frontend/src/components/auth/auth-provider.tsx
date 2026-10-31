@@ -4,11 +4,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   AuthServiceDomain,
@@ -16,11 +18,16 @@ import {
   AuthUser,
   clearStoredSession,
   inferServiceDomain,
+  inferUiLocale,
   loadStoredSession,
   saveStoredSession,
+  serverLogout,
   StoredAuthSession,
   toStoredSession,
+  UiLocale,
 } from "@/lib/api/auth-client";
+import { accessNeedsRefresh, canRefresh, msUntilRefresh } from "@/lib/api/session-logic";
+import { refreshStoredSession } from "@/lib/api/session-store";
 import { LoginModal } from "@/components/auth/login-modal";
 
 interface OpenLoginOptions {
@@ -29,6 +36,12 @@ interface OpenLoginOptions {
   description?: string;
   /** پس از ورود موفق، یک‌بار فراخوانی می‌شود (برای ادامه اکشن‌های گیت‌شده). */
   onSuccess?: () => void;
+  /** Language of the dialog. English (roxira.net) offers email + password only, no SMS. */
+  locale?: UiLocale;
+  /** Opens the sign-up form instead of sign-in (roxira.ir). */
+  authMode?: "login" | "signup";
+  /** Where to go after sign-in. Default for Roxira portal logins: `/app` (`/en/app` in English). */
+  redirectTo?: string;
 }
 
 interface AuthContextValue {
@@ -39,8 +52,11 @@ interface AuthContextValue {
   loginOpen: boolean;
   openLogin: (options?: OpenLoginOptions) => void;
   closeLogin: () => void;
+  /** Sign out: revoke the refresh token on the server, then clear this device. */
   logout: () => void;
-  /** Server answered 401 (token expired, sessions last 3 days): clear the session and open the login dialog. */
+  /** Replace the current session (e.g. after the password changed and older sessions were revoked). */
+  applySession: (session: AuthSession) => void;
+  /** The session can no longer be renewed: clear it and open the login dialog. */
   expireSession: () => void;
   getAccessToken: () => string | null;
 }
@@ -110,11 +126,27 @@ function getServerSessionSnapshot(): StoredAuthSession | null {
 const noopSubscribe = () => () => {};
 
 export const SESSION_EXPIRED_MESSAGE = "نشست شما منقضی شد؛ دوباره وارد شوید";
+export const SESSION_EXPIRED_MESSAGE_EN = "Your session has expired. Please sign in again.";
+
+/** Landing page after a Roxira portal sign-in. */
+function defaultRedirect(locale: UiLocale): string {
+  return locale === "en" ? "/en/app" : "/app";
+}
+
+function isInsideApp(pathname: string): boolean {
+  return /^\/(en\/)?app(\/|$)/.test(pathname);
+}
 
 /**
  * فراهم‌کننده وضعیت احراز هویت در سراسر رابط (هدر، چت‌بات قاضی و فرم‌های
  * فاکتور روکسیرا). سشن در localStorage نگه داشته می‌شود و مودال لاگین
  * به‌صورت سراسری از همین Provider رندر می‌گردد.
+ *
+ * Session lifetime (NestJS): 15-minute access token + 30-day rotating refresh
+ * token. This provider renews the access token a minute before it expires and
+ * when the tab becomes visible again; the user only sees the login dialog when
+ * the refresh token is gone, expired or revoked. Smart Judge (Python) sessions
+ * have no refresh token and end when their own access token expires.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const session = useSyncExternalStore(
@@ -130,11 +162,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
   const [loginOpen, setLoginOpen] = useState(false);
   const [modalOptions, setModalOptions] = useState<OpenLoginOptions>({});
+  const router = useRouter();
 
   const pendingRef = useRef<(() => void) | null>(null);
+  const redirectRef = useRef<string | null>(null);
 
   const openLogin = useCallback((options: OpenLoginOptions = {}) => {
     pendingRef.current = options.onSuccess ?? null;
+    redirectRef.current = options.redirectTo ?? null;
     setModalOptions(options);
     setLoginOpen(true);
   }, []);
@@ -142,35 +177,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const closeLogin = useCallback(() => {
     setLoginOpen(false);
     pendingRef.current = null;
+    redirectRef.current = null;
   }, []);
 
-  const handleAuthenticated = useCallback((authSession: AuthSession) => {
-    const stored = toStoredSession(authSession);
-    // Persists to localStorage and keeps an in-memory fallback if that fails.
-    persistSession(stored);
+  const handleAuthenticated = useCallback(
+    (authSession: AuthSession) => {
+      const stored = toStoredSession(authSession);
+      // Persists to localStorage and keeps an in-memory fallback if that fails.
+      persistSession(stored);
 
-    const callback = pendingRef.current;
-    pendingRef.current = null;
-    if (callback) {
-      callback();
-    }
+      const callback = pendingRef.current;
+      const explicitTarget = redirectRef.current;
+      pendingRef.current = null;
+      redirectRef.current = null;
+      if (callback) {
+        callback();
+        return;
+      }
+      // Roxira portal sign-in lands on the panel; Smart Judge stays where it is.
+      const portalLogin = authSession.user.serviceDomain === "ROXIRA";
+      const target = explicitTarget ?? (portalLogin ? defaultRedirect(inferUiLocale()) : null);
+      if (target && !(portalLogin && !explicitTarget && isInsideApp(window.location.pathname))) {
+        router.push(target);
+      }
+    },
+    [router],
+  );
+
+  const applySession = useCallback((authSession: AuthSession) => {
+    persistSession(toStoredSession(authSession));
   }, []);
 
   const logout = useCallback(() => {
+    const refreshToken = loadStoredSession()?.refreshToken ?? fallbackSession?.refreshToken;
+    if (refreshToken) void serverLogout(refreshToken);
     discardSession();
   }, []);
 
   const expireSession = useCallback(() => {
+    const wasPortal = inferServiceDomain() === "ROXIRA";
+    const locale = inferUiLocale();
     discardSession();
     pendingRef.current = null;
-    const serviceDomain = inferServiceDomain();
-    setModalOptions({
-      serviceDomain,
-      title: serviceDomain === "GHAZI" ? "ورود به قاضی هوشمند" : "ورود به حساب روکسیرا",
-      description: SESSION_EXPIRED_MESSAGE,
-    });
+    redirectRef.current = null;
+    if (wasPortal) {
+      setModalOptions({
+        serviceDomain: "ROXIRA",
+        locale,
+        title: locale === "en" ? "Sign in" : "ورود به پورتال سازمانی روکسیرا",
+        description: locale === "en" ? SESSION_EXPIRED_MESSAGE_EN : SESSION_EXPIRED_MESSAGE,
+      });
+    } else {
+      setModalOptions({
+        serviceDomain: "GHAZI",
+        title: "ورود به قاضی هوشمند",
+        description: SESSION_EXPIRED_MESSAGE,
+      });
+    }
     setLoginOpen(true);
   }, []);
+
+  // Keep the access token fresh: renew shortly before it expires, and when the
+  // tab wakes up (timers are throttled in background tabs).
+  useEffect(() => {
+    if (!session || !canRefresh(session)) return;
+    let timer: number | undefined;
+    let cancelled = false;
+    const renew = async () => {
+      const outcome = await refreshStoredSession();
+      if (cancelled) return;
+      if (outcome.status === "rejected") expireSession();
+      else if (outcome.status === "unavailable") timer = window.setTimeout(renew, 30_000);
+    };
+    timer = window.setTimeout(renew, accessNeedsRefresh(session) ? 0 : msUntilRefresh(session));
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(renew, 0);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [session, expireSession]);
 
   const getAccessToken = useCallback(
     () => session?.accessToken ?? null,
@@ -187,10 +279,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       openLogin,
       closeLogin,
       logout,
+      applySession,
       expireSession,
       getAccessToken,
     }),
     [
+      applySession,
       closeLogin,
       expireSession,
       getAccessToken,
@@ -210,6 +304,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         onClose={closeLogin}
         onAuthenticated={handleAuthenticated}
         serviceDomain={modalOptions.serviceDomain}
+        locale={modalOptions.locale}
+        authMode={modalOptions.authMode}
         title={modalOptions.title}
         description={modalOptions.description}
       />

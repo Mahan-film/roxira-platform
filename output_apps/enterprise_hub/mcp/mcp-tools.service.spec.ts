@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
+import { requestWithAccess } from '../test/support/access-stub';
 import { AuthenticatedRequest } from '../modules/auth/guards/jwt-auth.guard';
 import { UserRole } from '../modules/auth/enums/user-role.enum';
 import { TenantRole } from '../modules/tenants/enums/tenant-role.enum';
@@ -7,8 +8,8 @@ import { PipelineStage } from '../modules/crm/enums/crm.enums';
 import { McpToolsService } from './mcp-tools.service';
 
 /** کاربر تأییدشده ساختگی (پیلود JWT). */
-const requestWith = (user: unknown): AuthenticatedRequest =>
-  ({ user }) as unknown as AuthenticatedRequest;
+const requestWith = (user: Record<string, unknown>): AuthenticatedRequest =>
+  requestWithAccess(user);
 
 const TENANT_ID = 'tenant-1';
 const admin = requestWith({ role: UserRole.ADMIN, tenantId: TENANT_ID });

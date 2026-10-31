@@ -16,6 +16,45 @@ export class AuthRepository {
     private readonly repository: Repository<UserEntity>,
   ) {}
 
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    await this.repository.update({ id }, { passwordHash, passwordUpdatedAt: new Date() });
+  }
+
+  async findByUsername(username: string): Promise<UserEntity | null> {
+    return this.repository.findOne({ where: { username } });
+  }
+
+  async findByLoginEmail(loginEmail: string): Promise<UserEntity | null> {
+    return this.repository.findOne({ where: { loginEmail } });
+  }
+
+  /** Load a user together with `passwordHash` (a `select: false` column). */
+  async findWithPasswordHash(
+    where: { id: string } | { username: string } | { loginEmail: string },
+  ): Promise<UserEntity | null> {
+    return this.repository.findOne({
+      where,
+      select: {
+        id: true,
+        phone: true,
+        username: true,
+        loginEmail: true,
+        displayName: true,
+        email: true,
+        role: true,
+        serviceDomain: true,
+        tenantId: true,
+        tenantRole: true,
+        isActive: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
+        passwordHash: true,
+        passwordUpdatedAt: true,
+      },
+    });
+  }
+
   async findByPhone(phone: string): Promise<UserEntity | null> {
     return this.repository.findOne({ where: { phone } });
   }

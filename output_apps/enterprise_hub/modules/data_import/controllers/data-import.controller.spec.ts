@@ -9,6 +9,7 @@ import {
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { UserRole } from '../../auth/enums/user-role.enum';
 import { TenantRole } from '../../tenants/enums/tenant-role.enum';
+import { accessTestProviders } from '../../../test/support/access-stub';
 import { DataImportService } from '../services/data-import.service';
 import { EntityImportService } from '../services/entity-import.service';
 import { PackageImportService } from '../services/package-import.service';
@@ -16,6 +17,8 @@ import { DataImportController } from './data-import.controller';
 
 const SECRET = 'data-import-test-secret-1234567890';
 const VALID_UUID = '11111111-1111-4111-8111-111111111111';
+
+const { stub, providers: accessProviders } = accessTestProviders();
 
 describe('DataImportController (access control)', () => {
   let app: INestApplication;
@@ -78,9 +81,13 @@ describe('DataImportController (access control)', () => {
             }),
           },
         },
+        ...accessProviders,
         ...GLOBAL_GUARD_PROVIDERS,
       ],
     }).compile();
+    stub.grant('owner', 'tenant-1', 'owner');
+    stub.grant('admin', 'tenant-1', 'owner');
+    stub.grant('member', 'tenant-1', 'legacy_member');
 
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(
@@ -98,8 +105,21 @@ describe('DataImportController (access control)', () => {
     await app.close();
   });
 
+  /** sub follows the role so the stub membership (owner / legacy member / none) matches the old claims. */
   const token = (payload: Record<string, unknown>) =>
-    jwt.sign({ sub: 'u1', phone: '09120000000', domain: 'ROXIRA', ...payload });
+    jwt.sign({
+      sub:
+        payload.tenantRole === TenantRole.OWNER
+          ? 'owner'
+          : payload.tenantRole === TenantRole.MEMBER
+            ? 'member'
+            : payload.role === UserRole.ADMIN
+              ? 'admin'
+              : 'nobody',
+      phone: '09120000000',
+      domain: 'ROXIRA',
+      ...payload,
+    });
 
   const body = { uploadId: VALID_UUID, mapping: { name: 'fullName' } };
   const url = '/enterprise-hub/data-import/crm-leads/commit';

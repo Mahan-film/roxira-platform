@@ -45,7 +45,7 @@ import {
   sha256,
   verifyAssertionSignature,
 } from '../utils/cose.util';
-import { AuthService } from './auth.service';
+import { AuthService, LoginContext } from './auth.service';
 
 interface ClientData {
   type: string;
@@ -201,8 +201,8 @@ export class WebAuthnService {
       rp: { name: this.rpName, id: this.rpId },
       user: {
         id: generateUserHandle(user.id),
-        name: user.phone,
-        displayName: user.displayName ?? user.phone,
+        name: user.phone ?? user.id,
+        displayName: user.displayName ?? user.phone ?? user.id,
       },
       pubKeyCredParams: this.publicKeyParams(),
       timeout: WEBAUTHN_TIMEOUT_MS,
@@ -376,6 +376,7 @@ export class WebAuthnService {
    */
   async verifyAuthentication(
     dto: WebAuthnAuthenticationVerifyRequestDto,
+    ctx: LoginContext = {},
   ): Promise<AuthSessionDto> {
     const clientData = this.parseClientData(dto.response.clientDataJSON);
     if (clientData.type !== 'webauthn.get') {
@@ -448,7 +449,8 @@ export class WebAuthnService {
       throw new UnauthorizedException('کاربر مربوط به این Passkey یافت نشد.');
     }
 
-    const session = await this.authService.issueSessionForUser(user);
+    // A passkey is phishing-resistant and needs the device plus biometrics/PIN, so it counts as 2FA.
+    const session = (await this.authService.completeLogin(user, ctx, { strongFactor: true })) as AuthSessionDto;
 
     this.logger.log(
       `[WEBAUTHN] ورود موفق با Passkey | userId=${user.id} | phone=${user.phone}`,

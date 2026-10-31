@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
   Body,
   Controller,
@@ -27,6 +29,7 @@ import { AssistantService } from '../services/assistant.service';
  */
 @ApiTags('Assistant - دستیار هوشمند سازمان')
 @ApiBearerAuth()
+@ModuleAccess(AccessModule.ASSISTANT)
 @Controller('enterprise-hub/assistant')
 export class AssistantController {
   constructor(
@@ -48,6 +51,7 @@ export class AssistantController {
     return { enabled: this.isEnabled() };
   }
 
+  @RequireAction(AccessAction.READ)
   @Post('chat')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

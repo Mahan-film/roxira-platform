@@ -1,5 +1,9 @@
 import 'reflect-metadata';
-import { HttpException, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   OTP_GENERIC_ERROR,
   OTP_RESEND_COOLDOWN_SECONDS,
@@ -9,7 +13,6 @@ import {
 import { AuthServiceDomain } from '../enums/auth-service.enum';
 import { UserRole } from '../enums/user-role.enum';
 import { UserEntity } from '../entities/user.entity';
-import { TenantRole } from '../../tenants/enums/tenant-role.enum';
 import { AuthService } from './auth.service';
 
 const buildUser = (overrides: Partial<UserEntity> = {}): UserEntity =>
@@ -84,8 +87,15 @@ class FakeRedis {
 
 interface Mocks {
   authRepository: { findOrCreateByPhone: jest.Mock; save: jest.Mock };
-  tenantsService: { create: jest.Mock };
-  jwtService: { signAsync: jest.Mock };
+  organizations: { create: jest.Mock };
+  memberships: { listForUser: jest.Mock; findByTenantUser: jest.Mock };
+  invitations: { accept: jest.Mock };
+  challenges: { needsSecondFactor: jest.Mock; create: jest.Mock };
+  audit: { record: jest.Mock };
+  mail: { sendSecurityAlert: jest.Mock };
+  sessions: { switchTenant: jest.Mock };
+  jwtService: { signAsync: jest.Mock; decode: jest.Mock };
+  refreshTokens: { issue: jest.Mock; consume: jest.Mock; revoke: jest.Mock; revokeAllForUser: jest.Mock; isNewDevice: jest.Mock };
   config: { get: jest.Mock; getOrThrow: jest.Mock };
   kavenegar: { sendVerificationCode: jest.Mock; templateFor: jest.Mock };
   redis: FakeRedis;
@@ -99,8 +109,27 @@ const createService = () => {
       findOrCreateByPhone: jest.fn(),
       save: jest.fn(async (user: UserEntity) => user),
     },
-    tenantsService: { create: jest.fn() },
-    jwtService: { signAsync: jest.fn().mockResolvedValue('jwt-token') },
+    organizations: { create: jest.fn() },
+    memberships: {
+      listForUser: jest.fn().mockResolvedValue([]),
+      findByTenantUser: jest.fn().mockResolvedValue(null),
+    },
+    invitations: { accept: jest.fn() },
+    challenges: { needsSecondFactor: jest.fn().mockResolvedValue(false), create: jest.fn() },
+    audit: { record: jest.fn() },
+    mail: { sendSecurityAlert: jest.fn() },
+    sessions: { switchTenant: jest.fn() },
+    jwtService: {
+      signAsync: jest.fn().mockResolvedValue('jwt-token'),
+      decode: jest.fn().mockReturnValue({ iat: 1000, exp: 1900 }),
+    },
+    refreshTokens: {
+      issue: jest.fn().mockResolvedValue({ token: 'refresh-token', expiresIn: 2592000 }),
+      consume: jest.fn(),
+      revoke: jest.fn(),
+      revokeAllForUser: jest.fn(),
+      isNewDevice: jest.fn().mockResolvedValue(false),
+    },
     config: {
       get: jest.fn().mockReturnValue(''),
       getOrThrow: jest.fn().mockReturnValue('test-only-not-a-real-secret'),
@@ -117,8 +146,15 @@ const createService = () => {
     mocks.kavenegar as never,
     mocks.jwtService as never,
     mocks.config as never,
-    mocks.tenantsService as never,
     mocks.redis as never,
+    mocks.refreshTokens as never,
+    mocks.memberships as never,
+    mocks.organizations as never,
+    mocks.invitations as never,
+    mocks.challenges as never,
+    mocks.audit as never,
+    mocks.mail as never,
+    mocks.sessions as never,
   );
 
   return { service, mocks };
@@ -146,76 +182,84 @@ const issuedPayload = (mocks: Mocks) =>
   };
 
 describe('AuthService.verifyOtp — organisation onboarding', () => {
-  it('creates an organisation and makes the founder tenant OWNER (never global ADMIN)', async () => {
+  it('creates an organisation through OrganizationsService when a name is given (never global ADMIN)', async () => {
     const { service, mocks } = createService();
     const code = await issueCode(service, mocks);
     const user = buildUser();
-    mocks.authRepository.findOrCreateByPhone.mockResolvedValue({
-      user,
-      created: true,
-    });
-    mocks.tenantsService.create.mockResolvedValue({
-      id: 'tenant-1',
-      name: 'Acme',
-      slug: 'acme-abc123',
-    });
-
-    await service.verifyOtp({
-      phone: PHONE,
-      code,
-      organizationName: 'Acme',
+    mocks.authRepository.findOrCreateByPhone.mockResolvedValue({ user, created: true });
+    mocks.organizations.create.mockImplementation(async () => {
+      // the new membership is what the session picks up
+      mocks.memberships.listForUser.mockResolvedValue([
+        { tenantId: 'tenant-1', roleKey: 'owner', status: 'ACTIVE' },
+      ]);
+      mocks.memberships.findByTenantUser.mockResolvedValue({ roleKey: 'owner' });
+      return { tenantId: 'tenant-1' };
     });
 
-    expect(mocks.tenantsService.create).toHaveBeenCalledWith('Acme');
-    expect(mocks.authRepository.save).toHaveBeenCalledWith(user);
-    expect(user.tenantId).toBe('tenant-1');
-    expect(user.tenantRole).toBe(TenantRole.OWNER);
+    await service.verifyOtp({ phone: PHONE, code, organizationName: 'Acme' });
+
+    expect(mocks.organizations.create).toHaveBeenCalledWith(user.id, 'Acme');
     expect(user.role).not.toBe(UserRole.ADMIN);
-
     const payload = issuedPayload(mocks);
     expect(payload.tenantId).toBe('tenant-1');
     expect(payload.tenantRole).toBe('OWNER');
   });
 
-  it('ignores organizationName when the user already belongs to a tenant', async () => {
+  it('ignores organizationName when the user already belongs to an organisation', async () => {
     const { service, mocks } = createService();
     const code = await issueCode(service, mocks);
-    const user = buildUser({
-      tenantId: 'existing-tenant',
-      tenantRole: TenantRole.OWNER,
-    });
-    mocks.authRepository.findOrCreateByPhone.mockResolvedValue({
-      user,
-      created: false,
-    });
+    const user = buildUser({ tenantId: 'existing-tenant' });
+    mocks.authRepository.findOrCreateByPhone.mockResolvedValue({ user, created: false });
+    mocks.memberships.listForUser.mockResolvedValue([
+      { tenantId: 'existing-tenant', roleKey: 'owner', status: 'ACTIVE' },
+    ]);
+    mocks.memberships.findByTenantUser.mockResolvedValue({ roleKey: 'owner' });
 
-    await service.verifyOtp({
-      phone: PHONE,
-      code,
-      organizationName: 'Other Org',
-    });
+    await service.verifyOtp({ phone: PHONE, code, organizationName: 'Other Org' });
 
-    expect(mocks.tenantsService.create).not.toHaveBeenCalled();
-    expect(mocks.authRepository.save).not.toHaveBeenCalled();
-    expect(user.tenantId).toBe('existing-tenant');
+    expect(mocks.organizations.create).not.toHaveBeenCalled();
     expect(issuedPayload(mocks).tenantId).toBe('existing-tenant');
   });
 
-  it('issues null tenant claims when no organisation is requested', async () => {
+  it('issues null tenant claims when no organisation exists (sign up alone, create one later)', async () => {
     const { service, mocks } = createService();
     const code = await issueCode(service, mocks);
-    const user = buildUser();
-    mocks.authRepository.findOrCreateByPhone.mockResolvedValue({
-      user,
-      created: true,
-    });
+    mocks.authRepository.findOrCreateByPhone.mockResolvedValue({ user: buildUser(), created: true });
 
     await service.verifyOtp({ phone: PHONE, code });
 
-    expect(mocks.tenantsService.create).not.toHaveBeenCalled();
+    expect(mocks.organizations.create).not.toHaveBeenCalled();
     const payload = issuedPayload(mocks);
     expect(payload.tenantId).toBeNull();
     expect(payload.tenantRole).toBeNull();
+  });
+
+  it('joins by invitation without asking for an organisation name', async () => {
+    const { service, mocks } = createService();
+    const code = await issueCode(service, mocks);
+    mocks.authRepository.findOrCreateByPhone.mockResolvedValue({ user: buildUser(), created: true });
+    mocks.invitations.accept.mockResolvedValue({ tenantId: 'org-9' });
+    mocks.memberships.listForUser.mockResolvedValue([{ tenantId: 'org-9', roleKey: 'sales', status: 'ACTIVE' }]);
+    mocks.memberships.findByTenantUser.mockResolvedValue({ roleKey: 'sales' });
+
+    await service.verifyOtp({ phone: PHONE, code, inviteToken: 'x'.repeat(43) });
+
+    expect(mocks.invitations.accept).toHaveBeenCalledWith('user-1', 'x'.repeat(43));
+    expect(mocks.organizations.create).not.toHaveBeenCalled();
+    expect(issuedPayload(mocks)).toMatchObject({ tenantId: 'org-9', tenantRole: 'MEMBER' });
+  });
+
+  it('returns a challenge instead of tokens when the account has an authenticator app', async () => {
+    const { service, mocks } = createService();
+    const code = await issueCode(service, mocks);
+    mocks.authRepository.findOrCreateByPhone.mockResolvedValue({ user: buildUser(), created: false });
+    mocks.challenges.needsSecondFactor.mockResolvedValue(true);
+    mocks.challenges.create.mockResolvedValue({ mfaRequired: true, challenge: 'c', expiresIn: 300 });
+
+    const out = await service.verifyOtp({ phone: PHONE, code });
+
+    expect(out).toMatchObject({ mfaRequired: true });
+    expect(mocks.jwtService.signAsync).not.toHaveBeenCalled();
   });
 });
 
@@ -343,7 +387,9 @@ describe('AuthService OTP hardening (issue #366)', () => {
     const { service, mocks } = createService();
     mocks.kavenegar.sendVerificationCode.mockResolvedValue(false);
     for (let i = 0; i < 5; i += 1) {
-      await service.sendOtp({ phone: PHONE }, undefined, `198.51.100.${i}`);
+      await expect(
+        service.sendOtp({ phone: PHONE }, undefined, `198.51.100.${i}`),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
     }
     // failed sends neither count nor hold the cooldown
     expect(mocks.redis.store.get(`${OTP_SEND_LIMIT_REDIS_PREFIX}phone:${PHONE}`)).toBeUndefined();
@@ -397,5 +443,60 @@ describe('AuthService OTP hardening (issue #366)', () => {
       service.sendOtp({ phone: '09129999999' }, undefined, '198.51.100.8'),
     ).resolves.toMatchObject({ success: true });
     expect(mocks.kavenegar.sendVerificationCode).toHaveBeenCalledTimes(11);
+  });
+
+  it('reports an SMS failure as 503 SMS_DELIVERY_FAILED and discards the unsent code', async () => {
+    const { service, mocks } = createService();
+    mocks.kavenegar.sendVerificationCode.mockResolvedValue(false);
+    const error = await service.sendOtp({ phone: PHONE }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ServiceUnavailableException);
+    expect((error as ServiceUnavailableException).getResponse()).toMatchObject({
+      code: 'SMS_DELIVERY_FAILED',
+    });
+    // nothing usable is left behind: the code cannot be guessed after a failed send
+    await expect(
+      service.verifyOtp({ phone: PHONE, code: '123456' } as never),
+    ).rejects.toThrow(OTP_GENERIC_ERROR);
+  });
+
+  it('issues a short access token plus a refresh token, and reports the real JWT lifetime', async () => {
+    const { service, mocks } = createService();
+    const session = await service.issueSessionForUser(buildUser());
+    expect(session).toMatchObject({
+      accessToken: 'jwt-token',
+      expiresIn: 900,
+      refreshToken: 'refresh-token',
+      refreshExpiresIn: 2592000,
+    });
+    expect(mocks.refreshTokens.issue).toHaveBeenCalled();
+  });
+
+  it('rotates a refresh token and reuses its family', async () => {
+    const { service, mocks } = createService();
+    mocks.refreshTokens.consume.mockResolvedValue({ userId: 'user-1', familyId: 'fam-1', meta: { mfa: true, tenantId: null } });
+    (mocks.authRepository as never as { findById: jest.Mock }).findById = jest
+      .fn()
+      .mockResolvedValue(buildUser());
+    await service.refreshSession('old-token');
+    expect(mocks.refreshTokens.issue).toHaveBeenCalledWith(expect.anything(), 'fam-1', expect.objectContaining({ mfa: true }));
+    expect(issuedPayload(mocks)).toMatchObject({ sid: 'fam-1', mfa: true });
+  });
+
+  it('ends the session at refresh when the user was deactivated', async () => {
+    const { service, mocks } = createService();
+    mocks.refreshTokens.consume.mockResolvedValue({ userId: 'user-1', familyId: 'fam-1', meta: {} });
+    (mocks.authRepository as never as { findById: jest.Mock }).findById = jest
+      .fn()
+      .mockResolvedValue(buildUser({ isActive: false }));
+    await expect(service.refreshSession('old-token')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(mocks.refreshTokens.revokeAllForUser).toHaveBeenCalledWith('user-1');
+  });
+
+  it('logout revokes the refresh token on the server', async () => {
+    const { service, mocks } = createService();
+    await service.logout('some-token');
+    expect(mocks.refreshTokens.revoke).toHaveBeenCalledWith('some-token');
   });
 });

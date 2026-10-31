@@ -44,6 +44,10 @@ export class TenantEntity {
   })
   defaultVatRate: number;
 
+  /** When true, members must sign in with a second factor (TOTP or passkey) to use the suite. */
+  @Column({ type: 'boolean', default: false, name: 'require_2fa' })
+  require2fa: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

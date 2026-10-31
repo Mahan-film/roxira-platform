@@ -526,7 +526,7 @@ describe('HrController — payroll runs use the JWT tenant only', () => {
   const requestWith = (user: unknown): AuthenticatedRequest =>
     ({ user }) as unknown as AuthenticatedRequest;
 
-  it('routes calls with the token tenant and denies non-admins', async () => {
+  it('routes calls with the token tenant only', async () => {
     const { repo, hrService, service } = setup();
     repo.seedEmployee('tenant-a');
     const controller = new HrController(hrService, service);
@@ -543,17 +543,6 @@ describe('HrController — payroll runs use the JWT tenant only', () => {
         run.id,
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
-
-    await expect(
-      controller.postPayrollRun(
-        requestWith({
-          tenantId: 'tenant-a',
-          role: UserRole.USER,
-          tenantRole: TenantRole.MEMBER,
-        }),
-        run.id,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
 

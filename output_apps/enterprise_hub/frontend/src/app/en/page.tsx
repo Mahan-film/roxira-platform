@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { PasskeyLoginButton } from "@/components/en/passkey-login-button";
+import { AccountButton } from "@/components/en/account-button";
 import { EnSettlementPanel } from "@/components/en/en-settlement-panel";
 import { INTERNATIONAL_CURRENCIES } from "@/types/currency";
 import ModuleSandboxModal, { ModuleKey } from "@/components/en/ModuleSandboxModal";
@@ -213,6 +214,7 @@ export default function InternationalPortal() {
           </nav>
 
           <div className="flex items-center gap-2">
+            <AccountButton />
             <PasskeyLoginButton />
             <button
               onClick={openApiModal}

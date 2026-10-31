@@ -2,15 +2,15 @@ import {
   HttpException,
   HttpStatus,
   Inject,
+  ServiceUnavailableException,
   Injectable,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { createHmac, randomInt, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomInt, randomUUID, timingSafeEqual } from 'crypto';
 import {
-  JWT_DEFAULT_EXPIRES_IN_SECONDS,
   OTP_ATTEMPTS_REDIS_PREFIX,
   OTP_CODE_LENGTH,
   OTP_GENERIC_ERROR,
@@ -29,15 +29,25 @@ import {
   AuthUserDto,
   SendOtpResponseDto,
 } from '../dto/auth-session.dto';
+import {
+  REFRESH_INVALID_ERROR,
+  SMS_DELIVERY_FAILED_ERROR,
+} from '../constants/password-auth.constants';
 import { SendOtpDto } from '../dto/send-otp.dto';
 import { VerifyOtpDto } from '../dto/verify-otp.dto';
 import { UserEntity } from '../entities/user.entity';
 import { AuthServiceDomain } from '../enums/auth-service.enum';
 import { RedisClient } from '../providers/redis.provider';
 import { AuthRepository } from '../repositories/auth.repository';
-import { TenantRole } from '../../tenants/enums/tenant-role.enum';
-import { TenantsService } from '../../tenants/services/tenants.service';
+import { AuditService } from '../../access/services/audit.service';
+import { InvitationsService } from '../../access/services/invitations.service';
+import { OrganizationsService } from '../../access/services/organizations.service';
+import { MembershipsRepository } from '../../access/repositories/memberships.repository';
+import { LoginChallengeService, MfaChallenge } from './login-challenge.service';
+import { MailService } from './mail.service';
+import { SessionsService } from './sessions.service';
 import { KavenegarService } from './kavenegar.service';
+import { RefreshTokenService, SessionMeta } from './refresh-token.service';
 
 interface OtpRecord {
   /** HMAC-SHA256 of phone + code; the code itself is never stored. */
@@ -60,12 +70,30 @@ const maskPhone = (phone: string): string =>
 
 interface JwtPayload {
   sub: string;
-  phone: string;
+  phone: string | null;
   role: string;
   domain: AuthServiceDomain;
   tenantId: string | null;
   tenantRole: string | null;
+  sid: string;
+  mfa: boolean;
 }
+
+/** Network context of a sign-in; used for the session list and new-device alerts. */
+export interface LoginContext {
+  ip?: string;
+  userAgent?: string;
+  /** Prefer this organisation (e.g. the one just joined by invitation). */
+  tenantId?: string | null;
+}
+
+export interface IssueOptions {
+  familyId?: string;
+  mfa?: boolean;
+  meta?: SessionMeta;
+}
+
+const sha256 = (v: string): string => createHash('sha256').update(v).digest('hex');
 
 /**
  * سرویس احراز هویت پیامکی (Auth & Kavenegar OTP).
@@ -90,8 +118,15 @@ export class AuthService {
     private readonly kavenegarService: KavenegarService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
-    private readonly tenantsService: TenantsService,
     @Inject(REDIS_CLIENT) private readonly redis: RedisClient,
+    private readonly refreshTokens: RefreshTokenService,
+    private readonly memberships: MembershipsRepository,
+    private readonly organizations: OrganizationsService,
+    private readonly invitations: InvitationsService,
+    private readonly challenges: LoginChallengeService,
+    private readonly audit: AuditService,
+    private readonly mail: MailService,
+    private readonly sessions: SessionsService,
   ) {}
 
   /**
@@ -256,6 +291,20 @@ export class AuthService {
 
     await this.recordSendResult(phone, cooldownKey, smsDelivered === true);
 
+    if (smsDelivered !== true) {
+      // The code was never delivered: drop it and tell the client plainly so it
+      // can offer password sign-in instead of waiting for an SMS that will not come.
+      await this.redis.del(this.otpKey(phone), this.attemptsKey(phone));
+      this.logger.warn(
+        `[AUTH] SMS not delivered | phone=${maskPhone(phone)} | domain=${domain}`,
+      );
+      throw new ServiceUnavailableException({
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+        code: 'SMS_DELIVERY_FAILED',
+        message: SMS_DELIVERY_FAILED_ERROR,
+      });
+    }
+
     this.logger.log(
       `[AUTH] OTP صادر شد | phone=${maskPhone(phone)} | domain=${domain} | smsDelivered=${smsDelivered} | ttl=${OTP_TTL_SECONDS}s`,
     );
@@ -275,7 +324,7 @@ export class AuthService {
    *   • ایجاد/بازیابی کاربر
    *   • صدور توکن امضاشده JWT و بازگرداندن سشن کامل
    */
-  async verifyOtp(dto: VerifyOtpDto, host?: string): Promise<AuthSessionDto> {
+  async verifyOtp(dto: VerifyOtpDto, host?: string, ctx: LoginContext = {}): Promise<AuthSessionDto | MfaChallenge> {
     const domain = this.resolveServiceDomain(dto.serviceDomain, host);
     const phone = dto.phone;
     const key = this.otpKey(phone);
@@ -316,9 +365,14 @@ export class AuthService {
       record.domain ?? domain,
     );
 
-    await this.applyOrganizationOnboarding(user, dto.organizationName);
+    const loginCtx = { ...ctx };
+    if (dto.inviteToken) {
+      loginCtx.tenantId = (await this.invitations.accept(user.id, dto.inviteToken)).tenantId;
+    } else {
+      await this.applyOrganizationOnboarding(user, dto.organizationName);
+    }
 
-    const session = await this.issueSessionForUser(user);
+    const session = await this.completeLogin(user, loginCtx);
 
     this.logger.log(
       `[AUTH] ورود موفق | phone=${maskPhone(phone)} | userId=${user.id}`,
@@ -328,50 +382,168 @@ export class AuthService {
   }
 
   /**
-   * ثبت‌اولیه سازمان برای کاربر بدون مستأجر.
-   *
-   * اگر کاربر هنوز به هیچ سازمانی متصل نباشد و نام سازمان داده شده باشد،
-   * سازمان جدید ساخته و کاربر به‌عنوان `OWNER` به آن متصل می‌شود. در صورت
-   * داشتن مستأجر، نام سازمان نادیده گرفته می‌شود. نقش سراسری کاربر هرگز
-   * `UserRole.ADMIN` نمی‌شود؛ اختیارات سازمانی فقط از `tenant_role` می‌آید.
+   * ثبت‌اولیه سازمان: فقط وقتی نام سازمان داده شده و کاربر هنوز عضو هیچ
+   * سازمانی نیست. (نام سازمان اختیاری است؛ کاربر می‌تواند بعداً سازمان بسازد.)
    */
   private async applyOrganizationOnboarding(
     user: UserEntity,
     organizationName?: string,
   ): Promise<void> {
-    if (user.tenantId || !organizationName) {
+    if (!organizationName) {
       return;
     }
-
-    const tenant = await this.tenantsService.create(organizationName);
-    user.tenantId = tenant.id;
-    user.tenantRole = TenantRole.OWNER;
-    await this.authRepository.save(user);
+    if ((await this.memberships.listForUser(user.id)).length > 0) {
+      return;
+    }
+    await this.organizations.create(user.id, organizationName);
   }
 
   /**
-   * صدور سشن JWT برای کاربر (مشترک میان ورود پیامکی و ورود Passkey/WebAuthn).
-   * منطق توکن فقط در یک نقطه متمرکز می‌ماند تا از تکرار و انحراف قرارداد
-   * جلوگیری شود (Rule #3 — AGENTS.md).
+   * Organisation a new session starts in: the requested one if the user is an
+   * ACTIVE member, else the last active one, else the first membership, else none.
    */
-  async issueSessionForUser(user: UserEntity): Promise<AuthSessionDto> {
+  private async pickTenant(user: UserEntity, requested?: string | null): Promise<string | null> {
+    const active = (await this.memberships.listForUser(user.id)).filter((m) => m.status === 'ACTIVE');
+    const ids = active.map((m) => m.tenantId);
+    if (requested && ids.includes(requested)) return requested;
+    if (user.tenantId && ids.includes(user.tenantId)) return user.tenantId;
+    return ids[0] ?? null;
+  }
+
+  /**
+   * Single place where a verified identity becomes a session. If the account
+   * has TOTP and no stronger factor was used (passkey), the caller gets a
+   * challenge to complete at POST /auth/login/mfa instead of tokens.
+   */
+  async completeLogin(
+    user: UserEntity,
+    ctx: LoginContext = {},
+    opts: { strongFactor?: boolean } = {},
+  ): Promise<AuthSessionDto | MfaChallenge> {
+    const strong = opts.strongFactor === true;
+    if (!strong && (await this.challenges.needsSecondFactor(user.id))) {
+      return this.challenges.create(user.id, ctx);
+    }
+    return this.finishLogin(user, ctx, strong);
+  }
+
+  /** Second step for TOTP accounts: challenge + code -> session. */
+  async verifyMfa(challenge: string, code: string): Promise<AuthSessionDto> {
+    const { userId, ctx } = await this.challenges.complete(challenge, code);
+    const user = await this.authRepository.findById(userId);
+    if (!user || !user.isActive) throw new UnauthorizedException('Sign-in failed.');
+    return this.finishLogin(user, ctx, true);
+  }
+
+  private async finishLogin(user: UserEntity, ctx: LoginContext, mfa: boolean): Promise<AuthSessionDto> {
+    const tenantId = await this.pickTenant(user, ctx.tenantId);
+    const deviceHash = sha256(ctx.userAgent ?? 'unknown');
+    const newDevice = await this.refreshTokens.isNewDevice(user.id, deviceHash);
+    const session = await this.issueSessionForUser(user, {
+      mfa,
+      meta: { tenantId, mfa, ip: ctx.ip ?? null, userAgent: ctx.userAgent ?? null, deviceHash, sessionStartedAt: new Date() },
+    });
+    await this.audit.record({
+      tenantId,
+      actorUserId: user.id,
+      action: newDevice ? 'auth.login.new_device' : 'auth.login',
+      metadata: { mfa },
+      request: { ip: ctx.ip, headers: { 'user-agent': ctx.userAgent } } as never,
+    });
+    const to = user.loginEmail ?? user.email;
+    if (newDevice && to) {
+      void this.mail.sendSecurityAlert(
+        to,
+        'New sign-in to your Roxira account',
+        `We noticed a sign-in from a new device (${ctx.userAgent?.slice(0, 80) ?? 'unknown'}, IP ${ctx.ip ?? 'unknown'}).\n\nIf this was you, no action is needed. If not, change your password and end unknown sessions under Settings > Security.`,
+      );
+    }
+    return session;
+  }
+
+  /**
+   * Sign the access token and issue the matching refresh token. The token only
+   * *selects* an organisation; AccessGuard re-verifies everything per request.
+   */
+  async issueSessionForUser(user: UserEntity, opts: IssueOptions = {}): Promise<AuthSessionDto> {
+    const familyId = opts.familyId ?? randomUUID();
+    const meta: SessionMeta = { ...opts.meta };
+    if (meta.tenantId === undefined) meta.tenantId = await this.pickTenant(user);
+    meta.mfa = opts.mfa ?? meta.mfa ?? false;
     const payload: JwtPayload = {
       sub: user.id,
       phone: user.phone,
       role: user.role,
       domain: user.serviceDomain,
-      tenantId: user.tenantId ?? null,
-      tenantRole: user.tenantRole ?? null,
+      tenantId: meta.tenantId ?? null,
+      tenantRole: null,
+      sid: familyId,
+      mfa: meta.mfa,
     };
+    if (payload.tenantId) {
+      const m = await this.memberships.findByTenantUser(payload.tenantId, user.id);
+      payload.tenantRole = m?.roleKey === 'owner' ? 'OWNER' : m ? 'MEMBER' : null;
+    }
 
     const accessToken = await this.jwtService.signAsync(payload);
+    const refresh = await this.refreshTokens.issue(user, familyId, meta);
 
     return {
       tokenType: 'Bearer',
       accessToken,
-      expiresIn: this.expiresInSeconds(),
+      expiresIn: this.expiresInSeconds(accessToken),
+      refreshToken: refresh.token,
+      refreshExpiresIn: refresh.expiresIn,
       user: AuthUserDto.fromEntity(user),
     };
+  }
+
+  /**
+   * Rotate a refresh token: the old one is revoked, a new access + refresh
+   * pair is issued in the same session, keeping its organisation and 2FA flag.
+   * Inactive users lose their session here.
+   */
+  async refreshSession(refreshToken: string, ctx: LoginContext = {}): Promise<AuthSessionDto> {
+    const { userId, familyId, meta } = await this.refreshTokens.consume(refreshToken);
+    const user = await this.authRepository.findById(userId);
+    if (!user || !user.isActive) {
+      await this.refreshTokens.revokeAllForUser(userId);
+      throw new UnauthorizedException(REFRESH_INVALID_ERROR);
+    }
+    const tenantId = await this.pickTenant(user, meta.tenantId);
+    return this.issueSessionForUser(user, {
+      familyId,
+      mfa: meta.mfa,
+      meta: { ...meta, tenantId, ip: ctx.ip ?? meta.ip, userAgent: ctx.userAgent ?? meta.userAgent },
+    });
+  }
+
+  /** Re-point the current session at another organisation the user belongs to and sign a new access token. */
+  async switchTenant(
+    claims: { sub: string; sid?: string; mfa?: boolean },
+    tenantId: string,
+    request?: Parameters<AuditService['record']>[0]['request'],
+  ): Promise<{ accessToken: string; expiresIn: number; tenantId: string }> {
+    await this.sessions.switchTenant(claims.sub, claims.sid, tenantId, request);
+    const user = await this.authRepository.findById(claims.sub);
+    if (!user || !user.isActive) throw new UnauthorizedException('Sign in again.');
+    const m = await this.memberships.findByTenantUser(tenantId, user.id);
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      phone: user.phone,
+      role: user.role,
+      domain: user.serviceDomain,
+      tenantId,
+      tenantRole: m?.roleKey === 'owner' ? 'OWNER' : 'MEMBER',
+      sid: claims.sid,
+      mfa: claims.mfa === true,
+    });
+    return { accessToken, expiresIn: this.expiresInSeconds(accessToken), tenantId };
+  }
+
+  /** Server-side logout: revoke the refresh-token family (idempotent). */
+  async logout(refreshToken: string): Promise<void> {
+    await this.refreshTokens.revoke(refreshToken);
   }
 
   /** دریافت سشن/پروفایل کاربر جاری بر اساس شناسه توکن. */
@@ -383,13 +555,14 @@ export class AuthService {
     return AuthUserDto.fromEntity(user);
   }
 
-  private expiresInSeconds(): number {
-    const configured = Number(
-      this.config.get<string>('JWT_EXPIRES_IN_SECONDS', ''),
-    );
-    if (Number.isFinite(configured) && configured > 0) {
-      return configured;
+  /** Lifetime of the token we just signed, read from its own claims. */
+  private expiresInSeconds(accessToken: string): number {
+    const claims = this.jwtService.decode(accessToken) as
+      | { exp?: number; iat?: number }
+      | null;
+    if (claims?.exp && claims.iat && claims.exp > claims.iat) {
+      return claims.exp - claims.iat;
     }
-    return JWT_DEFAULT_EXPIRES_IN_SECONDS;
+    return 900;
   }
 }

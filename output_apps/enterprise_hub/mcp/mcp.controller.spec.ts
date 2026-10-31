@@ -8,6 +8,7 @@ import {
 } from '../security/global-guards';
 import { JwtAuthGuard } from '../modules/auth/guards/jwt-auth.guard';
 import { UserRole } from '../modules/auth/enums/user-role.enum';
+import { accessTestProviders } from '../test/support/access-stub';
 import { McpController } from './mcp.controller';
 import { McpHttpHandler } from './mcp-http.handler';
 
@@ -20,6 +21,8 @@ const SECRET = 'fake-secret-for-mcp-spec-x';
  * می‌گیرد و توکن معتبر به هندلر MCP با همان مستأجر می‌رسد. هندلر واقعی SDK
  * mock می‌شود تا آزمون به اجرای واقعی پروتکل وابسته نباشد.
  */
+const { stub, providers: accessProviders } = accessTestProviders();
+
 describe('McpController (auth + tenant isolation)', () => {
   let app: INestApplication;
   let jwt: JwtService;
@@ -36,9 +39,11 @@ describe('McpController (auth + tenant isolation)', () => {
       providers: [
         { provide: McpHttpHandler, useValue: handler },
         JwtAuthGuard,
+        ...accessProviders,
         ...GLOBAL_GUARD_PROVIDERS,
       ],
     }).compile();
+    stub.grant('u1', 'tenant-1', 'owner');
 
     app = moduleRef.createNestApplication();
     await app.init();

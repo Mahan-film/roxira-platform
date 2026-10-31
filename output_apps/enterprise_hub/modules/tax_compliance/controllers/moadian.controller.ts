@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
   Body,
   Controller,
@@ -12,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
-import { requireTenantAdmin, requireTenantId } from '../../tenants/tenant-context';
+import { requireTenantId } from '../../tenants/tenant-context';
 import {
   MoadianCredentialResponseDto,
   MoadianSubmissionResponseDto,
@@ -25,15 +27,16 @@ import { MoadianService } from '../services/moadian.service';
  * شناسه مستأجر فقط از claim تأییدشده JWT خوانده می‌شود (Rule #4 - AGENTS.md).
  */
 @ApiTags('Tax Compliance - اتصال زنده سامانه مودیان')
+@ModuleAccess(AccessModule.TAX)
 @Controller('enterprise-hub/tax-compliance/moadian')
 export class MoadianController {
   constructor(private readonly moadianService: MoadianService) {}
 
   private tenantIdOf(request: AuthenticatedRequest): string {
-    requireTenantAdmin(request);
     return requireTenantId(request);
   }
 
+  @RequireAction(AccessAction.ADMIN)
   @Put('credentials')
   @ApiOperation({
     summary: 'ثبت/جایگزینی شناسه حافظه، گواهی و کلید خصوصی مودیان',
@@ -54,6 +57,7 @@ export class MoadianController {
     return this.moadianService.getCredential(this.tenantIdOf(request));
   }
 
+  @RequireAction(AccessAction.POST)
   @Post('invoices/:invoiceId/submit')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'ارسال صورتحساب به سامانه مودیان (صف BullMQ)' })

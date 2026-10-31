@@ -1,16 +1,11 @@
 import {
   Body,
   Controller,
-  Delete,
   ForbiddenException,
   Get,
-  HttpCode,
   HttpStatus,
-  Param,
   Patch,
-  Post,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -18,21 +13,14 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import {
-  AuthenticatedRequest,
-  JwtAuthGuard,
-} from '../../auth/guards/jwt-auth.guard';
-import { AddTenantMemberDto } from '../dto/add-tenant-member.dto';
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { AnyMember, ModuleAccess, RequireAction } from '../../access/decorators';
+import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { TenantMeResponseDto } from '../dto/tenant-me-response.dto';
-import { TenantMemberResponseDto } from '../dto/tenant-member-response.dto';
 import { UpdateTenantSettingsDto } from '../dto/update-tenant-settings.dto';
 import { TenantRole } from '../enums/tenant-role.enum';
 import { TenantsService } from '../services/tenants.service';
-import {
-  requireTenantAdmin,
-  requireTenantId,
-  requireTenantOwner,
-} from '../tenant-context';
+import { requireTenantId } from '../tenant-context';
 
 /** تبدیل claim متنی توکن به نقش سازمانی شناخته‌شده (یا null). */
 function toTenantRole(value: string | null | undefined): TenantRole | null {
@@ -52,16 +40,17 @@ function toTenantRole(value: string | null | undefined): TenantRole | null {
  * (Rule #2 و Rule #3 - AGENTS.md).
  *
  * شناسه مستأجر «تنها» از claim تأییدشده JWT خوانده می‌شود (`requireTenantId`)
- * و عملیات مدیریت اعضا فقط برای مالک سازمان (`requireTenantOwner`) مجاز است —
- * هرگز از بدنه/کوئری/هدر درخواست (Rule #4 - AGENTS.md).
+ * و دسترسی را AccessGuard از روی نقش تعیین می‌کند. مدیریت اعضا در `/org/members`
+ * (ماژول access) است؛ هرگز از بدنه/کوئری/هدر درخواست (Rule #4 - AGENTS.md).
  */
 @ApiTags('Tenants - سازمان و اعضا')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@ModuleAccess(AccessModule.MEMBERS)
 @Controller('tenants')
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 
+  @AnyMember()
   @Get('me')
   @ApiOperation({ summary: 'دریافت سازمان جاری کاربر' })
   @ApiResponse({ status: HttpStatus.OK, type: TenantMeResponseDto })
@@ -78,6 +67,7 @@ export class TenantsController {
     );
   }
 
+  @RequireAction(AccessAction.ADMIN)
   @Patch('me/settings')
   @ApiOperation({ summary: 'به‌روزرسانی تنظیمات سازمان (نرخ پیش‌فرض VAT)' })
   @ApiResponse({ status: HttpStatus.OK, type: TenantMeResponseDto })
@@ -87,57 +77,10 @@ export class TenantsController {
     @Body() dto: UpdateTenantSettingsDto,
   ): Promise<TenantMeResponseDto> {
     const tenantId = requireTenantId(request);
-    requireTenantAdmin(request);
     const tenant = await this.tenantsService.updateSettings(tenantId, dto);
     return TenantMeResponseDto.fromEntity(
       tenant,
       toTenantRole(request.user?.tenantRole),
-    );
-  }
-
-  @Get('members')
-  @ApiOperation({ summary: 'فهرست اعضای سازمان (فقط مالک)' })
-  @ApiResponse({ status: HttpStatus.OK, type: [TenantMemberResponseDto] })
-  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'فقط مالک سازمان مجاز است' })
-  async listMembers(
-    @Req() request: AuthenticatedRequest,
-  ): Promise<TenantMemberResponseDto[]> {
-    const tenantId = requireTenantId(request);
-    requireTenantOwner(request);
-    const members = await this.tenantsService.listMembers(tenantId);
-    return members.map(TenantMemberResponseDto.fromEntity);
-  }
-
-  @Post('members')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'افزودن عضو به سازمان (فقط مالک)' })
-  @ApiResponse({ status: HttpStatus.CREATED, type: TenantMemberResponseDto })
-  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'شماره عضو سازمان دیگری است' })
-  async addMember(
-    @Req() request: AuthenticatedRequest,
-    @Body() dto: AddTenantMemberDto,
-  ): Promise<TenantMemberResponseDto> {
-    const tenantId = requireTenantId(request);
-    requireTenantOwner(request);
-    const member = await this.tenantsService.addMember(tenantId, dto);
-    return TenantMemberResponseDto.fromEntity(member);
-  }
-
-  @Delete('members/:userId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'حذف عضو از سازمان (فقط مالک)' })
-  @ApiResponse({ status: HttpStatus.NO_CONTENT, description: 'عضو حذف شد' })
-  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'فقط مالک سازمان مجاز است' })
-  async removeMember(
-    @Req() request: AuthenticatedRequest,
-    @Param('userId') userId: string,
-  ): Promise<void> {
-    const tenantId = requireTenantId(request);
-    requireTenantOwner(request);
-    await this.tenantsService.removeMember(
-      tenantId,
-      userId,
-      request.user?.sub ?? '',
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { ForbiddenException } from '@nestjs/common';
+import { requestWithAccess } from '../../test/support/access-stub';
 import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from '../auth/enums/user-role.enum';
 import { InvoiceStatus } from '../invoicing/enums/invoice-status.enum';
@@ -9,8 +10,8 @@ import {
   AssistantToolsService,
 } from './services/assistant-tools.service';
 
-const requestWith = (user: unknown): AuthenticatedRequest =>
-  ({ user }) as unknown as AuthenticatedRequest;
+const requestWith = (user: Record<string, unknown>): AuthenticatedRequest =>
+  requestWithAccess(user);
 
 const TENANT_ID = 'tenant-a';
 const OTHER_TENANT = 'tenant-b';
@@ -128,7 +129,7 @@ describe('AssistantToolsService (tenant scoping)', () => {
       data: [{ sku: 'A', name: 'پیچ', quantity: 2, minQuantity: 10 }],
       total: 1,
     });
-    const out = await service.run(member, 'inventory_low_stock', {
+    const out = await service.run(owner, 'inventory_low_stock', {
       ...HOSTILE,
       limit: 999,
     });
@@ -144,7 +145,7 @@ describe('AssistantToolsService (tenant scoping)', () => {
   });
 
   it('inventory_list_warehouses uses the JWT tenant', async () => {
-    await service.run(member, 'inventory_list_warehouses', HOSTILE);
+    await service.run(owner, 'inventory_list_warehouses', HOSTILE);
     expect(inventoryService.listWarehouses).toHaveBeenCalledWith(TENANT_ID);
   });
 
@@ -170,11 +171,19 @@ describe('AssistantToolsService (tenant scoping)', () => {
     mcpTools.accountingTrialBalance.mockRejectedValueOnce(
       new ForbiddenException('دسترسی مدیریتی سازمان لازم است.'),
     );
-    const out = await service.run(member, 'accounting_trial_balance', {});
+    const out = await service.run(owner, 'accounting_trial_balance', {});
     expect(out).toEqual({
       ok: false,
       result: { error: 'دسترسی مدیریتی سازمان لازم است.' },
     });
+  });
+
+  it('a legacy member only gets the modules their role has (no inventory, no accounting)', async () => {
+    for (const name of ['inventory_low_stock', 'inventory_list_items', 'accounting_trial_balance']) {
+      const out = await service.run(member, name, {});
+      expect(out.ok).toBe(false);
+    }
+    expect(inventoryService.listStockItems).not.toHaveBeenCalled();
   });
 
   it('rejects unknown tools', async () => {

@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
   Body,
   Controller,
@@ -13,7 +15,6 @@ import {
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import {
-  requireTenantAdmin,
   requireTenantId,
 } from '../../tenants/tenant-context';
 import { AccountLedgerResponseDto } from '../dto/account-ledger-response.dto';
@@ -44,18 +45,18 @@ import { AccountingService } from '../services/accounting.service';
  * پایگاه‌داده در این لایه وجود ندارد (Rule #3 — AGENTS.md).
  *
  * شناسه مستأجر «تنها» از claim تأییدشده JWT خوانده می‌شود (`requireTenantId`)
- * و دسترسی مدیریتی با `requireTenantAdmin` بررسی می‌شود؛ هرگز از بدنه/کوئری/هدر
+ * و دسترسی بر اساس نقش با AccessGuard بررسی می‌شود؛ هرگز از بدنه/کوئری/هدر
  * درخواست (Rule #4 - AGENTS.md). احراز هویت از طریق گارد سراسری JwtAuthGuard
  * اعمال می‌شود.
  */
 @ApiTags('Accounting - حسابداری و دفتر روزنامه')
+@ModuleAccess(AccessModule.ACCOUNTING)
 @Controller('enterprise-hub/accounting')
 export class AccountingController {
   constructor(private readonly accountingService: AccountingService) {}
 
   /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
   private tenantIdOf(request: AuthenticatedRequest): string {
-    requireTenantAdmin(request);
     return requireTenantId(request);
   }
 
@@ -85,6 +86,7 @@ export class AccountingController {
     return this.accountingService.createAccount(this.tenantIdOf(request), dto);
   }
 
+  @RequireAction(AccessAction.POST)
   @Post('journal-entries')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -105,6 +107,7 @@ export class AccountingController {
     );
   }
 
+  @RequireAction(AccessAction.POST)
   @Post('journal-entries/:id/reverse')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -138,6 +141,7 @@ export class AccountingController {
     return this.accountingService.listPeriodLocks(this.tenantIdOf(request));
   }
 
+  @RequireAction(AccessAction.POST)
   @Post('period-locks')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -154,6 +158,7 @@ export class AccountingController {
     return this.accountingService.lockPeriod(tenantId, this.actorOf(request), dto);
   }
 
+  @RequireAction(AccessAction.ADMIN)
   @Post('period-locks/:id/unlock')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

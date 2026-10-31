@@ -23,6 +23,10 @@ export interface JwtPayload {
   tenantId?: string | null;
   /** نقش کاربر درون سازمان یا null (برای توکن‌های قدیمی: null). */
   tenantRole?: string | null;
+  /** Session id (refresh-token family). Lets the server end a session immediately. */
+  sid?: string;
+  /** True when this session passed a second factor (TOTP or passkey). */
+  mfa?: boolean;
   iat?: number;
   exp?: number;
 }

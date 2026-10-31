@@ -52,4 +52,12 @@ export class VerifyOtpDto {
   @IsString()
   @Length(2, 150)
   organizationName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Invitation token: joins that organisation instead of creating one. No organisation name needed.',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(20, 200)
+  inviteToken?: string;
 }

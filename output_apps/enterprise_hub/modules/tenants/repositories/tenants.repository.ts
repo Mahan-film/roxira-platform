@@ -44,4 +44,13 @@ export class TenantsRepository {
     await this.repository.update({ id }, { defaultVatRate });
     return this.findById(id);
   }
+
+  async updateRequire2fa(id: string, require2fa: boolean): Promise<void> {
+    await this.repository.update({ id }, { require2fa });
+  }
+
+  /** Platform-operator listing (entitlements screen only; never exposed to tenants). */
+  listAll(): Promise<TenantEntity[]> {
+    return this.repository.find({ order: { name: 'ASC' }, take: 500 });
+  }
 }

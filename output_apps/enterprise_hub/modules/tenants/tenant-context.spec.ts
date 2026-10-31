@@ -1,12 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
-import { UserRole } from '../auth/enums/user-role.enum';
-import {
-  requireTenantAdmin,
-  requireTenantId,
-  requireTenantOwner,
-} from './tenant-context';
-import { TenantRole } from './enums/tenant-role.enum';
+import { requireTenantId } from './tenant-context';
 
 const requestWith = (user: unknown): AuthenticatedRequest =>
   ({ user }) as unknown as AuthenticatedRequest;
@@ -38,69 +32,5 @@ describe('requireTenantId', () => {
     expect(() => requireTenantId(requestWith(undefined))).toThrow(
       ForbiddenException,
     );
-  });
-});
-
-describe('requireTenantOwner', () => {
-  it('allows the tenant OWNER', () => {
-    expect(() =>
-      requireTenantOwner(
-        requestWith({ tenantId: 'tenant-1', tenantRole: TenantRole.OWNER }),
-      ),
-    ).not.toThrow();
-  });
-
-  it('denies a plain MEMBER', () => {
-    expect(() =>
-      requireTenantOwner(
-        requestWith({ tenantId: 'tenant-1', tenantRole: TenantRole.MEMBER }),
-      ),
-    ).toThrow(ForbiddenException);
-  });
-
-  it('denies a user with no tenant role claim', () => {
-    expect(() => requireTenantOwner(requestWith({ tenantId: 'tenant-1' }))).toThrow(
-      ForbiddenException,
-    );
-  });
-});
-
-describe('requireTenantAdmin', () => {
-  it('allows a platform ADMIN', () => {
-    expect(() =>
-      requireTenantAdmin(
-        requestWith({ tenantId: 'tenant-1', role: UserRole.ADMIN }),
-      ),
-    ).not.toThrow();
-  });
-
-  it('allows the tenant OWNER even without a platform role', () => {
-    expect(() =>
-      requireTenantAdmin(
-        requestWith({
-          tenantId: 'tenant-1',
-          role: UserRole.USER,
-          tenantRole: TenantRole.OWNER,
-        }),
-      ),
-    ).not.toThrow();
-  });
-
-  it('denies a plain MEMBER', () => {
-    expect(() =>
-      requireTenantAdmin(
-        requestWith({
-          tenantId: 'tenant-1',
-          role: UserRole.USER,
-          tenantRole: TenantRole.MEMBER,
-        }),
-      ),
-    ).toThrow(ForbiddenException);
-  });
-
-  it('denies a user with no role claims at all', () => {
-    expect(() =>
-      requireTenantAdmin(requestWith({ tenantId: 'tenant-1' })),
-    ).toThrow(ForbiddenException);
   });
 });

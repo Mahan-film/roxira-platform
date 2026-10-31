@@ -802,18 +802,14 @@ describe('Moadian — tenant isolation', () => {
     );
   });
 
-  it('controller requires a tenant admin and reads the tenant only from the JWT', async () => {
+  it('controller reads the tenant only from the verified request user', async () => {
     const { service } = buildMoadian();
     const controller = new MoadianController(service);
     const requestWith = (user: unknown) => ({ user }) as unknown as AuthenticatedRequest;
 
+    // Who may call is decided by AccessGuard (see permission-matrix.spec); here only the tenant source.
     await expect(
       controller.getCredential(requestWith({ tenantId: null, role: UserRole.ADMIN })),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(
-      controller.getCredential(
-        requestWith({ tenantId: TENANT_A, role: UserRole.USER, tenantRole: TenantRole.MEMBER }),
-      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     const owner = requestWith({ tenantId: TENANT_A, role: UserRole.USER, tenantRole: TenantRole.OWNER });

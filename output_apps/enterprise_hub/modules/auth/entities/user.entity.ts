@@ -22,10 +22,34 @@ export class UserEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** شماره همراه ایران به شکل استاندارد 09xxxxxxxxx (یکتا). */
+  /**
+   * شماره همراه ایران به شکل استاندارد 09xxxxxxxxx (یکتا). NULL برای حساب‌هایی
+   * که با ایمیل/نام‌کاربری و رمز عبور ساخته شده‌اند (مثلاً roxira.net).
+   */
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 11 })
-  phone: string;
+  @Column({ type: 'varchar', length: 11, nullable: true })
+  phone: string | null;
+
+  /** Lowercase login name for password sign-in (unique, optional). */
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 32, name: 'username', nullable: true })
+  username: string | null;
+
+  /** Organisation that created this staff account and may reset its password; NULL for self-registered users. */
+  @Column({ type: 'uuid', name: 'managed_by_tenant_id', nullable: true })
+  managedByTenantId: string | null;
+
+  /** Lowercase email used to sign in and to receive password resets (unique, optional). */
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 254, name: 'login_email', nullable: true })
+  loginEmail: string | null;
+
+  /** scrypt hash (`scrypt$N$r$p$salt$hash`); NULL when the user only uses SMS/passkey. */
+  @Column({ type: 'text', name: 'password_hash', nullable: true, select: false })
+  passwordHash: string | null;
+
+  @Column({ type: 'timestamp', name: 'password_updated_at', nullable: true })
+  passwordUpdatedAt: Date | null;
 
   @Column({ type: 'varchar', length: 120, nullable: true })
   displayName: string | null;

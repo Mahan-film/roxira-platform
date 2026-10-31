@@ -10,6 +10,8 @@ import {
   StatCard,
   loadErrorMessage,
 } from "@/components/app/app-ui";
+import { useAccess } from "@/components/app/access-provider";
+import { PasswordSettingsCard } from "@/components/auth/password-settings-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTrialBalance } from "@/lib/api/accounting-client";
 import { getLeadStats } from "@/lib/api/crm-client";
@@ -32,9 +34,11 @@ function emptySlice<T>(): Slice<T> {
   return { data: null, error: null, loading: true };
 }
 
-function useSlice<T>(load: (signal: AbortSignal) => Promise<T>): Slice<T> {
+function useSlice<T>(load: (signal: AbortSignal) => Promise<T>, enabled = true): Slice<T> {
   const [slice, setSlice] = useState<Slice<T>>(emptySlice<T>());
   useEffect(() => {
+    // A module the organisation lacks (or the role cannot read) is neither fetched nor shown.
+    if (!enabled) return;
     const controller = new AbortController();
     load(controller.signal)
       .then((data) => setSlice({ data, error: null, loading: false }))
@@ -45,7 +49,7 @@ function useSlice<T>(load: (signal: AbortSignal) => Promise<T>): Slice<T> {
     return () => controller.abort();
     // `load` is a stable module-level function in every call site below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled]);
   return slice;
 }
 
@@ -73,16 +77,22 @@ function Section({
 }
 
 export default function SuiteDashboardPage() {
-  const crm = useSlice<LeadStats>((s) => getLeadStats(s));
-  const hr = useSlice<HrStats>((s) => getHrStats(s));
-  const inventory = useSlice<FifoValuationResponse>((s) => getFifoValuation(s));
-  const accounting = useSlice<TrialBalanceResponse>((s) => getTrialBalance(s));
+  const { can } = useAccess();
+  const showCrm = can("crm");
+  const showHr = can("hr");
+  const showInventory = can("inventory");
+  const showAccounting = can("accounting");
+  const crm = useSlice<LeadStats>((s) => getLeadStats(s), showCrm);
+  const hr = useSlice<HrStats>((s) => getHrStats(s), showHr);
+  const inventory = useSlice<FifoValuationResponse>((s) => getFifoValuation(s), showInventory);
+  const accounting = useSlice<TrialBalanceResponse>((s) => getTrialBalance(s), showAccounting);
 
   const allEmpty =
-    !crm.loading &&
-    !hr.loading &&
-    !inventory.loading &&
-    !accounting.loading &&
+    can("data_import", "create") &&
+    (!showCrm || !crm.loading) &&
+    (!showHr || !hr.loading) &&
+    (!showInventory || !inventory.loading) &&
+    (!showAccounting || !accounting.loading) &&
     (crm.data?.totalLeads ?? 0) === 0 &&
     (hr.data?.totalEmployees ?? 0) === 0 &&
     (inventory.data?.itemCount ?? 0) === 0 &&
@@ -114,97 +124,107 @@ export default function SuiteDashboardPage() {
         </Link>
       )}
 
-      <Section title="مشتریان (CRM)" slice={crm}>
-        <StatCard
-          label="کل سرنخ‌ها"
-          value={formatNumber(crm.data?.totalLeads)}
-          href="/app/crm"
-        />
-        <StatCard
-          label="سرنخ‌های باز"
-          value={formatNumber(crm.data?.openLeads)}
-          href="/app/crm"
-        />
-        <StatCard
-          label="ارزش فرصت‌های باز"
-          value={formatMoneyRial(crm.data?.openPipelineValue)}
-          href="/app/crm"
-        />
-        <StatCard
-          label="درآمد تحقق‌یافته"
-          value={formatMoneyRial(crm.data?.wonRevenue)}
-          href="/app/crm"
-        />
-      </Section>
+      {showCrm && (
+        <Section title="مشتریان (CRM)" slice={crm}>
+          <StatCard
+            label="کل سرنخ‌ها"
+            value={formatNumber(crm.data?.totalLeads)}
+            href="/app/crm"
+          />
+          <StatCard
+            label="سرنخ‌های باز"
+            value={formatNumber(crm.data?.openLeads)}
+            href="/app/crm"
+          />
+          <StatCard
+            label="ارزش فرصت‌های باز"
+            value={formatMoneyRial(crm.data?.openPipelineValue)}
+            href="/app/crm"
+          />
+          <StatCard
+            label="درآمد تحقق‌یافته"
+            value={formatMoneyRial(crm.data?.wonRevenue)}
+            href="/app/crm"
+          />
+        </Section>
+      )}
 
-      <Section title="کارکنان (HR)" slice={hr}>
-        <StatCard
-          label="کل کارکنان"
-          value={formatNumber(hr.data?.totalEmployees)}
-          href="/app/hr"
-        />
-        <StatCard
-          label="فعال"
-          value={formatNumber(hr.data?.activeEmployees)}
-          href="/app/hr"
-        />
-        <StatCard
-          label="قراردادهای فعال"
-          value={formatNumber(hr.data?.activeContracts)}
-          href="/app/hr"
-        />
-        <StatCard
-          label="جمع حقوق پایه"
-          value={formatMoneyRial(hr.data?.totalBaseSalary)}
-          href="/app/hr"
-        />
-      </Section>
+      {showHr && (
+        <Section title="کارکنان (HR)" slice={hr}>
+          <StatCard
+            label="کل کارکنان"
+            value={formatNumber(hr.data?.totalEmployees)}
+            href="/app/hr"
+          />
+          <StatCard
+            label="فعال"
+            value={formatNumber(hr.data?.activeEmployees)}
+            href="/app/hr"
+          />
+          <StatCard
+            label="قراردادهای فعال"
+            value={formatNumber(hr.data?.activeContracts)}
+            href="/app/hr"
+          />
+          <StatCard
+            label="جمع حقوق پایه"
+            value={formatMoneyRial(hr.data?.totalBaseSalary)}
+            href="/app/hr"
+          />
+        </Section>
+      )}
 
-      <Section title="کالا و انبار" slice={inventory}>
-        <StatCard
-          label="تعداد کالا"
-          value={formatNumber(inventory.data?.itemCount)}
-          href="/app/inventory"
-        />
-        <StatCard
-          label="کالاهای زیر حد کسری"
-          value={formatNumber(inventory.data?.lowStockCount)}
-          href="/app/inventory"
-        />
-        <StatCard
-          label="ارزش موجودی (FIFO)"
-          value={formatMoneyRial(inventory.data?.totalInventoryValue)}
-          href="/app/inventory"
-        />
-        <StatCard
-          label="دسته‌های باز"
-          value={formatNumber(inventory.data?.totalOpenBatches)}
-          href="/app/inventory"
-        />
-      </Section>
+      {showInventory && (
+        <Section title="کالا و انبار" slice={inventory}>
+          <StatCard
+            label="تعداد کالا"
+            value={formatNumber(inventory.data?.itemCount)}
+            href="/app/inventory"
+          />
+          <StatCard
+            label="کالاهای زیر حد کسری"
+            value={formatNumber(inventory.data?.lowStockCount)}
+            href="/app/inventory"
+          />
+          <StatCard
+            label="ارزش موجودی (FIFO)"
+            value={formatMoneyRial(inventory.data?.totalInventoryValue)}
+            href="/app/inventory"
+          />
+          <StatCard
+            label="دسته‌های باز"
+            value={formatNumber(inventory.data?.totalOpenBatches)}
+            href="/app/inventory"
+          />
+        </Section>
+      )}
 
-      <Section title="حساب‌ها" slice={accounting}>
-        <StatCard
-          label="حساب‌های دارای گردش"
-          value={formatNumber(accounting.data?.rows.length)}
-          href="/app/accounting"
-        />
-        <StatCard
-          label="جمع بدهکار"
-          value={formatMoneyRial(accounting.data?.totalDebit)}
-          href="/app/accounting"
-        />
-        <StatCard
-          label="جمع بستانکار"
-          value={formatMoneyRial(accounting.data?.totalCredit)}
-          href="/app/accounting"
-        />
-        <StatCard
-          label="وضعیت تراز"
-          value={accounting.data?.balanced ? "تراز است" : "تراز نیست"}
-          href="/app/accounting"
-        />
-      </Section>
+      {showAccounting && (
+        <Section title="حساب‌ها" slice={accounting}>
+          <StatCard
+            label="حساب‌های دارای گردش"
+            value={formatNumber(accounting.data?.rows.length)}
+            href="/app/accounting"
+          />
+          <StatCard
+            label="جمع بدهکار"
+            value={formatMoneyRial(accounting.data?.totalDebit)}
+            href="/app/accounting"
+          />
+          <StatCard
+            label="جمع بستانکار"
+            value={formatMoneyRial(accounting.data?.totalCredit)}
+            href="/app/accounting"
+          />
+          <StatCard
+            label="وضعیت تراز"
+            value={accounting.data?.balanced ? "تراز است" : "تراز نیست"}
+            href="/app/accounting"
+          />
+        </Section>
+      )}
+
+      <PasswordSettingsCard locale="fa" />
     </>
   );
 }

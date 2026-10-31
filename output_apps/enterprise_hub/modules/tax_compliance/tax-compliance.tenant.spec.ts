@@ -456,20 +456,6 @@ describe('TaxComplianceController — tenant access rules', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('denies a plain MEMBER (403)', async () => {
-    const { controller, signatureId } = await setup();
-
-    await expect(
-      controller.findOne(
-        requestWith({
-          tenantId: 'tenant-a',
-          role: UserRole.USER,
-          tenantRole: TenantRole.MEMBER,
-        }),
-        signatureId,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
 
   it('allows the platform ADMIN of the owning tenant', async () => {
     const { controller, signatureId } = await setup();

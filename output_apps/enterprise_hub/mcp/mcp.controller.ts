@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../modules/access/catalogue';
+import { ModuleAccess, RequireAction } from '../modules/access/decorators';
 import {
   Controller,
   Delete,
@@ -31,10 +33,12 @@ import { McpHttpHandler } from './mcp-http.handler';
  */
 @ApiTags('MCP - پروتکل زمینه مدل (ابزارهای سازمانی)')
 @ApiBearerAuth()
+@ModuleAccess(AccessModule.ASSISTANT)
 @Controller('enterprise-hub/mcp')
 export class McpController {
   constructor(private readonly handler: McpHttpHandler) {}
 
+  @RequireAction(AccessAction.READ)
   @Post()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

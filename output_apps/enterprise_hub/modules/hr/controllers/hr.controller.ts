@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
   BadRequestException,
   Body,
@@ -19,7 +21,6 @@ import {
 } from '@nestjs/swagger';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import {
-  requireTenantAdmin,
   requireTenantId,
 } from '../../tenants/tenant-context';
 import { CreateContractDto } from '../dto/create-contract.dto';
@@ -55,7 +56,7 @@ import { PayrollRunService } from '../services/payroll-run.service';
  * پایگاه‌داده در این لایه وجود ندارد (Rule #3 — AGENTS.md).
  *
  * شناسه مستأجر «تنها» از claim تأییدشده JWT خوانده می‌شود (`requireTenantId`)
- * و دسترسی مدیریتی با `requireTenantAdmin` بررسی می‌شود؛ هرگز از بدنه/کوئری/هدر
+ * و دسترسی بر اساس نقش با AccessGuard بررسی می‌شود؛ هرگز از بدنه/کوئری/هدر
  * درخواست (Rule #4 - AGENTS.md). تمام فراخوانی‌های سرویس با همان شناسه مستأجر
  * انجام می‌شود تا سند خودکار حقوق نیز در دفتر همان سازمان ثبت گردد.
  */
@@ -78,6 +79,7 @@ export function parseOptionalId(raw?: string): number | undefined {
 }
 
 @ApiTags('HR - منابع انسانی و حقوق و دستمزد')
+@ModuleAccess(AccessModule.HR)
 @Controller('enterprise-hub/hr')
 export class HrController {
   constructor(
@@ -87,7 +89,6 @@ export class HrController {
 
   /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
   private tenantIdOf(request: AuthenticatedRequest): string {
-    requireTenantAdmin(request);
     return requireTenantId(request);
   }
 
@@ -289,6 +290,7 @@ export class HrController {
     return this.payrollRunService.findRun(this.tenantIdOf(request), id);
   }
 
+  @RequireAction(AccessAction.POST)
   @Post('payroll-runs/:id/post')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'ثبت سند حسابداری تراز اجرای حقوق و قفل آن' })
@@ -301,6 +303,7 @@ export class HrController {
     return this.payrollRunService.postRun(this.tenantIdOf(request), id);
   }
 
+  @RequireAction(AccessAction.EXPORT)
   @Get('payroll-runs/:id/insurance-list')
   @ApiOperation({
     summary: 'لیست بیمه تأمین اجتماعی (DSKKAR00 / DSKWOR00، متن CSV)',

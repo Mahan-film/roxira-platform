@@ -7,6 +7,7 @@ import {
   globalThrottlerModule,
 } from '../../../security/global-guards';
 import { UserRole } from '../../auth/enums/user-role.enum';
+import { accessTestProviders } from '../../../test/support/access-stub';
 import { INQUIRY_THROTTLE } from '../constants/inquiries.constants';
 import { InquiriesService } from '../services/inquiries.service';
 import { InquiriesController } from './inquiries.controller';
@@ -34,6 +35,7 @@ describe('InquiriesController (rate limit + admin listing)', () => {
             }),
           },
         },
+        ...accessTestProviders().providers,
         ...GLOBAL_GUARD_PROVIDERS,
       ],
     }).compile();

@@ -19,12 +19,16 @@ import { Label } from "@/components/ui/label";
 import {
   type AuthServiceDomain,
   type AuthSession,
+  type UiLocale,
   type UserRole,
+  isMfaChallenge,
   sendOtp as sendEnterpriseOtp,
   verifyOtp as verifyEnterpriseOtp,
 } from "@/lib/api/auth-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { EmailAuthPanel } from "@/components/auth/email-auth-panel";
+import { MfaCodeForm } from "@/components/auth/mfa-code-form";
+import { PasswordAuthPanel } from "@/components/auth/password-auth-panel";
 import {
   type JudgeAuthSession,
   JudgeAuthError,
@@ -41,6 +45,8 @@ import { cn } from "@/lib/utils";
 /** Minimum wait before the user may request another code. */
 const RESEND_COOLDOWN_SECONDS = 60;
 /** Dev-only OTP echo box; never rendered in production builds. */
+const SMS_FAILED_COPY =
+  "ارسال پیامک ممکن نشد. با رمز عبور وارد شوید یا چند دقیقه بعد دوباره تلاش کنید.";
 const NETWORK_ERROR_COPY = "اتصال به سرور برقرار نشد. اینترنت خود را بررسی کنید یا چند لحظه بعد دوباره تلاش کنید.";
 
 /**
@@ -88,8 +94,12 @@ interface LoginModalProps {
   onClose: () => void;
   onAuthenticated: (session: AuthSession) => void;
   serviceDomain?: AuthServiceDomain;
+  /** "en" = roxira.net: English, email + password only (no Iranian SMS). */
+  locale?: UiLocale;
   title?: string;
   description?: string;
+  /** "signup" opens the password tab on the sign-up form. */
+  authMode?: "login" | "signup";
 }
 
 /**
@@ -113,10 +123,16 @@ export function LoginModal({
   onClose,
   onAuthenticated,
   serviceDomain,
-  title = "ورود به سامانه",
-  description = "شماره همراه خود را وارد کنید؛ کد تأیید ۶ رقمی پیامک می‌شود.",
+  authMode,
+  locale = "fa",
+  title = locale === "en" ? "Sign in" : "ورود به سامانه",
+  description = locale === "en"
+    ? "Sign in or create an account with your email and a password."
+    : "شماره همراه خود را وارد کنید؛ کد تأیید ۶ رقمی پیامک می‌شود.",
 }: LoginModalProps) {
   const [step, setStep] = useState<"phone" | "code">("phone");
+  /** Set when the account has an authenticator app and needs a code after the SMS code. */
+  const [mfaChallenge, setMfaChallenge] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -129,7 +145,9 @@ export function LoginModal({
   const [networkFailed, setNetworkFailed] = useState(false);
   const [organizationName, setOrganizationName] = useState("");
   /** Sign-in method tab. The e-mail tab only exists when the server has SMTP configured. */
-  const [tab, setTab] = useState<"phone" | "email">("phone");
+  const [tab, setTab] = useState<"phone" | "email" | "password">("phone");
+  /** The SMS gateway refused the message: say so and offer password sign-in. */
+  const [smsFailed, setSmsFailed] = useState(false);
   const [emailEnabled, setEmailEnabled] = useState(false);
   /** Last code already sent for verification: blocks double auto-submit. */
   const submittedCodeRef = useRef<string | null>(null);
@@ -155,7 +173,8 @@ export function LoginModal({
     setRetrying(false);
     setNetworkFailed(false);
     setOrganizationName("");
-    setTab("phone");
+    setTab(authMode === "signup" ? "password" : "phone");
+    setSmsFailed(false);
   }
 
   // Reset the form each time the dialog opens (state adjusted during render,
@@ -209,6 +228,7 @@ export function LoginModal({
       setDevCode(null);
       setNetworkFailed(false);
       setRetrying(false);
+      setSmsFailed(false);
       try {
         if (isEnterprise) {
           // پورتال سازمانی: مسیر NestJS (`/api/backend/auth/send-otp`)
@@ -220,16 +240,14 @@ export function LoginModal({
           setStep("code");
           setCode("");
           setResendIn(RESEND_COOLDOWN_SECONDS);
-          setSmsDelivered(response.smsDelivered);
+          setSmsDelivered(true);
           setDevCode(null);
           const validMinutes = Math.max(
             1,
             Math.round((response.expiresIn || 120) / 60),
           );
           setNotice(
-            response.smsDelivered
-              ? `کد تأیید ارسال شد. تا ${validMinutes.toLocaleString("fa-IR")} دقیقه اعتبار دارد. برای ارسال مجدد ۶۰ ثانیه صبر کنید.`
-              : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، چند لحظه بعد دوباره درخواست کنید.",
+            `کد تأیید ارسال شد. تا ${validMinutes.toLocaleString("fa-IR")} دقیقه اعتبار دارد. برای ارسال مجدد ۶۰ ثانیه صبر کنید.`,
           );
           return;
         }
@@ -258,10 +276,14 @@ export function LoginModal({
             ? "کد تأیید پیش‌تر ارسال شده است؛ کد پیامک‌شده را وارد کنید."
             : response.deliveryConfirmed
               ? `کد تأیید ارسال شد. تا ${validMinutes.toLocaleString("fa-IR")} دقیقه اعتبار دارد. برای ارسال مجدد ۶۰ ثانیه صبر کنید.`
-              : "کد تأیید صادر شد؛ در صورت عدم دریافت پیامک، چند لحظه بعد دوباره درخواست کنید.",
+              : null,
         );
       } catch (err) {
-        if (err instanceof JudgeAuthError || err instanceof ApiClientError) {
+        if (err instanceof ApiClientError && err.code === "SMS_DELIVERY_FAILED") {
+          // Real failure, not a soft hint: the code was not sent. Offer password sign-in.
+          setError([SMS_FAILED_COPY]);
+          setSmsFailed(true);
+        } else if (err instanceof JudgeAuthError || err instanceof ApiClientError) {
           setError(err.details);
           setNetworkFailed(err.statusCode === 0);
         } else {
@@ -330,6 +352,10 @@ export function LoginModal({
             serviceDomain: "ROXIRA",
             organizationName: trimmedOrganization || undefined,
           }), () => setRetrying(true));
+          if (isMfaChallenge(session)) {
+            setMfaChallenge(session.challenge);
+            return;
+          }
           onAuthenticated(session);
           onClose();
           return;
@@ -421,6 +447,61 @@ export function LoginModal({
 
   if (!open) return null;
 
+  if (locale === "en") {
+    // roxira.net: English, email/username + password only. Iranian SMS is not offered.
+    return (
+      <div
+        dir="ltr"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={handleClose}
+          className="absolute inset-0 cursor-default bg-[#05080f]/80 backdrop-blur-sm"
+        />
+        <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#0a0f1a] text-slate-100 shadow-2xl shadow-black/50">
+          <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-[#0071e3] text-white">
+                <Lock className="size-4" />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-white">{title}</h2>
+                <p className="text-xs text-slate-400">Roxira International</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label="Close dialog"
+              className="flex size-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="px-5 py-5">
+            <p className="mb-4 text-xs leading-relaxed text-slate-400">{description}</p>
+            <PasswordAuthPanel
+              locale="en"
+              onSession={(session) => {
+                onAuthenticated(session);
+                onClose();
+              }}
+            />
+            <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-400">
+              <ShieldCheck className="size-3" />
+              Passwords are hashed; we never store them in plain text.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       dir="rtl"
@@ -460,9 +541,9 @@ export function LoginModal({
         </div>
 
         <div className="px-5 py-5">
-          {emailEnabled && !isEnterprise && (
+          {(isEnterprise || emailEnabled) && (
             <div role="tablist" className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-black/30 p-1">
-              {(["phone", "email"] as const).map((id) => (
+              {(isEnterprise ? (["phone", "password"] as const) : (["phone", "email"] as const)).map((id) => (
                 <button
                   key={id}
                   type="button"
@@ -474,19 +555,38 @@ export function LoginModal({
                     tab === id ? "bg-[#fbbf24] text-[#05080f]" : "text-slate-400 hover:text-white",
                   )}
                 >
-                  {id === "phone" ? "موبایل" : "ایمیل"}
+                  {id === "phone" ? (isEnterprise ? "پیامک" : "موبایل") : id === "password" ? "رمز عبور" : "ایمیل"}
                 </button>
               ))}
             </div>
           )}
 
-          {tab === "email" && emailEnabled && !isEnterprise ? (
+          {tab === "password" && isEnterprise ? (
+            <PasswordAuthPanel
+              key={authMode}
+              locale="fa"
+              initialMode={authMode}
+              onSession={(session) => {
+                onAuthenticated(session);
+                onClose();
+              }}
+            />
+          ) : tab === "email" && emailEnabled && !isEnterprise ? (
             <EmailAuthPanel onSession={completeJudgeSession} />
           ) : (
             <>
           <p className="mb-4 text-xs leading-relaxed text-slate-400">{description}</p>
 
-          {step === "phone" ? (
+          {mfaChallenge ? (
+            <MfaCodeForm
+              locale="fa"
+              challenge={mfaChallenge}
+              onSession={(session) => {
+                onAuthenticated(session);
+                onClose();
+              }}
+            />
+          ) : step === "phone" ? (
             <form onSubmit={handleSend} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <Label htmlFor="auth-phone" className="text-slate-300">
@@ -531,6 +631,20 @@ export function LoginModal({
               )}
 
               {error && <ErrorBox errors={error} />}
+              {smsFailed && isEnterprise && (
+                <Button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setError(null);
+                    setSmsFailed(false);
+                    setTab("password");
+                  }}
+                  className={`h-10 w-full ${primaryBtn}`}
+                >
+                  ورود با رمز عبور
+                </Button>
+              )}
               {error && networkFailed && (
                 <Button
                   type="button"
@@ -625,10 +739,26 @@ export function LoginModal({
               )}
 
               {smsDelivered === false && (
-                <p className="text-xs text-amber-300/90">
-                  ارسال پیامک از درگاه تأیید نشد؛ در صورت امکان چند لحظه بعد دوباره
-                  درخواست کنید.
-                </p>
+                <div
+                  role="alert"
+                  className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+                >
+                  <p>
+                    ارسال پیامک تأیید نشد و ممکن است کدی دریافت نکنید.
+                    {emailEnabled
+                      ? " می‌توانید با ایمیل وارد شوید یا بعد از پایان مهلت، دوباره کد بگیرید."
+                      : " بعد از پایان مهلت، دوباره کد بگیرید."}
+                  </p>
+                  {emailEnabled && !isEnterprise && (
+                    <button
+                      type="button"
+                      onClick={() => setTab("email")}
+                      className="font-semibold text-amber-100 underline"
+                    >
+                      ورود با ایمیل
+                    </button>
+                  )}
+                </div>
               )}
 
               {SHOW_DEV_CODE && devCode && (

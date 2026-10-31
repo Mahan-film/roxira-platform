@@ -1,7 +1,9 @@
 import { Provider } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../modules/auth/guards/jwt-auth.guard';
+import { AccessGuard } from '../modules/access/access.guard';
+import { AuditInterceptor } from '../modules/access/audit.interceptor';
 import { RolesGuard } from '../modules/auth/guards/roles.guard';
 import { ProxyAwareThrottlerGuard } from './proxy-aware-throttler.guard';
 
@@ -14,11 +16,14 @@ export const globalThrottlerModule = ThrottlerModule.forRoot([
 ]);
 
 /**
- * گاردهای سراسری؛ ترتیب مهم است: Throttler → JWT → Roles.
+ * گاردهای سراسری؛ ترتیب مهم است: Throttler → JWT → Roles → Access (membership, permission,
+ * entitlement, 2FA policy; default deny). AuditInterceptor logs mutating requests.
  * (JwtService باید توسط ماژول میزبان در دسترس باشد: AuthModule آن را export می‌کند.)
  */
 export const GLOBAL_GUARD_PROVIDERS: Provider[] = [
   { provide: APP_GUARD, useClass: ProxyAwareThrottlerGuard },
   { provide: APP_GUARD, useClass: JwtAuthGuard },
   { provide: APP_GUARD, useClass: RolesGuard },
+  { provide: APP_GUARD, useClass: AccessGuard },
+  { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
 ];

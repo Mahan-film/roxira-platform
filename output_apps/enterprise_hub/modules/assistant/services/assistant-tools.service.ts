@@ -1,3 +1,5 @@
+import { requireModulePermission } from '../../access/access-context';
+import { AccessAction, AccessModule } from '../../access/catalogue';
 import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import { McpToolsService } from '../../../mcp/mcp-tools.service';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
@@ -8,7 +10,6 @@ import { InvoiceStatus } from '../../invoicing/enums/invoice-status.enum';
 import { InvoiceSummaryRow } from '../../invoicing/repositories/invoicing.repository';
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
 import {
-  requireTenantAdmin,
   requireTenantId,
 } from '../../tenants/tenant-context';
 import { ASSISTANT_MAX_ROWS } from '../constants/assistant.constants';
@@ -246,6 +247,15 @@ function byCurrency(
  *   مدل هیچ SQL خامی نمی‌سازد (Rule #3).
  * - دسترسی‌ها همانند REST: صورتحساب و حسابداری فقط برای مدیر/مالک سازمان.
  */
+/** Tool name prefix -> the module whose data the tool exposes. */
+const TOOL_MODULES: Record<string, AccessModule> = {
+  invoicing: AccessModule.INVOICING,
+  inventory: AccessModule.INVENTORY,
+  crm: AccessModule.CRM,
+  accounting: AccessModule.ACCOUNTING,
+  hr: AccessModule.HR,
+};
+
 @Injectable()
 export class AssistantToolsService {
   private readonly handlers: Record<string, ToolHandler>;
@@ -307,6 +317,8 @@ export class AssistantToolsService {
       return { ok: false, result: { error: `ابزار ناشناخته: ${name}` } };
     }
     try {
+      // Each tool reads one module's data: the caller needs that module's read permission.
+      requireModulePermission(request, TOOL_MODULES[name.split('_')[0]] ?? AccessModule.ASSISTANT, AccessAction.READ);
       return { ok: true, result: await this.handlers[name](request, args) };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -320,7 +332,6 @@ export class AssistantToolsService {
     request: AuthenticatedRequest,
     args: ToolArgs,
   ): Promise<unknown> {
-    requireTenantAdmin(request);
     const tenantId = requireTenantId(request);
     const range = resolvePeriod({
       period: optionalString(args, 'period'),
@@ -345,7 +356,6 @@ export class AssistantToolsService {
     request: AuthenticatedRequest,
     args: ToolArgs,
   ): Promise<unknown> {
-    requireTenantAdmin(request);
     const tenantId = requireTenantId(request);
     const customer = optionalString(args, 'customer');
     if (!customer) {

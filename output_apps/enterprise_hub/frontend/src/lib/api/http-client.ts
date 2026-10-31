@@ -1,3 +1,5 @@
+import { getFreshAccessToken, refreshStoredSession } from "@/lib/api/session-store";
+
 /**
  * کلاینت HTTP عمومی برای ارتباط تایپ‌سیف با اندپوینت‌های NestJS.
  * مطابق Rule #4 AGENTS.md (Contract-First Synchronization) هر متد این
@@ -9,6 +11,8 @@ export interface NestValidationErrorBody {
   message: string | string[];
   error?: string;
   statusCode: number;
+  /** Machine-readable error code from NestJS (e.g. SMS_DELIVERY_FAILED). */
+  code?: string;
   /**
    * پیام خطای لایهٔ FastAPI (AI Core Layer) — مثلاً `{"detail":"Not Found"}`.
    * بدون خواندن این فیلد، خطاهای موتور پایتون به‌صورت پیام مبهم فارسی
@@ -51,6 +55,8 @@ function collectErrorMessages(value: unknown, sink: string[]): void {
 export class ApiClientError extends Error {
   readonly statusCode: number;
   readonly details: string[];
+  /** Machine-readable server error code, when the API sends one. */
+  readonly code?: string;
 
   constructor(statusCode: number, body: Partial<NestValidationErrorBody>) {
     const collected: string[] = [];
@@ -69,6 +75,7 @@ export class ApiClientError extends Error {
     this.name = "ApiClientError";
     this.statusCode = statusCode;
     this.details = details;
+    this.code = typeof body.code === "string" ? body.code : undefined;
   }
 }
 
@@ -106,25 +113,6 @@ function buildUrl(path: string, searchParams?: RequestOptions["searchParams"]): 
 }
 
 /**
- * توکن دسترسی سشن ذخیره‌شده (کلید مشترک با auth-client). از آنجا که
- * بک‌اند NestJS اکنون همه مسیرها را (جز مسیرهای @Public) پشت گارد JWT
- * سراسری دارد، توکن در صورت وجود به همه درخواست‌ها پیوست می‌شود.
- */
-function readStoredAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem("roxira.auth.session");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { accessToken?: unknown; expiresAt?: unknown };
-    if (typeof parsed.accessToken !== "string") return null;
-    if (typeof parsed.expiresAt === "number" && parsed.expiresAt < Date.now()) return null;
-    return parsed.accessToken;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * اجرای یک درخواست HTTP تایپ‌سیف به بک‌اند NestJS از طریق پروکسی
  * Next.js. در صورت پاسخ ناموفق، `ApiClientError` با جزئیات دقیق
  * پیام‌های اعتبارسنجی class-validator پرتاب می‌شود.
@@ -135,18 +123,29 @@ export async function apiRequest<TResponse>(
 ): Promise<TResponse> {
   const url = buildUrl(path, options.searchParams);
 
-  const headers: Record<string, string> = {};
-  if (options.body) headers["Content-Type"] = "application/json";
-  const token = readStoredAccessToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const send = async (token: string | null): Promise<Response> => {
+    const headers: Record<string, string> = {};
+    if (options.body) headers["Content-Type"] = "application/json";
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return fetch(url, {
+      method: options.method ?? "GET",
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: options.signal,
+      cache: "no-store",
+    });
+  };
 
-  const response = await fetch(url, {
-    method: options.method ?? "GET",
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    signal: options.signal,
-    cache: "no-store",
-  });
+  // Renews an expired/expiring NestJS access token first; a 401 despite a
+  // token (revoked or clock skew) gets one forced renewal and one retry.
+  const token = await getFreshAccessToken();
+  let response = await send(token);
+  if (response.status === 401 && token) {
+    const renewed = await refreshStoredSession(true);
+    if (renewed.status === "ok") {
+      response = await send(renewed.session.accessToken);
+    }
+  }
 
   if (!response.ok) {
     throw await toApiError(response);
@@ -170,7 +169,7 @@ export async function apiUpload<TResponse>(
   signal?: AbortSignal,
 ): Promise<TResponse> {
   const headers: Record<string, string> = {};
-  const token = readStoredAccessToken();
+  const token = await getFreshAccessToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const response = await fetch(path, {
@@ -208,7 +207,7 @@ export function apiUploadWithProgress<TResponse>(
   formData: FormData,
   options: UploadProgressOptions = {},
 ): Promise<TResponse> {
-  return new Promise<TResponse>((resolve, reject) => {
+  return getFreshAccessToken().then((token) => new Promise<TResponse>((resolve, reject) => {
     if (options.signal?.aborted) {
       reject(new DOMException("Aborted", "AbortError"));
       return;
@@ -218,7 +217,6 @@ export function apiUploadWithProgress<TResponse>(
     xhr.open("POST", path);
     xhr.responseType = "json";
 
-    const token = readStoredAccessToken();
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
     options.signal?.addEventListener("abort", () => xhr.abort(), { once: true });
@@ -252,5 +250,5 @@ export function apiUploadWithProgress<TResponse>(
     xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
 
     xhr.send(formData);
-  });
+  }));
 }

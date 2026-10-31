@@ -1,0 +1,1531 @@
+{
+  "DELETE /auth/sessions (AuthController.revokeOtherSessions)": {
+    "policy": "authOnly"
+  },
+  "DELETE /auth/sessions/:id (AuthController.revokeSession)": {
+    "policy": "authOnly"
+  },
+  "DELETE /enterprise-hub/banking/statement-lines/:id/match (BankingController.unmatch)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "DELETE /enterprise-hub/mcp/ (McpController.handleDelete)": {
+    "policy": "assistant:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "DELETE /org/branches/:id (OrgController.deleteBranch)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "DELETE /org/departments/:id (OrgController.deleteDepartment)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "DELETE /org/invitations/:id (OrgController.revokeInvitation)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "DELETE /org/members/:id (OrgController.removeMember)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "DELETE /org/roles/:id (OrgController.deleteRole)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /admin/entitlements/ (EntitlementsAdminController.listTenants)": {
+    "policy": "platformAdmin"
+  },
+  "GET /admin/entitlements/:tenantId (EntitlementsAdminController.get)": {
+    "policy": "platformAdmin"
+  },
+  "GET /admin/entitlements/requests/open (EntitlementsAdminController.openRequests)": {
+    "policy": "platformAdmin"
+  },
+  "GET /auth/me (AuthController.me)": {
+    "policy": "authOnly"
+  },
+  "GET /auth/organizations (AuthController.organizations)": {
+    "policy": "authOnly"
+  },
+  "GET /auth/sessions (AuthController.listSessions)": {
+    "policy": "authOnly"
+  },
+  "GET /auth/totp (AuthController.totpStatus)": {
+    "policy": "authOnly"
+  },
+  "GET /auth/webauthn/credentials (AuthController.webauthnCredentials)": {
+    "policy": "authOnly"
+  },
+  "GET /enterprise-hub/accounting/accounts (AccountingController.listAccounts)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/accounts/:code/ledger (AccountingController.getAccountLedger)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/journal-entries (AccountingController.listJournalEntries)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/journal-entries/:id (AccountingController.getJournalEntry)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/period-locks (AccountingController.listPeriodLocks)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/trial-balance (AccountingController.getTrialBalance)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/assistant/status (AssistantController.status)": {
+    "policy": "assistant:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /enterprise-hub/banking/accounts (BankingController.listAccounts)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/accounts/:id/book-lines (BankingController.listBookLines)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/accounts/:id/statement-lines (BankingController.listStatementLines)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/accounts/:id/summary (BankingController.summary)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/crm/leads (CrmController.listLeads)": {
+    "policy": "crm:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /enterprise-hub/crm/leads/:id (CrmController.getLead)": {
+    "policy": "crm:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /enterprise-hub/crm/leads/:id/contacts (CrmController.listContactRecords)": {
+    "policy": "crm:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /enterprise-hub/crm/pipeline (CrmController.getPipeline)": {
+    "policy": "crm:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /enterprise-hub/crm/stats (CrmController.getStats)": {
+    "policy": "crm:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /enterprise-hub/currency/ (CurrencyController.listSupported)": {
+    "policy": "public"
+  },
+  "GET /enterprise-hub/currency/rates (CurrencyController.getRates)": {
+    "policy": "public"
+  },
+  "GET /enterprise-hub/damages/ (DamagesController.findAll)": {
+    "policy": "damages:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/damages/:id (DamagesController.findOne)": {
+    "policy": "damages:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/batches (DataImportController.listBatches)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/entities (DataImportController.listEntities)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/packages/:id (DataImportController.getPackage)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/packages/:id/progress (DataImportController.getPackageProgress)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/contracts (HrController.listContracts)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/contracts/:id (HrController.getContract)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/employees (HrController.listEmployees)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/employees/:id (HrController.getEmployee)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/payroll-rates/:year (HrController.getPayrollRates)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/payroll-runs (HrController.listPayrollRuns)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/payroll-runs/:id (HrController.getPayrollRun)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/payroll-runs/:id/insurance-list (HrController.getInsuranceList)": {
+    "policy": "hr:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/payslips (HrController.listPayslips)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/payslips/:id (HrController.getPayslip)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/stats (HrController.getStats)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/items (InventoryController.listStockItems)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/items/:id (InventoryController.getStockItem)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/items/:sku/batches (InventoryController.getStockItemBatches)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/valuation (InventoryController.getFifoValuation)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/warehouses (InventoryController.listWarehouses)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/warehouses/:id/stock (InventoryController.getWarehouseStock)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/invoicing/ (InvoicingController.findAll)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/invoicing/:id (InvoicingController.findOne)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/mcp/ (McpController.handleGet)": {
+    "policy": "assistant:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /enterprise-hub/radar/report (RadarController.getReport)": {
+    "policy": "platformAdmin"
+  },
+  "GET /enterprise-hub/radar/scout-status (RadarController.getScoutStatus)": {
+    "policy": "platformAdmin"
+  },
+  "GET /enterprise-hub/radar/swarm-status (RadarController.getSwarmStatus)": {
+    "policy": "platformAdmin"
+  },
+  "GET /enterprise-hub/tax-compliance/keys/active (TaxComplianceController.getActiveKey)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/moadian/credentials (MoadianController.getCredential)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/status (MoadianController.status)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/signatures (TaxComplianceController.findAll)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/signatures/:id (TaxComplianceController.findOne)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/signatures/:id/packet (TaxComplianceController.getPacket)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/signatures/:id/verify (TaxComplianceController.verify)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise/inquiries/ (InquiriesController.list)": {
+    "policy": "platformAdmin"
+  },
+  "GET /health/system (SystemHealthController.getSystemHealth)": {
+    "policy": "public"
+  },
+  "GET /invitations/:token (InvitationsController.preview)": {
+    "policy": "public"
+  },
+  "GET /org/audit (OrgController.auditLog)": {
+    "policy": "audit:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /org/audit/verify (OrgController.verifyAudit)": {
+    "policy": "audit:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /org/branches (OrgController.listBranches)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /org/departments (OrgController.listDepartments)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /org/entitlements (OrgController.listEntitlements)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /org/invitations (OrgController.listInvitations)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /org/me (OrgController.me)": {
+    "policy": "authOnly"
+  },
+  "GET /org/members (OrgController.listMembers)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /org/module-catalogue (OrgController.moduleCatalogue)": {
+    "policy": "anyMember",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": true,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /org/roles (OrgController.listRoles)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /org/security (OrgController.getSecurity)": {
+    "policy": "security:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /tenants/me (TenantsController.me)": {
+    "policy": "anyMember",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": true,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "PATCH /enterprise-hub/crm/leads/:id (CrmController.updateLead)": {
+    "policy": "crm:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": true
+  },
+  "PATCH /enterprise-hub/crm/leads/:id/stage (CrmController.updateLeadStage)": {
+    "policy": "crm:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": true
+  },
+  "PATCH /enterprise-hub/hr/employees/:id (HrController.updateEmployee)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /enterprise-hub/inventory/items/:id (InventoryController.updateStockItem)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /enterprise-hub/invoicing/:id (InvoicingController.update)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /enterprise-hub/invoicing/:id/cancel (InvoicingController.cancel)": {
+    "policy": "invoicing:approve",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /enterprise-hub/invoicing/:id/pay (InvoicingController.pay)": {
+    "policy": "invoicing:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /org/branches/:id (OrgController.updateBranch)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /org/members/:id (OrgController.updateMember)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /org/roles/:id (OrgController.updateRole)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /org/security (OrgController.setSecurity)": {
+    "policy": "security:admin",
+    "owner": true,
+    "admin": false,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /tenants/me/settings (TenantsController.updateSettings)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /auth/login (AuthController.login)": {
+    "policy": "public"
+  },
+  "POST /auth/login/mfa (AuthController.loginMfa)": {
+    "policy": "public"
+  },
+  "POST /auth/logout (AuthController.logout)": {
+    "policy": "public"
+  },
+  "POST /auth/password/forgot (AuthController.forgotPassword)": {
+    "policy": "public"
+  },
+  "POST /auth/password/reset (AuthController.resetPassword)": {
+    "policy": "public"
+  },
+  "POST /auth/password/set (AuthController.setPassword)": {
+    "policy": "authOnly"
+  },
+  "POST /auth/refresh (AuthController.refresh)": {
+    "policy": "public"
+  },
+  "POST /auth/send-otp (AuthController.sendOtp)": {
+    "policy": "public"
+  },
+  "POST /auth/signup (AuthController.signup)": {
+    "policy": "public"
+  },
+  "POST /auth/switch-tenant (AuthController.switchTenant)": {
+    "policy": "authOnly"
+  },
+  "POST /auth/totp/disable (AuthController.totpDisable)": {
+    "policy": "authOnly"
+  },
+  "POST /auth/totp/enable (AuthController.totpEnable)": {
+    "policy": "authOnly"
+  },
+  "POST /auth/totp/setup (AuthController.totpSetup)": {
+    "policy": "authOnly"
+  },
+  "POST /auth/verify-otp (AuthController.verifyOtp)": {
+    "policy": "public"
+  },
+  "POST /auth/webauthn/authentication/options (AuthController.webauthnAuthenticationOptions)": {
+    "policy": "public"
+  },
+  "POST /auth/webauthn/authentication/verify (AuthController.webauthnAuthenticationVerify)": {
+    "policy": "public"
+  },
+  "POST /auth/webauthn/registration/options (AuthController.webauthnRegistrationOptions)": {
+    "policy": "authOnly"
+  },
+  "POST /auth/webauthn/registration/verify (AuthController.webauthnRegistrationVerify)": {
+    "policy": "authOnly"
+  },
+  "POST /enterprise-hub/accounting/accounts (AccountingController.createAccount)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/journal-entries (AccountingController.createJournalEntry)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/journal-entries/:id/reverse (AccountingController.reverseJournalEntry)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/period-locks (AccountingController.lockPeriod)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/period-locks/:id/unlock (AccountingController.unlockPeriod)": {
+    "policy": "accounting:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/assistant/chat (AssistantController.chat)": {
+    "policy": "assistant:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "POST /enterprise-hub/banking/accounts (BankingController.createAccount)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/accounts/:id/auto-match (BankingController.autoMatch)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/statement-lines/:id/journal-entry (BankingController.createEntry)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/statement-lines/:id/match (BankingController.match)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/client-errors/ (ClientErrorsController.report)": {
+    "policy": "public"
+  },
+  "POST /enterprise-hub/crm/leads (CrmController.createLead)": {
+    "policy": "crm:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": true
+  },
+  "POST /enterprise-hub/crm/leads/:id/contacts (CrmController.addContactRecord)": {
+    "policy": "crm:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": true
+  },
+  "POST /enterprise-hub/crm/leads/:id/notes (CrmController.addLeadNote)": {
+    "policy": "crm:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": true
+  },
+  "POST /enterprise-hub/damages/ (DamagesController.create)": {
+    "policy": "damages:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/damages/bulk (DamagesController.createBulk)": {
+    "policy": "damages:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/:entity/preview (DataImportController.previewForEntity)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/batches/:batchId/undo (DataImportController.undoBatch)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/commit (DataImportController.commit)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/crm-leads/commit (DataImportController.commitCrmLeads)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/crm-leads/preview (DataImportController.previewCrmLeads)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/packages (DataImportController.createPackage)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/packages/:id/commit (DataImportController.commitPackage)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/preview (DataImportController.preview)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/contracts (HrController.createContract)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/employees (HrController.createEmployee)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/payroll-runs (HrController.createPayrollRun)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/payroll-runs/:id/post (HrController.postPayrollRun)": {
+    "policy": "hr:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/payroll/calculate (HrController.calculatePayroll)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/payslips (HrController.issuePayslip)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/items (InventoryController.createStockItem)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/movements/inbound (InventoryController.receiveStock)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/movements/outbound (InventoryController.issueStock)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/warehouses (InventoryController.createWarehouse)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/invoicing/ (InvoicingController.create)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/mcp/ (McpController.handlePost)": {
+    "policy": "assistant:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "POST /enterprise-hub/radar/run-swarm (RadarController.runSwarm)": {
+    "policy": "platformAdmin"
+  },
+  "POST /enterprise-hub/radar/trigger-scout (RadarController.triggerScout)": {
+    "policy": "platformAdmin"
+  },
+  "POST /enterprise-hub/tax-compliance/csr (TaxComplianceController.generateCsr)": {
+    "policy": "tax:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/tax-compliance/keys (TaxComplianceController.generateKeyPair)": {
+    "policy": "tax:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/submit (MoadianController.submit)": {
+    "policy": "tax:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/tax-compliance/sign-invoice (TaxComplianceController.signInvoice)": {
+    "policy": "tax:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/tax-compliance/signatures/:id/submit (TaxComplianceController.submit)": {
+    "policy": "tax:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise/inquiries/ (InquiriesController.create)": {
+    "policy": "public"
+  },
+  "POST /invitations/accept (InvitationsController.accept)": {
+    "policy": "authOnly"
+  },
+  "POST /org/ (OrgController.create)": {
+    "policy": "authOnly"
+  },
+  "POST /org/branches (OrgController.createBranch)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /org/departments (OrgController.createDepartment)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /org/invitations (OrgController.invite)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /org/members (OrgController.createManagedMember)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /org/members/:id/password (OrgController.resetManagedPassword)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /org/module-requests (OrgController.requestModule)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /org/roles (OrgController.createRole)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {
+    "policy": "platformAdmin"
+  },
+  "PUT /enterprise-hub/tax-compliance/moadian/credentials (MoadianController.putCredential)": {
+    "policy": "tax:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  }
+}

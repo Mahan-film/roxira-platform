@@ -528,14 +528,11 @@ describe('BankingService tenant isolation', () => {
 describe('BankingController', () => {
   const requestWith = (user: unknown) => ({ user }) as unknown as AuthenticatedRequest;
 
-  it('takes the tenant from the JWT and requires tenant admin', async () => {
+  it('takes the tenant from the verified request user', async () => {
     const service = { listAccounts: jest.fn(async () => []) };
     const controller = new BankingController(service as never);
     await controller.listAccounts(requestWith({ tenantId: TENANT_A, tenantRole: TenantRole.OWNER }));
     expect(service.listAccounts).toHaveBeenCalledWith(TENANT_A);
-    await expect(
-      controller.listAccounts(requestWith({ tenantId: TENANT_A, tenantRole: TenantRole.MEMBER })),
-    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
 

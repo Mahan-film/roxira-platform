@@ -40,11 +40,14 @@ export const OTP_GENERIC_ERROR =
 export const OTP_SEND_LIMIT_ERROR =
   'تعداد درخواست کد بیش از حد مجاز است؛ لطفاً بعداً دوباره تلاش کنید.';
 
-/** توکن دسترسی JWT — پیش‌فرض ۱ روز اعتبار (Refresh ندارد؛ پس از انقضا ورود مجدد). */
-export const JWT_DEFAULT_EXPIRES_IN = '1d';
-
-/** اعتبار پیش‌فرض توکن دسترسی بر حسب ثانیه (۱ روز) — برای بازگرداندن به کلاینت. */
-export const JWT_DEFAULT_EXPIRES_IN_SECONDS = 86400;
+/**
+ * Access-token lifetime: 15 minutes. Sessions last through a rotating,
+ * server-revocable refresh token (30 days, see password-auth.constants.ts), so a
+ * leaked access token is short-lived and logout/password reset take effect
+ * within this window. The `expiresIn` sent to clients is read from the signed
+ * token itself, so it can never disagree with the JWT.
+ */
+export const JWT_DEFAULT_EXPIRES_IN = '15m';
 
 /** محدودیت سخت‌گیرانه مسیرهای ورود (@Throttle): ۵ درخواست در دقیقه برای هر IP. */
 export const AUTH_THROTTLE = { ttl: 60_000, limit: 5 } as const;

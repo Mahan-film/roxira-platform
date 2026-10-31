@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess } from '../../access/decorators';
 import {
   Body,
   Controller,
@@ -19,7 +21,6 @@ import {
 } from '@nestjs/swagger';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import {
-  requireTenantAdmin,
   requireTenantId,
 } from '../../tenants/tenant-context';
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
@@ -46,19 +47,19 @@ import { InventoryService } from '../services/inventory.service';
  * (Rule #3 - AGENTS.md).
  *
  * شناسه مستأجر «تنها» از claim تأییدشده JWT خوانده می‌شود (`requireTenantId`)
- * و دسترسی مدیریتی با `requireTenantAdmin` بررسی می‌شود؛ هرگز از بدنه/کوئری/هدر
+ * و دسترسی بر اساس نقش با AccessGuard بررسی می‌شود؛ هرگز از بدنه/کوئری/هدر
  * درخواست (Rule #4 - AGENTS.md). احراز هویت از طریق گارد سراسری JwtAuthGuard
  * اعمال می‌شود.
  */
 @ApiTags('Inventory - انبارداری و FIFO')
 @ApiBearerAuth()
+@ModuleAccess(AccessModule.INVENTORY)
 @Controller('enterprise-hub/inventory')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
   private tenantIdOf(request: AuthenticatedRequest): string {
-    requireTenantAdmin(request);
     return requireTenantId(request);
   }
 

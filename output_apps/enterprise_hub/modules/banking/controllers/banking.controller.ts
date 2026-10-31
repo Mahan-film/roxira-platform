@@ -1,3 +1,5 @@
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
   Body,
   Controller,
@@ -14,7 +16,6 @@ import {
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import {
-  requireTenantAdmin,
   requireTenantId,
 } from '../../tenants/tenant-context';
 import {
@@ -39,17 +40,17 @@ import { BankingService } from '../services/banking.service';
  * کنترلر حساب‌های بانکی و مغایرت‌گیری بانکی.
  *
  * فقط مسیریابی و اعتبارسنجی؛ شناسه مستأجر تنها از claim تأییدشده JWT خوانده
- * می‌شود (`requireTenantId`) و دسترسی مدیریتی با `requireTenantAdmin` بررسی
+ * می‌شود (`requireTenantId`) و دسترسی بر اساس نقش با AccessGuard بررسی
  * می‌شود (AGENTS.md §4). ورود سطرهای صورتحساب از مسیر عمومی ورود داده با
  * موجودیت `bank-statement` انجام می‌شود.
  */
 @ApiTags('Banking - حساب بانکی و مغایرت‌گیری')
+@ModuleAccess(AccessModule.BANKING)
 @Controller('enterprise-hub/banking')
 export class BankingController {
   constructor(private readonly bankingService: BankingService) {}
 
   private tenantIdOf(request: AuthenticatedRequest): string {
-    requireTenantAdmin(request);
     return requireTenantId(request);
   }
 
@@ -95,6 +96,7 @@ export class BankingController {
     return this.bankingService.listBookLines(this.tenantIdOf(request), id, query);
   }
 
+  @RequireAction(AccessAction.POST)
   @Post('accounts/:id/auto-match')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'تطبیق خودکار (مبلغ + پنجره تاریخ + شماره پیگیری)' })
@@ -118,6 +120,7 @@ export class BankingController {
     return this.bankingService.summary(this.tenantIdOf(request), id, query.asOf);
   }
 
+  @RequireAction(AccessAction.POST)
   @Post('statement-lines/:id/match')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'تطبیق دستی سطر بانک با سطر سند' })
@@ -130,6 +133,7 @@ export class BankingController {
     return this.bankingService.manualMatch(this.tenantIdOf(request), id, dto.journalLineId);
   }
 
+  @RequireAction(AccessAction.POST)
   @Delete('statement-lines/:id/match')
   @ApiOperation({ summary: 'لغو تطبیق سطر بانک' })
   @ApiResponse({ status: HttpStatus.OK, type: StatementLineResponseDto })
@@ -140,6 +144,7 @@ export class BankingController {
     return this.bankingService.unmatch(this.tenantIdOf(request), id);
   }
 
+  @RequireAction(AccessAction.POST)
   @Post('statement-lines/:id/journal-entry')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'ساخت سند از سطر بانکِ تطبیق‌نخورده و تطبیق آن' })
