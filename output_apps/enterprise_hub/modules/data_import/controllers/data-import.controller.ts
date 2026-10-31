@@ -38,6 +38,7 @@ import { maxPackageBytes } from '../constants/package-import.constants';
 import { BatchSummaryDto, UndoBatchResponseDto } from '../dto/batch-response.dto';
 import { CommitImportDto } from '../dto/commit-import.dto';
 import { CommitResponseDto } from '../dto/commit-response.dto';
+import { EntityKeyPipe } from '../dto/entity-key.pipe';
 import { EntityDescriptorDto } from '../dto/entity-descriptor-response.dto';
 import { EntityCommitDto, PreviewRequestDto } from '../dto/entity-commit.dto';
 import { EntityCommitResponseDto } from '../dto/entity-commit-response.dto';
@@ -186,7 +187,7 @@ export class DataImportController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
   async previewForEntity(
     @Req() request: AuthenticatedRequest,
-    @Param('entity') entity: string,
+    @Param('entity', EntityKeyPipe) entity: string,
     @UploadedFile() file: UploadedFilePayload,
   ): Promise<EntityPreviewResponseDto> {
     this.assertImportAccess(request);

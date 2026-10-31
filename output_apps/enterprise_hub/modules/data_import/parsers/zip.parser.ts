@@ -3,11 +3,11 @@
  *
  * هر فایل CSV/XLSX یک «جدول» با نام همان فایل می‌شود. پیش از ازفشرده‌سازی،
  * فهرست مرکزی ZIP خوانده و دو گارد اعمال می‌شود: حداکثر ۵۰ فایل و حداکثر
- * ۲۰۰ مگابایت حجم باز (ضد بمب فشرده‌سازی).
+ * ۲۰۰ مگابایت حجم باز. حجم باز هنگام ازفشرده‌سازی «واقعاً» اندازه‌گیری می‌شود
+ * (ضد بمب فشرده‌سازی)، نه فقط از روی اندازهٔ اعلام‌شده در هدر.
  */
 
 import * as path from 'path';
-import { unzipSync } from 'fflate';
 import {
   PACKAGE_MAX_UNCOMPRESSED_BYTES,
   PACKAGE_MAX_ZIP_FILES,
@@ -20,6 +20,13 @@ import {
   PackageTableReader,
 } from './package-source.types';
 import { parseXlsx } from './xlsx.parser';
+import {
+  extractZipEntry,
+  InflateBudget,
+  listZipEntries,
+  ZipEntry,
+  ZipReadError,
+} from './zip-reader';
 
 /** خطای تجزیهٔ بستهٔ ZIP. */
 export class ZipPackageError extends Error {}
@@ -77,48 +84,91 @@ export function assertZipWithinLimits(buffer: Buffer): number {
   return count;
 }
 
-/** نام جدول از مسیر فایل داخل ZIP (نام فایل بدون پسوند). */
-function tableNameFromPath(entryName: string): string {
+/** سقف طول نام جدول. */
+const MAX_TABLE_NAME_LENGTH = 64;
+
+/** نام جدول از مسیر فایل داخل ZIP؛ پاک‌سازی‌شده و بدون کاراکتر کنترلی/خطرناک. */
+export function tableNameFromPath(entryName: string): string {
   const base = path.posix.basename(entryName.replace(/\\/g, '/'));
   const withoutExt = base.replace(/\.[^.]+$/, '');
-  return withoutExt || base || 'table';
+  const cleaned = (withoutExt || base)
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{N}_ .-]/gu, '_')
+    .replace(/^[.\s]+/, '')
+    .trim()
+    .slice(0, MAX_TABLE_NAME_LENGTH);
+  if (!cleaned || /^(__proto__|constructor|prototype)$/i.test(cleaned)) {
+    return 'table';
+  }
+  return cleaned;
+}
+
+/** یکتا کردن نام جدول‌ها (دو فایل هم‌نام در پوشه‌های متفاوت). */
+function uniqueName(name: string, used: Set<string>): string {
+  let candidate = name;
+  for (let n = 2; used.has(candidate.toLowerCase()); n += 1) {
+    candidate = `${name.slice(0, MAX_TABLE_NAME_LENGTH - 4)}_${n}`;
+  }
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
+function toZipPackageError(error: unknown): ZipPackageError {
+  if (error instanceof ZipReadError && error.code === 'too_large') {
+    return new ZipPackageError(
+      'حجم بازِ فایل ZIP بیش از سقف مجاز (۲۰۰ مگابایت) است.',
+    );
+  }
+  if (error instanceof ZipReadError && error.code === 'unsupported') {
+    return new ZipPackageError('روش فشرده‌سازی این ZIP پشتیبانی نمی‌شود.');
+  }
+  return new ZipPackageError('فایل ZIP معتبر نیست یا آسیب‌دیده است.');
 }
 
 /** تجزیهٔ بستهٔ ZIP به جداول صفحه‌ای. */
 export function parseZipPackage(buffer: Buffer): ParsedPackage {
   assertZipWithinLimits(buffer);
 
-  let files: Record<string, Uint8Array>;
+  let entries: ZipEntry[];
   try {
-    files = unzipSync(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
-  } catch {
-    throw new ZipPackageError('فایل ZIP معتبر نیست یا آسیب‌دیده است.');
+    entries = listZipEntries(buffer);
+  } catch (error) {
+    throw toZipPackageError(error);
   }
 
+  const budget: InflateBudget = { remaining: PACKAGE_MAX_UNCOMPRESSED_BYTES };
   const tables: PackageTableReader[] = [];
+  const usedNames = new Set<string>();
   let totalRows = 0;
   const rowLimit = maxPackageRows();
 
-  for (const entryName of Object.keys(files).sort()) {
-    const lower = entryName.toLowerCase();
-    if (entryName.endsWith('/')) {
+  for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+    const lower = entry.name.toLowerCase();
+    if (entry.name.endsWith('/')) {
       continue;
     }
     if (!lower.endsWith('.csv') && !lower.endsWith('.xlsx')) {
       continue;
     }
 
-    const data = files[entryName];
     let headers: string[];
     let rows: string[][];
-    if (lower.endsWith('.csv')) {
-      const parsed = parseCsv(Buffer.from(data).toString('utf8'));
-      headers = parsed.headers;
-      rows = parsed.rows;
-    } else {
-      const parsed = parseXlsx(Buffer.from(data));
-      headers = parsed.headers;
-      rows = parsed.rows;
+    try {
+      const data = extractZipEntry(buffer, entry, budget);
+      if (lower.endsWith('.csv')) {
+        const parsed = parseCsv(data.toString('utf8'));
+        headers = parsed.headers;
+        rows = parsed.rows;
+      } else {
+        const parsed = parseXlsx(data, undefined, budget);
+        headers = parsed.headers;
+        rows = parsed.rows;
+      }
+    } catch (error) {
+      if (error instanceof ZipReadError) {
+        throw toZipPackageError(error);
+      }
+      throw error;
     }
 
     totalRows += rows.length;
@@ -128,7 +178,13 @@ export function parseZipPackage(buffer: Buffer): ParsedPackage {
       );
     }
 
-    tables.push(new InMemoryTableReader(tableNameFromPath(entryName), headers, rows));
+    tables.push(
+      new InMemoryTableReader(
+        uniqueName(tableNameFromPath(entry.name), usedNames),
+        headers,
+        rows,
+      ),
+    );
   }
 
   if (tables.length === 0) {

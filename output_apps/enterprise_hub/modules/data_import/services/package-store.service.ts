@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -7,7 +13,11 @@ import {
   PACKAGE_UPLOAD_EXTENSIONS,
   packageTmpRoot,
 } from '../constants/package-import.constants';
+
+/** فاصلهٔ اجرای جاروکننده: ۱۵ دقیقه. */
+const PACKAGE_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 import { PackageAnalysis } from '../analysis/package-analysis';
+import { FOREIGN_BINARY_MESSAGE } from '../parsers/sql-dump.parser';
 
 /** وضعیت چرخهٔ عمر یک بستهٔ دیتابیس. */
 export type PackageStatus =
@@ -58,8 +68,24 @@ function isSqliteHeader(buffer: Buffer): boolean {
   );
 }
 
+/** پسوندهای پشتیبان باینری دیتابیس‌های دیگر (SQL Server / PostgreSQL). */
+const FOREIGN_BINARY_EXTENSIONS = ['.bak', '.mdf', '.ldf', '.ndf', '.dump', '.backup'];
+
+/** SQL Server backup (MTF) starts with "TAPE"; pg_dump custom format starts with "PGDMP". */
+function isForeignBinary(fileName: string, buffer: Buffer): boolean {
+  const lower = (fileName ?? '').toLowerCase();
+  if (FOREIGN_BINARY_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
+    return true;
+  }
+  const magic = buffer.subarray(0, 5).toString('latin1');
+  return magic === 'PGDMP' || magic.startsWith('TAPE');
+}
+
 /** تشخیص نوع بسته از محتوا و پسوند. */
 export function detectPackageKind(fileName: string, buffer: Buffer): PackageKind {
+  if (isForeignBinary(fileName, buffer)) {
+    throw new BadRequestException(FOREIGN_BINARY_MESSAGE);
+  }
   if (isSqliteHeader(buffer)) {
     return 'sqlite';
   }
@@ -89,11 +115,90 @@ export function detectPackageKind(fileName: string, buffer: Buffer): PackageKind
  * پایگاه‌داده یا مخزن دیگری نوشته نمی‌شود (Rule #4 - AGENTS.md).
  */
 @Injectable()
-export class PackageStoreService {
+export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PackageStoreService.name);
   private readonly root: string;
+  private sweepTimer?: NodeJS.Timeout;
 
   constructor() {
     this.root = packageTmpRoot();
+  }
+
+  onModuleInit(): void {
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    void this.sweepExpired();
+    this.sweepTimer = setInterval(() => void this.sweepExpired(), PACKAGE_SWEEP_INTERVAL_MS);
+    this.sweepTimer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer);
+    }
+  }
+
+  /**
+   * حذف پوشهٔ بسته‌های منقضی (بیش از TTL) از دیسک موقت. `getState` فقط دسترسی را
+   * می‌بندد؛ بدون این جاروکننده فایل‌های آپلودشده تا ریبوت روی دیسک می‌ماندند.
+   * بسته‌ای که هنوز در حال تحلیل/ثبت است تا دو برابر TTL نگه داشته می‌شود.
+   */
+  async sweepExpired(now: number = Date.now()): Promise<number> {
+    let removed = 0;
+    let tenantDirs: string[];
+    try {
+      tenantDirs = await fs.readdir(this.root);
+    } catch {
+      return 0;
+    }
+    for (const tenantDir of tenantDirs) {
+      const tenantPath = path.join(this.root, tenantDir);
+      let packageDirs: string[];
+      try {
+        packageDirs = await fs.readdir(tenantPath);
+      } catch {
+        continue;
+      }
+      for (const packageDir of packageDirs) {
+        const dir = path.join(tenantPath, packageDir);
+        try {
+          if (await this.isExpired(dir, now)) {
+            await fs.rm(dir, { recursive: true, force: true });
+            removed += 1;
+          }
+        } catch (error) {
+          this.logger.warn(
+            `[PACKAGE-IMPORT] پاک‌سازی ${dir} ناموفق بود: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      }
+    }
+    if (removed > 0) {
+      this.logger.log(`[PACKAGE-IMPORT] ${removed} بستهٔ منقضی از دیسک حذف شد.`);
+    }
+    return removed;
+  }
+
+  private async isExpired(dir: string, now: number): Promise<boolean> {
+    let createdAt: number;
+    let busy = false;
+    try {
+      const state = JSON.parse(
+        await fs.readFile(path.join(dir, 'meta.json'), 'utf8'),
+      ) as PackageState;
+      createdAt = state.createdAt;
+      busy = state.status === 'analyzing' || state.status === 'committing';
+    } catch {
+      // Missing/corrupt meta.json: fall back to the directory's mtime.
+      createdAt = (await fs.stat(dir)).mtimeMs;
+    }
+    if (!Number.isFinite(createdAt)) {
+      createdAt = (await fs.stat(dir)).mtimeMs;
+    }
+    return now - createdAt > (busy ? PACKAGE_TTL_MS * 2 : PACKAGE_TTL_MS);
   }
 
   private safeSegment(value: string): string {
@@ -133,6 +238,9 @@ export class PackageStoreService {
     }
 
     const extension = path.extname(file.originalname ?? '').toLowerCase();
+    if (isForeignBinary(file.originalname, file.buffer)) {
+      throw new BadRequestException(FOREIGN_BINARY_MESSAGE);
+    }
     if (
       !PACKAGE_UPLOAD_EXTENSIONS.includes(
         extension as (typeof PACKAGE_UPLOAD_EXTENSIONS)[number],

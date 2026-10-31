@@ -15,12 +15,17 @@
  * ردیف (پیش‌فرض ۲۰٬۰۰۰). هر محتوای ZIP غیرمنتظره با پیام فارسی روشن رد می‌شود.
  */
 
-import { inflateRawSync } from 'zlib';
 import {
   maxImportRows,
   maxSheetBytes,
 } from '../constants/data-import.constants';
 import { HeaderLocator, safeHeaderIndex } from './csv.parser';
+import {
+  extractZipEntry,
+  InflateBudget,
+  listZipEntries,
+  ZipReadError,
+} from './zip-reader';
 
 /** خروجی تجزیه: سربرگ‌ها و ردیف‌های داده (به‌ترتیب ستون‌ها). */
 export interface ParsedXlsx {
@@ -35,9 +40,13 @@ export class XlsxParseError extends Error {}
 const INVALID_XLSX_MESSAGE =
   'فایل اکسل معتبر نیست؛ این فایل XLSX نیست یا آسیب‌دیده است.';
 
-const EOCD_SIGNATURE = 0x06054b50;
-const CENTRAL_SIGNATURE = 0x02014b50;
-const MAX_COMMENT_LENGTH = 0xffff;
+/** سقف پیش‌فرض مجموع حجم بازشدهٔ یک فایل XLSX: ۱۰۰ مگابایت. */
+const DEFAULT_MAX_INFLATED_BYTES = 100 * 1024 * 1024;
+
+function maxInflatedBytes(): number {
+  const value = Number.parseInt(process.env.IMPORT_MAX_INFLATED_BYTES ?? '', 10);
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_MAX_INFLATED_BYTES;
+}
 
 /* ----------------------------- تجزیه‌گر XML سبک ----------------------------- */
 
@@ -248,81 +257,44 @@ function collectText(node: XmlNode): string {
 
 /* -------------------------------- خواننده ZIP -------------------------------- */
 
-/** نگاشت یک فایل داخل آرشیو ZIP. */
-interface ZipEntry {
-  method: number;
-  compressedSize: number;
-  localOffset: number;
-}
+type ZipEntry = import('./zip-reader').ZipEntry;
 
-/** یافتن امضای «پایان فهرست مرکزی» (EOCD) از انتهای بافر. */
-function findEndOfCentralDirectory(buffer: Buffer): number {
-  const earliest = Math.max(0, buffer.length - 22 - MAX_COMMENT_LENGTH);
-  for (let pos = buffer.length - 22; pos >= earliest; pos -= 1) {
-    if (buffer.readUInt32LE(pos) === EOCD_SIGNATURE) {
-      return pos;
-    }
-  }
-  return -1;
-}
-
-/** خواندن فهرست مرکزی ZIP به‌صورت نگاشت «نام فایل ← نگاشت». */
+/** فهرست مرکزی به‌صورت نگاشت نام ← ورودی (ورودی تکراری، آخرین را نگه می‌دارد). */
 function readCentralDirectory(buffer: Buffer): Map<string, ZipEntry> {
-  const eocd = findEndOfCentralDirectory(buffer);
-  if (eocd === -1) {
-    throw new XlsxParseError(INVALID_XLSX_MESSAGE);
+  try {
+    return new Map(listZipEntries(buffer).map((entry) => [entry.name, entry]));
+  } catch (error) {
+    throw toXlsxError(error);
   }
-  const count = buffer.readUInt16LE(eocd + 10);
-  const offset = buffer.readUInt32LE(eocd + 16);
-  const entries = new Map<string, ZipEntry>();
-
-  let pos = offset;
-  for (let index = 0; index < count; index += 1) {
-    if (
-      pos + 46 > buffer.length ||
-      buffer.readUInt32LE(pos) !== CENTRAL_SIGNATURE
-    ) {
-      throw new XlsxParseError(INVALID_XLSX_MESSAGE);
-    }
-    const method = buffer.readUInt16LE(pos + 10);
-    const compressedSize = buffer.readUInt32LE(pos + 20);
-    const nameLength = buffer.readUInt16LE(pos + 28);
-    const extraLength = buffer.readUInt16LE(pos + 30);
-    const commentLength = buffer.readUInt16LE(pos + 32);
-    const localOffset = buffer.readUInt32LE(pos + 42);
-    const name = buffer
-      .toString('utf8', pos + 46, pos + 46 + nameLength)
-      .replace(/^[./]+/, '');
-    entries.set(name, { method, compressedSize, localOffset });
-    pos += 46 + nameLength + extraLength + commentLength;
-  }
-  return entries;
 }
 
-/** استخراج و ازفشرده‌سازی داده یک فایل داخل ZIP. */
-function extractEntry(buffer: Buffer, entry: ZipEntry): Buffer {
-  const localOffset = entry.localOffset;
-  if (localOffset + 30 > buffer.length) {
-    throw new XlsxParseError(INVALID_XLSX_MESSAGE);
-  }
-  const nameLength = buffer.readUInt16LE(localOffset + 26);
-  const extraLength = buffer.readUInt16LE(localOffset + 28);
-  const start = localOffset + 30 + nameLength + extraLength;
-  const data = buffer.subarray(start, start + entry.compressedSize);
-
-  if (entry.method === 0) {
-    return Buffer.from(data);
-  }
-  if (entry.method === 8) {
-    try {
-      return inflateRawSync(data);
-    } catch {
-      throw new XlsxParseError(INVALID_XLSX_MESSAGE);
+/** تبدیل خطای ZIP به خطای فارسی XLSX. */
+function toXlsxError(error: unknown): XlsxParseError {
+  if (error instanceof ZipReadError) {
+    if (error.code === 'too_large') {
+      return new XlsxParseError(
+        'محتوای بازشدهٔ فایل اکسل بیش از سقف مجاز است؛ فایل رد شد.',
+      );
+    }
+    if (error.code === 'unsupported') {
+      return new XlsxParseError(
+        'این فایل XLSX با روش فشرده‌سازی پشتیبانی‌نشده ذخیره شده است.',
+      );
     }
   }
-  throw new XlsxParseError(
-    'این فایل XLSX با روش فشرده‌سازی پشتیبانی‌نشده ذخیره شده است.',
-  );
+  return new XlsxParseError(INVALID_XLSX_MESSAGE);
+}
+
+/** بودجهٔ بازشدن در حال پردازش (به‌ازای هر فراخوان `parseXlsx`). */
+let activeBudget: InflateBudget = { remaining: 0 };
+
+/** استخراج و ازفشرده‌سازی داده یک فایل داخل ZIP با سقف حجم واقعی. */
+function extractEntry(buffer: Buffer, entry: ZipEntry): Buffer {
+  try {
+    return extractZipEntry(buffer, entry, activeBudget);
+  } catch (error) {
+    throw toXlsxError(error);
+  }
 }
 
 /* ----------------------------- استخراج اجزای XLSX ---------------------------- */
@@ -493,6 +465,7 @@ function readRows(sheet: XmlNode, sharedStrings: string[] | null): string[][] {
 export function parseXlsx(
   input: Buffer,
   locateHeader?: HeaderLocator,
+  budget?: InflateBudget,
 ): ParsedXlsx {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
   const sizeLimit = maxSheetBytes();
@@ -502,6 +475,8 @@ export function parseXlsx(
     );
   }
 
+  // Shared budget lets a ZIP of XLSX files cap the TOTAL inflated size, not just each file's.
+  activeBudget = budget ?? { remaining: maxInflatedBytes() };
   const entries = readCentralDirectory(buffer);
   const sheetName = findSheetName(buffer, entries);
   const sheetEntry = entries.get(sheetName);

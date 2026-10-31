@@ -106,6 +106,20 @@ export class DataImportBatchRepository {
     });
   }
 
+  /** به‌روزرسانی تعداد ردیف‌های درج‌شدهٔ یک دسته (دستهٔ package از ابتدا ساخته می‌شود). */
+  async setInserted(
+    tenantId: string,
+    batchId: string,
+    inserted: number,
+  ): Promise<void> {
+    await this.batches.update({ id: batchId, tenantId }, { inserted });
+  }
+
+  /** حذف سرصفحهٔ یک دستهٔ خالی (commit بدون هیچ ردیف درج‌شده). */
+  async removeBatch(tenantId: string, batchId: string): Promise<void> {
+    await this.batches.delete({ id: batchId, tenantId });
+  }
+
   /** علامت‌گذاری دسته به‌عنوان بازگردانی‌شده. */
   async markUndone(tenantId: string, batchId: string): Promise<void> {
     await this.batches.update({ id: batchId, tenantId }, { undone: true });

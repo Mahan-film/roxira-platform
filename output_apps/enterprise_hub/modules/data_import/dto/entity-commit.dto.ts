@@ -6,12 +6,14 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   Min,
   MinLength,
   ValidationOptions,
   registerDecorator,
 } from 'class-validator';
+import { ENTITY_KEY_PATTERN } from './entity-key.pipe';
 
 /** مقادیر مجاز نگاشت: شناسه فیلد (رشته) یا null برای ستون بی‌تطبیق. */
 function isValidEntityFieldMapping(value: unknown): boolean {
@@ -48,6 +50,7 @@ export class PreviewRequestDto {
   @IsOptional()
   @IsString()
   @MaxLength(64)
+  @Matches(ENTITY_KEY_PATTERN, { message: 'کلید موجودیت نامعتبر است.' })
   entity?: string;
 }
 
@@ -64,6 +67,7 @@ export class EntityCommitDto {
   @IsString()
   @MinLength(1)
   @MaxLength(64)
+  @Matches(ENTITY_KEY_PATTERN, { message: 'کلید موجودیت نامعتبر است.' })
   entity: string;
 
   @ApiProperty({

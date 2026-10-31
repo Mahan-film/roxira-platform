@@ -7,7 +7,9 @@ import { iterateRows } from '../analysis/package-analysis';
 import {
   PackageTableReader,
   stringifyCell,
-} from '../parsers/package-source.types';import { normaliseAndValidate } from '../registry/field-validation';
+  ParsedPackage,
+} from '../parsers/package-source.types';
+import { normaliseAndValidate } from '../registry/field-validation';
 import {
   EntityImportAdapter,
   NormalisedRecord,
@@ -76,12 +78,27 @@ export class PackageCommitService {
       errors: [],
     });
 
-    const buffer = await this.store.readSource(tenantId, packageId);
-    const parsed = await this.analysisService.parsePackageBuffer(
-      buffer,
-      state.fileName,
-      state.kind,
-    );
+    // Create the batch header BEFORE any row is written: whatever happens afterwards (crash,
+    // adapter exception) every inserted row is already reachable through this batch for undo.
+    await this.batchRepository.createBatch(tenantId, {
+      id: batchId,
+      entity: 'package',
+      fileName: state.fileName,
+      inserted: 0,
+    });
+
+    let parsed: ParsedPackage;
+    try {
+      const buffer = await this.store.readSource(tenantId, packageId);
+      parsed = await this.analysisService.parsePackageBuffer(
+        buffer,
+        state.fileName,
+        state.kind,
+      );
+    } catch (error) {
+      await this.batchRepository.removeBatch(tenantId, batchId);
+      throw error;
+    }
 
     const inserted: Record<string, number> = {};
     const skipped: Record<string, number> = {};
@@ -96,8 +113,7 @@ export class PackageCommitService {
       }
       errorCount.set(entity, count + 1);
     };
-    const batchItems: Array<{ entity: string; ownerId: number | string; rowNumber: number }> =
-      [];
+    let totalInserted = 0;
     let done = 0;
 
     try {
@@ -149,13 +165,21 @@ export class PackageCommitService {
           skipped[entity] = (skipped[entity] ?? 0) + skippedCount;
 
           const result = await adapter.commit(tenantId, unique);
-          for (const row of result.inserted) {
-            batchItems.push({
+          // Record the items straight away (not at the very end) so a later failure or crash
+          // cannot orphan rows that this adapter call already wrote.
+          const items = result.inserted.map((row) => ({
+            ownerId: row.ownerId,
+            rowNumber: row.rowNumber,
+          }));
+          for (let start = 0; start < items.length; start += 1000) {
+            await this.batchRepository.addItems(
+              tenantId,
+              batchId,
               entity,
-              ownerId: row.ownerId,
-              rowNumber: row.rowNumber,
-            });
+              items.slice(start, start + 1000),
+            );
           }
+          totalInserted += items.length;
           inserted[entity] = (inserted[entity] ?? 0) + result.inserted.length;
           for (const failure of result.failed) {
             addError(entity, `ردیف ${failure.rowNumber}: ${failure.message}`);
@@ -172,30 +196,35 @@ export class PackageCommitService {
           });
         }
       }
+    } catch (error) {
+      // The batch (with the items recorded so far) stays so the owner can undo the partial import.
+      await this.batchRepository.setInserted(tenantId, batchId, totalInserted);
+      state.status = 'failed';
+      state.batchId = batchId;
+      state.error = 'ثبت بسته با خطا متوقف شد؛ ردیف‌های ثبت‌شده تا اینجا را می‌توانید بازگردانی کنید.';
+      await this.store.writeState(state);
+      await this.progress.set(tenantId, packageId, {
+        phase: 'failed',
+        done,
+        total,
+        inserted,
+        skipped,
+        errors: [state.error, ...errors].slice(0, PACKAGE_MAX_ERRORS * 2),
+      });
+      this.logger.error(
+        `[PACKAGE-IMPORT] ثبت بسته ${packageId} ناموفق بود: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw error;
     } finally {
       parsed.close();
     }
 
-    // Record the whole package as ONE import batch so the existing undo endpoint can remove it.
-    const totalInserted = batchItems.length;
     if (totalInserted > 0) {
-      await this.batchRepository.createBatch(tenantId, {
-        id: batchId,
-        entity: 'package',
-        fileName: state.fileName,
-        inserted: totalInserted,
-      });
-      const byEntity = new Map<string, Array<{ ownerId: number | string; rowNumber: number }>>();
-      for (const item of batchItems) {
-        const list = byEntity.get(item.entity) ?? [];
-        list.push({ ownerId: item.ownerId, rowNumber: item.rowNumber });
-        byEntity.set(item.entity, list);
-      }
-      for (const [entity, rows] of byEntity) {
-        for (let start = 0; start < rows.length; start += 1000) {
-          await this.batchRepository.addItems(tenantId, batchId, entity, rows.slice(start, start + 1000));
-        }
-      }
+      await this.batchRepository.setInserted(tenantId, batchId, totalInserted);
+    } else {
+      await this.batchRepository.removeBatch(tenantId, batchId);
     }
     for (const [entity, count] of errorCount) {
       if (count > PER_ENTITY_ERRORS) {
@@ -217,7 +246,7 @@ export class PackageCommitService {
     });
 
     this.logger.log(
-      `[PACKAGE-IMPORT] بسته ${packageId} در دسته ${batchId} ثبت شد (${batchItems.length} ردیف).`,
+      `[PACKAGE-IMPORT] بسته ${packageId} در دسته ${batchId} ثبت شد (${totalInserted} ردیف).`,
     );
 
     return { batchId };

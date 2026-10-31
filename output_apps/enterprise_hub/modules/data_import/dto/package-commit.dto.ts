@@ -5,9 +5,11 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { ENTITY_KEY_PATTERN } from './entity-key.pipe';
 
 /** یک جدول انتخاب‌شده برای commit بستهٔ دیتابیس. */
 export class PackageCommitTableDto {
@@ -17,6 +19,7 @@ export class PackageCommitTableDto {
   // A skipped table may arrive without an entity (null or ""); only imported tables need one.
   @ValidateIf((table: PackageCommitTableDto) => !table.skip)
   @IsString()
+  @Matches(ENTITY_KEY_PATTERN, { message: 'کلید موجودیت نامعتبر است.' })
   entity: string;
 
   @IsObject()
