@@ -37,3 +37,37 @@ brackets do not.
   report's insurance example. Confirm for monthly-salaried staff.
 - Non-cash allowances are in gross and net pay here. If they are paid in kind, net pay must exclude them.
 - Refunds: a low month reduces tax to zero at most; nothing is paid back.
+
+## File layouts that need a real sample or official spec
+
+Neither the report nor a web search on 2026-10-31 gave a field-level spec. Both exports report
+`uploadReady: false`.
+
+### DSKKAR00.DBF and DSKWOR00.DBF
+
+Confirmed by the report: file names, FoxPro DBF format, `DSK_TKOSO`, `DSK_BIC`, workshop code 10 digits,
+contract row 3 digits, insurance number 10 digits with leading zeros, and that worker rows must total
+to the workshop row (enforced on the written bytes).
+
+Needs one real file from the SSO List Disk program v6:
+
+- Text code page. Built as Windows-1256; the older doc said Iran System. This one decides whether
+  Persian names survive the upload.
+- Type and width of every column except the three above. They are in `DSKKAR_LAYOUT` and `DSKWOR_LAYOUT`.
+- DBF version byte and language driver byte.
+- Numeric or text storage of `DSK_YY`, `DSK_MM`, `DSW_YY`, `DSW_MM`; two-digit year is assumed.
+- `DSK_LISTNO`, `DSK_KIND`, `DSK_PRATE`, `DSK_BIMH`, `DSW_PRATE`: meaning and allowed values.
+- `DSW_SEX`, `DSW_NAT`: stored as Persian words here; may be codes.
+- `DSW_JOB`: the SSO job code. Roxira has no such field on the employee, so it is empty.
+- `DSW_IDPLC`, `DSW_IDATE`: ID issue place and date; not collected, so empty.
+- Whether `DSK_TKOSO` is the employer share alone or a total, and `DSK_RATE` as 23.
+
+### WP and WH
+
+Confirmed by the report: only these two files go up, as TXT or ZIP, WK is gone, WP holds identity of
+new or changed staff, WH holds work and pay detail, and a list is main, additional or corrective.
+
+Everything else is missing: file naming, separator, encoding, field order, codes for list type and
+payment type. So Roxira produces `WP-YYYYMM-working.csv` and `WH-YYYYMM-working.csv` with its own columns
+for checking; they are not upload files. Also not modelled: changed-identity detection for WP (only new
+hires appear), the art. 92 less-developed-area 50% relief, and main versus secondary employer.

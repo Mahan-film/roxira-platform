@@ -350,7 +350,23 @@ export interface InsuranceListQuery {
   listNumber?: string;
 }
 
+export interface WageTaxFiles {
+  wpFileName: string;
+  wpFile: string;
+  whFileName: string;
+  whFile: string;
+  uploadReady: boolean;
+  totalGross: number;
+  totalTax: number;
+  warnings: string[];
+}
+
 export interface InsuranceList {
+  workshopDbfFileName: string;
+  workshopDbf: string;
+  workersDbfFileName: string;
+  workersDbf: string;
+  uploadReady: boolean;
   workshopFileName: string;
   workshopFile: string;
   workersFileName: string;

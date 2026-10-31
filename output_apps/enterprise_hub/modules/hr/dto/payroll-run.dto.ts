@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { WageTaxListType } from '../services/wage-tax-files';
 import {
   ArrayMaxSize,
   IsArray,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -183,9 +185,35 @@ export class InsuranceListResponseDto {
   @ApiProperty({ example: 'DSKKAR00.csv' }) workshopFileName: string;
   @ApiProperty({ description: 'سطر سرجمع کارگاه (CSV، UTF-8)' })
   workshopFile: string;
+  @ApiProperty({ example: 'DSKKAR00.DBF' }) workshopDbfFileName: string;
+  @ApiProperty({ description: 'DSKKAR00.DBF به‌صورت base64' }) workshopDbf: string;
+  @ApiProperty({ example: 'DSKWOR00.DBF' }) workersDbfFileName: string;
+  @ApiProperty({ description: 'DSKWOR00.DBF به‌صورت base64' }) workersDbf: string;
+  @ApiProperty({ description: 'تا تطبیق قالب با نمونه رسمی false است' })
+  uploadReady: boolean;
   @ApiProperty({ example: 'DSKWOR00.csv' }) workersFileName: string;
   @ApiProperty({ description: 'سطرهای کارکنان (CSV، UTF-8)' })
   workersFile: string;
+  @ApiProperty({ type: [String] }) warnings: string[];
+}
+
+/** GET /enterprise-hub/hr/payroll-runs/:id/wage-tax-files */
+export class WageTaxFilesQueryDto {
+  @ApiPropertyOptional({ enum: ['MAIN', 'ADDITIONAL', 'CORRECTIVE'] })
+  @IsOptional()
+  @IsIn(['MAIN', 'ADDITIONAL', 'CORRECTIVE'])
+  listType?: WageTaxListType;
+}
+
+export class WageTaxFilesResponseDto {
+  @ApiProperty() wpFileName: string;
+  @ApiProperty() wpFile: string;
+  @ApiProperty() whFileName: string;
+  @ApiProperty() whFile: string;
+  @ApiProperty({ description: 'تا دریافت مشخصات رسمی false است' })
+  uploadReady: boolean;
+  @ApiProperty() totalGross: number;
+  @ApiProperty() totalTax: number;
   @ApiProperty({ type: [String] }) warnings: string[];
 }
 

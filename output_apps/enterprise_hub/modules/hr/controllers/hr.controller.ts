@@ -46,6 +46,8 @@ import {
   InsuranceListResponseDto,
   PayrollRatesResponseDto,
   PayrollRunResponseDto,
+  WageTaxFilesQueryDto,
+  WageTaxFilesResponseDto,
 } from '../dto/payroll-run.dto';
 import { QueryEmployeeDto, QueryPayslipDto } from '../dto/query-hr.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
@@ -328,7 +330,7 @@ export class HrController {
   @RequireAction(AccessAction.EXPORT)
   @Get('payroll-runs/:id/insurance-list')
   @ApiOperation({
-    summary: 'لیست بیمه تأمین اجتماعی (DSKKAR00 / DSKWOR00، متن CSV)',
+    summary: 'لیست بیمه تأمین اجتماعی (DSKKAR00 و DSKWOR00، CSV و DBF)',
   })
   @ApiResponse({ status: HttpStatus.OK, type: InsuranceListResponseDto })
   async getInsuranceList(
@@ -337,6 +339,24 @@ export class HrController {
     @Query() query: InsuranceListQueryDto,
   ): Promise<InsuranceListResponseDto> {
     return this.payrollRunService.insuranceList(
+      this.tenantIdOf(request),
+      id,
+      query,
+    );
+  }
+
+  @RequireAction(AccessAction.EXPORT)
+  @Get('payroll-runs/:id/wage-tax-files')
+  @ApiOperation({
+    summary: 'برگه کاری WP و WH (قالب بارگذاری سامانه مالیات حقوق نیست)',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: WageTaxFilesResponseDto })
+  async getWageTaxFiles(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: WageTaxFilesQueryDto,
+  ): Promise<WageTaxFilesResponseDto> {
+    return this.payrollRunService.wageTaxFiles(
       this.tenantIdOf(request),
       id,
       query,

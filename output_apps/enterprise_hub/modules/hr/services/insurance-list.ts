@@ -5,10 +5,9 @@
  * (one row per worker).
  *
  * Format assumptions (see docs/hr/INSURANCE_LIST_EXPORT.md):
- *   - The DISKET program stores dBase files in the Iran System code page.
- *     We emit the same columns, in the same order and with the same field
- *     names, as UTF-8 CSV text (comma separated, CRLF, header row). Converting
- *     to DBF / Iran System is a separate step and is not done here.
+ *   - The same columns are emitted twice: as UTF-8 CSV for reading, and as DBF
+ *     files. The DBF code page and column widths are unconfirmed (see
+ *     DSKKAR_LAYOUT), so `uploadReady` is false.
  *   - Years are two digits (1405 → "05"), months two digits, dates are
  *     compact Jalali `YYYYMMDD`. Amounts are whole rials, no separators.
  *   - DSW_MAH = whole-rial daily wage × days; DSW_MAZ = insurable benefits above that;
@@ -17,6 +16,8 @@
  *   - DSK_TKOSO is the employer's 20% share, DSK_BIC the 3% unemployment
  *     share, DSK_RATE the employer's total rate in percent (23).
  */
+
+import { DbfField, DbfRow, readDbf, writeDbf } from './dbf-file';
 
 export interface InsuranceListWorkshop {
   workshopCode: string;
@@ -53,11 +54,113 @@ export interface InsuranceListWorker {
   unemploymentInsurance: number;
 }
 
+/**
+ * Column types and widths of the DBF files. The report names the files, the FoxPro DBF format and
+ * only these lengths: workshop code 10, contract row 3, insurance number 10. Every other width
+ * is unconfirmed: see docs/hr/STATUTORY_OPEN_ITEMS.md, and `uploadReady` stays false until a real
+ * sample from the SSO List Disk program replaces this table.
+ */
+const textField = (name: string, length: number): DbfField => ({ name, type: 'C', length });
+const numberField = (name: string, length: number): DbfField => ({ name, type: 'N', length });
+
+export const DSKKAR_LAYOUT: ReadonlyArray<DbfField> = [
+  textField('DSK_ID', 10),
+  textField('DSK_NAME', 100),
+  textField('DSK_FARM', 100),
+  textField('DSK_ADRS', 100),
+  numberField('DSK_KIND', 1),
+  numberField('DSK_YY', 2),
+  numberField('DSK_MM', 2),
+  textField('DSK_LISTNO', 12),
+  textField('DSK_DISC', 100),
+  numberField('DSK_NUM', 5),
+  numberField('DSK_TDD', 6),
+  numberField('DSK_TROOZ', 12),
+  numberField('DSK_TMAH', 12),
+  numberField('DSK_TMAZ', 12),
+  numberField('DSK_TMASH', 12),
+  numberField('DSK_TTOTL', 12),
+  numberField('DSK_TBIME', 12),
+  numberField('DSK_TKOSO', 12),
+  numberField('DSK_BIC', 12),
+  numberField('DSK_RATE', 5),
+  numberField('DSK_PRATE', 2),
+  numberField('DSK_BIMH', 12),
+  textField('MON_PYM', 3),
+];
+
+export const DSKWOR_LAYOUT: ReadonlyArray<DbfField> = [
+  textField('DSW_ID', 10),
+  numberField('DSW_YY', 2),
+  numberField('DSW_MM', 2),
+  textField('DSW_LISTNO', 12),
+  textField('DSW_ID1', 10),
+  textField('DSW_FNAME', 100),
+  textField('DSW_LNAME', 100),
+  textField('DSW_DNAME', 100),
+  textField('DSW_IDNO', 15),
+  textField('DSW_IDPLC', 100),
+  textField('DSW_IDATE', 8),
+  textField('DSW_BDATE', 8),
+  textField('DSW_SEX', 3),
+  textField('DSW_NAT', 10),
+  textField('DSW_OCP', 100),
+  textField('DSW_SDATE', 8),
+  textField('DSW_EDATE', 8),
+  numberField('DSW_DD', 2),
+  numberField('DSW_ROOZ', 12),
+  numberField('DSW_MAH', 12),
+  numberField('DSW_MAZ', 12),
+  numberField('DSW_MASH', 12),
+  numberField('DSW_TOTL', 12),
+  numberField('DSW_BIME', 12),
+  numberField('DSW_PRATE', 2),
+  textField('DSW_JOB', 6),
+  textField('PER_NATCOD', 10),
+];
+
+/** Workshop total ↔ worker column that must add up to it. */
+const TOTAL_COLUMNS: ReadonlyArray<[string, string]> = [
+  ['DSK_TDD', 'DSW_DD'],
+  ['DSK_TROOZ', 'DSW_ROOZ'],
+  ['DSK_TMAH', 'DSW_MAH'],
+  ['DSK_TMAZ', 'DSW_MAZ'],
+  ['DSK_TMASH', 'DSW_MASH'],
+  ['DSK_TTOTL', 'DSW_TOTL'],
+  ['DSK_TBIME', 'DSW_BIME'],
+];
+
+/** Mismatches between the workshop row and the worker rows; empty when they agree. */
+export function compareInsuranceTotals(
+  workshop: DbfRow,
+  workers: ReadonlyArray<DbfRow>,
+): string[] {
+  const problems: string[] = [];
+  if (Number(workshop.DSK_NUM) !== workers.length) {
+    problems.push(`DSK_NUM ${workshop.DSK_NUM} != ${workers.length}`);
+  }
+  for (const [total, column] of TOTAL_COLUMNS) {
+    const sum = workers.reduce((acc, row) => acc + Number(row[column]), 0);
+    if (Number(workshop[total]) !== sum) {
+      problems.push(`${total} ${workshop[total]} != ${sum}`);
+    }
+  }
+  return problems;
+}
+
 export interface InsuranceListFiles {
   workshopFileName: string;
   workshopFile: string;
   workersFileName: string;
   workersFile: string;
+  workshopDbfFileName: string;
+  /** Base64 of DSKKAR00.DBF. */
+  workshopDbf: string;
+  workersDbfFileName: string;
+  /** Base64 of DSKWOR00.DBF. */
+  workersDbf: string;
+  /** False until the DBF layout is confirmed against a real SSO sample. */
+  uploadReady: boolean;
   warnings: string[];
 }
 
@@ -200,7 +303,9 @@ export function buildInsuranceList(
       DSW_YY: yy,
       DSW_MM: mm,
       DSW_LISTNO: listNo,
-      DSW_ID1: worker.insuranceNumber ?? '',
+      DSW_ID1: worker.insuranceNumber
+        ? worker.insuranceNumber.padStart(10, '0')
+        : '',
       DSW_FNAME: worker.firstName,
       DSW_LNAME: worker.lastName,
       DSW_DNAME: worker.fatherName ?? '',
@@ -252,11 +357,27 @@ export function buildInsuranceList(
     MON_PYM: workshop.contractRow ?? '000',
   };
 
+  const now = new Date();
+  const workshopDbf = writeDbf(DSKKAR_LAYOUT, [header], now);
+  const workersDbf = writeDbf(DSKWOR_LAYOUT, workerRows, now);
+  const problems = compareInsuranceTotals(
+    readDbf(workshopDbf)[0],
+    readDbf(workersDbf),
+  );
+  if (problems.length > 0) {
+    throw new Error(`insurance list totals disagree: ${problems.join('; ')}`);
+  }
+
   return {
     workshopFileName: 'DSKKAR00.csv',
     workshopFile: toCsv(DSKKAR_FIELDS, [header]),
     workersFileName: 'DSKWOR00.csv',
     workersFile: toCsv(DSKWOR_FIELDS, workerRows),
+    workshopDbfFileName: 'DSKKAR00.DBF',
+    workshopDbf: workshopDbf.toString('base64'),
+    workersDbfFileName: 'DSKWOR00.DBF',
+    workersDbf: workersDbf.toString('base64'),
+    uploadReady: false,
     warnings,
   };
 }

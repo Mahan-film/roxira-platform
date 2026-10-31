@@ -816,6 +816,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "GET /enterprise-hub/hr/payroll-runs/:id/wage-tax-files (HrController.getWageTaxFiles)": {
+    "policy": "hr:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/hr/payslips (HrController.listPayslips)": {
     "policy": "hr:read",
     "owner": true,

@@ -24,6 +24,7 @@ import {
   getInsuranceList,
   getPayrollRates,
   getPayrollRun,
+  getWageTaxFiles,
   listPayrollRuns,
   postPayrollRun,
 } from "@/lib/api/hr-client";
@@ -68,6 +69,16 @@ function currentJalaliPeriod(): { year: number; month: number } {
 
 function periodLabel(year: number, month: number): string {
   return `${JALALI_MONTHS[month - 1] ?? month} ${formatNumber(year).replace(/٬/g, "")}`;
+}
+
+function downloadBase64(fileName: string, base64: string) {
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function downloadText(fileName: string, content: string) {
@@ -477,7 +488,28 @@ function InsuranceListCard({ runId }: { runId: number }) {
       const list = await getInsuranceList(runId, form);
       downloadText(list.workshopFileName, list.workshopFile);
       downloadText(list.workersFileName, list.workersFile);
-      setWarnings(list.warnings);
+      downloadBase64(list.workshopDbfFileName, list.workshopDbf);
+      downloadBase64(list.workersDbfFileName, list.workersDbf);
+      setWarnings(
+        list.uploadReady
+          ? list.warnings
+          : [...list.warnings, "قالب DBF هنوز با نمونه رسمی تطبیق نشده است؛ پیش از ارسال، آن را در برنامه لیست بیمه باز و کنترل کنید."],
+      );
+    } catch (err) {
+      setError(loadErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadTaxFiles() {
+    setBusy(true);
+    setError(null);
+    try {
+      const files = await getWageTaxFiles(runId);
+      downloadText(files.wpFileName, files.wpFile);
+      downloadText(files.whFileName, files.whFile);
+      setWarnings(files.warnings);
     } catch (err) {
       setError(loadErrorMessage(err));
     } finally {
@@ -497,8 +529,9 @@ function InsuranceListCard({ runId }: { runId: number }) {
       <CardHeader>
         <CardTitle>لیست بیمه تأمین اجتماعی</CardTitle>
         <CardDescription>
-          دو فایل DSKKAR00 (سرجمع کارگاه) و DSKWOR00 (کارکنان) با ستون‌های برنامه دیسکت (متن CSV،
-          UTF-8) دریافت می‌شود.
+          فایل‌های DSKKAR00 (سرجمع کارگاه) و DSKWOR00 (کارکنان) به‌صورت CSV و DBF دریافت می‌شود. جمع
+          سطرهای کارکنان پیش از ساخت فایل با سرجمع کارگاه کنترل می‌شود. برگه کاری مالیات حقوق (WP و WH)
+          برای کنترل است و قالب بارگذاری سامانه نیست.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -523,10 +556,14 @@ function InsuranceListCard({ runId }: { runId: number }) {
             ))}
           </ul>
         )}
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button onClick={download} disabled={busy || !form.workshopCode || !form.workshopName || !form.employerName}>
             <Download />
             دریافت لیست بیمه
+          </Button>
+          <Button variant="outline" onClick={downloadTaxFiles} disabled={busy}>
+            <Download />
+            برگه کاری مالیات حقوق
           </Button>
         </div>
       </CardContent>

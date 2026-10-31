@@ -19,6 +19,7 @@ import {
   QueryPayslipDto,
   SetStatutoryParameterDto,
   StatutoryParameter,
+  WageTaxFiles,
 } from "@/types/hr";
 import { apiRequest } from "@/lib/api/http-client";
 import { API_PROXY_BASE_PATH, HR_RESOURCE_PATH } from "@/lib/api/config";
@@ -185,6 +186,14 @@ export async function replaceContractAllowances(
   return apiRequest<ContractAllowance[]>(`${HR_ENDPOINT}/contracts/${contractId}/allowances`, {
     method: "PUT",
     body: JSON.stringify({ allowances }),
+  });
+}
+
+/** برگه کاری WP و WH — GET /enterprise-hub/hr/payroll-runs/:id/wage-tax-files */
+export async function getWageTaxFiles(runId: number, signal?: AbortSignal): Promise<WageTaxFiles> {
+  return apiRequest<WageTaxFiles>(`${HR_ENDPOINT}/payroll-runs/${runId}/wage-tax-files`, {
+    method: "GET",
+    signal,
   });
 }
 

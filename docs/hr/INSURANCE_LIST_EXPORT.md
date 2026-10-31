@@ -89,3 +89,10 @@ The SSO "DISKET" program (DSKWIN) uses two dBase files: `DSKKAR00.DBF` (workshop
   month. `DSW_IDPLC`, `DSW_IDATE`, `DSW_JOB` (job code) are empty: we do not store them.
 - An employee without an insurance number (`hr_employees.insurance_number`) is still exported
   and reported in `warnings`.
+
+## DBF and wage-tax exports
+
+`GET .../payroll-runs/:id/insurance-list` also returns `DSKKAR00.DBF` and `DSKWOR00.DBF` as base64. The
+worker rows are checked against the workshop row on the written bytes; a mismatch refuses the export.
+`GET .../payroll-runs/:id/wage-tax-files` returns WP and WH working files, not upload files. Both report
+`uploadReady: false`; `docs/hr/STATUTORY_OPEN_ITEMS.md` lists what would change that.

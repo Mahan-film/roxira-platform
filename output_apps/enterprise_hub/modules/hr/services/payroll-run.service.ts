@@ -16,6 +16,7 @@ import {
   CreatePayrollRunDto,
   InsuranceListQueryDto,
   InsuranceListResponseDto,
+  WageTaxFilesQueryDto,
   PayrollRatesResponseDto,
   PayrollRunItemDto,
   PayrollRunResponseDto,
@@ -36,6 +37,7 @@ import { PayrollYearRates } from '../statutory/payroll-rates';
 import { StatutoryService } from '../statutory/statutory.service';
 import { HrService } from './hr.service';
 import { buildInsuranceList, InsuranceListWorker } from './insurance-list';
+import { buildWageTaxFiles, WageTaxFiles } from './wage-tax-files';
 import {
   compactJalali,
   isoDate,
@@ -665,6 +667,61 @@ export class PayrollRunService {
       Math.round(
         (rates.employerInsuranceRate + rates.unemploymentInsuranceRate) * 100,
       ),
+    );
+  }
+
+  /** Working WP and WH files of a run; see wage-tax-files.ts for why they are not upload files. */
+  async wageTaxFiles(
+    tenantId: string,
+    id: number,
+    query: WageTaxFilesQueryDto,
+  ): Promise<WageTaxFiles> {
+    const run = await this.requireRun(tenantId, id);
+    const payslips = await this.hrRepository.findPayslipsByRun(tenantId, id);
+    const periodStart = isoDate(
+      jalaliMonthStart(run.periodYear, run.periodMonth),
+    );
+    const periodEnd = isoDate(jalaliMonthEnd(run.periodYear, run.periodMonth));
+    const people = payslips.map((payslip) => {
+      const employee = payslip.employee;
+      const hired = (employee.hireDate ?? '').slice(0, 10);
+      const money = (value: number): number => Number(value ?? 0);
+      const basePay = money(payslip.baseSalary) + money(payslip.seniorityAmount);
+      const overtimePay =
+        money(payslip.overtimeAmount) +
+        money(payslip.nightShiftAmount) +
+        money(payslip.holidayAmount);
+      const nonCash = money(payslip.nonCashAmount);
+      const eidi = money(payslip.eidiAmount);
+      const grossPay = money(payslip.grossPay);
+      return {
+        nationalId: employee.nationalId,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        fatherName: employee.fatherName,
+        birthDate: compactJalali(employee.birthDate),
+        isNew: hired >= periodStart && hired <= periodEnd,
+        workDays: Number(payslip.workDays),
+        basePay,
+        overtimePay,
+        allowances: grossPay - basePay - overtimePay - nonCash - eidi,
+        nonCash,
+        eidi,
+        grossPay,
+        employeeInsurance: money(payslip.insuranceDeduction),
+        taxableIncome: money(payslip.taxableIncome),
+        incomeTax: money(payslip.incomeTax),
+      };
+    });
+    return buildWageTaxFiles(
+      run.periodYear,
+      run.periodMonth,
+      query.listType ?? 'MAIN',
+      people,
+      {
+        totalGross: Number(run.totalGross),
+        totalTax: Number(run.totalIncomeTax),
+      },
     );
   }
 }
