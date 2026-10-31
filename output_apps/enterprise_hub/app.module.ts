@@ -27,6 +27,7 @@ import { ClientErrorsModule } from './modules/client-errors/client-errors.module
 import { BankingModule } from './modules/banking/banking.module';
 import { McpModule } from './mcp/mcp.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
+import { InvoiceCaptureModule } from './modules/invoice_capture/invoice-capture.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
   (file) => {
@@ -93,6 +94,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     BankingModule,
     McpModule,
     AssistantModule,
+    InvoiceCaptureModule,
   ],
 })
 export class AppModule {}

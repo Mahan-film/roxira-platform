@@ -890,6 +890,11 @@ export class AccountingService {
     return locks.map((lock) => this.toLockDto(lock));
   }
 
+  /** True when `date` falls inside an active period lock of the tenant (read-only pre-check). */
+  async isPeriodLocked(tenantId: string, date: Date): Promise<boolean> {
+    return (await this.accountingRepository.findActiveLockCovering(tenantId, date)) !== null;
+  }
+
   /** Header of a tenant's journal entry by its exact number, or null. */
   async findJournalEntryByNumber(
     tenantId: string,

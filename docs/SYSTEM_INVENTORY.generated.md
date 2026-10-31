@@ -81,6 +81,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | drafting | deepseek/deepseek-v4-pro, deepseek/deepseek-v4.1-flash, nvidia/nemotron-3-ultra-550b-a55b:free |
 | executor | deepseek/deepseek-v4.1-flash, deepseek/deepseek-v4-flash-0731, deepseek/deepseek-v4-flash |
 | free | qwen/qwen3.8-27b:free, google/gemma-4-31b-it:free, nvidia/nemotron-3-super-120b-a12b:free, nvidia/nemotron-3-ultra-550b-a55b:free, openrouter/free |
+| invoice_extraction | google/gemini-3.8-flash |
 | mechanical | google/gemini-3.1-flash-lite, anthropic/claude-haiku-4.5 |
 | mimo | xiaomi/mimo-v2.6-flash |
 | product | anthropic/claude-haiku-5.5, deepseek/deepseek-v4.1-flash |

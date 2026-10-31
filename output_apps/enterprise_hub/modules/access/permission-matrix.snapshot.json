@@ -304,6 +304,72 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/assistant/capture/documents (CaptureController.recent)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/assistant/capture/documents/:id (CaptureController.one)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/assistant/capture/documents/:id/source (CaptureController.source)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/assistant/capture/queue (CaptureController.queue)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/assistant/capture/settings (CaptureController.getSettings)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/assistant/capture/vendor-rules (CaptureController.vendorRules)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/assistant/status (AssistantController.status)": {
     "policy": "assistant:read",
     "owner": true,
@@ -1035,6 +1101,17 @@
     "read_only": true,
     "legacy_member": true
   },
+  "PATCH /enterprise-hub/assistant/capture/documents/:id (CaptureController.update)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "PATCH /enterprise-hub/crm/leads/:id (CrmController.updateLead)": {
     "policy": "crm:create",
     "owner": true,
@@ -1314,6 +1391,61 @@
     "owner": true,
     "admin": true,
     "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/assistant/capture/documents (CaptureController.create)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/assistant/capture/documents/:id/post (CaptureController.post)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/assistant/capture/documents/:id/reject (CaptureController.reject)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/assistant/capture/documents/:id/reverse (CaptureController.reverse)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/assistant/capture/documents/:id/review (CaptureController.review)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,
@@ -1978,6 +2110,28 @@
   },
   "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {
     "policy": "platformAdmin"
+  },
+  "PUT /enterprise-hub/assistant/capture/settings (CaptureController.putSettings)": {
+    "policy": "accounting:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/assistant/capture/vendor-rules/:vendorId (CaptureController.putRule)": {
+    "policy": "accounting:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
   },
   "PUT /enterprise-hub/banking/recon/settings (ReconController.updateSettings)": {
     "policy": "banking:admin",

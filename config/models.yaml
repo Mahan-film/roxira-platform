@@ -328,6 +328,20 @@ roles:
       - id: google/gemini-3.8-flash
         price_per_1m: { in: 0.75, out: 3.75 }
 
+  invoice_extraction:
+    description: >
+      Invoice capture in the assistant chat (enterprise_hub modules/invoice_capture): extract
+      seller/buyer/items/tax/total from a photo or text. This role holds ONLY the paid vision
+      fallback (provider.data_collection=deny); the free ladder is the `free` role above, tried
+      first by the code (owner decision 2026-10-14: free first, paid fallback; all current
+      customers are test accounts -- revisit before onboarding real paying customers). Whether the
+      free models read Persian print from images was NOT measured when this role was added;
+      docs/eval/INVOICE_CAPTURE_EVAL.md is the evidence.
+    data_policy: standard
+    models:
+      - id: google/gemini-3.8-flash
+        price_per_1m: { in: 0.75, out: 3.75 }
+
   voice_realtime:
     description: >
       W20 (docs/W20_realtime_voice.md): optional native speech-to-speech
