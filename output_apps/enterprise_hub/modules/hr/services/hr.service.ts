@@ -42,10 +42,12 @@ import {
   Gender,
   MaritalStatus,
   PayslipStatus,
+  WageTaxRegime,
 } from '../enums/hr.enum';
 import { HrRepository } from '../repositories/hr.repository';
-import { gregorianToJalali } from './jalali-period';
-import { calculatePayroll } from './payroll-calculator';
+import { gregorianToJalali, jalaliMonthDays } from './jalali-period';
+import { ContractAllowanceDto, ReplaceAllowancesDto } from '../dto/contract-allowance.dto';
+import { PayrollYearToDate, yearToDateOf, calculatePayroll } from './payroll-calculator';
 
 /** ورودی درج کارمند از مسیر ورود داده (فیلدهای اختیاری خالی می‌مانند). */
 export interface HrImportEmployeeInput {
@@ -157,6 +159,7 @@ export class HrService {
       childAllowance: this.round(Number(entity.childAllowance)),
       insuranceRate: Number(entity.insuranceRate),
       isInsuranceSubject: entity.isInsuranceSubject,
+      taxRegime: entity.taxRegime,
       status: entity.status,
       description: entity.description,
       createdAt: this.toIso(entity.createdAt) ?? '',
@@ -181,6 +184,13 @@ export class HrService {
       housingAllowance: this.round(Number(entity.housingAllowance)),
       foodAllowance: this.round(Number(entity.foodAllowance)),
       childAllowance: this.round(Number(entity.childAllowance)),
+      marriageAllowance: this.round(Number(entity.marriageAllowance ?? 0)),
+      allowancesTotal: this.round(Number(entity.allowancesTotal ?? 0)),
+      allowanceLines: entity.allowanceLines ?? [],
+      eidiAmount: this.round(Number(entity.eidiAmount ?? 0)),
+      taxableIncome: this.round(Number(entity.taxableIncome ?? 0)),
+      flatTax: this.round(Number(entity.flatTax ?? 0)),
+      monthDays: Number(entity.monthDays ?? 0),
       overtimeAmount: this.round(Number(entity.overtimeAmount)),
       payrollRunId: entity.payrollRunId ?? null,
       seniorityAmount: this.round(Number(entity.seniorityAmount ?? 0)),
@@ -515,6 +525,7 @@ export class HrService {
       childAllowance: this.round(dto.childAllowance ?? 0),
       insuranceRate: dto.insuranceRate ?? rates.employeeInsuranceRate,
       isInsuranceSubject: dto.isInsuranceSubject ?? true,
+      taxRegime: dto.taxRegime ?? WageTaxRegime.STANDARD,
       status: ContractStatus.ACTIVE,
       description: dto.description ?? null,
       createdAt: new Date(),
@@ -525,6 +536,36 @@ export class HrService {
       ...contract,
       employee,
     });
+  }
+
+  async listAllowances(
+    tenantId: string,
+    contractId: number,
+  ): Promise<ContractAllowanceDto[]> {
+    await this.findOneContract(tenantId, contractId);
+    const rows = await this.hrRepository.findAllowancesByContractIds(tenantId, [
+      contractId,
+    ]);
+    return rows.map(({ title, amount, insurable, taxTreatment }) => ({
+      title,
+      amount: Number(amount),
+      insurable,
+      taxTreatment,
+    }));
+  }
+
+  async replaceAllowances(
+    tenantId: string,
+    contractId: number,
+    dto: ReplaceAllowancesDto,
+  ): Promise<ContractAllowanceDto[]> {
+    await this.findOneContract(tenantId, contractId);
+    await this.hrRepository.replaceAllowances(
+      tenantId,
+      contractId,
+      dto.allowances,
+    );
+    return this.listAllowances(tenantId, contractId);
   }
 
   async listContracts(
@@ -565,6 +606,8 @@ export class HrService {
       overtimeAmount?: number;
       otherDeductions?: number;
       periodYear?: number;
+      yearToDate?: PayrollYearToDate;
+      monthDays?: number;
     },
   ): Promise<
     Omit<PayrollCalculationResponseDto, 'employeeFullName' | 'employeeId'>
@@ -576,7 +619,11 @@ export class HrService {
       options.periodYear,
     );
     const result = calculatePayroll({
-      rates: { ...rates, employeeInsuranceRate: Number(contract.insuranceRate) },
+      rates,
+      employeeInsuranceRate: String(contract.insuranceRate),
+      taxRegime: contract.taxRegime,
+      yearToDate: options.yearToDate,
+      monthDays: options.monthDays,
       monthlyBaseWage: Number(contract.baseSalary),
       housingAllowance: Number(contract.housingAllowance),
       foodAllowance: Number(contract.foodAllowance),
@@ -713,10 +760,20 @@ export class HrService {
       );
     }
 
+    const monthDays = jalaliMonthDays(dto.periodYear, dto.periodMonth);
     const calculation = await this.computePayroll(tenantId, contract, {
       overtimeAmount: dto.overtimeAmount,
       otherDeductions: dto.otherDeductions,
       periodYear: dto.periodYear,
+      monthDays,
+      yearToDate: yearToDateOf(
+        await this.hrRepository.findIssuedPayslipsBefore(
+          tenantId,
+          [employee.id],
+          dto.periodYear,
+          dto.periodMonth,
+        ),
+      ),
     });
 
     if (calculation.grossPay <= 0) {
@@ -788,6 +845,8 @@ export class HrService {
       overtimeAmount: calculation.overtimeAmount,
       grossPay: calculation.grossPay,
       insuranceDeduction: calculation.insuranceDeduction,
+      taxableIncome: calculation.taxableIncome,
+      monthDays,
       incomeTax: calculation.incomeTax,
       otherDeductions: calculation.otherDeductions,
       netPay: calculation.netPay,

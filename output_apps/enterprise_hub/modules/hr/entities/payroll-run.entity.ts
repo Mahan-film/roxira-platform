@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
+import { PayrollYearRates } from '../statutory/payroll-rates';
 import { PayrollRunStatus } from '../enums/hr.enum';
 import { numericTransformer } from './numeric-column.transformer';
 import { PayslipEntity } from './payslip.entity';
@@ -41,9 +42,17 @@ export class PayrollRunEntity {
   @Column({ type: 'varchar', length: 20, default: PayrollRunStatus.DRAFT })
   status: PayrollRunStatus;
 
-  /** Jalali year of the statutory rates used (constants/payroll-rates.ts). */
+  /** Jalali year of the statutory values used. */
   @Column({ type: 'integer', name: 'rates_year' })
   ratesYear: number;
+
+  /** Statutory values the run was calculated with; exports read these, not current values. */
+  @Column({ type: 'jsonb', name: 'rates_snapshot', nullable: true })
+  ratesSnapshot: PayrollYearRates | null;
+
+  /** Keys that were not verified when the run was calculated. */
+  @Column({ type: 'jsonb', name: 'unverified_keys', default: () => "'[]'::jsonb" })
+  unverifiedKeys: string[];
 
   @Column({ type: 'integer', name: 'employee_count', default: 0 })
   employeeCount: number;

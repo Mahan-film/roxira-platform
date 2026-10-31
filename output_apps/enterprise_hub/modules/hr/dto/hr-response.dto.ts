@@ -53,6 +53,7 @@ export class ContractResponseDto {
   @ApiProperty() childAllowance: number;
   @ApiProperty() insuranceRate: number;
   @ApiProperty() isInsuranceSubject: boolean;
+  @ApiProperty() taxRegime: string;
   @ApiProperty({ enum: ContractStatus }) status: ContractStatus;
   @ApiProperty({ nullable: true }) description: string | null;
   @ApiProperty() createdAt: string;
@@ -70,7 +71,7 @@ export class PayrollCalculationResponseDto {
   @ApiProperty() childAllowance: number;
   @ApiProperty() overtimeAmount: number;
   @ApiProperty({ description: 'جمع حقوق و مزایا (ریال)' }) grossPay: number;
-  @ApiProperty({ description: 'کسر بیمه سهم کارگر ۷٪ (ریال)' })
+  @ApiProperty({ description: 'کسر بیمه سهم کارگر (ریال)' })
   insuranceDeduction: number;
   @ApiProperty({ description: 'درآمد مشمول مالیات (ریال)' }) taxableIncome: number;
   @ApiProperty({ description: 'مالیات بر حقوق (ریال)' }) incomeTax: number;
@@ -86,6 +87,19 @@ export class PayslipResponseDto {
   @ApiProperty() employeeFullName: string;
   @ApiProperty() employeeNumber: string;
   @ApiProperty({ nullable: true }) contractId: number | null;
+  @ApiProperty() marriageAllowance: number;
+  @ApiProperty() allowancesTotal: number;
+  @ApiProperty({ type: 'array', items: { type: 'object' } })
+  allowanceLines: {
+    title: string;
+    amount: number;
+    insurable: boolean;
+    taxTreatment: string;
+  }[];
+  @ApiProperty() eidiAmount: number;
+  @ApiProperty() taxableIncome: number;
+  @ApiProperty() flatTax: number;
+  @ApiProperty() monthDays: number;
   @ApiProperty() periodYear: number;
   @ApiProperty() periodMonth: number;
   @ApiProperty() baseSalary: number;
@@ -99,9 +113,9 @@ export class PayslipResponseDto {
   @ApiProperty({ description: 'کار در روز تعطیل' }) holidayAmount: number;
   @ApiProperty({ description: 'کسر غیبت' }) absenceDeduction: number;
   @ApiProperty({ description: 'دستمزد مشمول بیمه' }) insurableWage: number;
-  @ApiProperty({ description: 'بیمه سهم کارفرما (۲۰٪)' })
+  @ApiProperty({ description: 'بیمه سهم کارفرما' })
   employerInsurance: number;
-  @ApiProperty({ description: 'بیمه بیکاری (۳٪، سهم کارفرما)' })
+  @ApiProperty({ description: 'بیمه بیکاری (سهم کارفرما)' })
   unemploymentInsurance: number;
   @ApiProperty() workDays: number;
   @ApiProperty() overtimeHours: number;

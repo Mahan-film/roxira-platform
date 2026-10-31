@@ -53,6 +53,7 @@ const INPUT_COLUMNS: Array<[InputKey, string]> = [
   ["holidayHours", "تعطیل‌کاری (ساعت)"],
   ["absenceDays", "غیبت (روز)"],
   ["otherDeductions", "سایر کسورات (ریال)"],
+  ["eidi", "عیدی (ریال)"],
 ];
 
 /** Current Jalali year and month in the browser's clock. */
@@ -287,11 +288,11 @@ export default function PayrollPage() {
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <StatCard label="جمع حقوق و مزایا" value={formatMoneyRial(run.totalGross)} hint={`${formatNumber(run.employeeCount)} نفر`} />
-            <StatCard label="بیمه سهم کارگر (۷٪)" value={formatMoneyRial(run.totalEmployeeInsurance)} />
+            <StatCard label="بیمه سهم کارگر" value={formatMoneyRial(run.totalEmployeeInsurance)} />
             <StatCard
-              label="بیمه سهم کارفرما (۲۰٪)"
+              label="بیمه سهم کارفرما"
               value={formatMoneyRial(run.totalEmployerInsurance)}
-              hint={`بیمه بیکاری (۳٪): ${formatMoneyRial(run.totalUnemploymentInsurance)}`}
+              hint={`بیمه بیکاری: ${formatMoneyRial(run.totalUnemploymentInsurance)}`}
             />
             <StatCard label="مالیات حقوق" value={formatMoneyRial(run.totalIncomeTax)} />
             <StatCard label="خالص پرداختی" value={formatMoneyRial(run.totalNet)} />
@@ -327,7 +328,7 @@ export default function PayrollPage() {
                       <TableHead key={key}>{label}</TableHead>
                     ))}
                     <TableHead>ناخالص</TableHead>
-                    <TableHead>بیمه ۷٪</TableHead>
+                    <TableHead>بیمه کارگر</TableHead>
                     <TableHead>مالیات</TableHead>
                     <TableHead>خالص</TableHead>
                     <TableHead>
@@ -396,14 +397,17 @@ function PayslipView({ payslip, onClose }: { payslip: Payslip; onClose: () => vo
     ["حق مسکن", payslip.housingAllowance],
     ["بن کارگری", payslip.foodAllowance],
     ["حق اولاد", payslip.childAllowance],
+    ["حق تأهل", payslip.marriageAllowance],
+    ...(payslip.allowanceLines ?? []).map((line): [string, number] => [line.title, line.amount]),
+    ["عیدی", payslip.eidiAmount],
     ["اضافه‌کاری", payslip.overtimeAmount],
     ["فوق‌العاده شب‌کاری", payslip.nightShiftAmount],
     ["تعطیل‌کاری", payslip.holidayAmount],
     ["کسر غیبت", payslip.absenceDeduction ? -payslip.absenceDeduction : 0],
   ];
   const deductions: Array<[string, number | undefined]> = [
-    ["بیمه سهم کارگر (۷٪)", payslip.insuranceDeduction],
-    ["مالیات حقوق", payslip.incomeTax],
+    ["بیمه سهم کارگر", payslip.insuranceDeduction],
+    ["مالیات حقوق (تجمعی)", payslip.incomeTax],
     ["سایر کسورات", payslip.otherDeductions],
   ];
   const row = ([label, amount]: [string, number | undefined]) => (
@@ -438,8 +442,8 @@ function PayslipView({ payslip, onClose }: { payslip: Payslip; onClose: () => vo
         <div>
           <h3 className="mb-1 font-semibold">سهم کارفرما (اطلاعاتی)</h3>
           {row(["دستمزد مشمول بیمه", payslip.insurableWage])}
-          {row(["بیمه سهم کارفرما (۲۰٪)", payslip.employerInsurance])}
-          {row(["بیمه بیکاری (۳٪)", payslip.unemploymentInsurance])}
+          {row(["بیمه سهم کارفرما", payslip.employerInsurance])}
+          {row(["بیمه بیکاری", payslip.unemploymentInsurance])}
         </div>
       </CardContent>
       <CardContent className="flex gap-2 print:hidden">

@@ -11,6 +11,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -23,6 +24,7 @@ import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import {
   requireTenantId,
 } from '../../tenants/tenant-context';
+import { ContractAllowanceDto, ReplaceAllowancesDto } from '../dto/contract-allowance.dto';
 import { CreateContractDto } from '../dto/create-contract.dto';
 import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import {
@@ -184,6 +186,27 @@ export class HrController {
     return this.hrService.findOneContract(this.tenantIdOf(request), id);
   }
 
+  @Get('contracts/:id/allowances')
+  @ApiOperation({ summary: 'مزایای قرارداد' })
+  @ApiResponse({ status: HttpStatus.OK, type: [ContractAllowanceDto] })
+  async listAllowances(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ContractAllowanceDto[]> {
+    return this.hrService.listAllowances(this.tenantIdOf(request), id);
+  }
+
+  @Put('contracts/:id/allowances')
+  @ApiOperation({ summary: 'جایگزینی مزایای قرارداد' })
+  @ApiResponse({ status: HttpStatus.OK, type: [ContractAllowanceDto] })
+  async replaceAllowances(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReplaceAllowancesDto,
+  ): Promise<ContractAllowanceDto[]> {
+    return this.hrService.replaceAllowances(this.tenantIdOf(request), id, dto);
+  }
+
   // ---------------------------------------------------------------------------
   // محاسبه حقوق و فیش حقوقی
   // ---------------------------------------------------------------------------
@@ -191,7 +214,7 @@ export class HrController {
   @Post('payroll/calculate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'پیش‌محاسبه حقوق (حقوق پایه، بن خواربار، حق مسکن، بیمه ۷٪ و مالیات)',
+    summary: 'پیش‌محاسبه حقوق (حقوق پایه، بن خواربار، حق مسکن، بیمه و مالیات)',
   })
   @ApiResponse({ status: HttpStatus.OK, type: PayrollCalculationResponseDto })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'ورودی نامعتبر' })

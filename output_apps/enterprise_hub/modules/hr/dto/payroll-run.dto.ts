@@ -27,7 +27,7 @@ export class PayrollRunItemDto {
   employeeId: number;
 
   @ApiPropertyOptional({
-    description: 'ساعات اضافه‌کاری (۴۰٪ اضافه)',
+    description: 'ساعات اضافه‌کاری',
     example: 10,
   })
   @IsOptional()
@@ -38,7 +38,7 @@ export class PayrollRunItemDto {
   overtimeHours?: number;
 
   @ApiPropertyOptional({
-    description: 'ساعات شب‌کاری (۳۵٪ فوق‌العاده)',
+    description: 'ساعات شب‌کاری',
     example: 0,
   })
   @IsOptional()
@@ -49,7 +49,7 @@ export class PayrollRunItemDto {
   nightHours?: number;
 
   @ApiPropertyOptional({
-    description: 'ساعات کار در روز تعطیل (۴۰٪ اضافه)',
+    description: 'ساعات کار در روز تعطیل',
     example: 0,
   })
   @IsOptional()
@@ -64,8 +64,15 @@ export class PayrollRunItemDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  @Max(30)
+  @Max(31)
   absenceDays?: number;
+
+  @ApiPropertyOptional({ description: 'عیدی پرداختی این ماه (ریال)', example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 0 })
+  @Min(0)
+  eidi?: number;
 
   @ApiPropertyOptional({ description: 'سایر کسورات (ریال)', example: 0 })
   @IsOptional()
@@ -152,6 +159,8 @@ export class PayrollRunResponseDto {
   @ApiProperty({ enum: PayrollRunStatus }) status: PayrollRunStatus;
   @ApiProperty() statusLabel: string;
   @ApiProperty({ description: 'سال جدول نرخ‌های قانونی' }) ratesYear: number;
+  @ApiProperty({ type: [String], description: 'مقادیر تأییدنشده هنگام محاسبه' })
+  unverifiedKeys: string[];
   @ApiProperty() employeeCount: number;
   @ApiProperty() totalGross: number;
   @ApiProperty() totalInsurable: number;
@@ -204,6 +213,6 @@ export class PayrollRatesResponseDto {
   @ApiProperty() employerInsuranceRate: number;
   @ApiProperty() unemploymentInsuranceRate: number;
   @ApiProperty() maxInsurableMonthlyWage: number;
-  @ApiProperty({ description: 'پله‌های مالیات (upTo=null یعنی بی‌سقف)' })
-  taxBrackets: { upTo: number | null; rate: number }[];
+  @ApiProperty({ description: 'پله‌های سالانه مالیات (upTo=null یعنی بی‌سقف)' })
+  annualTaxBrackets: { upTo: number | null; rate: number }[];
 }

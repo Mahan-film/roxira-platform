@@ -65,6 +65,24 @@ export enum PayrollRunStatus {
   POSTED = 'POSTED',
 }
 
+/**
+ * How an allowance enters wage tax. PROGRESSIVE: joins cumulative taxable income; FLAT: taxed at
+ * the flat statutory rate; EXEMPT: untaxed; NON_CASH: exempt up to the annual ceiling, the excess
+ * joins taxable income.
+ */
+export enum AllowanceTaxTreatment {
+  PROGRESSIVE = 'PROGRESSIVE',
+  FLAT = 'FLAT',
+  EXEMPT = 'EXEMPT',
+  NON_CASH = 'NON_CASH',
+}
+
+/** STANDARD: progressive brackets. FLAT: flat rate above the exemption (faculty, judges). */
+export enum WageTaxRegime {
+  STANDARD = 'STANDARD',
+  FLAT = 'FLAT',
+}
+
 /** برچسب‌های فارسی انواع شمارشی جهت پاسخ‌های API و UI */
 export const GENDER_LABELS: Record<Gender, string> = {
   [Gender.MALE]: 'مرد',

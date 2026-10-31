@@ -9,6 +9,7 @@ import {
 import {
   ContractStatus,
   ContractType,
+  WageTaxRegime,
 } from '../enums/hr.enum';
 import { numericTransformer } from './numeric-column.transformer';
 import { EmployeeEntity } from './employee.entity';
@@ -130,6 +131,14 @@ export class EmploymentContractEntity {
   /** مشمول کسر بیمه تأمین اجتماعی */
   @Column({ type: 'boolean', name: 'is_insurance_subject', default: true })
   isInsuranceSubject: boolean;
+
+  @Column({
+    type: 'varchar',
+    length: 16,
+    name: 'tax_regime',
+    default: WageTaxRegime.STANDARD,
+  })
+  taxRegime: WageTaxRegime;
 
   @Index()
   @Column({

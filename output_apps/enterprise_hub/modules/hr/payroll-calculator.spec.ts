@@ -12,7 +12,10 @@ import {
 } from './services/jalali-period';
 import {
   calculatePayroll,
-  progressiveTax,
+  applyRate,
+  cumulativeBandTax,
+  cumulativeTax,
+  yearToDateOf,
   serviceYears,
 } from './services/payroll-calculator';
 
@@ -42,17 +45,20 @@ describe('payroll rates 1405', () => {
   });
 });
 
-describe('progressiveTax', () => {
+describe('monthly tax (one month of the annual bands)', () => {
+  const progressiveTax = (income: number) =>
+    cumulativeBandTax(income, 1, rates1405.annualTaxBrackets);
+
   it('is zero up to the monthly exemption', () => {
-    expect(progressiveTax(400_000_000, rates1405.taxBrackets)).toBe(0);
+    expect(progressiveTax(400_000_000)).toBe(0);
   });
 
   it('applies each band only to the slice inside it', () => {
     // 400M@0 + 400M@10% + 200M@15% + 200M@20% + 200M@25% + 100M@30%
-    expect(progressiveTax(1_500_000_000, rates1405.taxBrackets)).toBe(
+    expect(progressiveTax(1_500_000_000)).toBe(
       40_000_000 + 30_000_000 + 40_000_000 + 50_000_000 + 30_000_000,
     );
-    expect(progressiveTax(500_000_000, rates1405.taxBrackets)).toBe(10_000_000);
+    expect(progressiveTax(500_000_000)).toBe(10_000_000);
   });
 });
 
@@ -112,7 +118,7 @@ describe('calculatePayroll', () => {
     expect(result.employeeInsurance).toBe(Math.round(1_163_788_500 * 0.07));
     expect(result.taxableIncome).toBe(2_000_000_000 - result.employeeInsurance);
     expect(result.incomeTax).toBe(
-      progressiveTax(result.taxableIncome, rates1405.taxBrackets),
+      cumulativeBandTax(result.taxableIncome, 1, rates1405.annualTaxBrackets),
     );
     expect(result.netPay).toBe(
       result.grossPay - result.employeeInsurance - result.incomeTax,

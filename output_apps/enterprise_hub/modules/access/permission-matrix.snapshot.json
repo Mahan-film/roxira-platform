@@ -739,6 +739,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/hr/contracts/:id/allowances (HrController.listAllowances)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/hr/employees (HrController.listEmployees)": {
     "policy": "hr:read",
     "owner": true,
@@ -2394,6 +2405,17 @@
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/hr/contracts/:id/allowances (HrController.replaceAllowances)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
     "read_only": false,
     "legacy_member": false
   },

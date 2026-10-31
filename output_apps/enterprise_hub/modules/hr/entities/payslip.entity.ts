@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { PayslipStatus } from '../enums/hr.enum';
 import { numericTransformer } from './numeric-column.transformer';
+import { PayrollAllowance } from '../services/payroll-calculator';
 import { EmployeeEntity } from './employee.entity';
 import { PayrollRunEntity } from './payroll-run.entity';
 
@@ -305,6 +306,76 @@ export class PayslipEntity {
     transformer: numericTransformer,
   })
   netPay: number;
+
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'marriage_allowance',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  marriageAllowance: number;
+
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'allowances_total',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  allowancesTotal: number;
+
+  /** Contract allowances as paid this month, with their insurance and tax treatment. */
+  @Column({ type: 'jsonb', name: 'allowance_lines', default: () => "'[]'::jsonb" })
+  allowanceLines: PayrollAllowance[];
+
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'eidi_amount',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  eidiAmount: number;
+
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'non_cash_amount',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  nonCashAmount: number;
+
+  /** Income of this month that joined the cumulative progressive base. */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'taxable_income',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  taxableIncome: number;
+
+  /** Part of `incomeTax` from flat-rate allowances. */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'flat_tax',
+    default: 0,
+    transformer: numericTransformer,
+  })
+  flatTax: number;
+
+  /** Calendar days of the Jalali month this payslip was calculated on. */
+  @Column({ type: 'integer', name: 'month_days', default: 30 })
+  monthDays: number;
 
   @Index()
   @Column({

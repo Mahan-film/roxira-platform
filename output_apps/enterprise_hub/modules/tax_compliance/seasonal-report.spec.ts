@@ -3,7 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { jalaliToGregorian } from '../data_import/normaliser/normalise';
 import { DEFAULT_VAT_RATE } from '../invoicing/constants/invoicing.constants';
 import { InvoiceEntity } from '../invoicing/entities/invoice.entity';
-import { getPayrollRates } from '../hr/constants/payroll-rates';
+import { seededRates } from '../hr/statutory/__fixtures__/seeded-rates';
 import { InvoicePostingService } from '../invoicing/services/invoice-posting.service';
 import { invoiceRateLines, invoiceRialAmounts } from './reports/invoice-rial-amounts';
 import { SeasonalReportController } from './controllers/seasonal-report.controller';
@@ -207,7 +207,7 @@ describe('statutory rates', () => {
   });
 
   it('1405 payroll figures confirmed by the 1404-12-24 Supreme Labour Council decree (ekhtebar.ir)', () => {
-    const rates = getPayrollRates(1405)!;
+    const rates = seededRates(1405);
     expect(rates.minDailyWage).toBe(5_541_850);
     expect(rates.housingAllowance).toBe(30_000_000);
   });

@@ -11,7 +11,7 @@
  *     to DBF / Iran System is a separate step and is not done here.
  *   - Years are two digits (1405 → "05"), months two digits, dates are
  *     compact Jalali `YYYYMMDD`. Amounts are whole rials, no separators.
- *   - DSW_MAH = daily wage × days; DSW_MAZ = insurable benefits above that;
+ *   - DSW_MAH = whole-rial daily wage × days; DSW_MAZ = insurable benefits above that;
  *     DSW_MASH = DSW_MAH + DSW_MAZ (the capped insurable wage);
  *     DSW_TOTL = DSW_MASH + non-insurable pay (child allowance).
  *   - DSK_TKOSO is the employer's 20% share, DSK_BIC the 3% unemployment
@@ -144,9 +144,10 @@ export function workerAmounts(worker: InsuranceListWorker): {
   totl: number;
 } {
   const mash = Math.round(worker.insurableWage);
-  const mah = Math.min(Math.round(worker.dailyWage * worker.workDays), mash);
+  const rooz = Math.round(worker.dailyWage);
+  const mah = Math.min(rooz * worker.workDays, mash);
   return {
-    rooz: Math.round(worker.dailyWage),
+    rooz,
     mah,
     maz: mash - mah,
     mash,

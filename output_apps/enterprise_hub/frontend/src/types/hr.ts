@@ -174,7 +174,23 @@ export interface PayrollCalculation {
   netPay: number;
 }
 
+export type AllowanceTaxTreatment = "PROGRESSIVE" | "FLAT" | "EXEMPT" | "NON_CASH";
+
+export interface ContractAllowance {
+  title: string;
+  amount: number;
+  insurable: boolean;
+  taxTreatment: AllowanceTaxTreatment;
+}
+
 export interface Payslip {
+  marriageAllowance?: number;
+  allowancesTotal?: number;
+  allowanceLines?: ContractAllowance[];
+  eidiAmount?: number;
+  taxableIncome?: number;
+  flatTax?: number;
+  monthDays?: number;
   id: number;
   payslipNumber: string;
   employeeId: number;
@@ -275,6 +291,7 @@ export interface PayrollRunItem {
   holidayHours?: number;
   absenceDays?: number;
   otherDeductions?: number;
+  eidi?: number;
 }
 
 export interface CreatePayrollRunDto {
@@ -306,6 +323,7 @@ export interface PayrollRun {
   status: PayrollRunStatus;
   statusLabel: string;
   ratesYear: number;
+  unverifiedKeys?: string[];
   employeeCount: number;
   totalGross: number;
   totalInsurable: number;

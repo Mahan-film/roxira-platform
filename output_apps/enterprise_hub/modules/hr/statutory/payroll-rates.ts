@@ -4,11 +4,11 @@
  * rates are decimal fractions. No legal figure lives in code.
  */
 
-export interface TaxBracket {
-  /** Upper bound of this band of monthly taxable income (IRR, inclusive). */
-  upTo: number;
-  /** Rate applied to the slice of income that falls inside this band. */
-  rate: number;
+export interface AnnualTaxBracket {
+  /** Upper bound of this band of annual taxable income (IRR); null for the last band. */
+  upTo: number | null;
+  /** Decimal string, so tax is computed exactly. */
+  rate: string;
 }
 
 export interface PayrollYearRates {
@@ -44,6 +44,16 @@ export interface PayrollYearRates {
   unemploymentInsuranceRate: number;
   /** Monthly ceiling of the insurable wage (سقف دستمزد مشمول بیمه). */
   maxInsurableMonthlyWage: number;
-  /** Monthly wage-tax brackets on the whole taxable income (first band is the exemption). */
-  taxBrackets: ReadonlyArray<TaxBracket>;
+  /** Annual wage-tax brackets; the first band is the exemption, the last has `upTo` null. */
+  annualTaxBrackets: ReadonlyArray<AnnualTaxBracket>;
+  /** Monthly marriage allowance (حق تأهل). */
+  marriageAllowance: number;
+  /** Flat wage-tax rate as a decimal string, or null if not configured. */
+  flatTaxRate: string | null;
+  /** Eidi exempt per year, in rials; null means not configured, so nothing is exempt. */
+  eidiExemptCeiling: number | null;
+  /** Non-cash benefits exempt per year, in rials; null means not configured. */
+  nonCashExemptAnnual: number | null;
+  /** Decimal-string insurance rates, used for exact rial arithmetic. */
+  insuranceRates: { employee: string; employer: string; unemployment: string };
 }

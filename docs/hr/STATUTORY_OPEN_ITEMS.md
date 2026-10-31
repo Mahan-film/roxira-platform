@@ -23,3 +23,17 @@ Note: the old code carried seniority as 5,000,000 a month. Circular 6682 sets 16
 store holds the daily figure and a 30-day month gives 5,000,010. The ekhtebar.ir copy says 166,666;
 the circular wins. Only the 400,000,000 monthly exemption has a second source; the rest of the
 brackets do not.
+
+## Payroll rules to confirm with an accountant
+
+- Whether m in cumulative tax counts months on payroll (built) or calendar months since Farvardin
+  (the report's formula for a full-year employee; the two differ only for mid-year hires).
+- Flat allowances: the report says the flat rate applies "after the proportional exemption". Built as
+  rate × amount with no exemption.
+- Housing, food, child and marriage allowances are taxed in full here. The report says welfare items
+  may be exempt under Administrative Court rulings of 1405; mark them EXEMPT per contract if so.
+- Marriage allowance is treated as insurable; only child allowance and eidi are excluded by default.
+- Base pay for calendar days: a 31-day month pays 31 × daily wage and Esfand 29 or 30, following the
+  report's insurance example. Confirm for monthly-salaried staff.
+- Non-cash allowances are in gross and net pay here. If they are paid in kind, net pay must exclude them.
+- Refunds: a low month reduces tax to zero at most; nothing is paid back.

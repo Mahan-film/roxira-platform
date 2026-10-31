@@ -13,14 +13,14 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ContractType } from '../enums/hr.enum';
+import { ContractType, WageTaxRegime } from '../enums/hr.enum';
 
 /**
  * DTO تعریف قرارداد/حکم حقوقی جدید
  * (POST /enterprise-hub/hr/contracts).
  *
  * اجزای حقوق در صورت عدم ارسال با پیش‌فرض‌های قانونی
- * (حق مسکن و بن سال شروع قرارداد از `constants/payroll-rates.ts`) پر می‌شوند.
+ * (حق مسکن و بن سال شروع قرارداد از `statutory parameters`) پر می‌شوند.
  */
 export class CreateContractDto {
   @ApiProperty({ description: 'شناسه کارمند', example: 1 })
@@ -108,6 +108,11 @@ export class CreateContractDto {
   @IsOptional()
   @IsBoolean()
   isInsuranceSubject?: boolean;
+
+  @ApiPropertyOptional({ enum: WageTaxRegime, default: WageTaxRegime.STANDARD })
+  @IsOptional()
+  @IsEnum(WageTaxRegime)
+  taxRegime?: WageTaxRegime;
 
   @ApiPropertyOptional({ description: 'توضیحات قرارداد' })
   @IsOptional()

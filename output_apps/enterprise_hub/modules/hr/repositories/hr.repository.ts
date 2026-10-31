@@ -7,9 +7,15 @@ import {
   FindOptionsWhere,
   ILike,
   In,
+  LessThan,
   Repository,
 } from 'typeorm';
-import { ContractStatus, EmployeeStatus } from '../enums/hr.enum';
+import {
+  ContractStatus,
+  EmployeeStatus,
+  PayslipStatus,
+} from '../enums/hr.enum';
+import { ContractAllowanceEntity } from '../entities/contract-allowance.entity';
 import { EmployeeEntity } from '../entities/employee.entity';
 import { EmploymentContractEntity } from '../entities/employment-contract.entity';
 import { PayrollRunEntity } from '../entities/payroll-run.entity';
@@ -51,6 +57,8 @@ export class HrRepository {
     private readonly payslips: Repository<PayslipEntity>,
     @InjectRepository(PayrollRunEntity)
     private readonly payrollRuns: Repository<PayrollRunEntity>,
+    @InjectRepository(ContractAllowanceEntity)
+    private readonly allowances: Repository<ContractAllowanceEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -428,6 +436,65 @@ export class HrRepository {
       },
       order: { startDate: 'DESC', id: 'DESC' },
     });
+  }
+
+  /** Allowances of the given contracts. */
+  async findAllowancesByContractIds(
+    tenantId: string,
+    contractIds: number[],
+  ): Promise<ContractAllowanceEntity[]> {
+    if (contractIds.length === 0) {
+      return [];
+    }
+    return this.allowances.find({
+      where: { tenantId, contractId: In(contractIds) },
+      order: { id: 'ASC' },
+    });
+  }
+
+  /** Replace a contract's allowances in one transaction. */
+  async replaceAllowances(
+    tenantId: string,
+    contractId: number,
+    rows: Partial<ContractAllowanceEntity>[],
+  ): Promise<ContractAllowanceEntity[]> {
+    return this.runInTransaction(async (manager) => {
+      const repo = manager.getRepository(ContractAllowanceEntity);
+      await repo.delete({ tenantId, contractId });
+      return repo.save(
+        rows.map((row) => repo.create({ ...row, tenantId, contractId })),
+      );
+    });
+  }
+
+  /** Issued payslips of the given employees in a year before `beforeMonth` (for cumulative tax). */
+  async findIssuedPayslipsBefore(
+    tenantId: string,
+    employeeIds: number[],
+    periodYear: number,
+    beforeMonth: number,
+  ): Promise<PayslipEntity[]> {
+    if (employeeIds.length === 0) {
+      return [];
+    }
+    return this.payslips.find({
+      where: {
+        tenantId,
+        employeeId: In(employeeIds),
+        periodYear,
+        periodMonth: LessThan(beforeMonth),
+        status: In([PayslipStatus.ISSUED, PayslipStatus.PAID]),
+      },
+    });
+  }
+
+  /** All runs of a Jalali year. */
+  async findPayrollRunsOfYear(
+    tenantId: string,
+    periodYear: number,
+    manager?: EntityManager,
+  ): Promise<PayrollRunEntity[]> {
+    return this.runs(manager).find({ where: { tenantId, periodYear } });
   }
 
   /** All payslips of a period (run payslips and legacy single payslips). */

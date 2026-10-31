@@ -4,6 +4,7 @@ import { AccessModule } from '../access/access.module';
 import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
 import { HrController } from './controllers/hr.controller';
+import { ContractAllowanceEntity } from './entities/contract-allowance.entity';
 import { EmployeeEntity } from './entities/employee.entity';
 import { EmploymentContractEntity } from './entities/employment-contract.entity';
 import { PayrollRunEntity } from './entities/payroll-run.entity';
@@ -38,6 +39,7 @@ import { StatutoryService } from './statutory/statutory.service';
       EmploymentContractEntity,
       PayslipEntity,
       PayrollRunEntity,
+      ContractAllowanceEntity,
       StatutoryParameterEntity,
     ]),
     AccessModule,

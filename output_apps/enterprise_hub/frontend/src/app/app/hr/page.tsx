@@ -236,7 +236,11 @@ function HrPage() {
                 )}
                 {contracts.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-mono text-xs">{c.contractNumber}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <Link href={`/app/hr/contracts/${c.id}/allowances`} className="underline underline-offset-4">
+                        {c.contractNumber}
+                      </Link>
+                    </TableCell>
                     <TableCell className="font-medium">{c.employeeFullName}</TableCell>
                     <TableCell>{c.jobTitle}</TableCell>
                     <TableCell>{formatJalaliDate(c.startDate)}</TableCell>

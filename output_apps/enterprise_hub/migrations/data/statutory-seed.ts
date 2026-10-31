@@ -13,7 +13,7 @@ const OFFICIAL_1405 =
 const REPORT_1405 =
   'گزارش پژوهشی انطباق ۱۴۰۵ (docs/research/2026-10-31/05-iran-compliance-1405-fa.md)؛ با متن رسمی تطبیق نشده';
 const LEGACY =
-  'مقدار پیشین کد حقوق (constants/payroll-rates.ts)؛ با متن رسمی تطبیق نشده';
+  'مقدار پیشین کد حقوق ؛ با متن رسمی تطبیق نشده';
 
 export const seedEffectiveFrom = (fiscalYear: number): string =>
   fiscalYear === 1404 ? '2025-03-21' : '2026-03-21';

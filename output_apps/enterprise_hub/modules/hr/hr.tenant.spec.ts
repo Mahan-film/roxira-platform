@@ -37,6 +37,10 @@ class FakeAccountingService {
  * `tenantId` محدود می‌کند تا رفتار جداسازی مستأجر در سطح سرویس/کنترلر سنجیده شود.
  */
 class InMemoryHrRepository {
+  async findIssuedPayslipsBefore(): Promise<never[]> {
+    return [];
+  }
+
   employees: EmployeeEntity[] = [];
   contracts: EmploymentContractEntity[] = [];
   payslips: PayslipEntity[] = [];
@@ -592,6 +596,7 @@ describe('HrRepository — tenant scoping', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await repository.findEmployeeById('tenant-a', 1);
@@ -612,6 +617,7 @@ describe('HrRepository — tenant scoping', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await repository.createEmployee('tenant-a', { firstName: 'سارا' });
@@ -626,6 +632,7 @@ describe('HrRepository — tenant scoping', () => {
     const employees = { update: jest.fn(async () => undefined) };
     const repository = new HrRepository(
       employees as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -649,6 +656,7 @@ describe('HrRepository — tenant scoping', () => {
       {} as never,
       {} as never,
       payslips as never,
+      {} as never,
       {} as never,
       {} as never,
     );

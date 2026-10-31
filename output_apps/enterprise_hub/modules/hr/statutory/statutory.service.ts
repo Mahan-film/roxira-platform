@@ -12,7 +12,7 @@ import {
   StatutorySourceKind,
 } from './statutory-parameter.entity';
 import { StatutoryRepository } from './statutory.repository';
-import { PayrollYearRates, TaxBracket } from './payroll-rates';
+import { AnnualTaxBracket, PayrollYearRates } from './payroll-rates';
 
 export const IRAN = 'IR';
 
@@ -76,19 +76,13 @@ export function toPayrollRates(
   }
   const raw = (key: StatutoryKey): unknown => parameters.get(key)?.value;
   const money = (key: StatutoryKey): number => Number(raw(key) ?? 0);
-  const rate = (key: StatutoryKey): number => Number(raw(key) ?? 0);
+  const rate = money;
 
   const days = money('payroll_month_days');
   const minDailyWage = money('min_daily_wage');
   const minMonthlyWage = minDailyWage * days;
-  const annual = raw('wage_tax_annual_brackets') as {
-    upTo: number | null;
-    rate: string;
-  }[];
-  const taxBrackets: TaxBracket[] = annual.map((band) => ({
-    upTo: band.upTo === null ? Number.POSITIVE_INFINITY : band.upTo / 12,
-    rate: Number(band.rate),
-  }));
+  const optionalMoney = (key: StatutoryKey): number | null =>
+    parameters.has(key) ? money(key) : null;
   const unverified = [...parameters.values()]
     .filter((row) => !row.verified)
     .map((row) => row.paramKey);
@@ -113,7 +107,18 @@ export function toPayrollRates(
     employerInsuranceRate: rate('employer_insurance_rate'),
     unemploymentInsuranceRate: rate('unemployment_insurance_rate'),
     maxInsurableMonthlyWage: minMonthlyWage * money('insurable_ceiling_multiplier'),
-    taxBrackets,
+    annualTaxBrackets: raw('wage_tax_annual_brackets') as AnnualTaxBracket[],
+    marriageAllowance: money('marriage_allowance'),
+    flatTaxRate: parameters.has('wage_flat_tax_rate')
+      ? String(raw('wage_flat_tax_rate'))
+      : null,
+    eidiExemptCeiling: optionalMoney('eidi_exempt_ceiling'),
+    nonCashExemptAnnual: optionalMoney('non_cash_exempt_annual'),
+    insuranceRates: {
+      employee: String(raw('employee_insurance_rate')),
+      employer: String(raw('employer_insurance_rate')),
+      unemployment: String(raw('unemployment_insurance_rate')),
+    },
   };
 }
 

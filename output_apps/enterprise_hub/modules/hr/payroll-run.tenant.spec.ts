@@ -138,6 +138,35 @@ class InMemoryPayrollRepository {
     );
   }
 
+  async findAllowancesByContractIds(): Promise<never[]> {
+    return [];
+  }
+
+  async findIssuedPayslipsBefore(
+    tenantId: string,
+    employeeIds: number[],
+    periodYear: number,
+    beforeMonth: number,
+  ): Promise<PayslipEntity[]> {
+    return this.payslips.filter(
+      (slip) =>
+        slip.tenantId === tenantId &&
+        employeeIds.includes(slip.employeeId) &&
+        slip.periodYear === periodYear &&
+        slip.periodMonth < beforeMonth &&
+        slip.status !== PayslipStatus.DRAFT,
+    );
+  }
+
+  async findPayrollRunsOfYear(
+    tenantId: string,
+    periodYear: number,
+  ): Promise<PayrollRunEntity[]> {
+    return this.runs.filter(
+      (run) => run.tenantId === tenantId && run.periodYear === periodYear,
+    );
+  }
+
   async findPayslipsOfPeriod(
     tenantId: string,
     periodYear: number,
@@ -569,6 +598,7 @@ describe('HrRepository — payroll-run queries are tenant scoped', () => {
       payslips as never,
       runs as never,
       {} as never,
+      {} as never,
     );
     return { repository, payslips, runs };
   };
@@ -606,5 +636,39 @@ describe('HrRepository — payroll-run queries are tenant scoped', () => {
       { tenantId: 'tenant-a', payrollRunId: 5 },
       expect.any(Object),
     );
+  });
+});
+
+describe('PayrollRunService — month order and cumulative tax', () => {
+  const nextMonth = { periodYear: period.periodYear, periodMonth: period.periodMonth + 1 };
+
+  it('refuses a month while an earlier month is still a draft', async () => {
+    const { repo, service } = setup();
+    repo.seedEmployee('tenant-a');
+    await service.createOrRecalculate('tenant-a', period);
+    await expect(service.createOrRecalculate('tenant-a', nextMonth)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('refuses a month before a posted one', async () => {
+    const { repo, service } = setup();
+    repo.seedEmployee('tenant-a');
+    const later = await service.createOrRecalculate('tenant-a', nextMonth);
+    await service.postRun('tenant-a', later.id);
+    await expect(service.createOrRecalculate('tenant-a', period)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('carries earlier posted months into the next run and stores the rates used', async () => {
+    const { repo, service } = setup();
+    repo.seedEmployee('tenant-a');
+    const first = await service.createOrRecalculate('tenant-a', period);
+    await service.postRun('tenant-a', first.id);
+    const second = await service.createOrRecalculate('tenant-a', nextMonth);
+    expect(second.unverifiedKeys).toContain('wage_tax_annual_brackets');
+    expect(repo.runs.find((run) => run.id === second.id)?.ratesSnapshot?.year).toBe(period.periodYear);
+    expect(second.totalIncomeTax).toBeGreaterThanOrEqual(0);
   });
 });

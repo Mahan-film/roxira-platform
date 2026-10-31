@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import {
@@ -25,6 +26,7 @@ import { EmploymentContractEntity } from '../entities/employment-contract.entity
 import { PayrollRunEntity } from '../entities/payroll-run.entity';
 import { PayslipEntity } from '../entities/payslip.entity';
 import {
+  MaritalStatus,
   PAYROLL_RUN_STATUS_LABELS,
   PayrollRunStatus,
   PayslipStatus,
@@ -37,10 +39,17 @@ import { buildInsuranceList, InsuranceListWorker } from './insurance-list';
 import {
   compactJalali,
   isoDate,
+  jalaliMonthDays,
   jalaliMonthEnd,
   jalaliMonthStart,
 } from './jalali-period';
-import { calculatePayroll, serviceYears } from './payroll-calculator';
+import {
+  calculatePayroll,
+  PayrollAllowance,
+  PayrollYearToDate,
+  serviceYears,
+  yearToDateOf,
+} from './payroll-calculator';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -115,9 +124,9 @@ export class PayrollRunService {
       employerInsuranceRate: rates.employerInsuranceRate,
       unemploymentInsuranceRate: rates.unemploymentInsuranceRate,
       maxInsurableMonthlyWage: rates.maxInsurableMonthlyWage,
-      taxBrackets: rates.taxBrackets.map((bracket) => ({
-        upTo: Number.isFinite(bracket.upTo) ? bracket.upTo : null,
-        rate: bracket.rate,
+      annualTaxBrackets: rates.annualTaxBrackets.map((bracket) => ({
+        upTo: bracket.upTo,
+        rate: Number(bracket.rate),
       })),
     };
   }
@@ -140,6 +149,7 @@ export class PayrollRunService {
       status: run.status,
       statusLabel: PAYROLL_RUN_STATUS_LABELS[run.status] ?? run.status,
       ratesYear: run.ratesYear,
+      unverifiedKeys: run.unverifiedKeys ?? [],
       employeeCount: run.employeeCount,
       totalGross: Number(run.totalGross),
       totalInsurable: Number(run.totalInsurable),
@@ -192,6 +202,12 @@ export class PayrollRunService {
             `حقوق دوره ${dto.periodYear}/${dto.periodMonth} قبلاً در حسابداری ثبت شده و قابل محاسبه مجدد نیست.`,
           );
         }
+        await this.assertMonthOrder(
+          tenantId,
+          dto.periodYear,
+          dto.periodMonth,
+          manager,
+        );
         if (run) {
           await this.hrRepository.deletePayslipsByRun(tenantId, run.id, manager);
         } else {
@@ -233,6 +249,27 @@ export class PayrollRunService {
         );
 
         const periodEnd = jalaliMonthEnd(dto.periodYear, dto.periodMonth);
+        const monthDays = jalaliMonthDays(dto.periodYear, dto.periodMonth);
+        const allowancesByContract = new Map<number, PayrollAllowance[]>();
+        for (const row of await this.hrRepository.findAllowancesByContractIds(
+          tenantId,
+          contracts.map((contract) => contract.id),
+        )) {
+          const lines = allowancesByContract.get(row.contractId) ?? [];
+          lines.push({
+            title: row.title,
+            amount: Number(row.amount),
+            insurable: row.insurable,
+            taxTreatment: row.taxTreatment,
+          });
+          allowancesByContract.set(row.contractId, lines);
+        }
+        const earlierSlips = await this.hrRepository.findIssuedPayslipsBefore(
+          tenantId,
+          employees.map((employee) => employee.id),
+          dto.periodYear,
+          dto.periodMonth,
+        );
         const month = String(dto.periodMonth).padStart(2, '0');
         const skipped: PayrollRunSkippedDto[] = [];
         const rows: Partial<PayslipEntity>[] = [];
@@ -258,12 +295,18 @@ export class PayrollRunService {
           }
           const item = items.get(employee.id);
           const result = calculatePayroll({
-            rates: {
-              ...rates,
-              employeeInsuranceRate: Number(
-                contract.insuranceRate ?? rates.employeeInsuranceRate,
-              ),
-            },
+            rates,
+            employeeInsuranceRate:
+              contract.insuranceRate === null ||
+              contract.insuranceRate === undefined
+                ? undefined
+                : String(contract.insuranceRate),
+            monthDays,
+            married: employee.maritalStatus === MaritalStatus.MARRIED,
+            allowances: allowancesByContract.get(contract.id) ?? [],
+            eidi: item?.eidi,
+            taxRegime: contract.taxRegime,
+            yearToDate: this.yearToDate(earlierSlips, employee.id),
             monthlyBaseWage: Number(contract.baseSalary),
             housingAllowance: Number(contract.housingAllowance),
             foodAllowance: Number(contract.foodAllowance),
@@ -297,6 +340,14 @@ export class PayrollRunService {
             housingAllowance: result.housingAllowance,
             foodAllowance: result.foodAllowance,
             childAllowance: result.childAllowance,
+            marriageAllowance: result.marriageAllowance,
+            allowancesTotal: result.allowancesTotal,
+            allowanceLines: result.allowanceLines,
+            eidiAmount: result.eidiAmount,
+            nonCashAmount: result.nonCashAmount,
+            taxableIncome: result.taxableIncome,
+            flatTax: result.flatTax,
+            monthDays: result.monthDays,
             overtimeAmount: result.overtimeAmount,
             nightShiftAmount: result.nightShiftAmount,
             holidayAmount: result.holidayAmount,
@@ -328,6 +379,8 @@ export class PayrollRunService {
           rows.reduce((total, row) => total + Number(row[key] ?? 0), 0);
         Object.assign(run, {
           ratesYear: rates.year,
+          ratesSnapshot: rates,
+          unverifiedKeys: rates.unverifiedKeys,
           employeeCount: rows.length,
           totalGross: sum('grossPay'),
           totalInsurable: sum('insurableWage'),
@@ -358,6 +411,48 @@ export class PayrollRunService {
       run.id,
     );
     return this.toRunDto(run, payslips, skipped);
+  }
+
+  private yearToDate(
+    slips: PayslipEntity[],
+    employeeId: number,
+  ): PayrollYearToDate {
+    return yearToDateOf(slips.filter((slip) => slip.employeeId === employeeId));
+  }
+
+  /**
+   * Cumulative tax needs months in order: refuse a month while an earlier month of the year is
+   * still a draft, or once a later month is posted.
+   */
+  private async assertMonthOrder(
+    tenantId: string,
+    year: number,
+    month: number,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const runs = await this.hrRepository.findPayrollRunsOfYear(
+      tenantId,
+      year,
+      manager,
+    );
+    const earlierDraft = runs.find(
+      (run) =>
+        run.periodMonth < month && run.status === PayrollRunStatus.DRAFT,
+    );
+    if (earlierDraft) {
+      throw new ConflictException(
+        `ابتدا حقوق ماه ${earlierDraft.periodMonth} را ثبت کنید؛ مالیات تجمعی به ترتیب ماه‌ها محاسبه می‌شود.`,
+      );
+    }
+    const laterPosted = runs.find(
+      (run) =>
+        run.periodMonth > month && run.status === PayrollRunStatus.POSTED,
+    );
+    if (laterPosted) {
+      throw new ConflictException(
+        `حقوق ماه ${laterPosted.periodMonth} ثبت شده است؛ ماه قبل از آن قابل محاسبه نیست.`,
+      );
+    }
   }
 
   private async requireRun(
@@ -398,12 +493,12 @@ export class PayrollRunService {
       {
         accountCode: accounts.employerInsuranceExpense.code,
         debit: employerCost,
-        description: 'بیمه سهم کارفرما (۲۰٪) و بیمه بیکاری (۳٪)',
+        description: 'بیمه سهم کارفرما و بیمه بیکاری',
       },
       {
         accountCode: accounts.insurancePayable.code,
         credit: insurance,
-        description: 'حق بیمه پرداختنی (۷٪ کارگر + ۲۳٪ کارفرما)',
+        description: 'حق بیمه پرداختنی (سهم کارگر و کارفرما)',
       },
       {
         accountCode: accounts.wageTaxPayable.code,
@@ -458,6 +553,7 @@ export class PayrollRunService {
       throw new BadRequestException('اجرای حقوق فیش قابل ثبتی ندارد.');
     }
 
+    await this.assertMonthOrder(tenantId, run.periodYear, run.periodMonth);
     await this.ensurePayrollAccounts(tenantId);
     const month = String(run.periodMonth).padStart(2, '0');
     const entryNumber = `${PAYROLL_RUN_ENTRY_PREFIX}-${run.periodYear}${month}`;
@@ -514,11 +610,9 @@ export class PayrollRunService {
     query: InsuranceListQueryDto,
   ): Promise<InsuranceListResponseDto> {
     const run = await this.requireRun(tenantId, id);
-    const rates = await this.requireRates(
-      tenantId,
-      run.ratesYear,
-      run.periodMonth,
-    );
+    const rates =
+      run.ratesSnapshot ??
+      (await this.requireRates(tenantId, run.ratesYear, run.periodMonth));
     const payslips = await this.hrRepository.findPayslipsByRun(tenantId, id);
     const periodStart = isoDate(
       jalaliMonthStart(run.periodYear, run.periodMonth),
@@ -547,7 +641,7 @@ export class PayrollRunService {
           workDays: Number(payslip.workDays),
           dailyWage:
             (Number(payslip.baseSalary) + Number(payslip.seniorityAmount)) /
-            rates.payrollMonthDays,
+            (Number(payslip.monthDays) || rates.payrollMonthDays),
           insurableWage: Number(payslip.insurableWage),
           grossPay: Number(payslip.grossPay),
           employeeInsurance: Number(payslip.insuranceDeduction),

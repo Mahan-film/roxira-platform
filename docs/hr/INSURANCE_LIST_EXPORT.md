@@ -26,14 +26,22 @@ consumables allowance, marriage allowance) are `verified`. Everything else is li
 
 ## Calculation rules (`services/payroll-calculator.ts`)
 
-- Hourly wage = (base + seniority) / 220. Overtime = hours × hourly × 1.4; night work =
-  hours × hourly × 0.35 (premium only); holiday/Friday work = hours × hourly × 1.4.
-- Unpaid absence deducts (base + seniority + housing + food) / 30 per day.
-- Insurable wage = gross − child allowance, capped at the ceiling.
-- Taxable income = gross − employee insurance share (Direct Taxation Act art. 137).
-- Child allowance uses `hr_employees.dependants`; the 720-insured-days eligibility check is
-  left to HR. A non-zero `childAllowance` on the contract overrides it.
-- Amounts are whole rials.
+- Base wage and seniority are paid for the calendar days of the Jalali month (31, 30, 29 or 30);
+  housing, food, child and marriage allowances stay monthly.
+- Hourly wage = (monthly base + seniority) / the statutory monthly hours. Overtime, night and
+  holiday work use the premiums in the store.
+- Unpaid absence deducts the daily share of base + seniority + housing + food.
+- Insurable wage = gross − child allowance − eidi − non-insurable contract allowances, capped.
+- Wage tax is cumulative: `Tax_m = bands(sum of Y, each band × m/12) − tax already withheld`, floored
+  at zero, where m is the months the employee has on payroll this year. Income `Y` is gross less the
+  employee insurance share, EXEMPT and FLAT allowances, non-cash within the annual ceiling, and eidi
+  within its ceiling. FLAT allowances are taxed apart. A contract with `tax_regime = FLAT` (faculty,
+  judges) pays the flat rate above the first band.
+- Months run in order: a month is refused while an earlier one is a draft or a later one is posted.
+- A run stores the values it used (`rates_snapshot`) and which were unverified (`unverified_keys`), so
+  later edits never change an existing export.
+- Contract allowances: `GET` and `PUT /enterprise-hub/hr/contracts/:id/allowances`.
+- Amounts are whole rials; money × rate is integer arithmetic, half up.
 
 ## Run lifecycle
 

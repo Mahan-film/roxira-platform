@@ -1,5 +1,6 @@
 import {
   CalculatePayrollDto,
+  ContractAllowance,
   CreateContractDto,
   CreateEmployeeDto,
   CreatePayrollRunDto,
@@ -162,6 +163,28 @@ export async function getPayrollRates(
   return apiRequest<PayrollRates>(`${HR_ENDPOINT}/payroll-rates/${year}`, {
     method: "GET",
     signal,
+  });
+}
+
+/** مزایای قرارداد — GET /enterprise-hub/hr/contracts/:id/allowances */
+export async function listContractAllowances(
+  contractId: number,
+  signal?: AbortSignal,
+): Promise<ContractAllowance[]> {
+  return apiRequest<ContractAllowance[]>(`${HR_ENDPOINT}/contracts/${contractId}/allowances`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/** جایگزینی مزایای قرارداد — PUT /enterprise-hub/hr/contracts/:id/allowances */
+export async function replaceContractAllowances(
+  contractId: number,
+  allowances: ContractAllowance[],
+): Promise<ContractAllowance[]> {
+  return apiRequest<ContractAllowance[]>(`${HR_ENDPOINT}/contracts/${contractId}/allowances`, {
+    method: "PUT",
+    body: JSON.stringify({ allowances }),
   });
 }
 
