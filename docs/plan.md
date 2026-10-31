@@ -45,6 +45,66 @@ checklist, not a design doc — keep entries short and link elsewhere for detail
       (`src/components/chat/chat-shell.tsx`). Update frontend `DESIGN.md`.
       Verify `npm run build` + `npx tsc --noEmit`.
 
+## Bank statement reconciliation assistant (accounting suite, branch on PR 902)
+
+Goal: a customer with several banks uploads a statement (Excel/CSV/PDF); the system checks it is the
+right account and period, matches it to the ledger, asks short questions about the rest, and posts
+only what is safe. Everything under `output_apps/enterprise_hub/modules/banking/recon/` (new files;
+`data_import`, `accounting` and the legacy banking flow are not edited, only imported from).
+
+### Pipeline
+
+1. **Upload** `recon/parse/` – sniff kind, reuse `parseCsv/parseXlsx/parsePdf` (read-only reuse; a
+   header-locator callback captures the title rows so bank/account/IBAN/period can be read). Per-bank
+   profiles (`profiles/bank-profiles.ts`) list the column layouts accepted automatically; any other
+   layout returns `needs_mapping` with the guessed columns and the user maps them once (saved as a
+   tenant template keyed by the header fingerprint). Statement text is data: capped lengths, control
+   characters stripped, never interpolated into queries/prompts unmasked.
+2. **Prerequisites** `recon/prerequisites.ts` (pure) – IBAN checksum + bank id, account match by IBAN →
+   number, bank-vs-account bank, period (header vs rows), overlap/duplicate file (sha256), opening
+   balance continuity vs previous import/ledger opening, running-balance arithmetic. Output is a list
+   of checks `ok | warn | ask | block`; `ask` needs a recorded confirmation; unknown account → guided
+   create (bank account + ledger account) via existing `BankingService.createAccount`.
+3. **Matching** `recon/matching/` (pure, BigInt minor units, stored as BIGINT rial): stages exact →
+   reference/cheque/Sayad → date tolerance → one-to-many / many-to-one (bounded subset sum). Result
+   groups `matched` (confidence ≥ tenant threshold, unambiguous) / `suggested` / `unmatched`, each with
+   confidence and reasons. Book lines already matched elsewhere (legacy flow or earlier session) are
+   excluded.
+4. **Classification** `recon/classify/` – rules (fees/SMS with tenant thresholds, keywords for sale,
+   purchase, partner current account, payroll, loan, tax, own-account transfer), counterparty
+   extraction, real/legal person type, tenant history and tenant rules. LLM use is only an optional
+   port behind `maskForLlm` (account numbers, IBANs, names, phone/national ids masked); this PR wires
+   no model.
+5. **Questions** `recon/questions.ts` – one short question per unresolved item, choices + evidence,
+   optional attached document (type allowlist, 5 MB, sha256). An answer creates/updates a tenant rule.
+6. **Posting** `recon/posting.service` – drafts by default (`fin_bank_recon_drafts`); batch approve
+   (tenant admin) posts through `AccountingService.createJournalEntry` (period locks → 423 per item,
+   not a batch failure); auto-post only for fee rules and only if `auto_post_fees` is on; correction
+   = `reverseJournalEntry` + unmatch; every step writes `fin_bank_recon_audit` (append-only).
+7. **Report** `recon/report/` – reconciliation statement (ledger balance, bank balance, deposits in
+   transit, outstanding withdrawals, bank-only items, adjusted balances, difference), snapshot per
+   period (`fin_bank_recon_reports`), export `xlsx` (own minimal writer, no new dependency), `csv`,
+   and print-ready `html` for PDF (no Persian-capable PDF library in the repo; see PR notes).
+
+### Tables (migration 1789372000000, all with `tenant_id`, every query tenant-scoped)
+
+`fin_bank_recon_sessions`, `fin_bank_recon_items` (BIGINT rial), `fin_bank_recon_matches`,
+`fin_bank_recon_rules`, `fin_bank_recon_settings`, `fin_bank_recon_drafts`,
+`fin_bank_recon_attachments`, `fin_bank_recon_reports`, `fin_bank_recon_audit`.
+
+### Out of scope / follow-ups
+
+Frontend wizard (API first; the existing `/app/accounting/bank` page is untouched), real bank sample
+files to promote profiles from `synthetic` to `verified`, LLM-assisted classification, integration
+with `ai-bookkeeper` drafts and `universal-import` parsers once they land.
+
+### Checklist
+
+- [x] design (this section)
+- [x] pure core (parse, profiles, prerequisites, matcher, classifier, questions, report, xlsx)
+- [x] migration + repository + service + controller (raw SQL repository, no entities)
+- [x] fixtures (7 banks, csv/xlsx/pdf) and tests; classification eval
+- [ ] tsc, lint, build, jest banking; PR with owner policy questions
 ## Org access control: accounts, structure, permissions, security (2026-10-31)
 
 Branch `claude/quirky-agnesi-1069f0` (on top of `feat/password-auth` commit f31d08c3).

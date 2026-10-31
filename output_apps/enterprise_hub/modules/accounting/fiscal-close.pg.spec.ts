@@ -170,7 +170,10 @@ describePg('Fiscal close on PostgreSQL', () => {
   it('reverts the migration cleanly', async () => {
     await ds.query(`REVOKE ALL ON fin_fiscal_years FROM rx_fy_app`);
     await ds.query(`DROP ROLE rx_fy_app`);
-    await ds.undoLastMigration();
+    // Later migrations stack on top of this one, so revert down to it by name, not by count.
+    while ((await ds.query(`SELECT 1 FROM migrations WHERE name = 'AddChartHierarchyAndFiscalYears1789370000000'`)).length > 0) {
+      await ds.undoLastMigration();
+    }
     const [{ exists }] = await ds.query(`SELECT to_regclass('fin_fiscal_years') IS NOT NULL AS "exists"`);
     expect(exists).toBe(false);
     await ds.runMigrations();

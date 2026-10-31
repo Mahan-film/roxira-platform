@@ -5,6 +5,9 @@ import { BankingController } from './controllers/banking.controller';
 import { BankAccountEntity } from './entities/bank-account.entity';
 import { BankStatementLineEntity } from './entities/bank-statement-line.entity';
 import { BankingRepository } from './repositories/banking.repository';
+import { ReconController } from './recon/recon.controller';
+import { ReconRepository } from './recon/recon.repository';
+import { ReconService } from './recon/recon.service';
 import { BankingService } from './services/banking.service';
 
 /**
@@ -23,8 +26,8 @@ import { BankingService } from './services/banking.service';
     TypeOrmModule.forFeature([BankAccountEntity, BankStatementLineEntity]),
     AccountingModule,
   ],
-  controllers: [BankingController],
-  providers: [BankingService, BankingRepository],
+  controllers: [BankingController, ReconController],
+  providers: [BankingService, BankingRepository, ReconService, ReconRepository],
   exports: [BankingService],
 })
 export class BankingModule {}

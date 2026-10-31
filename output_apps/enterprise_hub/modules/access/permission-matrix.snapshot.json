@@ -5,6 +5,17 @@
   "DELETE /auth/sessions/:id (AuthController.revokeSession)": {
     "policy": "authOnly"
   },
+  "DELETE /enterprise-hub/banking/recon/rules/:id (ReconController.deleteRule)": {
+    "policy": "banking:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/banking/statement-lines/:id/match (BankingController.unmatch)": {
     "policy": "banking:post",
     "owner": true,
@@ -239,6 +250,94 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/accounts/:id/summary (BankingController.summary)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/recon/audit (ReconController.audit)": {
+    "policy": "banking:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/recon/reports (ReconController.reports)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/recon/reports/:id (ReconController.exportReport)": {
+    "policy": "banking:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/recon/rules (ReconController.rules)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/recon/sessions (ReconController.list)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/recon/sessions/:id (ReconController.session)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/recon/sessions/:id/review (ReconController.review)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/recon/settings (ReconController.settings)": {
     "policy": "banking:read",
     "owner": true,
     "admin": true,
@@ -1133,6 +1232,149 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/banking/recon/drafts/:id/reject (ReconController.reject)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/drafts/:id/reverse (ReconController.reverse)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/drafts/approve (ReconController.approve)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/items/:id/answer (ReconController.answer)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/items/:id/attachments (ReconController.attach)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/sessions (ReconController.upload)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/sessions/:id/answers (ReconController.answerCheck)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/sessions/:id/commit (ReconController.commit)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/sessions/:id/create-account (ReconController.createAccount)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/sessions/:id/mapping (ReconController.mapping)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/sessions/:id/matches/:groupId (ReconController.decide)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/sessions/:id/rematch (ReconController.rematch)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/recon/sessions/:id/report (ReconController.report)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/banking/statement-lines/:id/journal-entry (BankingController.createEntry)": {
     "policy": "banking:post",
     "owner": true,
@@ -1582,6 +1824,17 @@
   },
   "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {
     "policy": "platformAdmin"
+  },
+  "PUT /enterprise-hub/banking/recon/settings (ReconController.updateSettings)": {
+    "policy": "banking:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
   },
   "PUT /enterprise-hub/tax-compliance/moadian/credentials (MoadianController.putCredential)": {
     "policy": "tax:admin",

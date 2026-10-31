@@ -6,6 +6,18 @@ export enum BankCode {
   TEJARAT = 'tejarat',
   PASARGAD = 'pasargad',
   SAMAN = 'saman',
+  SEPAH = 'sepah',
+  KESHAVARZI = 'keshavarzi',
+  MASKAN = 'maskan',
+  REFAH = 'refah',
+  PARSIAN = 'parsian',
+  KARAFARIN = 'karafarin',
+  EGHTESAD_NOVIN = 'eghtesad_novin',
+  SINA = 'sina',
+  SHAHR = 'shahr',
+  AYANDEH = 'ayandeh',
+  DEY = 'dey',
+  POST_BANK = 'post_bank',
   OTHER = 'other',
 }
 

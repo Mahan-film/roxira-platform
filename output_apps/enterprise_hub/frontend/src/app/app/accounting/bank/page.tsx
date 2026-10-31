@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, FileUp, Landmark } from "lucide-react";
+import { ArrowRight, FileUp, Landmark, Sparkles } from "lucide-react";
 
 import { PageHeader } from "@/components/app/app-ui";
 import { BankReconciliation } from "@/components/accounting/bank/bank-reconciliation";
@@ -21,7 +21,11 @@ export default function SuiteBankReconciliationPage() {
               <ArrowRight aria-hidden="true" />
               حساب‌ها
             </Link>
-            <Link href="/app/import" className={buttonVariants({ size: "sm" })}>
+            <Link href="/app/accounting/bank/reconcile" className={buttonVariants({ size: "sm" })}>
+              <Sparkles aria-hidden="true" />
+              مغایرت‌گیری هوشمند
+            </Link>
+            <Link href="/app/import" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <FileUp aria-hidden="true" />
               ورود صورتحساب بانک
             </Link>

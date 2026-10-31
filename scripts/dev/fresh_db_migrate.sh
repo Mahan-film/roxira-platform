@@ -44,9 +44,15 @@ port_in_use() {
 port_in_use "$PORT" && die "port $PORT is in use; set FRESH_DB_PORT to a free port"
 
 log "starting $IMAGE on 127.0.0.1:$PORT"
-docker run -d --name "$CTR" --network host --tmpfs /var/lib/postgresql \
+# Docker Desktop's host network does not reach the Mac, so publish the port there instead.
+if [ "$(uname -s)" = "Darwin" ]; then
+  NET_ARGS=(-p "127.0.0.1:$PORT:$PORT"); LISTEN='*'
+else
+  NET_ARGS=(--network host); LISTEN=127.0.0.1
+fi
+docker run -d --name "$CTR" "${NET_ARGS[@]}" --tmpfs /var/lib/postgresql \
   -e PGPORT="$PORT" -e POSTGRES_USER=rx -e POSTGRES_PASSWORD=rx -e POSTGRES_DB=rxfresh \
-  "$IMAGE" -c listen_addresses=127.0.0.1 >/dev/null
+  "$IMAGE" -c "listen_addresses=$LISTEN" >/dev/null
 for _ in $(seq 1 60); do
   docker exec "$CTR" pg_isready -q -h 127.0.0.1 -p "$PORT" -U rx -d rxfresh 2>/dev/null && break
   sleep 1

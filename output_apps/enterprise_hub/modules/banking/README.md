@@ -53,3 +53,19 @@ from common exports and should be extended when a real file does not detect):
   counter account), which is matched immediately.
 - Summary as of a date: bank balance, book balance, unmatched items on each side, adjusted balances
   and the difference (0 when reconciled).
+
+## Reconciliation assistant (`recon/`, `/enterprise-hub/banking/recon`)
+
+Upload (Excel/CSV/PDF) → prerequisite checks (account/IBAN/bank, period, overlap, opening balance
+continuity, running balance) → commit → matching (exact, reference, cheque/Sayad, date tolerance,
+one-to-many / many-to-one) → classification and one question per unresolved item → drafts → batch
+approval → reconciliation report (Excel/CSV/print HTML). Design: `docs/plan.md`; owner policy
+questions: `docs/eval/bank-recon-owner-questions.md`; classification evaluation:
+`docs/eval/bank-classification-eval.md`. Tables `fin_bank_recon_*` (migration 1789372000000) are
+separate from the legacy `fin_bank_statement_lines` flow; journal lines matched in the legacy flow
+are excluded from new matching.
+
+Rules: statement text is untrusted (sanitised, never executed, masked before any LLM); money is
+BIGINT rial / BigInt minor units; matching is deterministic (no model); drafts by default;
+auto-post only for rule-detected small fees when a tenant admin enabled it; period locks respected
+(423 per draft); correction by reversal only; every step is written to `fin_bank_recon_audit`.

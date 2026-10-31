@@ -191,6 +191,21 @@ export async function apiUpload<TResponse>(
   return (await response.json()) as TResponse;
 }
 
+/** GET a file with the same token and error handling as `apiRequest`. */
+export async function apiDownload(path: string, signal?: AbortSignal): Promise<Blob> {
+  const token = await getFreshAccessToken();
+  const response = await fetch(path, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    signal,
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  return response.blob();
+}
+
 export interface UploadProgressOptions {
   signal?: AbortSignal;
   /** Called with the upload percentage (۰ تا ۱۰۰) while the file is sent. */
