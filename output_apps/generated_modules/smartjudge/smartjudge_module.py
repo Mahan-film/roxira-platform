@@ -596,13 +596,27 @@ _FREE_PRIMARY, _FREE_FALLBACK = _registry_primary_and_fallback(
     "cheap", "deepseek/deepseek-v4.1-flash", "deepseek/deepseek-v4-flash-0731"
 )
 
+def _safe_role_models(role: str) -> list:
+    """Registry ids for ``role``; [] when the registry cannot be read (never blocks boot)."""
+    if _model_registry is None:
+        return []
+    try:
+        return list(_model_registry.role_models(role))
+    except Exception as _exc:  # noqa: BLE001
+        print(f"[SMARTJUDGE][MODEL-REGISTRY] role {role!r} unavailable: {_exc}", file=sys.stderr)
+        return []
+
+
+_STT_ROLE = _safe_role_models("stt")
+_STT_SECONDARY = _STT_ROLE[1] if len(_STT_ROLE) > 1 else ""
+
 OPENROUTER_TIERS = {
     "VIP": {
         "primary_model": _VIP_PRIMARY,
         "fallback_model": _VIP_FALLBACK,
         "voice_model": _FREE_PRIMARY,  # voice needs low latency: Flash, not Pro
         "stt_primary": "deepgram/nova-3",
-        "stt_secondary": "openai/whisper-large-v3-turbo",
+        "stt_secondary": _STT_SECONDARY,
         "label": "سامانه قاضی هوشمند (نسخه پیشرفته سازمانی)"
     },
     "FREE": {
@@ -610,7 +624,7 @@ OPENROUTER_TIERS = {
         "fallback_model": _FREE_FALLBACK,
         "voice_model": _FREE_PRIMARY,
         "stt_primary": "deepgram/nova-3",
-        "stt_secondary": "openai/whisper-large-v3-turbo",
+        "stt_secondary": _STT_SECONDARY,
         "label": "سامانه قاضی هوشمند (نسخه استاندارد)"
     }
 }
@@ -2687,9 +2701,10 @@ _SSE_HEADERS = {"Cache-Control": "no-store", "Connection": "keep-alive", "X-Acce
 # Now that VIP's primary_model tracks the `strong` role (text-only DeepSeek
 # V4 Pro, W24), that default would silently break transcription -- pin the
 # literal audio-capable id instead; SMARTJUDGE_TRANSCRIBE_MODEL still overrides.
-VOICE_TRANSCRIBE_MODEL = os.environ.get(
-    "SMARTJUDGE_TRANSCRIBE_MODEL", "google/gemini-3.8-flash"
-)
+# Audio-capable id: first entry of the registry's `vision` role (multimodal Flash model).
+VOICE_TRANSCRIBE_MODEL = os.environ.get("SMARTJUDGE_TRANSCRIBE_MODEL") or (
+    _safe_role_models("vision") or [""]
+)[0]
 _VOICE_AUDIO_FORMATS = {"wav", "mp3", "ogg", "webm", "flac", "m4a", "aac", "opus", "oga", "mp4"}
 
 
@@ -3975,17 +3990,10 @@ async def health_check():
 OPENROUTER_TRANSCRIPTION_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
 
 # فهرست اولویت‌بندی‌شده قوی‌ترین مدل‌های پیاده‌سازی گفتار فارسی در جهان
-PRIMARY_STT_MODELS = [
-    "openai/whisper-large-v3",
-    "openai/whisper-large-v3-turbo",
-    "google/chirp-3",
-    "deepgram/nova-3",
-    "openai/gpt-4o-transcribe",
-    "openai/whisper-1",
-]
+PRIMARY_STT_MODELS = _safe_role_models("stt")
 
-TRANSCRIBE_MODEL = "openai/whisper-large-v3"
-TRANSCRIBE_FALLBACK_MODEL = "openai/whisper-large-v3-turbo"
+TRANSCRIBE_MODEL = PRIMARY_STT_MODELS[0] if PRIMARY_STT_MODELS else ""
+TRANSCRIBE_FALLBACK_MODEL = PRIMARY_STT_MODELS[1] if len(PRIMARY_STT_MODELS) > 1 else ""
 
 TRANSCRIPTION_SYSTEM_PROMPT = (
     "شما یک موتور دقیق تبدیل گفتار به متن (Speech-to-Text) فارسی هستید. "

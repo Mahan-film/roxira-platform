@@ -16,7 +16,7 @@ NETWORK=roxira_platform_roxira_net
 IP=91.107.248.99
 HELO=mail.ghazihoushmand.ir
 SELECTOR=rx1
-DOMAINS=(ghazihoushmand.ir roxira.ir)
+DOMAINS=(ghazihoushmand.ir roxira.ir roxira.net)
 
 APPLY=0
 case "${1:-}" in

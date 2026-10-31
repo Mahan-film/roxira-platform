@@ -386,8 +386,18 @@ def _extract_text_native(data: bytes) -> tuple[str, List[str]]:
 # ──────────────────────────────────────────────────────────────────────────────
 # لایهٔ ۳ — OCR بینایی از راه دور (مدل بینایی OpenRouter)
 # ──────────────────────────────────────────────────────────────────────────────
+def _registry_vision_default() -> str:
+    try:
+        from output_apps.generated_modules.smartjudge import model_registry
+
+        ids = model_registry.role_models("vision")
+        return ids[0] if ids else ""
+    except Exception:
+        return ""
+
+
 VISION_OCR_MODEL = os.environ.get(
-    "VISION_OCR_MODEL", os.environ.get("OPENROUTER_VISION_MODEL", "google/gemini-3.8-flash")
+    "VISION_OCR_MODEL", os.environ.get("OPENROUTER_VISION_MODEL", _registry_vision_default())
 )
 VISION_OCR_MAX_PAGES = int(os.environ.get("VISION_OCR_MAX_PAGES", "5"))
 

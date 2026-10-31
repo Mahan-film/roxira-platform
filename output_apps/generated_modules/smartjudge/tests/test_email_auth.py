@@ -331,3 +331,31 @@ def test_jwt_roundtrip_resolves_email_user(monkeypatch):
     forged = mod._sign_jwt({"auth": "email", "sub": "09121234567", "exp": int(time.time()) + 60})
     assert mod._user_from_token(forged) is None
     assert mod._hashed_user_ref("em_0123456789abcdef") == mod._hashed_user_ref(user.phone)
+
+
+def test_email_sender_rejects_header_injection(monkeypatch):
+    """CR/LF in the recipient or subject never reaches SMTP (no Bcc/header injection)."""
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, *a, **k):
+            sent.append("connect")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def send_message(self, msg):
+            sent.append("send")
+
+    monkeypatch.setattr(email_sender.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("SMTP_HOST", "roxira_mail")
+    monkeypatch.setenv("SMTP_PORT", "25")
+    monkeypatch.setenv("SMTP_FROM", "Ghazi <no-reply@ghazihoushmand.ir>")
+    monkeypatch.setenv("SMTP_USER", "")
+    assert email_sender.send_email("a@example.com\r\nBcc: x@evil.test", "s", "t", "h") is False
+    assert email_sender.send_email("a@example.com", "s\nBcc: x@evil.test", "t", "h") is False
+    assert email_sender.send_email("not an address", "s", "t", "h") is False
+    assert sent == []

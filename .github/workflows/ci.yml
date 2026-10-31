@@ -242,6 +242,8 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       # If this fails, run `python3 scripts/gen_system_inventory.py` and commit docs/SYSTEM_INVENTORY.generated.md.
       - run: python3 -m pip install pyyaml && python3 scripts/gen_system_inventory.py --check
+      # AGENTS.md section 3: model ids live in config/models.yaml only. Baseline: scripts/ci/hardcoded_model_ids_baseline.txt.
+      - run: python3 scripts/ci/check_hardcoded_model_ids.py
 
   pytest:
     name: Pytest (unit)

@@ -12,16 +12,23 @@ if not OPENROUTER_KEY and env_p.exists():
         if l.startswith("OPENROUTER_API_KEY="):
             OPENROUTER_KEY = l.split("=", 1)[1].strip().strip("'\"")
 
-# ماتریس مدرن‌ترین مدل‌های ارزان و رایگان سپتامبر ۲۰۲۶
-NEXTGEN_MODELS = [
-    "inception/mercury-2.5-preview",      # تخفیف ویژه، سرعت فوق‌العاده بالا و خروجی موازی
-    "minimax/minimax-m3:free",            # کانتکست ۱ میلیون توکن با Sparse Attention
-    "nvidia/nemotron-3-ultra:free",       # ارکستراسیون MoE هیبریدی رایگان
-    "poolside/laguna-xs-2.1:free",        # ایجنت تخصصی تولید کد
-    "thinkingmachines/inkling:free",      # استدلال و استنتاج عمیق
-    "z-ai/glm-5.3-flash",                 # امتیاز ایجنتی ۹۶٪
-    "deepseek/deepseek-v4-flash-0731"     # پایداری کدنویسی
-]
+# Model ladder from config/models.yaml (AGENTS.md section 4): free role first, paid
+# cheap_agent role only as the fallback. No model ids are hardcoded here.
+def _registry_ladder() -> List[str]:
+    try:
+        from output_apps.generated_modules.smartjudge import model_registry
+        ladder: List[str] = []
+        for role in ("free", "cheap_agent"):
+            for mid in model_registry.role_models(role):
+                if mid not in ladder and mid != "openrouter/free":
+                    ladder.append(mid)
+        return ladder
+    except Exception as exc:  # registry unreadable -> rule-engine summary only
+        print(f"[PROJECTFACTORY][MODEL-REGISTRY] unavailable: {exc}")
+        return []
+
+
+NEXTGEN_MODELS = _registry_ladder()
 
 class ProjectIntakeRequest(BaseModel):
     project_title: str

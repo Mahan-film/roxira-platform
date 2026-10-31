@@ -69,8 +69,18 @@ except Exception as exc:  # noqa: BLE001
 
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 # مدل‌ها از پیکربندی زندهٔ موتور خوانده می‌شوند تا کاتالوگ مدل تک‌منبع بماند
+def _registry_cheap_default() -> str:
+    try:
+        from output_apps.generated_modules.smartjudge import model_registry
+
+        ids = model_registry.role_models("cheap")
+        return ids[0] if ids else ""
+    except Exception:
+        return ""
+
+
 LIGHTRAG_LLM_MODEL = os.environ.get(
-    "LIGHTRAG_LLM_MODEL", os.environ.get("DEFAULT_LLM_MODEL", "deepseek/deepseek-v4.1-flash")
+    "LIGHTRAG_LLM_MODEL", os.environ.get("DEFAULT_LLM_MODEL", _registry_cheap_default())
 )
 LIGHTRAG_EMBED_MODEL = os.environ.get(
     "LIGHTRAG_EMBED_MODEL", "openai/text-embedding-3-small"

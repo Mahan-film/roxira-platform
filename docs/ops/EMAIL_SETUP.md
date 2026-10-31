@@ -12,11 +12,11 @@ another provider is only an optional fallback (last section).
 
 Container `roxira_mail` (Postfix + OpenDKIM, image `boky/postfix:5.1.0`), files in `services/mail/`:
 
-- `docker-compose.mail.yml`: sends for `ghazihoushmand.ir` and `roxira.ir`, HELO `mail.ghazihoushmand.ir`,
+- `docker-compose.mail.yml`: sends for `ghazihoushmand.ir`, `roxira.ir` and `roxira.net`, HELO `mail.ghazihoushmand.ir`,
   DKIM selector `rx1`. **No host port is published** (AGENTS.md section 7): it is reachable only on the app's
   docker network as `roxira_mail:25`, and Postfix trusts only the private docker ranges, so no login is needed.
   It does not receive mail.
-- `install.sh`: dry-run by default, `--apply` generates 2048-bit DKIM keys (once, in
+- `install.sh`: dry-run by default, `--apply` generates 2048-bit DKIM keys for those three domains (only the missing ones, once, in
   `/var/lib/roxira-mail/dkim`, mode 600, never in git), starts the container and prints the DNS records and `.env` values.
 - `send_test.py`: sends one test mail through the relay.
 
@@ -28,13 +28,19 @@ bash services/mail/install.sh              # dry-run: preconditions and plan
 bash services/mail/install.sh --apply      # keys, container, then prints the exact DNS records
 ```
 
-1. **DNS** (at the DNS host of each domain), exactly as the script prints:
-   - **SPF**: one TXT on the root, `v=spf1 ip4:91.107.248.99 -all`. Check for an existing one first:
-     `dig +short TXT ghazihoushmand.ir | grep spf1` (same for `roxira.ir`). If it exists, **merge** (add
-     `ip4:91.107.248.99` before the final `-all`/`~all`); two SPF records make both invalid.
-   - **DKIM**: TXT `rx1._domainkey.ghazihoushmand.ir` and `rx1._domainkey.roxira.ir` (`v=DKIM1; k=rsa; p=...`).
-   - **Host**: A `mail.ghazihoushmand.ir` -> `91.107.248.99` (DNS only, not proxied by Cloudflare).
-   - **DMARC**: keep the record the owner already set.
+1. **DNS**. Live state checked 2026-10-31: all three domains (`ghazihoushmand.ir`, `roxira.ir`, `roxira.net`)
+   already have Cloudflare Email Routing MX records, an SPF record, a DKIM TXT at selector `rx1`
+   (`rx1._domainkey.<domain>`) and DMARC `p=none`. **No DNS work is needed.** Do not add a second SPF record
+   (two make both invalid); if SPF ever needs `ip4:91.107.248.99`, merge it into the existing record.
+   - Inbound mail is handled by Cloudflare Email Routing (the MX records). `roxira_mail` is send-only and never receives mail.
+   - **DKIM key must match the published record.** The relay signs with `/var/lib/roxira-mail/dkim/<domain>.private`
+     (key file name = domain, selector `rx1`). `install.sh` only creates a key when the file is missing, and a newly
+     generated key does not match the TXT already in DNS. Before `--apply`, check `ls /var/lib/roxira-mail/dkim`
+     for all three `.private` files. If one is missing (in particular `roxira.net`, which `install.sh` did not cover
+     before 2026-10-31), recover the original key from backup rather than regenerating, or publish the new public
+     key the script prints (replacing the old `rx1` TXT) as an owner DNS action.
+   - Later DMARC step (owner decision, not done): move `p=none` to `quarantine` once `rua` reports show clean alignment.
+   - **Host**: A `mail.ghazihoushmand.ir` -> `91.107.248.99` (DNS only, not proxied by Cloudflare) is the HELO name.
 2. **Reverse DNS** (Hetzner Cloud console > Servers > srv1 > Networking > the IPv4 > Edit reverse DNS):
    `91.107.248.99` -> `mail.ghazihoushmand.ir`. Must match the A record above (forward-confirmed).
 3. Server `.env` (never in git), then restart the app container (needs the owner's OK):
@@ -49,7 +55,7 @@ bash services/mail/install.sh --apply      # keys, container, then prints the ex
 
 4. Test: `docker exec -i -e SMTP_HOST=roxira_mail -e SMTP_PORT=25 -e SMTP_FROM='no-reply@ghazihoushmand.ir' roxira_app_prod python3 - you@example.com < services/mail/send_test.py`
    then `docker logs --tail 30 roxira_mail` (look for `status=sent`, or the remote refusal text).
-5. Verify DNS: `dig +short TXT rx1._domainkey.ghazihoushmand.ir`, `dig +short -x 91.107.248.99`,
+5. Verify DNS: `dig +short TXT rx1._domainkey.ghazihoushmand.ir` (and `.roxira.ir`, `.roxira.net`), `dig +short -x 91.107.248.99`,
    and send a mail to the address shown at <https://www.mail-tester.com> (aim for 9/10 or better; it reports SPF, DKIM, DMARC, rDNS).
 
 ### Deliverability notes
@@ -90,6 +96,10 @@ should return `"email": true`; then register with a real mailbox from the login 
 
 ## How it works (for the next developer)
 
+- Header safety: `email_sender.send_email` refuses a recipient or subject containing CR/LF/NUL or more than one
+  plain address (header injection), on top of `EmailMessage` refusing newlines in header values. The Next.js
+  mailers use `lib/mail-safe.ts` (`headerText`, `escapeHtml`); `provision-sandbox` only mails an address that
+  passed its anchored `EMAIL_RE`.
 - Code: `output_apps/generated_modules/smartjudge/email_auth.py` (accounts, tokens, endpoints),
   `email_sender.py` (smtplib + templates). Routes, under `/api/v1/apps/judge/auth/`:
   `methods` (GET), `email/register`, `email/verify-email`, `email/resend-verification`,

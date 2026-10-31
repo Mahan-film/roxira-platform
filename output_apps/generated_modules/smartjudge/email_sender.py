@@ -53,12 +53,24 @@ def _use_starttls() -> bool:
     return bool(_cfg("SMTP_USER"))
 
 
+def _header_safe(value: str) -> str | None:
+    """The value when it is safe in one header line, else None (CR/LF/NUL would allow header injection)."""
+    if any(ch in value for ch in ("\r", "\n", "\x00")):
+        return None
+    return value
+
+
 def send_email(to: str, subject: str, text: str, html_body: str) -> bool:
     """Send one multipart message. Never raises; returns False on any failure.
 
     The recipient address and body are never logged (only the exception class).
     """
     if not is_configured():
+        return False
+    # Explicit guard (EmailMessage also refuses CR/LF): a recipient must be one plain address.
+    to_addr = parseaddr(to)[1]
+    if _header_safe(to) is None or _header_safe(subject) is None or not to_addr or to_addr != to.strip():
+        print("[AUTH][EMAIL-ERROR] rejected unsafe recipient or subject", file=sys.stderr)
         return False
     try:
         name, addr = parseaddr(_cfg("SMTP_FROM"))
