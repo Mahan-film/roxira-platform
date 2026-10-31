@@ -3,7 +3,7 @@ import {
   seedEffectiveFrom,
   seedSource,
   STATUTORY_SEEDS,
-} from '../modules/hr/statutory/statutory-seed';
+} from './data/statutory-seed';
 
 /**
  * Versioned statutory parameters (country, fiscal year, effective date), one row per value with
@@ -13,7 +13,7 @@ import {
  * with its own `tenant_id`, so one organisation can never change another's figures. Rows are
  * append-only: an edit inserts the next `version` and history is never lost.
  *
- * The seed and its provenance are in modules/hr/statutory/statutory-seed.ts.
+ * The seed and its provenance are in migrations/data/statutory-seed.ts.
  */
 export class CreateStatutoryParameters1789410000000 implements MigrationInterface {
   name = 'CreateStatutoryParameters1789410000000';

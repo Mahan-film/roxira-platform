@@ -2,7 +2,7 @@ import {
   seedEffectiveFrom,
   seedSource,
   STATUTORY_SEEDS,
-} from '../statutory-seed';
+} from '../../../../migrations/data/statutory-seed';
 import { PayrollYearRates } from '../payroll-rates';
 import { StatutoryKey } from '../statutory-catalogue';
 import {
