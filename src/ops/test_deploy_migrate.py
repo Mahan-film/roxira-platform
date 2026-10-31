@@ -202,3 +202,20 @@ def test_script_has_no_auto_restore_in_migrate_failure_path() -> None:
     assert "cmd_migrate_rollback" not in body
     assert "pg_restore -U" not in body
     assert "NOT restoring automatically" in body
+
+
+def test_migration_filter_ignores_test_helpers():
+    import subprocess
+    script = Path(__file__).resolve().parents[2] / "scripts/ops/deploy_local.sh"
+    line = next(l for l in script.read_text().splitlines() if l.startswith("migration_files()"))
+    changed = (
+        "output_apps/enterprise_hub/test/migrations/verify.sh\n"
+        "output_apps/enterprise_hub/migrations/1-A.ts\n"
+        "src/a.py"
+    )
+    out = subprocess.run(
+        ["bash", "-c", f'{line}\nmigration_files'],
+        env={"CHANGED": changed, "PATH": "/usr/bin:/bin"},
+        capture_output=True, text=True, check=True,
+    ).stdout
+    assert out.split() == ["output_apps/enterprise_hub/migrations/1-A.ts"]
