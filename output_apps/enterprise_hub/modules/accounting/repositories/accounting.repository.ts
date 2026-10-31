@@ -9,7 +9,7 @@ import {
   In,
   Repository,
 } from 'typeorm';
-import { JournalEntryStatus } from '../enums/accounting.enum';
+import { JournalEntryStatus, JournalEntryType } from '../enums/accounting.enum';
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
@@ -198,6 +198,16 @@ export class AccountingRepository {
       .execute();
   }
 
+  /** Sets level, parent and report line on existing accounts; names, types and balances stay. */
+  async updateAccountMetadata(
+    tenantId: string,
+    code: string,
+    data: Pick<ChartOfAccountEntity, 'level' | 'parentCode' | 'reportLine'>,
+    manager?: EntityManager,
+  ): Promise<void> {
+    await this.accountsRepo(manager).update({ tenantId, code }, data);
+  }
+
   /** شناسه حساب‌هایی که سطر سند دارند (ارجاع‌شده؛ undo ممنوع). */
   async findReferencedAccountIds(
     tenantId: string,
@@ -316,6 +326,7 @@ export class AccountingRepository {
       description: string;
       status: JournalEntryStatus;
       reversesEntryId?: number | null;
+      entryType?: JournalEntryType;
     },
     lineInputs: JournalLineInput[],
     outerManager?: EntityManager,
@@ -336,6 +347,7 @@ export class AccountingRepository {
             description: header.description,
             status: header.status,
             reversesEntryId: header.reversesEntryId ?? null,
+            entryType: header.entryType ?? JournalEntryType.NORMAL,
           })
           .orIgnore()
           .returning('id')
@@ -416,7 +428,7 @@ export class AccountingRepository {
   }
 
   /** Exclusive advisory lock: waits for in-flight postings and blocks new ones. */
-  private async lockLedgerExclusive(
+  async lockLedgerExclusive(
     tenantId: string,
     manager: EntityManager,
   ): Promise<void> {
@@ -468,13 +480,14 @@ export class AccountingRepository {
       reason: string | null;
       lockedBy: string;
     },
+    outerManager?: EntityManager,
   ): Promise<PeriodLockEntity> {
-    return this.dataSource.transaction(async (manager) => {
+    return this.transaction(async (manager) => {
       await this.lockLedgerExclusive(tenantId, manager);
       return manager.save(
         manager.create(PeriodLockEntity, { ...data, tenantId }),
       );
-    });
+    }, outerManager);
   }
 
   /** Returns null when the lock does not exist for this tenant or is already unlocked. */
@@ -482,8 +495,9 @@ export class AccountingRepository {
     tenantId: string,
     id: number,
     data: { unlockedBy: string; unlockReason: string },
+    outerManager?: EntityManager,
   ): Promise<PeriodLockEntity | null> {
-    return this.dataSource.transaction(async (manager) => {
+    return this.transaction(async (manager) => {
       await this.lockLedgerExclusive(tenantId, manager);
       const rows: unknown[] = (
         await manager
@@ -505,7 +519,7 @@ export class AccountingRepository {
         return null;
       }
       return manager.findOne(PeriodLockEntity, { where: { id, tenantId } });
-    });
+    }, outerManager);
   }
 
   async findPeriodLock(

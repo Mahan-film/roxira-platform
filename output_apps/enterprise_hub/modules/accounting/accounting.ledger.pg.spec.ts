@@ -495,9 +495,10 @@ describePg('Ledger on PostgreSQL', () => {
       const base = new DataSource(options(legacy));
       await base.initialize();
       await base.runMigrations();
-      // go back to the pre-ledger schema (both new migrations reverted), then seed legacy data
-      await base.undoLastMigration();
-      await base.undoLastMigration();
+      // go back to the pre-ledger schema (the ledger migrations and all later ones), then seed legacy data
+      while ((await base.query(`SELECT 1 FROM migrations WHERE name = 'LedgerPeriodLocksAndGuards1789320000000'`)).length > 0) {
+        await base.undoLastMigration();
+      }
       const accounts = await base.query(
         `INSERT INTO fin_chart_of_accounts (code, name, account_type, tenant_id, balance) VALUES
            ('1010','cash','ASSET',$1,0.30000000000000004), ('4010','sales','REVENUE',$1,-0.3), ('9999','drift','ASSET',$1,5)
@@ -520,8 +521,10 @@ describePg('Ledger on PostgreSQL', () => {
       // the old "<number>-REV" convention is backfilled into reverses_entry_id
       expect(await base.query(`SELECT reverses_entry_id FROM fin_journal_entries WHERE entry_number='J1-REV'`)).toEqual([{ reverses_entry_id: entryId }]);
 
-      await base.undoLastMigration(); // numeric -> double precision
-      await base.undoLastMigration(); // guards, locks table, reverses column
+      // later migrations, numeric -> double precision, then guards, locks table, reverses column
+      while ((await base.query(`SELECT 1 FROM migrations WHERE name = 'LedgerPeriodLocksAndGuards1789320000000'`)).length > 0) {
+        await base.undoLastMigration();
+      }
       expect((await base.query(`SELECT data_type FROM information_schema.columns WHERE table_name='fin_chart_of_accounts' AND column_name='balance'`))[0].data_type).toBe('double precision');
       expect(await base.query(`SELECT 1 FROM information_schema.tables WHERE table_name IN ('fin_period_locks','fin_balance_reconciliation_log')`)).toEqual([]);
       expect(await base.query(`SELECT 1 FROM pg_trigger WHERE tgname LIKE 'TRG_fin_%'`)).toEqual([]);

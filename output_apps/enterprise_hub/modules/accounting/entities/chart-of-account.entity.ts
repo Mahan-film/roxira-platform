@@ -1,5 +1,5 @@
 import { Column, Entity, Index, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
-import { AccountType } from '../enums/accounting.enum';
+import { AccountLevel, AccountType, ReportLine } from '../enums/accounting.enum';
 import { JournalEntryLineEntity } from './journal-entry-line.entity';
 
 /**
@@ -50,6 +50,16 @@ export class ChartOfAccountEntity {
    */
   @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
   balance: string;
+
+  /** Null for imported and legacy accounts, which report through inference. */
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  level: AccountLevel | null;
+
+  @Column({ type: 'varchar', length: 32, name: 'parent_code', nullable: true })
+  parentCode: string | null;
+
+  @Column({ type: 'varchar', length: 32, name: 'report_line', nullable: true })
+  reportLine: ReportLine | null;
 
   @OneToMany(() => JournalEntryLineEntity, (line) => line.account)
   lines: JournalEntryLineEntity[];

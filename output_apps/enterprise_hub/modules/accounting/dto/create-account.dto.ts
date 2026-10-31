@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Currency } from '../../currency/enums/currency.enum';
-import { AccountType } from '../enums/accounting.enum';
+import { AccountLevel, AccountType, ReportLine } from '../enums/accounting.enum';
 
 /**
  * DTO ایجاد حساب جدید در دفتر کل (Chart of Accounts).
@@ -33,4 +33,20 @@ export class CreateAccountDto {
   @IsOptional()
   @IsEnum(Currency)
   currency?: Currency;
+
+  @ApiPropertyOptional({ enum: AccountLevel, description: 'سطح حساب: معین یا تفصیلی' })
+  @IsOptional()
+  @IsEnum(AccountLevel)
+  level?: AccountLevel;
+
+  @ApiPropertyOptional({ description: 'کد حساب بالادست', example: '1012' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  parentCode?: string;
+
+  @ApiPropertyOptional({ enum: ReportLine, description: 'ردیف صورت‌های مالی' })
+  @IsOptional()
+  @IsEnum(ReportLine)
+  reportLine?: ReportLine;
 }

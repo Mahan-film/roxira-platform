@@ -5,7 +5,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { JournalEntryStatus } from '../enums/accounting.enum';
+import { JournalEntryStatus, JournalEntryType } from '../enums/accounting.enum';
 import { JournalEntryLineEntity } from './journal-entry-line.entity';
 
 /**
@@ -52,6 +52,14 @@ export class JournalEntryEntity {
   /** Set on a reversing entry: the posted entry it reverses (unique per tenant). */
   @Column({ type: 'integer', name: 'reverses_entry_id', nullable: true })
   reversesEntryId: number | null;
+
+  @Column({
+    type: 'varchar',
+    length: 16,
+    name: 'entry_type',
+    default: JournalEntryType.NORMAL,
+  })
+  entryType: JournalEntryType;
 
   @OneToMany(() => JournalEntryLineEntity, (line) => line.journalEntry, {
     cascade: true,

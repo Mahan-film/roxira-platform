@@ -61,7 +61,12 @@ import {
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
-import { AccountType, JournalEntryStatus } from '../enums/accounting.enum';
+import {
+  AccountLevel,
+  AccountType,
+  JournalEntryStatus,
+  JournalEntryType,
+} from '../enums/accounting.enum';
 import {
   AccountingRepository,
   JournalLineInput,
@@ -136,6 +141,9 @@ export class AccountingService {
       accountType: entity.accountType,
       currency: entity.currency as Currency,
       balance: fromMinor(fromDb(entity.balance)),
+      level: entity.level ?? null,
+      parentCode: entity.parentCode ?? null,
+      reportLine: entity.reportLine ?? null,
     };
   }
 
@@ -339,6 +347,12 @@ export class AccountingService {
         `حسابی با کد ${dto.code} قبلاً در دفتر کل ثبت شده است.`,
       );
     }
+    if (dto.parentCode) {
+      const parent = await this.accountingRepository.findAccountByCode(tenantId, dto.parentCode);
+      if (!parent) {
+        throw new BadRequestException(`حساب بالادست ${dto.parentCode} یافت نشد.`);
+      }
+    }
 
     const created = await this.accountingRepository.createAccount(tenantId, {
       code: dto.code,
@@ -346,6 +360,9 @@ export class AccountingService {
       accountType: dto.accountType,
       currency: dto.currency ?? Currency.IRR,
       balance: '0',
+      level: dto.level ?? null,
+      parentCode: dto.parentCode?.trim() || null,
+      reportLine: dto.reportLine ?? null,
     });
 
     return this.toAccountDto(created);
@@ -537,13 +554,23 @@ export class AccountingService {
     dto: CreateJournalEntryDto,
     manager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
-    return this.postEntry(tenantId, dto, null, manager);
+    return this.postEntry(tenantId, dto, {}, manager);
+  }
+
+  /** Posts an entry of a fiscal close or an opening; only the close service calls this. */
+  async postTypedEntry(
+    tenantId: string,
+    dto: CreateJournalEntryDto,
+    entryType: JournalEntryType,
+    manager: EntityManager,
+  ): Promise<JournalEntryResponseDto> {
+    return this.postEntry(tenantId, dto, { entryType }, manager);
   }
 
   private async postEntry(
     tenantId: string,
     dto: CreateJournalEntryDto,
-    reversesEntryId: number | null,
+    options: { reversesEntryId?: number; entryType?: JournalEntryType },
     manager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId, manager);
@@ -592,6 +619,16 @@ export class AccountingService {
       );
     }
 
+    const headers = accounts.filter(
+      (account) =>
+        account.level === AccountLevel.GROUP || account.level === AccountLevel.KOL,
+    );
+    if (headers.length > 0) {
+      throw new BadRequestException(
+        `سند روی حساب گروه یا کل ثبت نمی‌شود؛ حساب معین یا تفصیلی انتخاب کنید: ${headers.map((a) => a.code).join(', ')}`,
+      );
+    }
+
     const lineInputs: JournalLineInput[] = normalizedLines.map((line) => ({
       accountId: accountByCode.get(line.accountCode)!.id,
       debitMinor: line.debitMinor,
@@ -612,7 +649,8 @@ export class AccountingService {
           date: dto.date ? new Date(dto.date) : new Date(),
           description: dto.description,
           status: JournalEntryStatus.POSTED,
-          reversesEntryId,
+          reversesEntryId: options.reversesEntryId ?? null,
+          entryType: options.entryType,
         },
         lineInputs,
         manager,
@@ -647,9 +685,30 @@ export class AccountingService {
     id: number,
     options: { date?: string; reason?: string } = {},
   ): Promise<JournalEntryResponseDto> {
-    return this.accountingRepository.transaction((manager) =>
-      this.reverseWithin(tenantId, id, options, manager),
-    );
+    return this.accountingRepository.transaction(async (manager) => {
+      const entry = await this.accountingRepository.findEntryById(tenantId, id, manager);
+      if (
+        entry &&
+        (entry.entryType === JournalEntryType.CLOSING_TEMP ||
+          entry.entryType === JournalEntryType.CLOSING_PERM ||
+          entry.entryType === JournalEntryType.OPENING_AUTO)
+      ) {
+        throw new BadRequestException(
+          'سند بستن سال مالی جداگانه برگشت نمی‌خورد؛ سال مالی را بازگشایی کنید.',
+        );
+      }
+      return this.reverseWithin(tenantId, id, options, manager);
+    });
+  }
+
+  /** Reverses an entry of a fiscal close; only the reopen flow calls this. */
+  reverseTypedEntry(
+    tenantId: string,
+    id: number,
+    options: { date: string; reason: string },
+    manager: EntityManager,
+  ): Promise<JournalEntryResponseDto> {
+    return this.reverseWithin(tenantId, id, options, manager);
   }
 
   private async reverseWithin(
@@ -710,7 +769,7 @@ export class AccountingService {
             `برگشت سند ${original.entryNumber}` + (reason ? `: ${reason}` : ''),
           lines,
         } as CreateJournalEntryDto,
-        original.id,
+        { reversesEntryId: original.id, entryType: original.entryType },
         manager,
       );
     } catch (error) {

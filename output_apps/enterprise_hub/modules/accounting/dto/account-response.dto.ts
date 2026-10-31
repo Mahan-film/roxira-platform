@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
-import { AccountType } from '../enums/accounting.enum';
+import { AccountLevel, AccountType, ReportLine } from '../enums/accounting.enum';
 import { Money } from '../money';
 
 /**
@@ -24,4 +24,13 @@ export class AccountResponseDto {
 
   @ApiProperty({ description: 'مانده حساب با علامت بدهکار-مثبت' })
   balance: Money;
+
+  @ApiPropertyOptional({ enum: AccountLevel, nullable: true, description: 'گروه، کل، معین یا تفصیلی' })
+  level?: AccountLevel | null;
+
+  @ApiPropertyOptional({ nullable: true, description: 'کد حساب بالادست' })
+  parentCode?: string | null;
+
+  @ApiPropertyOptional({ enum: ReportLine, nullable: true, description: 'ردیف صورت‌های مالی' })
+  reportLine?: ReportLine | null;
 }
