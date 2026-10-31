@@ -471,12 +471,13 @@ suite('Org access control (e2e, real Postgres)', () => {
         await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [owner.tenantId]);
         return m.query(sql, [owner.tenantId]);
       });
-    // superuser: the trigger raises; app role: RLS has no UPDATE/DELETE policy, so nothing is touched
+    // superuser: the trigger raises; owner role: RLS has no UPDATE/DELETE policy, so nothing is touched;
+    // restricted app role: it holds no UPDATE/DELETE grant on audit_log
     const before = (await inScope(`SELECT count(*)::int n FROM audit_log WHERE tenant_id=$1`))[0].n;
     for (const sql of [`UPDATE audit_log SET action='x' WHERE tenant_id=$1`, `DELETE FROM audit_log WHERE tenant_id=$1`]) {
       await inScope(sql).then(
         (res) => expect(Array.isArray(res) ? res[1] ?? 0 : 0).toBe(0),
-        (err: Error) => expect(err.message).toMatch(/append-only/),
+        (err: Error) => expect(err.message).toMatch(/append-only|permission denied/),
       );
     }
     expect((await inScope(`SELECT count(*)::int n FROM audit_log WHERE tenant_id=$1`))[0].n).toBe(before);
@@ -556,7 +557,18 @@ suite('Org access control (e2e, real Postgres)', () => {
     expect(ok).toMatchObject({ ok: true, brokenAtId: null });
     expect(ok.checked).toBeGreaterThanOrEqual(3);
     // an attacker with table-owner rights disables the trigger and edits history
-    await db.transaction(async (m) => {
+    // the restricted app role cannot do this, so the rehearsal passes the owner's password
+    const ownerDb = process.env.APP_E2E_ADMIN_PASSWORD
+      ? await new DataSource({
+          type: 'postgres',
+          host: process.env.DATABASE_HOST,
+          port: Number(process.env.DATABASE_PORT),
+          username: 'enterprise_admin',
+          password: process.env.APP_E2E_ADMIN_PASSWORD,
+          database: process.env.DATABASE_NAME,
+        }).initialize()
+      : db;
+    await ownerDb.transaction(async (m) => {
       await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [owner.tenantId]);
       await m.query(`ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_change`);
       await m.query(`ALTER TABLE audit_log NO FORCE ROW LEVEL SECURITY`);
@@ -567,6 +579,7 @@ suite('Org access control (e2e, real Postgres)', () => {
       await m.query(`ALTER TABLE audit_log FORCE ROW LEVEL SECURITY`);
       await m.query(`ALTER TABLE audit_log ENABLE TRIGGER audit_log_no_change`);
     });
+    if (ownerDb !== db) await ownerDb.destroy();
     const bad = (await call('get', '/v1/org/audit/verify', owner.accessToken).expect(200)).body;
     expect(bad.ok).toBe(false);
     expect(bad.brokenAtId).toBeTruthy();

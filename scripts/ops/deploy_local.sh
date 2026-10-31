@@ -436,7 +436,7 @@ print_migrate_plan() {
   echo "  3. archive of $TARGET_SHORT (Dockerfile, package files, tsconfig, data-source.ts, migrations) -> $MIGRATE_WORK"
   echo "     docker build --target deps -t $MIGRATE_IMAGE (server checkout is NOT changed; deploy is a separate step)"
   echo "  4. pg_dump -Fc inside $PG_CONTAINER -> $BACKUP_DIR/<timestamp>.dump; verify with pg_restore --list"
-  echo "  5. docker run --rm --network <network of $PG_CONTAINER> --env-file <DB credentials from the backend env, never printed>"
+  echo "  5. docker run --rm --network <network of $PG_CONTAINER> --env-file <DB owner credentials from the Postgres container env, never printed>"
   echo "     -e DATABASE_HOST=$PG_CONTAINER -e DATABASE_PORT=5432 $MIGRATE_IMAGE $MIGRATE_CMD"
   echo "  6. remove the one-off image, env file and work dir"
   echo "  7. verify via psql that tenant_id exists and is NOT NULL on: $VERIFY_TABLES"
@@ -476,8 +476,10 @@ cmd_migrate() {
     [ \"\$(docker inspect -f '{{.State.Running}}' $BACKEND_CONTAINER)\" = true ] || { echo '$BACKEND_CONTAINER not running' >&2; exit 1; }
     umask 077
     w='$MIGRATE_WORK'; rm -rf \"\$w\"; mkdir -p \"\$w\"
-    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' $BACKEND_CONTAINER | grep -E '^DATABASE_(USER|PASSW[A-Z]*|NAME)=' > \"\$w/db.env\" || true
-    [ \"\$(wc -l < \"\$w/db.env\")\" -eq 3 ] || { echo 'DB user/credential/name not all set in the backend container env' >&2; exit 1; }
+    # Migrations run as the database owner from the Postgres container, never as the backend's
+    # restricted application role (docs/ops/APP_DB_ROLE.md).
+    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' $PG_CONTAINER | sed -n -e 's/^POSTGRES_USER=/DATABASE_USER=/p' -e 's/^POSTGRES_\(PASSW[A-Z]*\)=/DATABASE_\1=/p' -e 's/^POSTGRES_DB=/DATABASE_NAME=/p' > \"\$w/db.env\" || true
+    [ \"\$(wc -l < \"\$w/db.env\")\" -eq 3 ] || { echo 'DB user/credential/name not all set in the $PG_CONTAINER env' >&2; exit 1; }
     git fetch -q origin main
     git archive '$TARGET_SHA' $HUB_DIR/Dockerfile $HUB_DIR/package.json $HUB_DIR/package-lock.json $HUB_DIR/tsconfig.json $DATA_SOURCE $MIG_DIR | tar -x -C \"\$w\"
     docker build -q --target deps -t '$MIGRATE_IMAGE' \"\$w/$HUB_DIR\" >/dev/null" \

@@ -31,7 +31,8 @@ slug_name() {  # slug -> agentdb_<slug>, sanitised
   printf 'agentdb_%s' "$s"
 }
 db_user() {
-  docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND" | sed -n 's/^DATABASE_USER=//p' | head -n1
+  # The owner, not the backend's restricted role: this script creates and drops databases.
+  docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$PG" | sed -n 's/^POSTGRES_USER=//p' | head -n1
 }
 psql_admin() {  # psql_admin <sql>: run against the maintenance DB
   docker exec -i "$PG" psql -U "$(db_user)" -d postgres -v ON_ERROR_STOP=1 -qtAX -c "$1"

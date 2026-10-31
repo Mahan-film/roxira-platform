@@ -293,9 +293,12 @@ services:
       - PORT=3000
       - DATABASE_HOST=roxira_pgbouncer
       - DATABASE_PORT=6432
-      - DATABASE_USER=enterprise_admin
-      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Restricted role once APP_DB_USER/APP_DB_PASSWORD are in .env (docs/ops/APP_DB_ROLE.md).
+      - DATABASE_USER=${APP_DB_USER:-enterprise_admin}
+      - DATABASE_PASSWORD=${APP_DB_PASSWORD:-${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}}
       - DATABASE_NAME=enterprise_db
+      # env_file hands the container all of .env; keep the superuser password out of it.
+      - POSTGRES_PASSWORD=
       - REDIS_HOST=redis_prod
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
