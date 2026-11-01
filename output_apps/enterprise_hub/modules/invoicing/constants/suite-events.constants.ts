@@ -69,5 +69,45 @@ export const CASH_BANK_ACCOUNT: InvoiceAccountSpec = {
   match: ['بانک', 'صندوق'],
 };
 
+/** موجودی کالا — دارایی، پیش‌فرض کد ۱۳۰۱. */
+export const INVENTORY_ACCOUNT: InvoiceAccountSpec = {
+  code: '1301',
+  name: 'موجودی کالا',
+  accountType: AccountType.ASSET,
+  match: ['موجودی کالا', 'موجودی انبار'],
+};
+
+/** بهای تمام‌شده کالای فروش‌رفته — هزینه، پیش‌فرض کد ۵۱۰۱. */
+export const COGS_ACCOUNT: InvoiceAccountSpec = {
+  code: '5101',
+  name: 'بهای تمام‌شده کالای فروش‌رفته',
+  accountType: AccountType.EXPENSE,
+  match: ['بهای تمام'],
+};
+
+/** خرید کالا و خدمات غیرانباری — هزینه، پیش‌فرض کد ۵۲۰۱. */
+export const PURCHASES_ACCOUNT: InvoiceAccountSpec = {
+  code: '5201',
+  name: 'خرید کالا و خدمات',
+  accountType: AccountType.EXPENSE,
+  match: ['خرید'],
+};
+
+/** حساب‌های پرداختنی تجاری — بدهی، پیش‌فرض کد ۲۱۰۱. */
+export const PAYABLE_ACCOUNT: InvoiceAccountSpec = {
+  code: '2101',
+  name: 'حساب‌های پرداختنی تجاری',
+  accountType: AccountType.LIABILITY,
+  match: ['پرداختنی تجاری', 'حساب‌های پرداختنی'],
+};
+
+/** مالیات بر ارزش افزوده خرید (اعتبار مالیاتی) — دارایی، پیش‌فرض کد ۱۴۰۱. */
+export const VAT_RECEIVABLE_ACCOUNT: InvoiceAccountSpec = {
+  code: '1401',
+  name: 'مالیات بر ارزش افزوده خرید (اعتبار مالیاتی)',
+  accountType: AccountType.ASSET,
+  match: ['اعتبار مالیاتی', 'ارزش افزوده خرید'],
+};
+
 /** حداکثر طول متن خطای ثبت ذخیره‌شده روی صورتحساب. */
 export const MAX_POSTING_ERROR_LENGTH = 2000;

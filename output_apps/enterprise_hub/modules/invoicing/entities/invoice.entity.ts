@@ -7,6 +7,11 @@ import {
 } from 'typeorm';
 import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
+import {
+  EInvoiceType,
+  InvoiceDirection,
+  InvoiceSubject,
+} from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -41,6 +46,26 @@ export interface InvoiceItem {
   vatRate: number;
   tax: number;
   total: number;
+}
+
+/** بهای تمام‌شده FIFO ثبت‌شده هنگام صدور (واحد: ریال، دو رقم اعشار). */
+export interface InvoicePostingMeta {
+  /** مجموع بهای کالای جابه‌جا‌شده در این صورتحساب. */
+  stockValue: number;
+  lines: Array<{
+    sku: string;
+    quantity: number;
+    unitCost: number;
+    value: number;
+    /** IN = کالا به انبار وارد شد، OUT = خارج شد. */
+    moved: 'IN' | 'OUT';
+    warehouseId: number | null;
+  }>;
+  /**
+   * مبالغ علامت‌دار سند (ریال × ۱۰۰، رشتهٔ عدد صحیح): مطالبه/بدهی، مالیات، خالص کالا و تغییر ارزش موجودی؛ ابطال
+   * دقیقاً قرینهٔ همین مقادیر را ثبت می‌کند.
+   */
+  posted?: { receivable: string; vat: string; net: string; stock: string };
 }
 
 /**
@@ -171,6 +196,30 @@ export class InvoiceEntity {
   /** آخرین خطای ثبت خودکار رویدادها؛ در صورت موفقیت پاک می‌شود. */
   @Column({ type: 'text', name: 'posting_error', nullable: true })
   postingError: string | null;
+
+  /** SALE (ما صادر می‌کنیم) یا PURCHASE (تأمین‌کننده برای ما صادر کرده). */
+  @Column({ type: 'varchar', length: 8, default: InvoiceDirection.SALE })
+  direction: InvoiceDirection;
+
+  /** نوع صورتحساب الکترونیکی (۱ با مشخصات خریدار، ۲ بدون، ۳ فروشگاهی). */
+  @Column({ type: 'smallint', name: 'einvoice_type', default: 1 })
+  einvoiceType: EInvoiceType;
+
+  /** موضوع صورتحساب (۱ اصلی، ۲ اصلاحی، ۳ ابطالی، ۴ برگشتی). */
+  @Column({ type: 'smallint', default: 1 })
+  subject: InvoiceSubject;
+
+  /** صورتحساب مرجع برای اصلاحی/ابطالی/برگشتی (همان مستأجر). */
+  @Column({ type: 'uuid', name: 'related_invoice_id', nullable: true })
+  relatedInvoiceId: string | null;
+
+  /** انباری که با ثبت صورتحساب، کالا از آن خارج یا به آن وارد می‌شود. */
+  @Column({ type: 'int', name: 'warehouse_id', nullable: true })
+  warehouseId: number | null;
+
+  /** آنچه ثبت خودکار انجام داده (بهای تمام‌شده FIFO) تا ابطال/برگشت دقیقاً همان را برگرداند. */
+  @Column({ type: 'jsonb', name: 'posting_meta', nullable: true })
+  postingMeta: InvoicePostingMeta | null;
 
   @CreateDateColumn()
   createdAt: Date;

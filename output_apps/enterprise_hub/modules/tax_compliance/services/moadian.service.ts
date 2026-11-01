@@ -199,6 +199,16 @@ export class MoadianService {
     this.assertEnabled();
     // findOne خود به مستأجر محدود است و برای صورتحساب سازمان دیگر NotFound می‌دهد.
     const invoice = await this.invoicingService.findOne(tenantId, invoiceId);
+    if ((invoice.direction ?? 'SALE') !== 'SALE') {
+      throw new BadRequestException(
+        'صورتحساب خرید را تأمین‌کننده به سامانه مودیان ارسال می‌کند؛ از اینجا ارسال نمی‌شود.',
+      );
+    }
+    if ((invoice.subject ?? 1) !== 1) {
+      throw new BadRequestException(
+        'ارسال صورتحساب اصلاحی، ابطالی و برگشتی به سامانه مودیان هنوز پشتیبانی نمی‌شود.',
+      );
+    }
     const credential = await this.repository.findCredential(tenantId);
     if (!credential) {
       throw new BadRequestException('ابتدا اطلاعات اتصال مودیان را ثبت کنید.');

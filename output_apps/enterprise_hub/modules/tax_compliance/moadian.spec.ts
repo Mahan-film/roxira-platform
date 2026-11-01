@@ -1,3 +1,4 @@
+import { EInvoiceType, InvoiceDirection, InvoiceSubject } from '../invoicing/enums/invoice-kind.enum';
 import 'reflect-metadata';
 import {
   BadRequestException,
@@ -119,6 +120,11 @@ function buildInvoice(overrides: Partial<InvoiceResponseDto> = {}): InvoiceRespo
   return {
     id: INVOICE_A,
     taxInvoiceNumber: 'TI-A-1',
+    direction: InvoiceDirection.SALE,
+    einvoiceType: EInvoiceType.WITH_BUYER,
+    subject: InvoiceSubject.ORIGINAL,
+    relatedInvoiceId: null,
+    warehouseId: null,
     customerId: null,
     sellerInfo: { name: 'Seller', economicCode: '10101010101' },
     buyerInfo: { name: 'Buyer', nationalId: '0012345678', economicCode: '0012345678' },

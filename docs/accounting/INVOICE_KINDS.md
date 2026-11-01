@@ -1,0 +1,35 @@
+# Sales and purchase invoices, e-invoice type and subject
+
+`/app/invoicing` records sales (we issue) and purchases (the supplier issued it to us) in a side drawer.
+
+| Field | Values |
+|---|---|
+| `direction` | `SALE`, `PURCHASE` |
+| `einvoiceType` | 1 with buyer, 2 without buyer, 3 retail (Moadian `inty`) |
+| `subject` | 1 original, 2 corrective, 3 cancel, 4 return (Moadian `ins`) |
+| `relatedInvoiceId` | required for subjects 2-4; must be an issued original of the same tenant and direction |
+
+## Posting (no tax rate anywhere; amounts come from the stored invoice lines)
+
+Every posting is one transaction: stock movement, one balanced voucher, and the marker columns.
+What was posted is stored in `invoices.posting_meta`, so a cancellation books the exact mirror and
+returns stock at the recorded FIFO cost, never at the selling price.
+
+| Document | Stock | Voucher (debit / credit) |
+|---|---|---|
+| Sale, original | FIFO issue from `warehouse_id` | AR / Sales + VAT payable; COGS / Inventory |
+| Purchase, original | FIFO layer created at net unit cost | Inventory + Purchases + VAT credit / AP |
+| Return | sale: stock back at sale cost; purchase: stock out | mirror of the amounts (and of COGS) |
+| Corrective | none | only the difference to the latest issued version |
+| Cancel | none itself; cancels the related invoice, whose cancellation event mirrors it | - |
+| Payment | - | sale: Cash / AR; purchase: AP / Cash |
+
+Return quantity per SKU can never exceed what the related invoice moved minus earlier returns.
+IRR invoices are rounded to whole rials, IRT to one decimal, foreign currencies to two.
+
+## Known limits
+
+- Corrective documents are financial only (no stock change).
+- Cancelling an already paid invoice does not reverse its payment voucher (unchanged behaviour).
+- Moadian submission only sends original sales; purchase, corrective, cancel and return documents are refused.
+- The seasonal VAT report counts original sales only; returns and correctives are not netted yet.

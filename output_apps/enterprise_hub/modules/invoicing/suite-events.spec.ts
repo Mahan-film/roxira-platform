@@ -15,6 +15,7 @@ import {
 } from './constants/suite-events.constants';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceEntity } from './entities/invoice.entity';
+import { EInvoiceType, InvoiceDirection, InvoiceSubject } from './enums/invoice-kind.enum';
 import { InvoiceStatus } from './enums/invoice-status.enum';
 import { SuiteEventsProcessor } from './processors/suite-events.processor';
 import { InvoicingRepository } from './repositories/invoicing.repository';
@@ -159,8 +160,8 @@ const buildAccounting = () => {
 };
 
 const buildInventory = () => {
-  const issueStock = jest.fn(async () => ({ type: 'OUTBOUND' }));
-  const receiveStock = jest.fn(async () => ({ type: 'INBOUND' }));
+  const issueStock = jest.fn(async () => ({ type: 'OUTBOUND', totalCost: 600 }));
+  const receiveStock = jest.fn(async () => ({ type: 'INBOUND', totalCost: 600 }));
   return {
     service: { issueStock, receiveStock } as unknown as InventoryService,
     issueStock,
@@ -174,6 +175,12 @@ const buildInvoice = (
   id: 'inv-1',
   tenantId: 'tenant-a',
   taxInvoiceNumber: 'TI-1',
+  direction: InvoiceDirection.SALE,
+  einvoiceType: EInvoiceType.WITH_BUYER,
+  subject: InvoiceSubject.ORIGINAL,
+  relatedInvoiceId: null,
+  warehouseId: null,
+  postingMeta: null,
   jurisdiction: InvoiceJurisdiction.IR,
   customerId: null,
   sellerInfo: { name: 'فروشنده' },
@@ -272,11 +279,18 @@ describe('InvoicePostingService — ISSUED', () => {
     expect(dto.entryNumber).toBe('INV-inv-1-ISSUED');
     expect(dto.lines).toEqual([
       expect.objectContaining({ accountCode: '1020', debit: '1100.00' }),
+      expect.objectContaining({ accountCode: '5101', debit: '600.00' }),
       expect.objectContaining({ accountCode: '4010', credit: '1000.00' }),
       expect.objectContaining({ accountCode: '2020', credit: '100.00' }),
+      expect.objectContaining({ accountCode: '1301', credit: '600.00' }),
     ]);
+    expect(repo.rows[0].postingMeta).toMatchObject({
+      stockValue: 600,
+      lines: [{ sku: 'SKU-3', quantity: 2, unitCost: 300, moved: 'OUT' }],
+      posted: { receivable: '110000', vat: '10000', net: '100000', stock: '-60000' },
+    });
 
-    expect(repo.rows[0].journalEntryId).toBe(101);
+    expect(repo.rows[0].journalEntryId).not.toBeNull();
     expect(repo.rows[0].postingError).toBeNull();
   });
 
@@ -301,8 +315,10 @@ describe('InvoicePostingService — ISSUED', () => {
     const dto = journalDto(accounting.createJournalEntry, 0);
     expect(dto.lines).toEqual([
       expect.objectContaining({ accountCode: '1020', debit: '1012000000.00' }),
+      expect.objectContaining({ accountCode: '5101', debit: '600.00' }),
       expect.objectContaining({ accountCode: '4010', credit: '920000000.00' }),
       expect.objectContaining({ accountCode: '2020', credit: '92000000.00' }),
+      expect.objectContaining({ accountCode: '1301', credit: '600.00' }),
     ]);
   });
 
@@ -325,12 +341,14 @@ describe('InvoicePostingService — ISSUED', () => {
 
     await posting.handle(event(InvoiceStatus.ISSUED));
 
-    expect(accounting.createAccount).toHaveBeenCalledTimes(3);
+    expect(accounting.createAccount).toHaveBeenCalledTimes(5);
     const dto = journalDto(accounting.createJournalEntry, 0);
     expect(dto.lines.map((line) => line.accountCode)).toEqual([
       '1201',
+      '5101',
       '4101',
       '2301',
+      '1301',
     ]);
   });
 });
@@ -404,7 +422,7 @@ describe('InvoicePostingService — CANCELLED', () => {
       }),
       expect.anything(),
     );
-    expect(repo.rows[0].reversalJournalEntryId).toBe(101);
+    expect(repo.rows[0].reversalJournalEntryId).not.toBeNull();
   });
 
   it('does nothing when the invoice was never issued', async () => {

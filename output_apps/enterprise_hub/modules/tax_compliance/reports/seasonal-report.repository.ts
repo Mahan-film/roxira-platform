@@ -24,6 +24,10 @@ export class SeasonalReportRepository {
       .andWhere('invoice.status IN (:...statuses)', {
         statuses: [InvoiceStatus.ISSUED, InvoiceStatus.PAID],
       })
+      // Sales VAT counts our original sales only: purchases are a different return, and
+      // cancel documents repeat the invoice they cancel.
+      .andWhere("invoice.direction = 'SALE'")
+      .andWhere('invoice.subject = 1')
       .andWhere('invoice.jurisdiction = :jurisdiction', { jurisdiction: InvoiceJurisdiction.IR })
       .andWhere('invoice.issuedAt >= :from', { from })
       .andWhere('invoice.issuedAt < :to', { to })

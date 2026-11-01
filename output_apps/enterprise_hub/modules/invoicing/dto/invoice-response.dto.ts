@@ -5,6 +5,11 @@ import {
   InvoicePartyInfo,
 } from '../entities/invoice.entity';
 import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
+import {
+  EInvoiceType,
+  InvoiceDirection,
+  InvoiceSubject,
+} from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -104,4 +109,19 @@ export class InvoiceResponseDto {
 
   @ApiProperty({ description: 'تاریخ ثبت صورتحساب در سیستم' })
   createdAt: Date;
+
+  @ApiProperty({ enum: InvoiceDirection, description: 'خرید یا فروش' })
+  direction: InvoiceDirection;
+
+  @ApiProperty({ enum: EInvoiceType, description: 'نوع صورتحساب الکترونیکی' })
+  einvoiceType: EInvoiceType;
+
+  @ApiProperty({ enum: InvoiceSubject, description: 'موضوع صورتحساب' })
+  subject: InvoiceSubject;
+
+  @ApiProperty({ description: 'صورتحساب مرجع', nullable: true })
+  relatedInvoiceId: string | null;
+
+  @ApiProperty({ description: 'انبار حرکت کالا', nullable: true })
+  warehouseId: number | null;
 }

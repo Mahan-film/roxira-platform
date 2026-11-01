@@ -20,6 +20,7 @@ import {
   loadErrorMessage,
 } from "@/components/app/app-ui";
 import { InvoiceEditor } from "@/components/invoicing/invoice-editor";
+import { Drawer } from "@/components/ui/drawer";
 import { InvoicePrintView } from "@/components/invoicing/invoice-print-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,8 +48,12 @@ import {
   formatNumber,
 } from "@/lib/fa-format";
 import {
+  INVOICE_DIRECTION_LABELS,
   INVOICE_STATUS_LABELS,
+  INVOICE_SUBJECT_LABELS,
+  InvoiceDirection,
   InvoiceStatus,
+  InvoiceSubject,
   VAT_RATE,
   invoiceRialEquivalent,
   isForeignInvoice,
@@ -92,6 +97,16 @@ function InvoicingPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [defaultVatRate, setDefaultVatRate] = useState(VAT_RATE);
+  const [ownName, setOwnName] = useState("");
+  const [direction, setDirection] = useState<InvoiceDirection | "">("");
+  // What the drawer opens for: a new sale/purchase, or a corrective/cancel/return of `related`.
+  const [newDirection, setNewDirection] = useState<InvoiceDirection>(
+    InvoiceDirection.SALE,
+  );
+  const [newSubject, setNewSubject] = useState<InvoiceSubject>(
+    InvoiceSubject.ORIGINAL,
+  );
+  const [related, setRelated] = useState<InvoiceResponseDto | null>(null);
 
   const [showEditor, setShowEditor] = useState(searchParams.get("new") === "1");
   const [editing, setEditing] = useState<InvoiceResponseDto | null>(null);
@@ -116,6 +131,7 @@ function InvoicingPage() {
         limit: PAGE_SIZE,
         status: status || undefined,
         search: search || undefined,
+        direction: direction || undefined,
       },
       controller.signal,
     )
@@ -132,7 +148,7 @@ function InvoicingPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [page, status, search, refreshKey]);
+  }, [page, status, search, direction, refreshKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -141,6 +157,7 @@ function InvoicingPage() {
         if (tenant.defaultVatRate !== undefined) {
           setDefaultVatRate(tenant.defaultVatRate);
         }
+        setOwnName(tenant.name ?? "");
       })
       .catch(() => {
         // Keep the 10% platform default when the setting is unavailable.
@@ -186,6 +203,26 @@ function InvoicingPage() {
     }
   }
 
+  function openNew(
+    nextDirection: InvoiceDirection,
+    subject = InvoiceSubject.ORIGINAL,
+    relatedInvoice: InvoiceResponseDto | null = null,
+  ) {
+    setEditing(null);
+    setNewDirection(nextDirection);
+    setNewSubject(subject);
+    setRelated(relatedInvoice);
+    setViewing(null);
+    setShowEditor(true);
+  }
+
+  function closeEditor() {
+    setShowEditor(false);
+    setEditing(null);
+    setRelated(null);
+    setNewSubject(InvoiceSubject.ORIGINAL);
+  }
+
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const isEmpty = !loading && !error && total === 0 && !search && !status;
 
@@ -196,35 +233,55 @@ function InvoicingPage() {
         description="صدور و ویرایش فاکتور با مالیات ارزش افزوده، چاپ A4 و ثبت پرداخت"
         icon={<ReceiptText className="size-6 text-indigo-500" />}
         actions={
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setShowEditor(true);
-            }}
-          >
-            <Plus />
-            صورتحساب جدید
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => openNew(InvoiceDirection.SALE)}>
+              <Plus />
+              فاکتور فروش
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => openNew(InvoiceDirection.PURCHASE)}
+            >
+              <Plus />
+              فاکتور خرید
+            </Button>
+          </div>
         }
       />
 
       <ErrorNotice title="خطا در عملیات صورتحساب" message={error} />
 
-      {showEditor && (
-        <InvoiceEditor
-          invoice={editing}
-          defaultVatRate={defaultVatRate}
-          onSaved={() => {
-            setShowEditor(false);
-            setEditing(null);
-            refresh();
-          }}
-          onCancel={() => {
-            setShowEditor(false);
-            setEditing(null);
-          }}
-        />
-      )}
+      <Drawer
+        open={showEditor}
+        size="xl"
+        title={
+          editing
+            ? `ویرایش ${INVOICE_DIRECTION_LABELS[editing.direction]} ${editing.taxInvoiceNumber}`
+            : newSubject !== InvoiceSubject.ORIGINAL
+              ? `صورتحساب ${INVOICE_SUBJECT_LABELS[newSubject]}`
+              : newDirection === InvoiceDirection.PURCHASE
+                ? "ثبت فاکتور خرید"
+                : "صدور فاکتور فروش"
+        }
+        description="مشتری یا تأمین‌کننده، کالای هر سطر و انبار را انتخاب کنید؛ مالیات هر سطر جدا قابل تنظیم است و جمع نهایی در سرور محاسبه و گرد می‌شود."
+        onClose={closeEditor}
+      >
+        {showEditor && (
+          <InvoiceEditor
+            invoice={editing}
+            direction={newDirection}
+            subject={newSubject}
+            related={related}
+            ownName={ownName}
+            defaultVatRate={defaultVatRate}
+            onSaved={() => {
+              closeEditor();
+              refresh();
+            }}
+            onCancel={closeEditor}
+          />
+        )}
+      </Drawer>
 
       {isEmpty ? (
         <EmptyImportState
@@ -245,6 +302,23 @@ function InvoicingPage() {
                   aria-label="جست‌وجوی صورتحساب"
                 />
               </div>
+              <select
+                value={direction}
+                onChange={(event) => {
+                  setDirection(event.target.value as InvoiceDirection | "");
+                  setPage(1);
+                }}
+                aria-label="فیلتر خرید و فروش"
+                className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+              >
+                <option value="">خرید و فروش</option>
+                <option value={InvoiceDirection.SALE}>
+                  {INVOICE_DIRECTION_LABELS[InvoiceDirection.SALE]}
+                </option>
+                <option value={InvoiceDirection.PURCHASE}>
+                  {INVOICE_DIRECTION_LABELS[InvoiceDirection.PURCHASE]}
+                </option>
+              </select>
               <select
                 value={status}
                 onChange={(event) => {
@@ -280,7 +354,8 @@ function InvoicingPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>شماره</TableHead>
-                  <TableHead>خریدار</TableHead>
+                  <TableHead>نوع</TableHead>
+                  <TableHead>طرف حساب</TableHead>
                   <TableHead>تاریخ</TableHead>
                   <TableHead>جمع ناخالص</TableHead>
                   <TableHead>مالیات</TableHead>
@@ -293,7 +368,7 @@ function InvoicingPage() {
                 {loading && invoices.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="py-8 text-center text-muted-foreground"
                     >
                       در حال بارگذاری...
@@ -302,7 +377,7 @@ function InvoicingPage() {
                 ) : invoices.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="py-8 text-center text-muted-foreground"
                     >
                       صورتحسابی با این فیلتر یافت نشد.
@@ -325,7 +400,16 @@ function InvoicingPage() {
                           {invoice.taxInvoiceNumber}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {invoice.buyerInfo?.name ?? "—"}
+                          <Badge variant="outline">
+                            {INVOICE_DIRECTION_LABELS[invoice.direction]}
+                            {invoice.subject !== InvoiceSubject.ORIGINAL &&
+                              ` · ${INVOICE_SUBJECT_LABELS[invoice.subject]}`}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {invoice.direction === InvoiceDirection.PURCHASE
+                            ? invoice.sellerInfo?.name ?? "—"
+                            : invoice.buyerInfo?.name ?? "—"}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {foreign
@@ -362,6 +446,54 @@ function InvoicingPage() {
                               <Eye />
                               مشاهده
                             </Button>
+                            {(invoice.status === InvoiceStatus.ISSUED ||
+                              invoice.status === InvoiceStatus.PAID) &&
+                              invoice.subject === InvoiceSubject.ORIGINAL && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      openNew(
+                                        invoice.direction,
+                                        InvoiceSubject.CORRECTIVE,
+                                        invoice,
+                                      )
+                                    }
+                                    title="صورتحساب اصلاحی"
+                                  >
+                                    اصلاحی
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      openNew(
+                                        invoice.direction,
+                                        InvoiceSubject.RETURN,
+                                        invoice,
+                                      )
+                                    }
+                                    title="برگشت کالا"
+                                  >
+                                    برگشت
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      openNew(
+                                        invoice.direction,
+                                        InvoiceSubject.CANCEL,
+                                        invoice,
+                                      )
+                                    }
+                                    title="صدور سند ابطالی"
+                                  >
+                                    ابطالی
+                                  </Button>
+                                </>
+                              )}
                             {canChange && (
                               <>
                                 <Button
@@ -443,6 +575,7 @@ function InvoicingPage() {
           onPay={(invoice) => void handlePay(invoice)}
           onEdit={(invoice) => {
             setViewing(null);
+            setNewDirection(invoice.direction);
             setEditing(invoice);
             setShowEditor(true);
           }}

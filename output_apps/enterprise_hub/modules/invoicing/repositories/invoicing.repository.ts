@@ -9,6 +9,7 @@ import {
   Repository,
 } from 'typeorm';
 import { InvoiceEntity } from '../entities/invoice.entity';
+import { InvoiceSubject } from '../enums/invoice-kind.enum';
 
 /**
  * لایه Repository - تنها نقطه دسترسی به پایگاه‌داده برای ماژول Invoicing.
@@ -85,6 +86,7 @@ export class InvoicingRepository {
         status: entity.status,
         issuedAt: entity.issuedAt,
         paidAt: entity.paidAt,
+        warehouseId: entity.warehouseId ?? null,
       },
     );
     entity.tenantId = tenantId;
@@ -112,6 +114,7 @@ export class InvoicingRepository {
         | 'paidJournalEntryId'
         | 'reversalJournalEntryId'
         | 'postingError'
+        | 'postingMeta'
       >
     >,
     manager?: EntityManager,
@@ -120,6 +123,33 @@ export class InvoicingRepository {
       ? manager.getRepository(InvoiceEntity)
       : this.repository;
     await repository.update({ id, tenantId }, data);
+  }
+
+  /** Every document that refers to `relatedId` (corrective, cancel, return), oldest first. */
+  async findByRelated(
+    tenantId: string,
+    relatedId: string,
+  ): Promise<InvoiceEntity[]> {
+    return this.repository.find({
+      where: { tenantId, relatedInvoiceId: relatedId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  /** Corrective documents of `relatedId`, oldest first (inside the caller's transaction). */
+  async findCorrectives(
+    tenantId: string,
+    relatedId: string,
+    manager: EntityManager,
+  ): Promise<InvoiceEntity[]> {
+    return manager.find(InvoiceEntity, {
+      where: {
+        tenantId,
+        relatedInvoiceId: relatedId,
+        subject: InvoiceSubject.CORRECTIVE,
+      },
+      order: { createdAt: 'ASC' },
+    });
   }
 
   async findByTaxInvoiceNumber(
@@ -161,6 +191,7 @@ export class InvoicingRepository {
       search: string;
       status?: InvoiceEntity['status'];
       currency?: InvoiceEntity['currency'];
+      direction?: InvoiceEntity['direction'];
       skip: number;
       take: number;
     },
@@ -172,12 +203,17 @@ export class InvoicingRepository {
     if (options.search) {
       const pattern = `%${options.search}%`;
       query.andWhere(
-        "(invoice.taxInvoiceNumber ILIKE :pattern OR invoice.buyerInfo ->> 'name' ILIKE :pattern)",
+        "(invoice.taxInvoiceNumber ILIKE :pattern OR invoice.buyerInfo ->> 'name' ILIKE :pattern OR invoice.sellerInfo ->> 'name' ILIKE :pattern)",
         { pattern },
       );
     }
     if (options.status) {
       query.andWhere('invoice.status = :status', { status: options.status });
+    }
+    if (options.direction) {
+      query.andWhere('invoice.direction = :direction', {
+        direction: options.direction,
+      });
     }
     if (options.currency) {
       query.andWhere('invoice.currency = :currency', {
@@ -216,6 +252,8 @@ export class InvoicingRepository {
       .addSelect('COALESCE(SUM(invoice.finalPayable), 0)', 'total')
       .addSelect('COALESCE(SUM(invoice.totalTax), 0)', 'tax')
       .where('invoice.tenantId = :tenantId', { tenantId })
+      .andWhere("invoice.direction = 'SALE'")
+      .andWhere('invoice.subject <> 3')
       .andWhere('invoice.status IN (:...statuses)', {
         statuses: options.statuses,
       });

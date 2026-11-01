@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -22,6 +23,11 @@ import {
   INVOICE_JURISDICTIONS,
   InvoiceJurisdiction,
 } from '../enums/invoice-jurisdiction.enum';
+import {
+  EInvoiceType,
+  InvoiceDirection,
+  InvoiceSubject,
+} from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
@@ -146,10 +152,56 @@ export class InvoiceItemDto {
  * DTO ورودی ایجاد صورتحساب مالیاتی (POST /enterprise-hub/invoicing).
  */
 export class CreateInvoiceDto {
-  @ApiProperty({ description: 'شماره یکتای صورتحساب مالیاتی', example: 'TI-1405-000123' })
+  @ApiPropertyOptional({
+    description:
+      'شماره یکتای صورتحساب؛ در نبود مقدار، سرور شماره یکتا می‌سازد. برای خرید، شمارهٔ فاکتور تأمین‌کننده.',
+    example: 'TI-1405-000123',
+  })
+  @IsOptional()
   @IsString()
   @MaxLength(64)
-  taxInvoiceNumber: string;
+  taxInvoiceNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'جهت: SALE فروش (پیش‌فرض) یا PURCHASE خرید',
+    enum: InvoiceDirection,
+    default: InvoiceDirection.SALE,
+  })
+  @IsOptional()
+  @IsEnum(InvoiceDirection)
+  direction?: InvoiceDirection;
+
+  @ApiPropertyOptional({
+    description: 'نوع صورتحساب الکترونیکی: ۱ با مشخصات خریدار، ۲ بدون، ۳ فروشگاهی',
+    enum: EInvoiceType,
+    default: EInvoiceType.WITH_BUYER,
+  })
+  @IsOptional()
+  @IsEnum(EInvoiceType)
+  einvoiceType?: EInvoiceType;
+
+  @ApiPropertyOptional({
+    description: 'موضوع: ۱ اصلی، ۲ اصلاحی، ۳ ابطالی، ۴ برگشتی. غیر از اصلی، relatedInvoiceId الزامی است.',
+    enum: InvoiceSubject,
+    default: InvoiceSubject.ORIGINAL,
+  })
+  @IsOptional()
+  @IsEnum(InvoiceSubject)
+  subject?: InvoiceSubject;
+
+  @ApiPropertyOptional({ description: 'صورتحساب مرجع برای اصلاحی/ابطالی/برگشتی' })
+  @IsOptional()
+  @IsUUID()
+  relatedInvoiceId?: string;
+
+  @ApiPropertyOptional({
+    description: 'انبار مقصد/مبدأ حرکت کالا هنگام ثبت (برای سطرهای پیوند‌خورده به کالا)',
+    example: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  warehouseId?: number;
 
   @ApiProperty({ type: InvoicePartyInfoDto, description: 'اطلاعات فروشنده' })
   @ValidateNested()

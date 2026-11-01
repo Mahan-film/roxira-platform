@@ -6,18 +6,10 @@ import {
   CirclePlus,
   Loader2,
   Trash2,
-  WandSparkles,
 } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -30,18 +22,22 @@ import {
 } from "@/components/ui/table";
 import { createInvoice, updateInvoice } from "@/lib/api/invoicing-client";
 import { listLeads } from "@/lib/api/crm-client";
-import { listStockItems } from "@/lib/api/inventory-client";
+import { listStockItems, listWarehouses } from "@/lib/api/inventory-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { formatLatinMoney, formatMoneyRial } from "@/lib/fa-format";
 import { Currency, isIranianCurrency } from "@/types/currency";
 import type { Lead } from "@/types/crm";
-import type { StockItem } from "@/types/inventory";
+import type { StockItem, Warehouse } from "@/types/inventory";
 import {
+  EINVOICE_TYPE_LABELS,
+  EInvoiceType,
   INVOICE_CURRENCIES,
   INVOICE_JURISDICTION_LABELS,
-  INVOICE_STATUS_LABELS,
+  INVOICE_SUBJECT_LABELS,
+  InvoiceDirection,
   InvoiceJurisdiction,
   InvoiceStatus,
+  InvoiceSubject,
   VAT_RATE,
   type CreateInvoiceDto,
   type InvoicePartyInfo,
@@ -50,6 +46,14 @@ import {
 
 interface InvoiceEditorProps {
   invoice?: InvoiceResponseDto | null;
+  /** Sale (we issue) or purchase (the supplier issued it to us); fixed for an existing invoice. */
+  direction?: InvoiceDirection;
+  /** Subject of a new document; anything but ORIGINAL needs `related`. */
+  subject?: InvoiceSubject;
+  /** The issued invoice a corrective, cancel or return refers to. */
+  related?: InvoiceResponseDto | null;
+  /** Our own name, prefilled as the seller of a sale or the buyer of a purchase. */
+  ownName?: string;
   defaultVatRate?: number;
   onSaved: (invoice: InvoiceResponseDto) => void;
   onCancel: () => void;
@@ -135,11 +139,6 @@ function computeLine(line: LineState) {
   return { gross, discount, taxable, tax, total: taxable + tax };
 }
 
-function makeInvoiceNumber(): string {
-  const serial = String(Date.now()).slice(-8);
-  return `TI-${serial}`;
-}
-
 /**
  * فرم ایجاد/ویرایش صورتحساب در نرم‌افزار `/app/invoicing`.
  * مشتری از CRM، کالاهای سطر از انبار و نرخ VAT هر سطر قابل انتخاب است؛
@@ -147,50 +146,69 @@ function makeInvoiceNumber(): string {
  */
 export function InvoiceEditor({
   invoice,
+  direction: directionProp,
+  subject: subjectProp,
+  related,
+  ownName,
   defaultVatRate,
   onSaved,
   onCancel,
 }: InvoiceEditorProps) {
   const nextLine = useRef(1);
   const isEdit = Boolean(invoice);
+  const direction =
+    invoice?.direction ?? related?.direction ?? directionProp ?? InvoiceDirection.SALE;
+  const subject =
+    invoice?.subject ?? subjectProp ?? InvoiceSubject.ORIGINAL;
+  const isPurchase = direction === InvoiceDirection.PURCHASE;
+  const isCancel = subject === InvoiceSubject.CANCEL;
+  // A new corrective/cancel/return starts from the invoice it refers to.
+  const seed = invoice ?? related ?? null;
 
   const [currency, setCurrency] = useState<Currency>(
-    invoice?.currency ?? Currency.IRR,
+    seed?.currency ?? Currency.IRR,
   );
   const [jurisdiction, setJurisdiction] = useState<InvoiceJurisdiction>(
-    invoice?.jurisdiction ??
-      (isIranianCurrency(invoice?.currency ?? Currency.IRR)
+    seed?.jurisdiction ??
+      (isIranianCurrency(seed?.currency ?? Currency.IRR)
         ? InvoiceJurisdiction.IR
         : InvoiceJurisdiction.INTL),
   );
   const [fxRate, setFxRate] = useState<string>(
-    invoice?.fxRate && invoice.fxRate > 0 ? String(invoice.fxRate) : "",
+    seed?.fxRate && seed.fxRate > 0 ? String(seed.fxRate) : "",
   );
 
   const isForeign = !isIranianCurrency(currency);
   const effectiveDefaultVatRate = isForeign ? 0 : defaultVatRate ?? VAT_RATE;
   const fallbackPercent = effectiveDefaultVatRate * 100;
 
+  // Empty means "let the server number it"; suppliers' own numbers are typed in for purchases.
   const [taxInvoiceNumber, setTaxInvoiceNumber] = useState(
-    invoice?.taxInvoiceNumber ?? makeInvoiceNumber(),
+    invoice?.taxInvoiceNumber ?? "",
   );
-  const [status, setStatus] = useState<InvoiceStatus>(
-    invoice && invoice.status !== InvoiceStatus.PAID
-      ? invoice.status
-      : InvoiceStatus.DRAFT,
+  const [einvoiceType, setEInvoiceType] = useState<EInvoiceType>(
+    seed?.einvoiceType ?? EInvoiceType.WITH_BUYER,
   );
+  const [warehouseId, setWarehouseId] = useState(
+    seed?.warehouseId ? String(seed.warehouseId) : "",
+  );
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [customerId, setCustomerId] = useState(
-    invoice?.customerId ? String(invoice.customerId) : "",
+    seed?.customerId ? String(seed.customerId) : "",
   );
-  const [seller, setSeller] = useState<PartyState>(
-    partyFromInfo(invoice?.sellerInfo),
+  const [seller, setSeller] = useState<PartyState>(() =>
+    seed
+      ? partyFromInfo(seed.sellerInfo)
+      : { ...EMPTY_PARTY, name: isPurchase ? "" : ownName ?? "" },
   );
-  const [buyer, setBuyer] = useState<PartyState>(
-    partyFromInfo(invoice?.buyerInfo),
+  const [buyer, setBuyer] = useState<PartyState>(() =>
+    seed
+      ? partyFromInfo(seed.buyerInfo)
+      : { ...EMPTY_PARTY, name: isPurchase ? ownName ?? "" : "" },
   );
   const [lines, setLines] = useState<LineState[]>(() => {
-    if (invoice?.items?.length) {
-      return invoice.items.map((item, index) => ({
+    if (seed?.items?.length) {
+      return seed.items.map((item, index) => ({
         uid: `line-${index}`,
         itemId: item.itemId ? String(item.itemId) : "",
         sku: item.sku ?? "",
@@ -217,10 +235,12 @@ export function InvoiceEditor({
     Promise.all([
       listLeads({ page: 1, limit: 200 }, controller.signal),
       listStockItems({ page: 1, limit: 100 }, controller.signal),
+      listWarehouses(controller.signal),
     ])
-      .then(([leadResult, itemResult]) => {
+      .then(([leadResult, itemResult, warehouseList]) => {
         setLeads(leadResult.data);
         setStockItems(itemResult.data);
+        setWarehouses(warehouseList);
       })
       .catch(() => {
         // Picker data is optional; the invoice can still be written by hand.
@@ -314,14 +334,22 @@ export function InvoiceEditor({
 
   function validate(): string[] {
     const messages: string[] = [];
-    if (!taxInvoiceNumber.trim()) {
-      messages.push("شماره صورتحساب الزامی است.");
+    if (isPurchase && !taxInvoiceNumber.trim()) {
+      messages.push("شمارهٔ فاکتور تأمین‌کننده الزامی است.");
     }
     if (!seller.name.trim()) {
-      messages.push("نام فروشنده الزامی است.");
+      messages.push(isPurchase ? "نام تأمین‌کننده الزامی است." : "نام فروشنده الزامی است.");
     }
-    if (!buyer.name.trim()) {
-      messages.push("نام خریدار الزامی است.");
+    if (
+      !isPurchase &&
+      einvoiceType === EInvoiceType.WITH_BUYER &&
+      !buyer.name.trim() &&
+      !customerId
+    ) {
+      messages.push("نام خریدار الزامی است (یا نوع دوم/سوم را انتخاب کنید).");
+    }
+    if (subject !== InvoiceSubject.ORIGINAL && !related && !invoice) {
+      messages.push("برای صورتحساب اصلاحی، ابطالی یا برگشتی، صورتحساب مرجع لازم است.");
     }
     const validLines = lines.filter(
       (line) =>
@@ -345,7 +373,7 @@ export function InvoiceEditor({
     return messages;
   }
 
-  async function submit() {
+  async function submit(nextStatus: InvoiceStatus) {
     setErrors(null);
     setSuccessMessage(null);
     const validationErrors = validate();
@@ -355,10 +383,15 @@ export function InvoiceEditor({
     }
 
     const payload: CreateInvoiceDto = {
-      taxInvoiceNumber: taxInvoiceNumber.trim(),
+      taxInvoiceNumber: taxInvoiceNumber.trim() || undefined,
+      direction,
+      einvoiceType,
+      subject,
+      relatedInvoiceId: invoice?.relatedInvoiceId ?? related?.id ?? undefined,
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
       sellerInfo: toPartyInfo(seller),
-      buyerInfo: toPartyInfo(buyer),
-      customerId: customerId ? Number(customerId) : undefined,
+      buyerInfo: buyer.name.trim() ? toPartyInfo(buyer) : undefined,
+      customerId: !isPurchase && customerId ? Number(customerId) : undefined,
       items: lines
         .filter((line) => line.description.trim())
         .map((line) => ({
@@ -370,7 +403,7 @@ export function InvoiceEditor({
           discount: Number(line.discount) || 0,
           vatRate: vatRateRatio(line.vatRate),
         })),
-      status,
+      status: nextStatus,
       currency,
       jurisdiction,
       fxRate: isForeign ? Number(fxRate) : undefined,
@@ -398,48 +431,41 @@ export function InvoiceEditor({
     }
   }
 
+  const anyStockLine = lines.some((line) => line.itemId);
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          {isEdit ? "ویرایش صورتحساب" : "صدور صورتحساب جدید"}
-        </CardTitle>
-        <CardDescription>
-          مشتری را از CRM و کالاهای هر سطر را از انبار انتخاب کنید؛ نرخ VAT هر
-          سطر جداگانه قابل تغییر است و جمع نهایی در سرور محاسبه می‌شود.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div>
+      {related && (
+        <p className="mb-4 rounded-lg border bg-muted/30 p-3 text-xs">
+          {INVOICE_SUBJECT_LABELS[subject]} برای صورتحساب{" "}
+          <span className="font-mono">{related.taxInvoiceNumber}</span>
+          {isCancel &&
+            " — با صدور این سند، صورتحساب مرجع ابطال و ثبت حسابداری و موجودی آن برگردانده می‌شود."}
+        </p>
+      )}
         <form
           className="flex flex-col gap-5"
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
-            void submit();
+            void submit(InvoiceStatus.ISSUED);
           }}
         >
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="grid gap-2">
-              <Label htmlFor="invoice-number">شماره صورتحساب</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="invoice-number"
-                  value={taxInvoiceNumber}
-                  onChange={(event) => setTaxInvoiceNumber(event.target.value)}
-                  maxLength={64}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  title="تولید شماره خودکار"
-                  onClick={() => setTaxInvoiceNumber(makeInvoiceNumber())}
-                >
-                  <WandSparkles />
-                </Button>
-              </div>
+              <Label htmlFor="invoice-number">
+                {isPurchase ? "شمارهٔ فاکتور تأمین‌کننده" : "شماره صورتحساب"}
+              </Label>
+              <Input
+                id="invoice-number"
+                value={taxInvoiceNumber}
+                onChange={(event) => setTaxInvoiceNumber(event.target.value)}
+                maxLength={64}
+                placeholder={isPurchase ? "" : "خالی بماند تا خودکار ساخته شود"}
+              />
             </div>
 
+            {!isPurchase && (
             <div className="grid gap-2">
               <Label htmlFor="invoice-customer">مشتری (CRM)</Label>
               <select
@@ -457,23 +483,61 @@ export function InvoiceEditor({
                 ))}
               </select>
             </div>
+            )}
 
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="grid gap-2">
-              <Label htmlFor="invoice-status">وضعیت</Label>
+              <Label htmlFor="invoice-einvoice-type">نوع صورتحساب</Label>
               <select
-                id="invoice-status"
-                value={status}
+                id="invoice-einvoice-type"
+                value={einvoiceType}
+                disabled={isCancel}
                 onChange={(event) =>
-                  setStatus(event.target.value as InvoiceStatus)
+                  setEInvoiceType(Number(event.target.value) as EInvoiceType)
                 }
                 className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
               >
-                <option value={InvoiceStatus.DRAFT}>
-                  {INVOICE_STATUS_LABELS[InvoiceStatus.DRAFT]}
+                {Object.values(EInvoiceType)
+                  .filter((value) => typeof value === "number")
+                  .map((value) => (
+                    <option key={value} value={value}>
+                      {EINVOICE_TYPE_LABELS[value as EInvoiceType]}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="invoice-subject">موضوع</Label>
+              <Input
+                id="invoice-subject"
+                value={INVOICE_SUBJECT_LABELS[subject]}
+                readOnly
+                disabled
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="invoice-warehouse">
+                {isPurchase ? "انبار مقصد" : "انبار مبدأ"}
+              </Label>
+              <select
+                id="invoice-warehouse"
+                value={warehouseId}
+                disabled={!anyStockLine || isCancel}
+                onChange={(event) => setWarehouseId(event.target.value)}
+                className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+              >
+                <option value="">
+                  {anyStockLine ? "همهٔ انبارها (به‌ترتیب FIFO)" : "برای سطر کالا فعال می‌شود"}
                 </option>
-                <option value={InvoiceStatus.ISSUED}>
-                  {INVOICE_STATUS_LABELS[InvoiceStatus.ISSUED]}
-                </option>
+                {warehouses.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -535,7 +599,9 @@ export function InvoiceEditor({
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
-              <h3 className="text-sm font-semibold">اطلاعات فروشنده</h3>
+              <h3 className="text-sm font-semibold">
+                {isPurchase ? "اطلاعات تأمین‌کننده (فروشنده)" : "اطلاعات فروشنده"}
+              </h3>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>نام / عنوان</Label>
@@ -578,7 +644,9 @@ export function InvoiceEditor({
             </div>
 
             <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
-              <h3 className="text-sm font-semibold">اطلاعات خریدار</h3>
+              <h3 className="text-sm font-semibold">
+                {isPurchase ? "اطلاعات خریدار (سازمان شما)" : "اطلاعات خریدار"}
+              </h3>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>نام / عنوان</Label>
@@ -817,7 +885,7 @@ export function InvoiceEditor({
             </Alert>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="sticky bottom-0 -mx-4 -mb-4 flex flex-wrap items-center gap-2 border-t border-border bg-background p-4">
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
@@ -825,9 +893,25 @@ export function InvoiceEditor({
                   در حال ذخیره...
                 </>
               ) : (
-                <>{isEdit ? "ذخیره تغییرات" : "صدور صورتحساب"}</>
+                <>
+                  {isPurchase
+                    ? "ثبت فاکتور خرید"
+                    : isCancel
+                      ? "صدور ابطالی"
+                      : "ثبت و صدور"}
+                </>
               )}
             </Button>
+            {(!invoice || invoice.status === InvoiceStatus.DRAFT) && (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isSubmitting}
+                onClick={() => void submit(InvoiceStatus.DRAFT)}
+              >
+                ذخیره پیش‌نویس
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -838,7 +922,6 @@ export function InvoiceEditor({
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

@@ -16,6 +16,7 @@ import { CurrencyService } from '../../currency/services/currency.service';
 import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
 import {
+  DEFAULT_TAX_INVOICE_NUMBER_PREFIX,
   DEFAULT_VAT_RATE,
   INTL_DEFAULT_VAT_RATE,
   MONEY_SCALE,
@@ -39,6 +40,11 @@ import {
   InvoicePartyInfo,
 } from '../entities/invoice.entity';
 import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
+import {
+  EInvoiceType,
+  InvoiceDirection,
+  InvoiceSubject,
+} from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 import {
   InvoiceSummaryRow,
@@ -120,8 +126,23 @@ export class InvoicingService {
 
   /** گرد کردن مبالغ ریالی تا ۲ رقم اعشار. */
   private round(value: number): number {
-    const factor = 10 ** MONEY_SCALE;
+    return this.roundTo(value, MONEY_SCALE);
+  }
+
+  private roundTo(value: number, scale: number): number {
+    const factor = 10 ** scale;
     return Math.round((value + Number.EPSILON) * factor) / factor;
+  }
+
+  /** ریال کامل بدون اعشار؛ تومان تا یک رقم (یک ریال)؛ سایر ارزها دو رقم. */
+  private moneyScale(currency: Currency): number {
+    if (currency === Currency.IRR) {
+      return 0;
+    }
+    if (currency === Currency.IRT) {
+      return 1;
+    }
+    return MONEY_SCALE;
   }
 
   /**
@@ -270,8 +291,10 @@ export class InvoicingService {
     tenantId: string,
     items: InvoiceItemDto[],
     defaultVatRate: number,
+    currency: Currency = Currency.IRR,
   ): Promise<InvoiceItem[]> {
     const normalized: InvoiceItem[] = [];
+    const scale = this.moneyScale(currency);
 
     for (const item of items) {
       let itemId = item.itemId ?? null;
@@ -326,16 +349,16 @@ export class InvoicingService {
       const discount = item.discount ?? 0;
       const taxable = Math.max(0, gross - discount);
       const vatRate = this.normalizeVatRate(item.vatRate, defaultVatRate);
-      const tax = this.round(taxable * vatRate);
-      const total = this.round(taxable + tax);
+      const tax = this.roundTo(taxable * vatRate, scale);
+      const total = this.roundTo(taxable + tax, scale);
 
       normalized.push({
         itemId,
         sku,
         description,
         quantity: item.quantity,
-        unitPrice: this.round(item.unitPrice),
-        discount: this.round(discount),
+        unitPrice: this.roundTo(item.unitPrice, scale),
+        discount: this.roundTo(discount, scale),
         vatRate,
         tax,
         total,
@@ -345,7 +368,11 @@ export class InvoicingService {
     return normalized;
   }
 
-  private computeTotals(items: InvoiceItem[]): InvoiceTotals {
+  private computeTotals(
+    items: InvoiceItem[],
+    currency: Currency = Currency.IRR,
+  ): InvoiceTotals {
+    const scale = this.moneyScale(currency);
     let totalAmount = 0;
     let totalDiscount = 0;
     let totalTax = 0;
@@ -359,10 +386,10 @@ export class InvoicingService {
     }
 
     return {
-      totalAmount: this.round(totalAmount),
-      totalDiscount: this.round(totalDiscount),
-      totalTax: this.round(totalTax),
-      finalPayable: this.round(finalPayable),
+      totalAmount: this.roundTo(totalAmount, scale),
+      totalDiscount: this.roundTo(totalDiscount, scale),
+      totalTax: this.roundTo(totalTax, scale),
+      finalPayable: this.roundTo(finalPayable, scale),
     };
   }
 
@@ -414,6 +441,11 @@ export class InvoicingService {
       reversalJournalEntryId: entity.reversalJournalEntryId ?? null,
       postingError: entity.postingError ?? null,
       createdAt: entity.createdAt,
+      direction: entity.direction ?? InvoiceDirection.SALE,
+      einvoiceType: entity.einvoiceType ?? EInvoiceType.WITH_BUYER,
+      subject: entity.subject ?? InvoiceSubject.ORIGINAL,
+      relatedInvoiceId: entity.relatedInvoiceId ?? null,
+      warehouseId: entity.warehouseId ?? null,
     };
   }
 
@@ -425,42 +457,66 @@ export class InvoicingService {
     tenantId: string,
     dto: CreateInvoiceDto,
   ): Promise<InvoiceResponseDto> {
+    const subject = dto.subject ?? InvoiceSubject.ORIGINAL;
+    const related = await this.resolveRelated(tenantId, dto, subject);
+    // A cancel document is a copy of what it cancels; it cannot carry its own figures.
+    const source: CreateInvoiceDto =
+      subject === InvoiceSubject.CANCEL && related
+        ? this.copyOf(related, dto)
+        : dto;
+    const direction = related?.direction ?? source.direction ?? InvoiceDirection.SALE;
+    const einvoiceType = source.einvoiceType ?? EInvoiceType.WITH_BUYER;
+
+    const taxInvoiceNumber =
+      source.taxInvoiceNumber?.trim() ||
+      (await this.generateInvoiceNumber(tenantId, direction));
     const existing = await this.invoicingRepository.findByTaxInvoiceNumber(
       tenantId,
-      dto.taxInvoiceNumber,
+      taxInvoiceNumber,
     );
 
     if (existing) {
       throw new ConflictException(
-        `صورتحسابی با شماره ${dto.taxInvoiceNumber} قبلاً ثبت شده است.`,
+        `صورتحسابی با شماره ${taxInvoiceNumber} قبلاً ثبت شده است.`,
       );
     }
 
-    const currency = dto.currency ?? Currency.IRR;
+    const currency = source.currency ?? Currency.IRR;
     const jurisdiction =
-      dto.jurisdiction ?? this.defaultJurisdiction(currency);
+      source.jurisdiction ?? this.defaultJurisdiction(currency);
     const tenantVatRate = await this.resolveDefaultVatRate(tenantId);
     const defaultVatRate = this.defaultVatRateForJurisdiction(
       jurisdiction,
       tenantVatRate,
     );
-    const fxRate = this.resolveFxRate(currency, dto.fxRate);
+    const fxRate = this.resolveFxRate(currency, source.fxRate);
 
-    const items = await this.normalizeItems(tenantId, dto.items, defaultVatRate);
-    const { customerId, buyerInfo } = await this.resolveBuyer(
+    const items = await this.normalizeItems(
       tenantId,
-      dto.customerId,
-      dto.buyerInfo,
+      source.items,
+      defaultVatRate,
+      currency,
     );
-    const totals = this.computeTotals(items);
+    const { customerId, buyerInfo } = await this.resolveParties(
+      tenantId,
+      direction,
+      einvoiceType,
+      source,
+    );
+    const totals = this.computeTotals(items, currency);
 
     const exchangeRate = this.currencyService.getRate(currency, BASE_CURRENCY);
-    const status = dto.status ?? InvoiceStatus.DRAFT;
+    const status = source.status ?? InvoiceStatus.DRAFT;
 
     const entity = {
-      taxInvoiceNumber: dto.taxInvoiceNumber,
+      taxInvoiceNumber,
+      direction,
+      einvoiceType,
+      subject,
+      relatedInvoiceId: related?.id ?? null,
+      warehouseId: source.warehouseId ?? null,
       customerId,
-      sellerInfo: dto.sellerInfo,
+      sellerInfo: source.sellerInfo,
       buyerInfo,
       items,
       currency,
@@ -495,10 +551,215 @@ export class InvoicingService {
     const saved = await this.invoicingRepository.create(tenantId, entity);
 
     if (status === InvoiceStatus.ISSUED || status === InvoiceStatus.PAID) {
-      await this.emitStatusEvent(tenantId, saved.id, status);
+      if (subject === InvoiceSubject.CANCEL) {
+        await this.applyCancelSubject(tenantId, saved);
+      } else {
+        await this.emitStatusEvent(tenantId, saved.id, status);
+      }
     }
 
     return this.toResponseDto(saved);
+  }
+
+  /**
+   * صورتحساب مرجع برای اصلاحی/ابطالی/برگشتی. باید در همین مستأجر، صادرشده، ابطال‌نشده و
+   * اصلی باشد؛ برای برگشتی تعداد کالای برگشتی از تعداد فروخته/خریده‌شده بیشتر نمی‌شود.
+   */
+  private async resolveRelated(
+    tenantId: string,
+    dto: CreateInvoiceDto,
+    subject: InvoiceSubject,
+  ): Promise<InvoiceEntity | null> {
+    if (subject === InvoiceSubject.ORIGINAL) {
+      if (dto.relatedInvoiceId) {
+        throw new BadRequestException(
+          'صورتحساب اصلی صورتحساب مرجع ندارد؛ موضوع را اصلاحی، ابطالی یا برگشتی بگذارید.',
+        );
+      }
+      return null;
+    }
+    if (!dto.relatedInvoiceId) {
+      throw new BadRequestException(
+        'برای صورتحساب اصلاحی، ابطالی یا برگشتی، صورتحساب مرجع الزامی است.',
+      );
+    }
+    const related = await this.invoicingRepository.findById(
+      tenantId,
+      dto.relatedInvoiceId,
+    );
+    if (!related) {
+      throw new NotFoundException('صورتحساب مرجع یافت نشد.');
+    }
+    if (
+      related.status !== InvoiceStatus.ISSUED &&
+      related.status !== InvoiceStatus.PAID
+    ) {
+      throw new BadRequestException(
+        'صورتحساب مرجع باید صادرشده و ابطال‌نشده باشد.',
+      );
+    }
+    if ((related.subject ?? InvoiceSubject.ORIGINAL) !== InvoiceSubject.ORIGINAL) {
+      throw new BadRequestException(
+        'صورتحساب مرجع باید از موضوع «اصلی» باشد.',
+      );
+    }
+    if (dto.direction && dto.direction !== (related.direction ?? InvoiceDirection.SALE)) {
+      throw new BadRequestException(
+        'جهت (خرید/فروش) باید با صورتحساب مرجع یکی باشد.',
+      );
+    }
+    if (subject === InvoiceSubject.RETURN) {
+      await this.assertReturnWithinSold(tenantId, related, dto.items);
+    }
+    return related;
+  }
+
+  /** Quantity returned per SKU, including earlier returns, never exceeds what the related invoice moved. */
+  private async assertReturnWithinSold(
+    tenantId: string,
+    related: InvoiceEntity,
+    items: InvoiceItemDto[],
+  ): Promise<void> {
+    const sold = new Map<string, number>();
+    for (const line of related.items) {
+      if (line.sku) {
+        sold.set(line.sku, (sold.get(line.sku) ?? 0) + line.quantity);
+      }
+    }
+    const returned = new Map<string, number>();
+    const earlier = await this.invoicingRepository.findByRelated(
+      tenantId,
+      related.id,
+    );
+    for (const doc of earlier) {
+      if (
+        doc.subject === InvoiceSubject.RETURN &&
+        doc.status !== InvoiceStatus.CANCELLED
+      ) {
+        for (const line of doc.items) {
+          if (line.sku) {
+            returned.set(line.sku, (returned.get(line.sku) ?? 0) + line.quantity);
+          }
+        }
+      }
+    }
+    for (const item of items) {
+      const sku = item.sku?.trim();
+      if (!sku) {
+        continue;
+      }
+      const available = (sold.get(sku) ?? 0) - (returned.get(sku) ?? 0);
+      if (item.quantity > available + 1e-9) {
+        throw new BadRequestException(
+          `تعداد برگشتی کالای ${sku} از باقی‌ماندهٔ قابل برگشت (${available}) بیشتر است.`,
+        );
+      }
+    }
+  }
+
+  /** A cancel document repeats the related invoice's parties, currency and lines. */
+  private copyOf(related: InvoiceEntity, dto: CreateInvoiceDto): CreateInvoiceDto {
+    return {
+      ...dto,
+      direction: related.direction ?? InvoiceDirection.SALE,
+      einvoiceType: related.einvoiceType ?? EInvoiceType.WITH_BUYER,
+      sellerInfo: related.sellerInfo,
+      buyerInfo: related.buyerInfo,
+      customerId: related.customerId ?? undefined,
+      currency: related.currency,
+      jurisdiction: related.jurisdiction,
+      fxRate: Number(related.fxRate),
+      warehouseId: related.warehouseId ?? undefined,
+      items: related.items.map((line) => ({
+        itemId: line.itemId ?? undefined,
+        sku: line.sku ?? undefined,
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discount: line.discount,
+        vatRate: line.vatRate,
+      })),
+    };
+  }
+
+  /**
+   * Issuing a cancel document cancels the invoice it refers to; that invoice's own cancellation
+   * event then books the exact mirror entry and returns the stock.
+   */
+  private async applyCancelSubject(
+    tenantId: string,
+    cancelDoc: InvoiceEntity,
+  ): Promise<void> {
+    if (!cancelDoc.relatedInvoiceId) {
+      return;
+    }
+    const related = await this.invoicingRepository.findById(
+      tenantId,
+      cancelDoc.relatedInvoiceId,
+    );
+    if (!related || related.status === InvoiceStatus.CANCELLED) {
+      return;
+    }
+    const previous = related.status;
+    related.status = InvoiceStatus.CANCELLED;
+    await this.invoicingRepository.save(tenantId, related);
+    if (previous === InvoiceStatus.ISSUED || previous === InvoiceStatus.PAID) {
+      await this.emitStatusEvent(tenantId, related.id, InvoiceStatus.CANCELLED);
+    }
+  }
+
+  /** Buyer/seller for the direction: a purchase has the supplier as seller and us as buyer. */
+  private async resolveParties(
+    tenantId: string,
+    direction: InvoiceDirection,
+    einvoiceType: EInvoiceType,
+    dto: CreateInvoiceDto,
+  ): Promise<{ customerId: number | null; buyerInfo: InvoicePartyInfo }> {
+    if (direction === InvoiceDirection.PURCHASE) {
+      return {
+        customerId: null,
+        buyerInfo: dto.buyerInfo ?? { name: await this.ownName(tenantId) },
+      };
+    }
+    const hasBuyer =
+      dto.customerId !== undefined || Boolean(dto.buyerInfo?.name?.trim());
+    if (einvoiceType !== EInvoiceType.WITH_BUYER && !hasBuyer) {
+      return { customerId: null, buyerInfo: { name: 'مصرف‌کننده نهایی' } };
+    }
+    return this.resolveBuyer(tenantId, dto.customerId, dto.buyerInfo);
+  }
+
+  private async ownName(tenantId: string): Promise<string> {
+    try {
+      const tenant = await this.tenantsRepository?.findById(tenantId);
+      return tenant?.name?.trim() || 'سازمان من';
+    } catch {
+      return 'سازمان من';
+    }
+  }
+
+  /** Unique number when the user leaves it empty: TI/PI + date + random suffix. */
+  private async generateInvoiceNumber(
+    tenantId: string,
+    direction: InvoiceDirection,
+  ): Promise<string> {
+    const prefix =
+      direction === InvoiceDirection.PURCHASE
+        ? 'PI'
+        : DEFAULT_TAX_INVOICE_NUMBER_PREFIX;
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const suffix = Math.floor(Math.random() * 1_000_000)
+        .toString()
+        .padStart(6, '0');
+      const candidate = `${prefix}-${day}-${suffix}`;
+      if (
+        !(await this.invoicingRepository.findByTaxInvoiceNumber(tenantId, candidate))
+      ) {
+        return candidate;
+      }
+    }
+    throw new ConflictException('ساخت شمارهٔ یکتای صورتحساب ممکن نشد؛ دوباره تلاش کنید.');
   }
 
   async findAll(
@@ -510,7 +771,8 @@ export class InvoicingService {
     page: number;
     limit: number;
   }> {
-    const { page, limit, status, taxInvoiceNumber, search, currency } = query;
+    const { page, limit, status, taxInvoiceNumber, search, currency, direction } =
+      query;
     const skip = (page - 1) * limit;
 
     if (search) {
@@ -520,6 +782,7 @@ export class InvoicingService {
           search,
           status,
           currency,
+          direction,
           skip,
           take: limit,
         },
@@ -541,6 +804,9 @@ export class InvoicingService {
     }
     if (currency) {
       where.currency = currency;
+    }
+    if (direction) {
+      where.direction = direction;
     }
 
     const [entities, total] = await this.invoicingRepository.findAndCount(
@@ -644,8 +910,9 @@ export class InvoicingService {
         tenantId,
         dto.items,
         defaultVatRate,
+        entity.currency,
       );
-      const totals = this.computeTotals(items);
+      const totals = this.computeTotals(items, entity.currency);
       entity.items = items;
       entity.totalAmount = totals.totalAmount;
       entity.totalDiscount = totals.totalDiscount;
@@ -692,6 +959,9 @@ export class InvoicingService {
     if (dto.sellerInfo !== undefined) {
       entity.sellerInfo = dto.sellerInfo;
     }
+    if (dto.warehouseId !== undefined) {
+      entity.warehouseId = dto.warehouseId;
+    }
     if (dto.status !== undefined) {
       entity.status = dto.status;
       this.applyStatusTimestamps(entity, dto.status);
@@ -701,7 +971,18 @@ export class InvoicingService {
 
     const saved = await this.invoicingRepository.save(tenantId, entity);
 
-    if (dto.status !== undefined && entity.status !== previousStatus) {
+    if (
+      dto.status !== undefined &&
+      entity.status !== previousStatus &&
+      entity.subject === InvoiceSubject.CANCEL
+    ) {
+      if (
+        entity.status === InvoiceStatus.ISSUED ||
+        entity.status === InvoiceStatus.PAID
+      ) {
+        await this.applyCancelSubject(tenantId, saved);
+      }
+    } else if (dto.status !== undefined && entity.status !== previousStatus) {
       await this.emitStatusTransition(
         tenantId,
         saved.id,
@@ -744,6 +1025,9 @@ export class InvoicingService {
     }
     if (entity.status === InvoiceStatus.CANCELLED) {
       throw new ConflictException('صورتحساب ابطال‌شده قابل پرداخت نیست.');
+    }
+    if (entity.subject === InvoiceSubject.CANCEL) {
+      throw new ConflictException('صورتحساب ابطالی پرداخت ندارد.');
     }
     if (entity.status === InvoiceStatus.PAID) {
       throw new ConflictException('این صورتحساب قبلاً پرداخت شده است.');

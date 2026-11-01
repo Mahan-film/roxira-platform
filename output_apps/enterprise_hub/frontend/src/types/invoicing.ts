@@ -51,6 +51,45 @@ export const INVOICE_CURRENCIES: Currency[] = [
   Currency.OMR,
 ];
 
+/** جهت صورتحساب: فروش (ما صادر می‌کنیم) یا خرید (تأمین‌کننده برای ما صادر کرده). */
+export enum InvoiceDirection {
+  SALE = "SALE",
+  PURCHASE = "PURCHASE",
+}
+
+export const INVOICE_DIRECTION_LABELS: Record<InvoiceDirection, string> = {
+  [InvoiceDirection.SALE]: "فروش",
+  [InvoiceDirection.PURCHASE]: "خرید",
+};
+
+/** نوع صورتحساب الکترونیکی (سامانه مودیان). */
+export enum EInvoiceType {
+  WITH_BUYER = 1,
+  WITHOUT_BUYER = 2,
+  RETAIL = 3,
+}
+
+export const EINVOICE_TYPE_LABELS: Record<EInvoiceType, string> = {
+  [EInvoiceType.WITH_BUYER]: "نوع اول (با مشخصات خریدار)",
+  [EInvoiceType.WITHOUT_BUYER]: "نوع دوم (بدون مشخصات خریدار)",
+  [EInvoiceType.RETAIL]: "نوع سوم (فروشگاهی)",
+};
+
+/** موضوع صورتحساب الکترونیکی. */
+export enum InvoiceSubject {
+  ORIGINAL = 1,
+  CORRECTIVE = 2,
+  CANCEL = 3,
+  RETURN = 4,
+}
+
+export const INVOICE_SUBJECT_LABELS: Record<InvoiceSubject, string> = {
+  [InvoiceSubject.ORIGINAL]: "اصلی",
+  [InvoiceSubject.CORRECTIVE]: "اصلاحی",
+  [InvoiceSubject.CANCEL]: "ابطالی",
+  [InvoiceSubject.RETURN]: "برگشتی",
+};
+
 /** نرخ پیش‌فرض مالیات بر ارزش افزوده (VAT) — منطبق با بک‌اند NestJS */
 export const VAT_RATE = 0.1;
 
@@ -87,7 +126,13 @@ export interface CreateInvoiceItemDto {
 }
 
 export interface CreateInvoiceDto {
-  taxInvoiceNumber: string;
+  /** Left out, the server generates a unique number. */
+  taxInvoiceNumber?: string;
+  direction?: InvoiceDirection;
+  einvoiceType?: EInvoiceType;
+  subject?: InvoiceSubject;
+  relatedInvoiceId?: string;
+  warehouseId?: number;
   sellerInfo: InvoicePartyInfo;
   buyerInfo?: InvoicePartyInfo;
   customerId?: number;
@@ -126,6 +171,11 @@ export interface InvoiceResponseDto {
   issuedAt: string | null;
   paidAt: string | null;
   createdAt: string;
+  direction: InvoiceDirection;
+  einvoiceType: EInvoiceType;
+  subject: InvoiceSubject;
+  relatedInvoiceId: string | null;
+  warehouseId: number | null;
 }
 
 export type InvoiceResponse = InvoiceResponseDto;
@@ -137,6 +187,7 @@ export interface QueryInvoiceDto {
   taxInvoiceNumber?: string;
   search?: string;
   currency?: Currency;
+  direction?: InvoiceDirection;
 }
 
 export type QueryInvoiceParams = QueryInvoiceDto;
