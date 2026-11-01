@@ -1,3 +1,5 @@
+> Any AI assistant: read `docs/AI_HANDOFF.md` first.
+
 # ROXIRA AUTONOMOUS ENGINEERING STANDARD (AGENTS.md)
 
 ## 1. System Architecture & Boundaries
