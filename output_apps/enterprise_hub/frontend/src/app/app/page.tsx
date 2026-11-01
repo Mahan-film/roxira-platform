@@ -130,21 +130,25 @@ export default function SuiteDashboardPage() {
             label="کل سرنخ‌ها"
             value={formatNumber(crm.data?.totalLeads)}
             href="/app/crm"
+            hint="فهرست همه سرنخ‌ها"
           />
           <StatCard
             label="سرنخ‌های باز"
             value={formatNumber(crm.data?.openLeads)}
-            href="/app/crm"
+            href="/app/crm?view=board"
+            hint="پایپ‌لاین مراحل باز"
           />
           <StatCard
             label="ارزش فرصت‌های باز"
             value={formatMoneyRial(crm.data?.openPipelineValue)}
-            href="/app/crm"
+            href="/app/crm?view=board"
+            hint="ارزش هر مرحله در پایپ‌لاین"
           />
           <StatCard
             label="درآمد تحقق‌یافته"
             value={formatMoneyRial(crm.data?.wonRevenue)}
-            href="/app/crm"
+            href="/app/crm?stage=WON"
+            hint="سرنخ‌های برنده‌شده"
           />
         </Section>
       )}
@@ -155,21 +159,25 @@ export default function SuiteDashboardPage() {
             label="کل کارکنان"
             value={formatNumber(hr.data?.totalEmployees)}
             href="/app/hr"
+            hint="فهرست کارکنان"
           />
           <StatCard
             label="فعال"
             value={formatNumber(hr.data?.activeEmployees)}
-            href="/app/hr"
+            href="/app/hr?status=ACTIVE"
+            hint="فقط کارکنان شاغل"
           />
           <StatCard
             label="قراردادهای فعال"
             value={formatNumber(hr.data?.activeContracts)}
-            href="/app/hr"
+            href="/app/hr#contracts"
+            hint="قراردادهای حقوقی"
           />
           <StatCard
             label="جمع حقوق پایه"
             value={formatMoneyRial(hr.data?.totalBaseSalary)}
-            href="/app/hr"
+            href="/app/hr/payroll"
+            hint="محاسبه حقوق ماهانه"
           />
         </Section>
       )}
@@ -180,21 +188,25 @@ export default function SuiteDashboardPage() {
             label="تعداد کالا"
             value={formatNumber(inventory.data?.itemCount)}
             href="/app/inventory"
+            hint="فهرست کالاها"
           />
           <StatCard
             label="کالاهای زیر حد کسری"
             value={formatNumber(inventory.data?.lowStockCount)}
             href="/app/inventory"
+            hint="کالاهای رو به اتمام در انبار"
           />
           <StatCard
             label="ارزش موجودی (FIFO)"
             value={formatMoneyRial(inventory.data?.totalInventoryValue)}
             href="/app/inventory"
+            hint="ارزش‌گذاری موجودی"
           />
           <StatCard
             label="دسته‌های باز"
             value={formatNumber(inventory.data?.totalOpenBatches)}
             href="/app/inventory"
+            hint="دسته‌های خرید باقی‌مانده"
           />
         </Section>
       )}
@@ -205,21 +217,25 @@ export default function SuiteDashboardPage() {
             label="حساب‌های دارای گردش"
             value={formatNumber(accounting.data?.rows.length)}
             href="/app/accounting"
+            hint="درخت حساب‌ها"
           />
           <StatCard
             label="جمع بدهکار"
             value={formatMoneyRial(accounting.data?.totalDebit)}
-            href="/app/accounting"
+            href="/app/accounting/reports"
+            hint="تراز آزمایشی"
           />
           <StatCard
             label="جمع بستانکار"
             value={formatMoneyRial(accounting.data?.totalCredit)}
-            href="/app/accounting"
+            href="/app/accounting/reports"
+            hint="تراز آزمایشی"
           />
           <StatCard
             label="وضعیت تراز"
             value={accounting.data?.balanced ? "تراز است" : "تراز نیست"}
-            href="/app/accounting"
+            href="/app/accounting/reports"
+            hint="بررسی تراز در گزارش‌ها"
           />
         </Section>
       )}

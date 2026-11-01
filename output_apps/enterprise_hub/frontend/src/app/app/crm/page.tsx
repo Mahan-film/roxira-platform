@@ -57,10 +57,13 @@ export default function SuiteCrmPage() {
 
 function CrmPage() {
   const searchParams = useSearchParams();
-  const [view, setView] = useState<View>("table");
+  const [view, setView] = useState<View>(searchParams.get("view") === "board" ? "board" : "table");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [stage, setStage] = useState<PipelineStage | "">("");
+  const [stage, setStage] = useState<PipelineStage | "">(() => {
+    const raw = searchParams.get("stage");
+    return raw && (PIPELINE_STAGE_ORDER as string[]).includes(raw) ? (raw as PipelineStage) : "";
+  });
   const [page, setPage] = useState(1);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [total, setTotal] = useState(0);

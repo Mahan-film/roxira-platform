@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { FileSpreadsheet, Loader2 } from "lucide-react";
+import { ChevronLeft, FileSpreadsheet, Loader2 } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,14 +81,17 @@ export function StatCard({
   const body = (
     <Card className="h-full border-0 ring-1 ring-border transition-colors hover:ring-indigo-500/40">
       <CardContent className="flex flex-col gap-1 py-4">
-        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
+          {label}
+          {href && <ChevronLeft className="size-3.5" aria-hidden="true" />}
+        </span>
         <span className="text-xl font-bold">{value}</span>
         {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
       </CardContent>
     </Card>
   );
   return href ? (
-    <Link href={href} className="block">
+    <Link href={href} className="block rounded-xl focus-visible:outline-2 focus-visible:outline-indigo-500">
       {body}
     </Link>
   ) : (

@@ -33,6 +33,7 @@ import { formatJalaliDate, formatMoneyRial } from "@/lib/fa-format";
 import {
   EMPLOYEE_STATUS_LABELS,
   type Employee,
+  type EmployeeStatus,
   type EmploymentContract,
   type HrStats,
 } from "@/types/hr";
@@ -50,6 +51,10 @@ function HrPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [contracts, setContracts] = useState<EmploymentContract[]>([]);
   const [stats, setStats] = useState<HrStats | null>(null);
+  const [statusFilter, setStatusFilter] = useState<EmployeeStatus | "">(() => {
+    const raw = searchParams.get("status");
+    return raw && raw in EMPLOYEE_STATUS_LABELS ? (raw as EmployeeStatus) : "";
+  });
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Employee | null>(null);
@@ -152,6 +157,11 @@ function HrPage() {
                 aria-label="جست‌وجوی کارکنان"
               />
             </div>
+            {statusFilter && (
+              <Button variant="secondary" size="sm" onClick={() => setStatusFilter("")}>
+                {EMPLOYEE_STATUS_LABELS[statusFilter]} ✕
+              </Button>
+            )}
             <LoadingLine show={loading} />
           </div>
 
@@ -175,14 +185,14 @@ function HrPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {employees.length === 0 && (
+                {employees.filter((e) => !statusFilter || e.status === statusFilter).length === 0 && (
                   <TableRow>
                     <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                       {loading ? "در حال بارگذاری..." : "موردی یافت نشد."}
                     </TableCell>
                   </TableRow>
                 )}
-                {employees.map((e) => (
+                {employees.filter((e) => !statusFilter || e.status === statusFilter).map((e) => (
                   <TableRow key={e.id}>
                     <TableCell className="font-mono text-xs">{e.employeeNumber}</TableCell>
                     <TableCell className="font-medium">{e.fullName}</TableCell>
@@ -211,7 +221,7 @@ function HrPage() {
             </Table>
           </Card>
 
-          <Card>
+          <Card id="contracts">
             <CardHeader>
               <CardTitle>قراردادها و احکام حقوقی</CardTitle>
             </CardHeader>
