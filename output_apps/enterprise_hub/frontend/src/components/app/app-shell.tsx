@@ -254,7 +254,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <AccessProvider>
       <ImportHandoffProvider>
         <div className="dark flex min-h-screen flex-1 bg-background text-foreground">
-          <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-l border-border bg-card/60 p-4 lg:block">
+          <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-e border-border bg-card/60 p-4 lg:block">
             <SidebarContent pathname={pathname} />
           </aside>
 
@@ -320,12 +320,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className="absolute inset-0 bg-black/60 focus:outline-none"
                 onClick={() => setDrawerOpen(false)}
               />
-              <div className="absolute inset-y-0 right-0 w-72 max-w-[85vw] border-l border-border bg-background p-4 shadow-2xl">
+              <div className="absolute inset-y-0 start-0 w-72 max-w-[85vw] border-e border-border bg-background p-4 shadow-2xl">
                 <button
                   type="button"
                   onClick={() => setDrawerOpen(false)}
                   aria-label="بستن منو"
-                  className="absolute top-3 left-3 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="absolute top-3 end-3 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>

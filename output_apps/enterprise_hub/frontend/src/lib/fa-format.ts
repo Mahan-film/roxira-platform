@@ -101,3 +101,23 @@ export function formatReportMoney(value: number | string | null | undefined): st
   const persian = kept.replace(/\d/g, (digit) => PERSIAN_DIGITS[Number(digit)]);
   return negative ? `(${persian})` : persian;
 }
+
+const NUMERIC_DATE_FMT = new Intl.DateTimeFormat("fa-IR-u-ca-persian");
+
+/** Jalali date in numbers only, e.g. «۱۴۰۵/۸/۱۰». */
+export function formatJalaliNumericDate(value?: string | number | Date | null): string {
+  const date = toDate(value);
+  return date ? NUMERIC_DATE_FMT.format(date) : "—";
+}
+
+/**
+ * One money formatter for the whole app: rials and tomans with Persian digits,
+ * any other ISO code in Latin digits. Missing or non-finite values show «—».
+ */
+export function formatMoney(value: number | null | undefined, currency = "IRR"): string {
+  if (currency === "IRR") return formatMoneyRial(value);
+  if (currency === "IRT") {
+    return typeof value === "number" && Number.isFinite(value) ? `${NUMBER_FMT.format(value)} تومان` : "—";
+  }
+  return formatLatinMoney(value, currency);
+}
