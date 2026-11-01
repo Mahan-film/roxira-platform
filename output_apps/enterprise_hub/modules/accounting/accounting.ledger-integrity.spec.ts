@@ -126,7 +126,10 @@ describe('Ledger integrity — balanced entries and decimal money', () => {
 });
 
 describe('Ledger integrity — immutability and reversal', () => {
-  it('exposes no update or delete route for journal entries', () => {
+  it('exposes update and delete only for non-final vouchers', () => {
+    // Drafts and temporary vouchers can be edited; the service and the database refuse a POSTED one
+    // (see voucher-states.pg.spec.ts).
+    const EDITABLE_VOUCHER_ROUTES = ['updateJournalEntry', 'deleteJournalEntry'];
     const proto = AccountingController.prototype as unknown as Record<string, unknown>;
     const methods = Object.getOwnPropertyNames(AccountingController.prototype)
       .filter((n) => n !== 'constructor' && typeof proto[n] === 'function')
@@ -135,7 +138,11 @@ describe('Ledger integrity — immutability and reversal', () => {
     for (const name of methods) {
       const httpMethod = Reflect.getMetadata('method', proto[name] as object);
       // RequestMethod: GET=0, POST=1, PUT=2, DELETE=3, PATCH=4
-      expect([0, 1]).toContain(httpMethod);
+      if (EDITABLE_VOUCHER_ROUTES.includes(name)) {
+        expect([2, 3]).toContain(httpMethod);
+      } else {
+        expect([0, 1]).toContain(httpMethod);
+      }
     }
   });
 

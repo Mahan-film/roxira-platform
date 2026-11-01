@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsIn,
   IsISO8601,
   IsOptional,
   IsString,
@@ -11,6 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { JournalEntryStatus } from '../enums/accounting.enum';
 import { IsMoneyAmount } from './money.validator';
 import { IsSupportedCurrency } from '../../currency/normaliser/currency-normaliser';
 import {
@@ -120,4 +122,14 @@ export class CreateJournalEntryDto {
   @ValidateNested({ each: true })
   @Type(() => JournalEntryLineDto)
   lines: JournalEntryLineDto[];
+
+  @ApiPropertyOptional({
+    enum: [JournalEntryStatus.DRAFT, JournalEntryStatus.TEMPORARY, JournalEntryStatus.POSTED],
+    default: JournalEntryStatus.POSTED,
+    description:
+      'DRAFT: پیش‌نویس (می‌تواند ناتراز باشد و در گزارش‌ها نمی‌آید). TEMPORARY: موقت (تراز، قابل ویرایش، خارج از گزارش‌ها). POSTED: قطعی و تغییرناپذیر.',
+  })
+  @IsOptional()
+  @IsIn([JournalEntryStatus.DRAFT, JournalEntryStatus.TEMPORARY, JournalEntryStatus.POSTED])
+  status?: JournalEntryStatus;
 }

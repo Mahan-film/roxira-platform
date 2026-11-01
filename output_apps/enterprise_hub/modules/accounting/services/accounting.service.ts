@@ -44,6 +44,7 @@ import {
   CreateJournalEntryDto,
   JournalEntryLineDto,
 } from '../dto/create-journal-entry.dto';
+import { UpdateJournalEntryDto } from '../dto/voucher-state.dto';
 import {
   JournalEntryLineResponseDto,
   JournalEntryResponseDto,
@@ -567,19 +568,10 @@ export class AccountingService {
     return this.postEntry(tenantId, dto, { entryType }, manager);
   }
 
-  private async postEntry(
-    tenantId: string,
-    dto: CreateJournalEntryDto,
-    options: { reversesEntryId?: number; entryType?: JournalEntryType },
-    manager?: EntityManager,
-  ): Promise<JournalEntryResponseDto> {
-    await this.ensureDefaultAccounts(tenantId, manager);
-
-    const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
-
-    // Exact check in integer minor units: a posted entry must balance to the cent.
-    const debitMinor = normalizedLines.reduce((sum, l) => sum + l.debitMinor, 0n);
-    const creditMinor = normalizedLines.reduce((sum, l) => sum + l.creditMinor, 0n);
+  /** Exact check in integer minor units: debit equals credit and the total is above zero. */
+  private assertBalanced(lines: NormalisedJournalLine[]): void {
+    const debitMinor = lines.reduce((sum, l) => sum + l.debitMinor, 0n);
+    const creditMinor = lines.reduce((sum, l) => sum + l.creditMinor, 0n);
 
     if (debitMinor !== creditMinor) {
       throw new BadRequestException(
@@ -590,18 +582,14 @@ export class AccountingService {
     if (debitMinor <= 0n) {
       throw new BadRequestException('مبلغ سند باید بزرگ‌تر از صفر باشد.');
     }
+  }
 
-    const existing = await this.accountingRepository.findEntryByNumber(
-      tenantId,
-      dto.entryNumber,
-      manager,
-    );
-    if (existing) {
-      throw new ConflictException(
-        `سندی با شماره ${dto.entryNumber} قبلاً ثبت شده است.`,
-      );
-    }
-
+  /** Looks the account codes up and refuses unknown codes and header (group or kol) accounts. */
+  private async resolveLineInputs(
+    tenantId: string,
+    normalizedLines: NormalisedJournalLine[],
+    manager?: EntityManager,
+  ): Promise<JournalLineInput[]> {
     const uniqueCodes = Array.from(
       new Set(normalizedLines.map((line) => line.accountCode)),
     );
@@ -629,7 +617,7 @@ export class AccountingService {
       );
     }
 
-    const lineInputs: JournalLineInput[] = normalizedLines.map((line) => ({
+    return normalizedLines.map((line) => ({
       accountId: accountByCode.get(line.accountCode)!.id,
       debitMinor: line.debitMinor,
       creditMinor: line.creditMinor,
@@ -639,6 +627,36 @@ export class AccountingService {
       fxRate: line.fxRate,
       partyCode: line.partyCode,
     }));
+  }
+
+  private async postEntry(
+    tenantId: string,
+    dto: CreateJournalEntryDto,
+    options: { reversesEntryId?: number; entryType?: JournalEntryType },
+    manager?: EntityManager,
+  ): Promise<JournalEntryResponseDto> {
+    await this.ensureDefaultAccounts(tenantId, manager);
+
+    const status = dto.status ?? JournalEntryStatus.POSTED;
+    const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
+
+    // A draft may be unbalanced while it is typed; every other state must balance to the cent.
+    if (status !== JournalEntryStatus.DRAFT) {
+      this.assertBalanced(normalizedLines);
+    }
+
+    const existing = await this.accountingRepository.findEntryByNumber(
+      tenantId,
+      dto.entryNumber,
+      manager,
+    );
+    if (existing) {
+      throw new ConflictException(
+        `سندی با شماره ${dto.entryNumber} قبلاً ثبت شده است.`,
+      );
+    }
+
+    const lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
 
     let saved: JournalEntryEntity;
     try {
@@ -648,7 +666,7 @@ export class AccountingService {
           entryNumber: dto.entryNumber,
           date: dto.date ? new Date(dto.date) : new Date(),
           description: dto.description,
-          status: JournalEntryStatus.POSTED,
+          status,
           reversesEntryId: options.reversesEntryId ?? null,
           entryType: options.entryType,
         },
@@ -671,6 +689,128 @@ export class AccountingService {
     }
 
     return this.toEntryDto(saved);
+  }
+
+  private mapPeriodLock(error: unknown): never {
+    if (error instanceof LockedPeriodError) {
+      throw new PeriodLockedException(
+        `Posting refused: ${error.date} is inside a locked accounting period.`,
+      );
+    }
+    throw error;
+  }
+
+  /** Loads and row-locks a voucher that is still editable; a final one is refused with 409. */
+  private async lockEditableVoucher(
+    tenantId: string,
+    id: number,
+    manager: EntityManager,
+  ): Promise<JournalEntryEntity> {
+    const entry = await this.accountingRepository.lockEntry(tenantId, id, manager);
+    if (!entry) {
+      throw new NotFoundException(`سند حسابداری با شناسه ${id} یافت نشد.`);
+    }
+    if (entry.status === JournalEntryStatus.POSTED || entry.status === JournalEntryStatus.VOID) {
+      throw new ConflictException(
+        'سند قطعی قابل ویرایش یا حذف نیست؛ برای اصلاح، سند برگشتی ثبت کنید.',
+      );
+    }
+    return entry;
+  }
+
+  /** Replaces the header and lines of a DRAFT or TEMPORARY voucher. */
+  async updateVoucher(
+    tenantId: string,
+    id: number,
+    dto: UpdateJournalEntryDto,
+  ): Promise<JournalEntryResponseDto> {
+    await this.ensureDefaultAccounts(tenantId);
+    return this.accountingRepository.transaction(async (manager) => {
+      const entry = await this.lockEditableVoucher(tenantId, id, manager);
+      const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
+      if (entry.status === JournalEntryStatus.TEMPORARY) {
+        this.assertBalanced(normalizedLines);
+      }
+      if (dto.entryNumber !== entry.entryNumber) {
+        const clash = await this.accountingRepository.findEntryByNumber(
+          tenantId,
+          dto.entryNumber,
+          manager,
+        );
+        if (clash) {
+          throw new ConflictException(`سندی با شماره ${dto.entryNumber} قبلاً ثبت شده است.`);
+        }
+      }
+      const date = dto.date ? new Date(dto.date) : entry.date;
+      try {
+        await this.accountingRepository.assertDateOpen(tenantId, date, manager);
+      } catch (error) {
+        this.mapPeriodLock(error);
+      }
+      const lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
+      await this.accountingRepository.replaceEntryContent(
+        tenantId,
+        id,
+        { entryNumber: dto.entryNumber, date, description: dto.description },
+        lineInputs,
+        manager,
+      );
+      const saved = await this.accountingRepository.findEntryById(tenantId, id, manager);
+      return this.toEntryDto(saved as JournalEntryEntity);
+    });
+  }
+
+  /**
+   * DRAFT to TEMPORARY or POSTED, TEMPORARY to DRAFT or POSTED. POSTED is final. Leaving DRAFT
+   * needs a balanced voucher of two or more lines dated in an open period.
+   */
+  async changeVoucherStatus(
+    tenantId: string,
+    id: number,
+    target: JournalEntryStatus,
+  ): Promise<JournalEntryResponseDto> {
+    return this.accountingRepository.transaction(async (manager) => {
+      const entry = await this.lockEditableVoucher(tenantId, id, manager);
+      if (entry.status === target) {
+        throw new ConflictException('سند از قبل در همین وضعیت است.');
+      }
+      const full = (await this.accountingRepository.findEntryById(tenantId, id, manager)) as JournalEntryEntity;
+      const lineInputs: JournalLineInput[] = full.lines.map((line) => ({
+        accountId: line.accountId,
+        debitMinor: fromDb(line.debit),
+        creditMinor: fromDb(line.credit),
+      }));
+      if (target !== JournalEntryStatus.DRAFT) {
+        if (lineInputs.length < 2) {
+          throw new BadRequestException('سند باید حداقل دو سطر داشته باشد.');
+        }
+        const debit = lineInputs.reduce((sum, l) => sum + l.debitMinor, 0n);
+        const credit = lineInputs.reduce((sum, l) => sum + l.creditMinor, 0n);
+        if (debit !== credit || debit <= 0n) {
+          throw new BadRequestException(
+            `سند تراز نیست: جمع بدهکار (${minorToDecimal(debit)}) با جمع بستانکار (${minorToDecimal(credit)}) برابر نیست.`,
+          );
+        }
+      }
+      if (target === JournalEntryStatus.POSTED) {
+        try {
+          await this.accountingRepository.assertDateOpen(tenantId, entry.date, manager);
+        } catch (error) {
+          this.mapPeriodLock(error);
+        }
+      }
+      await this.accountingRepository.setEntryStatus(tenantId, entry, target, lineInputs, manager);
+      const saved = await this.accountingRepository.findEntryById(tenantId, id, manager);
+      return this.toEntryDto(saved as JournalEntryEntity);
+    });
+  }
+
+  /** Deletes a DRAFT or TEMPORARY voucher. A final voucher is only ever reversed. */
+  async deleteVoucher(tenantId: string, id: number): Promise<void> {
+    await this.accountingRepository.transaction(async (manager) => {
+      await this.lockEditableVoucher(tenantId, id, manager);
+      await this.accountingRepository.deleteEntry(tenantId, id, manager);
+    });
   }
 
   /**

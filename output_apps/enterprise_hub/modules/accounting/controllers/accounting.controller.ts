@@ -3,12 +3,14 @@ import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -27,6 +29,7 @@ import {
   UnlockPeriodDto,
 } from '../dto/period-lock.dto';
 import { ReverseJournalEntryDto } from '../dto/reverse-journal-entry.dto';
+import { ChangeVoucherStatusDto, UpdateJournalEntryDto } from '../dto/voucher-state.dto';
 import {
   JournalEntryResponseDto,
   PaginatedJournalEntryResponseDto,
@@ -128,6 +131,53 @@ export class AccountingController {
       id,
       dto,
     );
+  }
+
+  @RequireAction(AccessAction.CREATE)
+  @Put('journal-entries/:id')
+  @ApiOperation({
+    summary: 'ویرایش سند پیش‌نویس یا موقت',
+    description: 'فقط سندهایی که هنوز قطعی نشده‌اند؛ سند قطعی با سند برگشتی اصلاح می‌شود.',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: JournalEntryResponseDto })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'سند قطعی یا شماره تکراری' })
+  async updateJournalEntry(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateJournalEntryDto,
+  ): Promise<JournalEntryResponseDto> {
+    return this.accountingService.updateVoucher(this.tenantIdOf(request), id, dto);
+  }
+
+  @RequireAction(AccessAction.POST)
+  @Post('journal-entries/:id/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'تغییر وضعیت سند (پیش‌نویس، موقت، قطعی)',
+    description: 'قطعی‌سازی برگشت‌ناپذیر است و مانده حساب‌ها را به‌روز می‌کند.',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: JournalEntryResponseDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'سند ناتراز' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'سند قطعی است یا دوره قفل است' })
+  async changeJournalEntryStatus(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ChangeVoucherStatusDto,
+  ): Promise<JournalEntryResponseDto> {
+    return this.accountingService.changeVoucherStatus(this.tenantIdOf(request), id, dto.status);
+  }
+
+  @RequireAction(AccessAction.CREATE)
+  @Delete('journal-entries/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'حذف سند پیش‌نویس یا موقت' })
+  @ApiResponse({ status: HttpStatus.NO_CONTENT })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'سند قطعی قابل حذف نیست' })
+  async deleteJournalEntry(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<void> {
+    await this.accountingService.deleteVoucher(this.tenantIdOf(request), id);
   }
 
   @Get('period-locks')

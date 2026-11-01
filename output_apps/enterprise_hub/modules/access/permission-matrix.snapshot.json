@@ -5,6 +5,17 @@
   "DELETE /auth/sessions/:id (AuthController.revokeSession)": {
     "policy": "authOnly"
   },
+  "DELETE /enterprise-hub/accounting/journal-entries/:id (AccountingController.deleteJournalEntry)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/banking/recon/rules/:id (ReconController.deleteRule)": {
     "policy": "banking:admin",
     "owner": true,
@@ -1529,6 +1540,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/accounting/journal-entries/:id/status (AccountingController.changeJournalEntryStatus)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/accounting/period-locks (AccountingController.lockPeriod)": {
     "policy": "accounting:post",
     "owner": true,
@@ -2374,6 +2396,17 @@
   },
   "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {
     "policy": "platformAdmin"
+  },
+  "PUT /enterprise-hub/accounting/journal-entries/:id (AccountingController.updateJournalEntry)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
   },
   "PUT /enterprise-hub/assistant/capture/settings (CaptureController.putSettings)": {
     "policy": "accounting:admin",

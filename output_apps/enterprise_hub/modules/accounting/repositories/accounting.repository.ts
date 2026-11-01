@@ -358,51 +358,11 @@ export class AccountingRepository {
       }
       const entryId = inserted[0].id;
 
-      const lineRows = lineInputs.map((line) => ({
-        tenantId,
-        journalEntryId: entryId,
-        accountId: line.accountId,
-        debit: minorToDecimal(line.debitMinor),
-        credit: minorToDecimal(line.creditMinor),
-        currency: line.currency ?? 'IRR',
-        amountFx: line.amountFx ?? null,
-        fxRate: line.fxRate ?? null,
-        partyCode: line.partyCode ?? null,
-        description: line.description ?? null,
-      }));
-      for (let offset = 0; offset < lineRows.length; offset += 200) {
-        await manager
-          .createQueryBuilder()
-          .insert()
-          .into(JournalEntryLineEntity)
-          .values(lineRows.slice(offset, offset + 200))
-          .execute();
-      }
+      await this.insertLines(tenantId, entryId, lineInputs, manager);
 
-      // Debit-positive balances, applied in a fixed order (ascending account id).
-      const deltaByAccount = new Map<number, bigint>();
-      for (const line of lineInputs) {
-        deltaByAccount.set(
-          line.accountId,
-          (deltaByAccount.get(line.accountId) ?? 0n) +
-            line.debitMinor -
-            line.creditMinor,
-        );
-      }
-      const accountIds = Array.from(deltaByAccount.keys()).sort((a, b) => a - b);
-      for (const accountId of accountIds) {
-        // `pg` returns `[rows, rowCount]` for UPDATE, plain rows for SELECT.
-        const result: unknown[] = await manager.query(
-          `UPDATE "fin_chart_of_accounts" SET "balance" = "balance" + $1::numeric
-            WHERE "id" = $2 AND "tenant_id" = $3 RETURNING "id"`,
-          [minorToDecimal(deltaByAccount.get(accountId)!), accountId, tenantId],
-        );
-        const updated = Array.isArray(result[0]) ? result[0] : result;
-        if (updated.length !== 1) {
-          throw new Error(
-            `Account ${accountId} not found for tenant while posting entry ${header.entryNumber}.`,
-          );
-        }
+      // Only final entries move the cached account balances; drafts and temporary entries do not.
+      if (header.status === JournalEntryStatus.POSTED) {
+        await this.applyBalanceDeltas(tenantId, lineInputs, header.entryNumber, manager);
       }
 
       return (await manager.findOne(JournalEntryEntity, {
@@ -410,6 +370,123 @@ export class AccountingRepository {
         relations: { lines: true },
       })) as JournalEntryEntity;
     }, outerManager);
+  }
+
+  /**
+   * Debit-positive balance deltas, applied in a fixed order (ascending account id) so two
+   * concurrent entries touching the same accounts cannot deadlock.
+   */
+  private async applyBalanceDeltas(
+    tenantId: string,
+    lineInputs: JournalLineInput[],
+    entryNumber: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const deltaByAccount = new Map<number, bigint>();
+    for (const line of lineInputs) {
+      deltaByAccount.set(
+        line.accountId,
+        (deltaByAccount.get(line.accountId) ?? 0n) + line.debitMinor - line.creditMinor,
+      );
+    }
+    const accountIds = Array.from(deltaByAccount.keys()).sort((a, b) => a - b);
+    for (const accountId of accountIds) {
+      // `pg` returns `[rows, rowCount]` for UPDATE, plain rows for SELECT.
+      const result: unknown[] = await manager.query(
+        `UPDATE "fin_chart_of_accounts" SET "balance" = "balance" + $1::numeric
+          WHERE "id" = $2 AND "tenant_id" = $3 RETURNING "id"`,
+        [minorToDecimal(deltaByAccount.get(accountId)!), accountId, tenantId],
+      );
+      const updated = Array.isArray(result[0]) ? result[0] : result;
+      if (updated.length !== 1) {
+        throw new Error(
+          `Account ${accountId} not found for tenant while posting entry ${entryNumber}.`,
+        );
+      }
+    }
+  }
+
+  /** Row-locks one entry (header only) so concurrent edits and status changes serialise. */
+  async lockEntry(
+    tenantId: string,
+    id: number,
+    manager: EntityManager,
+  ): Promise<JournalEntryEntity | null> {
+    await this.lockLedgerShared(tenantId, manager);
+    return manager.findOne(JournalEntryEntity, {
+      where: { id, tenantId },
+      lock: { mode: 'pessimistic_write' },
+    });
+  }
+
+  /**
+   * Replaces the header fields and every line of a DRAFT or TEMPORARY entry. The caller has
+   * locked the entry and checked its status; the database refuses to touch a POSTED one anyway.
+   */
+  async replaceEntryContent(
+    tenantId: string,
+    entryId: number,
+    header: { entryNumber: string; date: Date; description: string },
+    lineInputs: JournalLineInput[],
+    manager: EntityManager,
+  ): Promise<void> {
+    await manager.delete(JournalEntryLineEntity, { journalEntryId: entryId, tenantId });
+    await manager.update(JournalEntryEntity, { id: entryId, tenantId }, {
+      entryNumber: header.entryNumber,
+      date: header.date,
+      description: header.description,
+    });
+    await this.insertLines(tenantId, entryId, lineInputs, manager);
+  }
+
+  private async insertLines(
+    tenantId: string,
+    entryId: number,
+    lineInputs: JournalLineInput[],
+    manager: EntityManager,
+  ): Promise<void> {
+    const lineRows = lineInputs.map((line) => ({
+      tenantId,
+      journalEntryId: entryId,
+      accountId: line.accountId,
+      debit: minorToDecimal(line.debitMinor),
+      credit: minorToDecimal(line.creditMinor),
+      currency: line.currency ?? 'IRR',
+      amountFx: line.amountFx ?? null,
+      fxRate: line.fxRate ?? null,
+      partyCode: line.partyCode ?? null,
+      description: line.description ?? null,
+    }));
+    for (let offset = 0; offset < lineRows.length; offset += 200) {
+      await manager
+        .createQueryBuilder()
+        .insert()
+        .into(JournalEntryLineEntity)
+        .values(lineRows.slice(offset, offset + 200))
+        .execute();
+    }
+  }
+
+  /**
+   * Moves an entry between states. Becoming POSTED applies the line totals to the account
+   * balances in the same transaction; the database refuses an unbalanced or locked-period post.
+   */
+  async setEntryStatus(
+    tenantId: string,
+    entry: JournalEntryEntity,
+    status: JournalEntryStatus,
+    lineInputs: JournalLineInput[],
+    manager: EntityManager,
+  ): Promise<void> {
+    await manager.update(JournalEntryEntity, { id: entry.id, tenantId }, { status });
+    if (status === JournalEntryStatus.POSTED) {
+      await this.applyBalanceDeltas(tenantId, lineInputs, entry.entryNumber, manager);
+    }
+  }
+
+  /** Deletes a DRAFT or TEMPORARY entry; its lines go with it. */
+  async deleteEntry(tenantId: string, id: number, manager: EntityManager): Promise<void> {
+    await manager.delete(JournalEntryEntity, { id, tenantId });
   }
 
   // ---------------------------------------------------------------------------
@@ -550,6 +627,7 @@ export class AccountingRepository {
     const query = this.lines
       .createQueryBuilder('line')
       .innerJoin('line.account', 'account')
+      .innerJoin('line.journalEntry', 'entry')
       .select('account.code', 'code')
       .addSelect('account.name', 'name')
       .addSelect('account.accountType', 'accountType')
@@ -557,7 +635,8 @@ export class AccountingRepository {
       .addSelect('COALESCE(SUM(line.credit), 0)', 'totalCredit')
       .addSelect('COALESCE(SUM(line.amountFx), 0)', 'totalAmountFx')
       .addSelect('COALESCE(SUM(line.amountFx * line.fxRate), 0)', 'totalFxInIrr')
-      .where('line.tenantId = :tenantId', { tenantId });
+      .where('line.tenantId = :tenantId', { tenantId })
+      .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED });
 
     if (currency) {
       query.andWhere('line.currency = :currency', { currency });
@@ -597,6 +676,7 @@ export class AccountingRepository {
       .where('line.tenantId = :tenantId', { tenantId })
       .andWhere('line.accountId = :accountId', { accountId })
       .andWhere('line.id IN (:...lineIds)', { lineIds })
+      .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED })
       .getRawMany<LedgerRawRow>();
   }
 
@@ -622,6 +702,7 @@ export class AccountingRepository {
       .addSelect('line.credit', 'credit')
       .where('line.tenantId = :tenantId', { tenantId })
       .andWhere('line.accountId = :accountId', { accountId })
+      .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED })
       .orderBy('entry.date', 'ASC')
       .addOrderBy('line.id', 'ASC');
 
