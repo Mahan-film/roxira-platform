@@ -41,7 +41,7 @@ export function MembersPanel() {
       {action.error && <Alert variant="destructive"><AlertDescription>{action.error}</AlertDescription></Alert>}
       <div className="overflow-x-auto rounded-2xl border border-border">
         <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-xs text-muted-foreground">
+          <thead className="bg-muted text-xs font-semibold text-foreground">
             <tr>
               <th className="p-3 text-start">عضو</th>
               <th className="p-3 text-start">نقش</th>
