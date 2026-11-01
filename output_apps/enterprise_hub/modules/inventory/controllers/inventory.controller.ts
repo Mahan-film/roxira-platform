@@ -24,7 +24,7 @@ import {
   requireTenantId,
 } from '../../tenants/tenant-context';
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
-import { CreateWarehouseDto } from '../dto/create-warehouse.dto';
+import { CreateWarehouseDto, UpdateWarehouseDto } from '../dto/create-warehouse.dto';
 import { FifoBatchResponseDto } from '../dto/fifo-batch-response.dto';
 import { FifoValuationResponseDto } from '../dto/inventory-valuation.dto';
 import { QueryStockItemDto } from '../dto/query-stock-item.dto';
@@ -86,6 +86,18 @@ export class InventoryController {
     @Req() request: AuthenticatedRequest,
   ): Promise<WarehouseResponseDto[]> {
     return this.inventoryService.listWarehouses(this.tenantIdOf(request));
+  }
+
+  @Patch('warehouses/:id')
+  @ApiOperation({ summary: 'ویرایش انبار: نام، فروشگاه، فعال/غیرفعال' })
+  @ApiResponse({ status: HttpStatus.OK, type: WarehouseResponseDto })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'نام تکراری یا انبار دارای موجودی' })
+  async updateWarehouse(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateWarehouseDto,
+  ): Promise<WarehouseResponseDto> {
+    return this.inventoryService.updateWarehouse(this.tenantIdOf(request), id, dto);
   }
 
   @Get('warehouses/:id/stock')

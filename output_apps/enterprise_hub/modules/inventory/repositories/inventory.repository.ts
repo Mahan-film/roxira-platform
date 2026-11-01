@@ -3,11 +3,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
 import { FifoBatchEntity } from '../entities/fifo-batch.entity';
+import { StoreEntity } from '../entities/store.entity';
 import { StockItemEntity } from '../entities/stock-item.entity';
 import { WarehouseEntity } from '../entities/warehouse.entity';
 import {
   InsufficientStockError,
   StockItemMissingError,
+  WarehouseInactiveError,
   WarehouseMissingError,
 } from '../errors/inventory.errors';
 
@@ -106,9 +108,12 @@ export class InventoryRepository {
     data: {
       name: string;
       locationCode: string;
+      storeId?: number | null;
     },
   ): Promise<WarehouseEntity> {
     const entity = this.warehouses.create({
+      storeId: null,
+      isActive: true,
       ...data,
       tenantId,
       createdAt: new Date(),
@@ -128,6 +133,32 @@ export class InventoryRepository {
     id: number,
   ): Promise<WarehouseEntity | null> {
     return this.warehouses.findOne({ where: { id, tenantId } });
+  }
+
+  /** A store of this tenant, or null (used to validate a warehouse's `storeId`). */
+  async findStoreById(tenantId: string, id: number): Promise<StoreEntity | null> {
+    return this.dataSource.getRepository(StoreEntity).findOne({ where: { id, tenantId } });
+  }
+
+  /** Updates the editable warehouse fields, scoped by tenant. */
+  async updateWarehouse(
+    tenantId: string,
+    id: number,
+    patch: Partial<Pick<WarehouseEntity, 'name' | 'locationCode' | 'storeId' | 'isActive'>>,
+  ): Promise<void> {
+    await this.warehouses.update({ id, tenantId }, patch);
+  }
+
+  /** Open stock quantity (sum of FIFO layers) held by one warehouse. */
+  async openQuantityInWarehouse(tenantId: string, warehouseId: number): Promise<number> {
+    const row = await this.batches
+      .createQueryBuilder('batch')
+      .select('COALESCE(SUM(batch.quantityRemaining), 0)', 'total')
+      .where('batch.tenantId = :tenantId', { tenantId })
+      .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
+      .andWhere('batch.quantityRemaining > 0')
+      .getRawOne<{ total: string }>();
+    return Number(row?.total ?? 0);
   }
 
   async findWarehouseByName(
@@ -493,6 +524,9 @@ export class InventoryRepository {
     });
     if (!warehouse) {
       throw new WarehouseMissingError(warehouseId);
+    }
+    if (warehouse.isActive === false) {
+      throw new WarehouseInactiveError(warehouseId);
     }
   }
 }

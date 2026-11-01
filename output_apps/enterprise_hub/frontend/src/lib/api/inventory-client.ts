@@ -1,4 +1,10 @@
 import {
+  CreateStoreDto,
+  CreateTransferDto,
+  StockDocument,
+  Store,
+  UpdateStoreDto,
+  UpdateWarehouseDto,
   CreateStockItemDto,
   CreateWarehouseDto,
   FifoBatch,
@@ -153,4 +159,39 @@ export async function getFifoValuation(
     `${INVENTORY_ENDPOINT}/valuation`,
     { method: "GET", signal },
   );
+}
+
+/** فهرست فروشگاه‌ها — GET /enterprise-hub/inventory/stores */
+export async function listStores(signal?: AbortSignal): Promise<Store[]> {
+  return apiRequest<Store[]>(`${INVENTORY_ENDPOINT}/stores`, { method: "GET", signal });
+}
+
+export async function createStore(payload: CreateStoreDto): Promise<Store> {
+  return apiRequest<Store>(`${INVENTORY_ENDPOINT}/stores`, { method: "POST", body: payload });
+}
+
+export async function updateStore(id: number, payload: UpdateStoreDto): Promise<Store> {
+  return apiRequest<Store>(`${INVENTORY_ENDPOINT}/stores/${id}`, { method: "PATCH", body: payload });
+}
+
+/** ویرایش انبار — PATCH /enterprise-hub/inventory/warehouses/:id */
+export async function updateWarehouse(id: number, payload: UpdateWarehouseDto): Promise<Warehouse> {
+  return apiRequest<Warehouse>(`${INVENTORY_ENDPOINT}/warehouses/${id}`, { method: "PATCH", body: payload });
+}
+
+/** انتقال بین دو انبار — POST /enterprise-hub/inventory/documents/transfers */
+export async function createTransfer(payload: CreateTransferDto): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/transfers`, { method: "POST", body: payload });
+}
+
+/** اسناد انبار — GET /enterprise-hub/inventory/documents */
+export async function listStockDocuments(
+  params: { page?: number; limit?: number; docType?: string; warehouseId?: number } = {},
+  signal?: AbortSignal,
+): Promise<{ data: StockDocument[]; total: number; page: number; limit: number }> {
+  return apiRequest(`${INVENTORY_ENDPOINT}/documents`, {
+    method: "GET",
+    searchParams: params,
+    signal,
+  });
 }

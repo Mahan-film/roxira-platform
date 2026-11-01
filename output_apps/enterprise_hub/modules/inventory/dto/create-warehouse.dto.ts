@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 /**
  * DTO ایجاد انبار جدید (POST /enterprise-hub/inventory/warehouses).
@@ -16,4 +16,17 @@ export class CreateWarehouseDto {
   @MinLength(2)
   @MaxLength(50)
   locationCode: string;
+
+  @ApiPropertyOptional({ description: 'فروشگاه صاحب این انبار' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  storeId?: number;
+}
+
+export class UpdateWarehouseDto extends PartialType(CreateWarehouseDto) {
+  @ApiPropertyOptional({ description: 'فعال یا غیرفعال کردن انبار (انبار دارای موجودی غیرفعال نمی‌شود)' })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

@@ -893,6 +893,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/inventory/documents/ (StockDocumentsController.list)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/documents/:id (StockDocumentsController.get)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/items (InventoryController.listStockItems)": {
     "policy": "inventory:read",
     "owner": true,
@@ -916,6 +938,17 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/items/:sku/batches (InventoryController.getStockItemBatches)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/stores/ (StoresController.list)": {
     "policy": "inventory:read",
     "owner": true,
     "admin": true,
@@ -1311,6 +1344,28 @@
     "legacy_member": false
   },
   "PATCH /enterprise-hub/inventory/items/:id (InventoryController.updateStockItem)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /enterprise-hub/inventory/stores/:id (StoresController.update)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /enterprise-hub/inventory/warehouses/:id (InventoryController.updateWarehouse)": {
     "policy": "inventory:create",
     "owner": true,
     "admin": true,
@@ -2181,6 +2236,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/inventory/documents/transfers (StockDocumentsController.createTransfer)": {
+    "policy": "inventory:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/inventory/items (InventoryController.createStockItem)": {
     "policy": "inventory:create",
     "owner": true,
@@ -2204,6 +2270,17 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/movements/outbound (InventoryController.issueStock)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/stores/ (StoresController.create)": {
     "policy": "inventory:create",
     "owner": true,
     "admin": true,

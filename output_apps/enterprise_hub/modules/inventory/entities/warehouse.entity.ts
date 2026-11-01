@@ -31,6 +31,15 @@ export class WarehouseEntity {
   @Column({ type: 'varchar', length: 50, name: 'location_code' })
   locationCode: string;
 
+  /** Store (shop/branch) this warehouse belongs to; null for a stand-alone warehouse. */
+  @Index()
+  @Column({ type: 'int', name: 'store_id', nullable: true })
+  storeId: number | null;
+
+  /** An inactive warehouse takes no new movements and is hidden from pickers. */
+  @Column({ type: 'boolean', name: 'is_active', default: true })
+  isActive: boolean;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 }

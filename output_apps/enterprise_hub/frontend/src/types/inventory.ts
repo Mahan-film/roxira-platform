@@ -18,10 +18,83 @@ export interface Warehouse {
   id: number;
   name: string;
   locationCode: string;
+  storeId: number | null;
+  isActive: boolean;
   createdAt: string;
 }
 
+export interface Store {
+  id: number;
+  code: string;
+  name: string;
+  address: string | null;
+  isActive: boolean;
+  warehouseCount: number;
+  createdAt: string;
+}
+
+export interface CreateStoreDto {
+  code: string;
+  name: string;
+  address?: string;
+}
+
+export type UpdateStoreDto = Partial<CreateStoreDto> & { isActive?: boolean };
+
+export type UpdateWarehouseDto = Partial<CreateWarehouseDto> & {
+  isActive?: boolean;
+};
+
+export type StockDocumentType =
+  | "OPENING"
+  | "PURCHASE_RECEIPT"
+  | "SALES_DELIVERY"
+  | "ADJUSTMENT"
+  | "TRANSFER";
+
+export const STOCK_DOCUMENT_TYPE_LABELS: Record<StockDocumentType, string> = {
+  OPENING: "رسید افتتاحیه",
+  PURCHASE_RECEIPT: "رسید خرید",
+  SALES_DELIVERY: "حواله فروش",
+  ADJUSTMENT: "تعدیل موجودی",
+  TRANSFER: "انتقال بین انبارها",
+};
+
+export interface StockDocumentLine {
+  id: number;
+  sku: string;
+  quantity: number;
+  unitCost: number;
+  value: number;
+  batchNumber: string | null;
+}
+
+export interface StockDocument {
+  id: number;
+  docNumber: string;
+  docType: StockDocumentType;
+  status: "DRAFT" | "POSTED";
+  docDate: string;
+  fromWarehouseId: number | null;
+  toWarehouseId: number | null;
+  reference: string | null;
+  note: string | null;
+  totalValue: number;
+  createdAt: string;
+  lines?: StockDocumentLine[];
+}
+
+export interface CreateTransferDto {
+  fromWarehouseId: number;
+  toWarehouseId: number;
+  docDate?: string;
+  reference?: string;
+  note?: string;
+  lines: Array<{ sku: string; quantity: number }>;
+}
+
 export interface CreateWarehouseDto {
+  storeId?: number;
   name: string;
   locationCode: string;
 }

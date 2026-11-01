@@ -533,7 +533,7 @@ export function InvoiceEditor({
                 <option value="">
                   {anyStockLine ? "همهٔ انبارها (به‌ترتیب FIFO)" : "برای سطر کالا فعال می‌شود"}
                 </option>
-                {warehouses.map((warehouse) => (
+                {warehouses.filter((warehouse) => warehouse.isActive).map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name}
                   </option>

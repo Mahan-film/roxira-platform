@@ -34,3 +34,11 @@ export class InsufficientStockError extends Error {
     this.name = 'InsufficientStockError';
   }
 }
+
+/** انبار غیرفعال است و حرکت جدید نمی‌پذیرد. */
+export class WarehouseInactiveError extends Error {
+  constructor(readonly warehouseId: number) {
+    super(`انبار با شناسه ${warehouseId} غیرفعال است.`);
+    this.name = 'WarehouseInactiveError';
+  }
+}

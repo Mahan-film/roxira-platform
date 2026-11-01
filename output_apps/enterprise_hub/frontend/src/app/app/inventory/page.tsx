@@ -14,6 +14,7 @@ import { InventoryAdminPanel } from "@/components/inventory/inventory-admin-pane
 import { InventoryStats } from "@/components/inventory/inventory-stats";
 import { StockBatchesPanel } from "@/components/inventory/stock-batches-panel";
 import { StockItemsTable } from "@/components/inventory/stock-items-table";
+import { WarehousesManager } from "@/components/inventory/warehouses-manager";
 import { WarehouseStockPanel } from "@/components/inventory/warehouse-stock-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,8 @@ export default function SuiteInventoryPage() {
       />
 
       <InventoryAdminPanel onChanged={refresh} />
+
+      <WarehousesManager warehouses={warehouses} onChanged={refresh} />
 
       {isEmpty ? (
         <EmptyImportState

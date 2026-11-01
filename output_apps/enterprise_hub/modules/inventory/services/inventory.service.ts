@@ -7,7 +7,7 @@ import {
 import { EntityManager } from 'typeorm';
 import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
-import { CreateWarehouseDto } from '../dto/create-warehouse.dto';
+import { CreateWarehouseDto, UpdateWarehouseDto } from '../dto/create-warehouse.dto';
 import { FifoBatchResponseDto } from '../dto/fifo-batch-response.dto';
 import {
   FifoValuationResponseDto,
@@ -36,6 +36,7 @@ import { StockMovementType } from '../enums/stock-movement-type.enum';
 import {
   InsufficientStockError,
   StockItemMissingError,
+  WarehouseInactiveError,
   WarehouseMissingError,
 } from '../errors/inventory.errors';
 import { InventoryRepository } from '../repositories/inventory.repository';
@@ -89,6 +90,8 @@ export class InventoryService {
       id: entity.id,
       name: entity.name,
       locationCode: entity.locationCode,
+      storeId: entity.storeId ?? null,
+      isActive: entity.isActive ?? true,
       createdAt: entity.createdAt,
     };
   }
@@ -148,11 +151,59 @@ export class InventoryService {
       throw new ConflictException(`انباری با نام ${dto.name} قبلاً ثبت شده است.`);
     }
 
+    if (dto.storeId !== undefined) {
+      await this.assertStoreExists(tenantId, dto.storeId);
+    }
+
     const created = await this.inventoryRepository.createWarehouse(tenantId, {
       name: dto.name,
       locationCode: dto.locationCode,
+      storeId: dto.storeId ?? null,
     });
     return this.toWarehouseResponse(created);
+  }
+
+  private async assertStoreExists(tenantId: string, storeId: number): Promise<void> {
+    if (!(await this.inventoryRepository.findStoreById(tenantId, storeId))) {
+      throw new NotFoundException(`فروشگاه با شناسه ${storeId} یافت نشد.`);
+    }
+  }
+
+  /** Renames, regroups or (de)activates a warehouse. A warehouse that still holds stock cannot be deactivated. */
+  async updateWarehouse(
+    tenantId: string,
+    id: number,
+    dto: UpdateWarehouseDto,
+  ): Promise<WarehouseResponseDto> {
+    const warehouse = await this.inventoryRepository.findWarehouseById(tenantId, id);
+    if (!warehouse) {
+      throw new NotFoundException(`انبار با شناسه ${id} یافت نشد.`);
+    }
+    if (dto.name !== undefined && dto.name !== warehouse.name) {
+      const clash = await this.inventoryRepository.findWarehouseByName(tenantId, dto.name);
+      if (clash && clash.id !== id) {
+        throw new ConflictException(`انباری با نام ${dto.name} قبلاً ثبت شده است.`);
+      }
+    }
+    if (dto.storeId !== undefined) {
+      await this.assertStoreExists(tenantId, dto.storeId);
+    }
+    if (dto.isActive === false && warehouse.isActive !== false) {
+      const open = await this.inventoryRepository.openQuantityInWarehouse(tenantId, id);
+      if (open > 0) {
+        throw new ConflictException(
+          'این انبار هنوز موجودی دارد؛ ابتدا موجودی را به انبار دیگری منتقل کنید.',
+        );
+      }
+    }
+    await this.inventoryRepository.updateWarehouse(tenantId, id, {
+      ...(dto.name !== undefined ? { name: dto.name } : {}),
+      ...(dto.locationCode !== undefined ? { locationCode: dto.locationCode } : {}),
+      ...(dto.storeId !== undefined ? { storeId: dto.storeId } : {}),
+      ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+    });
+    const updated = await this.inventoryRepository.findWarehouseById(tenantId, id);
+    return this.toWarehouseResponse(updated as WarehouseEntity);
   }
 
   async listWarehouses(tenantId: string): Promise<WarehouseResponseDto[]> {
@@ -575,6 +626,9 @@ export class InventoryService {
     }
     if (error instanceof WarehouseMissingError) {
       throw new NotFoundException(error.message);
+    }
+    if (error instanceof WarehouseInactiveError) {
+      throw new BadRequestException(error.message);
     }
     if (error instanceof InsufficientStockError) {
       throw new BadRequestException(error.message);
