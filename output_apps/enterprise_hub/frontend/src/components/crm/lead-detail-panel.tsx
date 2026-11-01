@@ -12,6 +12,9 @@ import {
   Send,
   StickyNote,
   UserRound,
+  Pencil,
+  TriangleAlert,
+  Wand2,
   X,
 } from "lucide-react";
 
@@ -39,9 +42,11 @@ import {
   addContactRecord,
   addLeadNote,
   listContactRecords,
+  updateLead,
   updateLeadStage,
 } from "@/lib/api/crm-client";
 import { ApiClientError } from "@/lib/api/http-client";
+import { checkParty } from "@/lib/crm-party";
 import { formatPersianDate, formatRial } from "@/lib/format";
 import {
   CONTACT_CHANNEL_LABELS,
@@ -51,6 +56,7 @@ import {
   PipelineStage,
   type ContactMessage,
   type Lead,
+  type UpdateLeadDto,
 } from "@/types/crm";
 
 interface LeadDetailPanelProps {
@@ -85,6 +91,31 @@ export function LeadDetailPanel({
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [isSavingContact, setIsSavingContact] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const party = checkParty(lead);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function saveEdit(payload: UpdateLeadDto) {
+    setIsSavingEdit(true);
+    setErrorMessage(null);
+    try {
+      const updated = await updateLead(lead.id, payload);
+      onUpdated(updated);
+      setEditing(false);
+    } catch (error) {
+      setErrorMessage(extractErrorMessages(error).join(" | "));
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
 
   const [note, setNote] = useState("");
   const [subject, setSubject] = useState("");
@@ -179,12 +210,25 @@ export function LeadDetailPanel({
     .filter(Boolean);
 
   return (
-    <Card className="h-full">
+    <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
+      <button
+        type="button"
+        aria-label="بستن"
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+      />
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-label={`جزئیات ${lead.fullName}`}
+        className="relative h-full w-full max-w-md overflow-y-auto rounded-none"
+      >
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1">
             <CardTitle className="flex items-center gap-2">
               <UserRound className="size-4 text-indigo-500" />
+              <span className="text-xs font-normal text-muted-foreground">شخص تماس:</span>
               {lead.fullName}
             </CardTitle>
             <CardDescription className="flex flex-wrap items-center gap-3">
@@ -198,14 +242,22 @@ export function LeadDetailPanel({
                   {lead.phone}
                 </span>
               )}
-              {lead.company && (
-                <span className="flex items-center gap-1">
-                  <Building2 className="size-3.5" />
-                  {lead.company}
-                </span>
-              )}
+              <span className="flex items-center gap-1">
+                <Building2 className="size-3.5" />
+                شرکت: {lead.company ?? "—"}
+              </span>
             </CardDescription>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setEditing((v) => !v)}
+            title="ویرایش"
+            aria-pressed={editing}
+          >
+            <Pencil />
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -239,6 +291,38 @@ export function LeadDetailPanel({
           </Alert>
         )}
 
+        {party.status !== "ok" && (
+          <Alert>
+            <TriangleAlert />
+            <AlertTitle>نیاز به بررسی نام و شرکت</AlertTitle>
+            <AlertDescription>
+              <span>{party.reason}</span>
+              {party.status === "repairable" && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 self-start"
+                  disabled={isSavingEdit}
+                  onClick={() => void saveEdit(party.fix)}
+                >
+                  <Wand2 />
+                  جداسازی: شرکت «{party.fix.company}»، شخص «{party.fix.fullName}»
+                </Button>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {editing && (
+          <LeadEditForm
+            lead={lead}
+            saving={isSavingEdit}
+            onCancel={() => setEditing(false)}
+            onSave={(payload) => void saveEdit(payload)}
+          />
+        )}
+
         {/* انتقال مرحله */}
         <div className="flex flex-col gap-2">
           <Label>مرحله فروش</Label>
@@ -250,7 +334,9 @@ export function LeadDetailPanel({
               }
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="انتخاب مرحله" />
+                <SelectValue placeholder="انتخاب مرحله">
+                  {PIPELINE_STAGE_LABELS[lead.pipelineStage]}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {PIPELINE_STAGE_ORDER.map((stage) => (
@@ -390,7 +476,7 @@ export function LeadDetailPanel({
                 }
               >
                 <SelectTrigger size="sm">
-                  <SelectValue placeholder="کانال" />
+                  <SelectValue placeholder="کانال">{CONTACT_CHANNEL_LABELS[channel]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {Object.values(ContactChannel).map((item) => (
@@ -416,6 +502,65 @@ export function LeadDetailPanel({
           </form>
         </div>
       </CardContent>
-    </Card>
+      </Card>
+    </div>
+  );
+}
+
+function LeadEditForm({
+  lead,
+  saving,
+  onCancel,
+  onSave,
+}: {
+  lead: Lead;
+  saving: boolean;
+  onCancel: () => void;
+  onSave: (payload: UpdateLeadDto) => void;
+}) {
+  const [fullName, setFullName] = useState(lead.fullName);
+  const [company, setCompany] = useState(lead.company ?? "");
+  const [email, setEmail] = useState(lead.email);
+  const [phone, setPhone] = useState(lead.phone ?? "");
+  const [owner, setOwner] = useState(lead.owner ?? "");
+  const [value, setValue] = useState(String(lead.estimatedValue ?? 0));
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const amount = Number(value.replace(/[^\d.]/g, ""));
+    onSave({
+      fullName: fullName.trim(),
+      company: company.trim() || undefined,
+      email: email.trim(),
+      phone: phone.trim() || undefined,
+      owner: owner.trim() || undefined,
+      estimatedValue: Number.isFinite(amount) ? amount : 0,
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-2 rounded-lg border p-3">
+      <Label>شرکت</Label>
+      <Input value={company} onChange={(e) => setCompany(e.target.value)} maxLength={255} />
+      <Label>شخص تماس</Label>
+      <Input value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={255} required />
+      <Label>ایمیل</Label>
+      <Input dir="ltr" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      <Label>تلفن</Label>
+      <Input dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={32} />
+      <Label>کارشناس</Label>
+      <Input value={owner} onChange={(e) => setOwner(e.target.value)} maxLength={255} />
+      <Label>ارزش تخمینی (ریال)</Label>
+      <Input dir="ltr" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} />
+      <div className="flex gap-2 pt-1">
+        <Button type="submit" size="sm" disabled={saving || !fullName.trim() || !email.trim()}>
+          {saving && <Loader2Icon className="animate-spin" />}
+          ذخیره
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onCancel}>
+          انصراف
+        </Button>
+      </div>
+    </form>
   );
 }

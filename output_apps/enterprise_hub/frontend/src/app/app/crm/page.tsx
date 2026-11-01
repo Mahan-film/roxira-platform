@@ -217,8 +217,8 @@ function CrmPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>نام</TableHead>
                     <TableHead>شرکت</TableHead>
+                    <TableHead>شخص تماس</TableHead>
                     <TableHead>تلفن</TableHead>
                     <TableHead>مرحله</TableHead>
                     <TableHead>ارزش</TableHead>
@@ -240,8 +240,8 @@ function CrmPage() {
                       className="cursor-pointer"
                       onClick={() => setSelected(lead)}
                     >
-                      <TableCell className="font-medium">{lead.fullName}</TableCell>
-                      <TableCell>{lead.company ?? "—"}</TableCell>
+                      <TableCell className="font-medium">{lead.company ?? "—"}</TableCell>
+                      <TableCell>{lead.fullName}</TableCell>
                       <TableCell dir="ltr" className="text-right font-mono text-xs">
                         {lead.phone ?? "—"}
                       </TableCell>
