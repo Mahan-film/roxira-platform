@@ -93,6 +93,16 @@ export class JournalEntryLineEntity {
   })
   partyCode: string | null;
 
+  /** Floating detail account, cost centre and project centre (fin_dimensions ids), all optional. */
+  @Column({ type: 'integer', name: 'detail_id', nullable: true })
+  detailId: number | null;
+
+  @Column({ type: 'integer', name: 'cost_center_id', nullable: true })
+  costCenterId: number | null;
+
+  @Column({ type: 'integer', name: 'project_id', nullable: true })
+  projectId: number | null;
+
   @Column({ type: 'text', nullable: true })
   description: string | null;
 }

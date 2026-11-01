@@ -133,3 +133,10 @@ export enum PettyCashStatus {
   POSTED = 'POSTED',
   VOID = 'VOID',
 }
+
+/** Floating detail (tafsili shenavar), cost centre and project centre share one table. */
+export enum DimensionKind {
+  DETAIL = 'DETAIL',
+  COST_CENTER = 'COST_CENTER',
+  PROJECT = 'PROJECT',
+}

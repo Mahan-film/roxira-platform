@@ -1,3 +1,7 @@
+import { DimensionController } from './controllers/dimension.controller';
+import { DimensionEntity } from './entities/dimension.entity';
+import { DimensionRepository } from './repositories/dimension.repository';
+import { DimensionService } from './services/dimension.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CurrencyModule } from '../currency/currency.module';
@@ -42,15 +46,18 @@ import { ReportExportService } from './services/report-export.service';
       JournalEntryLineEntity,
       PeriodLockEntity,
       FiscalYearEntity,
+      DimensionEntity,
       PettyCashFundEntity,
       PettyCashTransactionEntity,
     ]),
     CurrencyModule,
   ],
-  controllers: [AccountingController, FiscalYearController, PettyCashController, ReportsController],
+  controllers: [AccountingController, DimensionController, FiscalYearController, PettyCashController, ReportsController],
   providers: [
     AccountingService,
     AccountingRepository,
+    DimensionRepository,
+    DimensionService,
     ChartTemplateService,
     FinancialReportsService,
     FiscalYearRepository,

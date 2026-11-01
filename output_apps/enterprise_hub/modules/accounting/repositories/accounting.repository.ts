@@ -18,6 +18,7 @@ import { minorToDecimal } from '../money';
 import {
   DuplicateEntryNumberError,
   LockedPeriodError,
+  UnknownDimensionError,
 } from '../exceptions/ledger.exceptions';
 
 /** Advisory-lock namespace shared by posting (shared) and period lock/unlock (exclusive). */
@@ -40,6 +41,10 @@ export interface JournalLineInput {
   fxRate?: string | null;
   /** کد طرف حساب/تفضیلی (اختیاری). */
   partyCode?: string | null;
+  /** Dimension codes; the repository resolves them to ids inside the write transaction. */
+  detailCode?: string | null;
+  costCenterCode?: string | null;
+  projectCode?: string | null;
 }
 
 /**
@@ -439,13 +444,51 @@ export class AccountingRepository {
     await this.insertLines(tenantId, entryId, lineInputs, manager);
   }
 
+  /** Maps `KIND:code` to the id of an active dimension; an unknown code throws UnknownDimensionError. */
+  private async resolveDimensions(
+    tenantId: string,
+    lineInputs: JournalLineInput[],
+    manager: EntityManager,
+  ): Promise<Map<string, number>> {
+    const wanted = new Set<string>();
+    for (const line of lineInputs) {
+      if (line.detailCode) wanted.add(`DETAIL:${line.detailCode}`);
+      if (line.costCenterCode) wanted.add(`COST_CENTER:${line.costCenterCode}`);
+      if (line.projectCode) wanted.add(`PROJECT:${line.projectCode}`);
+    }
+    const ids = new Map<string, number>();
+    if (wanted.size === 0) {
+      return ids;
+    }
+    await manager.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+    const rows: Array<{ id: number; key: string }> = await manager.query(
+      `SELECT id, kind || ':' || code AS key FROM fin_dimensions
+        WHERE tenant_id = $1 AND active AND kind || ':' || code = ANY($2)`,
+      [tenantId, Array.from(wanted)],
+    );
+    for (const row of rows) {
+      ids.set(row.key, row.id);
+    }
+    for (const key of wanted) {
+      if (!ids.has(key)) {
+        const [kind, ...code] = key.split(':');
+        throw new UnknownDimensionError(kind, code.join(':'));
+      }
+    }
+    return ids;
+  }
+
   private async insertLines(
     tenantId: string,
     entryId: number,
     lineInputs: JournalLineInput[],
     manager: EntityManager,
   ): Promise<void> {
+    const ids = await this.resolveDimensions(tenantId, lineInputs, manager);
     const lineRows = lineInputs.map((line) => ({
+      detailId: line.detailCode ? ids.get(`DETAIL:${line.detailCode}`)! : null,
+      costCenterId: line.costCenterCode ? ids.get(`COST_CENTER:${line.costCenterCode}`)! : null,
+      projectId: line.projectCode ? ids.get(`PROJECT:${line.projectCode}`)! : null,
       tenantId,
       journalEntryId: entryId,
       accountId: line.accountId,

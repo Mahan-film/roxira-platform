@@ -30,6 +30,7 @@ import {
   DuplicateEntryNumberError,
   LockedPeriodError,
   PeriodLockedException,
+  UnknownDimensionError,
 } from '../exceptions/ledger.exceptions';
 import {
   LockPeriodDto,
@@ -115,6 +116,9 @@ interface NormalisedJournalLine {
   amountFx: string | null;
   fxRate: string | null;
   partyCode: string | null;
+  detailCode: string | null;
+  costCenterCode: string | null;
+  projectCode: string | null;
 }
 
 /** Minor units as a JS number for consumers that need one (base-currency conversion, banking). */
@@ -298,6 +302,9 @@ export class AccountingService {
       amountFx: amountFx != null ? scaledToDecimal(amountFx, FX_SCALE) : null,
       fxRate: fxRate != null ? scaledToDecimal(fxRate, FX_SCALE) : null,
       partyCode: line.partyCode?.trim() || null,
+      detailCode: line.detailCode?.trim() || null,
+      costCenterCode: line.costCenterCode?.trim() || null,
+      projectCode: line.projectCode?.trim() || null,
     };
   }
 
@@ -626,6 +633,9 @@ export class AccountingService {
       amountFx: line.amountFx,
       fxRate: line.fxRate,
       partyCode: line.partyCode,
+      detailCode: line.detailCode,
+      costCenterCode: line.costCenterCode,
+      projectCode: line.projectCode,
     }));
   }
 
@@ -679,6 +689,9 @@ export class AccountingService {
           `Posting refused: ${error.date} is inside a locked accounting period.`,
         );
       }
+      if (error instanceof UnknownDimensionError) {
+        this.mapPeriodLock(error);
+      }
       // A concurrent writer won the (tenant, number) unique index; reported, not thrown by PG.
       if (error instanceof DuplicateEntryNumberError) {
         throw new ConflictException(
@@ -692,6 +705,9 @@ export class AccountingService {
   }
 
   private mapPeriodLock(error: unknown): never {
+    if (error instanceof UnknownDimensionError) {
+      throw new BadRequestException(`تفصیلی یا مرکز ${error.code} (${error.kind}) تعریف نشده یا غیرفعال است.`);
+    }
     if (error instanceof LockedPeriodError) {
       throw new PeriodLockedException(
         `Posting refused: ${error.date} is inside a locked accounting period.`,
@@ -748,13 +764,17 @@ export class AccountingService {
         this.mapPeriodLock(error);
       }
       const lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
-      await this.accountingRepository.replaceEntryContent(
-        tenantId,
-        id,
-        { entryNumber: dto.entryNumber, date, description: dto.description },
-        lineInputs,
-        manager,
-      );
+      try {
+        await this.accountingRepository.replaceEntryContent(
+          tenantId,
+          id,
+          { entryNumber: dto.entryNumber, date, description: dto.description },
+          lineInputs,
+          manager,
+        );
+      } catch (error) {
+        this.mapPeriodLock(error);
+      }
       const saved = await this.accountingRepository.findEntryById(tenantId, id, manager);
       return this.toEntryDto(saved as JournalEntryEntity);
     });

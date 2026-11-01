@@ -80,6 +80,24 @@ export class JournalEntryLineDto {
   @MaxLength(64)
   partyCode?: string;
 
+  @ApiPropertyOptional({ description: 'کد تفصیلی شناور (باید قبلاً تعریف شده باشد)', example: 'P-1001' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  detailCode?: string;
+
+  @ApiPropertyOptional({ description: 'کد مرکز هزینه', example: 'CC-100' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  costCenterCode?: string;
+
+  @ApiPropertyOptional({ description: 'کد مرکز پروژه', example: 'PR-7' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  projectCode?: string;
+
   @ApiPropertyOptional({ description: 'شرح سطر', example: 'دریافت نقدی بابت فروش' })
   @IsOptional()
   @IsString()

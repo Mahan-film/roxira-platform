@@ -161,6 +161,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/accounting/dimensions/ (DimensionController.list)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/dimensions/:kind/balances (DimensionController.balances)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/accounting/fiscal-years (FiscalYearController.list)": {
     "policy": "accounting:read",
     "owner": true,
@@ -1530,6 +1552,17 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/chart-templates/:key/apply (FiscalYearController.applyTemplate)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/dimensions/ (DimensionController.create)": {
     "policy": "accounting:create",
     "owner": true,
     "admin": true,
