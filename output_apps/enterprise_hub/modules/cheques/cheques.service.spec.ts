@@ -26,7 +26,7 @@ function build() {
   const failNextPosting = { on: false };
 
   const repo = {
-    async runInTransaction<T>(work: (m: unknown) => Promise<T>): Promise<T> {
+    async runInTransaction<T>(_tenantId: string, work: (m: unknown) => Promise<T>): Promise<T> {
       const snapshot = [cheques.map((c) => ({ ...c })), events.map((e) => ({ ...e })), [...entries]] as const;
       try {
         return await work({});

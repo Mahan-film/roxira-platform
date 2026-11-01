@@ -89,7 +89,7 @@ export class ChequesService {
     await this.ensureAccounts(tenantId);
 
     try {
-      const saved = await this.chequesRepository.runInTransaction(async (manager) => {
+      const saved = await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
         const cheque = await this.chequesRepository.create(
           tenantId,
           {
@@ -129,7 +129,7 @@ export class ChequesService {
     await this.ensureAccounts(tenantId);
     const eventDate = dto.eventDate ? dateOnly(dto.eventDate) : todayUtc();
 
-    await this.chequesRepository.runInTransaction(async (manager) => {
+    await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
       const cheque = await this.chequesRepository.findByIdForUpdate(tenantId, id, manager);
       if (!cheque) {
         throw new NotFoundException('چک یافت نشد.');

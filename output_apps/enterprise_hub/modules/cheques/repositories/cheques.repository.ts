@@ -1,15 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
   Between,
-  DataSource,
   EntityManager,
   FindOptionsWhere,
   In,
   LessThanOrEqual,
   MoreThanOrEqual,
-  Repository,
 } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { ChequeEventEntity } from '../entities/cheque-event.entity';
 import { ChequeEntity } from '../entities/cheque.entity';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
@@ -46,69 +44,66 @@ export interface ChequeEventInput {
 }
 
 /**
- * The only access point to `fin_cheques` and `fin_cheque_events`. Every read and
- * write carries `tenantId` so one tenant can never see or change another's rows
- * (AGENTS.md §4). Write methods take the transaction manager of the lifecycle move.
+ * The only access point to `fin_cheques` and `fin_cheque_events`. Both tables have FORCE row-level
+ * security, so every call runs in a TenantScope transaction (`app.tenant_id`), and every query also
+ * filters by `tenantId` itself (AGENTS.md §4). Methods that take a `manager` run inside the
+ * transaction opened by `runInTransaction`, which has already set the tenant.
  */
 @Injectable()
 export class ChequesRepository {
-  constructor(
-    @InjectRepository(ChequeEntity)
-    private readonly cheques: Repository<ChequeEntity>,
-    @InjectRepository(ChequeEventEntity)
-    private readonly events: Repository<ChequeEventEntity>,
-    private readonly dataSource: DataSource,
-  ) {}
+  constructor(private readonly scope: TenantScope) {}
 
-  async runInTransaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
-    return this.dataSource.transaction(work);
+  runInTransaction<T>(tenantId: string, work: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return this.scope.run(tenantId, work);
   }
 
-  private chequeRepo(manager?: EntityManager): Repository<ChequeEntity> {
-    return manager ? manager.getRepository(ChequeEntity) : this.cheques;
+  private within<T>(tenantId: string, manager: EntityManager | undefined, work: (m: EntityManager) => Promise<T>): Promise<T> {
+    return manager ? work(manager) : this.scope.run(tenantId, work);
   }
 
-  private eventRepo(manager?: EntityManager): Repository<ChequeEventEntity> {
-    return manager ? manager.getRepository(ChequeEventEntity) : this.events;
+  create(tenantId: string, input: ChequeInput, manager?: EntityManager): Promise<ChequeEntity> {
+    return this.within(tenantId, manager, (m) => {
+      const repo = m.getRepository(ChequeEntity);
+      return repo.save(repo.create({ ...input, tenantId, status: ChequeStatus.REGISTERED, spentToName: null }));
+    });
   }
 
-  async create(tenantId: string, input: ChequeInput, manager?: EntityManager): Promise<ChequeEntity> {
-    const repo = this.chequeRepo(manager);
-    return repo.save(repo.create({ ...input, tenantId, status: ChequeStatus.REGISTERED, spentToName: null }));
-  }
-
-  async findById(tenantId: string, id: number): Promise<ChequeEntity | null> {
-    return this.cheques.findOne({ where: { id, tenantId } });
+  findById(tenantId: string, id: number): Promise<ChequeEntity | null> {
+    return this.scope.run(tenantId, (m) => m.getRepository(ChequeEntity).findOne({ where: { id, tenantId } }));
   }
 
   /** Row-locked read inside a transaction, so two concurrent moves cannot both pass the state check. */
-  async findByIdForUpdate(tenantId: string, id: number, manager: EntityManager): Promise<ChequeEntity | null> {
+  findByIdForUpdate(tenantId: string, id: number, manager: EntityManager): Promise<ChequeEntity | null> {
     return manager.getRepository(ChequeEntity).findOne({
       where: { id, tenantId },
       lock: { mode: 'pessimistic_write' },
     });
   }
 
-  async findBySayadNumber(tenantId: string, sayadNumber: string): Promise<ChequeEntity | null> {
-    return this.cheques.findOne({ where: { sayadNumber, tenantId } });
+  findBySayadNumber(tenantId: string, sayadNumber: string): Promise<ChequeEntity | null> {
+    return this.scope.run(tenantId, (m) => m.getRepository(ChequeEntity).findOne({ where: { sayadNumber, tenantId } }));
   }
 
-  async list(tenantId: string, filter: ChequeFilter = {}): Promise<ChequeEntity[]> {
+  list(tenantId: string, filter: ChequeFilter = {}): Promise<ChequeEntity[]> {
     const where: FindOptionsWhere<ChequeEntity> = { tenantId };
     if (filter.direction) where.direction = filter.direction;
     if (filter.status) where.status = filter.status;
     if (filter.dueFrom && filter.dueTo) where.dueDate = Between(filter.dueFrom, filter.dueTo);
     else if (filter.dueFrom) where.dueDate = MoreThanOrEqual(filter.dueFrom);
     else if (filter.dueTo) where.dueDate = LessThanOrEqual(filter.dueTo);
-    return this.cheques.find({ where, order: { dueDate: 'ASC', id: 'ASC' } });
+    return this.scope.run(tenantId, (m) =>
+      m.getRepository(ChequeEntity).find({ where, order: { dueDate: 'ASC', id: 'ASC' } }),
+    );
   }
 
   /** Cheques still waiting for a due-date action whose due date is on or before `dueTo`. */
-  async listOpenDueBy(tenantId: string, statuses: ChequeStatus[], dueTo: string): Promise<ChequeEntity[]> {
-    return this.cheques.find({
-      where: { tenantId, status: In(statuses), dueDate: LessThanOrEqual(dueTo) },
-      order: { dueDate: 'ASC', id: 'ASC' },
-    });
+  listOpenDueBy(tenantId: string, statuses: ChequeStatus[], dueTo: string): Promise<ChequeEntity[]> {
+    return this.scope.run(tenantId, (m) =>
+      m.getRepository(ChequeEntity).find({
+        where: { tenantId, status: In(statuses), dueDate: LessThanOrEqual(dueTo) },
+        order: { dueDate: 'ASC', id: 'ASC' },
+      }),
+    );
   }
 
   async updateStatus(
@@ -120,12 +115,16 @@ export class ChequesRepository {
     await manager.getRepository(ChequeEntity).update({ id, tenantId }, patch);
   }
 
-  async addEvent(tenantId: string, input: ChequeEventInput, manager?: EntityManager): Promise<ChequeEventEntity> {
-    const repo = this.eventRepo(manager);
-    return repo.save(repo.create({ ...input, tenantId }));
+  addEvent(tenantId: string, input: ChequeEventInput, manager?: EntityManager): Promise<ChequeEventEntity> {
+    return this.within(tenantId, manager, (m) => {
+      const repo = m.getRepository(ChequeEventEntity);
+      return repo.save(repo.create({ ...input, tenantId }));
+    });
   }
 
-  async listEvents(tenantId: string, chequeId: number): Promise<ChequeEventEntity[]> {
-    return this.events.find({ where: { tenantId, chequeId }, order: { id: 'ASC' } });
+  listEvents(tenantId: string, chequeId: number): Promise<ChequeEventEntity[]> {
+    return this.scope.run(tenantId, (m) =>
+      m.getRepository(ChequeEventEntity).find({ where: { tenantId, chequeId }, order: { id: 'ASC' } }),
+    );
   }
 }

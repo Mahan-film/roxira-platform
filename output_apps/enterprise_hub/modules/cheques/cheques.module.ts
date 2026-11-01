@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
 import { ChequesController } from './controllers/cheques.controller';
 import { ChequeEventEntity } from './entities/cheque-event.entity';
@@ -16,7 +17,7 @@ import { ChequesService } from './services/cheques.service';
 @Module({
   imports: [TypeOrmModule.forFeature([ChequeEntity, ChequeEventEntity]), AccountingModule],
   controllers: [ChequesController],
-  providers: [ChequesService, ChequesRepository],
+  providers: [ChequesService, ChequesRepository, TenantScope],
   exports: [ChequesService],
 })
 export class ChequesModule {}
