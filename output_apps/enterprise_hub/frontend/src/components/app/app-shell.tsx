@@ -24,6 +24,8 @@ import {
   X,
   Contact,
   Landmark,
+  Building2,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +43,7 @@ import { cn } from "@/lib/utils";
 import type { AccessModuleKey } from "@/types/access";
 
 interface NavItem {
+  group: string;
   href: string;
   label: string;
   icon: LucideIcon;
@@ -52,26 +55,37 @@ interface NavItem {
   platformAdmin?: boolean;
 }
 
+const GROUP_OVERVIEW = "نمای کلی";
+const GROUP_SALES = "فروش";
+const GROUP_FINANCE = "مالی";
+const GROUP_OPS = "عملیات";
+const GROUP_DATA = "داده";
+const GROUP_ADMIN = "مدیریت";
+
 const NAV_ITEMS: NavItem[] = [
-  { href: "/app", label: "داشبورد", icon: LayoutDashboard, nested: false },
-  { href: "/app/crm", label: "مشتریان (CRM)", icon: Contact, nested: true, module: "crm" },
-  { href: "/app/hr", label: "کارکنان (HR)", icon: UsersRound, nested: true, module: "hr" },
-  { href: "/app/inventory", label: "کالا و انبار", icon: Warehouse, nested: true, module: "inventory" },
-  { href: "/app/accounting", label: "حساب‌ها", icon: BookOpenCheck, nested: true, module: "accounting" },
-  { href: "/app/cheques", label: "چک‌ها", icon: Banknote, nested: true, module: "cheques" },
-  { href: "/app/invoicing", label: "صورتحساب‌ها", icon: ReceiptText, nested: true, module: "invoicing" },
-  { href: "/app/tax", label: "مالیات و مودیان", icon: Landmark, nested: true, module: "tax" },
-  { href: "/app/import", label: "ورود داده (import)", icon: FileUp, nested: true, module: "data_import" },
-  { href: "/app/assistant", label: "دستیار هوشمند", icon: MessageSquareText, nested: false, module: "assistant" },
-  { href: "/app/settings/members", label: "اعضا و نقش‌ها", icon: Settings, nested: true, module: "members" },
-  { href: "/app/settings/modules", label: "ماژول‌ها", icon: Puzzle, nested: true, module: "members" },
-  { href: "/app/settings/audit", label: "گزارش رخدادها", icon: ClipboardList, nested: true, module: "audit" },
-  { href: "/app/settings/security", label: "امنیت حساب", icon: ShieldCheck, nested: true },
-  { href: "/app/admin/entitlements", label: "ماژول‌های مشتریان", icon: KeyRound, nested: true, platformAdmin: true },
+  { group: GROUP_OVERVIEW, href: "/app", label: "داشبورد", icon: LayoutDashboard, nested: false },
+  { group: GROUP_OVERVIEW, href: "/app/assistant", label: "دستیار هوشمند", icon: MessageSquareText, nested: false, module: "assistant" },
+  { group: GROUP_SALES, href: "/app/crm", label: "مشتریان (CRM)", icon: Contact, nested: true, module: "crm" },
+  { group: GROUP_SALES, href: "/app/invoicing", label: "صورتحساب‌ها", icon: ReceiptText, nested: true, module: "invoicing" },
+  { group: GROUP_FINANCE, href: "/app/accounting", label: "حساب‌ها", icon: BookOpenCheck, nested: true, module: "accounting" },
+  { group: GROUP_FINANCE, href: "/app/accounting/bank", label: "بانک و تطبیق", icon: Building2, nested: true, module: "banking" },
+  { group: GROUP_FINANCE, href: "/app/cheques", label: "چک‌ها", icon: Banknote, nested: true, module: "cheques" },
+  { group: GROUP_FINANCE, href: "/app/tax", label: "مالیات و مودیان", icon: Landmark, nested: true, module: "tax" },
+  { group: GROUP_OPS, href: "/app/hr", label: "کارکنان (HR)", icon: UsersRound, nested: true, module: "hr" },
+  { group: GROUP_OPS, href: "/app/inventory", label: "کالا و انبار", icon: Warehouse, nested: true, module: "inventory" },
+  { group: GROUP_OPS, href: "/damages", label: "خسارت", icon: ShieldAlert, nested: true, module: "damages" },
+  { group: GROUP_DATA, href: "/app/import", label: "ورود داده (import)", icon: FileUp, nested: true, module: "data_import" },
+  { group: GROUP_ADMIN, href: "/app/settings/members", label: "اعضا و نقش‌ها", icon: Settings, nested: true, module: "members" },
+  { group: GROUP_ADMIN, href: "/app/settings/modules", label: "ماژول‌ها", icon: Puzzle, nested: true, module: "members" },
+  { group: GROUP_ADMIN, href: "/app/settings/audit", label: "گزارش رخدادها", icon: ClipboardList, nested: true, module: "audit" },
+  { group: GROUP_ADMIN, href: "/app/settings/security", label: "امنیت حساب", icon: ShieldCheck, nested: true },
+  { group: GROUP_ADMIN, href: "/app/admin/entitlements", label: "ماژول‌های مشتریان", icon: KeyRound, nested: true, platformAdmin: true },
 ];
 
 function isActive(pathname: string, item: NavItem): boolean {
   if (pathname === item.href) return true;
+  // The bank page lives under /app/accounting but has its own entry.
+  if (item.href === "/app/accounting" && pathname.startsWith("/app/accounting/bank")) return false;
   return item.nested && pathname.startsWith(item.href + "/");
 }
 
@@ -112,25 +126,32 @@ function SidebarContent({
 
       <OrgSwitcher />
       <nav aria-label="منوی نرم‌افزار" className="flex flex-1 flex-col gap-1">
-        {navItems.map((item) => {
+        {navItems.map((item, index) => {
           const active = isActive(pathname, item);
           const Icon = item.icon;
+          const startsGroup = index === 0 || navItems[index - 1].group !== item.group;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors",
-                active
-                  ? "bg-indigo-500/15 font-bold text-indigo-300 ring-1 ring-indigo-500/30"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            <div key={item.href} className="flex flex-col gap-1">
+              {startsGroup && (
+                <span className="px-3 pt-3 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground/70">
+                  {item.group}
+                </span>
               )}
-            >
-              <Icon className="size-4 shrink-0" aria-hidden="true" />
-              {item.label}
-            </Link>
+              <Link
+                href={item.href}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                  active
+                    ? "bg-indigo-500/15 font-bold text-indigo-300 ring-1 ring-indigo-500/30"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4 shrink-0" aria-hidden="true" />
+                {item.label}
+              </Link>
+            </div>
           );
         })}
       </nav>
