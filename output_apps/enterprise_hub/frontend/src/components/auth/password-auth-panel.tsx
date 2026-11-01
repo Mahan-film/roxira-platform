@@ -98,6 +98,7 @@ export function PasswordAuthPanel({ locale, onSession, initialMode = "login", in
       if (!EMAIL_RE.test(email.trim())) return setError(t.errEmail);
       if (username.trim() && !USERNAME_RE.test(username.trim().toLowerCase())) return setError(t.errUsername);
       if (password.length < MIN_PASSWORD) return setError(t.errPasswordShort);
+      if (locale === "fa" && !inviteToken && organization.trim().length < 2) return setError(t.errOrganization);
     }
 
     setLoading(true);

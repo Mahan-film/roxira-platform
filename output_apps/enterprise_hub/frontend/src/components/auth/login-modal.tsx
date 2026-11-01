@@ -306,10 +306,14 @@ export function LoginModal({
         setError(["شماره همراه باید با فرمت 09xxxxxxxxx و ۱۱ رقم باشد."]);
         return;
       }
+      if (isEnterprise && authMode === "signup" && organizationName.trim().length < 2) {
+        setError(["نام مجموعه را وارد کنید."]);
+        return;
+      }
       setPhone(normalized);
       await requestCode(normalized);
     },
-    [phone, requestCode],
+    [authMode, isEnterprise, organizationName, phone, requestCode],
   );
 
   /** Map a Smart Judge session (OTP or e-mail login) to the app session and close. */
@@ -611,21 +615,21 @@ export function LoginModal({
                 </p>
               </div>
 
-              {isEnterprise && (
+              {isEnterprise && authMode === "signup" && (
                 <div className="space-y-2">
                   <Label htmlFor="auth-organization" className="text-slate-300">
-                    نام سازمان (برای ثبت سازمان جدید)
+                    نام مجموعه (سازمان، شرکت یا فروشگاه)
                   </Label>
                   <Input
                     id="auth-organization"
                     value={organizationName}
                     onChange={(event) => setOrganizationName(event.target.value)}
-                    placeholder="مثلاً شرکت توسعه فناوری پارس"
+                    placeholder="مثلاً فروشگاه پارس"
                     maxLength={150}
                     className="h-11 border-white/10 bg-black/30 text-slate-100 placeholder:text-slate-600"
                   />
                   <p className="text-xs text-slate-400">
-                    اختیاری؛ تنها اگر برای نخستین بار سازمانی ثبت می‌کنید آن را وارد کنید.
+                    حساب شما با همین نام ساخته می‌شود. اگر کارمند هستید، از لینک دعوت ثبت‌نام کنید.
                   </p>
                 </div>
               )}

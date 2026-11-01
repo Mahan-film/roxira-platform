@@ -11,6 +11,7 @@ export interface PasswordAuthCopy {
   passwordHint: string;
   organization: string;
   organizationHint: string;
+  errOrganization: string;
   login: string;
   signup: string;
   forgotSubmit: string;
@@ -43,8 +44,9 @@ const fa: PasswordAuthCopy = {
   usernameHint: "۳ تا ۳۲ نویسه: حروف انگلیسی کوچک، رقم، نقطه، خط تیره و زیرخط.",
   password: "رمز عبور",
   passwordHint: "حداقل ۱۰ نویسه؛ رمزهای رایج پذیرفته نمی‌شود.",
-  organization: "نام سازمان (اختیاری)",
-  organizationHint: "اگر خالی بگذارید حساب بدون سازمان ساخته می‌شود و بعداً می‌توانید سازمان بسازید یا با دعوت‌نامه عضو شوید.",
+  organization: "نام مجموعه (سازمان، شرکت یا فروشگاه)",
+  errOrganization: "نام مجموعه را وارد کنید.",
+  organizationHint: "حساب شما با همین نام ساخته می‌شود. اگر کارمند هستید، از لینک دعوت ثبت‌نام کنید.",
   login: "ورود",
   signup: "ساخت حساب",
   forgotSubmit: "ارسال پیوند بازیابی",
@@ -79,6 +81,7 @@ const en: PasswordAuthCopy = {
   password: "Password",
   passwordHint: "At least 10 characters; common passwords are rejected.",
   organization: "Organization name (optional)",
+  errOrganization: "",
   organizationHint: "Leave empty to create your account alone; you can create an organization later or join one by invitation.",
   login: "Sign in",
   signup: "Create account",
