@@ -81,6 +81,9 @@ export interface AccountingImportAccountInput {
   accountType: AccountType;
   /** ISO code or IRT / MULTI from the currency normaliser (up to 8 chars). */
   currency?: string;
+  level?: AccountLevel;
+  /** Must already exist (earlier in the same file or before the import). */
+  parentCode?: string;
 }
 
 /** ورودی سطر افتتاحیه از مسیر ورود داده. */
@@ -398,12 +401,20 @@ export class AccountingService {
           `حسابی با کد ${input.code} قبلاً در دفتر کل ثبت شده است.`,
         );
       }
+      if (input.parentCode) {
+        const parent = await this.accountingRepository.findAccountByCode(tenantId, input.parentCode);
+        if (!parent) {
+          throw new BadRequestException(`حساب بالادست ${input.parentCode} یافت نشد.`);
+        }
+      }
       const created = await this.accountingRepository.createAccount(tenantId, {
         code: input.code,
         name: input.name,
         accountType: input.accountType,
         currency: input.currency ?? Currency.IRR,
         balance: '0',
+        level: input.level ?? null,
+        parentCode: input.parentCode ?? null,
       });
       createdIds.push(created.id);
     }
