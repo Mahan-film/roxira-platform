@@ -2,7 +2,8 @@
 """Live team status report: what is happening and what must be done next.
 
   python3 scripts/dev/team_status.py [--no-ssh] [--no-sites] [--out FILE] [--json]
-                                     [--telegram] [--release-stale] [--stale-hours N]
+                                     [--telegram | --telegram-host HOST] [--release-stale]
+                                     [--stale-hours N]
 
 Read-only unless --release-stale is given (that edits GitHub issues). GitHub access is
 REST only (`gh api`), like whoswhat.sh. See docs/COLLABORATION.md "Live status report".
@@ -41,6 +42,7 @@ AGENT_STALE_HOURS = 2.0
 OTHER_STALE_HOURS = 24.0
 TELEGRAM_MAX = 3500
 CLAIM_LABEL = "in-progress"
+REMOTE_NOTIFY_CMD = "python3 /opt/roxira_platform/scripts/ops/notify/notify.py"
 
 
 # ---------------------------------------------------------------- pure helpers
@@ -527,6 +529,29 @@ def send_telegram(text: str) -> bool:
     return bool(mod.send(text))
 
 
+def send_telegram_via_ssh(text: str, host: str) -> bool:
+    """Send through notify.py on HOST (text on stdin); HOST holds the Telegram env. Never raises."""
+    try:
+        res = subprocess.run(
+            [
+                "ssh",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=15",
+                host,
+                REMOTE_NOTIFY_CMD,
+            ],
+            input=text,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return res.returncode == 0
+    except Exception:
+        return False
+
+
 def to_jsonable(data: dict) -> dict:
     d = dict(data)
     d["now"] = data["now"].isoformat()
@@ -540,6 +565,13 @@ def main(argv=None) -> int:
     ap.add_argument("--out", help="also write the report to this file")
     ap.add_argument("--json", action="store_true", help="print JSON instead of Markdown")
     ap.add_argument("--telegram", action="store_true", help="send a short version via notify.py")
+    ap.add_argument(
+        "--telegram-host",
+        default=os.environ.get("ROXIRA_NOTIFY_HOST") or None,
+        metavar="HOST",
+        help="send the short version by running notify.py on HOST over ssh "
+        "(default: env ROXIRA_NOTIFY_HOST)",
+    )
     ap.add_argument("--no-ssh", action="store_true", help="skip the prod autodeploy check")
     ap.add_argument("--no-sites", action="store_true", help="skip HTTP checks")
     ap.add_argument(
@@ -578,8 +610,13 @@ def main(argv=None) -> int:
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             fh.write(text)
-    if args.telegram:
-        ok = send_telegram(render_short(data))
+    if args.telegram or args.telegram_host:
+        short = render_short(data)
+        ok = (
+            send_telegram_via_ssh(short, args.telegram_host)
+            if args.telegram_host
+            else (send_telegram(short))
+        )
         print(
             "telegram: %s" % ("sent" if ok else "not sent (not configured or failed)"),
             file=sys.stderr,

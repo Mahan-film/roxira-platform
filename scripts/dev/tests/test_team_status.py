@@ -130,3 +130,40 @@ def test_short_report_limit():
         "actions": ["x" * 200] * 50,
     }
     assert len(ts.render_short(data)) <= ts.TELEGRAM_MAX
+
+
+def _run_stub(monkeypatch, result=None, exc=None):
+    calls = []
+
+    def fake(cmd, **kw):
+        calls.append((cmd, kw))
+        if exc:
+            raise exc
+        return result
+
+    monkeypatch.setattr(ts.subprocess, "run", fake)
+    return calls
+
+
+def test_send_telegram_via_ssh_success(monkeypatch):
+    import subprocess
+
+    calls = _run_stub(monkeypatch, result=subprocess.CompletedProcess([], 0, "", ""))
+    assert ts.send_telegram_via_ssh("hello", "roxira-prod") is True
+    cmd, kw = calls[0]
+    assert cmd[0] == "ssh" and "roxira-prod" in cmd and cmd[-1] == ts.REMOTE_NOTIFY_CMD
+    assert kw["input"] == "hello" and kw["timeout"] == 60
+
+
+def test_send_telegram_via_ssh_nonzero(monkeypatch):
+    import subprocess
+
+    _run_stub(monkeypatch, result=subprocess.CompletedProcess([], 255, "", "denied"))
+    assert ts.send_telegram_via_ssh("x", "h") is False
+
+
+def test_send_telegram_via_ssh_timeout(monkeypatch):
+    import subprocess
+
+    _run_stub(monkeypatch, exc=subprocess.TimeoutExpired("ssh", 60))
+    assert ts.send_telegram_via_ssh("x", "h") is False
