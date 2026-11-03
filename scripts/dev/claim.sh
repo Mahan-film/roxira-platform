@@ -71,10 +71,10 @@ git -C "$wt" commit -q --allow-empty -m "chore: start #$issue $title"
 git -C "$wt" push -q -u origin "$branch"
 pr="$(gh api -X POST "repos/$REPO/pulls" -F draft=true -f base=main -f head="$branch" \
   -f title="WIP #$issue: $title" -f body="Closes #$issue
-${agent:+
-Agent: $agent
-}
-Draft opened by scripts/dev/claim.sh so others can see this work is in progress." -q .html_url)"
+
+${agent:+Agent: $agent
+
+}Draft opened by scripts/dev/claim.sh so others can see this work is in progress." -q .html_url)"
 
 echo "claimed #$issue"
 echo "worktree: $wt"
