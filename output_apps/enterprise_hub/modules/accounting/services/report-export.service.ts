@@ -6,6 +6,7 @@ import {
   ageingTable,
   balanceSheetTable,
   cashFlowTable,
+  chartOfAccountsTable,
   equityChangesTable,
   incomeStatementTable,
   ledgerTable,
@@ -61,6 +62,8 @@ export class ReportExportService {
         return cashFlowTable(await this.reports.cashFlow(tenantId, period));
       case 'equity-changes':
         return equityChangesTable(await this.reports.equityChanges(tenantId, period));
+      case 'chart-of-accounts':
+        return chartOfAccountsTable(await this.reports.chartOfAccounts(tenantId));
       case 'ageing':
         return ageingTable(
           await this.reports.ageing(tenantId, {
