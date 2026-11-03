@@ -23,7 +23,7 @@ jobs:
     if: vars.FACTORY_ENABLED == 'true' && contains(fromJson(vars.AGENT_ALLOWED_ACTORS), github.actor)
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v7
