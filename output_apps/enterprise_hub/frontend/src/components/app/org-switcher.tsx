@@ -43,7 +43,7 @@ export function OrgSwitcher() {
             setBusy(false);
           }
         }}
-        className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs text-foreground disabled:opacity-70"
+        className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
       >
         {!org && <option value="">— انتخاب کنید —</option>}
         {active.map((o) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -107,11 +107,11 @@ function SidebarContent({
     return can(item.module, "read");
   });
   return (
-    <div className="flex h-full flex-col gap-4">
+    <div className="flex h-full flex-col gap-4 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-ring">
       <Link
         href="/app"
         onClick={onNavigate}
-        className="flex items-center gap-2.5 px-2 pt-1"
+        className="flex items-center gap-2.5 rounded-xl px-2 pt-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-black text-white shadow-lg shadow-indigo-600/30">
           R
@@ -142,7 +142,7 @@ function SidebarContent({
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                  "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   active
                     ? "bg-indigo-500/15 font-bold text-indigo-300 ring-1 ring-indigo-500/30"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -168,14 +168,14 @@ function SidebarContent({
         <button
           type="button"
           onClick={logout}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-bold text-muted-foreground transition-colors hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-200"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-bold text-muted-foreground transition-colors hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <LogOut className="size-3.5" aria-hidden="true" />
           خروج از حساب
         </button>
         <Link
           href="/"
-          className="px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           بازگشت به سایت روکسیرا
         </Link>
@@ -231,6 +231,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const drawerOpen = openAt === pathname;
   const setDrawerOpen = (open: boolean) => setOpenAt(open ? pathname : null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpenAt(null);
+        const menuButton =
+          menuButtonRef.current ??
+          document.querySelector<HTMLButtonElement>('button[aria-label="باز کردن منو"]');
+        menuButton?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [drawerOpen]);
 
   return (
     <EnterpriseRouteGuard>
@@ -244,11 +261,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur">
               <button
+                ref={menuButtonRef}
                 type="button"
                 onClick={() => setDrawerOpen(true)}
                 aria-label="باز کردن منو"
                 aria-expanded={drawerOpen}
-                className="inline-flex size-10 items-center justify-center rounded-xl border border-border lg:hidden"
+                className="inline-flex size-10 items-center justify-center rounded-xl border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
               >
                 <Menu className="size-5" aria-hidden="true" />
               </button>
@@ -276,11 +294,30 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           {drawerOpen && (
-            <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="منوی نرم‌افزار"
+              tabIndex={-1}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setDrawerOpen(false);
+                  const menuButton =
+                    menuButtonRef.current ??
+                    document.querySelector<HTMLButtonElement>('button[aria-label="باز کردن منو"]');
+                  menuButton?.focus();
+                }
+              }}
+              className="fixed inset-0 z-40 lg:hidden"
+            >
               <button
                 type="button"
                 aria-label="بستن منو"
-                className="absolute inset-0 bg-black/60"
+                tabIndex={-1}
+                aria-hidden="true"
+                className="absolute inset-0 bg-black/60 focus:outline-none"
                 onClick={() => setDrawerOpen(false)}
               />
               <div className="absolute inset-y-0 right-0 w-72 max-w-[85vw] border-l border-border bg-background p-4 shadow-2xl">
@@ -288,7 +325,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   type="button"
                   onClick={() => setDrawerOpen(false)}
                   aria-label="بستن منو"
-                  className="absolute top-3 left-3 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+                  className="absolute top-3 left-3 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>
