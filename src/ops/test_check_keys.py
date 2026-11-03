@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import os
+import re
 import ssl
 import urllib.error
 import urllib.request
@@ -40,7 +42,13 @@ def ck(monkeypatch):
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    for var in ALL_VARS:
+    # Hermetic: clear every variable the script can read, not only ALL_VARS. A shell with the
+    # real keys loaded (fleet, local CI after sourcing roxira.env) otherwise changes the results.
+    source = Path(spec.origin).read_text()
+    names = {n for q in re.findall(r'"([A-Z][A-Z0-9_|]{2,})"', source) for n in q.split("|")}
+    names |= set(ALL_VARS)
+    # Also numbered variants such as MISTRAL_API_KEY_2, which the script discovers itself.
+    for var in [k for k in os.environ if any(k == n or k.startswith(n + "_") for n in names)]:
         monkeypatch.delenv(var, raising=False)
     return module
 
