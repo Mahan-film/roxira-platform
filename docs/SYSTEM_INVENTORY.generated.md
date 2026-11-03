@@ -59,8 +59,8 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 
 | Package | Name | Versions |
 | --- | --- | --- |
-| backend | @roxira/enterprise-hub | @nestjs/core ^10.4.4, typescript ^5.9.3 |
-| frontend | @roxira/enterprise-hub-frontend | next 16.4.3, react 19.3.1, tailwindcss ^4, typescript ^5 |
+| backend | @roxira/enterprise-hub | @nestjs/core 10, typescript 5 |
+| frontend | @roxira/enterprise-hub-frontend | next 16, react 19, tailwindcss 4, typescript 5 |
 
 ## Python
 

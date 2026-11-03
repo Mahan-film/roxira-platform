@@ -95,6 +95,12 @@ def parse_package_versions(text, keys):
     return data.get("name", ""), found
 
 
+def _major(version):
+    """Major version only ("^16.4.3" -> "16"): Dependabot minor/patch bumps keep the file fresh."""
+    m = re.search(r"\d+", version or "")
+    return m.group(0) if m else version
+
+
 def parse_python_deps(text, keys):
     """Find key deps in requirements-like text (pyproject list or pip install lines)."""
     found = {}
@@ -169,7 +175,8 @@ def render():
         if t is None:
             continue
         name, vers = parse_package_versions(t, NPM_KEYS)
-        lines.append(f"| {label} | {name} | " + ", ".join(f"{k} {vers[k]}" for k in sorted(vers)) + " |")
+        versions = ", ".join(f"{k} {_major(vers[k])}" for k in sorted(vers))
+        lines.append(f"| {label} | {name} | {versions} |")
     lines.append("")
 
     pyproject = _read("pyproject.toml") or ""

@@ -51,6 +51,13 @@ def test_parse_package_versions():
     assert vers == {"next": "16.3.4", "typescript": "^5"}
 
 
+def test_major_version_only():
+    assert gen._major("^16.4.3") == "16"
+    assert gen._major("19.3.1") == "19"
+    assert gen._major("~5.9") == "5"
+    assert gen._major("workspace:*") == "workspace:*"
+
+
 def test_parse_python_deps_and_versions():
     text = 'requires-python = ">=3.13"\n"httpx>=0.28.1",\nRUN pip install fastapi uvicorn\n'
     deps = gen.parse_python_deps(text, ["httpx", "fastapi", "qdrant-client"])
