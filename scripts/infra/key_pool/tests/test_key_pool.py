@@ -489,6 +489,34 @@ def test_inventory_dry_run_lists_names_only_and_probe_uses_one_token():
     assert "fake-" not in "\n".join(lines)
 
 
+def test_direct_post_skips_socket_check_behind_https_proxy(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.local:8080")
+
+    def no_connect(*args, **kwargs):
+        raise AssertionError("socket.create_connection must be skipped when a proxy is set")
+
+    class FakeResponse:
+        status = 200
+
+        def read(self):
+            return b'{"ok": true}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        return FakeResponse()
+
+    monkeypatch.setattr(llm_pool.socket, "create_connection", no_connect)
+    monkeypatch.setattr(llm_pool.urllib.request, "urlopen", fake_urlopen)
+    status, data = llm_pool.default_post("https://api.groq.com/openai/v1/chat/completions",
+                                         {"Authorization": "Bearer fake"}, {"model": "m"}, 5.0)
+    assert status == 200 and data == {"ok": True}
+
+
 def test_client_weighted_shuffle_prefers_heavier_keys():
     heavy = kc.Deployment("g", "a", "free", "may_log", "u", "x", "HEAVY", "m", 1, weight=99)
     light = kc.Deployment("g", "b", "free", "may_log", "u", "x", "LIGHT", "m", 1, weight=1)
