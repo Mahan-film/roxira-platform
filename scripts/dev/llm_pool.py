@@ -37,7 +37,14 @@ import keypool_config as kc
 
 COOLDOWN = {429: 60, 5: 30, "conn": 300, "auth": 3600}  # seconds; 5 = any 5xx
 
+PROXY_ENV_VARS = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")
+
 HttpPost = Callable[[str, dict[str, str], dict[str, Any], float], "tuple[int, dict[str, Any] | None]"]
+
+
+def proxy_configured() -> bool:
+    """True when urllib would route through a proxy, so a raw socket check would be wrong."""
+    return any(os.environ.get(name) for name in PROXY_ENV_VARS)
 
 
 def default_post(url: str, headers: dict[str, str], body: dict[str, Any], timeout: float) -> tuple[int, dict[str, Any] | None]:
@@ -45,10 +52,11 @@ def default_post(url: str, headers: dict[str, str], body: dict[str, Any], timeou
     parts = urllib.parse.urlsplit(url)
     host = parts.hostname or ""
     port = parts.port or (443 if parts.scheme == "https" else 80)
-    try:  # quick reachability check so a blocked host fails in seconds
-        socket.create_connection((host, port), timeout=min(5.0, timeout)).close()
-    except OSError:
-        return 0, None
+    if not proxy_configured():
+        try:  # quick reachability check so a blocked host fails in seconds
+            socket.create_connection((host, port), timeout=min(5.0, timeout)).close()
+        except OSError:
+            return 0, None
     # Some providers sit behind Cloudflare, which rejects the default Python-urllib agent (error 1010).
     headers = {"User-Agent": "roxira-keypool/1.0", **headers}
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers, method="POST")
