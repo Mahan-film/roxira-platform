@@ -133,6 +133,7 @@ def chat(
     rng: random.Random | None = None,
     now: Callable[[], float] = time.time,
     log: Callable[[str], None] | None = None,
+    skip: Callable[[kc.Deployment], bool] | None = None,
 ) -> tuple[str, str]:
     """Direct provider rotation. Returns (text, 'provider/model'). Raises RuntimeError when all fail."""
     pool = pool or kc.load_pool()
@@ -140,6 +141,8 @@ def chat(
     state = state or State(None)
     log = log or (lambda m: None)
     deps = ordered(kc.group_deployments(pool, group, set(env)), rng or random.Random())
+    if skip:  # e.g. the reviewer must not be the author's model family
+        deps = [d for d in deps if not skip(d)]
     if not deps:
         raise RuntimeError(f"group {group}: no usable provider (no keys found for it)")
     tried: list[str] = []
