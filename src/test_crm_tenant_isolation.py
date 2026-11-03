@@ -64,6 +64,9 @@ def test_crm_repository_scopes_every_method_by_tenant():
         "findContactMessagesAndCount",
         "countContactsByLeadId",
         "getContactCountsByLeadIds",
+        "findWalkInLead",
+        "createWalkInLead",
+        "findLeadByPhoneNormalized",
     }
     heads = list(re.finditer(r"\n  async (\w+)\(\s*([^)]*?)\)\s*:", repo))
     assert {m.group(1) for m in heads} == methods, (

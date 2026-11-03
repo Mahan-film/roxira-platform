@@ -97,6 +97,22 @@ PR. A file listed there is off-limits until one of those PRs merges.
 `app-shell.tsx`, `permission-matrix.snapshot.json`, new migrations) take one writer at a time: put
 `[hotspot]` in the PR title and merge it before the next one starts.
 
+## Daily team report
+
+Every day at 09:00 (local time of the installing computer) one short message goes to Telegram: deploy
+result, sites down, counts of claims, open PRs, stale claims, overlaps and merges in the last 24 h, then
+the numbered next actions. The Mac runs `team_status.py` (it needs `gh`); Telegram is reachable only from
+the server, so the text is piped over ssh to `scripts/ops/notify/notify.py` on `roxira-prod`, which uses
+the server's own env. The full Markdown report is also written to `~/Library/Logs/roxira-team-status.md`.
+
+- Install: `bash scripts/dev/install_team_status_launchd.sh` (needs `gh auth login` and the `roxira-prod`
+  ssh alias). Log: `~/Library/Logs/roxira-team-status.log`.
+- Uninstall: `bash scripts/dev/install_team_status_launchd.sh --uninstall`.
+- Test by hand: `python3 scripts/dev/team_status.py --telegram-host roxira-prod` (or set
+  `ROXIRA_NOTIFY_HOST`).
+- Install it on one computer only. With two developers, if both install it, the team gets two messages a
+  day.
+
 ## Setting up the second developer
 
 1. Add their GitHub account to the `Mahan-film` organisation with the Maintain or Admin role.
