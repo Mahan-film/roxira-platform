@@ -13,6 +13,7 @@ import {
   InvoiceAccountSpec,
   MAX_POSTING_ERROR_LENGTH,
   PAYABLE_ACCOUNT,
+  POS_CLEARING_ACCOUNT,
   PURCHASES_ACCOUNT,
   RECEIVABLE_ACCOUNT,
   SALES_ACCOUNT,
@@ -201,12 +202,21 @@ export class InvoicePostingService {
         const owed = this.postedOf(locked).receivable;
         const sale = this.directionOf(locked) === InvoiceDirection.SALE;
         // Sale: cash comes in, receivable falls. Purchase: payable falls, cash goes out.
-        const cashDebit = sale ? owed : -owed;
+        const sign = sale ? 1n : -1n;
+        const split = this.splitPayments(locked, owed);
         const lines = this.toLines([
-          [accounts.cash, cashDebit, sale ? 'دریافت نقدی/بانکی بابت صورتحساب' : 'پرداخت نقدی/بانکی بابت صورتحساب'],
+          ...split.map(([method, amount]): [string, bigint, string] => [
+            method === 'CARD' ? accounts.posClearing : accounts.cash,
+            sign * amount,
+            sale
+              ? method === 'CARD'
+                ? 'دریافت از طریق پوز'
+                : 'دریافت نقدی/بانکی بابت صورتحساب'
+              : 'پرداخت نقدی/بانکی بابت صورتحساب',
+          ]),
           [
             sale ? accounts.receivable : accounts.payable,
-            -cashDebit,
+            -sign * owed,
             sale ? 'تسویه حساب‌های دریافتنی' : 'تسویه حساب‌های پرداختنی',
           ],
         ]);
@@ -704,7 +714,12 @@ export class InvoicePostingService {
     const wanted: Array<[keyof AccountMap, InvoiceAccountSpec]> =
       phase === 'payment'
         ? [
-            ['cash', CASH_BANK_ACCOUNT],
+            ...(!invoice.payments?.length || invoice.payments.some((p) => p.method !== 'CARD')
+              ? ([['cash', CASH_BANK_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
+            ...(invoice.payments?.some((p) => p.method === 'CARD')
+              ? ([['posClearing', POS_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
             sale ? ['receivable', RECEIVABLE_ACCOUNT] : ['payable', PAYABLE_ACCOUNT],
           ]
         : sale
@@ -733,6 +748,29 @@ export class InvoicePostingService {
       map[key] = codes[index];
     });
     return map as AccountMap;
+  }
+
+  /**
+   * How the amount owed was settled, in rial minor units. Without recorded payments the whole
+   * amount is one cash/bank settlement. With them, each method keeps its own amount and the last
+   * one absorbs any rounding so the parts add up to exactly what is owed.
+   */
+  private splitPayments(invoice: InvoiceEntity, owed: bigint): Array<[string, bigint]> {
+    const payments = invoice.payments ?? [];
+    if (payments.length === 0) {
+      return [['CASH', owed]];
+    }
+    const parts: Array<[string, bigint]> = [];
+    let assigned = 0n;
+    payments.forEach((payment, index) => {
+      const amount =
+        index === payments.length - 1
+          ? owed - assigned
+          : this.rialMinor(invoice, payment.amount);
+      assigned += amount;
+      parts.push([payment.method, amount]);
+    });
+    return parts;
   }
 
   /** Does posting this document move stock? (Correctives and unlinked lines never do.) */
@@ -873,4 +911,5 @@ interface AccountMap {
   purchases: string;
   payable: string;
   vatReceivable: string;
+  posClearing: string;
 }

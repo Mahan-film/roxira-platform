@@ -9,6 +9,8 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { FindOptionsWhere, ILike } from 'typeorm';
+import { CustomerIdentityService, WALK_IN_NAME } from '../../crm/services/customer-identity.service';
+import { invoiceRuleFor } from '../country/invoice-country-rules';
 import { CrmRepository } from '../../crm/repositories/crm.repository';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
@@ -50,6 +52,13 @@ import {
   InvoiceSummaryRow,
   InvoicingRepository,
 } from '../repositories/invoicing.repository';
+
+/** What a caller adds to `create` beyond the invoice itself (POS sales). */
+export interface CreateInvoiceOptions {
+  idempotencyKey?: string;
+  requestHash?: string;
+  payments?: Array<{ method: string; amount: number }>;
+}
 
 /** مجموع‌های محاسبه‌شده سمت سرور برای اقلام صورتحساب. */
 interface InvoiceTotals {
@@ -95,6 +104,7 @@ export class InvoicingService {
     @Optional()
     @InjectQueue(SUITE_EVENTS_QUEUE)
     private readonly suiteEventsQueue?: Queue,
+    @Optional() private readonly customerIdentity?: CustomerIdentityService,
   ) {}
 
   /**
@@ -456,6 +466,7 @@ export class InvoicingService {
   async create(
     tenantId: string,
     dto: CreateInvoiceDto,
+    options: CreateInvoiceOptions = {},
   ): Promise<InvoiceResponseDto> {
     const subject = dto.subject ?? InvoiceSubject.ORIGINAL;
     const related = await this.resolveRelated(tenantId, dto, subject);
@@ -465,7 +476,6 @@ export class InvoicingService {
         ? this.copyOf(related, dto)
         : dto;
     const direction = related?.direction ?? source.direction ?? InvoiceDirection.SALE;
-    const einvoiceType = source.einvoiceType ?? EInvoiceType.WITH_BUYER;
 
     const taxInvoiceNumber =
       source.taxInvoiceNumber?.trim() ||
@@ -497,10 +507,9 @@ export class InvoicingService {
       defaultVatRate,
       currency,
     );
-    const { customerId, buyerInfo } = await this.resolveParties(
+    const { customerId, buyerInfo, einvoiceType } = await this.resolveParties(
       tenantId,
       direction,
-      einvoiceType,
       source,
     );
     const totals = this.computeTotals(items, currency);
@@ -544,6 +553,9 @@ export class InvoicingService {
       status,
       issuedAt: null,
       paidAt: null,
+      idempotencyKey: options.idempotencyKey ?? null,
+      requestHash: options.requestHash ?? null,
+      payments: options.payments ?? null,
     } as Partial<InvoiceEntity>;
 
     this.applyStatusTimestamps(entity, status);
@@ -708,25 +720,88 @@ export class InvoicingService {
     }
   }
 
-  /** Buyer/seller for the direction: a purchase has the supplier as seller and us as buyer. */
+  /**
+   * Buyer/seller for the direction. A purchase has the supplier as seller and us as buyer. A sale
+   * needs no customer: with none it goes to the built-in walk-in customer and takes the anonymous
+   * type of the tenant's country; a buyer is demanded only where the chosen type needs identity
+   * (Iranian type 1).
+   */
   private async resolveParties(
     tenantId: string,
     direction: InvoiceDirection,
-    einvoiceType: EInvoiceType,
     dto: CreateInvoiceDto,
-  ): Promise<{ customerId: number | null; buyerInfo: InvoicePartyInfo }> {
+  ): Promise<{
+    customerId: number | null;
+    buyerInfo: InvoicePartyInfo;
+    einvoiceType: EInvoiceType;
+  }> {
     if (direction === InvoiceDirection.PURCHASE) {
       return {
         customerId: null,
         buyerInfo: dto.buyerInfo ?? { name: await this.ownName(tenantId) },
+        einvoiceType: dto.einvoiceType ?? EInvoiceType.WITHOUT_BUYER,
       };
     }
+    const rule = invoiceRuleFor(await this.countryOf(tenantId));
     const hasBuyer =
       dto.customerId !== undefined || Boolean(dto.buyerInfo?.name?.trim());
-    if (einvoiceType !== EInvoiceType.WITH_BUYER && !hasBuyer) {
-      return { customerId: null, buyerInfo: { name: 'مصرف‌کننده نهایی' } };
+
+    if (!hasBuyer) {
+      const einvoiceType = dto.einvoiceType ?? rule.anonymousType;
+      if (rule.identityNeeded(einvoiceType) !== 'none') {
+        throw new BadRequestException(
+          'این نوع صورتحساب مشخصات خریدار می‌خواهد؛ خریدار را وارد کنید یا نوع دوم/سوم را انتخاب کنید.',
+        );
+      }
+      const walkIn = await this.customerIdentity?.walkIn(tenantId);
+      return {
+        customerId: walkIn?.id ?? null,
+        buyerInfo: { name: walkIn?.fullName ?? WALK_IN_NAME },
+        einvoiceType,
+      };
     }
-    return this.resolveBuyer(tenantId, dto.customerId, dto.buyerInfo);
+
+    const resolved = await this.resolveBuyer(tenantId, dto.customerId, dto.buyerInfo);
+    const identified = Boolean(
+      resolved.buyerInfo.nationalId?.trim() || resolved.buyerInfo.economicCode?.trim(),
+    );
+    const einvoiceType =
+      dto.einvoiceType ??
+      (identified && rule.identityNeeded(EInvoiceType.WITH_BUYER) !== 'none'
+        ? EInvoiceType.WITH_BUYER
+        : rule.anonymousType);
+    if (rule.identityNeeded(einvoiceType) === 'tax_id' && !identified) {
+      throw new BadRequestException(
+        'برای این نوع صورتحساب، کد ملی یا کد اقتصادی خریدار الزامی است.',
+      );
+    }
+    return { ...resolved, einvoiceType };
+  }
+
+  private async countryOf(tenantId: string): Promise<string | null> {
+    try {
+      return (await this.tenantsRepository?.findById(tenantId))?.countryCode ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Totals the server would put on an invoice for these lines, without saving anything (a POS
+   * sale checks the payments against the payable before it creates the invoice).
+   */
+  async quote(
+    tenantId: string,
+    source: Pick<CreateInvoiceDto, 'items' | 'currency' | 'jurisdiction' | 'fxRate'>,
+  ): Promise<{ items: InvoiceItem[]; totals: InvoiceTotals; currency: Currency }> {
+    const currency = source.currency ?? Currency.IRR;
+    const jurisdiction = source.jurisdiction ?? this.defaultJurisdiction(currency);
+    const defaultVatRate = this.defaultVatRateForJurisdiction(
+      jurisdiction,
+      await this.resolveDefaultVatRate(tenantId),
+    );
+    const items = await this.normalizeItems(tenantId, source.items, defaultVatRate, currency);
+    return { items, totals: this.computeTotals(items, currency), currency };
   }
 
   private async ownName(tenantId: string): Promise<string> {

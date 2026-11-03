@@ -1,5 +1,7 @@
 import {
   CreateInvoiceDto,
+  CreatePosSaleDto,
+  PosSaleResponse,
   InvoiceResponseDto,
   PaginatedInvoiceResponse,
   QueryInvoiceDto,
@@ -109,4 +111,19 @@ export async function cancelInvoice(
       signal,
     },
   );
+}
+
+/**
+ * فروش سریع (صندوق) با کلید یکتا — POST /enterprise-hub/invoicing/pos-sales.
+ * تکرار همان درخواست با همان کلید، همان صورتحساب را برمی‌گرداند.
+ */
+export async function createPosSale(
+  payload: CreatePosSaleDto,
+  signal?: AbortSignal,
+): Promise<PosSaleResponse> {
+  return apiRequest<PosSaleResponse>(`${INVOICING_ENDPOINT}/pos-sales`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
 }

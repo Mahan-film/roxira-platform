@@ -33,3 +33,17 @@ IRR invoices are rounded to whole rials, IRT to one decimal, foreign currencies 
 - Cancelling an already paid invoice does not reverse its payment voucher (unchanged behaviour).
 - Moadian submission only sends original sales; purchase, corrective, cancel and return documents are refused.
 - The seasonal VAT report counts original sales only; returns and correctives are not netted yet.
+
+## Anonymous, phone-only and POS sales
+
+A customer is never required.
+
+| Who the sale is for | What happens |
+|---|---|
+| Nobody | Booked to the tenant's built-in **walk-in customer** (`crm_leads.is_walk_in`, one per tenant, created on first use; no record per sale). Hidden from CRM lists and pipeline numbers. |
+| A phone | Exact match on the normalised phone (`crm_leads.phone_normalized`: digits only, Persian/Arabic digits folded, `+98`/`0098`/`98` folded to `0` for Iran) reuses that customer; otherwise a minimal record is created (`source = POS`, no email, `marketing_consent = false`). |
+| Name and phone | Same match; a matching customer keeps its own name. |
+
+The buyer identity an invoice needs comes from the **country rule** of the tenant (`tenants.country_code`, `modules/invoicing/country/invoice-country-rules.ts`), not from the core: Iran needs name plus national/economic code only for type 1 and defaults anonymous sales to type 2; any country without an entry needs no buyer identity. A named buyer without a tax id gets type 2 in Iran.
+
+`POST /enterprise-hub/invoicing/pos-sales` (`PosSaleService`) is the one sale flow for the manual quick-sale drawer and a later POS API: items by SKU or barcode, optional customer, payments (`CASH`, `CARD` -> POS clearing account 1015, `BANK_TRANSFER`) that must add up to the payable, stock availability checked first, then an ISSUED+PAID invoice whose events post revenue, VAT, COGS, stock and the settlement. `idempotencyKey` (unique per tenant) makes a retry, even a concurrent one, return the first invoice (`replayed: true`); the same key with a different body is a 409.
