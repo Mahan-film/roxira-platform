@@ -1,22 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Search, TriangleAlert, Warehouse } from "lucide-react";
+import Link from "next/link";
+import { FileSpreadsheet, Search, TriangleAlert, Warehouse } from "lucide-react";
 
 import {
-  EmptyImportState,
   ErrorNotice,
   LoadingLine,
   PageHeader,
   loadErrorMessage,
 } from "@/components/app/app-ui";
+import { EmptyState } from "@/components/app/empty-state";
 import { InventoryAdminPanel } from "@/components/inventory/inventory-admin-panel";
 import { InventoryStats } from "@/components/inventory/inventory-stats";
 import { StockBatchesPanel } from "@/components/inventory/stock-batches-panel";
 import { StockItemsTable } from "@/components/inventory/stock-items-table";
 import { WarehousesManager } from "@/components/inventory/warehouses-manager";
 import { WarehouseStockPanel } from "@/components/inventory/warehouse-stock-panel";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   getFifoValuation,
@@ -97,9 +98,15 @@ export default function SuiteInventoryPage() {
       <WarehousesManager warehouses={warehouses} onChanged={refresh} />
 
       {isEmpty ? (
-        <EmptyImportState
-          title="فهرست کالاهای قبلی‌تان را اینجا رها کنید"
-          hint="فایل اکسل کالا یا موجودی انبار را در صفحه ورود داده بارگذاری کنید"
+        <EmptyState
+          icon={<Warehouse className="size-6 text-indigo-500" aria-hidden="true" />}
+          description="مدیریت فهرست کالاها، انبارها و ارزش‌گذاری موجودی به روش FIFO در این بخش انجام می‌شود."
+          action={
+            <Link href="/app/import" className={buttonVariants()}>
+              <FileSpreadsheet aria-hidden="true" />
+              ورود اطلاعات از فایل
+            </Link>
+          }
         />
       ) : (
         <>

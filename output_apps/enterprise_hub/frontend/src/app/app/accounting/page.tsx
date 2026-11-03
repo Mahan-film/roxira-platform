@@ -5,11 +5,11 @@ import Link from "next/link";
 import { BookOpenCheck, CalendarRange, FileBarChart, FilePlus2, Gauge, Landmark, Wallet } from "lucide-react";
 
 import {
-  EmptyImportState,
   ErrorNotice,
   PageHeader,
   loadErrorMessage,
 } from "@/components/app/app-ui";
+import { EmptyState } from "@/components/app/empty-state";
 import { AccountTreeCard } from "@/components/accounting/account-tree-card";
 import { JournalEntryForm } from "@/components/accounting/journal-entry-form";
 import { AccountLedgerPanel } from "@/components/accounting/account-ledger-panel";
@@ -104,9 +104,15 @@ export default function SuiteAccountingPage() {
       )}
 
       {!loading && !error && accounts.length === 0 ? (
-        <EmptyImportState
-          title="سرفصل حساب‌ها یا تراز افتتاحیه قبلی‌تان را اینجا رها کنید"
-          hint="فایل اکسل یا PDF حساب‌ها را در صفحه ورود داده بارگذاری کنید"
+        <EmptyState
+          icon={<BookOpenCheck className="size-6 text-indigo-500" aria-hidden="true" />}
+          description="مدیریت سرفصل حساب‌ها، تراز آزمایشی و ثبت اسناد دوبل حسابداری در این بخش انجام می‌شود."
+          action={
+            <Button size="sm" onClick={() => setShowVoucher((v) => !v)} aria-expanded={showVoucher}>
+              <FilePlus2 aria-hidden="true" />
+              سند جدید
+            </Button>
+          }
         />
       ) : (
         <>

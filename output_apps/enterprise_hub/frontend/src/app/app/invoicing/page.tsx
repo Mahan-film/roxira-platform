@@ -13,12 +13,12 @@ import {
 } from "lucide-react";
 
 import {
-  EmptyImportState,
   ErrorNotice,
   LoadingLine,
   PageHeader,
   loadErrorMessage,
 } from "@/components/app/app-ui";
+import { EmptyState } from "@/components/app/empty-state";
 import { InvoiceEditor } from "@/components/invoicing/invoice-editor";
 import { Drawer } from "@/components/ui/drawer";
 import { InvoicePrintView } from "@/components/invoicing/invoice-print-view";
@@ -284,9 +284,15 @@ function InvoicingPage() {
       </Drawer>
 
       {isEmpty ? (
-        <EmptyImportState
-          title="فایل اکسل فاکتورهای قبلی‌تان را اینجا رها کنید"
-          hint="برای ورود خودکار صورتحساب‌ها به صفحه ورود داده بروید"
+        <EmptyState
+          icon={<ReceiptText className="size-6 text-indigo-500" aria-hidden="true" />}
+          description="صدور، ویرایش و چاپ صورتحساب‌های فروش و خرید با محاسبه مالیات در این بخش انجام می‌شود."
+          action={
+            <Button onClick={() => openNew(InvoiceDirection.SALE)}>
+              <Plus />
+              فاکتور فروش
+            </Button>
+          }
         />
       ) : (
         <>
