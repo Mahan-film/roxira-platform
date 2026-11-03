@@ -62,7 +62,7 @@ def classify_actor(branch: str, login: str) -> str:
     """Actor type from a branch name: agent:<id>, relay, dependabot, else the human login."""
     if branch.startswith("agent/"):
         parts = branch.split("/")
-        return "agent:" + (parts[1] if len(parts) > 2 and parts[1] else "unknown")
+        return "agent:" + (parts[1] if len(parts) > 1 and parts[1] else "unknown")
     if branch.startswith("relay/"):
         return "relay"
     if branch.startswith("dependabot/"):
