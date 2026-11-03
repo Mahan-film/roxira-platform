@@ -1,21 +1,16 @@
-# Factory docs index
-
-Index of the documents in `docs/factory/`, grouped by purpose.
+# Roxira AI Software Factory Documentation
 
 ## Plans
-
-- [AI_DATA_IMPORT_PLAN.md](AI_DATA_IMPORT_PLAN.md) — plan for AI-assisted import of a customer's previous CRM/accounting/ERP export, with the hard rules for handling customer data.
-- [AI_SOFTWARE_FACTORY_PRODUCT_PLAN_2026-10-14.md](AI_SOFTWARE_FACTORY_PRODUCT_PLAN_2026-10-14.md) — product plan for turning the internal agent factory into a sellable product where a customer describes an app and agents build and host it.
+- [AI_SOFTWARE_FACTORY_PRODUCT_PLAN_2026-10-14.md](AI_SOFTWARE_FACTORY_PRODUCT_PLAN_2026-10-14.md) — The product plan for the AI software factory
+- [COST_AND_REVIEW.md](COST_AND_REVIEW.md) — Cost per accepted task, lane budgets, and cross-family review
+- [HOUSE_STACK.md](HOUSE_STACK.md) — The house stack fed to every factory spec
 
 ## How-to
-
-- [BRIEF_TO_SPEC.md](BRIEF_TO_SPEC.md) — how `scripts/factory/brief_to_spec.py` turns a one-paragraph brief into researched, owner-approved task files.
-- [COST_AND_REVIEW.md](COST_AND_REVIEW.md) — how the factory measures cost per accepted task, sets lane budgets, and runs cross-family review (P1).
-- [DAYTONA.md](DAYTONA.md) — how the workbench checks run the same command groups in disposable Daytona sandboxes instead of Docker on srv1.
-- [HOUSE_STACK.md](HOUSE_STACK.md) — the default stack every factory spec reuses, which a spec may deviate from only with a stated hard reason.
-- [ROUTING.md](ROUTING.md) — which factory tool uses which model gateway, and the data rules for each.
+- [BRIEF_TO_SPEC.md](BRIEF_TO_SPEC.md) — How to convert a brief to a spec
+- [FACTORY_AUDIT_2026-10-12.md](FACTORY_AUDIT_2026-10-12.md) — The software factory audit
+- [ROUTING.md](ROUTING.md) — Factory routing: which tool uses which gateway
 
 ## Research
-
-- [DEEP_RESEARCH_PROMPT.md](DEEP_RESEARCH_PROMPT.md) — a ready-to-paste prompt for a Deep Research tool on next-generation agent factories and legal-AI architecture.
-- [FACTORY_AUDIT_2026-10-12.md](FACTORY_AUDIT_2026-10-12.md) — audit of the owner's Mac developer tooling, its overlapping gateways, and cost-routing levers.
+- [DEEP_RESEARCH_PROMPT.md](DEEP_RESEARCH_PROMPT.md) — Deep research prompt for next-generation agent factories and legal-AI architecture
+- [AI_DATA_IMPORT_PLAN.md](AI_DATA_IMPORT_PLAN.md) — AI-assisted data import plan
+- [DAYTONA.md](DAYTONA.md) — Daytona backend for the workbench checks
