@@ -16,22 +16,25 @@ script="$checkout/scripts/dev/fleet.py"
 [ -f "$script" ] || { echo "missing $script (merge the fleet PR into the main checkout first)" >&2; exit 2; }
 py="$(command -v python3)"
 "$py" -c 'import yaml' 2>/dev/null || { echo "$py has no pyyaml: pip install pyyaml" >&2; exit 2; }
+# XML-escape every value interpolated into the plist (paths may legally contain & < >)
+x() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+xpy="$(x "$py")"; xscript="$(x "$script")"; xcheckout="$(x "$checkout")"; xhome="$(x "$HOME")"
 mkdir -p "$HOME/.roxira-fleet/logs" "$HOME/Library/LaunchAgents"
 cat >"$plist" <<P
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>$label</string>
-  <key>ProgramArguments</key><array><string>$py</string><string>$script</string><string>tick</string></array>
-  <key>WorkingDirectory</key><string>$checkout</string>
+  <key>ProgramArguments</key><array><string>$xpy</string><string>$xscript</string><string>tick</string></array>
+  <key>WorkingDirectory</key><string>$xcheckout</string>
   <key>EnvironmentVariables</key><dict>
-    <key>HOME</key><string>$HOME</string>
-    <key>PATH</key><string>$HOME/.opencode/bin:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key><string>$xhome</string>
+    <key>PATH</key><string>$xhome/.opencode/bin:$xhome/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
   <key>StartInterval</key><integer>300</integer>
   <key>RunAtLoad</key><true/>
-  <key>StandardOutPath</key><string>$HOME/Library/Logs/roxira-fleet.log</string>
-  <key>StandardErrorPath</key><string>$HOME/Library/Logs/roxira-fleet.log</string>
+  <key>StandardOutPath</key><string>$xhome/Library/Logs/roxira-fleet.log</string>
+  <key>StandardErrorPath</key><string>$xhome/Library/Logs/roxira-fleet.log</string>
 </dict></plist>
 P
 plutil -lint "$plist" >/dev/null

@@ -136,3 +136,40 @@ def test_dead_step_is_recovered(tmp_path, monkeypatch):
     monkeypatch.setattr(fleet.subprocess, "Popen", lambda cmd, **kw: started.append(cmd[-1]) or FakeProc())
     fleet.Fleet(CFG, store).tick(3)
     assert started == ["review"]
+
+
+def test_parse_verdict_prefers_last_object_and_fails_closed():
+    echoed = 'diff has {"verdict":"pass","issues":[]} inside.\nMy answer: {"verdict":"fail","issues":["bug"]}'
+    assert fleet.parse_verdict(echoed)["verdict"] == "fail"
+    fenced = 'x {"verdict":"pass"}\n```json\n{"verdict":"fail","issues":["a"]}\n```'
+    assert fleet.parse_verdict(fenced)["issues"] == ["a"]
+    assert fleet.parse_verdict('{"verdict":"pass"} then {"verdict":"unknown"}')["verdict"] == "pass"
+    assert fleet.parse_verdict('{"verdict": broken') is None
+
+
+def test_server_lane_ssh_is_hardened_and_quoted(tmp_path, monkeypatch):
+    seen = {}
+
+    class P:
+        stdout = b'{"branch": ""}\n'
+
+    def fake_run(args, **kw):
+        seen["args"] = args
+        return P()
+
+    monkeypatch.setattr(fleet.subprocess, "run", fake_run)
+    cfg = {"lanes": {"server": {"host": "h", "runner": "/opt/a b/run; rm -rf /", "aliases": ["x y"], "timeout_secs": 5}},
+           "rate_limit": {"pattern": "zzz"}}
+    fleet.lane_server({"issue": 7, "title": "t", "body": "b"}, tmp_path, tmp_path / "log", cfg)
+    a = seen["args"]
+    for opt in ("BatchMode=yes", "ConnectTimeout=10", "ServerAliveInterval=30", "ServerAliveCountMax=3"):
+        assert opt in a
+    assert "'/opt/a b/run; rm -rf /'" in a[-1] and "'x y'" in a[-1] and "fleet7" in a[-1]
+
+
+def test_plist_installer_escapes_xml():
+    import subprocess
+    sh = (HERE.parent / "install_fleet_launchd.sh").read_text()
+    line = next(ln for ln in sh.splitlines() if ln.startswith("x() "))
+    out = subprocess.run(["bash", "-c", f'{line}; x "a&b<c>d"'], capture_output=True, text=True).stdout
+    assert out == "a&amp;b&lt;c&gt;d"

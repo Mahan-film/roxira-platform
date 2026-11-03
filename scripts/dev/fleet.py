@@ -25,6 +25,7 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -141,18 +142,19 @@ def merge_decision(pr: dict[str, Any], cfg: dict[str, Any], now: float) -> tuple
 
 
 def parse_verdict(text: str) -> dict[str, Any] | None:
-    """First JSON object in a reviewer reply with a verdict of pass/fail."""
-    for m in re.finditer(r"\{.*\}", text, re.S):
-        for end in range(len(m.group(0)), 1, -1):
-            try:
-                obj = json.loads(m.group(0)[:end])
-            except ValueError:
-                continue
-            if isinstance(obj, dict) and str(obj.get("verdict", "")).lower() in ("pass", "fail"):
-                obj["verdict"] = obj["verdict"].lower()
-                return obj
-            break
-    return None
+    """LAST JSON object in a reviewer reply with a verdict of pass/fail. The last one, because a reviewer may echo
+    JSON from the (untrusted) diff before giving its own answer; no valid verdict means no pass."""
+    dec, found, i = json.JSONDecoder(), None, 0
+    while (i := text.find("{", i)) != -1:
+        try:
+            obj, end = dec.raw_decode(text, i)
+        except ValueError:
+            i += 1
+            continue
+        if isinstance(obj, dict) and str(obj.get("verdict", "")).lower() in ("pass", "fail"):
+            found = {**obj, "verdict": str(obj["verdict"]).lower()}
+        i = end
+    return found
 
 
 # ------------------------------------------------------------------ state
@@ -288,11 +290,14 @@ def lane_claude(job: dict[str, Any], wt: Path, log: Path, cfg: dict[str, Any]) -
 def lane_server(job: dict[str, Any], wt: Path, log: Path, cfg: dict[str, Any]) -> tuple[str, str]:
     """Server agent: run_task.sh over ssh pushes agent/<date>-<slug>; fetch it into the worktree."""
     lc = cfg["lanes"]["server"]
-    slug = f"fleet{job['issue']}"
     alias = lc["aliases"][min(job.get("model_idx", 0), len(lc["aliases"]) - 1)]
-    remote = (f"cat > /tmp/{slug}.md && {lc['runner']} --model {alias} --task-file /tmp/{slug}.md --slug {slug} --push --public")
+    slug = f"fleet{int(job['issue'])}"
+    remote = (f"cat > /tmp/{slug}.md && {shlex.quote(str(lc['runner']))} --model {shlex.quote(str(alias))} "
+              f"--task-file /tmp/{slug}.md --slug {slug} --push --public")
+    ssh = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3",
+           str(lc["host"]), remote]
     with open(log, "ab") as lf:
-        p = subprocess.run(["ssh", lc["host"], remote], input=build_prompt(job).encode(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        p = subprocess.run(ssh, input=build_prompt(job).encode(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                            timeout=lc["timeout_secs"])
         out = p.stdout.decode("utf-8", "replace")
         lf.write(out.encode())
