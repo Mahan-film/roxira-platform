@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /**
@@ -36,4 +36,13 @@ export class QueryStockItemDto {
   @Type(() => Boolean)
   @IsBoolean()
   lowStockOnly?: boolean = false;
+
+  @ApiPropertyOptional({
+    description: 'فقط کالاهای بدون هیچ لایهٔ موجود (مثلاً واردشده از فایل و هنوز بدون موجودی اولیه)',
+    default: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  noStockOnly?: boolean = false;
 }

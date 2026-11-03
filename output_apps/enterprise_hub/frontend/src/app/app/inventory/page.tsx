@@ -1,51 +1,76 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { FileSpreadsheet, Search, TriangleAlert, Warehouse } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ClipboardCheck,
+  PackagePlus,
+  Search,
+  TriangleAlert,
+  Warehouse,
+} from "lucide-react";
 
 import {
+  EmptyImportState,
   ErrorNotice,
   LoadingLine,
   PageHeader,
   loadErrorMessage,
 } from "@/components/app/app-ui";
-import { EmptyState } from "@/components/app/empty-state";
-import { InventoryAdminPanel } from "@/components/inventory/inventory-admin-panel";
 import { InventoryStats } from "@/components/inventory/inventory-stats";
+import { ItemCreateDrawer } from "@/components/inventory/item-create-drawer";
+import {
+  StockDocumentDrawer,
+  type DocumentKind,
+} from "@/components/inventory/stock-document-drawer";
 import { StockBatchesPanel } from "@/components/inventory/stock-batches-panel";
+import { StockDocumentsList } from "@/components/inventory/stock-documents-list";
 import { StockItemsTable } from "@/components/inventory/stock-items-table";
-import { WarehousesManager } from "@/components/inventory/warehouses-manager";
 import { WarehouseStockPanel } from "@/components/inventory/warehouse-stock-panel";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { WarehousesManager } from "@/components/inventory/warehouses-manager";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   getFifoValuation,
   listStockItems,
   listWarehouses,
 } from "@/lib/api/inventory-client";
+import { formatNumber } from "@/lib/fa-format";
 import type {
   FifoValuationResponse,
   StockItem,
   Warehouse as WarehouseModel,
 } from "@/types/inventory";
 
+const PAGE_SIZE = 50;
+
+type Filter = "all" | "low" | "empty";
+
 export default function SuiteInventoryPage() {
   const [items, setItems] = useState<StockItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [noStockCount, setNoStockCount] = useState(0);
+  const [page, setPage] = useState(1);
   const [warehouses, setWarehouses] = useState<WarehouseModel[]>([]);
   const [valuation, setValuation] = useState<FifoValuationResponse | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showNewItem, setShowNewItem] = useState(false);
+  const [documentKind, setDocumentKind] = useState<DocumentKind | null>(null);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
@@ -53,7 +78,13 @@ export default function SuiteInventoryPage() {
     const controller = new AbortController();
     Promise.all([
       listStockItems(
-        { page: 1, limit: 100, search: search || undefined, lowStockOnly },
+        {
+          page,
+          limit: PAGE_SIZE,
+          search: search || undefined,
+          lowStockOnly: filter === "low" ? true : undefined,
+          noStockOnly: filter === "empty" ? true : undefined,
+        },
         controller.signal,
       ),
       listWarehouses(controller.signal),
@@ -61,6 +92,8 @@ export default function SuiteInventoryPage() {
     ])
       .then(([itemsResult, warehousesResult, valuationResult]) => {
         setItems(itemsResult.data);
+        setTotal(itemsResult.total);
+        setNoStockCount(itemsResult.noStockCount ?? 0);
         setWarehouses(warehousesResult);
         setValuation(valuationResult);
         setError(null);
@@ -73,16 +106,37 @@ export default function SuiteInventoryPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [search, lowStockOnly, refreshKey]);
+  }, [search, filter, page, refreshKey]);
 
-  const isEmpty = !loading && !error && items.length === 0 && !search && !lowStockOnly;
+  const isEmpty = !loading && !error && total === 0 && !search && filter === "all";
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <>
       <PageHeader
         title="کالا و انبار"
-        description="کالاها، انبارها و موجودی با ارزش‌گذاری FIFO"
+        description="کالاها، انبارها، اسناد انبار و موجودی با ارزش‌گذاری FIFO"
         icon={<Warehouse className="size-6 text-indigo-500" />}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setShowNewItem(true)}>
+              <PackagePlus />
+              کالای جدید
+            </Button>
+            <Button variant="secondary" onClick={() => setDocumentKind("receipt")}>
+              <ArrowDownToLine />
+              رسید خرید
+            </Button>
+            <Button variant="secondary" onClick={() => setDocumentKind("delivery")}>
+              <ArrowUpFromLine />
+              حوالهٔ خروج
+            </Button>
+            <Button variant="outline" onClick={() => setDocumentKind("adjustment")}>
+              <ClipboardCheck />
+              تعدیل موجودی
+            </Button>
+          </div>
+        }
       />
 
       <ErrorNotice title="خطا در دریافت اطلاعات انبار" message={error} />
@@ -93,24 +147,31 @@ export default function SuiteInventoryPage() {
         lowStockCount={valuation?.lowStockCount ?? 0}
       />
 
-      <InventoryAdminPanel onChanged={refresh} />
-
-      <WarehousesManager warehouses={warehouses} onChanged={refresh} />
+      {noStockCount > 0 && filter !== "empty" && (
+        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          {formatNumber(noStockCount)} کالا هیچ موجودی ثبت‌شده‌ای ندارد و ارزش FIFO آن‌ها صفر است.
+          موجودی را با رسید خرید یا موجودی اول دوره وارد کنید؛ عددی از خودمان نمی‌سازیم.{" "}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              setFilter("empty");
+              setPage(1);
+            }}
+          >
+            نمایش آن‌ها
+          </button>
+        </p>
+      )}
 
       {isEmpty ? (
-        <EmptyState
-          icon={<Warehouse className="size-6 text-indigo-500" aria-hidden="true" />}
-          description="مدیریت فهرست کالاها، انبارها و ارزش‌گذاری موجودی به روش FIFO در این بخش انجام می‌شود."
-          action={
-            <Link href="/app/import" className={buttonVariants()}>
-              <FileSpreadsheet aria-hidden="true" />
-              ورود اطلاعات از فایل
-            </Link>
-          }
+        <EmptyImportState
+          title="فهرست کالاهای قبلی‌تان را اینجا رها کنید"
+          hint="فایل اکسل کالا یا موجودی انبار را در صفحه ورود داده بارگذاری کنید"
         />
       ) : (
         <>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 sm:max-w-sm">
               <Search className="pointer-events-none absolute top-1/2 start-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -121,15 +182,22 @@ export default function SuiteInventoryPage() {
                 aria-label="جست‌وجوی کالا"
               />
             </div>
-            <Button
-              variant={lowStockOnly ? "default" : "outline"}
-              size="sm"
-              onClick={() => setLowStockOnly((v) => !v)}
-            >
-              <TriangleAlert />
-              فقط کسری
-            </Button>
+            {(["all", "low", "empty"] as Filter[]).map((key) => (
+              <Button
+                key={key}
+                size="sm"
+                variant={filter === key ? "default" : "outline"}
+                onClick={() => {
+                  setFilter(key);
+                  setPage(1);
+                }}
+              >
+                {key === "low" && <TriangleAlert />}
+                {key === "all" ? "همه" : key === "low" ? "کسری" : "بدون موجودی"}
+              </Button>
+            ))}
             <LoadingLine show={loading} />
+            <span className="ms-auto text-xs text-muted-foreground">{formatNumber(total)} کالا</span>
           </div>
 
           <StockItemsTable
@@ -141,6 +209,22 @@ export default function SuiteInventoryPage() {
             onRefresh={refresh}
           />
 
+          {total > PAGE_SIZE && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                صفحه {formatNumber(page)} از {formatNumber(pageCount)}
+              </span>
+              <div className="flex gap-1">
+                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  قبلی
+                </Button>
+                <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((p) => p + 1)}>
+                  بعدی
+                </Button>
+              </div>
+            </div>
+          )}
+
           {selectedSku && (
             <StockBatchesPanel
               sku={selectedSku}
@@ -148,10 +232,15 @@ export default function SuiteInventoryPage() {
               onClose={() => setSelectedSku(null)}
             />
           )}
-
-          <WarehouseStockPanel warehouses={warehouses} refreshKey={refreshKey} />
         </>
       )}
+
+      <WarehousesManager warehouses={warehouses} onChanged={refresh} />
+      <WarehouseStockPanel warehouses={warehouses} refreshKey={refreshKey} />
+      <StockDocumentsList warehouses={warehouses} refreshKey={refreshKey} />
+
+      <ItemCreateDrawer open={showNewItem} onClose={() => setShowNewItem(false)} onCreated={refresh} />
+      <StockDocumentDrawer kind={documentKind} onClose={() => setDocumentKind(null)} onPosted={refresh} />
     </>
   );
 }

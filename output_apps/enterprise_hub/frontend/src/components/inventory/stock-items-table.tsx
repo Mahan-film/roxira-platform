@@ -121,7 +121,9 @@ export function StockItemsTable({
                     {formatRial(item.fifoValuation)}
                   </TableCell>
                   <TableCell>
-                    {item.isLowStock ? (
+                    {item.quantity <= 0 ? (
+                      <Badge variant="outline">بدون موجودی</Badge>
+                    ) : item.isLowStock ? (
                       <Badge variant="destructive">
                         <TriangleAlert />
                         کسری

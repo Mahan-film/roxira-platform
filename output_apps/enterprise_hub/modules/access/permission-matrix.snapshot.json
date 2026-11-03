@@ -2269,6 +2269,39 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/inventory/documents/adjustments (StockDocumentsController.createAdjustment)": {
+    "policy": "inventory:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/documents/deliveries (StockDocumentsController.createDelivery)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/documents/receipts (StockDocumentsController.createReceipt)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/inventory/documents/transfers (StockDocumentsController.createTransfer)": {
     "policy": "inventory:post",
     "owner": true,

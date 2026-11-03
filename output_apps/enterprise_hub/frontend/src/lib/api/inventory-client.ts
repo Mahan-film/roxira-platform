@@ -1,4 +1,7 @@
 import {
+  CreateAdjustmentDto,
+  CreateDeliveryDto,
+  CreateReceiptDto,
   CreateStoreDto,
   CreateTransferDto,
   StockDocument,
@@ -91,6 +94,7 @@ export async function listStockItems(
           params.lowStockOnly === undefined
             ? undefined
             : String(params.lowStockOnly),
+        noStockOnly: params.noStockOnly ? "true" : undefined,
       },
       signal,
     },
@@ -194,4 +198,20 @@ export async function listStockDocuments(
     searchParams: params,
     signal,
   });
+}
+
+export async function createReceipt(payload: CreateReceiptDto): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/receipts`, { method: "POST", body: payload });
+}
+
+export async function createDelivery(payload: CreateDeliveryDto): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/deliveries`, { method: "POST", body: payload });
+}
+
+export async function createAdjustment(payload: CreateAdjustmentDto): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/adjustments`, { method: "POST", body: payload });
+}
+
+export async function getStockDocument(id: number, signal?: AbortSignal): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/${id}`, { method: "GET", signal });
 }

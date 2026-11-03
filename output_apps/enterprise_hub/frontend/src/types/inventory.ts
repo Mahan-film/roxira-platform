@@ -132,6 +132,30 @@ export interface QueryStockItemDto {
   limit?: number;
   search?: string;
   lowStockOnly?: boolean;
+  noStockOnly?: boolean;
+}
+
+export interface CreateReceiptDto {
+  toWarehouseId: number;
+  docDate?: string;
+  reference?: string;
+  note?: string;
+  lines: Array<{ sku: string; quantity: number; unitCost: number; batchNumber?: string }>;
+}
+
+export interface CreateDeliveryDto {
+  fromWarehouseId: number;
+  docDate?: string;
+  reference?: string;
+  note?: string;
+  lines: Array<{ sku: string; quantity: number }>;
+}
+
+export interface CreateAdjustmentDto {
+  warehouseId: number;
+  reason: string;
+  docDate?: string;
+  lines: Array<{ sku: string; quantity: number; unitCost?: number }>;
 }
 
 export interface PaginatedStockItemResponse {
@@ -140,6 +164,8 @@ export interface PaginatedStockItemResponse {
   page: number;
   limit: number;
   lowStockCount: number;
+  /** Items with nothing on the shelf (no open FIFO layer). */
+  noStockCount: number;
 }
 
 export interface FifoBatch {
