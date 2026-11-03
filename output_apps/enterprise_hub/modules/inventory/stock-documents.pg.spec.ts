@@ -9,10 +9,7 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
-import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
-import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
-import { PeriodLockEntity } from '../accounting/entities/period-lock.entity';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingRepository } from '../accounting/repositories/accounting.repository';
 import { AccountingService } from '../accounting/services/accounting.service';
 import { CurrencyService } from '../currency/services/currency.service';
@@ -59,13 +56,7 @@ describePg('stock documents on PostgreSQL', () => {
     ds = await new DataSource(options(db)).initialize();
     await ds.runMigrations();
     const accounting = new AccountingService(
-      new AccountingRepository(
-        ds.getRepository(ChartOfAccountEntity),
-        ds.getRepository(JournalEntryEntity),
-        ds.getRepository(JournalEntryLineEntity),
-        ds.getRepository(PeriodLockEntity),
-        ds,
-      ),
+      new AccountingRepository(new TenantScope(ds)),
       { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService,
     );
     inventory = new InventoryService(

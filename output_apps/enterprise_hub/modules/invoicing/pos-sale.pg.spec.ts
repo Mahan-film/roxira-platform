@@ -10,10 +10,7 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
-import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
-import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
-import { PeriodLockEntity } from '../accounting/entities/period-lock.entity';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingRepository } from '../accounting/repositories/accounting.repository';
 import { AccountingService } from '../accounting/services/accounting.service';
 import { ContactMessageEntity } from '../crm/entities/contact-message.entity';
@@ -72,13 +69,7 @@ describePg('POS sales on PostgreSQL', () => {
     await q(`INSERT INTO tenants (id, name, slug) VALUES ($1, 'شرکت ما', 'ours'), ($2, 'دیگری', 'other')`, [T1, T2]);
 
     const accounting = new AccountingService(
-      new AccountingRepository(
-        ds.getRepository(ChartOfAccountEntity),
-        ds.getRepository(JournalEntryEntity),
-        ds.getRepository(JournalEntryLineEntity),
-        ds.getRepository(PeriodLockEntity),
-        ds,
-      ),
+      new AccountingRepository(new TenantScope(ds)),
       { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService,
     );
     const inventoryRepo = new InventoryRepository(
