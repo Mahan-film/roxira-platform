@@ -186,8 +186,9 @@ export function InvoiceEditor({
   const [taxInvoiceNumber, setTaxInvoiceNumber] = useState(
     invoice?.taxInvoiceNumber ?? "",
   );
-  const [einvoiceType, setEInvoiceType] = useState<EInvoiceType>(
-    seed?.einvoiceType ?? EInvoiceType.WITH_BUYER,
+  // "" = automatic: the server picks the type from the buyer details and the country's rule.
+  const [einvoiceType, setEInvoiceType] = useState<EInvoiceType | "">(
+    seed?.einvoiceType ?? "",
   );
   const [warehouseId, setWarehouseId] = useState(
     seed?.warehouseId ? String(seed.warehouseId) : "",
@@ -343,10 +344,10 @@ export function InvoiceEditor({
     if (
       !isPurchase &&
       einvoiceType === EInvoiceType.WITH_BUYER &&
-      !buyer.name.trim() &&
-      !customerId
+      !buyer.nationalId.trim() &&
+      !buyer.economicCode.trim()
     ) {
-      messages.push("نام خریدار الزامی است (یا نوع دوم/سوم را انتخاب کنید).");
+      messages.push("برای نوع اول، کد ملی یا کد اقتصادی خریدار الزامی است (یا نوع را خودکار بگذارید).");
     }
     if (subject !== InvoiceSubject.ORIGINAL && !related && !invoice) {
       messages.push("برای صورتحساب اصلاحی، ابطالی یا برگشتی، صورتحساب مرجع لازم است.");
@@ -385,7 +386,7 @@ export function InvoiceEditor({
     const payload: CreateInvoiceDto = {
       taxInvoiceNumber: taxInvoiceNumber.trim() || undefined,
       direction,
-      einvoiceType,
+      einvoiceType: einvoiceType === "" ? undefined : einvoiceType,
       subject,
       relatedInvoiceId: invoice?.relatedInvoiceId ?? related?.id ?? undefined,
       warehouseId: warehouseId ? Number(warehouseId) : undefined,
@@ -495,10 +496,15 @@ export function InvoiceEditor({
                 value={einvoiceType}
                 disabled={isCancel}
                 onChange={(event) =>
-                  setEInvoiceType(Number(event.target.value) as EInvoiceType)
+                  setEInvoiceType(
+                    event.target.value === ""
+                      ? ""
+                      : (Number(event.target.value) as EInvoiceType),
+                  )
                 }
                 className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
               >
+                <option value="">خودکار (بدون مشتری: مشتری گذری)</option>
                 {Object.values(EInvoiceType)
                   .filter((value) => typeof value === "number")
                   .map((value) => (

@@ -135,6 +135,31 @@ export class InventoryRepository {
     return this.warehouses.findOne({ where: { id, tenantId } });
   }
 
+  /** The item whose code (SKU) or barcode is exactly `code`; SKU wins when both match. */
+  async findStockItemByCode(tenantId: string, code: string): Promise<StockItemEntity | null> {
+    return (
+      (await this.stockItems.findOne({ where: { tenantId, sku: code } })) ??
+      (await this.stockItems.findOne({ where: { tenantId, barcode: code }, order: { id: 'ASC' } }))
+    );
+  }
+
+  /** Units of `sku` available to sell: in one warehouse's layers, or the item total when none is given. */
+  async availableQuantity(tenantId: string, sku: string, warehouseId: number | null): Promise<number> {
+    if (warehouseId === null) {
+      const item = await this.stockItems.findOne({ where: { tenantId, sku } });
+      return Number(item?.quantity ?? 0);
+    }
+    const row = await this.batches
+      .createQueryBuilder('batch')
+      .select('COALESCE(SUM(batch.quantityRemaining), 0)', 'total')
+      .where('batch.tenantId = :tenantId', { tenantId })
+      .andWhere('batch.sku = :sku', { sku })
+      .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
+      .andWhere('batch.quantityRemaining > 0')
+      .getRawOne<{ total: string }>();
+    return Number(row?.total ?? 0);
+  }
+
   /** A store of this tenant, or null (used to validate a warehouse's `storeId`). */
   async findStoreById(tenantId: string, id: number): Promise<StoreEntity | null> {
     return this.dataSource.getRepository(StoreEntity).findOne({ where: { id, tenantId } });

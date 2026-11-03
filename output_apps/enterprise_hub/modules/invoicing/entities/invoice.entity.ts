@@ -221,6 +221,18 @@ export class InvoiceEntity {
   @Column({ type: 'jsonb', name: 'posting_meta', nullable: true })
   postingMeta: InvoicePostingMeta | null;
 
+  /** Client-supplied key of a POS sale: a retry with the same key returns this invoice. */
+  @Column({ type: 'varchar', length: 80, name: 'idempotency_key', nullable: true })
+  idempotencyKey: string | null;
+
+  /** Hash of the request that created it; the same key with a different request is refused. */
+  @Column({ type: 'varchar', length: 64, name: 'request_hash', nullable: true })
+  requestHash: string | null;
+
+  /** How a POS sale was paid; posting books each method to its own account. */
+  @Column({ type: 'jsonb', nullable: true })
+  payments: Array<{ method: string; amount: number }> | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

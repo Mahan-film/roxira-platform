@@ -86,7 +86,7 @@ export class CrmService {
     return {
       id: lead.id,
       fullName: lead.fullName,
-      email: lead.email,
+      email: lead.email ?? '',
       phone: lead.phone,
       company: lead.company,
       pipelineStage: lead.pipelineStage,

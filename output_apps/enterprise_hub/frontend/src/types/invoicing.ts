@@ -219,3 +219,35 @@ export function invoiceRialEquivalent(
   const amount = invoice.amountFx ?? invoice.finalPayable;
   return amount * (invoice.fxRate || 0);
 }
+
+export type PaymentMethod = "CASH" | "CARD" | "BANK_TRANSFER";
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  CASH: "نقد",
+  CARD: "کارتخوان (پوز)",
+  BANK_TRANSFER: "کارت‌به‌کارت / واریز",
+};
+
+export interface CreatePosSaleDto {
+  idempotencyKey: string;
+  customer?: { phone?: string; name?: string };
+  lines: Array<{
+    code?: string;
+    description?: string;
+    quantity: number;
+    unitPrice: number;
+    discount?: number;
+    vatRate?: number;
+  }>;
+  payments: Array<{ method: PaymentMethod; amount: number }>;
+  warehouseId?: number;
+  currency?: Currency;
+  fxRate?: number;
+}
+
+export interface PosSaleResponse {
+  invoice: InvoiceResponseDto;
+  replayed: boolean;
+  customerLevel: "anonymous" | "phone" | "name_phone";
+  customerCreated: boolean;
+}
