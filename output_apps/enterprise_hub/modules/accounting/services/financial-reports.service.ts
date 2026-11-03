@@ -27,6 +27,7 @@ import {
   trialBalanceRows,
 } from '../reports/statements';
 import { ageing, AgeingInputError, AgeingReport } from '../reports/ageing';
+import type { ChartAccountRow } from '../reports/report-tables';
 
 export interface ResolvedPeriod {
   yearStart: string;
@@ -144,6 +145,19 @@ export class FinancialReportsService {
       level: row.level ?? null,
       parentCode: row.parentCode ?? null,
       reportLine: row.reportLine ?? null,
+    }));
+  }
+
+  /** Every account of the tenant with its currency, for the chart export. */
+  async chartOfAccounts(tenantId: string): Promise<ChartAccountRow[]> {
+    const rows = await this.accounting.findAllAccounts(tenantId);
+    return rows.map((row) => ({
+      code: row.code,
+      name: row.name,
+      accountType: row.accountType,
+      level: row.level ?? null,
+      parentCode: row.parentCode ?? null,
+      currency: row.currency,
     }));
   }
 

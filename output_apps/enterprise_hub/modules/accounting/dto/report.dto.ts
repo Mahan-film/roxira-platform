@@ -118,6 +118,7 @@ export const EXPORTABLE_REPORTS = [
   'cash-flow',
   'equity-changes',
   'ageing',
+  'chart-of-accounts',
 ] as const;
 export type ExportableReport = (typeof EXPORTABLE_REPORTS)[number];
 

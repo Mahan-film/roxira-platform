@@ -1,4 +1,5 @@
 import { LedgerReport, ResolvedPeriod, TrialBalanceReport } from '../services/financial-reports.service';
+import { AccountLevel, AccountType } from '../enums/accounting.enum';
 import { AgeingBucket, AgeingReport } from './ageing';
 import { ReportColumn, ReportRow, ReportTable } from './report-table';
 import {
@@ -192,5 +193,61 @@ export function ageingTable(report: AgeingReport): ReportTable {
         bold: true,
       },
     ],
+  };
+}
+
+/**
+ * Persian account types. Each is an alias the accounts importer accepts
+ * (`data_import/registry/accounting-accounts.registry.ts`), so an exported chart imports back.
+ */
+export const ACCOUNT_TYPE_TITLES: Record<AccountType, string> = {
+  [AccountType.ASSET]: 'دارایی',
+  [AccountType.LIABILITY]: 'بدهی',
+  [AccountType.EQUITY]: 'سرمایه',
+  [AccountType.REVENUE]: 'درآمد',
+  [AccountType.EXPENSE]: 'هزینه',
+};
+
+const ACCOUNT_LEVEL_TITLES: Record<AccountLevel, string> = {
+  [AccountLevel.GROUP]: 'گروه',
+  [AccountLevel.KOL]: 'کل',
+  [AccountLevel.MOEIN]: 'معین',
+  [AccountLevel.TAFSILI]: 'تفصیلی',
+};
+
+export interface ChartAccountRow {
+  code: string;
+  name: string;
+  accountType: AccountType;
+  level: AccountLevel | null;
+  parentCode: string | null;
+  currency: string;
+}
+
+/** Chart of accounts. The first four column titles are the accounts importer's own field labels. */
+export function chartOfAccountsTable(accounts: ChartAccountRow[]): ReportTable {
+  return {
+    title: 'سرفصل حساب‌ها',
+    subtitle: `${accounts.length} حساب`,
+    columns: [
+      { title: 'کد حساب', width: 0.8 },
+      { title: 'نام حساب', width: 2.4 },
+      { title: 'ماهیت حساب', width: 0.8 },
+      { title: 'واحد پول', width: 0.6 },
+      { title: 'سطح', width: 0.6 },
+      { title: 'کد حساب بالاتر', width: 0.8 },
+    ],
+    rows: [...accounts]
+      .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+      .map((account) => ({
+        cells: [
+          account.code,
+          account.name,
+          ACCOUNT_TYPE_TITLES[account.accountType],
+          account.currency,
+          account.level ? ACCOUNT_LEVEL_TITLES[account.level] : '',
+          account.parentCode ?? '',
+        ],
+      })),
   };
 }
