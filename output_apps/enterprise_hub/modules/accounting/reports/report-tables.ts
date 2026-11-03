@@ -1,4 +1,5 @@
 import { LedgerReport, ResolvedPeriod, TrialBalanceReport } from '../services/financial-reports.service';
+import { AgeingBucket, AgeingReport } from './ageing';
 import { ReportColumn, ReportRow, ReportTable } from './report-table';
 import {
   BalanceSheet,
@@ -153,5 +154,43 @@ export function equityChangesTable(report: EquityChanges & { period: ResolvedPer
       cells: [row.title, row.capital, row.legalReserve, row.otherReserves, row.retainedEarnings, row.total],
       bold: row.key === 'closing',
     })),
+  };
+}
+
+const bucketTitle = (bucket: AgeingBucket): string =>
+  bucket.toDay === null ? `بیش از ${bucket.fromDay - 1} روز` : `${bucket.fromDay} تا ${bucket.toDay} روز`;
+
+export function ageingTable(report: AgeingReport): ReportTable {
+  const side = report.side === 'receivable' ? 'دریافتنی' : 'پرداختنی';
+  const advance = report.side === 'receivable' ? 'پیش‌دریافت' : 'پیش‌پرداخت';
+  return {
+    title: `گزارش سنی حساب‌های ${side}`,
+    subtitle: `در تاریخ ${jalali(report.asOf)}، سن از تاریخ سند (مبالغ به ریال)`,
+    columns: [
+      { title: 'حساب', width: 0.7 },
+      { title: 'نام حساب', width: 1.6 },
+      { title: 'تفصیلی', width: 0.9 },
+      { title: 'قدیمی‌ترین قلم باز', width: 0.9 },
+      ...report.buckets.map((bucket) => ({ title: bucketTitle(bucket), money: true })),
+      { title: advance, money: true },
+      { title: 'مانده', money: true },
+    ],
+    rows: [
+      ...report.rows.map((row) => ({
+        cells: [
+          row.accountCode,
+          row.accountName,
+          row.partyCode ?? 'بدون تفصیلی',
+          row.oldestOpenDay ? jalali(row.oldestOpenDay) : '',
+          ...row.amounts,
+          row.unapplied,
+          row.balance,
+        ],
+      })),
+      {
+        cells: ['', 'جمع', '', '', ...report.totals.amounts, report.totals.unapplied, report.totals.balance],
+        bold: true,
+      },
+    ],
   };
 }

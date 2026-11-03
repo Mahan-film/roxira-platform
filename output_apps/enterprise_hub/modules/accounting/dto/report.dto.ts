@@ -117,6 +117,7 @@ export const EXPORTABLE_REPORTS = [
   'income-statement',
   'cash-flow',
   'equity-changes',
+  'ageing',
 ] as const;
 export type ExportableReport = (typeof EXPORTABLE_REPORTS)[number];
 
@@ -132,9 +133,23 @@ export class ExportReportQueryDto extends TrialBalanceQueryDto {
   @MaxLength(32)
   accountCode?: string;
 
-  @ApiPropertyOptional({ description: 'Ledger report' })
+  @ApiPropertyOptional({ description: 'Ledger and ageing reports' })
   @IsOptional()
   @IsString()
   @MaxLength(64)
   partyCode?: string;
+
+  @ApiPropertyOptional({ enum: ['receivable', 'payable'], default: 'receivable', description: 'Ageing report' })
+  @IsOptional()
+  @IsIn(['receivable', 'payable'])
+  side?: 'receivable' | 'payable';
+
+  @ApiPropertyOptional({ description: 'Ageing report: bucket edges in days, comma separated', example: '30,60,90' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.split(',').map((part) => Number(part.trim())) : value))
+  @ArrayMaxSize(12)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(3650, { each: true })
+  edges?: number[];
 }

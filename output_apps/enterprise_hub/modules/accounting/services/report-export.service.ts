@@ -3,6 +3,7 @@ import { ExportableReport, ExportReportQueryDto } from '../dto/report.dto';
 import { writePdf } from '../reports/pdf-writer';
 import { ReportTable } from '../reports/report-table';
 import {
+  ageingTable,
   balanceSheetTable,
   cashFlowTable,
   equityChangesTable,
@@ -60,6 +61,16 @@ export class ReportExportService {
         return cashFlowTable(await this.reports.cashFlow(tenantId, period));
       case 'equity-changes':
         return equityChangesTable(await this.reports.equityChanges(tenantId, period));
+      case 'ageing':
+        return ageingTable(
+          await this.reports.ageing(tenantId, {
+            side: query.side,
+            to: query.to,
+            accountCode: query.accountCode,
+            partyCode: query.partyCode,
+            edges: query.edges,
+          }),
+        );
     }
   }
 
