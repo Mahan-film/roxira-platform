@@ -280,16 +280,20 @@ const buildService = () => {
   return { repository, service: new AccountingService(repository, currencyService) };
 };
 
+/** A repository whose TenantScope hands the given entity doubles to the query (no database). */
+const scopedRepository = (accounts?: object, entries?: object) => {
+  const manager = {
+    getRepository: (entity: { name: string }) =>
+      entity.name === 'ChartOfAccountEntity' ? accounts : entries,
+  };
+  const scope = { within: async (_t: string, _m: unknown, work: (m: unknown) => unknown) => work(manager) };
+  return new AccountingRepository(scope as never);
+};
+
 describe('AccountingRepository — tenant scoping', () => {
   it('scopes findEntryById by tenantId', async () => {
     const entries = { findOne: jest.fn(async () => null) };
-    const repository = new AccountingRepository(
-      {} as never,
-      entries as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    );
+    const repository = scopedRepository(undefined, entries);
 
     await repository.findEntryById('tenant-a', 1);
 
@@ -301,13 +305,7 @@ describe('AccountingRepository — tenant scoping', () => {
 
   it('scopes findAccountByCode by tenantId', async () => {
     const accounts = { findOne: jest.fn(async () => null) };
-    const repository = new AccountingRepository(
-      accounts as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    );
+    const repository = scopedRepository(accounts, undefined);
 
     await repository.findAccountByCode('tenant-a', '1010');
 
@@ -321,13 +319,7 @@ describe('AccountingRepository — tenant scoping', () => {
       create: jest.fn((data: unknown) => data),
       save: jest.fn(async (data: unknown) => data),
     };
-    const repository = new AccountingRepository(
-      accounts as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    );
+    const repository = scopedRepository(accounts, undefined);
 
     await repository.createAccount('tenant-a', { code: '9000' });
 
@@ -339,13 +331,7 @@ describe('AccountingRepository — tenant scoping', () => {
 
   it('injects tenantId into findAndCountEntries where', async () => {
     const entries = { findAndCount: jest.fn(async () => [[], 0]) };
-    const repository = new AccountingRepository(
-      {} as never,
-      entries as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    );
+    const repository = scopedRepository(undefined, entries);
 
     await repository.findAndCountEntries('tenant-a', {
       where: { status: JournalEntryStatus.POSTED },

@@ -1,3 +1,4 @@
+import { TenantScope } from '../access/services/tenant-scope';
 /**
  * Sample company on a REAL PostgreSQL: the statements must reconcile to the trial balance exactly,
  * before and after a close, and for imported data. Opt-in: skipped unless ROXIRA_TEST_PG_HOST is set.
@@ -80,16 +81,10 @@ describePg('Financial reports on PostgreSQL', () => {
     await ds.initialize();
     await ds.runMigrations();
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(
-      ds.getRepository(ChartOfAccountEntity),
-      ds.getRepository(JournalEntryEntity),
-      ds.getRepository(JournalEntryLineEntity),
-      ds.getRepository(PeriodLockEntity),
-      ds,
-    );
+    const repo = new AccountingRepository(new TenantScope(ds));
     accounting = new AccountingService(repo, currency);
     const fiscal = new FiscalYearRepository(ds);
-    const ledger = new LedgerReportRepository(ds);
+    const ledger = new LedgerReportRepository(new TenantScope(ds));
     reports = new FinancialReportsService(repo, fiscal, ledger);
     exporter = new ReportExportService(reports);
     years = new FiscalYearService(repo, fiscal, ledger, accounting);

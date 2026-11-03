@@ -1,3 +1,4 @@
+import { TenantScope } from '../access/services/tenant-scope';
 /**
  * Invoice capture against a REAL PostgreSQL. The model is faked; the migration, repository and ledger are real.
  * Opt-in: ROXIRA_TEST_PG_HOST=127.0.0.1 ROXIRA_TEST_PG_PORT=55439 npx jest modules/invoice_capture/capture.pg.spec.ts
@@ -63,13 +64,7 @@ describePg('Invoice capture on PostgreSQL', () => {
     await ds.initialize();
     await ds.runMigrations();
     accounting = new AccountingService(
-      new AccountingRepository(
-        ds.getRepository(ChartOfAccountEntity),
-        ds.getRepository(JournalEntryEntity),
-        ds.getRepository(JournalEntryLineEntity),
-        ds.getRepository(PeriodLockEntity),
-        ds,
-      ),
+      new AccountingRepository(new TenantScope(ds)),
       { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService,
     );
     const llm = {

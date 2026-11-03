@@ -489,7 +489,7 @@ export class AccountingService {
     ids: number[],
   ): Promise<{ removed: number; refused: number[] }> {
     const unique = Array.from(new Set(ids));
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entries = await this.accountingRepository.findEntriesByIds(
         tenantId,
         unique,
@@ -741,7 +741,7 @@ export class AccountingService {
     dto: UpdateJournalEntryDto,
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId);
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
       const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
       if (entry.status === JournalEntryStatus.TEMPORARY) {
@@ -789,7 +789,7 @@ export class AccountingService {
     id: number,
     target: JournalEntryStatus,
   ): Promise<JournalEntryResponseDto> {
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
       if (entry.status === target) {
         throw new ConflictException('سند از قبل در همین وضعیت است.');
@@ -827,7 +827,7 @@ export class AccountingService {
 
   /** Deletes a DRAFT or TEMPORARY voucher. A final voucher is only ever reversed. */
   async deleteVoucher(tenantId: string, id: number): Promise<void> {
-    await this.accountingRepository.transaction(async (manager) => {
+    await this.accountingRepository.transaction(tenantId, async (manager) => {
       await this.lockEditableVoucher(tenantId, id, manager);
       await this.accountingRepository.deleteEntry(tenantId, id, manager);
     });
@@ -845,7 +845,7 @@ export class AccountingService {
     id: number,
     options: { date?: string; reason?: string } = {},
   ): Promise<JournalEntryResponseDto> {
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.accountingRepository.findEntryById(tenantId, id, manager);
       if (
         entry &&

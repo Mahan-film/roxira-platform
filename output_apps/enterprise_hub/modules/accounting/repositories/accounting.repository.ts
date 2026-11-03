@@ -1,13 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import {
-  DataSource,
   EntityManager,
   FindManyOptions,
   FindOptionsWhere,
   ILike,
   In,
-  Repository,
 } from 'typeorm';
 import { JournalEntryStatus, JournalEntryType } from '../enums/accounting.enum';
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
@@ -84,49 +82,26 @@ export interface LedgerRawRow {
  */
 @Injectable()
 export class AccountingRepository {
-  constructor(
-    @InjectRepository(ChartOfAccountEntity)
-    private readonly accounts: Repository<ChartOfAccountEntity>,
-    @InjectRepository(JournalEntryEntity)
-    private readonly entries: Repository<JournalEntryEntity>,
-    @InjectRepository(JournalEntryLineEntity)
-    private readonly lines: Repository<JournalEntryLineEntity>,
-    @InjectRepository(PeriodLockEntity)
-    private readonly locks: Repository<PeriodLockEntity>,
-    private readonly dataSource: DataSource,
-  ) {}
-
-  private accountsRepo(manager?: EntityManager): Repository<ChartOfAccountEntity> {
-    return manager ? manager.getRepository(ChartOfAccountEntity) : this.accounts;
-  }
-
-  private entriesRepo(manager?: EntityManager): Repository<JournalEntryEntity> {
-    return manager ? manager.getRepository(JournalEntryEntity) : this.entries;
-  }
-
-  private linesRepo(manager?: EntityManager): Repository<JournalEntryLineEntity> {
-    return manager ? manager.getRepository(JournalEntryLineEntity) : this.lines;
-  }
-
-  private locksRepo(manager?: EntityManager): Repository<PeriodLockEntity> {
-    return manager ? manager.getRepository(PeriodLockEntity) : this.locks;
-  }
+  constructor(private readonly scope: TenantScope) {}
 
   /** Runs `work` in one transaction (the caller's, if a manager is passed). */
   transaction<T>(
+    tenantId: string,
     work: (manager: EntityManager) => Promise<T>,
     outerManager?: EntityManager,
   ): Promise<T> {
-    return outerManager ? work(outerManager) : this.dataSource.transaction(work);
+    return this.scope.within(tenantId, outerManager, work);
   }
 
   async findAllAccounts(
     tenantId: string,
     manager?: EntityManager,
   ): Promise<ChartOfAccountEntity[]> {
-    return this.accountsRepo(manager).find({
-      where: { tenantId },
-      order: { code: 'ASC' },
+    return this.scope.within(tenantId, manager, async (m) => {
+      return m.getRepository(ChartOfAccountEntity).find({
+        where: { tenantId },
+        order: { code: 'ASC' },
+      });
     });
   }
 
@@ -134,14 +109,18 @@ export class AccountingRepository {
     tenantId: string,
     id: number,
   ): Promise<ChartOfAccountEntity | null> {
-    return this.accounts.findOne({ where: { id, tenantId } });
+    return this.scope.within(tenantId, undefined, async (m) => {
+      return m.getRepository(ChartOfAccountEntity).findOne({ where: { id, tenantId } });
+    });
   }
 
   async findAccountByCode(
     tenantId: string,
     code: string,
   ): Promise<ChartOfAccountEntity | null> {
-    return this.accounts.findOne({ where: { code, tenantId } });
+    return this.scope.within(tenantId, undefined, async (m) => {
+      return m.getRepository(ChartOfAccountEntity).findOne({ where: { code, tenantId } });
+    });
   }
 
   async findAccountsByCodes(
@@ -149,34 +128,42 @@ export class AccountingRepository {
     codes: string[],
     manager?: EntityManager,
   ): Promise<ChartOfAccountEntity[]> {
-    if (codes.length === 0) {
-      return [];
-    }
-    return this.accountsRepo(manager).find({
-      where: codes.map((code) => ({ code, tenantId })),
+    return this.scope.within(tenantId, manager, async (m) => {
+      if (codes.length === 0) {
+        return [];
+      }
+      return m.getRepository(ChartOfAccountEntity).find({
+        where: codes.map((code) => ({ code, tenantId })),
+      });
     });
   }
 
   async countAccounts(tenantId: string, manager?: EntityManager): Promise<number> {
-    return this.accountsRepo(manager).count({ where: { tenantId } });
+    return this.scope.within(tenantId, manager, async (m) => {
+      return m.getRepository(ChartOfAccountEntity).count({ where: { tenantId } });
+    });
   }
 
   async createAccount(
     tenantId: string,
     data: Partial<ChartOfAccountEntity>,
   ): Promise<ChartOfAccountEntity> {
-    const entity = this.accounts.create({ ...data, tenantId });
-    return this.accounts.save(entity);
+    return this.scope.within(tenantId, undefined, async (m) => {
+      const entity = m.getRepository(ChartOfAccountEntity).create({ ...data, tenantId });
+      return m.getRepository(ChartOfAccountEntity).save(entity);
+    });
   }
 
   async createAccounts(
     tenantId: string,
     data: Partial<ChartOfAccountEntity>[],
   ): Promise<ChartOfAccountEntity[]> {
-    const entities = data.map((item) =>
-      this.accounts.create({ ...item, tenantId }),
-    );
-    return this.accounts.save(entities, { chunk: 500 }); // stay under the bind-parameter limit
+    return this.scope.within(tenantId, undefined, async (m) => {
+      const entities = data.map((item) =>
+        m.getRepository(ChartOfAccountEntity).create({ ...item, tenantId }),
+      );
+      return m.getRepository(ChartOfAccountEntity).save(entities, { chunk: 500 }); // stay under the bind-parameter limit
+    });
   }
 
   /**
@@ -189,18 +176,20 @@ export class AccountingRepository {
     data: Partial<ChartOfAccountEntity>[],
     manager?: EntityManager,
   ): Promise<void> {
-    if (data.length === 0) {
-      return;
-    }
-    const repo = this.accountsRepo(manager);
-    const entities = data.map((item) => repo.create({ ...item, tenantId }));
-    await repo
-      .createQueryBuilder()
-      .insert()
-      .into(ChartOfAccountEntity)
-      .values(entities)
-      .orIgnore()
-      .execute();
+    return this.scope.within(tenantId, manager, async (m) => {
+      if (data.length === 0) {
+        return;
+      }
+      const repo = m.getRepository(ChartOfAccountEntity);
+      const entities = data.map((item) => repo.create({ ...item, tenantId }));
+      await repo
+        .createQueryBuilder()
+        .insert()
+        .into(ChartOfAccountEntity)
+        .values(entities)
+        .orIgnore()
+        .execute();
+    });
   }
 
   /** Sets level, parent and report line on existing accounts; names, types and balances stay. */
@@ -210,7 +199,9 @@ export class AccountingRepository {
     data: Pick<ChartOfAccountEntity, 'level' | 'parentCode' | 'reportLine'>,
     manager?: EntityManager,
   ): Promise<void> {
-    await this.accountsRepo(manager).update({ tenantId, code }, data);
+    return this.scope.within(tenantId, manager, async (m) => {
+      await m.getRepository(ChartOfAccountEntity).update({ tenantId, code }, data);
+    });
   }
 
   /** شناسه حساب‌هایی که سطر سند دارند (ارجاع‌شده؛ undo ممنوع). */
@@ -218,14 +209,16 @@ export class AccountingRepository {
     tenantId: string,
     ids: number[],
   ): Promise<number[]> {
-    if (ids.length === 0) {
-      return [];
-    }
-    const rows = await this.lines.find({
-      where: { tenantId, accountId: In(ids) },
-      select: { accountId: true },
+    return this.scope.within(tenantId, undefined, async (m) => {
+      if (ids.length === 0) {
+        return [];
+      }
+      const rows = await m.getRepository(JournalEntryLineEntity).find({
+        where: { tenantId, accountId: In(ids) },
+        select: { accountId: true },
+      });
+      return Array.from(new Set(rows.map((row) => row.accountId)));
     });
-    return Array.from(new Set(rows.map((row) => row.accountId)));
   }
 
   /** حذف حساب‌های یک دسته ورود داده با قید مستأجر (برای undo). */
@@ -233,11 +226,13 @@ export class AccountingRepository {
     tenantId: string,
     ids: number[],
   ): Promise<number> {
-    if (ids.length === 0) {
-      return 0;
-    }
-    const result = await this.accounts.delete({ tenantId, id: In(ids) });
-    return result.affected ?? 0;
+    return this.scope.within(tenantId, undefined, async (m) => {
+      if (ids.length === 0) {
+        return 0;
+      }
+      const result = await m.getRepository(ChartOfAccountEntity).delete({ tenantId, id: In(ids) });
+      return result.affected ?? 0;
+    });
   }
 
   async findEntryByNumber(
@@ -245,8 +240,10 @@ export class AccountingRepository {
     entryNumber: string,
     manager?: EntityManager,
   ): Promise<JournalEntryEntity | null> {
-    return this.entriesRepo(manager).findOne({
-      where: { entryNumber, tenantId },
+    return this.scope.within(tenantId, manager, async (m) => {
+      return m.getRepository(JournalEntryEntity).findOne({
+        where: { entryNumber, tenantId },
+      });
     });
   }
 
@@ -256,8 +253,10 @@ export class AccountingRepository {
     entryId: number,
     manager?: EntityManager,
   ): Promise<JournalEntryEntity | null> {
-    return this.entriesRepo(manager).findOne({
-      where: { tenantId, reversesEntryId: entryId },
+    return this.scope.within(tenantId, manager, async (m) => {
+      return m.getRepository(JournalEntryEntity).findOne({
+        where: { tenantId, reversesEntryId: entryId },
+      });
     });
   }
 
@@ -266,9 +265,11 @@ export class AccountingRepository {
     id: number,
     manager?: EntityManager,
   ): Promise<JournalEntryEntity | null> {
-    return this.entriesRepo(manager).findOne({
-      where: { id, tenantId },
-      relations: { lines: true },
+    return this.scope.within(tenantId, manager, async (m) => {
+      return m.getRepository(JournalEntryEntity).findOne({
+        where: { id, tenantId },
+        relations: { lines: true },
+      });
     });
   }
 
@@ -277,13 +278,15 @@ export class AccountingRepository {
     ids: number[],
     manager?: EntityManager,
   ): Promise<JournalEntryEntity[]> {
-    if (ids.length === 0) {
-      return [];
-    }
-    return this.entriesRepo(manager).find({
-      where: { tenantId, id: In(ids) },
-      relations: { lines: true },
-      order: { id: 'ASC' },
+    return this.scope.within(tenantId, manager, async (m) => {
+      if (ids.length === 0) {
+        return [];
+      }
+      return m.getRepository(JournalEntryEntity).find({
+        where: { tenantId, id: In(ids) },
+        relations: { lines: true },
+        order: { id: 'ASC' },
+      });
     });
   }
 
@@ -291,10 +294,12 @@ export class AccountingRepository {
     tenantId: string,
     options: FindManyOptions<JournalEntryEntity>,
   ): Promise<[JournalEntryEntity[], number]> {
-    const where = (options.where ?? {}) as FindOptionsWhere<JournalEntryEntity>;
-    return this.entries.findAndCount({
-      ...options,
-      where: { ...where, tenantId },
+    return this.scope.within(tenantId, undefined, async (m) => {
+      const where = (options.where ?? {}) as FindOptionsWhere<JournalEntryEntity>;
+      return m.getRepository(JournalEntryEntity).findAndCount({
+        ...options,
+        where: { ...where, tenantId },
+      });
     });
   }
 
@@ -302,10 +307,12 @@ export class AccountingRepository {
     tenantId: string,
     entryNumber: string,
   ): Promise<JournalEntryEntity[]> {
-    return this.entries.find({
-      where: { entryNumber: ILike(`%${entryNumber}%`), tenantId },
-      order: { date: 'DESC' },
-      relations: { lines: true },
+    return this.scope.within(tenantId, undefined, async (m) => {
+      return m.getRepository(JournalEntryEntity).find({
+        where: { entryNumber: ILike(`%${entryNumber}%`), tenantId },
+        order: { date: 'DESC' },
+        relations: { lines: true },
+      });
     });
   }
 
@@ -336,7 +343,7 @@ export class AccountingRepository {
     lineInputs: JournalLineInput[],
     outerManager?: EntityManager,
   ): Promise<JournalEntryEntity> {
-    return this.transaction(async (manager) => {
+    return this.transaction(tenantId, async (manager) => {
       await this.lockLedgerShared(tenantId, manager);
       await this.assertDateOpen(tenantId, header.date, manager);
 
@@ -575,17 +582,19 @@ export class AccountingRepository {
     date: Date,
     manager?: EntityManager,
   ): Promise<PeriodLockEntity | null> {
-    // The calendar day is computed by PostgreSQL from the same bound value the INSERT uses, so
-    // this check and the BEFORE INSERT trigger can never disagree about the day (time zones).
-    return this.locksRepo(manager)
-      .createQueryBuilder('lock')
-      .where('lock.tenantId = :tenantId', { tenantId })
-      .andWhere('lock.unlockedAt IS NULL')
-      .andWhere(
-        'CAST(CAST(:date AS timestamp) AS date) BETWEEN lock.periodStart AND lock.periodEnd',
-        { date },
-      )
-      .getOne();
+    return this.scope.within(tenantId, manager, async (m) => {
+      // The calendar day is computed by PostgreSQL from the same bound value the INSERT uses, so
+      // this check and the BEFORE INSERT trigger can never disagree about the day (time zones).
+      return m.getRepository(PeriodLockEntity)
+        .createQueryBuilder('lock')
+        .where('lock.tenantId = :tenantId', { tenantId })
+        .andWhere('lock.unlockedAt IS NULL')
+        .andWhere(
+          'CAST(CAST(:date AS timestamp) AS date) BETWEEN lock.periodStart AND lock.periodEnd',
+          { date },
+        )
+        .getOne();
+    });
   }
 
   private dayOf(date: Date): string {
@@ -602,7 +611,7 @@ export class AccountingRepository {
     },
     outerManager?: EntityManager,
   ): Promise<PeriodLockEntity> {
-    return this.transaction(async (manager) => {
+    return this.transaction(tenantId, async (manager) => {
       await this.lockLedgerExclusive(tenantId, manager);
       return manager.save(
         manager.create(PeriodLockEntity, { ...data, tenantId }),
@@ -617,7 +626,7 @@ export class AccountingRepository {
     data: { unlockedBy: string; unlockReason: string },
     outerManager?: EntityManager,
   ): Promise<PeriodLockEntity | null> {
-    return this.transaction(async (manager) => {
+    return this.transaction(tenantId, async (manager) => {
       await this.lockLedgerExclusive(tenantId, manager);
       const rows: unknown[] = (
         await manager
@@ -646,13 +655,17 @@ export class AccountingRepository {
     tenantId: string,
     id: number,
   ): Promise<PeriodLockEntity | null> {
-    return this.locks.findOne({ where: { id, tenantId } });
+    return this.scope.within(tenantId, undefined, async (m) => {
+      return m.getRepository(PeriodLockEntity).findOne({ where: { id, tenantId } });
+    });
   }
 
   async listPeriodLocks(tenantId: string): Promise<PeriodLockEntity[]> {
-    return this.locks.find({
-      where: { tenantId },
-      order: { lockedAt: 'DESC', id: 'DESC' },
+    return this.scope.within(tenantId, undefined, async (m) => {
+      return m.getRepository(PeriodLockEntity).find({
+        where: { tenantId },
+        order: { lockedAt: 'DESC', id: 'DESC' },
+      });
     });
   }
 
@@ -667,30 +680,32 @@ export class AccountingRepository {
     tenantId: string,
     currency?: string,
   ): Promise<TrialBalanceRawRow[]> {
-    const query = this.lines
-      .createQueryBuilder('line')
-      .innerJoin('line.account', 'account')
-      .innerJoin('line.journalEntry', 'entry')
-      .select('account.code', 'code')
-      .addSelect('account.name', 'name')
-      .addSelect('account.accountType', 'accountType')
-      .addSelect('COALESCE(SUM(line.debit), 0)', 'totalDebit')
-      .addSelect('COALESCE(SUM(line.credit), 0)', 'totalCredit')
-      .addSelect('COALESCE(SUM(line.amountFx), 0)', 'totalAmountFx')
-      .addSelect('COALESCE(SUM(line.amountFx * line.fxRate), 0)', 'totalFxInIrr')
-      .where('line.tenantId = :tenantId', { tenantId })
-      .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED });
+    return this.scope.within(tenantId, undefined, async (m) => {
+      const query = m.getRepository(JournalEntryLineEntity)
+        .createQueryBuilder('line')
+        .innerJoin('line.account', 'account')
+        .innerJoin('line.journalEntry', 'entry')
+        .select('account.code', 'code')
+        .addSelect('account.name', 'name')
+        .addSelect('account.accountType', 'accountType')
+        .addSelect('COALESCE(SUM(line.debit), 0)', 'totalDebit')
+        .addSelect('COALESCE(SUM(line.credit), 0)', 'totalCredit')
+        .addSelect('COALESCE(SUM(line.amountFx), 0)', 'totalAmountFx')
+        .addSelect('COALESCE(SUM(line.amountFx * line.fxRate), 0)', 'totalFxInIrr')
+        .where('line.tenantId = :tenantId', { tenantId })
+        .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED });
 
-    if (currency) {
-      query.andWhere('line.currency = :currency', { currency });
-    }
+      if (currency) {
+        query.andWhere('line.currency = :currency', { currency });
+      }
 
-    return query
-      .groupBy('account.code')
-      .addGroupBy('account.name')
-      .addGroupBy('account.accountType')
-      .orderBy('account.code', 'ASC')
-      .getRawMany<TrialBalanceRawRow>();
+      return query
+        .groupBy('account.code')
+        .addGroupBy('account.name')
+        .addGroupBy('account.accountType')
+        .orderBy('account.code', 'ASC')
+        .getRawMany<TrialBalanceRawRow>();
+    });
   }
 
   /**
@@ -702,25 +717,27 @@ export class AccountingRepository {
     accountId: number,
     lineIds: number[],
   ): Promise<LedgerRawRow[]> {
-    if (lineIds.length === 0) {
-      return [];
-    }
-    return this.lines
-      .createQueryBuilder('line')
-      .innerJoin('line.journalEntry', 'entry')
-      .select('line.id', 'id')
-      .addSelect('line.journalEntryId', 'journalEntryId')
-      .addSelect('entry.entryNumber', 'entryNumber')
-      .addSelect('entry.date', 'date')
-      .addSelect('entry.description', 'entryDescription')
-      .addSelect('line.description', 'lineDescription')
-      .addSelect('line.debit', 'debit')
-      .addSelect('line.credit', 'credit')
-      .where('line.tenantId = :tenantId', { tenantId })
-      .andWhere('line.accountId = :accountId', { accountId })
-      .andWhere('line.id IN (:...lineIds)', { lineIds })
-      .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED })
-      .getRawMany<LedgerRawRow>();
+    return this.scope.within(tenantId, undefined, async (m) => {
+      if (lineIds.length === 0) {
+        return [];
+      }
+      return m.getRepository(JournalEntryLineEntity)
+        .createQueryBuilder('line')
+        .innerJoin('line.journalEntry', 'entry')
+        .select('line.id', 'id')
+        .addSelect('line.journalEntryId', 'journalEntryId')
+        .addSelect('entry.entryNumber', 'entryNumber')
+        .addSelect('entry.date', 'date')
+        .addSelect('entry.description', 'entryDescription')
+        .addSelect('line.description', 'lineDescription')
+        .addSelect('line.debit', 'debit')
+        .addSelect('line.credit', 'credit')
+        .where('line.tenantId = :tenantId', { tenantId })
+        .andWhere('line.accountId = :accountId', { accountId })
+        .andWhere('line.id IN (:...lineIds)', { lineIds })
+        .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED })
+        .getRawMany<LedgerRawRow>();
+    });
   }
 
   /**
@@ -732,30 +749,32 @@ export class AccountingRepository {
     fromDate?: Date,
     toDate?: Date,
   ): Promise<LedgerRawRow[]> {
-    const query = this.lines
-      .createQueryBuilder('line')
-      .innerJoin('line.journalEntry', 'entry')
-      .select('line.id', 'id')
-      .addSelect('line.journalEntryId', 'journalEntryId')
-      .addSelect('entry.entryNumber', 'entryNumber')
-      .addSelect('entry.date', 'date')
-      .addSelect('entry.description', 'entryDescription')
-      .addSelect('line.description', 'lineDescription')
-      .addSelect('line.debit', 'debit')
-      .addSelect('line.credit', 'credit')
-      .where('line.tenantId = :tenantId', { tenantId })
-      .andWhere('line.accountId = :accountId', { accountId })
-      .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED })
-      .orderBy('entry.date', 'ASC')
-      .addOrderBy('line.id', 'ASC');
+    return this.scope.within(tenantId, undefined, async (m) => {
+      const query = m.getRepository(JournalEntryLineEntity)
+        .createQueryBuilder('line')
+        .innerJoin('line.journalEntry', 'entry')
+        .select('line.id', 'id')
+        .addSelect('line.journalEntryId', 'journalEntryId')
+        .addSelect('entry.entryNumber', 'entryNumber')
+        .addSelect('entry.date', 'date')
+        .addSelect('entry.description', 'entryDescription')
+        .addSelect('line.description', 'lineDescription')
+        .addSelect('line.debit', 'debit')
+        .addSelect('line.credit', 'credit')
+        .where('line.tenantId = :tenantId', { tenantId })
+        .andWhere('line.accountId = :accountId', { accountId })
+        .andWhere('entry.status = :posted', { posted: JournalEntryStatus.POSTED })
+        .orderBy('entry.date', 'ASC')
+        .addOrderBy('line.id', 'ASC');
 
-    if (fromDate) {
-      query.andWhere('entry.date >= :fromDate', { fromDate });
-    }
-    if (toDate) {
-      query.andWhere('entry.date <= :toDate', { toDate });
-    }
+      if (fromDate) {
+        query.andWhere('entry.date >= :fromDate', { fromDate });
+      }
+      if (toDate) {
+        query.andWhere('entry.date <= :toDate', { toDate });
+      }
 
-    return query.getRawMany<LedgerRawRow>();
+      return query.getRawMany<LedgerRawRow>();
+    });
   }
 }

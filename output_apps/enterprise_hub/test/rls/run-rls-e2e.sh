@@ -8,6 +8,7 @@ HUB="$(cd "$(dirname "$0")/../.." && pwd)"
 ROOT="$(cd "$HUB/../.." && pwd)"
 PGB_IMAGE="$(sed -n 's/^ *image: \(edoburu\/pgbouncer@.*\)$/\1/p' "$ROOT/docker-compose.prod.yml")"
 ID="rxrls$$" NET="$ID-net" PG="$ID-pg" PGB="$ID-pgb"
+RLS_SUITES="${RLS_SUITES:-modules/accounting modules/hr modules/banking modules/invoice_capture modules/cheques modules/invoicing}"
 PG_PORT="${RLS_PG_PORT:-55461}" PGB_PORT="${RLS_PGB_PORT:-55462}"
 for p in "$PG_PORT" "$PGB_PORT"; do
   if lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then echo "port $p is busy; set RLS_PG_PORT / RLS_PGB_PORT"; exit 1; fi
@@ -17,7 +18,8 @@ trap cleanup EXIT
 
 docker network create "$NET" >/dev/null
 docker run -d --name "$PG" --network "$NET" -p "127.0.0.1:$PG_PORT:5432" --tmpfs /var/lib/postgresql/data \
-  -e POSTGRES_USER=enterprise_admin -e POSTGRES_PASSWORD=owner-test-only -e POSTGRES_DB=postgres postgres:17-alpine >/dev/null
+  -e POSTGRES_USER=enterprise_admin -e POSTGRES_PASSWORD=owner-test-only -e POSTGRES_DB=postgres \
+  -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine >/dev/null
 for _ in $(seq 1 30); do docker exec "$PG" pg_isready -U enterprise_admin -q && break; sleep 1; done
 sleep 2
 # Same settings as pgbouncer_prod in docker-compose.prod.yml.
@@ -28,6 +30,13 @@ docker run -d --name "$PGB" --network "$NET" -p "127.0.0.1:$PGB_PORT:6432" -e DB
 sleep 3
 
 cd "$HUB"
+# Functional regression: the existing PostgreSQL suites of the covered modules, as the superuser they
+# were written for (they inspect tables with raw owner queries, which FORCE RLS would hide). RLS itself
+# is proven by the spec below, which connects as roxira_app through PgBouncer.
+if [ -z "${RLS_SKIP_SUITES:-}" ]; then
+  ROXIRA_TEST_PG_HOST=127.0.0.1 ROXIRA_TEST_PG_PORT="$PG_PORT" ROXIRA_TEST_PG_USER=enterprise_admin \
+    npx jest --runInBand $RLS_SUITES
+fi
 ROXIRA_TEST_PG_HOST=127.0.0.1 ROXIRA_TEST_PG_PORT="$PG_PORT" ROXIRA_TEST_PG_USER=enterprise_admin \
 ROXIRA_TEST_PG_PASSWORD=owner-test-only ROXIRA_TEST_PGB_HOST=127.0.0.1 ROXIRA_TEST_PGB_PORT="$PGB_PORT" \
   npx jest modules/access/rls/tenant-rls.pg.spec.ts --runInBand "$@"

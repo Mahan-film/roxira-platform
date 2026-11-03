@@ -1,3 +1,4 @@
+import { TenantScope } from '../access/services/tenant-scope';
 /** Petty cash on a REAL PostgreSQL. Opt-in: skipped unless ROXIRA_TEST_PG_HOST is set. */
 import 'reflect-metadata';
 import * as path from 'path';
@@ -58,15 +59,9 @@ describePg('Petty cash on PostgreSQL', () => {
     await ds.initialize();
     await ds.runMigrations();
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(
-      ds.getRepository(ChartOfAccountEntity),
-      ds.getRepository(JournalEntryEntity),
-      ds.getRepository(JournalEntryLineEntity),
-      ds.getRepository(PeriodLockEntity),
-      ds,
-    );
+    const repo = new AccountingRepository(new TenantScope(ds));
     accounting = new AccountingService(repo, currency);
-    reports = new FinancialReportsService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(ds));
+    reports = new FinancialReportsService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(new TenantScope(ds)));
     petty = new PettyCashService(new PettyCashRepository(ds), repo, accounting);
     await new ChartTemplateService(repo).apply(T1, 'iran-trading');
     await accounting.createJournalEntry(T1, {
