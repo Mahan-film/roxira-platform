@@ -105,6 +105,7 @@ check "dry-run runs no docker" '[ ! -e "$T/docker.calls" ]'
 # 2) real run: prune + remove, skip recent and dirty, then alert (90%)
 out="$(guard 2>&1)" || { echo "$out"; fail=1; }
 check "prunes the build cache" 'grep -qF "builder prune -f --keep-storage 3GB" "$T/docker.calls"'
+check "prunes dangling images only" 'grep -qxF "image prune -f" "$T/docker.calls"'
 check "removes the stale done worktree" '[ ! -e "$WTR/old" ]'
 check "keeps the recent worktree" '[ -d "$WTR/new" ]'
 check "keeps the dirty worktree" '[ -d "$WTR/dirty" ]'
