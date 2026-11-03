@@ -6,7 +6,6 @@ import { AccountingImportAccountInput, AccountingService } from '../../accountin
 import { parseXlsx } from '../parsers/xlsx.parser';
 import { AccountingAccountsRegistry } from './accounting-accounts.registry';
 import { buildEntityFallbackMapping, locateHeaderRow } from './entity-detect';
-import { normaliseText } from '../normaliser/normalise';
 import { normaliseAndValidate } from './field-validation';
 import { NormalisedRecord } from './import-registry.types';
 
@@ -53,8 +52,8 @@ describe('accounts import: chart hierarchy round trip', () => {
     expect(received).toEqual(
       chart.map((account) => ({
         code: account.code,
-        // Text fields go through normaliseText (ZWNJ becomes a space today; see the PR notes).
-        name: normaliseText(account.name),
+        // ZWNJ survives the import (#97): «دارایی‌های جاری» comes back unchanged.
+        name: account.name,
         accountType: account.accountType,
         currency: account.currency,
         ...(account.level ? { level: account.level } : {}),
