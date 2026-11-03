@@ -256,14 +256,11 @@ def check_otp_config() -> dict:
                 key = line.split("=", 1)[1].strip().strip("'\"")
                 break
     if not key:
-        # همان پیش‌فرض docker-compose.prod.yml
-        key = "REDACTED_SECRET_01"
-    if not key:
         return {"ok": False, "detail": "KAVENEGAR_API_KEY تنظیم نشده"}
     if ALLOW_OTP_DISPATCH:
         status, body, ms = http_post_json(
             f"{APP_URL}/api/v1/auth/request-otp",
-            {"phone_number": os.getenv("AUTO_REVIEW_OTP_PHONE", "09129367796"), "target_service": "roxira"},
+            {"phone_number": os.getenv("AUTO_REVIEW_OTP_PHONE", ""), "target_service": "roxira"},
             timeout=30,
         )
         return {"ok": status == 200, "detail": f"dispatch HTTP {status} ({ms:.0f}ms): {body[:120]}"}

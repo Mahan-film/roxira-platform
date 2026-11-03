@@ -29,11 +29,7 @@ KAVENEGAR_API_URL_BASE = os.getenv(
     "KAVENEGAR_API_URL_BASE", "https://api.kavenegar.com/v1"
 )
 
-# کلید پیش‌فرض مستندشده پنل کاوه‌نگار سامانه — در پروداکشن از متغیر محیطی
-# KAVENEGAR_API_KEY برای چرخش کلید استفاده کنید.
-KAVENEGAR_DEFAULT_API_KEY = (
-    "REDACTED_SECRET_01"
-)
+# The key comes only from the KAVENEGAR_API_KEY environment variable (never from code).
 KAVENEGAR_API_KEY_ENV = "KAVENEGAR_API_KEY"
 
 # قالب‌های تأیید اختصاصی هر سرویس
@@ -97,9 +93,9 @@ class KavenegarService:
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         base_url: str = KAVENEGAR_API_URL_BASE,
     ) -> None:
-        # مقداردهی کلید: پارامتر > متغیر محیطی > پیش‌فرض مستندشده
+        # مقداردهی کلید: پارامتر > متغیر محیطی
         self.api_key = (
-            api_key or os.getenv(KAVENEGAR_API_KEY_ENV) or KAVENEGAR_DEFAULT_API_KEY
+            api_key or os.getenv(KAVENEGAR_API_KEY_ENV) or ""
         ).strip()
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
