@@ -3,8 +3,10 @@
 # (8 GB docker build cache + 71 stale agent worktrees). Run hourly by roxira-disk-guard.timer.
 #
 # When / is at or above THRESHOLD_CLEANUP (default 80%):
-#   * docker builder prune -f --keep-storage 3GB -- build cache only. Images, volumes and containers
-#     are never touched: rollback images are tagged under /root/deploy-state/image_*.
+#   * docker builder prune -f --keep-storage 3GB -- build cache.
+#   * docker image prune -f -- DANGLING (untagged) images only: every deploy leaves ~4.5 GB of them
+#     (2026-11-03: 10.7 GB in 3 days). Tagged images, volumes and containers are never touched:
+#     rollback images are tagged under /root/deploy-state/image_*.
 #   * remove agent worktrees under WORKTREE_ROOT older than WORKTREE_MAX_AGE_DAYS whose newest taskq
 #     task reached done/failed/cancelled (taskq.db opened read-only). A worktree with uncommitted
 #     changes is skipped. Branches and patches are never deleted.
@@ -133,6 +135,8 @@ if [ "${WORKTREES_ONLY:-0}" = 1 ]; then
 elif command -v "$DOCKER_BIN" >/dev/null 2>&1; then
   log "pruning docker build cache (keep-storage $KEEP_STORAGE; images/volumes/containers untouched)"
   run "$DOCKER_BIN" builder prune -f --keep-storage "$KEEP_STORAGE" || log "WARNING: build-cache prune failed"
+  log "pruning dangling docker images (untagged only)"
+  run "$DOCKER_BIN" image prune -f || log "WARNING: dangling-image prune failed"
 else
   log "docker not found ($DOCKER_BIN); skipping build-cache prune"
 fi
