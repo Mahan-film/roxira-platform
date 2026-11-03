@@ -13,7 +13,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
 
 const OUT_DIR = __dirname;
 const SEED = 14030701;
@@ -79,35 +78,35 @@ function makeZip(entries) {
 
   for (const entry of entries) {
     const nameBuf = Buffer.from(entry.name, 'utf8');
-    const compressed = zlib.deflateRawSync(entry.data, { level: 9 });
-    const checksum = crc32(entry.data);
+    const dataBuf = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(entry.data, 'utf8');
+    const checksum = crc32(dataBuf);
     const utf8Flag = 0x0800;
 
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
     local.writeUInt16LE(utf8Flag, 6);
-    local.writeUInt16LE(8, 8);
+    local.writeUInt16LE(0, 8); // Method 0: STORE (uncompressed for cross-Node byte-for-byte determinism)
     local.writeUInt16LE(dosTime, 10);
     local.writeUInt16LE(dosDate, 12);
     local.writeUInt32LE(checksum, 14);
-    local.writeUInt32LE(compressed.length, 18);
-    local.writeUInt32LE(entry.data.length, 22);
+    local.writeUInt32LE(dataBuf.length, 18);
+    local.writeUInt32LE(dataBuf.length, 22);
     local.writeUInt16LE(nameBuf.length, 26);
     local.writeUInt16LE(0, 28);
-    localChunks.push(local, nameBuf, compressed);
+    localChunks.push(local, nameBuf, dataBuf);
 
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
     central.writeUInt16LE(20, 4);
     central.writeUInt16LE(20, 6);
     central.writeUInt16LE(utf8Flag, 8);
-    central.writeUInt16LE(8, 10);
+    central.writeUInt16LE(0, 10); // Method 0: STORE (uncompressed)
     central.writeUInt16LE(dosTime, 12);
     central.writeUInt16LE(dosDate, 14);
     central.writeUInt32LE(checksum, 16);
-    central.writeUInt32LE(compressed.length, 20);
-    central.writeUInt32LE(entry.data.length, 24);
+    central.writeUInt32LE(dataBuf.length, 20);
+    central.writeUInt32LE(dataBuf.length, 24);
     central.writeUInt16LE(nameBuf.length, 28);
     central.writeUInt16LE(0, 30);
     central.writeUInt16LE(0, 32);
@@ -117,7 +116,7 @@ function makeZip(entries) {
     central.writeUInt32LE(offset, 42);
     centralChunks.push(central, nameBuf);
 
-    offset += local.length + nameBuf.length + compressed.length;
+    offset += local.length + nameBuf.length + dataBuf.length;
   }
 
   const centralDir = Buffer.concat(centralChunks);
@@ -685,8 +684,69 @@ function generateDataset() {
   totalPurchasesGross = totalPurchasesGross - dupRow200OldTotal + dupRow121Total;
   invoicesRows[199] = [...invoicesRows[120]];
 
-  const uniqueSalesReceivablesDelta = salesReceivablesDelta - dupRow1Unpaid;
-  const uniquePurchasePayablesDelta = purchasePayablesDelta - dupRow121Unpaid;
+  let uniqueSalesReceivablesDelta = salesReceivablesDelta - dupRow1Unpaid;
+  let uniquePurchasePayablesDelta = purchasePayablesDelta - dupRow121Unpaid;
+
+  // 5b. 40 Multi-line Invoices (24 sales + 16 purchases) with 2 to 6 items each
+  for (let m = 1; m <= 40; m += 1) {
+    const isSale = m <= 24;
+    const invNum = isSale
+      ? `INV-S-1403-${String(120 + m).padStart(4, '0')}`
+      : `INV-P-1403-${String(80 + (m - 24)).padStart(4, '0')}`;
+    const type = isSale ? 'فروش' : 'خرید';
+    const month = String(((m - 1) % 6) + 4).padStart(2, '0');
+    const day = String(((m * 2) % 25) + 1).padStart(2, '0');
+    const date = `2024-${month}-${day}`;
+
+    const partyIdx = isSale ? (m - 1) % 29 : 30 + ((m - 25) % 19);
+    const party = counterpartiesData[partyIdx];
+    const partyCode = party.code;
+    let partyName = party.fullName;
+
+    const status = m % 3 === 0 ? 'تسویه‌شده' : 'صادرشده';
+    const lineCount = 2 + ((m * 3 + 1) % 5); // 2 to 6 items per invoice (cycle of 6, 4, 2, 5, 3)
+
+    for (let line = 0; line < lineCount; line += 1) {
+      const itemIdx = (100 + m * 7 + line) % itemsData.length;
+      const item = itemsData[itemIdx];
+      const qty = ((m + line) % 5) + 1;
+      const unitPrice = isSale ? Math.round(item.unitCost * 1.25) : item.unitCost;
+      const amount = qty * unitPrice;
+      const vat = Math.round(amount * 0.1); // 10% VAT
+      const totalRial = amount + vat;
+
+      invoicesRows.push([
+        invNum,
+        type,
+        date,
+        partyCode,
+        partyName,
+        item.sku,
+        String(qty),
+        String(unitPrice),
+        String(amount),
+        String(vat),
+        String(totalRial),
+        'IRR',
+        '1',
+        status,
+      ]);
+
+      if (isSale) {
+        totalSalesGross += totalRial;
+        if (status !== 'تسویه‌شده') {
+          salesReceivablesDelta += totalRial;
+          uniqueSalesReceivablesDelta += totalRial;
+        }
+      } else {
+        totalPurchasesGross += totalRial;
+        if (status !== 'تسویه‌شده') {
+          purchasePayablesDelta += totalRial;
+          uniquePurchasePayablesDelta += totalRial;
+        }
+      }
+    }
+  }
 
   // 6. 100 Bank Statement Lines
   const bankHeaders = [
@@ -798,7 +858,7 @@ All names, company titles, phone numbers (\`09000000xxx\`), national/economic ID
 - \`opening-balances.csv\` & \`opening-balances.xlsx\` — 14 balanced opening lines (\`debit = credit = ${totals.openingDebit}\`)
 - \`customers-suppliers.csv\`, \`customers-suppliers.xlsx\`, & \`customers-suppliers-win1256.csv\` — 50 rows (30 customers + 20 suppliers; includes Persian/Arabic digits, Arabic \`ي\`/\`ك\`, merged name & company, and 2 duplicate rows)
 - \`items.csv\` & \`items.xlsx\` — 300 inventory items (\`stock value = ${totals.stockValue}\`)
-- \`invoices.csv\` & \`invoices.xlsx\` — 200 sales & purchase invoices (120 sales + 80 purchases; includes 6 blank-customer walk-in rows, Persian/Arabic digits, Arabic \`ي\`/\`ك\`, and 2 duplicate rows)
+- \`invoices.csv\` & \`invoices.xlsx\` — 240 sales & purchase invoices (144 sales + 96 purchases: 200 single-line + 40 multi-line with 2 to 6 items each, total 360 rows; includes 6 blank-customer walk-in rows, Persian/Arabic digits, Arabic \`ي\`/\`ك\`, and 2 duplicate rows)
 - \`bank-statement.csv\` & \`bank-statement.xlsx\` — 100 bank statement lines
 - \`sample-company.xlsx\` — Multi-sheet workbook containing all 6 tables
 
