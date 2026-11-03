@@ -11,16 +11,13 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
   merge (16 PRs) was refused. Moved to `/root/env-backups/`; merges #975-#980 then triggered autodeploy of `main`.
   Check `/root/deploy-state/autodeploy-last.json` before assuming a merge is live.
 - **Two people on one Mac**: GitHub `mahan-films` (org admin) and `mahansudo`. `bash scripts/dev/iam.sh <login>` (#976)
-  switches gh + git author. `mahansudo` is NOT yet a repo collaborator: the private repo's Team org has 1 seat, so it
-  needs a paid seat or the public repo below.
+  switches gh + git author. `mahansudo` is now an admin collaborator of the public repo.
 - **Secrets**: hardcoded Kavenegar key and owner phone default removed from code (#975). Hash audit: the AI key pool
   (Mistral, Groq, Gemini, Zilliz, Daytona, OpenRouter, SambaNova, Qdrant) is not in git history; Kavenegar, SMS.ir,
   Tavily, Brave, Exa, Jina, Firecrawl, Kira and AssemblyAI keys ARE in history and still valid (owner keeps them for now).
-- **Public repo (approved by the owner, not done)**: GitHub keeps PR refs, so the current repo cannot be made public
-  safely. Plan: rename it to `roxira-platform-private`, create a new public `Mahan-film/roxira-platform` from a
-  history scrubbed with `git filter-repo` (dry run on the Mac: 1,255 commits, gitleaks clean, 0 values from any Mac or
-  srv1 env file), copy deploy keys (`roxira-platform` write, `srv1` read-only), add `mahansudo`, switch srv1/Mac origin,
-  install a pre-push guard that refuses the old root commit `c0c36302`. Blocked by the session permission layer.
+- **Public repo (DONE 2026-11-03)**: new public `Mahan-film/roxira-platform` built from a scrubbed history; the old
+  repo is the private archive `roxira-platform-private`. Details, guard and checks: `docs/ops/PUBLIC_REPO_MIGRATION.md`.
+  Open item: the Codeberg off-site mirror is stopped (owner fix is in that doc).
 - **Cleanup (#978)**: 34 unreferenced root/docs files moved to `archive/`; README, CLAUDE.md and this header fixed.
   Team rules: `docs/strategy/TEAM_WORKFLOW_2026-11-03.md`.
 - **Antigravity**: A17 fix (#977), A20 empty states (#979), A21 keyboard drawer (#980) reviewed and merged.
