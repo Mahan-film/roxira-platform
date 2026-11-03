@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Label } from "@/components/ui/label";
 import {
   getBalanceSheet,
@@ -48,9 +49,17 @@ const TABS = [
   { key: "income-statement", label: "سود و زیان" },
   { key: "cash-flow", label: "جریان نقد" },
   { key: "equity-changes", label: "تغییرات حقوق مالکانه" },
+  { key: "ageing", label: "گزارش سنی" },
+  { key: "chart-of-accounts", label: "سرفصل حساب‌ها" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+
+/** Reports with an Excel/PDF export but no on-screen view yet (their JSON endpoints come later). */
+type ExportOnlyTab = "ageing" | "chart-of-accounts";
+const isExportOnly = (tab: TabKey): tab is ExportOnlyTab => tab === "ageing" || tab === "chart-of-accounts";
+
+const EDGES_PATTERN = /^\s*\d+(\s*[,،]\s*\d+)*\s*$/;
 
 type Loaded =
   | { tab: "trial-balance" | "subsidiary"; data: TrialBalanceReport }
@@ -68,6 +77,9 @@ export default function AccountingReportsPage() {
   const [level, setLevel] = useState("");
   const [accountCode, setAccountCode] = useState("");
   const [partyCode, setPartyCode] = useState("");
+  const [ageingSide, setAgeingSide] = useState<"receivable" | "payable">("receivable");
+  const [ageingTo, setAgeingTo] = useState("");
+  const [ageingEdges, setAgeingEdges] = useState("30,60,90");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,20 +99,30 @@ export default function AccountingReportsPage() {
   }, []);
 
   const needsAccount = tab === "ledger" && !accountCode.trim();
+  const badEdges = tab === "ageing" && !EDGES_PATTERN.test(ageingEdges);
 
-  const exportQuery = useMemo(
-    () => ({
+  const exportQuery = useMemo(() => {
+    if (tab === "ageing") {
+      return {
+        side: ageingSide,
+        to: ageingTo || undefined,
+        edges: ageingEdges.replace(/[\s]/g, "").replace(/،/g, ","),
+        accountCode: accountCode.trim() || undefined,
+        partyCode: partyCode.trim() || undefined,
+      };
+    }
+    if (tab === "chart-of-accounts") return {};
+    return {
       ...query,
       columns: tab === "trial-balance" || tab === "subsidiary" ? columns : undefined,
       level: tab === "trial-balance" ? level || undefined : undefined,
       accountCode: tab === "ledger" || tab === "subsidiary" ? accountCode.trim() || undefined : undefined,
       partyCode: tab === "ledger" ? partyCode.trim() || undefined : undefined,
-    }),
-    [query, tab, columns, level, accountCode, partyCode],
-  );
+    };
+  }, [query, tab, columns, level, accountCode, partyCode, ageingSide, ageingTo, ageingEdges]);
 
   useEffect(() => {
-    if (needsAccount) return;
+    if (needsAccount || isExportOnly(tab)) return;
     const controller = new AbortController();
     const { signal } = controller;
     const code = accountCode.trim();
@@ -123,6 +145,8 @@ export default function AccountingReportsPage() {
           return { tab, data: await getCashFlow(query, signal) };
         case "equity-changes":
           return { tab, data: await getEquityChanges(query, signal) };
+        default:
+          throw new Error(`report ${tab} has no on-screen view`);
       }
     };
     const timer = setTimeout(() => {
@@ -155,7 +179,7 @@ export default function AccountingReportsPage() {
         title="گزارش‌های حسابداری"
         description="تراز، دفاتر و صورت‌های مالی از اسناد ثبت‌شده"
         icon={<FileBarChart className="size-6 text-indigo-500" />}
-        actions={<ExportButtons report={tab} query={exportQuery} disabled={needsAccount} />}
+        actions={<ExportButtons report={tab} query={exportQuery} disabled={needsAccount || badEdges} />}
       />
 
       <div role="tablist" aria-label="نوع گزارش" className="flex flex-wrap gap-1">
@@ -177,7 +201,38 @@ export default function AccountingReportsPage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        <PeriodControls years={years} query={query} onChange={setQuery} />
+        {!isExportOnly(tab) && <PeriodControls years={years} query={query} onChange={setQuery} />}
+        {tab === "ageing" && (
+          <>
+            <div className="grid gap-1">
+              <Label htmlFor="ageing-side">نوع</Label>
+              <select
+                id="ageing-side"
+                className={FIELD_CLASS}
+                value={ageingSide}
+                onChange={(event) => setAgeingSide(event.target.value as "receivable" | "payable")}
+              >
+                <option value="receivable">دریافتنی‌ها</option>
+                <option value="payable">پرداختنی‌ها</option>
+              </select>
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="ageing-to">در تاریخ</Label>
+              <JalaliDateInput id="ageing-to" value={ageingTo} onChange={(to) => setAgeingTo(to)} />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="ageing-edges">بازه‌ها (روز)</Label>
+              <Input
+                id="ageing-edges"
+                dir="ltr"
+                className="w-32"
+                aria-invalid={badEdges}
+                value={ageingEdges}
+                onChange={(event) => setAgeingEdges(event.target.value)}
+              />
+            </div>
+          </>
+        )}
         {showColumns && (
           <div className="grid gap-1">
             <Label htmlFor="report-columns">ستون‌ها</Label>
@@ -206,13 +261,13 @@ export default function AccountingReportsPage() {
             </select>
           </div>
         )}
-        {(tab === "ledger" || tab === "subsidiary") && (
+        {(tab === "ledger" || tab === "subsidiary" || tab === "ageing") && (
           <div className="grid gap-1">
             <Label htmlFor="report-account">کد حساب</Label>
             <Input id="report-account" dir="ltr" className="w-32" value={accountCode} onChange={(event) => setAccountCode(event.target.value)} />
           </div>
         )}
-        {tab === "ledger" && (
+        {(tab === "ledger" || tab === "ageing") && (
           <div className="grid gap-1">
             <Label htmlFor="report-party">کد تفصیلی</Label>
             <Input id="report-party" dir="ltr" className="w-32" value={partyCode} onChange={(event) => setPartyCode(event.target.value)} />
@@ -225,6 +280,18 @@ export default function AccountingReportsPage() {
 
       <Card className="overflow-x-auto">
         {needsAccount && <p className="px-4 py-6 text-sm text-muted-foreground">کد حساب را وارد کنید.</p>}
+        {tab === "ageing" && (
+          <p className="px-4 py-6 text-sm text-muted-foreground">
+            {badEdges
+              ? "بازه‌ها را به صورت عددهای صعودی با کاما وارد کنید، مثلاً 30,60,90."
+              : "مانده هر طرف حساب به تفکیک سن اقلام باز (از تاریخ سند). بدون تاریخ، امروز در نظر گرفته می‌شود. خروجی را با دکمه‌های Excel یا PDF بگیرید."}
+          </p>
+        )}
+        {tab === "chart-of-accounts" && (
+          <p className="px-4 py-6 text-sm text-muted-foreground">
+            فهرست کامل حساب‌ها با ماهیت، سطح و حساب بالاتر. فایل Excel آن را می‌توانید در بخش ورود داده دوباره وارد کنید.
+          </p>
+        )}
         {loaded?.tab === "trial-balance" || loaded?.tab === "subsidiary" ? <TrialBalanceView report={loaded.data} /> : null}
         {!needsAccount && loaded?.tab === "ledger" && <LedgerView report={loaded.data} />}
         {loaded?.tab === "balance-sheet" && <BalanceSheetView report={loaded.data} />}
