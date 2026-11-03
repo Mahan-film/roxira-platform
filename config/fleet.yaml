@@ -12,11 +12,12 @@ reviewers_parallel: 2
 
 lanes:
   # Local OpenCode pool. Tried in order; a rate-limited model hands over to the next one.
-  # `executor` = config/models.yaml executor primary (OpenRouter, paid, cheap). pool/* = LiteLLM key
-  # pool on 127.0.0.1:4000 (free tiers first, public code only).
+  # Free first, paid as fallback (AGENTS.md section 4): pool/* = LiteLLM key pool on 127.0.0.1:4000
+  # (free tiers, public code only); `executor` = config/models.yaml executor primary (OpenRouter,
+  # paid, cheap) runs only when both free models are rate-limited or fail.
   opencode:
     enabled: true
-    models: [executor, pool/gptoss, pool/codestral]
+    models: [pool/gptoss, pool/codestral, executor]
     timeout_secs: 900
   # Claude Code headless sessions (owner's subscription). Hard issues and lane overflow.
   claude:
