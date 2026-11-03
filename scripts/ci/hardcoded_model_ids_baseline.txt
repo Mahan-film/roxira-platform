@@ -1,13 +1,13 @@
 # Grandfathered hardcoded model ids (scripts/ci/check_hardcoded_model_ids.py).
 # path<TAB>count. Migrate a file to config/models.yaml, then run
 # `python3 scripts/ci/check_hardcoded_model_ids.py --update`. Never add entries by hand.
-apply_2026_modern_pipeline.py	12
-auto_system_journalist.py	3
+archive/root_scripts/apply_2026_modern_pipeline.py	12
+archive/root_scripts/auto_system_journalist.py	3
 autonomous_agent_factory.py	10
 factory_engine.py	2
-generate_handover.py	7
-master_autonomous_runner.py	3
-openrouter_agent_bridge.py	1
+archive/root_scripts/generate_handover.py	7
+archive/root_scripts/master_autonomous_runner.py	3
+archive/root_scripts/openrouter_agent_bridge.py	1
 output_apps/ecosystem_core/src/agents/ai_router.py	13
 output_apps/ecosystem_core/src/ai/multi_model_llm_router.py	10
 output_apps/ecosystem_core/src/auth/subscription_tier_manager.py	5

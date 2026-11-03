@@ -29,6 +29,12 @@ Then check `http://localhost:8000/health`.
 ## Tests and linting
 
 ```bash
-uv run pytest
+bash scripts/dev/local_ci.sh   # the checks CI runs (also the pre-push hook)
+```
+
+Never run `pytest` over `src/` or the repo root: many old `test_*.py` files run git commands and call paid
+APIs at import time (see `CLAUDE.md`). Run only the tests that `local_ci.sh` collects.
+
+```bash
 uv run ruff check .
 ```

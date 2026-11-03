@@ -1,6 +1,6 @@
-> **Plan: `docs/strategy/MASTER_PLAN_2026-10-16.md` (v2: factory first, then a global business via the Malaysian company; Track I Iran / Track G global). Owner decisions are in §0.**
+> **Plan (2026-10-31, current): `docs/strategy/MASTER_PLAN_2026-10-31.md` and `docs/strategy/IRAN_FIRST_ROADMAP_2026-10-31.md` (Iran first: the Roxira accounting suite is the first factory product). The 2026-10-16 plan (factory first, Malaysian company) is superseded. What is done or missing: `docs/strategy/REQUIREMENTS_STATUS.md`. Team rules: `docs/strategy/TEAM_WORKFLOW_2026-11-03.md`.**
 
-> **Last update: 2026-10-30. NEW CHAT / OTHER AI? Start at `docs/CONTEXT_HUB.md`, then read this file, then `docs/HANDOFF_2026-10-15.md` (older context; the section "Shipped 2026-10-16..20" below supersedes it). Older: `docs/STRATEGY_STATUS_2026-10-14.md`, `docs/SYSTEM_MAP.md`.**
+> **Last update: 2026-11-03. NEW CHAT / OTHER AI? Start at `docs/AI_HANDOFF.md`, then this file. Sections dated before 2026-10-31 are history; when they disagree with the plan above, the plan wins.**
 
 # Current state (read this first)
 
