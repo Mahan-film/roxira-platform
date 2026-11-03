@@ -36,6 +36,15 @@ export interface LedgerLineRow {
   credit: string;
 }
 
+export interface AgeingLineRow {
+  accountCode: string;
+  accountName: string;
+  partyCode: string | null;
+  day: string;
+  debit: string;
+  credit: string;
+}
+
 export interface LedgerFilter {
   accountIds: number[];
   partyCode?: string;
@@ -153,6 +162,28 @@ export class LedgerReportRepository {
       [tenantId, filter.accountIds, filter.from, filter.to, ...(filter.partyCode ? [filter.partyCode] : [])],
     ));
     return rows[0];
+  }
+
+  /**
+   * Every posted line of the accounts up to `to` (openings included), oldest first, for ageing.
+   * Same-day lines are ordered by entry and line id so settlement order is deterministic.
+   */
+  async ageingLines(
+    tenantId: string,
+    filter: { accountIds: number[]; to: string; partyCode?: string },
+  ): Promise<AgeingLineRow[]> {
+    const party = filter.partyCode ? `AND l.party_code = $4` : '';
+    return this.scope.run(tenantId, (m) => m.query(
+      `SELECT a.code AS "accountCode", a.name AS "accountName", l.party_code AS "partyCode",
+              to_char(${DAY}, 'YYYY-MM-DD') AS "day", l.debit AS "debit", l.credit AS "credit"
+         FROM fin_journal_entry_lines l
+         JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+         JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
+        WHERE l.tenant_id = $1 AND l.account_id = ANY($2) AND e.status = 'POSTED' AND ${NOT_PAIR}
+          AND ${DAY} <= $3 ${party}
+        ORDER BY ${DAY} ASC, e.id ASC, l.id ASC`,
+      [tenantId, filter.accountIds, filter.to, ...(filter.partyCode ? [filter.partyCode] : [])],
+    ));
   }
 
   async ledgerLines(tenantId: string, filter: LedgerFilter): Promise<LedgerLineRow[]> {

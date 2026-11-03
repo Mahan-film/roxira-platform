@@ -47,7 +47,7 @@ Nothing here is marked done from memory of earlier sessions.
 | I-02 | Tree item coding, dual unit, serial, reorder point, quarantine | partial | `modules/inventory/` (items, warehouses, FIFO batches, valuation) | No tree coding, dual unit, serial or warranty, reorder point, quarantine. Weighted average not offered (FIFO only). Owned by another session. |
 | I-03 | Visitor app, field sales, GPS, commission | missing | none | Not started; growth stage. |
 | I-04 | Contracting, payroll, fixed assets and depreciation | partial | payroll: `modules/hr/`; chart has fixed-asset and accumulated-depreciation lines (`iran-chart-template.ts`) | No asset register, no depreciation schedule or voucher, no contractor statements. Fixed assets planned. |
-| I-05 | Interactive account browsing, advanced search, ageing, cash flow, report builder | partial | ledger drill-down `frontend/src/components/accounting/account-ledger-panel.tsx`; cash flow `reports/statements.ts` | No receivable/payable ageing, no amount or cheque search, no report builder. |
+| I-05 | Interactive account browsing, advanced search, ageing, cash flow, report builder | partial | ledger drill-down `frontend/src/components/accounting/account-ledger-panel.tsx`; cash flow `reports/statements.ts` | Ageing service built (#79), endpoint and UI pending. No amount or cheque search, no report builder. |
 | N-01 | Multi-branch, holding, web access | partial | branches and departments `modules/access/entities/branch.entity.ts`, `department.entity.ts`; multi-tenant web app | No consolidation of statements across companies, no per-branch ledger dimension. |
 | N-02 | Multi-currency, bilingual reports, import files | partial | `modules/accounting/accounting.fx.spec.ts`, `modules/currency/`, `migrations/1789220000000-AddFxMultiCurrencyCore.ts` | No bilingual reports, no import-file management, no revaluation. |
 | N-03 | API, shop connectors, CRM, payment gateways | partial | OpenAPI controllers throughout; `modules/crm/` | No WooCommerce or WordPress plugin, no gateway integration, no webhooks. |
@@ -77,7 +77,7 @@ Nothing here is marked done from memory of earlier sessions.
 | Jalali fiscal years and year close | done | `modules/accounting/services/fiscal-year.service.ts`, `fiscal-close.pg.spec.ts` | |
 | 2 to 10 column trial balances | done | `dto/report.dto.ts` | |
 | Balance sheet, profit and loss, cash flow | done | `reports/statements.ts`, `statements.spec.ts` | |
-| Ageing | missing | none | |
+| Ageing | partial | `modules/accounting/reports/ageing.ts`, `ageing.spec.ts`, `accounting.ageing.spec.ts`, `FinancialReportsService.ageing` | Receivable and payable ageing per account and party, FIFO, by document date (#79). No HTTP endpoint or UI yet; no due dates, so not days overdue. |
 | Cost centres | missing | none | Planned. |
 | Hash-chained audit log | partial | `modules/access/services/audit.service.ts` | Covers organisation actions; ledger changes not chained. |
 | Effective-dated statutory parameters | done | `modules/hr/statutory/`, `migrations/1789410000000-CreateStatutoryParameters.ts`, `statutory.pg.spec.ts` | Values unverified; catalogue is payroll plus one VAT key. |
