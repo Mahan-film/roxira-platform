@@ -48,6 +48,17 @@ import { PackageImportService } from './services/package-import.service';
 import { PackageProgressService } from './services/package-progress.service';
 import { PackageStoreService } from './services/package-store.service';
 import { UploadStoreService } from './services/upload-store.service';
+import { TenantScope } from '../access/services/tenant-scope';
+import { BulkImportController } from './bulk/bulk-import.controller';
+import { BulkImportProcessor } from './bulk/bulk-import.processor';
+import { BulkImportRepository } from './bulk/bulk-import.repository';
+import { BulkImportRunner } from './bulk/bulk-import.runner';
+import { BulkImportService } from './bulk/bulk-import.service';
+import { BulkPostService } from './bulk/bulk-post.service';
+import { BULK_QUEUE_NAME, localStorageRoot, storageDriver } from './bulk/bulk.constants';
+import { LocalObjectStore } from './bulk/storage/local-object-store';
+import { OBJECT_STORE } from './bulk/storage/object-store';
+import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store';
 
 /**
  * ماژول ورود داده با کمک هوش مصنوعی (AI-assisted data import).
@@ -70,7 +81,7 @@ import { UploadStoreService } from './services/upload-store.service';
     AccountingModule,
     InvoicingModule,
     BankingModule,
-    BullModule.registerQueue({ name: PACKAGE_QUEUE_NAME }),
+    BullModule.registerQueue({ name: PACKAGE_QUEUE_NAME }, { name: BULK_QUEUE_NAME }),
     TypeOrmModule.forFeature([
       DataImportBatchEntity,
       DataImportBatchItemEntity,
@@ -90,7 +101,7 @@ import { UploadStoreService } from './services/upload-store.service';
       }),
     }),
   ],
-  controllers: [DataImportController],
+  controllers: [DataImportController, BulkImportController],
   providers: [
     DataImportService,
     DataImportRepository,
@@ -157,6 +168,17 @@ import { UploadStoreService } from './services/upload-store.service';
       ],
     },
     JwtAuthGuard,
+    TenantScope,
+    BulkImportRepository,
+    BulkImportRunner,
+    BulkImportService,
+    BulkPostService,
+    BulkImportProcessor,
+    {
+      provide: OBJECT_STORE,
+      // R2 (S3 API) in production; a folder on disk only for development. Settings come from the environment.
+      useFactory: () => (storageDriver() === 's3' ? new S3ObjectStore(s3SettingsFromEnv()) : new LocalObjectStore(localStorageRoot())),
+    },
   ],
   exports: [DataImportService, EntityImportService],
 })

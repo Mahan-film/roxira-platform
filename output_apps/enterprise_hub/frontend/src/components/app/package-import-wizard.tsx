@@ -36,7 +36,6 @@ import {
 import {
   PACKAGE_ACCEPT,
   PACKAGE_ENTITY_LABELS,
-  PACKAGE_MAX_BYTES,
   commitImportPackage,
   createImportPackageFromUploads,
   reconcileImportPackage,
@@ -468,8 +467,7 @@ export function PackageImportWizard({
           <p className="max-w-md text-sm text-muted-foreground">
             تقریباً هر خروجی حسابداری: اکسل (xls، xlsx، ods)، CSV/TSV، DBF، JSON/XML،
             دامپ SQL (MySQL، PostgreSQL، SQLite، T-SQL)، QuickBooks IIF، OFX/QBO، ZIP — یا یک پوشهٔ کامل.
-            قالب از روی محتوا تشخیص داده می‌شود. هر فایل تا{" "}
-            {formatNumber(PACKAGE_MAX_BYTES / 1024 / 1024)} مگابایت، به‌صورت تکه‌ای و ازسرگیری‌پذیر.
+            قالب از روی محتوا تشخیص داده می‌شود؛ بارگذاری تکه‌ای و ازسرگیری‌پذیر است.
             پیش از هر انتقال، گزارش مغایرت‌گیری نشان داده می‌شود.
           </p>
           <input

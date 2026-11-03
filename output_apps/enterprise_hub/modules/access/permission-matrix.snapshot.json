@@ -38,6 +38,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/data-import/bulk/jobs/:id (BulkImportController.remove)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/inventory/openings/:id (OpeningBalanceController.remove)": {
     "policy": "inventory:create",
     "owner": true,
@@ -696,6 +707,61 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/batches (DataImportController.listBatches)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/bulk/config (BulkImportController.config)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/bulk/jobs (BulkImportController.list)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/bulk/jobs/:id (BulkImportController.get)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/bulk/jobs/:id/tables/:idx/rows (BulkImportController.rows)": {
+    "policy": "data_import:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/bulk/uploads/:id/parts (BulkImportController.parts)": {
     "policy": "data_import:read",
     "owner": true,
     "admin": true,
@@ -2126,6 +2192,94 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/data-import/bulk/jobs/:id/approve (BulkImportController.approve)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/bulk/jobs/:id/cancel (BulkImportController.cancel)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/bulk/jobs/:id/pause (BulkImportController.pause)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/bulk/jobs/:id/resume (BulkImportController.resume)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/bulk/jobs/:id/retry (BulkImportController.retry)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/bulk/uploads (BulkImportController.start)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/bulk/uploads/:id/complete (BulkImportController.complete)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/bulk/uploads/:id/sign (BulkImportController.sign)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/data-import/commit (DataImportController.commit)": {
     "policy": "data_import:create",
     "owner": true,
@@ -2655,6 +2809,17 @@
     "owner": true,
     "admin": true,
     "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/data-import/bulk/uploads/:id/parts/:n (BulkImportController.putPart)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,
