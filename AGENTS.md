@@ -73,3 +73,17 @@ To prevent breaking existing live services, background workers, or proxies on th
 2. **Pre-Allocation Verification**:
    - Any new tool, container, or background process MUST explicitly run `ss -tulnp | grep <PORT>` first.
    - If a port is occupied, binding without owner-approved reconfiguration is strictly prohibited.
+
+## 8. Working with other agents and people
+
+- Before starting, run `bash scripts/dev/whoswhat.sh` to see what is claimed.
+- Claim the task with `bash scripts/dev/claim.sh <n>`. The draft PR is the lock.
+- One worktree per agent. Never share a working directory.
+- Branch names: `<login>/<issue>-<slug>` for people, `agent/<agent-id>/<issue>-<slug>` for agents (`claim.sh --agent <id>`). Agent ids: `claude-<login>`, `opencode`, `antigravity`, `server-<lane>`.
+- When you stop or are blocked, post the Handoff block from `.github/pull_request_template.md` as a PR comment.
+- Push or comment at least every 2 h while working. Otherwise the claim may be released by `scripts/dev/team_status.py --release-stale`.
+- At most 2-3 active agents per person.
+- Never use `--no-verify`. Never bypass the pre-push guard (`scripts/dev/guard_old_history.sh`) or GitHub push protection.
+- The reviewer must be another model family (`scripts/dev/check_reviewer_family.py`).
+- Keep PRs small. Rebase on origin/main daily.
+- The repo is PUBLIC. Never commit .env files, keys or customer data.

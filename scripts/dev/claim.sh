@@ -2,16 +2,35 @@
 # Claim a task before working on it, so nobody else does the same thing.
 #   bash scripts/dev/claim.sh <issue-number> [short-slug]
 #   bash scripts/dev/claim.sh new "Title of the task" [short-slug]   # creates the issue first
+#   add --agent <id> anywhere (e.g. --agent opencode) for an AI agent: branch agent/<id>/<issue>-<slug>
+#   and "Agent: <id>" in the draft PR body. Agent ids: claude-<login>, opencode, antigravity, server-<lane>
 # What it does (all visible to everyone on GitHub):
 #   1. assigns the issue to you and adds the label in-progress
-#   2. creates branch <your-login>/<issue>-<slug> from origin/main in a new worktree
+#   2. creates branch <your-login>/<issue>-<slug> (or agent/<id>/<issue>-<slug>) from origin/main in a new worktree
 #   3. pushes an empty commit and opens a DRAFT pull request "Closes #<issue>"
 # Release a claim: gh api -X DELETE repos/Mahan-film/roxira-platform/issues/<n>/labels/in-progress
 # See docs/COLLABORATION.md. Uses REST only (gh api): GraphQL is blocked in Claude Code cloud sessions.
 set -euo pipefail
 
 REPO="${ROXIRA_REPO:-Mahan-film/roxira-platform}"
-[ $# -ge 1 ] || { sed -n '2,11p' "$0"; exit 2; }
+
+# Optional --agent <id>, accepted anywhere in the args.
+agent=""
+rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --agent)
+      [ $# -ge 2 ] || { echo "usage: --agent <id>" >&2; exit 2; }
+      agent="$2"; shift 2 ;;
+    *) rest+=("$1"); shift ;;
+  esac
+done
+set -- ${rest[@]+"${rest[@]}"}
+if [ -n "$agent" ] && ! printf '%s' "$agent" | grep -Eq '^[a-z0-9][a-z0-9-]*$'; then
+  echo "bad agent id '$agent' (use lowercase letters, digits, dashes)" >&2; exit 2
+fi
+
+[ $# -ge 1 ] || { sed -n '2,13p' "$0"; exit 2; }
 
 if [ "$1" = "new" ]; then
   [ $# -ge 2 ] || { echo "usage: $0 new \"Title\" [slug]" >&2; exit 2; }
@@ -37,6 +56,7 @@ fi
 [ -n "$slug" ] || slug="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//' | cut -c1-40)"
 [ -n "$slug" ] || slug="task"
 branch="$me/$issue-$slug"
+[ -z "$agent" ] || branch="agent/$agent/$issue-$slug"
 
 gh api -X POST "repos/$REPO/labels" -f name=in-progress -f color=FBCA04 \
   -f description="Someone is working on this (claim.sh)" >/dev/null 2>&1 || true
@@ -51,7 +71,9 @@ git -C "$wt" commit -q --allow-empty -m "chore: start #$issue $title"
 git -C "$wt" push -q -u origin "$branch"
 pr="$(gh api -X POST "repos/$REPO/pulls" -F draft=true -f base=main -f head="$branch" \
   -f title="WIP #$issue: $title" -f body="Closes #$issue
-
+${agent:+
+Agent: $agent
+}
 Draft opened by scripts/dev/claim.sh so others can see this work is in progress." -q .html_url)"
 
 echo "claimed #$issue"
