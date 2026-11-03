@@ -148,12 +148,12 @@ function HrPage() {
         <>
           <div className="flex items-center gap-3">
             <div className="relative flex-1 sm:max-w-sm">
-              <Search className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute top-1/2 start-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="جست‌وجو در نام، کد پرسنلی یا کد ملی"
-                className="pr-8"
+                className="ps-8"
                 aria-label="جست‌وجوی کارکنان"
               />
             </div>
@@ -198,7 +198,7 @@ function HrPage() {
                     <TableCell className="font-medium">{e.fullName}</TableCell>
                     <TableCell>{e.jobTitle}</TableCell>
                     <TableCell>{e.department}</TableCell>
-                    <TableCell dir="ltr" className="text-right font-mono text-xs">
+                    <TableCell dir="ltr" className="text-end font-mono text-xs">
                       {e.mobile}
                     </TableCell>
                     <TableCell>

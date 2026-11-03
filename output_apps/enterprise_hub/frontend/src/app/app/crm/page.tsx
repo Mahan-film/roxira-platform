@@ -168,12 +168,12 @@ function CrmPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
               <div className="relative flex-1 sm:max-w-sm">
-                <Search className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute top-1/2 start-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="جست‌وجو در نام، ایمیل، شرکت یا تلفن"
-                  className="pr-8"
+                  className="ps-8"
                   aria-label="جست‌وجوی مشتریان"
                 />
               </div>
@@ -245,7 +245,7 @@ function CrmPage() {
                     >
                       <TableCell className="font-medium">{lead.company ?? "—"}</TableCell>
                       <TableCell>{lead.fullName}</TableCell>
-                      <TableCell dir="ltr" className="text-right font-mono text-xs">
+                      <TableCell dir="ltr" className="text-end font-mono text-xs">
                         {lead.phone ?? "—"}
                       </TableCell>
                       <TableCell>
