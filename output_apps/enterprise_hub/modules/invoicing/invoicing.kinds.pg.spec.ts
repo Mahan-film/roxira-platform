@@ -1,3 +1,4 @@
+import { TenantScope } from '../access/services/tenant-scope';
 /**
  * Purchase, sale, return and cancel postings against a REAL PostgreSQL: FIFO layers are created by
  * a purchase, a sale takes them at cost, a return and a cancellation put them back, and every
@@ -64,13 +65,7 @@ describePg('invoice kinds on PostgreSQL', () => {
     ds = await new DataSource(options(db)).initialize();
     await ds.runMigrations();
     const accounting = new AccountingService(
-      new AccountingRepository(
-        ds.getRepository(ChartOfAccountEntity),
-        ds.getRepository(JournalEntryEntity),
-        ds.getRepository(JournalEntryLineEntity),
-        ds.getRepository(PeriodLockEntity),
-        ds,
-      ),
+      new AccountingRepository(new TenantScope(ds)),
       { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService,
     );
     inventory = new InventoryService(

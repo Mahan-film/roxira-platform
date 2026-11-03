@@ -1,3 +1,4 @@
+import { TenantScope } from '../access/services/tenant-scope';
 /**
  * Ledger integration tests against a REAL PostgreSQL (concurrency, row locks, period locks,
  * reversal, import rollback, DB triggers, migrations up/down with data).
@@ -125,13 +126,7 @@ describePg('Ledger on PostgreSQL', () => {
     await ds.initialize();
     await ds.runMigrations();
 
-    const repo = new AccountingRepository(
-      ds.getRepository(ChartOfAccountEntity),
-      ds.getRepository(JournalEntryEntity),
-      ds.getRepository(JournalEntryLineEntity),
-      ds.getRepository(PeriodLockEntity),
-      ds,
-    );
+    const repo = new AccountingRepository(new TenantScope(ds));
     accounting = new AccountingService(repo, currencyStub);
     inventory = new InventoryService(
       new InventoryRepository(

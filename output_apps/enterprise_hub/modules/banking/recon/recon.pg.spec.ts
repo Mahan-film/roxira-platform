@@ -1,3 +1,4 @@
+import { TenantScope } from '../../access/services/tenant-scope';
 /**
  * Reconciliation assistant against a REAL PostgreSQL: the migration, the raw-SQL repository, the
  * ledger and the guided flow end to end, using a real statement file.
@@ -112,13 +113,7 @@ describePg('Reconciliation assistant on PostgreSQL', () => {
     await ds.runMigrations();
 
     accounting = new AccountingService(
-      new AccountingRepository(
-        ds.getRepository(ChartOfAccountEntity),
-        ds.getRepository(JournalEntryEntity),
-        ds.getRepository(JournalEntryLineEntity),
-        ds.getRepository(PeriodLockEntity),
-        ds,
-      ),
+      new AccountingRepository(new TenantScope(ds)),
       currencyStub,
     );
     banking = new BankingService(

@@ -82,7 +82,7 @@ export class FiscalYearService {
   }
 
   async create(tenantId: string, dto: CreateFiscalYearDto): Promise<FiscalYearResponseDto> {
-    const year = await this.accountingRepository.transaction(async (manager) => {
+    const year = await this.accountingRepository.transaction(tenantId, async (manager) => {
       await this.accountingRepository.lockLedgerExclusive(tenantId, manager);
       return this.insertYear(tenantId, dto, manager);
     });
@@ -172,7 +172,7 @@ export class FiscalYearService {
     id: number,
     dto: CloseFiscalYearDto,
   ): Promise<CloseResultDto> {
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       await this.accountingRepository.lockLedgerExclusive(tenantId, manager);
       const years = await this.fiscalYears.list(tenantId, manager);
       const year = years.find((candidate) => candidate.id === id);
@@ -339,7 +339,7 @@ export class FiscalYearService {
     id: number,
     dto: ReopenFiscalYearDto,
   ): Promise<FiscalYearResponseDto> {
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       await this.accountingRepository.lockLedgerExclusive(tenantId, manager);
       const years = await this.fiscalYears.list(tenantId, manager);
       const year = years.find((candidate) => candidate.id === id);

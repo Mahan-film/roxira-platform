@@ -1,3 +1,4 @@
+import { TenantScope } from '../access/services/tenant-scope';
 /**
  * Fiscal close on a REAL PostgreSQL. Opt-in, like accounting.ledger.pg.spec.ts: skipped unless
  * ROXIRA_TEST_PG_HOST is set; each run creates and drops its own throwaway database.
@@ -73,16 +74,10 @@ describePg('Fiscal close on PostgreSQL', () => {
     await ds.initialize();
     await ds.runMigrations();
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(
-      ds.getRepository(ChartOfAccountEntity),
-      ds.getRepository(JournalEntryEntity),
-      ds.getRepository(JournalEntryLineEntity),
-      ds.getRepository(PeriodLockEntity),
-      ds,
-    );
+    const repo = new AccountingRepository(new TenantScope(ds));
     accounting = new AccountingService(repo, currency);
     templates = new ChartTemplateService(repo);
-    years = new FiscalYearService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(ds), accounting);
+    years = new FiscalYearService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(new TenantScope(ds)), accounting);
   }, 120000);
 
   afterAll(async () => {
