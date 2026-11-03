@@ -112,12 +112,12 @@ export default function SuiteInventoryPage() {
         <>
           <div className="flex items-center gap-2">
             <div className="relative flex-1 sm:max-w-sm">
-              <Search className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute top-1/2 start-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="جست‌وجوی کد کالا، بارکد یا نام"
-                className="pr-8"
+                className="ps-8"
                 aria-label="جست‌وجوی کالا"
               />
             </div>
