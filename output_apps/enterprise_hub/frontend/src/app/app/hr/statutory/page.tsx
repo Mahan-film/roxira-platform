@@ -62,6 +62,8 @@ export default function StatutoryParametersPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    // Show the loading state again when the year changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRows(null);
     listStatutoryParameters(year, controller.signal)
       .then(setRows)
