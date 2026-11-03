@@ -2,9 +2,23 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
+import { minorToDecimal, toMinor } from '../../accounting/money';
+import { AccountingService } from '../../accounting/services/accounting.service';
+import { Currency } from '../../currency/enums/currency.enum';
+import {
+  OPENING_STOCK_EQUITY_ACCOUNT,
+  STOCK_ADJUSTMENT_ACCOUNT,
+  STOCK_INVENTORY_ACCOUNT,
+  StockAccountSpec,
+} from '../constants/stock-accounts';
 import { MONEY_SCALE } from '../constants/inventory.constants';
 import {
+  CreateAdjustmentDto,
+  CreateDeliveryDto,
+  CreateReceiptDto,
   CreateTransferDto,
   QueryStockDocumentDto,
   StockDocumentResponseDto,
@@ -22,6 +36,9 @@ import {
   WarehouseMissingError,
 } from '../errors/inventory.errors';
 import { StockDocumentsRepository } from '../repositories/stock-documents.repository';
+import { InventoryService } from './inventory.service';
+
+type LineInput = Omit<StockDocumentLineEntity, 'id' | 'tenantId' | 'documentId'>;
 
 /** Postgres unique-violation code. */
 const UNIQUE_VIOLATION = '23505';
@@ -30,7 +47,11 @@ const NUMBER_ATTEMPTS = 4;
 /** Stock documents: every stock event is one numbered document with its lines. */
 @Injectable()
 export class StockDocumentsService {
-  constructor(private readonly repository: StockDocumentsRepository) {}
+  constructor(
+    private readonly repository: StockDocumentsRepository,
+    @Optional() private readonly inventory?: InventoryService,
+    @Optional() private readonly accounting?: AccountingService,
+  ) {}
 
   private money(value: number): number {
     const factor = 10 ** MONEY_SCALE;
@@ -135,58 +156,45 @@ export class StockDocumentsService {
     }
     const docDate = dto.docDate ?? this.today();
 
+    return this.runNumbered(tenantId, StockDocumentType.TRANSFER, docDate, async (manager, docNumber) => {
+      await this.repository.assertActiveWarehouse(tenantId, dto.fromWarehouseId, manager);
+      await this.repository.assertActiveWarehouse(tenantId, dto.toWarehouseId, manager);
+
+      const lines: LineInput[] = [];
+      for (const [sku, quantity] of wanted) {
+        const moved = await this.repository.moveLayers(
+          tenantId,
+          { sku, quantity, fromWarehouseId: dto.fromWarehouseId, toWarehouseId: dto.toWarehouseId },
+          manager,
+        );
+        const value = this.money(moved.reduce((sum, layer) => sum + layer.quantity * layer.unitCost, 0));
+        lines.push({ itemId: null, sku, quantity, unitCost: this.money(value / quantity), value, batchNumber: null });
+      }
+      return this.save(tenantId, userId, manager, {
+        docNumber,
+        docType: StockDocumentType.TRANSFER,
+        docDate,
+        fromWarehouseId: dto.fromWarehouseId,
+        toWarehouseId: dto.toWarehouseId,
+        reference: dto.reference ?? null,
+        note: dto.note ?? null,
+      }, lines);
+    });
+  }
+
+  /** Runs `work` in one transaction with a fresh document number, retrying if a concurrent document took it. */
+  private async runNumbered(
+    tenantId: string,
+    docType: StockDocumentType,
+    docDate: string,
+    work: (manager: EntityManager, docNumber: string) => Promise<StockDocumentResponseDto>,
+  ): Promise<StockDocumentResponseDto> {
     for (let attempt = 1; ; attempt += 1) {
       try {
         return await this.repository.transaction(async (manager) => {
-          await this.repository.assertActiveWarehouse(tenantId, dto.fromWarehouseId, manager);
-          await this.repository.assertActiveWarehouse(tenantId, dto.toWarehouseId, manager);
-
-          const lines: Array<Omit<StockDocumentLineEntity, 'id' | 'tenantId' | 'documentId'>> = [];
-          for (const [sku, quantity] of wanted) {
-            const moved = await this.repository.moveLayers(
-              tenantId,
-              {
-                sku,
-                quantity,
-                fromWarehouseId: dto.fromWarehouseId,
-                toWarehouseId: dto.toWarehouseId,
-              },
-              manager,
-            );
-            const value = this.money(moved.reduce((sum, layer) => sum + layer.quantity * layer.unitCost, 0));
-            lines.push({
-              itemId: null,
-              sku,
-              quantity,
-              unitCost: this.money(value / quantity),
-              value,
-              batchNumber: null,
-            });
-          }
-
-          const count = await this.repository.countDocuments(tenantId, StockDocumentType.TRANSFER, manager);
-          const docNumber = `${STOCK_DOCUMENT_PREFIX[StockDocumentType.TRANSFER]}-${docDate.replace(/-/g, '')}-${String(count + attempt).padStart(5, '0')}`;
-          const document = await this.repository.insertDocument(
-            tenantId,
-            {
-              docNumber,
-              docType: StockDocumentType.TRANSFER,
-              status: StockDocumentStatus.POSTED,
-              docDate,
-              fromWarehouseId: dto.fromWarehouseId,
-              toWarehouseId: dto.toWarehouseId,
-              reference: dto.reference ?? null,
-              note: dto.note ?? null,
-              createdBy: userId,
-              postedAt: new Date(),
-            },
-            lines,
-            manager,
-          );
-          return this.toResponse(
-            document,
-            lines.map((line, index) => ({ ...line, id: index + 1, tenantId, documentId: document.id })),
-          );
+          const count = await this.repository.countDocuments(tenantId, docType, manager);
+          const docNumber = `${STOCK_DOCUMENT_PREFIX[docType]}-${docDate.replace(/-/g, '')}-${String(count + attempt).padStart(5, '0')}`;
+          return work(manager, docNumber);
         });
       } catch (error) {
         if (this.isUniqueViolation(error) && attempt < NUMBER_ATTEMPTS) {
@@ -195,5 +203,239 @@ export class StockDocumentsService {
         this.rethrow(error);
       }
     }
+  }
+
+  private async save(
+    tenantId: string,
+    userId: string,
+    manager: EntityManager,
+    header: Partial<StockDocumentEntity> & { docNumber: string; docType: StockDocumentType; docDate: string },
+    lines: LineInput[],
+  ): Promise<StockDocumentResponseDto> {
+    const document = await this.repository.insertDocument(
+      tenantId,
+      { ...header, status: StockDocumentStatus.POSTED, createdBy: userId, postedAt: new Date() },
+      lines,
+      manager,
+    );
+    return this.toResponse(
+      document,
+      lines.map((line, index) => ({ ...line, id: index + 1, tenantId, documentId: document.id })),
+    );
+  }
+
+  private requireInventory(): InventoryService {
+    if (!this.inventory) {
+      throw new Error('StockDocumentsService needs InventoryService for receipts, deliveries and adjustments.');
+    }
+    return this.inventory;
+  }
+
+  /** Goods received into a warehouse: one new FIFO layer per line at the stated cost. No voucher; the purchase invoice books the money. */
+  async createReceipt(tenantId: string, userId: string, dto: CreateReceiptDto): Promise<StockDocumentResponseDto> {
+    const inventory = this.requireInventory();
+    const docDate = dto.docDate ?? this.today();
+    return this.runNumbered(tenantId, StockDocumentType.PURCHASE_RECEIPT, docDate, async (manager, docNumber) => {
+      await this.repository.assertActiveWarehouse(tenantId, dto.toWarehouseId, manager);
+      const lines: LineInput[] = [];
+      for (const line of dto.lines) {
+        const result = await inventory.receiveStock(
+          tenantId,
+          {
+            sku: line.sku.trim(),
+            quantity: line.quantity,
+            unitPurchaseCost: line.unitCost,
+            warehouseId: dto.toWarehouseId,
+            batchNumber: line.batchNumber,
+            receivedAt: `${docDate}T12:00:00.000Z`,
+            reference: dto.reference,
+          },
+          manager,
+        );
+        lines.push({
+          itemId: null,
+          sku: line.sku.trim(),
+          quantity: line.quantity,
+          unitCost: line.unitCost,
+          value: result.totalCost,
+          batchNumber: result.layers[0]?.batchNumber ?? line.batchNumber ?? null,
+        });
+      }
+      return this.save(tenantId, userId, manager, {
+        docNumber,
+        docType: StockDocumentType.PURCHASE_RECEIPT,
+        docDate,
+        toWarehouseId: dto.toWarehouseId,
+        reference: dto.reference ?? null,
+        note: dto.note ?? null,
+      }, lines);
+    });
+  }
+
+  /** Goods leaving a warehouse at FIFO cost. No voucher; the sales invoice books revenue and cost. */
+  async createDelivery(tenantId: string, userId: string, dto: CreateDeliveryDto): Promise<StockDocumentResponseDto> {
+    const inventory = this.requireInventory();
+    const docDate = dto.docDate ?? this.today();
+    return this.runNumbered(tenantId, StockDocumentType.SALES_DELIVERY, docDate, async (manager, docNumber) => {
+      await this.repository.assertActiveWarehouse(tenantId, dto.fromWarehouseId, manager);
+      const lines: LineInput[] = [];
+      for (const line of dto.lines) {
+        const result = await inventory.issueStock(
+          tenantId,
+          { sku: line.sku.trim(), quantity: line.quantity, warehouseId: dto.fromWarehouseId, reference: dto.reference },
+          manager,
+        );
+        lines.push({
+          itemId: null,
+          sku: line.sku.trim(),
+          quantity: line.quantity,
+          unitCost: this.money(result.totalCost / line.quantity),
+          value: result.totalCost,
+          batchNumber: null,
+        });
+      }
+      return this.save(tenantId, userId, manager, {
+        docNumber,
+        docType: StockDocumentType.SALES_DELIVERY,
+        docDate,
+        fromWarehouseId: dto.fromWarehouseId,
+        reference: dto.reference ?? null,
+        note: dto.note ?? null,
+      }, lines);
+    });
+  }
+
+  /**
+   * Stocktake correction: positive lines add a layer at the stated cost, negative lines take
+   * stock out at FIFO cost, and one voucher moves the net value between inventory and the
+   * stock gain/loss account so the ledger keeps agreeing with the shelf.
+   */
+  async createAdjustment(tenantId: string, userId: string, dto: CreateAdjustmentDto): Promise<StockDocumentResponseDto> {
+    const inventory = this.requireInventory();
+    const docDate = dto.docDate ?? this.today();
+    for (const line of dto.lines) {
+      if (line.quantity === 0) {
+        throw new BadRequestException(`مقدار تعدیل کالای ${line.sku} صفر است.`);
+      }
+      if (line.quantity > 0 && !line.unitCost) {
+        throw new BadRequestException(`برای اضافه‌شدن کالای ${line.sku} بهای واحد لازم است.`);
+      }
+    }
+    const accounts = await this.resolveAccounts(tenantId, [STOCK_INVENTORY_ACCOUNT, STOCK_ADJUSTMENT_ACCOUNT]);
+    return this.runNumbered(tenantId, StockDocumentType.ADJUSTMENT, docDate, async (manager, docNumber) => {
+      await this.repository.assertActiveWarehouse(tenantId, dto.warehouseId, manager);
+      const lines: LineInput[] = [];
+      let net = 0n;
+      for (const line of dto.lines) {
+        const sku = line.sku.trim();
+        if (line.quantity > 0) {
+          const result = await inventory.receiveStock(
+            tenantId,
+            {
+              sku,
+              quantity: line.quantity,
+              unitPurchaseCost: line.unitCost as number,
+              warehouseId: dto.warehouseId,
+              receivedAt: `${docDate}T12:00:00.000Z`,
+              reference: dto.reason,
+            },
+            manager,
+          );
+          net += toMinor(result.totalCost);
+          lines.push({ itemId: null, sku, quantity: line.quantity, unitCost: line.unitCost as number, value: result.totalCost, batchNumber: null });
+        } else {
+          const take = Math.abs(line.quantity);
+          const result = await inventory.issueStock(
+            tenantId,
+            { sku, quantity: take, warehouseId: dto.warehouseId, reference: dto.reason },
+            manager,
+          );
+          net -= toMinor(result.totalCost);
+          lines.push({ itemId: null, sku, quantity: line.quantity, unitCost: this.money(result.totalCost / take), value: -result.totalCost, batchNumber: null });
+        }
+      }
+      const document = await this.save(tenantId, userId, manager, {
+        docNumber,
+        docType: StockDocumentType.ADJUSTMENT,
+        docDate,
+        toWarehouseId: dto.warehouseId,
+        reference: dto.reason,
+      }, lines);
+      if (net !== 0n) {
+        const entry = await this.postValueEntry(tenantId, docNumber, docDate, `تعدیل موجودی ${docNumber}: ${dto.reason}`, accounts, net, manager);
+        await manager.update('erp_stock_documents', { id: document.id, tenantId }, { journalEntryId: entry.id });
+        document.journalEntryId = entry.id;
+      }
+      return document;
+    });
+  }
+
+  /**
+   * One voucher for a net change in stock value: positive debits inventory and credits the
+   * counter account, negative the reverse.
+   */
+  async postValueEntry(
+    tenantId: string,
+    docNumber: string,
+    docDate: string,
+    description: string,
+    accounts: string[],
+    net: bigint,
+    manager: EntityManager,
+  ): Promise<{ id: number }> {
+    if (!this.accounting) {
+      throw new Error('StockDocumentsService needs AccountingService to post stock vouchers.');
+    }
+    const [inventoryCode, counterCode] = accounts;
+    const amount = minorToDecimal(net < 0n ? -net : net);
+    const debitInventory = net > 0n;
+    return this.accounting.createJournalEntry(
+      tenantId,
+      {
+        entryNumber: `STK-${docNumber}`,
+        date: `${docDate}T12:00:00.000Z`,
+        description,
+        lines: [
+          debitInventory
+            ? { accountCode: inventoryCode, debit: amount, description: 'موجودی کالا' }
+            : { accountCode: counterCode, debit: amount, description: 'کسری انبار' },
+          debitInventory
+            ? { accountCode: counterCode, credit: amount, description: 'مابه‌ازای ثبت موجودی' }
+            : { accountCode: inventoryCode, credit: amount, description: 'موجودی کالا' },
+        ],
+      },
+      manager,
+    );
+  }
+
+  /** Account codes by spec: an existing account of the same type matching by name, then by code, else a new default. */
+  async resolveAccounts(tenantId: string, specs: StockAccountSpec[]): Promise<string[]> {
+    if (!this.accounting) {
+      throw new Error('StockDocumentsService needs AccountingService to resolve accounts.');
+    }
+    const existing = await this.accounting.listAccounts(tenantId);
+    const codes: string[] = [];
+    for (const spec of specs) {
+      const found =
+        existing.find((a) => a.accountType === spec.accountType && spec.match.some((m) => a.name.includes(m))) ??
+        existing.find((a) => a.code === spec.code);
+      if (found) {
+        codes.push(found.code);
+        continue;
+      }
+      try {
+        const created = await this.accounting.createAccount(tenantId, {
+          code: spec.code,
+          name: spec.name,
+          accountType: spec.accountType,
+          currency: Currency.IRR,
+        });
+        existing.push(created);
+        codes.push(created.code);
+      } catch {
+        codes.push(spec.code);
+      }
+    }
+    return codes;
   }
 }

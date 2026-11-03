@@ -21,6 +21,7 @@ import { FifoBatchEntity } from '../inventory/entities/fifo-batch.entity';
 import { StockItemEntity } from '../inventory/entities/stock-item.entity';
 import { WarehouseEntity } from '../inventory/entities/warehouse.entity';
 import { InventoryRepository } from '../inventory/repositories/inventory.repository';
+import { StockDocumentsRepository } from '../inventory/repositories/stock-documents.repository';
 import { InventoryService } from '../inventory/services/inventory.service';
 import { InvoiceEntity } from './entities/invoice.entity';
 import { InvoiceDirection, InvoiceSubject } from './enums/invoice-kind.enum';
@@ -77,7 +78,7 @@ describePg('invoice kinds on PostgreSQL', () => {
       ),
     );
     invoicing = new InvoicingRepository(ds.getRepository(InvoiceEntity), ds);
-    posting = new InvoicePostingService(invoicing, inventory, accounting);
+    posting = new InvoicePostingService(invoicing, inventory, accounting, new StockDocumentsRepository(ds));
     await inventory.createStockItem(T, { sku: SKU, barcode: SKU, name: 'kind item' } as never);
   }, 180_000);
 
@@ -155,6 +156,16 @@ describePg('invoice kinds on PostgreSQL', () => {
     expect(await stock()).toBe(11);
     expect(await balance('1020')).toBe(-110); // only the return's credit is left
     expect(await balance('5101')).toBe(-100);
+
+    // The register shows what moved: a delivery for the sale, a receipt for the purchase, a signed
+    // adjustment for the return, each tied to its invoice and (for stock) carrying the voucher id.
+    const docs = await q<{ doc_type: string; source_invoice_id: string; journal_entry_id: number | null }>(
+      `SELECT doc_type, source_invoice_id, journal_entry_id FROM erp_stock_documents WHERE tenant_id=$1 ORDER BY id`,
+      [T],
+    );
+    expect(docs.map((d) => d.doc_type)).toEqual(['PURCHASE_RECEIPT', 'SALES_DELIVERY', 'ADJUSTMENT']);
+    expect(docs.every((d) => d.journal_entry_id !== null)).toBe(true);
+    expect(docs[1].source_invoice_id).toBe(sale.id);
 
     // Every voucher balances and the books net to zero.
     const unbalanced = await q(

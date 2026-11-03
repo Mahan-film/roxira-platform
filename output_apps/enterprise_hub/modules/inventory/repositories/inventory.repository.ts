@@ -20,6 +20,8 @@ export interface InboundPersistInput {
   unitPurchaseCost: number;
   warehouseId: number | null;
   batchNumber: string;
+  /** Layer arrival time; FIFO order follows it. Defaults to now. */
+  receivedDate?: Date;
 }
 
 /** نتیجه پرسیستنس ورود کالا. */
@@ -186,6 +188,17 @@ export class InventoryRepository {
     return Number(row?.total ?? 0);
   }
 
+  /** How many of the tenant's items have no open FIFO layer. */
+  async countItemsWithoutStock(tenantId: string): Promise<number> {
+    return this.stockItems
+      .createQueryBuilder('item')
+      .where('item.tenantId = :tenantId', { tenantId })
+      .andWhere(
+        `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
+      )
+      .getCount();
+  }
+
   async findWarehouseByName(
     tenantId: string,
     name: string,
@@ -304,6 +317,8 @@ export class InventoryRepository {
     options: {
       search?: string;
       lowStockOnly: boolean;
+      /** Only items with no open FIFO layer (nothing on the shelf, e.g. imported but never received). */
+      noStockOnly?: boolean;
       skip: number;
       take: number;
     },
@@ -321,6 +336,11 @@ export class InventoryRepository {
     }
     if (options.lowStockOnly) {
       query.andWhere('item.minQuantity > 0 AND item.quantity <= item.minQuantity');
+    }
+    if (options.noStockOnly) {
+      query.andWhere(
+        `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
+      );
     }
 
     query
@@ -444,7 +464,7 @@ export class InventoryRepository {
         batchNumber: input.batchNumber,
         quantityRemaining: this.roundQuantity(input.quantity),
         unitPurchaseCost: this.roundMoney(input.unitPurchaseCost),
-        receivedDate: new Date(),
+        receivedDate: input.receivedDate ?? new Date(),
         warehouseId: input.warehouseId,
       });
       const savedBatch = await manager.save(batch);

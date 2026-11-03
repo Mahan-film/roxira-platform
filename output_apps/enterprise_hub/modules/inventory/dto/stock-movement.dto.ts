@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsDateString,
   IsInt,
   IsNumber,
   IsOptional,
@@ -43,6 +44,13 @@ export class InboundStockDto {
   @IsString()
   @MaxLength(100)
   batchNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'زمان ورود لایه (ISO)؛ ترتیب FIFO بر پایهٔ آن است. پیش‌فرض: اکنون',
+  })
+  @IsOptional()
+  @IsDateString()
+  receivedAt?: string;
 
   @ApiPropertyOptional({ description: 'شرح/مرجع رسید ورود', example: 'خرید از تأمین‌کننده الف' })
   @IsOptional()

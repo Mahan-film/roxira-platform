@@ -412,11 +412,13 @@ export class InventoryService {
     page: number;
     limit: number;
     lowStockCount: number;
+    noStockCount: number;
   }> {
     const [entities, total] =
       await this.inventoryRepository.findStockItemsAndCount(tenantId, {
         search: query.search,
         lowStockOnly: query.lowStockOnly ?? false,
+        noStockOnly: query.noStockOnly ?? false,
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       });
@@ -432,6 +434,7 @@ export class InventoryService {
       page: query.page,
       limit: query.limit,
       lowStockCount: data.filter((item) => item.isLowStock).length,
+      noStockCount: await this.inventoryRepository.countItemsWithoutStock(tenantId),
     };
   }
 
@@ -483,6 +486,7 @@ export class InventoryService {
         unitPurchaseCost: dto.unitPurchaseCost,
         warehouseId: dto.warehouseId ?? null,
         batchNumber,
+        receivedDate: dto.receivedAt ? new Date(dto.receivedAt) : undefined,
       }, manager);
 
       const layer: MovementLayerDto = {

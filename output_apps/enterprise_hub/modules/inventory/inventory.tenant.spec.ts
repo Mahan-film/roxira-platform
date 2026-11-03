@@ -157,6 +157,10 @@ class InMemoryInventoryRepository {
     return this.items.filter((row) => row.tenantId === tenantId);
   }
 
+  async countItemsWithoutStock(_tenantId: string): Promise<number> {
+    return 0;
+  }
+
   async findStockItemsAndCount(
     tenantId: string,
     _options: {
