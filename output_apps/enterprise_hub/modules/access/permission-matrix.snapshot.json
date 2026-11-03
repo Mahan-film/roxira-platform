@@ -194,6 +194,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/accounting/fixed-assets/ (FixedAssetController.list)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/accounting/journal-entries (AccountingController.listJournalEntries)": {
     "policy": "accounting:read",
     "owner": true,
@@ -1600,6 +1611,28 @@
     "owner": true,
     "admin": true,
     "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/fixed-assets/ (FixedAssetController.create)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/fixed-assets/depreciation-runs (FixedAssetController.run)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,

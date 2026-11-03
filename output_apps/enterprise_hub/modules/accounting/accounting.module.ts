@@ -1,3 +1,7 @@
+import { FixedAssetController } from './controllers/fixed-asset.controller';
+import { DepreciationLineEntity, FixedAssetEntity } from './entities/fixed-asset.entity';
+import { FixedAssetRepository } from './repositories/fixed-asset.repository';
+import { FixedAssetService } from './services/fixed-asset.service';
 import { DimensionController } from './controllers/dimension.controller';
 import { DimensionEntity } from './entities/dimension.entity';
 import { DimensionRepository } from './repositories/dimension.repository';
@@ -47,17 +51,21 @@ import { ReportExportService } from './services/report-export.service';
       PeriodLockEntity,
       FiscalYearEntity,
       DimensionEntity,
+      FixedAssetEntity,
+      DepreciationLineEntity,
       PettyCashFundEntity,
       PettyCashTransactionEntity,
     ]),
     CurrencyModule,
   ],
-  controllers: [AccountingController, DimensionController, FiscalYearController, PettyCashController, ReportsController],
+  controllers: [AccountingController, DimensionController, FixedAssetController, FiscalYearController, PettyCashController, ReportsController],
   providers: [
     AccountingService,
     AccountingRepository,
     DimensionRepository,
     DimensionService,
+    FixedAssetRepository,
+    FixedAssetService,
     ChartTemplateService,
     FinancialReportsService,
     FiscalYearRepository,
