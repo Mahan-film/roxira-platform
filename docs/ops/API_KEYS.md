@@ -12,7 +12,7 @@ python3 scripts/dev/check_keys.py
 
 | Covered (one authenticated request per key) | Not covered (no authenticated request) |
 | --- | --- |
-| OpenRouter, Mistral, Groq, SambaNova, Cerebras, Brave, Exa, Jina, Firecrawl, Gemini, Daytona, Cloudflare, Codeberg, Kavenegar, SMS.ir, Telegram, Tavily, AssemblyAI, Qdrant Cloud, OmniRoute | NVIDIA NIM, DeepSeek direct, Chutes, Together, Fireworks, TinyFish, Modal, Zilliz, R2 |
+| OPENROUTER, MISTRAL, GROQ, SAMBANOVA, CEREBRAS, BRAVE, EXA, JINA, FIRECRAWL, GEMINI, DAYTONA, CLOUDFLARE, CODEBERG, KAVENEGAR, SMS_IR, TELEGRAM, TAVILY, ASSEMBLYAI, QDRANT_CLOUD, OMNIROUTE | NVIDIA NIM, DeepSeek direct, Chutes, Together, Fireworks, TinyFish, Modal, Zilliz, R2 |
 
 Telegram is covered through both `NOTIFY_BOT_TOKEN` and
 `TELEGRAM_CHANNEL_BOT_TOKEN`. `TINYFISH_API_KEY`, `MODAL_TOKEN_ID` and
