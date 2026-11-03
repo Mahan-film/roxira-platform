@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AccountType } from '../../accounting/enums/accounting.enum';
+import { AccountLevel, AccountType } from '../../accounting/enums/accounting.enum';
 import {
   AccountingImportAccountInput,
   AccountingService,
@@ -32,6 +32,14 @@ const ACCOUNT_TYPE_ALIASES: Record<string, string> = {
   فروش: AccountType.REVENUE,
   هزینهها: AccountType.EXPENSE,
   'هزینه‌ها': AccountType.EXPENSE,
+};
+
+const ACCOUNT_LEVEL_ALIASES: Record<string, string> = {
+  گروه: AccountLevel.GROUP,
+  کل: AccountLevel.KOL,
+  معین: AccountLevel.MOEIN,
+  تفصیلی: AccountLevel.TAFSILI,
+  تفضیلی: AccountLevel.TAFSILI,
 };
 
 /** رجیستری ورود داده دفتر کل حساب‌ها (Chart of Accounts). */
@@ -99,6 +107,23 @@ export class AccountingAccountsRegistry implements EntityImportAdapter {
         'واحد پول',
         'ارز',
       ],
+    },
+    {
+      // Optional hierarchy, as written by the chart of accounts export (reports/export/chart-of-accounts).
+      key: 'level',
+      labelFa: 'سطح',
+      required: false,
+      type: 'enum',
+      enumValues: Object.values(AccountLevel),
+      enumAliases: ACCOUNT_LEVEL_ALIASES,
+      synonyms: ['level', 'AccountLevel', 'account level', 'سطح', 'سطح حساب'],
+    },
+    {
+      key: 'parentCode',
+      labelFa: 'کد حساب بالاتر',
+      required: false,
+      type: 'text',
+      synonyms: ['parentCode', 'parent code', 'ParentCode', 'کد حساب بالاتر', 'کد حساب بالادست', 'کد بالادست'],
     },
   ];
 
@@ -169,6 +194,12 @@ export class AccountingAccountsRegistry implements EntityImportAdapter {
       name: String(values.name ?? '').trim(),
       accountType: values.accountType as AccountType,
     };
+    if (typeof values.level === 'string' && values.level) {
+      input.level = values.level as AccountLevel;
+    }
+    if (typeof values.parentCode === 'string' && values.parentCode.trim()) {
+      input.parentCode = values.parentCode.trim();
+    }
     if (typeof values.currency === 'string' && values.currency) {
       const currency = normalizeCurrency(values.currency);
       if (currency) {
