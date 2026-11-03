@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { fromDb, fromMinor } from '../money';
-import { LedgerQueryDto, ReportPeriodDto, SubsidiaryQueryDto, TrialBalanceQueryDto } from '../dto/report.dto';
-import { AccountType } from '../enums/accounting.enum';
+import { AgeingQueryDto, LedgerQueryDto, ReportPeriodDto, SubsidiaryQueryDto, TrialBalanceQueryDto } from '../dto/report.dto';
+import { AccountType, ReportLine } from '../enums/accounting.enum';
 import { AccountingRepository } from '../repositories/accounting.repository';
 import { FiscalYearRepository } from '../repositories/fiscal-year.repository';
 import { AccountBucketRow, LedgerReportRepository } from '../repositories/ledger-report.repository';
@@ -26,6 +26,7 @@ import {
   TrialBalanceRow,
   trialBalanceRows,
 } from '../reports/statements';
+import { ageing, AgeingInputError, AgeingReport } from '../reports/ageing';
 
 export interface ResolvedPeriod {
   yearStart: string;
@@ -270,6 +271,51 @@ export class FinancialReportsService {
       trialBalanceRows(balances, [], { includeClosing: query.includeClosing }),
     );
     return { ...report, balanced: null };
+  }
+
+  /**
+   * Receivable or payable ageing per account and party at `to` (default today), by document date.
+   * Without `accountCode` it covers every account whose statement line is RECEIVABLE (or PAYABLE),
+   * set on the account or inferred from its name.
+   */
+  async ageing(tenantId: string, query: AgeingQueryDto): Promise<AgeingReport & { accountCodes: string[] }> {
+    const side = query.side ?? 'receivable';
+    const to = query.to ?? new Date().toISOString().slice(0, 10);
+    if (!realDay(to)) {
+      throw new BadRequestException(`تاریخ ${to} معتبر نیست.`);
+    }
+    const accounts = await this.accounts(tenantId);
+    const line = side === 'receivable' ? ReportLine.RECEIVABLE : ReportLine.PAYABLE;
+    const scope = query.accountCode
+      ? this.subtree(accounts, query.accountCode)
+      : accounts.filter((account) => classify(account).line === line);
+    const accountCodes = scope.map((account) => account.code).sort();
+    const rows = scope.length
+      ? await this.ledger.ageingLines(tenantId, {
+          accountIds: scope.map((account) => account.id),
+          to,
+          partyCode: query.partyCode,
+        })
+      : [];
+    try {
+      const report = ageing(
+        rows.map((row) => ({
+          accountCode: row.accountCode,
+          accountName: row.accountName,
+          partyCode: row.partyCode,
+          day: row.day,
+          debit: fromDb(row.debit),
+          credit: fromDb(row.credit),
+        })),
+        { side, asOf: to, edges: query.edges },
+      );
+      return { ...report, accountCodes };
+    } catch (error) {
+      if (error instanceof AgeingInputError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   async accountLedger(tenantId: string, query: LedgerQueryDto): Promise<LedgerReport> {
