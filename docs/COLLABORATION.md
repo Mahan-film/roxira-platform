@@ -124,3 +124,7 @@ the server's own env. The full Markdown report is also written to `~/Library/Log
 4. Production server: add their own SSH public key (one key per person, so the log shows who logged in) and
    copy `scripts/ops/ssh_config.example` into `~/.ssh/config`.
 5. They read `CLAUDE.md`, `docs/AI_HANDOFF.md` and this page, then use `whoswhat.sh` / `claim.sh`.
+
+## Two computers
+
+The Mac and the Windows laptop (WSL 2): setup, secrets, Wi-Fi checks and rollback are in [ops/TWO_COMPUTERS.md](ops/TWO_COMPUTERS.md).
