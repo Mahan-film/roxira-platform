@@ -1,0 +1,22 @@
+# Line endings are LF in the repo and in every checkout, also on Windows.
+# A CRLF shell script breaks bash, so this matters for the second (Windows/WSL) computer.
+* text=auto eol=lf
+*.sh text eol=lf
+scripts/dev/rx text eol=lf
+scripts/dev/rxall text eol=lf
+
+# Test fixtures keep their exact bytes (some are CRLF or Windows-1256 on purpose).
+e2e/fixtures/** -text
+**/__fixtures__/** -text
+**/tests/fixtures/** -text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.zip binary
+*.woff binary
+*.woff2 binary
