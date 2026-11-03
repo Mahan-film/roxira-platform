@@ -47,6 +47,17 @@ Code sessions, work on this repository at the same time. This page is the agreed
     git author together, so every commit, claim and PR shows who did it. `bash scripts/dev/iam.sh` shows
     who is active.
 
+## Live status report
+
+`python3 scripts/dev/team_status.py` prints a Markdown report: main sha, last autodeploy result on prod
+(over ssh) and HTTP status of the public sites, claimed issues and open PRs with the actor type (human,
+`agent:<id>`, relay, dependabot), stale claims (idle more than 2 h on `agent/` branches, 24 h otherwise),
+files touched by more than one open PR, PRs merged in the last 24 h, and a "Next actions" list. Flags:
+`--no-ssh`, `--no-sites`, `--out FILE`, `--json`, `--telegram` (short version via `scripts/ops/notify`),
+`--stale-hours N`. It is read-only, except `--release-stale`, which changes GitHub: it removes the
+`in-progress` label and assignees from stale claims and comments on them. Without that flag it only prints
+what it would do.
+
 ## For Claude sessions (both people)
 
 At the start of every session, before writing code: run `bash scripts/dev/whoswhat.sh`, pick or create
