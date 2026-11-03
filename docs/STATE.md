@@ -6,6 +6,27 @@
 
 Owner speaks Persian: reply in Persian; code, commits and docs in English. The owner wants FULL automation: do not hand them commands unless a secret or a physical action is needed.
 
+## 2026-11-03 (hub, mahansudo + Claude): unblocked deploys, two accounts, cleanup, public-repo prep
+- **Deploys were stuck since 2026-11-01**: an untracked `.env.before-app-role.*` on srv1 made the tree dirty, so every
+  merge (16 PRs) was refused. Moved to `/root/env-backups/`; merges #975-#980 then triggered autodeploy of `main`.
+  Check `/root/deploy-state/autodeploy-last.json` before assuming a merge is live.
+- **Two people on one Mac**: GitHub `mahan-films` (org admin) and `mahansudo`. `bash scripts/dev/iam.sh <login>` (#976)
+  switches gh + git author. `mahansudo` is NOT yet a repo collaborator: the private repo's Team org has 1 seat, so it
+  needs a paid seat or the public repo below.
+- **Secrets**: hardcoded Kavenegar key and owner phone default removed from code (#975). Hash audit: the AI key pool
+  (Mistral, Groq, Gemini, Zilliz, Daytona, OpenRouter, SambaNova, Qdrant) is not in git history; Kavenegar, SMS.ir,
+  Tavily, Brave, Exa, Jina, Firecrawl, Kira and AssemblyAI keys ARE in history and still valid (owner keeps them for now).
+- **Public repo (approved by the owner, not done)**: GitHub keeps PR refs, so the current repo cannot be made public
+  safely. Plan: rename it to `roxira-platform-private`, create a new public `Mahan-film/roxira-platform` from a
+  history scrubbed with `git filter-repo` (dry run on the Mac: 1,255 commits, gitleaks clean, 0 values from any Mac or
+  srv1 env file), copy deploy keys (`roxira-platform` write, `srv1` read-only), add `mahansudo`, switch srv1/Mac origin,
+  install a pre-push guard that refuses the old root commit `c0c36302`. Blocked by the session permission layer.
+- **Cleanup (#978)**: 34 unreferenced root/docs files moved to `archive/`; README, CLAUDE.md and this header fixed.
+  Team rules: `docs/strategy/TEAM_WORKFLOW_2026-11-03.md`.
+- **Antigravity**: A17 fix (#977), A20 empty states (#979), A21 keyboard drawer (#980) reviewed and merged.
+- **DeepSeek dsh-superagent** (2026-11-01, MIT research prototype, full OS access): not adopted; trial later in a
+  Daytona sandbox on the public repo only.
+
 ## Operating model (changed 2026-10-14; older docs may say otherwise)
 - **Hub** (Claude, Opus-class) plans, reviews diffs, tests locally, merges PRs itself (`gh pr merge N --repo Mahan-film/roxira-platform --squash --admin --delete-branch`; the owner's settings allow it; permission mode must not be Auto).
 - **Workers** = server agents: `ssh roxira-prod '/opt/roxira_platform/scripts/infra/server_agents/run_task.sh --model ds-flash|--gateway --public [--tier light] --task-file /tmp/t.md --scope <dir>/ --slug <x>'`. Free tier first (`--gateway --public`), DeepSeek (`ds-flash`) for big/long tasks (Groq TPM is too small for large inputs). Stagger parallel launches ~15 s (worktree lock). Agents cannot run npm/tsc/jest: the hub verifies locally (node_modules exist in `.wt/keypool`). Retrieve: `git -c safe.directory='*' -C <worktree> format-patch -1 --stdout`.
