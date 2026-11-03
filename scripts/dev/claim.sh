@@ -3,7 +3,8 @@
 #   bash scripts/dev/claim.sh <issue-number> [short-slug]
 #   bash scripts/dev/claim.sh new "Title of the task" [short-slug]   # creates the issue first
 #   add --agent <id> anywhere (e.g. --agent opencode) for an AI agent: branch agent/<id>/<issue>-<slug>
-#   and "Agent: <id>" in the draft PR body. Agent ids: claude-<login>, opencode, antigravity, server-<lane>
+#   and "Agent: <id>" in the draft PR body. Agent ids: claude, opencode, antigravity, deepseek, zed, server-<lane>;
+#   your login is appended (opencode -> opencode-<login>) so the team sees whose agent it is
 # What it does (all visible to everyone on GitHub):
 #   1. assigns the issue to you and adds the label in-progress
 #   2. creates branch <your-login>/<issue>-<slug> (or agent/<id>/<issue>-<slug>) from origin/main in a new worktree
@@ -55,6 +56,8 @@ fi
 
 [ -n "$slug" ] || slug="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//' | cut -c1-40)"
 [ -n "$slug" ] || slug="task"
+# Two people each run several agents: an agent id always names whose agent it is (opencode -> opencode-<login>).
+case "$agent" in ""|*-"$me") ;; *) agent="$agent-$me" ;; esac
 branch="$me/$issue-$slug"
 [ -z "$agent" ] || branch="agent/$agent/$issue-$slug"
 
