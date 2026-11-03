@@ -42,6 +42,10 @@ Code sessions, work on this repository at the same time. This page is the agreed
 8. **Deploys are automatic** (server timer, docs/ops/AUTODEPLOY.md). Nobody deploys by hand. A merge to
    `main` is a release, so only merge green, reviewed PRs.
 9. **Each person uses their own Claude account.** Sharing one account is against Anthropic's terms.
+10. **Same Mac, two people:** log in both GitHub accounts once (`gh auth login`), then run
+    `bash scripts/dev/iam.sh <your-login>` when you sit down. It switches gh, git push, `claim.sh` and the
+    git author together, so every commit, claim and PR shows who did it. `bash scripts/dev/iam.sh` shows
+    who is active.
 
 ## For Claude sessions (both people)
 
