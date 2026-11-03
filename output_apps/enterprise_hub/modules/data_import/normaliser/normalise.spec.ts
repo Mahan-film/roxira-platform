@@ -1,5 +1,6 @@
 import {
   fixPersianChars,
+  normaliseKey,
   normaliseText,
   parseJalaliDate,
   parseMoneyRials,
@@ -22,8 +23,21 @@ describe('fixPersianChars', () => {
     expect(fixPersianChars('كتاب')).toBe('کتاب');
   });
 
-  it('normalises text with ZWNJ and extra spaces', () => {
-    expect(normaliseText('نام\u200cو  نام')).toBe('نام و نام');
+  it('keeps a ZWNJ between letters and collapses extra spaces', () => {
+    expect(normaliseText('حساب\u200cهای   دریافتنی')).toBe('حساب\u200cهای دریافتنی');
+    expect(normaliseText('می\u200c\u200cشود')).toBe('می\u200cشود');
+  });
+
+  it('drops a ZWNJ next to a space or at the ends, and bidi marks', () => {
+    expect(normaliseText('نام\u200c و نام')).toBe('نام و نام');
+    expect(normaliseText('نام \u200cو')).toBe('نام و');
+    expect(normaliseText('\u200cنام\u200c')).toBe('نام');
+    expect(normaliseText('\u200fنام\u200eو')).toBe('نام و');
+  });
+
+  it('matches with and without ZWNJ in keys', () => {
+    expect(normaliseKey('حساب\u200cهای دریافتنی')).toBe(normaliseKey('حساب های دریافتنی'));
+    expect(normaliseKey('حساب\u200cهای دریافتنی')).toBe(normaliseKey('حسابهای دریافتنی'));
   });
 });
 
