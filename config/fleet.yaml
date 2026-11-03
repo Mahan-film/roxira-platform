@@ -1,0 +1,73 @@
+# Fleet dispatcher settings (scripts/dev/fleet.py, runbook docs/ops/FLEET_RUNBOOK.md).
+# Holds lane names, caps and timings only. Never a key value. Model ids stay in config/models.yaml
+# (roles) and config/key_pool.yaml (provider-native ids); the names below are OpenCode aliases or
+# Claude CLI aliases, resolved at run time.
+
+# Writers = jobs that edit a worktree at the same moment. More than 4 on one Mac thrashes disk and
+# the free-tier rate limits, so `max` is a hard ceiling for --writers.
+writers:
+  default: 3
+  max: 4
+reviewers_parallel: 2
+
+lanes:
+  # Local OpenCode pool. Tried in order; a rate-limited model hands over to the next one.
+  # `executor` = config/models.yaml executor primary (OpenRouter, paid, cheap). pool/* = LiteLLM key
+  # pool on 127.0.0.1:4000 (free tiers first, public code only).
+  opencode:
+    enabled: true
+    models: [executor, pool/gptoss, pool/codestral]
+    timeout_secs: 900
+  # Claude Code headless sessions (owner's subscription). Hard issues and lane overflow.
+  claude:
+    enabled: true
+    model: sonnet
+    max_turns: 40
+    timeout_secs: 1500
+  # Server agents on srv1 (run_task.sh over ssh, pushes an agent/* branch). Off by default: it runs
+  # work on production hardware, so the owner turns it on with FLEET_LANES=opencode,claude,server.
+  server:
+    enabled: false
+    host: roxira-prod
+    runner: /opt/roxira_platform/scripts/infra/server_agents/run_task.sh
+    aliases: [groq-strong, ds-flash]
+    timeout_secs: 1200
+
+review:
+  # Reviewer must be a different vendor family than the author (scripts/dev/check_reviewer_family.py).
+  # Key-pool groups are tried in order through scripts/dev/llm_pool.py (direct provider calls);
+  # a deployment of the author's own family is skipped. Last resort: the Claude CLI (when the author
+  # was not Claude).
+  groups: [agent-strong-free, agent-light-free, agent-free-paid]
+  claude_model: haiku
+  max_diff_chars: 18000   # free tiers cap tokens/minute (Groq 8k TPM): larger diffs are cut
+  max_repairs: 1
+
+rate_limit:
+  base_backoff_secs: 900      # first wait after every model of a lane hit a limit
+  max_backoff_secs: 14400
+  # Output of a worker that matches this regex counts as a rate/quota limit, not a failure.
+  pattern: "(rate.?limit|429|too many requests|quota|usage limit|limit reached|resource_exhausted|overloaded|try again later|credit)"
+
+merge:
+  max_changed_lines: 1500
+  # CI checks that may be red without blocking the merge (report-only jobs).
+  report_only_checks: ["Agent review", "Mutation", "Radar"]
+  # A PR touching one of these stays open for hub review (same list as scripts/dev/rx).
+  sensitive:
+    - ".github/"
+    - "scripts/ops/"
+    - "ops/"
+    - "config/models.yaml"
+    - "docker-compose"
+    - "nginx"
+    - "migrations/"
+    - "docker/"
+    - ".sql"
+    - "src/factory_pipeline/budget.py"
+    - ".semgrep/"
+    - "output_apps/ecosystem_core/src/billing/"
+    - "output_apps/ecosystem_core/src/auth/"
+    - "Dockerfile.prod"
+    - "scripts/dev/fleet.py"
+    - "scripts/dev/rx"
