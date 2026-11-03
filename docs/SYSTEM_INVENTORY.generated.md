@@ -38,7 +38,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | agent-automerge.yml | Agent auto-merge | workflow_dispatch, workflow_run |
 | agent-review.yml | Agent review | pull_request_target, workflow_dispatch |
 | agent-task.yml | Agent task | issues, workflow_dispatch |
-| ci.yml | CI | pull_request, push, workflow_dispatch |
+| ci.yml | CI | merge_group, pull_request, push, workflow_dispatch |
 | deploy-prod.yml | Deploy prod | workflow_dispatch, workflow_run |
 | deps-audit-weekly.yml | Weekly dependency audit | schedule, workflow_dispatch |
 | e2e-smoke.yml | E2E smoke (production) | schedule, workflow_dispatch |

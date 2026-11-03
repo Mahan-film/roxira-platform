@@ -16,10 +16,15 @@ on:
   # rule. agent-task.yml dispatches this workflow directly on the new branch via
   # `gh workflow run ci.yml --ref <branch>` so agent PRs still get a real CI run.
   workflow_dispatch:
+  # GitHub merge queue: the queue creates a temporary gh-readonly-queue/* branch and
+  # requests checks on it. Required status checks must be reported for this event too.
+  merge_group:
+    types: [checks_requested]
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Merge-queue groups each have their own head_ref, so they never cancel each other.
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -55,7 +60,11 @@ jobs:
           # natural "before" commit to diff against, unlike push/pull_request; give it
           # one explicitly. Left empty for push/pull_request so their own automatic
           # base detection (unaffected by this input) keeps working.
-          base: ${{ github.event_name == 'workflow_dispatch' && 'main' || '' }}
+          base: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || (github.event_name == 'workflow_dispatch' && 'main' || '') }}
+          # merge_group has no automatic base detection either: diff the queue's temporary
+          # merge commit against the base it will land on. Other events keep the action's
+          # own default (github.ref).
+          ref: ${{ github.event_name == 'merge_group' && github.event.merge_group.head_sha || github.ref }}
           filters: |
             python:
               - "**/*.py"
@@ -88,7 +97,7 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
       - name: Install gitleaks
         run: |
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
@@ -107,8 +116,8 @@ jobs:
           fi
       - name: Scan commits introduced by this change
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
         run: |
           # History already contains secrets on purpose (see docs/STRATEGY.md §6), so only
           # the commits this PR/push adds are scanned. Removing a secret never fails.
