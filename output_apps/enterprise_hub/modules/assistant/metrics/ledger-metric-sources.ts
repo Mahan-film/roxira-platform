@@ -83,7 +83,7 @@ export class LedgerMetricSources implements MetricSources {
   async stock(tenantId: string) {
     const valuation = await this.inventory.getFifoValuation(tenantId);
     return {
-      fifoValue: fromMinor(toMinor(valuation.totalInventoryValue)),
+      fifoValue: valuation.totalInventoryValue,
       lowStockCount: valuation.lowStockCount,
     };
   }

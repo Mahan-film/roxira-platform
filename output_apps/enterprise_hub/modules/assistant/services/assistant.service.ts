@@ -106,10 +106,8 @@ export class AssistantService {
     const used: AssistantToolCallDto[] = [];
     /** نتیجهٔ موفق ابزارها در این نوبت: تنها شاهد مجاز برای عددهای پاسخ. */
     const evidence: unknown[] = [];
-    const userTexts = [
-      ...(dto.history ?? []).filter((entry) => entry.role !== 'assistant').map((entry) => String(entry.content)),
-      dto.message,
-    ];
+    // Only the current message: client-supplied history must not launder numbers into evidence.
+    const userTexts = [dto.message];
     let model: string | null = null;
 
     const deadlineAt = Date.now() + ASSISTANT_TOTAL_TIMEOUT_MS;
