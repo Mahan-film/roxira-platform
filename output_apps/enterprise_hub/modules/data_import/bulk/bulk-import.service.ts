@@ -13,10 +13,13 @@ import {
   BULK_QUEUE_NAME,
   BULK_RUN_JOB,
   MAX_PARTS,
+  MAX_PROXY_PART_BYTES,
   RESERVED_PRESIGN_SECONDS,
   maxActiveJobsPerTenant,
   maxFileBytes,
   partBytes,
+  partChecksumsEnabled,
+  proxyPartsEnabled,
   storageDriver,
   tenantQuotaBytes,
 } from './bulk.constants';
@@ -71,7 +74,12 @@ export class BulkImportService implements OnModuleInit {
 
   config() {
     const driver = storageDriver();
-    return { enabled: driver !== 'disabled', driver, direct: this.store.direct, partBytes: partBytes(), quotaBytes: tenantQuotaBytes() };
+    return { enabled: driver !== 'disabled', driver, direct: this.store.direct, proxyParts: this.proxyAllowed(), checksums: this.store.direct && partChecksumsEnabled(), partBytes: partBytes(), quotaBytes: tenantQuotaBytes() };
+  }
+
+  /** The API may relay a part: always for the local driver, for S3 only as the fallback and only if enabled. */
+  private proxyAllowed(): boolean {
+    return !this.store.direct || proxyPartsEnabled();
   }
 
   async quota(tenantId: string) {
@@ -111,7 +119,7 @@ export class BulkImportService implements OnModuleInit {
       driver: this.store.driver,
       partBytes: part,
     });
-    return { jobId: job.id, partBytes: part, totalParts: Math.ceil(size / part), direct: this.store.direct };
+    return { jobId: job.id, partBytes: part, totalParts: Math.ceil(size / part), direct: this.store.direct, proxyParts: this.proxyAllowed() && part <= MAX_PROXY_PART_BYTES, checksums: this.store.direct && partChecksumsEnabled() };
   }
 
   private async mustGet(tenantId: string, id: string): Promise<BulkJob> {
@@ -132,25 +140,38 @@ export class BulkImportService implements OnModuleInit {
     return { partBytes: job.partBytes, totalParts: Math.ceil(job.sizeBytes / job.partBytes), uploaded: parts.map((p) => ({ partNumber: p.partNumber, size: p.size })) };
   }
 
-  async signParts(tenantId: string, id: string, numbers: number[]) {
+  async signParts(tenantId: string, id: string, numbers: number[], checksums: Record<string, string> = {}) {
     const job = await this.uploading(tenantId, id);
     const total = Math.ceil(job.sizeBytes / job.partBytes);
     if (!this.store.direct) throw new BadRequestException('این سرور آپلود مستقیم ندارد.');
     const urls: Record<number, string> = {};
+    const headers: Record<number, Record<string, string>> = {};
     for (const n of numbers) {
       if (n < 1 || n > total) throw new BadRequestException('شمارهٔ تکه نامعتبر است.');
-      urls[n] = await this.store.presignPart(job.objectKey, job.multipartId as string, n, RESERVED_PRESIGN_SECONDS);
+      const sum = partChecksumsEnabled() ? checksums[String(n)] : undefined;
+      urls[n] = await this.store.presignPart(job.objectKey, job.multipartId as string, n, RESERVED_PRESIGN_SECONDS, sum);
+      if (sum) headers[n] = { 'x-amz-checksum-sha256': sum };
     }
-    return { urls };
+    return { urls, headers };
   }
 
-  /** Development / test driver only: the API receives the part. */
-  async putLocalPart(tenantId: string, id: string, partNumber: number, body: Readable) {
+  /**
+   * The API receives one part and streams it to storage (no disk, no buffering). Always for the local driver;
+   * for R2 it is the fallback when the browser cannot reach storage. The part's exact size is known from the job,
+   * so a short or long body is refused before anything is stored.
+   */
+  async putProxyPart(tenantId: string, id: string, partNumber: number, body: Readable, declaredLength: number | null, checksumSha256?: string) {
     const job = await this.uploading(tenantId, id);
-    if (this.store.direct) throw new BadRequestException('این سرور آپلود مستقیم دارد.');
+    if (!this.proxyAllowed()) throw new BadRequestException('ارسال تکه از مسیر API در این سرور غیرفعال است.');
     const total = Math.ceil(job.sizeBytes / job.partBytes);
     if (partNumber < 1 || partNumber > total) throw new BadRequestException('شمارهٔ تکه نامعتبر است.');
-    return this.store.putPart(job.objectKey, job.multipartId as string, partNumber, body);
+    const expected = partNumber < total ? job.partBytes : job.sizeBytes - job.partBytes * (total - 1);
+    if (expected > MAX_PROXY_PART_BYTES) throw new PayloadTooLargeException('این تکه برای ارسال از مسیر API بزرگ است.');
+    if (declaredLength !== null && declaredLength !== expected) {
+      throw new BadRequestException(`اندازهٔ تکه ${partNumber} باید ${expected} بایت باشد.`);
+    }
+    if (checksumSha256 !== undefined && !/^[A-Za-z0-9+/]{43}=$/.test(checksumSha256)) throw new BadRequestException('چکیدهٔ تکه نامعتبر است.');
+    return this.store.putPart(job.objectKey, job.multipartId as string, partNumber, body, { size: expected, checksumSha256 });
   }
 
   /** Verifies every part is present with the right size, stitches the object and queues the job. */

@@ -324,8 +324,10 @@ export async function apiPutRaw<TResponse>(
   path: string,
   body: Blob,
   signal?: AbortSignal,
+  extraHeaders: Record<string, string> = {},
 ): Promise<TResponse> {
   const headers: Record<string, string> = {
+    ...extraHeaders,
     "Content-Type": "application/octet-stream",
   };
   const token = await getFreshAccessToken();

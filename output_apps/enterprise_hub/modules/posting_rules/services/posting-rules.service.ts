@@ -155,6 +155,7 @@ export class PostingRulesService {
         roles: roles.map((role) => ({
           role,
           label: POSTING_ROLES[role].label,
+          types: [...POSTING_ROLES[role].types] as string[],
           accountCode: mapping[role] ?? null,
           accountName: mapping[role] ? (accounts.get(mapping[role]!)?.name ?? null) : null,
           source: source[role]!,

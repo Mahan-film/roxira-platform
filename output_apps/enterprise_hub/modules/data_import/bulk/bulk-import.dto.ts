@@ -37,6 +37,11 @@ export class SignPartsDto {
   @IsInt({ each: true })
   @Min(1, { each: true })
   partNumbers: number[];
+
+  @ApiProperty({ required: false, description: 'SHA-256 (base64) هر تکه، کلید = شمارهٔ تکه' })
+  @IsOptional()
+  @IsObject()
+  checksums?: Record<string, string>;
 }
 
 export class ApproveTableDto {

@@ -39,9 +39,22 @@ export const STATUTORY_KEYS = {
   income_tax_art131_brackets: { kind: 'brackets', label: 'پله‌های مالیات بر درآمد اشخاص حقیقی (ماده ۱۳۱)', required: false },
   income_exemption_ceiling_art57_art101: { kind: 'money', label: 'سقف معافیت درآمد مستغلات (ماده ۵۷) و مشاغل (ماده ۱۰۱)', required: false },
   rental_expense_deduction_rate: { kind: 'rate', label: 'درصد هزینه و استهلاک مالک از اجاره‌بها (ماده ۵۳)', required: false },
+  doctor_fee_withholding_rate: { kind: 'rate', label: 'نرخ مالیات علی‌الحساب حق‌الزحمه پزشکان (کسر توسط مراکز درمانی)', required: false },
+  withholding_late_penalty_rate: { kind: 'rate', label: 'جریمهٔ عدم کسر یا ایصال مالیات تکلیفی (ماده ۱۹۹)', required: false },
+  withholding_late_penalty_monthly_rate: { kind: 'rate', label: 'جریمهٔ ماهانهٔ تأخیر در ایصال مالیات تکلیفی (ماده ۱۹۹)', required: false },
   civil_partnership_max_exemptions: { kind: 'count', label: 'حداکثر تعداد معافیت شرکای مشارکت مدنی (تبصره ۱ ماده ۱۰۱)', required: false },
   corporate_tax_rate: { kind: 'rate', label: 'نرخ مالیات بر درآمد شرکت‌ها', required: false },
   corporate_tax_effective_floor: { kind: 'rate', label: 'حداقل نرخ مؤثر مالیات بر درآمد شرکت‌ها', required: false },
+  // Contracting (HR-CON-01). A seeded row may be "unclear": no figure is known, so the value is NULL.
+  contract_retention_rate: { kind: 'rate', label: 'سپرده حسن انجام کار (درصد از هر صورت وضعیت)', required: false },
+  contract_insurance_deposit_rate: { kind: 'rate', label: 'سپرده بیمه ماده ۳۸ (درصد بهای کل کار)', required: false },
+  contract_insurance_rate_mechanical: { kind: 'rate', label: 'ضریب بیمه پیمان غیرعمرانی مکانیزه', required: false },
+  contract_insurance_rate_non_mechanical: { kind: 'rate', label: 'ضریب بیمه پیمان غیرعمرانی غیرمکانیزه (دستمزدی)', required: false },
+  contract_insurance_rate_civil_executive: { kind: 'rate', label: 'ضریب بیمه پیمان عمرانی اجرایی', required: false },
+  contract_insurance_rate_civil_consulting: { kind: 'rate', label: 'ضریب بیمه پیمان عمرانی مشاوره‌ای', required: false },
+  contract_unemployment_addon_fraction: { kind: 'rate', label: 'کسر بیمه بیکاری افزوده بر ضریب بیمه پیمان', required: false },
+  contract_tax_withholding_rate: { kind: 'rate', label: 'نرخ کسر مالیات پیمانکاران از صورت وضعیت', required: false },
+  contract_advance_payment_max_rate: { kind: 'rate', label: 'سقف پیش‌پرداخت قرارداد', required: false },
 } as const satisfies Record<string, StatutoryKeyDefinition>;
 
 export type StatutoryKey = keyof typeof STATUTORY_KEYS;

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PortalAuthActions } from "@/components/auth/portal-auth-actions";
+import { EnamadBadge } from "@/components/layout/EnamadBadge";
 import { PortalMobileNav } from "@/components/layout/portal-mobile-nav";
 import {
   ArrowLeft,
@@ -231,6 +232,7 @@ export default function HomePage() {
           <span className="font-mono" dir="ltr">
             © 1405 Roxira · roxira.ir
           </span>
+          <EnamadBadge domain="roxira" width={80} height={80} />
         </div>
       </footer>
     </div>
