@@ -4,8 +4,8 @@
  *
  * Safety rules baked in:
  *  - the tenant is always a brand-new one called "Roxira QA <date>" with an @example.invalid address;
- *  - a password is generated per run and only ever lives in memory (or in TOUR_EMAIL / TOUR_PASSWORD if the
- *    caller wants to re-use a tenant); nothing is written to the repo;
+ *  - a password is generated per run; TOUR_EMAIL / TOUR_PASSWORD only pre-seed the credentials of the NEW
+ *    signup (they do not log in to an existing tenant). Nothing is written to the repo (tour-results/ is ignored);
  *  - every failure keeps a screenshot, the console errors and the failed /api requests.
  */
 import { expect, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';

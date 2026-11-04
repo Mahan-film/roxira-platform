@@ -27,7 +27,8 @@ import {
  * Shared state (session, created ids) is cached in tour-results/state.json so a worker restart after a
  * failure does not create a second tenant. Delete that folder to start a new tenant.
  */
-test.skip(!process.env.PROD_TOUR, 'opt-in: set PROD_TOUR=1 (writes to a throwaway tenant on production)');
+const ENABLED = process.env.PROD_TOUR === '1';
+test.skip(!ENABLED, 'opt-in: set PROD_TOUR=1 (writes to a throwaway tenant on production)');
 
 const FIXTURES = path.resolve(__dirname, '../fixtures/sample-company');
 const STATE_FILE = path.join(OUT_DIR, 'state.json');
@@ -53,7 +54,8 @@ function saveState(patch: State): State {
 const arr = (x: any): any[] => (Array.isArray(x) ? x : (x?.data ?? x?.items ?? x?.results ?? []));
 const BASE_ITEMS = 'enterprise-hub/inventory';
 // Persisted so a worker restart after a failing test keeps using the same names and ids.
-const sfx: string = loadState().sfx ?? saveState({ sfx: uniqueSuffix() }).sfx;
+// Only touches disk when the tour is enabled, so collecting the file in CI has no side effects.
+const sfx: string = !ENABLED ? 'disabled' : (loadState().sfx ?? saveState({ sfx: uniqueSuffix() }).sfx);
 
 /** Random 10-digit Iranian national id with a valid check digit. */
 function nationalId(): string {
