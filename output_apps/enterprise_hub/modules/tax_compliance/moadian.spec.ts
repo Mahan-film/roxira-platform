@@ -534,7 +534,7 @@ function fakeMoadianServer(state: FakeServerState): FetchLike {
   };
 }
 
-function buildMoadian(options: { enabled?: boolean } = {}) {
+function buildMoadian(options: { enabled?: boolean; invoices?: InvoiceResponseDto[] } = {}) {
   const env: Record<string, string> = {
     [MOADIAN_ENV.ENABLED]: options.enabled === false ? 'false' : 'true',
     [MOADIAN_ENV.KEY_ENCRYPTION_KEY]: masterKeyB64,
@@ -557,6 +557,8 @@ function buildMoadian(options: { enabled?: boolean } = {}) {
   } as unknown as Queue;
   const invoicingService = {
     findOne: jest.fn(async (tenantId: string, id: string) => {
+      const custom = options.invoices?.find((invoice) => invoice.id === id);
+      if (tenantId === TENANT_A && custom) return custom;
       if (tenantId === TENANT_A && id === INVOICE_A) return buildInvoice();
       throw new NotFoundException('invoice not found');
     }),
@@ -578,6 +580,89 @@ const credentialDto = () => ({
   privateKeyPem: tenantKeys.privateKeyPem,
   defaultSstid: '2330001234567',
   defaultMeasurementUnit: '1627',
+});
+
+// Synthetic data only; the fake server above is the only "Moadian" these specs talk to.
+describe('MoadianService — every pattern through the send path', () => {
+  const sentHeader = (state: FakeServerState) => state.received[0].packet.header as Record<string, unknown>;
+  const submitAndSend = async (
+    options: { invoices?: InvoiceResponseDto[] },
+    id: string,
+    body?: Parameters<MoadianService['submitInvoice']>[2],
+  ) => {
+    const ctx = buildMoadian(options);
+    await ctx.service.putCredential(TENANT_A, credentialDto());
+    const queued = await ctx.service.submitInvoice(TENANT_A, id, body);
+    await ctx.service.processSend(ctx.jobs[0].data as never, false);
+    return { ...ctx, queued };
+  };
+  const INV2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  it('a plain submit is still pattern 1', async () => {
+    const { state } = await submitAndSend({}, INVOICE_A);
+    expect(sentHeader(state)).toMatchObject({ inp: 1, ins: 1 });
+  });
+
+  it('pattern 4 is chosen explicitly (crn is optional in 1 to 3, so it does not infer)', async () => {
+    const { state } = await submitAndSend({}, INVOICE_A, { pattern: 4, extras: { header: { crn: '123456789012' } } });
+    expect(sentHeader(state)).toMatchObject({ inp: 4, crn: '123456789012' });
+  });
+
+  it('an optional crn on a plain sale does not turn it into a contract', async () => {
+    const { state } = await submitAndSend({}, INVOICE_A, { extras: { header: { crn: '123456789012' } } });
+    expect(sentHeader(state)).toMatchObject({ inp: 1, crn: '123456789012' });
+  });
+
+  it('infers pattern 7 from the export lines and sends the export totals', async () => {
+    const { state } = await submitAndSend({}, INVOICE_A, {
+      extras: { items: [{ ssrv: 6_000_000, sscv: 10, cut: 'USD', exr: 600_000 }, { ssrv: 600_000, sscv: 1, cut: 'USD', exr: 600_000 }] },
+    });
+    expect(sentHeader(state)).toMatchObject({ inp: 7, torv: 6_600_000, tocv: 11, tprdis: null });
+  });
+
+  it('an explicit pattern must agree with the data and with the supported range', async () => {
+    const ctx = buildMoadian();
+    await ctx.service.putCredential(TENANT_A, credentialDto());
+    await expect(
+      ctx.service.submitInvoice(TENANT_A, INVOICE_A, { pattern: 5, extras: { header: { ft: 1 } } }),
+    ).rejects.toThrow(/نمی‌خواند/);
+    await expect(
+      ctx.service.submitInvoice(TENANT_A, INVOICE_A, { extras: { header: { billid: '1', ft: 1 } } }),
+    ).rejects.toThrow(/چند الگو/);
+    await expect(ctx.service.submitInvoice(TENANT_A, INVOICE_A, { pattern: 8 })).rejects.toThrow(/۱ تا ۷/);
+    expect(ctx.jobs).toHaveLength(0);
+  });
+
+  it('fails with a Persian message on a missing required field and burns no serial', async () => {
+    const ctx = buildMoadian();
+    await ctx.service.putCredential(TENANT_A, credentialDto());
+    await expect(ctx.service.submitInvoice(TENANT_A, INVOICE_A, { pattern: 6 })).rejects.toThrow(/فیلد header\.ft اجباری است/);
+    await expect(ctx.service.submitInvoice(TENANT_A, INVOICE_A, { pattern: 2, extras: { items: [{ cpr: 1, sovat: 1 }] } })).rejects.toThrow(/cfee/);
+    expect(ctx.repository.credentials[0].nextSerial).toBe('1');
+    expect(ctx.jobs).toHaveLength(0);
+  });
+
+  it('a cancellation points at the tax id of the invoice it cancels and needs it to be registered', async () => {
+    const cancel = buildInvoice({ id: INV2, subject: InvoiceSubject.CANCEL, relatedInvoiceId: INVOICE_A });
+    const ctx = buildMoadian({ invoices: [cancel] });
+    await ctx.service.putCredential(TENANT_A, credentialDto());
+    await expect(ctx.service.submitInvoice(TENANT_A, INV2)).rejects.toThrow(/صورتحساب مرجع/);
+    await ctx.repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A, taxId: 'A1B2C30510C00000000019', status: MoadianSubmissionStatus.SUCCESS,
+    });
+    await ctx.service.submitInvoice(TENANT_A, INV2);
+    await ctx.service.processSend(ctx.jobs[0].data as never, false);
+    expect(sentHeader(ctx.state)).toMatchObject({ ins: 3, irtaxid: 'A1B2C30510C00000000019' });
+  });
+
+  it('cash and credit needs the cash part', async () => {
+    const ctx = buildMoadian();
+    await ctx.service.putCredential(TENANT_A, { ...credentialDto(), settlementMethod: MoadianSettlementMethod.CASH_AND_CREDIT } as never);
+    await expect(ctx.service.submitInvoice(TENANT_A, INVOICE_A)).rejects.toThrow(/cashPortion/);
+    await ctx.service.submitInvoice(TENANT_A, INVOICE_A, { cashPortion: 1_000_000 });
+    await ctx.service.processSend(ctx.jobs[0].data as never, false);
+    expect(sentHeader(ctx.state)).toMatchObject({ setm: 3, cap: 1_000_000 });
+  });
 });
 
 describe('MoadianService — send and poll', () => {

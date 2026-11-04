@@ -5,7 +5,7 @@ type Bag = Record<string, unknown>;
 
 export class MoadianPacketValidationError extends Error {
   constructor(readonly problems: string[]) {
-    super(`Moadian packet is not valid for its type and pattern: ${problems.join('; ')}`);
+    super(`صورتحساب برای سامانه مودیان معتبر نیست: ${problems.join('؛ ')}`);
   }
 }
 
@@ -61,19 +61,19 @@ export function validatePacketAgainstPattern(header: Bag, body: Bag[]): void {
   const ins = header.ins as MoadianInvoiceSubject;
 
   if (type === MoadianInvoiceType.RETAIL) {
-    throw new MoadianPacketValidationError(['type 3 (retail/POS) has no field table in the source: unclear']);
+    throw new MoadianPacketValidationError(['نوع ۳ (فروشگاهی/پوز) جدول فیلد در منبع ندارد و unclear است']);
   }
   if (type !== MoadianInvoiceType.WITH_BUYER && type !== MoadianInvoiceType.WITHOUT_BUYER) {
-    throw new MoadianPacketValidationError([`inty ${String(type)} is not 1 or 2`]);
+    throw new MoadianPacketValidationError(['نوع صورتحساب (inty) باید ۱ یا ۲ باشد']);
   }
   if (!Number.isInteger(pattern) || pattern < 1 || pattern > 7) {
-    throw new MoadianPacketValidationError([`pattern ${String(pattern)} is outside the supported patterns 1 to 7`]);
+    throw new MoadianPacketValidationError([`الگوی ${String(pattern)} خارج از الگوهای پشتیبانی‌شده ۱ تا ۷ است`]);
   }
   if (type === MoadianInvoiceType.WITHOUT_BUYER && !isType2Pattern(pattern)) {
-    problems.push(`type 2 is allowed only for patterns 1 and 3, not ${pattern}`);
+    problems.push(`نوع ۲ (بدون مشخصات خریدار) فقط برای الگوهای ۱ و ۳ مجاز است، نه الگوی ${pattern}؛ مشخصات خریدار را وارد کنید`);
   }
   if (pattern === MoadianInvoicePattern.EXPORT && ins === MoadianInvoiceSubject.CORRECTIVE) {
-    problems.push('ins 2 (corrective) is not allowed in pattern 7 (export)');
+    problems.push('موضوع اصلاحی (ins=2) در الگوی ۷ (صادرات) مجاز نیست');
   }
 
   const checkBag = (
@@ -86,14 +86,14 @@ export function validatePacketAgainstPattern(header: Bag, body: Bag[]): void {
     for (const field of Object.keys(rules)) {
       const status = statusOf(rules, field, type, pattern);
       const has = present(bag[field]);
-      if (status === 'M' && !has) problems.push(`${where}${field} is mandatory`);
-      if (status === 'I' && has) problems.push(`${where}${field} is out of pattern and must not be sent`);
+      if (status === 'M' && !has) problems.push(`فیلد ${where}${field} اجباری است و مقدار ندارد`);
+      if (status === 'I' && has) problems.push(`فیلد ${where}${field} در این الگو مجاز نیست و نباید ارسال شود`);
       if (status === 'C') {
         const required = conditional(field);
-        if (required === true && !has) problems.push(`${where}${field} is required here`);
-        if (required === false && has) problems.push(`${where}${field} must not be sent here`);
+        if (required === true && !has) problems.push(`فیلد ${where}${field} در این حالت لازم است`);
+        if (required === false && has) problems.push(`فیلد ${where}${field} در این حالت نباید ارسال شود`);
       }
-      if (has && format[field] && !format[field](bag[field])) problems.push(`${where}${field} has an invalid format or length`);
+      if (has && format[field] && !format[field](bag[field])) problems.push(`فیلد ${where}${field} قالب یا طول نامعتبر دارد`);
     }
   };
 
@@ -132,42 +132,42 @@ export function validatePacketAgainstPattern(header: Bag, body: Bag[]): void {
   if (header.tob !== undefined && present(header.bid) && present(header.tob)) {
     const need: Record<number, number> = { 1: 10, 2: 11, 3: 12, 4: 12 };
     const len = String(header.bid).length;
-    if (need[num(header.tob)] && len !== need[num(header.tob)]) problems.push(`header.bid length ${len} does not match buyer type ${String(header.tob)}`);
+    if (need[num(header.tob)] && len !== need[num(header.tob)]) problems.push(`طول شناسه خریدار (header.bid) ${len} با نوع شخص خریدار ${String(header.tob)} نمی‌خواند`);
   }
   if (late && present(header.indati2m) && !(num(header.indati2m) > num(header.indatim))) {
-    problems.push('header.indati2m must be later than indatim');
+    problems.push('زمان ثبت (header.indati2m) باید بعد از زمان صدور (indatim) باشد');
   }
   if (setm === 3 && present(header.cap) && present(header.insp)) {
-    if (!(num(header.insp) > 0)) problems.push('header.insp must be greater than 0 when setm is 3');
-    if (num(header.cap) + num(header.insp) > num(header.tbill) - num(header.todam ?? 0)) problems.push('header.cap + insp must not exceed tbill minus todam');
+    if (!(num(header.insp) > 0)) problems.push('مبلغ نسیه (header.insp) برای تسویه نقد و نسیه باید بزرگ‌تر از صفر باشد');
+    if (num(header.cap) + num(header.insp) > num(header.tbill) - num(header.todam ?? 0)) problems.push('جمع header.cap و insp نباید از جمع صورتحساب منهای عوارض بیشتر باشد');
   }
 
   // Totals are the sums of the lines (Tir 1405 totals rules).
   for (const [total, line] of [['tprdis', 'prdis'], ['tdis', 'dis'], ['tadis', 'adis'], ['tvam', 'vam'], ['tbill', 'tsstam'], ['torv', 'ssrv'], ['tocv', 'sscv'], ['tonw', 'nw']] as const) {
-    if (present(header[total]) && !near(num(header[total]), sum(body, line))) problems.push(`header.${total} is not the sum of body ${line}`);
+    if (present(header[total]) && !near(num(header[total]), sum(body, line))) problems.push(`جمع header.${total} با مجموع ${line} سطرها برابر نیست`);
   }
   if (present(header.todam) && !near(num(header.todam), sum(body, 'odam') + sum(body, 'olam'))) {
-    problems.push('header.todam is not the sum of body odam and olam');
+    problems.push('header.todam با مجموع odam و olam سطرها برابر نیست');
   }
   if (pattern === MoadianInvoicePattern.EXPORT) {
-    body.forEach((r, i) => num(r.vra) !== 0 && problems.push(`body[${i}].vra must be 0 in pattern 7`));
-    if (!(num(header.torv) > 0) || !(num(header.tocv) > 0)) problems.push('header.torv and tocv must be greater than 0');
+    body.forEach((r, i) => num(r.vra) !== 0 && problems.push(`body[${i}].vra در الگوی ۷ باید صفر باشد`));
+    if (!(num(header.torv) > 0) || !(num(header.tocv) > 0)) problems.push('header.torv و tocv باید بزرگ‌تر از صفر باشند');
   }
   if (pattern === MoadianInvoicePattern.GOLD) {
     body.forEach((r, i) => {
-      if (num(r.tcpbs) !== num(r.consfee) + num(r.spro) + num(r.bros)) problems.push(`body[${i}].tcpbs must be consfee + spro + bros`);
-      if (present(r.cui) && !(num(r.cui) > 0 && num(r.cui) <= 1000)) problems.push(`body[${i}].cui must be in (0, 1000]`);
+      if (num(r.tcpbs) !== num(r.consfee) + num(r.spro) + num(r.bros)) problems.push(`body[${i}].tcpbs باید برابر consfee + spro + bros باشد`);
+      if (present(r.cui) && !(num(r.cui) > 0 && num(r.cui) <= 1000)) problems.push(`body[${i}].cui باید در بازهٔ (۰، ۱۰۰۰] باشد`);
     });
   }
   if (pattern === MoadianInvoicePattern.SALE_CURRENCY) {
     body.forEach((r, i) => {
-      if (present(r.cpr) && present(r.exr) && !(num(r.cpr) > 0 && num(r.cpr) < num(r.exr))) problems.push(`body[${i}].cpr must satisfy 0 < cpr < exr`);
+      if (present(r.cpr) && present(r.exr) && !(num(r.cpr) > 0 && num(r.cpr) < num(r.exr))) problems.push(`body[${i}].cpr باید بزرگ‌تر از صفر و کوچک‌تر از exr باشد`);
     });
   }
   // Foreign-currency group: if any of cfee, cut, exr is sent, all three are (pattern 7 sends cut and exr only).
   if (pattern !== MoadianInvoicePattern.EXPORT) body.forEach((r, i) => {
     const group = ['cfee', 'cut', 'exr'].filter((k) => present(r[k]));
-    if (group.length > 0 && group.length < 3) problems.push(`body[${i}] cfee, cut and exr must be sent together`);
+    if (group.length > 0 && group.length < 3) problems.push(`body[${i}]: فیلدهای cfee و cut و exr باید با هم ارسال شوند`);
   });
 
   if (problems.length > 0) throw new MoadianPacketValidationError(problems);
