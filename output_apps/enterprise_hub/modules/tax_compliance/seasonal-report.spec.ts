@@ -203,7 +203,8 @@ describe('purchases and input VAT', () => {
     id: 'p1',
     taxInvoiceNumber: 'P-1',
     direction: 'PURCHASE',
-    buyerInfo: { name: 'Seller Co', nationalId: '999' },
+    buyerInfo: { name: 'Own Company', nationalId: '000' },
+    sellerInfo: { name: 'Seller Co', nationalId: '999' },
     issuedAt: new Date('2026-05-01T08:00:00Z'),
   } as Partial<InvoiceEntity>);
 
@@ -234,7 +235,7 @@ describe('purchases and input VAT', () => {
     });
     const { purchaseRows } = await svc.transactions('tenant-a', 1405, 1);
     expect(purchaseRows.map((r) => r.documentNumber)).toEqual(['P-1', 'K-7']);
-    expect(purchaseRows[0].source).toBe('invoice');
+    expect(purchaseRows[0]).toMatchObject({ source: 'invoice', sellerName: 'Seller Co', sellerTaxId: '999' });
   });
 
   it('a capture uses the edited draft and converts foreign currency like the voucher', async () => {

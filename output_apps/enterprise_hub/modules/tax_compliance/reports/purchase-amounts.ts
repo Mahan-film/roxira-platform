@@ -23,8 +23,8 @@ export function purchaseFromInvoice(invoice: InvoiceEntity, tehranDay: string): 
     source: 'invoice',
     documentNumber: invoice.taxInvoiceNumber ?? '',
     date: tehranDay,
-    sellerName: invoice.buyerInfo?.name ?? '',
-    sellerTaxId: invoice.buyerInfo?.nationalId ?? '',
+    sellerName: invoice.sellerInfo?.name ?? '',
+    sellerTaxId: invoice.sellerInfo?.nationalId ?? '',
     baseMinor: amounts.salesMinor,
     vatMinor: amounts.vatMinor,
   };
