@@ -50,6 +50,7 @@ import {
   WageTaxFilesResponseDto,
 } from '../dto/payroll-run.dto';
 import { QueryEmployeeDto, QueryPayslipDto } from '../dto/query-hr.dto';
+import { PreviewSettlementDto, SettlementPreviewDto } from '../dto/settlement.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
 import { HrService } from '../services/hr.service';
 import { PayrollRunService } from '../services/payroll-run.service';
@@ -131,6 +132,21 @@ export class HrController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<EmployeeResponseDto> {
     return this.hrService.findOneEmployee(this.tenantIdOf(request), id);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('employees/:id/settlement')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'پیش‌نمایش سنوات و تسویه مرخصی هنگام پایان خدمت (بدون ثبت)' })
+  @ApiResponse({ status: HttpStatus.OK, type: SettlementPreviewDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'قرارداد فعال یا پارامتر قانونی تعریف نشده' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'کارمند یافت نشد' })
+  async previewSettlement(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: PreviewSettlementDto,
+  ): Promise<SettlementPreviewDto> {
+    return this.hrService.previewSettlement(this.tenantIdOf(request), id, dto);
   }
 
   @Patch('employees/:id')

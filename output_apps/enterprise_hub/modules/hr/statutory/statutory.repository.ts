@@ -31,6 +31,29 @@ export class StatutoryRepository {
     );
   }
 
+  /** Platform and tenant rows of some keys in `maxYear` and every earlier year, every version. */
+  findKeysUpToYear(
+    tenantId: string,
+    country: string,
+    keys: string[],
+    maxYear: number,
+  ): Promise<StatutoryParameterEntity[]> {
+    return this.scope.run(tenantId, (manager) =>
+      manager
+        .getRepository(StatutoryParameterEntity)
+        .createQueryBuilder('p')
+        .where('(p.tenantId IS NULL OR p.tenantId = :tenantId)', { tenantId })
+        .andWhere('p.country = :country AND p.fiscalYear <= :maxYear', {
+          country,
+          maxYear,
+        })
+        .andWhere('p.paramKey IN (:...keys)', { keys })
+        .orderBy('p.effectiveFrom', 'DESC')
+        .addOrderBy('p.version', 'DESC')
+        .getMany(),
+    );
+  }
+
   /** Fiscal years with at least one row, ascending. */
   configuredYears(tenantId: string, country: string): Promise<number[]> {
     return this.scope.run(tenantId, async (manager) => {

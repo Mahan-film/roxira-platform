@@ -2412,6 +2412,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/hr/employees/:id/settlement (HrController.previewSettlement)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/hr/payroll-runs (HrController.createPayrollRun)": {
     "policy": "hr:create",
     "owner": true,
