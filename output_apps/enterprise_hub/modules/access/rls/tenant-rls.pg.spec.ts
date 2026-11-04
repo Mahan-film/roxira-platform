@@ -20,6 +20,7 @@ import { AccountingService } from '../../accounting/services/accounting.service'
 import { ChartTemplateService } from '../../accounting/services/chart-template.service';
 import { ChequesRepository } from '../../cheques/repositories/cheques.repository';
 import { HrRepository } from '../../hr/repositories/hr.repository';
+import { PostingRulesRepository } from '../../posting_rules/repositories/posting-rules.repository';
 import { ChequeDirection, ChequeStatus } from '../../cheques/enums/cheque.enum';
 import { AuditRepository } from '../repositories/audit.repository';
 import { AuditService } from '../services/audit.service';
@@ -42,6 +43,7 @@ const RLS_TABLES = [
   'fin_cheques', 'fin_cheque_events',
   'fin_chart_of_accounts', 'fin_journal_entries', 'fin_journal_entry_lines', 'fin_period_locks', 'fin_balance_reconciliation_log',
   'hr_employees', 'hr_employment_contracts', 'hr_contract_allowances', 'hr_payroll_runs', 'hr_payslips',
+  'fin_posting_role_maps', 'fin_posting_sources',
 ];
 
 const cheque = (n: string) => ({
@@ -282,6 +284,33 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
     it('a forged tenant_id on an HR row is refused', async () => {
       await expect(
         scope.run(T2, (m) => m.query(`UPDATE hr_employees SET tenant_id = $1 WHERE tenant_id = $2`, [T1, T2])),
+      ).rejects.toThrow(/row-level security/);
+    });
+  });
+
+  describe('batch repositories (posting rules)', () => {
+    let posting: PostingRulesRepository;
+    beforeAll(() => { posting = new PostingRulesRepository(scope); });
+
+    it('a tenant sees only its own role mappings', async () => {
+      await posting.upsertMapping(T1, 'payroll.run', 'bank', '1012');
+      await posting.upsertMapping(T2, 'payroll.run', 'bank', '1099');
+      expect((await posting.listAllMappings(T1)).map((r) => r.accountCode)).toEqual(['1012']);
+      expect((await posting.listAllMappings(T2)).map((r) => r.accountCode)).toEqual(['1099']);
+    });
+
+    it('the idempotency key is per tenant: the same source id can be claimed by both', async () => {
+      const claim = (tenant: string) => posting.runInTransaction(tenant, (m) => posting.claimSource(tenant, 'payroll_run', '7', 'payroll.run', m));
+      expect(await claim(T1)).toBe(true);
+      expect(await claim(T1)).toBe(false);
+      expect(await claim(T2)).toBe(true);
+      expect(await posting.findSource(T1, 'payroll_run', '7')).not.toBeNull();
+      expect(await app.query(`SELECT count(*)::int AS n FROM fin_posting_sources`)).toEqual([{ n: 0 }]);
+    });
+
+    it('a forged tenant_id on a mapping is refused', async () => {
+      await expect(
+        scope.run(T2, (m) => m.query(`UPDATE fin_posting_role_maps SET tenant_id = $1 WHERE tenant_id = $2`, [T1, T2])),
       ).rejects.toThrow(/row-level security/);
     });
   });
