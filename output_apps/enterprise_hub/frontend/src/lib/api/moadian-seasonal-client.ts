@@ -55,7 +55,9 @@ export function getSeasonalTransactions(
 export type SeasonalCsvKind =
   | "vat-seasonal"
   | "seasonal-transactions"
-  | "seasonal-purchases";
+  | "seasonal-purchases"
+  | "journal"
+  | "ledger";
 
 /** Download a seasonal CSV through the authenticated proxy and save it. */
 export async function downloadSeasonalCsv(
