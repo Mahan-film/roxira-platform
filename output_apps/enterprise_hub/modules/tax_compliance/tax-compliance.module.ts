@@ -13,8 +13,11 @@ import { MoadianSubmissionEntity } from './entities/moadian-submission.entity';
 import { TaxInvoiceSignatureEntity } from './entities/tax-invoice-signature.entity';
 import { TaxSigningKeyEntity } from './entities/tax-signing-key.entity';
 import { MoadianProcessor } from './processors/moadian.processor';
+import { TenantScope } from '../access/services/tenant-scope';
 import { SeasonalReportRepository } from './reports/seasonal-report.repository';
 import { SeasonalReportService } from './reports/seasonal-report.service';
+import { VatReturnRepository } from './reports/vat-return.repository';
+import { VatReturnService } from './reports/vat-return.service';
 import { MoadianRepository } from './repositories/moadian.repository';
 import { TaxComplianceRepository } from './repositories/tax-compliance.repository';
 import { MoadianApiClient } from './services/moadian-api.client';
@@ -55,6 +58,9 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     MoadianApiClient,
     MoadianProcessor,
     SeasonalReportService,
+    VatReturnRepository,
+    VatReturnService,
+    TenantScope,
     SeasonalReportRepository,
   ],
   exports: [TaxComplianceService],
