@@ -248,6 +248,34 @@ describePg('POS sales on PostgreSQL', () => {
     ).rejects.toThrow(/کافی نیست/);
   });
 
+  it('line and sale discounts: VAT on the discounted base, revenue posted net (E1.3)', async () => {
+    const revenueBefore = await balance('درآمد فروش%');
+    const vatBefore = await balance('مالیات بر ارزش افزوده پرداختنی');
+    const cashBefore = await balance('موجودی نقد و بانک');
+    // 2 × 500 = 1000, 10% line discount -> 900; service 1000 at 0% VAT; sale discount 190 spread
+    // 90 / 100 -> taxable 810 and 900; VAT 81 + 0; payable 1791.
+    const result = await pos.createSale(
+      T1,
+      sale({
+        lines: [
+          { code: 'P-1', quantity: 2, unitPrice: 500, discountPercent: 10, vatRate: 10 },
+          { description: 'نصب', quantity: 1, unitPrice: 1000, vatRate: 0 },
+        ],
+        invoiceDiscount: 190,
+        payments: [{ method: 'CASH', amount: 1791 }],
+      }),
+    );
+    expect(result.invoice).toMatchObject({ totalDiscount: 290, invoiceDiscount: 190, totalTax: 81, finalPayable: 1791 });
+    expect(result.invoice.items.map((i) => i.discount)).toEqual([190, 100]);
+    expect((await balance('درآمد فروش%')) - revenueBefore).toBe(-1710);
+    expect((await balance('مالیات بر ارزش افزوده پرداختنی')) - vatBefore).toBe(-81);
+    expect((await balance('موجودی نقد و بانک')) - cashBefore).toBe(1791);
+    // Paying the undiscounted amount is refused.
+    await expect(
+      pos.createSale(T1, sale({ invoiceDiscount: 100, payments: [{ method: 'CASH', amount: 1100 }] })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('every voucher balances', async () => {
     expect(await q(`SELECT journal_entry_id FROM fin_journal_entry_lines GROUP BY journal_entry_id HAVING SUM(debit) <> SUM(credit)`)).toEqual([]);
   });

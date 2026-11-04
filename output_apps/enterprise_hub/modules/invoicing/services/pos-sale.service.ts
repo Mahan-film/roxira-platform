@@ -76,6 +76,8 @@ export class PosSaleService {
       items: lines,
       currency: dto.currency,
       fxRate: dto.fxRate,
+      invoiceDiscount: dto.invoiceDiscount,
+      invoiceDiscountPercent: dto.invoiceDiscountPercent,
     });
     this.assertPaid(quote.totals.finalPayable, dto, quote.currency);
 
@@ -87,6 +89,8 @@ export class PosSaleService {
     const invoiceDto: CreateInvoiceDto = {
       sellerInfo: { name: tenant?.name ?? 'سازمان من' },
       items: lines,
+      invoiceDiscount: dto.invoiceDiscount,
+      invoiceDiscountPercent: dto.invoiceDiscountPercent,
       status: InvoiceStatus.PAID,
       currency: dto.currency,
       fxRate: dto.fxRate,
@@ -137,6 +141,7 @@ export class PosSaleService {
           quantity: line.quantity,
           unitPrice: line.unitPrice,
           discount: line.discount,
+          discountPercent: line.discountPercent,
           vatRate: line.vatRate,
         });
         continue;
@@ -152,6 +157,7 @@ export class PosSaleService {
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discount: line.discount,
+        discountPercent: line.discountPercent,
         vatRate: line.vatRate,
       });
     }

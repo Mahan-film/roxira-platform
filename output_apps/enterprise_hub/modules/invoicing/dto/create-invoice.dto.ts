@@ -124,6 +124,17 @@ export class InvoiceItemDto {
 
   @ApiPropertyOptional({
     description:
+      'Line discount as a percent of quantity × unit price (0-100); use either this or discount, not both.',
+    example: 5,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(100)
+  discountPercent?: number;
+
+  @ApiPropertyOptional({
+    description:
       'نرخ مالیات بر ارزش افزوده سطر؛ نسبت (۰٫۱ = ۱۰٪) یا درصد (۱۰). در نبود مقدار، تنظیم مستأجر (پیش‌فرض ۱۰٪) اعمال می‌شود.',
     example: 0.1,
     minimum: 0,
@@ -234,6 +245,26 @@ export class CreateInvoiceDto {
   @ValidateNested({ each: true })
   @Type(() => InvoiceItemDto)
   items: InvoiceItemDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Invoice-level discount amount. It is spread over the lines in proportion to their net amount before VAT, so VAT is charged on the discounted base. Use either this or invoiceDiscountPercent.',
+    example: 50000,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  invoiceDiscount?: number;
+
+  @ApiPropertyOptional({
+    description: 'Invoice-level discount as a percent (0-100) of the lines net of their own discounts.',
+    example: 10,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(100)
+  invoiceDiscountPercent?: number;
 
   @ApiPropertyOptional({
     description: 'وضعیت اولیه صورتحساب (پیش‌فرض DRAFT)',
