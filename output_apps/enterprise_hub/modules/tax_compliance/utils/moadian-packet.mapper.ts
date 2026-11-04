@@ -9,6 +9,8 @@ import {
   MoadianInvoiceType,
   MoadianSettlementMethod,
 } from '../enums/moadian.enum';
+import { statusOf, HEADER_RULES, BODY_RULES, isType2Pattern } from './moadian-pattern-rules';
+import { MoadianPacketValidationError, validatePacketAgainstPattern } from './moadian-packet.validator';
 import { generateMoadianTaxId } from './moadian-tax-id.util';
 
 /**
@@ -24,7 +26,7 @@ import { generateMoadianTaxId } from './moadian-tax-id.util';
 export interface MoadianInvoiceHeader {
   taxid: string;
   indatim: number;
-  indati2m: number;
+  indati2m: number | null;
   inty: MoadianInvoiceType;
   inno: string;
   irtaxid: string | null;
@@ -43,31 +45,40 @@ export interface MoadianInvoiceHeader {
   scc: string | null;
   crn: string | null;
   billid: string | null;
-  tprdis: number;
-  tdis: number;
-  tadis: number;
+  tprdis: number | null;
+  tdis: number | null;
+  tadis: number | null;
   tvam: number;
   todam: number;
   tbill: number;
-  setm: MoadianSettlementMethod;
+  setm: MoadianSettlementMethod | null;
   cap: number | null;
   insp: number | null;
   tvop: number | null;
   tax17: number | null;
+  insr: number | null;
+  cdcn: string | null;
+  cdcd: number | null;
+  tonw: number | null;
+  torv: number | null;
+  tocv: number | null;
+  tinc: string | null;
+  nti1: string | null;
+  nti2: string | null;
 }
 
 export interface MoadianInvoiceBodyItem {
   sstid: string;
   sstt: string;
-  am: number;
+  am: number | null;
   mu: string | null;
-  fee: number;
+  fee: number | null;
   cfee: number | null;
   cut: string | null;
   exr: number | null;
-  prdis: number;
-  dis: number;
-  adis: number;
+  prdis: number | null;
+  dis: number | null;
+  adis: number | null;
   vra: number;
   vam: number;
   odt: string | null;
@@ -84,6 +95,12 @@ export interface MoadianInvoiceBodyItem {
   vop: number | null;
   bsrn: string | null;
   tsstam: number;
+  nw: number | null;
+  ssrv: number | null;
+  sscv: number | null;
+  cui: number | null;
+  cpr: number | null;
+  sovat: number | null;
 }
 
 export interface MoadianInvoicePayment {
@@ -114,12 +131,27 @@ export interface MoadianMappingContext {
   defaultSstid: string | null;
   defaultMeasurementUnit: string | null;
   settlementMethod: MoadianSettlementMethod;
+  /** Pattern `inp` 1 to 7; default 1 (sale). */
+  pattern?: MoadianInvoicePattern;
+  /** Subject `ins`; default 1 (main). */
+  subject?: MoadianInvoiceSubject;
+  /** Tax id of the referenced invoice: required when subject is not 1. */
+  referenceTaxId?: string | null;
+  /** Cash part in rials, required when the settlement method is cash and credit (3). */
+  cashPortion?: number;
+  /** Article 9 late submission: registration time (ms), sent as `indati2m` with `insr = 1`. */
+  lateRegistrationAt?: number;
+  /**
+   * Pattern-specific data the invoice does not hold (airline ticket type, contract id, bill id,
+   * currency, customs, gold wages ...), keyed by Moadian field name. `items[i]` is merged into line i.
+   */
+  extras?: { header?: Record<string, unknown>; items?: Array<Record<string, unknown>> };
 }
 
 export class MoadianMappingError extends Error {}
 
 const SSTID_PATTERN = /^\d{13}$/;
-const ECONOMIC_CODE_PATTERN = /^\d{11,14}$/;
+const ECONOMIC_CODE_PATTERN = /^(\d{11}|\d{14})$/;
 
 function toRial(amount: number, factor: number): number {
   return Math.round((Number(amount) + Number.EPSILON) * factor);
@@ -152,6 +184,34 @@ function buyerTypeOf(nationalId: string | null): MoadianBuyerType | null {
   return null;
 }
 
+const BODY_KEYS = ['sstid', 'sstt', 'am', 'mu', 'fee', 'cfee', 'cut', 'exr', 'prdis', 'dis', 'adis', 'vra', 'vam', 'odt', 'odr', 'odam', 'olt', 'olr', 'olam', 'consfee', 'spro', 'bros', 'tcpbs', 'cop', 'vop', 'bsrn', 'tsstam', 'nw', 'ssrv', 'sscv', 'cui', 'cpr', 'sovat'] as const;
+const HEADER_KEYS = ['taxid', 'indatim', 'indati2m', 'inty', 'inno', 'irtaxid', 'inp', 'ins', 'tins', 'tob', 'bid', 'tinb', 'sbc', 'bpc', 'bbc', 'ft', 'bpn', 'scln', 'scc', 'crn', 'billid', 'tprdis', 'tdis', 'tadis', 'tvam', 'todam', 'tbill', 'setm', 'cap', 'insp', 'tvop', 'tax17', 'insr', 'cdcn', 'cdcd', 'tonw', 'torv', 'tocv', 'tinc', 'nti1', 'nti2'] as const;
+
+type Bag = Record<string, unknown>;
+
+/** Fields outside patterns 1 to 7 (or typos) are refused instead of being sent unchecked. */
+function rejectUnknown(extra: Bag, known: readonly string[], where: string): void {
+  const unknown = Object.keys(extra).filter((k) => !known.includes(k));
+  if (unknown.length > 0) {
+    throw new MoadianMappingError(`${where} has fields outside patterns 1 to 7: ${unknown.join(', ')}`);
+  }
+}
+
+/** Applies the pattern's field statuses: fields out of pattern are dropped (set to null). */
+function dropOutOfPattern(bag: Bag, rules: typeof HEADER_RULES, type: MoadianInvoiceType, pattern: MoadianInvoicePattern): void {
+  // An impossible type/pattern pair has no table: leave it intact so the validator reports it.
+  if (type === MoadianInvoiceType.WITHOUT_BUYER && !isType2Pattern(pattern)) return;
+  for (const field of Object.keys(bag)) {
+    if (rules[field] && statusOf(rules, field, type, pattern) === 'I') bag[field] = null;
+  }
+}
+
+/**
+ * Maps an internal invoice to a Moadian packet for type 1 or 2 and patterns 1 to 7. Field presence,
+ * format and totals follow docs/legal_sources/iran/moadian-fields.md (see moadian-pattern-rules.ts and
+ * moadian-packet.validator.ts). Anything the invoice does not hold comes from `ctx.extras`; fields
+ * that the pattern ignores are dropped and anything missing or malformed is a MoadianMappingError.
+ */
 export function mapInvoiceToMoadianPacket(
   invoice: InvoiceResponseDto,
   ctx: MoadianMappingContext,
@@ -165,10 +225,12 @@ export function mapInvoiceToMoadianPacket(
   if (!invoice.items?.length) {
     throw new MoadianMappingError('Invoice has no items');
   }
+  const pattern = ctx.pattern ?? MoadianInvoicePattern.SALE;
+  const subject = ctx.subject ?? MoadianInvoiceSubject.MAIN;
 
   const tins = digitsOnly(ctx.sellerEconomicCode) ?? digitsOnly(invoice.sellerInfo?.economicCode);
   if (!tins || !ECONOMIC_CODE_PATTERN.test(tins)) {
-    throw new MoadianMappingError('Seller economic code (tins) is missing or invalid');
+    throw new MoadianMappingError('Seller economic code (tins) must be 11 or 14 digits');
   }
 
   const factor = rialFactor(invoice);
@@ -178,100 +240,97 @@ export function mapInvoiceToMoadianPacket(
     throw new MoadianMappingError('Invoice has no valid issue date');
   }
 
-  const body: MoadianInvoiceBodyItem[] = invoice.items.map((item, index) => {
+  const bid = digitsOnly(invoice.buyerInfo?.nationalId);
+  const tinb = digitsOnly(invoice.buyerInfo?.economicCode);
+  const inty = bid || tinb ? MoadianInvoiceType.WITH_BUYER : MoadianInvoiceType.WITHOUT_BUYER;
+
+  const body: Bag[] = invoice.items.map((item, index) => {
     const sstid = ctx.defaultSstid;
     if (!sstid || !SSTID_PATTERN.test(sstid)) {
-      throw new MoadianMappingError(
-        `Item ${index + 1} has no 13-digit Moadian product/service id (sstid)`,
-      );
+      throw new MoadianMappingError(`Item ${index + 1} has no 13-digit Moadian product/service id (sstid)`);
     }
     const am = Number(item.quantity);
     const fee = toRial(item.unitPrice, factor);
     const prdis = Math.round(am * fee);
     const dis = Math.min(prdis, toRial(item.discount ?? 0, factor));
-    const adis = prdis - dis;
-    const vatRate = Number(item.vatRate ?? 0);
-    const vra = Math.round(vatRate * 100 * 100) / 100;
-    const vam = toRial(item.tax ?? 0, factor);
-    return {
-      sstid,
-      sstt: item.description,
-      am,
-      mu: ctx.defaultMeasurementUnit,
-      fee,
-      cfee: null,
-      cut: null,
-      exr: null,
-      prdis,
-      dis,
-      adis,
-      vra,
-      vam,
-      odt: null,
-      odr: null,
-      odam: null,
-      olt: null,
-      olr: null,
-      olam: null,
-      consfee: null,
-      spro: null,
-      bros: null,
-      tcpbs: null,
-      cop: null,
-      vop: null,
-      bsrn: null,
-      tsstam: adis + vam,
-    };
+    const row: Bag = Object.fromEntries(BODY_KEYS.map((k) => [k, null]));
+    Object.assign(row, {
+      sstid, sstt: item.description, am, mu: ctx.defaultMeasurementUnit, fee, prdis, dis, adis: prdis - dis,
+      vra: Math.round(Number(item.vatRate ?? 0) * 100 * 100) / 100, vam: toRial(item.tax ?? 0, factor),
+      odam: null, olam: null,
+    });
+    // Caller-supplied pattern data wins over computed values (currency, customs, gold wages ...).
+    const extra = ctx.extras?.items?.[index] ?? {};
+    rejectUnknown(extra, BODY_KEYS, `extras.items[${index}]`);
+    Object.assign(row, extra);
+    if (pattern === MoadianInvoicePattern.GOLD) {
+      row.tcpbs = Number(row.consfee ?? 0) + Number(row.spro ?? 0) + Number(row.bros ?? 0);
+      row.adis = Number(row.prdis) + Number(row.tcpbs) - Number(row.dis);
+    }
+    if (pattern === MoadianInvoicePattern.EXPORT) {
+      row.vra = 0;
+      row.vam = 0;
+    }
+    return row;
   });
 
-  const sum = (pick: (row: MoadianInvoiceBodyItem) => number): number =>
-    body.reduce((acc, row) => acc + pick(row), 0);
-  const tprdis = sum((r) => r.prdis);
-  const tdis = sum((r) => r.dis);
-  const tadis = sum((r) => r.adis);
-  const tvam = sum((r) => r.vam);
-  const todam = 0;
-  const tbill = tadis + tvam + todam;
-
-  const bid = digitsOnly(invoice.buyerInfo?.nationalId);
-  const tinb = digitsOnly(invoice.buyerInfo?.economicCode);
-  const inty = bid || tinb ? MoadianInvoiceType.WITH_BUYER : MoadianInvoiceType.WITHOUT_BUYER;
-
   const taxid = generateMoadianTaxId(ctx.memoryId, indatim, ctx.serial);
-  const header: MoadianInvoiceHeader = {
-    taxid,
-    indatim,
-    indati2m: indatim,
-    inty,
-    inno: ctx.serial.toString(16).padStart(10, '0').toUpperCase(),
-    irtaxid: null,
-    inp: MoadianInvoicePattern.SALE,
-    ins: MoadianInvoiceSubject.MAIN,
-    tins,
+  const late = ctx.lateRegistrationAt !== undefined;
+  const header: Bag = Object.fromEntries(HEADER_KEYS.map((k) => [k, null]));
+  const bidValue = inty === MoadianInvoiceType.WITH_BUYER ? bid : null;
+  Object.assign(header, {
+    taxid, indatim, inty, inno: ctx.serial.toString(16).padStart(10, '0').toUpperCase(),
+    irtaxid: subject === MoadianInvoiceSubject.MAIN ? null : ctx.referenceTaxId ?? null,
+    inp: pattern, ins: subject, tins,
     tob: inty === MoadianInvoiceType.WITH_BUYER ? buyerTypeOf(bid) : null,
-    bid: inty === MoadianInvoiceType.WITH_BUYER ? bid : null,
-    tinb: inty === MoadianInvoiceType.WITH_BUYER ? tinb : null,
-    sbc: null,
-    bpc: null,
-    bbc: null,
-    ft: null,
-    bpn: null,
-    scln: null,
-    scc: null,
-    crn: null,
-    billid: null,
-    tprdis,
-    tdis,
-    tadis,
-    tvam,
-    todam,
-    tbill,
+    bid: bidValue, tinb: inty === MoadianInvoiceType.WITH_BUYER ? tinb : null,
+    indati2m: late ? ctx.lateRegistrationAt : null, insr: late ? 1 : null,
     setm: ctx.settlementMethod,
-    cap: ctx.settlementMethod === MoadianSettlementMethod.CASH ? tbill : null,
-    insp: ctx.settlementMethod === MoadianSettlementMethod.CREDIT ? tbill : null,
-    tvop: null,
-    tax17: null,
-  };
+  });
+  rejectUnknown(ctx.extras?.header ?? {}, HEADER_KEYS, 'extras.header');
+  Object.assign(header, ctx.extras?.header ?? {});
 
-  return { header, body, payments: [] };
+  // Out-of-pattern fields are dropped on both levels before totals are built.
+  dropOutOfPattern(header, HEADER_RULES, inty, pattern);
+  body.forEach((row) => dropOutOfPattern(row, BODY_RULES, inty, pattern));
+  // Which of the optional line fields to total is decided by what is still present.
+  body.forEach((row) => {
+    const parts = pattern === MoadianInvoicePattern.EXPORT
+      ? [row.ssrv, row.vam, row.odam, row.olam]
+      : [row.adis, row.vam, row.odam, row.olam];
+    row.tsstam = parts.reduce<number>((a, v) => a + Number(v ?? 0), 0);
+  });
+  const total = (key: string): number | null => {
+    const values = body.map((r) => r[key]).filter((v) => v !== null && v !== undefined);
+    return values.length === 0 ? null : values.reduce<number>((a, v) => a + Number(v), 0);
+  };
+  Object.assign(header, {
+    tprdis: total('prdis'), tdis: total('dis'), tadis: total('adis'), tvam: total('vam') ?? 0,
+    todam: (total('odam') ?? 0) + (total('olam') ?? 0), tbill: total('tsstam') ?? 0,
+    tonw: total('nw'), torv: total('ssrv'), tocv: total('sscv'),
+  });
+  dropOutOfPattern(header, HEADER_RULES, inty, pattern);
+
+  // Cash and credit: the cash part comes from the caller; the credit part is what is left.
+  if (header.setm === MoadianSettlementMethod.CASH_AND_CREDIT && inty === MoadianInvoiceType.WITH_BUYER) {
+    if (ctx.cashPortion === undefined) {
+      throw new MoadianMappingError('cashPortion (rials) is required when the settlement method is cash and credit');
+    }
+    header.cap = ctx.cashPortion;
+    header.insp = Number(header.tbill) - ctx.cashPortion;
+  }
+
+  try {
+    validatePacketAgainstPattern(header, body);
+  } catch (error) {
+    if (error instanceof MoadianPacketValidationError) {
+      throw new MoadianMappingError(error.message);
+    }
+    throw error;
+  }
+  return {
+    header: header as unknown as MoadianInvoiceHeader,
+    body: body as unknown as MoadianInvoiceBodyItem[],
+    payments: [],
+  };
 }
