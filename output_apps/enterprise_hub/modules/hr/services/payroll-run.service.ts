@@ -716,7 +716,7 @@ export class PayrollRunService {
       filename:
         payslipId === undefined
           ? `payslips-${run.periodYear}${month}.pdf`
-          : `payslip-${payslips[0].payslipNumber}.pdf`,
+          : `payslip-${payslips[0].payslipNumber.replace(/[^A-Za-z0-9_-]/g, '_')}.pdf`,
     };
   }
 

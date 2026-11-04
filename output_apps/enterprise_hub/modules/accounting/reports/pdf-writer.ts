@@ -82,6 +82,9 @@ export function writePdf(table: ReportTable): Promise<Buffer> {
 
 /** Several tables in one file, each starting on its own page (e.g. one payslip per page). */
 export function writePdfs(tables: ReportTable[]): Promise<Buffer> {
+  if (tables.length === 0) {
+    throw new Error('writePdfs needs at least one table');
+  }
   const table = tables[0];
   const directory = fontDirectory();
   const landscape = table.columns.length > 6;
