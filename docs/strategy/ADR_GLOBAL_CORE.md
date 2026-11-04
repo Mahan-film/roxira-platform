@@ -18,6 +18,13 @@ Going global later (the owner picks the first foreign country; a Malaysian compa
 
 Non-goals: any foreign tax rate, chart or e-invoice format (owner decision pending; `XX` is a fake test pack only); multi-currency redesign (`modules/currency` exists); moving data between countries; changing any Iranian figure.
 
+## Deployments (owner decision, 2026-11-04)
+
+- `roxira.ir` is the Iran-only deployment: the `IR` pack, Iranian law, Iranian data.
+- `roxira.net` is the future global, multi-country deployment with international rules.
+- Iran comes first. Whether `roxira.net` is a separate deployment or one deployment with tenant regions is left to a later ADR; the pack interface works either way because a pack is resolved per tenant country.
+- Scope now: the calendar module, the pack interface, the `IR` pack and a fake `XX` stub test. No foreign rule and no `roxira.net` feature is built.
+
 ## Decision 1: country pack interface
 
 A country pack is a plain, immutable object registered under an ISO 3166-1 alpha-2 code (`IR`, test-only `XX`). It holds no state and no database access. Everything that needs I/O is a small **port** the pack's adapter calls, injected by Nest when the pack is built.
@@ -59,7 +66,7 @@ One module, `modules/calendar`, owns conversion and period maths. Everything els
 - Boundaries of range: closed `[start, end]` plus `endExclusive`, so SQL `>= start AND < endExclusive` is always correct.
 - Migration of the scattered Jalali helpers is **not** part of this change (they are in lanes owned by others and in production use). Each owner swaps its helper for `CalendarService` in its own issue (list at the end).
 
-## Decision 3: multi-book (local book and IFRS book on the same ledger events)
+## Decision 3: multi-book (local book and IFRS book on the same ledger events) - FUTURE WORK, not built now
 
 Goal: one set of business events, more than one set of books (for example Iranian standards for tax and IFRS for a parent company), without copying transactions.
 
