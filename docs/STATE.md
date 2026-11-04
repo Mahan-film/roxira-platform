@@ -1,10 +1,20 @@
 > **Plan (2026-10-31, current): `docs/strategy/MASTER_PLAN_2026-10-31.md` and `docs/strategy/IRAN_FIRST_ROADMAP_2026-10-31.md` (Iran first: the Roxira accounting suite is the first factory product). The 2026-10-16 plan (factory first, Malaysian company) is superseded. What is done or missing: `docs/strategy/REQUIREMENTS_STATUS.md`. Team rules: `docs/strategy/TEAM_WORKFLOW_2026-11-03.md`.**
 
-> **Last update: 2026-11-03. NEW CHAT / OTHER AI? Start at `docs/AI_HANDOFF.md`, then this file. Sections dated before 2026-10-31 are history; when they disagree with the plan above, the plan wins.**
+> **Last update: 2026-11-04. NEW CHAT / OTHER AI? Start at `docs/AI_HANDOFF.md`, then this file. Sections dated before 2026-10-31 are history; when they disagree with the plan above, the plan wins.**
 
 # Current state (read this first)
 
 Owner speaks Persian: reply in Persian; code, commits and docs in English. The owner wants FULL automation: do not hand them commands unless a secret or a physical action is needed.
+
+## 2026-11-04 (Mac hub + Claude): fleet dispatcher live, tax/payroll features merged
+- **Merged since 2026-11-03**: VAT return draft per Jalali season (RET-01, #143), WP/WH wage-tax files (PAY-01, #141),
+  seniority (paye sanavat) by year of service (LAB-01, #145), M1 e2e gate skeleton (#122), nginx strict rate limit only on
+  credential routes (#152), fleet dispatcher (#51, fixes #77, #78, #89).
+- **Fleet** (`scripts/dev/fleet.py`, launchd `ir.roxira.fleet`, tick every 5 min): the tick only continues jobs already
+  queued with `fleet.py run <issues...>`; it does not poll labels. A `lane:<name>` issue label forces a lane.
+  Writers 3 (max 4). Free OpenCode models first, `executor` (paid) last. The repo uses a merge queue, so the merge step
+  must not pass `--delete-branch` (fixed in #187). Issues touching the same 3-level path prefix wait for each other;
+  an `Areas:` line in the issue body overrides that.
 
 ## 2026-11-03 (hub, mahansudo + Claude): unblocked deploys, two accounts, cleanup, public-repo prep
 - **Deploys were stuck since 2026-11-01**: an untracked `.env.before-app-role.*` on srv1 made the tree dirty, so every
