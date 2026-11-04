@@ -50,9 +50,11 @@ describe('extractNumbers', () => {
     expect(extractNumbers('یک میلیون')[0].value).toBe(1_000_000);
   });
 
-  it('ignores list markers and identifiers', () => {
+  it('ignores list markers; identifier digits are claims that need evidence', () => {
     expect(extractNumbers('۱. نخست\n۲) دوم')).toEqual([]);
-    expect(extractNumbers('کد INV-2045 و SKU_77')).toEqual([]);
+    expect(extractNumbers('کد INV-2045 و SKU_77').map((t) => t.value)).toEqual([2045, 77]);
+    expect(check('کد INV-2045', [{ number: 'INV-2045' }]).abstained).toBe(false);
+    expect(check('کد INV-2045', [{ number: 'INV-9' }]).abstained).toBe(true);
   });
 
   it('treats Jalali dates and months as dates, not as numbers', () => {
@@ -91,6 +93,39 @@ describe('validateNumbers: honest answers pass', () => {
 
   it('an answer without numbers always passes', () => {
     expect(check('داده‌ای برای این پرسش ثبت نشده است.', []).abstained).toBe(false);
+  });
+});
+
+describe('validateNumbers: review regressions', () => {
+  it('toman conversion (÷10) applies only to claims in toman', () => {
+    const tool = [{ limit: 10, total: 37, cash: 150_000_000 }];
+    expect(check('۳٫۷ مورد', tool).abstained).toBe(true);
+    expect(check('۱۵ میلیون تومان', tool).abstained).toBe(false);
+    expect(check('۱۵ میلیون ریال', tool).abstained).toBe(true);
+  });
+
+  it('pagination parameters are not evidence', () => {
+    expect(check('۵۰ مورد', [{ limit: 50, items: [] }]).abstained).toBe(true);
+  });
+
+  it('digits glued to letters or ranges are still checked', () => {
+    expect(check('USD5000', [{ a: 1 }]).abstained).toBe(true);
+    expect(check('مبلغ۵۰۰۰', [{ a: 1 }]).abstained).toBe(true);
+    expect(check('بین ۱۵-۲۰ مورد', [{ a: 15 }]).abstained).toBe(true);
+  });
+
+  it('prototype names are not number words', () => {
+    expect(check('constructor valueOf toString', []).abstained).toBe(false);
+  });
+
+  it("today's year/month/day count as evidence", () => {
+    expect(check('در سال ۱۴۰۵ و ۲۰۲۶', []).abstained).toBe(false);
+  });
+
+  it('mixed digit + word compounds are one number', () => {
+    const tool = [{ v: 5_300_000 }];
+    expect(check('۵ میلیون و سیصد هزار ریال', tool).abstained).toBe(false);
+    expect(check('۵ میلیون و چهارصد هزار ریال', tool).abstained).toBe(true);
   });
 });
 

@@ -43,6 +43,9 @@ const SCALES: Record<string, number> = {
   thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12,
 };
 
+const has = (table: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(table, key);
+
 const WORD_PATTERN = /[آ-یٰ‌A-Za-z]+/g;
 
 interface Token {
@@ -54,6 +57,10 @@ interface Token {
   /** ضریب بزرگی (هزار/میلیون/…)؛ ۱ اگر نباشد. */
   magnitude: number;
   kind: 'number' | 'date';
+  /** ادعا با واحد «تومان» است: فقط آن‌وقت ده‌یک شاهد (ریال←تومان) پذیرفته می‌شود. */
+  toman?: boolean;
+  /** محدودهٔ متن اصلی که این عدد گرفته (برای پوشاندن پیش از تحلیل حروفی). */
+  span?: [number, number];
 }
 
 /**
@@ -77,17 +84,17 @@ function wordNumbers(text: string): Token[] {
     let lastSmall = '';
     while (i < words.length) {
       const { word } = words[i];
-      if ((word === 'و' || word === 'and') && seen > 0 && i + 1 < words.length && (words[i + 1].word in ONES || words[i + 1].word in SCALES)) {
+      if ((word === 'و' || word === 'and') && seen > 0 && i + 1 < words.length && (has(ONES, words[i + 1].word) || has(SCALES, words[i + 1].word))) {
         i += 1;
         continue;
       }
       if (word === 'hundred') {
         small = (small || 1) * 100;
         lastSmall = word;
-      } else if (word in ONES) {
+      } else if (has(ONES, word)) {
         small += ONES[word];
         lastSmall = word;
-      } else if (word in SCALES) {
+      } else if (has(SCALES, word)) {
         const scale = SCALES[word];
         if (scale === 1e3) {
           thousands += (small || 1) * scale;
@@ -134,7 +141,7 @@ const MAGNITUDE_VALUE: Record<string, number> = {
 const DATE_RE = /(?<![\d/.-])(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?![\d/])/g;
 const MONTH_RE = /(?<![\d/.-])(\d{4})\/(\d{1,2})(?![\d/])/g;
 const NUMBER_RE =
-  /(?<![\p{L}\d_./-])\d+(?:[,،٬]\d{3})*(?:[.٫/]\d+)?(?!\d)/gu;
+  /(?<![\d.,،٬٫/])\d+(?:[,،٬]\d{3})*(?:[.٫/]\d+)?(?!\d)/gu;
 const SUFFIX_AFTER = /^\s?([kKmMbB])(?![A-Za-z])/;
 const SUFFIX_VALUE: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9 };
 const LIST_MARKER_RE = /^[ \t]*(?:[-*•]\s*)?\d{1,2}[.)]\s/;
@@ -179,17 +186,41 @@ function digitNumbers(text: string): Token[] {
     const after = rest.slice(index + raw.length);
     const mag = MAGNITUDE_AFTER.exec(after);
     const suffix = mag ? null : SUFFIX_AFTER.exec(after);
-    const magnitude = mag
+    let magnitude = mag
       ? MAGNITUDE_VALUE[mag[1].replace(/\s+/g, ' ').toLowerCase()]
       : suffix
         ? SUFFIX_VALUE[suffix[1].toLowerCase()]
         : 1;
+    let consumed = raw.length + (mag ? mag[0].length : suffix ? suffix[0].length : 0);
+    let total = value * magnitude;
+    let outDecimals = decimals;
+    if (mag) {
+      // «۵ میلیون و سیصد هزار»: ادامهٔ حروفی همین عدد است، نه عدد جدا.
+      const tail = rest.slice(index + consumed);
+      let end = 0;
+      for (;;) {
+        const step = /^\s*(?:(?:و|and)\s+)?([آ-یA-Za-z‌]+)/.exec(tail.slice(end));
+        const word = step?.[1].replace(/‌/g, '').toLowerCase();
+        if (!step || !word || !(has(ONES, word) || has(SCALES, word) || word === 'hundred')) break;
+        end += step[0].length;
+      }
+      const more = end > 0 ? wordNumbers(tail.slice(0, end))[0] : undefined;
+      if (more) {
+        total += more.value;
+        consumed += end;
+        magnitude = 1;
+        outDecimals = 0;
+      }
+    }
+    const tomanAfter = /^\s*(?:تومان|تومن|toman)/i.test(rest.slice(index + consumed));
     tokens.push({
-      text: mag ? `${raw} ${mag[1]}` : suffix ? `${raw}${suffix[1]}` : raw,
-      value: value * magnitude,
-      decimals,
+      text: rest.slice(index, index + consumed),
+      value: total,
+      decimals: outDecimals,
       magnitude,
       kind: 'number',
+      toman: tomanAfter,
+      span: [index, index + consumed],
     });
   }
   return tokens;
@@ -198,12 +229,13 @@ function digitNumbers(text: string): Token[] {
 /** همهٔ عددهای ادعاشدهٔ یک متن (رقمی و حروفی). */
 export function extractNumbers(text: string): Token[] {
   const latin = toLatinDigits(text);
-  // «۱۵ میلیون» یک عدد رقمی است؛ واژهٔ «میلیون» نباید دوباره حروفی شمرده شود.
-  const wordsOnly = latin.replace(
-    /\d[\d,،٬.٫/]*\s*(?:هزار\s+میلیارد|هزار|میلیون|میلیارد|بیلیون|تریلیون|thousand|million|billion|trillion)/gi,
-    ' ¤ ',
-  );
-  return [...digitNumbers(latin), ...wordNumbers(wordsOnly)];
+  const digits = digitNumbers(latin);
+  // بخش‌هایی که عدد رقمی گرفته (مثل «۱۵ میلیون و صد هزار») دوباره حروفی شمرده نشود.
+  const masked = [...latin];
+  for (const token of digits) {
+    if (token.span) for (let k = token.span[0]; k < token.span[1]; k++) masked[k] = ' ';
+  }
+  return [...digits, ...wordNumbers(masked.join(''))];
 }
 
 // -------------------------------------------------------------------- evidence
@@ -238,6 +270,7 @@ function jalaliOf(date: Date): { jy: number; jm: number; jd: number } {
 
 function addDate(evidence: Evidence, date: Date): void {
   const { jy, jm, jd } = jalaliOf(date);
+  for (const n of [jy, jm, jd, date.getUTCFullYear()]) addNumber(evidence, n);
   evidence.dates.add(normalizeDate(String(jy), String(jm), String(jd)));
   evidence.dates.add(normalizeDate(String(jy), String(jm)));
   const iso = date.toISOString().slice(0, 10);
@@ -248,6 +281,9 @@ function addDate(evidence: Evidence, date: Date): void {
 function addNumber(evidence: Evidence, value: number): void {
   if (Number.isFinite(value)) evidence.numbers.add(Math.abs(value));
 }
+
+/** پارامترهای صفحه‌بندی عدد کسب‌وکاری نیستند و شاهد حساب نمی‌شوند. */
+const PAGINATION_KEYS: ReadonlySet<string> = new Set(['limit', 'page', 'offset', 'skip', 'pageSize']);
 
 function collect(evidence: Evidence, value: unknown, depth: number): void {
   if (depth > 12 || value === null || value === undefined) return;
@@ -265,7 +301,8 @@ function collect(evidence: Evidence, value: unknown, depth: number): void {
       addDate(evidence, value);
       return;
     }
-    for (const item of Object.values(value as Record<string, unknown>)) {
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (PAGINATION_KEYS.has(key)) continue;
       collect(evidence, item, depth + 1);
     }
   }
@@ -332,7 +369,7 @@ function supported(token: Token, evidence: Evidence): boolean {
     ? (token.magnitude > 1 ? token.magnitude : 1) * 10 ** -token.decimals
     : 0;
   for (const base of evidence.numbers) {
-    for (const candidate of [base, base / 10]) {
+    for (const candidate of token.toman ? [base, base / 10] : [base]) {
       if (candidate === claimed) return true;
       if (step === 0) {
         // دقیقاً برابر، با تحمل خطای ممیز شناور.
