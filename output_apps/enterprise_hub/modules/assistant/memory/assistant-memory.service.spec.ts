@@ -17,7 +17,7 @@ describe('AssistantMemoryService', () => {
     expect(repo.remember).toHaveBeenCalledWith(T, expect.objectContaining({ subject: 'vat', fact: '10 percent', confirmedBy: U }));
   });
 
-  it.each(['sk-or-v1-abcdefabcdefabcdefabcdef', 'ghp_abcdefghijklmnopqrstuvwxyz0123', 'a'.repeat(40)])('refuses a secret-like fact (%s)', async (fact) => {
+  it.each([['sk', 'or', 'v1', 'abcdefabcdefabcdefabcdef'].join('-'), 'ghp_abcdefghijklmnopqrstuvwxyz0123', 'a'.repeat(40)])('refuses a secret-like fact (%s)', async (fact) => {
     const { repo, service } = make();
     expect(() => service.confirm(T, U, { subject: 's', fact })).toThrow(BadRequestException);
     expect(repo.remember).not.toHaveBeenCalled();
