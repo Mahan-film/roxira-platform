@@ -3,7 +3,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { LedgerAuditService } from '../../access/services/ledger-audit.service';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import {
   fromDb,
@@ -141,6 +143,8 @@ export class AccountingService {
   constructor(
     private readonly accountingRepository: AccountingRepository,
     private readonly currencyService: CurrencyService,
+    /** Optional so unit tests and tools can build the service without the access module. */
+    @Optional() private readonly ledgerAudit?: LedgerAuditService,
   ) {}
 
   private toAccountDto(entity: ChartOfAccountEntity): AccountResponseDto {
@@ -714,6 +718,22 @@ export class AccountingService {
       throw error;
     }
 
+    if (status === JournalEntryStatus.POSTED) {
+      // Read-only hook: records the posting in the tenant's hash-chained audit log (access lane).
+      await this.ledgerAudit?.record(
+        {
+          kind: options.reversesEntryId != null ? 'reversed' : 'posted',
+          tenantId,
+          entryId: saved.id,
+          entryNumber: saved.entryNumber,
+          entryDate: new Date(saved.date).toISOString().slice(0, 10),
+          lines: lineInputs,
+          reversesEntryId: options.reversesEntryId ?? null,
+        },
+        manager,
+      );
+    }
+
     return this.toEntryDto(saved);
   }
 
@@ -833,6 +853,19 @@ export class AccountingService {
         }
       }
       await this.accountingRepository.setEntryStatus(tenantId, entry, target, lineInputs, manager);
+      if (target === JournalEntryStatus.POSTED) {
+        await this.ledgerAudit?.record(
+          {
+            kind: 'posted',
+            tenantId,
+            entryId: entry.id,
+            entryNumber: entry.entryNumber,
+            entryDate: new Date(entry.date).toISOString().slice(0, 10),
+            lines: lineInputs,
+          },
+          manager,
+        );
+      }
       const saved = await this.accountingRepository.findEntryById(tenantId, id, manager);
       return this.toEntryDto(saved as JournalEntryEntity);
     });
@@ -1031,6 +1064,15 @@ export class AccountingService {
       reason: dto.reason?.trim() || null,
       lockedBy: actor,
     });
+    await this.ledgerAudit?.record({
+      kind: 'period.locked',
+      tenantId,
+      actor,
+      lockId: created.id,
+      periodStart: dto.periodStart,
+      periodEnd: dto.periodEnd,
+      reason: created.reason,
+    });
     return this.toLockDto(created);
   }
 
@@ -1055,6 +1097,15 @@ export class AccountingService {
     if (!updated) {
       throw new ConflictException('این دوره قبلاً باز شده است.');
     }
+    await this.ledgerAudit?.record({
+      kind: 'period.unlocked',
+      tenantId,
+      actor,
+      lockId: updated.id,
+      periodStart: updated.periodStart,
+      periodEnd: updated.periodEnd,
+      reason: updated.unlockReason,
+    });
     return this.toLockDto(updated);
   }
 

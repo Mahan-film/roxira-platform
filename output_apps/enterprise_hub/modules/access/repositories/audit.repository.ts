@@ -42,7 +42,11 @@ export class AuditRepository {
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
-  async append(data: Partial<AuditLogEntity>): Promise<void> {
+  /**
+   * With `manager` the row joins the caller's transaction (inside a savepoint, so a failed audit write
+   * cannot abort the caller's work) and commits or rolls back together with it.
+   */
+  async append(data: Partial<AuditLogEntity>, manager?: EntityManager): Promise<void> {
     const createdAt = new Date();
     const row = {
       tenantId: data.tenantId ?? null,
@@ -60,7 +64,7 @@ export class AuditRepository {
       await this.dataSource.transaction((m) => this.insert(m, { ...row, prevHash: null, hash: auditRowHash(GENESIS_HASH, row) }));
       return;
     }
-    await this.scope.run(row.tenantId, async (m) => {
+    const write = async (m: EntityManager) => {
       await m.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`audit:${row.tenantId}`]);
       const last = (await m.query(
         `SELECT "hash" FROM "audit_log" WHERE "tenant_id" = $1 AND "hash" IS NOT NULL ORDER BY "id" DESC LIMIT 1`,
@@ -68,7 +72,9 @@ export class AuditRepository {
       )) as Array<{ hash: string }>;
       const prev = last[0]?.hash ?? GENESIS_HASH;
       await this.insert(m, { ...row, prevHash: prev, hash: auditRowHash(prev, row) });
-    });
+    };
+    if (manager) await this.scope.within(row.tenantId, manager, (m) => m.transaction(write));
+    else await this.scope.run(row.tenantId, write);
   }
 
   /** No RETURNING: under FORCE RLS it needs the read policy, which tenant-less rows do not pass. */
@@ -93,20 +99,43 @@ export class AuditRepository {
     });
   }
 
-  /** Walk the tenant's chain oldest-first and report the first row that does not match. */
-  verifyChain(tenantId: string): Promise<{ ok: boolean; checked: number; brokenAtId: string | null }> {
+  /**
+   * Walk the tenant's chain oldest-first and report the first row that does not match. Ledger events
+   * are in the same chain; each one is also checked against the ledger table it points to, so a
+   * journal entry or period lock that was removed (or renumbered) behind the application's back is
+   * reported in `ledgerMissing` even though the chain itself is intact.
+   */
+  verifyChain(tenantId: string): Promise<{
+    ok: boolean; checked: number; brokenAtId: string | null; ledgerEvents: number; ledgerMissing: string[];
+  }> {
     return this.scope.run(tenantId, async (m) => {
       const rows = await m.find(AuditLogEntity, { where: { tenantId }, order: { id: 'ASC' } });
       let prev = GENESIS_HASH;
       let checked = 0;
+      let ledgerEvents = 0;
       for (const r of rows) {
+        if (r.action.startsWith('ledger.')) ledgerEvents += 1;
         if (!r.hash) continue;
         const expected = auditRowHash(prev, { ...r, createdAt: new Date(r.createdAt) });
-        if (r.prevHash !== prev || r.hash !== expected) return { ok: false, checked, brokenAtId: r.id };
+        if (r.prevHash !== prev || r.hash !== expected) {
+          return { ok: false, checked, brokenAtId: r.id, ledgerEvents, ledgerMissing: [] };
+        }
         prev = r.hash;
         checked += 1;
       }
-      return { ok: true, checked, brokenAtId: null };
+      const missing = (await m.query(
+        `SELECT a.id::text AS id FROM audit_log a
+          LEFT JOIN fin_journal_entries e ON a.resource_type = 'journal_entry' AND e.tenant_id = a.tenant_id
+                AND e.id::text = a.resource_id AND e.entry_number = a.metadata->>'entryNumber'
+          LEFT JOIN fin_period_locks l ON a.resource_type = 'period_lock' AND l.tenant_id = a.tenant_id
+                AND l.id::text = a.resource_id
+          WHERE a.tenant_id = $1 AND a.action LIKE 'ledger.%'
+            AND ((a.resource_type = 'journal_entry' AND e.id IS NULL) OR (a.resource_type = 'period_lock' AND l.id IS NULL))
+          ORDER BY a.id`,
+        [tenantId],
+      )) as Array<{ id: string }>;
+      const ledgerMissing = missing.map((r) => r.id);
+      return { ok: ledgerMissing.length === 0, checked, brokenAtId: null, ledgerEvents, ledgerMissing };
     });
   }
 }

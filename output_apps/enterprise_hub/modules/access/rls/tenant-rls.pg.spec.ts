@@ -19,6 +19,9 @@ import { AccountingService } from '../../accounting/services/accounting.service'
 import { ChartTemplateService } from '../../accounting/services/chart-template.service';
 import { ChequesRepository } from '../../cheques/repositories/cheques.repository';
 import { ChequeDirection, ChequeStatus } from '../../cheques/enums/cheque.enum';
+import { AuditRepository } from '../repositories/audit.repository';
+import { AuditService } from '../services/audit.service';
+import { LedgerAuditService } from '../services/ledger-audit.service';
 import { TenantScope } from '../services/tenant-scope';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
@@ -165,12 +168,14 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       lines: [{ accountCode: '1012', debit: '500.00' }, { accountCode: '3010', credit: '500.00' }],
     });
     let accounting: AccountingService;
+    let audit: AuditService;
     let ledger: LedgerReportRepository;
 
     beforeAll(async () => {
       const repo = new AccountingRepository(scope);
       ledger = new LedgerReportRepository(scope);
-      accounting = new AccountingService(repo, { convert: (v: number) => v, round: (v: number) => v } as never);
+      audit = new AuditService(new AuditRepository(scope, app));
+      accounting = new AccountingService(repo, { convert: (v: number) => v, round: (v: number) => v } as never, new LedgerAuditService(audit));
       for (const t of [T1, T2]) await new ChartTemplateService(repo).apply(t, 'iran-trading');
     }, 60_000);
 
@@ -183,11 +188,56 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       expect(await ledger.firstEntryDay(T1)).toBe('2026-04-01');
     });
 
+    it('ledger events are hash-chained: post, reverse, lock and unlock, and verify covers them', async () => {
+      const posted = await accounting.createJournalEntry(T1, entry('AUD-1') as never);
+      await accounting.reverseJournalEntry(T1, posted.id, { reason: 'test' });
+      const lock = await accounting.lockPeriod(T1, '44444444-4444-4444-8444-444444444444', { periodStart: '2026-01-01', periodEnd: '2026-01-31', reason: 'close' } as never);
+      await accounting.unlockPeriod(T1, 'someone', lock.id, { reason: 'fix' } as never);
+      const rows = await audit.list(T1, { limit: 50 });
+      const actions = rows.map((r) => r.action).filter((a) => a.startsWith('ledger.'));
+      expect(actions).toEqual(expect.arrayContaining(['ledger.entry.posted', 'ledger.entry.reversed', 'ledger.period.locked', 'ledger.period.unlocked']));
+      const verdict = await audit.verify(T1);
+      expect(verdict).toMatchObject({ ok: true, ledgerMissing: [] });
+      expect(verdict.ledgerEvents).toBeGreaterThanOrEqual(4);
+      // the other tenant's chain is separate
+      expect((await audit.verify(T2)).ledgerEvents).toBeLessThan(verdict.ledgerEvents);
+    });
+
+    it('a post that rolls back leaves no audit row; one that commits leaves exactly one', async () => {
+      const before = (await audit.list(T1, { limit: 500 })).length;
+      await expect(
+        app.transaction(async (foreign) => {
+          await accounting.createJournalEntry(T1, entry('AUD-ROLLBACK') as never, foreign);
+          throw new Error('abort');
+        }),
+      ).rejects.toThrow('abort');
+      expect((await audit.list(T1, { limit: 500 })).length).toBe(before);
+      await accounting.createJournalEntry(T1, entry('AUD-COMMIT') as never);
+      const rows = await audit.list(T1, { limit: 500 });
+      expect(rows.length).toBe(before + 1);
+      expect(rows[0].metadata).toMatchObject({ entryNumber: 'AUD-COMMIT', totalMinor: expect.any(String) });
+    });
+
+    it('verify reports a ledger entry that was removed behind the application\'s back', async () => {
+      const e = await accounting.createJournalEntry(T1, entry('AUD-TAMPER') as never);
+      const runner = owner.createQueryRunner();
+      await runner.startTransaction();
+      await runner.query(`SET LOCAL session_replication_role = replica`);
+      await runner.query(`DELETE FROM fin_journal_entry_lines WHERE journal_entry_id = $1`, [e.id]);
+      await runner.query(`DELETE FROM fin_journal_entries WHERE id = $1`, [e.id]);
+      await runner.commitTransaction();
+      await runner.release();
+      const verdict = await audit.verify(T1);
+      expect(verdict.ok).toBe(false);
+      expect(verdict.ledgerMissing).toHaveLength(1);
+    });
+
     it('a ledger post inside ANOTHER module transaction that never set the tenant still works and stays scoped', async () => {
       await app.transaction(async (foreign) => {
+        const [{ n: before }] = await scope.run(T1, (m) => m.query(`SELECT count(*)::int AS n FROM fin_journal_entries`));
         await accounting.createJournalEntry(T1, entry('RLS-FOREIGN') as never, foreign);
         const [{ n }] = await foreign.query(`SELECT count(*)::int AS n FROM fin_journal_entries`);
-        expect(n).toBe(2);
+        expect(n).toBe(before + 1);
       });
     });
 

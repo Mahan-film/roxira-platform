@@ -1,3 +1,4 @@
+import { AccessModule } from '../access/access.module';
 import { FixedAssetController } from './controllers/fixed-asset.controller';
 import { DepreciationLineEntity, FixedAssetEntity } from './entities/fixed-asset.entity';
 import { FixedAssetRepository } from './repositories/fixed-asset.repository';
@@ -58,6 +59,7 @@ import { ReportExportService } from './services/report-export.service';
       PettyCashTransactionEntity,
     ]),
     CurrencyModule,
+    AccessModule,
   ],
   controllers: [AccountingController, DimensionController, FixedAssetController, FiscalYearController, PettyCashController, ReportsController],
   providers: [

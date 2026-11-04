@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Request } from 'express';
+import { EntityManager } from 'typeorm';
 import { AuditLogEntity } from '../entities/audit-log.entity';
 import { AuditRepository } from '../repositories/audit.repository';
 
@@ -21,7 +22,7 @@ export class AuditService {
   constructor(private readonly repo: AuditRepository) {}
 
   /** Best effort: an audit write failure is logged loudly but never breaks the user's request. */
-  async record(entry: AuditEntry): Promise<void> {
+  async record(entry: AuditEntry, manager?: EntityManager): Promise<void> {
     try {
       const ua = entry.request?.headers?.['user-agent'];
       await this.repo.append({
@@ -33,7 +34,7 @@ export class AuditService {
         metadata: entry.metadata ?? null,
         ip: entry.request?.ip ?? null,
         userAgent: typeof ua === 'string' ? ua.slice(0, 255) : null,
-      });
+      }, manager);
     } catch (error) {
       this.logger.error(
         `[AUDIT] write failed for ${entry.action}: ${error instanceof Error ? error.message : String(error)}`,
