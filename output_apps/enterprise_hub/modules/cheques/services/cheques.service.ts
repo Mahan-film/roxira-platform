@@ -4,13 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { MoneyFormatError, fromDb, fromMinor, minorToDecimal, toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import {
-  CHEQUE_ACCOUNTS,
   CHEQUE_ACCOUNT_DEFINITIONS,
   DEFAULT_DUE_WINDOW_DAYS,
   PG_UNIQUE_VIOLATION,
@@ -35,7 +34,6 @@ import { ChequeStatus } from '../enums/cheque.enum';
 import {
   BLOCKED_AFTER_PARTIAL,
   OPEN_STATUSES,
-  PostingLine,
   allowedTargets,
   creationPosting,
   findRule,
@@ -72,6 +70,7 @@ export class ChequesService {
   constructor(
     private readonly chequesRepository: ChequesRepository,
     private readonly accountingService: AccountingService,
+    private readonly postingRules: PostingRulesService,
   ) {}
 
   async create(tenantId: string, dto: CreateChequeDto, actor = 'unknown'): Promise<ChequeResponseDto> {
@@ -128,7 +127,7 @@ export class ChequesService {
           manager,
         );
         const posting = creationPosting(cheque.direction, amountMinor);
-        const journalEntryId = await this.post(tenantId, cheque, 'new', issueDate, posting.description, posting.lines, manager);
+        const journalEntryId = await this.post(tenantId, cheque, 'new', issueDate, posting.description, posting.docType, amountMinor, manager);
         await this.chequesRepository.addEvent(
           tenantId,
           { chequeId: cheque.id, fromStatus: null, toStatus: ChequeStatus.REGISTERED, eventDate: issueDate, journalEntryId, amount: minorToDecimal(amountMinor), note: null },
@@ -179,8 +178,8 @@ export class ChequesService {
         throw new BadRequestException('تاریخ رویداد نمی‌تواند پیش از تاریخ صدور چک باشد.');
       }
 
-      const journalEntryId = rule.lines
-        ? await this.post(tenantId, cheque, dto.status, eventDate, rule.description, rule.lines(remaining), manager, dto.spentToCode)
+      const journalEntryId = rule.docType
+        ? await this.post(tenantId, cheque, dto.status, eventDate, rule.description, rule.docType, remaining, manager, dto.spentToCode)
         : null;
       const closes = dto.status === ChequeStatus.CLEARED;
       await this.chequesRepository.updateStatus(
@@ -245,7 +244,7 @@ export class ChequesService {
       if (eventDate < cheque.issueDate) {
         throw new BadRequestException('تاریخ رویداد نمی‌تواند پیش از تاریخ صدور چک باشد.');
       }
-      const journalEntryId = await this.post(tenantId, cheque, 'partial', eventDate, posting.description, posting.lines, manager);
+      const journalEntryId = await this.post(tenantId, cheque, 'partial', eventDate, posting.description, posting.docType, paid, manager);
       await this.chequesRepository.updateStatus(tenantId, id, { settledAmount: minorToDecimal(settled + paid) }, manager);
       await this.chequesRepository.addEvent(
         tenantId,
@@ -375,39 +374,39 @@ export class ChequesService {
 
   // ------------------------------------------------------------------ internals
 
-  /** Posts one entry for a cheque move; returns the journal entry id. */
+  /**
+   * Posts one entry for a cheque move through the posting rules engine; returns the journal entry
+   * id. The source key is the cheque plus its event sequence number, so a retry of the same move
+   * returns the same voucher while a later move of the same kind (bounce, re-deposit, bounce) posts
+   * a new one. An endorsed cheque settles a different party's payable than the drawer's.
+   */
   private async post(
     tenantId: string,
     cheque: ChequeEntity,
     marker: string,
     date: string,
     title: string,
-    lines: PostingLine[],
+    docType: string,
+    amount: bigint,
     manager: EntityManager,
     spentToCode?: string,
   ): Promise<number> {
-    const partyAccounts: string[] = [CHEQUE_ACCOUNTS.RECEIVABLES, CHEQUE_ACCOUNTS.PAYABLES];
-    const entry = await this.accountingService.createJournalEntry(
+    const seq = (await this.chequesRepository.listEvents(tenantId, cheque.id)).length;
+    const result = await this.postingRules.post(
       tenantId,
       {
-        entryNumber: `CHQ-${cheque.id}-${marker}-${randomUUID().slice(0, 8)}`,
+        docType,
+        sourceType: 'cheque',
+        sourceId: `${cheque.id}:${seq}`,
+        entryNumber: `CHQ-${cheque.id}-${marker}-${seq}`,
         date: `${date}T00:00:00.000Z`,
         description: `${title} — چک ${cheque.chequeNumber} (${cheque.partyName})`,
-        lines: lines.map((line) => ({
-          accountCode: line.accountCode,
-          debit: minorToDecimal(line.debit),
-          credit: minorToDecimal(line.credit),
-          // an endorsed cheque settles a different party's payable than the drawer's
-          partyCode: !partyAccounts.includes(line.accountCode)
-            ? undefined
-            : marker === ChequeStatus.SPENT
-              ? spentToCode || undefined
-              : (cheque.partyCode ?? undefined),
-        })),
+        amounts: { amount },
+        partyCode: (marker === ChequeStatus.SPENT ? spentToCode : cheque.partyCode) || undefined,
       },
       manager,
     );
-    return entry.id;
+    return result.entryId;
   }
 
   /**

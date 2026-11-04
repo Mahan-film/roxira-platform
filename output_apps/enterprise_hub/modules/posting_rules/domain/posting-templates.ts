@@ -1,4 +1,5 @@
 import { PostingRole } from '../constants/posting-roles';
+import { CHEQUE_TEMPLATES } from './cheque-templates';
 
 export type PostingSide = 'debit' | 'credit';
 
@@ -31,6 +32,7 @@ const cr = (role: PostingRole, amount: string, description: string, party = fals
  * New adopting modules add their template here (and a spec comparing it with their old output).
  */
 export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
+  ...CHEQUE_TEMPLATES,
   {
     docType: 'invoice.sale',
     title: 'فاکتور فروش',
@@ -134,36 +136,6 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     title: 'هزینه تنخواه',
     amounts: ['amount'],
     lines: [dr('counter', 'amount', 'هزینه تنخواه'), cr('petty_cash', 'amount', 'تنخواه')],
-  },
-  {
-    docType: 'cheque.received.create',
-    title: 'دریافت چک',
-    amounts: ['amount'],
-    lines: [dr('cheques_receivable', 'amount', 'اسناد دریافتنی', true), cr('receivable', 'amount', 'حساب دریافتنی', true)],
-  },
-  {
-    docType: 'cheque.received.deposit',
-    title: 'واگذاری چک به بانک برای وصول',
-    amounts: ['amount'],
-    lines: [dr('cheques_in_collection', 'amount', 'در جریان وصول'), cr('cheques_receivable', 'amount', 'اسناد دریافتنی')],
-  },
-  {
-    docType: 'cheque.received.clear',
-    title: 'وصول چک',
-    amounts: ['amount'],
-    lines: [dr('bank', 'amount', 'وصول چک'), cr('cheques_in_collection', 'amount', 'در جریان وصول')],
-  },
-  {
-    docType: 'cheque.issued.create',
-    title: 'صدور چک',
-    amounts: ['amount'],
-    lines: [dr('payable', 'amount', 'حساب پرداختنی', true), cr('cheques_payable', 'amount', 'اسناد پرداختنی')],
-  },
-  {
-    docType: 'cheque.issued.clear',
-    title: 'پاس شدن چک پرداختنی',
-    amounts: ['amount'],
-    lines: [dr('cheques_payable', 'amount', 'اسناد پرداختنی'), cr('bank', 'amount', 'پرداخت از بانک')],
   },
 ];
 

@@ -1,6 +1,6 @@
 import { CHEQUE_ACCOUNTS } from './constants/cheque.constants';
 import { ChequeDirection, ChequeStatus } from './enums/cheque.enum';
-import { allowedTargets, creationPosting, findRule, partialPaymentPosting } from './lifecycle/cheque-lifecycle';
+import { allowedTargets, creationPosting, findRule, linesFor, partialPaymentPosting } from './lifecycle/cheque-lifecycle';
 
 const ALL = Object.values(ChequeStatus);
 const KNOWN_CODES = new Set<string>(Object.values(CHEQUE_ACCOUNTS));
@@ -11,8 +11,8 @@ describe('cheque lifecycle table', () => {
       for (const from of ALL) {
         for (const to of ALL) {
           const rule = findRule(direction, from, to);
-          if (!rule?.lines) continue;
-          const lines = rule.lines(999_999_999_999_999_999n); // 9999999999999999.99, beyond float precision
+          if (!rule?.docType) continue;
+          const lines = linesFor(rule.docType, 999_999_999_999_999_999n); // 9999999999999999.99, beyond float precision
           const debit = lines.reduce((s, l) => s + l.debit, 0n);
           const credit = lines.reduce((s, l) => s + l.credit, 0n);
           expect(debit).toBe(credit);
@@ -39,7 +39,7 @@ describe('cheque lifecycle table', () => {
 
   it('received cheque happy path posts the expected accounts', () => {
     const post = (to: ChequeStatus, from: ChequeStatus) =>
-      findRule(ChequeDirection.RECEIVED, from, to)!.lines!(10n).map((l) => `${l.debit > 0n ? 'Dr' : 'Cr'}${l.accountCode}`);
+      linesFor(findRule(ChequeDirection.RECEIVED, from, to)!.docType!, 10n).map((l) => `${l.debit > 0n ? 'Dr' : 'Cr'}${l.accountCode}`);
     expect(post(ChequeStatus.DEPOSITED, ChequeStatus.REGISTERED)).toEqual(['Dr1120', 'Cr1110']);
     expect(post(ChequeStatus.CLEARED, ChequeStatus.DEPOSITED)).toEqual(['Dr1010', 'Cr1120']);
     expect(post(ChequeStatus.BOUNCED, ChequeStatus.DEPOSITED)).toEqual(['Dr1020', 'Cr1120']);
@@ -51,8 +51,8 @@ describe('cheque lifecycle table', () => {
   });
 
   it('a bounced issued cheque and a returned bounced received cheque change status only', () => {
-    expect(findRule(ChequeDirection.ISSUED, ChequeStatus.REGISTERED, ChequeStatus.BOUNCED)!.lines).toBeNull();
-    expect(findRule(ChequeDirection.RECEIVED, ChequeStatus.BOUNCED, ChequeStatus.RETURNED)!.lines).toBeNull();
+    expect(findRule(ChequeDirection.ISSUED, ChequeStatus.REGISTERED, ChequeStatus.BOUNCED)!.docType).toBeNull();
+    expect(findRule(ChequeDirection.RECEIVED, ChequeStatus.BOUNCED, ChequeStatus.RETURNED)!.docType).toBeNull();
   });
 
   it('terminal states have no exits and issued cheques cannot be deposited or spent', () => {
@@ -71,11 +71,11 @@ describe('cheque lifecycle: delivered and partial payment', () => {
   const D = ChequeDirection.ISSUED;
 
   it('issued: registered -> delivered is status only, then delivered -> cleared / bounced / returned', () => {
-    expect(findRule(D, ChequeStatus.REGISTERED, ChequeStatus.DELIVERED)!.lines).toBeNull();
-    const clear = findRule(D, ChequeStatus.DELIVERED, ChequeStatus.CLEARED)!.lines!(10n);
+    expect(findRule(D, ChequeStatus.REGISTERED, ChequeStatus.DELIVERED)!.docType).toBeNull();
+    const clear = linesFor(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.CLEARED)!.docType!, 10n);
     expect(clear.map((l) => `${l.debit > 0n ? 'Dr' : 'Cr'}${l.accountCode}`)).toEqual(['Dr2110', 'Cr1010']);
-    expect(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.BOUNCED)!.lines).toBeNull();
-    expect(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.RETURNED)!.lines!(10n)).toHaveLength(2);
+    expect(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.BOUNCED)!.docType).toBeNull();
+    expect(linesFor(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.RETURNED)!.docType!, 10n)).toHaveLength(2);
     expect(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.DEPOSITED)).toBeNull();
   });
 

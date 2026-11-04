@@ -5,6 +5,7 @@ import { ChequeEntity } from './entities/cheque.entity';
 import { ChequeDirection, ChequeStatus } from './enums/cheque.enum';
 import { toMinor } from '../accounting/money';
 import { ChequesService } from './services/cheques.service';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -28,10 +29,12 @@ function build() {
   const repo = {
     async runInTransaction<T>(_tenantId: string, work: (m: unknown) => Promise<T>): Promise<T> {
       const snapshot = [cheques.map((c) => ({ ...c })), events.map((e) => ({ ...e })), [...entries]] as const;
+      const sourcesSnapshot = new Map(sources);
       try {
         return await work({});
       } catch (error) {
         [cheques, events, entries] = [snapshot[0] as ChequeEntity[], snapshot[1] as ChequeEventEntity[], [...snapshot[2]]];
+        sources = sourcesSnapshot;
         throw error;
       }
     },
@@ -98,7 +101,28 @@ function build() {
     },
   };
 
-  const service = new ChequesService(repo as never, accounting as never);
+  // the real engine over an in-memory source ledger (rolled back with the cheque transaction)
+  let sources = new Map<string, { entryId: number | null; entryNumber: string | null }>();
+  const postingRepo = {
+    async runInTransaction<T>(_t: string, work: (m: unknown) => Promise<T>) {
+      return work({});
+    },
+    async listMappings() {
+      return [];
+    },
+    async findSource(_t: string, st: string, sid: string, dt: string) {
+      return sources.get(`${st}/${sid}/${dt}`) ?? null;
+    },
+    async claimSource(_t: string, st: string, sid: string, dt: string) {
+      if (sources.has(`${st}/${sid}/${dt}`)) return false;
+      sources.set(`${st}/${sid}/${dt}`, { entryId: null, entryNumber: null });
+      return true;
+    },
+    async attachEntry(_t: string, st: string, sid: string, dt: string, entryId: number, entryNumber: string) {
+      Object.assign(sources.get(`${st}/${sid}/${dt}`)!, { entryId, entryNumber });
+    },
+  };
+  const service = new ChequesService(repo as never, accounting as never, new PostingRulesService(postingRepo as never, accounting as never));
   return {
     service,
     failNextPosting,
