@@ -6,6 +6,7 @@ import { CaptureDocumentEntity } from '../invoice_capture/entities/capture.entit
 import { InvoicingModule } from '../invoicing/invoicing.module';
 import { MOADIAN_QUEUE } from './constants/moadian.constants';
 import { MoadianController } from './controllers/moadian.controller';
+import { LedgerExportController } from './controllers/ledger-export.controller';
 import { SeasonalReportController } from './controllers/seasonal-report.controller';
 import { TaxComplianceController } from './controllers/tax-compliance.controller';
 import { MoadianCredentialEntity } from './entities/moadian-credential.entity';
@@ -14,6 +15,8 @@ import { TaxInvoiceSignatureEntity } from './entities/tax-invoice-signature.enti
 import { TaxSigningKeyEntity } from './entities/tax-signing-key.entity';
 import { MoadianProcessor } from './processors/moadian.processor';
 import { TenantScope } from '../access/services/tenant-scope';
+import { LedgerExportRepository } from './reports/ledger-export.repository';
+import { LedgerExportService } from './reports/ledger-export.service';
 import { SeasonalReportRepository } from './reports/seasonal-report.repository';
 import { SeasonalReportService } from './reports/seasonal-report.service';
 import { VatReturnRepository } from './reports/vat-return.repository';
@@ -49,7 +52,7 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     InvoicingModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
   ],
-  controllers: [TaxComplianceController, MoadianController, SeasonalReportController],
+  controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController],
   providers: [
     TaxComplianceService,
     TaxComplianceRepository,
@@ -58,6 +61,8 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     MoadianApiClient,
     MoadianProcessor,
     SeasonalReportService,
+    LedgerExportRepository,
+    LedgerExportService,
     VatReturnRepository,
     VatReturnService,
     TenantScope,

@@ -411,6 +411,12 @@ function SeasonalCard() {
           <Button variant="outline" size="sm" onClick={() => downloadReturn("pdf")} disabled={loading || !ret}>
             <Download className="size-4" /> اظهارنامه PDF
           </Button>
+          <Button variant="outline" size="sm" onClick={() => download("journal")} disabled={loading}>
+            <Download className="size-4" /> CSV دفتر روزنامه (قالب تأییدنشده)
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => download("ledger")} disabled={loading}>
+            <Download className="size-4" /> CSV دفتر کل (قالب تأییدنشده)
+          </Button>
         </div>
         <LoadingLine show={loading} />
         {error && <ErrorNotice title="خطا" message={error} />}

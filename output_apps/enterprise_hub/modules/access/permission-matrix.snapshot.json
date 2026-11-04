@@ -1243,6 +1243,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/tax-compliance/reports/journal.csv (LedgerExportController.journal)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/reports/ledger.csv (LedgerExportController.ledger)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/tax-compliance/reports/seasonal-purchases.csv (SeasonalReportController.purchasesCsv)": {
     "policy": "tax:export",
     "owner": true,
