@@ -45,7 +45,14 @@ const RUN_ROLE_ACCOUNTS: RoleAccounts = {
   payroll_payable: PAYROLL_RUN_ACCOUNTS.salariesPayable.code,
 };
 
-/** Role -> account of a payslip voucher (matches the HR single-payslip codes). */
+/**
+ * Role -> account of a payslip voucher (matches the HR single-payslip codes).
+ *
+ * Keys are posting ROLES, never amount names. The `payroll.payslip` template binds the amount
+ * `deductions` to the role `payroll_payable` and the amount `net` to the role `bank`, so the
+ * deductions total resolves through `payroll_payable` (2010) and the net total through `bank`
+ * (1010). Swapping these roles would credit the deductions to the bank ledger instead.
+ */
 const PAYSLIP_ROLE_ACCOUNTS: RoleAccounts = {
   payroll_expense: PAYROLL_EXPENSE_ACCOUNT_CODE,
   payroll_payable: PAYROLL_PAYABLE_ACCOUNT_CODE,

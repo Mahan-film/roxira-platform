@@ -113,6 +113,18 @@ describe('payrollPayslipProposalInput', () => {
     expect(debit).toBe(credit);
   });
 
+  it('binds the deductions amount to the payroll_payable role, not the bank role', () => {
+    const input = payrollPayslipProposalInput(payslipWithDeductions)!;
+    // Mapping keys are posting roles; the template maps amount 'deductions' -> role
+    // 'payroll_payable' (2010) and amount 'net' -> role 'bank' (1010).
+    expect(input.mapping).toMatchObject({ payroll_payable: '2010', bank: '1010' });
+    const proposal = buildProposal(input);
+    const payable = proposal.lines.find((l) => l.role === 'payroll_payable')!;
+    expect([payable.accountCode, payable.credit]).toEqual(['2010', 1_500n]);
+    const bank = proposal.lines.find((l) => l.role === 'bank')!;
+    expect([bank.accountCode, bank.credit]).toEqual(['1010', 8_500n]);
+  });
+
   it('drops the zero deductions line for a payslip without deductions', () => {
     const noDeductions: PayrollPayslipTotals = {
       grossPay: 5_000n,
