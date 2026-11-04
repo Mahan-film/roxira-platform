@@ -44,7 +44,7 @@ export class ChequeReconService {
   ) {}
 
   async suggest(tenantId: string, query: QueryChequeReconDto): Promise<ChequeReconResponseDto> {
-    const items = await this.build(tenantId, query.bankAccountId, query);
+    const items = (await this.build(tenantId, query.bankAccountId, query)).map((r) => r.item);
     const counts: Record<string, number> = { reconciled: 0, suggested: 0, unmatched: 0, no_bank_line: 0 };
     for (const item of items) counts[item.state] += 1;
     return { items, counts };
@@ -52,74 +52,84 @@ export class ChequeReconService {
 
   /** Confirms one suggested pair. The banking module re-checks amount, direction and double matches. */
   async match(tenantId: string, dto: ChequeReconMatchDto): Promise<ChequeReconItemDto> {
-    const events = await this.chequesRepository.listClearingEvents(tenantId);
-    const event = events.find((e) => e.id === dto.eventId);
+    const event = await this.chequesRepository.findClearingEvent(tenantId, dto.eventId);
     if (!event) throw new NotFoundException('رویداد وصول چک یافت نشد.');
-    const items = await this.build(tenantId, dto.bankAccountId, {}, [event]);
-    const item = items[0];
-    if (item.state === 'no_bank_line') {
+    const [row] = await this.build(tenantId, dto.bankAccountId, {}, [event]);
+    if (!row || row.item.state === 'no_bank_line') {
       throw new BadRequestException('سند وصول این چک روی حساب دفتر کل این حساب بانکی نیست.');
     }
-    if (item.state === 'reconciled') throw new BadRequestException('این وصول قبلاً با صورتحساب تطبیق خورده است.');
-    const bookLine = await this.bookLineOf(tenantId, dto.bankAccountId, event, item.direction);
-    if (!bookLine) throw new BadRequestException('سطر دفتر این وصول یافت نشد.');
-    await this.bankingService.manualMatch(tenantId, dto.statementLineId, bookLine.id);
-    return (await this.build(tenantId, dto.bankAccountId, {}, [event]))[0];
+    if (row.item.state === 'reconciled') throw new BadRequestException('این وصول قبلاً با صورتحساب تطبیق خورده است.');
+    await this.bankingService.manualMatch(tenantId, dto.statementLineId, row.bookLineId!);
+    return { ...row.item, state: 'reconciled', matchedStatementLineId: dto.statementLineId, candidates: [] };
   }
 
-  /** Applies every suggestion that has exactly one candidate and whose candidate no other item wants. */
+  /**
+   * Applies every suggestion that has exactly one candidate that no other item also wants. Not one
+   * transaction: each pair is confirmed on its own, a pair the banking module refuses is counted in
+   * `failed` and the rest still apply.
+   */
   async applyUnambiguous(tenantId: string, dto: ChequeReconApplyDto): Promise<ChequeReconApplyResponseDto> {
-    const items = await this.build(tenantId, dto.bankAccountId, dto);
+    const rows = await this.build(tenantId, dto.bankAccountId, dto);
     const wanted = new Map<number, number>();
-    for (const item of items) for (const c of item.candidates) wanted.set(c.statementLineId, (wanted.get(c.statementLineId) ?? 0) + 1);
+    for (const { item } of rows) for (const c of item.candidates) wanted.set(c.statementLineId, (wanted.get(c.statementLineId) ?? 0) + 1);
     let matched = 0;
     let skippedAmbiguous = 0;
-    for (const item of items.filter((i) => i.state === 'suggested')) {
+    let failed = 0;
+    for (const { item, bookLineId } of rows.filter((r) => r.item.state === 'suggested')) {
       const only = item.candidates.length === 1 ? item.candidates[0] : null;
-      if (!only || wanted.get(only.statementLineId) !== 1) {
+      if (!only || wanted.get(only.statementLineId) !== 1 || bookLineId === null) {
         skippedAmbiguous += 1;
         continue;
       }
-      await this.match(tenantId, { bankAccountId: dto.bankAccountId, eventId: item.eventId, statementLineId: only.statementLineId });
-      matched += 1;
+      try {
+        await this.bankingService.manualMatch(tenantId, only.statementLineId, bookLineId);
+        matched += 1;
+      } catch {
+        failed += 1;
+      }
     }
-    return { matched, skippedAmbiguous };
+    return { matched, skippedAmbiguous, failed };
   }
 
   // ------------------------------------------------------------------ internals
 
-  private async bookLineOf(tenantId: string, bankAccountId: number, event: ChequeEventEntity, direction: ChequeDirection) {
-    const amount = fromDb(event.amount ?? '0');
-    const lines = await this.bankingService.listBookLines(tenantId, bankAccountId, {});
-    return lines.find(
-      (l) =>
-        l.journalEntryId === event.journalEntryId &&
-        minorOf(direction === ChequeDirection.RECEIVED ? l.debit : l.credit) === amount,
-    );
-  }
-
+  /**
+   * One pass: the events, their cheques, and one book-line and one statement-line read limited to the
+   * events' date range (statement lines widened by the window), indexed by journal entry.
+   */
   private async build(
     tenantId: string,
     bankAccountId: number,
     range: { fromDate?: string; toDate?: string; windowDays?: number },
     only?: ChequeEventEntity[],
-  ): Promise<ChequeReconItemDto[]> {
-    const events = only ?? (await this.chequesRepository.listClearingEvents(tenantId, { from: range.fromDate?.slice(0, 10), to: range.toDate?.slice(0, 10) }));
+  ): Promise<Array<{ item: ChequeReconItemDto; bookLineId: number | null }>> {
+    const events =
+      only ??
+      (await this.chequesRepository.listClearingEvents(tenantId, { from: range.fromDate?.slice(0, 10), to: range.toDate?.slice(0, 10) }));
     if (events.length === 0) return [];
     const windowDays = range.windowDays ?? DEFAULT_WINDOW_DAYS;
-    const cheques = new Map((await this.chequesRepository.findByIds(tenantId, [...new Set(events.map((e) => e.chequeId))])).map((c) => [c.id, c]));
+    const dates = events.map((e) => e.eventDate).sort();
+    const shift = (date: string, days: number) => new Date((dayNumber(date) + days) * DAY_MS).toISOString().slice(0, 10);
+    const cheques = new Map(
+      (await this.chequesRepository.findByIds(tenantId, [...new Set(events.map((e) => e.chequeId))])).map((c) => [c.id, c]),
+    );
     const [bookLines, unmatched] = await Promise.all([
-      this.bankingService.listBookLines(tenantId, bankAccountId, {}),
-      this.bankingService.listStatementLines(tenantId, bankAccountId, { status: StatementLineStatus.UNMATCHED }),
+      this.bankingService.listBookLines(tenantId, bankAccountId, { fromDate: dates[0], toDate: dates[dates.length - 1] }),
+      this.bankingService.listStatementLines(tenantId, bankAccountId, {
+        status: StatementLineStatus.UNMATCHED,
+        fromDate: shift(dates[0], -windowDays),
+        toDate: shift(dates[dates.length - 1], windowDays),
+      }),
     ]);
-    return events.flatMap((event): ChequeReconItemDto[] => {
+    const bookByEntry = new Map<number, typeof bookLines>();
+    for (const line of bookLines) bookByEntry.set(line.journalEntryId, [...(bookByEntry.get(line.journalEntryId) ?? []), line]);
+
+    return events.flatMap((event) => {
       const cheque = cheques.get(event.chequeId);
       if (!cheque || event.journalEntryId === null) return [];
       const amount = fromDb(event.amount ?? cheque.amount);
       const received = cheque.direction === ChequeDirection.RECEIVED;
-      const bookLine = bookLines.find(
-        (l) => l.journalEntryId === event.journalEntryId && minorOf(received ? l.debit : l.credit) === amount,
-      );
+      const bookLine = (bookByEntry.get(event.journalEntryId) ?? []).find((l) => minorOf(received ? l.debit : l.credit) === amount);
       const base = {
         eventId: event.id,
         chequeId: cheque.id,
@@ -131,9 +141,10 @@ export class ChequeReconService {
         amount: fromMinor(amount),
         journalEntryId: event.journalEntryId,
       };
-      if (!bookLine) return [{ ...base, state: 'no_bank_line', matchedStatementLineId: null, candidates: [] }];
+      const done = (item: Omit<ChequeReconItemDto, keyof typeof base>, id: number | null) => ({ item: { ...base, ...item } as ChequeReconItemDto, bookLineId: id });
+      if (!bookLine) return [done({ state: 'no_bank_line', matchedStatementLineId: null, candidates: [] }, null)];
       if (bookLine.matchedStatementLineId !== null) {
-        return [{ ...base, state: 'reconciled', matchedStatementLineId: bookLine.matchedStatementLineId, candidates: [] }];
+        return [done({ state: 'reconciled', matchedStatementLineId: bookLine.matchedStatementLineId, candidates: [] }, bookLine.id)];
       }
       const candidates = unmatched
         .filter(
@@ -142,7 +153,7 @@ export class ChequeReconService {
             Math.abs(dayNumber(s.txnDate) - dayNumber(event.eventDate)) <= windowDays,
         )
         .map((s) => ({ statementLineId: s.id, txnDate: s.txnDate, description: s.description, reference: s.reference }));
-      return [{ ...base, state: candidates.length ? 'suggested' : 'unmatched', matchedStatementLineId: null, candidates }];
+      return [done({ state: candidates.length ? 'suggested' : 'unmatched', matchedStatementLineId: null, candidates }, bookLine.id)];
     });
   }
 }

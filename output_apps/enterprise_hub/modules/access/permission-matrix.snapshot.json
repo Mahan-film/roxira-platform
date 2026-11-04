@@ -668,7 +668,7 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/cheques/reconciliation (ChequesController.reconciliation)": {
-    "policy": "cheques:read",
+    "policy": "banking:read",
     "owner": true,
     "admin": true,
     "accountant": true,
@@ -2311,7 +2311,7 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/reconciliation/apply (ChequesController.reconApply)": {
-    "policy": "cheques:post",
+    "policy": "banking:post",
     "owner": true,
     "admin": true,
     "accountant": true,
@@ -2322,7 +2322,7 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/reconciliation/match (ChequesController.reconMatch)": {
-    "policy": "cheques:post",
+    "policy": "banking:post",
     "owner": true,
     "admin": true,
     "accountant": true,

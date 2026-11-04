@@ -80,6 +80,8 @@ export class ChequesController {
     return this.chequesService.bouncedReport(this.tenantIdOf(request), query);
   }
 
+  // Reads bank statement and book lines: needs the banking module's permission, not only cheques.
+  @ModuleAccess(AccessModule.BANKING)
   @Get('reconciliation')
   @ApiOperation({ summary: 'وصول‌های چک و سطرهای صورتحساب بانک مطابق (پیشنهاد تطبیق)' })
   @ApiResponse({ status: HttpStatus.OK, type: ChequeReconResponseDto })
@@ -87,6 +89,7 @@ export class ChequesController {
     return this.reconService.suggest(this.tenantIdOf(request), query);
   }
 
+  @ModuleAccess(AccessModule.BANKING)
   @RequireAction(AccessAction.POST)
   @Post('reconciliation/match')
   @HttpCode(HttpStatus.OK)
@@ -96,6 +99,7 @@ export class ChequesController {
     return this.reconService.match(this.tenantIdOf(request), dto);
   }
 
+  @ModuleAccess(AccessModule.BANKING)
   @RequireAction(AccessAction.POST)
   @Post('reconciliation/apply')
   @HttpCode(HttpStatus.OK)

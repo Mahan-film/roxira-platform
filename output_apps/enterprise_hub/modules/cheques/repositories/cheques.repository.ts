@@ -166,6 +166,15 @@ export class ChequesRepository {
     });
   }
 
+  /** One clearing event (see `listClearingEvents`) by id, or null. */
+  async findClearingEvent(tenantId: string, id: number): Promise<ChequeEventEntity | null> {
+    const events = await this.scope.run(tenantId, (m) =>
+      m.getRepository(ChequeEventEntity).find({ where: { tenantId, id } }),
+    );
+    const e = events[0];
+    return e && e.journalEntryId !== null && (e.toStatus === ChequeStatus.CLEARED || (e.fromStatus === e.toStatus && e.amount !== null)) ? e : null;
+  }
+
   findByIds(tenantId: string, ids: number[]): Promise<ChequeEntity[]> {
     if (ids.length === 0) return Promise.resolve([]);
     return this.scope.run(tenantId, (m) =>

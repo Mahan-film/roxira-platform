@@ -382,4 +382,5 @@ export class ChequeReconResponseDto {
 export class ChequeReconApplyResponseDto {
   @ApiProperty() matched: number;
   @ApiProperty() skippedAmbiguous: number;
+  @ApiProperty({ description: 'جفت‌هایی که ماژول بانک پذیرفت نکرد' }) failed: number;
 }

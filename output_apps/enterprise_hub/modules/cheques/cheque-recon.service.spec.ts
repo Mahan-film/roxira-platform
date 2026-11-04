@@ -14,6 +14,7 @@ function build(events: Ev[], cheques: Chq[], books: Book[], stmts: Stmt[]) {
   const matched: Array<[number, number]> = [];
   const repo = {
     listClearingEvents: jest.fn(async () => events),
+    findClearingEvent: jest.fn(async (_t: string, id: number) => events.find((e) => e.id === id) ?? null),
     findByIds: jest.fn(async (_t: string, ids: number[]) => cheques.filter((c) => ids.includes(c.id))),
   };
   const banking = {
@@ -112,12 +113,39 @@ describe('ChequeReconService', () => {
         { id: 2, txnDate: '2026-11-02', deposit: 300, withdrawal: 0, description: null, reference: null },
       ],
     );
-    expect(await t.service.applyUnambiguous(T, { bankAccountId: BANK })).toEqual({ matched: 1, skippedAmbiguous: 2 });
+    expect(await t.service.applyUnambiguous(T, { bankAccountId: BANK })).toEqual({ matched: 1, skippedAmbiguous: 2, failed: 0 });
     expect(t.matched).toEqual([[2, 103]]);
   });
 
   it('is empty when no cheque has cleared', async () => {
     const t = build([], [], [], []);
     expect(await t.service.suggest(T, { bankAccountId: BANK })).toEqual({ items: [], counts: { reconciled: 0, suggested: 0, unmatched: 0, no_bank_line: 0 } });
+  });
+});
+
+describe('ChequeReconService limits and failures', () => {
+  it('reads book and statement lines once per call, limited to the events\' date range', async () => {
+    const t = build([ev(1, 1, 11, '2026-11-02'), ev(2, 1, 12, '2026-11-09')], [rec], [], []);
+    await t.service.suggest(T, { bankAccountId: BANK, windowDays: 3 });
+    expect(t.banking.listBookLines).toHaveBeenCalledTimes(1);
+    expect(t.banking.listBookLines).toHaveBeenCalledWith(T, BANK, { fromDate: '2026-11-02', toDate: '2026-11-09' });
+    expect(t.banking.listStatementLines).toHaveBeenCalledWith(T, BANK, { status: 'unmatched', fromDate: '2026-10-30', toDate: '2026-11-12' });
+  });
+
+  it('applyUnambiguous counts a pair the banking module refuses and keeps going', async () => {
+    const t = build(
+      [ev(1, 1, 11, '2026-11-02'), ev(2, 3, 12, '2026-11-02', '300.00')],
+      [rec, { ...rec, id: 3, chequeNumber: '9' }],
+      [
+        { id: 101, journalEntryId: 11, debit: 100, credit: 0, matchedStatementLineId: null },
+        { id: 102, journalEntryId: 12, debit: 300, credit: 0, matchedStatementLineId: null },
+      ],
+      [
+        { id: 1, txnDate: '2026-11-02', deposit: 100, withdrawal: 0, description: null, reference: null },
+        { id: 2, txnDate: '2026-11-02', deposit: 300, withdrawal: 0, description: null, reference: null },
+      ],
+    );
+    t.banking.manualMatch.mockRejectedValueOnce(new ConflictException('taken'));
+    expect(await t.service.applyUnambiguous(T, { bankAccountId: BANK })).toEqual({ matched: 1, skippedAmbiguous: 0, failed: 1 });
   });
 });
