@@ -13,6 +13,7 @@ import {
 } from './statutory-parameter.entity';
 import { StatutoryRepository } from './statutory.repository';
 import { AnnualTaxBracket, PayrollYearRates } from './payroll-rates';
+import { buildContractTerms, CONTRACT_TERM_KEYS, ContractTerms } from './contract-terms';
 
 export const IRAN = 'IR';
 
@@ -25,6 +26,8 @@ export interface ResolvedParameter {
   source: string;
   sourceKind: StatutorySourceKind;
   verified: boolean;
+  /** No figure is known (value null). Never treat as zero. */
+  unclear: boolean;
   /** True when this organisation's own row is in force rather than the platform default. */
   tenantOverride: boolean;
 }
@@ -228,6 +231,19 @@ export class StatutoryService {
     };
   }
 
+  /**
+   * Contract figures in force on a Gregorian date, read-only, for the contracting module (T3, #227).
+   * A tenant's own row beats the platform default; `unclear` terms carry rate null.
+   */
+  async contractTermsOn(tenantId: string, asOf: string): Promise<ContractTerms> {
+    const jalali = gregorianToJalali(asOf);
+    if (!jalali) {
+      throw new BadRequestException('تاریخ معتبر نیست.');
+    }
+    const rows = await this.repository.findKeysUpToYear(tenantId, IRAN, CONTRACT_TERM_KEYS, jalali.jy);
+    return buildContractTerms(asOf, resolveParameters(rows, asOf));
+  }
+
   async list(
     tenantId: string,
     year: number,
@@ -243,6 +259,7 @@ export class StatutoryService {
       source: row.source,
       sourceKind: row.sourceKind,
       verified: row.verified,
+      unclear: row.unclear === true,
       tenantOverride: row.tenantId !== null,
     }));
   }

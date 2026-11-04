@@ -95,6 +95,43 @@ describePg('statutory parameters on PostgreSQL', () => {
     expect((await service.settlementTermsOn(T2, '2027-06-01')).daysPerYear).toBe(30);
   });
 
+  it('seeds contract terms: known figures unverified, unclear ones null, tenant can fill them', async () => {
+    const base = await service.contractTermsOn(T1, '2026-06-01');
+    expect(base.retention).toMatchObject({ rate: '0.1', unclear: false, verified: false });
+    expect(base.insuranceDeposit.rate).toBe('0.05');
+    expect(base.insuranceByType.MECHANICAL.rate).toBe('0.07');
+    expect(base.insuranceByType.NON_MECHANICAL.rate).toBe('0.15');
+    for (const unclear of [
+      base.insuranceByType.CIVIL_EXECUTIVE,
+      base.insuranceByType.CIVIL_CONSULTING,
+      base.unemploymentAddon,
+      base.taxWithholding,
+      base.advancePaymentMax,
+    ]) {
+      expect(unclear).toMatchObject({ rate: null, unclear: true });
+    }
+    await service.setValue(T1, 'u1', {
+      fiscalYear: 1405, key: 'contract_tax_withholding_rate', value: '0.03',
+      source: 'تأیید حسابدار', verified: true,
+    });
+    expect((await service.contractTermsOn(T1, '2026-06-01')).taxWithholding).toMatchObject({
+      rate: '0.03', unclear: false, tenantOverride: true,
+    });
+    expect((await service.contractTermsOn(T2, '2026-06-01')).taxWithholding.unclear).toBe(true);
+    // The CHECK ties NULL to the flag: a null value must say unclear, a value cannot.
+    const scope = new TenantScope(ds);
+    const insert = (value: string | null, unclear: boolean) =>
+      scope.run(T1, (m) =>
+        m.query(
+          `INSERT INTO statutory_parameters (tenant_id, country, fiscal_year, param_key, effective_from, value, unclear, source, source_kind, created_by)
+           VALUES ($1, 'IR', 1405, 'contract_retention_rate', '2026-03-21', $2::jsonb, $3, 'x', 'TENANT', 'x')`,
+          [T1, value, unclear],
+        ),
+      );
+    await expect(insert(null, false)).rejects.toThrow(/CHK_statutory_parameters_unclear/);
+    await expect(insert('"0.1"', true)).rejects.toThrow(/CHK_statutory_parameters_unclear/);
+  });
+
   it('a tenant edit stays with that tenant and versions up', async () => {
     await service.setValue(T1, 'u1', input);
     await service.setValue(T1, 'u1', { ...input, value: 32_000_000 });

@@ -4,7 +4,7 @@ import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
-import { SetStatutoryParameterDto, StatutoryParameterResponseDto, StatutoryYearQueryDto } from './statutory.dto';
+import { ContractTermsQueryDto, SetStatutoryParameterDto, StatutoryParameterResponseDto, StatutoryYearQueryDto } from './statutory.dto';
 import { StatutoryService } from './statutory.service';
 
 /**
@@ -16,6 +16,14 @@ import { StatutoryService } from './statutory.service';
 @Controller('enterprise-hub/hr/statutory-parameters')
 export class StatutoryController {
   constructor(private readonly statutory: StatutoryService) {}
+
+  @Get('contract-terms')
+  @ApiOperation({
+    summary: 'پارامترهای قانونی قراردادهای پیمانکاری در یک تاریخ (فقط‌خواندنی؛ مقدار null یعنی نامشخص)',
+  })
+  contractTerms(@Req() request: AuthenticatedRequest, @Query() query: ContractTermsQueryDto) {
+    return this.statutory.contractTermsOn(requireTenantId(request), query.asOf);
+  }
 
   @Get(':year')
   @ApiOperation({ summary: 'مقادیر جاری یک سال با منبع و وضعیت تأیید' })

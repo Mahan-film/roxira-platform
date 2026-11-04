@@ -28,6 +28,7 @@ export function seededRows(year: number): StatutoryParameterEntity[] {
         source: seedSource(seed),
         sourceKind: kind as StatutorySourceKind,
         verified: kind === 'OFFICIAL',
+        unclear: false,
         createdBy: 'migration',
         createdAt: new Date(0),
       };
@@ -60,6 +61,7 @@ const sanavatRow = (
   effectiveFrom,
   version,
   value,
+  unclear: false,
   source: 'test',
   sourceKind: StatutorySourceKind.REPORT,
   verified: false,
