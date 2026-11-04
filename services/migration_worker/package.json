@@ -1,0 +1,16 @@
+{
+  "name": "roxira-migration-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Out-of-core transform of a migration manifest (NDJSON) into normalised Parquet and a typed per-tenant staging schema (DuckDB).",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "2.0.0-r.1"
+  }
+}
