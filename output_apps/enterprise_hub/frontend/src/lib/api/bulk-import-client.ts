@@ -8,7 +8,9 @@
  *   GET  /bulk/jobs  /bulk/jobs/:id        POST /bulk/jobs/:id/{pause,resume,retry,cancel,approve}
  *   GET  /bulk/jobs/:id/tables/:idx/rows
  */
-import { ApiClientError, apiPutRaw, apiRequest } from "@/lib/api/http-client";
+import { apiPutRaw, apiRequest } from "@/lib/api/http-client";
+import { UploadHttpError, uploadResumable } from "@/lib/upload";
+import type { PutPart, UploadEvent, UploadTransport } from "@/lib/upload";
 import { API_PROXY_BASE_PATH, DATA_IMPORT_RESOURCE_PATH } from "@/lib/api/config";
 
 const BASE = `${API_PROXY_BASE_PATH}/${DATA_IMPORT_RESOURCE_PATH}/bulk`;
@@ -75,6 +77,8 @@ export interface BulkConfig {
   enabled: boolean;
   driver: "s3" | "local" | "disabled";
   direct: boolean;
+  proxyParts: boolean;
+  checksums: boolean;
   partBytes: number;
   quotaBytes: number;
   usedBytes: number;
@@ -122,6 +126,8 @@ interface StartResponse {
   partBytes: number;
   totalParts: number;
   direct: boolean;
+  proxyParts: boolean;
+  checksums: boolean;
 }
 interface PartsResponse {
   partBytes: number;
@@ -136,110 +142,59 @@ export interface BulkUploadOptions {
   /** Resume an existing upload instead of starting a new one. */
   jobId?: string;
   concurrency?: number;
+  onEvent?: (event: UploadEvent) => void;
 }
 
-const PART_RETRIES = 6;
-
-/** PUT one part with progress; resolves when the storage answers 2xx. */
-function putWithProgress(url: string, body: Blob, onBytes: (n: number) => void, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
+/** PUT one part to storage with byte progress (XHR, because `fetch` cannot report upload progress). */
+const putWithProgress: PutPart = (url, body, headers, onBytes, signal) =>
+  new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
+    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
     xhr.upload.onprogress = (event) => onBytes(event.loaded);
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`upload ${xhr.status}`)));
-    xhr.onerror = () => reject(new Error("network"));
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new UploadHttpError(xhr.status)));
+    xhr.onerror = () => reject(new TypeError("network"));
     xhr.onabort = () => reject(new DOMException("aborted", "AbortError"));
     signal?.addEventListener("abort", () => xhr.abort(), { once: true });
     xhr.send(body);
   });
-}
+
+const transport: UploadTransport = {
+  start: (file, signal) =>
+    apiRequest<StartResponse>(`${BASE}/uploads`, { method: "POST", body: { fileName: file.name, size: file.size }, signal }),
+  capabilities: async (signal) => {
+    const c = await getBulkConfig(signal);
+    return { direct: c.direct, proxyParts: c.proxyParts, checksums: c.checksums };
+  },
+  listParts: (jobId, signal) => apiRequest<PartsResponse>(`${BASE}/uploads/${jobId}/parts`, { signal }),
+  sign: (jobId, partNumbers, checksums, signal) =>
+    apiRequest<{ urls: Record<string, string>; headers?: Record<string, Record<string, string>> }>(`${BASE}/uploads/${jobId}/sign`, {
+      method: "POST",
+      body: { partNumbers, checksums },
+      signal,
+    }),
+  putViaApi: async (jobId, partNumber, body, headers, signal) => {
+    await apiPutRaw(`${BASE}/uploads/${jobId}/parts/${partNumber}`, body, signal, headers);
+  },
+  complete: async (jobId, signal) => {
+    await apiRequest<BulkJob>(`${BASE}/uploads/${jobId}/complete`, { method: "POST", signal });
+  },
+};
 
 /**
- * Uploads `file` in parts (default 64 MiB) straight to storage, four at a time. Closing the tab or losing
- * the network is fine: call again with the same `jobId` and only the missing parts are sent.
+ * Uploads `file` in parts (default 64 MiB) straight to storage, four at a time, with a per-part SHA-256 when the
+ * server enables it and an automatic relay through the API if the browser cannot reach storage. Closing the tab
+ * or losing the network is fine: call again with the same `jobId` and only the missing parts are sent.
  */
-export async function uploadBulkFile(file: File, options: BulkUploadOptions = {}): Promise<string> {
-  const { signal } = options;
-  let jobId = options.jobId;
-  let direct = true;
-  let partBytes = 0;
-  let totalParts = 0;
-  if (jobId) {
-    const parts = await apiRequest<PartsResponse>(`${BASE}/uploads/${jobId}/parts`, { signal });
-    partBytes = parts.partBytes;
-    totalParts = parts.totalParts;
-    direct = (await getBulkConfig(signal)).direct;
-  } else {
-    const started = await apiRequest<StartResponse>(`${BASE}/uploads`, {
-      method: "POST",
-      body: { fileName: file.name, size: file.size },
-      signal,
-    });
-    jobId = started.jobId;
-    partBytes = started.partBytes;
-    totalParts = started.totalParts;
-    direct = started.direct;
-  }
-  const have = new Set(
-    (await apiRequest<PartsResponse>(`${BASE}/uploads/${jobId}/parts`, { signal })).uploaded.map((p) => p.partNumber),
-  );
-  const sizeOf = (n: number) => (n < totalParts ? partBytes : file.size - partBytes * (totalParts - 1));
-  const inFlight = new Map<number, number>();
-  let done = 0;
-  for (const n of have) done += sizeOf(n);
-  const report = () => {
-    let live = 0;
-    inFlight.forEach((v) => (live += v));
-    options.onProgress?.(Math.min(file.size, done + live), file.size);
-  };
-  report();
-
-  const todo: number[] = [];
-  for (let n = 1; n <= totalParts; n += 1) if (!have.has(n)) todo.push(n);
-  const id = jobId;
-
-  const sendOne = async (n: number): Promise<void> => {
-    const blob = file.slice((n - 1) * partBytes, (n - 1) * partBytes + sizeOf(n));
-    for (let attempt = 0; ; attempt += 1) {
-      try {
-        inFlight.set(n, 0);
-        if (direct) {
-          const { urls } = await apiRequest<{ urls: Record<string, string> }>(`${BASE}/uploads/${id}/sign`, {
-            method: "POST",
-            body: { partNumbers: [n] },
-            signal,
-          });
-          await putWithProgress(urls[String(n)], blob, (b) => { inFlight.set(n, b); report(); }, signal);
-        } else {
-          await apiPutRaw(`${BASE}/uploads/${id}/parts/${n}`, blob, signal);
-        }
-        inFlight.delete(n);
-        done += sizeOf(n);
-        report();
-        return;
-      } catch (error) {
-        inFlight.delete(n);
-        if (error instanceof DOMException && error.name === "AbortError") throw error;
-        if (error instanceof ApiClientError && error.statusCode >= 400 && error.statusCode < 500) throw error;
-        if (attempt >= PART_RETRIES) {
-          throw new ApiClientError(0, { message: "ارتباط بارها قطع شد؛ بارگذاری ناتمام ماند و از همان‌جا ادامه می‌یابد." });
-        }
-        await new Promise((resolve) => setTimeout(resolve, Math.min(15000, 500 * 2 ** attempt)));
-      }
-    }
-  };
-
-  let next = 0;
-  const workers = Array.from({ length: Math.max(1, Math.min(options.concurrency ?? 4, todo.length)) }, async () => {
-    while (next < todo.length) {
-      const n = todo[next];
-      next += 1;
-      await sendOne(n);
-    }
+export function uploadBulkFile(file: File, options: BulkUploadOptions = {}): Promise<string> {
+  return uploadResumable(file, transport, {
+    signal: options.signal,
+    resumeId: options.jobId,
+    concurrency: options.concurrency,
+    onProgress: options.onProgress,
+    onEvent: options.onEvent,
+    putPart: putWithProgress,
   });
-  await Promise.all(workers);
-  await apiRequest<BulkJob>(`${BASE}/uploads/${id}/complete`, { method: "POST", signal });
-  return id;
 }
 
 export function bulkStatusLabel(status: BulkStatus): string {

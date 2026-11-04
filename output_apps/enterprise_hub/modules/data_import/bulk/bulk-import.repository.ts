@@ -166,6 +166,12 @@ export class BulkImportRepository {
     });
   }
 
+  /** Size of the staging table including indexes and TOAST, all tenants (a capacity probe, not tenant data). */
+  async stagingBytes(): Promise<number> {
+    const rows = await this.dataSource.query<{ size: string }[]>(`SELECT pg_total_relation_size('bulk_import_rows') AS size`);
+    return Number(rows[0]?.size ?? 0);
+  }
+
   async countActive(tenantId: string): Promise<number> {
     return this.scope.run(tenantId, async (m) => {
       const rows = await m.query<{ n: string }[]>(
