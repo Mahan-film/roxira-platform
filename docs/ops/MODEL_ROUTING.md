@@ -116,3 +116,26 @@ Global 2.00. Per role: cheap 0.40, strong 0.40, product 0.40, product_pro 0.40, 
 vision 0.30, invoice_extraction 0.30, cheap_agent 0.20, executor 0.20, agent_runner 0.20, reviewer 0.10, summarize 0.10,
 stt 0.10, mechanical 0.05; free and tts 0. The numbers are a starting point for the owner to change in that one file.
 Enforcement (refuse or downgrade when a cap is spent) arrives with the router PR, reading `requests.jsonl`.
+
+## Pool proof, 2026-11-05 (Mac, `scripts/dev/pool_proof.py`, key names only)
+
+A working key check (`check_keys.py`, a models listing) does not mean chat works. Real chat calls through the pool:
+
+| Provider | Keys (env names) | Chat result today | Roles / groups |
+|---|---|---|---|
+| Groq | `GROQ_API_KEY`, `_2`, `_3` (`_` and `_2` hold the **same key value**) | ok (gpt-oss-120b/20b, qwen3.8-27b; no Llama 4 listed any more) | agent-strong/light-free, best-product(-free) |
+| OpenRouter free | `OPENROUTER_API_KEY_AGENTS` (ok), `OPENROUTER_API_KEY` (403/429 on free ids) | ok on nemotron-ultra and 3.5-lightning; gemma-4 and nemotron-super fail | best-product-free |
+| OpenRouter paid | agents key, product key | ok (GLM-5.3 Flash, DeepSeek V4.1 Flash, Haiku 5.5) | agent-free-paid, vip-* , private |
+| SambaNova | `SAMBANOVA_API_KEY` | 429 "high demand" | agent-strong-free |
+| Mistral | `MISTRAL_API_KEY` .. `_4` (`_` and `_3` are the **same value**) | **402 API budget exhausted** (free quota is used up, not 80%) | agent-*-free, best-product |
+| Gemini | `GEMINI_API_KEY` .. `_4` | 502/503 "high demand" today | gemini-best*, best-product |
+| OmniRoute | `OMNIROUTE_API_KEY` | answers (rank 9, last resort; upstream auth errors seen earlier) | agent-free-paid |
+| Cloudflare AI | `CF_AI_TOKEN` | not callable: `CF_ACCOUNT_ID` is not set | agent-*-free |
+| Cerebras, NVIDIA NIM, DeepSeek direct | no key | skipped | candidates |
+
+Order inside a group is by rank; same-rank keys of every provider share the load; a 429/402/auth/5xx/connection error puts that
+key in cooldown and the next deployment takes over (`llm_pool.chat`, LiteLLM `cooldown_time` on the gateway). Duplicate key
+values are collapsed (`dedupe_keys`) because two slots with one value share one rate limit.
+**Forced-429 proof:** `pool_proof.py --failover groq` -> `GROQ_API_KEY_2 -> 429 (forced)`, then `GROQ_API_KEY_3 -> 200`, served by groq/gpt-oss-120b.
+
+srv1 runtime pool has these env names set (names only): Groq x3, Mistral x4, Gemini x4, OpenRouter x2, SambaNova, CF_AI_TOKEN, Brave, Exa, Tavily (`TAVILY_KEYS`), Jina, Firecrawl. It has no Cerebras, DeepSeek, NVIDIA or OmniRoute. Nothing was copied between machines.

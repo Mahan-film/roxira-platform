@@ -93,6 +93,7 @@ providers:
     models:
       - {role: agent_runner, alias: groq-strong}   # openai/gpt-oss-120b
       - {role: agent_runner, alias: groq-fast}     # openai/gpt-oss-20b
+      - {id: qwen/qwen3.8-27b}                     # verified in GET /models 2026-11-05 (Groq has no Llama 4 any more)
     limits: {rpm: 30, tpm: 8000, rpd: 1000, status: unverified}
 
   sambanova:
@@ -116,6 +117,7 @@ providers:
       - {id: mistral-code-latest}
       - {id: mistral-small-latest}
       - {id: ministral-8b-latest}
+      - {id: ministral-14b-latest}   # verified in GET /v1/models 2026-11-05 (no Devstral id is listed any more)
     limits: {rpm: 60, tpm: 500000, rpd: unverified, status: unverified}
 
   gemini:
@@ -256,6 +258,17 @@ providers:
     models:
       - {id: accounts/fireworks/models/gpt-oss-120b, price_per_1m: {in: 0.15, out: 0.60}}   # unverified
     limits: {rpm: 60, tpm: unverified, rpd: unverified, status: unverified}
+
+  omniroute:   # last-resort local gateway (scraped/free combos); public data only. 502 on 2026-11-05 (upstream auth), so rank last.
+    tier: free
+    data_policy: may_log
+    base_url: http://127.0.0.1:20128/v1
+    api_base: http://127.0.0.1:20128/v1
+    litellm_prefix: openai
+    keys: [OMNIROUTE_API_KEY]
+    models:
+      - {id: team-coding}
+    limits: {rpm: 30, tpm: unverified, rpd: unverified, status: unverified}
 
   local-tei:
     # Shared local TEI container `roxira_embeddings`, OpenAI-compatible at /v1 with BAAI/bge-m3.
@@ -498,7 +511,7 @@ groups:
   agent-free-paid:   # cheap paid agent step (2026-10-17): GLM-5.3 Flash first, then DeepSeek V4.1 Flash
     description: Cheap paid step (GLM-5.3 Flash, then DeepSeek on OpenRouter + direct keys, then paid gpt-oss-120b). Shared last-resort fallback for the free agent groups.
     ordered: true
-    providers: [openrouter-paid, deepseek, chutes, together, fireworks]
+    providers: [openrouter-paid, deepseek, chutes, together, fireworks, omniroute]
     models:
       openrouter-paid:
         - {role: cheap_agent, alias: glm-flash, rank: 1}
@@ -507,6 +520,7 @@ groups:
       chutes: [{id: openai/gpt-oss-120b, rank: 3}]        # then paid gpt-oss-120b on every remaining paid key
       together: [{id: openai/gpt-oss-120b, rank: 3}]
       fireworks: [{id: accounts/fireworks/models/gpt-oss-120b, rank: 3}]
+      omniroute: [{id: team-coding, rank: 9}]               # absolute last resort, after every paid key
 
   summarize-cheap:   # compress long uploaded case files before the main model (no app wiring yet).
                      # ScaleDown first ($0.04/M in, $0 out, 1M context), then the free ladder: never stops.
