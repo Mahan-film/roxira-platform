@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
+import { AGEING_ALLOCATIONS } from '../accounting/reports/ageing-allocations';
 import { BankingModule } from '../banking/banking.module';
 import { ChequesModule } from '../cheques/cheques.module';
 import { InvoicingModule } from '../invoicing/invoicing.module';
@@ -40,6 +41,8 @@ import { TreasuryService } from './services/treasury.service';
     TreasuryRepository,
     TenantScope,
     { provide: TREASURY_POSTING, useClass: TreasuryLedgerPostingAdapter },
+    // Ageing and the party statement settle invoices by these allocations (#237).
+    { provide: AGEING_ALLOCATIONS, useExisting: TreasuryService },
   ],
   exports: [TreasuryService],
 })

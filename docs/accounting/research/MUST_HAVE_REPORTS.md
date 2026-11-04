@@ -29,7 +29,7 @@ expect, compared with what Roxira has today. Pinned parent: #230. Research issue
 | R-02 | General ledger and subsidiary ledger per account, detail levels | B | exists | `reports/ledger`, `reports/subsidiary`, `accounts/:code/ledger`; UI `account-ledger-panel.tsx` | account review (مرور حساب) with drill from total to detail is partial in UI | accounting | - |
 | R-03 | Income statement, balance sheet, cash flow, equity changes | B | exists | `reports/statements.ts`, four endpoints, exports | none | accounting | - |
 | R-04 | Party statement (صورت‌حساب طرف حساب) with running balance, printable | B | partial | ageing per party (only via `export/ageing`; no GET endpoint yet, see `dto/report.dto.ts`), subsidiary by detail | no per-party statement with running balance to send a customer | accounting | #242 |
-| R-05 | Receivable and payable ageing | B | exists | export `ageing` (`GET export/ageing`; FIFO; #237 moves it to real allocations) | no plain GET endpoint (follow-up to #79); allocation accuracy in #237 | accounting | #237 |
+| R-05 | Receivable and payable ageing | B | exists | export `ageing` (`GET export/ageing`), aged by real treasury allocations, FIFO for lines without one (`reports/ageing-allocations.ts`, `ageing-allocations.pg.spec.ts`, #237) | no plain GET endpoint (follow-up to #79) | accounting | #237 |
 | R-06 | Chart of accounts export | B | exists | export `chart-of-accounts` | none | accounting | - |
 | R-07 | Journal search and voucher list | B | exists | `GET accounting/journal-entries` filters, `journal-search.pg.spec.ts` | none | accounting | - |
 | R-08 | Sales by item, customer, salesperson | T (S by service/customer) | missing | invoice list `GET invoicing` only | no grouped sales report | invoicing | #243 |

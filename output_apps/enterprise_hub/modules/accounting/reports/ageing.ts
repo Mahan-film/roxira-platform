@@ -9,6 +9,10 @@
  * Age is counted in days from the line's date to `asOf`. Journal lines carry no due date, so this
  * is ageing by document date, not by days overdue.
  *
+ * Real allocations (#237) plug in through `options.allocations`: the source says which open items a
+ * settlement paid (by the item's `ref`); only what it does not explain settles oldest-first. Without
+ * a source every settlement is FIFO, as before.
+ *
  * Known limit: a reversal is a settlement like any other, so it settles the oldest open item, not
  * necessarily the one it reverses. Totals per party stay exact; only the bucket split can differ.
  */
@@ -25,7 +29,21 @@ export interface AgeingLine {
   day: string;
   debit: bigint;
   credit: bigint;
+  /** The document this line belongs to (e.g. an invoice id), matched by an allocation source. */
+  ref?: string | null;
 }
+
+/** Part of a settlement line that paid the open item whose `ref` is `itemRef`. */
+export interface AgeingAllocation {
+  itemRef: string;
+  amount: bigint;
+}
+
+/**
+ * Where settlements really went, e.g. treasury receipt/payment allocations (#237). Called once per
+ * settlement line; amounts it does not cover, and refs with no open item, fall back to FIFO.
+ */
+export type AgeingAllocationSource = (settlement: AgeingLine) => readonly AgeingAllocation[];
 
 export interface AgeingBucket {
   /** Inclusive lower bound in days. */
@@ -94,7 +112,15 @@ function bucketIndex(buckets: AgeingBucket[], age: number): number {
 
 interface OpenItem {
   day: string;
+  ref: string | null;
   remaining: bigint;
+}
+
+/** Takes up to `amount` from `item`; returns what was used. */
+function take(item: OpenItem, amount: bigint): bigint {
+  const used = amount < item.remaining ? amount : item.remaining;
+  item.remaining -= used;
+  return used;
 }
 
 /**
@@ -103,7 +129,7 @@ interface OpenItem {
  */
 export function ageing(
   lines: readonly AgeingLine[],
-  options: { side: AgeingSide; asOf: string; edges?: readonly number[] },
+  options: { side: AgeingSide; asOf: string; edges?: readonly number[]; allocations?: AgeingAllocationSource },
 ): AgeingReport {
   const asOfNumber = dayNumber(options.asOf);
   const buckets = ageingBuckets(options.edges ?? DEFAULT_AGEING_EDGES);
@@ -125,7 +151,7 @@ export function ageing(
   for (const { first, lines: groupLines } of groups.values()) {
     // Array.prototype.sort is stable, so same-day lines keep their input order.
     groupLines.sort((a, b) => a.at - b.at);
-    const open: OpenItem[] = [];
+    let open: OpenItem[] = [];
     let unapplied = 0n;
     for (const { line } of groupLines) {
       let amount = sign * (line.debit - line.credit);
@@ -134,19 +160,23 @@ export function ageing(
         unapplied -= used;
         amount -= used;
         if (amount > 0n) {
-          open.push({ day: line.day, remaining: amount });
+          open.push({ day: line.day, ref: line.ref ?? null, remaining: amount });
         }
       } else if (amount < 0n) {
         let settle = -amount;
-        while (settle > 0n && open.length > 0) {
-          const item = open[0];
-          const used = settle < item.remaining ? settle : item.remaining;
-          item.remaining -= used;
-          settle -= used;
-          if (item.remaining === 0n) {
-            open.shift();
+        for (const allocation of options.allocations?.(line) ?? []) {
+          const item = open.find((candidate) => candidate.ref === allocation.itemRef && candidate.remaining > 0n);
+          if (item && allocation.amount > 0n) {
+            settle -= take(item, allocation.amount < settle ? allocation.amount : settle);
           }
         }
+        for (const item of open) {
+          if (settle === 0n) {
+            break;
+          }
+          settle -= take(item, settle);
+        }
+        open = open.filter((item) => item.remaining > 0n);
         unapplied += settle;
       }
     }
