@@ -237,7 +237,7 @@ def worker_model(lane_cfg: dict[str, Any], alias: str) -> str:
 
 
 def build_prompt(job: dict[str, Any]) -> str:
-    fb = f"\n\nA reviewer rejected the previous attempt. Fix exactly these points:\n{job['feedback']}\n" if job.get("feedback") else ""
+    fb = f"\n\nThe previous attempt was rejected (reviewer or test run). Fix exactly these points:\n{job['feedback']}\n" if job.get("feedback") else ""
     return (f"You are in a git worktree of {REPO}. Task = GitHub issue #{job['issue']}: {job['title']}\n\n{job['body']}{fb}\n\n"
             "Rules: edit only files this task needs; never run pytest on src/ or the repo root; never write secrets; model ids only in "
             "config/models.yaml; do NOT run git or gh (the dispatcher commits); do not start subagents; do not read data files under data/. "
@@ -352,6 +352,27 @@ class Fleet:
         if lane in LANES and not job.get("lane_forced"):
             job["lane_forced"] = lane
 
+    def jest_gate(self, wt: Path) -> str | None:
+        """Run the unit specs a lane added or changed (enterprise_hub backend). Free models write specs blind and
+        often assert wrong facts; node_modules comes from the main checkout through a temporary symlink."""
+        out = sh(["git", "status", "--porcelain", "-uall", "--", "output_apps/enterprise_hub/modules"], wt).stdout
+        specs = [line[3:].strip() for line in out.splitlines()
+                 if line[3:].strip().endswith(".spec.ts") and ".pg.spec" not in line and not line.startswith(" D")]
+        hub = wt / "output_apps" / "enterprise_hub"
+        shared = CHECKOUT / "output_apps" / "enterprise_hub" / "node_modules"
+        if not specs or not shared.is_dir() or (hub / "node_modules").exists():
+            return None
+        link = hub / "node_modules"
+        link.symlink_to(shared)
+        try:
+            rel = [x.split("output_apps/enterprise_hub/", 1)[-1] for x in specs]
+            r = sh(["npx", "--no-install", "jest", "--ci", *rel], hub, timeout=600)
+            if r.returncode:
+                return "jest: " + ((r.stdout or "") + (r.stderr or ""))[-1500:]
+        finally:
+            link.unlink()
+        return None
+
     def gates(self, wt: Path) -> str | None:
         sh(["git", "add", "-A"], wt)
         diff = sh(["git", "diff", "--cached", "-U0"], wt).stdout
@@ -375,9 +396,12 @@ class Fleet:
             return self.rate_limited(n, job["lane"])
         if status != "ok":
             return self.save(n, status="failed", note=f"{job['lane']} lane produced no change (see logs/{n}.log)")
-        bad = self.gates(wt)
+        bad = self.jest_gate(wt)
+        if bad and job.get("repairs", 0) < 2:  # hand the failing output back to the lane once or twice
+            return self.save(n, status="queued", repairs=job.get("repairs", 0) + 1, feedback=bad[-1500:], note="jest gate failed, repairing")
+        bad = bad or self.gates(wt)
         if bad:
-            return self.save(n, status="failed", note=f"gate failed: {bad}")
+            return self.save(n, status="failed", note=f"gate failed: {bad[:300]}")
         with contextlib.suppress(Exception):
             sh(["git", "commit", "-q", "-m", f"{job['title']} (closes #{n})\n\nCo-Authored-By: fleet ({author})"], wt)
         # The pre-push hook runs local CI (several minutes), so the push gets a long timeout and few tries.
