@@ -57,6 +57,14 @@ function build() {
         .filter((c) => c.tenantId === tenantId && statuses.includes(c.status) && c.dueDate <= dueTo)
         .sort((x, y) => x.dueDate.localeCompare(y.dueDate));
     },
+    async listByStatus(tenantId: string, status: ChequeStatus) {
+      return cheques.filter((c) => c.tenantId === tenantId && c.status === status);
+    },
+    async listEventsToStatus(tenantId: string, ids: number[], toStatus: ChequeStatus) {
+      return events
+        .filter((e) => e.tenantId === tenantId && ids.includes(e.chequeId) && e.toStatus === toStatus)
+        .sort((x, y) => y.eventDate.localeCompare(x.eventDate) || y.id - x.id);
+    },
     async updateStatus(tenantId: string, id: number, patch: Partial<ChequeEntity>) {
       Object.assign(cheques.find((c) => c.id === id && c.tenantId === tenantId)!, patch);
     },
@@ -539,5 +547,64 @@ describe('ChequesService Sayad fields (CHK-01)', () => {
     await expect(t.service.create(A, received({ sayadNumber: undefined, sayadVerified: true }) as never)).rejects.toBeInstanceOf(BadRequestException);
     const c = await t.service.create(A, received() as never);
     await expect(t.service.verifySayad(B, c.id, 'u', { verified: true })).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('ChequesService bounced report with ageing (CHK-01)', () => {
+  const bounce = async (t: ReturnType<typeof build>, over: Record<string, unknown>, date: string, deposit = true) => {
+    const c = await t.service.create(A, received({ sayadNumber: undefined, issueDate: '2026-01-01', dueDate: '2026-12-31', ...over }) as never);
+    if (deposit && c.direction === 'received') await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED, eventDate: date });
+    await t.service.transition(A, c.id, { status: ChequeStatus.BOUNCED, eventDate: date });
+    return c;
+  };
+
+  it('buckets by days since the latest bounce and totals the unpaid remainder per direction', async () => {
+    const t = build();
+    await bounce(t, { amount: 10 }, '2026-10-25'); // 7 days
+    await bounce(t, { amount: 20 }, '2026-09-20'); // 42 days
+    await bounce(t, { amount: 30 }, '2026-08-20'); // 73 days
+    await bounce(t, { amount: 40 }, '2026-05-01'); // 184 days
+    await bounce(t, { amount: 5, direction: ChequeDirection.ISSUED }, '2026-10-30', false);
+    const r = await t.service.bouncedReport(A, { asOf: '2026-11-01' });
+    expect(r.items.map((i) => i.bucket)).toEqual(['90+', '61-90', '31-60', '0-30', '0-30']);
+    expect(r.items[0]).toMatchObject({ ageDays: 184, bouncedOn: '2026-05-01' });
+    expect(r.buckets.map((b) => [b.bucket, b.count, b.receivedTotal, b.issuedTotal])).toEqual([
+      ['0-30', 2, 10, 5],
+      ['31-60', 1, 20, 0],
+      ['61-90', 1, 30, 0],
+      ['90+', 1, 40, 0],
+    ]);
+    expect([r.receivedTotal, r.issuedTotal]).toEqual([100, 5]);
+  });
+
+  it('uses the latest bounce when a cheque was re-deposited and bounced again; boundary days fall in the lower bucket', async () => {
+    const t = build();
+    const c = await bounce(t, { amount: 10 }, '2026-06-01');
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED, eventDate: '2026-09-01' });
+    await t.service.transition(A, c.id, { status: ChequeStatus.BOUNCED, eventDate: '2026-10-02' });
+    const r = await t.service.bouncedReport(A, { asOf: '2026-11-01' });
+    expect(r.items[0]).toMatchObject({ bouncedOn: '2026-10-02', ageDays: 30, bucket: '0-30' });
+  });
+
+  it('reports only the unpaid remainder of a partly paid cheque and honours the direction filter', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED, eventDate: '2026-10-01' });
+    await t.service.partialPayment(A, c.id, { amount: 35, eventDate: '2026-10-05' });
+    await t.service.transition(A, c.id, { status: ChequeStatus.BOUNCED, eventDate: '2026-10-10' });
+    await bounce(t, { amount: 7, direction: ChequeDirection.ISSUED }, '2026-10-10', false);
+    const all = await t.service.bouncedReport(A, { asOf: '2026-11-01' });
+    expect([all.receivedTotal, all.issuedTotal]).toEqual([65, 7]);
+    const onlyReceived = await t.service.bouncedReport(A, { asOf: '2026-11-01', direction: ChequeDirection.RECEIVED });
+    expect(onlyReceived.items).toHaveLength(1);
+    expect(onlyReceived.issuedTotal).toBe(0);
+  });
+
+  it('drops a cheque once it is cleared or returned, and never shows another tenant\'s cheques', async () => {
+    const t = build();
+    const c = await bounce(t, { amount: 10 }, '2026-10-01');
+    expect((await t.service.bouncedReport(B, {})).items).toEqual([]);
+    await t.service.transition(A, c.id, { status: ChequeStatus.RETURNED });
+    expect((await t.service.bouncedReport(A, { asOf: '2026-11-01' })).items).toEqual([]);
   });
 });

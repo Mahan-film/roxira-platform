@@ -260,3 +260,127 @@ export class DueChequesResponseDto {
   @ApiProperty({ description: 'جمع چک‌های دریافتی در بازه (ریال)', oneOf: [{ type: 'number' }, { type: 'string' }] }) receivedTotal: number | string;
   @ApiProperty({ description: 'جمع چک‌های صادرشده در بازه (ریال)', oneOf: [{ type: 'number' }, { type: 'string' }] }) issuedTotal: number | string;
 }
+
+export class QueryBouncedChequesDto {
+  @ApiPropertyOptional({ description: 'مبنای محاسبه سن (ISO)؛ پیش‌فرض امروز' })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  asOf?: string;
+
+  @ApiPropertyOptional({ enum: ChequeDirection })
+  @IsOptional()
+  @IsEnum(ChequeDirection)
+  direction?: ChequeDirection;
+}
+
+export class BouncedChequeDto extends ChequeResponseDto {
+  @ApiProperty({ description: 'تاریخ برگشت (آخرین رویداد برگشت)؛ در نبود رویداد، تاریخ سررسید' }) bouncedOn: string;
+  @ApiProperty({ description: 'روز از برگشت تا مبنای محاسبه' }) ageDays: number;
+  @ApiProperty({ enum: ['0-30', '31-60', '61-90', '90+'] }) bucket: string;
+}
+
+export class BouncedBucketDto {
+  @ApiProperty() bucket: string;
+  @ApiProperty() count: number;
+  @ApiProperty({ description: 'مانده چک‌های برگشتی دریافتی (ریال)', oneOf: [{ type: 'number' }, { type: 'string' }] }) receivedTotal: number | string;
+  @ApiProperty({ description: 'مانده چک‌های برگشتی صادرشده (ریال)', oneOf: [{ type: 'number' }, { type: 'string' }] }) issuedTotal: number | string;
+}
+
+export class BouncedChequesResponseDto {
+  @ApiProperty() asOf: string;
+  @ApiProperty({ type: [BouncedChequeDto] }) items: BouncedChequeDto[];
+  @ApiProperty({ type: [BouncedBucketDto] }) buckets: BouncedBucketDto[];
+  @ApiProperty({ oneOf: [{ type: 'number' }, { type: 'string' }] }) receivedTotal: number | string;
+  @ApiProperty({ oneOf: [{ type: 'number' }, { type: 'string' }] }) issuedTotal: number | string;
+}
+
+export class QueryChequeReconDto {
+  @ApiProperty({ description: 'شناسه حساب بانکی ماژول بانک' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  bankAccountId: number;
+
+  @ApiPropertyOptional({ description: 'از تاریخ رویداد وصول (ISO)' })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  fromDate?: string;
+
+  @ApiPropertyOptional({ description: 'تا تاریخ رویداد وصول (ISO)' })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  toDate?: string;
+
+  @ApiPropertyOptional({ description: 'پنجرهٔ تاریخ تطبیق بر حسب روز (پیش‌فرض ۵)', default: 5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(30)
+  windowDays?: number;
+}
+
+export class ChequeReconMatchDto {
+  @ApiProperty() @Type(() => Number) @IsInt() @Min(1) bankAccountId: number;
+  @ApiProperty({ description: 'شناسه رویداد وصول چک' }) @Type(() => Number) @IsInt() @Min(1) eventId: number;
+  @ApiProperty({ description: 'شناسه سطر صورتحساب بانک' }) @Type(() => Number) @IsInt() @Min(1) statementLineId: number;
+}
+
+export class ChequeReconApplyDto {
+  @ApiProperty() @Type(() => Number) @IsInt() @Min(1) bankAccountId: number;
+
+  @ApiPropertyOptional({ description: 'فقط رویدادهای از این تاریخ' })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  fromDate?: string;
+
+  @ApiPropertyOptional({ description: 'فقط رویدادهای تا این تاریخ' })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  toDate?: string;
+
+  @ApiPropertyOptional({ default: 5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(30)
+  windowDays?: number;
+}
+
+export class ReconCandidateDto {
+  @ApiProperty() statementLineId: number;
+  @ApiProperty() txnDate: string;
+  @ApiProperty({ nullable: true }) description: string | null;
+  @ApiProperty({ nullable: true }) reference: string | null;
+}
+
+export class ChequeReconItemDto {
+  @ApiProperty() eventId: number;
+  @ApiProperty() chequeId: number;
+  @ApiProperty({ enum: ChequeDirection }) direction: ChequeDirection;
+  @ApiProperty() chequeNumber: string;
+  @ApiProperty({ nullable: true }) sayadNumber: string | null;
+  @ApiProperty() partyName: string;
+  @ApiProperty() eventDate: string;
+  @ApiProperty({ description: 'مبلغ وصول/پرداخت (ریال)', oneOf: [{ type: 'number' }, { type: 'string' }] }) amount: number | string;
+  @ApiProperty() journalEntryId: number;
+  @ApiProperty({
+    enum: ['reconciled', 'suggested', 'unmatched', 'no_bank_line'],
+    description: 'reconciled: تطبیق‌شده؛ suggested: یک یا چند سطر بانک مطابق؛ unmatched: سطری یافت نشد؛ no_bank_line: سند وصول روی حساب دفتر کل این بانک نیست',
+  })
+  state: 'reconciled' | 'suggested' | 'unmatched' | 'no_bank_line';
+  @ApiProperty({ nullable: true }) matchedStatementLineId: number | null;
+  @ApiProperty({ type: [ReconCandidateDto] }) candidates: ReconCandidateDto[];
+}
+
+export class ChequeReconResponseDto {
+  @ApiProperty({ type: [ChequeReconItemDto] }) items: ChequeReconItemDto[];
+  @ApiProperty() counts: Record<string, number>;
+}
+
+export class ChequeReconApplyResponseDto {
+  @ApiProperty() matched: number;
+  @ApiProperty() skippedAmbiguous: number;
+  @ApiProperty({ description: 'جفت‌هایی که ماژول بانک پذیرفت نکرد' }) failed: number;
+}

@@ -23,7 +23,9 @@ import {
   DueChequesResponseDto,
   QueryChequesDto,
   QueryDueChequesDto,
+  BouncedChequesResponseDto,
   PartialPaymentDto,
+  QueryBouncedChequesDto,
   TransitionChequeDto,
   VerifySayadDto,
 } from '../dto/cheque.dto';
@@ -332,6 +334,43 @@ export class ChequesService {
     const total = (direction: string) =>
       fromMinor(rows.filter((r) => r.direction === direction).reduce((sum, r) => sum + fromDb(r.amount) - fromDb(r.settledAmount ?? '0'), 0n));
     return { asOf, until, items, receivedTotal: total('received'), issuedTotal: total('issued') };
+  }
+
+  /**
+   * Bounced cheques with ageing. The age counts from the latest bounce event (the cheque's due date
+   * when no event exists, e.g. imported rows). Amounts are the unpaid remainder, so a partly paid
+   * cheque that bounced for the rest is reported for the rest only.
+   */
+  async bouncedReport(tenantId: string, query: QueryBouncedChequesDto): Promise<BouncedChequesResponseDto> {
+    const asOf = query.asOf ? dateOnly(query.asOf) : todayUtc();
+    const all = await this.chequesRepository.listByStatus(tenantId, ChequeStatus.BOUNCED);
+    const rows = query.direction ? all.filter((c) => c.direction === query.direction) : all;
+    const events = await this.chequesRepository.listEventsToStatus(
+      tenantId,
+      rows.map((c) => c.id),
+      ChequeStatus.BOUNCED,
+    );
+    const bouncedOn = new Map<number, string>();
+    for (const event of events) if (!bouncedOn.has(event.chequeId)) bouncedOn.set(event.chequeId, event.eventDate); // newest first
+
+    const bucketOf = (age: number): string => (age <= 30 ? '0-30' : age <= 60 ? '31-60' : age <= 90 ? '61-90' : '90+');
+    const remainingOf = (c: ChequeEntity): bigint => fromDb(c.amount) - fromDb(c.settledAmount ?? '0');
+    const items = rows
+      .map((row) => {
+        const on = bouncedOn.get(row.id) ?? row.dueDate;
+        const ageDays = Math.max(0, dayNumber(asOf) - dayNumber(on));
+        return { ...this.toDto(row), bouncedOn: on, ageDays, bucket: bucketOf(ageDays) };
+      })
+      .sort((a, b) => b.ageDays - a.ageDays || a.id - b.id);
+
+    const sum = (list: ChequeEntity[], direction: string) =>
+      fromMinor(list.filter((c) => c.direction === direction).reduce((t, c) => t + remainingOf(c), 0n));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const buckets = ['0-30', '31-60', '61-90', '90+'].map((bucket) => {
+      const inBucket = items.filter((i) => i.bucket === bucket).map((i) => byId.get(i.id)!);
+      return { bucket, count: inBucket.length, receivedTotal: sum(inBucket, 'received'), issuedTotal: sum(inBucket, 'issued') };
+    });
+    return { asOf, items, buckets, receivedTotal: sum(rows, 'received'), issuedTotal: sum(rows, 'issued') };
   }
 
   // ------------------------------------------------------------------ internals

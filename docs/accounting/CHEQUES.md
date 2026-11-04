@@ -62,6 +62,18 @@ this change are marked `legacy`. There is still no call to Sayad.
   **[LEGAL] unclear:** the cheque law's rule that the holder may not refuse partial payment is not in `docs/legal_sources/iran/`;
   the lawyer must confirm it, and whether a partly paid cheque may still be endorsed or returned.
 
+### 2c. Bank reconciliation and reports (CHK-01)
+
+* `GET .../reconciliation?bankAccountId=&fromDate=&toDate=&windowDays=` lists each clearing event (a `cleared` move or a
+  partial payment) with a state: `reconciled`, `suggested` (statement lines of the same amount and direction within the
+  window, default 5 days), `unmatched`, or `no_bank_line` (the clearing entry posted to 1010 but the bank account is linked
+  to another ledger account). `POST .../reconciliation/match` confirms one pair; `POST .../reconciliation/apply` applies
+  every item with exactly one candidate that no other item also wants. Matching uses only the exported `BankingService`
+  (`listBookLines`, `listStatementLines`, `manualMatch`), which re-checks amount and direction and refuses double matches.
+* `GET .../due?days=N` (already existed): open cheques due in N days plus overdue. `GET .../bounced?asOf=&direction=`:
+  bounced cheques aged from their latest bounce event (due date when none) in buckets 0-30, 31-60, 61-90, 90+, with the
+  unpaid remainder summed per direction.
+
 ## 3. Lifecycle and postings
 
 Amounts are IRR. Account codes: 1010 bank/cash, 1020 trade receivables, 2010 trade payables (default chart);
