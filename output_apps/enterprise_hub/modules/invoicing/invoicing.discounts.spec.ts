@@ -11,7 +11,7 @@ import { TenantsRepository } from '../tenants/repositories/tenants.repository';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceEntity } from './entities/invoice.entity';
 import { InvoicingRepository } from './repositories/invoicing.repository';
-import { allocateDiscount, percentOf, toMinor } from './services/invoice-discount';
+import { allocateDiscount, fromUnits, percentOf, toUnits } from './services/invoice-discount';
 import { InvoicingService } from './services/invoicing.service';
 
 const T = 'tenant-a';
@@ -72,7 +72,15 @@ describe('discount allocation helpers', () => {
 
   it('rounds percents half up in minor units', () => {
     expect(percentOf(1005n, 10)).toBe(101n); // 100.5 -> 101
-    expect(percentOf(toMinor(12.34, 2), 12.5)).toBe(154n); // 154.25 -> 154
+    expect(percentOf(toUnits(12.34, 2), 12.5)).toBe(154n); // 154.25 -> 154
+  });
+
+  it('counts amounts in the currency unit through money.ts', () => {
+    expect(toUnits(1234.5, 0)).toBe(1235n); // IRR: half a rial rounds away from zero
+    expect(toUnits(-1234.5, 0)).toBe(-1235n);
+    expect(toUnits(12.34, 1)).toBe(123n); // IRT: one decimal
+    expect(fromUnits(1235n, 0)).toBe(1235);
+    expect(fromUnits(123n, 1)).toBe(12.3);
   });
 });
 

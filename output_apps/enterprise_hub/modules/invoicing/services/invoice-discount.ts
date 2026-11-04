@@ -4,18 +4,29 @@
  * `tax = (gross - discount) × vatRate` stays a per-line figure (the Moadian layout has no
  * invoice-level discount field; every line reports its own).
  *
- * All arithmetic is in integer minor units (bigint) so shares never drift by a rial.
+ * Amounts go through the ledger's `accounting/money.ts` (exact integer minor units) and are then
+ * counted in the smallest unit of the invoice currency (one rial for IRR), so shares never drift.
  */
+import { MONEY_SCALE } from '../../accounting/constants/accounting.constants';
+import { fromMinor, toMinor } from '../../accounting/money';
 
-/** Integer minor units of `value` at `scale` decimals (rounded half away from zero). */
-export function toMinor(value: number, scale: number): bigint {
-  const factor = 10 ** scale;
-  const scaled = Math.round((Math.abs(value) + Number.EPSILON) * factor);
-  return BigInt(value < 0 ? -scaled : scaled);
+/** Ledger minor units in one smallest unit of a currency with `scale` decimals (scale <= MONEY_SCALE). */
+function unitSize(scale: number): bigint {
+  return 10n ** BigInt(MONEY_SCALE - scale);
 }
 
-export function fromMinor(value: bigint, scale: number): number {
-  return Number(value) / 10 ** scale;
+/** `value` in smallest currency units at `scale` decimals, rounded half away from zero. */
+export function toUnits(value: number, scale: number): bigint {
+  const size = unitSize(scale);
+  const minor = toMinor(value);
+  const units = minor / size;
+  const rest = minor % size;
+  const half = (rest < 0n ? -rest : rest) * 2n >= size;
+  return half ? units + (minor < 0n ? -1n : 1n) : units;
+}
+
+export function fromUnits(units: bigint, scale: number): number {
+  return Number(fromMinor(units * unitSize(scale)));
 }
 
 /** `percent`% of `base` minor units, rounded half up. */

@@ -62,7 +62,7 @@ import {
   ImportedPartyRef,
 } from './invoice-import';
 import { VatRateResolver } from './vat-rate.resolver';
-import { allocateDiscount, fromMinor, percentOf, toMinor } from './invoice-discount';
+import { allocateDiscount, fromUnits, percentOf, toUnits } from './invoice-discount';
 
 /** What a caller adds to `create` beyond the invoice itself (POS sales). */
 export interface CreateInvoiceOptions {
@@ -417,7 +417,7 @@ export class InvoicingService {
     const shares = this.invoiceDiscountShares(prepared, invoiceDiscount, scale);
     const normalized: InvoiceItem[] = [];
     prepared.forEach((line, index) => {
-      const share = fromMinor(shares[index], scale);
+      const share = fromUnits(shares[index], scale);
       const discount = this.roundTo(line.lineDiscount + share, scale);
       const taxable = Math.max(0, line.gross - discount);
       const vatRate = this.normalizeVatRate(line.item.vatRate, defaultVatRate);
@@ -450,7 +450,7 @@ export class InvoicingService {
       throw new BadRequestException('تخفیف سطر را یا به مبلغ یا به درصد وارد کنید، نه هر دو.');
     }
     const discount =
-      percent > 0 ? fromMinor(percentOf(toMinor(gross, scale), percent), scale) : this.roundTo(amount, scale);
+      percent > 0 ? fromUnits(percentOf(toUnits(gross, scale), percent), scale) : this.roundTo(amount, scale);
     if (discount > this.roundTo(gross, scale)) {
       throw new BadRequestException(
         `تخفیف سطر (${discount}) از مبلغ سطر (${this.roundTo(gross, scale)}) بیشتر است.`,
@@ -469,7 +469,7 @@ export class InvoicingService {
     scale: number,
   ): bigint[] {
     const bases = lines.map((line) => {
-      const base = toMinor(line.gross, scale) - toMinor(line.lineDiscount, scale);
+      const base = toUnits(line.gross, scale) - toUnits(line.lineDiscount, scale);
       return base > 0n ? base : 0n;
     });
     const amount = input?.amount ?? 0;
@@ -478,10 +478,10 @@ export class InvoicingService {
       throw new BadRequestException('تخفیف فاکتور را یا به مبلغ یا به درصد وارد کنید، نه هر دو.');
     }
     const net = bases.reduce((sum, base) => sum + base, 0n);
-    const discount = percent > 0 ? percentOf(net, percent) : toMinor(amount, scale);
+    const discount = percent > 0 ? percentOf(net, percent) : toUnits(amount, scale);
     if (discount > net) {
       throw new BadRequestException(
-        `تخفیف فاکتور (${fromMinor(discount, scale)}) از جمع خالص سطرها (${fromMinor(net, scale)}) بیشتر است.`,
+        `تخفیف فاکتور (${fromUnits(discount, scale)}) از جمع خالص سطرها (${fromUnits(net, scale)}) بیشتر است.`,
       );
     }
     return allocateDiscount(bases, discount);
