@@ -28,7 +28,7 @@
   <table>
     <thead><tr><th>روش</th><th>جزئیات (حساب، شماره پیگیری، شماره چک، بانک، سررسید)</th><th>مبلغ</th></tr></thead>
     <tbody>{{#each payments}}<tr><td class="c">{{method}}</td><td>{{detail}}</td><td class="n">{{amount}}</td></tr>{{/each}}</tbody>
-    <tfoot><tr><td colspan="2">جمع</td><td class="n">{{amount}}</td></tr></tfoot>
+    <tfoot><tr><td colspan="2">جمع</td><td class="n">{{paymentsTotal}}</td></tr></tfoot>
   </table>
   <div class="sign"><div>{{signerLeftLabel}}</div><div>{{signerRightLabel}}</div><div>تأییدکننده</div></div>
 </div>

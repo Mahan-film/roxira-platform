@@ -13,7 +13,7 @@
 </head>
 <body>
 <!-- Mirrors PayslipPrint in modules/hr/services/payslip-pdf.ts. All amounts pre-formatted rials.
-     Zero-valued earning/deduction rows may be hidden by the caller. -->
+     totalDeductions = sum of the deduction rows (derived by the caller, not a PayslipPrint field). Zero-valued earning/deduction rows may be hidden by the caller. -->
 <div class="sheet">
   <h1>فیش حقوقی — {{monthName}} {{year}}</h1>
   <div class="muted" style="text-align:center">{{company.name}}</div>
@@ -30,15 +30,16 @@
     <div><table>
       <thead><tr><th colspan="2">مزایا</th></tr></thead>
       <tbody>
-        <tr><td>حقوق پایه</td><td class="n">{{baseSalary}}</td></tr>
+        <tr><td>حقوق مبنا</td><td class="n">{{baseSalary}}</td></tr>
         <tr><td>پایه سنوات</td><td class="n">{{seniorityAmount}}</td></tr>
         <tr><td>حق مسکن</td><td class="n">{{housingAllowance}}</td></tr>
-        <tr><td>خواربار</td><td class="n">{{foodAllowance}}</td></tr>
+        <tr><td>کمک‌هزینه اقلام مصرفی</td><td class="n">{{foodAllowance}}</td></tr>
         <tr><td>حق اولاد</td><td class="n">{{childAllowance}}</td></tr>
         <tr><td>حق تأهل</td><td class="n">{{marriageAllowance}}</td></tr>
-        <tr><td>اضافه‌کاری</td><td class="n">{{overtimeAmount}}</td></tr>
+        <tr><td>سایر مزایا</td><td class="n">{{allowancesTotal}}</td></tr>
+        <tr><td>اضافه‌کار</td><td class="n">{{overtimeAmount}}</td></tr>
         <tr><td>شب‌کاری</td><td class="n">{{nightShiftAmount}}</td></tr>
-        <tr><td>تعطیل‌کاری</td><td class="n">{{holidayAmount}}</td></tr>
+        <tr><td>کار در تعطیلات</td><td class="n">{{holidayAmount}}</td></tr>
         <tr><td>عیدی / پاداش</td><td class="n">{{eidiAmount}}</td></tr>
       </tbody>
       <tfoot><tr><td>جمع مزایا (ناخالص)</td><td class="n">{{grossPay}}</td></tr></tfoot>

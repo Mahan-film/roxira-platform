@@ -28,14 +28,14 @@ expect, compared with what Roxira has today. Pinned parent: #230. Research issue
 | R-01 | Trial balance 2/4/6/8/10 columns | B | exists | `GET accounting/reports/trial-balance`, export `trial-balance` | none | accounting | - |
 | R-02 | General ledger and subsidiary ledger per account, detail levels | B | exists | `reports/ledger`, `reports/subsidiary`, `accounts/:code/ledger`; UI `account-ledger-panel.tsx` | account review (مرور حساب) with drill from total to detail is partial in UI | accounting | - |
 | R-03 | Income statement, balance sheet, cash flow, equity changes | B | exists | `reports/statements.ts`, four endpoints, exports | none | accounting | - |
-| R-04 | Party statement (صورت‌حساب طرف حساب) with running balance, printable | B | partial | ageing per party (`reports/ageing`), subsidiary by detail | no per-party statement with running balance to send a customer | accounting | #242 |
-| R-05 | Receivable and payable ageing | B | exists | `reports/ageing`, export `ageing` (FIFO; #237 moves it to real allocations) | allocation accuracy tracked in #237 | accounting | #237 |
+| R-04 | Party statement (صورت‌حساب طرف حساب) with running balance, printable | B | partial | ageing per party (only via `export/ageing`; no GET endpoint yet, see `dto/report.dto.ts`), subsidiary by detail | no per-party statement with running balance to send a customer | accounting | #242 |
+| R-05 | Receivable and payable ageing | B | exists | export `ageing` (`GET export/ageing`; FIFO; #237 moves it to real allocations) | no plain GET endpoint (follow-up to #79); allocation accuracy in #237 | accounting | #237 |
 | R-06 | Chart of accounts export | B | exists | export `chart-of-accounts` | none | accounting | - |
 | R-07 | Journal search and voucher list | B | exists | `GET accounting/journal-entries` filters, `journal-search.pg.spec.ts` | none | accounting | - |
 | R-08 | Sales by item, customer, salesperson | T (S by service/customer) | missing | invoice list `GET invoicing` only | no grouped sales report | invoicing | #243 |
 | R-09 | Purchases by item and supplier | T | missing | purchase invoices stored (direction PURCHASE); seasonal purchases CSV for tax | no management report | invoicing | #244 |
 | R-10 | Stock cardex (کاردکس کالا) per item and warehouse | T | missing | `GET inventory/warehouses/:id/stock`, `valuation`, stock documents list | no per-item chronological ledger with running quantity and value | inventory | #245 |
-| R-11 | Stock balance as of a date, reorder alerts | T | partial | current stock and FIFO valuation (`GET inventory/valuation`) | no as-of date, no reorder point (REQUIREMENTS I-02) | inventory | #246 |
+| R-11 | Stock balance as of a date, reorder alerts | T | partial | current stock and FIFO valuation (`GET inventory/valuation`) | no as-of date; a low-stock filter exists (`lowStockOnly` on `GET inventory/items`) but no reorder-point report | inventory | #246 |
 | R-12 | Profit per invoice, item, customer | T (S per customer) | missing | COGS stored in `invoices.posting_meta` (see `docs/accounting/INVOICE_KINDS.md`) | no report | invoicing | #247 |
 | R-13 | POS day-end close, daily sales | T retail | missing | `pos-sales` flow, payments by method stored | no close report, no cash count | invoicing | #248 |
 | R-14 | Cash book and bank book (گردش صندوق / بانک) | B | partial | bank `accounts/:id/book-lines`, `summary`; petty cash `funds`; ledger of cash account | no unified cash/bank book print with opening and closing | treasury | covered by #254 scope note below |

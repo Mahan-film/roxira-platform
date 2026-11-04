@@ -22,11 +22,11 @@ claim about "how it must look on paper" is therefore `convention` or `unverified
 | Rule | Status |
 |---|---|
 | RTL, Persian digits on paper, Jalali dates `yyyy/mm/dd` | convention |
-| Amounts in integer rials with thousands separator (stored amounts are integer rials, `modules/accounting/money.ts`) | verified (repo) |
+| Amounts printed in rials with thousands separator; the caller pre-formats them from the exact decimal money type (`modules/accounting/money.ts`, scale 2 in `accounting.constants.ts`), templates do no maths | verified (repo) |
 | Font Vazirmatn (bundled in `frontend/src/app/fonts/`), fallback Tahoma | verified (repo) |
 | A4 portrait for documents with lines; A5 landscape for short vouchers; 80 mm roll for POS | convention |
 | Every document carries tenant name, document number, issue date, page `n / N` | convention |
-| A document printed from a draft carries a «پیش‌نویس» watermark | design choice |
+| A document printed from a draft carries a «پیش‌نویس» watermark | convention |
 | No erasure on an official invoice; a mistake is a corrective or cancel document (`ins` 2/3), never an edit | verified (web) + verified (repo) |
 
 ## 1. Sales invoice (صورتحساب فروش کالا و خدمات)
@@ -126,7 +126,7 @@ Template: `receipt-payment-voucher-a5.html` (A5 landscape, title by placeholder)
 
 ## 4. Cheque receipt (رسید چک)
 
-The cheque itself is governed by the Commerce Code and the Sayad regime; the receipt we hand over is an
+The cheque itself is governed by the Commerce Code and the Sayad regime (`unverified`, text not read); the receipt we hand over is an
 internal document (`unverified`). Lifecycle: `docs/accounting/CHEQUES.md`.
 
 Fields: receipt number and date; direction (received / issued); per cheque: number, **Sayad id**
@@ -149,7 +149,7 @@ Template: `warehouse-document-a4.html` (`{{docTitle}}` switches direction).
 
 ## 6. Payslip (فیش حقوقی)
 
-Amount rules come from labour and social-security law. That a payslip must be issued monthly is
+Amount rules come from labour and social-security law (`unverified`, texts not read in this session). That a payslip must be issued monthly is
 convention; no text confirming a duty was found (`unverified`). Deduction items confirmed on a public
 page (verified (web), mohaseban.org «کسورات حقوق و دستمزد»): employee insurance 7% of insurable wage,
 progressive income tax after exemptions, optional supplementary health, court-ordered deductions,

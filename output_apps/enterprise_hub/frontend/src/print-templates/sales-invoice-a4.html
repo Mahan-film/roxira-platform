@@ -13,6 +13,7 @@
 <body class="{{#if isDraft}}is-draft{{/if}}">
 <!-- Placeholders: {{name}} text, {{#if x}}..{{/if}} condition, {{#each lines}}..{{/each}} loop.
      Amounts are pre-formatted strings (Persian digits, thousands separators, rials) supplied by the caller.
+     sendStatusText: e.g. «ارسال‌شده به سامانه مودیان»; qrSvg: caller-built trusted SVG markup (the only unescaped value); logoUrl: validated https/data URL.
      docTitle: صورتحساب فروش کالا و خدمات | صورتحساب اصلاحی | صورتحساب ابطالی | صورتحساب برگشت از فروش -->
 <div class="watermark">پیش‌نویس</div>
 <div class="sheet">
@@ -77,7 +78,7 @@
     <thead><tr>
       <th>ردیف</th><th>شناسه کالا/خدمت</th><th>شرح کالا یا خدمت</th><th>تعداد</th><th>واحد</th>
       <th>مبلغ واحد</th><th>مبلغ قبل از تخفیف</th><th>تخفیف</th><th>مبلغ بعد از تخفیف</th>
-      <th>نرخ مالیات</th><th>مالیات ارزش افزوده</th><th>جمع کل</th>
+      <th>نرخ مالیات</th><th>مالیات بر ارزش افزوده</th><th>جمع کل</th>
     </tr></thead>
     <tbody>
     {{#each lines}}
