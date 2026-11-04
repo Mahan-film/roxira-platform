@@ -66,7 +66,7 @@ Nothing here is marked done from memory of earlier sessions.
 | Autonomy L0 to L3, document text untrusted | partial | `modules/invoice_capture/` (review queue, vendor rules) | Level model not codified in code. |
 | Import: sandboxed parsing, Parquet, DuckDB, dry run, signed report | partial | `modules/data_import/` (readers, hostile fixtures, reconciliation, dry-run preview, undo) | No R2 multipart direct upload, no Parquet or DuckDB, no signed report. Owned by another session. |
 | Single vector store | not assessed | n/a | Not an accounting item. |
-| Privacy: masking proxy, provider allowlist | partial | `modules/data_import/masking.ts`, `modules/banking/recon/classify/mask.ts` | Provider allowlist by data class not found in `modules/`. |
+| Privacy: masking proxy, provider allowlist | partial | `modules/data_import/masking.ts`, `modules/ai_policy/ai-data-policy.ts`, `modules/banking/recon/classify/mask.ts` | Provider allowlist by data class: `config/ai_data_policy.json` + `modules/ai_policy/` (mode switch `test_accounts` / `production`, docs/ops/AI_DATA_POLICY.md), enforced in the assistant and the import mapping; not yet in invoice capture, bank-recon classifier or the Python core. |
 
 ## Master plan: roadmap
 

@@ -1,3 +1,4 @@
+import { loadAiDataPolicy } from '../../ai_policy/ai-data-policy';
 import { maskValue } from '../masking';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -387,16 +388,20 @@ export class OpenRouterMappingService {
 
   /** شناسه مدل نقش `cheap` از `config/models.yaml`. */
   private resolveModelId(): string {
+    // Headers and masked sample rows of a tenant's file: the model must be allowed to see
+    // tenant-business data (config/ai_data_policy.json). Callers turn a refusal into the deterministic mapping.
+    const policy = loadAiDataPolicy(this.modelConfigPaths());
     for (const candidate of this.modelConfigPaths()) {
+      let id: string | null = null;
       try {
-        const text = fs.readFileSync(candidate, 'utf8');
-        const id = readCheapModelId(text);
-        if (id) {
-          this.logger.debug(`مدل نگاشت: ${id} (${candidate})`);
-          return id;
-        }
+        id = readCheapModelId(fs.readFileSync(candidate, 'utf8'));
       } catch {
         // فایل ناموجود/غیرقابل‌خواندن: گزینه بعدی.
+      }
+      if (id) {
+        policy.assertModel('tenant-business', CHEAP_MODEL_ROLE, id);
+        this.logger.debug(`مدل نگاشت: ${id} (${candidate})`);
+        return id;
       }
     }
     throw new Error('شناسه مدل نقش cheap در config/models.yaml یافت نشد.');

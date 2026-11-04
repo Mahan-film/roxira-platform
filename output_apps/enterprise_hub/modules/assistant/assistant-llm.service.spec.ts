@@ -13,11 +13,13 @@ const YAML = `
 roles:
   free:
     description: x
+    data_policy: non_sensitive_only
     models:
       - id: vendor/free-a:free
         price_per_1m: { in: 0, out: 0 }
       - id: vendor/free-b:free
   cheap:
+    data_policy: standard
     models:
       - id: vendor/paid-a
       - id: vendor/free-b:free
@@ -60,6 +62,12 @@ describe('AssistantLlmService', () => {
   const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'assistant-'));
   const file = path.join(dir, 'models.yaml');
   fs.writeFileSync(file, YAML);
+  const writePolicy = (mode: string) =>
+    fs.writeFileSync(
+      path.join(dir, 'ai_data_policy.json'),
+      fs.readFileSync(path.resolve(__dirname, '../../../../config/ai_data_policy.json'), 'utf8').replace(/"mode": "[a-z_]+"/, `"mode": "${mode}"`),
+    );
+  writePolicy('test_accounts');
 
   const configWith = (values: Record<string, string>) =>
     ({
@@ -100,6 +108,30 @@ describe('AssistantLlmService', () => {
     ]);
     expect(bodies[0].provider).toBeUndefined();
     expect(bodies[2].provider).toEqual({ data_collection: 'deny' });
+  });
+
+  it('in production mode the assistant never calls a may-log (free) provider with tenant data', async () => {
+    writePolicy('production');
+    try {
+      const models: string[] = [];
+      global.fetch = jest.fn(async (_url: unknown, init?: { body?: string }) => {
+        models.push(JSON.parse(String(init?.body)).model);
+        return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) };
+      }) as unknown as typeof fetch;
+      const service = new AssistantLlmService(configWith({ OPENROUTER_API_KEY: 'test', MODELS_CONFIG_PATH: file }));
+      await service.complete([{ role: 'user', content: 'x' }], []);
+      expect(models).toEqual(['vendor/paid-a']);
+      // a :free id listed under the paid role is never tried with tenant data either
+      global.fetch = jest.fn(async (_url: unknown, init?: { body?: string }) => {
+        models.push(JSON.parse(String(init?.body)).model);
+        return { ok: false, status: 500, json: async () => ({}) };
+      }) as unknown as typeof fetch;
+      models.length = 0;
+      await expect(service.complete([{ role: 'user', content: 'x' }], [])).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(models).toEqual(['vendor/paid-a']);
+    } finally {
+      writePolicy('test_accounts');
+    }
   });
 
   it('refuses without a server key and never calls the network', async () => {
