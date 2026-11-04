@@ -55,6 +55,7 @@ export class LedgerExportRepository {
            JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
           WHERE l.tenant_id = $1 AND e.status = 'POSTED'
             AND e.entry_type NOT IN ('CLOSING_PERM', 'OPENING_AUTO')
+            AND NOT (e.entry_type = 'OPENING' OR (e.entry_type = 'NORMAL' AND e.entry_number LIKE 'OB-%'))
             AND CAST(e.date AS date) >= $2 AND CAST(e.date AS date) < $3
             AND ($4::text IS NULL OR a.code = $4)
           ORDER BY e.date, e.id, l.id
@@ -80,11 +81,15 @@ export class LedgerExportRepository {
     }));
   }
 
-  /** Debit minus credit of every account before `fromDay` (the ledger's opening balance). */
+  /**
+   * Debit minus credit of every account before `fromDay`, plus opening entries (`OB-` imports and
+   * OPENING) dated up to `toDay`: the same opening rule as the accounting reports.
+   */
   async openingBalances(
     tenantId: string,
     fromDay: string,
     accountCode?: string,
+    toDay: string = fromDay,
   ): Promise<Map<string, bigint>> {
     const rows: Array<{ code: string; balance: string }> = await this.scope.run(tenantId, (m) =>
       m.query(
@@ -94,9 +99,10 @@ export class LedgerExportRepository {
            JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
           WHERE l.tenant_id = $1 AND e.status = 'POSTED'
             AND e.entry_type NOT IN ('CLOSING_PERM', 'OPENING_AUTO')
-            AND CAST(e.date AS date) < $2 AND ($3::text IS NULL OR a.code = $3)
+            AND (CAST(e.date AS date) < $2 OR ((e.entry_type = 'OPENING' OR (e.entry_type = 'NORMAL' AND e.entry_number LIKE 'OB-%')) AND CAST(e.date AS date) < $4))
+            AND ($3::text IS NULL OR a.code = $3)
           GROUP BY a.code`,
-        [tenantId, fromDay, accountCode ?? null],
+        [tenantId, fromDay, accountCode ?? null, toDay],
       ),
     );
     return new Map(rows.map((r) => [r.code, fromDb(r.balance)]));

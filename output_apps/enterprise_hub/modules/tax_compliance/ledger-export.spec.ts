@@ -78,6 +78,20 @@ describe('electronic journal and ledger CSV (LDG-01)', () => {
     expect(toCsv(['a'], [['-5.00'], ['-abc']])).toBe('﻿a\r\n-5.00\r\n\'-abc\r\n');
   });
 
+  it('ledger passes the season end so opening entries dated inside the season count as opening', async () => {
+    const { service, repo } = build([], { '1010': 100n });
+    await service.ledgerCsv('tenant-a', 1405, 1);
+    expect(repo.openingBalances).toHaveBeenCalledWith('tenant-a', '2026-03-21', undefined, '2026-06-22');
+  });
+
+  it('ledger controller takes the tenant from the JWT too', async () => {
+    const ledgerCsv = jest.fn().mockResolvedValue('');
+    const controller = new LedgerExportController({ ledgerCsv } as never);
+    const request = { user: { tenantId: 'tenant-a', tenantRole: 'ADMIN', role: 'ADMIN' } } as never;
+    await controller.ledger(request, { year: 1405, quarter: 1, tenantId: 'tenant-b' } as never).catch(() => undefined);
+    expect(ledgerCsv.mock.calls[0][0]).toBe('tenant-a');
+  });
+
   it('controller takes the tenant from the JWT, never from the query', async () => {
     const journalCsv = jest.fn().mockResolvedValue('');
     const controller = new LedgerExportController({ journalCsv } as never);

@@ -69,7 +69,7 @@ export class LedgerExportService {
     const { fromDay, toDay } = this.bounds(year, quarter);
     const [lines, opening] = await Promise.all([
       this.repository.lines(tenantId, fromDay, toDay, accountCode),
-      this.repository.openingBalances(tenantId, fromDay, accountCode),
+      this.repository.openingBalances(tenantId, fromDay, accountCode, toDay),
     ]);
     const byAccount = new Map<string, { name: string; lines: ExportLine[] }>();
     for (const line of lines) {
