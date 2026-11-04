@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { listStockItems } from "@/lib/api/inventory-client";
-import { reorderCsv, shortfall } from "@/lib/reorder";
+import { reorderCsv, shortfall, sortByShortfall } from "@/lib/reorder";
 import type { StockItem } from "@/types/inventory";
 
 interface ReorderPointTableProps {
@@ -118,7 +118,7 @@ export function ReorderPointTable({
                 </TableRow>
               ))
             ) : items.length > 0 ? (
-              items.map((item) => (
+              sortByShortfall(items).map((item) => (
                 <TableRow
                   key={item.id}
                   data-state={selectedSku === item.sku ? "selected" : undefined}
