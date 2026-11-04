@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>فیش حقوقی {{employee.fullName}} {{monthName}} {{year}}</title>
+<link rel="stylesheet" href="print-base.css">
+<style>
+  @page { size: A5 portrait; margin: 6mm; }
+  body { font-size:9.5pt; line-height:1.4; }
+  table { margin:2mm 0; }
+  .col2 { display:flex; gap:3mm; } .col2 > div { flex:1; }
+</style>
+</head>
+<body>
+<!-- Mirrors PayslipPrint in modules/hr/services/payslip-pdf.ts. All amounts pre-formatted rials.
+     totalDeductions = sum of the deduction rows (derived by the caller, not a PayslipPrint field). Zero-valued earning/deduction rows may be hidden by the caller. -->
+<div class="sheet">
+  <h1>فیش حقوقی — {{monthName}} {{year}}</h1>
+  <div class="muted" style="text-align:center">{{company.name}}</div>
+  <div class="box" style="margin-top:2mm"><dl class="kv">
+    <dt>نام و نام خانوادگی</dt><dd>{{employee.fullName}}</dd>
+    <dt>شماره پرسنلی</dt><dd class="num">{{employee.number}}</dd>
+    <dt>کد ملی</dt><dd class="num">{{employee.nationalId}}</dd>
+    <dt>شماره بیمه</dt><dd class="num">{{employee.insuranceNumber}}</dd>
+    <dt>سمت</dt><dd>{{employee.jobTitle}}</dd>
+    <dt>روزهای کارکرد</dt><dd class="num">{{workDays}}</dd>
+    <dt>شماره فیش</dt><dd class="num">{{payslipNumber}}</dd>
+  </dl></div>
+  <div class="col2">
+    <div><table>
+      <thead><tr><th colspan="2">مزایا</th></tr></thead>
+      <tbody>
+        <tr><td>حقوق مبنا</td><td class="n">{{baseSalary}}</td></tr>
+        <tr><td>پایه سنوات</td><td class="n">{{seniorityAmount}}</td></tr>
+        <tr><td>حق مسکن</td><td class="n">{{housingAllowance}}</td></tr>
+        <tr><td>کمک‌هزینه اقلام مصرفی</td><td class="n">{{foodAllowance}}</td></tr>
+        <tr><td>حق اولاد</td><td class="n">{{childAllowance}}</td></tr>
+        <tr><td>حق تأهل</td><td class="n">{{marriageAllowance}}</td></tr>
+        <tr><td>سایر مزایا</td><td class="n">{{allowancesTotal}}</td></tr>
+        <tr><td>اضافه‌کار</td><td class="n">{{overtimeAmount}}</td></tr>
+        <tr><td>شب‌کاری</td><td class="n">{{nightShiftAmount}}</td></tr>
+        <tr><td>کار در تعطیلات</td><td class="n">{{holidayAmount}}</td></tr>
+        <tr><td>عیدی / پاداش</td><td class="n">{{eidiAmount}}</td></tr>
+      </tbody>
+      <tfoot><tr><td>جمع مزایا (ناخالص)</td><td class="n">{{grossPay}}</td></tr></tfoot>
+    </table></div>
+    <div><table>
+      <thead><tr><th colspan="2">کسورات</th></tr></thead>
+      <tbody>
+        <tr><td>کسر غیبت</td><td class="n">{{absenceDeduction}}</td></tr>
+        <tr><td>حق بیمه سهم کارگر</td><td class="n">{{insuranceDeduction}}</td></tr>
+        <tr><td>مالیات حقوق</td><td class="n">{{incomeTax}}</td></tr>
+        <tr><td>سایر کسورات</td><td class="n">{{otherDeductions}}</td></tr>
+      </tbody>
+      <tfoot><tr><td>جمع کسورات</td><td class="n">{{totalDeductions}}</td></tr></tfoot>
+    </table>
+    <table><tbody>
+      <tr><td><b>خالص پرداختی</b></td><td class="n"><b>{{netPay}}</b></td></tr>
+      <tr><td class="muted">سهم کارفرما (بیمه)</td><td class="n muted">{{employerInsurance}}</td></tr>
+      <tr><td class="muted">بیمه بیکاری</td><td class="n muted">{{unemploymentInsurance}}</td></tr>
+    </tbody></table></div>
+  </div>
+  <div class="sign" style="margin-top:3mm"><div style="height:14mm">امضای کارمند</div><div style="height:14mm">مهر و امضای کارفرما</div></div>
+</div>
+</body>
+</html>

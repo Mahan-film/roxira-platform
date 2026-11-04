@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>رسید فروش {{receiptNumber}}</title>
+<link rel="stylesheet" href="print-base.css">
+<style>
+  @page { size: 80mm auto; margin: 3mm; }
+  html, body { width:72mm; }
+  body { font-size:10pt; line-height:1.35; }
+  .sheet { padding:0; }
+  h1 { font-size:12pt; }
+  hr { border:0; border-top:1px dashed #000; margin:2mm 0; }
+  .ln { display:flex; justify-content:space-between; gap:2mm; }
+  .item { margin:1mm 0; }
+  .item .sub { color:var(--muted); font-size:9pt; }
+  .tot { font-weight:700; font-size:11pt; }
+  .c { text-align:center; }
+</style>
+</head>
+<body>
+<!-- Anonymous type-2 sale: buyer block omitted. Amounts pre-formatted rials. -->
+<div class="sheet">
+  <h1>{{shop.name}}</h1>
+  <div class="c muted">{{shop.address}}<br><span class="num">{{shop.phone}}</span></div>
+  <div class="c muted">شماره اقتصادی: <span class="num">{{shop.economicCode}}</span></div>
+  <hr>
+  <div class="ln"><span>رسید</span><span class="num">{{receiptNumber}}</span></div>
+  <div class="ln"><span>تاریخ</span><span class="num">{{dateJalali}} {{time}}</span></div>
+  <div class="ln"><span>صندوقدار</span><span>{{cashier}}</span></div>
+  <hr>
+  {{#each lines}}
+  <div class="item"><div>{{name}}</div>
+    <div class="ln sub"><span class="num">{{quantity}} × {{unitPrice}}</span><span class="num">{{lineTotal}}</span></div></div>
+  {{/each}}
+  <hr>
+  <div class="ln"><span>جمع</span><span class="num">{{subtotal}}</span></div>
+  {{#if discount}}<div class="ln"><span>تخفیف</span><span class="num">{{discount}}</span></div>{{/if}}
+  <div class="ln"><span>مالیات بر ارزش افزوده</span><span class="num">{{vat}}</span></div>
+  <div class="ln tot"><span>مبلغ قابل پرداخت</span><span class="num">{{total}}</span></div>
+  <hr>
+  {{#each payments}}<div class="ln"><span>{{method}}</span><span class="num">{{amount}}</span></div>{{/each}}
+  {{#if change}}<div class="ln"><span>باقی‌مانده</span><span class="num">{{change}}</span></div>{{/if}}
+  {{#if taxId}}<hr><div class="c muted">شماره منحصر به فرد مالیاتی</div><div class="c mono" style="font-size:9pt">{{taxId}}</div>
+    {{#if trackingCode}}<div class="c muted">کد رهگیری: <span class="mono">{{trackingCode}}</span></div>{{/if}}{{/if}}
+  <hr>
+  <div class="c muted">{{footerText}}</div>
+</div>
+</body>
+</html>
