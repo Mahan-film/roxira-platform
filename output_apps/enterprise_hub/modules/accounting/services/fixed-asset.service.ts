@@ -1,0 +1,189 @@
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { CreateFixedAssetDto, DepreciationRunDto } from '../dto/fixed-asset.dto';
+import { nextMonthCharge, periodIndex } from '../assets/depreciation';
+import { FixedAssetEntity } from '../entities/fixed-asset.entity';
+import { AccountLevel } from '../enums/accounting.enum';
+import { fromDb, minorToDecimal, MoneyFormatError, toMinor } from '../money';
+import { AccountingRepository } from '../repositories/accounting.repository';
+import { FixedAssetRepository } from '../repositories/fixed-asset.repository';
+import { gregorianToJalali, isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
+import { AccountingService } from './accounting.service';
+
+export interface DepreciationRunResult {
+  year: number;
+  month: number;
+  entryNumber: string | null;
+  totalCharged: string;
+  charged: Array<{ code: string; amount: string }>;
+  skipped: Array<{ code: string; reason: 'ALREADY_DONE' | 'NOT_ACQUIRED_YET' | 'PREVIOUS_MONTH_MISSING' }>;
+}
+
+const realDay = (day: string): void => {
+  const parsed = new Date(`${day}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== day) {
+    throw new BadRequestException(`تاریخ ${day} معتبر نیست.`);
+  }
+};
+
+/** Fixed asset register and monthly depreciation posted to the ledger. */
+@Injectable()
+export class FixedAssetService {
+  constructor(
+    private readonly assets: FixedAssetRepository,
+    private readonly ledger: AccountingRepository,
+    private readonly accounting: AccountingService,
+  ) {}
+
+  list(tenantId: string) {
+    return this.assets.list(tenantId).then((rows) =>
+      rows.map((a) => ({
+        ...a,
+        netBookValue: minorToDecimal(fromDb(a.cost) - fromDb(a.accumulatedDepreciation)),
+      })),
+    );
+  }
+
+  async create(tenantId: string, actor: string, dto: CreateFixedAssetDto): Promise<FixedAssetEntity> {
+    realDay(dto.acquisitionDate);
+    let cost: bigint;
+    let salvage: bigint;
+    try {
+      cost = toMinor(dto.cost);
+      salvage = toMinor(dto.salvageValue ?? 0);
+    } catch (error) {
+      if (error instanceof MoneyFormatError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    if (cost <= 0n || salvage >= cost) {
+      throw new BadRequestException('بهای تمام‌شده باید مثبت و ارزش اسقاط کمتر از آن باشد.');
+    }
+    if (dto.method === 'STRAIGHT_LINE' && !dto.lifeMonths) {
+      throw new BadRequestException('برای خط مستقیم، عمر مفید به ماه لازم است.');
+    }
+    if (dto.method === 'DECLINING_BALANCE' && (!dto.annualRate || Number(dto.annualRate) <= 0)) {
+      throw new BadRequestException('برای روش نزولی، نرخ سالانه لازم است.');
+    }
+    const jalali = gregorianToJalali(dto.acquisitionDate);
+    if (!jalali) {
+      throw new BadRequestException('تاریخ خرید معتبر نیست.');
+    }
+
+    return this.assets.scoped(tenantId, async (manager) => {
+      if (await this.assets.findByCode(tenantId, dto.code, manager)) {
+        throw new ConflictException(`دارایی با کد ${dto.code} قبلاً ثبت شده است.`);
+      }
+      const codes = [dto.assetAccountCode, dto.accumulatedAccountCode, dto.expenseAccountCode];
+      const found = await this.ledger.findAccountsByCodes(tenantId, [...new Set(codes)], manager);
+      for (const code of codes) {
+        const account = found.find((a) => a.code === code);
+        if (!account) {
+          throw new BadRequestException(`حساب ${code} یافت نشد.`);
+        }
+        if (account.level === AccountLevel.GROUP || account.level === AccountLevel.KOL) {
+          throw new BadRequestException(`حساب ${code} حساب گروه یا کل است.`);
+        }
+      }
+      return this.assets.save(
+        tenantId,
+        {
+          code: dto.code,
+          name: dto.name.trim(),
+          category: dto.category.trim(),
+          acquisitionDate: dto.acquisitionDate,
+          cost: minorToDecimal(cost),
+          salvageValue: minorToDecimal(salvage),
+          method: dto.method,
+          lifeMonths: dto.method === 'STRAIGHT_LINE' ? dto.lifeMonths! : null,
+          annualRate: dto.method === 'DECLINING_BALANCE' ? dto.annualRate! : null,
+          rateSource: dto.rateSource?.trim() || null,
+          rateVerified: false,
+          assetAccountCode: dto.assetAccountCode,
+          accumulatedAccountCode: dto.accumulatedAccountCode,
+          expenseAccountCode: dto.expenseAccountCode,
+          nextPeriodIndex: periodIndex(jalali.jy, jalali.jm),
+          createdBy: actor,
+        },
+        manager,
+      );
+    });
+  }
+
+  /**
+   * Charges one Jalali month for every active asset in one balanced journal entry dated the last
+   * day of that month. A month is charged once per asset (database key), months cannot be skipped,
+   * and the whole run is one transaction: a locked period or an unknown account books nothing.
+   */
+  async runMonth(tenantId: string, dto: DepreciationRunDto): Promise<DepreciationRunResult> {
+    const target = periodIndex(dto.year, dto.month);
+    const date = isoDate(jalaliMonthEnd(dto.year, dto.month));
+    return this.assets.scoped(tenantId, async (manager) => {
+      const active = await this.assets.lockActive(tenantId, manager);
+      const result: DepreciationRunResult = {
+        year: dto.year,
+        month: dto.month,
+        entryNumber: null,
+        totalCharged: '0.00',
+        charged: [],
+        skipped: [],
+      };
+      const todo: Array<{ asset: FixedAssetEntity; charge: bigint }> = [];
+      for (const asset of active) {
+        if (target < asset.nextPeriodIndex) {
+          const acquired = gregorianToJalali(asset.acquisitionDate)!;
+          result.skipped.push({
+            code: asset.code,
+            reason: target < periodIndex(acquired.jy, acquired.jm) ? 'NOT_ACQUIRED_YET' : 'ALREADY_DONE',
+          });
+        } else if (target > asset.nextPeriodIndex) {
+          result.skipped.push({ code: asset.code, reason: 'PREVIOUS_MONTH_MISSING' });
+        } else {
+          const charge = nextMonthCharge({
+            costMinor: fromDb(asset.cost),
+            salvageMinor: fromDb(asset.salvageValue),
+            accumulatedMinor: fromDb(asset.accumulatedDepreciation),
+            monthsDone: asset.monthsDepreciated,
+            method: asset.method,
+            lifeMonths: asset.lifeMonths,
+            annualRate: asset.annualRate,
+          });
+          if (charge > 0n) {
+            todo.push({ asset, charge });
+          }
+        }
+      }
+      if (todo.length === 0) {
+        return result;
+      }
+      const seq = (await this.assets.entriesInPeriod(tenantId, dto.year, dto.month, manager)) + 1;
+      const entryNumber = `DEP-${dto.year}${String(dto.month).padStart(2, '0')}-${seq}`;
+      const lines = todo.flatMap(({ asset, charge }) => [
+        { accountCode: asset.expenseAccountCode, debit: minorToDecimal(charge), description: `استهلاک ${asset.code}` },
+        { accountCode: asset.accumulatedAccountCode, credit: minorToDecimal(charge), description: `استهلاک ${asset.code}` },
+      ]);
+      const entry = await this.accounting.createJournalEntry(
+        tenantId,
+        { entryNumber, date, description: `استهلاک ماه ${dto.year}/${dto.month}`, lines } as never,
+        manager,
+      );
+      let total = 0n;
+      for (const { asset, charge } of todo) {
+        const accumulated = fromDb(asset.accumulatedDepreciation) + charge;
+        const full = accumulated >= fromDb(asset.cost) - fromDb(asset.salvageValue);
+        await this.assets.applyCharge(
+          tenantId,
+          asset,
+          { year: dto.year, month: dto.month, amount: minorToDecimal(charge), journalEntryId: entry.id },
+          { accumulatedDepreciation: minorToDecimal(accumulated), status: full ? 'FULLY_DEPRECIATED' : 'ACTIVE' },
+          manager,
+        );
+        result.charged.push({ code: asset.code, amount: minorToDecimal(charge) });
+        total += charge;
+      }
+      result.entryNumber = entryNumber;
+      result.totalCharged = minorToDecimal(total);
+      return result;
+    });
+  }
+}
