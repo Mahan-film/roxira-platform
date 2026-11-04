@@ -49,6 +49,7 @@ import {
   calculatePayroll,
   PayrollAllowance,
   PayrollYearToDate,
+  seniorityDayUnits,
   serviceYears,
   yearToDateOf,
 } from './payroll-calculator';
@@ -315,6 +316,11 @@ export class PayrollRunService {
             childAllowanceOverride: Number(contract.childAllowance),
             children: employee.dependants ?? 0,
             seniorityYears: serviceYears(employee.hireDate, periodEnd),
+            seniorityDayUnits: seniorityDayUnits(
+              employee.hireDate,
+              dto.periodYear,
+              dto.periodMonth,
+            ),
             overtimeHours: item?.overtimeHours,
             nightHours: item?.nightHours,
             holidayHours: item?.holidayHours,

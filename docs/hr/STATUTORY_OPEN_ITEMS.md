@@ -26,6 +26,28 @@ store holds the daily figure and a 30-day month gives 5,000,010. The ekhtebar.ir
 the circular wins. Only the 400,000,000 monthly exemption has a second source; the rest of the
 brackets do not.
 
+## Checked 2026-11-04 (LAB-01)
+
+Against `docs/legal_sources/iran/wage-circular-1405.txt` (Supreme Labour Council, circular 6682, 1405/01/31), enforced by
+`labour-seniority.spec.ts` which reads the circular text and compares it with the store:
+
+| Value | Circular | Store | Result |
+| --- | --- | --- | --- |
+| Minimum daily wage | art. 1: 5,541,850 | `min_daily_wage` | matches; monthly = 30 days = 166,255,500 |
+| Seniority base (پایه سنوات) | art. 2: 166,667 a day, for workers with one year of service or one year since the last base; note 3: also for those whose end-of-service benefit was settled | `seniority_daily` | matches |
+| Consumables allowance | art. 3: 22,000,000 a month, married or single | `food_allowance` | matches |
+| Marriage allowance | art. 4: 5,000,000 a month | `marriage_allowance` | matches |
+
+Seniority rule built: one base per completed **Jalali** year of service, counted per day (`seniorityDayUnits`), so a worker
+whose anniversary falls mid-month is paid from that day, not for the whole month; before, the whole month was paid at the
+years completed on the last day, with Gregorian anniversaries. Reading "one year since the last base" as one extra base each
+year is the usual practice but art. 2 does not spell out cumulation: `unclear`, confirm with the Labour Ministry circular.
+Not modelled: note 2 (seasonal workers, pro rata) and job-classification plans (art. 1 note, art. 5).
+
+Not closable now: Labour Law arts. 24, 51, 58-62 (30-day sanavat, 220 hours, 40/35/40% premiums). The official texts
+(rc.majlis.ir) did not load from here; secondary sites quote 40% for overtime (art. 59) but disagree on article numbers for
+night and holiday work, so those rows stay unverified.
+
 ## Payroll rules to confirm with an accountant
 
 - Whether m in cumulative tax counts months on payroll (built) or calendar months since Farvardin

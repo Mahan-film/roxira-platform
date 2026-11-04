@@ -1,4 +1,5 @@
 import { AllowanceTaxTreatment, WageTaxRegime } from '../enums/hr.enum';
+import { gregorianToJalali, jalaliMonthDays } from './jalali-period';
 import {
   AnnualTaxBracket,
   PayrollYearRates,
@@ -51,6 +52,12 @@ export interface PayrollInput {
   married?: boolean;
   /** Full years of service at the end of the period. */
   seniorityYears: number;
+  /**
+   * Seniority base (paye sanavat) in paye-days for this month, from `seniorityDayUnits`: each day counts
+   * the years completed on that day, so a worker whose anniversary falls mid-month is paid from that
+   * day. When absent the whole month is paid at `seniorityYears`.
+   */
+  seniorityDayUnits?: number;
   /** Calendar days of the Jalali month; defaults to the statutory day basis. */
   monthDays?: number;
   allowances?: ReadonlyArray<PayrollAllowance>;
@@ -193,7 +200,13 @@ export function calculatePayroll(input: PayrollInput): PayrollResult {
   const seniorityMonthly =
     Math.floor(nonNegative(input.seniorityYears)) * rates.seniorityPerYear;
   const baseWage = rial((monthlyBase * monthDays) / basis);
-  const seniorityAmount = rial((seniorityMonthly * monthDays) / basis);
+  const seniorityAmount =
+    input.seniorityDayUnits === undefined
+      ? rial((seniorityMonthly * monthDays) / basis)
+      : rial(
+          Math.floor(nonNegative(input.seniorityDayUnits)) *
+            (rates.seniorityPerYear / basis),
+        );
   const housingAllowance = rial(nonNegative(input.housingAllowance));
   const foodAllowance = rial(nonNegative(input.foodAllowance));
   const override = nonNegative(input.childAllowanceOverride ?? 0);
@@ -375,6 +388,31 @@ export function yearToDateOf(
  * Full years of service from `hireDate` (ISO Gregorian) to `periodEnd`
  * (ISO Gregorian). Returns 0 for missing or future hire dates.
  */
+/**
+ * Paye-days of seniority base inside one Jalali month. The 1405 circular 6682 art. 2 pays the daily base
+ * once a worker has one year of service or one year has passed since the last base was received, so
+ * each completed Jalali year adds one base. Counted per day; Jalali anniversaries, not Gregorian.
+ */
+export function seniorityDayUnits(
+  hireDate: string | null | undefined,
+  year: number,
+  month: number,
+): number {
+  const hire = gregorianToJalali(hireDate);
+  if (!hire) {
+    return 0;
+  }
+  let units = 0;
+  const days = jalaliMonthDays(year, month);
+  for (let day = 1; day <= days; day += 1) {
+    const beforeAnniversary =
+      month < hire.jm || (month === hire.jm && day < hire.jd);
+    const completed = year - hire.jy - (beforeAnniversary ? 1 : 0);
+    units += Math.max(0, completed);
+  }
+  return units;
+}
+
 export function serviceYears(
   hireDate: string | null | undefined,
   periodEnd: Date,
