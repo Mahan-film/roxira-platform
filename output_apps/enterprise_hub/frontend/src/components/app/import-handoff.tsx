@@ -8,12 +8,17 @@ import {
   type ReactNode,
 } from "react";
 
+import { routeImportFile } from "@/lib/import-routing";
+
 /** Import wizard tabs: single file vs whole-database package. */
 export type ImportTab = "file" | "package";
 
-/** Database packages and every non-single-file format (.sqlite/.sql/.zip/.xls/.ods/.dbf/.iif/.ofx/…) belong to the whole-database tab. */
+/**
+ * Every file the one-request preview cannot take belongs to the whole-database tab (chunked upload):
+ * database files and other formats (.sqlite/.sql/.zip/.xls/.ods/.dbf/.iif/.ofx/…) and anything over 5 MB.
+ */
 export function isDatabaseFile(file: File): boolean {
-  return /\.(sqlite3?|db|sql|zip|xls|ods|dbf|tsv|json|xml|iif|ofx|qbo|qfx|mdb|accdb|bak|mdf|dump)$/i.test(file.name);
+  return routeImportFile(file, false) !== "single";
 }
 
 interface ImportHandoffValue {

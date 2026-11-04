@@ -28,6 +28,7 @@ import {
   API_PROXY_BASE_PATH,
   DATA_IMPORT_RESOURCE_PATH,
 } from "@/lib/api/config";
+import { FALLBACK_ACCEPT, chunkResumeKey } from "@/lib/import-routing";
 
 const BASE = `${API_PROXY_BASE_PATH}/${DATA_IMPORT_RESOURCE_PATH}`;
 
@@ -91,7 +92,11 @@ export interface ImportBatch {
   undone: boolean;
 }
 
-export const IMPORT_ACCEPT = ".xlsx,.csv,.pdf,.jpg,.jpeg,.png";
+/**
+ * Static fallback of the file picker's `accept`; the pages use `useImportAccept()`, which builds it
+ * from `GET /data-import/formats` (the support matrix), so the picker offers every readable format.
+ */
+export const IMPORT_ACCEPT = FALLBACK_ACCEPT;
 
 /** سقف حجم صفحه‌گسترده (XLSX/CSV): ۱۰ مگابایت. */
 export const IMPORT_MAX_SHEET_BYTES = 10 * 1024 * 1024;
@@ -116,7 +121,7 @@ const ALLOWED_EXTENSIONS = [...SHEET_EXTENSIONS, ...DOC_EXTENSIONS];
 export function validateImportFile(file: File): string | null {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return "فرمت فایل پشتیبانی نمی‌شود. فقط xlsx، csv، pdf، jpg و png پذیرفته می‌شود.";
+    return `ورود تکی فقط xlsx، csv، pdf، jpg و png را می‌خواند؛ فایل «.${ext}» را در زبانهٔ «انتقال کامل دیتابیس» بفرستید یا جدول «فرمت‌های پشتیبانی‌شده» را ببینید.`;
   }
   if (file.size === 0) {
     return "فایل خالی است.";
@@ -141,9 +146,18 @@ export function importErrorMessage(error: unknown): string {
     ) {
       return "سرویس ورود داده در حال حاضر در دسترس نیست. کمی بعد دوباره تلاش کنید.";
     }
-    return error.details.join(" | ");
+    if (error.statusCode === 413) {
+      return "فایل از سقف حجم یک درخواست سرور بزرگ‌تر است. آن را در زبانهٔ «انتقال کامل دیتابیس» (بارگذاری تکه‌ای) یا در «ورود حجیم» بالای همین صفحه بفرستید.";
+    }
+    if (error.statusCode === 415) {
+      return "این قالب فایل خوانده نمی‌شود. خروجی xlsx یا csv بگیرید، یا جدول «فرمت‌های پشتیبانی‌شده» را ببینید.";
+    }
+    return error.details.join(" | ") || "درخواست انجام نشد. دوباره تلاش کنید.";
   }
-  return "ارتباط با سرور برقرار نشد. اینترنت خود را بررسی کنید و دوباره تلاش کنید.";
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "بارگذاری متوقف شد.";
+  }
+  return "ارتباط با سرور برقرار نشد. اینترنت خود را بررسی کنید و دوباره تلاش کنید؛ بارگذاری تکه‌ای از همان‌جا ادامه پیدا می‌کند.";
 }
 
 export function listImportEntities(
@@ -194,8 +208,6 @@ export function listImportBatches(
  * Database package import (whole-company migration)
  * ------------------------------------------------------------------ */
 
-/** پسوندهای مجاز بستهٔ دیتابیس. */
-export const PACKAGE_ACCEPT = "";
 
 /** سقف حجم هر فایل در بارگذاری تکه‌ای: ۱۲۰ مگابایت (هماهنگ با IMPORT_MAX_FILE_BYTES سرور). */
 export const PACKAGE_MAX_BYTES = 120 * 1024 * 1024;
@@ -400,6 +412,8 @@ export function validatePackageFiles(files: File[]): string | null {
 
 interface UploadStatus {
   uploadId: string;
+  size?: number;
+  complete?: boolean;
   chunkSize: number;
   totalChunks: number;
   missing: number[];
@@ -415,11 +429,15 @@ export async function uploadFileChunked(
   file: File,
   options: UploadProgressOptions = {},
 ): Promise<string> {
-  const init = await apiRequest<UploadStatus>(`${BASE}/uploads`, {
-    method: "POST",
-    body: { fileName: file.name, size: file.size, chunkSize: PACKAGE_CHUNK_BYTES },
-    signal: options.signal,
-  });
+  const resumeKey = chunkResumeKey(file);
+  const init =
+    (await resumableUpload(resumeKey, file.size, options.signal)) ??
+    (await apiRequest<UploadStatus>(`${BASE}/uploads`, {
+      method: "POST",
+      body: { fileName: file.name, size: file.size, chunkSize: PACKAGE_CHUNK_BYTES },
+      signal: options.signal,
+    }));
+  remember(resumeKey, init.uploadId);
   let status = init;
   let sent = init.totalChunks - init.missing.length;
   for (let attempt = 0; status.missing.length > 0; attempt += 1) {
@@ -449,7 +467,41 @@ export async function uploadFileChunked(
       sent = status.totalChunks - status.missing.length;
     }
   }
+  remember(resumeKey, null);
   return init.uploadId;
+}
+
+/** Browser storage may be blocked (private mode); resume is then just not offered. */
+function remember(key: string, uploadId: string | null): void {
+  try {
+    if (uploadId) window.localStorage.setItem(key, uploadId);
+    else window.localStorage.removeItem(key);
+  } catch {
+    // no storage: nothing to resume later
+  }
+}
+
+/** An unfinished upload of the same file (same name, size and date), if the server still has it. */
+async function resumableUpload(
+  key: string,
+  size: number,
+  signal?: AbortSignal,
+): Promise<UploadStatus | null> {
+  let uploadId: string | null = null;
+  try {
+    uploadId = window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+  if (!uploadId) return null;
+  try {
+    const status = await apiRequest<UploadStatus>(`${BASE}/uploads/${encodeURIComponent(uploadId)}`, { signal });
+    if (status.size === size && !status.complete && status.missing.length > 0) return status;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+  }
+  remember(key, null);
+  return null;
 }
 
 /** ساخت بسته از بارگذاری‌های تکه‌ای کامل (یک فایل، چند فایل یا پوشه). */

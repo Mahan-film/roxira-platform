@@ -46,7 +46,15 @@ interface Pick {
  * reads them in a stream, and nothing is posted until the user has looked at the staged tables and
  * confirmed. Pause, resume, retry and cancel are available while the job runs.
  */
-export function BulkImportPanel() {
+export function BulkImportPanel({
+  incomingFile = null,
+  onIncomingFileUsed,
+}: {
+  /** A file over 40 MB handed over by the import wizard below (#277). */
+  incomingFile?: File | null;
+  onIncomingFileUsed?: () => void;
+} = {}) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [config, setConfig] = useState<BulkConfig | null>(null);
   const [jobs, setJobs] = useState<BulkJob[]>([]);
   const [entities, setEntities] = useState<ImportEntityDef[]>([]);
@@ -109,6 +117,22 @@ export function BulkImportPanel() {
     }
   }
 
+  // A large file picked in the wizard starts here, once the server's bulk config is known.
+  useEffect(() => {
+    if (!incomingFile || !config) return;
+    onIncomingFileUsed?.();
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!config.enabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError(
+        `«${incomingFile.name}» بیش از ۱۲۰ مگابایت است و ورود حجیم هنوز روی این سرور فعال نشده است. فایل را به چند بخش کوچک‌تر تقسیم کنید یا خروجی هر جدول را جدا بگیرید.`,
+      );
+      return;
+    }
+    void upload(incomingFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingFile, config]);
+
   function onFiles(list: FileList | null) {
     if (!list) return;
     Array.from(list).forEach((file) => void upload(file));
@@ -170,7 +194,7 @@ export function BulkImportPanel() {
   const quotaPercent = config && config.quotaBytes > 0 ? Math.min(100, Math.round((config.usedBytes / config.quotaBytes) * 100)) : 0;
 
   return (
-    <div className="flex flex-col gap-4" dir="rtl">
+    <div ref={rootRef} className="flex flex-col gap-4" dir="rtl">
       <ErrorNotice title="ورود حجیم انجام نشد" message={error} />
       <div
         onDragOver={(e) => {
