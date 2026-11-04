@@ -11,10 +11,12 @@ import {
   minorToDecimal,
   Money,
   MoneyFormatError,
+  parseMinor,
   parseScaled,
   scaledToDecimal,
   toMinor,
 } from '../money';
+import { needsSearch } from '../repositories/journal-search.sql';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
 import {
@@ -1083,6 +1085,31 @@ export class AccountingService {
     query: QueryJournalEntryDto,
   ): Promise<PaginatedJournalEntryResponseDto> {
     const { page, limit, status, entryNumber } = query;
+
+    if (needsSearch(query)) {
+      if (query.fromDate && query.toDate && query.fromDate > query.toDate) {
+        throw new BadRequestException('«از تاریخ» نباید بعد از «تا تاریخ» باشد.');
+      }
+      if (query.minAmount && query.maxAmount && parseMinor(query.minAmount) > parseMinor(query.maxAmount)) {
+        throw new BadRequestException('کمینهٔ مبلغ نباید از بیشینهٔ آن بیشتر باشد.');
+      }
+      const [found, count] = await this.accountingRepository.searchEntries(
+        tenantId,
+        {
+          status,
+          entryNumber,
+          fromDate: query.fromDate,
+          toDate: query.toDate,
+          accountCode: query.accountCode?.trim() || undefined,
+          partyCode: query.partyCode?.trim() || undefined,
+          minAmount: query.minAmount,
+          maxAmount: query.maxAmount,
+          text: query.text?.trim() || undefined,
+        },
+        { skip: (page - 1) * limit, take: limit },
+      );
+      return { data: found.map((entity) => this.toEntryDto(entity)), total: count, page, limit };
+    }
 
     const where: FindOptionsWhere<JournalEntryEntity> = {};
     if (status) {

@@ -7,9 +7,14 @@ import {
   IsString,
   Max,
   MaxLength,
+  Matches,
   Min,
 } from 'class-validator';
 import { JournalEntryStatus } from '../enums/accounting.enum';
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+/** Up to 16 integer digits (numeric(18,2)) and 2 decimals; no sign, no grouping. */
+const AMOUNT = /^\d{1,16}(\.\d{1,2})?$/;
 
 /**
  * DTO فیلتر/صفحه‌بندی دفتر روزنامه
@@ -41,6 +46,44 @@ export class QueryJournalEntryDto {
   @IsString()
   @MaxLength(64)
   entryNumber?: string;
+
+  @ApiPropertyOptional({ description: 'از تاریخ سند (YYYY-MM-DD، شامل همان روز)', example: '2026-03-21' })
+  @IsOptional()
+  @Matches(DATE_ONLY, { message: 'fromDate must be YYYY-MM-DD' })
+  fromDate?: string;
+
+  @ApiPropertyOptional({ description: 'تا تاریخ سند (YYYY-MM-DD، شامل همان روز)', example: '2026-04-20' })
+  @IsOptional()
+  @Matches(DATE_ONLY, { message: 'toDate must be YYYY-MM-DD' })
+  toDate?: string;
+
+  @ApiPropertyOptional({ description: 'اسنادی که دست‌کم یک سطر روی این کد حساب دارند' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  accountCode?: string;
+
+  @ApiPropertyOptional({ description: 'اسنادی که دست‌کم یک سطر برای این تفصیلی دارند' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  partyCode?: string;
+
+  @ApiPropertyOptional({ description: 'کمینهٔ مبلغ بدهکار یا بستانکار یک سطر', example: '5000000' })
+  @IsOptional()
+  @Matches(AMOUNT, { message: 'minAmount must be a non-negative decimal with at most 2 decimals' })
+  minAmount?: string;
+
+  @ApiPropertyOptional({ description: 'بیشینهٔ مبلغ بدهکار یا بستانکار یک سطر', example: '5000000' })
+  @IsOptional()
+  @Matches(AMOUNT, { message: 'maxAmount must be a non-negative decimal with at most 2 decimals' })
+  maxAmount?: string;
+
+  @ApiPropertyOptional({ description: 'جست‌وجو در شرح سند و شرح سطرها' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  text?: string;
 }
 
 /**

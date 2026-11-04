@@ -13,6 +13,7 @@ import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
 import { PeriodLockEntity } from '../entities/period-lock.entity';
 import { minorToDecimal } from '../money';
+import { JournalSearchFilter, journalSearchWhere } from './journal-search.sql';
 import {
   DuplicateEntryNumberError,
   LockedPeriodError,
@@ -300,6 +301,42 @@ export class AccountingRepository {
         ...options,
         where: { ...where, tenantId },
       });
+    });
+  }
+
+  /**
+   * Journal entry search (amount, date, account, party, text): one page of matching entries,
+   * newest first, with their lines, and the total match count. SQL in `journal-search.sql.ts`.
+   */
+  async searchEntries(
+    tenantId: string,
+    filter: JournalSearchFilter,
+    page: { skip: number; take: number },
+  ): Promise<[JournalEntryEntity[], number]> {
+    const { where, params } = journalSearchWhere(tenantId, filter);
+    return this.scope.within(tenantId, undefined, async (m) => {
+      const n = params.length;
+      // One transaction, one connection: the two queries run one after the other.
+      const ids: Array<{ id: number }> = await m.query(
+        `SELECT e.id AS "id" FROM fin_journal_entries e WHERE ${where}
+          ORDER BY e.date DESC, e.id DESC LIMIT $${n + 1} OFFSET $${n + 2}`,
+        [...params, page.take, page.skip],
+      );
+      const counted: Array<{ total: string }> = await m.query(
+        `SELECT COUNT(*) AS "total" FROM fin_journal_entries e WHERE ${where}`,
+        params,
+      );
+      const total = Number(counted[0]?.total ?? 0);
+      if (ids.length === 0) {
+        return [[], total];
+      }
+      const order = new Map(ids.map((row, i) => [Number(row.id), i]));
+      const entries = await m.getRepository(JournalEntryEntity).find({
+        where: { tenantId, id: In([...order.keys()]) },
+        relations: { lines: true },
+      });
+      entries.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+      return [entries, total];
     });
   }
 
