@@ -13,6 +13,7 @@ import {
 } from './statutory-parameter.entity';
 import { StatutoryRepository } from './statutory.repository';
 import { AnnualTaxBracket, PayrollYearRates } from './payroll-rates';
+import { buildContractTerms, CONTRACT_TERM_KEYS, ContractTerms } from './contract-terms';
 
 export const IRAN = 'IR';
 
@@ -25,6 +26,8 @@ export interface ResolvedParameter {
   source: string;
   sourceKind: StatutorySourceKind;
   verified: boolean;
+  /** No figure is known (value null). Never treat as zero. */
+  unclear: boolean;
   /** True when this organisation's own row is in force rather than the platform default. */
   tenantOverride: boolean;
 }
@@ -64,8 +67,13 @@ export function toPayrollRates(
   year: number,
   parameters: Map<StatutoryKey, StatutoryParameterEntity>,
 ): PayrollYearRates {
+  // A key with no row, or an unclear one (NULL), is missing: it must never be computed as zero.
+  const usable = (key: StatutoryKey): boolean => {
+    const row = parameters.get(key);
+    return !!row && row.unclear !== true && row.value !== null && row.value !== undefined;
+  };
   const missing = (Object.keys(STATUTORY_KEYS) as StatutoryKey[]).filter(
-    (key) => STATUTORY_KEYS[key].required && !parameters.has(key),
+    (key) => STATUTORY_KEYS[key].required && !usable(key),
   );
   if (missing.length > 0) {
     throw new BadRequestException(
@@ -82,9 +90,11 @@ export function toPayrollRates(
   const minDailyWage = money('min_daily_wage');
   const minMonthlyWage = minDailyWage * days;
   const optionalMoney = (key: StatutoryKey): number | null =>
-    parameters.has(key) ? money(key) : null;
+    usable(key) ? money(key) : null;
+  // Contract terms share the table but are not payroll parameters.
+  const contractKeys = new Set<string>(CONTRACT_TERM_KEYS);
   const unverified = [...parameters.values()]
-    .filter((row) => !row.verified)
+    .filter((row) => !row.verified && !contractKeys.has(row.paramKey))
     .map((row) => row.paramKey);
 
   return {
@@ -109,7 +119,7 @@ export function toPayrollRates(
     maxInsurableMonthlyWage: minMonthlyWage * money('insurable_ceiling_multiplier'),
     annualTaxBrackets: raw('wage_tax_annual_brackets') as AnnualTaxBracket[],
     marriageAllowance: money('marriage_allowance'),
-    flatTaxRate: parameters.has('wage_flat_tax_rate')
+    flatTaxRate: usable('wage_flat_tax_rate')
       ? String(raw('wage_flat_tax_rate'))
       : null,
     eidiExemptCeiling: optionalMoney('eidi_exempt_ceiling'),
@@ -228,6 +238,19 @@ export class StatutoryService {
     };
   }
 
+  /**
+   * Contract figures in force on a Gregorian date, read-only, for the contracting module (T3, #227).
+   * A tenant's own row beats the platform default; `unclear` terms carry rate null.
+   */
+  async contractTermsOn(tenantId: string, asOf: string): Promise<ContractTerms> {
+    const jalali = gregorianToJalali(asOf);
+    if (!jalali) {
+      throw new BadRequestException('تاریخ معتبر نیست.');
+    }
+    const rows = await this.repository.findKeysUpToYear(tenantId, IRAN, CONTRACT_TERM_KEYS, jalali.jy);
+    return buildContractTerms(asOf, resolveParameters(rows, asOf));
+  }
+
   async list(
     tenantId: string,
     year: number,
@@ -243,6 +266,7 @@ export class StatutoryService {
       source: row.source,
       sourceKind: row.sourceKind,
       verified: row.verified,
+      unclear: row.unclear === true,
       tenantOverride: row.tenantId !== null,
     }));
   }

@@ -40,8 +40,13 @@ export class StatutoryParameterEntity {
   version: number;
 
   /** number (rials, counts), decimal string (rates) or bracket list; see statutory-catalogue.ts. */
-  @Column({ type: 'jsonb' })
+  /** NULL only when `unclear` is true: no figure could be established from an official text. */
+  @Column({ type: 'jsonb', nullable: true })
   value: unknown;
+
+  /** The figure is not known. Never read it as zero; ask an accountant or add the official source. */
+  @Column({ type: 'boolean', default: false })
+  unclear?: boolean;
 
   @Column({ type: 'text' })
   source: string;

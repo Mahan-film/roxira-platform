@@ -1080,6 +1080,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/hr/statutory-parameters/contract-terms (StatutoryController.contractTerms)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/documents/ (StockDocumentsController.list)": {
     "policy": "inventory:read",
     "owner": true,

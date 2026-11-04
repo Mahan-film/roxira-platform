@@ -45,6 +45,16 @@ export const STATUTORY_KEYS = {
   civil_partnership_max_exemptions: { kind: 'count', label: 'حداکثر تعداد معافیت شرکای مشارکت مدنی (تبصره ۱ ماده ۱۰۱)', required: false },
   corporate_tax_rate: { kind: 'rate', label: 'نرخ مالیات بر درآمد شرکت‌ها', required: false },
   corporate_tax_effective_floor: { kind: 'rate', label: 'حداقل نرخ مؤثر مالیات بر درآمد شرکت‌ها', required: false },
+  // Contracting (HR-CON-01). A seeded row may be "unclear": no figure is known, so the value is NULL.
+  contract_retention_rate: { kind: 'rate', label: 'سپرده حسن انجام کار (درصد از هر صورت وضعیت)', required: false },
+  contract_insurance_deposit_rate: { kind: 'rate', label: 'سپرده بیمه ماده ۳۸ (درصد بهای کل کار)', required: false },
+  contract_insurance_rate_mechanical: { kind: 'rate', label: 'ضریب بیمه پیمان غیرعمرانی مکانیزه', required: false },
+  contract_insurance_rate_non_mechanical: { kind: 'rate', label: 'ضریب بیمه پیمان غیرعمرانی غیرمکانیزه (دستمزدی)', required: false },
+  contract_insurance_rate_civil_executive: { kind: 'rate', label: 'ضریب بیمه پیمان عمرانی اجرایی', required: false },
+  contract_insurance_rate_civil_consulting: { kind: 'rate', label: 'ضریب بیمه پیمان عمرانی مشاوره‌ای', required: false },
+  contract_unemployment_addon_fraction: { kind: 'rate', label: 'کسر بیمه بیکاری افزوده بر ضریب بیمه پیمان', required: false },
+  contract_tax_withholding_rate: { kind: 'rate', label: 'نرخ کسر مالیات پیمانکاران از صورت وضعیت', required: false },
+  contract_advance_payment_max_rate: { kind: 'rate', label: 'سقف پیش‌پرداخت قرارداد', required: false },
 } as const satisfies Record<string, StatutoryKeyDefinition>;
 
 export type StatutoryKey = keyof typeof STATUTORY_KEYS;
