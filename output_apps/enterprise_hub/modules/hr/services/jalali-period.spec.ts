@@ -58,8 +58,8 @@ describe('jalali-period', () => {
       expect(gregorianToJalali('2020-03-20')).toEqual({ jy: 1398, jm: 12, jd: 30 });
     });
 
-    it('converts 2020-03-21 to 1399-12-01', () => {
-      expect(gregorianToJalali('2020-03-21')).toEqual({ jy: 1399, jm: 12, jd: 1 });
+    it('converts 2020-03-21 to 1399-01-01', () => {
+      expect(gregorianToJalali('2020-03-21')).toEqual({ jy: 1399, jm: 1, jd: 1 });
     });
   });
 
