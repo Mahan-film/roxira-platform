@@ -36,10 +36,14 @@ import { MoadianCredentialEntity } from '../entities/moadian-credential.entity';
 import { MoadianSubmissionEntity } from '../entities/moadian-submission.entity';
 import {
   MoadianInquiryStatus,
+  MoadianInvoicePattern,
+  MoadianInvoiceSubject,
   MoadianSettlementMethod,
   MoadianSubmissionStatus,
 } from '../enums/moadian.enum';
 import { MoadianRepository } from '../repositories/moadian.repository';
+import { choosePattern, MoadianPatternSelectionError } from '../utils/moadian-pattern-select';
+import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
 import { MoadianMappingError, mapInvoiceToMoadianPacket } from '../utils/moadian-packet.mapper';
 import { openSecret, parseMasterKey, sealSecret } from '../utils/secret-box.util';
 import { MoadianApiClient, MoadianApiError, MoadianAuthContext } from './moadian-api.client';
@@ -195,7 +199,11 @@ export class MoadianService {
   // ارسال صورتحساب
   // ---------------------------------------------------------------------------
 
-  async submitInvoice(tenantId: string, invoiceId: string): Promise<MoadianSubmissionResponseDto> {
+  async submitInvoice(
+    tenantId: string,
+    invoiceId: string,
+    options: SubmitMoadianInvoiceDto = {},
+  ): Promise<MoadianSubmissionResponseDto> {
     this.assertEnabled();
     // findOne خود به مستأجر محدود است و برای صورتحساب سازمان دیگر NotFound می‌دهد.
     const invoice = await this.invoicingService.findOne(tenantId, invoiceId);
@@ -204,10 +212,28 @@ export class MoadianService {
         'صورتحساب خرید را تأمین‌کننده به سامانه مودیان ارسال می‌کند؛ از اینجا ارسال نمی‌شود.',
       );
     }
-    if ((invoice.subject ?? 1) !== 1) {
-      throw new BadRequestException(
-        'ارسال صورتحساب اصلاحی، ابطالی و برگشتی به سامانه مودیان هنوز پشتیبانی نمی‌شود.',
-      );
+    const subject = Number(invoice.subject ?? 1) as MoadianInvoiceSubject;
+    let pattern: MoadianInvoicePattern;
+    try {
+      pattern = choosePattern(options.pattern, options.extras);
+    } catch (error) {
+      if (error instanceof MoadianPatternSelectionError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    // Corrective, cancel and return documents point at the tax id of the invoice they amend.
+    let referenceTaxId: string | null = null;
+    if (subject !== MoadianInvoiceSubject.MAIN) {
+      const related = invoice.relatedInvoiceId
+        ? await this.repository.findSubmissionByInvoice(tenantId, invoice.relatedInvoiceId)
+        : null;
+      if (related?.status !== MoadianSubmissionStatus.SUCCESS) {
+        throw new BadRequestException(
+          'صورتحساب مرجع (اصلی) باید قبلاً با موفقیت در سامانه مودیان ثبت شده باشد تا اصلاحی، ابطالی یا برگشتی ارسال شود.',
+        );
+      }
+      referenceTaxId = related.taxId;
     }
     const credential = await this.repository.findCredential(tenantId);
     if (!credential) {
@@ -234,6 +260,12 @@ export class MoadianService {
           defaultSstid: credential.defaultSstid,
           defaultMeasurementUnit: credential.defaultMeasurementUnit,
           settlementMethod: Number(credential.settlementMethod) as MoadianSettlementMethod,
+          pattern,
+          subject,
+          referenceTaxId,
+          cashPortion: options.cashPortion,
+          lateRegistrationAt: options.lateRegistrationAt,
+          extras: options.extras,
         });
       } catch (error) {
         if (error instanceof MoadianMappingError) {
