@@ -6,7 +6,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Purely additive on existing tenant tables (`fin_cheques`, `fin_cheque_events`), which already have
  * FORCE RLS (1789430000000), so no new policy is needed. The status CHECK is replaced to admit
- * 'delivered'. Reversible.
+ * 'delivered'. Reversible, but down() is lossy: it drops the new columns (Sayad verifier, receiver and
+ * endorsee ids, settled amounts, event amounts) and turns 'delivered' cheques back into 'registered'.
+ * The legacy-verifier UPDATE needs the migration role to bypass FORCE RLS (enterprise_admin does,
+ * docs/ops/APP_DB_ROLE.md); under a role that does not, it would touch no rows.
  */
 export class AddChequeSayadAndPartialPayment1789495000000 implements MigrationInterface {
   name = 'AddChequeSayadAndPartialPayment1789495000000';
