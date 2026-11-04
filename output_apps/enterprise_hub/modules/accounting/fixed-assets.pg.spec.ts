@@ -19,15 +19,21 @@ import { PostingRulesService } from '../posting_rules/services/posting-rules.ser
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
 const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
+const PASSWORD = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
+const T3 = '33333333-3333-4333-8333-333333333333';
+/** The services run as a non-superuser without BYPASSRLS, like production, so FORCE RLS applies. */
+const APP_ROLE = `rx_fa_app_${process.pid}`;
+const APP_PW = 'app-role-test-only';
 
-const options = (database: string) => ({
+const options = (database: string, username = USER, password = PASSWORD) => ({
   type: 'postgres' as const,
   host: HOST,
   port: PORT,
-  username: USER,
+  username,
+  password,
   database,
   entities: [path.join(__dirname, '../**/*.entity.ts')],
   migrations: [path.join(__dirname, '../../migrations/*.ts')],
@@ -49,6 +55,7 @@ const admin = async (sql: string) => {
 describePg('Fixed assets on PostgreSQL', () => {
   const dbName = `rx_fa_${process.pid}_${Date.now()}`;
   let ds: DataSource;
+  let app: DataSource;
   let accounting: AccountingService;
   let assets: FixedAssetService;
 
@@ -70,18 +77,38 @@ describePg('Fixed assets on PostgreSQL', () => {
     ds = new DataSource(options(dbName));
     await ds.initialize();
     await ds.runMigrations();
+    await admin(`DROP ROLE IF EXISTS ${APP_ROLE}`);
+    await admin(`CREATE ROLE ${APP_ROLE} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
+    await ds.query(`GRANT CONNECT ON DATABASE "${dbName}" TO ${APP_ROLE}`);
+    await ds.query(`GRANT USAGE ON SCHEMA public TO ${APP_ROLE}`);
+    await ds.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${APP_ROLE}`);
+    await ds.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${APP_ROLE}`);
+    app = new DataSource({ ...options(dbName, APP_ROLE, APP_PW), migrations: [] });
+    await app.initialize();
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(new TenantScope(ds));
+    const repo = new AccountingRepository(new TenantScope(app));
     accounting = new AccountingService(repo, currency);
     assets = new FixedAssetService(new FixedAssetRepository(ds), repo, new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting));
     const templates = new ChartTemplateService(repo);
     await templates.apply(T1, 'iran-trading');
     await templates.apply(T2, 'iran-trading');
+    await templates.apply(T3, 'iran-trading');
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
+    await app?.destroy();
+    await ds?.destroy();
     await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await admin(`DROP ROLE IF EXISTS ${APP_ROLE}`);
+  });
+
+  it('runs the services as a role that cannot bypass row-level security', async () => {
+    const [r] = await app.query(`SELECT r.rolsuper, r.rolbypassrls FROM pg_roles r WHERE r.rolname = current_user`);
+    expect(r).toMatchObject({ rolsuper: false, rolbypassrls: false });
+    // Without app.tenant_id the forced policy hides every asset row.
+    await make(T2, 'FA-RLS', { cost: '10.00', method: 'STRAIGHT_LINE', lifeMonths: 10 });
+    expect(await app.query(`SELECT id FROM fin_fixed_assets`)).toEqual([]);
+    await ds.query(`DELETE FROM fin_fixed_assets WHERE code = 'FA-RLS'`);
   });
 
   it('registers assets and refuses duplicates, bad terms and unknown accounts', async () => {
@@ -147,5 +174,43 @@ describePg('Fixed assets on PostgreSQL', () => {
       ds.query(`INSERT INTO fin_depreciation_lines (tenant_id, asset_id, period_year, period_month, amount, journal_entry_id)
                 SELECT tenant_id, asset_id, period_year, period_month, amount, journal_entry_id FROM fin_depreciation_lines LIMIT 1`),
     ).rejects.toThrow(/UQ_fin_depreciation_lines_month/);
+  });
+
+  describe('charges that round to zero (#129)', () => {
+    const asset = async (code: string) => (await assets.list(T3)).find((a) => a.code === code)!;
+    const months = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+
+    it('a one-cent straight-line asset advances through zero months and ends fully depreciated', async () => {
+      await make(T3, 'Z-SL', { cost: '0.01', salvageValue: '0', method: 'STRAIGHT_LINE', lifeMonths: 12 });
+      for (const month of months(1, 5)) {
+        const r = await assets.runMonth(T3, { year: 1405, month });
+        expect(r).toMatchObject({ entryNumber: null, charged: [], zeroCharge: ['Z-SL'], skipped: [] });
+      }
+      const sixth = await assets.runMonth(T3, { year: 1405, month: 6 });
+      expect(sixth.charged).toEqual([{ code: 'Z-SL', amount: '0.01' }]);
+      expect(await asset('Z-SL')).toMatchObject({ status: 'FULLY_DEPRECIATED', monthsDepreciated: 6, netBookValue: '0.00' });
+      expect(await balance(T3, '5060')).toBe('0.01');
+    });
+
+    it('a full straight-line life adds up to cost minus salvage', async () => {
+      // Acquired 2026-07-23 = 1405/05/01.
+      await make(T3, 'Z-FULL', { cost: '100.00', salvageValue: '0.01', method: 'STRAIGHT_LINE', lifeMonths: 7, acquisitionDate: '2026-07-23' });
+      let total = 0;
+      for (const month of months(5, 11)) {
+        const r = await assets.runMonth(T3, { year: 1405, month });
+        expect(r.skipped.filter((s) => s.code === 'Z-FULL')).toEqual([]);
+        total += Number(r.charged.find((c) => c.code === 'Z-FULL')?.amount ?? 0) * 100;
+      }
+      expect(Math.round(total)).toBe(9999);
+      expect(await asset('Z-FULL')).toMatchObject({ status: 'FULLY_DEPRECIATED', monthsDepreciated: 7, netBookValue: '0.01' });
+    });
+
+    it('declining balance writes off the rounded-away remainder and reaches FULLY_DEPRECIATED', async () => {
+      // Acquired 2026-10-23 = 1405/08/01; 5 cents at 24%/year is 0.1 cent a month, which rounds to zero.
+      await make(T3, 'Z-DB', { cost: '0.05', method: 'DECLINING_BALANCE', annualRate: '0.24', acquisitionDate: '2026-10-23' });
+      const r = await assets.runMonth(T3, { year: 1405, month: 8 });
+      expect(r.charged).toEqual([{ code: 'Z-DB', amount: '0.05' }]);
+      expect(await asset('Z-DB')).toMatchObject({ status: 'FULLY_DEPRECIATED', netBookValue: '0.00' });
+    });
   });
 });

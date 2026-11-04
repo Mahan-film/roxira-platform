@@ -71,4 +71,13 @@ export class FixedAssetRepository {
       },
     );
   }
+
+  /** Marks the asset's next month done when its charge rounds to zero (no depreciation line). */
+  async advanceWithoutCharge(tenantId: string, asset: FixedAssetEntity, manager: EntityManager): Promise<void> {
+    await manager.update(
+      FixedAssetEntity,
+      { id: asset.id, tenantId },
+      { monthsDepreciated: asset.monthsDepreciated + 1, nextPeriodIndex: asset.nextPeriodIndex + 1 },
+    );
+  }
 }
