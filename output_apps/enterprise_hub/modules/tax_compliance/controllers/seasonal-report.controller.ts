@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import { QuerySeasonalReportDto } from '../dto/query-seasonal-report.dto';
 import {
+  SeasonalPurchaseRow,
   SeasonalReportService,
   SeasonalTransactionRow,
   SeasonalVatReport,
@@ -48,7 +49,12 @@ export class SeasonalReportController {
   transactions(
     @Req() request: AuthenticatedRequest,
     @Query() query: QuerySeasonalReportDto,
-  ): Promise<{ period: SeasonalVatReport['period']; rows: SeasonalTransactionRow[]; notes: string[] }> {
+  ): Promise<{
+    period: SeasonalVatReport['period'];
+    rows: SeasonalTransactionRow[];
+    purchaseRows: SeasonalPurchaseRow[];
+    notes: string[];
+  }> {
     return this.reports.transactions(this.tenantIdOf(request), query.year, query.quarter);
   }
 
@@ -62,5 +68,14 @@ export class SeasonalReportController {
     @Query() query: QuerySeasonalReportDto,
   ): Promise<string> {
     return this.reports.transactionsCsv(this.tenantIdOf(request), query.year, query.quarter);
+  }
+
+  @RequireAction(AccessAction.EXPORT)
+  @Get('seasonal-purchases.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'خروجی CSV فهرست خرید فصلی و مالیات ورودی' })
+  purchasesCsv(@Req() request: AuthenticatedRequest, @Query() query: QuerySeasonalReportDto): Promise<string> {
+    return this.reports.purchasesCsv(this.tenantIdOf(request), query.year, query.quarter);
   }
 }

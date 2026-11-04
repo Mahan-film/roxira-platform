@@ -9,3 +9,13 @@ export function formatJalaliYmd(date: Date): string {
   const pick = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
   return `${pick('year')}/${pick('month')}/${pick('day')}`;
 }
+
+/** `2026-05-01` for an instant, in the Asia/Tehran calendar day. */
+export function tehranDay(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tehran',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}

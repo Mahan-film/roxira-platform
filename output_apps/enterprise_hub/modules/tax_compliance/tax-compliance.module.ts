@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InvoiceEntity } from '../invoicing/entities/invoice.entity';
+import { CaptureDocumentEntity } from '../invoice_capture/entities/capture.entities';
 import { InvoicingModule } from '../invoicing/invoicing.module';
 import { MOADIAN_QUEUE } from './constants/moadian.constants';
 import { MoadianController } from './controllers/moadian.controller';
@@ -40,6 +41,7 @@ import { TaxComplianceService } from './services/tax-compliance.service';
       MoadianCredentialEntity,
       MoadianSubmissionEntity,
       InvoiceEntity,
+      CaptureDocumentEntity,
     ]),
     InvoicingModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),

@@ -68,7 +68,15 @@ export interface SeasonalVatReport {
     vat: number | string;
     byRate: SeasonalVatRateRow[];
   };
-  purchases: { available: false; note: string };
+  purchases: {
+    available: true;
+    documentCount: number;
+    invoiceCount: number;
+    captureCount: number;
+    taxableBase: number | string;
+    inputVat: number | string;
+    unreadableCaptures: number;
+  };
   notes: string[];
 }
 

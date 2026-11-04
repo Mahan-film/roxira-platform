@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
 import { InvoiceJurisdiction } from '../../invoicing/enums/invoice-jurisdiction.enum';
 import { InvoiceStatus } from '../../invoicing/enums/invoice-status.enum';
+import { CaptureDocumentEntity } from '../../invoice_capture/entities/capture.entities';
 
 /**
  * Read-only access to issued invoices for seasonal reports. Every query is
@@ -14,7 +15,49 @@ export class SeasonalReportRepository {
   constructor(
     @InjectRepository(InvoiceEntity)
     private readonly invoices: Repository<InvoiceEntity>,
+    @InjectRepository(CaptureDocumentEntity)
+    private readonly captures: Repository<CaptureDocumentEntity>,
   ) {}
+
+  /** Purchase invoices (direction PURCHASE, original subject) issued in `[from, to)`. */
+  async findPurchaseInvoicesBetween(tenantId: string, from: Date, to: Date): Promise<InvoiceEntity[]> {
+    return this.invoices
+      .createQueryBuilder('invoice')
+      .where('invoice.tenantId = :tenantId', { tenantId })
+      .andWhere('invoice.status IN (:...statuses)', {
+        statuses: [InvoiceStatus.ISSUED, InvoiceStatus.PAID],
+      })
+      .andWhere("invoice.direction = 'PURCHASE'")
+      .andWhere('invoice.subject = 1')
+      .andWhere('invoice.jurisdiction = :jurisdiction', { jurisdiction: InvoiceJurisdiction.IR })
+      .andWhere('invoice.issuedAt >= :from', { from })
+      .andWhere('invoice.issuedAt < :to', { to })
+      .orderBy('invoice.issuedAt', 'ASC')
+      .addOrderBy('invoice.taxInvoiceNumber', 'ASC')
+      .getMany();
+  }
+
+  /**
+   * Posted purchase captures dated in `[fromDay, toDay)` (Gregorian `YYYY-MM-DD`, Tehran days).
+   * Reversed and rejected documents are excluded: only `posted` and `auto_posted` count.
+   */
+  async findPostedCapturePurchasesBetween(
+    tenantId: string,
+    fromDay: string,
+    toDay: string,
+  ): Promise<CaptureDocumentEntity[]> {
+    const draftField = (key: string): string =>
+      `COALESCE(doc.edited ->> '${key}', doc.extracted -> 'draft' ->> '${key}')`;
+    return this.captures
+      .createQueryBuilder('doc')
+      .where('doc.tenantId = :tenantId', { tenantId })
+      .andWhere("doc.status IN ('posted', 'auto_posted')")
+      .andWhere(`${draftField('kind')} = 'purchase'`)
+      .andWhere(`${draftField('date')} >= :fromDay`, { fromDay })
+      .andWhere(`${draftField('date')} < :toDay`, { toDay })
+      .orderBy('doc.createdAt', 'ASC')
+      .getMany();
+  }
 
   /** Domestic (IR) invoices issued in `[from, to)`: ISSUED and PAID only. */
   async findIssuedBetween(tenantId: string, from: Date, to: Date): Promise<InvoiceEntity[]> {
