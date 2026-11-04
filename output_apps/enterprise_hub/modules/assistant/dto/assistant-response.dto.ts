@@ -29,4 +29,15 @@ export class AssistantChatResponseDto {
 
   @ApiProperty({ description: 'مدلی که پاسخ نهایی را داد', nullable: true })
   model: string | null;
+
+  @ApiProperty({
+    description: 'true اگر پاسخ مدل به‌خاطر عدد بدون شاهد رد و دستیار پرهیز کرد',
+  })
+  abstained: boolean;
+
+  @ApiProperty({
+    type: [String],
+    description: 'عددهای بدون شاهدی که باعث پرهیز شدند (فقط وقتی پرهیز شده)',
+  })
+  unverifiedNumbers: string[];
 }

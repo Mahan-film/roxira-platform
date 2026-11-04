@@ -68,6 +68,6 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     TenantScope,
     SeasonalReportRepository,
   ],
-  exports: [TaxComplianceService],
+  exports: [TaxComplianceService, VatReturnService],
 })
 export class TaxComplianceModule {}

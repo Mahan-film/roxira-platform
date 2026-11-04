@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from '../auth/enums/user-role.enum';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
 import { ASSISTANT_MAX_ROUNDS } from './constants/assistant.constants';
+import { ABSTAIN_MESSAGE_FA } from './validator/numeric-validator';
 import { LlmTurn } from './services/assistant-llm.service';
 import { AssistantRateLimiterService } from './services/assistant-rate-limiter.service';
 import { AssistantService, buildSystemPrompt } from './services/assistant.service';
@@ -283,5 +284,82 @@ describe('Jalali periods', () => {
 
   it('the system prompt carries today in Jalali', () => {
     expect(buildSystemPrompt(now)).toContain('1405/07/30');
+  });
+
+  describe('numeric validator (certified numbers, abstain without evidence)', () => {
+    const llm = { complete: jest.fn() };
+    const tools = {
+      definitions: jest.fn(() => [{ type: 'function', function: { name: 't' } }]),
+      run: jest.fn(),
+    };
+    let service: AssistantService;
+    beforeEach(() => {
+      jest.resetAllMocks();
+      tools.definitions.mockReturnValue([{ type: 'function', function: { name: 't' } }]);
+      service = new AssistantService(llm as never, tools as never, new AssistantRateLimiterService());
+    });
+    const ask = () => service.chat(owner, { message: 'موجودی صندوق چقدر است؟' });
+
+    it('lets an answer through when every number comes from a tool result', async () => {
+      llm.complete
+        .mockResolvedValueOnce(toolTurn('assistant_metric', { id: 'cash_balance' }))
+        .mockResolvedValueOnce(textTurn('موجودی صندوق ۱۵۰٬۰۰۰٬۰۰۰ ریال (۱۵ میلیون تومان) است.'));
+      tools.run.mockResolvedValueOnce({ ok: true, result: { id: 'cash_balance', value: 150_000_000 } });
+      const out = await ask();
+      expect(out.abstained).toBe(false);
+      expect(out.unverifiedNumbers).toEqual([]);
+      expect(out.answer).toContain('۱۵۰٬۰۰۰٬۰۰۰');
+    });
+
+    it('LLM invents a number with no tool call: abstains in Persian', async () => {
+      llm.complete
+        .mockResolvedValueOnce(textTurn('موجودی صندوق ۹۹٬۰۰۰٬۰۰۰ ریال است.'))
+        .mockResolvedValueOnce(textTurn('همچنان ۹۹٬۰۰۰٬۰۰۰ ریال است.'));
+      const out = await ask();
+      expect(out.abstained).toBe(true);
+      expect(out.answer).toBe(ABSTAIN_MESSAGE_FA);
+      expect(out.answer).not.toMatch(/\d|[۰-۹]/);
+      expect(out.unverifiedNumbers).toEqual(['99٬000٬000']);
+    });
+
+    it('LLM changes the tool number: one corrective retry, then the honest answer is shown', async () => {
+      llm.complete
+        .mockResolvedValueOnce(toolTurn('assistant_metric', { id: 'cash_balance' }))
+        .mockResolvedValueOnce(textTurn('موجودی ۱۶۰ میلیون ریال است.'))
+        .mockResolvedValueOnce(textTurn('موجودی ۱۵۰ میلیون ریال است.'));
+      tools.run.mockResolvedValueOnce({ ok: true, result: { id: 'cash_balance', value: 150_000_000 } });
+      const out = await ask();
+      expect(out.abstained).toBe(false);
+      expect(out.answer).toBe('موجودی ۱۵۰ میلیون ریال است.');
+      const retryMessages = llm.complete.mock.calls[2][0];
+      expect(retryMessages.at(-1).content).toContain('160');
+    });
+
+    it('a failed tool cannot back a number', async () => {
+      llm.complete
+        .mockResolvedValueOnce(toolTurn('assistant_metric', { id: 'cash_balance' }))
+        .mockResolvedValueOnce(textTurn('موجودی ۵۰۰ ریال است.'))
+        .mockResolvedValueOnce(textTurn('موجودی ۵۰۰ ریال است.'));
+      tools.run.mockResolvedValueOnce({ ok: false, result: { error: 'دسترسی ندارید.' } });
+      const out = await ask();
+      expect(out.abstained).toBe(true);
+    });
+
+    it('a retry that throws or is empty still abstains', async () => {
+      llm.complete
+        .mockResolvedValueOnce(textTurn('عدد ۷۷۷۷'))
+        .mockRejectedValueOnce(new Error('timeout'));
+      expect((await ask()).abstained).toBe(true);
+      llm.complete
+        .mockResolvedValueOnce(textTurn('عدد ۷۷۷۷'))
+        .mockResolvedValueOnce(textTurn('   '));
+      expect((await ask()).abstained).toBe(true);
+    });
+
+    it('numbers the user typed are not flagged', async () => {
+      llm.complete.mockResolvedValueOnce(textTurn('برای ۳۰ روز گذشته اطلاعاتی ندارم.'));
+      const out = await service.chat(owner, { message: 'فروش ۳۰ روز گذشته؟' });
+      expect(out.abstained).toBe(false);
+    });
   });
 });

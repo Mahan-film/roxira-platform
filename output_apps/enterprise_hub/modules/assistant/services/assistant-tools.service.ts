@@ -13,6 +13,8 @@ import {
   requireTenantId,
 } from '../../tenants/tenant-context';
 import { ASSISTANT_MAX_ROWS } from '../constants/assistant.constants';
+import { AssistantMetricsService } from '../metrics/assistant-metrics.service';
+import { METRIC_REGISTRY } from '../metrics/metric-registry';
 import { ASSISTANT_PERIODS, resolvePeriod } from './jalali-period';
 
 /** تعریف ابزار به قالب function-calling سازگار با OpenAI/OpenRouter. */
@@ -172,6 +174,21 @@ export const ASSISTANT_TOOLS: AssistantToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'assistant_metric',
+      description: `Certified business metric computed from posted ledger and module data (read-only, current tenant). Prefer it for headline figures. Metrics: ${METRIC_REGISTRY.map((m) => `${m.id} (${m.labelFa})`).join('; ')}. A null value means there is no evidence: say you are not certain, never guess.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', enum: METRIC_REGISTRY.map((m) => m.id) },
+        },
+        required: ['id'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'accounting_account_ledger',
       description: 'Movements and closing balance of one ledger account by code.',
       parameters: {
@@ -264,6 +281,7 @@ export class AssistantToolsService {
     private readonly mcpTools: McpToolsService,
     private readonly invoicingService: InvoicingService,
     private readonly inventoryService: InventoryService,
+    private readonly metrics: AssistantMetricsService,
   ) {
     this.handlers = {
       invoicing_sales_summary: (request, args) =>
@@ -277,6 +295,13 @@ export class AssistantToolsService {
         this.mcpTools.inventoryStock(request, {
           warehouseId: positiveInt(args, 'warehouseId'),
         }),
+      assistant_metric: async (request, args) => {
+        const outcome = await this.metrics.run(request, optionalString(args, 'id') ?? '');
+        if (!outcome.ok) {
+          throw new BadRequestException(outcome.error);
+        }
+        return outcome.result;
+      },
       crm_list_leads: (request, args) => this.listLeads(request, args),
       accounting_trial_balance: (request) =>
         this.mcpTools.accountingTrialBalance(request),

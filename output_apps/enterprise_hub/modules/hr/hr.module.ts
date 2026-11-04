@@ -54,6 +54,6 @@ import { StatutoryService } from './statutory/statutory.service';
     StatutoryRepository,
     TenantScope,
   ],
-  exports: [HrService],
+  exports: [HrService, PayrollRunService],
 })
 export class HrModule {}

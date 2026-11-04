@@ -5,6 +5,7 @@ import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from '../auth/enums/user-role.enum';
 import { InvoiceStatus } from '../invoicing/enums/invoice-status.enum';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
+import { AssistantMetricsService } from './metrics/assistant-metrics.service';
 import {
   ASSISTANT_TOOLS,
   AssistantToolsService,
@@ -45,10 +46,16 @@ describe('AssistantToolsService (tenant scoping)', () => {
     listStockItems: jest.fn().mockResolvedValue({ data: [], total: 0 }),
     listWarehouses: jest.fn().mockResolvedValue([]),
   };
+  const metricSources = {
+    dashboard: jest.fn().mockResolvedValue({
+      cash: 150, bank: 850, receivables: 1, payables: 1, taxDue: 0, inventory: 0,
+    }),
+  };
   const service = new AssistantToolsService(
     mcpTools as never,
     invoicingService as never,
     inventoryService as never,
+    new AssistantMetricsService(metricSources as never),
   );
 
   beforeEach(() => jest.clearAllMocks());
@@ -197,5 +204,30 @@ describe('AssistantToolsService (tenant scoping)', () => {
     });
     expect(out.ok).toBe(false);
     expect(mcpTools.inventoryStock).not.toHaveBeenCalled();
+  });
+
+  it('assistant_metric returns a certified metric for the JWT tenant only', async () => {
+    const out = await service.run(owner, 'assistant_metric', { id: 'cash_balance', ...HOSTILE });
+    expect(out).toMatchObject({ ok: true, result: { id: 'cash_balance', value: 150, unit: 'IRR' } });
+    expect(metricSources.dashboard.mock.calls[0][0]).toBe(TENANT_ID);
+  });
+
+  it('assistant_metric rejects unknown ids and never builds queries from them', async () => {
+    const out = await service.run(owner, 'assistant_metric', { id: "1; DROP TABLE x" });
+    expect(out.ok).toBe(false);
+    expect(metricSources.dashboard).not.toHaveBeenCalled();
+  });
+
+  it('assistant_metric is limited to modules the caller may read', async () => {
+    const out = await service.run(member, 'assistant_metric', { id: 'cash_balance' });
+    expect(out.ok).toBe(false);
+    expect(metricSources.dashboard).not.toHaveBeenCalled();
+  });
+
+  it('the metric tool lists every certified metric and takes no tenant or SQL argument', () => {
+    const tool = ASSISTANT_TOOLS.find((t) => t.function.name === 'assistant_metric');
+    expect(tool).toBeDefined();
+    const properties = (tool?.function.parameters as { properties: Record<string, unknown> }).properties;
+    expect(Object.keys(properties)).toEqual(['id']);
   });
 });

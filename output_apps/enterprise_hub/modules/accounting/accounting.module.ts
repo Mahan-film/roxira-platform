@@ -79,6 +79,6 @@ import { ReportExportService } from './services/report-export.service';
     PettyCashService,
     ReportExportService,
   ],
-  exports: [AccountingService],
+  exports: [AccountingService, FinancialReportsService],
 })
 export class AccountingModule {}
