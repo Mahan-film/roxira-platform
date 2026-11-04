@@ -72,6 +72,7 @@ export class InventoryService {
     return Math.round((value + Number.EPSILON) * factor) / factor;
   }
 
+  /** Same rule as `REORDER_STOCK_SQL` in the repository; switch both when available stock lands (#227 T1). */
   private isLowStock(quantity: number, minQuantity: number): boolean {
     return minQuantity > 0 && quantity <= minQuantity;
   }
