@@ -167,8 +167,12 @@ export class InvoicingService {
    * نرمال‌سازی نرخ VAT: ورودی می‌تواند نسبت (۰٫۱) یا درصد (۱۰) باشد؛
    * خروجی همیشه نسبت در بازه ۰ تا ۱ است.
    */
-  private normalizeVatRate(value: number | undefined, fallback: number): number {
+  private normalizeVatRate(value: number | undefined, fallback: number | null): number {
     if (value === undefined || value === null) {
+      if (fallback === null) {
+        // defaultVatRateForJurisdiction returns null only when every line has its own rate.
+        throw new BadRequestException('نرخ مالیات ارزش افزوده سطر مشخص نیست.');
+      }
       return this.roundRate(fallback);
     }
     if (!Number.isFinite(value) || value < 0) {
@@ -239,15 +243,24 @@ export class InvoicingService {
     return requested;
   }
 
-  /** Default VAT rate by jurisdiction: INTL zero; IR the general rate on the invoice date. */
+  /**
+   * Default VAT rate by jurisdiction: INTL zero; IR the general rate on the invoice date.
+   * `null` when every line carries its own rate: the store is then not read, so a date with no
+   * store row does not refuse an invoice that never needs the general rate (#126).
+   */
   private async defaultVatRateForJurisdiction(
     tenantId: string,
     jurisdiction: InvoiceJurisdiction,
     onDate: Date,
-  ): Promise<number> {
-    return jurisdiction === InvoiceJurisdiction.INTL
-      ? INTL_DEFAULT_VAT_RATE
-      : this.resolveDefaultVatRate(tenantId, onDate);
+    items: InvoiceItemDto[],
+  ): Promise<number | null> {
+    if (jurisdiction === InvoiceJurisdiction.INTL) {
+      return INTL_DEFAULT_VAT_RATE;
+    }
+    if (items.every((item) => item.vatRate !== undefined && item.vatRate !== null)) {
+      return null;
+    }
+    return this.resolveDefaultVatRate(tenantId, onDate);
   }
 
   /**
@@ -305,7 +318,7 @@ export class InvoicingService {
   private async normalizeItems(
     tenantId: string,
     items: InvoiceItemDto[],
-    defaultVatRate: number,
+    defaultVatRate: number | null,
     currency: Currency = Currency.IRR,
   ): Promise<InvoiceItem[]> {
     const normalized: InvoiceItem[] = [];
@@ -504,6 +517,7 @@ export class InvoicingService {
       tenantId,
       jurisdiction,
       new Date(),
+      source.items,
     );
     const fxRate = this.resolveFxRate(currency, source.fxRate);
 
@@ -806,6 +820,7 @@ export class InvoicingService {
       tenantId,
       jurisdiction,
       new Date(),
+      source.items,
     );
     const items = await this.normalizeItems(tenantId, source.items, defaultVatRate, currency);
     return { items, totals: this.computeTotals(items, currency), currency };
@@ -987,6 +1002,7 @@ export class InvoicingService {
         tenantId,
         entity.jurisdiction,
         entity.issuedAt ? new Date(entity.issuedAt) : new Date(),
+        dto.items,
       );
       const items = await this.normalizeItems(
         tenantId,
