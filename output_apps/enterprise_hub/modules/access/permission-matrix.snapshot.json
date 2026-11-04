@@ -2222,6 +2222,28 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/cheques/:id/partial-payment (ChequesController.partialPayment)": {
+    "policy": "cheques:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/:id/sayad-verification (ChequesController.verifySayad)": {
+    "policy": "cheques:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/cheques/:id/transition (ChequesController.transition)": {
     "policy": "cheques:post",
     "owner": true,
