@@ -248,3 +248,12 @@ export class PayrollRatesResponseDto {
   @ApiProperty({ description: 'پله‌های سالانه مالیات (upTo=null یعنی بی‌سقف)' })
   annualTaxBrackets: { upTo: number | null; rate: number }[];
 }
+
+export class PayrollReconciliationResponseDto {
+  @ApiProperty({ description: 'true when payslips, run totals and voucher lines all agree' })
+  ok: boolean;
+  @ApiProperty({ type: [String], description: 'each disagreement, empty when ok' })
+  problems: string[];
+  @ApiProperty() debitTotal: number;
+  @ApiProperty() creditTotal: number;
+}
