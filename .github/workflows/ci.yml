@@ -51,6 +51,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       projects: ${{ steps.filter.outputs.projects }}
       templates: ${{ steps.filter.outputs.templates }}
+      e2e: ${{ steps.filter.outputs.e2e }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -89,6 +90,11 @@ jobs:
               - ".github/workflows/ci.yml"
             templates:
               - "templates/**"
+              - ".github/workflows/ci.yml"
+            e2e:
+              - "e2e/**"
+              - "output_apps/enterprise_hub/**"
+              - "scripts/ci/mint_e2e_session.js"
               - ".github/workflows/ci.yml"
 
   gitleaks:
@@ -442,6 +448,108 @@ jobs:
           ROXIRA_TEST_PG_PORT: "5432"
           ROXIRA_TEST_PG_USER: postgres
         run: npx jest --runInBand --testPathPattern '\.pg\.spec\.ts$'
+
+  m1-gate:
+    # Issue #116 / docs/testing/M1_GATE.md. REPORT-ONLY: continue-on-error, and it is not a required check.
+    # Make it required (branch protection) only after the laptop developer says the gate is stable.
+    name: M1 gate (Playwright)
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: rxfresh
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rxfresh"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: "5432"
+      DATABASE_USER: postgres
+      # The service uses trust auth, the value is ignored but the app requires the key.
+      DATABASE_PASSWORD: ci-trust-auth
+      DATABASE_NAME: rxfresh
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "6379"
+      # Throwaway per-run secret for this job's own backend; never a real key.
+      JWT_SECRET: ci-m1-gate-throwaway-secret-0123456789abcdef
+      JWT_SECRET_KEY: ci-m1-gate-throwaway-secret-0123456789abcdef
+      NEST_API_ORIGIN: http://127.0.0.1:3000
+      JUDGE_API_ORIGIN: http://127.0.0.1:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Backend install, build, fresh migrations
+        working-directory: output_apps/enterprise_hub
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          npm run migration:run
+      - name: Start backend (:3000)
+        working-directory: output_apps/enterprise_hub
+        env:
+          NODE_ENV: production
+          PORT: "3000"
+        run: |
+          nohup node dist/main > "$RUNNER_TEMP/backend.log" 2>&1 &
+          for i in $(seq 1 60); do
+            grep -q "successfully started" "$RUNNER_TEMP/backend.log" && exit 0
+            sleep 2
+          done
+          echo "::error::backend did not start"; tail -40 "$RUNNER_TEMP/backend.log"; exit 1
+      - name: Frontend install, build, start (:3001)
+        working-directory: output_apps/enterprise_hub/frontend
+        run: |
+          npm ci
+          npm run build
+          PORT=3001 HOSTNAME=127.0.0.1 nohup npm run start > "$RUNNER_TEMP/frontend.log" 2>&1 &
+          for i in $(seq 1 45); do
+            curl -fs -o /dev/null http://127.0.0.1:3001/ && exit 0
+            sleep 2
+          done
+          echo "::error::frontend did not start"; tail -40 "$RUNNER_TEMP/frontend.log"; exit 1
+      - name: Mint a throwaway tenant session
+        working-directory: output_apps/enterprise_hub
+        run: NODE_PATH="$PWD/node_modules" node ../../scripts/ci/mint_e2e_session.js "$RUNNER_TEMP/session.m1.json"
+      - name: Install Playwright (chromium)
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run the M1 gate
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: http://127.0.0.1:3001
+          APP_E2E_SESSION_FILE_M1: ${{ runner.temp }}/session.m1.json
+          CI: "true"
+        run: npx playwright test m1-shop-month --project=chromium --reporter=list,html
+      - name: Upload report and service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1-gate-report
+          path: |
+            e2e/playwright-report
+            ${{ runner.temp }}/backend.log
+            ${{ runner.temp }}/frontend.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   frontend-gate:
     name: Frontend gate
