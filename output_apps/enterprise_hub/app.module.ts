@@ -29,6 +29,7 @@ import { ChequesModule } from './modules/cheques/cheques.module';
 import { McpModule } from './mcp/mcp.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { InvoiceCaptureModule } from './modules/invoice_capture/invoice-capture.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
   (file) => {
@@ -97,6 +98,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     McpModule,
     AssistantModule,
     InvoiceCaptureModule,
+    CalendarModule,
   ],
 })
 export class AppModule {}
