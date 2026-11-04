@@ -304,7 +304,7 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       expect(await claim(T1)).toBe(true);
       expect(await claim(T1)).toBe(false);
       expect(await claim(T2)).toBe(true);
-      expect(await posting.findSource(T1, 'payroll_run', '7')).not.toBeNull();
+      expect(await posting.findSource(T1, 'payroll_run', '7', 'payroll.run')).not.toBeNull();
       expect(await app.query(`SELECT count(*)::int AS n FROM fin_posting_sources`)).toEqual([{ n: 0 }]);
     });
 

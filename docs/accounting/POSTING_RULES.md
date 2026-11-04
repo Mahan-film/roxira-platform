@@ -15,7 +15,7 @@ Module: `output_apps/enterprise_hub/modules/posting_rules` (issue #230, PR #233)
 - **Tenant mapping** (`fin_posting_role_maps`, FORCE RLS): role -> account code per document type, or `*` for all.
   Resolution order: caller override (e.g. the bank account's own ledger code) > doc type mapping > `*` mapping >
   template default > global default from `iran-chart-template.ts`.
-- **Source ledger** (`fin_posting_sources`, FORCE RLS): unique `(tenant, source_type, source_id)`. A second `post()` for
+- **Source ledger** (`fin_posting_sources`, FORCE RLS): unique `(tenant, source_type, source_id, doc_type)` (one source may post several document types). A second `post()` for
   the same source returns the first voucher (`replayed: true`) and writes nothing.
 
 ## API for modules
@@ -26,7 +26,7 @@ await postingRules.post(tenantId, {
   date: isoDate, description, entryNumber,           // entryNumber optional
   amounts: { gross, employerCost, insurance, incomeTax, otherDeductions, net }, // bigint minor units
 }, manager);                                          // joins the caller's transaction
-await postingRules.reverse(tenantId, 'payroll_run', String(run.id), { reason });
+await postingRules.reverse(tenantId, 'payroll.run', 'payroll_run', String(run.id), { reason });
 ```
 
 Refusals are `PostingRuleError` (HTTP 400, Persian message, `code`): `MISSING_AMOUNT`, `NEGATIVE_AMOUNT`,

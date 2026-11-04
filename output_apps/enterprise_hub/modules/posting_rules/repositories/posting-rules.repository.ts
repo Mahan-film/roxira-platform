@@ -46,28 +46,28 @@ export class PostingRulesRepository {
     const rows: Array<{ id: number }> = await this.scope.within(tenantId, manager, (m) =>
       m.query(
         `INSERT INTO "fin_posting_sources" ("tenant_id","source_type","source_id","doc_type") VALUES ($1,$2,$3,$4)
-         ON CONFLICT ("tenant_id","source_type","source_id") DO NOTHING RETURNING "id"`,
+         ON CONFLICT ("tenant_id","source_type","source_id","doc_type") DO NOTHING RETURNING "id"`,
         [tenantId, sourceType, sourceId, docType],
       ),
     );
     return rows.length > 0;
   }
 
-  findSource(tenantId: string, sourceType: string, sourceId: string, manager?: EntityManager): Promise<PostingSourceEntity | null> {
+  findSource(tenantId: string, sourceType: string, sourceId: string, docType: string, manager?: EntityManager): Promise<PostingSourceEntity | null> {
     return this.scope.within(tenantId, manager, (m) =>
-      m.getRepository(PostingSourceEntity).findOne({ where: { tenantId, sourceType, sourceId } }),
+      m.getRepository(PostingSourceEntity).findOne({ where: { tenantId, sourceType, sourceId, docType } }),
     );
   }
 
-  async attachEntry(tenantId: string, sourceType: string, sourceId: string, entryId: number, entryNumber: string, manager: EntityManager): Promise<void> {
+  async attachEntry(tenantId: string, sourceType: string, sourceId: string, docType: string, entryId: number, entryNumber: string, manager: EntityManager): Promise<void> {
     await this.scope.within(tenantId, manager, (m) =>
-      m.getRepository(PostingSourceEntity).update({ tenantId, sourceType, sourceId }, { entryId, entryNumber }),
+      m.getRepository(PostingSourceEntity).update({ tenantId, sourceType, sourceId, docType }, { entryId, entryNumber }),
     );
   }
 
-  async attachReversal(tenantId: string, sourceType: string, sourceId: string, reversalEntryId: number, manager?: EntityManager): Promise<void> {
+  async attachReversal(tenantId: string, sourceType: string, sourceId: string, docType: string, reversalEntryId: number, manager?: EntityManager): Promise<void> {
     await this.scope.within(tenantId, manager, (m) =>
-      m.getRepository(PostingSourceEntity).update({ tenantId, sourceType, sourceId }, { reversalEntryId }),
+      m.getRepository(PostingSourceEntity).update({ tenantId, sourceType, sourceId, docType }, { reversalEntryId }),
     );
   }
 }

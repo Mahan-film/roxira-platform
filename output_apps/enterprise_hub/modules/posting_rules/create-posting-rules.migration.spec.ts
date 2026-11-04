@@ -16,7 +16,7 @@ describe('CreatePostingRules migration', () => {
       expect(sql).toContain(`CREATE POLICY "${table}_tenant" ON "${table}"`);
     }
     expect(sql).toContain('ON "fin_posting_role_maps" ("tenant_id", "doc_type", "role")');
-    expect(sql).toContain('ON "fin_posting_sources" ("tenant_id", "source_type", "source_id")');
+    expect(sql).toContain('ON "fin_posting_sources" ("tenant_id", "source_type", "source_id", "doc_type")');
   });
 
   it('down() removes policies before dropping the tables', async () => {

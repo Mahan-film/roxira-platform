@@ -13,17 +13,17 @@ function setup(accounts = [account('1012', AccountType.ASSET), account('1020', A
     runInTransaction: jest.fn(async (_t: string, work: (m: unknown) => unknown) => work({})),
     listMappings: jest.fn(async (_t: string, types: string[]) => maps.filter((m) => types.includes(m.docType))),
     listAllMappings: jest.fn(async () => maps),
-    findSource: jest.fn(async (_t: string, st: string, sid: string) => sources.get(`${st}/${sid}`) ?? null),
-    claimSource: jest.fn(async (_t: string, st: string, sid: string) => {
-      if (sources.has(`${st}/${sid}`)) return false;
-      sources.set(`${st}/${sid}`, { entryId: null, entryNumber: null, reversalEntryId: null });
+    findSource: jest.fn(async (_t: string, st: string, sid: string, dt: string) => sources.get(`${st}/${sid}/${dt}`) ?? null),
+    claimSource: jest.fn(async (_t: string, st: string, sid: string, dt: string) => {
+      if (sources.has(`${st}/${sid}/${dt}`)) return false;
+      sources.set(`${st}/${sid}/${dt}`, { entryId: null, entryNumber: null, reversalEntryId: null });
       return true;
     }),
-    attachEntry: jest.fn(async (_t: string, st: string, sid: string, entryId: number, entryNumber: string) => {
-      Object.assign(sources.get(`${st}/${sid}`)!, { entryId, entryNumber });
+    attachEntry: jest.fn(async (_t: string, st: string, sid: string, dt: string, entryId: number, entryNumber: string) => {
+      Object.assign(sources.get(`${st}/${sid}/${dt}`)!, { entryId, entryNumber });
     }),
-    attachReversal: jest.fn(async (_t: string, st: string, sid: string, id: number) => {
-      sources.get(`${st}/${sid}`)!.reversalEntryId = id;
+    attachReversal: jest.fn(async (_t: string, st: string, sid: string, dt: string, id: number) => {
+      sources.get(`${st}/${sid}/${dt}`)!.reversalEntryId = id;
     }),
     upsertMapping: jest.fn(),
     deleteMapping: jest.fn(),
@@ -63,6 +63,22 @@ describe('PostingRulesService', () => {
     ]);
   });
 
+  it('one source can post two different document types', async () => {
+    const { service, accounting } = setup();
+    await service.post(T, request());
+    const second = await service.post(T, request({ docType: 'bank.payment' }));
+    expect(second.replayed).toBe(false);
+    expect(accounting.createJournalEntry).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses to post when the source is claimed but not yet posted, and an over-long number', async () => {
+    const { service, accounting, sources } = setup();
+    sources.set('bank_txn/9/bank.receipt', { entryId: null, entryNumber: null, reversalEntryId: null });
+    await expect(service.post(T, request())).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.post(T, request({ sourceId: '10', entryNumber: 'X'.repeat(65) }))).rejects.toThrow(/۶۴ نویسه/);
+    expect(accounting.createJournalEntry).not.toHaveBeenCalled();
+  });
+
   it('refuses an unmapped role and writes nothing', async () => {
     const { service, accounting, sources } = setup();
     await expect(service.post(T, request({ overrides: { bank: '1012' } }))).rejects.toThrow(/حسابی تعیین نشده/);
@@ -86,11 +102,11 @@ describe('PostingRulesService', () => {
   it('reverses through the source and refuses a second reversal', async () => {
     const { service, accounting } = setup();
     await service.post(T, request());
-    const reversal = await service.reverse(T, 'bank_txn', '9', { reason: 'x' });
+    const reversal = await service.reverse(T, 'bank.receipt', 'bank_txn', '9', { reason: 'x' });
     expect(accounting.reverseJournalEntry).toHaveBeenCalledWith(T, 100, { reason: 'x' });
     expect(reversal.entryId).toBe(1100);
-    await expect(service.reverse(T, 'bank_txn', '9')).rejects.toBeInstanceOf(ConflictException);
-    await expect(service.reverse(T, 'bank_txn', 'none')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.reverse(T, 'bank.receipt', 'bank_txn', '9')).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.reverse(T, 'bank.receipt', 'bank_txn', 'none')).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('setMapping validates posting level and role/type fit', async () => {

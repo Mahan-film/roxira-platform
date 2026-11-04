@@ -39,7 +39,7 @@ export class CreatePostingRules1789510000000 implements MigrationInterface {
       )`,
     );
     await q.query(
-      `CREATE UNIQUE INDEX IF NOT EXISTS "UQ_fin_posting_sources" ON "fin_posting_sources" ("tenant_id", "source_type", "source_id")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "UQ_fin_posting_sources" ON "fin_posting_sources" ("tenant_id", "source_type", "source_id", "doc_type")`,
     );
     for (const table of TABLES) await enableTenantRls(q, table);
   }

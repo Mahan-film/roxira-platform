@@ -2,10 +2,10 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 
 
 /**
  * One row per source document that was posted by the engine: the idempotency key
- * (tenant, source type, source id) and the vouchers it produced.
+ * (tenant, source type, source id, doc type) and the vouchers it produced.
  */
 @Entity({ name: 'fin_posting_sources' })
-@Index('UQ_fin_posting_sources', ['tenantId', 'sourceType', 'sourceId'], { unique: true })
+@Index('UQ_fin_posting_sources', ['tenantId', 'sourceType', 'sourceId', 'docType'], { unique: true })
 export class PostingSourceEntity {
   @PrimaryGeneratedColumn()
   id: number;

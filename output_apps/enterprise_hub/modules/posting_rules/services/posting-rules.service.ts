@@ -85,37 +85,50 @@ export class PostingRulesService {
    */
   async post(tenantId: string, request: PostingRequest, manager?: EntityManager): Promise<PostingResult> {
     const run = async (m: EntityManager): Promise<PostingResult> => {
-      const existing = await this.repository.findSource(tenantId, request.sourceType, request.sourceId, m);
+      const existing = await this.repository.findSource(tenantId, request.sourceType, request.sourceId, request.docType, m);
       if (existing?.entryId) return { entryId: existing.entryId, entryNumber: existing.entryNumber ?? '', replayed: true };
 
       const proposal = await this.propose(tenantId, request, m);
       if (!(await this.repository.claimSource(tenantId, request.sourceType, request.sourceId, request.docType, m))) {
-        const raced = await this.repository.findSource(tenantId, request.sourceType, request.sourceId, m);
+        const raced = await this.repository.findSource(tenantId, request.sourceType, request.sourceId, request.docType, m);
         if (raced?.entryId) return { entryId: raced.entryId, entryNumber: raced.entryNumber ?? '', replayed: true };
+        // claimed by a transaction that has not finished: never post a second voucher
+        throw new ConflictException('ثبت سند این سند منبع در حال انجام است؛ دوباره تلاش کنید.');
       }
       const entry = await this.accounting.createJournalEntry(
         tenantId,
         {
-          entryNumber: request.entryNumber ?? `${request.sourceType}-${request.sourceId}`.slice(0, 64),
+          entryNumber: this.entryNumberOf(request),
           date: request.date,
           description: request.description,
           lines: toJournalLines(proposal),
         },
         m,
       );
-      await this.repository.attachEntry(tenantId, request.sourceType, request.sourceId, entry.id, entry.entryNumber, m);
+      await this.repository.attachEntry(tenantId, request.sourceType, request.sourceId, request.docType, entry.id, entry.entryNumber, m);
       return { entryId: entry.id, entryNumber: entry.entryNumber, replayed: false };
     };
     return manager ? run(manager) : this.repository.runInTransaction(tenantId, run);
   }
 
-  /** Reverses the voucher the engine posted for a source document (debit and credit swapped). */
-  async reverse(tenantId: string, sourceType: string, sourceId: string, options: { date?: string; reason?: string } = {}): Promise<PostingResult> {
-    const source = await this.repository.findSource(tenantId, sourceType, sourceId);
+  /** `<sourceType>-<sourceId>` unless given; either way it must fit the 64-char column. */
+  private entryNumberOf(request: PostingRequest): string {
+    const number = request.entryNumber ?? `${request.sourceType}-${request.sourceId}`;
+    if (number.length > 64) throw new PostingRuleError('INVALID_MAPPING', `شماره سند «${number.slice(0, 20)}…» از ۶۴ نویسه بلندتر است.`);
+    return number;
+  }
+
+  /**
+   * Reverses the voucher the engine posted for a source document (debit and credit swapped).
+   * Two concurrent calls cannot both succeed: the ledger allows one reversal per entry (unique index)
+   * and the loser gets its 409; marking the source row afterwards is bookkeeping only.
+   */
+  async reverse(tenantId: string, docType: string, sourceType: string, sourceId: string, options: { date?: string; reason?: string } = {}): Promise<PostingResult> {
+    const source = await this.repository.findSource(tenantId, sourceType, sourceId, docType);
     if (!source?.entryId) throw new NotFoundException('برای این سند منبع، سند حسابداری ثبت‌شده‌ای وجود ندارد.');
     if (source.reversalEntryId) throw new ConflictException('سند حسابداری این سند منبع قبلاً برگشت خورده است.');
     const reversal = await this.accounting.reverseJournalEntry(tenantId, source.entryId, options);
-    await this.repository.attachReversal(tenantId, sourceType, sourceId, reversal.id);
+    await this.repository.attachReversal(tenantId, sourceType, sourceId, docType, reversal.id);
     return { entryId: reversal.id, entryNumber: reversal.entryNumber, replayed: false };
   }
 
