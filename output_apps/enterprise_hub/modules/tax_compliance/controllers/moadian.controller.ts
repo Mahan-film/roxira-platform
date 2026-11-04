@@ -13,6 +13,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
@@ -74,8 +75,9 @@ export class MoadianController {
   async submit(
     @Req() request: AuthenticatedRequest,
     @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
+    @Body() body?: SubmitMoadianInvoiceDto,
   ): Promise<MoadianSubmissionResponseDto> {
-    return this.moadianService.submitInvoice(this.tenantIdOf(request), invoiceId);
+    return this.moadianService.submitInvoice(this.tenantIdOf(request), invoiceId, body ?? {});
   }
 
   @Get('invoices/:invoiceId/status')

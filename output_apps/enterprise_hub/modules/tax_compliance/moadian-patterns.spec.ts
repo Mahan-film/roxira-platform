@@ -73,7 +73,7 @@ describe('type 1 and type 2, pattern 1 (sale)', () => {
 
   it('type 2 is refused for patterns other than 1 and 3', () => {
     for (const pattern of [P.SALE_CURRENCY, P.CONTRACT, P.UTILITY_BILLS, P.AIRLINE_TICKET, P.EXPORT]) {
-      expect(() => map(pattern, {}, { buyerInfo: { name: 'Walk-in' } })).toThrow(/type 2 is allowed only/);
+      expect(() => map(pattern, {}, { buyerInfo: { name: 'Walk-in' } })).toThrow(/نوع ۲.*فقط برای الگوهای ۱ و ۳/);
     }
   });
 
@@ -97,9 +97,9 @@ describe('pattern 2 (currency sale)', () => {
     expect(body[0]).toMatchObject({ am: null, fee: null, mu: null, cfee: 100, cut: 'USD', exr: 600_000, cpr: 590_000, sovat: 1_000_000 });
   });
   it('needs cfee, cut, exr, cpr and sovat and cpr below exr', () => {
-    expect(() => map(P.SALE_CURRENCY)).toThrow(/cfee is mandatory/);
-    expect(() => map(P.SALE_CURRENCY, { extras: { items: [{ ...item, cpr: 600_000 }] } })).toThrow(/cpr must satisfy/);
-    expect(() => map(P.SALE_CURRENCY, { extras: { items: [{ ...item, cut: 'US' }] } })).toThrow(/cut has an invalid/);
+    expect(() => map(P.SALE_CURRENCY)).toThrow(/cfee اجباری/);
+    expect(() => map(P.SALE_CURRENCY, { extras: { items: [{ ...item, cpr: 600_000 }] } })).toThrow(/cpr باید/);
+    expect(() => map(P.SALE_CURRENCY, { extras: { items: [{ ...item, cut: 'US' }] } })).toThrow(/cut قالب/);
   });
 });
 
@@ -112,24 +112,24 @@ describe('pattern 3 (gold)', () => {
   it('is allowed for type 2 and refuses missing wages', () => {
     const { header } = map(P.GOLD, { extras: { items: [item] } }, { buyerInfo: { name: 'W' } });
     expect(header.inty).toBe(2);
-    expect(() => map(P.GOLD, { extras: { items: [{ ...item, consfee: null }] } })).toThrow(/consfee is mandatory/);
+    expect(() => map(P.GOLD, { extras: { items: [{ ...item, consfee: null }] } })).toThrow(/consfee اجباری/);
     expect(() => map(P.GOLD, { extras: { items: [{ cui: 1001, consfee: 1, spro: 1, bros: 1 }] } })).toThrow(/cui/);
   });
 });
 
 describe('pattern 4 (contract), 5 (utility bill), 6 (airline ticket)', () => {
   it('contract needs crn of at most 12 digits', () => {
-    expect(() => map(P.CONTRACT)).toThrow(/crn is mandatory/);
-    expect(() => map(P.CONTRACT, { extras: { header: { crn: '1234567890123' } } })).toThrow(/crn has an invalid/);
+    expect(() => map(P.CONTRACT)).toThrow(/crn اجباری/);
+    expect(() => map(P.CONTRACT, { extras: { header: { crn: '1234567890123' } } })).toThrow(/crn قالب/);
     expect(map(P.CONTRACT, { extras: { header: { crn: '123456789012' } } }).header.crn).toBe('123456789012');
   });
   it('utility bill needs billid of at most 19 digits', () => {
-    expect(() => map(P.UTILITY_BILLS)).toThrow(/billid is mandatory/);
+    expect(() => map(P.UTILITY_BILLS)).toThrow(/billid اجباری/);
     expect(map(P.UTILITY_BILLS, { extras: { header: { billid: '1234567890123456789' } } }).header.billid).toBe('1234567890123456789');
   });
   it('airline ticket needs ft 1 or 2 and a passport or id for a foreign buyer', () => {
-    expect(() => map(P.AIRLINE_TICKET)).toThrow(/ft is mandatory/);
-    expect(() => map(P.AIRLINE_TICKET, { extras: { header: { ft: 3 } } })).toThrow(/ft has an invalid/);
+    expect(() => map(P.AIRLINE_TICKET)).toThrow(/ft اجباری/);
+    expect(() => map(P.AIRLINE_TICKET, { extras: { header: { ft: 3 } } })).toThrow(/ft قالب/);
     expect(map(P.AIRLINE_TICKET, { extras: { header: { ft: 1 } } }).header.ft).toBe(1);
     expect(() => map(P.AIRLINE_TICKET, { extras: { header: { ft: 2, tob: 4, bid: null } } }, { buyerInfo: { name: 'F', economicCode: '00123456780012' } })).toThrow(/bid|bpn/);
   });
@@ -147,14 +147,14 @@ describe('pattern 7 (export)', () => {
     expect(header).toMatchObject({ tprdis: null, tdis: null, tadis: null, torv: 6_000_000, tocv: 10, tonw: 12.5, tbill: 6_000_000, tvam: 0 });
   });
   it('needs ssrv, sscv, cut and exr and refuses a corrective subject', () => {
-    expect(() => map(P.EXPORT)).toThrow(/ssrv is mandatory/);
-    expect(() => map(P.EXPORT, { subject: MoadianInvoiceSubject.CORRECTIVE, referenceTaxId: 'A'.repeat(22), extras: { items: [item] } })).toThrow(/pattern 7/);
+    expect(() => map(P.EXPORT)).toThrow(/ssrv اجباری/);
+    expect(() => map(P.EXPORT, { subject: MoadianInvoiceSubject.CORRECTIVE, referenceTaxId: 'A'.repeat(22), extras: { items: [item] } })).toThrow(/الگوی ۷/);
   });
 });
 
 describe('extras', () => {
   it('refuses a field outside patterns 1 to 7 instead of sending it unchecked', () => {
-    expect(() => map(P.SALE, { extras: { header: { lno: '1' } } })).toThrow(/outside patterns 1 to 7: lno/);
+    expect(() => map(P.SALE, { extras: { header: { lno: '1' } } })).toThrow(/خارج از الگوهای ۱ تا ۷ دارد: lno/);
     expect(() => map(P.SALE, { extras: { items: [{ zzz: 1 }] } })).toThrow(/zzz/);
   });
 });
@@ -162,14 +162,14 @@ describe('extras', () => {
 describe('subject and late submission', () => {
   const ref = 'A1B2C30510C00000000019';
   it('a main invoice has no irtaxid, other subjects need one of 22 characters', () => {
-    expect(() => map(P.SALE, { subject: MoadianInvoiceSubject.CANCELLATION })).toThrow(/irtaxid is required/);
+    expect(() => map(P.SALE, { subject: MoadianInvoiceSubject.CANCELLATION })).toThrow(/irtaxid در این حالت لازم/);
     expect(map(P.SALE, { subject: MoadianInvoiceSubject.CANCELLATION, referenceTaxId: ref }).header.irtaxid).toBe(ref);
     expect(map(P.SALE, { referenceTaxId: ref }).header.irtaxid).toBeNull();
   });
   it('indati2m and insr go together and indati2m is later than indatim', () => {
     const issued = Date.parse('2026-10-22T08:30:00Z');
     expect(map(P.SALE, { lateRegistrationAt: issued + 1000 }).header).toMatchObject({ insr: 1, indati2m: issued + 1000 });
-    expect(() => map(P.SALE, { lateRegistrationAt: issued })).toThrow(/indati2m must be later/);
+    expect(() => map(P.SALE, { lateRegistrationAt: issued })).toThrow(/indati2m.*بعد از/);
   });
   it('type 3 and patterns beyond 7 are refused (unclear / not covered)', () => {
     expect(() => validatePacketAgainstPattern({ inty: 3, inp: 1 }, [])).toThrow(/unclear/);
