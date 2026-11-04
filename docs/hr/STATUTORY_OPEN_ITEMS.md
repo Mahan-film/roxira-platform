@@ -19,6 +19,8 @@ records that with `PUT /enterprise-hub/hr/statutory-parameters`.
 | `insurable_ceiling_multiplier` | 7 | Old code | SSO circular for 1405 |
 | `child_allowance_days` | 3 | Old code | Social Security Act art. 86 |
 | `monthly_work_hours`, `payroll_month_days`, `overtime_premium`, `night_shift_premium`, `holiday_premium` | 220, 30, 40%, 35%, 40% | Old code | Labour Law arts. 51, 58, 59, 62 |
+| `contract_retention_rate`, `contract_insurance_deposit_rate`, `contract_insurance_rate_mechanical`, `contract_insurance_rate_non_mechanical` | 10 / 5 / 7 / 15% | Secondary sources (docs/legal_sources/iran/contract-statutory-parameters.md) | General Conditions of Contract art. 35; Social Security Act art. 38; SSO circular 14 |
+| `contract_insurance_rate_civil_executive`, `contract_insurance_rate_civil_consulting`, `contract_unemployment_addon_fraction`, `contract_tax_withholding_rate`, `contract_advance_payment_max_rate` | NULL (unclear) | No official figure established | SSO resolutions 129 and 143; what replaced Direct Taxes Law art. 104 |
 | All 1404 values | see seed | Old code | The 1404 texts; they are not in this repository |
 
 Note: the old code carried seniority as 5,000,000 a month. Circular 6682 sets 166,667 a day, so the

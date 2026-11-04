@@ -3,6 +3,8 @@
 import { useCallback, useId, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { ENAMAD } from "@/lib/enamad";
+
 /**
  * Official eNamad (نماد اعتماد الکترونیکی) trust seal.
  *
@@ -16,7 +18,8 @@ import type { CSSProperties } from "react";
  *
  *   1. plain native `<a>` + `<img>` tags (never `next/image`, never a fetch);
  *   2. WITHOUT any `rel` attribute — no `noopener`, no `noreferrer`;
- *   3. WITHOUT `target="_blank"` (which would imply `rel="noopener"`);
+ *   3. `target="_blank"` exactly as in the official eNamad snippet (the
+ *      referrerpolicy attribute, not rel, controls what is sent);
  *   4. carrying the literal lower-case `referrerpolicy="origin"` attribute on
  *      BOTH the `<a>` and the `<img>`.
  *
@@ -46,7 +49,7 @@ export interface EnamadSealCredentials {
  */
 export const ENAMAD_SEALS: Readonly<Record<EnamadDomain, EnamadSealCredentials>> = {
   ghazi: { id: "7491439", code: "yFeNLueqB3RV5ZK9nT7avRH3IR8jSeYa" },
-  roxira: { id: "7480559", code: "y8CR7EIrUfh4ZL897SvEy6SCJPlf5bBp" },
+  roxira: ENAMAD,
 } as const;
 
 export const DEFAULT_ENAMAD_DOMAIN: EnamadDomain = "roxira";
@@ -225,9 +228,10 @@ export function EnamadBadge({
   const handleLogoError = useCallback(() => setLogoFailed(true), []);
 
   return (
-    /* Plain <a>: NO rel, NO target (target would imply rel=noopener). */
+    /* Plain <a>, official snippet: target=_blank, referrerpolicy=origin, NO rel. */
     <a
       {...ENAMAD_REFERRER_ATTRIBUTE}
+      target="_blank"
       href={href}
       id={`enamad-${credentials.id}`}
       className={className ? `${ANCHOR_CLASSES} ${className}` : ANCHOR_CLASSES}

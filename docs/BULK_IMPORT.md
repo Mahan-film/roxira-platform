@@ -61,6 +61,7 @@ size in the message. At most `IMPORT_BULK_MAX_ACTIVE_JOBS` (5) jobs per organisa
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | token with Object Read & Write on that bucket only |
 | `IMPORT_TENANT_QUOTA_BYTES` | optional, default 53 687 091 200 (50 GiB) |
 | `IMPORT_PART_BYTES`, `IMPORT_STAGING_RETENTION_DAYS` | optional (64 MiB, 14 days) |
+| `IMPORT_PROXY_PARTS`, `IMPORT_PART_CHECKSUMS`, `IMPORT_STAGING_MAX_BYTES` | optional: API relay fallback (on), per-part SHA-256 (off until probed), staging table ceiling (6 GiB). See `docs/ops/HUGE_IMPORT.md` |
 
 **Host prerequisite (one command on srv1, owner/ops):** `install -d -o 100 -g 101 /var/lib/roxira/import-spool`. The backend
 container's `/tmp` is a RAM tmpfs inside a 900 MB limit, so XLSX shared-string and nested-workbook spills go to this folder

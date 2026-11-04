@@ -9,7 +9,7 @@ import { MappingMemoryService } from '../services/mapping-memory.service';
 import { Optional } from '@nestjs/common';
 import { BulkImportRepository } from './bulk-import.repository';
 import { BulkJob, BulkTableInfo } from './bulk-import.types';
-import { progressIntervalMs, STAGING_BATCH_CHARS, STAGING_BATCH_ROWS } from './bulk.constants';
+import { progressIntervalMs, STAGING_BATCH_CHARS, STAGING_BATCH_ROWS, stagingMaxBytes } from './bulk.constants';
 import { OBJECT_STORE, ObjectStore } from './storage/object-store';
 import { parseSource } from './stream/source-parser';
 import { Cell, ImportFileError } from './stream/types';
@@ -122,7 +122,19 @@ export class BulkImportRunner {
       writing.catch(() => undefined); // the error is raised by the next `await writing`
     };
 
+    let lastSpaceCheck = 0;
     const controlRequested = async (): Promise<RunOutcome | null> => {
+      if (Date.now() - lastSpaceCheck >= 15_000) {
+        lastSpaceCheck = Date.now();
+        const used = await this.repo.stagingBytes();
+        if (used > stagingMaxBytes()) {
+          await flush();
+          await writing;
+          throw new ImportFileError(
+            'فضای موقت پردازش فایل‌های حجیم فعلاً پر است. ورودهای دیگر را تمام یا لغو کنید و این ورود را «ادامه» دهید؛ از همین‌جا ادامه می‌یابد.',
+          );
+        }
+      }
       const status = await this.repo.status(tenantId, job.id);
       if (status === 'pausing') {
         await flush();

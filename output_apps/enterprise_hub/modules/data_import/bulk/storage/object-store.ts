@@ -6,6 +6,12 @@ export interface CompletedPart {
   etag: string;
 }
 
+/** What the API knows about a part it relays (fallback path): exact size and the optional base64 SHA-256. */
+export interface PutPartMeta {
+  size: number;
+  checksumSha256?: string;
+}
+
 export interface PartInfo {
   partNumber: number;
   size: number;
@@ -22,11 +28,15 @@ export interface ObjectStore {
   /** True when the browser can PUT directly to a presigned URL (false for `local`). */
   readonly direct: boolean;
   createMultipart(key: string): Promise<{ uploadId: string }>;
-  presignPart(key: string, uploadId: string, partNumber: number, expiresSeconds: number): Promise<string>;
+  /**
+   * `checksumSha256` (base64) binds the URL to that digest: storage rejects a part whose bytes differ, and the
+   * browser must send the same value in the `x-amz-checksum-sha256` header.
+   */
+  presignPart(key: string, uploadId: string, partNumber: number, expiresSeconds: number, checksumSha256?: string): Promise<string>;
   /** Parts already stored: this is what makes an upload resumable after a closed tab. */
   listParts(key: string, uploadId: string): Promise<PartInfo[]>;
   /** Used by the local driver, which has no presigned URLs. */
-  putPart(key: string, uploadId: string, partNumber: number, body: Readable): Promise<{ etag: string; size: number }>;
+  putPart(key: string, uploadId: string, partNumber: number, body: Readable, meta?: PutPartMeta): Promise<{ etag: string; size: number }>;
   completeMultipart(key: string, uploadId: string, parts: CompletedPart[]): Promise<{ size: number }>;
   abortMultipart(key: string, uploadId: string): Promise<void>;
   /** Streams an object from `start` (inclusive byte offset). Never buffers the object. */

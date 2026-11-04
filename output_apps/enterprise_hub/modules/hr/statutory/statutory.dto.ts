@@ -24,6 +24,12 @@ export class StatutoryYearQueryDto {
   month?: number;
 }
 
+export class ContractTermsQueryDto {
+  @ApiProperty({ example: '2026-06-01', description: 'Gregorian date the terms must be in force on' })
+  @IsDateString({ strict: true })
+  asOf: string;
+}
+
 export class SetStatutoryParameterDto {
   @ApiProperty({ example: 1405 })
   @IsInt()
@@ -67,5 +73,6 @@ export class StatutoryParameterResponseDto {
   @ApiProperty() source: string;
   @ApiProperty() sourceKind: string;
   @ApiProperty() verified: boolean;
+  @ApiProperty() unclear: boolean;
   @ApiProperty() tenantOverride: boolean;
 }
