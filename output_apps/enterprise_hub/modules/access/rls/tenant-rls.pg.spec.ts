@@ -14,6 +14,7 @@ import { DataSource } from 'typeorm';
 import { EnableRlsCheques1789430000000 } from '../../../migrations/1789430000000-EnableRlsCheques';
 import { EnableRlsLedger1789440000000 } from '../../../migrations/1789440000000-EnableRlsLedger';
 import { EnableRlsHr1789490000000 } from '../../../migrations/1789490000000-EnableRlsHr';
+import { ApiTokensRepository } from '../../public_api/repositories/api-tokens.repository';
 import { AccountingRepository } from '../../accounting/repositories/accounting.repository';
 import { LedgerReportRepository } from '../../accounting/repositories/ledger-report.repository';
 import { AccountingService } from '../../accounting/services/accounting.service';
@@ -42,6 +43,7 @@ const RLS_TABLES = [
   'fin_cheques', 'fin_cheque_events',
   'fin_chart_of_accounts', 'fin_journal_entries', 'fin_journal_entry_lines', 'fin_period_locks', 'fin_balance_reconciliation_log',
   'hr_employees', 'hr_employment_contracts', 'hr_contract_allowances', 'hr_payroll_runs', 'hr_payslips',
+  'public_api_tokens',
 ];
 
 const cheque = (n: string) => ({
@@ -161,6 +163,39 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       await expect(
         cheques.runInTransaction(T2, (m) => cheques.findByIdForUpdate(T2, row.id, m)),
       ).resolves.toBeNull();
+    });
+  });
+
+  describe('public API tokens', () => {
+    const tok = (n: string) => ({
+      name: n, tokenPrefix: 'rxk_test', tokenHash: n.padEnd(64, '0'), scopes: ['items:read'],
+      rateLimitPerMinute: 60, createdBy: 'u', expiresAt: null,
+    });
+
+    it('a tenant sees, finds and revokes only its own tokens', async () => {
+      const tokens = new ApiTokensRepository(scope);
+      const a = await tokens.create(T1, tok('a'));
+      const b = await tokens.create(T2, tok('b'));
+      expect((await tokens.list(T1)).map((t) => t.id)).toEqual([a.id]);
+      expect((await tokens.list(T2)).map((t) => t.id)).toEqual([b.id]);
+      expect(await tokens.findByHash(T2, a.tokenHash)).toBeNull();
+      expect(await tokens.revoke(T2, a.id, new Date())).toBe(false);
+      expect((await tokens.findByHash(T1, a.tokenHash))?.revokedAt).toBeNull();
+    });
+
+    it('a query with no tenant filter is cut off, and a session without a tenant sees nothing', async () => {
+      const seen = await scope.run(T2, (m) => m.query(`SELECT tenant_id FROM public_api_tokens`));
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.every((r: { tenant_id: string }) => r.tenant_id === T2)).toBe(true);
+      expect(await app.query(`SELECT 1 FROM public_api_tokens`)).toEqual([]);
+    });
+
+    it('cannot write a row for another tenant', async () => {
+      await expect(
+        scope.run(T1, (m) =>
+          m.query(`INSERT INTO public_api_tokens (tenant_id, name, token_prefix, token_hash, scopes, created_by) VALUES ($1, 'x', 'p', repeat('f', 64), ARRAY['items:read'], 'u')`, [T2]),
+        ),
+      ).rejects.toThrow();
     });
   });
 
