@@ -71,7 +71,6 @@ export interface CreateInvoiceOptions {
   payments?: Array<{ method: string; amount: number }>;
 }
 
-/** مجموع‌های محاسبه‌شده سمت سرور برای اقلام صورتحساب. */
 /** Invoice-level discount as sent: an amount or a percent (E1.3). */
 export interface InvoiceDiscountInput {
   amount?: number;
@@ -87,6 +86,7 @@ interface PreparedLine {
   lineDiscount: number;
 }
 
+/** مجموع‌های محاسبه‌شده سمت سرور برای اقلام صورتحساب. */
 interface InvoiceTotals {
   totalAmount: number;
   totalDiscount: number;
