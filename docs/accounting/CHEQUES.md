@@ -38,6 +38,30 @@ the inquiry colours. **[LEGAL]** confirm the enforceability position for unregis
 * `sayad_verified`: boolean the user ticks. It is shown as "(تأییدنشده)" when a number exists and the box is not ticked.
 * Future work, not built: CBI/bank API inquiry, status sync, automatic transfer registration.
 
+### 2a. Sayad fields added for CHK-01 (2026-11-04)
+
+| Field | Rule | Source status |
+| --- | --- | --- |
+| `sayad_number` | 16 digits, not one repeated digit, unique per tenant | length from public explainers; no public check-digit rule: **unclear** |
+| `sayad_registration_status` | `unknown` / `registered` / `unregistered`, declared by the user | manual; never read from Sayad |
+| `receiver_national_id` | 10 digits (person, mod-11 check) or 11 digits (company, weighted check) | public checksum algorithms, not in `docs/legal_sources/iran/`: **unclear** |
+| `sayad_verified` + `sayad_verified_by` + `sayad_verified_at` | manual tick; who and when are stored, an event row keeps the history; DB CHECK refuses a verified row without a verifier | n/a |
+
+`POST .../:id/sayad-verification {verified, sayadRegistrationStatus?, note?}` sets or clears the tick. Rows verified before
+this change are marked `legacy`. There is still no call to Sayad.
+
+### 2b. New moves (CHK-01)
+
+* Issued: `registered -> delivered` (status only, liability already posted at issue), then `delivered -> cleared / bounced / returned`.
+  `registered -> cleared` stays for cheques paid without a recorded hand-over.
+* Endorsement (`spent`) now stores `spent_to_code` and `spent_to_national_id`; the payable line carries the third party's code.
+* Partial payment: `POST .../:id/partial-payment {amount}` posts Dr 1010 / Cr 1110 or 1120 (received, from `registered` or `deposited`)
+  or Dr 2110 / Cr 1010 (issued, from `registered`, `delivered`, `bounced`) for the part only. The cheque keeps its status and
+  `settled_amount` grows. The closing move (clear, bounce, return) posts only the remainder. A payment equal to or above the
+  remainder is refused (use the normal clear move). A cheque with a payment taken cannot be endorsed.
+  **[LEGAL] unclear:** the cheque law's rule that the holder may not refuse partial payment is not in `docs/legal_sources/iran/`;
+  the lawyer must confirm it, and whether a partly paid cheque may still be endorsed or returned.
+
 ## 3. Lifecycle and postings
 
 Amounts are IRR. Account codes: 1010 bank/cash, 1020 trade receivables, 2010 trade payables (default chart);

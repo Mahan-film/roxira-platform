@@ -20,9 +20,11 @@ import {
   ChequeResponseDto,
   CreateChequeDto,
   DueChequesResponseDto,
+  PartialPaymentDto,
   QueryChequesDto,
   QueryDueChequesDto,
   TransitionChequeDto,
+  VerifySayadDto,
 } from '../dto/cheque.dto';
 import { ChequesService } from '../services/cheques.service';
 
@@ -38,6 +40,10 @@ export class ChequesController {
 
   private tenantIdOf(request: AuthenticatedRequest): string {
     return requireTenantId(request);
+  }
+
+  private actorOf(request: AuthenticatedRequest): string {
+    return request.user?.sub ?? 'unknown';
   }
 
   @Get()
@@ -60,7 +66,7 @@ export class ChequesController {
   @ApiOperation({ summary: 'ثبت چک دریافتی یا صادرشده (با سند حسابداری)' })
   @ApiResponse({ status: HttpStatus.CREATED, type: ChequeResponseDto })
   create(@Req() request: AuthenticatedRequest, @Body() dto: CreateChequeDto): Promise<ChequeResponseDto> {
-    return this.chequesService.create(this.tenantIdOf(request), dto);
+    return this.chequesService.create(this.tenantIdOf(request), dto, this.actorOf(request));
   }
 
   @Get(':id')
@@ -81,5 +87,31 @@ export class ChequesController {
     @Body() dto: TransitionChequeDto,
   ): Promise<ChequeDetailResponseDto> {
     return this.chequesService.transition(this.tenantIdOf(request), id, dto);
+  }
+
+  @RequireAction(AccessAction.POST)
+  @Post(':id/partial-payment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'پرداخت بخشی از وجه چک؛ سند وصول/پرداخت همان مبلغ ثبت می‌شود' })
+  @ApiResponse({ status: HttpStatus.OK, type: ChequeDetailResponseDto })
+  partialPayment(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: PartialPaymentDto,
+  ): Promise<ChequeDetailResponseDto> {
+    return this.chequesService.partialPayment(this.tenantIdOf(request), id, dto);
+  }
+
+  @RequireAction(AccessAction.POST)
+  @Post(':id/sayad-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'ثبت دستی تأیید صیاد (کاربر و زمان ذخیره می‌شود؛ بدون فراخوانی صیاد)' })
+  @ApiResponse({ status: HttpStatus.OK, type: ChequeDetailResponseDto })
+  verifySayad(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: VerifySayadDto,
+  ): Promise<ChequeDetailResponseDto> {
+    return this.chequesService.verifySayad(this.tenantIdOf(request), id, this.actorOf(request), dto);
   }
 }

@@ -16,6 +16,7 @@ import {
 import { IsMoneyAmount } from '../../accounting/dto/money.validator';
 import { MAX_DUE_WINDOW_DAYS } from '../constants/cheque.constants';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
+import { SayadRegistrationStatus } from '../sayad/sayad';
 
 const toLatinDigits = ({ value }: { value: unknown }) =>
   typeof value === 'string'
@@ -43,6 +44,18 @@ export class CreateChequeDto {
   @IsOptional()
   @IsBoolean()
   sayadVerified?: boolean;
+
+  @ApiPropertyOptional({ enum: SayadRegistrationStatus, description: 'وضعیت ثبت در سامانه صیاد، طبق اعلام کاربر (خوانده نمی‌شود از صیاد)' })
+  @IsOptional()
+  @IsEnum(SayadRegistrationStatus)
+  sayadRegistrationStatus?: SayadRegistrationStatus;
+
+  @ApiPropertyOptional({ description: 'کد/شناسه ملی دریافت‌کننده (ذی‌نفع) در ثبت صیاد: ۱۰ رقم حقیقی، ۱۱ رقم حقوقی', example: '0499370899' })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @Transform(toLatinDigits)
+  @Matches(/^([0-9]{10}|[0-9]{11})$/, { message: 'کد ملی باید ۱۰ رقم و شناسه ملی ۱۱ رقم باشد.' })
+  receiverNationalId?: string;
 
   @ApiProperty({ description: 'شماره سری/سریال چک', example: '123456' })
   @Transform(toLatinDigits)
@@ -104,6 +117,53 @@ export class TransitionChequeDto {
   @MaxLength(128)
   spentToName?: string;
 
+  @ApiPropertyOptional({ description: 'کد طرف حساب شخص ثالث (خرج چک)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  spentToCode?: string;
+
+  @ApiPropertyOptional({ description: 'کد/شناسه ملی شخص ثالث (خرج چک)' })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @Transform(toLatinDigits)
+  @Matches(/^([0-9]{10}|[0-9]{11})$/, { message: 'کد ملی باید ۱۰ رقم و شناسه ملی ۱۱ رقم باشد.' })
+  spentToNationalId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  note?: string;
+}
+
+export class PartialPaymentDto {
+  @ApiProperty({ description: 'مبلغ پرداخت‌شده (ریال)؛ کمتر از مانده چک', oneOf: [{ type: 'number' }, { type: 'string' }] })
+  @IsMoneyAmount()
+  amount: number | string;
+
+  @ApiPropertyOptional({ description: 'تاریخ رویداد (ISO)؛ پیش‌فرض امروز' })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  eventDate?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  note?: string;
+}
+
+export class VerifySayadDto {
+  @ApiProperty({ description: 'true = کاربر در سامانه صیاد بررسی کرده است؛ false = لغو تأیید' })
+  @IsBoolean()
+  verified: boolean;
+
+  @ApiPropertyOptional({ enum: SayadRegistrationStatus })
+  @IsOptional()
+  @IsEnum(SayadRegistrationStatus)
+  sayadRegistrationStatus?: SayadRegistrationStatus;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -153,6 +213,10 @@ export class ChequeResponseDto {
   @ApiProperty({ enum: ChequeDirection }) direction: ChequeDirection;
   @ApiProperty({ nullable: true }) sayadNumber: string | null;
   @ApiProperty() sayadVerified: boolean;
+  @ApiProperty({ enum: SayadRegistrationStatus }) sayadRegistrationStatus: SayadRegistrationStatus;
+  @ApiProperty({ nullable: true }) sayadVerifiedBy: string | null;
+  @ApiProperty({ nullable: true, description: 'ISO' }) sayadVerifiedAt: string | null;
+  @ApiProperty({ nullable: true }) receiverNationalId: string | null;
   @ApiProperty() chequeNumber: string;
   @ApiProperty({ nullable: true }) bankName: string | null;
   @ApiProperty({ description: 'عدد یا رشته اعشاری دقیق', oneOf: [{ type: 'number' }, { type: 'string' }] }) amount: number | string;
@@ -161,6 +225,10 @@ export class ChequeResponseDto {
   @ApiProperty() partyName: string;
   @ApiProperty({ nullable: true }) partyCode: string | null;
   @ApiProperty({ nullable: true }) spentToName: string | null;
+  @ApiProperty({ nullable: true }) spentToCode: string | null;
+  @ApiProperty({ nullable: true }) spentToNationalId: string | null;
+  @ApiProperty({ description: 'بخش پرداخت‌شده توسط بانک (ریال)', oneOf: [{ type: 'number' }, { type: 'string' }] }) settledAmount: number | string;
+  @ApiProperty({ description: 'مانده قابل وصول (ریال)', oneOf: [{ type: 'number' }, { type: 'string' }] }) remainingAmount: number | string;
   @ApiProperty({ enum: ChequeStatus }) status: ChequeStatus;
   @ApiProperty({ type: [String], description: 'وضعیت‌های مجاز بعدی' }) allowedNext: ChequeStatus[];
   @ApiProperty({ nullable: true }) description: string | null;
@@ -172,6 +240,7 @@ export class ChequeEventResponseDto {
   @ApiProperty({ enum: ChequeStatus }) toStatus: ChequeStatus;
   @ApiProperty() eventDate: string;
   @ApiProperty({ nullable: true }) journalEntryId: number | null;
+  @ApiProperty({ nullable: true, oneOf: [{ type: 'number' }, { type: 'string' }] }) amount: number | string | null;
   @ApiProperty({ nullable: true }) note: string | null;
 }
 

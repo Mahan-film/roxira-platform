@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
+import { SayadRegistrationStatus } from '../sayad/sayad';
 
 /**
  * Received or issued cheque. Amounts are in IRR. The Sayad number is entered by
@@ -30,6 +31,21 @@ export class ChequeEntity {
 
   @Column({ type: 'boolean', name: 'sayad_verified', default: false })
   sayadVerified: boolean;
+
+  /** Declared by the user, never read from Sayad. */
+  @Column({ type: 'varchar', length: 16, name: 'sayad_registration_status', default: SayadRegistrationStatus.UNKNOWN })
+  sayadRegistrationStatus: SayadRegistrationStatus;
+
+  /** Who ticked `sayadVerified` and when; both null while it is false. */
+  @Column({ type: 'varchar', length: 128, name: 'sayad_verified_by', nullable: true })
+  sayadVerifiedBy: string | null;
+
+  @Column({ type: 'timestamp', name: 'sayad_verified_at', nullable: true })
+  sayadVerifiedAt: Date | null;
+
+  /** National id of the payee named in the Sayad registration: 10 digits (person) or 11 (company). */
+  @Column({ type: 'varchar', length: 11, name: 'receiver_national_id', nullable: true })
+  receiverNationalId: string | null;
 
   @Column({ type: 'varchar', length: 32, name: 'cheque_number' })
   chequeNumber: string;
@@ -57,6 +73,16 @@ export class ChequeEntity {
   /** Third party the cheque was endorsed to (status SPENT). */
   @Column({ type: 'varchar', length: 128, name: 'spent_to_name', nullable: true })
   spentToName: string | null;
+
+  @Column({ type: 'varchar', length: 64, name: 'spent_to_code', nullable: true })
+  spentToCode: string | null;
+
+  @Column({ type: 'varchar', length: 11, name: 'spent_to_national_id', nullable: true })
+  spentToNationalId: string | null;
+
+  /** Part already paid by the bank (partial payment); 0 until then. numeric(18,2) string like `amount`. */
+  @Column({ type: 'numeric', precision: 18, scale: 2, name: 'settled_amount', default: '0' })
+  settledAmount: string;
 
   @Column({ type: 'varchar', length: 16, default: ChequeStatus.REGISTERED })
   status: ChequeStatus;

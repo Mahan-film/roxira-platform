@@ -13,6 +13,8 @@ export enum ChequeDirection {
 export enum ChequeStatus {
   /** Received and held by us, or issued and outstanding. */
   REGISTERED = 'registered',
+  /** Issued cheque handed to the payee; the liability is unchanged, only the status moves (issued only). */
+  DELIVERED = 'delivered',
   /** Received cheque handed to the bank for collection. */
   DEPOSITED = 'deposited',
   /** Paid by the bank. Terminal. */

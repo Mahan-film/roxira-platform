@@ -50,6 +50,10 @@ const cheque = (n: string) => ({
   direction: ChequeDirection.RECEIVED,
   sayadNumber: null,
   sayadVerified: false,
+  sayadRegistrationStatus: 'unknown' as never,
+  sayadVerifiedBy: null,
+  sayadVerifiedAt: null,
+  receiverNationalId: null,
   chequeNumber: n,
   bankName: null,
   amount: '1000.00',
@@ -138,7 +142,7 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       expect((await cheques.list(T2)).map((c) => c.id)).toEqual([b.id]);
       expect(await cheques.findById(T2, a.id)).toBeNull();
       await cheques.addEvent(T1, {
-        chequeId: a.id, fromStatus: null, toStatus: ChequeStatus.REGISTERED, eventDate: '2026-01-01', journalEntryId: null, note: null,
+        chequeId: a.id, fromStatus: null, toStatus: ChequeStatus.REGISTERED, eventDate: '2026-01-01', journalEntryId: null, amount: null, note: null,
       });
       expect(await cheques.listEvents(T2, a.id)).toEqual([]);
       expect(await cheques.listEvents(T1, a.id)).toHaveLength(1);
@@ -156,7 +160,7 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
         expect(await cheques.findByIdForUpdate(T1, row.id, m)).not.toBeNull();
         await cheques.updateStatus(T1, row.id, { status: ChequeStatus.DEPOSITED }, m);
         await cheques.addEvent(T1, {
-          chequeId: row.id, fromStatus: ChequeStatus.REGISTERED, toStatus: ChequeStatus.DEPOSITED, eventDate: '2026-01-02', journalEntryId: null, note: null,
+          chequeId: row.id, fromStatus: ChequeStatus.REGISTERED, toStatus: ChequeStatus.DEPOSITED, eventDate: '2026-01-02', journalEntryId: null, amount: null, note: null,
         }, m);
       });
       expect((await cheques.findById(T1, row.id))?.status).toBe(ChequeStatus.DEPOSITED);
