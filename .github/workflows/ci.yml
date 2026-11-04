@@ -526,7 +526,7 @@ jobs:
           echo "::error::frontend did not start"; tail -40 "$RUNNER_TEMP/frontend.log"; exit 1
       - name: Mint a throwaway tenant session
         working-directory: output_apps/enterprise_hub
-        run: node ../../scripts/ci/mint_e2e_session.js "$RUNNER_TEMP/session.m1.json"
+        run: NODE_PATH="$PWD/node_modules" node ../../scripts/ci/mint_e2e_session.js "$RUNNER_TEMP/session.m1.json"
       - name: Install Playwright (chromium)
         working-directory: e2e
         run: |
