@@ -50,7 +50,7 @@ export function BulkImportPanel({
   incomingFile = null,
   onIncomingFileUsed,
 }: {
-  /** A file over 40 MB handed over by the import wizard below (#277). */
+  /** A file over 5 MB, or a database dump or archive, handed over by the import wizard below (#277). */
   incomingFile?: File | null;
   onIncomingFileUsed?: () => void;
 } = {}) {
@@ -125,7 +125,7 @@ export function BulkImportPanel({
     if (!config.enabled) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(
-        `«${incomingFile.name}» بیش از ۱۲۰ مگابایت است و ورود حجیم هنوز روی این سرور فعال نشده است. فایل را به چند بخش کوچک‌تر تقسیم کنید یا خروجی هر جدول را جدا بگیرید.`,
+        `«${incomingFile.name}» (${formatBytes(incomingFile.size)}) برای زبانهٔ «انتقال کامل دیتابیس» بزرگ است و ورود حجیم هنوز روی این سرور فعال نشده است. فایل را به چند بخش کوچک‌تر تقسیم کنید یا خروجی هر جدول را جدا بگیرید.`,
       );
       return;
     }
@@ -313,7 +313,17 @@ export function BulkImportPanel({
                       <Button size="sm" onClick={() => void openReview(job)}>بازبینی و ثبت</Button>
                     )}
                     {["uploading", "queued", "running", "pausing", "paused", "failed", "ready"].includes(job.status) && (
-                      <Button size="sm" variant="ghost" onClick={() => void control(() => cancelBulkJob(job.id))}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          // Stop the parts still being sent from this tab, then cancel the job on the server.
+                          Object.entries(aborts.current).forEach(([key, controller]) => {
+                            if (key === job.id || uploads[key]?.name === job.fileName) controller.abort();
+                          });
+                          void control(() => cancelBulkJob(job.id));
+                        }}
+                      >
                         <X className="size-4" aria-hidden="true" /> لغو
                       </Button>
                     )}

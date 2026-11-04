@@ -28,7 +28,7 @@ import {
   API_PROXY_BASE_PATH,
   DATA_IMPORT_RESOURCE_PATH,
 } from "@/lib/api/config";
-import { FALLBACK_ACCEPT, chunkResumeKey } from "@/lib/import-routing";
+import { FALLBACK_ACCEPT } from "@/lib/import-routing";
 
 const BASE = `${API_PROXY_BASE_PATH}/${DATA_IMPORT_RESOURCE_PATH}`;
 
@@ -412,8 +412,6 @@ export function validatePackageFiles(files: File[]): string | null {
 
 interface UploadStatus {
   uploadId: string;
-  size?: number;
-  complete?: boolean;
   chunkSize: number;
   totalChunks: number;
   missing: number[];
@@ -429,15 +427,11 @@ export async function uploadFileChunked(
   file: File,
   options: UploadProgressOptions = {},
 ): Promise<string> {
-  const resumeKey = chunkResumeKey(file);
-  const init =
-    (await resumableUpload(resumeKey, file.size, options.signal)) ??
-    (await apiRequest<UploadStatus>(`${BASE}/uploads`, {
-      method: "POST",
-      body: { fileName: file.name, size: file.size, chunkSize: PACKAGE_CHUNK_BYTES },
-      signal: options.signal,
-    }));
-  remember(resumeKey, init.uploadId);
+  const init = await apiRequest<UploadStatus>(`${BASE}/uploads`, {
+    method: "POST",
+    body: { fileName: file.name, size: file.size, chunkSize: PACKAGE_CHUNK_BYTES },
+    signal: options.signal,
+  });
   let status = init;
   let sent = init.totalChunks - init.missing.length;
   for (let attempt = 0; status.missing.length > 0; attempt += 1) {
@@ -467,41 +461,7 @@ export async function uploadFileChunked(
       sent = status.totalChunks - status.missing.length;
     }
   }
-  remember(resumeKey, null);
   return init.uploadId;
-}
-
-/** Browser storage may be blocked (private mode); resume is then just not offered. */
-function remember(key: string, uploadId: string | null): void {
-  try {
-    if (uploadId) window.localStorage.setItem(key, uploadId);
-    else window.localStorage.removeItem(key);
-  } catch {
-    // no storage: nothing to resume later
-  }
-}
-
-/** An unfinished upload of the same file (same name, size and date), if the server still has it. */
-async function resumableUpload(
-  key: string,
-  size: number,
-  signal?: AbortSignal,
-): Promise<UploadStatus | null> {
-  let uploadId: string | null = null;
-  try {
-    uploadId = window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-  if (!uploadId) return null;
-  try {
-    const status = await apiRequest<UploadStatus>(`${BASE}/uploads/${encodeURIComponent(uploadId)}`, { signal });
-    if (status.size === size && !status.complete && status.missing.length > 0) return status;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-  }
-  remember(key, null);
-  return null;
 }
 
 /** ساخت بسته از بارگذاری‌های تکه‌ای کامل (یک فایل، چند فایل یا پوشه). */

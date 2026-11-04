@@ -56,7 +56,7 @@ import {
   type ImportPackageProgress,
 } from "@/lib/api/data-import-suite-client";
 import { formatJalaliDateTime, formatNumber } from "@/lib/fa-format";
-import { BULK_FROM_BYTES, routeImportFile } from "@/lib/import-routing";
+import { routeImportFile } from "@/lib/import-routing";
 import { cn } from "@/lib/utils";
 
 type PackagePhase = "upload" | "analyzing" | "review" | "committing" | "done";
@@ -232,7 +232,7 @@ export function PackageImportWizard({
         return;
       }
       setError(
-        `«${large[0].name}» بیش از ${Math.round(BULK_FROM_BYTES / 1024 / 1024)} مگابایت است. آن را جدا در «ورود حجیم» بالای همین صفحه بفرستید و بقیه را دوباره انتخاب کنید.`,
+        `«${large[0].name}» بزرگ یا فایل دیتابیس است و از «ورود حجیم» بالای همین صفحه بارگذاری می‌شود. آن را جدا بفرستید و بقیهٔ فایل‌ها را دوباره انتخاب کنید.`,
       );
       return;
     }

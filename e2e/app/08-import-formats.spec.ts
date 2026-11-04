@@ -5,10 +5,11 @@ import type { Page } from '@playwright/test';
 import { test, expect, fixturePath, openApp } from './fixtures';
 
 /**
- * #277: the file picker on /app/import offers the formats the server reads (support matrix), and a file
- * that does not fit one request (production nginx caps /enterprise-hub/ at 16 MB) goes up in resumable
- * chunks through the whole-database tab. Each case picks a file on the single-file tab and must reach
- * the analysis preview without an error. Nothing is committed.
+ * #277 / #282: the file picker on /app/import offers the formats the server reads (support matrix), and a
+ * file that does not fit one request (production nginx caps /enterprise-hub/ at 16 MB) never goes up as one
+ * request. With bulk import enabled it goes to the «ورود حجیم» panel in resumable parts and waits at the
+ * review gate; without it, it goes up in chunks through the whole-database tab. Each case picks a file on
+ * the single-file tab and must reach a review step without an error. Nothing is committed.
  */
 test.use({ sessionKind: 'import' });
 
@@ -36,10 +37,10 @@ function asFile(dir: string, source: string, name: string): string {
   return file;
 }
 
-async function pickOnFileTab(page: Page, file: string): Promise<number> {
-  let chunks = 0;
+async function pickOnFileTab(page: Page, file: string): Promise<void> {
+  let singleRequest = false;
   page.on('request', (request) => {
-    if (request.method() === 'PUT' && /\/data-import\/uploads\/[^/]+\/chunks\/\d+/.test(request.url())) chunks += 1;
+    if (request.method() === 'POST' && /\/data-import\/preview$/.test(request.url())) singleRequest = true;
   });
   await openApp(page, '/app/import');
   const input = page.locator('#import-file');
@@ -48,11 +49,13 @@ async function pickOnFileTab(page: Page, file: string): Promise<number> {
   await expect(input).toHaveAttribute('accept', /\.sqlite(,|$)/);
   await input.setInputFiles(file);
 
-  // Routed to the whole-database tab, uploaded in chunks and analysed: the review step is the preview.
-  await expect(page.getByRole('tab', { name: 'انتقال کامل دیتابیس' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('button', { name: /تأیید و انتقال/ })).toBeVisible({ timeout: 180_000 });
+  // Bulk panel (job ready for review) or whole-database tab (analysis shown): either is the preview.
+  const bulkReview = page.getByRole('button', { name: 'بازبینی و ثبت' });
+  const packageReview = page.getByRole('button', { name: /تأیید و انتقال/ });
+  await expect(bulkReview.or(packageReview).first()).toBeVisible({ timeout: 180_000 });
   await expect(page.getByText('انتقال دیتابیس انجام نشد')).toHaveCount(0);
-  return chunks;
+  await expect(page.getByText('ورود حجیم انجام نشد')).toHaveCount(0);
+  expect(singleRequest, 'the file must not go up as one request').toBe(false);
 }
 
 test.describe('import formats and sizes (#277)', () => {
@@ -62,22 +65,20 @@ test.describe('import formats and sizes (#277)', () => {
   });
   test.afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  test('a CSV over 16 MB goes up in chunks and reaches the preview', async ({ page }) => {
+  test('a CSV over 16 MB goes up in parts and reaches the review', async ({ page }) => {
     test.setTimeout(300_000);
     const file = bigCsv(dir);
     expect(fs.statSync(file).size).toBeGreaterThan(16 * MB);
-    const chunks = await pickOnFileTab(page, file);
-    expect(chunks).toBeGreaterThanOrEqual(5); // 17 MB in 4 MB chunks, none over the 16 MB cap
+    await pickOnFileTab(page, file);
   });
 
-  test('a MySQL .sql dump is read (never executed) and reaches the preview', async ({ page }) => {
+  test('a MySQL .sql dump is read (never executed) and reaches the review', async ({ page }) => {
     test.setTimeout(180_000);
     await pickOnFileTab(page, asFile(dir, path.join(FORMATS, 'mysql-dump.sql.txt'), 'shop-dump.sql'));
   });
 
-  test('a .sqlite database reaches the preview with its tables', async ({ page }) => {
+  test('a .sqlite database reaches the review', async ({ page }) => {
     test.setTimeout(180_000);
     await pickOnFileTab(page, fixturePath());
-    await expect(page.getByText('tbl_Accounts_Coding', { exact: true }).first()).toBeVisible();
   });
 });

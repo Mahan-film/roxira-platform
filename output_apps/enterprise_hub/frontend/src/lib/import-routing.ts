@@ -1,10 +1,11 @@
 /**
- * Where an import file goes, decided before anything is sent (#277).
+ * Where an import file goes, decided before anything is sent (#277, #325).
  *
  * Production nginx caps one request under `/enterprise-hub/` at 16 MB, so only small spreadsheets,
- * PDFs and images go through the one-request preview. Everything else, and every file over about
- * 5 MB, goes up in resumable chunks through the whole-database tab. Files over 40 MB (the server's
- * package limit) go to the bulk streaming import when the server has it enabled.
+ * PDFs and images go through the one-request preview. When the server has the bulk import enabled,
+ * every file over about 5 MB and every database dump or archive goes there: resumable parts, then
+ * the review gate in the «ورود حجیم» panel. Without it, the other files go up in chunks through
+ * the whole-database tab (up to its 120 MB limit).
  */
 
 export type ImportRoute = "single" | "package" | "bulk";
@@ -15,8 +16,8 @@ export const SINGLE_FILE_EXTENSIONS: readonly string[] = ["xlsx", "csv", "pdf", 
 /** From this size a file goes up in chunks instead of one request. */
 export const CHUNKED_FROM_BYTES = 5 * 1024 * 1024;
 
-/** From this size a file goes to the bulk streaming import (server package default: 40 MB). */
-export const BULK_FROM_BYTES = 40 * 1024 * 1024;
+/** Database dumps and archives always take the bulk path when it is enabled (#325). */
+const BULK_EXTENSIONS: readonly string[] = ["sql", "zip", "sqlite", "db"];
 
 /** Largest file the chunked package upload takes (server `IMPORT_MAX_FILE_BYTES` default). */
 export const CHUNKED_MAX_BYTES = 120 * 1024 * 1024;
@@ -50,22 +51,14 @@ export function acceptFromFormats(rows: ReadonlyArray<{ extensions: string[]; st
 }
 
 export function routeImportFile(file: { name: string; size: number }, bulkEnabled: boolean): ImportRoute {
-  if (file.size > BULK_FROM_BYTES && (bulkEnabled || file.size > CHUNKED_MAX_BYTES)) return "bulk";
+  const ext = extensionOf(file.name);
+  if (bulkEnabled && (file.size > CHUNKED_FROM_BYTES || BULK_EXTENSIONS.includes(ext))) return "bulk";
+  if (file.size > CHUNKED_MAX_BYTES) return "bulk";
   if (file.size > CHUNKED_FROM_BYTES) return "package";
-  return SINGLE_FILE_EXTENSIONS.includes(extensionOf(file.name)) ? "single" : "package";
+  return SINGLE_FILE_EXTENSIONS.includes(ext) ? "single" : "package";
 }
 
-/** Storage key that lets a chunked upload of the same file resume after a reload or a network drop. */
+/** Storage key under which the bulk job of this file is kept, so picking it again after a reload resumes. */
 export function chunkResumeKey(file: { name: string; size: number; lastModified: number }): string {
-  return `roxira.import.upload:${file.name}:${file.size}:${file.lastModified}`;
-}
-
-const MB = 1024 * 1024;
-
-/** Persian message for a file the server refused as too large (HTTP 413). */
-export function tooLargeMessage(size: number): string {
-  const mb = Math.ceil(size / MB);
-  return size > BULK_FROM_BYTES
-    ? `فایل ${mb} مگابایتی از سقف یک درخواست سرور بزرگ‌تر است. آن را از بخش «ورود حجیم» بالای همین صفحه بفرستید؛ آنجا تکه‌تکه و قابل ادامه بارگذاری می‌شود.`
-    : `فایل ${mb} مگابایتی از سقف یک درخواست سرور بزرگ‌تر است. آن را در زبانهٔ «انتقال کامل دیتابیس» بفرستید تا تکه‌تکه بارگذاری شود.`;
+  return `roxira.import.bulk-job:${file.name}:${file.size}:${file.lastModified}`;
 }
