@@ -510,3 +510,59 @@ roles:
         provider: openrouter
         price_per_1m: { in: 0, out: 0 }
         public_code_only: true
+
+# ---- Routing: per-task chains and daily cost caps (issue #288, docs/ops/MODEL_ROUTING.md) ----
+# `tasks` maps each AI call site (by task name) to a chain of roles tried in order:
+# free -> cheapest paid -> strong only when needed. A role in a chain is expanded to its
+# `models:` list above. `data_class` is the highest class (config/ai_data_policy.json) the
+# task may carry; model_registry.chain_for() drops steps the current ai_data_policy mode does
+# not allow for that class, so production mode automatically removes the may_log (free) steps
+# for tenant-business / personal data. `group` is the key-pool group (config/key_pool.yaml)
+# the gateway uses for the task; `stop_on_cap: true` means the call is refused (not
+# downgraded) once the cap of the task's role or the global cap is spent.
+# Caps are USD per UTC day, an owner-tunable proposal: change here, nowhere else.
+budgets:
+  global_daily_usd: 2.00
+  roles:
+    cheap: 0.40
+    strong: 0.40
+    drafting: 0.30
+    product: 0.40
+    product_pro: 0.40
+    product_premium: 0.60
+    cheap_agent: 0.20
+    vision: 0.30
+    invoice_extraction: 0.30
+    summarize: 0.10
+    executor: 0.20
+    reviewer: 0.10
+    mechanical: 0.05
+    agent_runner: 0.20
+    free: 0
+    stt: 0.10
+    tts: 0
+
+tasks:
+  # ---- Product runtime ----
+  assistant_chat:       {data_class: tenant-business, group: best-product-free, chain: [free, cheap, strong]}
+  invoice_capture:      {data_class: personal, group: private, chain: [free, invoice_extraction], note: "free ladder first (owner 2026-10-14, test_accounts mode); in production mode the free step is dropped and only the paid vision fallback remains"}
+  import_mapping:       {data_class: tenant-business, group: best-product-free, chain: [free, cheap, vision]}
+  recon_classify:       {data_class: tenant-business, group: best-product-free, chain: [free, cheap]}
+  smartjudge_chat:      {data_class: personal, group: best-product-free, chain: [free, cheap, strong]}
+  smartjudge_chat_basic: {data_class: personal, group: vip-product, chain: [product, free]}
+  smartjudge_chat_pro:  {data_class: personal, group: vip-pro, chain: [product_pro, product, free]}
+  smartjudge_chat_premium: {data_class: personal, group: vip-premium, chain: [product_premium, product_pro, product, free]}
+  smartjudge_draft:     {data_class: personal, group: private, chain: [drafting]}
+  case_ocr:             {data_class: personal, group: private, chain: [vision]}
+  case_summarize:       {data_class: personal, group: summarize-cheap, chain: [summarize, cheap]}
+  stt:                  {data_class: personal, chain: [stt_direct, stt]}
+  tts:                  {data_class: public, chain: [tts]}
+  voice_realtime:       {data_class: personal, chain: [voice_realtime]}
+  # ---- Factory (builder agents, public code and docs only) ----
+  fleet:                {data_class: public, group: agent-light-free, chain: [free, cheap_agent, executor]}
+  review_desk:          {data_class: public, group: agent-strong-free, chain: [reviewer], note: "different family than the executor"}
+  dispatch_opencode:    {data_class: public, group: agent-strong-free, chain: [agent_runner, cheap_agent]}
+  selfimprove:          {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
+  radar:                {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
+  law_watch:            {data_class: public, group: agent-strong-free, chain: [free, cheap]}
+  marketing:            {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
