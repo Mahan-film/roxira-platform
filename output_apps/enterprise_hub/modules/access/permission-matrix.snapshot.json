@@ -1210,6 +1210,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/tax-compliance/reports/seasonal-purchases.csv (SeasonalReportController.purchasesCsv)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/tax-compliance/reports/seasonal-transactions (SeasonalReportController.transactions)": {
     "policy": "tax:read",
     "owner": true,
