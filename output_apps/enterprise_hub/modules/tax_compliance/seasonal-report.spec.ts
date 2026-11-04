@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { jalaliToGregorian } from '../data_import/normaliser/normalise';
-import { DEFAULT_VAT_RATE } from '../invoicing/__fixtures__/vat-rate.fixture';
+import * as fs from 'fs';
+import * as path from 'path';
 import { InvoiceEntity } from '../invoicing/entities/invoice.entity';
 import { seededRates } from '../hr/statutory/__fixtures__/seeded-rates';
 import { InvoicePostingService } from '../invoicing/services/invoice-posting.service';
@@ -306,8 +307,21 @@ describe('csv util', () => {
  * 1404 budget law. The 12% figure was only a 1405 budget BILL proposal.
  */
 describe('statutory rates', () => {
-  it('default VAT rate is 10% (1404 budget law, unchanged in 1405)', () => {
-    expect(DEFAULT_VAT_RATE).toBe(0.1);
+  it('reports the rate stored on each invoice line (set by the statutory resolver), never a default', async () => {
+    const stub = repoStub(jest.fn().mockResolvedValue([
+      invoice({ items: [{ description: 'x', quantity: 1, unitPrice: 1000, discount: 0, vatRate: 0.05, tax: 50, total: 1050 }], totalAmount: 1000, totalDiscount: 0, totalTax: 50, finalPayable: 1050 }),
+    ]));
+    const report = await new SeasonalReportService(stub).vatReport('tenant-a', 1405, 1);
+    expect(report.sales.byRate.map((r) => r.rate)).toEqual([0.05]);
+  });
+
+  it('no production file of the tax module uses a default VAT rate', () => {
+    const walk = (dir: string): string[] =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.ts') && !e.name.endsWith('.spec.ts') ? [path.join(dir, e.name)] : [],
+      );
+    const offenders = walk(__dirname).filter((f) => /DEFAULT_VAT_RATE|vat-rate\.fixture/.test(fs.readFileSync(f, 'utf8')));
+    expect(offenders).toEqual([]);
   });
 
   it('1405 payroll figures confirmed by the 1404-12-24 Supreme Labour Council decree (ekhtebar.ir)', () => {
