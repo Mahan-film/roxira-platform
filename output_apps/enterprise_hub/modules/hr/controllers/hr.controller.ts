@@ -14,6 +14,8 @@ import {
   Put,
   Query,
   Req,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -48,6 +50,7 @@ import {
   PayrollRunResponseDto,
   WageTaxFilesQueryDto,
   WageTaxFilesResponseDto,
+  PayrollReconciliationResponseDto,
 } from '../dto/payroll-run.dto';
 import { QueryEmployeeDto, QueryPayslipDto } from '../dto/query-hr.dto';
 import { PreviewSettlementDto, SettlementPreviewDto } from '../dto/settlement.dto';
@@ -377,6 +380,47 @@ export class HrController {
       id,
       query,
     );
+  }
+
+  @Get('payroll-runs/:id/reconciliation')
+  @ApiOperation({
+    summary: 'کنترل تطبیق جمع فیش‌ها، جمع اجرا و سند حسابداری حقوق',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: PayrollReconciliationResponseDto })
+  async getPayrollReconciliation(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<PayrollReconciliationResponseDto> {
+    return this.payrollRunService.reconciliation(this.tenantIdOf(request), id);
+  }
+
+  @RequireAction(AccessAction.EXPORT)
+  @Get('payroll-runs/:id/payslips-pdf')
+  @ApiOperation({ summary: 'فیش حقوقی فارسی همه کارکنان یک اجرا (PDF، هر نفر یک صفحه)' })
+  async getPayslipsPdf(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Res({ passthrough: true }) response: { setHeader(name: string, value: string): void },
+  ): Promise<StreamableFile> {
+    const file = await this.payrollRunService.payslipsPdf(this.tenantIdOf(request), id);
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    return new StreamableFile(file.body);
+  }
+
+  @RequireAction(AccessAction.EXPORT)
+  @Get('payroll-runs/:id/payslips/:payslipId/pdf')
+  @ApiOperation({ summary: 'فیش حقوقی فارسی یک کارمند (PDF)' })
+  async getPayslipPdf(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('payslipId', ParseIntPipe) payslipId: number,
+    @Res({ passthrough: true }) response: { setHeader(name: string, value: string): void },
+  ): Promise<StreamableFile> {
+    const file = await this.payrollRunService.payslipsPdf(this.tenantIdOf(request), id, payslipId);
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    return new StreamableFile(file.body);
   }
 
   // ---------------------------------------------------------------------------

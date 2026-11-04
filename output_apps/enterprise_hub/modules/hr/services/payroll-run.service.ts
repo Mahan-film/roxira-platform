@@ -1,3 +1,11 @@
+import { writePdfs } from '../../accounting/reports/pdf-writer';
+import { payslipTable } from './payslip-pdf';
+import {
+  ReconPayslip,
+  ReconRunTotals,
+  Reconciliation,
+  reconcilePayrollRun,
+} from './payroll-reconciliation';
 import {
   BadRequestException,
   ConflictException,
@@ -609,6 +617,107 @@ export class PayrollRunService {
       );
     });
     return this.findRun(tenantId, run.id);
+  }
+
+  /** Posting check: run totals vs payslips vs the voucher lines the run would post. */
+  async reconciliation(tenantId: string, id: number): Promise<Reconciliation> {
+    const run = await this.requireRun(tenantId, id);
+    const payslips = await this.hrRepository.findPayslipsByRun(tenantId, id);
+    const accounts = PAYROLL_RUN_ACCOUNTS;
+    return reconcilePayrollRun(
+      this.runTotals(run),
+      payslips.map((p) => this.reconPayslip(p)),
+      this.buildJournalLines(run),
+      {
+        salaryExpense: accounts.salaryExpense.code,
+        employerInsuranceExpense: accounts.employerInsuranceExpense.code,
+        insurancePayable: accounts.insurancePayable.code,
+        wageTaxPayable: accounts.wageTaxPayable.code,
+        otherDeductionsPayable: accounts.otherDeductionsPayable.code,
+        salariesPayable: accounts.salariesPayable.code,
+      },
+    );
+  }
+
+  private runTotals(run: PayrollRunEntity): ReconRunTotals {
+    return {
+      employeeCount: run.employeeCount,
+      totalGross: Number(run.totalGross),
+      totalEmployeeInsurance: Number(run.totalEmployeeInsurance),
+      totalEmployerInsurance: Number(run.totalEmployerInsurance),
+      totalUnemploymentInsurance: Number(run.totalUnemploymentInsurance),
+      totalIncomeTax: Number(run.totalIncomeTax),
+      totalOtherDeductions: Number(run.totalOtherDeductions),
+      totalNet: Number(run.totalNet),
+    };
+  }
+
+  private reconPayslip(p: PayslipEntity): ReconPayslip {
+    return {
+      payslipNumber: p.payslipNumber,
+      grossPay: Number(p.grossPay),
+      insuranceDeduction: Number(p.insuranceDeduction),
+      incomeTax: Number(p.incomeTax),
+      otherDeductions: Number(p.otherDeductions),
+      netPay: Number(p.netPay),
+      employerInsurance: Number(p.employerInsurance),
+      unemploymentInsurance: Number(p.unemploymentInsurance),
+    };
+  }
+
+  /** Persian payslip PDF of a run: one page per employee, or just `payslipId`. */
+  async payslipsPdf(
+    tenantId: string,
+    id: number,
+    payslipId?: number,
+  ): Promise<{ body: Buffer; filename: string }> {
+    const run = await this.requireRun(tenantId, id);
+    const all = await this.hrRepository.findPayslipsByRun(tenantId, id);
+    const payslips = payslipId === undefined ? all : all.filter((p) => p.id === payslipId);
+    if (payslips.length === 0) {
+      throw new NotFoundException('فیش حقوقی یافت نشد.');
+    }
+    const n = (value: number | null | undefined): number => Number(value ?? 0);
+    const tables = payslips.map((p) =>
+      payslipTable({
+        payslipNumber: p.payslipNumber,
+        periodYear: p.periodYear,
+        periodMonth: p.periodMonth,
+        employeeNumber: p.employee.employeeNumber,
+        fullName: this.fullName(p.employee),
+        nationalId: p.employee.nationalId,
+        insuranceNumber: p.employee.insuranceNumber ?? null,
+        jobTitle: p.employee.jobTitle,
+        workDays: n(p.workDays),
+        baseSalary: n(p.baseSalary),
+        seniorityAmount: n(p.seniorityAmount),
+        housingAllowance: n(p.housingAllowance),
+        foodAllowance: n(p.foodAllowance),
+        childAllowance: n(p.childAllowance),
+        marriageAllowance: n(p.marriageAllowance),
+        allowancesTotal: n(p.allowancesTotal),
+        eidiAmount: n(p.eidiAmount),
+        overtimeAmount: n(p.overtimeAmount),
+        nightShiftAmount: n(p.nightShiftAmount),
+        holidayAmount: n(p.holidayAmount),
+        absenceDeduction: n(p.absenceDeduction),
+        grossPay: n(p.grossPay),
+        insuranceDeduction: n(p.insuranceDeduction),
+        incomeTax: n(p.incomeTax),
+        otherDeductions: n(p.otherDeductions),
+        netPay: n(p.netPay),
+        employerInsurance: n(p.employerInsurance),
+        unemploymentInsurance: n(p.unemploymentInsurance),
+      }),
+    );
+    const month = String(run.periodMonth).padStart(2, '0');
+    return {
+      body: await writePdfs(tables),
+      filename:
+        payslipId === undefined
+          ? `payslips-${run.periodYear}${month}.pdf`
+          : `payslip-${payslips[0].payslipNumber.replace(/[^A-Za-z0-9_-]/g, '_')}.pdf`,
+    };
   }
 
   /** SSO insurance list (DSKKAR00 + DSKWOR00) of a run. */

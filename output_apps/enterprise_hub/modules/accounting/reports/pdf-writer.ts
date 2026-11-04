@@ -77,6 +77,15 @@ const cellText = (cell: ReportCell): string =>
   typeof cell === 'bigint' ? formatMoney(cell) : (cell ?? '');
 
 export function writePdf(table: ReportTable): Promise<Buffer> {
+  return writePdfs([table]);
+}
+
+/** Several tables in one file, each starting on its own page (e.g. one payslip per page). */
+export function writePdfs(tables: ReportTable[]): Promise<Buffer> {
+  if (tables.length === 0) {
+    throw new Error('writePdfs needs at least one table');
+  }
+  const table = tables[0];
   const directory = fontDirectory();
   const landscape = table.columns.length > 6;
   const doc = new PDFDocument({ size: 'A4', layout: landscape ? 'landscape' : 'portrait', margin: MARGIN, bufferPages: true });
@@ -97,15 +106,15 @@ export function writePdf(table: ReportTable): Promise<Buffer> {
   const right = doc.page.width - MARGIN;
   let y = MARGIN;
 
-  const header = (): void => {
+  const header = (current: ReportTable): void => {
     doc.font('bold').fontSize(13);
-    drawRtl(doc, table.title, right, y, usable);
+    drawRtl(doc, current.title, right, y, usable);
     y += 22;
     doc.font('body').fontSize(9);
-    drawRtl(doc, table.subtitle, right, y, usable);
+    drawRtl(doc, current.subtitle, right, y, usable);
     y += 20;
     doc.font('bold').fontSize(fontSize);
-    drawRow(table.columns.map((column) => column.title));
+    drawRow(current.columns.map((column) => column.title));
     doc.moveTo(MARGIN, y - 3).lineTo(right, y - 3).lineWidth(0.8).stroke('#444444');
   };
   const drawRow = (cells: string[]): void => {
@@ -117,16 +126,22 @@ export function writePdf(table: ReportTable): Promise<Buffer> {
     y += ROW_HEIGHT;
   };
 
-  header();
-  for (const row of table.rows) {
-    if (y > bottom) {
+  tables.forEach((current, index) => {
+    if (index > 0) {
       doc.addPage();
       y = MARGIN;
-      header();
     }
-    doc.font(row.bold ? 'bold' : 'body').fontSize(fontSize);
-    drawRow(row.cells.map(cellText));
-  }
+    header(current);
+    for (const row of current.rows) {
+      if (y > bottom) {
+        doc.addPage();
+        y = MARGIN;
+        header(current);
+      }
+      doc.font(row.bold ? 'bold' : 'body').fontSize(fontSize);
+      drawRow(row.cells.map(cellText));
+    }
+  });
   doc.end();
   return finished;
 }

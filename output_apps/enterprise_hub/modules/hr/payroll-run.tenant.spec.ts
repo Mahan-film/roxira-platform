@@ -25,6 +25,7 @@ import {
 import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
 import { PayrollRunService } from './services/payroll-run.service';
+import { reconcilePayrollRun } from './services/payroll-reconciliation';
 import { fakeStatutory } from './statutory/__fixtures__/seeded-rates';
 
 /** Accounting fake: keeps a per-tenant chart and rejects unbalanced entries. */
@@ -520,6 +521,71 @@ describe('PayrollRunService — calculation and posting', () => {
       `,${run.totalEmployeeInsurance},${run.totalEmployerInsurance},${run.totalUnemploymentInsurance},23,`,
     );
     expect(list.warnings).toHaveLength(1);
+  });
+
+  it('PAY-02: the posted voucher reconciles to the run totals and the payslips', async () => {
+    const { repo, accounting, service } = setup();
+    repo.seedEmployee('tenant-a', { dependants: 1 });
+    repo.seedEmployee('tenant-a');
+    repo.seedEmployee('tenant-a');
+    const draft = await service.createOrRecalculate('tenant-a', period);
+    const posted = await service.postRun('tenant-a', draft.id);
+
+    // The lines that went to the ledger, not a rebuild of them.
+    const entry = accounting.entries[0];
+    const codes = PAYROLL_RUN_ACCOUNTS;
+    const result = reconcilePayrollRun(
+      posted,
+      posted.payslips,
+      entry.lines,
+      {
+        salaryExpense: codes.salaryExpense.code,
+        employerInsuranceExpense: codes.employerInsuranceExpense.code,
+        insurancePayable: codes.insurancePayable.code,
+        wageTaxPayable: codes.wageTaxPayable.code,
+        otherDeductionsPayable: codes.otherDeductionsPayable.code,
+        salariesPayable: codes.salariesPayable.code,
+      },
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(result.debitTotal).toBe(
+      posted.totalGross + posted.totalEmployerInsurance + posted.totalUnemploymentInsurance,
+    );
+    expect((await service.reconciliation('tenant-a', posted.id)).ok).toBe(true);
+    await expect(service.reconciliation('tenant-b', posted.id)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('PAY-02: reconciliation names a total that was changed after the payslips were written', async () => {
+    const { repo, service } = setup();
+    repo.seedEmployee('tenant-a');
+    const run = await service.createOrRecalculate('tenant-a', period);
+    repo.runs[0].totalNet = Number(repo.runs[0].totalNet) + 1;
+
+    const result = await service.reconciliation('tenant-a', run.id);
+
+    expect(result.ok).toBe(false);
+    expect(result.problems.join(' ')).toContain('totalNet vs payslips');
+  });
+
+  it('PAY-02: renders a Persian payslip PDF per employee, only for the own tenant', async () => {
+    const { repo, service } = setup();
+    repo.seedEmployee('tenant-a');
+    repo.seedEmployee('tenant-a');
+    const run = await service.createOrRecalculate('tenant-a', period);
+
+    const all = await service.payslipsPdf('tenant-a', run.id);
+    expect(all.body.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(all.filename).toBe('payslips-140507.pdf');
+    const one = await service.payslipsPdf('tenant-a', run.id, run.payslips[0].id);
+    expect(one.body.length).toBeLessThan(all.body.length);
+
+    await expect(service.payslipsPdf('tenant-b', run.id)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.payslipsPdf('tenant-a', run.id, 999_999)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });
 
