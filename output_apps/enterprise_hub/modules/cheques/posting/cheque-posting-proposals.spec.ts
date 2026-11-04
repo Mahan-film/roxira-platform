@@ -1,8 +1,14 @@
 import { buildProposal } from '../../posting_rules/domain/posting-engine';
 import { PostingRuleError } from '../../posting_rules/domain/posting-error';
+import { findTemplate } from '../../posting_rules/domain/posting-templates';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
 import { creationPosting, findRule } from '../lifecycle/cheque-lifecycle';
-import { ChequeStatusChange, chequePostingDocType, chequePostingProposal } from './cheque-posting-proposals';
+import {
+  CHEQUE_POSTING_DOC_TYPES,
+  ChequeStatusChange,
+  chequePostingDocType,
+  chequePostingProposal,
+} from './cheque-posting-proposals';
 
 const R = ChequeDirection.RECEIVED;
 const I = ChequeDirection.ISSUED;
@@ -116,5 +122,18 @@ describe('cheque posting proposals', () => {
       ['1099', AMOUNT, 0n],
       ['1120', 0n, AMOUNT],
     ]);
+  });
+
+  it('covers exactly the cheque doc types the engine has templates for', () => {
+    expect([...CHEQUE_POSTING_DOC_TYPES]).toEqual([
+      'cheque.received.create',
+      'cheque.received.deposit',
+      'cheque.received.clear',
+      'cheque.issued.create',
+      'cheque.issued.clear',
+    ]);
+    for (const docType of CHEQUE_POSTING_DOC_TYPES) {
+      expect(findTemplate(docType)).toBeDefined();
+    }
   });
 });
