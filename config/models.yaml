@@ -560,7 +560,7 @@ tasks:
   voice_realtime:       {data_class: personal, chain: [voice_realtime]}
   # ---- Factory (builder agents, public code and docs only) ----
   fleet:                {data_class: public, group: agent-light-free, chain: [free, cheap_agent, executor]}
-  review_desk:          {data_class: public, group: agent-strong-free, chain: [reviewer], note: "different family than the executor"}
+  review_desk:          {data_class: public, group: agent-strong-free, chain: [reviewer], note: "different family than the executor; scripts/dev/llm_route.py review_attempts(): DeepSeek via OpenRouter, via srv1 key pool, DeepSeek API, then free non-Claude (gpt-oss-120b Groq/Cerebras, Mistral)"}
   dispatch_opencode:    {data_class: public, group: agent-strong-free, chain: [agent_runner, cheap_agent]}
   selfimprove:          {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
   radar:                {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
