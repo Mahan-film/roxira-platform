@@ -50,6 +50,8 @@ export class AssistantMemoryRepository {
    */
   async remember(tenantId: string, input: NewMemoryFact): Promise<MemoryFact> {
     return this.scope.run(tenantId, async (m) => {
+      // Serialise writers of one subject: FOR UPDATE alone does not stop two first writes racing.
+      await m.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`${tenantId}:${input.subject}`]);
       const current = await this.currentBySubject(tenantId, input.subject, m);
       const from = input.validFrom.getTime();
       const same = current.find((c) => c.fact === input.fact && c.validTo === null && new Date(c.validFrom).getTime() <= from);

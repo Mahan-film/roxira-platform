@@ -182,6 +182,8 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       expect(await recall(T2, 'vat')).toEqual(['tenant two: 9 percent']);
       expect(await memory.forget(T2, a.id)).toBe(false);
       expect(await recall(T1, 'vat')).toHaveLength(1);
+      expect(await memory.forget(T1, a.id)).toBe(true);
+      expect(await recall(T1, 'vat')).toHaveLength(0);
     });
 
     it('an unfiltered query is cut to the bound tenant, and an unbound one sees nothing', async () => {
