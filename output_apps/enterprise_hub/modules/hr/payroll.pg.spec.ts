@@ -58,14 +58,7 @@ describePg('monthly payroll on PostgreSQL', () => {
     ds = await new DataSource(options(db)).initialize();
     await ds.runMigrations();
 
-    const repository = new HrRepository(
-      ds.getRepository(EmployeeEntity),
-      ds.getRepository(EmploymentContractEntity),
-      ds.getRepository(PayslipEntity),
-      ds.getRepository(PayrollRunEntity),
-      ds.getRepository(ContractAllowanceEntity),
-      ds,
-    );
+    const repository = new HrRepository(new TenantScope(ds), ds);
     const accounting = {
       listAccounts: async () => [],
       createAccount: async () => undefined,

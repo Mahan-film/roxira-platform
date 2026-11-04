@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import {
   DataSource,
   EntityManager,
@@ -41,6 +41,14 @@ export interface PayslipAggregate {
   totalOtherDeductions: string;
 }
 
+interface HrRepos {
+  employees: Repository<EmployeeEntity>;
+  contracts: Repository<EmploymentContractEntity>;
+  payslips: Repository<PayslipEntity>;
+  payrollRuns: Repository<PayrollRunEntity>;
+  allowances: Repository<ContractAllowanceEntity>;
+}
+
 /**
  * لایه Repository — تنها نقطه دسترسی به جداول منابع انسانی برای ماژول HR.
  * Controller/Service هرگز نباید مستقیماً به TypeORM Repository دسترسی داشته
@@ -49,16 +57,7 @@ export interface PayslipAggregate {
 @Injectable()
 export class HrRepository {
   constructor(
-    @InjectRepository(EmployeeEntity)
-    private readonly employees: Repository<EmployeeEntity>,
-    @InjectRepository(EmploymentContractEntity)
-    private readonly contracts: Repository<EmploymentContractEntity>,
-    @InjectRepository(PayslipEntity)
-    private readonly payslips: Repository<PayslipEntity>,
-    @InjectRepository(PayrollRunEntity)
-    private readonly payrollRuns: Repository<PayrollRunEntity>,
-    @InjectRepository(ContractAllowanceEntity)
-    private readonly allowances: Repository<ContractAllowanceEntity>,
+    private readonly scope: TenantScope,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -69,12 +68,24 @@ export class HrRepository {
     return this.dataSource.transaction(work);
   }
 
-  private runs(manager?: EntityManager): Repository<PayrollRunEntity> {
-    return manager ? manager.getRepository(PayrollRunEntity) : this.payrollRuns;
-  }
-
-  private slips(manager?: EntityManager): Repository<PayslipEntity> {
-    return manager ? manager.getRepository(PayslipEntity) : this.payslips;
+  /**
+   * Every HR table has FORCE row-level security: each call binds `app.tenant_id` on its transaction
+   * (or on the caller's, when a manager is passed) and every query still filters by tenant itself.
+   */
+  private use<T>(
+    tenantId: string,
+    manager: EntityManager | undefined,
+    fn: (r: HrRepos) => Promise<T>,
+  ): Promise<T> {
+    return this.scope.within(tenantId, manager, (m) =>
+      fn({
+        employees: m.getRepository(EmployeeEntity),
+        contracts: m.getRepository(EmploymentContractEntity),
+        payslips: m.getRepository(PayslipEntity),
+        payrollRuns: m.getRepository(PayrollRunEntity),
+        allowances: m.getRepository(ContractAllowanceEntity),
+      }),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -82,69 +93,81 @@ export class HrRepository {
   // ---------------------------------------------------------------------------
 
   async countEmployees(tenantId: string): Promise<number> {
-    return this.employees.count({ where: { tenantId } });
+    return this.use(tenantId, undefined, async (r) => {
+      return r.employees.count({ where: { tenantId } });
+    });
   }
 
   async createEmployee(
     tenantId: string,
     data: Partial<EmployeeEntity>,
   ): Promise<EmployeeEntity> {
-    const entity = this.employees.create({ ...data, tenantId });
-    return this.employees.save(entity);
+    return this.use(tenantId, undefined, async (r) => {
+      const entity = r.employees.create({ ...data, tenantId });
+      return r.employees.save(entity);
+    });
   }
 
   async saveEmployee(
     tenantId: string,
     entity: EmployeeEntity,
   ): Promise<EmployeeEntity> {
-    // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
-    await this.employees.update(
-      { id: entity.id, tenantId },
-      {
-        employeeNumber: entity.employeeNumber,
-        firstName: entity.firstName,
-        lastName: entity.lastName,
-        nationalId: entity.nationalId,
-        fatherName: entity.fatherName,
-        birthDate: entity.birthDate,
-        gender: entity.gender,
-        mobile: entity.mobile,
-        email: entity.email,
-        jobTitle: entity.jobTitle,
-        department: entity.department,
-        maritalStatus: entity.maritalStatus,
-        dependants: entity.dependants,
-        status: entity.status,
-        hireDate: entity.hireDate,
-        terminationDate: entity.terminationDate,
-        bankAccountNumber: entity.bankAccountNumber,
-        insuranceNumber: entity.insuranceNumber,
-        updatedAt: entity.updatedAt,
-      },
-    );
-    entity.tenantId = tenantId;
-    return entity;
+    return this.use(tenantId, undefined, async (r) => {
+      // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
+      await r.employees.update(
+        { id: entity.id, tenantId },
+        {
+          employeeNumber: entity.employeeNumber,
+          firstName: entity.firstName,
+          lastName: entity.lastName,
+          nationalId: entity.nationalId,
+          fatherName: entity.fatherName,
+          birthDate: entity.birthDate,
+          gender: entity.gender,
+          mobile: entity.mobile,
+          email: entity.email,
+          jobTitle: entity.jobTitle,
+          department: entity.department,
+          maritalStatus: entity.maritalStatus,
+          dependants: entity.dependants,
+          status: entity.status,
+          hireDate: entity.hireDate,
+          terminationDate: entity.terminationDate,
+          bankAccountNumber: entity.bankAccountNumber,
+          insuranceNumber: entity.insuranceNumber,
+          updatedAt: entity.updatedAt,
+        },
+      );
+      entity.tenantId = tenantId;
+      return entity;
+    });
   }
 
   async findEmployeeById(
     tenantId: string,
     id: number,
   ): Promise<EmployeeEntity | null> {
-    return this.employees.findOne({ where: { id, tenantId } });
+    return this.use(tenantId, undefined, async (r) => {
+      return r.employees.findOne({ where: { id, tenantId } });
+    });
   }
 
   async findEmployeeByNationalId(
     tenantId: string,
     nationalId: string,
   ): Promise<EmployeeEntity | null> {
-    return this.employees.findOne({ where: { nationalId, tenantId } });
+    return this.use(tenantId, undefined, async (r) => {
+      return r.employees.findOne({ where: { nationalId, tenantId } });
+    });
   }
 
   async findEmployeeByNumber(
     tenantId: string,
     employeeNumber: string,
   ): Promise<EmployeeEntity | null> {
-    return this.employees.findOne({ where: { employeeNumber, tenantId } });
+    return this.use(tenantId, undefined, async (r) => {
+      return r.employees.findOne({ where: { employeeNumber, tenantId } });
+    });
   }
 
   /** کدهای ملی موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
@@ -152,14 +175,16 @@ export class HrRepository {
     tenantId: string,
     nationalIds: string[],
   ): Promise<string[]> {
-    if (nationalIds.length === 0) {
-      return [];
-    }
-    const rows = await this.employees.find({
-      where: { tenantId, nationalId: In(nationalIds) },
-      select: { nationalId: true },
+    return this.use(tenantId, undefined, async (r) => {
+      if (nationalIds.length === 0) {
+        return [];
+      }
+      const rows = await r.employees.find({
+        where: { tenantId, nationalId: In(nationalIds) },
+        select: { nationalId: true },
+      });
+      return rows.map((row) => row.nationalId);
     });
-    return rows.map((row) => row.nationalId);
   }
 
   /** شناسه کارمندانی که قرارداد یا فیش حقوقی دارند (ارجاع‌شده؛ undo ممنوع). */
@@ -167,25 +192,27 @@ export class HrRepository {
     tenantId: string,
     ids: number[],
   ): Promise<number[]> {
-    if (ids.length === 0) {
-      return [];
-    }
-    const [contracts, payslips] = await Promise.all([
-      this.contracts.find({
-        where: { tenantId, employeeId: In(ids) },
-        select: { employeeId: true },
-      }),
-      this.payslips.find({
-        where: { tenantId, employeeId: In(ids) },
-        select: { employeeId: true },
-      }),
-    ]);
-    return Array.from(
-      new Set([
-        ...contracts.map((row) => row.employeeId),
-        ...payslips.map((row) => row.employeeId),
-      ]),
-    );
+    return this.use(tenantId, undefined, async (r) => {
+      if (ids.length === 0) {
+        return [];
+      }
+      const [contracts, payslips] = await Promise.all([
+        r.contracts.find({
+          where: { tenantId, employeeId: In(ids) },
+          select: { employeeId: true },
+        }),
+        r.payslips.find({
+          where: { tenantId, employeeId: In(ids) },
+          select: { employeeId: true },
+        }),
+      ]);
+      return Array.from(
+        new Set([
+          ...contracts.map((row) => row.employeeId),
+          ...payslips.map((row) => row.employeeId),
+        ]),
+      );
+    });
   }
 
   /** حذف کارمندان یک دسته ورود داده با قید مستأجر (برای undo). */
@@ -193,23 +220,27 @@ export class HrRepository {
     tenantId: string,
     ids: number[],
   ): Promise<number> {
-    if (ids.length === 0) {
-      return 0;
-    }
-    const result = await this.employees.delete({ tenantId, id: In(ids) });
-    return result.affected ?? 0;
+    return this.use(tenantId, undefined, async (r) => {
+      if (ids.length === 0) {
+        return 0;
+      }
+      const result = await r.employees.delete({ tenantId, id: In(ids) });
+      return result.affected ?? 0;
+    });
   }
 
   async findAndCountEmployees(
     tenantId: string,
     options: FindManyOptions<EmployeeEntity>,
   ): Promise<[EmployeeEntity[], number]> {
-    const { where, ...rest } = options;
-    const scoped: FindOptionsWhere<EmployeeEntity> | FindOptionsWhere<EmployeeEntity>[] =
-      Array.isArray(where)
-        ? where.map((condition) => ({ ...condition, tenantId }))
-        : { ...(where ?? {}), tenantId };
-    return this.employees.findAndCount({ ...rest, where: scoped });
+    return this.use(tenantId, undefined, async (r) => {
+      const { where, ...rest } = options;
+      const scoped: FindOptionsWhere<EmployeeEntity> | FindOptionsWhere<EmployeeEntity>[] =
+        Array.isArray(where)
+          ? where.map((condition) => ({ ...condition, tenantId }))
+          : { ...(where ?? {}), tenantId };
+      return r.employees.findAndCount({ ...rest, where: scoped });
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -220,17 +251,21 @@ export class HrRepository {
     tenantId: string,
     data: Partial<EmploymentContractEntity>,
   ): Promise<EmploymentContractEntity> {
-    const entity = this.contracts.create({ ...data, tenantId });
-    return this.contracts.save(entity);
+    return this.use(tenantId, undefined, async (r) => {
+      const entity = r.contracts.create({ ...data, tenantId });
+      return r.contracts.save(entity);
+    });
   }
 
   async findContractById(
     tenantId: string,
     id: number,
   ): Promise<EmploymentContractEntity | null> {
-    return this.contracts.findOne({
-      where: { id, tenantId },
-      relations: { employee: true },
+    return this.use(tenantId, undefined, async (r) => {
+      return r.contracts.findOne({
+        where: { id, tenantId },
+        relations: { employee: true },
+      });
     });
   }
 
@@ -238,7 +273,9 @@ export class HrRepository {
     tenantId: string,
     contractNumber: string,
   ): Promise<EmploymentContractEntity | null> {
-    return this.contracts.findOne({ where: { contractNumber, tenantId } });
+    return this.use(tenantId, undefined, async (r) => {
+      return r.contracts.findOne({ where: { contractNumber, tenantId } });
+    });
   }
 
   /**
@@ -248,10 +285,12 @@ export class HrRepository {
     tenantId: string,
     employeeId: number,
   ): Promise<EmploymentContractEntity | null> {
-    return this.contracts.findOne({
-      where: { employeeId, status: ContractStatus.ACTIVE, tenantId },
-      relations: { employee: true },
-      order: { startDate: 'DESC', id: 'DESC' },
+    return this.use(tenantId, undefined, async (r) => {
+      return r.contracts.findOne({
+        where: { employeeId, status: ContractStatus.ACTIVE, tenantId },
+        relations: { employee: true },
+        order: { startDate: 'DESC', id: 'DESC' },
+      });
     });
   }
 
@@ -259,18 +298,22 @@ export class HrRepository {
     tenantId: string,
     options: FindManyOptions<EmploymentContractEntity>,
   ): Promise<[EmploymentContractEntity[], number]> {
-    const { where, ...rest } = options;
-    const scoped:
-      | FindOptionsWhere<EmploymentContractEntity>
-      | FindOptionsWhere<EmploymentContractEntity>[] = Array.isArray(where)
-      ? where.map((condition) => ({ ...condition, tenantId }))
-      : { ...(where ?? {}), tenantId };
-    return this.contracts.findAndCount({ ...rest, where: scoped });
+    return this.use(tenantId, undefined, async (r) => {
+      const { where, ...rest } = options;
+      const scoped:
+        | FindOptionsWhere<EmploymentContractEntity>
+        | FindOptionsWhere<EmploymentContractEntity>[] = Array.isArray(where)
+        ? where.map((condition) => ({ ...condition, tenantId }))
+        : { ...(where ?? {}), tenantId };
+      return r.contracts.findAndCount({ ...rest, where: scoped });
+    });
   }
 
   async countActiveContracts(tenantId: string): Promise<number> {
-    return this.contracts.count({
-      where: { status: ContractStatus.ACTIVE, tenantId },
+    return this.use(tenantId, undefined, async (r) => {
+      return r.contracts.count({
+        where: { status: ContractStatus.ACTIVE, tenantId },
+      });
     });
   }
 
@@ -278,7 +321,9 @@ export class HrRepository {
     tenantId: string,
     status: EmployeeStatus,
   ): Promise<number> {
-    return this.employees.count({ where: { status, tenantId } });
+    return this.use(tenantId, undefined, async (r) => {
+      return r.employees.count({ where: { status, tenantId } });
+    });
   }
 
   /**
@@ -287,14 +332,16 @@ export class HrRepository {
   async aggregateActiveContracts(
     tenantId: string,
   ): Promise<ActiveContractAggregate> {
-    const raw = await this.contracts
-      .createQueryBuilder('contract')
-      .select('COUNT(contract.id)', 'count')
-      .addSelect('COALESCE(SUM(contract.baseSalary), 0)', 'totalBaseSalary')
-      .where('contract.status = :status', { status: ContractStatus.ACTIVE })
-      .andWhere('contract.tenantId = :tenantId', { tenantId })
-      .getRawOne<ActiveContractAggregate>();
-    return raw ?? { count: '0', totalBaseSalary: '0' };
+    return this.use(tenantId, undefined, async (r) => {
+      const raw = await r.contracts
+        .createQueryBuilder('contract')
+        .select('COUNT(contract.id)', 'count')
+        .addSelect('COALESCE(SUM(contract.baseSalary), 0)', 'totalBaseSalary')
+        .where('contract.status = :status', { status: ContractStatus.ACTIVE })
+        .andWhere('contract.tenantId = :tenantId', { tenantId })
+        .getRawOne<ActiveContractAggregate>();
+      return raw ?? { count: '0', totalBaseSalary: '0' };
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -305,17 +352,21 @@ export class HrRepository {
     tenantId: string,
     data: Partial<PayslipEntity>,
   ): Promise<PayslipEntity> {
-    const entity = this.payslips.create({ ...data, tenantId });
-    return this.payslips.save(entity);
+    return this.use(tenantId, undefined, async (r) => {
+      const entity = r.payslips.create({ ...data, tenantId });
+      return r.payslips.save(entity);
+    });
   }
 
   async findPayslipById(
     tenantId: string,
     id: number,
   ): Promise<PayslipEntity | null> {
-    return this.payslips.findOne({
-      where: { id, tenantId },
-      relations: { employee: true },
+    return this.use(tenantId, undefined, async (r) => {
+      return r.payslips.findOne({
+        where: { id, tenantId },
+        relations: { employee: true },
+      });
     });
   }
 
@@ -325,8 +376,10 @@ export class HrRepository {
     periodYear: number,
     periodMonth: number,
   ): Promise<PayslipEntity | null> {
-    return this.payslips.findOne({
-      where: { employeeId, periodYear, periodMonth, tenantId },
+    return this.use(tenantId, undefined, async (r) => {
+      return r.payslips.findOne({
+        where: { employeeId, periodYear, periodMonth, tenantId },
+      });
     });
   }
 
@@ -334,78 +387,84 @@ export class HrRepository {
     tenantId: string,
     options: FindManyOptions<PayslipEntity>,
   ): Promise<[PayslipEntity[], number]> {
-    const { where, ...rest } = options;
-    const scoped: FindOptionsWhere<PayslipEntity> | FindOptionsWhere<PayslipEntity>[] =
-      Array.isArray(where)
-        ? where.map((condition) => ({ ...condition, tenantId }))
-        : { ...(where ?? {}), tenantId };
-    return this.payslips.findAndCount({ ...rest, where: scoped });
+    return this.use(tenantId, undefined, async (r) => {
+      const { where, ...rest } = options;
+      const scoped: FindOptionsWhere<PayslipEntity> | FindOptionsWhere<PayslipEntity>[] =
+        Array.isArray(where)
+          ? where.map((condition) => ({ ...condition, tenantId }))
+          : { ...(where ?? {}), tenantId };
+      return r.payslips.findAndCount({ ...rest, where: scoped });
+    });
   }
 
   async savePayslip(
     tenantId: string,
     entity: PayslipEntity,
   ): Promise<PayslipEntity> {
-    // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
-    await this.payslips.update(
-      { id: entity.id, tenantId },
-      {
-        payslipNumber: entity.payslipNumber,
-        employeeId: entity.employeeId,
-        contractId: entity.contractId,
-        periodYear: entity.periodYear,
-        periodMonth: entity.periodMonth,
-        baseSalary: entity.baseSalary,
-        housingAllowance: entity.housingAllowance,
-        foodAllowance: entity.foodAllowance,
-        childAllowance: entity.childAllowance,
-        overtimeAmount: entity.overtimeAmount,
-        grossPay: entity.grossPay,
-        insuranceDeduction: entity.insuranceDeduction,
-        incomeTax: entity.incomeTax,
-        otherDeductions: entity.otherDeductions,
-        netPay: entity.netPay,
-        status: entity.status,
-        journalEntryId: entity.journalEntryId,
-        journalEntryNumber: entity.journalEntryNumber,
-        issuedAt: entity.issuedAt,
-        updatedAt: entity.updatedAt,
-      },
-    );
-    entity.tenantId = tenantId;
-    return entity;
+    return this.use(tenantId, undefined, async (r) => {
+      // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
+      await r.payslips.update(
+        { id: entity.id, tenantId },
+        {
+          payslipNumber: entity.payslipNumber,
+          employeeId: entity.employeeId,
+          contractId: entity.contractId,
+          periodYear: entity.periodYear,
+          periodMonth: entity.periodMonth,
+          baseSalary: entity.baseSalary,
+          housingAllowance: entity.housingAllowance,
+          foodAllowance: entity.foodAllowance,
+          childAllowance: entity.childAllowance,
+          overtimeAmount: entity.overtimeAmount,
+          grossPay: entity.grossPay,
+          insuranceDeduction: entity.insuranceDeduction,
+          incomeTax: entity.incomeTax,
+          otherDeductions: entity.otherDeductions,
+          netPay: entity.netPay,
+          status: entity.status,
+          journalEntryId: entity.journalEntryId,
+          journalEntryNumber: entity.journalEntryNumber,
+          issuedAt: entity.issuedAt,
+          updatedAt: entity.updatedAt,
+        },
+      );
+      entity.tenantId = tenantId;
+      return entity;
+    });
   }
 
   /**
    * تجمیع تحلیلی فیش‌های حقوقی برای کارت‌های بنتو.
    */
   async aggregatePayslips(tenantId: string): Promise<PayslipAggregate> {
-    const raw = await this.payslips
-      .createQueryBuilder('payslip')
-      .select('COUNT(payslip.id)', 'count')
-      .addSelect('COALESCE(SUM(payslip.grossPay), 0)', 'totalGrossPay')
-      .addSelect('COALESCE(SUM(payslip.netPay), 0)', 'totalNetPay')
-      .addSelect(
-        'COALESCE(SUM(payslip.insuranceDeduction), 0)',
-        'totalInsurance',
-      )
-      .addSelect('COALESCE(SUM(payslip.incomeTax), 0)', 'totalTax')
-      .addSelect(
-        'COALESCE(SUM(payslip.otherDeductions), 0)',
-        'totalOtherDeductions',
-      )
-      .where('payslip.tenantId = :tenantId', { tenantId })
-      .getRawOne<PayslipAggregate>();
-    return (
-      raw ?? {
-        count: '0',
-        totalGrossPay: '0',
-        totalNetPay: '0',
-        totalInsurance: '0',
-        totalTax: '0',
-        totalOtherDeductions: '0',
-      }
-    );
+    return this.use(tenantId, undefined, async (r) => {
+      const raw = await r.payslips
+        .createQueryBuilder('payslip')
+        .select('COUNT(payslip.id)', 'count')
+        .addSelect('COALESCE(SUM(payslip.grossPay), 0)', 'totalGrossPay')
+        .addSelect('COALESCE(SUM(payslip.netPay), 0)', 'totalNetPay')
+        .addSelect(
+          'COALESCE(SUM(payslip.insuranceDeduction), 0)',
+          'totalInsurance',
+        )
+        .addSelect('COALESCE(SUM(payslip.incomeTax), 0)', 'totalTax')
+        .addSelect(
+          'COALESCE(SUM(payslip.otherDeductions), 0)',
+          'totalOtherDeductions',
+        )
+        .where('payslip.tenantId = :tenantId', { tenantId })
+        .getRawOne<PayslipAggregate>();
+      return (
+        raw ?? {
+          count: '0',
+          totalGrossPay: '0',
+          totalNetPay: '0',
+          totalInsurance: '0',
+          totalTax: '0',
+          totalOtherDeductions: '0',
+        }
+      );
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -414,9 +473,11 @@ export class HrRepository {
 
   /** Active employees of the tenant (payroll-run population). */
   async findActiveEmployees(tenantId: string): Promise<EmployeeEntity[]> {
-    return this.employees.find({
-      where: { tenantId, status: EmployeeStatus.ACTIVE },
-      order: { id: 'ASC' },
+    return this.use(tenantId, undefined, async (r) => {
+      return r.employees.find({
+        where: { tenantId, status: EmployeeStatus.ACTIVE },
+        order: { id: 'ASC' },
+      });
     });
   }
 
@@ -425,16 +486,18 @@ export class HrRepository {
     tenantId: string,
     employeeIds: number[],
   ): Promise<EmploymentContractEntity[]> {
-    if (employeeIds.length === 0) {
-      return [];
-    }
-    return this.contracts.find({
-      where: {
-        tenantId,
-        status: ContractStatus.ACTIVE,
-        employeeId: In(employeeIds),
-      },
-      order: { startDate: 'DESC', id: 'DESC' },
+    return this.use(tenantId, undefined, async (r) => {
+      if (employeeIds.length === 0) {
+        return [];
+      }
+      return r.contracts.find({
+        where: {
+          tenantId,
+          status: ContractStatus.ACTIVE,
+          employeeId: In(employeeIds),
+        },
+        order: { startDate: 'DESC', id: 'DESC' },
+      });
     });
   }
 
@@ -443,12 +506,14 @@ export class HrRepository {
     tenantId: string,
     contractIds: number[],
   ): Promise<ContractAllowanceEntity[]> {
-    if (contractIds.length === 0) {
-      return [];
-    }
-    return this.allowances.find({
-      where: { tenantId, contractId: In(contractIds) },
-      order: { id: 'ASC' },
+    return this.use(tenantId, undefined, async (r) => {
+      if (contractIds.length === 0) {
+        return [];
+      }
+      return r.allowances.find({
+        where: { tenantId, contractId: In(contractIds) },
+        order: { id: 'ASC' },
+      });
     });
   }
 
@@ -458,11 +523,12 @@ export class HrRepository {
     contractId: number,
     rows: Partial<ContractAllowanceEntity>[],
   ): Promise<ContractAllowanceEntity[]> {
-    return this.runInTransaction(async (manager) => {
-      const repo = manager.getRepository(ContractAllowanceEntity);
-      await repo.delete({ tenantId, contractId });
-      return repo.save(
-        rows.map((row) => repo.create({ ...row, tenantId, contractId })),
+    return this.use(tenantId, undefined, async (r) => {
+      await r.allowances.delete({ tenantId, contractId });
+      return r.allowances.save(
+        rows.map((row) =>
+          r.allowances.create({ ...row, tenantId, contractId }),
+        ),
       );
     });
   }
@@ -474,17 +540,19 @@ export class HrRepository {
     periodYear: number,
     beforeMonth: number,
   ): Promise<PayslipEntity[]> {
-    if (employeeIds.length === 0) {
-      return [];
-    }
-    return this.payslips.find({
-      where: {
-        tenantId,
-        employeeId: In(employeeIds),
-        periodYear,
-        periodMonth: LessThan(beforeMonth),
-        status: In([PayslipStatus.ISSUED, PayslipStatus.PAID]),
-      },
+    return this.use(tenantId, undefined, async (r) => {
+      if (employeeIds.length === 0) {
+        return [];
+      }
+      return r.payslips.find({
+        where: {
+          tenantId,
+          employeeId: In(employeeIds),
+          periodYear,
+          periodMonth: LessThan(beforeMonth),
+          status: In([PayslipStatus.ISSUED, PayslipStatus.PAID]),
+        },
+      });
     });
   }
 
@@ -494,7 +562,9 @@ export class HrRepository {
     periodYear: number,
     manager?: EntityManager,
   ): Promise<PayrollRunEntity[]> {
-    return this.runs(manager).find({ where: { tenantId, periodYear } });
+    return this.use(tenantId, manager, async (r) => {
+      return r.payrollRuns.find({ where: { tenantId, periodYear } });
+    });
   }
 
   /** All payslips of a period (run payslips and legacy single payslips). */
@@ -503,8 +573,10 @@ export class HrRepository {
     periodYear: number,
     periodMonth: number,
   ): Promise<PayslipEntity[]> {
-    return this.payslips.find({
-      where: { tenantId, periodYear, periodMonth },
+    return this.use(tenantId, undefined, async (r) => {
+      return r.payslips.find({
+        where: { tenantId, periodYear, periodMonth },
+      });
     });
   }
 
@@ -513,7 +585,9 @@ export class HrRepository {
     id: number,
     manager?: EntityManager,
   ): Promise<PayrollRunEntity | null> {
-    return this.runs(manager).findOne({ where: { id, tenantId } });
+    return this.use(tenantId, manager, async (r) => {
+      return r.payrollRuns.findOne({ where: { id, tenantId } });
+    });
   }
 
   async findPayrollRunByPeriod(
@@ -522,16 +596,20 @@ export class HrRepository {
     periodMonth: number,
     manager?: EntityManager,
   ): Promise<PayrollRunEntity | null> {
-    return this.runs(manager).findOne({
-      where: { tenantId, periodYear, periodMonth },
+    return this.use(tenantId, manager, async (r) => {
+      return r.payrollRuns.findOne({
+        where: { tenantId, periodYear, periodMonth },
+      });
     });
   }
 
   async listPayrollRuns(tenantId: string): Promise<PayrollRunEntity[]> {
-    return this.payrollRuns.find({
-      where: { tenantId },
-      order: { periodYear: 'DESC', periodMonth: 'DESC' },
-      take: 120,
+    return this.use(tenantId, undefined, async (r) => {
+      return r.payrollRuns.find({
+        where: { tenantId },
+        order: { periodYear: 'DESC', periodMonth: 'DESC' },
+        take: 120,
+      });
     });
   }
 
@@ -540,9 +618,11 @@ export class HrRepository {
     data: Partial<PayrollRunEntity>,
     manager?: EntityManager,
   ): Promise<PayrollRunEntity> {
-    const repo = this.runs(manager);
-    const entity = repo.create({ ...data, tenantId });
-    return repo.save(entity);
+    return this.use(tenantId, manager, async (r) => {
+      const repo = r.payrollRuns;
+      const entity = repo.create({ ...data, tenantId });
+      return repo.save(entity);
+    });
   }
 
   async savePayrollRun(
@@ -550,39 +630,43 @@ export class HrRepository {
     entity: PayrollRunEntity,
     manager?: EntityManager,
   ): Promise<PayrollRunEntity> {
-    // Tenant-scoped update: another tenant's id changes 0 rows.
-    await this.runs(manager).update(
-      { id: entity.id, tenantId },
-      {
-        status: entity.status,
-        ratesYear: entity.ratesYear,
-        employeeCount: entity.employeeCount,
-        totalGross: entity.totalGross,
-        totalInsurable: entity.totalInsurable,
-        totalEmployeeInsurance: entity.totalEmployeeInsurance,
-        totalEmployerInsurance: entity.totalEmployerInsurance,
-        totalUnemploymentInsurance: entity.totalUnemploymentInsurance,
-        totalIncomeTax: entity.totalIncomeTax,
-        totalOtherDeductions: entity.totalOtherDeductions,
-        totalNet: entity.totalNet,
-        journalEntryId: entity.journalEntryId,
-        journalEntryNumber: entity.journalEntryNumber,
-        postedAt: entity.postedAt,
-        updatedAt: entity.updatedAt,
-      },
-    );
-    entity.tenantId = tenantId;
-    return entity;
+    return this.use(tenantId, manager, async (r) => {
+      // Tenant-scoped update: another tenant's id changes 0 rows.
+      await r.payrollRuns.update(
+        { id: entity.id, tenantId },
+        {
+          status: entity.status,
+          ratesYear: entity.ratesYear,
+          employeeCount: entity.employeeCount,
+          totalGross: entity.totalGross,
+          totalInsurable: entity.totalInsurable,
+          totalEmployeeInsurance: entity.totalEmployeeInsurance,
+          totalEmployerInsurance: entity.totalEmployerInsurance,
+          totalUnemploymentInsurance: entity.totalUnemploymentInsurance,
+          totalIncomeTax: entity.totalIncomeTax,
+          totalOtherDeductions: entity.totalOtherDeductions,
+          totalNet: entity.totalNet,
+          journalEntryId: entity.journalEntryId,
+          journalEntryNumber: entity.journalEntryNumber,
+          postedAt: entity.postedAt,
+          updatedAt: entity.updatedAt,
+        },
+      );
+      entity.tenantId = tenantId;
+      return entity;
+    });
   }
 
   async findPayslipsByRun(
     tenantId: string,
     payrollRunId: number,
   ): Promise<PayslipEntity[]> {
-    return this.payslips.find({
-      where: { tenantId, payrollRunId },
-      relations: { employee: true },
-      order: { employeeId: 'ASC' },
+    return this.use(tenantId, undefined, async (r) => {
+      return r.payslips.find({
+        where: { tenantId, payrollRunId },
+        relations: { employee: true },
+        order: { employeeId: 'ASC' },
+      });
     });
   }
 
@@ -591,12 +675,14 @@ export class HrRepository {
     rows: Partial<PayslipEntity>[],
     manager?: EntityManager,
   ): Promise<PayslipEntity[]> {
-    if (rows.length === 0) {
-      return [];
-    }
-    const repo = this.slips(manager);
-    const entities = rows.map((row) => repo.create({ ...row, tenantId }));
-    return repo.save(entities);
+    return this.use(tenantId, manager, async (r) => {
+      if (rows.length === 0) {
+        return [];
+      }
+      const repo = r.payslips;
+      const entities = rows.map((row) => repo.create({ ...row, tenantId }));
+      return repo.save(entities);
+    });
   }
 
   /** Remove the payslips of a DRAFT run before recalculating it. */
@@ -605,8 +691,10 @@ export class HrRepository {
     payrollRunId: number,
     manager?: EntityManager,
   ): Promise<number> {
-    const result = await this.slips(manager).delete({ tenantId, payrollRunId });
-    return result.affected ?? 0;
+    return this.use(tenantId, manager, async (r) => {
+      const result = await r.payslips.delete({ tenantId, payrollRunId });
+      return result.affected ?? 0;
+    });
   }
 
   /** Mark all payslips of a run with a status and journal entry. */
@@ -619,10 +707,12 @@ export class HrRepository {
     >,
     manager?: EntityManager,
   ): Promise<void> {
-    await this.slips(manager).update(
-      { tenantId, payrollRunId },
-      { ...changes, updatedAt: new Date() },
-    );
+    return this.use(tenantId, manager, async (r) => {
+      await r.payslips.update(
+        { tenantId, payrollRunId },
+        { ...changes, updatedAt: new Date() },
+      );
+    });
   }
 
   /** ساخت شرط جست‌وجوی کارمند بر اساس نام/کد پرسنلی/کد ملی */

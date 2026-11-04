@@ -646,6 +646,13 @@ describe('HrController — payroll runs use the JWT tenant only', () => {
   });
 });
 
+/** A TenantScope whose manager hands out the given mock repositories by entity class name. */
+const fakeScope = (repos: Record<string, unknown>) =>
+  ({
+    within: (_t: string, _m: unknown, fn: (m: unknown) => unknown) =>
+      fn({ getRepository: (e: { name: string }) => repos[e.name] ?? {} }),
+  }) as never;
+
 describe('HrRepository — payroll-run queries are tenant scoped', () => {
   const build = () => {
     const payslips = {
@@ -658,14 +665,7 @@ describe('HrRepository — payroll-run queries are tenant scoped', () => {
       find: jest.fn(async () => []),
       update: jest.fn(async () => ({ affected: 0 })),
     };
-    const repository = new HrRepository(
-      {} as never,
-      {} as never,
-      payslips as never,
-      runs as never,
-      {} as never,
-      {} as never,
-    );
+    const repository = new HrRepository(fakeScope({ PayslipEntity: payslips, PayrollRunEntity: runs }), {} as never);
     return { repository, payslips, runs };
   };
 
