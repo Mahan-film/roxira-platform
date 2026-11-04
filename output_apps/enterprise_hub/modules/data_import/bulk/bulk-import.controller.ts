@@ -10,6 +10,15 @@ import { DATA_IMPORT_RESOURCE } from '../constants/data-import.constants';
 import { ApproveBulkDto, SignPartsDto, StartBulkUploadDto } from './bulk-import.dto';
 import { BulkImportService } from './bulk-import.service';
 
+/** Keeps only `{ "<part>": "<44-char base64 sha256>" }` pairs; anything else is dropped before it reaches a signature. */
+function sanitizeChecksums(raw: Record<string, unknown> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw ?? {})) {
+    if (/^\d{1,5}$/.test(k) && typeof v === 'string' && /^[A-Za-z0-9+/]{43}=$/.test(v)) out[k] = v;
+  }
+  return out;
+}
+
 /**
  * Bulk import: resumable direct-to-storage upload, then a background job with progress, pause, retry and
  * cancel, then a review gate before anything is posted. The tenant always comes from the verified token.
@@ -52,18 +61,27 @@ export class BulkImportController {
   @Throttle({ default: { limit: 600, ttl: 60_000 } })
   @ApiOperation({ summary: 'نشانی‌های امضاشدهٔ بارگذاری تکه‌ها' })
   sign(@Req() request: AuthenticatedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: SignPartsDto) {
-    return this.service.signParts(this.tenant(request), id, dto.partNumbers);
+    return this.service.signParts(this.tenant(request), id, dto.partNumbers, sanitizeChecksums(dto.checksums));
   }
 
   @Put('uploads/:id/parts/:n')
   @Throttle({ default: { limit: 600, ttl: 60_000 } })
-  @ApiOperation({ summary: 'فقط توسعه/آزمون: دریافت تکه از طریق API' })
+  @ApiOperation({ summary: 'جایگزین وقتی مرورگر به R2 نمی‌رسد: دریافت یک تکه و پخش مستقیم آن به ذخیره‌سازی (بدون دیسک)' })
   putPart(
     @Req() request: AuthenticatedRequest & IncomingMessage,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('n', new ParseIntPipe()) n: number,
   ) {
-    return this.service.putLocalPart(this.tenant(request), id, n, request);
+    const length = request.headers['content-length'];
+    const sum = request.headers['x-amz-checksum-sha256'];
+    return this.service.putProxyPart(
+      this.tenant(request),
+      id,
+      n,
+      request,
+      length === undefined ? null : Number(length),
+      typeof sum === 'string' ? sum : undefined,
+    );
   }
 
   @Post('uploads/:id/complete')

@@ -80,11 +80,11 @@ describe('BulkImportService', () => {
     const started = await svc.startUpload(T, 'u', { fileName: 'a.csv', size });
     expect(started.totalParts).toBe(3);
     const job = jobs.get(started.jobId) as BulkJob;
-    const part = (n: number, bytes: number) => svc.putLocalPart(T, job.id, n, require('stream').Readable.from([Buffer.alloc(bytes, 97)]));
+    const part = (n: number, bytes: number) => svc.putProxyPart(T, job.id, n, require('stream').Readable.from([Buffer.alloc(bytes, 97)]), bytes);
     await part(1, started.partBytes);
     await expect(svc.completeUpload(T, job.id)).rejects.toThrow(BadRequestException);
     await part(2, started.partBytes);
-    await part(3, 99); // wrong size
+    await expect(part(3, 99)).rejects.toThrow(BadRequestException); // wrong size is refused before storing
     await expect(svc.completeUpload(T, job.id)).rejects.toThrow(/3/);
     await part(3, 100);
     const done = await svc.completeUpload(T, job.id);
@@ -140,5 +140,63 @@ describe('object keys and the S3 store', () => {
     expect(url).toContain('uploadId=upload-1');
     expect(url).toContain('X-Amz-Signature=');
     expect(url).not.toContain('SK'); // the secret is never in the URL
+  });
+});
+
+describe('R2 fallback relay and per-part checksums', () => {
+  const SUM = 'a'.repeat(43) + '=';
+  const make = () => {
+    const calls: any[] = [];
+    const s3: any = new S3ObjectStore({ endpoint: 'https://acc.r2.cloudflarestorage.com', accessKeyId: 'AK', secretAccessKey: 'SK', bucket: 'imports' });
+    return { s3, calls };
+  };
+  beforeEach(() => {
+    process.env.IMPORT_STORAGE_DRIVER = 's3';
+    process.env.IMPORT_PART_BYTES = String(5 * 1024 * 1024);
+    delete process.env.IMPORT_PROXY_PARTS;
+    delete process.env.IMPORT_PART_CHECKSUMS;
+  });
+
+  it('binds the SHA-256 header into the signed URL (not hoisted to the query string)', async () => {
+    const { s3 } = make();
+    const url: string = await s3.presignPart(`tenants/${T}/imports/j/source`, 'u1', 2, 3600, SUM);
+    expect(url).toMatch(/X-Amz-SignedHeaders=[^&]*x-amz-checksum-sha256/i);
+    expect(url).not.toMatch(/[?&]x-amz-checksum-sha256=/i);
+    const plain: string = await s3.presignPart(`tenants/${T}/imports/j/source`, 'u1', 2, 3600);
+    expect(plain).not.toMatch(/checksum/i);
+  });
+
+  it('signs checksums only when enabled and well-formed, and tells the browser which header to send', async () => {
+    const { repo } = fakeRepo();
+    const s3: any = make().s3;
+    s3.createMultipart = jest.fn(async () => ({ uploadId: 'u1' }));
+    const svc = new BulkImportService(repo, s3, queue);
+    const started = await svc.startUpload(T, 'u', { fileName: 'a.csv', size: 5 * 1024 * 1024 * 2 });
+    expect(started.checksums).toBe(false);
+    expect((await svc.signParts(T, started.jobId, [1], { '1': SUM })).headers).toEqual({});
+    process.env.IMPORT_PART_CHECKSUMS = '1';
+    const signed = await svc.signParts(T, started.jobId, [1, 2], { '1': SUM });
+    expect(signed.headers[1]).toEqual({ 'x-amz-checksum-sha256': SUM });
+    expect(signed.headers[2]).toBeUndefined();
+  });
+
+  it('relays a part as a stream with its exact size and refuses wrong lengths, bad digests and the off switch', async () => {
+    const { repo } = fakeRepo();
+    const s3: any = make().s3;
+    s3.createMultipart = jest.fn(async () => ({ uploadId: 'u1' }));
+    s3.putPart = jest.fn(async (_k: string, _u: string, n: number, _b: unknown, meta: any) => ({ etag: `"e${n}"`, size: meta.size }));
+    const svc = new BulkImportService(repo, s3, queue);
+    const size = 5 * 1024 * 1024 * 2 + 10;
+    const started = await svc.startUpload(T, 'u', { fileName: 'a.csv', size });
+    expect(started.proxyParts).toBe(true);
+    const body = require('stream').Readable.from([]);
+    await expect(svc.putProxyPart(T, started.jobId, 1, body, 123)).rejects.toThrow(BadRequestException);
+    await expect(svc.putProxyPart(T, started.jobId, 1, body, started.partBytes, 'not-base64')).rejects.toThrow(/چکیده/);
+    await expect(svc.putProxyPart(T, started.jobId, 9, body, started.partBytes)).rejects.toThrow(/نامعتبر/);
+    expect(await svc.putProxyPart(T, started.jobId, 3, body, 10, SUM)).toEqual({ etag: '"e3"', size: 10 });
+    expect(s3.putPart).toHaveBeenCalledWith(expect.any(String), 'u1', 3, body, { size: 10, checksumSha256: SUM });
+    process.env.IMPORT_PROXY_PARTS = '0';
+    await expect(svc.putProxyPart(T, started.jobId, 3, body, 10)).rejects.toThrow(/غیرفعال/);
+    expect(svc.config().proxyParts).toBe(false);
   });
 });

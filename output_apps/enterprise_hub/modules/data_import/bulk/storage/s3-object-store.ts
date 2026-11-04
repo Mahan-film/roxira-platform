@@ -12,7 +12,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as fs from 'fs';
 import type { Readable } from 'stream';
-import { CompletedPart, ObjectStore, PartInfo } from './object-store';
+import { CompletedPart, ObjectStore, PartInfo, PutPartMeta } from './object-store';
 
 export interface S3Settings {
   endpoint: string;
@@ -44,6 +44,10 @@ export class S3ObjectStore implements ObjectStore {
         region: 'auto',
         endpoint: settings.endpoint,
         forcePathStyle: true,
+        // Newer SDKs add a CRC32 of an EMPTY body to presigned URLs, which storage rejects for real parts.
+        // Only send a checksum when we ask for one (ChecksumSHA256 above). Cloudflare's own R2 guidance.
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
         credentials: { accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey },
       });
   }
@@ -56,11 +60,18 @@ export class S3ObjectStore implements ObjectStore {
     return { uploadId: out.UploadId };
   }
 
-  presignPart(key: string, uploadId: string, partNumber: number, expiresSeconds: number): Promise<string> {
+  presignPart(key: string, uploadId: string, partNumber: number, expiresSeconds: number, checksumSha256?: string): Promise<string> {
     return getSignedUrl(
       this.client,
-      new UploadPartCommand({ Bucket: this.settings.bucket, Key: key, UploadId: uploadId, PartNumber: partNumber }),
-      { expiresIn: expiresSeconds },
+      new UploadPartCommand({
+        Bucket: this.settings.bucket,
+        Key: key,
+        UploadId: uploadId,
+        PartNumber: partNumber,
+        ...(checksumSha256 ? { ChecksumSHA256: checksumSha256 } : {}),
+      }),
+      // The digest header must stay a signed header (not be hoisted into the query string), so storage checks it.
+      { expiresIn: expiresSeconds, unhoistableHeaders: new Set(['x-amz-checksum-sha256']) },
     );
   }
 
@@ -88,8 +99,24 @@ export class S3ObjectStore implements ObjectStore {
     return parts;
   }
 
-  async putPart(): Promise<{ etag: string; size: number }> {
-    throw new Error('Parts are uploaded directly to the presigned URL');
+  /**
+   * Fallback when the browser cannot reach R2 (filtering): the API relays one part as a stream. Nothing is
+   * written to local disk and the part is never held in memory; `ContentLength` lets the SDK stream it.
+   */
+  async putPart(key: string, uploadId: string, partNumber: number, body: Readable, meta?: PutPartMeta): Promise<{ etag: string; size: number }> {
+    if (!meta || !(meta.size > 0)) throw new Error('A relayed part needs its exact size');
+    const out = await this.client.send(
+      new UploadPartCommand({
+        Bucket: this.settings.bucket,
+        Key: key,
+        UploadId: uploadId,
+        PartNumber: partNumber,
+        Body: body,
+        ContentLength: meta.size,
+        ...(meta.checksumSha256 ? { ChecksumSHA256: meta.checksumSha256 } : {}),
+      }),
+    );
+    return { etag: out.ETag ?? '', size: meta.size };
   }
 
   async completeMultipart(key: string, uploadId: string, parts: CompletedPart[]): Promise<{ size: number }> {

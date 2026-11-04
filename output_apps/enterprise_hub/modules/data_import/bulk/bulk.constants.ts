@@ -101,6 +101,35 @@ export function bulkTmpDir(): string {
   return os.tmpdir();
 }
 
+/**
+ * Parts relayed through the API (streamed to storage, never to disk) when the browser cannot reach R2.
+ * On by default for the S3 driver; set IMPORT_PROXY_PARTS=0 to forbid it.
+ */
+export function proxyPartsEnabled(): boolean {
+  return process.env.IMPORT_PROXY_PARTS !== '0';
+}
+
+/** Largest relayed part the API accepts (must stay below nginx's limit for that route and Cloudflare's 100 MB). */
+export const MAX_PROXY_PART_BYTES = 96 * MIB;
+
+/**
+ * Per-part SHA-256 bound into presigned URLs. Off by default until `scripts/ops/huge_import_probe.mjs`
+ * has confirmed the real R2 bucket enforces the header; then set IMPORT_PART_CHECKSUMS=1.
+ */
+export function partChecksumsEnabled(): boolean {
+  return process.env.IMPORT_PART_CHECKSUMS === '1';
+}
+
+/**
+ * Ceiling for ALL staged rows in PostgreSQL (`bulk_import_rows`, all tenants). Staged rows are ~1.4x the CSV that
+ * produced them and live on the database host's disk, which is the real limit of a huge import. A job that would
+ * push the table over this stops with a clear message and resumes where it stopped once space is free.
+ * Default 6 GiB for srv1 (about 16 GB free); raise it when the data volume is bigger.
+ */
+export function stagingMaxBytes(): number {
+  return positive('IMPORT_STAGING_MAX_BYTES', 6 * GIB);
+}
+
 export function maxActiveJobsPerTenant(): number {
   return positive('IMPORT_BULK_MAX_ACTIVE_JOBS', 5);
 }
