@@ -33,6 +33,9 @@ describe('Jalali deadline helpers', () => {
     expect(monthsLate('2026-07-22', '2026-07-22')).toBe(0);
     expect(monthsLate('2026-07-22', '2026-07-23')).toBe(1); // 1405/05/01
     expect(monthsLate('2026-07-22', '2026-08-30')).toBe(2); // 1405/06/08 -> month 2 started
+    // a 30-day month deadline and a 31st-day remittance: 1405/11/30 -> 1406/01/31 is two months
+    expect(monthsLate('2027-02-19', '2027-04-20')).toBe(2);
+    expect(monthsLate('2027-03-20', '2027-04-20')).toBe(1); // 1405/12/29 -> 1406/01/31
   });
 });
 
@@ -68,6 +71,7 @@ describe('doctors fee advance withholding preview (DTX-04)', () => {
     const p = await build().preview('t', dto({ remittedOn: '2026-08-30' }));
     // tax 50,000,000: 10% = 5,000,000 + 2.5% x 2 months = 2,500,000
     expect(p.latePenalty).toEqual({ remittedOn: '2026-08-30', monthsLate: 2, amount: '7500000.00' });
+    expect(p.lines[0].latePenalty).toEqual({ monthsLate: 2, amount: '7500000.00' });
     const onTime = await build().preview('t', dto({ remittedOn: '2026-07-22' }));
     expect(onTime.latePenalty).toMatchObject({ monthsLate: 0, amount: '0.00' });
   });

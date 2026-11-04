@@ -23,6 +23,8 @@ export interface DoctorWithholdingLine {
   excludedReason: string | null;
   /** End of the Jalali month after the payment (Gregorian ISO date). */
   remitBy: string;
+  /** Art. 199 estimate for this line when `remittedOn` is given. */
+  latePenalty: { monthsLate: number; amount: string } | null;
 }
 
 export interface DoctorWithholdingPreview {
@@ -49,12 +51,15 @@ export function remitDeadline(paidOn: string): string {
   return isoDate(jalaliMonthEnd(year, month));
 }
 
-/** Jalali months started after `due` up to `remitted` (0 when not late). */
+/**
+ * Jalali months started after `due` up to `remitted` (0 when not late). `due` is always the last day of a
+ * Jalali month, so the months started equal the difference of the month numbers.
+ */
 export function monthsLate(due: string, remitted: string): number {
   if (remitted <= due) return 0;
   const a = gregorianToJalali(due)!;
   const b = gregorianToJalali(remitted)!;
-  return (b.jy * 12 + b.jm) - (a.jy * 12 + a.jm) + (b.jd > a.jd ? 1 : 0) || 1;
+  return b.jy * 12 + b.jm - (a.jy * 12 + a.jm);
 }
 
 /** Advance withholding on doctors' fees paid by medical centres. Preview only, rates from the statutory store. */
@@ -79,6 +84,7 @@ export class DoctorWithholdingService {
         netToDoctor: minorToDecimal(amount - withheld),
         excludedReason: fee ? null : 'حقوق و کارانه (بودجه‌ای) مشمول این کسر نیست و طبق مقررات حقوق مالیات می‌شود',
         remitBy: remitDeadline(p.paidOn),
+        latePenalty: null,
       };
     });
 
@@ -102,8 +108,10 @@ export class DoctorWithholdingService {
         const w = parseMinor(line.withheld);
         const late = monthsLate(line.remitBy, dto.remittedOn);
         if (w === 0n || late === 0) continue;
+        const linePenalty = applyRate(w, flat) + applyRate(w, monthly) * BigInt(late);
+        line.latePenalty = { monthsLate: late, amount: minorToDecimal(linePenalty) };
         months = Math.max(months, late);
-        amount += applyRate(w, flat) + applyRate(w, monthly) * BigInt(late);
+        amount += linePenalty;
       }
       latePenalty = { remittedOn: dto.remittedOn, monthsLate: months, amount: minorToDecimal(amount) };
     }
