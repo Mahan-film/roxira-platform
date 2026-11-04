@@ -38,6 +38,7 @@ export const STATUTORY_KEYS = {
   vat_general_rate: { kind: 'rate', label: 'نرخ عمومی مالیات بر ارزش افزوده', required: false },
   income_tax_art131_brackets: { kind: 'brackets', label: 'پله‌های مالیات بر درآمد اشخاص حقیقی (ماده ۱۳۱)', required: false },
   income_exemption_ceiling_art57_art101: { kind: 'money', label: 'سقف معافیت درآمد مستغلات (ماده ۵۷) و مشاغل (ماده ۱۰۱)', required: false },
+  rental_expense_deduction_rate: { kind: 'rate', label: 'درصد هزینه و استهلاک مالک از اجاره‌بها (ماده ۵۳)', required: false },
   civil_partnership_max_exemptions: { kind: 'count', label: 'حداکثر تعداد معافیت شرکای مشارکت مدنی (تبصره ۱ ماده ۱۰۱)', required: false },
   corporate_tax_rate: { kind: 'rate', label: 'نرخ مالیات بر درآمد شرکت‌ها', required: false },
   corporate_tax_effective_floor: { kind: 'rate', label: 'حداقل نرخ مؤثر مالیات بر درآمد شرکت‌ها', required: false },

@@ -6,6 +6,8 @@ import { CaptureDocumentEntity } from '../invoice_capture/entities/capture.entit
 import { InvoicingModule } from '../invoicing/invoicing.module';
 import { MOADIAN_QUEUE } from './constants/moadian.constants';
 import { MoadianController } from './controllers/moadian.controller';
+import { RentalTaxController } from './controllers/rental-tax.controller';
+import { RentalTaxService } from './services/rental-tax.service';
 import { BusinessTaxController } from './controllers/business-tax.controller';
 import { BusinessTaxService } from './services/business-tax.service';
 import { CorporateTaxController } from './controllers/corporate-tax.controller';
@@ -59,7 +61,7 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     InvoicingModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
   ],
-  controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController, BusinessTaxController],
+  controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController, BusinessTaxController, RentalTaxController],
   providers: [
     TaxComplianceService,
     TaxComplianceRepository,
@@ -70,6 +72,7 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     SeasonalReportService,
     CorporateTaxService,
     BusinessTaxService,
+    RentalTaxService,
     StatutoryRepository,
     LedgerExportRepository,
     LedgerExportService,
