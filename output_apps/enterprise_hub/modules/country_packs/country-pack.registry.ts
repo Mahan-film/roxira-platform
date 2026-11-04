@@ -38,11 +38,11 @@ export class CountryPackRegistry {
   }
 
   has(country: string): boolean {
-    return this.packs.has(country);
+    return this.packs.has(country.toUpperCase());
   }
 
   get(country: string): CountryPack {
-    const pack = this.packs.get(country);
+    const pack = this.packs.get(country.toUpperCase());
     if (!pack) throw new CountryPackNotFoundError(`no country pack for ${country}`);
     return pack;
   }
@@ -57,7 +57,7 @@ export class CountryPackRegistry {
   }
 
   /** The e-invoice adapter, or a clear error when the country has none. */
-  eInvoiceOf(country: string): EInvoiceAdapter<never, never, unknown> {
+  eInvoiceOf(country: string): EInvoiceAdapter {
     const adapter = this.get(country).eInvoice;
     if (!adapter) throw new CountryPackUnsupportedError(`country ${country} has no e-invoice scheme`);
     return adapter;

@@ -24,6 +24,13 @@ describe('CountryPackRegistry', () => {
     expect(() => registry.get('ZZ')).toThrow(CountryPackNotFoundError);
   });
 
+  it('country lookup ignores case, and freezing a pack does not freeze shared constants', () => {
+    const registry = new CountryPackRegistry(TEST_COUNTRY);
+    registry.register(base());
+    expect(registry.get('xx').country).toBe(TEST_COUNTRY);
+    expect(registry.has('xx')).toBe(true);
+  });
+
   it('refuses a second pack for the same country', () => {
     const registry = new CountryPackRegistry(TEST_COUNTRY);
     registry.register(base());

@@ -130,7 +130,7 @@ describe('Iran pack is adapters over existing code (behaviour unchanged)', () =>
   });
 
   it('calendar and locale describe Iran today', () => {
-    expect(pack.calendars.fiscalYear).toBe(IRAN_FISCAL_YEAR);
+    expect(pack.calendars.fiscalYear).toEqual(IRAN_FISCAL_YEAR);
     expect(pack.calendars.primary).toBe('jalali');
     expect(pack.calendars.weekendDays).toEqual([5]);
     expect(pack.locale).toMatchObject({ direction: 'rtl', timeZone: 'Asia/Tehran', currency: { code: 'IRR', minorUnits: 0 } });

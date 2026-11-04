@@ -119,7 +119,7 @@ export interface CountryPack {
   taxRules: readonly TaxRuleInfo[];
   statutory: StatutoryPort;
   /** Absent when the country has no e-invoice scheme in the product. */
-  eInvoice?: EInvoiceAdapter<never, never, unknown>;
+  eInvoice?: EInvoiceAdapter;
   /** Absent when the country has no payroll rules in the product. */
   payroll?: PayrollRulesAdapter;
   reportPack: readonly ReportPackEntry[];

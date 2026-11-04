@@ -121,7 +121,7 @@ export function createIranPack(deps: IranPackDeps): IranCountryPack {
       currency: { code: 'IRR', minorUnits: 0 },
       timeZone: 'Asia/Tehran',
     },
-    calendars: { primary: 'jalali', fiscalYear: IRAN_FISCAL_YEAR, weekendDays: [5] },
+    calendars: { primary: 'jalali', fiscalYear: { ...IRAN_FISCAL_YEAR }, weekendDays: [5] },
     chartTemplates,
     taxRules,
     statutory,
