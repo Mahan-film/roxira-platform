@@ -46,6 +46,8 @@ import {
 } from '../enums/hr.enum';
 import { HrRepository } from '../repositories/hr.repository';
 import { gregorianToJalali, jalaliMonthDays } from './jalali-period';
+import { calculateEndOfService } from './end-of-service';
+import { PreviewSettlementDto, SettlementPreviewDto } from '../dto/settlement.dto';
 import { ContractAllowanceDto, ReplaceAllowancesDto } from '../dto/contract-allowance.dto';
 import { PayrollYearToDate, yearToDateOf, calculatePayroll } from './payroll-calculator';
 
@@ -399,6 +401,63 @@ export class HrService {
       throw new NotFoundException(`کارمند با شناسه ${id} یافت نشد.`);
     }
     return this.toEmployeeDto(entity);
+  }
+
+  /**
+   * Preview of the end-of-service benefit and leave pay. Writes nothing. Day basis and days per
+   * year come from the statutory store as of the end date; the daily wage is the active
+   * contract's base salary over the payroll month days.
+   */
+  async previewSettlement(
+    tenantId: string,
+    employeeId: number,
+    dto: PreviewSettlementDto,
+  ): Promise<SettlementPreviewDto> {
+    const employee = await this.hrRepository.findEmployeeById(tenantId, employeeId);
+    if (!employee) {
+      throw new NotFoundException(`کارمند با شناسه ${employeeId} یافت نشد.`);
+    }
+    const contract = await this.hrRepository.findActiveContractByEmployee(tenantId, employeeId);
+    if (!contract) {
+      throw new BadRequestException('کارمند قرارداد فعال ندارد؛ مزد روزانه مشخص نیست.');
+    }
+    const terms = await this.statutory.settlementTermsOn(tenantId, dto.endDate.slice(0, 10));
+    const monthDays = BigInt(terms.monthDays);
+    const dailyWage =
+      (2n * BigInt(Math.round(Number(contract.baseSalary))) + monthDays) / (2n * monthDays);
+    let result: ReturnType<typeof calculateEndOfService>;
+    try {
+      result = calculateEndOfService({
+        hireDate: employee.hireDate,
+        terminationDate: dto.endDate,
+        dailyWage,
+        daysPerYear: terms.daysPerYear,
+        yearDays: terms.yearDays,
+        unusedLeaveDays: dto.unusedLeaveDays,
+      });
+    } catch (error) {
+      if (error instanceof RangeError) {
+        throw new BadRequestException(
+          error.message === 'terminationDate is before hireDate'
+            ? 'تاریخ پایان خدمت قبل از تاریخ استخدام است.'
+            : error.message,
+        );
+      }
+      throw error;
+    }
+    return {
+      employeeId,
+      hireDate: employee.hireDate.slice(0, 10),
+      endDate: dto.endDate.slice(0, 10),
+      fullYears: result.fullYears,
+      extraDays: result.extraDays,
+      dailyWage: dailyWage.toString(),
+      unusedLeaveDays: dto.unusedLeaveDays ?? 0,
+      endOfServiceBenefit: result.endOfServiceBenefit.toString(),
+      leaveSettlement: result.leaveSettlement.toString(),
+      total: result.total.toString(),
+      parameters: terms.parameters,
+    };
   }
 
   async updateEmployee(

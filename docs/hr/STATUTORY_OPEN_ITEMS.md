@@ -10,6 +10,8 @@ records that with `PUT /enterprise-hub/hr/statutory-parameters`.
 | `housing_allowance` | 30,000,000 | Not in circular 6682; matches the decree text on ekhtebar.ir (docs/research/TAX_SEASONAL_AND_RATES_2026-10-31.md) | Official copy of the cabinet decree |
 | `wage_tax_annual_brackets` | 4.8 / 9.6 / 12 / 14.4 / 16.8 bn, 10 to 30% | Research report | Budget Law 1405 text and the tax directive |
 | `wage_flat_tax_rate` | 10% | Research report | Tax circular |
+| `sanavat_days_per_year` | 30 | Labour Law art. 24, not checked against the official text | Official copy of art. 24 |
+| `sanavat_year_days` | 365 | Day basis of the part-year share (`POST /hr/employees/:id/settlement`) | Accountant's confirmation (365 or 360) |
 | `eidi_exempt_ceiling` | 400,000,000 | Research report | Budget Law 1405 |
 | `non_cash_exempt_annual` | 800,000,000 | Research report | Art. 91(13) with Budget Law 1405 |
 | `vat_general_rate` | 10% | Research report | Budget Law 1405; the report records a 10 versus 12 dispute |

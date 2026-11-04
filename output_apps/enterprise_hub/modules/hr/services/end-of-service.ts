@@ -4,17 +4,14 @@
  *
  * Rules built (source: Labour Law art. 24; confirm with an accountant, see
  * docs/hr/STATUTORY_OPEN_ITEMS.md):
- *   - one month (30 days) of the last daily wage for each full year of service;
- *   - a part year earns the same share pro rata: remaining calendar days / 365;
+ *   - `daysPerYear` days of the last daily wage for each full year of service;
+ *   - a part year earns the same share pro rata: remaining calendar days / `yearDays`;
  *   - unused leave is paid at the same daily wage.
- * The caller supplies the daily wage (what counts as "last wage" is a contract matter), so no
+ * `daysPerYear` and `yearDays` come from the statutory parameter store (sanavat_days_per_year,
+ * sanavat_year_days), never from code. The caller supplies the daily wage (what counts as "last wage" is a contract matter), so no
  * statutory amount is invented here.
  */
 
-/** Days of daily wage per full year of service. */
-export const SANAVAT_DAYS_PER_YEAR = 30;
-/** Divisor for the part-year share. */
-export const SANAVAT_YEAR_DAYS = 365;
 
 export interface EndOfServiceInput {
   /** First day of service, ISO date (YYYY-MM-DD, Gregorian). */
@@ -22,7 +19,11 @@ export interface EndOfServiceInput {
   /** Last day of service, ISO date; counted as a worked day. */
   terminationDate: string;
   /** Last daily wage in whole rials. */
-  dailyWage: number;
+  dailyWage: bigint;
+  /** Days of daily wage per full year of service (statutory parameter). */
+  daysPerYear: number;
+  /** Day count of a year for the part-year share (statutory parameter). */
+  yearDays: number;
   /** Unused leave days owed at termination (may be fractional, e.g. 2.5). */
   unusedLeaveDays?: number;
 }
@@ -32,10 +33,10 @@ export interface EndOfServiceResult {
   /** Calendar days beyond the full years (0..365). */
   extraDays: number;
   /** Sanavat in whole rials. */
-  endOfServiceBenefit: number;
+  endOfServiceBenefit: bigint;
   /** Unused-leave pay in whole rials. */
-  leaveSettlement: number;
-  total: number;
+  leaveSettlement: bigint;
+  total: bigint;
 }
 
 const parseDay = (value: string, label: string): Date => {
@@ -57,8 +58,14 @@ export function calculateEndOfService(input: EndOfServiceInput): EndOfServiceRes
   if (end < hire) {
     throw new RangeError('terminationDate is before hireDate');
   }
-  if (!Number.isInteger(input.dailyWage) || input.dailyWage < 0) {
+  if (input.dailyWage < 0n) {
     throw new RangeError('dailyWage must be a non-negative whole number of rials');
+  }
+  if (!Number.isSafeInteger(input.daysPerYear) || input.daysPerYear <= 0) {
+    throw new RangeError('daysPerYear must be a positive whole number');
+  }
+  if (!Number.isSafeInteger(input.yearDays) || input.yearDays <= 0) {
+    throw new RangeError('yearDays must be a positive whole number');
   }
   const leaveDays = input.unusedLeaveDays ?? 0;
   if (!Number.isFinite(leaveDays) || leaveDays < 0) {
@@ -77,19 +84,19 @@ export function calculateEndOfService(input: EndOfServiceInput): EndOfServiceRes
   }
   const extraDays = Math.round((exclusiveEnd.getTime() - anniversary.getTime()) / DAY_MS);
 
-  const wage = BigInt(input.dailyWage);
-  const perYear = wage * BigInt(SANAVAT_DAYS_PER_YEAR);
+  const wage = input.dailyWage;
+  const perYear = wage * BigInt(input.daysPerYear);
   const benefit =
     perYear * BigInt(fullYears) +
-    divideHalfUp(perYear * BigInt(extraDays), BigInt(SANAVAT_YEAR_DAYS));
+    divideHalfUp(perYear * BigInt(extraDays), BigInt(input.yearDays));
   // Leave days are held in hundredths so 2.5 days is exact.
   const leave = divideHalfUp(wage * BigInt(Math.round(leaveDays * 100)), 100n);
 
   return {
     fullYears,
     extraDays,
-    endOfServiceBenefit: Number(benefit),
-    leaveSettlement: Number(leave),
-    total: Number(benefit + leave),
+    endOfServiceBenefit: benefit,
+    leaveSettlement: leave,
+    total: benefit + leave,
   };
 }
