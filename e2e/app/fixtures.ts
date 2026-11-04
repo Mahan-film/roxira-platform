@@ -9,14 +9,22 @@ export const SESSION_STORAGE_KEY = 'roxira.auth.session';
  * Which sandbox tenant a spec runs as:
  *  - 'seeded' (default): a tenant pre-loaded with the data_import fixture; shared, treat as read-mostly.
  *  - 'import': a fresh, empty tenant per browser project, for specs that import data through the UI.
+ *  - 'm1': a fresh, empty tenant for the M1 gate (e2e/tests/m1-shop-month.spec.ts), which imports the
+ *    sample-company fixture and posts a whole month. APP_E2E_SESSION_FILE_M1 (mint one with
+ *    `scripts/infra/e2e/mkuser.sh m1`), else the import tenant of the browser project.
  */
-export type SessionKind = 'seeded' | 'import';
+export type SessionKind = 'seeded' | 'import' | 'm1';
+
+/** The session JSON file for a tenant kind, or undefined when the env does not provide one. */
+export function findSessionFile(kind: SessionKind, projectName: string): string | undefined {
+  const env = process.env;
+  const importFile = env[`APP_E2E_SESSION_FILE_IMPORT_${projectName.toUpperCase()}`];
+  if (kind === 'm1') return env.APP_E2E_SESSION_FILE_M1 ?? importFile ?? env.APP_E2E_SESSION_FILE;
+  return (kind === 'import' ? importFile : undefined) ?? env.APP_E2E_SESSION_FILE;
+}
 
 function sessionFileFor(kind: SessionKind, projectName: string): string {
-  const env = process.env;
-  const file =
-    (kind === 'import' ? env[`APP_E2E_SESSION_FILE_IMPORT_${projectName.toUpperCase()}`] : undefined) ??
-    env.APP_E2E_SESSION_FILE;
+  const file = findSessionFile(kind, projectName);
   if (!file) {
     throw new Error(
       'APP_E2E_SESSION_FILE is not set. Start the sandbox with scripts/infra/e2e/sandbox_up.sh and source ' +
@@ -146,6 +154,15 @@ export async function openApp(page: Page, route: string): Promise<void> {
   // The sidebar is rendered only once the route guard let the shell through (aria-label «منوی نرم‌افزار»).
   await expect(page.getByRole('navigation', { name: /منوی نرم.?افزار/ })).toBeVisible();
   await expect(page.getByText('در حال بررسی دسترسی')).toHaveCount(0);
+}
+
+/**
+ * Log in as the sandbox test tenant of this test (see `sessionKind`) and land on /app: the session is already
+ * injected into localStorage by the `context` fixture, so this only proves the route guard accepts it.
+ */
+export async function loginAsTestTenant(page: Page, route = '/app'): Promise<void> {
+  await openApp(page, route);
+  await expect(page).not.toHaveURL(/\/login/);
 }
 
 /** Assert that no destructive error notice (Alert role="alert", e.g. ErrorNotice) is visible on the page. */
