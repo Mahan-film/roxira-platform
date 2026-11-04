@@ -87,6 +87,7 @@ Nothing here is marked done from memory of earlier sessions.
 | Assistant stage (metrics, memory, validator, investigator, close copilot, voice) | partial | `modules/assistant/`, `modules/invoice_capture/` | Others not found. |
 | Growth stage (firm hub, open banking, POS bridge, public API, shop connectors) | missing | none | |
 | Later: light manufacturing, fixed assets, contractor accounting, international tax | missing | none | Fixed assets planned. |
+| M1 Shop-ready acceptance gate (issue #116, E0) | partial | `e2e/tests/m1-shop-month.spec.ts` (paths from repo root), `e2e/tests/m1/expected-totals.ts`, `e2e/tests/m1/fixture-data.ts`, `docs/testing/M1_GATE.md`; fixture self-check 4/4 passing (`npx playwright test m1-shop-month`, no server) | Gate steps: 1/17 real (login, sandbox only, not run locally), 16/17 `test.fixme`; each epic flips its own steps. No CI job yet (Mac). |
 
 ## Iran-first roadmap stages
 

@@ -10,5 +10,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["playwright.app.config.ts", "app"]
+  "include": ["playwright.config.ts", "playwright.app.config.ts", "app", "tests"]
 }
