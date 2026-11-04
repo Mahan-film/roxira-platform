@@ -1,0 +1,48 @@
+{
+  "label": "csv5g",
+  "file": "big5g.csv",
+  "fileBytes": 5486153990,
+  "fileGB": 5.11,
+  "outcome": "ready",
+  "status": "ready",
+  "error": null,
+  "seconds": 436.2,
+  "mbPerSecond": 12,
+  "rowsStaged": 14400000,
+  "rowsPerSecond": 33010,
+  "expectRows": 14400000,
+  "rowsMatch": true,
+  "tables": [
+    {
+      "name": "big5g",
+      "rows": 14400000,
+      "columns": 12
+    }
+  ],
+  "dbTableStats": [
+    {
+      "idx": 0,
+      "n": 14400000,
+      "lo": 1,
+      "hi": 14400000,
+      "contiguous": true
+    }
+  ],
+  "firstRow": [
+    "1",
+    "C-000000001",
+    "علی احمدی"
+  ],
+  "lastRow": [
+    "14400000",
+    "C-014400000",
+    "پریسا کریمی"
+  ],
+  "notes": [],
+  "peakRssMB": 226,
+  "peakHeapMB": 83,
+  "peakExternalMB": 28,
+  "postgresDatabaseGB": 7.54,
+  "node": "v26.5.1",
+  "nodeHeapLimitMB": 352
+}

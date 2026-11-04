@@ -18,6 +18,8 @@ import { iterateRows } from './package-analysis';
 export interface BuildRecordsOptions {
   /** ضریب تبدیل مبلغ ستون‌های پولی به ریال (۱۰ برای تومان)؛ مبلغ‌هایی که خودشان واحد دارند دست نمی‌خورند. */
   moneyToRial?: number;
+  /** Rows of this table already handled before this page (paged posting keeps row numbers global). */
+  rowOffset?: number;
 }
 
 export interface BuiltRecords {
@@ -62,7 +64,7 @@ export function buildRecords(
   const records: NormalisedRecord[] = [];
   const errors: string[] = [];
   let invalidRows = 0;
-  let rowNumber = 1;
+  let rowNumber = 1 + (options.rowOffset ?? 0);
 
   for (const row of iterateRows(table)) {
     rowNumber += 1;

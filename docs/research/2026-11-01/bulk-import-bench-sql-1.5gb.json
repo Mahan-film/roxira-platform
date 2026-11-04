@@ -1,0 +1,50 @@
+{
+  "label": "sql",
+  "file": "dump.sql",
+  "fileBytes": 1620090681,
+  "fileGB": 1.51,
+  "outcome": "ready",
+  "status": "ready",
+  "error": null,
+  "seconds": 54,
+  "mbPerSecond": 28.6,
+  "rowsStaged": 4000000,
+  "rowsPerSecond": 74017,
+  "expectRows": 4000000,
+  "rowsMatch": true,
+  "tables": [
+    {
+      "name": "customers",
+      "rows": 4000000,
+      "columns": 12
+    }
+  ],
+  "dbTableStats": [
+    {
+      "idx": 0,
+      "n": 4000000,
+      "lo": 1,
+      "hi": 4000000,
+      "contiguous": true
+    }
+  ],
+  "firstRow": [
+    "1",
+    "C-000000001",
+    "علی احمدی"
+  ],
+  "lastRow": [
+    "4000000",
+    "C-004000000",
+    "رضا کریمی"
+  ],
+  "notes": [
+    "dump: 4 دستور غیرداده نادیده گرفته شد (هیچ دستوری اجرا نمی‌شود)."
+  ],
+  "peakRssMB": 217,
+  "peakHeapMB": 74,
+  "peakExternalMB": 26,
+  "postgresDatabaseGB": 2.1,
+  "node": "v26.5.1",
+  "nodeHeapLimitMB": 352
+}

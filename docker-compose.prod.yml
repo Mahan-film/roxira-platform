@@ -319,6 +319,8 @@ services:
       - PYTHONPATH=/opt/roxira_platform
       - PYTHONDONTWRITEBYTECODE=1
       - HOME=/tmp
+      # Bulk import spills (XLSX shared strings, nested workbooks) go to disk, not to the RAM-backed /tmp.
+      - IMPORT_BULK_SPOOL_DIR=/import-spool
     # non-root (nestjs = uid 100 / gid 101 in the image), no capabilities,
     # read-only root filesystem. Host prerequisite for the radar write paths below:
     #   chown 100:101 TECH_RADAR_REPORT.md TECH_RADAR_REPORT.json; install -d -o 100 -g 101 data/tech_radar
@@ -336,6 +338,8 @@ services:
       - ./TECH_RADAR_REPORT.md:/opt/roxira_platform/TECH_RADAR_REPORT.md
       - ./TECH_RADAR_REPORT.json:/opt/roxira_platform/TECH_RADAR_REPORT.json
       - ./data/tech_radar:/opt/roxira_platform/data/tech_radar
+      # Host prerequisite: install -d -o 100 -g 101 /var/lib/roxira/import-spool (docs/BULK_IMPORT.md)
+      - /var/lib/roxira/import-spool:/import-spool
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
