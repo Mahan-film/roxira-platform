@@ -77,7 +77,8 @@ export const SEASONAL_NOTES: readonly string[] = [
 export class SeasonalReportService {
   constructor(private readonly repository: SeasonalReportRepository) {}
 
-  private async loadPurchases(
+  /** Purchase documents of the season (invoices + posted captures), exact minor units. */
+  async loadPurchases(
     tenantId: string,
     range: ReturnType<typeof jalaliQuarterRange>,
   ): Promise<{ rows: PurchaseAmounts[]; invoiceCount: number; unreadable: number }> {
@@ -98,6 +99,24 @@ export class SeasonalReportService {
     }
     rows.sort((a, b) => a.date.localeCompare(b.date) || a.documentNumber.localeCompare(b.documentNumber));
     return { rows, invoiceCount: invoices.length, unreadable };
+  }
+
+  /** Sales invoice totals of the season in exact rial minor units (same rule as `vatReport`). */
+  async salesTotals(
+    tenantId: string,
+    year: number,
+    quarter: number,
+  ): Promise<{ invoiceCount: number; baseMinor: bigint; vatMinor: bigint }> {
+    const range = jalaliQuarterRange(year, quarter);
+    const invoices = await this.repository.findIssuedBetween(tenantId, range.from, range.to);
+    let baseMinor = 0n;
+    let vatMinor = 0n;
+    for (const invoice of invoices) {
+      const amounts = invoiceRialAmounts(invoice);
+      baseMinor += amounts.salesMinor;
+      vatMinor += amounts.vatMinor;
+    }
+    return { invoiceCount: invoices.length, baseMinor, vatMinor };
   }
 
   async vatReport(tenantId: string, year: number, quarter: number): Promise<SeasonalVatReport> {

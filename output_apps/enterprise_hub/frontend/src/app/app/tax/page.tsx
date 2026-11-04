@@ -41,6 +41,7 @@ import {
   type MoadianSubmissionResponse,
   type SeasonalTransactionsResponse,
   type SeasonalVatReport,
+  type VatReturnDraft,
 } from "@/types/moadian-seasonal";
 
 const POLL_INTERVAL_MS = 5_000;
@@ -317,6 +318,7 @@ function SeasonalCard() {
   const [quarter, setQuarter] = useState(initialQuarter);
   const [vat, setVat] = useState<SeasonalVatReport | null>(null);
   const [tx, setTx] = useState<SeasonalTransactionsResponse | null>(null);
+  const [ret, setRet] = useState<VatReturnDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -327,10 +329,12 @@ function SeasonalCard() {
     Promise.all([
       getSeasonalVat(year, quarter, controller.signal),
       getSeasonalTransactions(year, quarter, controller.signal),
+      getVatReturn(year, quarter, controller.signal),
     ])
-      .then(([v, t]) => {
+      .then(([v, t, r]) => {
         setVat(v);
         setTx(t);
+        setRet(r);
         setError(null);
       })
       .catch((err: unknown) => {
@@ -342,6 +346,14 @@ function SeasonalCard() {
       });
     return () => controller.abort();
   }, [year, quarter]);
+
+  async function downloadReturn(format: "xlsx" | "pdf") {
+    try {
+      await downloadVatReturn(format, year, quarter);
+    } catch (err) {
+      setError(loadErrorMessage(err));
+    }
+  }
 
   async function download(kind: SeasonalCsvKind) {
     try {
@@ -393,9 +405,30 @@ function SeasonalCard() {
           <Button variant="outline" size="sm" onClick={() => download("seasonal-purchases")} disabled={loading || !tx}>
             <Download className="size-4" /> CSV خرید و مالیات ورودی
           </Button>
+          <Button variant="outline" size="sm" onClick={() => downloadReturn("xlsx")} disabled={loading || !ret}>
+            <Download className="size-4" /> اظهارنامه Excel
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => downloadReturn("pdf")} disabled={loading || !ret}>
+            <Download className="size-4" /> اظهارنامه PDF
+          </Button>
         </div>
         <LoadingLine show={loading} />
         {error && <ErrorNotice title="خطا" message={error} />}
+
+        {ret && (
+          <Alert variant={ret.ledger.reconciled ? "default" : "destructive"}>
+            <AlertTitle>پیش‌نویس اظهارنامه ارزش افزوده</AlertTitle>
+            <AlertDescription>
+              مالیات فروش {formatMoneyRial(Number(ret.output.vat))} — مالیات ورودی{" "}
+              {formatMoneyRial(Number(ret.input.vat))} — قابل پرداخت {formatMoneyRial(Number(ret.payable))} — اعتبار
+              انتقالی {formatMoneyRial(Number(ret.creditCarriedForward))}.{" "}
+              {ret.ledger.reconciled
+                ? "با دفتر کل مطابقت دقیق دارد."
+                : `اختلاف با دفتر کل: ${formatMoneyRial(Number(ret.ledger.difference))}.`}{" "}
+              عوارض و انتقال اعتبار هنوز تأیید نشده (unclear) است.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {vat && (
           <>

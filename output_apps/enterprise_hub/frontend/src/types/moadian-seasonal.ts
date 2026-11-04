@@ -98,3 +98,23 @@ export interface SeasonalTransactionsResponse {
   rows: SeasonalTransactionRow[];
   notes: string[];
 }
+
+export interface VatReturnDraft {
+  status: "draft";
+  period: { year: number; quarter: number; label: string };
+  output: { invoiceCount: number; taxableBase: number | string; vat: number | string };
+  input: { documentCount: number; taxableBase: number | string; vat: number | string };
+  levies: { amount: number | string; status: "unclear" };
+  netVat: number | string;
+  carriedCreditIn: number | string;
+  payable: number | string;
+  creditCarriedForward: number | string;
+  ledger: {
+    outputAccount: string | null;
+    inputAccount: string | null;
+    netPayable: number | string;
+    difference: number | string;
+    reconciled: boolean;
+  };
+  notes: string[];
+}

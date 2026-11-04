@@ -285,7 +285,7 @@ describe('purchases and input VAT', () => {
 describe('SeasonalReportController tenant source', () => {
   it('takes the tenant from the JWT, never from the query', async () => {
     const vatReport = jest.fn().mockResolvedValue({});
-    const controller = new SeasonalReportController({ vatReport } as unknown as SeasonalReportService);
+    const controller = new SeasonalReportController({ vatReport } as unknown as SeasonalReportService, {} as never);
     const request = { user: { tenantId: 'tenant-a', tenantRole: 'ADMIN', role: 'ADMIN' } } as never;
     await controller
       .vat(request, { year: 1405, quarter: 1, tenantId: 'tenant-b' } as never)
