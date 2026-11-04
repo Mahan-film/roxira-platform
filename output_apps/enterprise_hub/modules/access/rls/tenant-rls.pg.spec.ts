@@ -43,6 +43,7 @@ const T2 = '22222222-2222-4222-8222-222222222222';
 const RLS_TABLES = [
   'fin_cheques', 'fin_cheque_events',
   'fin_chart_of_accounts', 'fin_journal_entries', 'fin_journal_entry_lines', 'fin_period_locks', 'fin_balance_reconciliation_log',
+  'fin_treasury_settings', 'fin_treasury_documents', 'fin_treasury_document_lines', 'fin_treasury_allocations',
   'hr_employees', 'hr_employment_contracts', 'hr_contract_allowances', 'hr_payroll_runs', 'hr_payslips',
   'fin_posting_role_maps', 'fin_posting_sources',
   'public_api_tokens',
