@@ -80,6 +80,21 @@ describePg('statutory parameters on PostgreSQL', () => {
     expect(rates.unverifiedKeys).not.toContain('min_daily_wage');
   });
 
+  it('seeds sanavat terms as platform defaults and lets a tenant override them by date', async () => {
+    const base = await service.settlementTermsOn(T1, '2026-12-31');
+    expect([base.daysPerYear, base.yearDays, base.monthDays]).toEqual([30, 365, 30]);
+    expect(base.parameters.every((p) => !p.tenantOverride && !p.verified)).toBe(true);
+    await service.setValue(T1, 'u1', {
+      fiscalYear: 1405, key: 'sanavat_year_days', value: 360,
+      effectiveFrom: '2026-09-23', source: 'تأیید حسابدار', verified: true,
+    });
+    expect((await service.settlementTermsOn(T1, '2026-09-22')).yearDays).toBe(365);
+    expect((await service.settlementTermsOn(T1, '2026-12-31')).yearDays).toBe(360);
+    expect((await service.settlementTermsOn(T2, '2026-12-31')).yearDays).toBe(365);
+    // A later fiscal year with no rows of its own inherits the last one in force.
+    expect((await service.settlementTermsOn(T2, '2027-06-01')).daysPerYear).toBe(30);
+  });
+
   it('a tenant edit stays with that tenant and versions up', async () => {
     await service.setValue(T1, 'u1', input);
     await service.setValue(T1, 'u1', { ...input, value: 32_000_000 });

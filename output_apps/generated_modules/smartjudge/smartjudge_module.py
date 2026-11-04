@@ -608,6 +608,7 @@ def _safe_role_models(role: str) -> list:
 
 
 _STT_ROLE = _safe_role_models("stt")
+_STT_PRIMARY = _STT_ROLE[0] if _STT_ROLE else ""
 _STT_SECONDARY = _STT_ROLE[1] if len(_STT_ROLE) > 1 else ""
 
 OPENROUTER_TIERS = {
@@ -615,7 +616,7 @@ OPENROUTER_TIERS = {
         "primary_model": _VIP_PRIMARY,
         "fallback_model": _VIP_FALLBACK,
         "voice_model": _FREE_PRIMARY,  # voice needs low latency: Flash, not Pro
-        "stt_primary": "deepgram/nova-3",
+        "stt_primary": _STT_PRIMARY,
         "stt_secondary": _STT_SECONDARY,
         "label": "سامانه قاضی هوشمند (نسخه پیشرفته سازمانی)"
     },
@@ -623,7 +624,7 @@ OPENROUTER_TIERS = {
         "primary_model": _FREE_PRIMARY,
         "fallback_model": _FREE_FALLBACK,
         "voice_model": _FREE_PRIMARY,
-        "stt_primary": "deepgram/nova-3",
+        "stt_primary": _STT_PRIMARY,
         "stt_secondary": _STT_SECONDARY,
         "label": "سامانه قاضی هوشمند (نسخه استاندارد)"
     }

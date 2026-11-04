@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { AuditService } from '../../access/services/audit.service';
-import { isoDate, jalaliMonthEnd, jalaliMonthStart } from '../services/jalali-period';
+import { gregorianToJalali, isoDate, jalaliMonthEnd, jalaliMonthStart } from '../services/jalali-period';
 import {
   isStatutoryKey,
   isValidStatutoryValue,
@@ -122,6 +122,26 @@ export function toPayrollRates(
   };
 }
 
+export interface SettlementParameterUse {
+  key: StatutoryKey;
+  value: number;
+  version: number;
+  effectiveFrom: string;
+  source: string;
+  verified: boolean;
+  tenantOverride: boolean;
+}
+
+/** The figures an end-of-service settlement needs, with the versions they came from. */
+export interface SettlementTerms {
+  daysPerYear: number;
+  yearDays: number;
+  monthDays: number;
+  parameters: SettlementParameterUse[];
+}
+
+const SETTLEMENT_KEYS = ['sanavat_days_per_year', 'sanavat_year_days', 'payroll_month_days'] as const;
+
 /** Reads and edits statutory values. Payroll takes every legal figure from here. */
 @Injectable()
 export class StatutoryService {
@@ -170,6 +190,42 @@ export class StatutoryService {
   async hasYear(tenantId: string, year: number): Promise<boolean> {
     const rows = await this.repository.findForYear(tenantId, IRAN, year);
     return rows.length > 0;
+  }
+
+  /** Sanavat terms in force on a Gregorian date: the tenant's own rows beat platform defaults. */
+  async settlementTermsOn(tenantId: string, asOf: string): Promise<SettlementTerms> {
+    const jalali = gregorianToJalali(asOf);
+    if (!jalali) {
+      throw new BadRequestException('تاریخ معتبر نیست.');
+    }
+    const rows = await this.repository.findKeysUpToYear(tenantId, IRAN, [...SETTLEMENT_KEYS], jalali.jy);
+    const resolved = resolveParameters(rows, asOf);
+    const parameters: SettlementParameterUse[] = [];
+    for (const key of SETTLEMENT_KEYS) {
+      const row = resolved.get(key);
+      const value = row?.value;
+      if (!row || !Number.isSafeInteger(value) || (value as number) <= 0) {
+        throw new BadRequestException(
+          `پارامتر قانونی «${STATUTORY_KEYS[key].label}» برای این تاریخ تعریف نشده است.`,
+        );
+      }
+      parameters.push({
+        key,
+        value: value as number,
+        version: row.version,
+        effectiveFrom: row.effectiveFrom.slice(0, 10),
+        source: row.source,
+        verified: row.verified,
+        tenantOverride: row.tenantId !== null,
+      });
+    }
+    const valueOf = (key: StatutoryKey): number => parameters.find((p) => p.key === key)!.value;
+    return {
+      daysPerYear: valueOf('sanavat_days_per_year'),
+      yearDays: valueOf('sanavat_year_days'),
+      monthDays: valueOf('payroll_month_days'),
+      parameters,
+    };
   }
 
   async list(
