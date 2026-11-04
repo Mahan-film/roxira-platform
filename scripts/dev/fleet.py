@@ -463,10 +463,11 @@ class Fleet:
             return self.finish(n, "needs_hub", "--no-merge")
         if job.get("review", {}).get("verdict") != "pass":
             return self.save(n, status="built", note="merge refused: no passing review")
-        m = retry_sh(["gh", "pr", "merge", str(job["pr"]), "--repo", REPO, "--squash", "--delete-branch", "--match-head-commit", pr["headRefOid"]])
+        m = retry_sh(["gh", "pr", "merge", str(job["pr"]), "--repo", REPO, "--squash", "--match-head-commit", pr["headRefOid"]])
         if m.returncode:
             return self.save(n, status="reviewed", resume_at=time.time() + 180, note="merge refused: " + (m.stderr or m.stdout).strip()[:200])
-        self.finish(n, "merged", "squash merged")
+        # The repo uses a merge queue: `gh pr merge` enqueues the PR (and `--delete-branch` is refused there).
+        self.finish(n, "merged", "squash merged or queued for merge")
 
     def finish(self, n: int, status: str, note: str) -> None:
         self.save(n, status=status, note=note, locked=False)
