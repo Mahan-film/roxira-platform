@@ -156,6 +156,7 @@ function buildInvoice(overrides: Partial<InvoiceResponseDto> = {}): InvoiceRespo
     baseCurrency: Currency.USD,
     totalAmount: 2_500_000,
     totalDiscount: 100_000,
+    invoiceDiscount: 0,
     totalTax: 190_000,
     finalPayable: 2_590_000,
     baseTotalAmount: 0,
