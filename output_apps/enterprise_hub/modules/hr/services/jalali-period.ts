@@ -60,6 +60,24 @@ export function compactJalali(iso: string | null | undefined): string {
   return j ? `${pad(j.jy, 4)}${pad(j.jm)}${pad(j.jd)}` : '';
 }
 
+const TEHRAN_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Tehran',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * Gregorian ISO date (`YYYY-MM-DD`) of an instant in the Iran calendar day (Asia/Tehran).
+ * Use this, not `isoDate`, for "what legal date is it now": `isoDate` reads UTC, which is still
+ * the previous day between 00:00 and 03:30 Tehran time.
+ */
+export function tehranIsoDate(date: Date): string {
+  const parts = TEHRAN_DAY.formatToParts(date);
+  const pick = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
+  return `${pick('year')}-${pick('month')}-${pick('day')}`;
+}
+
 /** Gregorian ISO date (`YYYY-MM-DD`) of a UTC date. */
 export function isoDate(date: Date): string {
   return `${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1)}-${pad(
