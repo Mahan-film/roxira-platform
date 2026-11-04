@@ -351,7 +351,12 @@ describe('Moadian JOSE and key sealing', () => {
     });
     expect(verified?.header.x5c[0]).not.toContain('BEGIN');
     expect(verifyMoadianJws(token, taxOrgKeys.publicKey)).toBeNull();
-    expect(verifyMoadianJws(`${token.slice(0, -2)}AA`, tenantKeys.publicKey)).toBeNull();
+    // Tamper with the first signature character (always significant). Rewriting the last
+    // characters is not safe: the final base64url char carries 2 padding bits, so a few
+    // key/signature combinations decode to the same bytes and the token still verifies.
+    const [h, p, sig] = token.split('.');
+    const flipped = `${sig[0] === 'A' ? 'B' : 'A'}${sig.slice(1)}`;
+    expect(verifyMoadianJws(`${h}.${p}.${flipped}`, tenantKeys.publicKey)).toBeNull();
   });
 
   it('JWE(JWS) encrypt -> decrypt round trip with the tax org key', () => {

@@ -48,6 +48,7 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       compose: ${{ steps.filter.outputs.compose }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
       projects: ${{ steps.filter.outputs.projects }}
       templates: ${{ steps.filter.outputs.templates }}
     steps:
@@ -79,6 +80,9 @@ jobs:
               - ".github/workflows/ci.yml"
             frontend:
               - "output_apps/enterprise_hub/frontend/**"
+              - ".github/workflows/ci.yml"
+            backend:
+              - "output_apps/enterprise_hub/**"
               - ".github/workflows/ci.yml"
             projects:
               - "projects/**"
@@ -386,6 +390,58 @@ jobs:
       - run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+  backend:
+    name: Backend (tsc + jest + Postgres specs)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: output_apps/enterprise_hub
+    services:
+      postgres:
+        # Same major version as production (docker-compose.prod.yml, fresh_db_migrate.sh).
+        image: postgres:17
+        env:
+          # Throwaway service container: the pg specs connect without a password.
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: rxfresh
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rxfresh"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: "5432"
+      DATABASE_USER: postgres
+      DATABASE_NAME: rxfresh
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: output_apps/enterprise_hub/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: tsc --noEmit
+        run: npx tsc --noEmit
+      - name: Fresh migrations on an empty database
+        run: npm run migration:run
+      - name: Jest unit specs
+        # *.pg.spec.ts skip themselves without ROXIRA_TEST_PG_HOST; they run in the next step.
+        run: npx jest --testPathIgnorePatterns '/node_modules/' '/frontend/' '/dist/' '\.pg\.spec\.ts$'
+      - name: Jest Postgres specs
+        # Each spec creates and drops its own database on this server.
+        env:
+          ROXIRA_TEST_PG_HOST: 127.0.0.1
+          ROXIRA_TEST_PG_PORT: "5432"
+          ROXIRA_TEST_PG_USER: postgres
+        run: npx jest --runInBand --testPathPattern '\.pg\.spec\.ts$'
 
   frontend-gate:
     name: Frontend gate
