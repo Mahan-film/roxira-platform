@@ -200,11 +200,11 @@ export const METRIC_REGISTRY: readonly MetricDefinition[] = [
     labelFa: 'هزینه حقوق این ماه',
     unit: 'IRR',
     module: AccessModule.HR,
-    definitionFa: 'جمع ناخالص حقوق، بیمهٔ سهم کارفرما و بیمهٔ بیکاری (همان ترکیب سند حسابداری حقوق) در اجرای حقوق ماه شمسی جاری؛ بدون اجرای حقوق تعریف‌نشده است.',
+    definitionFa: 'جمع ناخالص حقوق، بیمهٔ سهم کارفرما و بیمهٔ بیکاری (همان ترکیب سند حسابداری حقوق) در اجرای حقوق ثبت‌شده (قطعی) ماه شمسی جاری؛ بدون اجرای ثبت‌شده تعریف‌نشده است.',
     compute: async (c) => {
       const run = await c.sources.payrollRun(c.tenantId, c.jalali.jy, c.jalali.jm);
       if (!run) {
-        return noEvidence('برای این ماه اجرای حقوق ثبت نشده است.');
+        return noEvidence('برای این ماه اجرای حقوق ثبت‌شده (قطعی) وجود ندارد.');
       }
       return done(
         toMinor(run.totalGross) +

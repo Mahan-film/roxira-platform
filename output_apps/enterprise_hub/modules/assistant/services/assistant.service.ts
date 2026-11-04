@@ -14,6 +14,11 @@ import {
   AssistantChatResponseDto,
   AssistantToolCallDto,
 } from '../dto/assistant-response.dto';
+import {
+  ABSTAIN_MESSAGE_FA,
+  enforceNumericEvidence,
+  NumericValidation,
+} from '../validator/numeric-validator';
 import { AssistantLlmService, LlmMessage } from './assistant-llm.service';
 import { AssistantRateLimiterService } from './assistant-rate-limiter.service';
 import { AssistantToolsService } from './assistant-tools.service';
@@ -29,6 +34,8 @@ export function buildSystemPrompt(now: Date): string {
     'If no tool covers the question, or a tool returns an error, say so briefly.',
     'You cannot create, change or delete anything.',
     'Always answer in Persian (Farsi), concise, with the key numbers.',
+    'Every number in your answer must be copied exactly from a tool result of this conversation turn; prefer the assistant_metric tool for headline business figures.',
+    'Never add, subtract, average or estimate numbers yourself: if no tool returns the figure, say you are not certain. A metric whose value is null has no evidence.',
     'Money: IRR amounts are rials; also give the toman value (rial / 10) for IRR. Name the currency.',
     'Dates use the Iranian (Jalali) calendar. "ماه گذشته" = period last_month.',
     `Today is ${jalali} (Jalali), ${now.toISOString().slice(0, 10)} (Gregorian).`,
@@ -97,6 +104,10 @@ export class AssistantService {
     ];
 
     const used: AssistantToolCallDto[] = [];
+    /** نتیجهٔ موفق ابزارها در این نوبت: تنها شاهد مجاز برای عددهای پاسخ. */
+    const evidence: unknown[] = [];
+    // Only the current message: client-supplied history must not launder numbers into evidence.
+    const userTexts = [dto.message];
     let model: string | null = null;
 
     const deadlineAt = Date.now() + ASSISTANT_TOTAL_TIMEOUT_MS;
@@ -114,11 +125,16 @@ export class AssistantService {
       model = turn.model;
 
       if (turn.toolCalls.length === 0 || !allowTools) {
-        return {
-          answer: turn.content ?? 'پاسخی دریافت نشد.',
-          toolCalls: used,
+        return this.verified({
+          draft: turn.content ?? 'پاسخی دریافت نشد.',
+          messages,
+          evidence,
+          userTexts,
+          used,
           model,
-        };
+          now,
+          deadlineAt,
+        });
       }
 
       messages.push({
@@ -144,6 +160,9 @@ export class AssistantService {
               ? String((outcome.result as { error: unknown }).error)
               : null;
           used.push({ name, arguments: args, ok: outcome.ok, error });
+          if (outcome.ok) {
+            evidence.push(outcome.result);
+          }
           content = serializeToolResult(outcome.result);
         }
         messages.push({ role: 'tool', tool_call_id: call.id, content });
@@ -154,6 +173,73 @@ export class AssistantService {
       answer: 'پاسخ کامل در تعداد مراحل مجاز به دست نیامد. پرسش را ساده‌تر کنید.',
       toolCalls: used,
       model,
+      abstained: false,
+      unverifiedNumbers: [],
     };
   }
+
+  /**
+   * هر عدد پاسخ باید شاهدی در همین نوبت داشته باشد. اگر نداشت، یک بار از مدل
+   * خواسته می‌شود فقط با عددهای ابزارها بازنویسی کند؛ اگر باز هم نداشت، پاسخ
+   * رد می‌شود و دستیار به فارسی اعلام می‌کند که مطمئن نیست.
+   */
+  private async verified(input: {
+    draft: string;
+    messages: LlmMessage[];
+    evidence: unknown[];
+    userTexts: string[];
+    used: AssistantToolCallDto[];
+    model: string | null;
+    now: Date;
+    deadlineAt: number;
+  }): Promise<AssistantChatResponseDto> {
+    const check = (answer: string) =>
+      enforceNumericEvidence({
+        answer,
+        toolResults: input.evidence,
+        userTexts: input.userTexts,
+        now: input.now,
+      });
+    let answer = input.draft;
+    let model = input.model;
+    let outcome = check(answer);
+
+    if (outcome.abstained && Date.now() < input.deadlineAt) {
+      const bad = outcome.validation.unsupported.map((n) => n.text).join('، ');
+      input.messages.push(
+        { role: 'assistant', content: answer },
+        {
+          role: 'user',
+          content: `These numbers have no evidence in the tool results of this turn: ${bad}. Rewrite the answer in Persian using ONLY numbers copied exactly from tool results, or say you are not certain. Do not compute new numbers.`,
+        },
+      );
+      try {
+        const retry = await this.llm.complete(
+          input.messages,
+          this.tools.definitions(),
+          'none',
+          input.deadlineAt,
+        );
+        model = retry.model;
+        if (retry.content?.trim()) {
+          answer = retry.content;
+          outcome = check(answer);
+        }
+      } catch {
+        // A failed retry is not a reason to show the unverified draft: it stays abstained.
+      }
+    }
+
+    return {
+      answer: outcome.abstained ? ABSTAIN_MESSAGE_FA : answer,
+      toolCalls: input.used,
+      model,
+      abstained: outcome.abstained,
+      unverifiedNumbers: outcome.abstained ? unsupportedTexts(outcome.validation) : [],
+    };
+  }
+}
+
+function unsupportedTexts(validation: NumericValidation): string[] {
+  return validation.unsupported.map((entry) => entry.text).slice(0, 10);
 }

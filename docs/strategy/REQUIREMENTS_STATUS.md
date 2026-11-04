@@ -61,7 +61,7 @@ Nothing here is marked done from memory of earlier sessions.
 |---|---|---|---|
 | Modular suite: ledger, invoicing, tax, treasury, stock, payroll, copilot | partial | `modules/` directories for each | Firm hub, manufacturing, fixed assets missing. |
 | Keep NestJS monolith with BullMQ and FastAPI workers | done | `app.module.ts`, `processors/` in tax_compliance, data_import | Decision, not a deliverable. |
-| One deterministic assistant graph, certified numbers, abstain without evidence | partial | `modules/assistant/` (tools service, LLM service, specs) | 25 certified metrics and numeric validator not verified present. |
+| One deterministic assistant graph, certified numbers, abstain without evidence | done | `modules/assistant/metrics/` (27 certified read-only metrics over existing report services, fixture spec #159), `modules/assistant/validator/numeric-validator.ts` (every number must trace to this turn's tool/metric results or the answer abstains in Persian, adversarial specs #202), `assistant_metric` tool and `AssistantService.verified` (retry once, then abstain; wiring #208) | Branch-scoped users still see company-wide figures (same as other assistant tools). |
 | Postgres-native memory with forced RLS | partial | forced RLS in 4+ migrations (`FORCE ROW LEVEL SECURITY`); episodic and bitemporal memory: none | Memory tables missing; RLS rollout owned by another session. |
 | Autonomy L0 to L3, document text untrusted | partial | `modules/invoice_capture/` (review queue, vendor rules) | Level model not codified in code. |
 | Import: sandboxed parsing, Parquet, DuckDB, dry run, signed report | partial | `modules/data_import/` (readers, hostile fixtures, reconciliation, dry-run preview, undo) | No R2 multipart direct upload, no Parquet or DuckDB, no signed report. Owned by another session. |
@@ -85,7 +85,7 @@ Nothing here is marked done from memory of earlier sessions.
 | Tamin list disk v6 | partial | see INS-01 | |
 | Property tests for ledger invariants | missing | `modules/accounting/accounting.ledger-integrity.spec.ts` is example-based; no `fast-check` in `package.json` | |
 | Import stage (R2 multipart, sandbox, encodings, Sepidar playbook, mapping memory, reconciliation) | partial | `modules/data_import/`, `migrations/1789400000000-CreateImportMappingMemory.ts` | Sepidar playbook: none; others per above. |
-| Assistant stage (metrics, memory, validator, investigator, close copilot, voice) | partial | `modules/assistant/`, `modules/invoice_capture/` | Others not found. |
+| Assistant stage (metrics, memory, validator, investigator, close copilot, voice) | partial | `modules/assistant/` (metrics #159, numeric validator #202, wiring #208), `modules/invoice_capture/` | Metrics and validator done. Bitemporal memory, investigator, close copilot, voice not found. |
 | Growth stage (firm hub, open banking, POS bridge, public API, shop connectors) | missing | none | |
 | Later: light manufacturing, fixed assets, contractor accounting, international tax | missing | none | Fixed assets planned. |
 | M1 Shop-ready acceptance gate (issue #116, E0) | partial | `e2e/tests/m1-shop-month.spec.ts` (paths from repo root), `e2e/tests/m1/expected-totals.ts`, `e2e/tests/m1/fixture-data.ts`, `docs/testing/M1_GATE.md`; fixture self-check 4/4 passing (`npx playwright test m1-shop-month`, no server) | Gate steps: 1/17 real (login, sandbox only, not run locally), 16/17 `test.fixme`; each epic flips its own steps. No CI job yet (Mac). |
