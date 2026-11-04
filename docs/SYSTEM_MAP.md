@@ -15,7 +15,7 @@ the derivable facts (compose, nginx, workflows, versions, model ids) are in `doc
 - Priority (STRATEGY §1): Smart Judge earns revenue; Roxira OS is the platform. Reliability of Smart Judge comes first.
 - Owner-facing FAQ in Persian: `docs/OWNER_GUIDE_FA.md`.
 
-## 2. Production server (refreshed 2026-10-22)
+## 2. Production server (refreshed 2026-11-04)
 | Item | Value |
 | --- | --- |
 | Host | `roxira-prod` = `91.107.248.99` (srv1.roxira.net, Ubuntu 26.04 arm64, 4 vCPU / 7.7 GB RAM + zram + 4 GB swapfile / 75 GB disk; old host 5.75.200.67 until decommission) |

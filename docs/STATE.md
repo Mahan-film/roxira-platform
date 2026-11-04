@@ -7,6 +7,8 @@
 Owner speaks Persian: reply in Persian; code, commits and docs in English. The owner wants FULL automation: do not hand them commands unless a secret or a physical action is needed.
 
 ## 2026-11-03 (hub, mahansudo + Claude): unblocked deploys, two accounts, cleanup, public-repo prep
+
+## 2026-11-04 (hub, mahansudo + Claude): added VAT return draft, WP/WH wage-tax files, Tamin list disk v6, M1 e2e gate skeleton, nginx rate-limit fix, fixed assets, bank reconcile, fleet dispatcher
 - **Deploys were stuck since 2026-11-01**: an untracked `.env.before-app-role.*` on srv1 made the tree dirty, so every
   merge (16 PRs) was refused. Moved to `/root/env-backups/`; merges #975-#980 then triggered autodeploy of `main`.
   Check `/root/deploy-state/autodeploy-last.json` before assuming a merge is live.
@@ -73,6 +75,8 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
   features shipped by other routes (by name, not diffed); #46 `models-long-sambanova` is still unresolved.
 
 ## Shipped 2026-10-22
+
+## Shipped 2026-11-04
 
 - **Incidents**: ghazihoushmand.ir was NXDOMAIN at IRNIC for ~2 h (domain expired; owner renewed). srv1 root disk hit 100 % (build cache 8 GB, 71 agent worktrees 6.5 GB, unused images); cleaned to ~75 %. Smoke tests now hit the local origin (#773) so a DNS outage no longer rolls deploys back.
 - **Lean architecture** (`docs/strategy/LEAN_ARCHITECTURE_2026-10-22.md`): **query embeddings on Cloudflare Workers AI `@cf/baai/bge-m3`** (`EMBED_BACKEND=cf`, `CF_ACCOUNT_ID`/`CF_AI_TOKEN` in .env; parity cosine 1.0000 vs TEI, legal gate 70 q in 20 s, strict recall@5 85.7 % = TEI, alias-aware 92.9 %; automatic fallback to TEI). Disk guard timer `roxira-disk-guard.timer` (hourly; build-cache prune, old agent worktrees, Telegram alert >= 88 %). Memory caps on every prod service (#780). nginx edge-cache headers for /laws, /regulations, /guides, sitemaps (2xx/3xx only; Cloudflare needs a Cache Rule to cache HTML). `vm.swappiness=20`. Modal dropped (GPU needs a card; CPU run hung).
