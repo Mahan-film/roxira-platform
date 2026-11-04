@@ -937,6 +937,39 @@
     "read_only": false,
     "legacy_member": false
   },
+  "GET /enterprise-hub/hr/payroll-runs/:id/payslips-pdf (HrController.getPayslipsPdf)": {
+    "policy": "hr:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/payroll-runs/:id/payslips/:payslipId/pdf (HrController.getPayslipPdf)": {
+    "policy": "hr:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/payroll-runs/:id/reconciliation (HrController.getPayrollReconciliation)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/hr/payroll-runs/:id/wage-tax-files (HrController.getWageTaxFiles)": {
     "policy": "hr:export",
     "owner": true,
