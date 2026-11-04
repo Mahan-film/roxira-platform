@@ -29,7 +29,7 @@ brackets do not.
 ## Checked 2026-11-04 (LAB-01)
 
 Against `docs/legal_sources/iran/wage-circular-1405.txt` (Supreme Labour Council, circular 6682, 1405/01/31), enforced by
-`labour-seniority.spec.ts` which reads the circular text and compares it with the store:
+`labour-seniority.spec.ts` which checks that each figure appears in the circular text and equals the store value (it does not parse article context; the article column is from reading the circular):
 
 | Value | Circular | Store | Result |
 | --- | --- | --- | --- |

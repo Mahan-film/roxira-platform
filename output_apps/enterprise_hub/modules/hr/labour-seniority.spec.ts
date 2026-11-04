@@ -27,6 +27,11 @@ describe('LAB-01: seniority base (paye sanavat) by year of service', () => {
     expect(seniorityDayUnits(iso(1402, 1, 1), 1405, 7)).toBe(3 * 30);
   });
 
+  it('a 30 Esfand hire date falls on the last day of a 29-day Esfand', () => {
+    // 1403 is leap (30 Esfand exists); 1405 Esfand has 29 days. Anniversary of 2 years: day 29 only.
+    expect(seniorityDayUnits(iso(1403, 12, 30), 1405, 12)).toBe(28 * 1 + 1 * 2);
+  });
+
   it('is zero for no, invalid or future hire dates', () => {
     expect(seniorityDayUnits(null, 1405, 5)).toBe(0);
     expect(seniorityDayUnits('garbage', 1405, 5)).toBe(0);

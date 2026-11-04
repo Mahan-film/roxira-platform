@@ -385,10 +385,6 @@ export function yearToDateOf(
 }
 
 /**
- * Full years of service from `hireDate` (ISO Gregorian) to `periodEnd`
- * (ISO Gregorian). Returns 0 for missing or future hire dates.
- */
-/**
  * Paye-days of seniority base inside one Jalali month. The 1405 circular 6682 art. 2 pays the daily base
  * once a worker has one year of service or one year has passed since the last base was received, so
  * each completed Jalali year adds one base. Counted per day; Jalali anniversaries, not Gregorian.
@@ -405,14 +401,20 @@ export function seniorityDayUnits(
   let units = 0;
   const days = jalaliMonthDays(year, month);
   for (let day = 1; day <= days; day += 1) {
+    // A 30 Esfand hire date has no anniversary in a 29-day Esfand: it falls on the last day.
+    const anniversaryDay = hire.jm === month ? Math.min(hire.jd, days) : hire.jd;
     const beforeAnniversary =
-      month < hire.jm || (month === hire.jm && day < hire.jd);
+      month < hire.jm || (month === hire.jm && day < anniversaryDay);
     const completed = year - hire.jy - (beforeAnniversary ? 1 : 0);
     units += Math.max(0, completed);
   }
   return units;
 }
 
+/**
+ * Full years of service from `hireDate` (ISO Gregorian) to `periodEnd`
+ * (ISO Gregorian). Returns 0 for missing or future hire dates.
+ */
 export function serviceYears(
   hireDate: string | null | undefined,
   periodEnd: Date,
