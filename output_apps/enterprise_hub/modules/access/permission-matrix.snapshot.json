@@ -2814,6 +2814,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/tax-compliance/rental-tax/preview (RentalTaxController.preview)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/tax-compliance/sign-invoice (TaxComplianceController.signInvoice)": {
     "policy": "tax:post",
     "owner": true,
