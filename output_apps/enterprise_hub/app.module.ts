@@ -26,6 +26,7 @@ import { InquiriesModule } from './modules/inquiries/inquiries.module';
 import { ClientErrorsModule } from './modules/client-errors/client-errors.module';
 import { BankingModule } from './modules/banking/banking.module';
 import { ChequesModule } from './modules/cheques/cheques.module';
+import { TreasuryModule } from './modules/treasury/treasury.module';
 import { McpModule } from './mcp/mcp.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { InvoiceCaptureModule } from './modules/invoice_capture/invoice-capture.module';
@@ -97,6 +98,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     ClientErrorsModule,
     BankingModule,
     ChequesModule,
+    TreasuryModule,
     McpModule,
     AssistantModule,
     InvoiceCaptureModule,
