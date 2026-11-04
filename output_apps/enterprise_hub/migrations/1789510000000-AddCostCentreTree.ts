@@ -9,8 +9,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Revert: `down()` drops the column; the tree is lost, centres and line tags stay.
  */
-export class AddCostCentreTree1789500000000 implements MigrationInterface {
-  name = 'AddCostCentreTree1789500000000';
+export class AddCostCentreTree1789510000000 implements MigrationInterface {
+  name = 'AddCostCentreTree1789510000000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`ALTER TABLE "fin_dimensions" ADD COLUMN "parent_id" integer`);
