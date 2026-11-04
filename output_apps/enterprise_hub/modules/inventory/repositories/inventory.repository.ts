@@ -343,8 +343,19 @@ export class InventoryRepository {
       );
     }
 
+    // An exact code or barcode match comes first, so a scanned barcode is always on the first
+    // page even when many other items contain the same digits.
+    const exact = options.search?.trim();
+    if (exact) {
+      query
+        .addSelect('CASE WHEN item.sku = :exact OR item.barcode = :exact THEN 0 ELSE 1 END', 'exact_rank')
+        .setParameter('exact', exact)
+        .orderBy('exact_rank', 'ASC')
+        .addOrderBy('item.name', 'ASC');
+    } else {
+      query.orderBy('item.name', 'ASC');
+    }
     query
-      .orderBy('item.name', 'ASC')
       .addOrderBy('item.id', 'ASC')
       .skip(options.skip)
       .take(options.take);

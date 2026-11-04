@@ -40,6 +40,9 @@ import {
 } from "@/components/ui/table";
 
 import { createInvoice } from "@/lib/api/invoicing-client";
+import { addScannedItem, incrementQuantity } from "@/lib/barcode-scan";
+import { BarcodeScanBox } from "@/components/invoicing/barcode-scan-box";
+import type { StockItem } from "@/types/inventory";
 import { ApiClientError } from "@/lib/api/http-client";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -61,6 +64,8 @@ import {
 
 interface FormItem {
   uid: string;
+  /** Stock item code when the line was scanned; links the line to stock on posting. */
+  sku: string;
   description: string;
   quantity: string;
   unitPrice: string;
@@ -94,7 +99,7 @@ const EMPTY_PARTY: PartyFormState = {
 };
 
 function createEmptyItem(uid: string): FormItem {
-  return { uid, description: "", quantity: "1", unitPrice: "", discount: "0" };
+  return { uid, sku: "", description: "", quantity: "1", unitPrice: "", discount: "0" };
 }
 
 function computeItem(item: FormItem, vatRate: number = VAT_RATE): ComputedItem {
@@ -227,6 +232,21 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
     setItems((prev) => [...prev, createEmptyItem(`row-${id}`)]);
   }
 
+  function addScanned(stockItem: StockItem) {
+    setItems((prev) =>
+      addScannedItem(prev, stockItem, {
+        codeOf: (item) => item.sku,
+        isBlank: (item) => !item.sku && !item.description.trim() && !item.unitPrice.trim(),
+        addOne: (item) => ({ ...item, quantity: incrementQuantity(item.quantity) }),
+        fromItem: (it) => ({
+          ...createEmptyItem(`row-${nextItemId.current++}`),
+          sku: it.sku,
+          description: it.name,
+        }),
+      }),
+    );
+  }
+
   function removeItem(uid: string) {
     setItems((prev) =>
       prev.length > 1 ? prev.filter((item) => item.uid !== uid) : prev,
@@ -310,6 +330,7 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
       items: items
         .filter((item) => item.description.trim())
         .map((item) => ({
+          ...(item.sku ? { sku: item.sku } : {}),
           description: item.description.trim(),
           quantity: Number(item.quantity) || 0,
           unitPrice: Number(item.unitPrice) || 0,
@@ -476,6 +497,8 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
               </Button>
             </div>
 
+            <BarcodeScanBox id="invoice-scan" onItem={addScanned} />
+
             <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
@@ -502,6 +525,11 @@ export function InvoiceForm({ onCreated }: InvoiceFormProps) {
                             }
                             placeholder="شرح کالا یا خدمت"
                           />
+                          {item.sku && (
+                            <span dir="ltr" className="mt-1 block text-xs text-muted-foreground">
+                              {item.sku}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Input
