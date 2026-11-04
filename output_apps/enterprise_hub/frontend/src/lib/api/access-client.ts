@@ -30,8 +30,29 @@ export const getMyAccess = (signal?: AbortSignal) => apiRequest<MyAccess>(`${ORG
 export const createOrganization = (name: string) =>
   apiRequest<{ tenantId: string }>(ORG, { method: "POST", body: { name } });
 
-export const listOrganizations = (signal?: AbortSignal) =>
-  apiRequest<OrganizationSummary[]>(`${AUTH}/organizations`, { signal });
+// Issue #149: the org switcher remounts on every /app navigation and refetched
+// this list each time. Share one in-flight/short-TTL result per page load (a
+// tenant switch reloads the page, which resets this module state).
+const ORGS_TTL_MS = 60_000;
+let orgsCache: { at: number; promise: Promise<OrganizationSummary[]> } | null = null;
+
+export const listOrganizations = (signal?: AbortSignal) => {
+  if (!orgsCache || Date.now() - orgsCache.at > ORGS_TTL_MS) {
+    const promise = apiRequest<OrganizationSummary[]>(`${AUTH}/organizations`);
+    orgsCache = { at: Date.now(), promise };
+    // never cache a failure (e.g. 401/429): let the next caller retry
+    promise.catch(() => {
+      if (orgsCache?.promise === promise) orgsCache = null;
+    });
+  }
+  const shared = orgsCache.promise;
+  if (!signal) return shared;
+  return new Promise<OrganizationSummary[]>((resolve, reject) => {
+    if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    shared.then(resolve, reject);
+  });
+};
 
 export const switchOrganization = (tenantId: string) =>
   apiRequest<{ accessToken: string; expiresIn: number; tenantId: string }>(`${AUTH}/switch-tenant`, {
