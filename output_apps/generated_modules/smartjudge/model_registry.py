@@ -152,3 +152,97 @@ def data_policy(role: str, path: pathlib.Path | None = None) -> str:
 
 def all_role_names(path: pathlib.Path | None = None) -> list[str]:
     return list(roles(path).keys())
+
+
+# ---- routing: per-task chains and daily cost caps (issue #288) ---------------------------------
+
+DATA_CLASSES = ("public", "tenant-business", "personal")
+_POLICY_PATH = REGISTRY_PATH.parent / "ai_data_policy.json"
+
+
+def task_names(path: pathlib.Path | None = None) -> list[str]:
+    data = load(path) if path is None else _load_uncached(path)
+    return list((data.get("tasks") or {}).keys())
+
+
+def task(name: str, path: pathlib.Path | None = None) -> dict[str, Any]:
+    data = load(path) if path is None else _load_uncached(path)
+    entry = (data.get("tasks") or {}).get(name)
+    if entry is None:
+        raise ModelRegistryError(f"unknown task {name!r} in config/models.yaml")
+    return entry
+
+
+def _allowed_provider_classes(data_class: str, mode: str | None = None) -> set[str]:
+    """Provider classes (may_log / no_log) allowed for a data class (config/ai_data_policy.json).
+
+    Fails closed: a missing or invalid policy file means the strict production rules.
+    """
+    import json
+    import os
+
+    strict = {"public": {"may_log", "no_log"}, "tenant-business": {"no_log"}, "personal": {"no_log"}}
+    try:
+        policy = json.loads(_POLICY_PATH.read_text(encoding="utf-8"))
+        chosen = os.environ.get("ROXIRA_AI_DATA_MODE") or mode or policy["mode"]
+        modes = policy["modes"]
+        if chosen not in modes:
+            return strict.get(data_class, {"no_log"})
+        return set(modes[chosen].get(data_class, ["no_log"]))
+    except (OSError, ValueError, KeyError):
+        return strict.get(data_class, {"no_log"})
+
+
+def chain_for(
+    task_name: str,
+    data_class: str | None = None,
+    mode: str | None = None,
+    path: pathlib.Path | None = None,
+) -> list[dict[str, Any]]:
+    """Ordered steps for one call: [{role, tier_index, id, price_per_1m}, ...], free first.
+
+    Roles are expanded to model entries in registry order. A role whose data_policy maps to a
+    provider class the data class may not use (ai_data_policy.json) is dropped, and so is any
+    :free id when the data class is not allowed on may_log providers. ``data_class`` defaults to
+    the task's own class and may only be made stricter, never looser.
+    """
+    entry = task(task_name, path)
+    cls = data_class or entry.get("data_class", "personal")
+    if cls not in DATA_CLASSES:
+        raise ModelRegistryError(f"unknown data class {cls!r}")
+    task_cls = entry.get("data_class", "personal")
+    if DATA_CLASSES.index(cls) < DATA_CLASSES.index(task_cls):
+        cls = task_cls  # never looser than the task declares
+    allowed = _allowed_provider_classes(cls, mode)
+    class_of = {"non_sensitive_only": "may_log", "standard": "no_log"}
+    steps: list[dict[str, Any]] = []
+    for idx, role in enumerate(entry.get("chain", [])):
+        role_data = roles(path).get(role)
+        if role_data is None:
+            raise ModelRegistryError(f"task {task_name!r} references unknown role {role!r}")
+        role_class = class_of.get(role_data.get("data_policy", "standard"), "no_log")
+        for model in _drop_forbidden(role, list(role_data.get("models", []))):
+            mid = str(model.get("id", ""))
+            if not mid:
+                continue
+            model_class = "may_log" if (_is_free_tier_id(mid) or model.get("public_code_only")) else role_class
+            if model_class not in allowed:
+                continue
+            steps.append({"role": role, "tier_index": idx, "id": mid, "price_per_1m": model.get("price_per_1m")})
+    return steps
+
+
+def budgets(path: pathlib.Path | None = None) -> dict[str, Any]:
+    data = load(path) if path is None else _load_uncached(path)
+    return data.get("budgets") or {}
+
+
+def global_daily_cap_usd(path: pathlib.Path | None = None) -> float | None:
+    value = budgets(path).get("global_daily_usd")
+    return None if value is None else float(value)
+
+
+def role_daily_cap_usd(role: str, path: pathlib.Path | None = None) -> float | None:
+    """Daily USD cap of a role; None = no cap configured. 0 means the role must not spend."""
+    value = (budgets(path).get("roles") or {}).get(role)
+    return None if value is None else float(value)
