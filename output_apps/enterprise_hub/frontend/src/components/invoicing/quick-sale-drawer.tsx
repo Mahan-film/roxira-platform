@@ -4,12 +4,14 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { SkuInput } from "@/components/inventory/sku-input";
+import { BarcodeScanBox } from "@/components/invoicing/barcode-scan-box";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiClientError } from "@/lib/api/http-client";
 import { listWarehouses } from "@/lib/api/inventory-client";
+import { addScannedItem, incrementQuantity } from "@/lib/barcode-scan";
 import { createPosSale } from "@/lib/api/invoicing-client";
 import { formatMoneyRial } from "@/lib/fa-format";
 import type { StockItem, Warehouse } from "@/types/inventory";
@@ -37,6 +39,8 @@ interface LineState {
 
 const SELECT_CLASS =
   "h-8 w-full rounded-lg border border-input bg-background px-2 text-sm";
+
+const blankLine = (l: LineState) => !l.code.trim() && !l.description.trim() && !l.unitPrice.trim();
 
 function newKey(): string {
   return `pos-${crypto.randomUUID()}`;
@@ -84,6 +88,17 @@ export function QuickSaleDrawer({
 
   function applyItem(uid: number, item: StockItem | null) {
     if (item) updateLine(uid, { description: item.name });
+  }
+
+  function addScanned(item: StockItem) {
+    setLines((prev) =>
+      addScannedItem(prev, item, {
+        codeOf: (l) => l.code.trim(),
+        isBlank: blankLine,
+        addOne: (l) => ({ ...l, quantity: incrementQuantity(l.quantity) }),
+        fromItem: (it) => ({ uid: nextUid.current++, code: it.sku, description: it.name, quantity: "1", unitPrice: "" }),
+      }),
+    );
   }
 
   const valid = lines.filter(
@@ -177,6 +192,8 @@ export function QuickSaleDrawer({
             <Input id="qs-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
         </div>
+
+        <BarcodeScanBox id="qs-scan" onItem={addScanned} />
 
         <div className="grid gap-2">
           {lines.map((line) => (
