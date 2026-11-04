@@ -26,7 +26,7 @@ New keys (names and shape only, no figure in code): `income_tax_art131_brackets`
 
 ## Inputs
 
-`fiscalYear`; `mode` = `SOLE` or `PARTNERSHIP`; `units[]` with `revenue` and `deductibleExpenses` (rials, exact decimal strings); for a partnership `partners[]` with `shareBps` (sum 10000), optional `name` and `spouseGroup`.
+`fiscalYear`; `mode` = `SOLE` or `PARTNERSHIP`; `units[]` with `revenue` and `deductibleExpenses` (rials, exact decimal strings); for a partnership `partners[]` with `shareBps` (sum 10000), optional `name`, `spouseGroup` and `isHusband`.
 
 ## Computation (integer minor units, half-up per band)
 
