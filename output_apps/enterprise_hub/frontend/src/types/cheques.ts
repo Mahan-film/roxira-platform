@@ -112,8 +112,8 @@ export interface CreateChequeDto {
   receiverNationalId?: string;
   chequeNumber: string;
   bankName?: string;
-  /** Decimal string with at most 2 decimals, e.g. "50000000" or "50000000.50". */
-  amount: string;
+  /** Decimal string with at most 2 decimals, e.g. "50000000" or "50000000.50" (the API also accepts a number). */
+  amount: string | number;
   issueDate: string;
   dueDate: string;
   partyName: string;
@@ -131,7 +131,7 @@ export interface TransitionChequeDto {
 }
 
 export interface PartialPaymentDto {
-  amount: string;
+  amount: string | number;
   eventDate?: string;
   note?: string;
 }

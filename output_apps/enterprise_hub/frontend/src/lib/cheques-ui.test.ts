@@ -8,6 +8,7 @@ import {
   partialAmountError,
   sortByUrgency,
   statusesFor,
+  toMinorUnits,
   toLatinDigits,
 } from "./cheques-ui.ts";
 
@@ -62,4 +63,15 @@ test("urgency sort puts overdue open cheques first, closed last", () => {
     { id: 4, dueDate: "2026-11-05", status: "deposited" as const },
   ];
   assert.deepEqual(sortByUrgency(rows, "2026-11-01").map((r) => r.id), [3, 4, 1, 2]);
+});
+
+test("comparisons stay exact beyond 2^53 (no float rounding)", () => {
+  assert.equal(String(toMinorUnits("9999999999999999.99")), "999999999999999999");
+  assert.equal(String(toMinorUnits("12.5")), "1250");
+  assert.equal(toMinorUnits("1.234"), null);
+  assert.equal(String(toMinorUnits("۱۲")), "1200");
+  // 9007199254740993 is not representable as a double; the cheque is one unit above the payment
+  assert.equal(partialAmountError("9007199254740992", "9007199254740993"), null);
+  assert.notEqual(partialAmountError("9007199254740993", "9007199254740993"), null);
+  assert.equal(canPartialPay({ direction: "received", status: "deposited", remainingAmount: "0.00" }), false);
 });

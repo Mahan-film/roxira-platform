@@ -73,7 +73,7 @@ export function DueReport() {
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label={`دریافتی تا ${formatNumber(days)} روز (و معوق)`} value={formatMoneyRial(data ? Number(data.receivedTotal) : null)} />
-        <StatCard label={`پرداختی تا ${formatNumber(days)} روز (و معوق)`} value={formatMoneyRial(data ? Number(data.issuedTotal) : null)} />
+        <StatCard label={`صادرشده تا ${formatNumber(days)} روز (و معوق)`} value={formatMoneyRial(data ? Number(data.issuedTotal) : null)} />
         <StatCard label="چک معوق" value={formatNumber(overdue)} hint="سررسید گذشته و هنوز وصول/پاس نشده" />
       </div>
       <Card>

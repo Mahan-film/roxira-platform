@@ -40,9 +40,25 @@ export function statusesFor(direction: ChequeDirection | "all"): ChequeStatus[] 
   return ["registered", "delivered", "deposited", "cleared", "bounced", "returned", "spent"];
 }
 
+/**
+ * Exact minor units (hundredths of a rial) of an amount given as text or number, or null when it is not
+ * a plain decimal with at most 2 places. Comparisons use BigInt so amounts beyond 2^53 stay exact.
+ */
+// The frontend targets below ES2020, so BigInt literals (100n) are not allowed; build the constants instead.
+const ZERO = BigInt(0);
+const HUNDRED = BigInt(100);
+
+export function toMinorUnits(value: string | number): bigint | null {
+  const t = toLatinDigits(String(value)).replace(/[,٬\s]/g, "");
+  const m = /^(\d{1,16})(?:\.(\d{1,2}))?$/.exec(t);
+  if (!m) return null;
+  return BigInt(m[1]) * HUNDRED + BigInt((m[2] ?? "").padEnd(2, "0") || "0");
+}
+
 /** A part can be paid while the cheque is still being collected and something remains. */
 export function canPartialPay(cheque: Pick<Cheque, "direction" | "status" | "remainingAmount">): boolean {
-  if (Number(cheque.remainingAmount) <= 0) return false;
+  const remaining = toMinorUnits(cheque.remainingAmount);
+  if (remaining === null || remaining <= ZERO) return false;
   return cheque.direction === "received"
     ? cheque.status === "registered" || cheque.status === "deposited"
     : cheque.status === "registered" || cheque.status === "delivered" || cheque.status === "bounced";
@@ -50,9 +66,10 @@ export function canPartialPay(cheque: Pick<Cheque, "direction" | "status" | "rem
 
 /** Client-side check before sending a partial payment: 0 < amount < remaining, at most 2 decimals. */
 export function partialAmountError(text: string, remaining: number | string): string | null {
-  const t = toLatinDigits(text).replace(/[,٬\s]/g, "");
-  if (!/^\d{1,16}(\.\d{1,2})?$/.test(t) || Number(t) <= 0) return "مبلغ باید عددی بزرگ‌تر از صفر باشد.";
-  if (Number(t) >= Number(remaining)) return "مبلغ باید کمتر از مانده چک باشد؛ برای پرداخت کامل از «وصول/پاس شد» استفاده کنید.";
+  const paid = toMinorUnits(text);
+  const left = toMinorUnits(remaining);
+  if (paid === null || paid <= ZERO) return "مبلغ باید عددی بزرگ‌تر از صفر با حداکثر دو رقم اعشار باشد.";
+  if (left === null || paid >= left) return "مبلغ باید کمتر از مانده چک باشد؛ برای پرداخت کامل از «وصول/پاس شد» استفاده کنید.";
   return null;
 }
 
