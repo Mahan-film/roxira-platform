@@ -1,7 +1,8 @@
 # Purchase cycle, 3-way match and landed cost (#227 T2)
 
-Status: design note. PR 1 (#276) implements the purchase request, purchase order and goods receipt
-domain with in-memory specs. Tables, HTTP, supplier invoice, match and landed cost follow.
+Status: design note. PR 1 (#276) adds the purchase order and goods receipt rules and the posting
+adapter; PR 2 adds the service that runs request, order and receipt with in-memory specs. Tables,
+HTTP, supplier invoice, match and landed cost follow.
 
 ## Flow
 
@@ -84,9 +85,10 @@ nets to zero, PAYABLE, COGS share).
 
 ## PR plan
 
-1. Design note, PR/PO/receipt domain and service with in-memory specs (#276).
-2. Supplier invoice and 3-way match with tolerance and review (domain + specs).
-3. Landed cost allocation into FIFO layers (domain + specs, inventory layer cost update).
-4. Migration (hotspot), repositories with `*.pg.spec.ts`, isolation specs, HTTP endpoints.
-5. Frontend pages and the Playwright gate scenario.
-6. Purchases report by item and supplier (#244).
+1. Design note, order and receipt rules, posting adapter (#276).
+2. Purchase cycle service (request, order, receipt) over ports, in-memory specs.
+3. Supplier invoice and 3-way match with tolerance and review (domain + specs).
+4. Landed cost allocation into FIFO layers (domain + specs, inventory layer cost update).
+5. Migration (hotspot), repositories with `*.pg.spec.ts`, isolation specs, HTTP endpoints.
+6. Frontend pages and the Playwright gate scenario.
+7. Purchases report by item and supplier (#244).
