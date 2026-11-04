@@ -645,7 +645,29 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/cheques/bounced (ChequesController.bounced)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/cheques/due (ChequesController.due)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/cheques/reconciliation (ChequesController.reconciliation)": {
     "policy": "cheques:read",
     "owner": true,
     "admin": true,
@@ -2278,6 +2300,28 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/:id/transition (ChequesController.transition)": {
+    "policy": "cheques:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/reconciliation/apply (ChequesController.reconApply)": {
+    "policy": "cheques:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/reconciliation/match (ChequesController.reconMatch)": {
     "policy": "cheques:post",
     "owner": true,
     "admin": true,

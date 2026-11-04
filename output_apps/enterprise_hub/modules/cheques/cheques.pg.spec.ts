@@ -16,6 +16,11 @@ import { AccountType } from '../accounting/enums/accounting.enum';
 import { AccountingRepository } from '../accounting/repositories/accounting.repository';
 import { AccountingService } from '../accounting/services/accounting.service';
 import { ChequeDirection, ChequeStatus } from './enums/cheque.enum';
+import { BankAccountEntity } from '../banking/entities/bank-account.entity';
+import { BankStatementLineEntity } from '../banking/entities/bank-statement-line.entity';
+import { BankingRepository } from '../banking/repositories/banking.repository';
+import { BankingService } from '../banking/services/banking.service';
+import { ChequeReconService } from './services/cheque-recon.service';
 import { ChequesRepository } from './repositories/cheques.repository';
 import { ChequesService } from './services/cheques.service';
 
@@ -56,6 +61,8 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
   let ds: DataSource;
   let service: ChequesService;
   let accounting: AccountingService;
+  let banking: BankingService;
+  let recon: ChequeReconService;
   let seq = 0;
 
   const q = <R = Record<string, string>>(sql: string, params: unknown[] = []) => ds.query(sql, params) as Promise<R[]>;
@@ -89,7 +96,13 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
     await ds.initialize();
     await ds.runMigrations();
     accounting = new AccountingService(new AccountingRepository(new TenantScope(ds)), currencyStub);
-    service = new ChequesService(new ChequesRepository(new TenantScope(ds)), accounting);
+    const chequesRepo = new ChequesRepository(new TenantScope(ds));
+    service = new ChequesService(chequesRepo, accounting);
+    banking = new BankingService(
+      new BankingRepository(ds.getRepository(BankAccountEntity), ds.getRepository(BankStatementLineEntity), ds),
+      accounting,
+    );
+    recon = new ChequeReconService(chequesRepo, banking);
     for (const tenantId of [T1, T2]) {
       await q(`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $2) ON CONFLICT DO NOTHING`, [tenantId, tenantId.slice(0, 8)]).catch(() => undefined);
       // the tenant may already be seeded with the default chart: create only what is missing
@@ -216,5 +229,84 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
     await expect(service.transition(T2, c.id, { status: ChequeStatus.DEPOSITED })).rejects.toThrow(/یافت نشد/);
     await expect(service.partialPayment(T2, c.id, { amount: '1' })).rejects.toThrow(/یافت نشد/);
     expect((await service.list(T2, {})).every((r) => r.id !== c.id)).toBe(true);
+  });
+
+  describe('bank reconciliation and bounced report', () => {
+    let bankAccountId: number;
+    let otherBankAccountId: number;
+    const stmt = (n: number, txnDate: string, deposit: number, withdrawal: number) => ({
+      txnDate, description: `line ${n}`, withdrawal, deposit, balance: null, reference: `ref-${n}`, dedupeKey: `chq-${process.pid}-${n}`,
+    });
+
+    beforeAll(async () => {
+      const ledger = async (code: string, name: string) =>
+        (await accounting.listAccounts(T1)).find((a) => a.code === code) ??
+        (await accounting.createAccount(T1, { code, name, accountType: AccountType.ASSET } as never));
+      const bankLedger = await ledger('1010', 'بانک');
+      const otherLedger = await ledger('1099', 'بانک دیگر');
+      bankAccountId = (await banking.createAccount(T1, { name: 'جاری', accountNumber: `91${seq}001`, ledgerAccountId: bankLedger.id, openingBalance: 0 } as never)).id;
+      otherBankAccountId = (await banking.createAccount(T1, { name: 'دیگر', accountNumber: `91${seq}002`, ledgerAccountId: otherLedger.id, openingBalance: 0 } as never)).id;
+    });
+
+    it('a cleared received cheque is suggested the matching deposit, confirmed, and then shows as reconciled', async () => {
+      const c = await service.create(T1, base({ amount: '777000', issueDate: '2026-11-01', dueDate: '2026-11-10' }) as never);
+      await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED, eventDate: '2026-11-05' });
+      await service.transition(T1, c.id, { status: ChequeStatus.CLEARED, eventDate: '2026-11-10' });
+      const [good, decoy, wrongDir] = await banking.importStatementLines(T1, bankAccountId, [
+        stmt(1, '2026-11-11', 777000, 0), stmt(2, '2026-11-11', 777001, 0), stmt(3, '2026-11-11', 0, 777000),
+      ]);
+      const view = await recon.suggest(T1, { bankAccountId });
+      const item = view.items.find((i) => i.chequeId === c.id)!;
+      expect(item.state).toBe('suggested');
+      expect(item.candidates.map((x) => x.statementLineId)).toEqual([good]);
+      expect([decoy, wrongDir]).not.toContain(item.candidates[0].statementLineId);
+
+      const done = await recon.match(T1, { bankAccountId, eventId: item.eventId, statementLineId: good });
+      expect(done.state).toBe('reconciled');
+      const line = (await banking.listStatementLines(T1, bankAccountId, {})).find((l) => l.id === good)!;
+      expect(line.matchedJournalLineId).not.toBeNull();
+      await expect(recon.match(T1, { bankAccountId, eventId: item.eventId, statementLineId: good })).rejects.toThrow();
+    });
+
+    it('an issued cheque matches a withdrawal; apply() handles single candidates', async () => {
+      const c = await service.create(T1, base({ direction: ChequeDirection.ISSUED, amount: '555000', issueDate: '2026-11-01' }) as never);
+      await service.transition(T1, c.id, { status: ChequeStatus.DELIVERED, eventDate: '2026-11-02' });
+      await service.transition(T1, c.id, { status: ChequeStatus.CLEARED, eventDate: '2026-11-12' });
+      const [w] = await banking.importStatementLines(T1, bankAccountId, [stmt(10, '2026-11-12', 0, 555000)]);
+      const result = await recon.applyUnambiguous(T1, { bankAccountId });
+      expect(result.matched).toBeGreaterThanOrEqual(1);
+      const line = (await banking.listStatementLines(T1, bankAccountId, {})).find((l) => l.id === w)!;
+      expect(line.matchedJournalLineId).not.toBeNull();
+    });
+
+    it('a partial payment is its own reconciliation item for its own amount', async () => {
+      const c = await service.create(T1, base({ amount: '900000', issueDate: '2026-11-01' }) as never);
+      await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED, eventDate: '2026-11-03' });
+      await service.partialPayment(T1, c.id, { amount: '300000', eventDate: '2026-11-15' });
+      await banking.importStatementLines(T1, bankAccountId, [stmt(20, '2026-11-15', 300000, 0)]);
+      const items = (await recon.suggest(T1, { bankAccountId })).items.filter((i) => i.chequeId === c.id);
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ state: 'suggested', amount: 300000 });
+    });
+
+    it('a bank account linked to another ledger account shows no_bank_line, and tenants are isolated', async () => {
+      const items = (await recon.suggest(T1, { bankAccountId: otherBankAccountId })).items;
+      expect(items.length).toBeGreaterThan(0);
+      expect(items.every((i) => i.state === 'no_bank_line')).toBe(true);
+      expect((await recon.suggest(T2, { bankAccountId })).items).toEqual([]);
+      const some = (await recon.suggest(T1, { bankAccountId })).items[0];
+      await expect(recon.match(T2, { bankAccountId, eventId: some.eventId, statementLineId: 1 })).rejects.toThrow();
+    });
+
+    it('the bounced report ages cheques from their bounce date and reports the unpaid remainder', async () => {
+      const c = await service.create(T1, base({ amount: '1000', issueDate: '2026-06-01', dueDate: '2026-06-10' }) as never);
+      await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED, eventDate: '2026-06-11' });
+      await service.partialPayment(T1, c.id, { amount: '400', eventDate: '2026-06-12' });
+      await service.transition(T1, c.id, { status: ChequeStatus.BOUNCED, eventDate: '2026-06-15' });
+      const r = await service.bouncedReport(T1, { asOf: '2026-11-01' });
+      const row = r.items.find((i) => i.id === c.id)!;
+      expect(row).toMatchObject({ bouncedOn: '2026-06-15', bucket: '90+', remainingAmount: 600 });
+      expect((await service.bouncedReport(T2, { asOf: '2026-11-01' })).items).toEqual([]);
+    });
   });
 });

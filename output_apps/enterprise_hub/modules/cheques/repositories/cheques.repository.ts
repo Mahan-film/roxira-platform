@@ -143,6 +143,36 @@ export class ChequesRepository {
     );
   }
 
+  /**
+   * Events that moved money to or from the bank: a clearing (`cleared`) or a partial payment (status
+   * unchanged, amount set). Each carries the journal entry whose bank line the statement should confirm.
+   */
+  listClearingEvents(tenantId: string, range: { from?: string; to?: string } = {}): Promise<ChequeEventEntity[]> {
+    return this.scope.run(tenantId, async (m) => {
+      const rows = await m
+        .getRepository(ChequeEventEntity)
+        .createQueryBuilder('e')
+        .where('e.tenant_id = :tenantId', { tenantId })
+        .andWhere('e.journal_entry_id IS NOT NULL')
+        .andWhere(
+          "(e.to_status = 'cleared' OR (e.from_status = e.to_status AND e.amount IS NOT NULL))",
+        )
+        .andWhere(range.from ? 'e.event_date >= :from' : '1=1', { from: range.from })
+        .andWhere(range.to ? 'e.event_date <= :to' : '1=1', { to: range.to })
+        .orderBy('e.event_date', 'ASC')
+        .addOrderBy('e.id', 'ASC')
+        .getMany();
+      return rows;
+    });
+  }
+
+  findByIds(tenantId: string, ids: number[]): Promise<ChequeEntity[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.scope.run(tenantId, (m) =>
+      m.getRepository(ChequeEntity).find({ where: { tenantId, id: In(ids) } }),
+    );
+  }
+
   async updateStatus(
     tenantId: string,
     id: number,
