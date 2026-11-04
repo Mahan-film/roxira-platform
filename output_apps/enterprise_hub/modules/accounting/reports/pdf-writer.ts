@@ -98,13 +98,22 @@ export function writePdfs(tables: ReportTable[]): Promise<Buffer> {
     doc.on('error', reject);
   });
 
-  const usable = doc.page.width - 2 * MARGIN;
-  const totalWeight = table.columns.reduce((total, column) => total + (column.width ?? 1), 0);
-  const widths = table.columns.map((column) => (usable * (column.width ?? 1)) / totalWeight);
-  const fontSize = table.columns.length > 8 ? 7 : table.columns.length > 5 ? 8 : 9;
-  const bottom = doc.page.height - MARGIN - ROW_HEIGHT;
-  const right = doc.page.width - MARGIN;
+  // Layout is computed per table: tables of one file may have different column counts (e.g. a certificate).
+  let usable = 0;
+  let widths: number[] = [];
+  let fontSize = 9;
+  let bottom = 0;
+  let right = 0;
   let y = MARGIN;
+  const layoutFor = (current: ReportTable): void => {
+    usable = doc.page.width - 2 * MARGIN;
+    const totalWeight = current.columns.reduce((total, column) => total + (column.width ?? 1), 0);
+    widths = current.columns.map((column) => (usable * (column.width ?? 1)) / totalWeight);
+    fontSize = current.columns.length > 8 ? 7 : current.columns.length > 5 ? 8 : 9;
+    bottom = doc.page.height - MARGIN - ROW_HEIGHT;
+    right = doc.page.width - MARGIN;
+  };
+  layoutFor(table);
 
   const header = (current: ReportTable): void => {
     doc.font('bold').fontSize(13);
@@ -128,7 +137,8 @@ export function writePdfs(tables: ReportTable[]): Promise<Buffer> {
 
   tables.forEach((current, index) => {
     if (index > 0) {
-      doc.addPage();
+      doc.addPage({ size: 'A4', layout: current.columns.length > 6 ? 'landscape' : 'portrait', margin: MARGIN });
+      layoutFor(current);
       y = MARGIN;
     }
     header(current);
