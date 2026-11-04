@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException, Optional } 
 import { ModuleRef } from '@nestjs/core';
 import { fromDb, fromMinor } from '../money';
 import { AgeingQueryDto, LedgerQueryDto, ReportPeriodDto, SubsidiaryQueryDto, TrialBalanceQueryDto } from '../dto/report.dto';
-import { AccountType, ReportLine } from '../enums/accounting.enum';
+import { AccountLevel, AccountType, ReportLine } from '../enums/accounting.enum';
 import { AccountingRepository } from '../repositories/accounting.repository';
 import { FiscalYearRepository } from '../repositories/fiscal-year.repository';
 import { AccountBucketRow, LedgerReportRepository } from '../repositories/ledger-report.repository';
@@ -30,6 +30,14 @@ import {
 import { ageing, AgeingInputError, AgeingReport } from '../reports/ageing';
 import { AGEING_ALLOCATIONS, AllocationLister, allocationSource } from '../reports/ageing-allocations';
 import type { ChartAccountRow } from '../reports/report-tables';
+import type { JournalBookLine, LedgerBookAccount } from '../reports/legal-books';
+
+/** A legal book is printed whole or not at all: above this many lines, ask for a shorter period. */
+export const BOOK_LINE_LIMIT = 50_000;
+const bookTooLarge = () =>
+  new BadRequestException(
+    `دفتر بیش از ${BOOK_LINE_LIMIT.toLocaleString('fa-IR')} ردیف دارد و ناقص چاپ نمی‌شود. بازه تاریخ را کوتاه‌تر کنید.`,
+  );
 
 export interface ResolvedPeriod {
   yearStart: string;
@@ -160,6 +168,77 @@ export class FinancialReportsService {
       parentCode: row.parentCode ?? null,
       reportLine: row.reportLine ?? null,
     }));
+  }
+
+  /** Journal book (#249): every POSTED line in the period, openings included, by date and voucher. */
+  async journalBook(tenantId: string, query: ReportPeriodDto): Promise<{ period: ResolvedPeriod; lines: JournalBookLine[] }> {
+    const period = await this.resolvePeriod(tenantId, query);
+    const accounts = await this.accounts(tenantId);
+    const rows = accounts.length
+      ? await this.ledger.ledgerLines(tenantId, {
+          accountIds: accounts.map((account) => account.id),
+          from: period.from,
+          to: period.to,
+          limit: BOOK_LINE_LIMIT + 1,
+          withOpenings: true,
+        })
+      : [];
+    if (rows.length > BOOK_LINE_LIMIT) {
+      throw bookTooLarge();
+    }
+    return {
+      period,
+      lines: rows.map((row) => ({
+        entryNumber: row.entryNumber,
+        day: new Date(row.date).toISOString().slice(0, 10),
+        accountCode: row.accountCode,
+        accountName: row.accountName,
+        description: row.description ?? '',
+        debit: fromDb(row.debit),
+        credit: fromDb(row.credit),
+      })),
+    };
+  }
+
+  /**
+   * General ledger book (#249): the ledger of every account at `level` (default کل; top-level
+   * accounts when the chart has no levels), each with its sub-accounts, in code order.
+   */
+  async generalLedgerBook(
+    tenantId: string,
+    query: ReportPeriodDto & { level?: AccountLevel },
+  ): Promise<{ period: ResolvedPeriod; accounts: LedgerBookAccount[] }> {
+    const period = await this.resolvePeriod(tenantId, query);
+    const all = await this.accounts(tenantId);
+    const level = query.level ?? AccountLevel.KOL;
+    let chosen = all.filter((account) => account.level === level);
+    if (chosen.length === 0 && !query.level) {
+      chosen = all.filter((account) => !account.parentCode);
+    }
+    chosen.sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+    const accounts: LedgerBookAccount[] = [];
+    let total = 0;
+    for (const account of chosen) {
+      const ledger = await this.accountLedger(tenantId, { ...period, accountCode: account.code, limit: BOOK_LINE_LIMIT });
+      total += ledger.lines.length;
+      if (ledger.truncated || total > BOOK_LINE_LIMIT) {
+        throw bookTooLarge();
+      }
+      accounts.push({
+        code: account.code,
+        name: account.name,
+        opening: ledger.opening,
+        lines: ledger.lines.map((line) => ({
+          journalEntryId: line.journalEntryId,
+          entryNumber: line.entryNumber,
+          day: line.date,
+          description: line.description,
+          debit: line.debit,
+          credit: line.credit,
+        })),
+      });
+    }
+    return { period, accounts };
   }
 
   /** Every account of the tenant with its currency, for the chart export. */

@@ -52,13 +52,18 @@ const TABS = [
   { key: "equity-changes", label: "تغییرات حقوق مالکانه" },
   { key: "ageing", label: "گزارش سنی" },
   { key: "chart-of-accounts", label: "سرفصل حساب‌ها" },
+  { key: "journal-book", label: "دفتر روزنامه" },
+  { key: "general-ledger-book", label: "دفتر کل (چاپی)" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
 
 /** Reports with an Excel/PDF export but no on-screen view yet (their JSON endpoints come later). */
-type ExportOnlyTab = "ageing" | "chart-of-accounts";
-const isExportOnly = (tab: TabKey): tab is ExportOnlyTab => tab === "ageing" || tab === "chart-of-accounts";
+type ExportOnlyTab = "ageing" | "chart-of-accounts" | "journal-book" | "general-ledger-book";
+const isExportOnly = (tab: TabKey): tab is ExportOnlyTab =>
+  tab === "ageing" || tab === "chart-of-accounts" || isBook(tab);
+/** Legal books (#249): page-numbered PDF with totals carried page to page. */
+const isBook = (tab: TabKey) => tab === "journal-book" || tab === "general-ledger-book";
 
 const EDGES_PATTERN = /^\s*\d+(\s*[,،]\s*\d+)*\s*$/;
 
@@ -116,7 +121,7 @@ export default function AccountingReportsPage() {
     return {
       ...query,
       columns: tab === "trial-balance" || tab === "subsidiary" ? columns : undefined,
-      level: tab === "trial-balance" ? level || undefined : undefined,
+      level: tab === "trial-balance" || tab === "general-ledger-book" ? level || undefined : undefined,
       accountCode: tab === "ledger" || tab === "subsidiary" ? accountCode.trim() || undefined : undefined,
       partyCode: tab === "ledger" ? partyCode.trim() || undefined : undefined,
     };
@@ -207,7 +212,7 @@ export default function AccountingReportsPage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        {!isExportOnly(tab) && <PeriodControls years={years} query={query} onChange={setQuery} />}
+        {(!isExportOnly(tab) || isBook(tab)) && <PeriodControls years={years} query={query} onChange={setQuery} />}
         {tab === "ageing" && (
           <>
             <div className="grid gap-1">
@@ -256,13 +261,13 @@ export default function AccountingReportsPage() {
             </select>
           </div>
         )}
-        {tab === "trial-balance" && (
+        {(tab === "trial-balance" || tab === "general-ledger-book") && (
           <div className="grid gap-1">
             <Label htmlFor="report-level">سطح</Label>
             <select id="report-level" className={FIELD_CLASS} value={level} onChange={(event) => setLevel(event.target.value)}>
-              <option value="">حساب‌های ثبت‌شده</option>
+              <option value="">{tab === "general-ledger-book" ? "کل" : "حساب‌های ثبت‌شده"}</option>
               <option value="GROUP">گروه</option>
-              <option value="KOL">کل</option>
+              {tab !== "general-ledger-book" && <option value="KOL">کل</option>}
               <option value="MOEIN">معین</option>
             </select>
           </div>
@@ -291,6 +296,14 @@ export default function AccountingReportsPage() {
             {badEdges
               ? "بازه‌ها را به صورت عددهای صعودی با کاما وارد کنید، مثلاً 30,60,90."
               : "مانده هر طرف حساب به تفکیک سن اقلام باز (از تاریخ سند). بدون تاریخ، امروز در نظر گرفته می‌شود. خروجی را با دکمه‌های Excel یا PDF بگیرید."}
+          </p>
+        )}
+        {isBook(tab) && (
+          <p className="px-4 py-6 text-sm text-muted-foreground">
+            {tab === "journal-book"
+              ? "همه ردیف‌های اسناد قطعی دوره به ترتیب تاریخ و سند، با شماره ردیف پیوسته."
+              : "گردش هر حساب کل (یا سطح انتخابی) به تفکیک سند، با مانده ابتدا، مانده جاری و مانده پایان؛ هر حساب از صفحه تازه."}{" "}
+            هر صفحه شماره «صفحه n از N» و جمع نقل از صفحه قبل و نقل به صفحه بعد دارد. فایل PDF را چاپ کنید.
           </p>
         )}
         {tab === "chart-of-accounts" && (

@@ -304,4 +304,42 @@ describePg('Financial reports on PostgreSQL', () => {
     expect(sheet).toContain('rightToLeft="1"');
     expect(sheet).toContain('<v>2710000.25</v>');
   }, 60000);
+
+  it('prints the legal journal and general ledger books, page-numbered and balanced (#249)', async () => {
+    const journal = await reports.journalBook(COMPANY, { fiscalYearId: yearId });
+    // Openings are in the journal; lines run by date and voucher, a voucher's lines together.
+    expect(journal.lines[0].entryNumber).toMatch(/^OB-/);
+    expect(journal.lines.filter((l) => l.entryNumber === 'J05').map((l) => [l.accountCode, l.debit, l.credit])).toEqual([
+      ['1020', rial('1090000.50'), 0n],
+      ['4020', 0n, rial('1000000.50')],
+      ['2020', 0n, rial('90000.00')],
+    ]);
+    const sum = (key: 'debit' | 'credit') => journal.lines.reduce((total, line) => total + line[key], 0n);
+    expect(sum('debit')).toBe(sum('credit'));
+
+    const ledger = await reports.generalLedgerBook(COMPANY, { fiscalYearId: yearId });
+    const kol = new Set(
+      (await reports.chartOfAccounts(COMPANY)).filter((a) => a.level === 'KOL').map((a) => a.code),
+    );
+    expect(ledger.accounts.length).toBe(kol.size);
+    expect(ledger.accounts.every((a) => kol.has(a.code))).toBe(true);
+    // Every posting account sits under one کل account, so the closing balances of the book net to zero.
+    const closing = ledger.accounts.reduce(
+      (total, a) => total + a.opening + a.lines.reduce((s, l) => s + l.debit - l.credit, 0n),
+      0n,
+    );
+    expect(closing).toBe(0n);
+
+    for (const report of ['journal-book', 'general-ledger-book'] as const) {
+      const pdf = await exporter.export(COMPANY, report, { fiscalYearId: yearId, format: 'pdf' });
+      expect(pdf.body.subarray(0, 4).toString()).toBe('%PDF');
+      const xlsx = await exporter.export(COMPANY, report, { fiscalYearId: yearId, format: 'xlsx' });
+      expect(strFromU8(unzipSync(xlsx.body)['xl/worksheets/sheet1.xml'])).toContain('rightToLeft="1"');
+      if (process.env.ROXIRA_REPORT_OUT) {
+        fs.writeFileSync(path.join(process.env.ROXIRA_REPORT_OUT, `${report}.pdf`), pdf.body);
+      }
+    }
+    // Another company's books hold none of these lines.
+    expect((await reports.journalBook(OTHER, { from: '2026-03-21', to: '2027-03-20' })).lines).toEqual([]);
+  }, 60000);
 });

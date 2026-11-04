@@ -11,12 +11,12 @@ import {
   TRIAL_BALANCE_GROUP_TITLES,
 } from './statements';
 
-const jalali = (day: string): string =>
+export const jalali = (day: string): string =>
   new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'UTC', dateStyle: 'short' }).format(
     new Date(`${day}T12:00:00.000Z`),
   );
 
-const periodText = (period: ResolvedPeriod): string =>
+export const periodText = (period: ResolvedPeriod): string =>
   `از ${jalali(period.from)} تا ${jalali(period.to)} (مبالغ به ریال)`;
 
 const dateText = (period: ResolvedPeriod): string => `در تاریخ ${jalali(period.to)} (مبالغ به ریال)`;

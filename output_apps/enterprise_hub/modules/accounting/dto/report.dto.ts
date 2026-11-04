@@ -127,6 +127,8 @@ export const EXPORTABLE_REPORTS = [
   'equity-changes',
   'ageing',
   'chart-of-accounts',
+  'journal-book',
+  'general-ledger-book',
 ] as const;
 export type ExportableReport = (typeof EXPORTABLE_REPORTS)[number];
 

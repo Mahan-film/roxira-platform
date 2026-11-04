@@ -76,6 +76,22 @@ function drawRtl(doc: PDFKit.PDFDocument, text: string, right: number, y: number
 const cellText = (cell: ReportCell): string =>
   typeof cell === 'bigint' ? formatMoney(cell) : (cell ?? '');
 
+/** A4 in points, as pdfkit lays it out. */
+const A4_HEIGHT = { portrait: 841.89, landscape: 595.28 };
+/** Title, subtitle and the column head take this much of each page before the first row. */
+const HEAD_HEIGHT = 22 + 20 + ROW_HEIGHT;
+
+/**
+ * How many rows `writePdfs` draws on one page of a table with `columnCount` columns before it
+ * breaks the page itself. Books (legal-books.ts) cut their pages to this size so that every page's
+ * carry rows land on that page.
+ */
+export function rowsPerPage(columnCount: number): number {
+  const height = columnCount > 6 ? A4_HEIGHT.landscape : A4_HEIGHT.portrait;
+  const bottom = height - MARGIN - ROW_HEIGHT;
+  return Math.floor((bottom - (MARGIN + HEAD_HEIGHT)) / ROW_HEIGHT) + 1;
+}
+
 export function writePdf(table: ReportTable): Promise<Buffer> {
   return writePdfs([table]);
 }
