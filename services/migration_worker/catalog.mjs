@@ -85,4 +85,13 @@ export const TARGETS = {
       direction: { type: 'enum', values: ['in', 'out'], required: false, synonyms: ['direction', 'type', 'نوع', 'ورود', 'خروج'] },
     },
   },
+  stock_balances: {
+    hints: ['موجودی', 'بالانس', 'balance', 'onhand', 'stocklevel'],
+    fields: {
+      item_code: { type: 'text', required: true, synonyms: ['itemcode', 'کدکالا', 'کالا', 'sku', 'code'] },
+      warehouse: { type: 'text', required: true, synonyms: ['warehouse', 'انبار', 'کدانبار', 'store', 'wh'] },
+      qty: { type: 'qty', required: true, synonyms: ['qty', 'quantity', 'تعداد', 'مقدار', 'موجودی', 'onhand'] },
+      value: { type: 'money', required: false, synonyms: ['value', 'ارزش', 'مبلغ', 'amount', 'totalcost'] },
+    },
+  },
 };
