@@ -212,8 +212,10 @@ export class WageTaxFilesResponseDto {
   @ApiProperty() wpFile: string;
   @ApiProperty() whFileName: string;
   @ApiProperty() whFile: string;
-  @ApiProperty({ description: 'تا دریافت مشخصات رسمی false است' })
+  @ApiProperty({ description: 'فقط وقتی true است که unverified خالی باشد' })
   uploadReady: boolean;
+  @ApiProperty({ type: [String], description: 'مواردی از مشخصات که هیچ منبعی تأیید نکرده است' })
+  unverified: string[];
   @ApiProperty() totalGross: number;
   @ApiProperty() totalTax: number;
   @ApiProperty({ type: [String] }) warnings: string[];

@@ -136,6 +136,8 @@ describe('wage tax working files', () => {
     expect(files.whFile.trim().split('\r\n')).toHaveLength(3);
     expect(files.wpFileName).toBe('WP-140501-working.csv');
     expect(files.uploadReady).toBe(false);
+    expect(files.unverified.length).toBeGreaterThan(0);
+    expect(files.unverified.join(' ')).toContain('WP');
   });
 
   it('refuses rows that do not add up to the run', () => {

@@ -513,7 +513,11 @@ function InsuranceListCard({ runId }: { runId: number }) {
       const files = await getWageTaxFiles(runId);
       downloadText(files.wpFileName, files.wpFile);
       downloadText(files.whFileName, files.whFile);
-      setWarnings(files.warnings);
+      setWarnings(
+        files.uploadReady
+          ? files.warnings
+          : [...files.warnings, "این‌ها فایل بارگذاری نیستند؛ موارد تأییدنشده:", ...(files.unverified ?? [])],
+      );
     } catch (err) {
       setError(loadErrorMessage(err));
     } finally {

@@ -35,11 +35,21 @@ export interface WageTaxFiles {
   whFileName: string;
   whFile: string;
   uploadReady: boolean;
+  /** What no source confirms (docs/legal_sources/iran/wage-tax-files-fields.md). */
+  unverified: string[];
   /** Our tax next to the run total, for checking against the tax system's own calculation. */
   totalGross: number;
   totalTax: number;
   warnings: string[];
 }
+
+export const WAGE_TAX_UNVERIFIED: ReadonlyArray<string> = [
+  'قالب رکورد WP و WH (ترتیب، عرض، جداکننده) در هیچ منبعی که خوانده شد نیامده است؛ دفترچه رسمی در دسترس نبود',
+  'نام و پسوند فایل (WPYYYYMM.TXT) و رمزگذاری متن تأیید نشده است',
+  'جدول کدها (نوع لیست، نوع پرداخت، نوع ارز، وضعیت اشتغال) تأیید نشده است',
+  'اقلام WH که هنوز ساخته نمی‌شوند: ماه‌های کارکرد از ابتدای سال، تاریخ شروع و ترک کار، وضعیت اشتغال، پرداخت‌های معوق',
+  'اقلام WP که هنوز ذخیره نمی‌شوند: محل خدمت، نوع استخدام، مدرک تحصیلی، ملیت، تلفن، نشانی؛ تشخیص تغییر مشخصات هم ساخته نشده',
+];
 
 const WP_COLUMNS = [
   'national_id',
@@ -117,7 +127,8 @@ export function buildWageTaxFiles(
         p.incomeTax,
       ]),
     ),
-    uploadReady: false,
+    uploadReady: WAGE_TAX_UNVERIFIED.length === 0,
+    unverified: [...WAGE_TAX_UNVERIFIED],
     totalGross,
     totalTax,
     warnings: [
