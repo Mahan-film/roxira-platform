@@ -2,15 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  Ban,
-  CheckCircle2,
-  Eye,
-  Pencil,
-  Plus,
-  ReceiptText,
-  Search,
-} from "lucide-react";
+import Link from "next/link";
+import { FileSpreadsheet, Plus, ReceiptText, Search } from "lucide-react";
 
 import {
   ErrorNotice,
@@ -22,32 +15,19 @@ import { EmptyState } from "@/components/app/empty-state";
 import { InvoiceEditor } from "@/components/invoicing/invoice-editor";
 import { QuickSaleDrawer } from "@/components/invoicing/quick-sale-drawer";
 import { Drawer } from "@/components/ui/drawer";
+import { InvoiceListTable } from "@/components/invoicing/invoice-list-table";
 import { InvoicePrintView } from "@/components/invoicing/invoice-print-view";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   cancelInvoice,
   listInvoices,
   payInvoice,
 } from "@/lib/api/invoicing-client";
 import { getMyTenant } from "@/lib/api/tenants-client";
-import {
-  formatGregorianDate,
-  formatJalaliDate,
-  formatLatinMoney,
-  formatMoneyRial,
-  formatNumber,
-} from "@/lib/fa-format";
+import { formatNumber } from "@/lib/fa-format";
+import { toggleSelection } from "@/lib/invoice-list";
 import {
   INVOICE_DIRECTION_LABELS,
   INVOICE_STATUS_LABELS,
@@ -56,27 +36,10 @@ import {
   InvoiceStatus,
   InvoiceSubject,
   VAT_RATE,
-  invoiceRialEquivalent,
-  isForeignInvoice,
   type InvoiceResponseDto,
 } from "@/types/invoicing";
 
 const PAGE_SIZE = 20;
-
-function statusVariant(
-  status: InvoiceStatus,
-): "default" | "secondary" | "outline" | "destructive" {
-  switch (status) {
-    case InvoiceStatus.PAID:
-      return "default";
-    case InvoiceStatus.ISSUED:
-      return "outline";
-    case InvoiceStatus.CANCELLED:
-      return "destructive";
-    default:
-      return "secondary";
-  }
-}
 
 export default function SuiteInvoicingPage() {
   return (
@@ -99,7 +62,12 @@ function InvoicingPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [defaultVatRate, setDefaultVatRate] = useState(VAT_RATE);
   const [ownName, setOwnName] = useState("");
-  const [direction, setDirection] = useState<InvoiceDirection | "">("");
+  const [direction, setDirection] = useState<InvoiceDirection>(
+    searchParams.get("direction") === InvoiceDirection.PURCHASE
+      ? InvoiceDirection.PURCHASE
+      : InvoiceDirection.SALE,
+  );
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   // What the drawer opens for: a new sale/purchase, or a corrective/cancel/return of `related`.
   const [newDirection, setNewDirection] = useState<InvoiceDirection>(
     InvoiceDirection.SALE,
@@ -133,12 +101,13 @@ function InvoicingPage() {
         limit: PAGE_SIZE,
         status: status || undefined,
         search: search || undefined,
-        direction: direction || undefined,
+        direction,
       },
       controller.signal,
     )
       .then((result) => {
         setInvoices(result.data);
+        setSelected(new Set());
         setTotal(result.total);
         setError(null);
       })
@@ -236,21 +205,16 @@ function InvoicingPage() {
         icon={<ReceiptText className="size-6 text-indigo-500" />}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setShowQuickSale(true)}>
+            <Button onClick={() => openNew(direction)}>
               <Plus />
-              فروش سریع
+              {direction === InvoiceDirection.PURCHASE ? "فاکتور خرید" : "فاکتور فروش"}
             </Button>
-            <Button variant="secondary" onClick={() => openNew(InvoiceDirection.SALE)}>
-              <Plus />
-              فاکتور فروش
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => openNew(InvoiceDirection.PURCHASE)}
-            >
-              <Plus />
-              فاکتور خرید
-            </Button>
+            {direction === InvoiceDirection.SALE && (
+              <Button variant="outline" onClick={() => setShowQuickSale(true)}>
+                <Plus />
+                فروش سریع
+              </Button>
+            )}
           </div>
         }
       />
@@ -296,15 +260,49 @@ function InvoicingPage() {
         )}
       </Drawer>
 
+      <div role="tablist" aria-label="فروش یا خرید" className="flex gap-1 border-b border-border">
+        {[InvoiceDirection.SALE, InvoiceDirection.PURCHASE].map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={direction === tab}
+            onClick={() => {
+              setDirection(tab);
+              setPage(1);
+            }}
+            className={`-mb-px min-h-11 border-b-2 px-4 text-sm font-medium ${
+              direction === tab
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {INVOICE_DIRECTION_LABELS[tab]}
+          </button>
+        ))}
+      </div>
+
       {isEmpty ? (
         <EmptyState
           icon={<ReceiptText className="size-6 text-indigo-500" aria-hidden="true" />}
-          description="صدور، ویرایش و چاپ صورتحساب‌های فروش و خرید با محاسبه مالیات در این بخش انجام می‌شود."
+          description={
+            direction === InvoiceDirection.PURCHASE
+              ? "هنوز فاکتور خریدی ثبت نشده است. فاکتور خرید موجودی کالا و بدهی به تأمین‌کننده را ثبت می‌کند."
+              : "هنوز فاکتور فروشی صادر نشده است. فاکتور فروش با مالیات ارزش افزوده و چاپ A4 از اینجا صادر می‌شود."
+          }
           action={
-            <Button onClick={() => openNew(InvoiceDirection.SALE)}>
-              <Plus />
-              فاکتور فروش
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => openNew(direction)}>
+                <Plus />
+                {direction === InvoiceDirection.PURCHASE
+                  ? "اولین فاکتور خرید را ثبت کنید"
+                  : "اولین فاکتور فروش را بسازید"}
+              </Button>
+              <Link href="/app/import" className={buttonVariants({ variant: "outline" })}>
+                <FileSpreadsheet />
+                ورود از اکسل
+              </Link>
+            </div>
           }
         />
       ) : (
@@ -321,23 +319,6 @@ function InvoicingPage() {
                   aria-label="جست‌وجوی صورتحساب"
                 />
               </div>
-              <select
-                value={direction}
-                onChange={(event) => {
-                  setDirection(event.target.value as InvoiceDirection | "");
-                  setPage(1);
-                }}
-                aria-label="فیلتر خرید و فروش"
-                className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
-              >
-                <option value="">خرید و فروش</option>
-                <option value={InvoiceDirection.SALE}>
-                  {INVOICE_DIRECTION_LABELS[InvoiceDirection.SALE]}
-                </option>
-                <option value={InvoiceDirection.PURCHASE}>
-                  {INVOICE_DIRECTION_LABELS[InvoiceDirection.PURCHASE]}
-                </option>
-              </select>
               <select
                 value={status}
                 onChange={(event) => {
@@ -369,195 +350,25 @@ function InvoicingPage() {
           </div>
 
           <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>شماره</TableHead>
-                  <TableHead>نوع</TableHead>
-                  <TableHead>طرف حساب</TableHead>
-                  <TableHead>تاریخ</TableHead>
-                  <TableHead>جمع ناخالص</TableHead>
-                  <TableHead>مالیات</TableHead>
-                  <TableHead>قابل پرداخت</TableHead>
-                  <TableHead>وضعیت</TableHead>
-                  <TableHead className="w-64">عملیات</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading && invoices.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={9}
-                      className="py-8 text-center text-muted-foreground"
-                    >
-                      در حال بارگذاری...
-                    </TableCell>
-                  </TableRow>
-                ) : invoices.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={9}
-                      className="py-8 text-center text-muted-foreground"
-                    >
-                      صورتحسابی با این فیلتر یافت نشد.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  invoices.map((invoice) => {
-                    const busy = actionId === invoice.id;
-                    const canChange =
-                      invoice.status !== InvoiceStatus.PAID &&
-                      invoice.status !== InvoiceStatus.CANCELLED;
-                    const foreign = isForeignInvoice(invoice);
-                    const money = (value: number) =>
-                      foreign
-                        ? formatLatinMoney(value, invoice.currency)
-                        : formatMoneyRial(value);
-                    return (
-                      <TableRow key={invoice.id}>
-                        <TableCell className="whitespace-nowrap font-mono text-xs">
-                          {invoice.taxInvoiceNumber}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <Badge variant="outline">
-                            {INVOICE_DIRECTION_LABELS[invoice.direction]}
-                            {invoice.subject !== InvoiceSubject.ORIGINAL &&
-                              ` · ${INVOICE_SUBJECT_LABELS[invoice.subject]}`}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {invoice.direction === InvoiceDirection.PURCHASE
-                            ? invoice.sellerInfo?.name ?? "—"
-                            : invoice.buyerInfo?.name ?? "—"}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {foreign
-                            ? formatGregorianDate(invoice.createdAt)
-                            : formatJalaliDate(invoice.createdAt)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {money(invoice.totalAmount)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-amber-600 dark:text-amber-400">
-                          {money(invoice.totalTax)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap font-medium text-emerald-600 dark:text-emerald-400">
-                          {money(invoice.finalPayable)}
-                          {foreign && (
-                            <span className="block text-[11px] font-normal text-muted-foreground">
-                              ≈ {formatMoneyRial(invoiceRialEquivalent(invoice))}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={statusVariant(invoice.status)}>
-                            {INVOICE_STATUS_LABELS[invoice.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setViewing(invoice)}
-                              title="مشاهده و چاپ"
-                            >
-                              <Eye />
-                              مشاهده
-                            </Button>
-                            {(invoice.status === InvoiceStatus.ISSUED ||
-                              invoice.status === InvoiceStatus.PAID) &&
-                              invoice.subject === InvoiceSubject.ORIGINAL && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      openNew(
-                                        invoice.direction,
-                                        InvoiceSubject.CORRECTIVE,
-                                        invoice,
-                                      )
-                                    }
-                                    title="صورتحساب اصلاحی"
-                                  >
-                                    اصلاحی
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      openNew(
-                                        invoice.direction,
-                                        InvoiceSubject.RETURN,
-                                        invoice,
-                                      )
-                                    }
-                                    title="برگشت کالا"
-                                  >
-                                    برگشت
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      openNew(
-                                        invoice.direction,
-                                        InvoiceSubject.CANCEL,
-                                        invoice,
-                                      )
-                                    }
-                                    title="صدور سند ابطالی"
-                                  >
-                                    ابطالی
-                                  </Button>
-                                </>
-                              )}
-                            {canChange && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setEditing(invoice);
-                                    setShowEditor(true);
-                                  }}
-                                  title="ویرایش"
-                                >
-                                  <Pencil />
-                                  ویرایش
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={busy}
-                                  onClick={() => void handlePay(invoice)}
-                                  title="ثبت پرداخت"
-                                >
-                                  <CheckCircle2 />
-                                  پرداخت
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={busy}
-                                  onClick={() => void handleCancel(invoice)}
-                                  title="ابطال"
-                                >
-                                  <Ban />
-                                  ابطال
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+            <InvoiceListTable
+              invoices={invoices}
+              loading={loading}
+              busyId={actionId}
+              selected={selected}
+              onToggle={(id) =>
+                setSelected((current) =>
+                  toggleSelection(current, invoices.map((invoice) => invoice.id), id),
+                )
+              }
+              onView={setViewing}
+              onEdit={(invoice) => {
+                setEditing(invoice);
+                setShowEditor(true);
+              }}
+              onPay={(invoice) => void handlePay(invoice)}
+              onCancel={(invoice) => void handleCancel(invoice)}
+              onRelated={(invoice, subject) => openNew(invoice.direction, subject, invoice)}
+            />
             {total > PAGE_SIZE && (
               <div className="flex items-center justify-between gap-2 border-t border-border p-3 text-xs text-muted-foreground">
                 <span>

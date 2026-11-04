@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  getLead,
   getLeadStats,
   getPipeline,
   listLeads,
@@ -86,6 +87,20 @@ function CrmPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  // `?lead=<id>` (e.g. the party link on an invoice) opens that record's panel.
+  const leadParam = searchParams.get("lead");
+  useEffect(() => {
+    const id = Number(leadParam);
+    if (!leadParam || !Number.isInteger(id) || id <= 0) return;
+    const controller = new AbortController();
+    getLead(id, controller.signal)
+      .then(setSelected)
+      .catch(() => {
+        // Missing or another tenant's record: stay on the list.
+      });
+    return () => controller.abort();
+  }, [leadParam]);
 
   // Debounce the search box so we do not call the API on every keystroke.
   useEffect(() => {
