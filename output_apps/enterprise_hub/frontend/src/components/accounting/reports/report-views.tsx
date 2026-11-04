@@ -1,5 +1,8 @@
+"use client";
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatJalaliDate, formatReportMoney } from "@/lib/fa-format";
+import { useMoneyUnit } from "@/lib/money-unit";
 import {
   TRIAL_BALANCE_GROUP_LABELS,
   type BalanceSheetReport,
@@ -15,13 +18,19 @@ import {
   type TrialBalanceReport,
 } from "@/types/accounting-reports";
 
+/** A report amount in the unit the viewer chose (exact; negatives in brackets). */
+function Amount({ value }: { value: number | string | null | undefined }) {
+  const [unit] = useMoneyUnit();
+  return <>{formatReportMoney(value, unit)}</>;
+}
+
 const AMOUNT = "text-left tabular-nums whitespace-nowrap";
 
 function Row({ title, amount, strong }: { title: string; amount?: Money; strong?: boolean }) {
   return (
     <TableRow className={strong ? "font-bold" : undefined}>
       <TableCell className="whitespace-normal">{title}</TableCell>
-      <TableCell className={AMOUNT}>{amount === undefined ? "" : formatReportMoney(amount)}</TableCell>
+      <TableCell className={AMOUNT}>{amount === undefined ? "" : <Amount value={amount} />}</TableCell>
     </TableRow>
   );
 }
@@ -161,7 +170,7 @@ export function EquityChangesView({ report }: { report: EquityChangesReport }) {
               {[row.capital, row.legalReserve, row.otherReserves, row.retainedEarnings, row.total].map(
                 (amount, index) => (
                   <TableCell key={index} className={AMOUNT}>
-                    {formatReportMoney(amount)}
+                    <Amount value={amount} />
                   </TableCell>
                 ),
               )}
@@ -200,7 +209,7 @@ export function TrialBalanceView({ report }: { report: TrialBalanceReport }) {
               <TableCell className="min-w-40 whitespace-normal">{row.name}</TableCell>
               {amounts(row).map((amount, index) => (
                 <TableCell key={index} className={AMOUNT}>
-                  {formatReportMoney(amount)}
+                  <Amount value={amount} />
                 </TableCell>
               ))}
             </TableRow>
@@ -210,7 +219,7 @@ export function TrialBalanceView({ report }: { report: TrialBalanceReport }) {
             <TableCell>جمع</TableCell>
             {amounts(report.totals).map((amount, index) => (
               <TableCell key={index} className={AMOUNT}>
-                {formatReportMoney(amount)}
+                <Amount value={amount} />
               </TableCell>
             ))}
           </TableRow>
@@ -247,7 +256,7 @@ export function LedgerView({ report }: { report: LedgerReport }) {
         <TableBody>
           <TableRow className="font-bold">
             <TableCell colSpan={7}>مانده ابتدای دوره</TableCell>
-            <TableCell className={AMOUNT}>{formatReportMoney(report.opening)}</TableCell>
+            <TableCell className={AMOUNT}><Amount value={report.opening} /></TableCell>
           </TableRow>
           {report.lines.map((line, index) => (
             <TableRow key={`${line.journalEntryId}-${index}`}>
@@ -256,16 +265,16 @@ export function LedgerView({ report }: { report: LedgerReport }) {
               <TableCell>{line.accountCode}</TableCell>
               <TableCell>{line.partyCode ?? "—"}</TableCell>
               <TableCell className="min-w-48 whitespace-normal">{line.description}</TableCell>
-              <TableCell className={AMOUNT}>{formatReportMoney(line.debit)}</TableCell>
-              <TableCell className={AMOUNT}>{formatReportMoney(line.credit)}</TableCell>
-              <TableCell className={AMOUNT}>{formatReportMoney(line.running)}</TableCell>
+              <TableCell className={AMOUNT}><Amount value={line.debit} /></TableCell>
+              <TableCell className={AMOUNT}><Amount value={line.credit} /></TableCell>
+              <TableCell className={AMOUNT}><Amount value={line.running} /></TableCell>
             </TableRow>
           ))}
           <TableRow className="font-bold">
             <TableCell colSpan={5}>جمع و مانده پایان دوره</TableCell>
-            <TableCell className={AMOUNT}>{formatReportMoney(report.totalDebit)}</TableCell>
-            <TableCell className={AMOUNT}>{formatReportMoney(report.totalCredit)}</TableCell>
-            <TableCell className={AMOUNT}>{formatReportMoney(report.closing)}</TableCell>
+            <TableCell className={AMOUNT}><Amount value={report.totalDebit} /></TableCell>
+            <TableCell className={AMOUNT}><Amount value={report.totalCredit} /></TableCell>
+            <TableCell className={AMOUNT}><Amount value={report.closing} /></TableCell>
           </TableRow>
         </TableBody>
       </Table>
