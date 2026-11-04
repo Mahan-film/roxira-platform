@@ -82,6 +82,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/posting-rules/:docType/roles/:role (PostingRulesController.clear)": {
+    "policy": "accounting:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /org/branches/:id (OrgController.deleteBranch)": {
     "policy": "members:admin",
     "owner": true,
@@ -1233,6 +1244,17 @@
     "hr": true,
     "read_only": true,
     "legacy_member": true
+  },
+  "GET /enterprise-hub/posting-rules/ (PostingRulesController.list)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
   },
   "GET /enterprise-hub/radar/report (RadarController.getReport)": {
     "policy": "platformAdmin"
@@ -3202,6 +3224,17 @@
   },
   "PUT /enterprise-hub/inventory/openings/:id/lines (OpeningBalanceController.replaceLines)": {
     "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/posting-rules/:docType/roles/:role (PostingRulesController.set)": {
+    "policy": "accounting:admin",
     "owner": true,
     "admin": true,
     "accountant": false,
