@@ -112,7 +112,6 @@ export class ChequeReconService {
       this.bankingService.listBookLines(tenantId, bankAccountId, {}),
       this.bankingService.listStatementLines(tenantId, bankAccountId, { status: StatementLineStatus.UNMATCHED }),
     ]);
-    const used = new Set<number>();
     return events.flatMap((event): ChequeReconItemDto[] => {
       const cheque = cheques.get(event.chequeId);
       if (!cheque || event.journalEntryId === null) return [];
@@ -143,7 +142,6 @@ export class ChequeReconService {
             Math.abs(dayNumber(s.txnDate) - dayNumber(event.eventDate)) <= windowDays,
         )
         .map((s) => ({ statementLineId: s.id, txnDate: s.txnDate, description: s.description, reference: s.reference }));
-      candidates.forEach((c) => used.add(c.statementLineId));
       return [{ ...base, state: candidates.length ? 'suggested' : 'unmatched', matchedStatementLineId: null, candidates }];
     });
   }
