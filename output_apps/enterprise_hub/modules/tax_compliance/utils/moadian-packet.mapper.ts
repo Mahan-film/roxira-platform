@@ -189,6 +189,14 @@ const HEADER_KEYS = ['taxid', 'indatim', 'indati2m', 'inty', 'inno', 'irtaxid', 
 
 type Bag = Record<string, unknown>;
 
+/** Fields outside patterns 1 to 7 (or typos) are refused instead of being sent unchecked. */
+function rejectUnknown(extra: Bag, known: readonly string[], where: string): void {
+  const unknown = Object.keys(extra).filter((k) => !known.includes(k));
+  if (unknown.length > 0) {
+    throw new MoadianMappingError(`${where} has fields outside patterns 1 to 7: ${unknown.join(', ')}`);
+  }
+}
+
 /** Applies the pattern's field statuses: fields out of pattern are dropped (set to null). */
 function dropOutOfPattern(bag: Bag, rules: typeof HEADER_RULES, type: MoadianInvoiceType, pattern: MoadianInvoicePattern): void {
   // An impossible type/pattern pair has no table: leave it intact so the validator reports it.
@@ -252,7 +260,9 @@ export function mapInvoiceToMoadianPacket(
       odam: null, olam: null,
     });
     // Caller-supplied pattern data wins over computed values (currency, customs, gold wages ...).
-    Object.assign(row, ctx.extras?.items?.[index] ?? {});
+    const extra = ctx.extras?.items?.[index] ?? {};
+    rejectUnknown(extra, BODY_KEYS, `extras.items[${index}]`);
+    Object.assign(row, extra);
     if (pattern === MoadianInvoicePattern.GOLD) {
       row.tcpbs = Number(row.consfee ?? 0) + Number(row.spro ?? 0) + Number(row.bros ?? 0);
       row.adis = Number(row.prdis) + Number(row.tcpbs) - Number(row.dis);
@@ -277,6 +287,7 @@ export function mapInvoiceToMoadianPacket(
     indati2m: late ? ctx.lateRegistrationAt : null, insr: late ? 1 : null,
     setm: ctx.settlementMethod,
   });
+  rejectUnknown(ctx.extras?.header ?? {}, HEADER_KEYS, 'extras.header');
   Object.assign(header, ctx.extras?.header ?? {});
 
   // Out-of-pattern fields are dropped on both levels before totals are built.

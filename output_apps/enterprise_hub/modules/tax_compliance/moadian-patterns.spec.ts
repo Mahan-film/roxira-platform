@@ -152,6 +152,13 @@ describe('pattern 7 (export)', () => {
   });
 });
 
+describe('extras', () => {
+  it('refuses a field outside patterns 1 to 7 instead of sending it unchecked', () => {
+    expect(() => map(P.SALE, { extras: { header: { lno: '1' } } })).toThrow(/outside patterns 1 to 7: lno/);
+    expect(() => map(P.SALE, { extras: { items: [{ zzz: 1 }] } })).toThrow(/zzz/);
+  });
+});
+
 describe('subject and late submission', () => {
   const ref = 'A1B2C30510C00000000019';
   it('a main invoice has no irtaxid, other subjects need one of 22 characters', () => {

@@ -139,7 +139,7 @@ export function validatePacketAgainstPattern(header: Bag, body: Bag[]): void {
   }
   if (setm === 3 && present(header.cap) && present(header.insp)) {
     if (!(num(header.insp) > 0)) problems.push('header.insp must be greater than 0 when setm is 3');
-    if (num(header.cap) + num(header.insp) > num(header.tbill)) problems.push('header.cap + insp must not exceed tbill');
+    if (num(header.cap) + num(header.insp) > num(header.tbill) - num(header.todam ?? 0)) problems.push('header.cap + insp must not exceed tbill minus todam');
   }
 
   // Totals are the sums of the lines (Tir 1405 totals rules).
