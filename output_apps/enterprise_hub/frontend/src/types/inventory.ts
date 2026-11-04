@@ -250,3 +250,29 @@ export interface FifoValuationResponse {
   totalOpenBatches: number;
   rows: FifoValuationRow[];
 }
+
+export interface OpeningProblem {
+  sku: string;
+  code: "UNKNOWN_SKU" | "DUPLICATE_SKU" | "BAD_QUANTITY" | "MISSING_COST" | "ALREADY_HAS_STOCK";
+  message: string;
+}
+
+export interface OpeningReview {
+  documentId: number;
+  docNumber: string;
+  status: "DRAFT" | "POSTED";
+  docDate: string;
+  warehouseId: number;
+  lineCount: number;
+  totalValue: number;
+  itemsStillWithoutStock: number;
+  problems: OpeningProblem[];
+  reviewed: boolean;
+  canPost: boolean;
+}
+
+export interface OpeningLine {
+  sku: string;
+  quantity: number;
+  unitCost: number;
+}

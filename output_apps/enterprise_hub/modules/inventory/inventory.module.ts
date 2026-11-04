@@ -7,6 +7,8 @@ import { StoresController } from './controllers/stores.controller';
 import { StockDocumentEntity, StockDocumentLineEntity } from './entities/stock-document.entity';
 import { StoreEntity } from './entities/store.entity';
 import { StockDocumentsRepository } from './repositories/stock-documents.repository';
+import { OpeningBalanceController } from './controllers/opening-balance.controller';
+import { OpeningBalanceService } from './services/opening-balance.service';
 import { StockDocumentsService } from './services/stock-documents.service';
 import { StoresService } from './services/stores.service';
 import { FifoBatchEntity } from './entities/fifo-batch.entity';
@@ -39,13 +41,19 @@ import { InventoryService } from './services/inventory.service';
       StockDocumentLineEntity,
     ]),
   ],
-  controllers: [InventoryController, StoresController, StockDocumentsController],
+  controllers: [
+    InventoryController,
+    StoresController,
+    StockDocumentsController,
+    OpeningBalanceController,
+  ],
   providers: [
     InventoryService,
     InventoryRepository,
     StoresService,
     StockDocumentsService,
     StockDocumentsRepository,
+    OpeningBalanceService,
   ],
   exports: [InventoryService, InventoryRepository, StockDocumentsService, StockDocumentsRepository],
 })

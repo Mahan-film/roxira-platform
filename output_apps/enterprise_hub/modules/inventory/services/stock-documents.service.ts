@@ -182,6 +182,34 @@ export class StockDocumentsService {
     });
   }
 
+  /** A draft header (no stock moves, no voucher) with a fresh number; used by the opening-balance flow. */
+  async createDraft(
+    tenantId: string,
+    userId: string,
+    header: Pick<StockDocumentEntity, 'docType' | 'docDate' | 'toWarehouseId' | 'note'>,
+  ): Promise<StockDocumentEntity> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.repository.transaction(async (manager) => {
+          await this.repository.assertActiveWarehouse(tenantId, header.toWarehouseId as number, manager);
+          const count = await this.repository.countDocuments(tenantId, header.docType, manager);
+          const docNumber = `${STOCK_DOCUMENT_PREFIX[header.docType]}-${header.docDate.replace(/-/g, '')}-${String(count + attempt).padStart(5, '0')}`;
+          return this.repository.insertDocument(
+            tenantId,
+            { ...header, docNumber, status: StockDocumentStatus.DRAFT, createdBy: userId },
+            [],
+            manager,
+          );
+        });
+      } catch (error) {
+        if (this.isUniqueViolation(error) && attempt < NUMBER_ATTEMPTS) {
+          continue;
+        }
+        this.rethrow(error);
+      }
+    }
+  }
+
   /** Runs `work` in one transaction with a fresh document number, retrying if a concurrent document took it. */
   private async runNumbered(
     tenantId: string,
