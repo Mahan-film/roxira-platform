@@ -2847,6 +2847,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/tax-compliance/doctor-withholding/preview (DoctorWithholdingController.preview)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/tax-compliance/keys (TaxComplianceController.generateKeyPair)": {
     "policy": "tax:admin",
     "owner": true,
