@@ -20,8 +20,20 @@ export type MetricOutcome =
 export class AssistantMetricsService {
   constructor(@Inject(METRIC_SOURCES) private readonly sources: MetricSources) {}
 
-  list(): Array<{ id: string; labelFa: string; unit: string; definitionFa: string }> {
-    return METRIC_REGISTRY.map(({ id, labelFa, unit, definitionFa }) => ({
+  /** فقط متریک‌هایی که کاربر اجازهٔ خواندنشان را دارد. */
+  list(
+    request: AuthenticatedRequest,
+  ): Array<{ id: string; labelFa: string; unit: string; definitionFa: string }> {
+    requireTenantId(request);
+    const readable = METRIC_REGISTRY.filter((metric) => {
+      try {
+        requireModulePermission(request, metric.module, AccessAction.READ);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    return readable.map(({ id, labelFa, unit, definitionFa }) => ({
       id,
       labelFa,
       unit,
@@ -71,7 +83,8 @@ export class AssistantMetricsService {
       if (error instanceof HttpException) {
         return { ok: false, error: error.message };
       }
-      throw error;
+      // خطای منبع داده نباید به یک عدد حدسی یا خطای ۵۰۰ تبدیل شود: دستیار پرهیز می‌کند.
+      return { ok: false, error: 'محاسبهٔ این شاخص اکنون ممکن نیست.' };
     }
   }
 }

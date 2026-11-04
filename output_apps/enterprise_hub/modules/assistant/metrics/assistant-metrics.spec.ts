@@ -68,6 +68,7 @@ function fixtureSources(): jest.Mocked<MetricSources> {
       employeeCount: 5,
       totalGross: 250_000_000,
       totalEmployerInsurance: 50_000_000,
+      totalUnemploymentInsurance: 10_000_000,
     }),
     vatSeason: jest
       .fn()
@@ -130,7 +131,7 @@ describe('AssistantMetricsService on fixture data', () => {
     vat_payable_season: 12_345_678,
     stock_value: 710_000_000,
     below_reorder_count: 4,
-    payroll_cost_this_month: 300_000_000,
+    payroll_cost_this_month: 310_000_000,
     cheques_due_7d_received: 80_000_000,
     cheques_due_7d_issued: 35_000_000,
     cheques_overdue_count: 2,
@@ -222,6 +223,19 @@ describe('AssistantMetricsService on fixture data', () => {
       expect(payroll.ok).toBe(false);
       expect(sources.dashboard).not.toHaveBeenCalled();
       expect(sources.payrollRun).not.toHaveBeenCalled();
+    });
+
+    it('list() shows a member only the metrics they may read', () => {
+      const ids = service.list(member).map((m) => m.id);
+      expect(ids).not.toContain('payroll_cost_this_month');
+      expect(ids).not.toContain('cash_balance');
+      expect(service.list(owner)).toHaveLength(METRIC_IDS.length);
+    });
+
+    it('a failing source abstains with a Persian error, no number, no 500', async () => {
+      sources.dashboard.mockRejectedValue(new Error('connection lost'));
+      const out = await service.run(owner, 'cash_balance', NOW);
+      expect(out).toEqual({ ok: false, error: expect.stringMatching(/[\u0600-\u06FF]/) });
     });
 
     it('unknown metric id is an error, not a query', async () => {

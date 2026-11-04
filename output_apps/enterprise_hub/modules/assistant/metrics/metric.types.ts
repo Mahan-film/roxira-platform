@@ -52,7 +52,10 @@ export interface MetricSources {
     buckets: Array<{ fromDay: number }>;
     amounts: Money[];
   }>;
-  /** جمع فروش (صدور‌شده و پرداخت‌شده) به ریال در بازهٔ نیم‌باز `[from, to)`. */
+  /**
+   * جمع فروش (صادرشده و پرداخت‌شده) در بازهٔ نیم‌باز `[from, to)`. فقط صورتحساب‌های
+   * ریالی؛ ارزهای دیگر هرگز با ریال جمع نمی‌شوند (آداپتور باید فیلتر کند).
+   */
   salesTotals(
     tenantId: string,
     range: { from: Date; to: Date },
@@ -60,7 +63,10 @@ export interface MetricSources {
   stock(
     tenantId: string,
   ): Promise<{ fifoValue: Money; lowStockCount: number }>;
-  /** چک‌های باز با سررسید تا `days` روز آینده + معوق‌ها. */
+  /**
+   * چک‌های باز با سررسید تا `days` روز آینده + معوق‌ها (جمع‌ها به ریال). تعداد کالاهای زیر
+   * نقطهٔ سفارش در `stock` باید شمارش کل مستأجر باشد، نه یک صفحه.
+   */
   chequesDue(
     tenantId: string,
     days: number,
@@ -79,6 +85,7 @@ export interface MetricSources {
     employeeCount: number;
     totalGross: Money;
     totalEmployerInsurance: Money;
+    totalUnemploymentInsurance: Money;
   } | null>;
   /** پیش‌نویس اظهارنامهٔ ارزش افزودهٔ یک فصل شمسی. */
   vatSeason(

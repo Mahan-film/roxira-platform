@@ -127,7 +127,7 @@ export const METRIC_REGISTRY: readonly MetricDefinition[] = [
     compute: async (c) => {
       const now = toMinor((await sales(c, 'this_month')).payable);
       const before = toMinor((await sales(c, 'last_month')).payable);
-      if (before === 0n) {
+      if (before <= 0n) {
         return noEvidence('ماه گذشته فروشی ثبت نشده و درصد تغییر تعریف نمی‌شود.');
       }
       return { value: percent(now - before, before) };
@@ -176,7 +176,7 @@ export const METRIC_REGISTRY: readonly MetricDefinition[] = [
     labelFa: 'مالیات ارزش افزوده قابل پرداخت این فصل',
     unit: 'IRR',
     module: AccessModule.TAX,
-    definitionFa: 'مبلغ قابل پرداخت در پیش‌نویس اظهارنامهٔ ارزش افزودهٔ فصل شمسی جاری (مالیات فروش منهای مالیات ورودی)؛ فقط وقتی با دفتر کل مطابقت دارد گزارش می‌شود.',
+    definitionFa: 'مبلغ قابل پرداخت در پیش‌نویس اظهارنامهٔ ارزش افزودهٔ فصل شمسی جاری (مالیات فروش منهای مالیات ورودی و منهای اعتبار منتقل‌شده از فصل‌های قبل در همان سال)؛ فقط وقتی با دفتر کل مطابقت دارد گزارش می‌شود.',
     compute: async (c) => {
       const { year, quarter } = season(c);
       const vat = await c.sources.vatSeason(c.tenantId, year, quarter);
@@ -200,13 +200,17 @@ export const METRIC_REGISTRY: readonly MetricDefinition[] = [
     labelFa: 'هزینه حقوق این ماه',
     unit: 'IRR',
     module: AccessModule.HR,
-    definitionFa: 'جمع ناخالص حقوق و بیمهٔ سهم کارفرما در اجرای حقوق ماه شمسی جاری؛ بدون اجرای حقوق تعریف‌نشده است.',
+    definitionFa: 'جمع ناخالص حقوق، بیمهٔ سهم کارفرما و بیمهٔ بیکاری (همان ترکیب سند حسابداری حقوق) در اجرای حقوق ماه شمسی جاری؛ بدون اجرای حقوق تعریف‌نشده است.',
     compute: async (c) => {
       const run = await c.sources.payrollRun(c.tenantId, c.jalali.jy, c.jalali.jm);
       if (!run) {
         return noEvidence('برای این ماه اجرای حقوق ثبت نشده است.');
       }
-      return done(toMinor(run.totalGross) + toMinor(run.totalEmployerInsurance));
+      return done(
+        toMinor(run.totalGross) +
+          toMinor(run.totalEmployerInsurance) +
+          toMinor(run.totalUnemploymentInsurance),
+      );
     },
   },
   {
