@@ -44,8 +44,10 @@ def normalise(text: str) -> str:
     return _WS.sub(" ", t).strip()
 
 
-def cache_key(task: str, messages: Sequence[dict[str, str]], tenant: str = "") -> str:
-    """Stable key. The tenant is part of the key so one tenant's answer is never served to another."""
+def cache_key(task: str, messages: Sequence[dict[str, str]], *, tenant: str) -> str:
+    """Stable key. ``tenant`` is required (use "-" for public, tenant-free content) so one tenant's answer is never served to another."""
+    if not tenant:
+        raise ValueError("tenant is required (use '-' for public content)")
     payload = json.dumps([task, tenant, [(m.get("role", ""), normalise(str(m.get("content", "")))) for m in messages]],
                          ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -93,8 +95,13 @@ def micro_batches(items: Sequence[Any], size: int | None = None) -> Iterator[lis
     lo, hi = int(cfg.get("min", 25)), int(cfg.get("max", 50))
     n = max(lo, min(hi, size or hi))
     chunks = [list(items[i:i + n]) for i in range(0, len(items), n)]
-    if len(chunks) > 1 and len(chunks[-1]) < lo and len(chunks[-2]) + len(chunks[-1]) <= hi:
-        chunks[-2].extend(chunks.pop())
+    if len(chunks) > 1 and len(chunks[-1]) < lo:
+        merged = chunks[-2] + chunks[-1]
+        if len(merged) <= hi:
+            chunks[-2:] = [merged]
+        elif len(merged) >= 2 * lo:  # rebalance so both stay inside [lo, hi]
+            half = len(merged) // 2
+            chunks[-2:] = [merged[:half], merged[half:]]
     yield from chunks
 
 

@@ -351,7 +351,7 @@ def _render_umami(u: dict[str, Any]) -> list[str]:
 def digest_line(cost: dict[str, Any], days: int, cap_usd_per_day: float | None) -> str:
     """ONE Persian line for the 12-hour e-mail digest (queued through notify.enqueue_report, no new sender)."""
     if cost.get("status") != "ok":
-        return f"هزینهٔ هوش مصنوعی {days} روز اخیر: در دسترس نیست ({cost.get('reason', cost.get('status'))})"
+        return f"هزینهٔ هوش مصنوعی {days} روز اخیر: در دسترس نیست ({' '.join(str(cost.get('reason', cost.get('status'))).split())})"
     agg = cost["agg"]
     total = float(agg["total_cost"])
     line = f"هزینهٔ هوش مصنوعی {days} روز اخیر: ${total:.4f} برای {agg['calls']} تماس ({_pct(agg['success'], agg['calls'])} موفق)"

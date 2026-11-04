@@ -10,10 +10,10 @@ U = timezone.utc
 
 
 def test_cache_key_ignores_whitespace_and_digit_script_but_not_tenant():
-    a = rp.cache_key("t", [{"role": "user", "content": "مبلغ  ۱۲۳ ریال"}], "x")
-    b = rp.cache_key("t", [{"role": "user", "content": "مبلغ 123 ریال "}], "x")
+    a = rp.cache_key("t", [{"role": "user", "content": "مبلغ  ۱۲۳ ریال"}], tenant="x")
+    b = rp.cache_key("t", [{"role": "user", "content": "مبلغ 123 ریال "}], tenant="x")
     assert a == b
-    assert a != rp.cache_key("t", [{"role": "user", "content": "مبلغ 123 ریال"}], "y")
+    assert a != rp.cache_key("t", [{"role": "user", "content": "مبلغ 123 ریال"}], tenant="y")
 
 
 def test_cache_expires_evicts_and_skips_empty():
@@ -25,6 +25,17 @@ def test_cache_expires_evicts_and_skips_empty():
     assert c.get("e") is None
     now[0] = 3601
     assert c.get("b") is None
+
+
+def test_cache_key_requires_tenant():
+    with pytest.raises(ValueError):
+        rp.cache_key("t", [], tenant="")
+
+
+def test_micro_batches_never_exceed_the_maximum_after_rebalancing():
+    for n in (51, 52, 75, 76, 99, 101):
+        sizes = [len(b) for b in rp.micro_batches(list(range(n)))]
+        assert sum(sizes) == n and all(25 <= s <= 50 for s in sizes), (n, sizes)
 
 
 def test_escalate_threshold():
