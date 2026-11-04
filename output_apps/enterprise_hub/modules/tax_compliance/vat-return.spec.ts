@@ -139,6 +139,16 @@ const purchase1 = invoice({
   totalTax: 400,
   finalPayable: 4400,
 });
+// A sale return books the exact opposite of its own amounts (documented in the posting service).
+const saleReturn = invoice({
+  id: 'r1',
+  taxInvoiceNumber: 'R-1',
+  subject: InvoiceSubject.RETURN,
+  items: [item(1, 500, 0.1, 50)],
+  totalAmount: 500,
+  totalTax: 50,
+  finalPayable: 550,
+});
 const captureDraft = {
   kind: 'purchase' as const,
   sellerName: 'Cap Seller',
@@ -157,19 +167,22 @@ const captureDraft = {
   notes: '',
 };
 
-async function build(opts: { manualVatVoucher?: boolean } = {}) {
+async function build(opts: { manualVatVoucher?: boolean; withReturn?: boolean } = {}) {
   const l = ledger();
   // Posting links the entity to its journal entry, so every build works on fresh copies.
   const [s1, s2, p1] = [sale1, sale2, purchase1].map((i) => ({ ...i }) as InvoiceEntity);
   await l.post(s1);
   await l.post(s2);
   await l.post(p1);
+  const returns = opts.withReturn ? [{ ...saleReturn } as InvoiceEntity] : [];
+  for (const r of returns) await l.post(r);
   // The posted capture voucher books its input VAT on 2020, exactly as `buildVoucher` does.
   l.lines.push(...buildVoucher(captureDraft, '5030').lines);
   if (opts.manualVatVoucher) l.lines.push({ accountCode: '2020', credit: '5.00' });
 
   const seasonalRepo = {
     findIssuedBetween: async () => [s1, s2],
+    findAdjustmentsBetween: async () => returns,
     findPurchaseInvoicesBetween: async () => [p1],
     findPostedCapturePurchasesBetween: async () => [
       { id: 'c1', status: 'posted', extracted: { draft: captureDraft }, edited: null },
@@ -193,6 +206,13 @@ describe('VAT return draft (RET-01)', () => {
     expect(report.ledger).toMatchObject({ outputAccount: '2020', inputAccount: '1401', difference: 0, reconciled: true });
     expect(report.payable).toBe(0);
     expect(report.creditCarriedForward).toBe(470 - 106.67);
+  });
+
+  it('nets a sale return so the return still reconciles exactly (ledger books the opposite amounts)', async () => {
+    const report = await (await build({ withReturn: true })).vatReturn(TENANT, 1405, 1);
+    expect(report.adjustments).toEqual({ returnCount: 1, correctiveCount: 0 });
+    expect(report.output.vat).toBe(56.67);
+    expect(report.ledger).toMatchObject({ difference: 0, reconciled: true });
   });
 
   it('shows a non-zero difference when a manual voucher touches the VAT account', async () => {

@@ -19,6 +19,24 @@ export class SeasonalReportRepository {
     private readonly captures: Repository<CaptureDocumentEntity>,
   ) {}
 
+  /**
+   * Returns (subject 4) and correctives (subject 2) of either direction issued in `[from, to)`.
+   * The ledger books them on the VAT accounts, so the VAT return must account for them.
+   */
+  async findAdjustmentsBetween(tenantId: string, from: Date, to: Date): Promise<InvoiceEntity[]> {
+    return this.invoices
+      .createQueryBuilder('invoice')
+      .where('invoice.tenantId = :tenantId', { tenantId })
+      .andWhere('invoice.status IN (:...statuses)', {
+        statuses: [InvoiceStatus.ISSUED, InvoiceStatus.PAID],
+      })
+      .andWhere('invoice.subject IN (2, 4)')
+      .andWhere('invoice.jurisdiction = :jurisdiction', { jurisdiction: InvoiceJurisdiction.IR })
+      .andWhere('invoice.issuedAt >= :from', { from })
+      .andWhere('invoice.issuedAt < :to', { to })
+      .getMany();
+  }
+
   /** Purchase invoices (direction PURCHASE, original subject) issued in `[from, to)`. */
   async findPurchaseInvoicesBetween(tenantId: string, from: Date, to: Date): Promise<InvoiceEntity[]> {
     return this.invoices

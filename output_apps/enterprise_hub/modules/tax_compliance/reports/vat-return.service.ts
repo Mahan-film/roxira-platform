@@ -25,6 +25,8 @@ export interface VatReturn {
   payable: Amount;
   /** Credit to carry into the next season, or zero. */
   creditCarriedForward: Amount;
+  /** Returns netted into output/input VAT; correctives are counted but not modelled. */
+  adjustments: { returnCount: number; correctiveCount: number };
   ledger: {
     outputAccount: string | null;
     inputAccount: string | null;
@@ -42,7 +44,8 @@ export const VAT_RETURN_NOTES: readonly string[] = [
   'عوارض و مالیات خرید غیرقابل‌کسر در سامانه نگهداری نمی‌شود؛ عوارض صفر گزارش شده و وضعیت آن unclear است.',
   'انتقال اعتبار مالیاتی به فصل بعد (به‌جای استرداد) مطابق منبع قانونی تأییدشده نیست و unclear است؛ فقط درون یک سال شمسی محاسبه می‌شود.',
   'مالیات ورودی قابل کسر مشروط به تطبیق کارپوشه است که هنوز انجام نمی‌شود (VAT-02).',
-  'تطبیق با دفتر کل: حساب بدهی «مالیات بر ارزش افزوده» و حساب دارایی «اعتبار مالیاتی» با همان قاعدهٔ ثبت صورتحساب انتخاب می‌شوند؛ اختلاف غیرصفر یعنی سندی ثبت‌نشده یا سند دستی روی این حساب‌ها وجود دارد.',
+  'برگشت از فروش و برگشت از خرید از مالیات فروش/ورودی کسر می‌شوند؛ صورتحساب‌های اصلاحی (فقط تفاوت با نسخهٔ قبل در دفتر ثبت می‌شود) و ابطال‌هایی که در فصل دیگری ثبت شده‌اند مدل نشده‌اند.',
+  'تطبیق با دفتر کل: حساب بدهی «مالیات بر ارزش افزوده» و حساب دارایی «اعتبار مالیاتی» با همان قاعدهٔ ثبت صورتحساب انتخاب می‌شوند؛ اختلاف غیرصفر یعنی سندی ثبت‌نشده، سند دستی، اصلاحی یا ابطال فصل دیگر روی این حساب‌ها وجود دارد.',
 ];
 
 /** Same pick the invoice posting uses: first account of the type whose name matches, else the default code. */
@@ -67,11 +70,18 @@ export class VatReturnService {
   private async season(tenantId: string, year: number, quarter: number) {
     const sales = await this.seasonal.salesTotals(tenantId, year, quarter);
     const purchases = await this.seasonal.loadPurchases(tenantId, jalaliQuarterRange(year, quarter));
+    const adj = await this.seasonal.adjustmentTotals(tenantId, year, quarter);
     return {
-      sales,
+      sales: {
+        invoiceCount: sales.invoiceCount,
+        baseMinor: sales.baseMinor - adj.saleReturnBaseMinor,
+        vatMinor: sales.vatMinor - adj.saleReturnVatMinor,
+      },
       purchaseCount: purchases.rows.length,
-      purchaseBase: purchases.rows.reduce((sum, r) => sum + r.baseMinor, 0n),
-      purchaseVat: purchases.rows.reduce((sum, r) => sum + r.vatMinor, 0n),
+      purchaseBase: purchases.rows.reduce((sum, r) => sum + r.baseMinor, 0n) - adj.purchaseReturnBaseMinor,
+      purchaseVat: purchases.rows.reduce((sum, r) => sum + r.vatMinor, 0n) - adj.purchaseReturnVatMinor,
+      returnCount: adj.returnCount,
+      correctiveCount: adj.correctiveCount,
     };
   }
 
@@ -120,6 +130,7 @@ export class VatReturnService {
         vat: fromMinor(current.purchaseVat),
       },
       levies: { amount: 0, status: 'unclear' },
+      adjustments: { returnCount: current.returnCount, correctiveCount: current.correctiveCount },
       netVat: fromMinor(net),
       carriedCreditIn: fromMinor(carriedIn),
       payable: fromMinor(owed > 0n ? owed : 0n),

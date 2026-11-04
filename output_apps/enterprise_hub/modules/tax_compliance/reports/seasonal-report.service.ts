@@ -101,6 +101,50 @@ export class SeasonalReportService {
     return { rows, invoiceCount: invoices.length, unreadable };
   }
 
+  /**
+   * Returns of the season as positive amounts to subtract (sale returns from output VAT, purchase
+   * returns from input VAT) and the number of correctives, which are not modelled.
+   */
+  async adjustmentTotals(
+    tenantId: string,
+    year: number,
+    quarter: number,
+  ): Promise<{
+    saleReturnBaseMinor: bigint;
+    saleReturnVatMinor: bigint;
+    purchaseReturnBaseMinor: bigint;
+    purchaseReturnVatMinor: bigint;
+    returnCount: number;
+    correctiveCount: number;
+  }> {
+    const range = jalaliQuarterRange(year, quarter);
+    const docs = await this.repository.findAdjustmentsBetween(tenantId, range.from, range.to);
+    const out = {
+      saleReturnBaseMinor: 0n,
+      saleReturnVatMinor: 0n,
+      purchaseReturnBaseMinor: 0n,
+      purchaseReturnVatMinor: 0n,
+      returnCount: 0,
+      correctiveCount: 0,
+    };
+    for (const doc of docs) {
+      if (Number(doc.subject) === 2) {
+        out.correctiveCount += 1;
+        continue;
+      }
+      const amounts = invoiceRialAmounts(doc);
+      out.returnCount += 1;
+      if (doc.direction === 'PURCHASE') {
+        out.purchaseReturnBaseMinor += amounts.salesMinor;
+        out.purchaseReturnVatMinor += amounts.vatMinor;
+      } else {
+        out.saleReturnBaseMinor += amounts.salesMinor;
+        out.saleReturnVatMinor += amounts.vatMinor;
+      }
+    }
+    return out;
+  }
+
   /** Sales invoice totals of the season in exact rial minor units (same rule as `vatReport`). */
   async salesTotals(
     tenantId: string,
