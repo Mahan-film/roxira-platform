@@ -46,3 +46,20 @@ systemctl daemon-reload
 systemctl enable --now roxira-docker-prune.timer
 systemctl list-timers roxira-docker-prune.timer
 ```
+
+## `roxira-digest.service` + `roxira-digest.timer`
+
+The ONLY routine e-mail: one grouped digest at 08:00 and 20:00 Tehran (owner rule 2026-11-04).
+Monitors, self-improvement jobs, radar and backup reports queue into `/var/lib/roxira-notify/queue.db`
+(`scripts/ops/notify/notify.py`); urgent problems go to Telegram only. See `docs/ops/NOTIFY_DIGEST.md`.
+These units are NOT installed by autodeploy (it only deploys code). Owner install, as root on srv1:
+
+```bash
+cd /opt/roxira_platform
+install -m 644 deploy/systemd/roxira-digest.service deploy/systemd/roxira-digest.timer /etc/systemd/system/
+install -m 644 deploy/systemd/roxira-backup-dr-report.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now roxira-digest.timer
+systemctl restart roxira-backup-dr-report.timer
+systemctl list-timers 'roxira-digest*'
+```

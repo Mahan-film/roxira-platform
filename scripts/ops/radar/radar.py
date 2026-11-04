@@ -1114,9 +1114,10 @@ def main(argv=None):
         if not a.no_issues:
             run["issues"] = open_issues(run["items"], state)
         if not a.no_email and not mc.silenced():
-            mc.send_email(f"[Roxira] Tech radar {a.mode} {today}: "
-                          f"{sum(c['verdict'] == 'adopt' for c in run['items'])} adopt, "
-                          f"{sum(c['verdict'] == 'trial' for c in run['items'])} trial", render_email(run))
+            mc.queue_report(f"Tech radar {a.mode} {today}: "
+                            f"{sum(c['verdict'] == 'adopt' for c in run['items'])} adopt, "
+                            f"{sum(c['verdict'] == 'trial' for c in run['items'])} trial", render_email(run),
+                            path=os.path.join(report_dir, name), source="radar")
         print(f"report {name} written; decisions appended: {n_dec}; issues: {len(run['issues'])}")
     state["versions"] = res["versions"]
     def _recent(d: object) -> bool:  # tolerate unparseable legacy values: drop them

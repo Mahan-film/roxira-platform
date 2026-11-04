@@ -9,11 +9,8 @@ import importlib.util
 import json
 import os
 import re
-import smtplib
-import ssl
 import tempfile
 import time
-from email.message import EmailMessage
 
 REMIND_SECONDS = 2 * 3600
 
@@ -106,12 +103,8 @@ def format_alerts(alerts, host: str, title: str) -> tuple[str, str]:
 _NOTIFY_BOT = None
 
 
-def notify_bot(subject: str, body: str) -> None:
-    """Best-effort mirror of an alert to the owner's Telegram/Bale bot.
-
-    Silently does nothing when notify.py is missing or the bot is unconfigured.
-    Never raises and never prints secret values (notify.py scrubs its input).
-    """
+def _notify_module():
+    """Load scripts/ops/notify/notify.py once (the single digest queue). False when unavailable."""
     global _NOTIFY_BOT
     if _NOTIFY_BOT is None:
         try:
@@ -123,40 +116,36 @@ def notify_bot(subject: str, body: str) -> None:
             _NOTIFY_BOT = module
         except Exception:
             _NOTIFY_BOT = False
-    if _NOTIFY_BOT:
-        try:
-            _NOTIFY_BOT.send(f"{subject}\n{body[:500]}")
-        except Exception:
-            pass
+    return _NOTIFY_BOT
+
+
+def queue_alerts(alerts, source: str, dry_run: bool = False) -> None:
+    """Put evaluate() alerts into the digest queue (no e-mail now). Call on EVERY run, even with
+    an empty list: the urgent rule (site down > 15 min -> Telegram) needs to see ongoing failures."""
+    if dry_run:
+        for kind, key, detail in alerts:
+            print(f"[dry-run] would queue {kind}: {key} - {detail}")
+        return
+    mod = _notify_module()
+    if mod:
+        mod.enqueue_alerts(alerts, source)
+
+
+def queue_report(title: str, body: str, path: str = "", source: str = "report", dry_run: bool = False) -> bool:
+    """Queue a report for the next digest (short summary + file path only)."""
+    if dry_run:
+        print(f"[dry-run] would queue report: {title}\n" + "\n".join("    " + x for x in body.splitlines()[:8]))
+        return True
+    mod = _notify_module()
+    return bool(mod and mod.enqueue_report(source, title, body, path))
 
 
 def send_email(subject: str, body: str, dry_run: bool = False) -> bool:
-    """Send via SMTP using BACKUP_SMTP_USER / BACKUP_SMTP_PASS / BACKUP_NOTIFY_TO."""
-    user = os.environ.get("BACKUP_SMTP_USER", "")
-    # Gmail App Passwords are shown with spaces; strip all whitespace before login.
-    password = "".join(os.environ.get("BACKUP_SMTP_PASS", "").split())
-    to = os.environ.get("BACKUP_NOTIFY_TO", "")
-    if dry_run:
-        print(f"[dry-run] would send email to={'<set>' if to else '<unset>'}\n"
-              f"  subject: {subject}\n  body:\n" + "\n".join("    " + x for x in body.splitlines()))
-        return True
-    if not (user and password and to):
-        print("email not sent: BACKUP_SMTP_USER/BACKUP_SMTP_PASS/BACKUP_NOTIFY_TO not all set")
-        return False
-    msg = EmailMessage()
-    msg["From"], msg["To"], msg["Subject"] = user, to, subject
-    msg.set_content(body)
-    host = os.environ.get("BACKUP_SMTP_HOST", "smtp.gmail.com")
-    port = int(os.environ.get("BACKUP_SMTP_PORT", "465"))
-    try:
-        with smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=30) as s:
-            s.login(user, password)
-            s.send_message(msg)
-        notify_bot(subject, body)
-        return True
-    except (OSError, smtplib.SMTPException) as exc:
-        print(f"email send failed: {type(exc).__name__}")
-        return False
+    """Compatibility name: nothing is mailed at once any more (owner rule 2026-11-04, max 2 mails a day).
+
+    The message goes into the digest queue; roxira-digest.timer mails ONE digest at 08:00 and 20:00 Tehran.
+    """
+    return queue_report(subject, body, source="mail", dry_run=dry_run)
 
 
 def silenced() -> bool:
