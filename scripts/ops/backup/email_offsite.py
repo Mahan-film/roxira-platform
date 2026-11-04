@@ -558,10 +558,6 @@ def cmd_offsite(a) -> int:
         return 2
     sender = _smtp_env()[5] or "unset@example.invalid"
     to = _smtp_env(True)[2] or "unset@example.invalid"
-    if state["mails"] > 0 and not a.dry_run and not os.environ.get("BACKUP_OFFSITE_TO"):
-        # Same mailbox as the owner's inbox: at most one offsite run per day.
-        print("email_offsite: offsite already mailed today; skipping (set BACKUP_OFFSITE_TO for a separate mailbox)")
-        return 0
     (work / f"offsite-manifest-{date}.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     if manifest["status"] != "OK":
         print("email_offsite: " + manifest["note"], file=sys.stderr)
@@ -571,6 +567,10 @@ def cmd_offsite(a) -> int:
         if mod and not a.dry_run:
             mod.enqueue_report("backup", f"offsite {date}: NOT SENT (over cap)", manifest["note"])
         return 5
+    if state["mails"] > 0 and not a.dry_run and not os.environ.get("BACKUP_OFFSITE_TO"):
+        # Same mailbox as the owner's inbox: at most one offsite run per day.
+        print("email_offsite: offsite already mailed today; skipping (set BACKUP_OFFSITE_TO for a separate mailbox)")
+        return 0
     msgs = offsite_messages(manifest, parts, sender, to)
     rc = _deliver(msgs, a.dry_run, offsite=True)
     if rc == 0 and not a.dry_run:

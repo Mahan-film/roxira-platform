@@ -153,3 +153,29 @@ def test_smtp_send_without_credentials_is_false(monkeypatch, tmp_path, capsys):
     for n in ("BACKUP_SMTP_USER", "BACKUP_SMTP_PASS", "BACKUP_NOTIFY_TO"):
         monkeypatch.delenv(n, raising=False)
     assert notify.smtp_send("s", "b") is False
+
+
+def test_telegram_ok_false_is_a_failure_and_retries_in_five_minutes(env):
+    db, _ = env
+    calls = []
+
+    def refuse(url, payload, timeout=10):
+        calls.append(1)
+        return {"ok": False, "description": "chat not found"}
+
+    assert notify._urgent("backup:FAILED", "x", now=T0, db=db, http=refuse) == "failed"
+    assert notify._urgent("backup:FAILED", "x", now=T0 + 100, db=db, http=refuse) == "cooldown"
+    assert notify._urgent("backup:FAILED", "x", now=T0 + 400, db=db, http=refuse) == "failed"   # retried after 5 min
+    assert len(calls) == 2
+    assert len(_events(db)[0]) == 1                                                            # one digest record only
+
+
+def test_cli_exit_codes(env, monkeypatch):
+    db, http = env
+    monkeypatch.setenv("NOTIFY_QUEUE_DB", db)
+    monkeypatch.setattr(notify, "http_post", http)
+    assert notify.main(["--urgent", "k", "boom"]) == 0
+    assert notify.main(["--urgent", "k", "boom"]) == 0            # cooldown is not an error
+    monkeypatch.setattr(notify, "http_post", lambda *a, **k: {"ok": False})
+    assert notify.main(["--urgent", "k2", "boom"]) == 1           # a refused send is reported
+    assert notify.main(["--queue", "info", "backup", "k", "text"]) == 0

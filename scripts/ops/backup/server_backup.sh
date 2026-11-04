@@ -137,11 +137,12 @@ send_mail() { # subject, body-file, [attachments...]
 alert() { # subject, message
   # Owner rule 2026-11-04: no per-event e-mail. A failure goes to Telegram (1/h per problem, cooldown in
   # notify.py); warnings (low disk) only go to the digest. Both also land in the 08:00/20:00 digest.
-  local notify_py="${NOTIFY_PY:-$SCRIPT_DIR/../notify/notify.py}" text
+  local notify_py="${NOTIFY_PY:-$SCRIPT_DIR/../notify/notify.py}" text ukey
+  ukey="backup:$(printf '%s' "$1" | tr -d '0-9%')"  # no changing numbers in the key, or the 1/h cooldown never applies
   text="$2 (host $(hostname), log $LOG_FILE)"
   if [ "$DRY_RUN" = "1" ]; then echo "[dry-run] alert: $1"; return 0; fi
   case "$1" in
-    *FAILED*|"DISK FULL"*) python3 "$notify_py" --urgent "backup:$1" "$1: $text" >/dev/null 2>&1 || warn "urgent notice not sent: $1" ;;
+    *FAILED*|"DISK FULL"*) python3 "$notify_py" --urgent "$ukey" "$1: $text" >/dev/null 2>&1 || warn "urgent notice not sent: $1" ;;
     *) python3 "$notify_py" --queue alert backup "$1" "$text" >/dev/null 2>&1 || warn "digest queue not written: $1" ;;
   esac
 }

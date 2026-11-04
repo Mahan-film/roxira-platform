@@ -135,7 +135,9 @@ def send(text: str, buttons=None, *, http=None, timeout: float = TIMEOUT) -> boo
                 ]
             }
         url = f"{cfg['api'].rstrip('/')}/bot{cfg['token']}/sendMessage"
-        (http or http_post)(url, payload, timeout)
+        result = (http or http_post)(url, payload, timeout)
+        if isinstance(result, dict) and result.get("ok") is False:
+            return False  # Telegram answers HTTP 200 {"ok": false} for chat-not-found / bot-blocked
         return True
     except Exception:
         return False
@@ -239,26 +241,44 @@ def enqueue_report(source, title, text, path="", now=None, db=None) -> bool:
     return enqueue(source, title, "REPORT", text, "INFO", path=path, now=now, db=db)
 
 
-def urgent(key, text, cooldown_s=URGENT_COOLDOWN_S, now=None, db=None, http=None) -> bool:
-    """Telegram-only urgent message, at most one per `key` per cooldown. Returns True if sent now.
+URGENT_RETRY_S = 300  # after a failed Telegram send, try again after 5 min (not after a full hour)
 
-    Urgent = site down > 15 min in a row, backup failed, deploy failed/rolled back, disk > 90%.
-    Never e-mails. The event is also recorded in the next digest (once per cooldown).
-    """
+
+def _urgent(key, text, cooldown_s=URGENT_COOLDOWN_S, now=None, db=None, http=None) -> str:
+    """Returns "sent", "cooldown" or "failed" (Telegram refused / unreachable / queue unwritable)."""
     now = now or time.time()
     try:
         con = _db(db)
         with con:
             row = con.execute("SELECT last_ts FROM cooldown WHERE key=?", (key,)).fetchone()
             if row and now - row[0] < cooldown_s:
-                return False
+                return "cooldown"
+            if not row:  # first attempt for this problem: one record for the digest
+                con.execute("INSERT INTO events(ts,source,key,kind,severity,text) VALUES(?,?,?,?,?,?)",
+                            (now, "urgent", key, "URGENT", "URGENT", light_scrub(text)))
             con.execute("INSERT OR REPLACE INTO cooldown(key,last_ts) VALUES(?,?)", (key, now))
-            con.execute("INSERT INTO events(ts,source,key,kind,severity,text) VALUES(?,?,?,?,?,?)",
-                        (now, "urgent", key, "URGENT", "URGENT", light_scrub(text)))
         con.close()
     except Exception:
-        return False
-    return send(f"URGENT {key}: {text}", http=http)
+        return "failed"
+    if send(f"URGENT {key}: {text}", http=http):
+        return "sent"
+    try:  # not delivered: allow a retry soon instead of silencing the problem for an hour
+        con = _db(db)
+        with con:
+            con.execute("UPDATE cooldown SET last_ts=? WHERE key=?", (now - cooldown_s + URGENT_RETRY_S, key))
+        con.close()
+    except Exception:
+        pass
+    return "failed"
+
+
+def urgent(key, text, cooldown_s=URGENT_COOLDOWN_S, now=None, db=None, http=None) -> bool:
+    """Telegram-only urgent message, at most one per `key` per cooldown. Returns True if sent now.
+
+    Urgent = site down > 15 min in a row, backup failed, deploy failed/rolled back, disk > 90%.
+    Never e-mails. The event is also recorded in the next digest (once per problem).
+    """
+    return _urgent(key, text, cooldown_s, now, db, http) == "sent"
 
 
 # ------------------------------------------------------------------ digest ---
@@ -394,12 +414,12 @@ def main(argv=None) -> int:
         print(f"digest: {res}")
         return 1 if res == "failed" else 0
     if args[:1] == ["--urgent"] and len(args) >= 3:
-        print("urgent: sent" if urgent(args[1], " ".join(args[2:])) else "urgent: suppressed")
-        return 0
+        res = _urgent(args[1], " ".join(args[2:]))
+        print(f"urgent: {res}")
+        return 1 if res == "failed" else 0
     if args[:1] == ["--queue"] and len(args) >= 5:
         sev = args[1].upper() if args[1].upper() in ("INFO", "ALERT") else "INFO"
-        enqueue(args[2], args[3], "REPORT", " ".join(args[4:]), sev)
-        return 0
+        return 0 if enqueue(args[2], args[3], "REPORT", " ".join(args[4:]), sev) else 1
     text = " ".join(args).strip()
     if not text and not sys.stdin.isatty():
         text = sys.stdin.read().strip()
