@@ -115,6 +115,15 @@ describePg('Journal entry search on PostgreSQL', () => {
     expect(await numbers(T1, { text: 'فاکتور ۱۲۳' })).toEqual(['S-3']);
   });
 
+  it('takes % and _ in the entry number literally on both paths (#128)', async () => {
+    // Old path (entry number alone) and search path (with another filter) must agree.
+    expect(await numbers(T1, { entryNumber: '%' })).toEqual([]);
+    expect(await numbers(T1, { entryNumber: '%', text: 'ف' })).toEqual([]);
+    expect(await numbers(T1, { entryNumber: '_' })).toEqual([]);
+    expect(await numbers(T1, { entryNumber: 's-' })).toEqual(['S-3', 'S-2', 'S-1']);
+    expect(await numbers(T1, { entryNumber: 'S-2', fromDate: '2026-01-01' })).toEqual(['S-2']);
+  });
+
   it('pages the results and never returns another tenant', async () => {
     const first = await search(T1, { fromDate: '2026-01-01', limit: 2 });
     const second = await search(T1, { fromDate: '2026-01-01', limit: 2, page: 2 });

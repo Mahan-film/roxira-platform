@@ -18,7 +18,7 @@ import {
   scaledToDecimal,
   toMinor,
 } from '../money';
-import { needsSearch } from '../repositories/journal-search.sql';
+import { likeContains, needsSearch } from '../repositories/journal-search.sql';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
 import {
@@ -1167,7 +1167,8 @@ export class AccountingService {
       where.status = status;
     }
     if (entryNumber) {
-      where.entryNumber = ILike(`%${entryNumber}%`);
+      // Same matching as the search path: % and _ are literal characters (#128).
+      where.entryNumber = ILike(likeContains(entryNumber));
     }
 
     const [entities, total] =

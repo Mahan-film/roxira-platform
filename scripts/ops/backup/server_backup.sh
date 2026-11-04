@@ -135,18 +135,15 @@ send_mail() { # subject, body-file, [attachments...]
 }
 
 alert() { # subject, message
-  local marker="$STATE_DIR/last_alert"
-  if [ "$DRY_RUN" = "1" ]; then echo "[dry-run] alert email: $1"; return 0; fi
-  if [ -f "$marker" ] && [ -n "$(find "$marker" -mmin "-$ALERT_COOLDOWN_MIN" 2>/dev/null)" ]; then
-    warn "alert suppressed by cooldown (${ALERT_COOLDOWN_MIN} min): $1"
-    return 0
-  fi
-  local body
-  body="$(mktemp)"
-  printf '%s\n\nhost: %s\ntime: %s\nlog: %s\n' "$2" "$(hostname)" "$(date -u)" "$LOG_FILE" >"$body"
-  send_mail "[roxira-backup] $1" "$body"
-  [ "$DRY_RUN" = "1" ] || touch "$marker"
-  rm -f "$body"
+  # Owner rule 2026-11-04: no per-event e-mail. A failure goes to Telegram (1/h per problem, cooldown in
+  # notify.py); warnings (low disk) only go to the digest. Both also land in the 08:00/20:00 digest.
+  local notify_py="${NOTIFY_PY:-$SCRIPT_DIR/../notify/notify.py}" text
+  text="$2 (host $(hostname), log $LOG_FILE)"
+  if [ "$DRY_RUN" = "1" ]; then echo "[dry-run] alert: $1"; return 0; fi
+  case "$1" in
+    *FAILED*|"DISK FULL"*) python3 "$notify_py" --urgent "backup:$1" "$1: $text" >/dev/null 2>&1 || warn "urgent notice not sent: $1" ;;
+    *) python3 "$notify_py" --queue alert backup "$1" "$text" >/dev/null 2>&1 || warn "digest queue not written: $1" ;;
+  esac
 }
 
 # ---- dumps -----------------------------------------------------------------------------------

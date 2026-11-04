@@ -6,7 +6,6 @@ Usage: hourly.py [--dry-run] [--no-probe]
 """
 import argparse
 import json
-import socket
 import sys
 import time
 
@@ -60,9 +59,9 @@ def main() -> int:
     if not args.dry_run:
         mc.save_state(state_path, {"checks": checks})
     print(json.dumps({k: v for k, v in rec.items()}, ensure_ascii=False, sort_keys=True))
-    if alerts and not mc.silenced():
-        subject, body = mc.format_alerts(alerts, socket.gethostname(), "self-improvement")
-        mc.send_email(subject, body, dry_run=args.dry_run)
+    if not mc.silenced():
+        # "STILL FAILING" repeats are muted: the open failure is listed once per digest.
+        mc.queue_alerts(alerts, "self-improvement", dry_run=args.dry_run)
     return 1 if any(not ok for ok, _ in results.values()) else 0
 
 

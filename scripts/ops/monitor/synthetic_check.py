@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Synthetic production monitor: HTTP, judge health, real chat round-trip, TLS, domain expiry, disk.
 
-Stdlib only. Alerts by e-mail only on state change plus a reminder every 2 h.
+Stdlib only. Alerts go to the digest queue (scripts/ops/notify/notify.py); never mailed one by one.
 
 Usage: synthetic_check.py [--once] [--dry-run] [--force-chat] [--state PATH]
 Env (names only): MONITOR_DOMAINS, MONITOR_CHAT_BASE, MONITOR_CHAT_INTERVAL_MIN,
@@ -207,15 +207,14 @@ def run(args) -> int:
         for key, (ok, detail) in sorted(results.items()):
             print(f"{'OK  ' if ok else 'FAIL'} {key}: {detail}")
 
-        if alerts:
-            try:
-                subject, body = mc.format_alerts(alerts, socket.gethostname(), "synthetic")
-                if mc.silenced() and not args.dry_run:
-                    print("alerts silenced:", subject)
-                else:
-                    mc.send_email(subject, body, dry_run=args.dry_run)
-            except Exception as exc:  # noqa: BLE001 - state must still be saved below
-                print(f"alert not sent: {type(exc).__name__}")
+        try:
+            # Always queue (even with no alerts): the urgent rule watches ongoing failures.
+            if mc.silenced() and not args.dry_run:
+                print("alerts silenced:", ", ".join(a[1] for a in alerts))
+            else:
+                mc.queue_alerts(alerts, "synthetic", dry_run=args.dry_run)
+        except Exception as exc:  # noqa: BLE001 - state must still be saved below
+            print(f"alert not queued: {type(exc).__name__}")
     finally:
         # Runs on every path (including an unexpected error above) so the alert state
         # and last_chat_ts are never lost between timer runs.

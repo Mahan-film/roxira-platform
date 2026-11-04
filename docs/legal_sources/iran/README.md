@@ -12,6 +12,8 @@ punctuation and numbers, so check a figure against the original PDF before relyi
 | `customs-law.txt` | Customs Affairs Law | Check amendments |
 | `aeinnameh-mavad-95-owner-copy.md` | Article 95 regulation, pasted | Not official; may mix versions |
 | `accounting-standards-list-owner-copy.md` | Standards list, pasted | Secondary source |
+| `direct-taxes-act-1366-updated-1400-10-20.txt` | Direct Taxes Act, mirror on ekhtebar.ir, updated to 1400/10/20 | Mirror of the official text; later amendments missing |
+| `budget-1405-tax-provisions-circular.txt` | Tax Organization letter ص/۲۰۰/۱۰۰۵ (1405/01/31): tax provisions of the 1405 budget law | Official letter, extraction has lost letters |
 
 ## Verified 1405 labour figures (circular 6682)
 
@@ -32,3 +34,12 @@ figure in `docs/research/2026-10-31/05-iran-compliance-1405-fa.md` come from a r
 stored as dated parameters and must not be presented as confirmed until an official source is added.
 
 Sample keys and tokens in `moadian-technical-connection-14010422.txt` are masked; use the original PDF for them.
+
+## Direct Taxes Act and 1405 budget figures (added 2026-11-04)
+
+Cited by `docs/tax/*.md`. Figures that come from the 1405 circular (row numbers in brackets): Article 84 exemption
+4,800 million rial (1-1); salary brackets 10/15/20/25/30% above 4,800 / 9,600 / 12,000 / 14,400 / 16,800 million rial (1-2-1 to
+1-2-5); maximum exempt income for Article 57 properties and Article 101 business income 2,800 million rial (1-5-2); minimum
+effective tax rate 10% on profit above 300 billion rial (1-8). Article 131 rates in the Act text are the version of 1400/10/20 and
+may have been amended since: treat the 1405 schedule as `unclear`. The 10% advance withholding on doctors' fees is NOT in this
+circular and not in the 1405 budget law text (searched), so its 1405 basis is `unclear` (see `docs/tax/DOCTOR_FEE_WITHHOLDING.md`).

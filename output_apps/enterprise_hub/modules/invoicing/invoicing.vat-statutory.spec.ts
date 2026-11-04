@@ -146,6 +146,53 @@ describe('VAT-01 — general VAT rate from the statutory store by invoice date',
     expect((await service.create(TENANT, dto())).items[0].vatRate).toBe(0.08);
   });
 
+  // #125: the effective date is the Iran calendar day (Asia/Tehran, UTC+03:30), not the UTC day.
+  it('an invoice at 00:30 Tehran on the effective day takes the new rate (UTC is still the day before)', async () => {
+    const { service } = build(twoRates());
+    at('2026-09-22T21:00:00Z'); // 2026-09-23 00:30 Tehran = Jalali 1405/07/01
+    const created = await service.create(TENANT, dto({ status: InvoiceStatus.ISSUED }));
+    expect(created.items[0].vatRate).toBe(0.08);
+    expect(created.totalTax).toBe(80);
+  });
+
+  it('an invoice at 23:30 Tehran the day before the effective day keeps the old rate', async () => {
+    const { service } = build(twoRates());
+    at('2026-09-22T20:00:00Z'); // 2026-09-22 23:30 Tehran
+    expect((await service.create(TENANT, dto())).items[0].vatRate).toBe(0.05);
+  });
+
+  it('POS quotes at 00:30 Tehran on the effective day take the new rate', async () => {
+    const { service } = build(twoRates());
+    at('2026-09-22T21:00:00Z');
+    const quoted = await service.quote(TENANT, {
+      items: [{ description: 'کالا', quantity: 1, unitPrice: 1000, discount: 0 }],
+      currency: Currency.IRR,
+    });
+    expect(quoted.items[0].vatRate).toBe(0.08);
+  });
+
+  it('editing an invoice issued at 00:30 Tehran on the effective day keeps the new rate', async () => {
+    const { service } = build(twoRates());
+    at('2026-09-22T21:00:00Z');
+    const issued = await service.create(TENANT, dto({ status: InvoiceStatus.ISSUED }));
+    at('2026-10-01T08:00:00Z');
+    const updated = await service.update(TENANT, issued.id, {
+      items: [{ description: 'خدمت', quantity: 2, unitPrice: 1000, discount: 0 }],
+    });
+    expect(updated.items[0].vatRate).toBe(0.08);
+  });
+
+  it('just after Nowruz midnight Tehran the lookup uses the new Jalali year', async () => {
+    const { service, store } = build([
+      param({ fiscalYear: 1405, effectiveFrom: '2026-03-21', value: '0.05' }),
+      param({ fiscalYear: 1404, effectiveFrom: '2025-03-21', value: '0.08' }),
+    ]);
+    at('2026-03-20T21:00:00Z'); // 2026-03-21 00:30 Tehran = Jalali 1405/01/01
+    const created = await service.create(TENANT, dto());
+    expect(store.findForYear).toHaveBeenCalledWith(TENANT, 'IR', 1405);
+    expect(created.items[0].vatRate).toBe(0.05);
+  });
+
   it("an organisation's own row in the store beats the platform default, for that tenant only", async () => {
     const rows = [
       ...twoRates(),

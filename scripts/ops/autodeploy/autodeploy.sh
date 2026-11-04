@@ -56,8 +56,11 @@ write_status() {
       >"$LAST_JSON" 2>/dev/null || true
     ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +$((KEEP_LOGS + 1)) | xargs -r rm -f 2>/dev/null || true
     # Best effort: notify the owner for a real outcome, never for a no-op/skip.
-    if [ "$RESULT" = "ok" ] || [ "$RESULT" = "failed" ]; then
-      python3 "$REPO/scripts/ops/notify/notify.py" "استقرار ${TARGET_SHORT:0:7}: $RESULT" >/dev/null 2>&1 || true
+    # A failed (rolled back) deploy is urgent -> Telegram only (1/h); a good deploy goes to the digest.
+    if [ "$RESULT" = "failed" ]; then
+      python3 "$REPO/scripts/ops/notify/notify.py" --urgent "deploy-failed" "استقرار ${TARGET_SHORT:0:7} ناموفق بود و برگردانده شد" >/dev/null 2>&1 || true
+    elif [ "$RESULT" = "ok" ]; then
+      python3 "$REPO/scripts/ops/notify/notify.py" --queue info autodeploy "deploy ${TARGET_SHORT:0:7}" "deployed ok" >/dev/null 2>&1 || true
     fi
   fi
   [ -z "$DEPLOY_TMP" ] || rm -f "$DEPLOY_TMP"
@@ -145,7 +148,7 @@ log "deploy OK: $TARGET_SHORT"
 # makes autodeploy exit non-zero (the deploy itself already passed its smoke test).
 gate4_alert() {
   log "GATE4 FAIL: $*"
-  python3 "$REPO/scripts/ops/notify/notify.py" "Gate4 ${TARGET_SHORT:0:7}: $*" >/dev/null 2>&1 || true
+  python3 "$REPO/scripts/ops/notify/notify.py" --urgent "gate4" "Gate4 ${TARGET_SHORT:0:7}: $*" >/dev/null 2>&1 || true
 }
 
 # (a) Containers that were rebuilt for this deploy must carry the target SHA as image label.

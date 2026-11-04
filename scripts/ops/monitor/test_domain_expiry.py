@@ -71,7 +71,7 @@ def test_run_adds_paths_and_domain_checks(monkeypatch, tmp_path, capsys):
     verdicts = {"ghazihoushmand.ir": (False, "registration expires soon"), "roxira.net": None}
     monkeypatch.setattr(sc.domain_expiry, "check_domain_expiry", lambda d, w: verdicts[d])
     sent = []
-    monkeypatch.setattr(sc.mc, "send_email", lambda s, b, dry_run=False: sent.append(s))
+    monkeypatch.setattr(sc.mc, "queue_alerts", lambda alerts, src, dry_run=False: sent.extend(alerts))
 
     state = tmp_path / "state.json"
     rc = sc.main(["--state", str(state)])

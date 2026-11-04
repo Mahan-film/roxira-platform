@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>{{docTitle}} {{documentNumber}}</title>
+<link rel="stylesheet" href="print-base.css">
+<style>@page { size: A4 portrait; margin: 8mm; }</style>
+</head>
+<body class="{{#if isDraft}}is-draft{{/if}} {{#if hideCost}}hide-cost{{/if}}">
+<!-- docTitle: رسید انبار | حواله انبار | حواله انتقال بین انبارها | سند تعدیل انبار.
+     counterpartyLabel: تأمین‌کننده | مشتری | انبار مقصد | واحد درخواست‌کننده.
+     lines[]{row,itemCode,itemName,unit,quantity,unitCost,amount,description}.
+     hideCost=true prints the clerk copy without the cost columns. -->
+<div class="watermark">پیش‌نویس</div>
+<div class="sheet">
+  <div class="row" style="align-items:center">
+    <div><b>{{company.name}}</b></div>
+    <div><h1>{{docTitle}}</h1></div>
+    <div><dl class="kv"><dt>شماره</dt><dd class="num">{{documentNumber}}</dd><dt>تاریخ</dt><dd class="num">{{dateJalali}}</dd></dl></div>
+  </div>
+  <div class="row" style="margin-top:3mm">
+    <section class="box"><dl class="kv">
+      <dt>انبار</dt><dd>{{warehouse.name}}</dd>
+      {{#if destinationWarehouse}}<dt>انبار مقصد</dt><dd>{{destinationWarehouse.name}}</dd>{{/if}}
+      <dt>{{counterpartyLabel}}</dt><dd>{{counterparty.name}}</dd></dl></section>
+    <section class="box"><dl class="kv">
+      <dt>مرجع</dt><dd class="num">{{referenceNumber}}</dd>
+      <dt>سند حسابداری</dt><dd class="num">{{voucherNumber}}</dd>
+      <dt>حمل‌کننده / پلاک</dt><dd>{{carrier}}</dd></dl></section>
+  </div>
+  <table>
+    <thead><tr><th>ردیف</th><th>کد کالا</th><th>نام کالا</th><th>واحد</th><th>مقدار</th>
+      <th class="cost">بهای واحد</th><th class="cost">مبلغ</th><th>توضیحات</th></tr></thead>
+    <tbody>{{#each lines}}
+      <tr><td class="c">{{row}}</td><td class="n">{{itemCode}}</td><td>{{itemName}}</td><td class="c">{{unit}}</td><td class="n">{{quantity}}</td>
+        <td class="n cost">{{unitCost}}</td><td class="n cost">{{amount}}</td><td>{{description}}</td></tr>
+    {{/each}}</tbody>
+    <tfoot><tr><td colspan="4">جمع</td><td class="n">{{totals.quantity}}</td><td class="cost"></td><td class="n cost">{{totals.amount}}</td><td></td></tr></tfoot>
+  </table>
+  {{#if notes}}<p><b>توضیحات:</b> {{notes}}</p>{{/if}}
+  <div class="sign">
+    <div>انباردار</div>
+    <div>{{receiverLabel}}</div>
+    <div>تأییدکننده</div>
+  </div>
+</div>
+</body>
+</html>

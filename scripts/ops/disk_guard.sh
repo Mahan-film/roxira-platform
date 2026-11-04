@@ -11,7 +11,7 @@
 #     task reached done/failed/cancelled (taskq.db opened read-only). A worktree with uncommitted
 #     changes is skipped. Branches and patches are never deleted.
 #   Removed paths are appended to /root/deploy-state/disk-guard.log.
-# When / is still at or above THRESHOLD_ALERT (default 88%) afterwards, a Persian alert with the use%
+# When / is still at or above THRESHOLD_ALERT (default 90%) afterwards, a Persian alert with the use%
 # and the five largest top-level directories is sent via scripts/ops/notify/notify.py (a silent no-op
 # when NOTIFY_* is not configured).
 #
@@ -45,7 +45,7 @@ LOG_FILE="${LOG_FILE:-$DEPLOY_STATE/disk-guard.log}"
 NOTIFY_BIN="${NOTIFY_BIN:-$HERE/notify/notify.py}"
 ROOT_MOUNT="${ROOT_MOUNT:-/}"
 THRESHOLD_CLEANUP="${THRESHOLD_CLEANUP:-80}"
-THRESHOLD_ALERT="${THRESHOLD_ALERT:-88}"
+THRESHOLD_ALERT="${THRESHOLD_ALERT:-90}"
 KEEP_STORAGE="${KEEP_STORAGE:-3GB}"
 WORKTREE_MAX_AGE_DAYS="${WORKTREE_MAX_AGE_DAYS:-3}"
 STATES_OK="done failed cancelled"
@@ -186,7 +186,8 @@ ${top_dirs}"
     printf '%s\n' "$message"
   else
     log "sending disk alert (${use_after}% >= ${THRESHOLD_ALERT}%)"
-    python3 "$NOTIFY_BIN" "$message" || true
+    # Urgent (Telegram only, 1/h). THRESHOLD_ALERT defaults to 90; the owner's urgent line is 90%.
+    python3 "$NOTIFY_BIN" --urgent "disk-full" "$message" || true
   fi
 else
   log "below ${THRESHOLD_ALERT}% after cleanup; no alert"

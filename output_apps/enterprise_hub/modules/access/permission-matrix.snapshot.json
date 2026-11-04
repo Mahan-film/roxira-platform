@@ -16,6 +16,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/api-tokens/:id (ApiTokensController.revoke)": {
+    "policy": "security:admin",
+    "owner": true,
+    "admin": false,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/banking/recon/rules/:id (ReconController.deleteRule)": {
     "policy": "banking:admin",
     "owner": true,
@@ -390,6 +401,17 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/api-tokens/ (ApiTokensController.list)": {
+    "policy": "security:admin",
+    "owner": true,
+    "admin": false,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/assistant/capture/documents (CaptureController.recent)": {
@@ -1958,6 +1980,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/api-tokens/ (ApiTokensController.create)": {
+    "policy": "security:admin",
+    "owner": true,
+    "admin": false,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/assistant/capture/documents (CaptureController.create)": {
     "policy": "accounting:create",
     "owner": true,
@@ -2758,6 +2791,17 @@
   },
   "POST /enterprise-hub/radar/trigger-scout (RadarController.triggerScout)": {
     "policy": "platformAdmin"
+  },
+  "POST /enterprise-hub/tax-compliance/business-tax/preview (BusinessTaxController.preview)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/corporate-tax/preview (CorporateTaxController.preview)": {
     "policy": "tax:export",

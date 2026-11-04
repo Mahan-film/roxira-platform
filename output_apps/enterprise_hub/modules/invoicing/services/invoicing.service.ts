@@ -51,7 +51,7 @@ import {
   InvoiceSummaryRow,
   InvoicingRepository,
 } from '../repositories/invoicing.repository';
-import { isoDate } from '../../hr/services/jalali-period';
+import { tehranIsoDate } from '../../hr/services/jalali-period';
 import { VatRateResolver } from './vat-rate.resolver';
 
 /** What a caller adds to `create` beyond the invoice itself (POS sales). */
@@ -192,9 +192,10 @@ export class InvoicingService {
   /**
    * General VAT rate in force on the invoice date (see VatRateResolver): the statutory store by
    * date, an organisation's own row in the store first, else the tenant setting. Never a code value.
+   * The date is the Iran calendar day of `onDate` (Asia/Tehran), not the UTC day (#125).
    */
   private async resolveDefaultVatRate(tenantId: string, onDate: Date): Promise<number> {
-    const { rate } = await this.vatRates.generalRate(tenantId, isoDate(onDate));
+    const { rate } = await this.vatRates.generalRate(tenantId, tehranIsoDate(onDate));
     return this.roundRate(rate);
   }
 
