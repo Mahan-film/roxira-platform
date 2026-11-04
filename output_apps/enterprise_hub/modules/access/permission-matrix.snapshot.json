@@ -403,6 +403,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/accounting/reports/trial-balance-by-cost-centre (ReportsController.trialBalanceByCostCentre)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/accounting/trial-balance (AccountingController.getTrialBalance)": {
     "policy": "accounting:read",
     "owner": true,
