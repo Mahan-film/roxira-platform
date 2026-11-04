@@ -204,15 +204,16 @@ def review_attempts() -> list[Attempt]:
     """Cross-family review chain (never Claude): DeepSeek via OpenRouter, then via the srv1 key pool,
     then DeepSeek's own API, then free non-Claude models (public diffs only). Qwen Coder is excluded
     by owner policy (model_registry.is_forbidden_model_id)."""
-    ds = "deepseek/deepseek-v4.1-flash"
+    ds = next(e for e in model_registry.role_entries("reviewer") if str(e["id"]).startswith("deepseek/"))["id"]
+    gpt_oss = next(e["id"] for e in model_registry.role_entries("agent_runner") if e.get("alias") == "groq-strong")
     price = (0.045, 0.50)
     out = [
         openai_compat("openrouter/" + ds, "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", ds, role="reviewer",
                       paid=True, price=price, extra={"reasoning": {"enabled": False}, "provider": {"data_collection": "deny"}}),
         gateway_ssh("roxira-prod", "private", role="reviewer", paid=True, price=price),
-        openai_compat("deepseek/deepseek-chat", "https://api.deepseek.com/v1", "DEEPSEEK_API_KEY", "deepseek-chat",
+        openai_compat("deepseek-api/deepseek-chat", "https://api.deepseek.com/v1", "DEEPSEEK_API_KEY", "deepseek-chat",
                       role="reviewer", paid=True, price=(0.28, 0.42)),
-        openai_compat("groq/gpt-oss-120b", "https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b",
+        openai_compat("groq/" + gpt_oss, "https://api.groq.com/openai/v1", "GROQ_API_KEY", gpt_oss,
                       role="reviewer", paid=False, public_only=True),
         openai_compat("cerebras/gpt-oss-120b", os.environ.get("CEREBRAS_BASE_URL") or "https://api.cerebras.ai/v1",
                       "CEREBRAS_API_KEY", "gpt-oss-120b", role="reviewer", paid=False, public_only=True),
