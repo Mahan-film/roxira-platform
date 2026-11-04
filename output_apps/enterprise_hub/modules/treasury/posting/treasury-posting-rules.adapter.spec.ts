@@ -176,4 +176,10 @@ describe('TreasuryPostingRulesAdapter', () => {
     await expect(adapter.postAdvanceAllocation(T, context, allocation({ writeoff: 5n }), manager)).rejects.toThrow(/تخفیف/);
     expect(accounting.createJournalEntry).not.toHaveBeenCalled();
   });
+
+  it('implements the treasury posting port surface', () => {
+    const { adapter } = setup();
+    expect(typeof adapter.postDocument).toBe('function');
+    expect(typeof adapter.postAdvanceAllocation).toBe('function');
+  });
 });
