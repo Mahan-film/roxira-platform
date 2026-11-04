@@ -1,6 +1,6 @@
 # Design audit of roxira.ir/app — 2026-11
 
-Scope: every page under `/app` in `output_apps/enterprise_hub/frontend` (`src/app/app/**`, nav in
+Scope: the pages under `/app` (the assistant, damages and settings pages only skimmed, see §15) in `output_apps/enterprise_hub/frontend` (`src/app/app/**`, nav in
 `src/components/app/app-shell.tsx`). Goal: match international SMB accounting/ERP UX (Xero, QuickBooks Online,
 Zoho Books, Odoo) and what Iranian accountants expect (Sepidar, Hamkaran, Holoo, Tahesab). Tracking: #230 (priority 1).
 
@@ -28,11 +28,13 @@ Zoho Books, Odoo) and what Iranian accountants expect (Sepidar, Hamkaran, Holoo,
 | 5 | **Invoice list mixes calendars and currencies per row** (foreign invoices: Gregorian `dd/mm/yyyy` + currency such as CNY; others: Jalali + ریال) and has no due-date/overdue column. | [code] `invoicing/page.tsx` L410-436 |
 | 6 | **Placeholder party names** («طرف حساب 2322») or `—` when `buyerInfo.name` is missing; no link from an invoice to a party record. | [data]+[code] `invoicing/page.tsx` L422-425 |
 | 7 | **Absurd demo balances** (bank 51 trillion rials) and raw full-integer rial figures with no ریال/تومان/میلیون switch. | [data]; `formatMoneyRial`, `formatReportMoney` print every digit |
-| 8 | **Status colours fail WCAG AA.** `text-amber-600` (about 3.2:1) and `text-emerald-600` (about 3.8:1) on white, 75 occurrences of `text-(amber\|emerald\|red\|rose)-(500\|600)`; colour is the only signal for «payable». | [code] grep; ratios computed on #fff |
+| 8 | **Status colours likely fail WCAG AA** (class-based estimate; measure rendered colours, open question 6). `text-amber-600` (about 3.2:1) and `text-emerald-600` (about 3.8:1) on white, 75 occurrences of `text-(amber\|emerald\|red\|rose)-(500\|600)`; colour is the only signal for «payable». | [code] grep; ratios computed on #fff |
 | 9 | **Wide tables on a phone.** Invoice list: 9 columns, `whitespace-nowrap`, a 16rem actions column; no card or row-menu pattern outside CRM. | [code] `invoicing/page.tsx` L372-385; verify at 375 px |
 | 10 | **Inconsistent page patterns and naming:** header button rows (6 on accounting, 3 on bank, 1 on cheques); plain-text empty row on invoicing while CRM/HR/inventory have an import prompt; «ورود داده (import)» and «کارکنان (HR)» mix Latin into Persian labels; «خسارت» uses a different route root (`/damages`). | [code] |
 
 ## Standards used
+
+These are working hypotheses from general knowledge; cheque statuses, numbering rules and competitor layouts are confirmed only by the open questions below.
 
 - **Dashboard order (SMB norm):** cash position → receivables/payables with overdue → income/profit this period vs
   previous → tax due → items needing action (bank, cheques) → low stock → tasks. Reference products: Xero (business
@@ -44,7 +46,7 @@ Zoho Books, Odoo) and what Iranian accountants expect (Sepidar, Hamkaran, Holoo,
 - **Iranian expectations:** Jalali dates everywhere (display, filters, sorting), amounts in ریال with separators and a
   تومان switch, Persian digits, «سند حسابداری» with a sequence number, ledger levels «کل / معین / تفصیلی», «تنخواه»
   under treasury, cheque statuses (در جریان وصول، وصول‌شده، برگشتی، خرج‌شده)، VAT season returns, Moadian status.
-- **UX/accessibility:** WCAG 2.1 AA (4.5:1 text, 3:1 UI components, 44 px touch targets on mobile), logical CSS for RTL
+- **UX/accessibility:** WCAG 2.1 AA (4.5:1 text, 3:1 UI components; 24 px minimum target is AA in WCAG 2.2, and we adopt 44 px on mobile as our own stricter rule, not an AA requirement), logical CSS for RTL
   (`ms-/me-/ps-/pe-`, `text-start`), colour never the only signal, empty state = what / why / primary action, one
   primary action per page, destructive actions confirmed.
 
@@ -107,7 +109,7 @@ filtered list behind it.
 
 Row 1 — position (4 KPI tiles):
 1. موجودی نقد و بانک: one number, sub-line «صندوق/تنخواه x · بانک y», 30-day sparkline.
-2. مطالبات: total plus **سررسید گذشته** amount (with count) in the danger colour; links to the ageing report.
+2. مطالبات: total plus **سررسید گذشته** amount (with count) in the danger colour plus the word «سررسید گذشته» and a warning icon; links to the ageing report.
 3. بدهی‌ها: total plus overdue; links to the ageing report.
 4. مالیات بر ارزش افزوده پرداختنی این فصل: amount and **deadline date** (Jalali) with days left.
 
@@ -122,7 +124,7 @@ Row 3 — needs action (lists of 5, each row clickable):
 
 Row 4 — tasks and shortcuts:
 10. کارهای باقی‌مانده: تراکنش بانکی مغایرت‌نخورده، سند پیش‌نویس، مهلت اظهارنامه، فاکتور ارسال‌نشده به مودیان.
-11. دسترسی سریع: «+ فاکتور فروش» (primary), «+ دریافت», «+ پرداخت», «+ سند».
+11. دسترسی سریع: «+ فاکتور فروش» is the page's single filled (primary) button; «+ دریافت», «+ پرداخت», «+ سند» are outline buttons.
 
 Rules: ریال/تومان/میلیون switch remembered per user; Persian digits; negatives in parentheses; period picker (ماه جاری /
 فصل / سال مالی) in the header; empty tenant shows the import prompt plus a 3-step setup checklist (سرفصل‌ها، حساب بانکی،
@@ -174,6 +176,7 @@ Format: wrong → why → proposal.
   bank lines, depreciation run) and a typed-confirmation «بستن سال مالی».
 
 ### 8. `/app/invoicing`
+- Note: the invoicing module has no due-date field today (grep `dueDate` in `modules/invoicing` = 0 hits), so the due-date/overdue/outstanding columns need a backend field first; the issue for this page must include it.
 - Wrong: 9-column table; mixed calendars and currencies; party `—` or placeholder; no due date, no outstanding amount,
   no overdue badge; plain-text empty row; 16rem actions column. [code]
 - Why: Xero and QBO lists show number, party, issue date, due date, amount, status badge and one primary action; Iranian
@@ -209,8 +212,9 @@ Format: wrong → why → proposal.
 - Wrong: label «ورود داده (import)». [code]
 - Proposal: «ورود از اکسل» under Settings, with a mapping preview and a count of rows to create before confirming.
 
-### 15. `/app/assistant`
-- Not audited in depth. It should answer «چقدر بدهکارم و چه کسی سررسید گذشته دارد؟» from the new summary API.
+### 15. `/app/assistant`, `/damages`, `/app/settings/security`, `/app/admin/entitlements`
+- Coverage gap: these were only skimmed (nav and file size), not audited in depth; `/damages` (خسارت) is outside `/app` and has no proposed menu slot yet — decide whether it stays an entitled-only item under «فروش».
+- `/app/assistant`: It should answer «چقدر بدهکارم و چه کسی سررسید گذشته دارد؟» from the new summary API.
 
 ### 16. `/app/settings/*`, `/app/admin/entitlements`
 - Wrong: «ماژول‌های مشتریان» is a platform-operator tool inside the customer menu. [code]
