@@ -81,3 +81,8 @@ def test_every_role_that_can_spend_has_a_daily_cap():
         for step in mr.chain_for(name, mode="test_accounts"):
             if not _is_free(step["id"]) and step["price_per_1m"]:
                 assert step["role"] in capped, f"{name}: paid role {step['role']} has no cap"
+
+
+@pytest.mark.parametrize("task", ["invoice_capture", "case_ocr", "import_mapping", "recon_classify"])
+def test_customer_document_tasks_never_use_free_tiers_in_production(task):
+    assert not any(_is_free(s["id"]) for s in mr.chain_for(task, mode="production"))

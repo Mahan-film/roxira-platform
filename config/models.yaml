@@ -566,3 +566,15 @@ tasks:
   radar:                {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
   law_watch:            {data_class: public, group: agent-strong-free, chain: [free, cheap]}
   marketing:            {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
+
+# Cost-saving policy (docs/strategy/PRODUCT_DECISIONS_2026-11.md section 5), read by
+# smartjudge/routing_policy.py. Order of checks: cache, free, cheap, strong.
+routing:
+  escalate_below_confidence: 0.80      # go to the next, stronger tier only when confidence_score is lower
+  batch_lines: { min: 25, max: 50 }    # bank lines per call
+  # DeepSeek's 50% discount window, UTC. 19:30-03:30 Tehran (UTC+3:30) = 16:00-00:00 UTC.
+  offpeak_utc: { start: "16:00", end: "00:00" }
+  offpeak_tasks: [import_mapping, recon_classify, review_desk, case_summarize]   # batch jobs scheduled at ~20:00 Tehran
+  cache: { ttl_hours: 24, max_entries: 5000 }
+  # Token budgets per UTC day. tenant = per tenant id across tasks; task = per task across tenants.
+  token_budgets: { tenant_daily: 200000, task_daily: { assistant_chat: 400000, import_mapping: 1000000, recon_classify: 600000, invoice_capture: 200000 } }

@@ -23,9 +23,20 @@ tenant-business and personal data. A caller can make the class stricter, never l
 | 1 Inventory | below (this PR) |
 | 2 Provider check | below (this PR) |
 | 3 Chains and caps in `models.yaml` | this PR (`tasks`, `budgets`, `chain_for`, tests) |
-| 4 Route every call site through the router, served-model + cost log | next PRs, see "Call sites that still bypass the gateway" |
-| 5 Events instead of polling | next PR |
-| 6 Weekly cost line in the 12-hour digest | next PR (no new sender; it goes through `notify.py --queue`) |
+| 4 Router with fallback, caps, served-model + cost log | `scripts/dev/llm_route.py` (PR for #288, review desk first). Product direct-OpenRouter sites and the other factory scripts still to move |
+| 5 Events instead of polling | cost log is already a LiteLLM callback (`cost_logger.py`); BullMQ events not done yet |
+| 6 Weekly cost line in the digest | `scripts/ops/kpi/weekly_report.py` queues ONE line with `notify.enqueue_report` (no new sender) |
+| Policy (PRODUCT_DECISIONS section 5) | `smartjudge/routing_policy.py` + `routing:` in `models.yaml`: cache, confidence < 0.80 escalation, 25-50 line micro-batches, off-peak 19:30-03:30 Tehran, token budgets |
+
+## Why the review desk got "Access denied by security policy" (2026-11-04)
+
+OpenRouter answers `403 {"error":"Access denied by security policy."}` to **blocked egress IPs**: from the Mac without
+the VPN even the public `GET /api/v1/models` returns 403, while srv1 returns 200. It is not the account privacy
+setting, not the #204 allowlist and not `opencode.json`. Fix: (1) turn the VPN on, or (2) use
+`python3 scripts/dev/llm_route.py --diff FILE`, which falls back automatically: OpenRouter DeepSeek -> the srv1 key
+pool over ssh (`private` group, DeepSeek, key stays on the server) -> DeepSeek API (`DEEPSEEK_API_KEY`) -> free
+non-Claude models (gpt-oss-120b on Groq/Cerebras, Mistral Medium; public diffs only). Qwen3 Coder is not used: the
+owner banned Qwen Coder everywhere. `dispatch_opencode.sh` now fails fast with this hint instead of printing "Forbidden".
 
 ## Existing routing layer (already in the repo)
 
@@ -116,3 +127,12 @@ Global 2.00. Per role: cheap 0.40, strong 0.40, product 0.40, product_pro 0.40, 
 vision 0.30, invoice_extraction 0.30, cheap_agent 0.20, executor 0.20, agent_runner 0.20, reviewer 0.10, summarize 0.10,
 stt 0.10, mechanical 0.05; free and tts 0. The numbers are a starting point for the owner to change in that one file.
 Enforcement (refuse or downgrade when a cap is spent) arrives with the router PR, reading `requests.jsonl`.
+
+## Cost-saving policy (PRODUCT_DECISIONS_2026-11 section 5)
+
+Order: cache, free, cheap, strong (escalate only when `confidence_score` < 0.80). Prefix caching: keep the fixed
+chart-of-accounts / Moadian rules prompt first in every request. Bank lines go 25-50 per call. Batch tasks
+(`offpeak_tasks`) wait for 19:30-03:30 Tehran (16:00-00:00 UTC), DeepSeek's 50% window. Token budgets per tenant and per
+task live under `routing.token_budgets`. Customer documents and bank statements never reach a may-log free tier: that
+is `chain_for(..., mode="production")`, so **flip `ai_data_policy.json` mode to `production` before the first real
+customer** (tests pin that invoice, case OCR, import and reconciliation tasks keep no `:free` step in production).

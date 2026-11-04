@@ -348,6 +348,18 @@ def _render_umami(u: dict[str, Any]) -> list[str]:
     return lines
 
 
+def digest_line(cost: dict[str, Any], days: int, cap_usd_per_day: float | None) -> str:
+    """ONE Persian line for the 12-hour e-mail digest (queued through notify.enqueue_report, no new sender)."""
+    if cost.get("status") != "ok":
+        return f"هزینهٔ هوش مصنوعی {days} روز اخیر: در دسترس نیست ({cost.get('reason', cost.get('status'))})"
+    agg = cost["agg"]
+    total = float(agg["total_cost"])
+    line = f"هزینهٔ هوش مصنوعی {days} روز اخیر: ${total:.4f} برای {agg['calls']} تماس ({_pct(agg['success'], agg['calls'])} موفق)"
+    if cap_usd_per_day:
+        line += f"، {_pct(total, cap_usd_per_day * days)} از سقف ${cap_usd_per_day * days:.2f}"
+    return line
+
+
 def _render_cost(c: dict[str, Any]) -> list[str]:
     lines = ["", "هزینهٔ مدل‌های زبانی (key pool)"]
     if c.get("status") != "ok":
@@ -421,6 +433,14 @@ def main(argv: list[str] | None = None) -> int:
         print(text)
         return 0
     sent = notify.send(text)  # never raises; False when the bot is not configured
+    try:  # one cost line for the e-mail digest (issue #288); the queue never raises into the caller
+        sys.path.insert(0, str(HERE.parents[2] / "output_apps" / "generated_modules" / "smartjudge"))
+        import model_registry  # noqa: E402
+
+        cap = model_registry.global_daily_cap_usd()
+    except Exception:
+        cap = None
+    notify.enqueue_report("llm-cost", "llm-cost-weekly", digest_line(report["cost"], args.days, cap))
     print("weekly KPI report sent to the owner bot" if sent else "weekly KPI report not sent (bot not configured)")
     return 0
 
