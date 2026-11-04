@@ -29,6 +29,11 @@ async function main() {
     [phone, tenant],
   );
   const userId = r.rows[0].id;
+  // AccessGuard resolves permissions from tenant_memberships, not from users.tenant_role.
+  await c.query(
+    `insert into tenant_memberships (tenant_id, user_id, role_key) values ($1, $2, 'owner')`,
+    [tenant, userId],
+  );
   await c.end();
   const accessToken = jwt.sign(
     { sub: userId, phone, role: 'ADMIN', domain: 'ROXIRA', tenantId: tenant, tenantRole: 'OWNER' },
