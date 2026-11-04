@@ -12,14 +12,14 @@ export const ABSTAIN_MESSAGE_FA =
 /** حداکثر خطای نسبی مجاز برای عددهای گردشده («حدود ۲۵ میلیون»). */
 const ROUNDING_RELATIVE_TOLERANCE = 0.05;
 
-const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
-const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
 
-/** ارقام فارسی/عربی را لاتین می‌کند. */
+/** هر رقم یونیکد (فارسی، عربی، تمام‌عرض، …) را به رقم لاتین تبدیل می‌کند. */
 export function toLatinDigits(value: string): string {
-  return value.replace(/[۰-۹٠-٩]/g, (char) => {
-    const persian = PERSIAN_DIGITS.indexOf(char);
-    return String(persian >= 0 ? persian : ARABIC_DIGITS.indexOf(char));
+  return value.replace(/\p{Nd}/gu, (char) => {
+    const cp = char.codePointAt(0) as number;
+    let start = cp;
+    while (/\p{Nd}/u.test(String.fromCodePoint(start - 1))) start -= 1;
+    return String((cp - start) % 10);
   });
 }
 
@@ -30,15 +30,20 @@ const ONES: Record<string, number> = {
   ده: 10, یازده: 11, دوازده: 12, سیزده: 13, چهارده: 14, پانزده: 15,
   شانزده: 16, هفده: 17, هجده: 18, نوزده: 19,
   بیست: 20, سی: 30, چهل: 40, پنجاه: 50, شصت: 60, هفتاد: 70, هشتاد: 80, نود: 90,
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50,
+  sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100,
   صد: 100, یکصد: 100, دویست: 200, سیصد: 300, چهارصد: 400, پانصد: 500,
   ششصد: 600, هفتصد: 700, هشتصد: 800, نهصد: 900,
 };
 /** «هزار» و بالاتر: ضرب می‌کنند. */
 const SCALES: Record<string, number> = {
   هزار: 1e3, میلیون: 1e6, میلیارد: 1e9, بیلیون: 1e9, تریلیون: 1e12,
+  thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12,
 };
 
-const WORD_PATTERN = /[آ-یٰ‌]+/g;
+const WORD_PATTERN = /[آ-یٰ‌A-Za-z]+/g;
 
 interface Token {
   text: string;
@@ -57,7 +62,7 @@ interface Token {
  */
 function wordNumbers(text: string): Token[] {
   const words = [...text.matchAll(WORD_PATTERN)].map((m) => ({
-    word: m[0].replace(/‌/g, ''),
+    word: m[0].replace(/‌/g, '').toLowerCase(),
     index: m.index ?? 0,
   }));
   const tokens: Token[] = [];
@@ -65,26 +70,32 @@ function wordNumbers(text: string): Token[] {
   while (i < words.length) {
     const start = i;
     let total = 0;
-    let group = 0;
+    let thousands = 0;
+    let small = 0;
     let seen = 0;
     let scaleSeen = 1;
     let lastSmall = '';
     while (i < words.length) {
       const { word } = words[i];
-      if (word === 'و' && seen > 0 && i + 1 < words.length && (words[i + 1].word in ONES || words[i + 1].word in SCALES)) {
+      if ((word === 'و' || word === 'and') && seen > 0 && i + 1 < words.length && (words[i + 1].word in ONES || words[i + 1].word in SCALES)) {
         i += 1;
         continue;
       }
-      if (word in ONES) {
-        group += ONES[word];
+      if (word === 'hundred') {
+        small = (small || 1) * 100;
+        lastSmall = word;
+      } else if (word in ONES) {
+        small += ONES[word];
         lastSmall = word;
       } else if (word in SCALES) {
         const scale = SCALES[word];
-        group = (group || 1) * scale;
-        if (scale >= 1e6) {
-          total += group;
-          group = 0;
+        if (scale === 1e3) {
+          thousands += (small || 1) * scale;
+        } else {
+          total += (thousands + small || 1) * scale;
+          thousands = 0;
         }
+        small = 0;
         scaleSeen = Math.max(scaleSeen, scale);
       } else {
         break;
@@ -96,8 +107,8 @@ function wordNumbers(text: string): Token[] {
       i = start + 1;
       continue;
     }
-    const value = total + group;
-    const loneArticle = seen === 1 && lastSmall === 'یک' && scaleSeen === 1;
+    const value = total + thousands + small;
+    const loneArticle = seen === 1 && (lastSmall === 'یک' || lastSmall === 'one') && scaleSeen === 1;
     if (!loneArticle) {
       tokens.push({
         text: words.slice(start, i).map((w) => w.word).join(' '),
@@ -113,16 +124,19 @@ function wordNumbers(text: string): Token[] {
 
 // ------------------------------------------------------------- digit numbers
 
-const MAGNITUDE_AFTER = /^\s*(هزار\s+میلیارد|هزار|میلیون|میلیارد|بیلیون|تریلیون)/;
+const MAGNITUDE_AFTER =
+  /^\s*(هزار\s+میلیارد|هزار|میلیون|میلیارد|بیلیون|تریلیون|thousand|million|billion|trillion)/i;
 const MAGNITUDE_VALUE: Record<string, number> = {
   هزار: 1e3, میلیون: 1e6, میلیارد: 1e9, بیلیون: 1e9, تریلیون: 1e12,
-  'هزار میلیارد': 1e12,
+  'هزار میلیارد': 1e12, thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12,
 };
 
 const DATE_RE = /(?<![\d/.-])(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?![\d/])/g;
 const MONTH_RE = /(?<![\d/.-])(\d{4})\/(\d{1,2})(?![\d/])/g;
 const NUMBER_RE =
-  /(?<![\p{L}\d_./-])\d+(?:[,،٬]\d{3})*(?:[.٫/]\d+)?(?![\p{L}\d_])/gu;
+  /(?<![\p{L}\d_./-])\d+(?:[,،٬]\d{3})*(?:[.٫/]\d+)?(?!\d)/gu;
+const SUFFIX_AFTER = /^\s?([kKmMbB])(?![A-Za-z])/;
+const SUFFIX_VALUE: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9 };
 const LIST_MARKER_RE = /^[ \t]*(?:[-*•]\s*)?\d{1,2}[.)]\s/;
 
 function digitNumbers(text: string): Token[] {
@@ -164,9 +178,14 @@ function digitNumbers(text: string): Token[] {
     const decimals = clean.includes('.') ? clean.split('.')[1].length : 0;
     const after = rest.slice(index + raw.length);
     const mag = MAGNITUDE_AFTER.exec(after);
-    const magnitude = mag ? MAGNITUDE_VALUE[mag[1].replace(/\s+/g, ' ')] : 1;
+    const suffix = mag ? null : SUFFIX_AFTER.exec(after);
+    const magnitude = mag
+      ? MAGNITUDE_VALUE[mag[1].replace(/\s+/g, ' ').toLowerCase()]
+      : suffix
+        ? SUFFIX_VALUE[suffix[1].toLowerCase()]
+        : 1;
     tokens.push({
-      text: mag ? `${raw} ${mag[1]}` : raw,
+      text: mag ? `${raw} ${mag[1]}` : suffix ? `${raw}${suffix[1]}` : raw,
       value: value * magnitude,
       decimals,
       magnitude,
@@ -181,7 +200,7 @@ export function extractNumbers(text: string): Token[] {
   const latin = toLatinDigits(text);
   // «۱۵ میلیون» یک عدد رقمی است؛ واژهٔ «میلیون» نباید دوباره حروفی شمرده شود.
   const wordsOnly = latin.replace(
-    /\d[\d,،٬.٫/]*\s*(?:هزار\s+میلیارد|هزار|میلیون|میلیارد|بیلیون|تریلیون)/g,
+    /\d[\d,،٬.٫/]*\s*(?:هزار\s+میلیارد|هزار|میلیون|میلیارد|بیلیون|تریلیون|thousand|million|billion|trillion)/gi,
     ' ¤ ',
   );
   return [...digitNumbers(latin), ...wordNumbers(wordsOnly)];

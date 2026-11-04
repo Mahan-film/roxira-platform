@@ -95,6 +95,16 @@ describe('validateNumbers: honest answers pass', () => {
 });
 
 describe('validateNumbers: adversarial answers abstain', () => {
+  it('LLM disguises an invented number with K/M/B suffixes, English words or other digit scripts', () => {
+    const tool = [metric('cash_balance', 150_000_000)];
+    expect(check('Cash is 99M rial', tool).abstained).toBe(true);
+    expect(check('Cash is 99k', tool).abstained).toBe(true);
+    expect(check('Cash is ninety nine million', tool).abstained).toBe(true);
+    expect(check('Cash is ９９０００', tool).abstained).toBe(true);
+    expect(check('Cash is 150M rial', tool).abstained).toBe(false);
+    expect(check('Cash is one hundred and fifty million', tool).abstained).toBe(false);
+  });
+
   it('LLM invents a number with no tool call at all', () => {
     const out = check('موجودی صندوق ۹۹٬۰۰۰٬۰۰۰ ریال است.', []);
     expect(out.abstained).toBe(true);
