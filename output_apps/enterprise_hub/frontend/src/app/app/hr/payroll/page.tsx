@@ -493,7 +493,11 @@ function InsuranceListCard({ runId }: { runId: number }) {
       setWarnings(
         list.uploadReady
           ? list.warnings
-          : [...list.warnings, "قالب DBF هنوز با نمونه رسمی تطبیق نشده است؛ پیش از ارسال، آن را در برنامه لیست بیمه باز و کنترل کنید."],
+          : [
+              ...list.warnings,
+              "قالب DBF هنوز آماده‌ی بارگذاری نیست؛ پیش از ارسال، آن را در برنامه لیست بیمه باز و کنترل کنید. موارد تأییدنشده:",
+              ...list.unverified,
+            ],
       );
     } catch (err) {
       setError(loadErrorMessage(err));

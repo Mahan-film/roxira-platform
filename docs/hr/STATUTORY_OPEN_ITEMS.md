@@ -47,22 +47,22 @@ Neither the report nor a web search on 2026-10-31 gave a field-level spec. Both 
 
 ### DSKKAR00.DBF and DSKWOR00.DBF
 
-Confirmed by the report: file names, FoxPro DBF format, `DSK_TKOSO`, `DSK_BIC`, workshop code 10 digits,
-contract row 3 digits, insurance number 10 digits with leading zeros, and that worker rows must total
-to the workshop row (enforced on the written bytes).
+Field names, order, types and widths of all 23 + 27 columns are now taken from a published SSO table:
+`docs/legal_sources/iran/tamin-list-v6-fields.md` (2026-11-04, source S1 and checks). `DSKKAR_LAYOUT` and
+`DSKWOR_LAYOUT` match it, enforced by `tamin-dbf-bytes.spec.ts`. Worker rows must total to the workshop row
+(enforced on the written bytes).
 
-Needs one real file from the SSO List Disk program v6:
+Still unclear, and listed in the export's `unverified` field and on the payroll page (so `uploadReady` stays false):
 
-- Text code page. Built as Windows-1256; the older doc said Iran System. This one decides whether
-  Persian names survive the upload.
-- Type and width of every column except the three above. They are in `DSKKAR_LAYOUT` and `DSKWOR_LAYOUT`.
+- Text code page. Built as Windows-1256; no source states it (the older doc said Iran System).
 - DBF version byte and language driver byte.
-- Numeric or text storage of `DSK_YY`, `DSK_MM`, `DSW_YY`, `DSW_MM`; two-digit year is assumed.
-- `DSK_LISTNO`, `DSK_KIND`, `DSK_PRATE`, `DSK_BIMH`, `DSW_PRATE`: meaning and allowed values.
-- `DSW_SEX`, `DSW_NAT`: stored as Persian words here; may be codes.
-- `DSW_JOB`: the SSO job code. Roxira has no such field on the employee, so it is empty.
-- `DSW_IDPLC`, `DSW_IDATE`: ID issue place and date; not collected, so empty.
-- Whether `DSK_TKOSO` is the employer share alone or a total, and `DSK_RATE` as 23.
+- `DSW_ID1` width: the table says 8, the report says 10 digits. Kept 10.
+- Date format of the `C(8)` columns, two-digit year, decimals of `N(n)` columns.
+- Allowed values of `DSK_KIND`, `DSK_PRATE`, `DSK_BIMH`, `DSW_PRATE`; format of `DSK_LISTNO`; `DSW_SEX`/`DSW_NAT` words or codes.
+- Whether the table is the one of List Disk v6 (it is undated, floppy era).
+- `DSW_JOB`, `DSW_IDPLC`, `DSW_IDATE` are empty: we do not store them.
+
+One real file from the current List Disk program closes most of this.
 
 ### WP and WH
 

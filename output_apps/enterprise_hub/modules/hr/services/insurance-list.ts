@@ -17,7 +17,7 @@
  *     share, DSK_RATE the employer's total rate in percent (23).
  */
 
-import { DbfField, DbfRow, readDbf, writeDbf } from './dbf-file';
+import { DbfField, DbfRow, encodedLength, readDbf, writeDbf } from './dbf-file';
 
 export interface InsuranceListWorkshop {
   workshopCode: string;
@@ -55,24 +55,23 @@ export interface InsuranceListWorker {
 }
 
 /**
- * Column types and widths of the DBF files. The report names the files, the FoxPro DBF format and
- * only these lengths: workshop code 10, contract row 3, insurance number 10. Every other width
- * is unconfirmed: see docs/hr/STATUTORY_OPEN_ITEMS.md, and `uploadReady` stays false until a real
- * sample from the SSO List Disk program replaces this table.
+ * Column names, order, types and widths are the published SSO table (docs/legal_sources/iran/tamin-list-v6-fields.md,
+ * source S1). One deliberate difference: DSW_ID1 is C(8) in that table but the owner's report says the insurance
+ * number has 10 digits, so it stays 10 wide rather than cut a real number; `INSURANCE_LIST_UNVERIFIED` lists it.
  */
 const textField = (name: string, length: number): DbfField => ({ name, type: 'C', length });
 const numberField = (name: string, length: number): DbfField => ({ name, type: 'N', length });
 
 export const DSKKAR_LAYOUT: ReadonlyArray<DbfField> = [
   textField('DSK_ID', 10),
-  textField('DSK_NAME', 100),
-  textField('DSK_FARM', 100),
-  textField('DSK_ADRS', 100),
+  textField('DSK_NAME', 30),
+  textField('DSK_FARM', 30),
+  textField('DSK_ADRS', 40),
   numberField('DSK_KIND', 1),
   numberField('DSK_YY', 2),
   numberField('DSK_MM', 2),
   textField('DSK_LISTNO', 12),
-  textField('DSK_DISC', 100),
+  textField('DSK_DISC', 30),
   numberField('DSK_NUM', 5),
   numberField('DSK_TDD', 6),
   numberField('DSK_TROOZ', 12),
@@ -95,16 +94,16 @@ export const DSKWOR_LAYOUT: ReadonlyArray<DbfField> = [
   numberField('DSW_MM', 2),
   textField('DSW_LISTNO', 12),
   textField('DSW_ID1', 10),
-  textField('DSW_FNAME', 100),
-  textField('DSW_LNAME', 100),
-  textField('DSW_DNAME', 100),
+  textField('DSW_FNAME', 50),
+  textField('DSW_LNAME', 50),
+  textField('DSW_DNAME', 50),
   textField('DSW_IDNO', 15),
-  textField('DSW_IDPLC', 100),
+  textField('DSW_IDPLC', 30),
   textField('DSW_IDATE', 8),
   textField('DSW_BDATE', 8),
   textField('DSW_SEX', 3),
   textField('DSW_NAT', 10),
-  textField('DSW_OCP', 100),
+  textField('DSW_OCP', 50),
   textField('DSW_SDATE', 8),
   textField('DSW_EDATE', 8),
   numberField('DSW_DD', 2),
@@ -159,10 +158,22 @@ export interface InsuranceListFiles {
   workersDbfFileName: string;
   /** Base64 of DSKWOR00.DBF. */
   workersDbf: string;
-  /** False until the DBF layout is confirmed against a real SSO sample. */
+  /** True only when `unverified` is empty. */
   uploadReady: boolean;
+  /** Spec items no source confirms (docs/legal_sources/iran/tamin-list-v6-fields.md). */
+  unverified: string[];
   warnings: string[];
 }
+
+export const INSURANCE_LIST_UNVERIFIED: ReadonlyArray<string> = [
+  'کدپیج متن فارسی در DBF (Windows-1256 یا ایران سیستم) در هیچ منبعی نیامده است',
+  'بایت نسخه DBF و بایت زبان (language driver) تأیید نشده است',
+  'DSW_ID1: جدول منتشرشده ۸ نویسه می‌گوید ولی گزارش ۱۰ رقم؛ عرض ۱۰ نگه داشته شده',
+  'قالب ستون‌های تاریخ (DSW_BDATE، DSW_SDATE، DSW_EDATE) و سال دو رقمی تأیید نشده است',
+  'مقادیر مجاز DSK_KIND، DSK_PRATE، DSK_BIMH، DSW_PRATE و قالب DSK_LISTNO تأیید نشده است',
+  'مقدار ستون‌های DSW_SEX و DSW_NAT (کلمه یا کد) و اعشار ستون‌های عددی تأیید نشده است',
+  'نسخه ۶ برنامه لیست دیسک با جدول منتشرشده یکی بودنش تأیید نشده است',
+];
 
 export const DSKKAR_FIELDS = [
   'DSK_ID',
@@ -256,6 +267,23 @@ export function workerAmounts(worker: InsuranceListWorker): {
     mash,
     totl: Math.max(mash, Math.round(worker.grossPay)),
   };
+}
+
+/** Text longer than its column is cut in the DBF; say which ones. */
+function truncationWarnings(
+  layout: ReadonlyArray<DbfField>,
+  rows: Row[],
+  file: string,
+): string[] {
+  const out: string[] = [];
+  for (const field of layout) {
+    if (field.type !== 'C') continue;
+    const cut = rows.filter((row) => encodedLength(String(row[field.name] ?? '')) > field.length).length;
+    if (cut > 0) {
+      out.push(`${file}.${field.name}: ${cut} مقدار از ${field.length} نویسه بلندتر است و در DBF بریده می‌شود.`);
+    }
+  }
+  return out;
 }
 
 export function buildInsuranceList(
@@ -357,6 +385,11 @@ export function buildInsuranceList(
     MON_PYM: workshop.contractRow ?? '000',
   };
 
+  warnings.push(
+    ...truncationWarnings(DSKKAR_LAYOUT, [header], 'DSKKAR00'),
+    ...truncationWarnings(DSKWOR_LAYOUT, workerRows, 'DSKWOR00'),
+  );
+
   const now = new Date();
   const workshopDbf = writeDbf(DSKKAR_LAYOUT, [header], now);
   const workersDbf = writeDbf(DSKWOR_LAYOUT, workerRows, now);
@@ -377,7 +410,8 @@ export function buildInsuranceList(
     workshopDbf: workshopDbf.toString('base64'),
     workersDbfFileName: 'DSKWOR00.DBF',
     workersDbf: workersDbf.toString('base64'),
-    uploadReady: false,
+    uploadReady: INSURANCE_LIST_UNVERIFIED.length === 0,
+    unverified: [...INSURANCE_LIST_UNVERIFIED],
     warnings,
   };
 }
