@@ -67,8 +67,13 @@ export function toPayrollRates(
   year: number,
   parameters: Map<StatutoryKey, StatutoryParameterEntity>,
 ): PayrollYearRates {
+  // A key with no row, or an unclear one (NULL), is missing: it must never be computed as zero.
+  const usable = (key: StatutoryKey): boolean => {
+    const row = parameters.get(key);
+    return !!row && row.unclear !== true && row.value !== null && row.value !== undefined;
+  };
   const missing = (Object.keys(STATUTORY_KEYS) as StatutoryKey[]).filter(
-    (key) => STATUTORY_KEYS[key].required && !parameters.has(key),
+    (key) => STATUTORY_KEYS[key].required && !usable(key),
   );
   if (missing.length > 0) {
     throw new BadRequestException(
@@ -85,9 +90,11 @@ export function toPayrollRates(
   const minDailyWage = money('min_daily_wage');
   const minMonthlyWage = minDailyWage * days;
   const optionalMoney = (key: StatutoryKey): number | null =>
-    parameters.has(key) ? money(key) : null;
+    usable(key) ? money(key) : null;
+  // Contract terms share the table but are not payroll parameters.
+  const contractKeys = new Set<string>(CONTRACT_TERM_KEYS);
   const unverified = [...parameters.values()]
-    .filter((row) => !row.verified)
+    .filter((row) => !row.verified && !contractKeys.has(row.paramKey))
     .map((row) => row.paramKey);
 
   return {
@@ -112,7 +119,7 @@ export function toPayrollRates(
     maxInsurableMonthlyWage: minMonthlyWage * money('insurable_ceiling_multiplier'),
     annualTaxBrackets: raw('wage_tax_annual_brackets') as AnnualTaxBracket[],
     marriageAllowance: money('marriage_allowance'),
-    flatTaxRate: parameters.has('wage_flat_tax_rate')
+    flatTaxRate: usable('wage_flat_tax_rate')
       ? String(raw('wage_flat_tax_rate'))
       : null,
     eidiExemptCeiling: optionalMoney('eidi_exempt_ceiling'),

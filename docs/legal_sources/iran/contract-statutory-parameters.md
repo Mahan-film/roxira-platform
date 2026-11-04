@@ -3,7 +3,7 @@
 Checked 2026-11-04 for laptop track T3 (#227). Status key: **secondary** = stated consistently by several
 accounting or legal websites, not yet checked against the text on rc.majlis.ir or tamin.ir (seeded with
 `verified = false`). **unclear** = no figure could be established; the store holds NULL with `unclear = true`.
-No figure here was typed from memory.
+No figure here was typed from memory. Seeded for fiscal year 1405 only; a date before 1405/01/01 resolves to "no figure" (unclear).
 
 | Store key | Seeded | Status | What the sources say |
 |---|---|---|---|

@@ -10,6 +10,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * `verified = false` and source kind REPORT. Sources: docs/legal_sources/iran/contract-statutory-parameters.md.
  * Self-contained on purpose: the deploy builds migrations from this folder alone.
  */
+// Only 1405 is documented in the source file; earlier dates resolve to "no figure" (unclear), not a guess.
 const SRC_DOC = 'docs/legal_sources/iran/contract-statutory-parameters.md';
 
 type Row = [key: string, value: string | null, source: string];
@@ -62,7 +63,6 @@ const ROWS: Row[] = [
 ];
 
 const YEARS: Array<[fiscalYear: number, effectiveFrom: string]> = [
-  [1404, '2025-03-21'],
   [1405, '2026-03-21'],
 ];
 

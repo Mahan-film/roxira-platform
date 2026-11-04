@@ -65,3 +65,16 @@ describe('buildContractTerms', () => {
     expect(after.retention.rate).toBe('0.05');
   });
 });
+
+describe('payroll rates ignore contract terms', () => {
+  it('keeps contract keys out of unverifiedKeys and refuses an unclear required key', () => {
+    const { seededRows } = jest.requireActual('./__fixtures__/seeded-rates');
+    const base: StatutoryParameterEntity[] = seededRows(1405);
+    const withContract = [...base, row('contract_retention_rate', '0.1'), row('contract_tax_withholding_rate', null)];
+    const { toPayrollRates } = jest.requireActual('./statutory.service');
+    const rates = toPayrollRates(1405, resolveParameters(withContract, '2026-12-31'));
+    expect(rates.unverifiedKeys.some((k: string) => k.startsWith('contract_'))).toBe(false);
+    const broken = [...base.filter((r) => r.paramKey !== 'housing_allowance'), row('housing_allowance', null)];
+    expect(() => toPayrollRates(1405, resolveParameters(broken, '2026-12-31'))).toThrow(/حق مسکن/);
+  });
+});
