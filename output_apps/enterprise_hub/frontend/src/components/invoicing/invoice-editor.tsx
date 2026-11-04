@@ -25,7 +25,7 @@ import { createInvoice, updateInvoice } from "@/lib/api/invoicing-client";
 import { listLeads } from "@/lib/api/crm-client";
 import { listStockItems, listWarehouses } from "@/lib/api/inventory-client";
 import { ApiClientError } from "@/lib/api/http-client";
-import { addScannedItem, incrementQuantity } from "@/lib/barcode-scan";
+import { addScannedItem, incrementQuantity, isUntypedInvoiceLine } from "@/lib/barcode-scan";
 import { formatLatinMoney, formatMoneyRial } from "@/lib/fa-format";
 import { Currency, isIranianCurrency } from "@/types/currency";
 import type { Lead } from "@/types/crm";
@@ -313,14 +313,15 @@ export function InvoiceEditor({
   function addScanned(item: StockItem) {
     // The row picker lists only the first page of items; make sure the scanned one is an option.
     setStockItems((prev) => (prev.some((it) => it.id === item.id) ? prev : [...prev, item]));
+    // Taken outside the updater: React may run updaters twice in development.
+    const uid = `line-${nextLine.current++}`;
     setLines((prev) =>
       addScannedItem(prev, item, {
         codeOf: (line) => line.sku,
-        isBlank: (line) =>
-          !line.itemId && !line.sku && !line.description.trim() && !line.unitPrice.trim(),
+        isBlank: isUntypedInvoiceLine,
         addOne: (line) => ({ ...line, quantity: incrementQuantity(line.quantity) }),
         fromItem: () => ({
-          ...createLine(`line-${nextLine.current++}`, fallbackPercent),
+          ...createLine(uid, fallbackPercent),
           itemId: String(item.id),
           sku: item.sku,
           description: item.name,
