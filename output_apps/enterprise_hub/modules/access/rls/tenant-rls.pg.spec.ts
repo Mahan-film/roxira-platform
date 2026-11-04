@@ -18,6 +18,7 @@ import { AccountingRepository } from '../../accounting/repositories/accounting.r
 import { LedgerReportRepository } from '../../accounting/repositories/ledger-report.repository';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { ChartTemplateService } from '../../accounting/services/chart-template.service';
+import { AssistantMemoryRepository } from '../../assistant/memory/assistant-memory.repository';
 import { ChequesRepository } from '../../cheques/repositories/cheques.repository';
 import { HrRepository } from '../../hr/repositories/hr.repository';
 import { ChequeDirection, ChequeStatus } from '../../cheques/enums/cheque.enum';
@@ -41,6 +42,7 @@ const T2 = '22222222-2222-4222-8222-222222222222';
 const RLS_TABLES = [
   'fin_cheques', 'fin_cheque_events',
   'fin_chart_of_accounts', 'fin_journal_entries', 'fin_journal_entry_lines', 'fin_period_locks', 'fin_balance_reconciliation_log',
+  'assistant_memory_facts',
   'hr_employees', 'hr_employment_contracts', 'hr_contract_allowances', 'hr_payroll_runs', 'hr_payslips',
 ];
 
@@ -161,6 +163,57 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       await expect(
         cheques.runInTransaction(T2, (m) => cheques.findByIdForUpdate(T2, row.id, m)),
       ).resolves.toBeNull();
+    });
+  });
+
+  describe('assistant episodic memory', () => {
+    const U1 = '99999999-9999-4999-8999-999999999999';
+    let memory: AssistantMemoryRepository;
+    beforeAll(() => { memory = new AssistantMemoryRepository(scope); });
+    const fact = (subject: string, text: string, validFrom = new Date('2026-01-01T00:00:00Z')) =>
+      ({ subject, fact: text, confirmedBy: U1, sourceConversationId: null, validFrom });
+    const recall = (t: string, subject: string, validAt = new Date(), knownAt?: Date) =>
+      memory.recall(t, { subject, validAt, knownAt, limit: 10 }).then((r) => r.map((f) => f.fact));
+
+    it('a tenant recalls only its own confirmed facts, even for the same subject', async () => {
+      const a = await memory.remember(T1, fact('vat', 'tenant one: 10 percent'));
+      await memory.remember(T2, fact('vat', 'tenant two: 9 percent'));
+      expect(await recall(T1, 'vat')).toEqual(['tenant one: 10 percent']);
+      expect(await recall(T2, 'vat')).toEqual(['tenant two: 9 percent']);
+      expect(await memory.forget(T2, a.id)).toBe(false);
+      expect(await recall(T1, 'vat')).toHaveLength(1);
+    });
+
+    it('an unfiltered query is cut to the bound tenant, and an unbound one sees nothing', async () => {
+      const seen = await scope.run(T2, (m) => m.query(`SELECT tenant_id FROM assistant_memory_facts`));
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.every((r: { tenant_id: string }) => r.tenant_id === T2)).toBe(true);
+      const bare = await app.query(`SELECT count(*)::int AS n FROM assistant_memory_facts`);
+      expect(bare[0].n).toBe(0);
+    });
+
+    it('cannot write a row for another tenant (WITH CHECK)', async () => {
+      await expect(
+        scope.run(T1, (m) => m.query(
+          `INSERT INTO assistant_memory_facts (id, tenant_id, subject, fact, confirmed_by) VALUES (gen_random_uuid(), $1, 's', 'f', $2)`,
+          [T2, U1],
+        )),
+      ).rejects.toThrow();
+    });
+
+    it('is bitemporal: valid time and knowledge time answer different questions', async () => {
+      await memory.remember(T1, fact('credit-limit', '100', new Date('2026-01-01T00:00:00Z')));
+      const [{ t: beforeCorrection }] = await owner.query(`SELECT clock_timestamp() AS t`);
+      await new Promise((r) => setTimeout(r, 30));
+      await memory.remember(T1, fact('credit-limit', '200', new Date('2026-03-01T00:00:00Z')));
+      expect(await recall(T1, 'credit-limit')).toEqual(['200']);
+      expect(await recall(T1, 'credit-limit', new Date('2026-02-01T00:00:00Z'))).toEqual(['100']);
+      // As we knew it before the correction, 100 was open-ended and also covered April.
+      expect(await recall(T1, 'credit-limit', new Date('2026-04-01T00:00:00Z'), beforeCorrection)).toEqual(['100']);
+      // A correction that starts earlier replaces, it does not stack.
+      await memory.remember(T1, fact('credit-limit', '300', new Date('2026-02-01T00:00:00Z')));
+      expect(await recall(T1, 'credit-limit', new Date('2026-04-01T00:00:00Z'))).toEqual(['300']);
+      expect(await recall(T1, 'credit-limit', new Date('2026-01-15T00:00:00Z'))).toEqual(['100']);
     });
   });
 
