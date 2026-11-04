@@ -47,10 +47,13 @@ export class RentalTaxService {
     const brackets = used.get('income_tax_art131_brackets')!.value as Bracket[];
 
     const gross = parseMinor(dto.rentReceived) + big(dto.inKindIncome);
+    // Rent the accountant excluded (owner residence, note 11 area ...) is gross rent and leaves the base before the cost share.
+    const excluded = min(gross, big(dto.exemptRentPortion));
+    const base = gross - excluded;
     // Owner: the rent minus the share for the owner's costs and depreciation (Art. 53). Not the owner: rent received minus rent paid.
-    const afterCosts = dto.lessorIsOwner ? gross - applyRate(gross, deductionRate) : gross - big(dto.rentPaid);
+    const afterCosts = dto.lessorIsOwner ? base - applyRate(base, deductionRate) : base - big(dto.rentPaid);
     const taxableRent = afterCosts > 0n ? afterCosts : 0n;
-    const afterManual = taxableRent - min(taxableRent, big(dto.exemptRentPortion));
+    const afterManual = taxableRent;
 
     // Art. 57 and note 2: the part of the rent that, together with the other income, stays within the exemption ceiling is exempt.
     const other = big(dto.otherTaxableIncome);
@@ -71,7 +74,7 @@ export class RentalTaxService {
       worksheet: [
         { step: 'اجاره‌بهای دریافتی (نقدی و غیرنقدی)', amount: minorToDecimal(gross) },
         { step: dto.lessorIsOwner ? `پس از کسر ${deductionRate} هزینه و استهلاک مالک` : 'پس از کسر اجارهٔ پرداختی', amount: minorToDecimal(taxableRent) },
-        { step: 'پس از کسر اجارهٔ معاف اعلام‌شده', amount: minorToDecimal(afterManual) },
+        { step: 'اجارهٔ معاف اعلام‌شده (قبل از کسر هزینه)', amount: minorToDecimal(excluded) },
         { step: 'معافیت ماده ۵۷', amount: minorToDecimal(exemption) },
         { step: 'درآمد مشمول مالیات اجاره', amount: minorToDecimal(taxable) },
         { step: 'مالیات (پله‌های ماده ۱۳۱)', amount: minorToDecimal(tax) },

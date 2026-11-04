@@ -14,13 +14,14 @@ Status: design plus a **preview-only** computation. Nothing is posted to the led
 | --- | --- | --- |
 | Taxable rent = total rent, cash and in kind, minus 25% for the owner's costs, depreciation and obligations | Act, Art. 53 | sourced. The 25% is read from the store key `rental_expense_deduction_rate`, not from code. |
 | A lessor who is not the owner: taxable income is rent received minus rent paid | Act, Art. 53 | sourced |
-| In-kind amounts: improvements made by the tenant for the owner (+50% of value in the handover year) and owner costs paid by the tenant | Act, Art. 53 notes 5 and 6 | sourced; the accountant supplies the valued amount in `inKindIncome` (the 50% uplift is applied by the accountant) |
-| Residences of the owner, parents, spouse, children and dependants, rent-free state use, units counted separately, note 11 area exemptions | Act, Art. 53 notes 1 to 4 and 11 | sourced, not computed: the accountant removes them with `exemptRentPortion` |
+| In-kind amounts: improvements made by the tenant for the owner (+50% of value in the handover year) and owner costs paid by the tenant | Act, Art. 53 notes 5 and 6 | sourced; the accountant supplies the valued amount in `inKindIncome` (the 50% uplift of note 5 is applied by the accountant, the code adds the amount at 100%) |
+| Residences of the owner, parents, spouse, children and dependants, rent-free state use, note 11 area exemptions (note 3: each apartment unit is a separate property; note 4: furniture and machinery rent is added to the property's income) | Act, Art. 53 notes 1 to 4 and 11 | sourced, not computed: the accountant removes the GROSS rent of exempt units with `exemptRentPortion` (it leaves the base before the 25% cut) |
 | A natural person with no other income is exempt up to the Art. 84 salary exemption, the rest is taxed; special declaration needed; pensions, prizes and bank interest are not income | Act, Art. 57 | sourced |
 | If the other taxable income is below the ceiling, the part of the rent that together with it reaches the ceiling is exempt | Act, Art. 57 note 2 | sourced |
 | No exemption for minor children under the father's guardianship | Act, Art. 57 note 1 | sourced |
 | Ceiling for 1405: 2,800 million rial | 1405 circular, row 1-5-2 | sourced (1405) |
 | Rental income is taxed at the Art. 131 rates | Act, Art. 131 ("rates of tax on the income of individuals") | The Act text is the 1400/10/20 version; the 1405 schedule is `unclear` |
+| Note 2 of Art. 57 says the other income is "monthly" in the text; the preview treats it as annual | read as annual | `unclear` (almost certainly annual) |
 | Whether rent is added to other income before the brackets apply | none read | `unclear`. The preview taxes the taxable rent on its own. |
 | 1403 discounts: 70% for a 2-year contract, 100% for 3 years or more, 50% for rent at least 15% below the regional rental value | secondary summary only, not in the 1400 text | `unclear`, not modelled |
 | Withholding by public bodies from the rent they pay | Act, Art. 53 note 9 | not modelled |
@@ -35,10 +36,10 @@ Inputs: `fiscalYear`, `rentReceived`, `inKindIncome`, `lessorIsOwner`, `rentPaid
 
 ```
 gross       = rentReceived + inKindIncome
-taxableRent = owner ? gross - round(gross x rate) : gross - rentPaid          (never below 0)
-afterManual = taxableRent - min(taxableRent, exemptRentPortion)
-exemption   = minorUnderGuardianship ? 0 : min(afterManual, max(0, ceiling - otherTaxableIncome))
-taxable     = afterManual - exemption
+base        = gross - min(gross, exemptRentPortion)
+taxableRent = owner ? base - round(base x rate) : base - rentPaid          (never below 0)
+exemption   = minorUnderGuardianship ? 0 : min(taxableRent, max(0, ceiling - otherTaxableIncome))
+taxable     = taxableRent - exemption
 tax         = bracketTax(taxable)  (each band at its own rate, half-up)
 ```
 

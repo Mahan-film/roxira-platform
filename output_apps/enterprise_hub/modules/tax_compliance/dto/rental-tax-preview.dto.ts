@@ -19,7 +19,7 @@ export class RentalTaxPreviewDto {
   @Matches(NON_NEGATIVE, amount('اجاره‌بهای دریافتی'))
   rentReceived: string;
 
-  @ApiPropertyOptional({ description: 'Art. 53 notes 5 and 6: value of improvements and owner costs paid by the tenant, already valued', example: '0' })
+  @ApiPropertyOptional({ description: 'Art. 53 notes 5 and 6: value of improvements and owner costs paid by the tenant, already valued; the 50% uplift of note 5 is applied by the caller', example: '0' })
   @IsOptional()
   @IsString()
   @Matches(NON_NEGATIVE, amount('درآمد غیرنقدی'))
@@ -35,7 +35,7 @@ export class RentalTaxPreviewDto {
   @Matches(NON_NEGATIVE, amount('اجاره‌بهای پرداختی'))
   rentPaid?: string;
 
-  @ApiPropertyOptional({ description: 'Rent the accountant has already excluded (owner residence, note 11 area exemption ...), in rials', example: '0' })
+  @ApiPropertyOptional({ description: 'GROSS rent the accountant excludes (owner residence, note 11 area exemption ...), removed before the cost share', example: '0' })
   @IsOptional()
   @IsString()
   @Matches(NON_NEGATIVE, amount('اجارهٔ معاف'))

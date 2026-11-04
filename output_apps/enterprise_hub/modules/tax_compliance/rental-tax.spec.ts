@@ -60,9 +60,10 @@ describe('rental income tax preview (DTX-03)', () => {
     expect(minor.taxableAfterExemption).toBe('450000000.00');
   });
 
-  it('rent the accountant already excluded is removed before the exemption', async () => {
+  it('gross rent the accountant excluded leaves the base before the 25% cut', async () => {
     const p = await build().preview('t', dto({ exemptRentPortion: '400000000' }));
-    expect(p).toMatchObject({ taxableAfterExemption: '0.00', exemptionAmount: '50000000.00' });
+    // 200M left, 25% off = 150M, all inside the 100M ceiling? no: 100M exempt, 50M taxed
+    expect(p).toMatchObject({ taxableRent: '150000000.00', exemptionAmount: '100000000.00', taxableAfterExemption: '50000000.00', tax: '7500000.00' });
   });
 
   it('refuses to compute without the statutory parameters, naming the missing one', async () => {
