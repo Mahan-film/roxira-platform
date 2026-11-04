@@ -356,6 +356,8 @@ export interface WageTaxFiles {
   whFileName: string;
   whFile: string;
   uploadReady: boolean;
+  /** Spec items no source confirms; empty only when uploadReady. */
+  unverified: string[];
   totalGross: number;
   totalTax: number;
   warnings: string[];

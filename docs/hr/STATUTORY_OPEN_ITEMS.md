@@ -92,7 +92,9 @@ One real file from the current List Disk program closes most of this.
 Confirmed by the report: only these two files go up, as TXT or ZIP, WK is gone, WP holds identity of
 new or changed staff, WH holds work and pay detail, and a list is main, additional or corrective.
 
-Everything else is missing: file naming, separator, encoding, field order, codes for list type and
+Researched again 2026-11-04 (`docs/legal_sources/iran/wage-tax-files-fields.md`): the content items of WH and WP are named by
+vendor tutorials but no source gives position, width, order or code tables, and the official booklet host did not answer.
+The export now returns `unverified[]` and the page shows it. Everything else is missing: file naming, separator, encoding, field order, codes for list type and
 payment type. So Roxira produces `WP-YYYYMM-working.csv` and `WH-YYYYMM-working.csv` with its own columns
 for checking; they are not upload files. Also not modelled: changed-identity detection for WP (only new
 hires appear), the art. 92 less-developed-area 50% relief, and main versus secondary employer.
