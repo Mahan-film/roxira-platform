@@ -7,7 +7,11 @@ import { McpModule } from '../../mcp/mcp.module';
 import { redisClientProvider } from '../auth/providers/redis.provider';
 import { InventoryModule } from '../inventory/inventory.module';
 import { InvoicingModule } from '../invoicing/invoicing.module';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AssistantController } from './controllers/assistant.controller';
+import { AssistantMemoryController } from './controllers/assistant-memory.controller';
+import { AssistantMemoryRepository } from './memory/assistant-memory.repository';
+import { AssistantMemoryService } from './memory/assistant-memory.service';
 import { AssistantLlmService } from './services/assistant-llm.service';
 import { AssistantMetricsService } from './metrics/assistant-metrics.service';
 import { LedgerMetricSources } from './metrics/ledger-metric-sources';
@@ -33,9 +37,12 @@ import { AssistantService } from './services/assistant.service';
     HrModule,
     TaxComplianceModule,
   ],
-  controllers: [AssistantController],
+  controllers: [AssistantController, AssistantMemoryController],
   providers: [
     AssistantService,
+    AssistantMemoryService,
+    AssistantMemoryRepository,
+    TenantScope,
     AssistantToolsService,
     AssistantLlmService,
     AssistantMetricsService,
