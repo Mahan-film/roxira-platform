@@ -72,7 +72,7 @@ describe('business owner tax preview (DTX-02)', () => {
     expect(p.taxpayers.every((t) => Number(t.tax) > 0)).toBe(true);
   });
 
-  it('spouses count as one partner and the couple's exemption goes to the husband', async () => {
+  it('spouses count as one partner and the couple exemption goes to the husband', async () => {
     const p = await build().preview('tenant-a', dto({
       mode: 'PARTNERSHIP',
       units: [{ revenue: '1000000000', deductibleExpenses: '0' }],
