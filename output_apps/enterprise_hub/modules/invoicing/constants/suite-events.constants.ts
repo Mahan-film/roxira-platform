@@ -109,5 +109,17 @@ export const VAT_RECEIVABLE_ACCOUNT: InvoiceAccountSpec = {
   match: ['اعتبار مالیاتی', 'ارزش افزوده خرید'],
 };
 
+/** حساب واسط پوز (طلب از شرکت پرداخت تا واریز بانکی) — دارایی، پیش‌فرض کد ۱۰۱۵. */
+export const POS_CLEARING_ACCOUNT: InvoiceAccountSpec = {
+  code: '1015',
+  name: 'حساب واسط پوز',
+  accountType: AccountType.ASSET,
+  match: ['واسط پوز', 'پوز'],
+};
+
+/** How a sale was paid; each method lands in its own ledger account. */
+export const PAYMENT_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER'] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
 /** حداکثر طول متن خطای ثبت ذخیره‌شده روی صورتحساب. */
 export const MAX_POSTING_ERROR_LENGTH = 2000;

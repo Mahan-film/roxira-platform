@@ -81,6 +81,9 @@ export interface AccountingImportAccountInput {
   accountType: AccountType;
   /** ISO code or IRT / MULTI from the currency normaliser (up to 8 chars). */
   currency?: string;
+  level?: AccountLevel;
+  /** Must already exist (earlier in the same file or before the import). */
+  parentCode?: string;
 }
 
 /** ورودی سطر افتتاحیه از مسیر ورود داده. */
@@ -398,12 +401,20 @@ export class AccountingService {
           `حسابی با کد ${input.code} قبلاً در دفتر کل ثبت شده است.`,
         );
       }
+      if (input.parentCode) {
+        const parent = await this.accountingRepository.findAccountByCode(tenantId, input.parentCode);
+        if (!parent) {
+          throw new BadRequestException(`حساب بالادست ${input.parentCode} یافت نشد.`);
+        }
+      }
       const created = await this.accountingRepository.createAccount(tenantId, {
         code: input.code,
         name: input.name,
         accountType: input.accountType,
         currency: input.currency ?? Currency.IRR,
         balance: '0',
+        level: input.level ?? null,
+        parentCode: input.parentCode ?? null,
       });
       createdIds.push(created.id);
     }
@@ -489,7 +500,7 @@ export class AccountingService {
     ids: number[],
   ): Promise<{ removed: number; refused: number[] }> {
     const unique = Array.from(new Set(ids));
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entries = await this.accountingRepository.findEntriesByIds(
         tenantId,
         unique,
@@ -741,7 +752,7 @@ export class AccountingService {
     dto: UpdateJournalEntryDto,
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId);
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
       const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
       if (entry.status === JournalEntryStatus.TEMPORARY) {
@@ -789,7 +800,7 @@ export class AccountingService {
     id: number,
     target: JournalEntryStatus,
   ): Promise<JournalEntryResponseDto> {
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
       if (entry.status === target) {
         throw new ConflictException('سند از قبل در همین وضعیت است.');
@@ -827,7 +838,7 @@ export class AccountingService {
 
   /** Deletes a DRAFT or TEMPORARY voucher. A final voucher is only ever reversed. */
   async deleteVoucher(tenantId: string, id: number): Promise<void> {
-    await this.accountingRepository.transaction(async (manager) => {
+    await this.accountingRepository.transaction(tenantId, async (manager) => {
       await this.lockEditableVoucher(tenantId, id, manager);
       await this.accountingRepository.deleteEntry(tenantId, id, manager);
     });
@@ -845,7 +856,7 @@ export class AccountingService {
     id: number,
     options: { date?: string; reason?: string } = {},
   ): Promise<JournalEntryResponseDto> {
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.accountingRepository.findEntryById(tenantId, id, manager);
       if (
         entry &&

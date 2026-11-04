@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test src/lib/upgrade-inquiry.test.ts src/lib/ledger-status.test.ts src/lib/crm-party.test.ts src/lib/account-tree.test.ts"
+    "test": "node --test src/lib/upgrade-inquiry.test.ts src/lib/ledger-status.test.ts src/lib/crm-party.test.ts src/lib/account-tree.test.ts src/lib/fa-format.test.ts src/lib/csv.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

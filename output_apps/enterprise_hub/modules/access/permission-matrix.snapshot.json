@@ -38,6 +38,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/inventory/openings/:id (OpeningBalanceController.remove)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/mcp/ (McpController.handleDelete)": {
     "policy": "assistant:create",
     "owner": true,
@@ -971,6 +982,28 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/items/:sku/batches (InventoryController.getStockItemBatches)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/openings/:id (OpeningBalanceController.review)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/openings/template (OpeningBalanceController.template)": {
     "policy": "inventory:read",
     "owner": true,
     "admin": true,
@@ -2302,6 +2335,39 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/inventory/documents/adjustments (StockDocumentsController.createAdjustment)": {
+    "policy": "inventory:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/documents/deliveries (StockDocumentsController.createDelivery)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/documents/receipts (StockDocumentsController.createReceipt)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/inventory/documents/transfers (StockDocumentsController.createTransfer)": {
     "policy": "inventory:post",
     "owner": true,
@@ -2346,6 +2412,39 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/inventory/openings/ (OpeningBalanceController.create)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/openings/:id/post (OpeningBalanceController.post)": {
+    "policy": "inventory:approve",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/openings/:id/review (OpeningBalanceController.markReviewed)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/inventory/stores/ (StoresController.create)": {
     "policy": "inventory:create",
     "owner": true,
@@ -2369,6 +2468,17 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/invoicing/ (InvoicingController.create)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/invoicing/pos-sales/ (PosSalesController.create)": {
     "policy": "invoicing:create",
     "owner": true,
     "admin": true,
@@ -2608,6 +2718,17 @@
   },
   "PUT /enterprise-hub/hr/statutory-parameters/ (StatutoryController.set)": {
     "policy": "hr:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/inventory/openings/:id/lines (OpeningBalanceController.replaceLines)": {
+    "policy": "inventory:create",
     "owner": true,
     "admin": true,
     "accountant": false,

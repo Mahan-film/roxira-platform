@@ -1,4 +1,9 @@
 import {
+  OpeningLine,
+  OpeningReview,
+  CreateAdjustmentDto,
+  CreateDeliveryDto,
+  CreateReceiptDto,
   CreateStoreDto,
   CreateTransferDto,
   StockDocument,
@@ -19,7 +24,7 @@ import {
   Warehouse,
   WarehouseStockResponse,
 } from "@/types/inventory";
-import { apiRequest } from "@/lib/api/http-client";
+import { apiRequest, apiRequestText } from "@/lib/api/http-client";
 import {
   API_PROXY_BASE_PATH,
   INVENTORY_RESOURCE_PATH,
@@ -91,6 +96,7 @@ export async function listStockItems(
           params.lowStockOnly === undefined
             ? undefined
             : String(params.lowStockOnly),
+        noStockOnly: params.noStockOnly ? "true" : undefined,
       },
       signal,
     },
@@ -194,4 +200,58 @@ export async function listStockDocuments(
     searchParams: params,
     signal,
   });
+}
+
+export async function createReceipt(payload: CreateReceiptDto): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/receipts`, { method: "POST", body: payload });
+}
+
+export async function createDelivery(payload: CreateDeliveryDto): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/deliveries`, { method: "POST", body: payload });
+}
+
+export async function createAdjustment(payload: CreateAdjustmentDto): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/adjustments`, { method: "POST", body: payload });
+}
+
+export async function getStockDocument(id: number, signal?: AbortSignal): Promise<StockDocument> {
+  return apiRequest<StockDocument>(`${INVENTORY_ENDPOINT}/documents/${id}`, { method: "GET", signal });
+}
+
+const OPENINGS = `${INVENTORY_ENDPOINT}/openings`;
+
+export async function createOpeningDraft(payload: {
+  toWarehouseId: number;
+  docDate: string;
+  note?: string;
+}): Promise<OpeningReview> {
+  return apiRequest<OpeningReview>(OPENINGS, { method: "POST", body: payload });
+}
+
+export async function getOpeningReview(id: number, signal?: AbortSignal): Promise<OpeningReview> {
+  return apiRequest<OpeningReview>(`${OPENINGS}/${id}`, { method: "GET", signal });
+}
+
+export async function replaceOpeningLines(id: number, lines: OpeningLine[]): Promise<OpeningReview> {
+  return apiRequest<OpeningReview>(`${OPENINGS}/${id}/lines`, { method: "PUT", body: { lines } });
+}
+
+export async function markOpeningReviewed(id: number): Promise<OpeningReview> {
+  return apiRequest<OpeningReview>(`${OPENINGS}/${id}/review`, { method: "POST", body: {} });
+}
+
+export async function postOpening(
+  id: number,
+  confirm: { lineCount: number; totalValue: number },
+): Promise<OpeningReview> {
+  return apiRequest<OpeningReview>(`${OPENINGS}/${id}/post`, { method: "POST", body: confirm });
+}
+
+export async function deleteOpeningDraft(id: number): Promise<void> {
+  await apiRequest<void>(`${OPENINGS}/${id}`, { method: "DELETE" });
+}
+
+/** CSV of items with no stock, to fill in quantity and unit cost. */
+export async function downloadOpeningTemplate(): Promise<string> {
+  return apiRequestText(`${OPENINGS}/template`);
 }

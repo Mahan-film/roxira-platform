@@ -212,14 +212,19 @@ def sh(args: list[str], cwd: Path | None = None, timeout: int = 120, check: bool
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=check)
 
 
-def retry_sh(args: list[str], cwd: Path | None = None, tries: int = 4) -> subprocess.CompletedProcess:
-    """gh/git over a flaky link (the Mac drops HTTP2): retry with a pause."""
-    r = sh(args, cwd)
+def retry_sh(args: list[str], cwd: Path | None = None, tries: int = 4, timeout: int = 120) -> subprocess.CompletedProcess:
+    """gh/git over a flaky link (the Mac drops HTTP2): retry with a pause. A timeout counts as a failed try."""
+    def once() -> subprocess.CompletedProcess:
+        try:
+            return sh(args, cwd, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return subprocess.CompletedProcess(args, 124, "", f"timeout after {timeout}s")
+    r = once()
     for _ in range(tries - 1):
         if r.returncode == 0:
             break
         time.sleep(4)
-        r = sh(args, cwd)
+        r = once()
     return r
 
 
@@ -375,8 +380,13 @@ class Fleet:
             return self.save(n, status="failed", note=f"gate failed: {bad}")
         with contextlib.suppress(Exception):
             sh(["git", "commit", "-q", "-m", f"{job['title']} (closes #{n})\n\nCo-Authored-By: fleet ({author})"], wt)
-        if retry_sh(["git", "-c", "http.version=HTTP/1.1", "push", "-q", "-u", "origin", f"issue-{n}", "--force-with-lease"], wt).returncode:
-            return self.save(n, status="queued", resume_at=time.time() + 120, note="push failed, retrying")
+        # The pre-push hook runs local CI (several minutes), so the push gets a long timeout and few tries.
+        push = retry_sh(["git", "-c", "http.version=HTTP/1.1", "push", "-q", "-u", "origin", f"issue-{n}", "--force-with-lease"], wt,
+                        tries=2, timeout=900)
+        if push.returncode:
+            with contextlib.suppress(OSError), open(log, "a", encoding="utf-8") as fh:
+                fh.write(f"\n--- push failed (exit {push.returncode}) ---\n{(push.stdout or '')[-3000:]}\n{(push.stderr or '')[-3000:]}\n")
+            return self.save(n, status="queued", resume_at=time.time() + 120, note="push failed, retrying (see log)")
         if not job.get("pr"):
             r = retry_sh(["gh", "pr", "create", "--repo", REPO, "--base", "main", "--head", f"issue-{n}", "--title", job["title"],
                           "--body", f"Closes #{n}\n\nBuilt by fleet lane `{job['lane']}` ({author}). Review and merge follow in fleet.\n\n"

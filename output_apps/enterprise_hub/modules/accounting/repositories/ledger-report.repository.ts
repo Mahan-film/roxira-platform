@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, EntityManager } from 'typeorm';
+import { EntityManager } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 
 /** Entry kind as reports see it: imported `OB-` entries are openings. */
 const KIND = `CASE WHEN e.entry_type = 'NORMAL' AND e.entry_number LIKE 'OB-%' THEN 'OPENING' ELSE e.entry_type END`;
@@ -36,6 +36,15 @@ export interface LedgerLineRow {
   credit: string;
 }
 
+export interface AgeingLineRow {
+  accountCode: string;
+  accountName: string;
+  partyCode: string | null;
+  day: string;
+  debit: string;
+  credit: string;
+}
+
 export interface LedgerFilter {
   accountIds: number[];
   partyCode?: string;
@@ -47,7 +56,7 @@ export interface LedgerFilter {
 /** Read-only report queries over POSTED lines. Sums stay PostgreSQL numeric (exact strings). */
 @Injectable()
 export class LedgerReportRepository {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(private readonly scope: TenantScope) {}
 
   /**
    * Per-account buckets for a period inside a year starting at `yearStart`:
@@ -69,7 +78,7 @@ export class LedgerReportRepository {
     const prior = `${KIND} = 'NORMAL' AND ${DAY} >= $2 AND ${DAY} < $3`;
     const period = `${KIND} = 'NORMAL' AND ${DAY} >= $3 AND ${DAY} <= $4`;
     const closing = `e.entry_type = 'CLOSING_TEMP' AND ${DAY} >= $2 AND ${DAY} <= $4`;
-    const rows: AccountBucketRow[] = await (manager ?? this.dataSource).query(
+    const rows: AccountBucketRow[] = await this.scope.within(tenantId, manager, (m) => m.query(
       `SELECT a.id AS "accountId", a.code AS "code"${party ? `, l.party_code AS "partyCode"` : ''},
               ${sum('debit', opening)} AS "openingDebit", ${sum('credit', opening)} AS "openingCredit",
               ${sum('debit', prior)} AS "priorDebit", ${sum('credit', prior)} AS "priorCredit",
@@ -82,7 +91,7 @@ export class LedgerReportRepository {
         GROUP BY a.id, a.code${party}
         ORDER BY a.code${party}`,
       [tenantId, range.yearStart, range.from, range.to],
-    );
+    ));
     return rows;
   }
 
@@ -92,7 +101,7 @@ export class LedgerReportRepository {
     to: string,
     manager: EntityManager,
   ): Promise<Array<{ accountId: number; code: string; balance: string }>> {
-    return manager.query(
+    return this.scope.within(tenantId, manager, (m) => m.query(
       `SELECT a.id AS "accountId", a.code AS "code", SUM(l.debit - l.credit) AS "balance"
          FROM fin_journal_entry_lines l
          JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
@@ -101,16 +110,16 @@ export class LedgerReportRepository {
         GROUP BY a.id, a.code
         ORDER BY a.code`,
       [tenantId, to],
-    );
+    ));
   }
 
   /** Earliest day with a posted line, to anchor reports of a company without fiscal years. */
   async firstEntryDay(tenantId: string): Promise<string | null> {
-    const rows: Array<{ day: string | null }> = await this.dataSource.query(
+    const rows: Array<{ day: string | null }> = await this.scope.run(tenantId, (m) => m.query(
       `SELECT to_char(MIN(e.date), 'YYYY-MM-DD') AS "day"
          FROM fin_journal_entries e WHERE e.tenant_id = $1 AND e.status = 'POSTED'`,
       [tenantId],
-    );
+    ));
     return rows[0]?.day ?? null;
   }
 
@@ -120,7 +129,7 @@ export class LedgerReportRepository {
     prefixes: string[],
     manager: EntityManager,
   ): Promise<Array<{ id: number; date: string }>> {
-    return manager.query(
+    return this.scope.within(tenantId, manager, (m) => m.query(
       `SELECT e.id AS "id", to_char(e.date, 'YYYY-MM-DD') AS "date"
          FROM fin_journal_entries e
         WHERE e.tenant_id = $1 AND e.entry_number = ANY($2)
@@ -129,7 +138,7 @@ export class LedgerReportRepository {
              WHERE r.tenant_id = e.tenant_id AND r.reverses_entry_id = e.id)
         ORDER BY e.id DESC`,
       [tenantId, prefixes],
-    );
+    ));
   }
 
   /**
@@ -141,7 +150,7 @@ export class LedgerReportRepository {
     filter: LedgerFilter,
   ): Promise<{ opening: string; debit: string; credit: string; count: string }> {
     const party = filter.partyCode ? `AND l.party_code = $5` : '';
-    const rows = await this.dataSource.query(
+    const rows = await this.scope.run(tenantId, (m) => m.query(
       `SELECT COALESCE(SUM(l.debit - l.credit) FILTER (WHERE ${DAY} < $3 OR ${KIND} = 'OPENING'), 0) AS "opening",
               COALESCE(SUM(l.debit) FILTER (WHERE ${DAY} >= $3 AND ${KIND} <> 'OPENING'), 0) AS "debit",
               COALESCE(SUM(l.credit) FILTER (WHERE ${DAY} >= $3 AND ${KIND} <> 'OPENING'), 0) AS "credit",
@@ -151,13 +160,35 @@ export class LedgerReportRepository {
         WHERE l.tenant_id = $1 AND l.account_id = ANY($2) AND e.status = 'POSTED' AND ${NOT_PAIR}
           AND ${DAY} <= $4 ${party}`,
       [tenantId, filter.accountIds, filter.from, filter.to, ...(filter.partyCode ? [filter.partyCode] : [])],
-    );
+    ));
     return rows[0];
+  }
+
+  /**
+   * Every posted line of the accounts up to `to` (openings included), oldest first, for ageing.
+   * Same-day lines are ordered by entry and line id so settlement order is deterministic.
+   */
+  async ageingLines(
+    tenantId: string,
+    filter: { accountIds: number[]; to: string; partyCode?: string },
+  ): Promise<AgeingLineRow[]> {
+    const party = filter.partyCode ? `AND l.party_code = $4` : '';
+    return this.scope.run(tenantId, (m) => m.query(
+      `SELECT a.code AS "accountCode", a.name AS "accountName", l.party_code AS "partyCode",
+              to_char(${DAY}, 'YYYY-MM-DD') AS "day", l.debit AS "debit", l.credit AS "credit"
+         FROM fin_journal_entry_lines l
+         JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+         JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
+        WHERE l.tenant_id = $1 AND l.account_id = ANY($2) AND e.status = 'POSTED' AND ${NOT_PAIR}
+          AND ${DAY} <= $3 ${party}
+        ORDER BY ${DAY} ASC, e.id ASC, l.id ASC`,
+      [tenantId, filter.accountIds, filter.to, ...(filter.partyCode ? [filter.partyCode] : [])],
+    ));
   }
 
   async ledgerLines(tenantId: string, filter: LedgerFilter): Promise<LedgerLineRow[]> {
     const party = filter.partyCode ? `AND l.party_code = $6` : '';
-    return this.dataSource.query(
+    return this.scope.run(tenantId, (m) => m.query(
       `SELECT l.id AS "id", l.journal_entry_id AS "journalEntryId", e.entry_number AS "entryNumber",
               e.date AS "date", a.code AS "accountCode", a.name AS "accountName",
               l.party_code AS "partyCode", COALESCE(l.description, e.description) AS "description",
@@ -170,6 +201,6 @@ export class LedgerReportRepository {
         ORDER BY e.date ASC, l.id ASC
         LIMIT $5`,
       [tenantId, filter.accountIds, filter.from, filter.to, filter.limit, ...(filter.partyCode ? [filter.partyCode] : [])],
-    );
+    ));
   }
 }

@@ -45,6 +45,10 @@ export class TenantEntity {
   defaultVatRate: number;
 
   /** When true, members must sign in with a second factor (TOTP or passkey) to use the suite. */
+  /** ISO 3166-1 alpha-2 country of the organisation; selects the invoice rules. */
+  @Column({ type: 'varchar', length: 2, name: 'country_code', default: 'IR' })
+  countryCode: string;
+
   @Column({ type: 'boolean', default: false, name: 'require_2fa' })
   require2fa: boolean;
 

@@ -509,7 +509,7 @@ export function LoginModal({
   return (
     <div
       dir="rtl"
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4${isGhazi ? " ghazi-theme" : ""}`}
+      className="ghazi-theme fixed inset-0 z-[100] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -518,11 +518,11 @@ export function LoginModal({
         type="button"
         aria-label="بستن"
         onClick={handleClose}
-        className="absolute inset-0 cursor-default bg-[#05080f]/80 backdrop-blur-sm"
+        className="absolute inset-0 cursor-default bg-[var(--gh-bg)]/80 backdrop-blur-sm"
       />
 
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#0a0f1a] text-slate-100 shadow-2xl shadow-black/50">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[var(--gh-border)] bg-[var(--gh-modal)] text-slate-100 shadow-2xl shadow-black/50">
+        <div className="flex items-center justify-between border-b border-[var(--gh-border)] px-5 py-4">
           <div className="flex items-center gap-2.5">
             <span className={`flex size-9 items-center justify-center rounded-xl ${primaryIcon}`}>
               <Lock className="size-4" />
@@ -556,7 +556,7 @@ export function LoginModal({
                   onClick={() => setTab(id)}
                   className={cn(
                     "rounded-lg py-2 text-sm font-semibold transition-colors",
-                    tab === id ? "bg-[#fbbf24] text-[#05080f]" : "text-slate-400 hover:text-white",
+                    tab === id ? "bg-[var(--gh-gold)] text-[var(--gh-on-gold)]" : "text-slate-400 hover:text-white",
                   )}
                 >
                   {id === "phone" ? (isEnterprise ? "پیامک" : "موبایل") : id === "password" ? "رمز عبور" : "ایمیل"}

@@ -124,3 +124,132 @@ export class StockDocumentResponseDto {
   @ApiProperty({ description: 'جمع ارزش خطوط' }) totalValue: number;
   @ApiPropertyOptional({ type: [StockDocumentLineResponseDto] }) lines?: StockDocumentLineResponseDto[];
 }
+
+export class ReceiptLineDto {
+  @ApiProperty({ description: 'کد کالا (SKU)' })
+  @IsString()
+  @MaxLength(64)
+  sku: string;
+
+  @ApiProperty({ description: 'مقدار دریافتی' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  quantity: number;
+
+  @ApiProperty({ description: 'بهای واحد (ریال) — حتماً از سند خرید؛ حدس زده نمی‌شود' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  unitCost: number;
+
+  @ApiPropertyOptional({ description: 'شماره دسته' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  batchNumber?: string;
+}
+
+export class CreateReceiptDto {
+  @ApiProperty({ description: 'انبار مقصد' })
+  @IsInt()
+  @Min(1)
+  toWarehouseId: number;
+
+  @ApiPropertyOptional({ description: 'تاریخ سند (YYYY-MM-DD)' })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  docDate?: string;
+
+  @ApiPropertyOptional({ description: 'مرجع، مثلاً شمارهٔ فاکتور تأمین‌کننده' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  reference?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  note?: string;
+
+  @ApiProperty({ type: [ReceiptLineDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_DOCUMENT_LINES)
+  @ValidateNested({ each: true })
+  @Type(() => ReceiptLineDto)
+  lines: ReceiptLineDto[];
+}
+
+export class CreateDeliveryDto {
+  @ApiProperty({ description: 'انبار مبدأ' })
+  @IsInt()
+  @Min(1)
+  fromWarehouseId: number;
+
+  @ApiPropertyOptional({ description: 'تاریخ سند (YYYY-MM-DD)' })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  docDate?: string;
+
+  @ApiPropertyOptional({ description: 'مرجع، مثلاً شمارهٔ فاکتور فروش' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  reference?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  note?: string;
+
+  @ApiProperty({ type: [TransferLineDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_DOCUMENT_LINES)
+  @ValidateNested({ each: true })
+  @Type(() => TransferLineDto)
+  lines: TransferLineDto[];
+}
+
+export class AdjustmentLineDto {
+  @ApiProperty({ description: 'کد کالا (SKU)' })
+  @IsString()
+  @MaxLength(64)
+  sku: string;
+
+  @ApiProperty({ description: 'تغییر موجودی: مثبت = اضافه، منفی = کسری' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  quantity: number;
+
+  @ApiPropertyOptional({ description: 'بهای واحد؛ برای مقدار مثبت الزامی است' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  unitCost?: number;
+}
+
+export class CreateAdjustmentDto {
+  @ApiProperty({ description: 'انبار' })
+  @IsInt()
+  @Min(1)
+  warehouseId: number;
+
+  @ApiProperty({ description: 'علت تعدیل (انبارگردانی، ضایعات، …)' })
+  @IsString()
+  @MaxLength(255)
+  reason: string;
+
+  @ApiPropertyOptional({ description: 'تاریخ سند (YYYY-MM-DD)' })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  docDate?: string;
+
+  @ApiProperty({ type: [AdjustmentLineDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_DOCUMENT_LINES)
+  @ValidateNested({ each: true })
+  @Type(() => AdjustmentLineDto)
+  lines: AdjustmentLineDto[];
+}

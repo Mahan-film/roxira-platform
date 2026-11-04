@@ -12,6 +12,11 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { EnableRlsCheques1789430000000 } from '../../../migrations/1789430000000-EnableRlsCheques';
+import { EnableRlsLedger1789440000000 } from '../../../migrations/1789440000000-EnableRlsLedger';
+import { AccountingRepository } from '../../accounting/repositories/accounting.repository';
+import { LedgerReportRepository } from '../../accounting/repositories/ledger-report.repository';
+import { AccountingService } from '../../accounting/services/accounting.service';
+import { ChartTemplateService } from '../../accounting/services/chart-template.service';
 import { ChequesRepository } from '../../cheques/repositories/cheques.repository';
 import { ChequeDirection, ChequeStatus } from '../../cheques/enums/cheque.enum';
 import { TenantScope } from '../services/tenant-scope';
@@ -28,7 +33,10 @@ const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
 
 /** Tables whose FORCE RLS is part of the rollout so far (tenant column is always tenant_id). */
-const RLS_TABLES = ['fin_cheques', 'fin_cheque_events'];
+const RLS_TABLES = [
+  'fin_cheques', 'fin_cheque_events',
+  'fin_chart_of_accounts', 'fin_journal_entries', 'fin_journal_entry_lines', 'fin_period_locks', 'fin_balance_reconciliation_log',
+];
 
 const cheque = (n: string) => ({
   direction: ChequeDirection.RECEIVED,
@@ -150,6 +158,46 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
     });
   });
 
+  describe('batch repositories (ledger)', () => {
+    const T3 = '33333333-3333-4333-8333-333333333333';
+    const entry = (n: string) => ({
+      entryNumber: n, date: '2026-04-01', description: 'rls',
+      lines: [{ accountCode: '1012', debit: '500.00' }, { accountCode: '3010', credit: '500.00' }],
+    });
+    let accounting: AccountingService;
+    let ledger: LedgerReportRepository;
+
+    beforeAll(async () => {
+      const repo = new AccountingRepository(scope);
+      ledger = new LedgerReportRepository(scope);
+      accounting = new AccountingService(repo, { convert: (v: number) => v, round: (v: number) => v } as never);
+      for (const t of [T1, T2]) await new ChartTemplateService(repo).apply(t, 'iran-trading');
+    }, 60_000);
+
+    it('each tenant has its own chart and entries, and cannot read the other', async () => {
+      const a = await accounting.createJournalEntry(T1, entry('RLS-A') as never);
+      await accounting.createJournalEntry(T2, entry('RLS-B') as never);
+      expect((await accounting.findAllJournalEntries(T1, { page: 1, limit: 50 } as never)).data.map((e) => e.entryNumber)).toEqual(['RLS-A']);
+      await expect(accounting.findOneJournalEntry(T2, a.id)).rejects.toThrow();
+      expect(await ledger.firstEntryDay(T3)).toBeNull();
+      expect(await ledger.firstEntryDay(T1)).toBe('2026-04-01');
+    });
+
+    it('a ledger post inside ANOTHER module transaction that never set the tenant still works and stays scoped', async () => {
+      await app.transaction(async (foreign) => {
+        await accounting.createJournalEntry(T1, entry('RLS-FOREIGN') as never, foreign);
+        const [{ n }] = await foreign.query(`SELECT count(*)::int AS n FROM fin_journal_entries`);
+        expect(n).toBe(2);
+      });
+    });
+
+    it('an unscoped ledger statement sees nothing and cannot write', async () => {
+      expect(await app.query(`SELECT count(*)::int AS n FROM fin_journal_entry_lines`)).toEqual([{ n: 0 }]);
+      await expect(app.query(`DELETE FROM fin_chart_of_accounts`)).resolves.toBeDefined();
+      expect(await owner.query(`SELECT count(*)::int > 0 AS ok FROM fin_chart_of_accounts`)).toEqual([{ ok: true }]);
+    });
+  });
+
   describe('isolation properties', () => {
     it('no tenant set means no rows and no writes', async () => {
       expect(await app.query(`SELECT count(*)::int AS n FROM fin_cheques`)).toEqual([{ n: 0 }]);
@@ -212,6 +260,11 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       expect(await app.query(`SELECT count(*)::int AS n FROM fin_cheques`)).not.toEqual([{ n: 0 }]);
       await migration.up(runner);
       expect(await app.query(`SELECT count(*)::int AS n FROM fin_cheques`)).toEqual([{ n: 0 }]);
+      const ledgerMigration = new EnableRlsLedger1789440000000();
+      await ledgerMigration.down(runner);
+      expect(await app.query(`SELECT count(*)::int > 0 AS ok FROM fin_journal_entries`)).toEqual([{ ok: true }]);
+      await ledgerMigration.up(runner);
+      expect(await app.query(`SELECT count(*)::int AS n FROM fin_journal_entries`)).toEqual([{ n: 0 }]);
       await runner.release();
     });
   });

@@ -53,7 +53,7 @@ class MemoryRepo {
   async findReversalOf(t: string, id: number) {
     return this.entries.find((e) => e.tenantId === t && e.reversesEntryId === id) ?? null;
   }
-  async transaction<T>(work: (m: unknown) => Promise<T>) {
+  async transaction<T>(_tenantId: string, work: (m: unknown) => Promise<T>) {
     return work({});
   }
   async persistJournalEntry(

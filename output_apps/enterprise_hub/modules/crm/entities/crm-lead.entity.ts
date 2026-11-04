@@ -32,14 +32,31 @@ export class CrmLeadEntity {
   @Column({ type: 'varchar', length: 120, name: 'full_name' })
   fullName: string;
 
-  @Column({ type: 'varchar', length: 120 })
-  email: string;
+  /** Optional: a customer known only by phone (POS) has none. Unique per tenant when present. */
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  email: string | null;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   phone: string | null;
 
   @Column({ type: 'varchar', length: 150, nullable: true })
   company: string | null;
+
+  /** Digits-only form of `phone` used for exact matching (see `normalizePhone`). */
+  @Column({ type: 'varchar', length: 24, name: 'phone_normalized', nullable: true })
+  phoneNormalized: string | null;
+
+  /** The built-in anonymous customer that receives sales with no customer details. One per tenant. */
+  @Column({ type: 'boolean', name: 'is_walk_in', default: false })
+  isWalkIn: boolean;
+
+  /** A sale never implies consent to marketing. */
+  @Column({ type: 'boolean', name: 'marketing_consent', default: false })
+  marketingConsent: boolean;
+
+  /** Where the record came from, e.g. POS. */
+  @Column({ type: 'varchar', length: 24, nullable: true })
+  source: string | null;
 
   @Index()
   @Column({

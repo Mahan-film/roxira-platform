@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { AccountLevel } from '../enums/accounting.enum';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -73,6 +73,42 @@ export class LedgerQueryDto extends ReportPeriodDto {
   limit?: number;
 }
 
+/** Receivable or payable ageing at one day. No endpoint yet (follow-up to #79). */
+export class AgeingQueryDto {
+  @ApiPropertyOptional({ enum: ['receivable', 'payable'], default: 'receivable' })
+  @IsOptional()
+  @IsIn(['receivable', 'payable'])
+  side?: 'receivable' | 'payable';
+
+  @ApiPropertyOptional({ description: 'Age at this day; default today', example: '2026-11-01' })
+  @IsOptional()
+  @Matches(DATE_ONLY, { message: 'to must be YYYY-MM-DD' })
+  to?: string;
+
+  @ApiPropertyOptional({
+    description: 'Limit to one account and the accounts under it; default all receivable (or payable) accounts',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  accountCode?: string;
+
+  @ApiPropertyOptional({ description: 'Only this party (tafsili)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  partyCode?: string;
+
+  @ApiPropertyOptional({ description: 'Bucket edges in days, comma separated', example: '30,60,90' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.split(',').map((part) => Number(part.trim())) : value))
+  @ArrayMaxSize(12)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(3650, { each: true })
+  edges?: number[];
+}
+
 export const EXPORTABLE_REPORTS = [
   'trial-balance',
   'subsidiary',
@@ -81,6 +117,8 @@ export const EXPORTABLE_REPORTS = [
   'income-statement',
   'cash-flow',
   'equity-changes',
+  'ageing',
+  'chart-of-accounts',
 ] as const;
 export type ExportableReport = (typeof EXPORTABLE_REPORTS)[number];
 
@@ -96,9 +134,23 @@ export class ExportReportQueryDto extends TrialBalanceQueryDto {
   @MaxLength(32)
   accountCode?: string;
 
-  @ApiPropertyOptional({ description: 'Ledger report' })
+  @ApiPropertyOptional({ description: 'Ledger and ageing reports' })
   @IsOptional()
   @IsString()
   @MaxLength(64)
   partyCode?: string;
+
+  @ApiPropertyOptional({ enum: ['receivable', 'payable'], default: 'receivable', description: 'Ageing report' })
+  @IsOptional()
+  @IsIn(['receivable', 'payable'])
+  side?: 'receivable' | 'payable';
+
+  @ApiPropertyOptional({ description: 'Ageing report: bucket edges in days, comma separated', example: '30,60,90' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.split(',').map((part) => Number(part.trim())) : value))
+  @ArrayMaxSize(12)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(3650, { each: true })
+  edges?: number[];
 }

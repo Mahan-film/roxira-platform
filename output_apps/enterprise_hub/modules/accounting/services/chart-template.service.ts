@@ -32,7 +32,7 @@ export class ChartTemplateService {
     if (!template) {
       throw new NotFoundException(`قالب سرفصل ${key} یافت نشد.`);
     }
-    return this.accountingRepository.transaction(async (manager) => {
+    return this.accountingRepository.transaction(tenantId, async (manager) => {
       const existing = new Map(
         (await this.accountingRepository.findAllAccounts(tenantId, manager)).map((account) => [
           account.code,

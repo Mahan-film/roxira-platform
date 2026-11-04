@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import {
   Table,
   TableBody,
@@ -44,6 +45,14 @@ import {
 } from "@/types/crm";
 
 const PAGE_SIZE = 25;
+
+/** «Move to next stage» for an open lead; nothing for won or lost ones. */
+function nextStageActions(lead: Lead, move: (lead: Lead, stage: PipelineStage) => void) {
+  const index = PIPELINE_STAGE_ORDER.indexOf(lead.pipelineStage);
+  const next = PIPELINE_STAGE_ORDER[index + 1];
+  if (!next || lead.pipelineStage === "WON" || lead.pipelineStage === "LOST") return [];
+  return [{ label: `انتقال به «${PIPELINE_STAGE_LABELS[next]}»`, onSelect: () => move(lead, next) }];
+}
 
 type View = "table" | "board";
 
@@ -226,12 +235,15 @@ function CrmPage() {
                     <TableHead>مرحله</TableHead>
                     <TableHead>ارزش</TableHead>
                     <TableHead>تاریخ ثبت</TableHead>
+                    <TableHead>
+                      <span className="sr-only">عملیات</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {leads.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                         {loading ? "در حال بارگذاری..." : "موردی یافت نشد."}
                       </TableCell>
                     </TableRow>
@@ -255,6 +267,15 @@ function CrmPage() {
                       </TableCell>
                       <TableCell>{formatMoneyRial(lead.estimatedValue)}</TableCell>
                       <TableCell>{formatJalaliDate(lead.createdAt)}</TableCell>
+                      <TableCell>
+                        <RowActionsMenu
+                          label={`عملیات ${lead.fullName}`}
+                          actions={[
+                            { label: "مشاهده و ویرایش", onSelect: () => setSelected(lead) },
+                            ...nextStageActions(lead, handleMove),
+                          ]}
+                        />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

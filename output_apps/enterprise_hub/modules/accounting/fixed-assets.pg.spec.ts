@@ -6,11 +6,8 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyService } from '../currency/services/currency.service';
-import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
-import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
-import { JournalEntryEntity } from './entities/journal-entry.entity';
-import { PeriodLockEntity } from './entities/period-lock.entity';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { FixedAssetRepository } from './repositories/fixed-asset.repository';
 import { AccountingService } from './services/accounting.service';
@@ -72,13 +69,7 @@ describePg('Fixed assets on PostgreSQL', () => {
     await ds.initialize();
     await ds.runMigrations();
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(
-      ds.getRepository(ChartOfAccountEntity),
-      ds.getRepository(JournalEntryEntity),
-      ds.getRepository(JournalEntryLineEntity),
-      ds.getRepository(PeriodLockEntity),
-      ds,
-    );
+    const repo = new AccountingRepository(new TenantScope(ds));
     accounting = new AccountingService(repo, currency);
     assets = new FixedAssetService(new FixedAssetRepository(ds), repo, accounting);
     const templates = new ChartTemplateService(repo);

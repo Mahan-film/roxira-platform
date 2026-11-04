@@ -1,3 +1,4 @@
+import { TenantScope } from '../access/services/tenant-scope';
 /**
  * Voucher states (DRAFT, TEMPORARY, POSTED) on a REAL PostgreSQL. Opt-in like the other pg specs:
  * skipped unless ROXIRA_TEST_PG_HOST is set; each run creates and drops its own database.
@@ -73,13 +74,7 @@ describePg('Voucher states on PostgreSQL', () => {
     await ds.runMigrations();
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     accounting = new AccountingService(
-      new AccountingRepository(
-        ds.getRepository(ChartOfAccountEntity),
-        ds.getRepository(JournalEntryEntity),
-        ds.getRepository(JournalEntryLineEntity),
-        ds.getRepository(PeriodLockEntity),
-        ds,
-      ),
+      new AccountingRepository(new TenantScope(ds)),
       currency,
     );
   }, 120000);

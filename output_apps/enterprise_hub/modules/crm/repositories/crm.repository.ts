@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { ContactMessageEntity } from '../entities/contact-message.entity';
+import { normalizePhone } from '../utils/phone';
+import { PipelineStage } from '../enums/crm.enums';
 import { CrmLeadEntity } from '../entities/crm-lead.entity';
 
 /** تجمیع سرنخ‌ها و ارزش ریالی به تفکیک مرحله پایپ‌لاین. */
@@ -43,8 +45,62 @@ export class CrmRepository {
     tenantId: string,
     data: Partial<CrmLeadEntity>,
   ): Promise<CrmLeadEntity> {
-    const entity = this.leads.create({ ...data, tenantId });
+    const entity = this.leads.create({
+      ...data,
+      tenantId,
+      phoneNormalized: normalizePhone(data.phone),
+    });
     return this.leads.save(entity);
+  }
+
+  /** The tenant's built-in anonymous customer, or null before the first anonymous sale. */
+  async findWalkInLead(tenantId: string): Promise<CrmLeadEntity | null> {
+    return this.leads.findOne({ where: { tenantId, isWalkIn: true } });
+  }
+
+  /**
+   * Creates the walk-in customer. The partial unique index allows one per tenant, so a concurrent
+   * creator loses with a unique violation and reads the winner instead.
+   */
+  async createWalkInLead(tenantId: string, fullName: string): Promise<CrmLeadEntity> {
+    const now = new Date();
+    try {
+      return await this.leads.save(
+        this.leads.create({
+          tenantId,
+          fullName,
+          email: null,
+          phone: null,
+          phoneNormalized: null,
+          isWalkIn: true,
+          marketingConsent: false,
+          source: 'POS',
+          pipelineStage: PipelineStage.WON,
+          estimatedValue: 0,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        const existing = await this.findWalkInLead(tenantId);
+        if (existing) {
+          return existing;
+        }
+      }
+      throw error;
+    }
+  }
+
+  /** A customer of this tenant with exactly this normalized phone (never the walk-in record). */
+  async findLeadByPhoneNormalized(
+    tenantId: string,
+    phoneNormalized: string,
+  ): Promise<CrmLeadEntity | null> {
+    return this.leads.findOne({
+      where: { tenantId, phoneNormalized, isWalkIn: false },
+      order: { id: 'ASC' },
+    });
   }
 
   /**
@@ -61,7 +117,11 @@ export class CrmRepository {
       return [];
     }
     const entities = dataList.map((data) =>
-      this.leads.create({ ...data, tenantId }),
+      this.leads.create({
+        ...data,
+        tenantId,
+        phoneNormalized: normalizePhone(data.phone),
+      }),
     );
     return this.leads.save(entities, { chunk: 500 }); // stay under the bind-parameter limit
   }
@@ -78,7 +138,9 @@ export class CrmRepository {
       where: { tenantId, email: In(emails) },
       select: { email: true },
     });
-    return rows.map((row) => row.email);
+    return rows
+      .map((row) => row.email)
+      .filter((email): email is string => email !== null);
   }
 
   /** مجموعه شماره تلفن‌های موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
@@ -121,6 +183,7 @@ export class CrmRepository {
         fullName: entity.fullName,
         email: entity.email,
         phone: entity.phone,
+        phoneNormalized: normalizePhone(entity.phone),
         company: entity.company,
         pipelineStage: entity.pipelineStage,
         estimatedValue: entity.estimatedValue,
@@ -166,6 +229,7 @@ export class CrmRepository {
         { pattern },
       );
     }
+    query.andWhere('lead.isWalkIn = false');
     if (options.stage) {
       query.andWhere('lead.pipelineStage = :stage', { stage: options.stage });
     }
@@ -181,14 +245,14 @@ export class CrmRepository {
 
   async findAllLeads(tenantId: string): Promise<CrmLeadEntity[]> {
     return this.leads.find({
-      where: { tenantId },
+      where: { tenantId, isWalkIn: false },
       order: { updatedAt: 'DESC', id: 'DESC' },
       take: 1000,
     });
   }
 
   async countAllLeads(tenantId: string): Promise<number> {
-    return this.leads.count({ where: { tenantId } });
+    return this.leads.count({ where: { tenantId, isWalkIn: false } });
   }
 
   /** تجمیع تعداد و ارزش ریالی سرنخ‌ها به تفکیک مرحله (فقط مستأجر جاری). */
@@ -199,6 +263,7 @@ export class CrmRepository {
       .addSelect('COUNT(lead.id)', 'count')
       .addSelect('COALESCE(SUM(lead.estimatedValue), 0)', 'value')
       .where('lead.tenantId = :tenantId', { tenantId })
+      .andWhere('lead.isWalkIn = false')
       .groupBy('lead.pipelineStage')
       .getRawMany<StageAggregateRow>();
   }

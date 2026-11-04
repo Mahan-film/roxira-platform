@@ -1,12 +1,37 @@
-# Default owner for everything in this repository.
+# Lane owners (issue #61). GitHub requests a review from the owner when the other person
+# or an agent changes their files. Reviews are not required to merge (ruleset main-protection);
+# the merge queue and CI gate merges. Later rules win.
+
+# Mac, mahan-films: hub, infra, factory, HR and payroll, tax.
 * @mahan-films
 
-# Security- and infrastructure-sensitive paths.
-/.github/ @mahan-films
-/nginx* @mahan-films
-/output_apps/nginx_config/ @mahan-films
-/deploy/ @mahan-films
-/scripts/ops/ @mahan-films
-/output_apps/ecosystem_core/src/billing/ @mahan-films
-/output_apps/ecosystem_core/src/auth/ @mahan-films
-/config/models.yaml @mahan-films
+# Windows laptop, mahansudo: accounting, sales and stock, CRM, import, UI shell.
+/output_apps/enterprise_hub/modules/accounting/ @mahansudo
+/output_apps/enterprise_hub/modules/banking/ @mahansudo
+/output_apps/enterprise_hub/modules/cheques/ @mahansudo
+/output_apps/enterprise_hub/modules/currency/ @mahansudo
+/output_apps/enterprise_hub/modules/invoicing/ @mahansudo
+/output_apps/enterprise_hub/modules/invoice_capture/ @mahansudo
+/output_apps/enterprise_hub/modules/inventory/ @mahansudo
+/output_apps/enterprise_hub/modules/crm/ @mahansudo
+/output_apps/enterprise_hub/modules/data_import/ @mahansudo
+/output_apps/enterprise_hub/frontend/src/app/app/accounting/ @mahansudo
+/output_apps/enterprise_hub/frontend/src/app/app/cheques/ @mahansudo
+/output_apps/enterprise_hub/frontend/src/app/app/invoicing/ @mahansudo
+/output_apps/enterprise_hub/frontend/src/app/app/inventory/ @mahansudo
+/output_apps/enterprise_hub/frontend/src/app/app/crm/ @mahansudo
+/output_apps/enterprise_hub/frontend/src/app/app/import/ @mahansudo
+/output_apps/enterprise_hub/frontend/src/components/ @mahansudo
+
+# Security- and infrastructure-sensitive paths: both people, whoever did not write the PR reviews it.
+/.github/ @mahan-films @mahansudo
+/nginx* @mahan-films @mahansudo
+/output_apps/nginx_config/ @mahan-films @mahansudo
+/deploy/ @mahan-films @mahansudo
+/scripts/ops/ @mahan-films @mahansudo
+/config/ @mahan-films @mahansudo
+/output_apps/ecosystem_core/src/billing/ @mahan-films @mahansudo
+/output_apps/ecosystem_core/src/auth/ @mahan-films @mahansudo
+/output_apps/enterprise_hub/modules/auth/ @mahan-films @mahansudo
+/output_apps/enterprise_hub/modules/access/ @mahan-films @mahansudo
+**/migrations/ @mahan-films @mahansudo

@@ -10,6 +10,7 @@ import { CrmActivityEntity } from './entities/crm-activity.entity';
 import { CrmLeadEntity } from './entities/crm-lead.entity';
 import { CrmActivityRepository } from './repositories/crm-activity.repository';
 import { CrmRepository } from './repositories/crm.repository';
+import { CustomerIdentityService } from './services/customer-identity.service';
 import { CrmService } from './services/crm.service';
 
 /**
@@ -48,7 +49,13 @@ import { CrmService } from './services/crm.service';
     }),
   ],
   controllers: [CrmController],
-  providers: [CrmService, CrmRepository, CrmActivityRepository, JwtAuthGuard],
-  exports: [CrmService, CrmRepository, CrmActivityRepository],
+  providers: [
+    CrmService,
+    CrmRepository,
+    CrmActivityRepository,
+    CustomerIdentityService,
+    JwtAuthGuard,
+  ],
+  exports: [CrmService, CrmRepository, CrmActivityRepository, CustomerIdentityService],
 })
 export class CrmModule {}

@@ -6,6 +6,7 @@ import { DimensionController } from './controllers/dimension.controller';
 import { DimensionEntity } from './entities/dimension.entity';
 import { DimensionRepository } from './repositories/dimension.repository';
 import { DimensionService } from './services/dimension.service';
+import { TenantScope } from '../access/services/tenant-scope';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CurrencyModule } from '../currency/currency.module';
@@ -64,6 +65,7 @@ import { ReportExportService } from './services/report-export.service';
     AccountingRepository,
     DimensionRepository,
     DimensionService,
+    TenantScope,
     FixedAssetRepository,
     FixedAssetService,
     ChartTemplateService,

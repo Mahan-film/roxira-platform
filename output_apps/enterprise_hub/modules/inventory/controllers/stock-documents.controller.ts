@@ -5,6 +5,9 @@ import { ModuleAccess, RequireAction } from '../../access/decorators';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
+  CreateAdjustmentDto,
+  CreateDeliveryDto,
+  CreateReceiptDto,
   CreateTransferDto,
   QueryStockDocumentDto,
   StockDocumentResponseDto,
@@ -49,5 +52,36 @@ export class StockDocumentsController {
     @Body() dto: CreateTransferDto,
   ): Promise<StockDocumentResponseDto> {
     return this.documents.createTransfer(requireTenantId(request), this.userIdOf(request), dto);
+  }
+
+  @Post('receipts')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'رسید خرید کالا به انبار',
+    description: 'برای هر سطر یک لایهٔ FIFO تازه با بهای واحدِ اعلام‌شده ساخته می‌شود؛ سند حسابداری ندارد.',
+  })
+  @ApiResponse({ status: HttpStatus.CREATED, type: StockDocumentResponseDto })
+  createReceipt(@Req() request: AuthenticatedRequest, @Body() dto: CreateReceiptDto): Promise<StockDocumentResponseDto> {
+    return this.documents.createReceipt(requireTenantId(request), this.userIdOf(request), dto);
+  }
+
+  @Post('deliveries')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'حوالهٔ خروج فروش از انبار (بهای FIFO)' })
+  @ApiResponse({ status: HttpStatus.CREATED, type: StockDocumentResponseDto })
+  createDelivery(@Req() request: AuthenticatedRequest, @Body() dto: CreateDeliveryDto): Promise<StockDocumentResponseDto> {
+    return this.documents.createDelivery(requireTenantId(request), this.userIdOf(request), dto);
+  }
+
+  @RequireAction(AccessAction.POST)
+  @Post('adjustments')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'تعدیل موجودی (انبارگردانی)',
+    description: 'مقدار مثبت لایهٔ جدید می‌سازد، مقدار منفی با بهای FIFO کسر می‌شود و یک سند حسابداری ثبت می‌شود.',
+  })
+  @ApiResponse({ status: HttpStatus.CREATED, type: StockDocumentResponseDto })
+  createAdjustment(@Req() request: AuthenticatedRequest, @Body() dto: CreateAdjustmentDto): Promise<StockDocumentResponseDto> {
+    return this.documents.createAdjustment(requireTenantId(request), this.userIdOf(request), dto);
   }
 }

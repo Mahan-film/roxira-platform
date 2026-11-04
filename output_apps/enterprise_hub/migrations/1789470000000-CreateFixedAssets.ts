@@ -8,8 +8,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Revert: `down()` drops both tables; the journal entries already posted stay in the ledger.
  */
-export class CreateFixedAssets1789450000000 implements MigrationInterface {
-  name = 'CreateFixedAssets1789450000000';
+export class CreateFixedAssets1789470000000 implements MigrationInterface {
+  name = 'CreateFixedAssets1789470000000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`

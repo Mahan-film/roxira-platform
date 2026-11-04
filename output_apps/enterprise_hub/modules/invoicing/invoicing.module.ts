@@ -7,6 +7,8 @@ import { CurrencyModule } from '../currency/currency.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { TenantsModule } from '../tenants/tenants.module';
 import { SUITE_EVENTS_QUEUE } from './constants/suite-events.constants';
+import { PosSalesController } from './controllers/pos-sales.controller';
+import { PosSaleService } from './services/pos-sale.service';
 import { InvoicingController } from './controllers/invoicing.controller';
 import { InvoiceEntity } from './entities/invoice.entity';
 import { SuiteEventsProcessor } from './processors/suite-events.processor';
@@ -35,11 +37,12 @@ import { InvoicingService } from './services/invoicing.service';
     TenantsModule,
     BullModule.registerQueue({ name: SUITE_EVENTS_QUEUE }),
   ],
-  controllers: [InvoicingController],
+  controllers: [InvoicingController, PosSalesController],
   providers: [
     InvoicingService,
     InvoicingRepository,
     InvoicePostingService,
+    PosSaleService,
     SuiteEventsProcessor,
   ],
   exports: [InvoicingService],

@@ -1,3 +1,4 @@
+import { TenantScope } from '../access/services/tenant-scope';
 /**
  * Floating details, cost centres and project centres on a REAL PostgreSQL. Opt-in like the other
  * pg specs: skipped unless ROXIRA_TEST_PG_HOST is set; each run creates and drops its own database.
@@ -74,13 +75,7 @@ describePg('Dimensions on PostgreSQL', () => {
     await ds.runMigrations();
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     accounting = new AccountingService(
-      new AccountingRepository(
-        ds.getRepository(ChartOfAccountEntity),
-        ds.getRepository(JournalEntryEntity),
-        ds.getRepository(JournalEntryLineEntity),
-        ds.getRepository(PeriodLockEntity),
-        ds,
-      ),
+      new AccountingRepository(new TenantScope(ds)),
       currency,
     );
     dims = new DimensionService(new DimensionRepository(ds));

@@ -20,6 +20,7 @@ import {
 } from "@/components/app/app-ui";
 import { EmptyState } from "@/components/app/empty-state";
 import { InvoiceEditor } from "@/components/invoicing/invoice-editor";
+import { QuickSaleDrawer } from "@/components/invoicing/quick-sale-drawer";
 import { Drawer } from "@/components/ui/drawer";
 import { InvoicePrintView } from "@/components/invoicing/invoice-print-view";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +108,7 @@ function InvoicingPage() {
     InvoiceSubject.ORIGINAL,
   );
   const [related, setRelated] = useState<InvoiceResponseDto | null>(null);
+  const [showQuickSale, setShowQuickSale] = useState(false);
 
   const [showEditor, setShowEditor] = useState(searchParams.get("new") === "1");
   const [editing, setEditing] = useState<InvoiceResponseDto | null>(null);
@@ -234,12 +236,16 @@ function InvoicingPage() {
         icon={<ReceiptText className="size-6 text-indigo-500" />}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => openNew(InvoiceDirection.SALE)}>
+            <Button onClick={() => setShowQuickSale(true)}>
+              <Plus />
+              فروش سریع
+            </Button>
+            <Button variant="secondary" onClick={() => openNew(InvoiceDirection.SALE)}>
               <Plus />
               فاکتور فروش
             </Button>
             <Button
-              variant="secondary"
+              variant="outline"
               onClick={() => openNew(InvoiceDirection.PURCHASE)}
             >
               <Plus />
@@ -250,6 +256,13 @@ function InvoicingPage() {
       />
 
       <ErrorNotice title="خطا در عملیات صورتحساب" message={error} />
+
+      <QuickSaleDrawer
+        open={showQuickSale}
+        defaultVatRate={defaultVatRate}
+        onClose={() => setShowQuickSale(false)}
+        onSold={refresh}
+      />
 
       <Drawer
         open={showEditor}

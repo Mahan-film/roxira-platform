@@ -60,7 +60,10 @@ doit() { if [ "$DRY_RUN" = 1 ]; then printf '[dry-run] %s\n' "$*"; else "$@"; fi
 [ "$DRY_RUN" = 1 ] || [ -r "$LOCAL_PW" ] || fail "password file $LOCAL_PW missing"
 
 # Online check: launchd also fires while offline; skip quietly, it retries next day / next wake.
-if [ "$DRY_RUN" != 1 ] && ! nc -z -G 5 "$HOST" 22 >/dev/null 2>&1; then
+# HOST is usually an ssh alias (roxira-prod), which nc cannot resolve: ask ssh for the real name and port.
+probe_host="$(ssh -G "$HOST" 2>/dev/null | awk '$1 == "hostname" {print $2; exit}')"
+probe_port="$(ssh -G "$HOST" 2>/dev/null | awk '$1 == "port" {print $2; exit}')"
+if [ "$DRY_RUN" != 1 ] && ! nc -z -G 5 "${probe_host:-$HOST}" "${probe_port:-22}" >/dev/null 2>&1; then
   log "server $HOST unreachable (offline?); will retry on the next run"
   # an offline Mac is normal for a day; if the last good pull is older than 48h, say so
   if [ -f "$DEST/last_ok" ] && [ -n "$(find "$DEST/last_ok" -mmin +2880 2>/dev/null)" ]; then notify STALE "No successful pull for over 48h"; fi

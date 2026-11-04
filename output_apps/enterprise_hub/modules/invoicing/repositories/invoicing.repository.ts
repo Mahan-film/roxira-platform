@@ -125,6 +125,11 @@ export class InvoicingRepository {
     await repository.update({ id, tenantId }, data);
   }
 
+  /** The invoice a POS retry refers to (same tenant, same client key). */
+  async findByIdempotencyKey(tenantId: string, key: string): Promise<InvoiceEntity | null> {
+    return this.repository.findOne({ where: { tenantId, idempotencyKey: key } });
+  }
+
   /** Every document that refers to `relatedId` (corrective, cancel, return), oldest first. */
   async findByRelated(
     tenantId: string,

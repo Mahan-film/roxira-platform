@@ -1,10 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
 import { AccountResponseDto } from '../../accounting/dto/account-response.dto';
 import { JournalEntryLineDto } from '../../accounting/dto/create-journal-entry.dto';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { Currency } from '../../currency/enums/currency.enum';
+import { StockDocumentsRepository } from '../../inventory/repositories/stock-documents.repository';
+import { STOCK_DOCUMENT_PREFIX, StockDocumentType } from '../../inventory/enums/stock-document.enum';
 import { InventoryService } from '../../inventory/services/inventory.service';
 import {
   CASH_BANK_ACCOUNT,
@@ -13,6 +15,7 @@ import {
   InvoiceAccountSpec,
   MAX_POSTING_ERROR_LENGTH,
   PAYABLE_ACCOUNT,
+  POS_CLEARING_ACCOUNT,
   PURCHASES_ACCOUNT,
   RECEIVABLE_ACCOUNT,
   SALES_ACCOUNT,
@@ -64,6 +67,7 @@ export class InvoicePostingService {
     private readonly invoicingRepository: InvoicingRepository,
     private readonly inventoryService: InventoryService,
     private readonly accountingService: AccountingService,
+    @Optional() private readonly stockDocuments?: StockDocumentsRepository,
   ) {}
 
   /** نقطه ورود پردازشگر صف؛ بر اساس وضعیت مقصد، رویداد مناسب را اجرا می‌کند. */
@@ -133,6 +137,7 @@ export class InvoicePostingService {
           return;
         }
         const meta = await this.moveStockAndMeasure(locked, manager);
+        const stockDocumentId = await this.recordStockDocument(locked, meta, manager);
         const entry = await this.accountingService.createJournalEntry(
           locked.tenantId,
           {
@@ -143,6 +148,9 @@ export class InvoicePostingService {
           },
           manager,
         );
+        if (stockDocumentId !== null) {
+          await manager.update('erp_stock_documents', { id: stockDocumentId, tenantId: locked.tenantId }, { journalEntryId: entry.id });
+        }
         await this.invoicingRepository.updatePosting(
           locked.tenantId,
           locked.id,
@@ -201,12 +209,21 @@ export class InvoicePostingService {
         const owed = this.postedOf(locked).receivable;
         const sale = this.directionOf(locked) === InvoiceDirection.SALE;
         // Sale: cash comes in, receivable falls. Purchase: payable falls, cash goes out.
-        const cashDebit = sale ? owed : -owed;
+        const sign = sale ? 1n : -1n;
+        const split = this.splitPayments(locked, owed);
         const lines = this.toLines([
-          [accounts.cash, cashDebit, sale ? 'دریافت نقدی/بانکی بابت صورتحساب' : 'پرداخت نقدی/بانکی بابت صورتحساب'],
+          ...split.map(([method, amount]): [string, bigint, string] => [
+            method === 'CARD' ? accounts.posClearing : accounts.cash,
+            sign * amount,
+            sale
+              ? method === 'CARD'
+                ? 'دریافت از طریق پوز'
+                : 'دریافت نقدی/بانکی بابت صورتحساب'
+              : 'پرداخت نقدی/بانکی بابت صورتحساب',
+          ]),
           [
             sale ? accounts.receivable : accounts.payable,
-            -cashDebit,
+            -sign * owed,
             sale ? 'تسویه حساب‌های دریافتنی' : 'تسویه حساب‌های پرداختنی',
           ],
         ]);
@@ -417,6 +434,52 @@ export class InvoicePostingService {
         stock: stock.toString(),
       },
     };
+  }
+
+  /**
+   * Leaves a stock document behind for the register: sales deliver, purchases receive, returns
+   * are signed adjustments. Numbered after the invoice so a re-run can never create it twice.
+   */
+  private async recordStockDocument(
+    invoice: InvoiceEntity,
+    meta: InvoicePostingMeta,
+    manager: EntityManager,
+  ): Promise<number | null> {
+    if (!this.stockDocuments || meta.lines.length === 0) {
+      return null;
+    }
+    const direction = this.directionOf(invoice);
+    const original = this.subjectOf(invoice) === InvoiceSubject.ORIGINAL;
+    const docType = !original
+      ? StockDocumentType.ADJUSTMENT
+      : direction === InvoiceDirection.SALE
+        ? StockDocumentType.SALES_DELIVERY
+        : StockDocumentType.PURCHASE_RECEIPT;
+    const date = (invoice.issuedAt ? new Date(invoice.issuedAt) : new Date()).toISOString().slice(0, 10);
+    const document = await this.stockDocuments.insertDocument(
+      invoice.tenantId,
+      {
+        docNumber: `${STOCK_DOCUMENT_PREFIX[docType]}-${invoice.id.replace(/-/g, '')}`.slice(0, 40),
+        docType,
+        status: 'POSTED' as never,
+        docDate: date,
+        fromWarehouseId: meta.lines[0].moved === 'OUT' ? invoice.warehouseId ?? null : null,
+        toWarehouseId: meta.lines[0].moved === 'IN' ? invoice.warehouseId ?? null : null,
+        reference: invoice.taxInvoiceNumber,
+        sourceInvoiceId: invoice.id,
+        postedAt: new Date(),
+      },
+      meta.lines.map((line) => ({
+        itemId: null,
+        sku: line.sku,
+        quantity: original ? line.quantity : line.moved === 'IN' ? line.quantity : -line.quantity,
+        unitCost: line.unitCost,
+        value: line.value,
+        batchNumber: null,
+      })),
+      manager,
+    );
+    return document.id;
   }
 
   /** Unit cost of a purchased line in rials: net of discount, converted at the invoice rate. */
@@ -704,7 +767,12 @@ export class InvoicePostingService {
     const wanted: Array<[keyof AccountMap, InvoiceAccountSpec]> =
       phase === 'payment'
         ? [
-            ['cash', CASH_BANK_ACCOUNT],
+            ...(!invoice.payments?.length || invoice.payments.some((p) => p.method !== 'CARD')
+              ? ([['cash', CASH_BANK_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
+            ...(invoice.payments?.some((p) => p.method === 'CARD')
+              ? ([['posClearing', POS_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
             sale ? ['receivable', RECEIVABLE_ACCOUNT] : ['payable', PAYABLE_ACCOUNT],
           ]
         : sale
@@ -733,6 +801,29 @@ export class InvoicePostingService {
       map[key] = codes[index];
     });
     return map as AccountMap;
+  }
+
+  /**
+   * How the amount owed was settled, in rial minor units. Without recorded payments the whole
+   * amount is one cash/bank settlement. With them, each method keeps its own amount and the last
+   * one absorbs any rounding so the parts add up to exactly what is owed.
+   */
+  private splitPayments(invoice: InvoiceEntity, owed: bigint): Array<[string, bigint]> {
+    const payments = invoice.payments ?? [];
+    if (payments.length === 0) {
+      return [['CASH', owed]];
+    }
+    const parts: Array<[string, bigint]> = [];
+    let assigned = 0n;
+    payments.forEach((payment, index) => {
+      const amount =
+        index === payments.length - 1
+          ? owed - assigned
+          : this.rialMinor(invoice, payment.amount);
+      assigned += amount;
+      parts.push([payment.method, amount]);
+    });
+    return parts;
   }
 
   /** Does posting this document move stock? (Correctives and unlinked lines never do.) */
@@ -873,4 +964,5 @@ interface AccountMap {
   purchases: string;
   payable: string;
   vatReceivable: string;
+  posClearing: string;
 }

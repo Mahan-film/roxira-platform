@@ -20,6 +20,8 @@ export interface InboundPersistInput {
   unitPurchaseCost: number;
   warehouseId: number | null;
   batchNumber: string;
+  /** Layer arrival time; FIFO order follows it. Defaults to now. */
+  receivedDate?: Date;
 }
 
 /** نتیجه پرسیستنس ورود کالا. */
@@ -135,6 +137,31 @@ export class InventoryRepository {
     return this.warehouses.findOne({ where: { id, tenantId } });
   }
 
+  /** The item whose code (SKU) or barcode is exactly `code`; SKU wins when both match. */
+  async findStockItemByCode(tenantId: string, code: string): Promise<StockItemEntity | null> {
+    return (
+      (await this.stockItems.findOne({ where: { tenantId, sku: code } })) ??
+      (await this.stockItems.findOne({ where: { tenantId, barcode: code }, order: { id: 'ASC' } }))
+    );
+  }
+
+  /** Units of `sku` available to sell: in one warehouse's layers, or the item total when none is given. */
+  async availableQuantity(tenantId: string, sku: string, warehouseId: number | null): Promise<number> {
+    if (warehouseId === null) {
+      const item = await this.stockItems.findOne({ where: { tenantId, sku } });
+      return Number(item?.quantity ?? 0);
+    }
+    const row = await this.batches
+      .createQueryBuilder('batch')
+      .select('COALESCE(SUM(batch.quantityRemaining), 0)', 'total')
+      .where('batch.tenantId = :tenantId', { tenantId })
+      .andWhere('batch.sku = :sku', { sku })
+      .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
+      .andWhere('batch.quantityRemaining > 0')
+      .getRawOne<{ total: string }>();
+    return Number(row?.total ?? 0);
+  }
+
   /** A store of this tenant, or null (used to validate a warehouse's `storeId`). */
   async findStoreById(tenantId: string, id: number): Promise<StoreEntity | null> {
     return this.dataSource.getRepository(StoreEntity).findOne({ where: { id, tenantId } });
@@ -159,6 +186,17 @@ export class InventoryRepository {
       .andWhere('batch.quantityRemaining > 0')
       .getRawOne<{ total: string }>();
     return Number(row?.total ?? 0);
+  }
+
+  /** How many of the tenant's items have no open FIFO layer. */
+  async countItemsWithoutStock(tenantId: string): Promise<number> {
+    return this.stockItems
+      .createQueryBuilder('item')
+      .where('item.tenantId = :tenantId', { tenantId })
+      .andWhere(
+        `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
+      )
+      .getCount();
   }
 
   async findWarehouseByName(
@@ -279,6 +317,8 @@ export class InventoryRepository {
     options: {
       search?: string;
       lowStockOnly: boolean;
+      /** Only items with no open FIFO layer (nothing on the shelf, e.g. imported but never received). */
+      noStockOnly?: boolean;
       skip: number;
       take: number;
     },
@@ -296,6 +336,11 @@ export class InventoryRepository {
     }
     if (options.lowStockOnly) {
       query.andWhere('item.minQuantity > 0 AND item.quantity <= item.minQuantity');
+    }
+    if (options.noStockOnly) {
+      query.andWhere(
+        `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
+      );
     }
 
     query
@@ -419,7 +464,7 @@ export class InventoryRepository {
         batchNumber: input.batchNumber,
         quantityRemaining: this.roundQuantity(input.quantity),
         unitPurchaseCost: this.roundMoney(input.unitPurchaseCost),
-        receivedDate: new Date(),
+        receivedDate: input.receivedDate ?? new Date(),
         warehouseId: input.warehouseId,
       });
       const savedBatch = await manager.save(batch);

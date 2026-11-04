@@ -45,17 +45,27 @@ export function fixPersianChars(value: string): string {
     .replace(/\u0649/g, '\u06cc'); // ى → ی
 }
 
-/** نرمال‌سازی یک متن: رقم/حرف فارسی‌سازی و یکسان‌سازی فاصله‌ها. */
+/**
+ * نرمال‌سازی یک متن: رقم/حرف فارسی‌سازی و یکسان‌سازی فاصله‌ها.
+ *
+ * The result is what gets stored, so a ZWNJ (نیم‌فاصله) between two letters is kept: «حساب‌های»
+ * stays «حساب‌های». Repeated ZWNJs collapse to one; a ZWNJ next to a space or at either end is
+ * dropped. Bidi marks (LRM/RLM) become spaces. Matching uses `normaliseKey`, which ignores ZWNJ.
+ */
 export function normaliseText(value: string): string {
   return fixPersianChars(toAsciiDigits(value))
-    .replace(/[\u200c\u200e\u200f]/g, ' ')
+    .replace(/[\u200e\u200f]/g, ' ')
     .replace(/\s+/g, ' ')
+    .replace(/\u200c+/g, '\u200c')
+    .replace(/ ?\u200c ?/g, (match) => (match === '\u200c' ? match : ' '))
+    .trim()
+    .replace(/^\u200c+|\u200c+$/g, '')
     .trim();
 }
 
-/** کلید تطبیق مترادف‌ها: بدون فاصله و با حروف کوچک. */
+/** کلید تطبیق مترادف‌ها: بدون فاصله و نیم‌فاصله، با حروف کوچک. */
 export function normaliseKey(value: string): string {
-  return normaliseText(value).toLowerCase().replace(/\s+/g, '');
+  return normaliseText(value).toLowerCase().replace(/[\s\u200c]+/g, '');
 }
 
 /** نرمال‌سازی رایانامه (کوچک و بدون فاصله اضافی). */
