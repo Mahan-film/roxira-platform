@@ -66,8 +66,8 @@ const YEARS: Array<[fiscalYear: number, effectiveFrom: string]> = [
   [1405, '2026-03-21'],
 ];
 
-export class SeedContractStatutoryParameters1789500000000 implements MigrationInterface {
-  name = 'SeedContractStatutoryParameters1789500000000';
+export class SeedContractStatutoryParameters1789510000000 implements MigrationInterface {
+  name = 'SeedContractStatutoryParameters1789510000000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`ALTER TABLE "statutory_parameters" ALTER COLUMN "value" DROP NOT NULL`);
