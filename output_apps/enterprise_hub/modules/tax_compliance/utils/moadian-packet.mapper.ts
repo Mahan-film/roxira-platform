@@ -163,7 +163,7 @@ function rialFactor(invoice: InvoiceResponseDto): number {
   }
   const rate = Number(invoice.fxRate);
   if (!Number.isFinite(rate) || rate <= 0) {
-    throw new MoadianMappingError('Invoice has no valid rial exchange rate (fxRate)');
+    throw new MoadianMappingError('نرخ تبدیل به ریال (fxRate) صورتحساب معتبر نیست');
   }
   return rate;
 }
@@ -193,7 +193,7 @@ type Bag = Record<string, unknown>;
 function rejectUnknown(extra: Bag, known: readonly string[], where: string): void {
   const unknown = Object.keys(extra).filter((k) => !known.includes(k));
   if (unknown.length > 0) {
-    throw new MoadianMappingError(`${where} has fields outside patterns 1 to 7: ${unknown.join(', ')}`);
+    throw new MoadianMappingError(`${where} فیلدهایی خارج از الگوهای ۱ تا ۷ دارد: ${unknown.join(', ')}`);
   }
 }
 
@@ -217,27 +217,27 @@ export function mapInvoiceToMoadianPacket(
   ctx: MoadianMappingContext,
 ): MoadianInvoicePacket {
   if (invoice.jurisdiction !== InvoiceJurisdiction.IR) {
-    throw new MoadianMappingError('Only domestic (IR) invoices are reported to Moadian');
+    throw new MoadianMappingError('فقط صورتحساب‌های داخلی (IR) به سامانه مودیان ارسال می‌شوند');
   }
   if (invoice.status !== InvoiceStatus.ISSUED && invoice.status !== InvoiceStatus.PAID) {
-    throw new MoadianMappingError('Only ISSUED or PAID invoices can be sent to Moadian');
+    throw new MoadianMappingError('فقط صورتحساب صادرشده یا پرداخت‌شده به سامانه مودیان ارسال می‌شود');
   }
   if (!invoice.items?.length) {
-    throw new MoadianMappingError('Invoice has no items');
+    throw new MoadianMappingError('صورتحساب هیچ سطری ندارد');
   }
   const pattern = ctx.pattern ?? MoadianInvoicePattern.SALE;
   const subject = ctx.subject ?? MoadianInvoiceSubject.MAIN;
 
   const tins = digitsOnly(ctx.sellerEconomicCode) ?? digitsOnly(invoice.sellerInfo?.economicCode);
   if (!tins || !ECONOMIC_CODE_PATTERN.test(tins)) {
-    throw new MoadianMappingError('Seller economic code (tins) must be 11 or 14 digits');
+    throw new MoadianMappingError('کد اقتصادی فروشنده (tins) باید ۱۱ یا ۱۴ رقم باشد');
   }
 
   const factor = rialFactor(invoice);
   const issuedAt = invoice.issuedAt ?? invoice.createdAt;
   const indatim = new Date(issuedAt).getTime();
   if (!Number.isFinite(indatim)) {
-    throw new MoadianMappingError('Invoice has no valid issue date');
+    throw new MoadianMappingError('تاریخ صدور صورتحساب معتبر نیست');
   }
 
   const bid = digitsOnly(invoice.buyerInfo?.nationalId);
@@ -247,7 +247,7 @@ export function mapInvoiceToMoadianPacket(
   const body: Bag[] = invoice.items.map((item, index) => {
     const sstid = ctx.defaultSstid;
     if (!sstid || !SSTID_PATTERN.test(sstid)) {
-      throw new MoadianMappingError(`Item ${index + 1} has no 13-digit Moadian product/service id (sstid)`);
+      throw new MoadianMappingError(`سطر ${index + 1} شناسه ۱۳ رقمی کالا/خدمت مودیان (sstid) ندارد`);
     }
     const am = Number(item.quantity);
     const fee = toRial(item.unitPrice, factor);
@@ -314,7 +314,7 @@ export function mapInvoiceToMoadianPacket(
   // Cash and credit: the cash part comes from the caller; the credit part is what is left.
   if (header.setm === MoadianSettlementMethod.CASH_AND_CREDIT && inty === MoadianInvoiceType.WITH_BUYER) {
     if (ctx.cashPortion === undefined) {
-      throw new MoadianMappingError('cashPortion (rials) is required when the settlement method is cash and credit');
+      throw new MoadianMappingError('برای تسویه نقد و نسیه، سهم نقدی (cashPortion) به ریال لازم است');
     }
     header.cap = ctx.cashPortion;
     header.insp = Number(header.tbill) - ctx.cashPortion;
