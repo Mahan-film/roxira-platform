@@ -479,6 +479,8 @@ jobs:
       DATABASE_HOST: 127.0.0.1
       DATABASE_PORT: "5432"
       DATABASE_USER: postgres
+      # The service uses trust auth, the value is ignored but the app requires the key.
+      DATABASE_PASSWORD: ci-trust-auth
       DATABASE_NAME: rxfresh
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: "6379"
