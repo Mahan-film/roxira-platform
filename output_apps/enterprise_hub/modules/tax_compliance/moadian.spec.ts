@@ -603,9 +603,14 @@ describe('MoadianService — every pattern through the send path', () => {
     expect(sentHeader(state)).toMatchObject({ inp: 1, ins: 1 });
   });
 
-  it('infers pattern 4 from crn and sends it', async () => {
-    const { state } = await submitAndSend({}, INVOICE_A, { extras: { header: { crn: '123456789012' } } });
+  it('pattern 4 is chosen explicitly (crn is optional in 1 to 3, so it does not infer)', async () => {
+    const { state } = await submitAndSend({}, INVOICE_A, { pattern: 4, extras: { header: { crn: '123456789012' } } });
     expect(sentHeader(state)).toMatchObject({ inp: 4, crn: '123456789012' });
+  });
+
+  it('an optional crn on a plain sale does not turn it into a contract', async () => {
+    const { state } = await submitAndSend({}, INVOICE_A, { extras: { header: { crn: '123456789012' } } });
+    expect(sentHeader(state)).toMatchObject({ inp: 1, crn: '123456789012' });
   });
 
   it('infers pattern 7 from the export lines and sends the export totals', async () => {
@@ -619,10 +624,10 @@ describe('MoadianService — every pattern through the send path', () => {
     const ctx = buildMoadian();
     await ctx.service.putCredential(TENANT_A, credentialDto());
     await expect(
-      ctx.service.submitInvoice(TENANT_A, INVOICE_A, { pattern: 5, extras: { header: { crn: '1' } } }),
+      ctx.service.submitInvoice(TENANT_A, INVOICE_A, { pattern: 5, extras: { header: { ft: 1 } } }),
     ).rejects.toThrow(/نمی‌خواند/);
     await expect(
-      ctx.service.submitInvoice(TENANT_A, INVOICE_A, { extras: { header: { crn: '1', ft: 1 } } }),
+      ctx.service.submitInvoice(TENANT_A, INVOICE_A, { extras: { header: { billid: '1', ft: 1 } } }),
     ).rejects.toThrow(/چند الگو/);
     await expect(ctx.service.submitInvoice(TENANT_A, INVOICE_A, { pattern: 8 })).rejects.toThrow(/۱ تا ۷/);
     expect(ctx.jobs).toHaveLength(0);

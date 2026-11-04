@@ -2,11 +2,11 @@ import { MoadianInvoicePattern as P } from '../enums/moadian.enum';
 
 /**
  * Fields that belong to one pattern only (docs/legal_sources/iran/moadian-fields.md: the field is
- * mandatory or optional in that pattern and `ignore` in the others). Fields shared by several
+ * mandatory or optional in that pattern and `ignore` in the others; `crn` is optional in patterns 1 to 3 as well, so it is not a signal and pattern 4 must be chosen explicitly). Fields shared by several
  * patterns (cut, exr, cfee, mu, scln, scc ...) say nothing about the pattern and are not listed.
  */
 const HEADER_SIGNALS: Record<string, P> = {
-  ft: P.AIRLINE_TICKET, tinc: P.AIRLINE_TICKET, crn: P.CONTRACT, billid: P.UTILITY_BILLS,
+  ft: P.AIRLINE_TICKET, tinc: P.AIRLINE_TICKET, billid: P.UTILITY_BILLS,
   cdcn: P.EXPORT, cdcd: P.EXPORT, tonw: P.EXPORT, torv: P.EXPORT, tocv: P.EXPORT,
 };
 const ITEM_SIGNALS: Record<string, P> = {

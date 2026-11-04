@@ -22,23 +22,23 @@ export class SubmitMoadianInvoiceDto {
   @ApiPropertyOptional({ description: 'Pattern 1 to 7; inferred from `extras` when omitted' })
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(7)
+  @IsInt({ message: 'الگو باید عدد صحیح ۱ تا ۷ باشد.' })
+  @Min(1, { message: 'الگو باید بین ۱ تا ۷ باشد.' })
+  @Max(7, { message: 'الگو باید بین ۱ تا ۷ باشد.' })
   pattern?: number;
 
   @ApiPropertyOptional({ description: 'Cash part in rials for a cash and credit settlement' })
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
-  @Min(0)
+  @IsInt({ message: 'سهم نقدی باید عدد صحیح ریال باشد.' })
+  @Min(0, { message: 'سهم نقدی نمی‌تواند منفی باشد.' })
   cashPortion?: number;
 
   @ApiPropertyOptional({ description: 'Article 9 late submission: registration time in ms' })
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
+  @IsInt({ message: 'زمان ثبت دیرهنگام باید عدد صحیح میلی‌ثانیه باشد.' })
+  @Min(1, { message: 'زمان ثبت دیرهنگام نامعتبر است.' })
   lateRegistrationAt?: number;
 
   @ApiPropertyOptional({ type: MoadianExtrasDto })
