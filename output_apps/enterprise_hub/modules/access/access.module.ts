@@ -30,6 +30,7 @@ import { SessionCheckRepository } from './repositories/session-check.repository'
 import { StructureRepository } from './repositories/structure.repository';
 import { AccessService } from './services/access.service';
 import { AuditService } from './services/audit.service';
+import { LedgerAuditService } from './services/ledger-audit.service';
 import { EntitlementsService } from './services/entitlements.service';
 import { InvitationsService } from './services/invitations.service';
 import { MembersService } from './services/members.service';
@@ -55,12 +56,12 @@ import { StructureService } from './services/structure.service';
   providers: [
     MembershipsRepository, StructureRepository, RolesRepository, InvitationsRepository,
     EntitlementsRepository, ModuleRequestsRepository, TenantScope, AuditRepository, SessionCheckRepository, AuthRepository, RefreshTokenRepository, MailService,
-    AccessService, AuditService, MembersService, RolesService, StructureService,
+    AccessService, AuditService, LedgerAuditService, MembersService, RolesService, StructureService,
     EntitlementsService, InvitationsService, OrganizationsService,
     AccessGuard, AuditInterceptor,
   ],
   exports: [
-    AccessService, AuditService, MembershipsRepository, OrganizationsService, InvitationsService,
+    AccessService, AuditService, LedgerAuditService, MembershipsRepository, OrganizationsService, InvitationsService,
     EntitlementsService, AccessGuard, AuditInterceptor,
   ],
 })

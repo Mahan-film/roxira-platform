@@ -80,7 +80,7 @@ Nothing here is marked done from memory of earlier sessions.
 | Balance sheet, profit and loss, cash flow | done | `reports/statements.ts`, `statements.spec.ts` | |
 | Ageing | partial | `modules/accounting/reports/ageing.ts`, `ageing.spec.ts`, `accounting.ageing.spec.ts`, `FinancialReportsService.ageing` | Receivable and payable ageing per account and party, FIFO, by document date (#79); XLSX/PDF via `GET reports/export/ageing` (#87). No JSON endpoint or UI yet; no due dates, so not days overdue. |
 | Cost centres | missing | none | Planned. |
-| Hash-chained audit log | partial | `modules/access/services/audit.service.ts` | Covers organisation actions; ledger changes not chained. |
+| Hash-chained audit log | done (ledger) | `modules/access/services/audit.service.ts`, `ledger-audit.service.ts` (hook in `AccountingService`), `GET audit/verify` | Organisation actions plus ledger post, reverse, period lock and unlock in one per-tenant chain; verify also cross-checks each ledger event against `fin_journal_entries` / `fin_period_locks` (`ledgerMissing`). Actor of post/reverse is not recorded (service has no user context). |
 | Effective-dated statutory parameters | done | `modules/hr/statutory/`, `migrations/1789410000000-CreateStatutoryParameters.ts`, `statutory.pg.spec.ts` | Values unverified; catalogue is payroll plus one VAT key. |
 | Tamin list disk v6 | partial | see INS-01 | |
 | Property tests for ledger invariants | missing | `modules/accounting/accounting.ledger-integrity.spec.ts` is example-based; no `fast-check` in `package.json` | |
