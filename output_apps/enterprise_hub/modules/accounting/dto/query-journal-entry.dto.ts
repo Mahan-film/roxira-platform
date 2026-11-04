@@ -11,8 +11,8 @@ import {
   Min,
 } from 'class-validator';
 import { JournalEntryStatus } from '../enums/accounting.enum';
+import { IsCalendarDate } from './calendar-date.validator';
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 /** Up to 16 integer digits (numeric(18,2)) and 2 decimals; no sign, no grouping. */
 const AMOUNT = /^\d{1,16}(\.\d{1,2})?$/;
 
@@ -49,12 +49,12 @@ export class QueryJournalEntryDto {
 
   @ApiPropertyOptional({ description: 'از تاریخ سند (YYYY-MM-DD، شامل همان روز)', example: '2026-03-21' })
   @IsOptional()
-  @Matches(DATE_ONLY, { message: 'fromDate must be YYYY-MM-DD' })
+  @IsCalendarDate('از تاریخ')
   fromDate?: string;
 
   @ApiPropertyOptional({ description: 'تا تاریخ سند (YYYY-MM-DD، شامل همان روز)', example: '2026-04-20' })
   @IsOptional()
-  @Matches(DATE_ONLY, { message: 'toDate must be YYYY-MM-DD' })
+  @IsCalendarDate('تا تاریخ')
   toDate?: string;
 
   @ApiPropertyOptional({ description: 'اسنادی که دست‌کم یک سطر روی این کد حساب دارند' })
