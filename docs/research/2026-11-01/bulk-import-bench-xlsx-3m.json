@@ -1,0 +1,72 @@
+{
+  "label": "xlsx2",
+  "file": "book.xlsx",
+  "fileBytes": 376415112,
+  "fileGB": 0.35,
+  "outcome": "ready",
+  "status": "ready",
+  "error": null,
+  "seconds": 142.1,
+  "mbPerSecond": 2.5,
+  "rowsStaged": 3000000,
+  "rowsPerSecond": 21112,
+  "expectRows": 3000000,
+  "rowsMatch": true,
+  "tables": [
+    {
+      "name": "Sheet1",
+      "rows": 1000000,
+      "columns": 12
+    },
+    {
+      "name": "Sheet2",
+      "rows": 1000000,
+      "columns": 12
+    },
+    {
+      "name": "Sheet3",
+      "rows": 1000000,
+      "columns": 12
+    }
+  ],
+  "dbTableStats": [
+    {
+      "idx": 0,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    },
+    {
+      "idx": 1,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    },
+    {
+      "idx": 2,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    }
+  ],
+  "firstRow": [
+    "1",
+    "C-000000001",
+    "علی احمدی 0"
+  ],
+  "lastRow": [
+    "1000000",
+    "C-001000000",
+    "رضا کریمی 99999"
+  ],
+  "notes": [],
+  "peakRssMB": 338,
+  "peakHeapMB": 118,
+  "peakExternalMB": 76,
+  "postgresDatabaseGB": 1.58,
+  "node": "v26.5.1",
+  "nodeHeapLimitMB": 352
+}

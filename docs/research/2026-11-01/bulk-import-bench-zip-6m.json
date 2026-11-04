@@ -1,0 +1,108 @@
+{
+  "label": "zip",
+  "file": "folder.zip",
+  "fileBytes": 370999538,
+  "fileGB": 0.35,
+  "outcome": "ready",
+  "status": "ready",
+  "error": null,
+  "seconds": 146.2,
+  "mbPerSecond": 2.4,
+  "rowsStaged": 6000000,
+  "rowsPerSecond": 41048,
+  "expectRows": 6000000,
+  "rowsMatch": true,
+  "tables": [
+    {
+      "name": "folder/part-006",
+      "rows": 1000000,
+      "columns": 12
+    },
+    {
+      "name": "folder/part-005",
+      "rows": 1000000,
+      "columns": 12
+    },
+    {
+      "name": "folder/part-004",
+      "rows": 1000000,
+      "columns": 12
+    },
+    {
+      "name": "folder/part-001",
+      "rows": 1000000,
+      "columns": 12
+    },
+    {
+      "name": "folder/part-003",
+      "rows": 1000000,
+      "columns": 12
+    },
+    {
+      "name": "folder/part-002",
+      "rows": 1000000,
+      "columns": 12
+    }
+  ],
+  "dbTableStats": [
+    {
+      "idx": 0,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    },
+    {
+      "idx": 1,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    },
+    {
+      "idx": 2,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    },
+    {
+      "idx": 3,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    },
+    {
+      "idx": 4,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    },
+    {
+      "idx": 5,
+      "n": 1000000,
+      "lo": 1,
+      "hi": 1000000,
+      "contiguous": true
+    }
+  ],
+  "firstRow": [
+    "1",
+    "C-000000001",
+    "علی احمدی"
+  ],
+  "lastRow": [
+    "1000000",
+    "C-001000000",
+    "رضا کریمی"
+  ],
+  "notes": [],
+  "peakRssMB": 285,
+  "peakHeapMB": 84,
+  "peakExternalMB": 91,
+  "postgresDatabaseGB": 3.14,
+  "node": "v26.5.1",
+  "nodeHeapLimitMB": 352
+}

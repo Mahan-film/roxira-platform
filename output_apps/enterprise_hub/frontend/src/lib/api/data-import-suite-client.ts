@@ -125,8 +125,8 @@ export function validateImportFile(file: File): string | null {
   const maxBytes = isSheet ? IMPORT_MAX_SHEET_BYTES : IMPORT_MAX_DOC_BYTES;
   if (file.size > maxBytes) {
     return isSheet
-      ? "حجم فایل اکسل/CSV بیش از ۱۰ مگابایت است."
-      : "حجم فایل PDF/تصویر بیش از ۱۵ مگابایت است.";
+      ? "این فایل برای ورود تکی بزرگ است؛ از بخش «ورود حجیم» بالای همین صفحه استفاده کنید."
+      : "حجم PDF/تصویر برای خواندن با OCR بیش از حد است؛ آن را کوچک‌تر یا چندبخشی کنید.";
   }
   return null;
 }
@@ -376,7 +376,7 @@ export function validatePackageFile(file: File): string | null {
     return "فایل خالی است.";
   }
   if (file.size > PACKAGE_MAX_BYTES) {
-    return `حجم فایل «${file.name}» بیش از ${Math.round(PACKAGE_MAX_BYTES / 1024 / 1024)} مگابایت است.`;
+    return `«${file.name}» برای این مسیر بزرگ است؛ از «ورود حجیم» استفاده کنید.`;
   }
   return null;
 }
