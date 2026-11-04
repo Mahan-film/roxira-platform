@@ -19,7 +19,6 @@ import { InventoryRepository } from '../../inventory/repositories/inventory.repo
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
 import {
   DEFAULT_TAX_INVOICE_NUMBER_PREFIX,
-  DEFAULT_VAT_RATE,
   INTL_DEFAULT_VAT_RATE,
   MONEY_SCALE,
   TOMAN_TO_RIAL,
@@ -52,6 +51,8 @@ import {
   InvoiceSummaryRow,
   InvoicingRepository,
 } from '../repositories/invoicing.repository';
+import { isoDate } from '../../hr/services/jalali-period';
+import { VatRateResolver } from './vat-rate.resolver';
 
 /** What a caller adds to `create` beyond the invoice itself (POS sales). */
 export interface CreateInvoiceOptions {
@@ -105,7 +106,13 @@ export class InvoicingService {
     @InjectQueue(SUITE_EVENTS_QUEUE)
     private readonly suiteEventsQueue?: Queue,
     @Optional() private readonly customerIdentity?: CustomerIdentityService,
-  ) {}
+    @Optional() vatRateResolver?: VatRateResolver,
+  ) {
+    // Without the store (unit tests that build the service by hand) only the tenant setting is read.
+    this.vatRates = vatRateResolver ?? new VatRateResolver(undefined, tenantsRepository);
+  }
+
+  private readonly vatRates: VatRateResolver;
 
   /**
    * انتشار رویداد تغییر وضعیت صورتحساب در صف `suite-events` (Rule #5).
@@ -174,28 +181,21 @@ export class InvoicingService {
   }
 
   private roundRate(value: number): number {
-    if (!Number.isFinite(value) || value < 0) return DEFAULT_VAT_RATE;
+    if (!Number.isFinite(value) || value < 0) {
+      throw new BadRequestException('نرخ مالیات ارزش افزوده نامعتبر است.');
+    }
     let rate = value > 1 ? value / 100 : value;
     if (rate > 1) rate = 1;
     return Math.round((rate + Number.EPSILON) * 10000) / 10000;
   }
 
-  /** نرخ پیش‌فرض VAT مستأجر؛ در نبود تنظیم، ۱۰٪. */
-  private async resolveDefaultVatRate(tenantId: string): Promise<number> {
-    if (!this.tenantsRepository) {
-      return DEFAULT_VAT_RATE;
-    }
-    try {
-      if (typeof this.tenantsRepository.findDefaultVatRate === 'function') {
-        return this.roundRate(
-          await this.tenantsRepository.findDefaultVatRate(tenantId),
-        );
-      }
-      const tenant = await this.tenantsRepository.findById(tenantId);
-      return this.roundRate(tenant?.defaultVatRate ?? DEFAULT_VAT_RATE);
-    } catch {
-      return DEFAULT_VAT_RATE;
-    }
+  /**
+   * General VAT rate in force on the invoice date (see VatRateResolver): the statutory store by
+   * date, an organisation's own row in the store first, else the tenant setting. Never a code value.
+   */
+  private async resolveDefaultVatRate(tenantId: string, onDate: Date): Promise<number> {
+    const { rate } = await this.vatRates.generalRate(tenantId, isoDate(onDate));
+    return this.roundRate(rate);
   }
 
   /** آیا ارز داخلی (ریال/تومان) است؟ */
@@ -235,14 +235,15 @@ export class InvoicingService {
     return requested;
   }
 
-  /** نرخ پیش‌فرض VAT بر مبنای حوزه: INTL صفر، IR تنظیم مستأجر (۱۰٪). */
-  private defaultVatRateForJurisdiction(
+  /** Default VAT rate by jurisdiction: INTL zero; IR the general rate on the invoice date. */
+  private async defaultVatRateForJurisdiction(
+    tenantId: string,
     jurisdiction: InvoiceJurisdiction,
-    tenantVatRate: number,
-  ): number {
+    onDate: Date,
+  ): Promise<number> {
     return jurisdiction === InvoiceJurisdiction.INTL
       ? INTL_DEFAULT_VAT_RATE
-      : tenantVatRate;
+      : this.resolveDefaultVatRate(tenantId, onDate);
   }
 
   /**
@@ -494,10 +495,11 @@ export class InvoicingService {
     const currency = source.currency ?? Currency.IRR;
     const jurisdiction =
       source.jurisdiction ?? this.defaultJurisdiction(currency);
-    const tenantVatRate = await this.resolveDefaultVatRate(tenantId);
-    const defaultVatRate = this.defaultVatRateForJurisdiction(
+    // A new invoice is dated today: issued now, or a draft that takes today's rate.
+    const defaultVatRate = await this.defaultVatRateForJurisdiction(
+      tenantId,
       jurisdiction,
-      tenantVatRate,
+      new Date(),
     );
     const fxRate = this.resolveFxRate(currency, source.fxRate);
 
@@ -796,9 +798,10 @@ export class InvoicingService {
   ): Promise<{ items: InvoiceItem[]; totals: InvoiceTotals; currency: Currency }> {
     const currency = source.currency ?? Currency.IRR;
     const jurisdiction = source.jurisdiction ?? this.defaultJurisdiction(currency);
-    const defaultVatRate = this.defaultVatRateForJurisdiction(
+    const defaultVatRate = await this.defaultVatRateForJurisdiction(
+      tenantId,
       jurisdiction,
-      await this.resolveDefaultVatRate(tenantId),
+      new Date(),
     );
     const items = await this.normalizeItems(tenantId, source.items, defaultVatRate, currency);
     return { items, totals: this.computeTotals(items, currency), currency };
@@ -953,8 +956,6 @@ export class InvoicingService {
       entity.taxInvoiceNumber = dto.taxInvoiceNumber;
     }
 
-    const tenantVatRate = await this.resolveDefaultVatRate(tenantId);
-
     const previousCurrency = entity.currency;
     const currencyChanged =
       dto.currency !== undefined && dto.currency !== previousCurrency;
@@ -977,9 +978,11 @@ export class InvoicingService {
     }
 
     if (dto.items !== undefined) {
-      const defaultVatRate = this.defaultVatRateForJurisdiction(
+      // An issued invoice keeps the rate of its issue date; a draft takes today's.
+      const defaultVatRate = await this.defaultVatRateForJurisdiction(
+        tenantId,
         entity.jurisdiction,
-        tenantVatRate,
+        entity.issuedAt ? new Date(entity.issuedAt) : new Date(),
       );
       const items = await this.normalizeItems(
         tenantId,
