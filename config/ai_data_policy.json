@@ -1,0 +1,22 @@
+{
+  "_comment": "Which AI providers may see which class of data (docs/ops/AI_DATA_POLICY.md). No model ids here: they live only in config/models.yaml, whose role `data_policy` is mapped to a provider class below. Read by output_apps/enterprise_hub/modules/ai_policy/ai-data-policy.ts and enforced where the assistant and the import column mapping call models. Missing or invalid file = the strict `production` rules (fail closed). Data classes: public (public law text, marketing, crawled pages), tenant-business (a tenant's accounting, HR, CRM, inventory data, also import headers and masked sample rows), personal (personal identifiers: names with national ids, phones, bank accounts).",
+  "schema_version": 1,
+  "mode": "test_accounts",
+  "_mode_comment": "THE SWITCH. test_accounts = owner decision 2026-10-14 (AGENTS.md section 4): all customers are test accounts, data is not confidential, so free / may-log providers are allowed for every class. Change to production BEFORE onboarding real paying customers with confidential data. Emergency flip without a deploy: env ROXIRA_AI_DATA_MODE=production.",
+  "provider_classes": {
+    "non_sensitive_only": "may_log",
+    "standard": "no_log"
+  },
+  "modes": {
+    "test_accounts": {
+      "public": ["may_log", "no_log"],
+      "tenant-business": ["may_log", "no_log"],
+      "personal": ["may_log", "no_log"]
+    },
+    "production": {
+      "public": ["may_log", "no_log"],
+      "tenant-business": ["no_log"],
+      "personal": ["no_log"]
+    }
+  }
+}

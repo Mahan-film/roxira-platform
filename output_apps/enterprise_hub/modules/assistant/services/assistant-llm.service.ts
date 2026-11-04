@@ -1,4 +1,5 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { loadAiDataPolicy } from '../../ai_policy/ai-data-policy';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -211,9 +212,12 @@ export class AssistantLlmService {
     if (this.cachedCandidates) {
       return this.cachedCandidates;
     }
-    for (const file of this.modelConfigPaths()) {
+    const paths = this.modelConfigPaths();
+    // The assistant sees tenant accounting data through its tools: only providers the policy allows.
+    const policy = loadAiDataPolicy(paths);
+    for (const file of paths) {
       try {
-        const found = buildCandidates(fs.readFileSync(file, 'utf8'));
+        const found = policy.filterByRole('tenant-business', buildCandidates(fs.readFileSync(file, 'utf8')));
         if (found.length > 0) {
           this.cachedCandidates = found;
           return found;

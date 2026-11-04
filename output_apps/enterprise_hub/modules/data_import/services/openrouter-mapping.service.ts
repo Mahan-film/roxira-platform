@@ -1,3 +1,4 @@
+import { loadAiDataPolicy } from '../../ai_policy/ai-data-policy';
 import { maskValue } from '../masking';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -387,6 +388,9 @@ export class OpenRouterMappingService {
 
   /** شناسه مدل نقش `cheap` از `config/models.yaml`. */
   private resolveModelId(): string {
+    // Headers and masked sample rows of a tenant's file: the role's providers must be allowed to see
+    // tenant-business data (config/ai_data_policy.yaml). A refusal falls back to the deterministic mapping.
+    loadAiDataPolicy(this.modelConfigPaths()).assertRole('tenant-business', CHEAP_MODEL_ROLE);
     for (const candidate of this.modelConfigPaths()) {
       try {
         const text = fs.readFileSync(candidate, 'utf8');
