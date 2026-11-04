@@ -276,6 +276,14 @@ roles:
           2026-09-26 audit also found retired from the live catalogue; that
           is a second, pre-existing degradation this PR flags but does not
           fix, to keep this change small.
+      - id: deepgram/nova-3
+        price_per_1m: null
+        catalogue_listed: false
+        note: >
+          Candidate only (Persian quality unverified, docs/research/STT_PERSIAN_OPTIONS_2026-10.md;
+          price in config/stt_prices.json). Was hardcoded as stt_primary in smartjudge_module.py
+          (D7) although nothing read that key; moved here. voice_stt.stt_model_chain skips
+          non-whisper ids, so listing it changes no runtime behaviour.
 
   stt_direct:
     description: >
