@@ -29,7 +29,7 @@ Exportable (all through the product's own "Send/Receive information" Excel templ
 | Receipts (رسید دریافت) | "دریافت از اکسل" on the form | Bank and non-bank receipts both go through this form |
 
 Encoding/format: Excel only. If the file is not shown in the import dialog, save as **Excel 97-2003 (.xls)**.
-Leading/trailing spaces in warehouse codes break the import. Closed fiscal year blocks adding counterparties
+Leading/trailing spaces in warehouse codes break the import. (Procedural claims in this section come from one reseller Q&A page and one vendor course page; treat as `unverified` until a licensed user confirms.) Closed fiscal year blocks adding counterparties
 with opening balances; opening-balance entry is only possible in the first year before the opening voucher.
 Sepidar's own coding article describes five levels (group, kol, moein, tafsili 1, tafsili 2) and four default charts
 (production, service, trading, contracting); the software tree itself is three levels.
@@ -67,7 +67,7 @@ Source: https://help.mahaksoft.com/2406/learn-how-to-import-basic-information-fr
 ## Holoo (هلو)
 
 - Reports can be saved as **Text, Excel or HTML** (invoice reports, "نمایش بصورت ستونی").
-- Import side (verified field names shown when mapping Excel columns): `کد کالا`, `نام کالا`, `آخرین قیمت خرید`, `قیمت فروش`.
+- Import side (field labels seen on Holoo's import-mapping screen, not proven export headers): `کد کالا`, `نام کالا`, `آخرین قیمت خرید`, `قیمت فروش`.
 - Encoding quirks (verified): the letter ی may show unreadable after an import; replacing Persian ی with Arabic
   ي in Excel and re-importing fixes it. Holoo wants **.xls** (strip the trailing x from .xlsx names) and Latin file
   names. This means exports can contain Arabic ي/ك: normalise ي→ی and ك→ک on read.
