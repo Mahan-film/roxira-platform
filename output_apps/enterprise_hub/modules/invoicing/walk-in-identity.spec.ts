@@ -13,6 +13,7 @@ import { InvoiceEntity } from './entities/invoice.entity';
 import { EInvoiceType } from './enums/invoice-kind.enum';
 import { InvoicingRepository } from './repositories/invoicing.repository';
 import { InvoicingService } from './services/invoicing.service';
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 
 const TENANT = 'tenant-a';
 
@@ -142,9 +143,10 @@ describe('invoice buyer rule (Iran)', () => {
       { getRate: () => 1, round: (v: number) => v } as unknown as CurrencyService,
       crm as unknown as CrmRepository,
       undefined,
-      { findById: async () => ({ countryCode, name: 'ما' }), findDefaultVatRate: async () => 0.1 } as unknown as TenantsRepository,
+      { findById: async () => ({ countryCode, name: 'ما' }) } as unknown as TenantsRepository,
       undefined,
       identity,
+      fixtureVatRates(),
     );
     return { service, crm, rows };
   };

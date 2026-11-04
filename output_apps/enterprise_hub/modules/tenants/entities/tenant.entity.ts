@@ -30,7 +30,11 @@ export class TenantEntity {
   @Column({ type: 'boolean', default: true, name: 'is_active' })
   isActive: boolean;
 
-  /** نرخ پیش‌فرض VAT سازمان به‌صورت نسبت (۰٫۱ = ۱۰٪). */
+  /**
+   * @deprecated Not read by invoicing (#116, #126). The general VAT rate comes only from the
+   * statutory store (`vat_general_rate`) by invoice date; an organisation overrides it with its
+   * own row there. Kept (NOT NULL, default 0.1) for the settings API; do not read it anywhere new.
+   */
   @Column({
     type: 'numeric',
     precision: 5,

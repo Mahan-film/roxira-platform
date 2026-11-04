@@ -9,6 +9,7 @@ import { InvoiceEntity } from './entities/invoice.entity';
 import { InvoiceJurisdiction } from './enums/invoice-jurisdiction.enum';
 import { InvoicingRepository } from './repositories/invoicing.repository';
 import { InvoicingService } from './services/invoicing.service';
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 
 /** نرخ تبدیل ساختگی: هر واحد ارز فاکتور = ۰٫۵ واحد ارز پایه (USD). */
 const currencyService = {
@@ -97,9 +98,7 @@ function buildDto(overrides: Partial<CreateInvoiceDto> = {}): CreateInvoiceDto {
 
 const buildService = () => {
   const repository = new InMemoryInvoicingRepository();
-  const tenantsRepository = {
-    findDefaultVatRate: jest.fn(async () => 0.1),
-  } as unknown as TenantsRepository;
+  const tenantsRepository = {} as unknown as TenantsRepository;
 
   const service = new InvoicingService(
     repository as unknown as InvoicingRepository,
@@ -107,6 +106,9 @@ const buildService = () => {
     undefined,
     undefined,
     tenantsRepository,
+    undefined,
+    undefined,
+    fixtureVatRates(),
   );
 
   return { service, repository };

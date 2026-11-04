@@ -108,8 +108,9 @@ export class InvoicingService {
     @Optional() private readonly customerIdentity?: CustomerIdentityService,
     @Optional() vatRateResolver?: VatRateResolver,
   ) {
-    // Without the store (unit tests that build the service by hand) only the tenant setting is read.
-    this.vatRates = vatRateResolver ?? new VatRateResolver(undefined, tenantsRepository);
+    // Without the store (unit tests that build the service by hand) no general rate exists: an
+    // invoice line without an explicit rate is refused (#126). Specs pass __fixtures__/vat-rate.fixture.
+    this.vatRates = vatRateResolver ?? new VatRateResolver();
   }
 
   private readonly vatRates: VatRateResolver;
@@ -186,12 +187,14 @@ export class InvoicingService {
     }
     let rate = value > 1 ? value / 100 : value;
     if (rate > 1) rate = 1;
-    return Math.round((rate + Number.EPSILON) * 10000) / 10000;
+    // Six decimals: the same precision the statutory store accepts for rates (statutory-catalogue RATE).
+    return Math.round((rate + Number.EPSILON) * 1_000_000) / 1_000_000;
   }
 
   /**
    * General VAT rate in force on the invoice date (see VatRateResolver): the statutory store by
-   * date, an organisation's own row in the store first, else the tenant setting. Never a code value.
+   * date, an organisation's own row in the store first; refused when no row covers the date (#126).
+   * Never a code value and never `tenants.default_vat_rate`.
    * The date is the Iran calendar day of `onDate` (Asia/Tehran), not the UTC day (#125).
    */
   private async resolveDefaultVatRate(tenantId: string, onDate: Date): Promise<number> {
