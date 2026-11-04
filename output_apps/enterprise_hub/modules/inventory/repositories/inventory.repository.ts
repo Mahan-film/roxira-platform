@@ -13,6 +13,12 @@ import {
   WarehouseMissingError,
 } from '../errors/inventory.errors';
 
+/**
+ * Stock compared with the minimum on the "below reorder point" list (E2.1). Today this is on-hand
+ * quantity; #227 T1 will switch it to available stock (on hand minus reservations) here only.
+ */
+export const REORDER_STOCK_SQL = 'item.quantity';
+
 /** ورودی پرسیستنس ورود کالا در یک Transaction. */
 export interface InboundPersistInput {
   sku: string;
@@ -335,7 +341,7 @@ export class InventoryRepository {
       );
     }
     if (options.lowStockOnly) {
-      query.andWhere('item.minQuantity > 0 AND item.quantity <= item.minQuantity');
+      query.andWhere(`item.minQuantity > 0 AND ${REORDER_STOCK_SQL} <= item.minQuantity`);
     }
     if (options.noStockOnly) {
       query.andWhere(
