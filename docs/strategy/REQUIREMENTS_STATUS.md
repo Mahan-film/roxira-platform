@@ -73,7 +73,7 @@ Nothing here is marked done from memory of earlier sessions.
 | Item | Status | Evidence | Gap |
 |---|---|---|---|
 | Stabilise: merge queue, disk, move uploads and backups, WAL to R2 | partial | `scripts/ops/backup/neon_offsite.sh` | WAL archive to R2 not shown. |
-| Isolation: tenant context, forced RLS, non-owner role, composite indexes, isolation tests | partial | `scripts/ops/db_app_role.sh`, `modules/*/*.tenant.spec.ts` | Remaining tables owned by RLS session; Persian normalisation exists in import (`readers/persian/`). |
+| Isolation: tenant context, forced RLS, non-owner role, composite indexes, isolation tests | partial | `scripts/ops/db_app_role.sh`, `modules/*/*.tenant.spec.ts`, `modules/access/rls/tenant-rls.pg.spec.ts` (roxira_app via PgBouncer) | FORCE RLS done: org/access, petty cash, fiscal years, dimensions, bulk import, fixed assets, statutory, cheques, ledger (batch 2), HR (batch 3: employees, contracts, allowances, payroll runs, payslips). Still open: banking, invoicing/tax, crm/inventory/import-memory/capture/damages, users/memberships/tokens (access lane batches 4-7); Persian normalisation exists in import (`readers/persian/`). |
 | Four-level chart | done | `modules/accounting/constants/iran-chart-template.ts`, `services/chart-template.service.ts` | |
 | Jalali fiscal years and year close | done | `modules/accounting/services/fiscal-year.service.ts`, `fiscal-close.pg.spec.ts` | |
 | 2 to 10 column trial balances | done | `dto/report.dto.ts` | |

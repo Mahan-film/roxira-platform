@@ -13,11 +13,13 @@ import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { EnableRlsCheques1789430000000 } from '../../../migrations/1789430000000-EnableRlsCheques';
 import { EnableRlsLedger1789440000000 } from '../../../migrations/1789440000000-EnableRlsLedger';
+import { EnableRlsHr1789490000000 } from '../../../migrations/1789490000000-EnableRlsHr';
 import { AccountingRepository } from '../../accounting/repositories/accounting.repository';
 import { LedgerReportRepository } from '../../accounting/repositories/ledger-report.repository';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { ChartTemplateService } from '../../accounting/services/chart-template.service';
 import { ChequesRepository } from '../../cheques/repositories/cheques.repository';
+import { HrRepository } from '../../hr/repositories/hr.repository';
 import { ChequeDirection, ChequeStatus } from '../../cheques/enums/cheque.enum';
 import { TenantScope } from '../services/tenant-scope';
 
@@ -36,6 +38,7 @@ const T2 = '22222222-2222-4222-8222-222222222222';
 const RLS_TABLES = [
   'fin_cheques', 'fin_cheque_events',
   'fin_chart_of_accounts', 'fin_journal_entries', 'fin_journal_entry_lines', 'fin_period_locks', 'fin_balance_reconciliation_log',
+  'hr_employees', 'hr_employment_contracts', 'hr_contract_allowances', 'hr_payroll_runs', 'hr_payslips',
 ];
 
 const cheque = (n: string) => ({
@@ -198,6 +201,41 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
     });
   });
 
+  describe('batch repositories (hr)', () => {
+    const employee = (n: string) => ({
+      employeeNumber: n, firstName: 'a', lastName: 'b', nationalId: `00${n}`, gender: 'male', mobile: '09120000000',
+      jobTitle: 'j', department: 'd', maritalStatus: 'single', dependants: 0, status: 'active',
+      hireDate: '2026-01-01', createdAt: new Date(), updatedAt: new Date(),
+    });
+    let hr: HrRepository;
+    beforeAll(() => { hr = new HrRepository(scope, app); });
+
+    it('a tenant sees only its own employees through the repository', async () => {
+      const a = await hr.createEmployee(T1, employee('E1') as never);
+      const b = await hr.createEmployee(T2, employee('E2') as never);
+      expect(await hr.findEmployeeById(T1, a.id)).not.toBeNull();
+      expect(await hr.findEmployeeById(T2, a.id)).toBeNull();
+      expect(await hr.countEmployees(T1)).toBe(1);
+      expect(await hr.countEmployees(T2)).toBe(1);
+      expect((await hr.findEmployeeById(T2, b.id))?.tenantId).toBe(T2);
+    });
+
+    it('roxira_app cannot read another tenant even with an unfiltered query', async () => {
+      const seen = await scope.run(T2, (m) => m.query(`SELECT tenant_id FROM hr_employees`));
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.every((r: { tenant_id: string }) => r.tenant_id === T2)).toBe(true);
+      for (const table of ['hr_employees', 'hr_employment_contracts', 'hr_contract_allowances', 'hr_payroll_runs', 'hr_payslips']) {
+        expect(await app.query(`SELECT count(*)::int AS n FROM ${table}`)).toEqual([{ n: 0 }]);
+      }
+    });
+
+    it('a forged tenant_id on an HR row is refused', async () => {
+      await expect(
+        scope.run(T2, (m) => m.query(`UPDATE hr_employees SET tenant_id = $1 WHERE tenant_id = $2`, [T1, T2])),
+      ).rejects.toThrow(/row-level security/);
+    });
+  });
+
   describe('isolation properties', () => {
     it('no tenant set means no rows and no writes', async () => {
       expect(await app.query(`SELECT count(*)::int AS n FROM fin_cheques`)).toEqual([{ n: 0 }]);
@@ -264,6 +302,11 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
       await ledgerMigration.down(runner);
       expect(await app.query(`SELECT count(*)::int > 0 AS ok FROM fin_journal_entries`)).toEqual([{ ok: true }]);
       await ledgerMigration.up(runner);
+      const hrMigration = new EnableRlsHr1789490000000();
+      await hrMigration.down(runner);
+      expect(await app.query(`SELECT count(*)::int > 0 AS ok FROM hr_employees`)).toEqual([{ ok: true }]);
+      await hrMigration.up(runner);
+      expect(await app.query(`SELECT count(*)::int AS n FROM hr_employees`)).toEqual([{ n: 0 }]);
       expect(await app.query(`SELECT count(*)::int AS n FROM fin_journal_entries`)).toEqual([{ n: 0 }]);
       await runner.release();
     });
