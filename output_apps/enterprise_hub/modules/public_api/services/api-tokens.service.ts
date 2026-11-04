@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   DEFAULT_RATE_LIMIT_PER_MINUTE,
@@ -60,8 +60,9 @@ export class ApiTokensService {
 
   /**
    * Resolves a plain token to its principal, or null (unknown, malformed, revoked or expired).
-   * The tenant id inside the token only selects which tenant's rows to search; the stored hash is
-   * what authenticates, compared in constant time.
+   * The tenant id inside the token only selects which tenant's rows to search; the SHA-256 of the
+   * 256-bit random part is looked up by equality, so a guess cannot be refined by timing. Guessing
+   * is also bounded by the global per-IP throttler, which runs before this guard.
    */
   async authenticate(plain: string, now = new Date()): Promise<ApiPrincipal | null> {
     const match = TOKEN_REGEX.exec(plain);
@@ -70,7 +71,6 @@ export class ApiTokensService {
     const hash = hashToken(plain);
     const row = await this.repository.findByHash(tenantId, hash);
     if (!row || row.tenantId !== tenantId) return null;
-    if (!timingSafeEqual(Buffer.from(row.tokenHash), Buffer.from(hash))) return null;
     if (row.revokedAt) return null;
     if (row.expiresAt && row.expiresAt.getTime() <= now.getTime()) return null;
     if (!row.lastUsedAt || now.getTime() - row.lastUsedAt.getTime() > LAST_USED_REFRESH_MS) {
