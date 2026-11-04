@@ -90,6 +90,18 @@ describe('DBF files', () => {
     expect(DSKKAR_LAYOUT.find((f) => f.name === 'MON_PYM')?.length).toBe(3);
     expect(DSKWOR_LAYOUT.find((f) => f.name === 'DSW_ID1')?.length).toBe(10);
   });
+
+  it('lists what no source confirms and stays not upload ready', () => {
+    const files = list([worker]);
+    expect(files.unverified.length).toBeGreaterThan(0);
+    expect(files.unverified.join(' ')).toContain('کدپیج');
+    expect(files.uploadReady).toBe(files.unverified.length === 0);
+  });
+
+  it('warns when a name is cut to the published column width', () => {
+    const files = list([{ ...worker, lastName: 'ا'.repeat(51) }]);
+    expect(files.warnings.join(' ')).toContain('DSKWOR00.DSW_LNAME');
+  });
 });
 
 describe('wage tax working files', () => {

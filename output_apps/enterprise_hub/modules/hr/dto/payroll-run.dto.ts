@@ -189,8 +189,10 @@ export class InsuranceListResponseDto {
   @ApiProperty({ description: 'DSKKAR00.DBF به‌صورت base64' }) workshopDbf: string;
   @ApiProperty({ example: 'DSKWOR00.DBF' }) workersDbfFileName: string;
   @ApiProperty({ description: 'DSKWOR00.DBF به‌صورت base64' }) workersDbf: string;
-  @ApiProperty({ description: 'تا تطبیق قالب با نمونه رسمی false است' })
+  @ApiProperty({ description: 'فقط وقتی true است که unverified خالی باشد' })
   uploadReady: boolean;
+  @ApiProperty({ type: [String], description: 'مواردی از مشخصات که هیچ منبعی تأیید نکرده است' })
+  unverified: string[];
   @ApiProperty({ example: 'DSKWOR00.csv' }) workersFileName: string;
   @ApiProperty({ description: 'سطرهای کارکنان (CSV، UTF-8)' })
   workersFile: string;

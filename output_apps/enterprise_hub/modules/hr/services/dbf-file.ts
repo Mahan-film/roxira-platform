@@ -33,6 +33,9 @@ function encodeText(text: string): number[] {
   return [...normalise(text)].map((char) => encoder?.get(char) ?? 0x3f);
 }
 
+/** Byte length of a text once encoded for a DBF cell. */
+export const encodedLength = (text: string): number => encodeText(text).length;
+
 function encodeCell(field: DbfField, value: string | number): number[] {
   const bytes = encodeText(String(value ?? ''));
   if (bytes.length > field.length) {

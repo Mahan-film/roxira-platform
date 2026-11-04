@@ -367,6 +367,8 @@ export interface InsuranceList {
   workersDbfFileName: string;
   workersDbf: string;
   uploadReady: boolean;
+  /** Spec items no source confirms; empty only when uploadReady. */
+  unverified: string[];
   workshopFileName: string;
   workshopFile: string;
   workersFileName: string;
