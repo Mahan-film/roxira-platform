@@ -23,18 +23,23 @@ import {
   DueChequesResponseDto,
   QueryChequesDto,
   QueryDueChequesDto,
+  PartialPaymentDto,
   TransitionChequeDto,
+  VerifySayadDto,
 } from '../dto/cheque.dto';
 import { ChequeEventEntity } from '../entities/cheque-event.entity';
 import { ChequeEntity } from '../entities/cheque.entity';
 import { ChequeStatus } from '../enums/cheque.enum';
 import {
+  BLOCKED_AFTER_PARTIAL,
   OPEN_STATUSES,
   PostingLine,
   allowedTargets,
   creationPosting,
   findRule,
+  partialPaymentPosting,
 } from '../lifecycle/cheque-lifecycle';
+import { SayadRegistrationStatus, isValidReceiverNationalId, isValidSayadNumber } from '../sayad/sayad';
 import { ChequesRepository } from '../repositories/cheques.repository';
 
 const DAY_MS = 86_400_000;
@@ -67,7 +72,16 @@ export class ChequesService {
     private readonly accountingService: AccountingService,
   ) {}
 
-  async create(tenantId: string, dto: CreateChequeDto): Promise<ChequeResponseDto> {
+  async create(tenantId: string, dto: CreateChequeDto, actor = 'unknown'): Promise<ChequeResponseDto> {
+    if (dto.sayadNumber && !isValidSayadNumber(dto.sayadNumber)) {
+      throw new BadRequestException('شناسه صیاد نامعتبر است (۱۶ رقم، نه یک رقم تکراری).');
+    }
+    if (dto.receiverNationalId && !isValidReceiverNationalId(dto.receiverNationalId)) {
+      throw new BadRequestException('کد/شناسه ملی دریافت‌کننده نامعتبر است.');
+    }
+    if (dto.sayadVerified && !dto.sayadNumber) {
+      throw new BadRequestException('تأیید صیاد بدون شناسه صیاد ممکن نیست.');
+    }
     const issueDate = dateOnly(dto.issueDate);
     const dueDate = dateOnly(dto.dueDate);
     if (dueDate < issueDate) {
@@ -96,6 +110,10 @@ export class ChequesService {
             direction: dto.direction,
             sayadNumber: dto.sayadNumber ?? null,
             sayadVerified: dto.sayadVerified ?? false,
+            sayadRegistrationStatus: dto.sayadRegistrationStatus ?? SayadRegistrationStatus.UNKNOWN,
+            sayadVerifiedBy: dto.sayadVerified ? actor : null,
+            sayadVerifiedAt: dto.sayadVerified ? new Date() : null,
+            receiverNationalId: dto.receiverNationalId ?? null,
             chequeNumber: dto.chequeNumber,
             bankName: dto.bankName ?? null,
             amount: minorToDecimal(amountMinor),
@@ -111,7 +129,7 @@ export class ChequesService {
         const journalEntryId = await this.post(tenantId, cheque, 'new', issueDate, posting.description, posting.lines, manager);
         await this.chequesRepository.addEvent(
           tenantId,
-          { chequeId: cheque.id, fromStatus: null, toStatus: ChequeStatus.REGISTERED, eventDate: issueDate, journalEntryId, note: null },
+          { chequeId: cheque.id, fromStatus: null, toStatus: ChequeStatus.REGISTERED, eventDate: issueDate, journalEntryId, amount: minorToDecimal(amountMinor), note: null },
           manager,
         );
         return cheque;
@@ -147,22 +165,136 @@ export class ChequesService {
       if (dto.status === ChequeStatus.SPENT && !spentToName) {
         throw new BadRequestException('برای خرج چک، نام شخص ثالث الزامی است.');
       }
+      if (dto.spentToNationalId && !isValidReceiverNationalId(dto.spentToNationalId)) {
+        throw new BadRequestException('کد/شناسه ملی شخص ثالث نامعتبر است.');
+      }
+      const settled = fromDb(cheque.settledAmount ?? '0');
+      if (settled > 0n && BLOCKED_AFTER_PARTIAL.includes(dto.status)) {
+        throw new BadRequestException('چکی که بخشی از آن پرداخت شده قابل خرج نیست.');
+      }
+      const remaining = fromDb(cheque.amount) - settled;
       if (eventDate < cheque.issueDate) {
         throw new BadRequestException('تاریخ رویداد نمی‌تواند پیش از تاریخ صدور چک باشد.');
       }
 
       const journalEntryId = rule.lines
-        ? await this.post(tenantId, cheque, dto.status, eventDate, rule.description, rule.lines(fromDb(cheque.amount)), manager)
+        ? await this.post(tenantId, cheque, dto.status, eventDate, rule.description, rule.lines(remaining), manager, dto.spentToCode)
         : null;
+      const closes = dto.status === ChequeStatus.CLEARED;
       await this.chequesRepository.updateStatus(
         tenantId,
         id,
-        { status: dto.status, ...(dto.status === ChequeStatus.SPENT ? { spentToName: spentToName ?? null } : {}) },
+        {
+          status: dto.status,
+          // the closing payment settles whatever was left
+          ...(closes ? { settledAmount: cheque.amount } : {}),
+          ...(dto.status === ChequeStatus.SPENT
+            ? { spentToName: spentToName ?? null, spentToCode: dto.spentToCode ?? null, spentToNationalId: dto.spentToNationalId ?? null }
+            : {}),
+        },
         manager,
       );
       await this.chequesRepository.addEvent(
         tenantId,
-        { chequeId: id, fromStatus: cheque.status, toStatus: dto.status, eventDate, journalEntryId, note: dto.note ?? null },
+        {
+          chequeId: id,
+          fromStatus: cheque.status,
+          toStatus: dto.status,
+          eventDate,
+          journalEntryId,
+          amount: journalEntryId === null ? null : minorToDecimal(remaining),
+          note: dto.note ?? null,
+        },
+        manager,
+      );
+    });
+    return this.get(tenantId, id);
+  }
+
+  /**
+   * The bank paid part of the face value. Posts the clearing entry for that part only; the cheque
+   * keeps its status and the rest is still collectible (or can bounce later for the remainder).
+   * A payment that would take the whole remainder is rejected: use the normal clear move.
+   */
+  async partialPayment(tenantId: string, id: number, dto: PartialPaymentDto): Promise<ChequeDetailResponseDto> {
+    let paid: bigint;
+    try {
+      paid = toMinor(dto.amount);
+    } catch (error) {
+      if (error instanceof MoneyFormatError) throw new BadRequestException(error.message);
+      throw error;
+    }
+    if (paid <= 0n) throw new BadRequestException('مبلغ پرداخت باید بزرگ‌تر از صفر باشد.');
+    await this.ensureAccounts(tenantId);
+    const eventDate = dto.eventDate ? dateOnly(dto.eventDate) : todayUtc();
+
+    await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
+      const cheque = await this.chequesRepository.findByIdForUpdate(tenantId, id, manager);
+      if (!cheque) throw new NotFoundException('چک یافت نشد.');
+      const settled = fromDb(cheque.settledAmount ?? '0');
+      const remaining = fromDb(cheque.amount) - settled;
+      const posting = partialPaymentPosting(cheque.direction, cheque.status, paid);
+      if (!posting) {
+        throw new BadRequestException(`پرداخت بخشی از چک در وضعیت «${cheque.status}» مجاز نیست.`);
+      }
+      if (paid >= remaining) {
+        throw new BadRequestException('مبلغ پرداخت باید کمتر از مانده چک باشد؛ برای پرداخت کامل، وضعیت را «وصول/پاس» کنید.');
+      }
+      if (eventDate < cheque.issueDate) {
+        throw new BadRequestException('تاریخ رویداد نمی‌تواند پیش از تاریخ صدور چک باشد.');
+      }
+      const journalEntryId = await this.post(tenantId, cheque, 'partial', eventDate, posting.description, posting.lines, manager);
+      await this.chequesRepository.updateStatus(tenantId, id, { settledAmount: minorToDecimal(settled + paid) }, manager);
+      await this.chequesRepository.addEvent(
+        tenantId,
+        {
+          chequeId: id,
+          fromStatus: cheque.status,
+          toStatus: cheque.status,
+          eventDate,
+          journalEntryId,
+          amount: minorToDecimal(paid),
+          note: dto.note ?? 'پرداخت بخشی از وجه چک',
+        },
+        manager,
+      );
+    });
+    return this.get(tenantId, id);
+  }
+
+  /**
+   * Records that a person looked the cheque up in Sayad (or withdraws that claim). The flag is manual:
+   * no Sayad call is made. Who and when are stored, and an event row keeps the history.
+   */
+  async verifySayad(tenantId: string, id: number, actor: string, dto: VerifySayadDto): Promise<ChequeDetailResponseDto> {
+    await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
+      const cheque = await this.chequesRepository.findByIdForUpdate(tenantId, id, manager);
+      if (!cheque) throw new NotFoundException('چک یافت نشد.');
+      if (dto.verified && !cheque.sayadNumber) {
+        throw new BadRequestException('برای تأیید صیاد، ابتدا شناسه صیاد چک را ثبت کنید.');
+      }
+      await this.chequesRepository.updateStatus(
+        tenantId,
+        id,
+        {
+          sayadVerified: dto.verified,
+          sayadVerifiedBy: dto.verified ? actor : null,
+          sayadVerifiedAt: dto.verified ? new Date() : null,
+          ...(dto.sayadRegistrationStatus ? { sayadRegistrationStatus: dto.sayadRegistrationStatus } : {}),
+        },
+        manager,
+      );
+      await this.chequesRepository.addEvent(
+        tenantId,
+        {
+          chequeId: id,
+          fromStatus: cheque.status,
+          toStatus: cheque.status,
+          eventDate: todayUtc(),
+          journalEntryId: null,
+          amount: null,
+          note: dto.note ?? (dto.verified ? `تأیید دستی صیاد توسط ${actor}` : `لغو تأیید صیاد توسط ${actor}`),
+        },
         manager,
       );
     });
@@ -198,7 +330,7 @@ export class ChequesService {
       return { ...this.toDto(row), daysUntilDue, overdue: daysUntilDue < 0 };
     });
     const total = (direction: string) =>
-      fromMinor(rows.filter((r) => r.direction === direction).reduce((sum, r) => sum + fromDb(r.amount), 0n));
+      fromMinor(rows.filter((r) => r.direction === direction).reduce((sum, r) => sum + fromDb(r.amount) - fromDb(r.settledAmount ?? '0'), 0n));
     return { asOf, until, items, receivedTotal: total('received'), issuedTotal: total('issued') };
   }
 
@@ -213,6 +345,7 @@ export class ChequesService {
     title: string,
     lines: PostingLine[],
     manager: EntityManager,
+    spentToCode?: string,
   ): Promise<number> {
     const partyAccounts: string[] = [CHEQUE_ACCOUNTS.RECEIVABLES, CHEQUE_ACCOUNTS.PAYABLES];
     const entry = await this.accountingService.createJournalEntry(
@@ -226,10 +359,11 @@ export class ChequesService {
           debit: minorToDecimal(line.debit),
           credit: minorToDecimal(line.credit),
           // an endorsed cheque settles a different party's payable than the drawer's
-          partyCode:
-            partyAccounts.includes(line.accountCode) && marker !== ChequeStatus.SPENT
-              ? (cheque.partyCode ?? undefined)
-              : undefined,
+          partyCode: !partyAccounts.includes(line.accountCode)
+            ? undefined
+            : marker === ChequeStatus.SPENT
+              ? spentToCode || undefined
+              : (cheque.partyCode ?? undefined),
         })),
       },
       manager,
@@ -264,6 +398,10 @@ export class ChequesService {
       direction: cheque.direction,
       sayadNumber: cheque.sayadNumber,
       sayadVerified: cheque.sayadVerified,
+      sayadRegistrationStatus: cheque.sayadRegistrationStatus ?? SayadRegistrationStatus.UNKNOWN,
+      sayadVerifiedBy: cheque.sayadVerifiedBy ?? null,
+      sayadVerifiedAt: cheque.sayadVerifiedAt ? new Date(cheque.sayadVerifiedAt).toISOString() : null,
+      receiverNationalId: cheque.receiverNationalId ?? null,
       chequeNumber: cheque.chequeNumber,
       bankName: cheque.bankName,
       amount: fromMinor(fromDb(cheque.amount)),
@@ -272,6 +410,10 @@ export class ChequesService {
       partyName: cheque.partyName,
       partyCode: cheque.partyCode,
       spentToName: cheque.spentToName,
+      spentToCode: cheque.spentToCode ?? null,
+      spentToNationalId: cheque.spentToNationalId ?? null,
+      settledAmount: fromMinor(fromDb(cheque.settledAmount ?? '0')),
+      remainingAmount: fromMinor(fromDb(cheque.amount) - fromDb(cheque.settledAmount ?? '0')),
       status: cheque.status,
       allowedNext: allowedTargets(cheque.direction, cheque.status),
       description: cheque.description,
@@ -285,6 +427,7 @@ export class ChequesService {
       toStatus: event.toStatus,
       eventDate: event.eventDate,
       journalEntryId: event.journalEntryId,
+      amount: event.amount === null || event.amount === undefined ? null : fromMinor(fromDb(event.amount)),
       note: event.note,
     };
   }

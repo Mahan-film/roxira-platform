@@ -311,3 +311,233 @@ describe('ChequesService due list', () => {
     expect(due.issuedTotal).toBe(5);
   });
 });
+
+const issued = (over: Record<string, unknown> = {}) => received({ direction: ChequeDirection.ISSUED, sayadNumber: undefined, ...over });
+
+describe('ChequesService issued lifecycle (CHK-01)', () => {
+  it('issued: register -> deliver (no posting) -> clear', async () => {
+    const t = build();
+    const c = await t.service.create(A, issued() as never);
+    const delivered = await t.service.transition(A, c.id, { status: ChequeStatus.DELIVERED, eventDate: '2026-10-05' });
+    expect(delivered.status).toBe('delivered');
+    expect(delivered.allowedNext).toEqual(['cleared', 'bounced', 'returned']);
+    expect(t.entries).toHaveLength(1);
+    const done = await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
+    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr1010']);
+    expect(done.events.map((e) => e.toStatus)).toEqual(['registered', 'delivered', 'cleared']);
+  });
+
+  it('issued: delivered -> bounced is status only, then cleared later posts the payment', async () => {
+    const t = build();
+    const c = await t.service.create(A, issued() as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DELIVERED });
+    await t.service.transition(A, c.id, { status: ChequeStatus.BOUNCED });
+    expect(t.entries).toHaveLength(1);
+    await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
+    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr1010']);
+  });
+
+  it('issued: delivered -> returned cancels the note payable back to the payable', async () => {
+    const t = build();
+    const c = await t.service.create(A, issued() as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DELIVERED });
+    await t.service.transition(A, c.id, { status: ChequeStatus.RETURNED });
+    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr2010']);
+  });
+
+  it('received cheques cannot be delivered; issued cannot go back to registered', async () => {
+    const t = build();
+    const r = await t.service.create(A, received({ sayadNumber: undefined }) as never);
+    await expect(t.service.transition(A, r.id, { status: ChequeStatus.DELIVERED })).rejects.toBeInstanceOf(BadRequestException);
+    const i = await t.service.create(A, issued() as never);
+    await t.service.transition(A, i.id, { status: ChequeStatus.DELIVERED });
+    await expect(t.service.transition(A, i.id, { status: ChequeStatus.REGISTERED })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('a delivered cheque stays in the due list until it is closed', async () => {
+    const t = build();
+    const c = await t.service.create(A, issued({ dueDate: '2026-11-05', amount: 7 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DELIVERED });
+    const due = await t.service.listDue(A, { asOf: '2026-11-01', days: 30 });
+    expect(due.items.map((i) => i.status)).toEqual(['delivered']);
+    expect(due.issuedTotal).toBe(7);
+  });
+});
+
+describe('ChequesService received lifecycle: returned and endorsement (CHK-01)', () => {
+  it('received: deposit -> bounce -> return leaves the receivable restored and posts nothing for the return', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    await t.service.transition(A, c.id, { status: ChequeStatus.BOUNCED });
+    const done = await t.service.transition(A, c.id, { status: ChequeStatus.RETURNED });
+    expect(t.entries).toHaveLength(3);
+    expect(done.events.map((e) => e.journalEntryId)).toEqual([1, 2, 3, null]);
+    expect(done.events.at(-1)!.amount).toBeNull();
+  });
+
+  it('endorsement stores the third party and posts the payable against that party code', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined }) as never);
+    const spent = await t.service.transition(A, c.id, {
+      status: ChequeStatus.SPENT,
+      spentToName: 'تأمین‌کننده',
+      spentToCode: 'S-9',
+      spentToNationalId: '0499370899',
+    });
+    expect(spent).toMatchObject({ spentToName: 'تأمین‌کننده', spentToCode: 'S-9', spentToNationalId: '0499370899' });
+    expect(t.entries[1].lines.find((l) => l.accountCode === '2010')!.partyCode).toBe('S-9');
+  });
+
+  it('endorsement rejects an invalid national id and leaves the cheque untouched', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined }) as never);
+    await expect(
+      t.service.transition(A, c.id, { status: ChequeStatus.SPENT, spentToName: 'x', spentToNationalId: '0499370890' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect((await t.service.get(A, c.id)).status).toBe('registered');
+    expect(t.entries).toHaveLength(1);
+  });
+
+  it('an endorsed cheque is final and cannot be endorsed again', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.SPENT, spentToName: 'x' });
+    await expect(t.service.transition(A, c.id, { status: ChequeStatus.SPENT, spentToName: 'y' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('ChequesService partial payment (CHK-01)', () => {
+  it('received: partial clearing from deposited posts the part and keeps the cheque collectible', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    const after = await t.service.partialPayment(A, c.id, { amount: 30 });
+    expect(after).toMatchObject({ status: 'deposited', settledAmount: 30, remainingAmount: 70 });
+    expect(shape(t.entries[2])).toEqual(['Dr1010', 'Cr1120']);
+    expect(t.entries[2].lines[0].debit).toBe('30.00');
+    expect(after.events.at(-1)).toMatchObject({ fromStatus: 'deposited', toStatus: 'deposited', amount: 30 });
+  });
+
+  it('the closing clear posts only the remainder and the books add up to the face value', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    await t.service.partialPayment(A, c.id, { amount: 30 });
+    const done = await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
+    expect(t.entries[3].lines[0].debit).toBe('70.00');
+    expect(done).toMatchObject({ status: 'cleared', settledAmount: 100, remainingAmount: 0 });
+    const toBank = t.entries.flatMap((e) => e.lines).filter((l) => l.accountCode === '1010').reduce((s, l) => s + toMinor(l.debit ?? 0), 0n);
+    expect(toBank).toBe(toMinor(100));
+  });
+
+  it('received: bouncing after a partial payment restores only the unpaid remainder', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    await t.service.partialPayment(A, c.id, { amount: 40 });
+    await t.service.transition(A, c.id, { status: ChequeStatus.BOUNCED });
+    expect(shape(t.entries[3])).toEqual(['Dr1020', 'Cr1120']);
+    expect(t.entries[3].lines[0].debit).toBe('60.00');
+    // the bounced remainder shows in the due list at 60, not 100
+    expect((await t.service.listDue(A, { asOf: '2026-12-10' })).receivedTotal).toBe(60);
+  });
+
+  it('issued: partial payment from delivered posts Dr 2110 / Cr 1010 for the part', async () => {
+    const t = build();
+    const c = await t.service.create(A, issued({ amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DELIVERED });
+    await t.service.partialPayment(A, c.id, { amount: '25.50' });
+    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr1010']);
+    expect(t.entries[1].lines[0].debit).toBe('25.50');
+    expect((await t.service.get(A, c.id)).remainingAmount).toBe(74.5);
+  });
+
+  it('a cheque with a payment taken cannot be endorsed', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.partialPayment(A, c.id, { amount: 10 }); // counter payment from registered
+    await expect(t.service.transition(A, c.id, { status: ChequeStatus.SPENT, spentToName: 'x' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it.each([[0], [100], [150], ['0.00']])('rejects an invalid partial amount %s', async (amount) => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await expect(t.service.partialPayment(A, c.id, { amount })).rejects.toBeInstanceOf(BadRequestException);
+    expect(t.entries).toHaveLength(1);
+  });
+
+  it('rejects a second partial payment that would take the whole remainder', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.partialPayment(A, c.id, { amount: 60 });
+    await expect(t.service.partialPayment(A, c.id, { amount: 40 })).rejects.toBeInstanceOf(BadRequestException);
+    await t.service.partialPayment(A, c.id, { amount: 39 });
+    expect((await t.service.get(A, c.id)).remainingAmount).toBe(1);
+  });
+
+  it('is refused from closed states and rolls back when the posting fails', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    t.failNextPosting.on = true;
+    await expect(t.service.partialPayment(A, c.id, { amount: 10 })).rejects.toThrow('period locked');
+    expect((await t.service.get(A, c.id)).settledAmount).toBe(0);
+    await t.service.transition(A, c.id, { status: ChequeStatus.RETURNED });
+    await expect(t.service.partialPayment(A, c.id, { amount: 10 })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("tenant B cannot pay part of tenant A's cheque", async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined }) as never);
+    await expect(t.service.partialPayment(B, c.id, { amount: 1 })).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('ChequesService Sayad fields (CHK-01)', () => {
+  it('rejects a malformed or repeated-digit Sayad id and an invalid receiver id', async () => {
+    const t = build();
+    await expect(t.service.create(A, received({ sayadNumber: '1111111111111111' }) as never)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(t.service.create(A, received({ sayadNumber: '123' }) as never)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(t.service.create(A, received({ receiverNationalId: '0499370890' }) as never)).rejects.toBeInstanceOf(BadRequestException);
+    expect(t.entries).toHaveLength(0);
+  });
+
+  it('stores the receiver national id and the declared registration status', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ receiverNationalId: '0499370899', sayadRegistrationStatus: 'registered' }) as never);
+    expect(c).toMatchObject({ receiverNationalId: '0499370899', sayadRegistrationStatus: 'registered', sayadVerified: false, sayadVerifiedBy: null });
+  });
+
+  it('defaults the registration status to unknown', async () => {
+    const t = build();
+    expect((await t.service.create(A, received() as never)).sayadRegistrationStatus).toBe('unknown');
+  });
+
+  it('manual verification records who and when, and an event keeps the history', async () => {
+    const t = build();
+    const c = await t.service.create(A, received() as never);
+    const v = await t.service.verifySayad(A, c.id, 'user-7', { verified: true, sayadRegistrationStatus: 'registered' as never });
+    expect(v).toMatchObject({ sayadVerified: true, sayadVerifiedBy: 'user-7', sayadRegistrationStatus: 'registered' });
+    expect(new Date(v.sayadVerifiedAt!).getTime()).toBeGreaterThan(Date.now() - 60_000);
+    expect(v.events.at(-1)!.note).toContain('user-7');
+    expect(t.entries).toHaveLength(1); // verification posts nothing
+    const un = await t.service.verifySayad(A, c.id, 'user-8', { verified: false });
+    expect(un).toMatchObject({ sayadVerified: false, sayadVerifiedBy: null, sayadVerifiedAt: null });
+  });
+
+  it('creating with sayadVerified stores the creating user as the verifier', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadVerified: true }) as never, 'user-3');
+    expect(c).toMatchObject({ sayadVerified: true, sayadVerifiedBy: 'user-3' });
+    expect(c.sayadVerifiedAt).not.toBeNull();
+  });
+
+  it('cannot verify a cheque that has no Sayad id, and tenants are isolated', async () => {
+    const t = build();
+    const noId = await t.service.create(A, received({ sayadNumber: undefined }) as never);
+    await expect(t.service.verifySayad(A, noId.id, 'u', { verified: true })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(t.service.create(A, received({ sayadNumber: undefined, sayadVerified: true }) as never)).rejects.toBeInstanceOf(BadRequestException);
+    const c = await t.service.create(A, received() as never);
+    await expect(t.service.verifySayad(B, c.id, 'u', { verified: true })).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

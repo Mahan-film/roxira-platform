@@ -11,11 +11,16 @@ import { TenantScope } from '../../access/services/tenant-scope';
 import { ChequeEventEntity } from '../entities/cheque-event.entity';
 import { ChequeEntity } from '../entities/cheque.entity';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
+import { SayadRegistrationStatus } from '../sayad/sayad';
 
 export interface ChequeInput {
   direction: ChequeDirection;
   sayadNumber: string | null;
   sayadVerified: boolean;
+  sayadRegistrationStatus: SayadRegistrationStatus;
+  sayadVerifiedBy: string | null;
+  sayadVerifiedAt: Date | null;
+  receiverNationalId: string | null;
   chequeNumber: string;
   bankName: string | null;
   /** Exact decimal string, e.g. "50000000.00" (minorToDecimal). */
@@ -40,7 +45,21 @@ export interface ChequeEventInput {
   toStatus: ChequeStatus;
   eventDate: string;
   journalEntryId: number | null;
+  /** Exact decimal string the posting moved; null when nothing was posted. */
+  amount: string | null;
   note: string | null;
+}
+
+export interface ChequeStatusPatch {
+  status?: ChequeStatus;
+  spentToName?: string | null;
+  spentToCode?: string | null;
+  spentToNationalId?: string | null;
+  settledAmount?: string;
+  sayadVerified?: boolean;
+  sayadVerifiedBy?: string | null;
+  sayadVerifiedAt?: Date | null;
+  sayadRegistrationStatus?: SayadRegistrationStatus;
 }
 
 /**
@@ -64,7 +83,7 @@ export class ChequesRepository {
   create(tenantId: string, input: ChequeInput, manager?: EntityManager): Promise<ChequeEntity> {
     return this.within(tenantId, manager, (m) => {
       const repo = m.getRepository(ChequeEntity);
-      return repo.save(repo.create({ ...input, tenantId, status: ChequeStatus.REGISTERED, spentToName: null }));
+      return repo.save(repo.create({ ...input, tenantId, status: ChequeStatus.REGISTERED, spentToName: null, spentToCode: null, spentToNationalId: null, settledAmount: '0' }));
     });
   }
 
@@ -106,10 +125,28 @@ export class ChequesRepository {
     );
   }
 
+  /** Cheques in one status, oldest due date first (the bounced-cheque report). */
+  listByStatus(tenantId: string, status: ChequeStatus): Promise<ChequeEntity[]> {
+    return this.scope.run(tenantId, (m) =>
+      m.getRepository(ChequeEntity).find({ where: { tenantId, status }, order: { dueDate: 'ASC', id: 'ASC' } }),
+    );
+  }
+
+  /** Events of the given cheques that moved to `toStatus`, newest first, in one query. */
+  listEventsToStatus(tenantId: string, chequeIds: number[], toStatus: ChequeStatus): Promise<ChequeEventEntity[]> {
+    if (chequeIds.length === 0) return Promise.resolve([]);
+    return this.scope.run(tenantId, (m) =>
+      m.getRepository(ChequeEventEntity).find({
+        where: { tenantId, chequeId: In(chequeIds), toStatus },
+        order: { eventDate: 'DESC', id: 'DESC' },
+      }),
+    );
+  }
+
   async updateStatus(
     tenantId: string,
     id: number,
-    patch: { status: ChequeStatus; spentToName?: string | null },
+    patch: ChequeStatusPatch,
     manager: EntityManager,
   ): Promise<void> {
     await manager.getRepository(ChequeEntity).update({ id, tenantId }, patch);

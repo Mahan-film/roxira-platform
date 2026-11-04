@@ -33,7 +33,8 @@ const S = ChequeStatus;
  *            spent      Dr 2010 / Cr 1110   (endorsed to a supplier)
  *            returned   Dr 1020 / Cr 1110   (from registered); no entry from bounced
  * Issued:    registered Dr 2010 / Cr 2110   (at creation)
- *            cleared    Dr 2110 / Cr 1010
+ *            delivered  status only (handed to the payee; liability unchanged)
+ *            cleared    Dr 2110 / Cr 1010   (from registered, delivered or bounced)
  *            returned   Dr 2110 / Cr 2010
  *            bounced    status only (the bank did not pay, the liability stays)
  */
@@ -57,6 +58,12 @@ const TABLE: Record<ChequeDirection, Partial<Record<ChequeStatus, Partial<Record
   },
   [ChequeDirection.ISSUED]: {
     [S.REGISTERED]: {
+      [S.DELIVERED]: { description: 'تحویل چک به ذی‌نفع', lines: null },
+      [S.CLEARED]: { description: 'پاس شدن چک پرداختنی', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.BANK, a)] },
+      [S.BOUNCED]: { description: 'برگشت چک صادرشده', lines: null },
+      [S.RETURNED]: { description: 'ابطال و استرداد چک صادرشده', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.PAYABLES, a)] },
+    },
+    [S.DELIVERED]: {
       [S.CLEARED]: { description: 'پاس شدن چک پرداختنی', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.BANK, a)] },
       [S.BOUNCED]: { description: 'برگشت چک صادرشده', lines: null },
       [S.RETURNED]: { description: 'ابطال و استرداد چک صادرشده', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.PAYABLES, a)] },
@@ -76,6 +83,34 @@ export function allowedTargets(direction: ChequeDirection, from: ChequeStatus): 
   return Object.keys(TABLE[direction][from] ?? {}) as ChequeStatus[];
 }
 
+/**
+ * Partial payment (the bank pays part of the face value). Only from a state where the cheque is
+ * still being collected, and never from an endorsed or closed one. The cheque keeps its status and
+ * its `settledAmount` grows; the move that finally closes it posts only the remainder.
+ *
+ * Legal basis: the Iranian cheque law lets the holder accept partial payment (and the bank issues the
+ * certificate for the rest). No such text is in docs/legal_sources/iran/, so the rule is `unclear` and
+ * flagged for the lawyer in docs/accounting/CHEQUES.md; the ledger effect follows the clearing entry.
+ */
+export function partialPaymentPosting(
+  direction: ChequeDirection,
+  from: ChequeStatus,
+  amount: bigint,
+): { description: string; lines: PostingLine[] } | null {
+  if (direction === ChequeDirection.RECEIVED) {
+    if (from === S.REGISTERED) return { description: 'وصول بخشی از چک (ارائه مستقیم در بانک)', lines: [dr(A.BANK, amount), cr(A.NOTES_RECEIVABLE_IN_HAND, amount)] };
+    if (from === S.DEPOSITED) return { description: 'وصول بخشی از چک', lines: [dr(A.BANK, amount), cr(A.NOTES_RECEIVABLE_IN_COLLECTION, amount)] };
+    return null;
+  }
+  if (from === S.REGISTERED || from === S.DELIVERED || from === S.BOUNCED) {
+    return { description: 'پرداخت بخشی از چک صادرشده', lines: [dr(A.NOTES_PAYABLE, amount), cr(A.BANK, amount)] };
+  }
+  return null;
+}
+
+/** A cheque with a payment already taken cannot be endorsed on. */
+export const BLOCKED_AFTER_PARTIAL: ChequeStatus[] = [S.SPENT];
+
 /** Posting at creation: received cheque enters notes-in-hand, issued cheque enters notes payable. */
 export function creationPosting(direction: ChequeDirection, amount: bigint): { description: string; lines: PostingLine[] } {
   return direction === ChequeDirection.RECEIVED
@@ -84,4 +119,4 @@ export function creationPosting(direction: ChequeDirection, amount: bigint): { d
 }
 
 /** Statuses that still await action: a bounced cheque stays open until it is cleared or returned. */
-export const OPEN_STATUSES: ChequeStatus[] = [S.REGISTERED, S.DEPOSITED, S.BOUNCED];
+export const OPEN_STATUSES: ChequeStatus[] = [S.REGISTERED, S.DELIVERED, S.DEPOSITED, S.BOUNCED];

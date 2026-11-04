@@ -23,6 +23,10 @@ export class ChequeEventEntity {
   @Column({ type: 'date', name: 'event_date' })
   eventDate: string;
 
+  /** Amount the posting moved (exact decimal string); null when the move has no ledger effect. */
+  @Column({ type: 'numeric', precision: 18, scale: 2, nullable: true })
+  amount: string | null;
+
   /** Null when the move has no ledger effect. */
   @Column({ type: 'integer', name: 'journal_entry_id', nullable: true })
   journalEntryId: number | null;
