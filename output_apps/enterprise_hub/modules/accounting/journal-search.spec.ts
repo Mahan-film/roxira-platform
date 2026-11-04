@@ -70,6 +70,21 @@ describe('QueryJournalEntryDto search fields', () => {
     expect(errors({ maxAmount: '1.005' })).toEqual(['maxAmount']);
     expect(errors({ text: 'x'.repeat(201) })).toEqual(['text']);
   });
+
+  it('rejects impossible calendar dates with a Persian message (#127)', () => {
+    for (const bad of ['2026-13-45', '2026-02-30', '2026-04-31', '2026-00-10', '2026-01-00', '2025-02-29', '0000-01-01']) {
+      expect(errors({ fromDate: bad })).toEqual(['fromDate']);
+      expect(errors({ toDate: bad })).toEqual(['toDate']);
+    }
+    const [error] = validateSync(plainToInstance(QueryJournalEntryDto, { toDate: '2026-02-30' }));
+    expect(Object.values(error.constraints ?? {})).toEqual(['«تا تاریخ» باید یک روز واقعی به شکل YYYY-MM-DD باشد.']);
+  });
+
+  it('accepts real edge days: leap day, month ends, year ends', () => {
+    expect(errors({ fromDate: '2024-02-29', toDate: '2026-12-31' })).toEqual([]);
+    expect(errors({ fromDate: '2000-02-29', toDate: '2026-04-30' })).toEqual([]);
+    expect(errors({ fromDate: '1900-02-29' })).toEqual(['fromDate']);
+  });
 });
 
 describe('AccountingService.findAllJournalEntries search routing', () => {
