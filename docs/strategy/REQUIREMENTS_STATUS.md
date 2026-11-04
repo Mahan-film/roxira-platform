@@ -15,7 +15,7 @@ Nothing here is marked done from memory of earlier sessions.
 
 | Code | Requirement | Status | Evidence | Gap |
 |---|---|---|---|---|
-| DTX-01 | Corporate income tax, 10% effective-rate floor | missing | none | No tax computation, provision voucher or floor worksheet. Tax workbench is planned (PR below). |
+| DTX-01 | Corporate income tax, 10% effective-rate floor | partial | `docs/tax/CORPORATE_TAX_WORKBENCH.md`, `modules/tax_compliance/services/corporate-tax.service.ts`, `controllers/corporate-tax.controller.ts` (`POST corporate-tax/preview`), `corporate-tax.spec.ts` | Preview only (provision, floor, worksheet, voucher lines), no posting. Rates come from statutory keys `corporate_tax_rate` and `corporate_tax_effective_floor`; no values are seeded because no source exists. Every rate and rule is `unclear` (nothing in `docs/legal_sources/iran/`). |
 | DTX-02 | Tax for business owners, civil partnerships | missing | none | Same. |
 | DTX-03 | Rental income tax, Art. 57 exemption | missing | none | Same. |
 | DTX-04 | 10% advance withholding on clinic doctors' fees | missing | none | `modules/hr/services/payroll-calculator.ts` is employee payroll only. |

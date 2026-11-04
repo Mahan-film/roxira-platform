@@ -2759,6 +2759,17 @@
   "POST /enterprise-hub/radar/trigger-scout (RadarController.triggerScout)": {
     "policy": "platformAdmin"
   },
+  "POST /enterprise-hub/tax-compliance/corporate-tax/preview (CorporateTaxController.preview)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/tax-compliance/csr (TaxComplianceController.generateCsr)": {
     "policy": "tax:admin",
     "owner": true,
