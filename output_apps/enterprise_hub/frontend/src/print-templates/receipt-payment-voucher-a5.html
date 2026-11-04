@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>{{docTitle}} {{documentNumber}}</title>
+<link rel="stylesheet" href="print-base.css">
+<style>@page { size: A5 landscape; margin: 6mm; } body{font-size:10pt;line-height:1.45} .sign>div{height:16mm}</style>
+</head>
+<body class="{{#if isDraft}}is-draft{{/if}}">
+<!-- docTitle: رسید دریافت | رسید پرداخت. partyLabel: دریافت از | پرداخت به.
+     payments[]{method,detail,amount}: method = نقد (صندوق) | واریز بانکی | چک | کارتخوان -->
+<div class="watermark">پیش‌نویس</div>
+<div class="sheet">
+  <div class="row" style="align-items:center">
+    <div><b>{{company.name}}</b></div>
+    <div><h1>{{docTitle}}</h1></div>
+    <div><dl class="kv"><dt>شماره</dt><dd class="num">{{documentNumber}}</dd><dt>تاریخ</dt><dd class="num">{{dateJalali}}</dd></dl></div>
+  </div>
+  <div class="box" style="margin-top:3mm">
+    <dl class="kv">
+      <dt>{{partyLabel}}</dt><dd>{{party.name}} <span class="muted num">{{party.code}}</span></dd>
+      <dt>مبلغ</dt><dd><b class="num">{{amount}}</b> {{currencyLabel}} — به حروف: {{amountInWords}}</dd>
+      <dt>بابت</dt><dd>{{purpose}}</dd>
+      {{#if invoiceRefs}}<dt>فاکتورهای مرتبط</dt><dd class="num">{{invoiceRefs}}</dd>{{/if}}
+      {{#if voucherNumber}}<dt>سند حسابداری</dt><dd class="num">{{voucherNumber}}</dd>{{/if}}
+    </dl>
+  </div>
+  <table>
+    <thead><tr><th>روش</th><th>جزئیات (حساب، شماره پیگیری، شماره چک، بانک، سررسید)</th><th>مبلغ</th></tr></thead>
+    <tbody>{{#each payments}}<tr><td class="c">{{method}}</td><td>{{detail}}</td><td class="n">{{amount}}</td></tr>{{/each}}</tbody>
+    <tfoot><tr><td colspan="2">جمع</td><td class="n">{{amount}}</td></tr></tfoot>
+  </table>
+  <div class="sign"><div>{{signerLeftLabel}}</div><div>{{signerRightLabel}}</div><div>تأییدکننده</div></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>رسید چک {{receiptNumber}}</title>
+<link rel="stylesheet" href="print-base.css">
+<style>@page { size: A5 landscape; margin: 6mm; } body{font-size:9.5pt;line-height:1.4} .sign>div{height:16mm}</style>
+</head>
+<body class="{{#if isDraft}}is-draft{{/if}}">
+<!-- directionLabel: رسید دریافت چک | رسید پرداخت چک.
+     cheques[]{number,sayadId,bank,branch,owner,accountNumber,dueDateJalali,amount,status} -->
+<div class="watermark">پیش‌نویس</div>
+<div class="sheet">
+  <div class="row" style="align-items:center">
+    <div><b>{{company.name}}</b></div>
+    <div><h1>{{directionLabel}}</h1></div>
+    <div><dl class="kv"><dt>شماره رسید</dt><dd class="num">{{receiptNumber}}</dd><dt>تاریخ</dt><dd class="num">{{dateJalali}}</dd></dl></div>
+  </div>
+  <p>{{partyLabel}}: <b>{{party.name}}</b> <span class="muted">({{party.nationalId}})</span> — بابت: {{purpose}} {{#if invoiceRefs}}(فاکتور <span class="num">{{invoiceRefs}}</span>){{/if}}</p>
+  <table>
+    <thead><tr><th>ردیف</th><th>شماره چک</th><th>شناسه صیاد</th><th>بانک / شعبه</th><th>صاحب حساب</th><th>شماره حساب</th><th>سررسید</th><th>مبلغ</th><th>وضعیت</th></tr></thead>
+    <tbody>{{#each cheques}}
+      <tr><td class="c">{{row}}</td><td class="n">{{number}}</td><td class="n">{{sayadId}}</td><td>{{bank}} {{branch}}</td><td>{{owner}}</td>
+        <td class="n">{{accountNumber}}</td><td class="n">{{dueDateJalali}}</td><td class="n">{{amount}}</td><td class="c">{{status}}</td></tr>
+    {{/each}}</tbody>
+    <tfoot><tr><td colspan="7">جمع ({{chequeCount}} فقره)</td><td class="n">{{total}}</td><td></td></tr></tfoot>
+  </table>
+  <div>به حروف: {{totalInWords}} {{currencyLabel}}</div>
+  <div class="sign"><div>تحویل‌دهنده</div><div>تحویل‌گیرنده</div><div>مهر شرکت</div></div>
+</div>
+</body>
+</html>
