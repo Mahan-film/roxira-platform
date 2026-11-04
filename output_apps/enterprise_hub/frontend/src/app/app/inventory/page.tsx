@@ -5,6 +5,7 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   ClipboardCheck,
+  ClipboardList,
   PackagePlus,
   Search,
   TriangleAlert,
@@ -24,6 +25,7 @@ import {
   StockDocumentDrawer,
   type DocumentKind,
 } from "@/components/inventory/stock-document-drawer";
+import { OpeningBalanceDrawer } from "@/components/inventory/opening-balance-drawer";
 import { StockBatchesPanel } from "@/components/inventory/stock-batches-panel";
 import { StockDocumentsList } from "@/components/inventory/stock-documents-list";
 import { StockItemsTable } from "@/components/inventory/stock-items-table";
@@ -62,6 +64,7 @@ export default function SuiteInventoryPage() {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showNewItem, setShowNewItem] = useState(false);
+  const [showOpening, setShowOpening] = useState(false);
   const [documentKind, setDocumentKind] = useState<DocumentKind | null>(null);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
@@ -131,6 +134,10 @@ export default function SuiteInventoryPage() {
               <ArrowUpFromLine />
               حوالهٔ خروج
             </Button>
+            <Button variant="secondary" onClick={() => setShowOpening(true)}>
+              <ClipboardList />
+              موجودی اول دوره
+            </Button>
             <Button variant="outline" onClick={() => setDocumentKind("adjustment")}>
               <ClipboardCheck />
               تعدیل موجودی
@@ -151,6 +158,9 @@ export default function SuiteInventoryPage() {
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           {formatNumber(noStockCount)} کالا هیچ موجودی ثبت‌شده‌ای ندارد و ارزش FIFO آن‌ها صفر است.
           موجودی را با رسید خرید یا موجودی اول دوره وارد کنید؛ عددی از خودمان نمی‌سازیم.{" "}
+          <button type="button" className="underline" onClick={() => setShowOpening(true)}>
+            ثبت موجودی اول دوره
+          </button>{" · "}
           <button
             type="button"
             className="underline"
@@ -240,6 +250,7 @@ export default function SuiteInventoryPage() {
       <StockDocumentsList warehouses={warehouses} refreshKey={refreshKey} />
 
       <ItemCreateDrawer open={showNewItem} onClose={() => setShowNewItem(false)} onCreated={refresh} />
+      <OpeningBalanceDrawer open={showOpening} onClose={() => setShowOpening(false)} onPosted={refresh} />
       <StockDocumentDrawer kind={documentKind} onClose={() => setDocumentKind(null)} onPosted={refresh} />
     </>
   );

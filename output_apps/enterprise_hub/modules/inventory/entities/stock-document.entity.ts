@@ -54,6 +54,13 @@ export class StockDocumentEntity {
   @Column({ type: 'timestamp', name: 'posted_at', nullable: true })
   postedAt: Date | null;
 
+  /** Draft documents: who reviewed the current lines and when (cleared when the lines change). */
+  @Column({ type: 'varchar', length: 64, name: 'reviewed_by', nullable: true })
+  reviewedBy: string | null;
+
+  @Column({ type: 'timestamp', name: 'reviewed_at', nullable: true })
+  reviewedAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 }

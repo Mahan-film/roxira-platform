@@ -120,6 +120,87 @@ export class StockDocumentsRepository {
     return document;
   }
 
+  /** Draft document edits, scoped by tenant. */
+  async updateDocument(
+    tenantId: string,
+    id: number,
+    patch: Partial<StockDocumentEntity>,
+    manager?: EntityManager,
+  ): Promise<void> {
+    await (manager ?? this.dataSource.manager).update(StockDocumentEntity, { id, tenantId }, patch);
+  }
+
+  /** Replaces all lines of a document (draft editing). */
+  async replaceLines(
+    tenantId: string,
+    documentId: number,
+    lines: Array<Omit<StockDocumentLineEntity, 'id' | 'tenantId' | 'documentId'>>,
+    manager: EntityManager,
+  ): Promise<void> {
+    await manager.delete(StockDocumentLineEntity, { tenantId, documentId });
+    if (lines.length > 0) {
+      await manager.save(
+        lines.map((line) => manager.create(StockDocumentLineEntity, { ...line, tenantId, documentId })),
+      );
+    }
+  }
+
+  async deleteDraft(tenantId: string, id: number, manager: EntityManager): Promise<void> {
+    await manager.delete(StockDocumentLineEntity, { tenantId, documentId: id });
+    await manager.delete(StockDocumentEntity, { tenantId, id });
+  }
+
+  /** SKUs from `skus` that exist as items of this tenant. */
+  async existingSkus(tenantId: string, skus: string[]): Promise<Set<string>> {
+    if (skus.length === 0) {
+      return new Set();
+    }
+    const rows = await this.dataSource
+      .getRepository(StockItemEntity)
+      .createQueryBuilder('item')
+      .select('item.sku', 'sku')
+      .where('item.tenantId = :tenantId', { tenantId })
+      .andWhere('item.sku IN (:...skus)', { skus })
+      .getRawMany<{ sku: string }>();
+    return new Set(rows.map((row) => row.sku));
+  }
+
+  /** SKUs that already have open stock in `warehouseId` (an opening balance on top would double count). */
+  async skusWithStockIn(tenantId: string, warehouseId: number, skus: string[]): Promise<Set<string>> {
+    if (skus.length === 0) {
+      return new Set();
+    }
+    const rows = await this.dataSource
+      .getRepository(FifoBatchEntity)
+      .createQueryBuilder('b')
+      .select('DISTINCT b.sku', 'sku')
+      .where('b.tenantId = :tenantId', { tenantId })
+      .andWhere('b.warehouseId = :warehouseId', { warehouseId })
+      .andWhere('b.quantityRemaining > 0')
+      .andWhere('b.sku IN (:...skus)', { skus })
+      .getRawMany<{ sku: string }>();
+    return new Set(rows.map((row) => row.sku));
+  }
+
+  /** Items with no open FIFO layer anywhere, for the opening-balance template. */
+  async itemsWithoutStock(
+    tenantId: string,
+    limit: number,
+  ): Promise<Array<{ sku: string; barcode: string; name: string }>> {
+    return this.dataSource
+      .getRepository(StockItemEntity)
+      .createQueryBuilder('item')
+      .select(['item.sku AS sku', 'item.barcode AS barcode', 'item.name AS name'])
+      .where('item.tenantId = :tenantId', { tenantId })
+      .andWhere(
+        `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
+      )
+      .orderBy('item.name', 'ASC')
+      .addOrderBy('item.id', 'ASC')
+      .limit(limit)
+      .getRawMany();
+  }
+
   findDocument(tenantId: string, id: number): Promise<StockDocumentEntity | null> {
     return this.dataSource.getRepository(StockDocumentEntity).findOne({ where: { id, tenantId } });
   }
