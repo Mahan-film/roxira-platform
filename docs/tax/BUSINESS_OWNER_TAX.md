@@ -14,7 +14,7 @@ Status: design plus a **preview-only** computation. Nothing is posted to the led
 | Business owners file a return per unit and pay at the Art. 131 rates | Act, Art. 100 | sourced |
 | Annual taxable income of owners who filed on time is exempt up to the Art. 84 exemption; the rest is taxed at the Art. 131 rates | Act, Art. 101 | sourced |
 | Several business units of one person: their income is added up, only one exemption is deducted | Act, Art. 101 note 2 | sourced |
-| Civil partnerships: partners use at most two exemptions, the exemption amount is divided equally, the rest of each partner's share is taxed separately; spouses count as one partner and the exemption goes to the husband; heirs of a deceased partner take his exemption share | Act, Art. 101 note 1 | sourced. "Divided equally between them" is read as: total = (number of exemptions used) x ceiling, divided equally among the effective partners. The reading is ours: `unclear` until a tax office confirms it. |
+| Civil partnerships: partners use at most two exemptions, the exemption amount is divided equally, the rest of each partner's share is taxed separately; spouses count as one partner and the exemption goes to the husband (the input must name him with `isHusband`; a spouse group has exactly two people); heirs of a deceased partner take his exemption share | Act, Art. 101 note 1 | sourced. "Divided equally between them" is read as: total = (number of exemptions used) x ceiling, divided equally among the effective partners. The reading is ours: `unclear` until a tax office confirms it. |
 | Maximum exempt income for Art. 57 properties and Art. 101 business income in 1405: 2,800 million rial | 1405 circular, row 1-5-2 | sourced (1405) |
 | Art. 131 rates for individuals (15/20/25% above 500 million and 1 billion rial in the Act text) with a discount of one point per 10% growth of declared income, at most five points | Act, Art. 131 and its note | The Act text is the 1400/10/20 version. Whether the 1405 schedule differs is `unclear`: it is not in the 1405 circular. The discount needs the previous year's declared income and settled debt, so it is not modelled. |
 | Salary brackets 10/15/20/25/30% (1405) | 1405 circular, rows 1-2-1 to 1-2-5 | sourced, but they are the **salary** schedule (HR lane), not Art. 131. They must not be used here. |
@@ -31,11 +31,11 @@ New keys (names and shape only, no figure in code): `income_tax_art131_brackets`
 ## Computation (integer minor units, half-up per band)
 
 ```
-income        = sum(units.revenue - units.deductibleExpenses)        (a loss counts as zero)
+income        = sum(units.revenue - units.deductibleExpenses)        (the sum of all units, a total loss counts as zero (a loss in one unit offsets another unit's profit, read from "the sum of the income of the business units" in note 2))
 SOLE          taxable = max(0, income - ceiling);  tax = bracketTax(taxable)
 PARTNERSHIP   effective partners = spouse groups + single partners
               exemptions = min(effective partners, civil_partnership_max_exemptions)
-              pool = exemptions x ceiling, split equally per effective partner (remainder to the first)
+              pool = exemptions x ceiling, split equally per effective partner (remainder to the first); a couple's exemption is held by the husband
               share_i = income x shareBps_i / 10000 (remainder to the largest share)
               taxable_i = max(0, share_i - exemption_i);  tax_i = bracketTax(taxable_i)
 ```

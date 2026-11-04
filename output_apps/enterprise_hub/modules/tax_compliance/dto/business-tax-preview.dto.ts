@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested,
+  IsBoolean, ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested,
 } from 'class-validator';
 
 const NON_NEGATIVE = /^\d{1,16}(\.\d{1,2})?$/;
@@ -32,11 +32,16 @@ export class PartnerDto {
   @Max(10000)
   shareBps: number;
 
-  @ApiPropertyOptional({ description: 'Partners with the same group id are spouses and count as one partner for the exemption' })
+  @ApiPropertyOptional({ description: 'Partners with the same group id are spouses (exactly two) and count as one partner for the exemption' })
   @IsOptional()
   @IsString()
   @MaxLength(32)
   spouseGroup?: string;
+
+  @ApiPropertyOptional({ description: 'Within a spouse group: the husband, to whom the exemption is granted (Art. 101 note 1)' })
+  @IsOptional()
+  @IsBoolean()
+  isHusband?: boolean;
 }
 
 /** Inputs of the business owner / civil partnership income tax preview. */

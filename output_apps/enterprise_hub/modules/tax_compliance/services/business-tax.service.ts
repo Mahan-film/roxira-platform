@@ -53,6 +53,7 @@ export class BusinessTaxService {
   async preview(tenantId: string, dto: BusinessTaxPreviewDto): Promise<BusinessTaxPreview> {
     const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, KEYS);
     const brackets = used.get('income_tax_art131_brackets')!.value as Bracket[];
+    // The store holds whole rials (money kind); the computation works in minor units (rial x 100).
     const ceiling = BigInt(used.get('income_exemption_ceiling_art57_art101')!.value as number) * 100n;
     const maxExemptions = Number(used.get('civil_partnership_max_exemptions')!.value);
 
@@ -73,12 +74,18 @@ export class BusinessTaxService {
       if (partners.reduce((a, p) => a + p.shareBps, 0) !== 10_000) {
         throw new BadRequestException('جمع سهم شرکا باید دقیقاً ۱۰۰٪ (۱۰۰۰۰) باشد.');
       }
-      // Spouses count as one partner; at most `maxExemptions` exemptions, divided equally; spouses' exemption goes to the first of them.
+      // Spouses count as one partner; at most `maxExemptions` exemptions, divided equally; a couple's exemption goes to the husband.
       const groups = new Map<string, number[]>();
       partners.forEach((p, i) => {
         const key = p.spouseGroup ? `g:${p.spouseGroup}` : `p:${i}`;
         groups.set(key, [...(groups.get(key) ?? []), i]);
       });
+      for (const members of groups.values()) {
+        const grouped = members.length > 1 || partners[members[0]].spouseGroup;
+        if (grouped && (members.length !== 2 || members.filter((i) => partners[i].isHusband).length !== 1)) {
+          throw new BadRequestException('هر گروه همسران باید دقیقاً دو نفر باشد و زوج (isHusband) مشخص شود.');
+        }
+      }
       const effective = [...groups.values()];
       exemptionsUsed = Math.min(effective.length, maxExemptions);
       const pool = ceiling * BigInt(exemptionsUsed);
@@ -86,7 +93,10 @@ export class BusinessTaxService {
       const leftover = pool - perEffective * BigInt(effective.length);
       const shares = splitByShares(positive, partners.map((p) => p.shareBps));
       const exemptionOf = new Map<number, bigint>();
-      effective.forEach((members, index) => exemptionOf.set(members[0], perEffective + (index === 0 ? leftover : 0n)));
+      effective.forEach((members, index) => {
+        const holder = members.length === 2 ? members.find((i) => partners[i].isHusband)! : members[0];
+        exemptionOf.set(holder, perEffective + (index === 0 ? leftover : 0n));
+      });
       partners.forEach((p, i) => {
         const share = shares[i];
         const wanted = exemptionOf.get(i) ?? 0n;

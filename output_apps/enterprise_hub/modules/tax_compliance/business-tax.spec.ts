@@ -76,11 +76,12 @@ describe('business owner tax preview (DTX-02)', () => {
     const p = await build().preview('tenant-a', dto({
       mode: 'PARTNERSHIP',
       units: [{ revenue: '1000000000', deductibleExpenses: '0' }],
-      partners: [{ name: 'Husband', shareBps: 5000, spouseGroup: 'A' }, { name: 'Wife', shareBps: 5000, spouseGroup: 'A' }],
+      partners: [{ name: 'Wife', shareBps: 5000, spouseGroup: 'A' }, { name: 'Husband', shareBps: 5000, spouseGroup: 'A', isHusband: true }],
     }));
     expect(p.exemptionsUsed).toBe(1);
-    expect(p.taxpayers[0]).toMatchObject({ label: 'Husband', exemption: '100000000.00' });
-    expect(p.taxpayers[1]).toMatchObject({ label: 'Wife', exemption: '0.00' });
+    // Listed second, but the exemption is granted to the husband whatever the order.
+    expect(p.taxpayers[1]).toMatchObject({ label: 'Husband', exemption: '100000000.00' });
+    expect(p.taxpayers[0]).toMatchObject({ label: 'Wife', exemption: '0.00' });
   });
 
   it('refuses a partnership with one partner or shares that do not add up to 100%', async () => {
@@ -88,6 +89,13 @@ describe('business owner tax preview (DTX-02)', () => {
     const base = { mode: 'PARTNERSHIP' as const };
     await expect(s.preview('t', dto({ ...base, partners: [{ shareBps: 10000 }] }))).rejects.toThrow(/حداقل دو شریک/);
     await expect(s.preview('t', dto({ ...base, partners: [{ shareBps: 5000 }, { shareBps: 4000 }] }))).rejects.toThrow(/۱۰۰٪/);
+  });
+
+  it('a spouse group must have exactly two people and name the husband', async () => {
+    const s = build();
+    const units = [{ revenue: '1000000000', deductibleExpenses: '0' }];
+    await expect(s.preview('t', dto({ mode: 'PARTNERSHIP', units, partners: [{ shareBps: 5000, spouseGroup: 'A' }, { shareBps: 5000, spouseGroup: 'A' }] }))).rejects.toThrow(/isHusband/);
+    await expect(s.preview('t', dto({ mode: 'PARTNERSHIP', units, partners: [{ shareBps: 5000, spouseGroup: 'A', isHusband: true }, { shareBps: 5000 }] }))).rejects.toThrow(/دقیقاً دو نفر/);
   });
 
   it('shares sum exactly to the total', () => {
