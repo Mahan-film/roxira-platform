@@ -73,6 +73,16 @@ case "$MODEL" in
                 export OMNIROUTE_BASE_URL="${OMNIROUTE_BASE_URL:-http://127.0.0.1:20128/v1}";;
 esac
 
+# Preflight: OpenRouter answers 403 "Access denied by security policy" to blocked egress IPs (the Mac without
+# its VPN). Fail fast with the fix instead of letting opencode print a bare "Forbidden" (issue #288).
+case "$MODEL" in openrouter/*)
+  _code="$(curl -s -o /dev/null -m 10 -w '%{http_code}' https://openrouter.ai/api/v1/models 2>/dev/null || true)"
+  if [ "$_code" = "403" ] && [ "$DRY" != 1 ]; then
+    echo "OpenRouter returns 403 for this machine's IP (blocked egress; turn the VPN on). For a review use: python3 scripts/dev/llm_route.py --diff <file> (falls back to the srv1 key pool and free non-Claude models)." >&2
+    exit 3
+  fi;;
+esac
+
 mkdir -p "$OUT"; STAMP="$(date +%Y%m%d-%H%M%S)"; TAG="$(basename "$WT")-$STAMP"
 LOG="$OUT/$TAG.log"; DIFF="$OUT/$TAG.diff"
 BASE_SHA="$(git -C "$WT" rev-parse HEAD)"
