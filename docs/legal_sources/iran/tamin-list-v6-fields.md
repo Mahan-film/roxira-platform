@@ -53,7 +53,7 @@ version it belongs to; whether it is "list v6" is `unclear`.
 | 17 | DSK_TBIME | N | 12 | جمع حق بیمه سهم بیمه شده | sum DSW_BIME | verified |
 | 18 | DSK_TKOSO | N | 12 | جمع حق بیمه سهم کارفرما | employer share | verified |
 | 19 | DSK_BIC | N | 12 | جمع بیمه بیکاری | unemployment | verified |
-| 20 | DSK_RATE | N | 5 | نرخ حق بیمه (مجموع سهم بیمه شده و کارفرما) | 23 | width verified; whole percent vs two decimals `unclear` |
+| 20 | DSK_RATE | N | 5 | نرخ حق بیمه (مجموع سهم بیمه شده و کارفرما) | 23 | width verified; **meaning unclear**: source says employee + employer share, writer sends 23 (employer + unemployment); decimals `unclear` |
 | 21 | DSK_PRATE | N | 2 | نرخ پورسانتاژ | 0 | name/width verified; use `unclear` |
 | 22 | DSK_BIMH | N | 12 | حق بیمه مشاغل (۴٪) | 0 | name/width verified; use `unclear` |
 | 23 | MON_PYM | C | 3 | ردیف پیمان | `000` | verified |
@@ -70,7 +70,7 @@ version it belongs to; whether it is "list v6" is `unclear`.
 | 6 | DSW_FNAME | C | 50 | نام بیمه شده | | verified |
 | 7 | DSW_LNAME | C | 50 | نام خانوادگی | | verified |
 | 8 | DSW_DNAME | C | 50 | نام پدر | | verified |
-| 9 | DSW_IDNO | C | 15 | شماره شناسنامه | national id (we do not store the ID-card number) | verified width |
+| 9 | DSW_IDNO | C | 15 | شماره شناسنامه | national id (we do not store the ID-card number) | width verified; **value unclear** (national id is not the ID-card number) |
 | 10 | DSW_IDPLC | C | 30 | محل صدور شناسنامه | empty (not collected) | verified width |
 | 11 | DSW_IDATE | C | 8 | تاریخ صدور شناسنامه | empty (not collected) | width verified; format `unclear` |
 | 12 | DSW_BDATE | C | 8 | تاریخ تولد | `YYYYMMDD` Jalali | width verified; format `unclear` |

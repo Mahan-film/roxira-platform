@@ -47,7 +47,7 @@ Neither the report nor a web search on 2026-10-31 gave a field-level spec. Both 
 
 ### DSKKAR00.DBF and DSKWOR00.DBF
 
-Field names, order, types and widths of all 23 + 27 columns are now taken from a published SSO table:
+Field names, order, types and widths of all 23 + 27 columns follow one third-party copy (undated, floppy era, not confirmed as List Disk v6) of an SSO contractor's table:
 `docs/legal_sources/iran/tamin-list-v6-fields.md` (2026-11-04, source S1 and checks). `DSKKAR_LAYOUT` and
 `DSKWOR_LAYOUT` match it, enforced by `tamin-dbf-bytes.spec.ts`. Worker rows must total to the workshop row
 (enforced on the written bytes).
@@ -60,6 +60,7 @@ Still unclear, and listed in the export's `unverified` field and on the payroll 
 - Date format of the `C(8)` columns, two-digit year, decimals of `N(n)` columns.
 - Allowed values of `DSK_KIND`, `DSK_PRATE`, `DSK_BIMH`, `DSW_PRATE`; format of `DSK_LISTNO`; `DSW_SEX`/`DSW_NAT` words or codes.
 - Whether the table is the one of List Disk v6 (it is undated, floppy era).
+- `DSK_RATE` meaning (source: employee + employer share; we write 23) and `DSW_IDNO` filled with the national id.
 - `DSW_JOB`, `DSW_IDPLC`, `DSW_IDATE` are empty: we do not store them.
 
 One real file from the current List Disk program closes most of this.

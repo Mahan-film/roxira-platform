@@ -496,7 +496,7 @@ function InsuranceListCard({ runId }: { runId: number }) {
           : [
               ...list.warnings,
               "قالب DBF هنوز آماده‌ی بارگذاری نیست؛ پیش از ارسال، آن را در برنامه لیست بیمه باز و کنترل کنید. موارد تأییدنشده:",
-              ...list.unverified,
+              ...(list.unverified ?? []),
             ],
       );
     } catch (err) {
