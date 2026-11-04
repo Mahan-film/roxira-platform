@@ -127,7 +127,7 @@ function buildInvoice(overrides: Partial<InvoiceResponseDto> = {}): InvoiceRespo
     warehouseId: null,
     customerId: null,
     sellerInfo: { name: 'Seller', economicCode: '10101010101' },
-    buyerInfo: { name: 'Buyer', nationalId: '0012345678', economicCode: '0012345678' },
+    buyerInfo: { name: 'Buyer', nationalId: '0012345678', economicCode: '00123456780012' },
     items: [
       {
         description: 'Consulting',
@@ -271,7 +271,7 @@ describe('Moadian packet mapping', () => {
       todam: 0,
       tbill: 2_590_000,
       setm: MoadianSettlementMethod.CASH,
-      cap: 2_590_000,
+      cap: null,
       insp: null,
     });
     expect(header.tbill).toBe(buildInvoice().finalPayable);
@@ -298,14 +298,14 @@ describe('Moadian packet mapping', () => {
     expect(packet.header.bid).toBeNull();
   });
 
-  it('marks an 11-digit buyer id as a legal person and credit as insp', () => {
+  it('marks an 11-digit buyer id as a legal person; credit sends neither cap nor insp', () => {
     const packet = mapInvoiceToMoadianPacket(
       buildInvoice({ buyerInfo: { name: 'Co', nationalId: '10101234567' } }),
       { ...mappingContext, settlementMethod: MoadianSettlementMethod.CREDIT },
     );
     expect(packet.header.tob).toBe(MoadianBuyerType.LEGAL);
     expect(packet.header.cap).toBeNull();
-    expect(packet.header.insp).toBe(2_590_000);
+    expect(packet.header.insp).toBeNull();
   });
 
   it.each([
