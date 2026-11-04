@@ -49,7 +49,7 @@ Fail closed: a missing or invalid policy file, an unknown mode or a malformed ta
   `cheap` role may see `tenant-business` data. Cells are still masked first by `modules/data_import/masking.ts`.
   A refusal takes the existing deterministic fallback mapping.
 
-Not covered yet: the Python AI core (`smartjudge`) and the invoice-capture LLM service; they have their own role
+Not covered yet: the Python AI core (`smartjudge`), the invoice-capture LLM service and the import vision/OCR service (`modules/data_import/services/openrouter-vision.service.ts`, paid `vision` role only); they have their own role
 selection (`llm_router.py`, `capture-llm.service.ts`). Use `ai-data-policy.ts` the same way when they handle tenant data.
 
 Tests: `modules/ai_policy/ai-data-policy.spec.ts`, and the production-mode case in `modules/assistant/assistant-llm.service.spec.ts`.
