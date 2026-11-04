@@ -6,6 +6,10 @@ import { CaptureDocumentEntity } from '../invoice_capture/entities/capture.entit
 import { InvoicingModule } from '../invoicing/invoicing.module';
 import { MOADIAN_QUEUE } from './constants/moadian.constants';
 import { MoadianController } from './controllers/moadian.controller';
+import { CorporateTaxController } from './controllers/corporate-tax.controller';
+import { StatutoryParameterEntity } from '../hr/statutory/statutory-parameter.entity';
+import { StatutoryRepository } from '../hr/statutory/statutory.repository';
+import { CorporateTaxService } from './services/corporate-tax.service';
 import { LedgerExportController } from './controllers/ledger-export.controller';
 import { SeasonalReportController } from './controllers/seasonal-report.controller';
 import { TaxComplianceController } from './controllers/tax-compliance.controller';
@@ -48,11 +52,12 @@ import { TaxComplianceService } from './services/tax-compliance.service';
       MoadianSubmissionEntity,
       InvoiceEntity,
       CaptureDocumentEntity,
+      StatutoryParameterEntity,
     ]),
     InvoicingModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
   ],
-  controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController],
+  controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController],
   providers: [
     TaxComplianceService,
     TaxComplianceRepository,
@@ -61,6 +66,8 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     MoadianApiClient,
     MoadianProcessor,
     SeasonalReportService,
+    CorporateTaxService,
+    StatutoryRepository,
     LedgerExportRepository,
     LedgerExportService,
     VatReturnRepository,

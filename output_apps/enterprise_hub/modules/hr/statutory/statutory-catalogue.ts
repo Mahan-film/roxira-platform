@@ -36,6 +36,8 @@ export const STATUTORY_KEYS = {
   sanavat_days_per_year: { kind: 'count', label: 'روزهای مزد سنوات به‌ازای هر سال خدمت', required: false },
   sanavat_year_days: { kind: 'count', label: 'مبنای روزهای سال برای سنوات کسری سال', required: false },
   vat_general_rate: { kind: 'rate', label: 'نرخ عمومی مالیات بر ارزش افزوده', required: false },
+  corporate_tax_rate: { kind: 'rate', label: 'نرخ مالیات بر درآمد شرکت‌ها', required: false },
+  corporate_tax_effective_floor: { kind: 'rate', label: 'حداقل نرخ مؤثر مالیات بر درآمد شرکت‌ها', required: false },
 } as const satisfies Record<string, StatutoryKeyDefinition>;
 
 export type StatutoryKey = keyof typeof STATUTORY_KEYS;
