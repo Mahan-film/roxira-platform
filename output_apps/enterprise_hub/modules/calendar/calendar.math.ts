@@ -12,8 +12,8 @@ import { CalendarDate, CalendarError, CalendarId } from './calendar.types';
  */
 export const JALALI_MIN_YEAR = 1206;
 export const JALALI_MAX_YEAR = 1500;
-export const GREGORIAN_MIN_YEAR = 1828;
-export const GREGORIAN_MAX_YEAR = 2121;
+export const GREGORIAN_MIN_YEAR = 1827;
+export const GREGORIAN_MAX_YEAR = 2122;
 
 const JALALI_MONTH_LENGTHS = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
 const GREGORIAN_MONTH_LENGTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -175,6 +175,7 @@ export function fromEpochDay(calendar: CalendarId, epochDay: number): CalendarDa
 }
 
 export function convert(date: CalendarDate, to: CalendarId): CalendarDate {
+  assertValid(date);
   return date.calendar === to ? { ...date } : fromEpochDay(to, toEpochDay(date));
 }
 

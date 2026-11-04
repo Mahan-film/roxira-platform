@@ -215,6 +215,18 @@ describe('conversion', () => {
     }
   });
 
+  it('the whole Jalali range converts to Gregorian and back, boundary years included', () => {
+    expect(convert(j(JALALI_MIN_YEAR, 1, 1), 'gregorian')).toEqual(g(1827, 3, 22));
+    expect(convert(j(JALALI_MAX_YEAR, 12, 29), 'gregorian')).toEqual(g(2122, 3, 20));
+    for (const d of [j(JALALI_MIN_YEAR, 1, 1), j(JALALI_MIN_YEAR, 12, 29), j(JALALI_MAX_YEAR, 1, 1), j(JALALI_MAX_YEAR, 12, 29)]) {
+      expect(convert(convert(d, 'gregorian'), 'jalali')).toEqual(d);
+    }
+  });
+
+  it('convert validates even when the calendar does not change', () => {
+    expect(() => convert(j(1404, 12, 30), 'jalali')).toThrow();
+  });
+
   it('refuses epoch days outside the supported range', () => {
     expect(() => fromEpochDay('jalali', toEpochDay(j(JALALI_MAX_YEAR, 12, 29)) + 400)).toThrow();
     expect(() => fromEpochDay('gregorian', -200_000)).toThrow();

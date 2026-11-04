@@ -90,7 +90,7 @@ The `IR` pack is built **only from adapters over existing code**:
 
 Proof that behaviour is unchanged:
 
-1. No existing file is edited except the root `app.module.ts` (two module imports).
+1. No existing code file is edited except the root `app.module.ts` (module imports); only the requirement rows change in docs.
 2. Adapter tests call the pack and the wrapped function side by side and assert identical output (same chart accounts, same mapped packet, same statutory call arguments).
 3. The existing suites of `accounting`, `tax_compliance` and `hr` stay untouched and green.
 4. Nothing reads the pack in production code paths yet. Switching a caller to the pack is a separate, small, reviewed change per module.
