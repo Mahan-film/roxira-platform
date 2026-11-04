@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
+import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 import { BankingModule } from '../banking/banking.module';
 import { ChequesController } from './controllers/cheques.controller';
 import { ChequeEventEntity } from './entities/cheque-event.entity';
@@ -18,7 +19,7 @@ import { ChequesService } from './services/cheques.service';
  * Sayad numbers are stored as entered; there is no Sayad network integration.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([ChequeEntity, ChequeEventEntity]), AccountingModule, BankingModule],
+  imports: [TypeOrmModule.forFeature([ChequeEntity, ChequeEventEntity]), AccountingModule, BankingModule, PostingRulesModule],
   controllers: [ChequesController],
   providers: [ChequesService, ChequeReconService, ChequesRepository, TenantScope],
   exports: [ChequesService],

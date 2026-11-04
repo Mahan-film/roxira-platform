@@ -1,4 +1,4 @@
-import { CHEQUE_ACCOUNTS } from '../constants/cheque.constants';
+import { buildProposal } from '../../posting_rules/domain/posting-engine';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
 
 /** Amounts are integer minor units (bigint), never floats; see accounting/money.ts. */
@@ -9,14 +9,18 @@ export interface PostingLine {
 }
 
 type Rule = {
-  /** Journal lines for the move; null = status change only, no ledger effect. */
-  lines: ((amount: bigint) => PostingLine[]) | null;
+  /** Posting rules document type (see posting_rules/domain/cheque-templates.ts); null = status change only. */
+  docType: string | null;
   description: string;
 };
 
-const dr = (accountCode: string, amount: bigint): PostingLine => ({ accountCode, debit: amount, credit: 0n });
-const cr = (accountCode: string, amount: bigint): PostingLine => ({ accountCode, debit: 0n, credit: amount });
-const A = CHEQUE_ACCOUNTS;
+/**
+ * The lines a document type posts with the legacy default accounts (no tenant mapping): used by
+ * tests and previews. Real postings go through PostingRulesService so a tenant's mapping applies.
+ */
+export function linesFor(docType: string, amount: bigint): PostingLine[] {
+  return buildProposal({ docType, amounts: { amount } }).lines.map((l) => ({ accountCode: l.accountCode, debit: l.debit, credit: l.credit }));
+}
 
 const S = ChequeStatus;
 
@@ -41,36 +45,36 @@ const S = ChequeStatus;
 const TABLE: Record<ChequeDirection, Partial<Record<ChequeStatus, Partial<Record<ChequeStatus, Rule>>>>> = {
   [ChequeDirection.RECEIVED]: {
     [S.REGISTERED]: {
-      [S.DEPOSITED]: { description: 'واگذاری چک به بانک برای وصول', lines: (a) => [dr(A.NOTES_RECEIVABLE_IN_COLLECTION, a), cr(A.NOTES_RECEIVABLE_IN_HAND, a)] },
-      [S.CLEARED]: { description: 'وصول چک (ارائه مستقیم در بانک)', lines: (a) => [dr(A.BANK, a), cr(A.NOTES_RECEIVABLE_IN_HAND, a)] },
-      [S.BOUNCED]: { description: 'برگشت چک (ارائه مستقیم در بانک)', lines: (a) => [dr(A.RECEIVABLES, a), cr(A.NOTES_RECEIVABLE_IN_HAND, a)] },
-      [S.SPENT]: { description: 'خرج چک به شخص ثالث', lines: (a) => [dr(A.PAYABLES, a), cr(A.NOTES_RECEIVABLE_IN_HAND, a)] },
-      [S.RETURNED]: { description: 'استرداد چک به صادرکننده', lines: (a) => [dr(A.RECEIVABLES, a), cr(A.NOTES_RECEIVABLE_IN_HAND, a)] },
+      [S.DEPOSITED]: { description: 'واگذاری چک به بانک برای وصول', docType: 'cheque.received.deposit' },
+      [S.CLEARED]: { description: 'وصول چک (ارائه مستقیم در بانک)', docType: 'cheque.received.clear_direct' },
+      [S.BOUNCED]: { description: 'برگشت چک (ارائه مستقیم در بانک)', docType: 'cheque.received.bounce_direct' },
+      [S.SPENT]: { description: 'خرج چک به شخص ثالث', docType: 'cheque.received.spend' },
+      [S.RETURNED]: { description: 'استرداد چک به صادرکننده', docType: 'cheque.received.return' },
     },
     [S.DEPOSITED]: {
-      [S.CLEARED]: { description: 'وصول چک', lines: (a) => [dr(A.BANK, a), cr(A.NOTES_RECEIVABLE_IN_COLLECTION, a)] },
-      [S.BOUNCED]: { description: 'برگشت چک', lines: (a) => [dr(A.RECEIVABLES, a), cr(A.NOTES_RECEIVABLE_IN_COLLECTION, a)] },
+      [S.CLEARED]: { description: 'وصول چک', docType: 'cheque.received.clear' },
+      [S.BOUNCED]: { description: 'برگشت چک', docType: 'cheque.received.bounce' },
     },
     [S.BOUNCED]: {
-      [S.DEPOSITED]: { description: 'ارائه مجدد چک برگشتی به بانک', lines: (a) => [dr(A.NOTES_RECEIVABLE_IN_COLLECTION, a), cr(A.RECEIVABLES, a)] },
-      [S.RETURNED]: { description: 'استرداد چک برگشتی به صادرکننده', lines: null },
+      [S.DEPOSITED]: { description: 'ارائه مجدد چک برگشتی به بانک', docType: 'cheque.received.redeposit' },
+      [S.RETURNED]: { description: 'استرداد چک برگشتی به صادرکننده', docType: null },
     },
   },
   [ChequeDirection.ISSUED]: {
     [S.REGISTERED]: {
-      [S.DELIVERED]: { description: 'تحویل چک به ذی‌نفع', lines: null },
-      [S.CLEARED]: { description: 'پاس شدن چک پرداختنی', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.BANK, a)] },
-      [S.BOUNCED]: { description: 'برگشت چک صادرشده', lines: null },
-      [S.RETURNED]: { description: 'ابطال و استرداد چک صادرشده', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.PAYABLES, a)] },
+      [S.DELIVERED]: { description: 'تحویل چک به ذی‌نفع', docType: null },
+      [S.CLEARED]: { description: 'پاس شدن چک پرداختنی', docType: 'cheque.issued.clear' },
+      [S.BOUNCED]: { description: 'برگشت چک صادرشده', docType: null },
+      [S.RETURNED]: { description: 'ابطال و استرداد چک صادرشده', docType: 'cheque.issued.return' },
     },
     [S.DELIVERED]: {
-      [S.CLEARED]: { description: 'پاس شدن چک پرداختنی', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.BANK, a)] },
-      [S.BOUNCED]: { description: 'برگشت چک صادرشده', lines: null },
-      [S.RETURNED]: { description: 'ابطال و استرداد چک صادرشده', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.PAYABLES, a)] },
+      [S.CLEARED]: { description: 'پاس شدن چک پرداختنی', docType: 'cheque.issued.clear' },
+      [S.BOUNCED]: { description: 'برگشت چک صادرشده', docType: null },
+      [S.RETURNED]: { description: 'ابطال و استرداد چک صادرشده', docType: 'cheque.issued.return' },
     },
     [S.BOUNCED]: {
-      [S.CLEARED]: { description: 'پاس شدن چک پرداختنی پس از برگشت', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.BANK, a)] },
-      [S.RETURNED]: { description: 'ابطال و استرداد چک برگشتی صادرشده', lines: (a) => [dr(A.NOTES_PAYABLE, a), cr(A.PAYABLES, a)] },
+      [S.CLEARED]: { description: 'پاس شدن چک پرداختنی پس از برگشت', docType: 'cheque.issued.clear' },
+      [S.RETURNED]: { description: 'ابطال و استرداد چک برگشتی صادرشده', docType: 'cheque.issued.return' },
     },
   },
 };
@@ -96,14 +100,15 @@ export function partialPaymentPosting(
   direction: ChequeDirection,
   from: ChequeStatus,
   amount: bigint,
-): { description: string; lines: PostingLine[] } | null {
+): { description: string; docType: string; lines: PostingLine[] } | null {
+  const make = (description: string, docType: string) => ({ description, docType, lines: linesFor(docType, amount) });
   if (direction === ChequeDirection.RECEIVED) {
-    if (from === S.REGISTERED) return { description: 'وصول بخشی از چک (ارائه مستقیم در بانک)', lines: [dr(A.BANK, amount), cr(A.NOTES_RECEIVABLE_IN_HAND, amount)] };
-    if (from === S.DEPOSITED) return { description: 'وصول بخشی از چک', lines: [dr(A.BANK, amount), cr(A.NOTES_RECEIVABLE_IN_COLLECTION, amount)] };
+    if (from === S.REGISTERED) return make('وصول بخشی از چک (ارائه مستقیم در بانک)', 'cheque.received.clear_direct');
+    if (from === S.DEPOSITED) return make('وصول بخشی از چک', 'cheque.received.clear');
     return null;
   }
   if (from === S.REGISTERED || from === S.DELIVERED || from === S.BOUNCED) {
-    return { description: 'پرداخت بخشی از چک صادرشده', lines: [dr(A.NOTES_PAYABLE, amount), cr(A.BANK, amount)] };
+    return make('پرداخت بخشی از چک صادرشده', 'cheque.issued.clear');
   }
   return null;
 }
@@ -112,10 +117,10 @@ export function partialPaymentPosting(
 export const BLOCKED_AFTER_PARTIAL: ChequeStatus[] = [S.SPENT];
 
 /** Posting at creation: received cheque enters notes-in-hand, issued cheque enters notes payable. */
-export function creationPosting(direction: ChequeDirection, amount: bigint): { description: string; lines: PostingLine[] } {
-  return direction === ChequeDirection.RECEIVED
-    ? { description: 'دریافت چک', lines: [dr(A.NOTES_RECEIVABLE_IN_HAND, amount), cr(A.RECEIVABLES, amount)] }
-    : { description: 'صدور چک', lines: [dr(A.PAYABLES, amount), cr(A.NOTES_PAYABLE, amount)] };
+export function creationPosting(direction: ChequeDirection, amount: bigint): { description: string; docType: string; lines: PostingLine[] } {
+  const received = direction === ChequeDirection.RECEIVED;
+  const docType = received ? 'cheque.received.create' : 'cheque.issued.create';
+  return { description: received ? 'دریافت چک' : 'صدور چک', docType, lines: linesFor(docType, amount) };
 }
 
 /** Statuses that still await action: a bounced cheque stays open until it is cleared or returned. */
