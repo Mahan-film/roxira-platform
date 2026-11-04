@@ -231,11 +231,19 @@ test.describe('prod feature tour', () => {
     await gotoApp(page, '/app/invoicing');
     await page.getByRole('button', { name: 'فاکتور فروش' }).first().click();
     await expect(page.locator('#invoice-warehouse')).toBeVisible();
-    const scan = page.locator('#invoice-scan, [id$="-scan"], input[placeholder*="بارکد"]').first();
+    // The drawer renders InvoiceEditor (#148); the scan box must be the editor's own field.
+    const scan = page.locator('#invoice-scan');
     await expect(scan, 'barcode scan box on the sales invoice').toBeVisible();
     await scan.fill(stock.barcode);
     await scan.press('Enter');
-    await expect(page.locator('main')).toContainText(`کالای آزمایشی ${sfx}`, { timeout: 15_000 });
+    // The first (blank) row becomes the item; the name also appears in the row picker, so check the row itself.
+    await expect(page.getByPlaceholder('شرح کالا یا خدمت').first()).toHaveValue(`کالای آزمایشی ${sfx}`, { timeout: 15_000 });
+    await expect(scan).toHaveValue('');
+    // A second scan of the same barcode adds a unit to that row instead of a new row.
+    await scan.fill(stock.barcode);
+    await scan.press('Enter');
+    await expect(page.getByLabel('تعداد', { exact: true }).first()).toHaveValue('2', { timeout: 15_000 });
+    await expect(page.getByPlaceholder('شرح کالا یا خدمت')).toHaveCount(1);
   });
 
   test('06 anonymous POS sale', async ({ page }) => {
