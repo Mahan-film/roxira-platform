@@ -54,6 +54,7 @@ import { MicHint, useMicHint } from "./chat-onboarding";
 import { ChatHistory } from "./chat-history";
 import type { StoredConversation } from "@/lib/api/conversations-client";
 import dynamic from "next/dynamic";
+import { detectVoiceSupport, VOICE_UNAVAILABLE_FA, type VoiceSupport } from "@/lib/voice-support";
 
 // Loaded only when the user opens a live call (keeps the first load small).
 const LiveVoiceModal = dynamic(() => import("./live-voice-modal").then((m) => m.LiveVoiceModal), { ssr: false });
@@ -255,6 +256,11 @@ export function ChatShell() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const micHint = useMicHint();
+  // Lockdown Mode / hardened browsers: hide voice controls when unsupported (text chat stays).
+  const [voiceSupport, setVoiceSupport] = useState<VoiceSupport | null>(null);
+  useEffect(() => setVoiceSupport(detectVoiceSupport()), []);
+  const dictationOk = voiceSupport?.dictation !== false;
+  const liveOk = voiceSupport?.live !== false;
   const recoveredRef = useRef(false);
   const { getAccessToken, isAuthenticated, openLogin, expireSession, user } = useAuth();
   // «بررسی قرارداد»: armed by its chip (premium/team); the server re-checks the plan.
@@ -1688,6 +1694,7 @@ export function ChatShell() {
                   <Camera className="size-4" aria-hidden="true" />
                   <span>عکس گرفتن از سند</span>
                 </button>
+                {liveOk && (
                 <button
                   type="button"
                   role="menuitem"
@@ -1700,6 +1707,7 @@ export function ChatShell() {
                   <Phone className="size-4" aria-hidden="true" />
                   <span>مکالمه صوتی زنده</span>
                 </button>
+                )}
               </div>
             )}
           </div>
@@ -1724,6 +1732,7 @@ export function ChatShell() {
           />
 
           {/* دکمه تبدیل گفتار به متن (Voice STT) */}
+          {dictationOk && (
           <button
             type="button"
             onClick={toggleVoiceRecording}
@@ -1736,8 +1745,10 @@ export function ChatShell() {
           >
             {isVoiceRecording ? <Square className="size-4" aria-hidden="true" /> : <Mic className="size-5" aria-hidden="true" />}
           </button>
+          )}
 
           {/* دکمه تماس صوتی زنده (روی صفحه‌های باریک داخل منوی +) */}
+          {liveOk && (
           <button
             type="button"
             onClick={() => {
@@ -1749,6 +1760,11 @@ export function ChatShell() {
           >
             <Phone className="size-5" aria-hidden="true" />
           </button>
+          )}
+
+          {voiceSupport && !voiceSupport.dictation && !voiceSupport.live && (
+            <p role="status" className="basis-full text-xs text-slate-400">{VOICE_UNAVAILABLE_FA}</p>
+          )}
 
           {/* دکمه ارسال پیام */}
           <button
