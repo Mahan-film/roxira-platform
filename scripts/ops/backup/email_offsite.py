@@ -453,18 +453,33 @@ def offsite_messages(manifest: dict, parts: list[Part], sender: str, to: str) ->
 
 
 # ---------------------------------------------------------------- CLI
-def _smtp_env():
+def _smtp_env(offsite: bool = False):
     user = os.environ.get("BACKUP_SMTP_USER", "")
     raw = os.environ.get("BACKUP_SMTP_PASS", "")
     pw = "".join(raw.split())
-    to = os.environ.get("BACKUP_NOTIFY_TO", "")
+    # Offsite parts are a backup channel, not notifications: BACKUP_OFFSITE_TO can point them at a
+    # different mailbox than the owner's inbox (BACKUP_NOTIFY_TO).
+    to = (os.environ.get("BACKUP_OFFSITE_TO", "") if offsite else "") or os.environ.get("BACKUP_NOTIFY_TO", "")
     host = os.environ.get("BACKUP_SMTP_HOST", "smtp.gmail.com")
     port = int(os.environ.get("BACKUP_SMTP_PORT", "587"))
     return user, pw, to, host, port, os.environ.get("BACKUP_NOTIFY_FROM", user)
 
 
-def _deliver(msgs, dry_run: bool) -> int:
-    user, pw, to, host, port, _ = _smtp_env()
+def _notify_module():
+    """scripts/ops/notify/notify.py (digest queue + urgent Telegram); None when unavailable."""
+    try:
+        import importlib.util
+        path = Path(__file__).resolve().parents[1] / "notify" / "notify.py"
+        spec = importlib.util.spec_from_file_location("notify", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:  # noqa: BLE001 - notification must never break a backup
+        return None
+
+
+def _deliver(msgs, dry_run: bool, offsite: bool = False) -> int:
+    user, pw, to, host, port, _ = _smtp_env(offsite)
     if dry_run:
         for m in msgs:
             print(f"[dry-run] would send via {host}:{port} to={to or '<unset>'} subject={m['Subject']!r} "
@@ -509,10 +524,24 @@ def cmd_report(a) -> int:
     body = md.partition("## Local sets")[0]
     extra = [(Path(p).name, Path(p).read_bytes()) for p in a.attach]
     sender = _smtp_env()[5] or "unset@example.invalid"
-    msg = make_message(subject, body, sender, _smtp_env()[2] or "unset@example.invalid",
+    if not extra:
+        # Daily report: no mail of its own. A short summary + the file path go to the digest;
+        # a failing backup also sends one Telegram message (1/h per problem).
+        path = str(Path(a.out_dir) / f"backup-report-{date}.md") if a.out_dir else ""
+        if a.dry_run:
+            print(f"[dry-run] would queue for the digest: {subject} file={path}")
+            return 0
+        mod = _notify_module()
+        if mod:
+            mod.enqueue_report("backup", subject, body, path)
+            if not ok:
+                mod.urgent("backup:report", f"{subject}. Details: {path}")
+        return 0
+    # Weekly config bundle attached: this IS the offsite copy, so it is mailed (once a week).
+    msg = make_message(subject, body, sender, _smtp_env(True)[2] or "unset@example.invalid",
                        [(f"backup-report-{date}.md", md.encode()),
                         (f"manifest-{date}.json", json.dumps(m, indent=2).encode())] + extra)
-    return _deliver([msg], a.dry_run)
+    return _deliver([msg], a.dry_run, offsite=True)
 
 
 def cmd_offsite(a) -> int:
@@ -528,16 +557,22 @@ def cmd_offsite(a) -> int:
         print(f"email_offsite: {exc}", file=sys.stderr)
         return 2
     sender = _smtp_env()[5] or "unset@example.invalid"
-    to = _smtp_env()[2] or "unset@example.invalid"
+    to = _smtp_env(True)[2] or "unset@example.invalid"
+    if state["mails"] > 0 and not a.dry_run and not os.environ.get("BACKUP_OFFSITE_TO"):
+        # Same mailbox as the owner's inbox: at most one offsite run per day.
+        print("email_offsite: offsite already mailed today; skipping (set BACKUP_OFFSITE_TO for a separate mailbox)")
+        return 0
     (work / f"offsite-manifest-{date}.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     if manifest["status"] != "OK":
         print("email_offsite: " + manifest["note"], file=sys.stderr)
         note = make_message(f"[roxira-backup] offsite {date}: NOT SENT (over cap)", manifest["note"] + "\n", sender, to,
                             [(f"offsite-manifest-{date}.json", json.dumps(manifest, indent=2).encode())])
-        _deliver([note], a.dry_run)
+        mod = _notify_module()
+        if mod and not a.dry_run:
+            mod.enqueue_report("backup", f"offsite {date}: NOT SENT (over cap)", manifest["note"])
         return 5
     msgs = offsite_messages(manifest, parts, sender, to)
-    rc = _deliver(msgs, a.dry_run)
+    rc = _deliver(msgs, a.dry_run, offsite=True)
     if rc == 0 and not a.dry_run:
         state["bytes"] += sum(p.size for p in parts)
         state["mails"] += len(parts)

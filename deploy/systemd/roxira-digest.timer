@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira digest e-mail at 08:00 and 20:00 Tehran time (the only routine e-mails)
+
+[Timer]
+OnCalendar=*-*-* 08:00:00 Asia/Tehran
+OnCalendar=*-*-* 20:00:00 Asia/Tehran
+Persistent=true
+
+[Install]
+WantedBy=timers.target

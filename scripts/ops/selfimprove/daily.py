@@ -119,7 +119,8 @@ def main() -> int:
     else:
         print(text)
     if not mc.silenced():
-        mc.send_email(f"[Roxira] Smart Judge daily improvement report {day}", text, dry_run=a.dry_run)
+        mc.queue_report(f"Smart Judge daily improvement report {day}", text,
+                        path=os.path.join(common.REPORT_DIR, day + ".md"), source="selfimprove", dry_run=a.dry_run)
     n = open_issues(report.actionable_items(ana, golden), os.path.join(common.STATE_DIR, "daily_state.json"), a.dry_run)
     print(f"report {day} done; issues opened: {n}; spent {ledger.spent():.4f} USD; host {socket.gethostname()}; t={int(time.time())}")
     return 0

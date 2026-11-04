@@ -1,0 +1,15 @@
+[Unit]
+Description=Roxira notification digest (one e-mail, grouped by severity)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/roxira/monitor.env
+EnvironmentFile=-/opt/roxira_platform/.env
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/notify/notify.py --digest
+StateDirectory=roxira-notify
+User=root
+Nice=10
+TimeoutStartSec=120

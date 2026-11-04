@@ -1,8 +1,8 @@
 [Unit]
-Description=Roxira DR backup daily status email (06:30 UTC)
+Description=Roxira DR backup daily status email (07:30 Tehran, before the 08:00 digest)
 
 [Timer]
-OnCalendar=*-*-* 06:30:00
+OnCalendar=*-*-* 04:00:00 UTC
 Persistent=true
 
 [Install]

@@ -204,7 +204,7 @@ def main(argv=None) -> int:
             if partial:
                 body += (f"\nPARTIAL: {DAILY_DEADLINE_S}s deadline reached; "
                          "counts cover only the lines read before it.\n")
-        mc.send_email("[Roxira daily] production summary", body + f"\nhost: {host}\n", dry_run=args.dry_run)
+        mc.queue_report("production summary (24 h)", body + f"\nhost: {host}\n", source="logs", dry_run=args.dry_run)
         return 0
 
     state_path = args.state or os.environ.get("MONITOR_LOG_STATE_FILE", "/var/lib/roxira-monitor/log_state.json")
@@ -224,14 +224,10 @@ def main(argv=None) -> int:
     checks, alerts = mc.evaluate(state.get("checks", {}), results, time.time())
     for key, (ok, detail) in sorted(results.items()):
         print(f"{'OK  ' if ok else 'FAIL'} {key}: {detail}")
-    if alerts:
-        subject, body = mc.format_alerts(alerts, host, "logs")
-        if stats and any(a[0] != "RECOVERED" for a in alerts):
-            body += "\n" + summary_text(stats, args.minutes)
-        if mc.silenced() and not args.dry_run:
-            print("alerts silenced:", subject)
-        else:
-            mc.send_email(subject, body, dry_run=args.dry_run)
+    if mc.silenced() and not args.dry_run:
+        print("alerts silenced:", ", ".join(a[1] for a in alerts))
+    else:
+        mc.queue_alerts(alerts, "logs", dry_run=args.dry_run)
     if not args.dry_run:
         mc.save_state(state_path, {"checks": checks, "last_run": time.time()})
     return 1 if any(not v[0] for v in results.values()) else 0
