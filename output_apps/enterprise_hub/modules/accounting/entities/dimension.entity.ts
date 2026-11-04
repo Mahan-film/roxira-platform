@@ -20,6 +20,10 @@ export class DimensionEntity {
   @Column({ type: 'varchar', length: 128 })
   name: string;
 
+  /** Parent cost centre (cost centres only); null at the top of the tree. */
+  @Column({ type: 'integer', name: 'parent_id', nullable: true })
+  parentId: number | null;
+
   @Column({ type: 'boolean', default: true })
   active: boolean;
 

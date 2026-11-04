@@ -17,6 +17,12 @@ export class CreateDimensionDto {
   @MinLength(1)
   @MaxLength(128)
   name: string;
+
+  @ApiPropertyOptional({ example: 'CC-100', description: 'کد مرکز هزینهٔ بالادست (فقط برای مرکز هزینه)' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9._-]{1,32}$/, { message: 'کد فقط حروف لاتین، عدد و . _ - تا ۳۲ نویسه' })
+  parentCode?: string;
 }
 
 export class DimensionListQueryDto {

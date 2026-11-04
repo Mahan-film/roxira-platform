@@ -31,7 +31,10 @@ export class DimensionRepository {
   }
 
   /** Inserts one dimension; resolves null when (tenant, kind, code) already exists. */
-  create(tenantId: string, data: { kind: DimensionKind; code: string; name: string }): Promise<DimensionEntity | null> {
+  create(
+    tenantId: string,
+    data: { kind: DimensionKind; code: string; name: string; parentId?: number | null },
+  ): Promise<DimensionEntity | null> {
     return this.scoped(tenantId, async (m) => {
       const rows: Array<{ id: number }> = (
         await m
@@ -45,6 +48,10 @@ export class DimensionRepository {
       ).raw;
       return rows.length === 0 ? null : m.findOneOrFail(DimensionEntity, { where: { tenantId, id: rows[0].id } });
     });
+  }
+
+  findByCode(tenantId: string, kind: DimensionKind, code: string): Promise<DimensionEntity | null> {
+    return this.scoped(tenantId, (m) => m.findOne(DimensionEntity, { where: { tenantId, kind, code } }));
   }
 
   /** Debit, credit and balance per dimension over POSTED normal and opening lines in the range. */

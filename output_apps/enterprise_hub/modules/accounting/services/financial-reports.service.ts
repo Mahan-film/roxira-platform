@@ -135,7 +135,7 @@ export class FinancialReportsService {
     return { yearStart: from < yearStart ? from : yearStart, from, to };
   }
 
-  private async accounts(tenantId: string): Promise<ReportAccount[]> {
+  async accounts(tenantId: string): Promise<ReportAccount[]> {
     const rows = await this.accounting.findAllAccounts(tenantId);
     return rows.map((row) => ({
       id: row.id,
@@ -161,7 +161,7 @@ export class FinancialReportsService {
     }));
   }
 
-  private toBalance(row: AccountBucketRow, account: ReportAccount): AccountBalance {
+  toBalance(row: AccountBucketRow, account: ReportAccount): AccountBalance {
     return {
       account,
       ...classify(account),
@@ -196,7 +196,7 @@ export class FinancialReportsService {
       .map(({ account, line }) => ({ code: account.code, name: account.name, line }));
   }
 
-  private summarize(
+  summarize(
     period: ResolvedPeriod,
     columns: TrialBalanceColumns,
     rows: TrialBalanceRow[],
