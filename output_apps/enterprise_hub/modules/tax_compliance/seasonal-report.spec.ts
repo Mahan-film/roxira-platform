@@ -73,9 +73,29 @@ function invoice(over: Partial<InvoiceEntity>): InvoiceEntity {
   } as unknown as InvoiceEntity;
 }
 
+/** Repository stub: no purchases unless a test says otherwise. */
+const repoStub = (
+  findIssuedBetween: jest.Mock,
+  purchases: { invoices?: InvoiceEntity[]; captures?: unknown[] } = {},
+): SeasonalReportRepository =>
+  ({
+    findIssuedBetween,
+    findPurchaseInvoicesBetween: jest.fn().mockResolvedValue(purchases.invoices ?? []),
+    findPostedCapturePurchasesBetween: jest.fn().mockResolvedValue(purchases.captures ?? []),
+  }) as unknown as SeasonalReportRepository;
+
+const capture = (draft: Record<string, unknown>, edited: Record<string, unknown> | null = null) =>
+  ({
+    id: 'c1',
+    tenantId: 'tenant-a',
+    status: 'posted',
+    extracted: { draft: { kind: 'purchase', currency: 'IRR', fxRate: null, ...draft } },
+    edited,
+  }) as unknown;
+
 describe('SeasonalReportService', () => {
   const findIssuedBetween = jest.fn();
-  const service = new SeasonalReportService({ findIssuedBetween } as unknown as SeasonalReportRepository);
+  const service = new SeasonalReportService(repoStub(findIssuedBetween));
   beforeEach(() => findIssuedBetween.mockReset());
 
   it('queries the exact quarter range for the caller tenant', async () => {
@@ -87,7 +107,7 @@ describe('SeasonalReportService', () => {
     expect(to.toISOString()).toBe(tehranMidnightIso(1405, 7, 1));
   });
 
-  it('sums base and VAT per rate and never reports purchases as zero', async () => {
+  it('sums base and VAT per rate', async () => {
     findIssuedBetween.mockResolvedValue([
       invoice({}),
       invoice({
@@ -105,7 +125,7 @@ describe('SeasonalReportService', () => {
     expect(report.sales.taxableBase).toBe(1800 + 500);
     expect(report.sales.vat).toBe(180);
     expect(report.sales.byRate.map((r) => r.rate)).toEqual([0, 0.1]);
-    expect(report.purchases.available).toBe(false);
+    expect(report.purchases).toMatchObject({ available: true, documentCount: 0, inputVat: 0 });
     expect(report.notes.join(' ')).toContain('قالب رسمی');
   });
 
@@ -165,7 +185,7 @@ describe('agreement with the issued journal entry (PR 902 amounts)', () => {
 
   it('vat report, transactions list and ledger amounts agree', async () => {
     const findIssuedBetween = jest.fn().mockResolvedValue([fxInvoice]);
-    const svc = new SeasonalReportService({ findIssuedBetween } as unknown as SeasonalReportRepository);
+    const svc = new SeasonalReportService(repoStub(findIssuedBetween));
     const amounts = invoiceRialAmounts(fxInvoice);
     const report = await svc.vatReport('tenant-a', 1405, 1);
     const { rows } = await svc.transactions('tenant-a', 1405, 1);
@@ -175,6 +195,89 @@ describe('agreement with the issued journal entry (PR 902 amounts)', () => {
     expect(rows[0].taxableBase).toBe(report.sales.taxableBase);
     expect(rows[0].vat).toBe(report.sales.vat);
     expect(Math.round(sumRates * 100)).toBe(Number(amounts.salesMinor));
+  });
+});
+
+describe('purchases and input VAT', () => {
+  const purchaseInvoice = invoice({
+    id: 'p1',
+    taxInvoiceNumber: 'P-1',
+    direction: 'PURCHASE',
+    buyerInfo: { name: 'Seller Co', nationalId: '999' },
+    issuedAt: new Date('2026-05-01T08:00:00Z'),
+  } as Partial<InvoiceEntity>);
+
+  it('adds purchase invoices and posted captures into one input-VAT total', async () => {
+    const svc = new SeasonalReportService(
+      repoStub(jest.fn().mockResolvedValue([]), {
+        invoices: [purchaseInvoice],
+        captures: [
+          capture({
+            invoiceNumber: 'K-7',
+            date: '2026-05-10',
+            sellerName: 'Cap Seller',
+            sellerTaxId: '111',
+            items: [{ total: '500.00' }, { total: '250.50' }],
+            tax: '75.05',
+          }),
+        ],
+      }),
+    );
+    const report = await svc.vatReport('tenant-a', 1405, 1);
+    expect(report.purchases).toMatchObject({
+      documentCount: 2,
+      invoiceCount: 1,
+      captureCount: 1,
+      taxableBase: 1800 + 750.5,
+      inputVat: 180 + 75.05,
+      unreadableCaptures: 0,
+    });
+    const { purchaseRows } = await svc.transactions('tenant-a', 1405, 1);
+    expect(purchaseRows.map((r) => r.documentNumber)).toEqual(['P-1', 'K-7']);
+    expect(purchaseRows[0].source).toBe('invoice');
+  });
+
+  it('a capture uses the edited draft and converts foreign currency like the voucher', async () => {
+    const svc = new SeasonalReportService(
+      repoStub(jest.fn().mockResolvedValue([]), {
+        captures: [
+          capture(
+            { date: '2026-05-10', items: [{ total: '1.00' }], tax: '0.10' },
+            { kind: 'purchase', currency: 'USD', fxRate: '600000', date: '2026-05-10', items: [{ total: '2.00' }], tax: '0.20' },
+          ),
+        ],
+      }),
+    );
+    const report = await svc.vatReport('tenant-a', 1405, 1);
+    expect(report.purchases.taxableBase).toBe(1_200_000);
+    expect(report.purchases.inputVat).toBe(120_000);
+  });
+
+  it('counts an unreadable capture instead of dropping it silently', async () => {
+    const svc = new SeasonalReportService(
+      repoStub(jest.fn().mockResolvedValue([]), {
+        captures: [capture({ date: '2026-05-10', items: [{ total: 'abc' }], tax: '1.00' })],
+      }),
+    );
+    const report = await svc.vatReport('tenant-a', 1405, 1);
+    expect(report.purchases).toMatchObject({ documentCount: 0, unreadableCaptures: 1 });
+  });
+
+  it('asks the repository for the exact Tehran day bounds of the quarter, for the caller tenant', async () => {
+    const stub = repoStub(jest.fn().mockResolvedValue([]));
+    await new SeasonalReportService(stub).vatReport('tenant-a', 1405, 1);
+    expect(stub.findPostedCapturePurchasesBetween).toHaveBeenCalledWith('tenant-a', '2026-03-21', '2026-06-22');
+  });
+
+  it('purchases CSV lists both sources and neutralises formulas', async () => {
+    const svc = new SeasonalReportService(
+      repoStub(jest.fn().mockResolvedValue([]), {
+        captures: [capture({ date: '2026-05-10', sellerName: '=1+1', items: [{ total: '10.00' }], tax: '1.00' })],
+      }),
+    );
+    const csv = await svc.purchasesCsv('tenant-a', 1405, 1);
+    expect(csv).toContain("'=1+1");
+    expect(csv).toContain('سند ثبت‌شده');
   });
 });
 

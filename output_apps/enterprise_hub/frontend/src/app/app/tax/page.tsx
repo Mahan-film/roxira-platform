@@ -25,6 +25,7 @@ import {
 import { listInvoices } from "@/lib/api/invoicing-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import {
+  type SeasonalCsvKind,
   downloadSeasonalCsv,
   getMoadianStatus,
   getMoadianSubmission,
@@ -342,7 +343,7 @@ function SeasonalCard() {
     return () => controller.abort();
   }, [year, quarter]);
 
-  async function download(kind: "vat-seasonal" | "seasonal-transactions") {
+  async function download(kind: SeasonalCsvKind) {
     try {
       await downloadSeasonalCsv(kind, year, quarter);
     } catch (err) {
@@ -389,6 +390,9 @@ function SeasonalCard() {
           <Button variant="outline" size="sm" onClick={() => download("seasonal-transactions")} disabled={loading || !tx}>
             <Download className="size-4" /> CSV فهرست فروش
           </Button>
+          <Button variant="outline" size="sm" onClick={() => download("seasonal-purchases")} disabled={loading || !tx}>
+            <Download className="size-4" /> CSV خرید و مالیات ورودی
+          </Button>
         </div>
         <LoadingLine show={loading} />
         {error && <ErrorNotice title="خطا" message={error} />}
@@ -425,8 +429,18 @@ function SeasonalCard() {
               </TableBody>
             </Table>
             <Alert>
-              <AlertTitle>خرید ثبت نشده است</AlertTitle>
-              <AlertDescription>{vat.purchases.note}</AlertDescription>
+              <AlertTitle>خرید و مالیات ورودی</AlertTitle>
+              <AlertDescription>
+                {formatNumber(vat.purchases.documentCount)} سند خرید (
+                {formatNumber(vat.purchases.invoiceCount)} صورتحساب،{" "}
+                {formatNumber(vat.purchases.captureCount)} سند ثبت‌شده) — مبلغ مشمول{" "}
+                {formatMoneyRial(Number(vat.purchases.taxableBase))}، مالیات ورودی{" "}
+                {formatMoneyRial(Number(vat.purchases.inputVat))}
+                {vat.purchases.unreadableCaptures > 0
+                  ? ` — ${formatNumber(vat.purchases.unreadableCaptures)} سند ثبت‌شده خوانا نبود و لحاظ نشد`
+                  : ""}
+                . کسر مالیات ورودی به تطبیق کارپوشه وابسته است که هنوز انجام نمی‌شود.
+              </AlertDescription>
             </Alert>
           </>
         )}
