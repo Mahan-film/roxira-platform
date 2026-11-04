@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 import { BadRequestException } from '@nestjs/common';
 import { AccountResponseDto } from '../accounting/dto/account-response.dto';
 import { AccountType } from '../accounting/enums/accounting.enum';
@@ -102,6 +103,8 @@ function setup() {
     inventoryRepo as unknown as InventoryRepository,
     undefined,
     queue as never,
+    undefined,
+    fixtureVatRates(),
   );
   const posting = new InvoicePostingService(
     repo as unknown as InvoicingRepository,

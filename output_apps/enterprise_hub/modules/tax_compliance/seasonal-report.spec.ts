@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { jalaliToGregorian } from '../data_import/normaliser/normalise';
-import { DEFAULT_VAT_RATE } from '../invoicing/constants/invoicing.constants';
+import { DEFAULT_VAT_RATE } from '../invoicing/__fixtures__/vat-rate.fixture';
 import { InvoiceEntity } from '../invoicing/entities/invoice.entity';
 import { seededRates } from '../hr/statutory/__fixtures__/seeded-rates';
 import { InvoicePostingService } from '../invoicing/services/invoice-posting.service';

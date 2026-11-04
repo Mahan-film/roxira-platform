@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 import {
   ConflictException,
   ForbiddenException,
@@ -98,7 +99,16 @@ const buildDto = (taxInvoiceNumber: string): CreateInvoiceDto => ({
 const buildService = () => {
   const repository =
     new InMemoryInvoicingRepository() as unknown as InvoicingRepository;
-  return { repository, service: new InvoicingService(repository, currencyService) };
+  return { repository, service: new InvoicingService(
+    repository,
+    currencyService,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fixtureVatRates(),
+  ) };
 };
 
 describe('InvoicingRepository — tenant scoping', () => {

@@ -1,5 +1,6 @@
 import { InvoiceJurisdiction } from './enums/invoice-jurisdiction.enum';
 import 'reflect-metadata';
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 import { Job, Queue } from 'bullmq';
 import { AccountResponseDto } from '../accounting/dto/account-response.dto';
 import { CreateAccountDto } from '../accounting/dto/create-account.dto';
@@ -506,6 +507,8 @@ describe('InvoicingService — enqueues suite events', () => {
       undefined,
       undefined,
       queue as unknown as Queue,
+      undefined,
+      fixtureVatRates(),
     );
     return { service, repo, queue };
   };
@@ -589,6 +592,12 @@ describe('InvoicingService — enqueues suite events', () => {
     const service = new InvoicingService(
       repo as unknown as InvoicingRepository,
       currencyService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      fixtureVatRates(),
     );
 
     await expect(

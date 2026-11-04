@@ -1,15 +1,11 @@
 /** حداکثر تعداد اقلام کالا/خدمت قابل قبول در هر صورتحساب */
 export const MAX_INVOICE_ITEMS = 200;
 
-/**
- * نرخ پیش‌فرض مالیات بر ارزش افزوده (VAT) — قابل بازنویسی با تنظیم هر مستأجر
- * (`tenants.default_vat_rate`). مقدار به‌صورت نسبت (۰٫۱ = ۱۰٪) ذخیره می‌شود و
- * نرخ نهایی هر سطر روی همان سطر صورتحساب نگه داشته می‌شود.
+/*
+ * The general VAT rate is not a code constant: it is read by invoice date from the statutory
+ * store (`vat_general_rate`), see services/vat-rate.resolver.ts. Tests use
+ * __fixtures__/vat-rate.fixture.ts.
  */
-export const DEFAULT_VAT_RATE = 0.1;
-
-/** نام سازگار با نسخه قبلی؛ همان نرخ پیش‌فرض ۱۰٪ است. */
-export const VAT_RATE = DEFAULT_VAT_RATE;
 
 /**
  * نرخ پیش‌فرض VAT صورتحساب‌های بین‌المللی (INTL): صفر، مگر اینکه نرخ هر سطر

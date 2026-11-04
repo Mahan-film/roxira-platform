@@ -5,6 +5,9 @@ import { AccountingModule } from '../accounting/accounting.module';
 import { CrmModule } from '../crm/crm.module';
 import { CurrencyModule } from '../currency/currency.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { TenantScope } from '../access/services/tenant-scope';
+import { StatutoryParameterEntity } from '../hr/statutory/statutory-parameter.entity';
+import { StatutoryRepository } from '../hr/statutory/statutory.repository';
 import { TenantsModule } from '../tenants/tenants.module';
 import { SUITE_EVENTS_QUEUE } from './constants/suite-events.constants';
 import { PosSalesController } from './controllers/pos-sales.controller';
@@ -15,6 +18,7 @@ import { SuiteEventsProcessor } from './processors/suite-events.processor';
 import { InvoicingRepository } from './repositories/invoicing.repository';
 import { InvoicePostingService } from './services/invoice-posting.service';
 import { InvoicingService } from './services/invoicing.service';
+import { VatRateResolver } from './services/vat-rate.resolver';
 
 /**
  * ماژول صورتحساب مالیاتی هوشمند (Smart Invoicing).
@@ -29,7 +33,7 @@ import { InvoicingService } from './services/invoicing.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InvoiceEntity]),
+    TypeOrmModule.forFeature([InvoiceEntity, StatutoryParameterEntity]),
     CurrencyModule,
     CrmModule,
     InventoryModule,
@@ -44,6 +48,10 @@ import { InvoicingService } from './services/invoicing.service';
     InvoicePostingService,
     PosSaleService,
     SuiteEventsProcessor,
+    // VAT-01: the general VAT rate comes from the statutory store, read-only here.
+    VatRateResolver,
+    StatutoryRepository,
+    TenantScope,
   ],
   exports: [InvoicingService],
 })
