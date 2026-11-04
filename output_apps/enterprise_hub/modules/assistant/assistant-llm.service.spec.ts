@@ -121,6 +121,14 @@ describe('AssistantLlmService', () => {
       const service = new AssistantLlmService(configWith({ OPENROUTER_API_KEY: 'test', MODELS_CONFIG_PATH: file }));
       await service.complete([{ role: 'user', content: 'x' }], []);
       expect(models).toEqual(['vendor/paid-a']);
+      // a :free id listed under the paid role is never tried with tenant data either
+      global.fetch = jest.fn(async (_url: unknown, init?: { body?: string }) => {
+        models.push(JSON.parse(String(init?.body)).model);
+        return { ok: false, status: 500, json: async () => ({}) };
+      }) as unknown as typeof fetch;
+      models.length = 0;
+      await expect(service.complete([{ role: 'user', content: 'x' }], [])).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(models).toEqual(['vendor/paid-a']);
     } finally {
       writePolicy('test_accounts');
     }

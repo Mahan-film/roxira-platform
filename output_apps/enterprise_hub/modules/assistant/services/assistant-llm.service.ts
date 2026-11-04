@@ -217,7 +217,7 @@ export class AssistantLlmService {
     const policy = loadAiDataPolicy(paths);
     for (const file of paths) {
       try {
-        const found = policy.filterByRole('tenant-business', buildCandidates(fs.readFileSync(file, 'utf8')));
+        const found = policy.filterModels('tenant-business', buildCandidates(fs.readFileSync(file, 'utf8')));
         if (found.length > 0) {
           this.cachedCandidates = found;
           return found;

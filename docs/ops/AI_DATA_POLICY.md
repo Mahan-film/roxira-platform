@@ -18,7 +18,8 @@ A role in `config/models.yaml` has a `data_policy`. `ai_data_policy.json` maps i
 - `non_sensitive_only` (the `free` role, free tiers) is `may_log`: the provider may log or train on prompts.
 - `standard` (paid roles such as `cheap`, `strong`) is `no_log`: paid terms, and requests also send `provider.data_collection = deny`.
 
-A role with no `data_policy`, or one the file does not map, counts as `may_log`.
+A role with no `data_policy`, or one the file does not map, counts as `may_log`. A model id ending in `:free`, and
+`openrouter/free`, is `may_log` whatever role lists it, so moving a free id into a paid role cannot slip past the policy.
 
 ## The switch
 

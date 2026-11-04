@@ -46,6 +46,33 @@ export class AiDataPolicy {
     return this.roleClass.get(role) ?? 'may_log';
   }
 
+  /**
+   * Provider class of one model of a role. A free-tier id (`:free`, OpenRouter's `openrouter/free`
+   * router) may log prompts whatever role it was listed under, so it is `may_log` even inside a
+   * paid role: moving a free id into `cheap` cannot slip it past the policy.
+   */
+  providerClassOfModel(role: string, modelId: string): ProviderClass {
+    if (modelId.endsWith(':free') || modelId === 'openrouter/free') return 'may_log';
+    return this.providerClassOfRole(role);
+  }
+
+  allowsModel(dataClass: DataClass, role: string, modelId: string): boolean {
+    return this.allows(dataClass, this.providerClassOfModel(role, modelId));
+  }
+
+  /** Throws unless this exact model may see the data class. */
+  assertModel(dataClass: DataClass, role: string, modelId: string): void {
+    const providerClass = this.providerClassOfModel(role, modelId);
+    if (!this.allows(dataClass, providerClass)) {
+      throw new AiDataPolicyError(dataClass, role, providerClass, this.mode);
+    }
+  }
+
+  /** Keeps the candidates whose model may see the data class, in order. */
+  filterModels<T extends { id: string; role: string }>(dataClass: DataClass, items: T[]): T[] {
+    return items.filter((item) => this.allowsModel(dataClass, item.role, item.id));
+  }
+
   allows(dataClass: DataClass, providerClass: ProviderClass): boolean {
     return this.allowed[dataClass].includes(providerClass);
   }

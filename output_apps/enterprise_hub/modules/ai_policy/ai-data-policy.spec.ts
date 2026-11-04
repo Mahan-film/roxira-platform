@@ -41,6 +41,18 @@ describe('AiDataPolicy', () => {
     expect(p.filterByRole('tenant-business', [{ role: 'free' }, { role: 'cheap' }])).toEqual([{ role: 'cheap' }]);
   });
 
+  it('a free-tier model id is may_log even when listed under a paid role', () => {
+    const p = parseAiDataPolicy(MODELS, POLICY('production'));
+    expect(p.providerClassOfModel('cheap', 'vendor/x:free')).toBe('may_log');
+    expect(p.providerClassOfModel('cheap', 'openrouter/free')).toBe('may_log');
+    expect(p.providerClassOfModel('cheap', 'vendor/paid')).toBe('no_log');
+    expect(() => p.assertModel('tenant-business', 'cheap', 'vendor/x:free')).toThrow(AiDataPolicyError);
+    expect(() => p.assertModel('tenant-business', 'cheap', 'vendor/paid')).not.toThrow();
+    expect(p.filterModels('personal', [{ id: 'a:free', role: 'cheap' }, { id: 'b', role: 'cheap' }])).toEqual([{ id: 'b', role: 'cheap' }]);
+    // test_accounts keeps the owner rule: nothing is filtered
+    expect(parseAiDataPolicy(MODELS, POLICY('test_accounts')).allowsModel('personal', 'cheap', 'a:free')).toBe(true);
+  });
+
   it('the env override flips the switch without touching the file', () => {
     const p = parseAiDataPolicy(MODELS, POLICY('test_accounts'), 'production');
     expect(p.mode).toBe('production');
