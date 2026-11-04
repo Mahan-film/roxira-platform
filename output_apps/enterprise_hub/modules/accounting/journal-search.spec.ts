@@ -90,6 +90,14 @@ describe('AccountingService.findAllJournalEntries search routing', () => {
     expect(repo.searchEntries).not.toHaveBeenCalled();
   });
 
+  it('escapes entry number wildcards on the old path like the search path (#128)', async () => {
+    const { repo, service } = setup();
+    await service.findAllJournalEntries(T, query({ entryNumber: '50%_a' }));
+    const [, options] = repo.findAndCountEntries.mock.calls[0];
+    expect(options.where.entryNumber.value).toBe(likeContains('50%_a'));
+    expect(options.where.entryNumber.value).toBe('%50\\%\\_a%');
+  });
+
   it('uses the search with trimmed values and the page window', async () => {
     const { repo, service } = setup();
     const page = await service.findAllJournalEntries(T, query({ accountCode: ' 1010 ', text: '  ', minAmount: '5' }));
