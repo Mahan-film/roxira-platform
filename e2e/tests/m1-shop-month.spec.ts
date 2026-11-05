@@ -783,7 +783,13 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const balanceAfterIssue = (code: string) => balanceOf(accountsAfterIssue, code);
     const balanceBeforeIssue = (code: string) => balanceOf(accountsBefore, code);
     const receivableAfterIssue = balanceAfterIssue('1201');
-    expect(receivableAfterIssue).toBe(13_273_675_000n);
+    // Evidence for a mismatch: every account the sale issue phase moved (code name delta, debit-positive).
+    const movedBySales = accountsAfterIssue
+      .map((a) => ({ a, delta: balanceOf(accountsAfterIssue, a.code) - balanceOf(accountsBefore, a.code) }))
+      .filter((m) => accountsBefore.some((b) => b.code === m.a.code) && m.delta !== 0n)
+      .map((m) => `${m.a.code} ${m.a.name ?? ''} ${m.delta}`);
+    test.info().annotations.push({ type: 'moved-by-sales', description: movedBySales.join('; ') });
+    expect(receivableAfterIssue, `1201 after issuing; accounts the sales moved: ${movedBySales.join('; ')}`).toBe(13_273_675_000n);
     expect(receivableAfterIssue).toBe(README_TOTALS.receivablesOpening + allSales);
     // Hand-computed deltas after the issue phase (balances are debit-positive, credits are negative).
     expect(
