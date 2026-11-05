@@ -13,6 +13,8 @@ import { FixedAssetRepository } from './repositories/fixed-asset.repository';
 import { AccountingService } from './services/accounting.service';
 import { ChartTemplateService } from './services/chart-template.service';
 import { FixedAssetService } from './services/fixed-asset.service';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -71,7 +73,7 @@ describePg('Fixed assets on PostgreSQL', () => {
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     const repo = new AccountingRepository(new TenantScope(ds));
     accounting = new AccountingService(repo, currency);
-    assets = new FixedAssetService(new FixedAssetRepository(ds), repo, accounting);
+    assets = new FixedAssetService(new FixedAssetRepository(ds), repo, new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting));
     const templates = new ChartTemplateService(repo);
     await templates.apply(T1, 'iran-trading');
     await templates.apply(T2, 'iran-trading');
@@ -95,7 +97,7 @@ describePg('Fixed assets on PostgreSQL', () => {
 
   it('posts one balanced entry per month, moves the ledger, and is idempotent', async () => {
     const first = await assets.runMonth(T1, { year: 1405, month: 1 });
-    expect(first).toMatchObject({ entryNumber: 'DEP-140501-1', totalCharged: '120.00' });
+    expect(first).toMatchObject({ entryNumber: 'DEP-140501-1', entryNumbers: ['DEP-140501-1', 'DEP-140501-2'], totalCharged: '120.00' });
     expect(first.charged).toEqual([{ code: 'FA-1', amount: '100.00' }, { code: 'FA-2', amount: '20.00' }]);
     expect(await balance(T1, '5060')).toBe('120.00');
     expect(await balance(T1, '1120')).toBe('-120.00');

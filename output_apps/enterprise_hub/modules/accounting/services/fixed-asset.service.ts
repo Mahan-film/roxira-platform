@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import { CreateFixedAssetDto, DepreciationRunDto } from '../dto/fixed-asset.dto';
 import { nextMonthCharge, periodIndex } from '../assets/depreciation';
 import { FixedAssetEntity } from '../entities/fixed-asset.entity';
@@ -7,16 +7,26 @@ import { fromDb, minorToDecimal, MoneyFormatError, toMinor } from '../money';
 import { AccountingRepository } from '../repositories/accounting.repository';
 import { FixedAssetRepository } from '../repositories/fixed-asset.repository';
 import { gregorianToJalali, isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
-import { AccountingService } from './accounting.service';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 
 export interface DepreciationRunResult {
   year: number;
   month: number;
+  /** First voucher of the run (kept for callers of the old single-voucher shape). */
   entryNumber: string | null;
+  /** One engine voucher per charged asset, in asset order. */
+  entryNumbers: string[];
   totalCharged: string;
   charged: Array<{ code: string; amount: string }>;
   skipped: Array<{ code: string; reason: 'ALREADY_DONE' | 'NOT_ACQUIRED_YET' | 'PREVIOUS_MONTH_MISSING' }>;
 }
+
+/**
+ * Posting port. PostingRulesModule imports AccountingModule, so AccountingModule cannot import it
+ * back; the engine is looked up lazily through ModuleRef (see accounting.module.ts).
+ */
+export const FIXED_ASSET_POSTING = Symbol('FIXED_ASSET_POSTING');
+export type FixedAssetPosting = Pick<PostingRulesService, 'post'>;
 
 const realDay = (day: string): void => {
   const parsed = new Date(`${day}T00:00:00.000Z`);
@@ -31,7 +41,7 @@ export class FixedAssetService {
   constructor(
     private readonly assets: FixedAssetRepository,
     private readonly ledger: AccountingRepository,
-    private readonly accounting: AccountingService,
+    @Inject(FIXED_ASSET_POSTING) private readonly posting: FixedAssetPosting,
   ) {}
 
   list(tenantId: string) {
@@ -124,6 +134,7 @@ export class FixedAssetService {
         year: dto.year,
         month: dto.month,
         entryNumber: null,
+        entryNumbers: [],
         totalCharged: '0.00',
         charged: [],
         skipped: [],
@@ -156,32 +167,40 @@ export class FixedAssetService {
       if (todo.length === 0) {
         return result;
       }
-      const seq = (await this.assets.entriesInPeriod(tenantId, dto.year, dto.month, manager)) + 1;
-      const entryNumber = `DEP-${dto.year}${String(dto.month).padStart(2, '0')}-${seq}`;
-      const lines = todo.flatMap(({ asset, charge }) => [
-        { accountCode: asset.expenseAccountCode, debit: minorToDecimal(charge), description: `استهلاک ${asset.code}` },
-        { accountCode: asset.accumulatedAccountCode, credit: minorToDecimal(charge), description: `استهلاک ${asset.code}` },
-      ]);
-      const entry = await this.accounting.createJournalEntry(
-        tenantId,
-        { entryNumber, date, description: `استهلاک ماه ${dto.year}/${dto.month}`, lines } as never,
-        manager,
-      );
+      const base = await this.assets.entriesInPeriod(tenantId, dto.year, dto.month, manager);
+      const period = `${dto.year}${String(dto.month).padStart(2, '0')}`;
       let total = 0n;
-      for (const { asset, charge } of todo) {
+      for (const [i, { asset, charge }] of todo.entries()) {
+        const entryNumber = `DEP-${period}-${base + i + 1}`;
+        // One voucher per asset and period; the engine returns the first one if it was already posted.
+        const voucher = await this.posting.post(
+          tenantId,
+          {
+            docType: 'asset.depreciation',
+            sourceType: 'asset_depreciation',
+            sourceId: `${asset.id}:${period}`,
+            date,
+            amounts: { charge },
+            description: `استهلاک ماه ${dto.year}/${dto.month} ${asset.code}`,
+            entryNumber,
+            overrides: { depreciation_expense: asset.expenseAccountCode, accumulated_depreciation: asset.accumulatedAccountCode },
+          },
+          manager,
+        );
         const accumulated = fromDb(asset.accumulatedDepreciation) + charge;
         const full = accumulated >= fromDb(asset.cost) - fromDb(asset.salvageValue);
         await this.assets.applyCharge(
           tenantId,
           asset,
-          { year: dto.year, month: dto.month, amount: minorToDecimal(charge), journalEntryId: entry.id },
+          { year: dto.year, month: dto.month, amount: minorToDecimal(charge), journalEntryId: voucher.entryId },
           { accumulatedDepreciation: minorToDecimal(accumulated), status: full ? 'FULLY_DEPRECIATED' : 'ACTIVE' },
           manager,
         );
         result.charged.push({ code: asset.code, amount: minorToDecimal(charge) });
+        result.entryNumbers.push(voucher.entryNumber);
         total += charge;
       }
-      result.entryNumber = entryNumber;
+      result.entryNumber = result.entryNumbers[0] ?? null;
       result.totalCharged = minorToDecimal(total);
       return result;
     });
