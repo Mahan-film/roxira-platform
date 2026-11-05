@@ -69,6 +69,11 @@ export interface CreateInvoiceOptions {
   idempotencyKey?: string;
   requestHash?: string;
   payments?: Array<{ method: string; amount: number }>;
+  /**
+   * Set by `withSaleLock`: the status event is queued here and sent after the lock is released
+   * (posting locks the related sale itself, so it must not run while this caller holds it).
+   */
+  deferEvents?: Array<() => Promise<void>>;
 }
 
 /** Invoice-level discount as sent: an amount or a percent (E1.3). */
@@ -435,6 +440,7 @@ export class InvoicingService {
         vatRate,
         tax,
         total,
+        ...(line.item.originalLine !== undefined ? { originalLine: line.item.originalLine } : {}),
       });
     });
 
@@ -610,6 +616,12 @@ export class InvoicingService {
     options: CreateInvoiceOptions = {},
   ): Promise<InvoiceResponseDto> {
     const subject = dto.subject ?? InvoiceSubject.ORIGINAL;
+    if (subject === InvoiceSubject.RETURN && dto.relatedInvoiceId && !options.deferEvents) {
+      // The check "returned so far + this return <= sold" and the insert run under the sale's lock.
+      return this.withSaleLock(tenantId, dto.relatedInvoiceId, (deferEvents) =>
+        this.create(tenantId, dto, { ...options, deferEvents }),
+      );
+    }
     const related = await this.resolveRelated(tenantId, dto, subject);
     // A cancel document is a copy of what it cancels; it cannot carry its own figures.
     const source: CreateInvoiceDto =
@@ -709,12 +721,35 @@ export class InvoicingService {
     if (status === InvoiceStatus.ISSUED || status === InvoiceStatus.PAID) {
       if (subject === InvoiceSubject.CANCEL) {
         await this.applyCancelSubject(tenantId, saved);
+      } else if (options.deferEvents) {
+        options.deferEvents.push(() => this.emitStatusEvent(tenantId, saved.id, status));
       } else {
         await this.emitStatusEvent(tenantId, saved.id, status);
       }
     }
 
     return this.toResponseDto(saved);
+  }
+
+  /**
+   * Runs `work` while holding a lock on the sale (`lockForReturn`), so concurrent returns of the
+   * same sale are checked and inserted one after the other. Status events that `work` defers are
+   * sent after the lock is released.
+   */
+  async withSaleLock<T>(
+    tenantId: string,
+    saleId: string,
+    work: (deferEvents: Array<() => Promise<void>>) => Promise<T>,
+  ): Promise<T> {
+    const deferred: Array<() => Promise<void>> = [];
+    const result = await this.invoicingRepository.transaction(async (manager) => {
+      await this.invoicingRepository.lockForReturn(tenantId, saleId, manager);
+      return work(deferred);
+    });
+    for (const send of deferred) {
+      await send();
+    }
+    return result;
   }
 
   /**

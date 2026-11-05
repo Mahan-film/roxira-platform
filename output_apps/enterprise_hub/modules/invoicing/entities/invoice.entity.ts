@@ -49,6 +49,8 @@ export interface InvoiceItem {
   vatRate: number;
   tax: number;
   total: number;
+  /** On a return: index of the line of the related invoice this line gives back. */
+  originalLine?: number;
 }
 
 /** بهای تمام‌شده FIFO ثبت‌شده هنگام صدور (واحد: ریال، دو رقم اعشار). */

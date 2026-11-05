@@ -49,6 +49,19 @@ export class InvoicingRepository {
     });
   }
 
+  /**
+   * Serialises returns of one sale: `FOR NO KEY UPDATE` on the sale row inside the caller's
+   * transaction. A second return of the same sale waits here until the first has committed, so its
+   * remaining-quantity check sees it. The weaker mode (not FOR UPDATE) does not conflict with the
+   * foreign-key share lock the return's own insert takes on the sale row.
+   */
+  async lockForReturn(tenantId: string, id: string, manager: EntityManager): Promise<InvoiceEntity | null> {
+    return manager.findOne(InvoiceEntity, {
+      where: { id, tenantId },
+      lock: { mode: 'for_no_key_update' },
+    });
+  }
+
   async create(
     tenantId: string,
     data: Partial<InvoiceEntity>,

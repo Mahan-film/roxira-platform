@@ -34,6 +34,7 @@ import { CreatePosSaleDto } from './dto/pos-sale.dto';
 import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
+import { InvoiceSubject } from './enums/invoice-kind.enum';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -274,6 +275,102 @@ describePg('POS sales on PostgreSQL', () => {
     await expect(
       pos.createSale(T1, sale({ invoiceDiscount: 100, payments: [{ method: 'CASH', amount: 1100 }] })),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  const returnOf = (invoiceId: string, refund: 'ORIGINAL' | 'CREDIT', quantity = 1): CreatePosSaleDto => ({
+    idempotencyKey: `pos-ret-${++n}-${Date.now()}`,
+    lines: [{ originalLine: 0, quantity }],
+    returnOf: { invoiceId, refund },
+  });
+
+  it('a return refunds by the sale methods, restocks at the sale cost and is linked to the sale (E-04)', async () => {
+    const sold = (await pos.createSale(T1, sale({ payments: [{ method: 'CARD', amount: 1100 }] }))).invoice;
+    const stockBefore = await stock();
+    const clearingBefore = await balance('حساب واسط پوز');
+    const cogsBefore = await balance('بهای تمام%');
+    const receivableBefore = await balance('%دریافتنی%');
+
+    const ret = (await pos.createSale(T1, returnOf(sold.id, 'ORIGINAL'))).invoice;
+    expect(ret).toMatchObject({ subject: InvoiceSubject.RETURN, relatedInvoiceId: sold.id, status: 'PAID', finalPayable: 550 });
+    const row = (await q<{ related_invoice_id: string; posting_error: string | null }>(
+      'SELECT related_invoice_id, posting_error FROM invoices WHERE id=$1',
+      [ret.id],
+    ))[0];
+    expect(row).toEqual({ related_invoice_id: sold.id, posting_error: null });
+    expect(await stock()).toBe(stockBefore + 1);
+    expect((await balance('بهای تمام%')) - cogsBefore).toBe(-60); // back at the 60 the sale recorded
+    expect((await balance('حساب واسط پوز')) - clearingBefore).toBe(-550); // refunded on the card
+    expect(await balance('%دریافتنی%')).toBe(receivableBefore);
+
+    // One unit left to return; a second return of two is refused, of one accepted.
+    await expect(pos.createSale(T1, returnOf(sold.id, 'ORIGINAL', 2))).rejects.toThrow(/باقی‌ماندهٔ قابل برگشت/);
+    await pos.createSale(T1, returnOf(sold.id, 'ORIGINAL', 1));
+    await expect(pos.createSale(T1, returnOf(sold.id, 'ORIGINAL', 1))).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('two concurrent returns of a one-unit sale: one wins, the other is refused, stock and ledger move once', async () => {
+    const sold = (
+      await pos.createSale(T1, sale({ lines: [{ code: 'P-1', quantity: 1, unitPrice: 500 }], payments: [{ method: 'CASH', amount: 550 }] }))
+    ).invoice;
+    const stockBefore = await stock();
+    const cashBefore = await balance('موجودی نقد و بانک');
+
+    const results = await Promise.allSettled([
+      pos.createSale(T1, returnOf(sold.id, 'ORIGINAL', 1)),
+      pos.createSale(T1, returnOf(sold.id, 'ORIGINAL', 1)),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const refused = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(refused.reason).toBeInstanceOf(BadRequestException);
+    expect(String(refused.reason.message)).toMatch(/باقی‌ماندهٔ قابل برگشت/);
+
+    const returns = await q<{ posting_error: string | null; journal_entry_id: string | null }>(
+      'SELECT posting_error, journal_entry_id FROM invoices WHERE related_invoice_id=$1',
+      [sold.id],
+    );
+    expect(returns).toHaveLength(1);
+    expect(returns[0].posting_error).toBeNull();
+    expect(await stock()).toBe(stockBefore + 1);
+    expect((await balance('موجودی نقد و بانک')) - cashBefore).toBe(-550);
+  });
+
+  it('a return of a discounted sale refunds what was paid, VAT from the original line, also under the lock', async () => {
+    // 2 × 500 = 1000, sale discount 100 -> taxable 900, VAT 10% = 90, paid 990.
+    const sold = (
+      await pos.createSale(T1, sale({ invoiceDiscount: 100, payments: [{ method: 'CASH', amount: 990 }] }))
+    ).invoice;
+    expect(sold).toMatchObject({ invoiceDiscount: 100, totalTax: 90, finalPayable: 990 });
+    const cashBefore = await balance('موجودی نقد و بانک');
+
+    // One unit back: half the discount (50) -> taxable 450, VAT 45, refund 495 exactly.
+    const first = (await pos.createSale(T1, returnOf(sold.id, 'ORIGINAL', 1))).invoice;
+    expect(first).toMatchObject({ totalAmount: 500, totalDiscount: 50, totalTax: 45, finalPayable: 495 });
+    expect((await balance('موجودی نقد و بانک')) - cashBefore).toBe(-495);
+
+    // The last unit takes the rest of the discount (50): another 495, 990 in all. Two concurrent
+    // returns of that last unit: one refunds 495, the other is refused; the ledger moves once.
+    const results = await Promise.allSettled([
+      pos.createSale(T1, returnOf(sold.id, 'ORIGINAL', 1)),
+      pos.createSale(T1, returnOf(sold.id, 'ORIGINAL', 1)),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const won = (results.find((r) => r.status === 'fulfilled') as PromiseFulfilledResult<{ invoice: { finalPayable: number } }>).value;
+    expect(won.invoice.finalPayable).toBe(495);
+    expect((await balance('موجودی نقد و بانک')) - cashBefore).toBe(-990);
+  });
+
+  it('a return on credit leaves the amount on the known customer; refused for the walk-in customer', async () => {
+    const known = (await pos.createSale(T1, sale({ customer: { phone: '09120000123' } }))).invoice;
+    const receivableBefore = await balance('%دریافتنی%');
+    const cashBefore = await balance('موجودی نقد و بانک');
+    const ret = (await pos.createSale(T1, returnOf(known.id, 'CREDIT'))).invoice;
+    expect(ret).toMatchObject({ status: 'ISSUED', customerId: known.customerId, relatedInvoiceId: known.id });
+    expect((await balance('%دریافتنی%')) - receivableBefore).toBe(-550);
+    expect(await balance('موجودی نقد و بانک')).toBe(cashBefore);
+
+    const walkIn = (await pos.createSale(T1, sale())).invoice;
+    await expect(pos.createSale(T1, returnOf(walkIn.id, 'CREDIT'))).rejects.toThrow(/مشتری گذری/);
+    await expect(pos.createSale(T2, returnOf(walkIn.id, 'ORIGINAL'))).rejects.toThrow(/یافت نشد/);
   });
 
   it('every voucher balances', async () => {

@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -54,10 +55,18 @@ export class PosLineDto {
   @IsPositive()
   quantity: number;
 
-  @ApiProperty({ description: 'قیمت واحد به ارز فروش' })
+  @ApiPropertyOptional({ description: 'قیمت واحد به ارز فروش؛ در فروش الزامی، در برگشت نادیده (قیمت فروش اصلی)' })
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
-  unitPrice: number;
+  unitPrice?: number;
+
+  @ApiPropertyOptional({ description: 'فقط در برگشت: شمارهٔ سطر فروش اصلی (از صفر)' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(199)
+  originalLine?: number;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
@@ -89,6 +98,23 @@ export class PosPaymentDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   amount: number;
+}
+
+/** Refund of a return: by the methods the sale was paid with, or as credit on the customer's account. */
+export const POS_REFUND_MODES = ['ORIGINAL', 'CREDIT'] as const;
+export type PosRefundMode = (typeof POS_REFUND_MODES)[number];
+
+export class PosReturnOfDto {
+  @ApiProperty({ description: 'شناسهٔ صورتحساب فروش اصلی' })
+  @IsUUID()
+  invoiceId: string;
+
+  @ApiProperty({
+    enum: POS_REFUND_MODES,
+    description: 'ORIGINAL: بازپرداخت به همان روش‌های پرداخت فروش؛ CREDIT: بستانکار شدن حساب مشتری',
+  })
+  @IsIn([...POS_REFUND_MODES])
+  refund: PosRefundMode;
 }
 
 export class CreatePosSaleDto {
@@ -129,13 +155,24 @@ export class CreatePosSaleDto {
   @Max(100)
   invoiceDiscountPercent?: number;
 
-  @ApiProperty({ type: [PosPaymentDto], description: 'جمع پرداخت‌ها باید دقیقاً برابر مبلغ قابل پرداخت باشد' })
+  @ApiPropertyOptional({
+    type: PosReturnOfDto,
+    description:
+      'برگشت از فروش: سطرها با originalLine و تعداد می‌آیند و قیمت، تخفیف و مالیات به نسبت از فروش اصلی گرفته می‌شود؛ payments نمی‌آید.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PosReturnOfDto)
+  returnOf?: PosReturnOfDto;
+
+  @ApiPropertyOptional({ type: [PosPaymentDto], description: 'در فروش الزامی؛ جمع پرداخت‌ها باید دقیقاً برابر مبلغ قابل پرداخت باشد. در برگشت نمی‌آید.' })
+  @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(5)
   @ValidateNested({ each: true })
   @Type(() => PosPaymentDto)
-  payments: PosPaymentDto[];
+  payments?: PosPaymentDto[];
 
   @ApiPropertyOptional({ description: 'انبار خروج کالا' })
   @IsOptional()
