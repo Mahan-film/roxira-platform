@@ -55,6 +55,8 @@ export interface LedgerFilter {
   from: string;
   to: string;
   limit: number;
+  /** Journal book: keep opening entries dated in the period, ordered by voucher. */
+  withOpenings?: boolean;
 }
 
 /** Read-only report queries over POSTED lines. Sums stay PostgreSQL numeric (exact strings). */
@@ -216,8 +218,8 @@ export class LedgerReportRepository {
          JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
          JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
         WHERE l.tenant_id = $1 AND l.account_id = ANY($2) AND e.status = 'POSTED' AND ${NOT_PAIR}
-          AND ${DAY} >= $3 AND ${DAY} <= $4 AND ${KIND} <> 'OPENING' ${party}
-        ORDER BY e.date ASC, l.id ASC
+          AND ${DAY} >= $3 AND ${DAY} <= $4 ${filter.withOpenings ? '' : `AND ${KIND} <> 'OPENING'`} ${party}
+        ORDER BY e.date ASC, ${filter.withOpenings ? 'e.id ASC, ' : ''}l.id ASC
         LIMIT $5`,
       [tenantId, filter.accountIds, filter.from, filter.to, filter.limit, ...(filter.partyCode ? [filter.partyCode] : [])],
     ));

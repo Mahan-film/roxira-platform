@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ExportableReport, ExportReportQueryDto } from '../dto/report.dto';
-import { writePdf } from '../reports/pdf-writer';
+import { Book, bookPages, bookSheet, generalLedgerBook, journalBook } from '../reports/legal-books';
+import { rowsPerPage, writePdf, writePdfs } from '../reports/pdf-writer';
 import { ReportTable } from '../reports/report-table';
 import {
   ageingTable,
@@ -9,7 +10,9 @@ import {
   chartOfAccountsTable,
   equityChangesTable,
   incomeStatementTable,
+  jalali,
   ledgerTable,
+  periodText,
   trialBalanceTable,
 } from '../reports/report-tables';
 import { writeXlsx } from '../reports/xlsx-writer';
@@ -25,6 +28,20 @@ export interface ExportedReport {
 @Injectable()
 export class ReportExportService {
   constructor(private readonly reports: FinancialReportsService) {}
+
+  /** The legal books (#249) are paged here, so each page carries its totals; null for other reports. */
+  private async book(tenantId: string, report: ExportableReport, query: ExportReportQueryDto): Promise<Book | null> {
+    const period = { fiscalYearId: query.fiscalYearId, from: query.from, to: query.to };
+    if (report === 'journal-book') {
+      const data = await this.reports.journalBook(tenantId, period);
+      return journalBook(data.lines, periodText(data.period), jalali);
+    }
+    if (report === 'general-ledger-book') {
+      const data = await this.reports.generalLedgerBook(tenantId, { ...period, level: query.level });
+      return generalLedgerBook(data.accounts, periodText(data.period), jalali);
+    }
+    return null;
+  }
 
   private async table(
     tenantId: string,
@@ -64,6 +81,9 @@ export class ReportExportService {
         return equityChangesTable(await this.reports.equityChanges(tenantId, period));
       case 'chart-of-accounts':
         return chartOfAccountsTable(await this.reports.chartOfAccounts(tenantId));
+      case 'journal-book':
+      case 'general-ledger-book':
+        throw new Error(`${report} is a book; export() pages it`);
       case 'ageing':
         return ageingTable(
           await this.reports.ageing(tenantId, {
@@ -82,7 +102,12 @@ export class ReportExportService {
     report: ExportableReport,
     query: ExportReportQueryDto,
   ): Promise<ExportedReport> {
-    const table = await this.table(tenantId, report, query);
+    const book = await this.book(tenantId, report, query);
+    if (book && query.format === 'pdf') {
+      const pages = bookPages(book, rowsPerPage(book.columns.length + (book.withBalance ? 3 : 2)));
+      return { body: await writePdfs(pages), filename: `${report}.pdf`, contentType: 'application/pdf' };
+    }
+    const table = book ? bookSheet(book) : await this.table(tenantId, report, query);
     if (query.format === 'pdf') {
       return { body: await writePdf(table), filename: `${report}.pdf`, contentType: 'application/pdf' };
     }
