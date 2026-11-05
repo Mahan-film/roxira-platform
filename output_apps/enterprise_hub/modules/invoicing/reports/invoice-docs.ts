@@ -38,22 +38,44 @@ export function rootOf(doc: ReportDoc, byId: Map<string, ReportDoc>): string {
 }
 
 /**
- * The documents that count, each with its sign, by the rules the ledger posts (invoice-posting.service):
- * a corrective replaces what it amends, so only the newest one of a chain counts; a return subtracts;
- * a cancellation removes its whole chain.
+ * The issued or paid documents of one direction whose chain still stands, each with the id of its
+ * chain root: the CANCEL document itself and every document of a cancelled chain are gone, while
+ * the original a corrective replaced is still live, because the stock it moved (its recorded cost)
+ * stands until a return reverses it. Every counted or cost-carrying document is live.
  */
-export function countedDocs(docs: readonly ReportDoc[], direction: InvoiceDirection): Array<{ doc: ReportDoc; sign: bigint }> {
+export function liveDocs<D extends ReportDoc = ReportDoc>(
+  docs: readonly D[],
+  direction: InvoiceDirection,
+): Array<{ doc: D; root: string }> {
   const issued = docs.filter(
     (doc) =>
       doc.direction === direction &&
       (doc.status === InvoiceStatus.ISSUED || doc.status === InvoiceStatus.PAID),
   );
-  const byId = new Map(issued.map((doc) => [doc.id, doc]));
+  const byId = new Map<string, ReportDoc>(issued.map((doc) => [doc.id, doc]));
   const cancelled = new Set<string>();
-  const newestCorrective = new Map<string, ReportDoc>();
+  const live: Array<{ doc: D; root: string }> = [];
   for (const doc of issued) {
     const root = rootOf(doc, byId);
-    if (doc.subject === InvoiceSubject.CANCEL) cancelled.add(root);
+    if (doc.subject === InvoiceSubject.CANCEL) {
+      cancelled.add(root);
+      continue;
+    }
+    live.push({ doc, root });
+  }
+  return live.filter(({ root }) => !cancelled.has(root));
+}
+
+/**
+ * The documents that count, each with its sign, by the rules the ledger posts (invoice-posting.service):
+ * a corrective replaces what it amends, so only the newest one of a chain counts; a return subtracts;
+ * a cancellation removes its whole chain. Every counted document is live (see `liveDocs`); the
+ * documents `liveDocs` keeps beyond these are exactly the replaced originals that still carry cost.
+ */
+export function countedDocs(docs: readonly ReportDoc[], direction: InvoiceDirection): Array<{ doc: ReportDoc; sign: bigint }> {
+  const live = liveDocs(docs, direction);
+  const newestCorrective = new Map<string, ReportDoc>();
+  for (const { doc, root } of live) {
     if (doc.subject === InvoiceSubject.CORRECTIVE) {
       const newest = newestCorrective.get(root);
       // Ids are UUIDs, so order by createdAt, as correctiveBaseline in the posting service does.
@@ -61,9 +83,7 @@ export function countedDocs(docs: readonly ReportDoc[], direction: InvoiceDirect
     }
   }
   const counted: Array<{ doc: ReportDoc; sign: bigint }> = [];
-  for (const doc of issued) {
-    const root = rootOf(doc, byId);
-    if (cancelled.has(root) || doc.subject === InvoiceSubject.CANCEL) continue;
+  for (const { doc, root } of live) {
     if (doc.subject === InvoiceSubject.RETURN) {
       counted.push({ doc, sign: -1n });
       continue;
