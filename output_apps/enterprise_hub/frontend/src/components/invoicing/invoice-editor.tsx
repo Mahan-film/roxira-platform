@@ -20,10 +20,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { BarcodeScanBox } from "@/components/invoicing/barcode-scan-box";
 import { createInvoice, updateInvoice } from "@/lib/api/invoicing-client";
 import { listLeads } from "@/lib/api/crm-client";
 import { listStockItems, listWarehouses } from "@/lib/api/inventory-client";
 import { ApiClientError } from "@/lib/api/http-client";
+import { addScannedItem, incrementQuantity, isUntypedInvoiceLine } from "@/lib/barcode-scan";
 import { formatLatinMoney, formatMoneyRial } from "@/lib/fa-format";
 import { Currency, isIranianCurrency } from "@/types/currency";
 import type { Lead } from "@/types/crm";
@@ -305,6 +307,27 @@ export function InvoiceEditor({
   function addLine() {
     const id = nextLine.current++;
     setLines((prev) => [...prev, createLine(`line-${id}`, fallbackPercent)]);
+  }
+
+  /** A scanned item: one more unit on its line, else the first blank line, else a new line. */
+  function addScanned(item: StockItem) {
+    // The row picker lists only the first page of items; make sure the scanned one is an option.
+    setStockItems((prev) => (prev.some((it) => it.id === item.id) ? prev : [...prev, item]));
+    // Taken outside the updater: React may run updaters twice in development.
+    const uid = `line-${nextLine.current++}`;
+    setLines((prev) =>
+      addScannedItem(prev, item, {
+        codeOf: (line) => line.sku,
+        isBlank: isUntypedInvoiceLine,
+        addOne: (line) => ({ ...line, quantity: incrementQuantity(line.quantity) }),
+        fromItem: () => ({
+          ...createLine(uid, fallbackPercent),
+          itemId: String(item.id),
+          sku: item.sku,
+          description: item.name,
+        }),
+      }),
+    );
   }
 
   function removeLine(uid: string) {
@@ -724,6 +747,8 @@ export function InvoiceEditor({
               </Button>
             </div>
 
+            {!isCancel && <BarcodeScanBox id="invoice-scan" onItem={addScanned} />}
+
             <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
@@ -779,6 +804,7 @@ export function InvoiceEditor({
                         <TableCell>
                           <Input
                             inputMode="decimal"
+                            aria-label="تعداد"
                             value={line.quantity}
                             onChange={(event) =>
                               updateLine(line.uid, "quantity", event.target.value)

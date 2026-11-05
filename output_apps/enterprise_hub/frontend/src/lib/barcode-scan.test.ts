@@ -5,6 +5,7 @@ import {
   addScannedItem,
   findExact,
   incrementQuantity,
+  isUntypedInvoiceLine,
   normaliseScan,
   unknownBarcodeMessage,
   type ScanLineOps,
@@ -45,6 +46,31 @@ test("scanning fills the blank line, then adds a unit, then appends", () => {
     { code: "P-1", quantity: "2" },
     { code: "6260000000011", quantity: "1" },
   ]);
+});
+
+test("sales invoice drawer rows: defaults count as blank, typed rows are kept (#148)", () => {
+  type Row = { itemId: string; sku: string; description: string; unitPrice: string; quantity: string };
+  const blank: Row = { itemId: "", sku: "", description: "", unitPrice: "", quantity: "1" };
+  const typed: Row = { ...blank, description: "خدمات نصب", unitPrice: "500000" };
+  const rowOps: ScanLineOps<Row> = {
+    codeOf: (r) => r.sku,
+    isBlank: isUntypedInvoiceLine,
+    addOne: (r) => ({ ...r, quantity: incrementQuantity(r.quantity) }),
+    fromItem: (item) => ({ ...blank, itemId: "7", sku: item.sku, description: item.name }),
+  };
+  assert.equal(isUntypedInvoiceLine(blank), true);
+  assert.equal(isUntypedInvoiceLine({ ...blank, description: "  " }), true);
+  assert.equal(isUntypedInvoiceLine(typed), false);
+
+  let rows = addScannedItem([typed, blank], pen, rowOps);
+  assert.deepEqual(rows[0], typed);
+  assert.equal(rows[1].sku, "P-1");
+  assert.equal(rows.length, 2);
+  rows = addScannedItem(rows, pen, rowOps);
+  assert.equal(rows[1].quantity, "2");
+  assert.equal(rows.length, 2);
+  rows = addScannedItem(rows, ink, rowOps);
+  assert.equal(rows.length, 3);
 });
 
 test("incrementQuantity handles Persian digits and junk", () => {

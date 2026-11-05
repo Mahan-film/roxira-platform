@@ -53,6 +53,19 @@ export function addScannedItem<L>(lines: L[], item: ScannableItem, ops: ScanLine
   return [...lines, ops.fromItem(item)];
 }
 
+/**
+ * A sales-invoice editor row nobody has typed into: no item, code, description or price.
+ * Quantity, discount and VAT have defaults, so they do not count.
+ */
+export function isUntypedInvoiceLine(line: {
+  itemId: string;
+  sku: string;
+  description: string;
+  unitPrice: string;
+}): boolean {
+  return !line.itemId && !line.sku && !line.description.trim() && !line.unitPrice.trim();
+}
+
 /** "2" -> "3". A quantity that is not a plain number restarts at "1". */
 export function incrementQuantity(quantity: string): string {
   const value = Number(normaliseScan(quantity));
