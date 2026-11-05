@@ -11,6 +11,8 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(here, 'verify-extractor-output.mjs');
 const SAMPLE = path.resolve(here, '..', '..', 'tools', 'windows-extractor', 'sample-output');
+const SCRIPT = path.resolve(SAMPLE, '..', 'Extract-RoxiraTables.ps1');
+const hasPwsh = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', 'exit 0']).status === 0;
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'extractor-'));
 const copySample = () => {
@@ -28,6 +30,13 @@ test('sample-output/ verifies and reports its row counts', () => {
   const r = run(SAMPLE);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /OK: 3 tables, 6 rows/);
+});
+
+test('the PowerShell extractor parses without syntax errors', { skip: !hasPwsh && 'pwsh is not installed' }, () => {
+  const literal = `'${SCRIPT.replace(/'/g, "''")}'`;
+  const command = `$e=$null;$t=$null;[System.Management.Automation.Language.Parser]::ParseFile(${literal},[ref]$t,[ref]$e) > $null; if ($e.Count) { $e | ForEach-Object { Write-Output ($_.Extent.StartLineNumber.ToString() + ': ' + $_.Message) }; exit 1 }; exit 0`;
+  const r = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stdout || r.stderr);
 });
 
 test('a flipped byte fails on the file hash', () => {

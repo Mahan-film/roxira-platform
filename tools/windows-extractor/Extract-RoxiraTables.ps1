@@ -91,7 +91,7 @@ function Upload-RoxiraFile([string] $Path, [string] $Name) {
     for ($n = 1; $n -le $totalParts; $n++) {
       $len = if ($n -lt $totalParts) { $partBytes } else { $size - $partBytes * ($totalParts - 1) }
       if ($have.ContainsKey($n) -and $have[$n] -eq $len) { continue }
-      $buf = New-Object byte[] $len
+      $buf = [byte[]]::new([int]$len)
       $fs.Position = [long]($n - 1) * $partBytes
       $read = 0
       while ($read -lt $len) {
