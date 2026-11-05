@@ -18,6 +18,8 @@ export interface DepreciationRunResult {
   entryNumbers: string[];
   totalCharged: string;
   charged: Array<{ code: string; amount: string }>;
+  /** Assets whose charge for this month rounds to zero: the month is done, no ledger line. */
+  zeroCharge: string[];
   skipped: Array<{ code: string; reason: 'ALREADY_DONE' | 'NOT_ACQUIRED_YET' | 'PREVIOUS_MONTH_MISSING' }>;
 }
 
@@ -137,6 +139,7 @@ export class FixedAssetService {
         entryNumbers: [],
         totalCharged: '0.00',
         charged: [],
+        zeroCharge: [],
         skipped: [],
       };
       const todo: Array<{ asset: FixedAssetEntity; charge: bigint }> = [];
@@ -161,6 +164,11 @@ export class FixedAssetService {
           });
           if (charge > 0n) {
             todo.push({ asset, charge });
+          } else {
+            // A month whose charge rounds to zero is still done: advance the asset so the next
+            // month is not refused as PREVIOUS_MONTH_MISSING. No ledger line (amounts are > 0).
+            await this.assets.advanceWithoutCharge(tenantId, asset, manager);
+            result.zeroCharge.push(asset.code);
           }
         }
       }

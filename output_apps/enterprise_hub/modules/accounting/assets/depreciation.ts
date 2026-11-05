@@ -24,7 +24,9 @@ const divRound = (numerator: bigint, denominator: bigint): bigint => (numerator 
  * The charge for the asset's next month, never taking its book value below salvage.
  *  - Straight line: cumulative target after k months is round((cost - salvage) * k / life), so
  *    the months add up to exactly the depreciable amount and no cent is lost to rounding.
- *  - Declining balance: round(book value * annual rate / 12).
+ *  - Declining balance: round(book value * annual rate / 12). Once that rounds to zero the
+ *    remaining few minor units are written off in one month, so the asset still reaches
+ *    FULLY_DEPRECIATED instead of charging zero forever.
  */
 export function nextMonthCharge(terms: DepreciationTerms): bigint {
   const depreciable = terms.costMinor - terms.salvageMinor;
@@ -47,6 +49,9 @@ export function nextMonthCharge(terms: DepreciationTerms): bigint {
     const ppm = parseScaled(terms.annualRate, PPM);
     const bookValue = terms.costMinor - terms.accumulatedMinor;
     charge = divRound(bookValue * ppm, 12n * 10n ** BigInt(PPM));
+    if (charge === 0n) {
+      charge = remaining;
+    }
   }
   if (charge < 0n) {
     return 0n;
