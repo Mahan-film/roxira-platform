@@ -1,14 +1,15 @@
 import { ReportColumn, ReportRow, ReportTable } from '../../accounting/reports/report-table';
-import { CardexMovement, cardex } from './cardex';
+import { CardexMovement, cardex, formatQty } from './cardex';
+
+export const NO_WAREHOUSE_LABEL = 'بدون انبار';
 
 /**
- * Whole-unit quantities, like the cardex; fractional stock is #461 and must land before a route.
  * A transfer-in leg must carry the cost of the layers its
  * transfer-out consumed, one movement per layer; a missing unitCost values the stock at 0.
  */
 export interface BalanceMovement extends CardexMovement {
   itemId: string;
-  warehouseId: string;
+  warehouseId: string | null;
 }
 
 export interface BalanceItem {
@@ -25,7 +26,7 @@ export interface BalanceWarehouse {
 
 export interface BalanceLine {
   itemId: string;
-  warehouseId: string;
+  warehouseId: string | null;
   quantity: bigint;
   value: bigint;
   shortageQty: bigint;
@@ -65,7 +66,7 @@ export function stockBalance(
     return true;
   });
 
-  const movementsByItemAndWarehouse = new Map<string, Map<string, BalanceMovement[]>>();
+  const movementsByItemAndWarehouse = new Map<string, Map<string | null, BalanceMovement[]>>();
 
   for (const movement of filteredMovements) {
     if (!movementsByItemAndWarehouse.has(movement.itemId)) {
@@ -137,7 +138,7 @@ export function stockBalance(
       if (itemA.code !== itemB.code) {
         return itemA.code.localeCompare(itemB.code);
       }
-      return a.warehouseId.localeCompare(b.warehouseId);
+      return (a.warehouseId ?? '').localeCompare(b.warehouseId ?? '');
     }),
     items: itemsBalance.sort((a, b) => {
       const itemA = itemsMap.get(a.itemId)!;
@@ -176,15 +177,15 @@ export function stockBalanceTable(
 
   for (const line of report.lines) {
     const item = itemsMap.get(line.itemId)!;
-    const warehouse = warehousesMap.get(line.warehouseId);
+    const warehouse = line.warehouseId === null ? undefined : warehousesMap.get(line.warehouseId);
     rows.push({
       cells: [
         item.code,
         item.name,
-        warehouse?.name ?? line.warehouseId,
-        String(line.quantity),
+        warehouse?.name ?? line.warehouseId ?? NO_WAREHOUSE_LABEL,
+        formatQty(line.quantity),
         line.value,
-        line.shortageQty > 0n ? String(line.shortageQty) : '',
+        line.shortageQty > 0n ? formatQty(line.shortageQty) : '',
       ],
     });
   }
@@ -228,9 +229,9 @@ export function reorderAlertTable(
       cells: [
         item.code,
         item.name,
-        String(alert.quantity),
-        String(alert.reorderPoint),
-        String(alert.shortfall),
+        formatQty(alert.quantity),
+        formatQty(alert.reorderPoint),
+        formatQty(alert.shortfall),
       ],
     });
   }

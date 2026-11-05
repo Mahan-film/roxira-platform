@@ -9,5 +9,8 @@ export const MONEY_SCALE = 2;
 /** دقت گرد کردن مقادیر فیزیکی کالا. */
 export const QUANTITY_SCALE = 2;
 
+/** یک واحد کامل در صدم؛ 10n ** BigInt(QUANTITY_SCALE) */
+export const QUANTITY_UNIT = 100n;
+
 /** حداکثر تعداد دسته (batch) که یک خروج FIFO می‌تواند مصرف کند. */
 export const MAX_FIFO_LAYERS = 500;

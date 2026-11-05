@@ -1,10 +1,21 @@
 import { StockMovementType } from '../enums/stock-movement-type.enum';
+import { QUANTITY_UNIT } from '../constants/inventory.constants';
 import { ReportColumn, ReportRow, ReportTable } from '../../accounting/reports/report-table';
 
 /** FIFO layer used for valuation */
 export interface FifoLayer {
   quantity: bigint;
   unitCost: bigint;
+}
+
+/** Rounds quantity × unitCost to whole minor units, half up — matches inventory.service.ts layer takes. */
+export function layerValue(quantity: bigint, unitCost: bigint): bigint {
+  return (quantity * unitCost + QUANTITY_UNIT / 2n) / QUANTITY_UNIT;
+}
+
+/** Formats a quantity in hundredths with exactly two decimals, e.g. 150n -> "1.50". */
+export function formatQty(q: bigint): string {
+  return `${q / QUANTITY_UNIT}.${(q % QUANTITY_UNIT).toString().padStart(2, '0')}`;
 }
 
 /** Movement input for the cardex report */
@@ -15,7 +26,7 @@ export interface CardexMovement {
   document: string;
   /** INBOUND adds a FIFO layer, OUTBOUND consumes FIFO */
   type: StockMovementType;
-  /** Quantity (always positive) */
+  /** Quantity in hundredths of a unit (always positive), e.g. 1.5 kg = 150n */
   quantity: bigint;
   /** Unit cost for inbound movements, rial minor units; ignored for outbound */
   unitCost?: bigint;
@@ -45,6 +56,13 @@ export interface CardexReport {
   shortageQty: bigint;
 }
 
+/** Internal FIFO queue layer carrying its remaining valued amount */
+interface QueueLayer {
+  quantity: bigint;
+  unitCost: bigint;
+  value: bigint;
+}
+
 /**
  * Compute a cardex (stock card) for a single SKU (optionally aggregated across warehouses).
  * FIFO consumption mirrors the existing inventory valuation logic.
@@ -55,29 +73,39 @@ export function cardex(
   options: { allWarehouses?: boolean } = {},
 ): CardexReport {
   // Clone FIFO queue
-  const fifo: FifoLayer[] = opening.map((l) => ({ quantity: l.quantity, unitCost: l.unitCost }));
+  const fifo: QueueLayer[] = opening.map((l) => ({
+    quantity: l.quantity,
+    unitCost: l.unitCost,
+    value: layerValue(l.quantity, l.unitCost),
+  }));
 
   const openingQty = fifo.reduce((sum, l) => sum + l.quantity, 0n);
-  const openingValue = fifo.reduce((sum, l) => sum + l.quantity * l.unitCost, 0n);
+  const openingValue = fifo.reduce((sum, l) => sum + l.value, 0n);
 
   let runningQty = openingQty;
   let runningValue = openingValue;
 
   const rows: CardexRow[] = [];
 
-  // Sort movements chronologically (ISO date strings sort lexicographically)
+  // Sort movements chronologically (ISO date strings sort lexicographically);
+  // on the same day an inbound lands before an outbound that would consume it.
   const sorted = movements
     .filter((m) => !(options.allWarehouses && m.transfer))
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      if (a.type === b.type) return 0;
+      return a.type === StockMovementType.INBOUND ? -1 : 1;
+    });
   let shortageQty = 0n;
 
   for (const m of sorted) {
     if (m.type === StockMovementType.INBOUND) {
       const qty = m.quantity;
       const cost = m.unitCost ?? 0n;
-      fifo.push({ quantity: qty, unitCost: cost });
+      const value = layerValue(qty, cost);
+      fifo.push({ quantity: qty, unitCost: cost, value });
       runningQty += qty;
-      runningValue += qty * cost;
+      runningValue += value;
       rows.push({
         date: m.date,
         document: m.document,
@@ -94,9 +122,14 @@ export function cardex(
       while (remaining > 0n && fifo.length > 0) {
         const layer = fifo[0];
         const take = remaining < layer.quantity ? remaining : layer.quantity;
+        // A whole-layer take uses the layer's remaining value, so no rounding
+        // remainder is lost and closingValue always equals the sum of the
+        // remaining layer values.
+        const takeValue = take === layer.quantity ? layer.value : layerValue(take, layer.unitCost);
         layer.quantity -= take;
+        layer.value -= takeValue;
         runningQty -= take;
-        runningValue -= take * layer.unitCost;
+        runningValue -= takeValue;
         remaining -= take;
         if (layer.quantity === 0n) {
           fifo.shift();
@@ -139,24 +172,25 @@ export function cardexTable(
   ];
   const openingRow: ReportRow = {
     bold: true,
-    cells: ['', 'موجودی ابتدای دوره', '', '', null, String(report.openingQty), report.openingValue],
+    cells: ['', 'موجودی ابتدای دوره', '', '', null, formatQty(report.openingQty), report.openingValue],
   };
   const dataRows: ReportRow[] = report.rows.map((r) => ({
     cells: [
       jalali(r.date),
       r.document,
-      r.inQty ? String(r.inQty) : '',
-      r.outQty ? String(r.outQty) : '',
+      r.inQty ? formatQty(r.inQty) : '',
+      r.outQty ? formatQty(r.outQty) : '',
       r.unitCost,
-      String(r.runningQty),
+      formatQty(r.runningQty),
       r.runningValue,
     ],
   }));
   const closingRow: ReportRow = {
     bold: true,
-    cells: ['', 'موجودی پایان دوره', '', '', null, String(report.closingQty), report.closingValue],
+    cells: ['', 'موجودی پایان دوره', '', '', null, formatQty(report.closingQty), report.closingValue],
   };
-  const warning = report.shortageQty > 0n ? `خروجی بیش از موجودی به مقدار ${report.shortageQty}؛ گردش کالا ناقص است` : '';
+  const warning =
+    report.shortageQty > 0n ? `خروجی بیش از موجودی به مقدار ${formatQty(report.shortageQty)}؛ گردش کالا ناقص است` : '';
   return {
     title,
     subtitle: [subtitle, warning].filter(Boolean).join('، '),
