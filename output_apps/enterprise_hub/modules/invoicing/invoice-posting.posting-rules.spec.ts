@@ -197,13 +197,20 @@ describe('invoice vouchers: engine vs the frozen old line building', () => {
     expect(repo.rows[0].journalEntryId).toBe(first);
   });
 
-  it('known differences: receivable/payable line texts lose the invoice number', async () => {
+  it('known differences: the issue/cancel party line has no text, so reports show the voucher description with the number', async () => {
     const sale = harness([invoice()]);
     await sale.posting.handle(ev(InvoiceStatus.ISSUED));
-    expect(sale.dto(0).lines[0].description).toBe('صدور صورتحساب');
+    await sale.posting.handle(ev(InvoiceStatus.CANCELLED));
+    expect(sale.dto(0).lines[0]).toMatchObject({ accountCode: '1201' });
+    expect(sale.dto(0).lines[0].description).toBeUndefined();
+    expect(sale.dto(0).description).toContain('TI-1');
+    expect(sale.dto(1).lines.find((l) => l.accountCode === '1201')?.description).toBeUndefined();
+    expect(sale.dto(1).description).toBe('ابطال صورتحساب TI-1');
     const purchase = harness([invoice({ direction: InvoiceDirection.PURCHASE })]);
     await purchase.posting.handle(ev(InvoiceStatus.ISSUED));
-    expect(purchase.dto(0).lines.at(-1)?.description).toBe('بدهی بابت صورتحساب');
+    expect(purchase.dto(0).lines.at(-1)).toMatchObject({ accountCode: '2101' });
+    expect(purchase.dto(0).lines.at(-1)?.description).toBeUndefined();
+    expect(purchase.dto(0).description).toBe('صدور صورتحساب TI-1');
   });
 
   it('known differences: payments of one method merge into one line', async () => {

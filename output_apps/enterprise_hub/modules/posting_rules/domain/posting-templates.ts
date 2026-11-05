@@ -31,8 +31,10 @@ const cr = (role: PostingRole, amount: string, description: string, party = fals
  * side (a return, a cancel and a corrective flip the sign), and the engine refuses negative amounts.
  * So every row is a pair of amounts, `<key>Dr` and `<key>Cr` (one of them 0, the zero line is dropped):
  * all debit rows first, then all credit rows, each in row order. That is exactly the order the old
- * posting service produced ("debits first, then credits, stable"). Descriptions are the old ones minus
- * the invoice number (a template line text is static; the number stays in the voucher description).
+ * posting service produced ("debits first, then credits, stable"). Descriptions are the old ones, except
+ * the party rows of the issue and cancel vouchers: a template line text is static and cannot carry the
+ * invoice number, so those rows have no text and the ledger reports fall back to the voucher description
+ * («صدور صورتحساب <number>» / «ابطال صورتحساب <number>»), which does carry it.
  * Defaults are the codes invoicing created before the engine (1201/4101/2301/2101/1401/5101/5201/1301/1010/1015).
  */
 const INVOICE_LEGACY: Readonly<Partial<Record<PostingRole, string>>> = {
@@ -64,7 +66,7 @@ function invoiceTemplate(docType: string, title: string, rows: readonly InvoiceR
 }
 
 const SALE_ROWS: readonly InvoiceRow[] = [
-  ['receivable', 'receivable', 'صدور صورتحساب', true],
+  ['receivable', 'receivable', '', true],
   ['sales', 'revenue', 'درآمد فروش'],
   ['vat', 'vat_output', 'مالیات بر ارزش افزوده پرداختنی'],
   ['stock', 'inventory', 'تغییر موجودی کالا'],
@@ -74,7 +76,7 @@ const PURCHASE_ROWS: readonly InvoiceRow[] = [
   ['stock', 'inventory', 'ورود کالا به انبار'],
   ['purchases', 'purchases', 'خرید کالا و خدمات'],
   ['vat', 'vat_input', 'مالیات بر ارزش افزوده خرید'],
-  ['payable', 'payable', 'بدهی بابت صورتحساب', true],
+  ['payable', 'payable', '', true],
 ];
 
 /** Settlement rows: cash/bank and POS clearing (card) in the order of the first payment, then the party. */

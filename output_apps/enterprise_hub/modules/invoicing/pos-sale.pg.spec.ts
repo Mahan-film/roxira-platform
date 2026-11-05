@@ -216,6 +216,20 @@ describePg('POS sales on PostgreSQL', () => {
     expect(b.invoice.id).not.toBe(a.invoice.id);
   });
 
+  it('the receivable line has no text of its own, so the ledger shows the voucher description with the invoice number', async () => {
+    const { invoice } = await pos.createSale(T1, sale({ customer: { phone: '09120000777' } }));
+    const rows = await q<{ description: string | null; entry_description: string }>(
+      `SELECT l.description, e.description AS entry_description FROM fin_journal_entry_lines l
+         JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+         JOIN fin_chart_of_accounts a ON a.id = l.account_id
+        WHERE e.entry_number = $1 AND a.name LIKE '%دریافتنی%'`,
+      ['INV-' + invoice.id + '-ISSUED'],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].description).toBeNull();
+    expect(rows[0].entry_description).toContain(invoice.taxInvoiceNumber);
+  });
+
   it('splits payments: card goes to POS clearing, cash to the cash account', async () => {
     const clearingBefore = await balance('حساب واسط پوز');
     const cashBefore = await balance('موجودی نقد و بانک');
