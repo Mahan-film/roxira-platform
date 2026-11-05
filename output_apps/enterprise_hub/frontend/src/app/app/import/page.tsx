@@ -8,7 +8,7 @@ import { BulkImportPanel } from "@/components/app/bulk-import-panel";
 import { ImportWizard } from "@/components/app/import-wizard";
 
 export default function SuiteImportPage() {
-  // Files over 40 MB picked in the wizard go to the bulk streaming import (#277).
+  // Files over 5 MB picked in the wizard go to the bulk streaming import (#277).
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   return (
     <>

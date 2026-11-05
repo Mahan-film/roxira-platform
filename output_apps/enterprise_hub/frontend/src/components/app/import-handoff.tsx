@@ -14,8 +14,8 @@ import { routeImportFile } from "@/lib/import-routing";
 export type ImportTab = "file" | "package";
 
 /**
- * Every file the one-request preview cannot take belongs to the whole-database tab (chunked upload):
- * database files and other formats (.sqlite/.sql/.zip/.xls/.ods/.dbf/.iif/.ofx/…) and anything over 5 MB.
+ * Every file that needs the whole-database tab (chunked upload): database files and other formats,
+ * and anything over 5 MB.
  */
 export function isDatabaseFile(file: File): boolean {
   return routeImportFile(file, false) !== "single";

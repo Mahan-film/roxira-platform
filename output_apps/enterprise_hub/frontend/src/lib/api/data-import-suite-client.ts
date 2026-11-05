@@ -93,7 +93,7 @@ export interface ImportBatch {
 }
 
 /**
- * Static fallback of the file picker's `accept`; the pages use `useImportAccept()`, which builds it
+ * Static fallback of the file picker's `accept`; the pages use `useImportLimits()`, which builds it
  * from `GET /data-import/formats` (the support matrix), so the picker offers every readable format.
  */
 export const IMPORT_ACCEPT = FALLBACK_ACCEPT;

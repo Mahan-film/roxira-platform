@@ -88,7 +88,7 @@ export function PackageImportWizard({
 }: {
   initialFile?: File | null;
   onInitialFileUsed?: () => void;
-  /** Receives a file over 40 MB when the server has the bulk streaming import enabled. */
+  /** Receives a file over 5 MB when the server has the bulk streaming import enabled. */
   onBulkFile?: (file: File) => void;
 } = {}) {
   const { accept, bulkEnabled } = useImportLimits();

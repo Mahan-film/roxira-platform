@@ -82,7 +82,7 @@ const MODE_LABELS: Array<[ImportMode, string]> = [
 ];
 
 /**
- * `onBulkFile` receives files over 40 MB: production nginx caps one request at 16 MB and the
+ * `onBulkFile` receives files over 5 MB: production nginx caps one request at 16 MB and the
  * package import at 40 MB, so those go to the bulk streaming import above the wizard (#277).
  */
 export function ImportWizard({ onBulkFile }: { onBulkFile?: (file: File) => void } = {}) {
