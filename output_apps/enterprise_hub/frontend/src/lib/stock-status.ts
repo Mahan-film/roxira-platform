@@ -14,21 +14,3 @@ export const STOCK_STATUS_LABEL: Record<StockStatus, string> = {
   low: "زیر نقطهٔ سفارش",
   ok: "کافی",
 };
-
-/** Counts of low, empty items and total FIFO value across a collection. */
-export function stockTotals(
-  items: readonly { quantity: number; isLowStock: boolean; fifoValuation: number }[],
-): { lowCount: number; emptyCount: number; value: number } {
-  let lowCount = 0;
-  let emptyCount = 0;
-  let value = 0;
-
-  for (const item of items) {
-    const status = stockStatus(item);
-    if (status === "low") lowCount++;
-    else if (status === "empty") emptyCount++;
-    value += item.fifoValuation;
-  }
-
-  return { lowCount, emptyCount, value };
-}
