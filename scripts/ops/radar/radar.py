@@ -196,6 +196,15 @@ def _load(name, path):
 _SI = None
 _MC = None
 _DL = None
+_LR = None
+
+
+def router():
+    """scripts/dev/llm_route.py: the shared free-first task router (issue #288)."""
+    global _LR
+    if _LR is None:
+        _LR = _load("radar_llm_route", os.path.join(REPO, "scripts", "dev", "llm_route.py"))
+    return _LR
 
 
 def si_common():
@@ -779,54 +788,40 @@ def pick_models(role, allow_free=False):
     return out
 
 
-def post_json(url, body, key, timeout=90):
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={
-        "Content-Type": "application/json", "Authorization": f"Bearer {key}", "User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - fixed https URL
-        return json.loads(resp.read())
-
-
 class LLM:
-    URL = "https://openrouter.ai/api/v1/chat/completions"
-
-    def __init__(self, budget, key, post=post_json):
-        self.budget, self.key, self.post = budget, key, post
+    def __init__(self, budget, key, *, attempts=None):
+        self.budget, self.key = budget, key
+        self.attempts = attempts
         self.models_used = []
         self.errors = []
 
     def ask(self, role, system, user, what, allow_free=False):
-        """First working model of `role`, or None. Budget is reserved before and charged after each call."""
+        """One routed call (task `radar`: free first, then cheap_agent), or None on failure.
+
+        The budget is reserved from a worst-case estimate before the call and charged the router's
+        priced cost after it; a refused reservation is a hard stop. `attempts` is injectable for tests.
+        """
         if not self.key:
             return None
-        for model in pick_models(role, allow_free)[:3]:
-            est = estimate_usd(model, len(system) + len(user))
-            try:
-                self.budget.reserve(est, what)
-            except BudgetStop as exc:
-                self.errors.append(str(exc))
-                return None
-            body = {"model": model, "max_tokens": MAX_OUT_TOKENS, "temperature": 0.1,
-                    "reasoning": {"enabled": False},
-                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
-            try:
-                data = self.post(self.URL, body, self.key)
-            except Exception as exc:  # noqa: BLE001 - provider/network failure: try the next model
-                self.errors.append(f"{what}/{model}: {type(exc).__name__}")
-                continue
-            usage = data.get("usage") or {}
-            p_in, p_out = si_common().model_prices(model)
-            real = usage.get("cost")
-            if not isinstance(real, (int, float)):
-                real = (usage.get("prompt_tokens", 0) * p_in + usage.get("completion_tokens", 0) * p_out) / 1e6 \
-                    if usage else est
-            self.budget.commit(real, what, model)
-            if model not in self.models_used:
-                self.models_used.append(model)
-            try:
-                return str(data["choices"][0]["message"]["content"])
-            except (KeyError, IndexError, TypeError):
-                continue
-        return None
+        model = next(iter(pick_models(role, allow_free)), "")
+        est = estimate_usd(model, len(system) + len(user))
+        try:
+            self.budget.reserve(est, what)
+        except BudgetStop as exc:
+            self.errors.append(str(exc))
+            return None
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        atts = self.attempts if self.attempts is not None else router().radar_attempts()
+        try:
+            res = router().route("radar", messages, atts, max_tokens=MAX_OUT_TOKENS, public=True)
+        except (router().CapReached, router().AllAttemptsFailed) as exc:
+            self.errors.append(str(exc))
+            self.budget.commit(0, what)
+            return None
+        self.budget.commit(res.cost_usd, what, res.served)
+        if res.served not in self.models_used:
+            self.models_used.append(res.served)
+        return res.text
 
 
 EVAL_SYSTEM = (

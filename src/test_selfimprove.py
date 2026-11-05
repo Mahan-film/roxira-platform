@@ -104,9 +104,45 @@ def test_logstats():
     assert r["client_errors"] == {"fetch_failed": 1}
 
 
-def test_llm_policy(monkeypatch):
+def test_llm_policy(monkeypatch, tmp_path):
+    monkeypatch.setenv("ROXIRA_LLM_COST_LOG", str(tmp_path / "cost.jsonl"))
     llm = _mod("llm")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert llm.pick_model() == "deepseek/deepseek-v4.1-flash"
     b = _mod("budget")
     assert llm.ask(b.Ledger("/nonexistent/x", 0.3), "p", "t") is None  # no key -> no call
+
+
+def test_llm_ask_routes_free_first_and_charges_ledger(monkeypatch, tmp_path):
+    monkeypatch.setenv("ROXIRA_LLM_COST_LOG", str(tmp_path / "cost.jsonl"))
+    llm = _mod("llm")
+    lr = llm.llm_route
+    seen = []
+
+    def call(messages, max_tokens):
+        seen.append(messages)
+        return "answer", 1000, 500
+    atts = [lr.Attempt("fake/free", "free", False, call, price=(0.0, 0.0), public_only=True)]
+    b = _mod("budget")
+    led = b.Ledger(str(tmp_path / "l.jsonl"), cap_usd=0.3)
+    assert llm.ask(led, "prompt", "what", system="sys", attempts=atts) == "answer"
+    assert seen and seen[0][0] == {"role": "system", "content": "sys"}
+    assert led.spent() == 0.0  # a free attempt costs nothing
+
+
+def test_llm_ask_falls_back_and_charges_paid_cost(monkeypatch, tmp_path):
+    monkeypatch.setenv("ROXIRA_LLM_COST_LOG", str(tmp_path / "cost.jsonl"))
+    llm = _mod("llm")
+    lr = llm.llm_route
+
+    def bad(messages, max_tokens):
+        raise lr.AttemptError("http429")
+
+    def good(messages, max_tokens):
+        return "ok", 1000, 500
+    atts = [lr.Attempt("fake/free", "free", False, bad, public_only=True),
+            lr.Attempt("fake/paid", "cheap_agent", True, good, price=(0.0, 2.0))]
+    b = _mod("budget")
+    led = b.Ledger(str(tmp_path / "l.jsonl"), cap_usd=0.3)
+    assert llm.ask(led, "p", "w", attempts=atts) == "ok"
+    assert led.spent() == pytest.approx(0.001)  # 500 out * 2.0 / 1e6

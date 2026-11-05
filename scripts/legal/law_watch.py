@@ -38,6 +38,9 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts" / "dev"))
+import llm_route  # noqa: E402
+
 BASE = "https://www.ekhtebar.ir"
 NEZAMAT_BASE = "https://nezamat.ir"
 ALLOWED_HOSTS = frozenset({"www.ekhtebar.ir", "ekhtebar.ir", "nezamat.ir", "www.nezamat.ir"})
@@ -686,26 +689,42 @@ def pick_llm_model() -> tuple[str, float, float]:
     return mid, price[0], price[1]
 
 
-def llm_classify(rec: dict, item: dict, http_post=None) -> dict | None:
-    """One cheap call. Returns updated record or None (budget exhausted / no key / error)."""
+def llm_classify(rec: dict, item: dict, http_post=None, *, attempts=None) -> dict | None:
+    """One routed call (task `law_watch`: free first, then cheap). Returns updated record or None.
+
+    The item text is public news, so the payload is declared public and free / may-log attempts are
+    allowed. `http_post` (legacy transport) and `attempts` (fake Attempt list) are injectable for tests;
+    production leaves both unset and goes through the shared router.
+    """
     budget = load_json(_p("llm_budget.json"), {})
     today = dt.date.today().isoformat()
     spent = budget.get("spent", 0.0) if budget.get("day") == today else 0.0
     if spent >= DAILY_LLM_CAP_USD:
         return None
-    key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not key and http_post is None:
-        return None
-    model, p_in, p_out = pick_llm_model()
     prompt = LLM_PROMPT + f"Title: {item.get('title')}\nText: {norm(item.get('text', ''))[:1500]}"
-    body = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 120,
-            "temperature": 0, "reasoning": {"enabled": False}}
+    if http_post is not None:
+        model, p_in, p_out = pick_llm_model()
+        body = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 120,
+                "temperature": 0, "reasoning": {"enabled": False}}
+        try:
+            resp = http_post(body, os.environ.get("OPENROUTER_API_KEY", ""))
+            content = resp["choices"][0]["message"]["content"]
+            usage = resp.get("usage", {})
+            cost = (usage.get("prompt_tokens", 700) * p_in + usage.get("completion_tokens", 60) * p_out) / 1e6
+        except Exception:
+            return None
+        served = model
+    else:
+        try:
+            res = llm_route.route("law_watch", [{"role": "user", "content": prompt}],
+                                  attempts if attempts is not None else llm_route.law_watch_attempts(),
+                                  max_tokens=120, public=True)
+        except (llm_route.AllAttemptsFailed, llm_route.CapReached):
+            return None
+        content, cost, served = res.text, res.cost_usd, res.served
     try:
-        resp = (http_post or _openrouter_post)(body, key)
-        out = json.loads(re.search(r"\{.*\}", resp["choices"][0]["message"]["content"], re.S).group(0))
-        usage = resp.get("usage", {})
-        cost = (usage.get("prompt_tokens", 700) * p_in + usage.get("completion_tokens", 60) * p_out) / 1e6
-    except Exception:
+        out = json.loads(re.search(r"\{.*\}", content, re.S).group(0))
+    except (AttributeError, ValueError):
         return None
     save_json(_p("llm_budget.json"), {"day": today, "spent": round(spent + cost, 6)})
     allowed = {"new_law", "amendment", "repeal", "annulment", "unity_ruling", "cabinet_decision", "regulation",
@@ -715,7 +734,7 @@ def llm_classify(rec: dict, item: dict, http_post=None) -> dict | None:
     rec = dict(rec)
     rec["change_type"] = out["change_type"]
     rec["effect"] = {"repeal": "repeals", "annulment": "annuls", "amendment": "modifies", "new_law": "adds"}.get(out["change_type"], "informs")
-    rec["classification"] = {"method": "llm", "confidence": "medium", "signals": ["llm:" + model]}
+    rec["classification"] = {"method": "llm", "confidence": "medium", "signals": ["llm:" + served]}
     rec["needs_llm"] = False
     rec["llm_law_name"] = out.get("law_name")
     rec["ingest_eligible"] = False  # LLM-classified items always need a human look
@@ -728,13 +747,6 @@ def llm_classify(rec: dict, item: dict, http_post=None) -> dict | None:
     else:
         rec["proposed_actions"] = [] if not rec["law_refs"] else proposed_actions(rec)
     return rec
-
-
-def _openrouter_post(body: dict, key: str) -> dict:
-    req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=json.dumps(body).encode(),
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60, context=_ssl_ctx()) as r:
-        return json.loads(r.read())
 
 
 def cmd_classify(args) -> int:
