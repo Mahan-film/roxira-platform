@@ -8,6 +8,8 @@ import { EntityManager } from 'typeorm';
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { MoneyFormatError, fromDb, fromMinor, minorToDecimal, toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
+import { BankingService } from '../../banking/services/banking.service';
+import { RoleAccounts } from '../../posting_rules/domain/posting-engine';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import {
   CHEQUE_ACCOUNT_DEFINITIONS,
@@ -71,6 +73,7 @@ export class ChequesService {
     private readonly chequesRepository: ChequesRepository,
     private readonly accountingService: AccountingService,
     private readonly postingRules: PostingRulesService,
+    private readonly bankingService?: BankingService,
   ) {}
 
   async create(tenantId: string, dto: CreateChequeDto, actor = 'unknown'): Promise<ChequeResponseDto> {
@@ -147,6 +150,7 @@ export class ChequesService {
   async transition(tenantId: string, id: number, dto: TransitionChequeDto): Promise<ChequeDetailResponseDto> {
     await this.ensureAccounts(tenantId);
     const eventDate = dto.eventDate ? dateOnly(dto.eventDate) : todayUtc();
+    const overrides = await this.bankOverrides(tenantId, dto.bankAccountId);
 
     await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
       const cheque = await this.chequesRepository.findByIdForUpdate(tenantId, id, manager);
@@ -179,7 +183,7 @@ export class ChequesService {
       }
 
       const journalEntryId = rule.docType
-        ? await this.post(tenantId, cheque, dto.status, eventDate, rule.description, rule.docType, remaining, manager, dto.spentToCode)
+        ? await this.post(tenantId, cheque, dto.status, eventDate, rule.description, rule.docType, remaining, manager, dto.spentToCode, overrides)
         : null;
       const closes = dto.status === ChequeStatus.CLEARED;
       await this.chequesRepository.updateStatus(
@@ -204,6 +208,7 @@ export class ChequesService {
           eventDate,
           journalEntryId,
           amount: journalEntryId === null ? null : minorToDecimal(remaining),
+          bankAccountId: dto.bankAccountId ?? null,
           note: dto.note ?? null,
         },
         manager,
@@ -228,6 +233,7 @@ export class ChequesService {
     if (paid <= 0n) throw new BadRequestException('مبلغ پرداخت باید بزرگ‌تر از صفر باشد.');
     await this.ensureAccounts(tenantId);
     const eventDate = dto.eventDate ? dateOnly(dto.eventDate) : todayUtc();
+    const overrides = await this.bankOverrides(tenantId, dto.bankAccountId);
 
     await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
       const cheque = await this.chequesRepository.findByIdForUpdate(tenantId, id, manager);
@@ -244,7 +250,7 @@ export class ChequesService {
       if (eventDate < cheque.issueDate) {
         throw new BadRequestException('تاریخ رویداد نمی‌تواند پیش از تاریخ صدور چک باشد.');
       }
-      const journalEntryId = await this.post(tenantId, cheque, 'partial', eventDate, posting.description, posting.docType, paid, manager);
+      const journalEntryId = await this.post(tenantId, cheque, 'partial', eventDate, posting.description, posting.docType, paid, manager, undefined, overrides);
       await this.chequesRepository.updateStatus(tenantId, id, { settledAmount: minorToDecimal(settled + paid) }, manager);
       await this.chequesRepository.addEvent(
         tenantId,
@@ -255,6 +261,7 @@ export class ChequesService {
           eventDate,
           journalEntryId,
           amount: minorToDecimal(paid),
+          bankAccountId: dto.bankAccountId ?? null,
           note: dto.note ?? 'پرداخت بخشی از وجه چک',
         },
         manager,
@@ -390,6 +397,7 @@ export class ChequesService {
     amount: bigint,
     manager: EntityManager,
     spentToCode?: string,
+    overrides?: RoleAccounts,
   ): Promise<number> {
     const seq = (await this.chequesRepository.listEvents(tenantId, cheque.id)).length;
     const result = await this.postingRules.post(
@@ -403,10 +411,27 @@ export class ChequesService {
         description: `${title} — چک ${cheque.chequeNumber} (${cheque.partyName})`,
         amounts: { amount },
         partyCode: (marker === ChequeStatus.SPENT ? spentToCode : cheque.partyCode) || undefined,
+        overrides,
       },
       manager,
     );
     return result.entryId;
+  }
+
+  /**
+   * The bank-side line of a clearing posts to the chosen bank account's own ledger account. Without
+   * a choice the posting rules default (1010) applies, so old callers and old events are unchanged.
+   */
+  private async bankOverrides(tenantId: string, bankAccountId?: number): Promise<RoleAccounts | undefined> {
+    if (!bankAccountId) return undefined;
+    if (!this.bankingService) {
+      throw new BadRequestException('حساب بانکی انتخاب‌شده در دسترس نیست.');
+    }
+    const account = (await this.bankingService.listAccounts(tenantId)).find((a) => a.id === bankAccountId);
+    if (!account) {
+      throw new BadRequestException('حساب بانکی انتخاب‌شده یافت نشد.');
+    }
+    return { bank: account.ledgerAccountCode };
   }
 
   /**

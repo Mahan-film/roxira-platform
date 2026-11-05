@@ -83,7 +83,7 @@ function build() {
 
   const accounting = {
     async listAccounts(tenantId: string) {
-      return ['1010', '1020', '2010', ...(accounts.get(tenantId) ?? [])].map((code) => ({ code }));
+      return ['1010', '1020', '2010', '1099', ...(accounts.get(tenantId) ?? [])].map((code) => ({ code }));
     },
     async createAccount(tenantId: string, dto: { code: string }) {
       accounts.set(tenantId, (accounts.get(tenantId) ?? new Set()).add(dto.code));
@@ -122,7 +122,17 @@ function build() {
       Object.assign(sources.get(`${st}/${sid}/${dt}`)!, { entryId, entryNumber });
     },
   };
-  const service = new ChequesService(repo as never, accounting as never, new PostingRulesService(postingRepo as never, accounting as never));
+  const banking = {
+    async listAccounts(tenantId: string) {
+      return tenantId === A ? [{ id: 7, ledgerAccountCode: '1099' }] : [];
+    },
+  };
+  const service = new ChequesService(
+    repo as never,
+    accounting as never,
+    new PostingRulesService(postingRepo as never, accounting as never),
+    banking as never,
+  );
   return {
     service,
     failNextPosting,
@@ -522,6 +532,46 @@ describe('ChequesService partial payment (CHK-01)', () => {
     const t = build();
     const c = await t.service.create(A, received({ sayadNumber: undefined }) as never);
     await expect(t.service.partialPayment(B, c.id, { amount: 1 })).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('ChequesService bank account override (CHK-01 follow-up)', () => {
+  it('clearing with a bank account posts the bank line to its ledger account and stores it', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED, bankAccountId: 7 });
+    expect(shape(t.entries[2])).toEqual(['Dr1099', 'Cr1120']);
+    expect(t.events.at(-1)!.bankAccountId).toBe(7);
+  });
+
+  it('clearing without a bank account still posts to 1010', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
+    expect(shape(t.entries[2])).toEqual(['Dr1010', 'Cr1120']);
+    expect(t.events.at(-1)!.bankAccountId).toBeNull();
+  });
+
+  it('partial payment with a bank account posts the part to its ledger account', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    await t.service.partialPayment(A, c.id, { amount: 30, bankAccountId: 7 });
+    expect(shape(t.entries[2])).toEqual(['Dr1099', 'Cr1120']);
+    expect(t.events.at(-1)!.bankAccountId).toBe(7);
+  });
+
+  it('rejects an unknown bank account without posting', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    await expect(
+      t.service.transition(A, c.id, { status: ChequeStatus.CLEARED, bankAccountId: 99 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(t.entries).toHaveLength(2);
+    expect((await t.service.get(A, c.id)).status).toBe('deposited');
   });
 });
 

@@ -130,6 +130,13 @@ export class TransitionChequeDto {
   @Matches(/^([0-9]{10}|[0-9]{11})$/, { message: 'کد ملی باید ۱۰ رقم و شناسه ملی ۱۱ رقم باشد.' })
   spentToNationalId?: string;
 
+  @ApiPropertyOptional({ description: 'حساب بانکی ماژول بانک برای سطر بانکی سند وصول/پاس؛ خالی یعنی حساب پیش‌فرض ۱۰۱۰' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  bankAccountId?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -146,6 +153,13 @@ export class PartialPaymentDto {
   @IsOptional()
   @IsISO8601({ strict: true })
   eventDate?: string;
+
+  @ApiPropertyOptional({ description: 'حساب بانکی ماژول بانک برای سطر بانکی سند وصول؛ خالی یعنی حساب پیش‌فرض ۱۰۱۰' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  bankAccountId?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

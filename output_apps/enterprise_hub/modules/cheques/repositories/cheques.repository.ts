@@ -47,6 +47,8 @@ export interface ChequeEventInput {
   journalEntryId: number | null;
   /** Exact decimal string the posting moved; null when nothing was posted. */
   amount: string | null;
+  /** Bank account whose ledger account received the bank-side line; null = the legacy 1010. */
+  bankAccountId?: number | null;
   note: string | null;
 }
 

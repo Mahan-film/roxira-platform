@@ -33,8 +33,9 @@ const minorOf = (value: number | string): bigint => {
  *
  * A clearing event is a `cleared` move or a partial payment: each posted one journal entry whose
  * bank-side line (debit for a received cheque, credit for an issued one, on the account the bank
- * account is linked to) should appear on the statement. The cheque module posts to 1010, so a bank
- * account linked to another ledger account shows `no_bank_line` until accounting maps it.
+ * account is linked to) should appear on the statement. A clearing that carried a `bankAccountId`
+ * posts to that account's ledger; an old event (null) posted to 1010, so a bank account linked to
+ * another ledger account still shows `no_bank_line` for it.
  */
 @Injectable()
 export class ChequeReconService {
