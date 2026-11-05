@@ -118,7 +118,7 @@ export default function SuiteInventoryPage() {
   return (
     <>
       <PageHeader
-        title="کالا و انبار"
+        title="کالاها و موجودی"
         description="کالاها، انبارها، اسناد انبار و موجودی با ارزش‌گذاری FIFO"
         icon={<Warehouse className="size-6 text-indigo-500" />}
         actions={
@@ -178,7 +178,7 @@ export default function SuiteInventoryPage() {
       {isEmpty ? (
         <EmptyImportState
           title="فهرست کالاهای قبلی‌تان را اینجا رها کنید"
-          hint="فایل اکسل کالا یا موجودی انبار را در صفحه ورود داده بارگذاری کنید"
+          hint="فایل اکسل کالا یا موجودی انبار را در صفحهٔ ورود از اکسل بارگذاری کنید"
         />
       ) : (
         <>
@@ -202,6 +202,7 @@ export default function SuiteInventoryPage() {
                   setFilter(key);
                   setPage(1);
                 }}
+                aria-pressed={filter === key}
               >
                 {key === "low" && <TriangleAlert />}
                 {key === "all" ? "همه" : key === "low" ? "زیر نقطهٔ سفارش" : "بدون موجودی"}

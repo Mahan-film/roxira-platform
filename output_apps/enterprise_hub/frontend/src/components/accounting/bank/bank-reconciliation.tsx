@@ -343,7 +343,7 @@ export function BankReconciliation() {
             </CardHeader>
             {lines.length === 0 ? (
               <CardContent className="text-sm text-muted-foreground">
-                سطری نیست. صورتحساب اکسل/CSV بانک را در صفحه ورود داده بارگذاری کنید.
+                سطری نیست. صورتحساب اکسل/CSV بانک را در صفحهٔ ورود از اکسل بارگذاری کنید.
               </CardContent>
             ) : (
               <Table>
