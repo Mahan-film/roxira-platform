@@ -136,8 +136,8 @@ export function CommandPalette({
       },
       {
         id: "import",
-        labelFa: "ورود داده",
-        labelEn: "Import data",
+        labelFa: "ورود از اکسل",
+        labelEn: "Import from Excel",
         keywords: ["ورود", "اکسل", "import", "excel", "csv"],
         icon: FileUp,
         run: go("/app/import"),

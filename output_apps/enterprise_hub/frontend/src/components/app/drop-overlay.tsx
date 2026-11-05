@@ -95,7 +95,7 @@ export function DropOverlay() {
         <FileUp className="size-12 text-indigo-400" aria-hidden="true" />
         <p className="text-lg font-bold">فایل را رها کنید</p>
         <p className="max-w-xs text-sm text-muted-foreground">
-          برای ورود خودکار به صفحهٔ ورود داده منتقل می‌شوید
+          برای ورود خودکار به صفحهٔ ورود از اکسل منتقل می‌شوید
         </p>
       </div>
     </div>

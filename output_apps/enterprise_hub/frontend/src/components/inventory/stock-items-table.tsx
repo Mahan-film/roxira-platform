@@ -3,6 +3,7 @@
 import { PackageSearch, TriangleAlert } from "lucide-react";
 
 import { MinQuantityEditor } from "@/components/inventory/min-quantity-editor";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatRial } from "@/lib/format";
+import { stockStatus, STOCK_STATUS_LABEL } from "@/lib/stock-status";
 import type { StockItem } from "@/types/inventory";
 
 interface StockItemsTableProps {
@@ -46,7 +48,7 @@ export function StockItemsTable({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">کالاهای موجود انبار</h2>
+        <h2 className="text-lg font-semibold">کالاها و موجودی</h2>
         <Button
           type="button"
           variant="ghost"
@@ -66,16 +68,18 @@ export function StockItemsTable({
       )}
 
       <div className="overflow-x-auto rounded-lg border">
-        <Table>
+        <Table className="min-w-[40rem]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-36">شناسه کالا</TableHead>
               <TableHead className="min-w-48">نام کالا</TableHead>
-              <TableHead className="w-32">بارکد</TableHead>
               <TableHead className="w-28">موجودی</TableHead>
               <TableHead className="w-36">حداقل موجودی</TableHead>
-              <TableHead className="w-36">ارزش FIFO</TableHead>
+              <TableHead className="w-36">ارزش (FIFO)</TableHead>
               <TableHead className="w-32">وضعیت</TableHead>
+              <TableHead className="w-20">
+                <span className="sr-only">عملیات کالا</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -102,15 +106,19 @@ export function StockItemsTable({
                   onClick={() => onSelectItem(item.sku)}
                 >
                   <TableCell className="font-mono text-xs">{item.sku}</TableCell>
-                  <TableCell className="whitespace-nowrap">{item.name}</TableCell>
-                  <TableCell className="font-mono text-xs" dir="ltr">
-                    {item.barcode}
+                  <TableCell className="whitespace-nowrap">
+                    {item.name}
+                    {item.barcode && (
+                      <div dir="ltr" className="text-xs text-muted-foreground">
+                        {item.barcode}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell
                     className={
                       item.isLowStock
-                        ? "font-bold text-rose-600 dark:text-rose-400"
-                        : "font-medium"
+                        ? "font-bold text-rose-700 dark:text-rose-300 tabular-nums"
+                        : "font-medium tabular-nums"
                     }
                   >
                     {quantityLabel(item.quantity)}
@@ -122,16 +130,30 @@ export function StockItemsTable({
                     {formatRial(item.fifoValuation)}
                   </TableCell>
                   <TableCell>
-                    {item.quantity <= 0 ? (
-                      <Badge variant="outline">بدون موجودی</Badge>
-                    ) : item.isLowStock ? (
-                      <Badge variant="destructive">
-                        <TriangleAlert />
-                        کسری
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">متعادل</Badge>
-                    )}
+                    {(() => {
+                      const status = stockStatus(item);
+                      return status === "empty" ? (
+                        <Badge variant="outline" className="gap-1">
+                          <PackageSearch className="size-3" />
+                          {STOCK_STATUS_LABEL.empty}
+                        </Badge>
+                      ) : status === "low" ? (
+                        <Badge variant="destructive" className="gap-1">
+                          <TriangleAlert className="size-3" />
+                          {STOCK_STATUS_LABEL.low}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">
+                          {STOCK_STATUS_LABEL.ok}
+                        </Badge>
+                      );
+                    })()}
+                  </TableCell>
+                  <TableCell>
+                    <RowActionsMenu
+                      label={`عملیات کالا ${item.name}`}
+                      actions={[{ label: "کارت کالا", onSelect: () => onSelectItem(item.sku) }]}
+                    />
                   </TableCell>
                 </TableRow>
               ))

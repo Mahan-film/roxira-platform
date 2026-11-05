@@ -125,7 +125,7 @@ export function ImportWizard({ onBulkFile }: { onBulkFile?: (file: File) => void
     <div className="flex flex-col gap-6">
       <div
         role="tablist"
-        aria-label="نوع ورود داده"
+        aria-label="نوع داده ورودی"
         className="flex flex-wrap gap-2 rounded-2xl bg-muted/40 p-1"
       >
         {MODE_LABELS.map(([key, label]) => (
@@ -375,7 +375,7 @@ function SingleFileImportWizard({
 
   return (
     <div className="flex flex-col gap-6">
-      <ol className="flex flex-wrap gap-2 text-xs" aria-label="مراحل ورود داده">
+      <ol className="flex flex-wrap gap-2 text-xs" aria-label="مراحل ورود از اکسل">
         {STEP_LABELS.map(([key, label]) => (
           <li
             key={key}
