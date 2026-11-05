@@ -4,7 +4,7 @@ import { jalaliToGregorian } from '../data_import/normaliser/normalise';
 import * as fs from 'fs';
 import * as path from 'path';
 import { InvoiceEntity } from '../invoicing/entities/invoice.entity';
-import { seededRates } from '../hr/statutory/__fixtures__/seeded-rates';
+import { seededRates, seededRows } from '../hr/statutory/__fixtures__/seeded-rates';
 import { InvoicePostingService } from '../invoicing/services/invoice-posting.service';
 import { invoiceRateLines, invoiceRialAmounts } from './reports/invoice-rial-amounts';
 import { SeasonalReportController } from './controllers/seasonal-report.controller';
@@ -307,6 +307,11 @@ describe('csv util', () => {
  * 1404 budget law. The 12% figure was only a 1405 budget BILL proposal.
  */
 describe('statutory rates', () => {
+  it('the seeded 1405 general VAT rate is 10% (1404 budget law, unchanged in 1405)', () => {
+    const row = seededRows(1405).find((r) => r.paramKey === 'vat_general_rate');
+    expect(row?.value).toBe('0.1');
+  });
+
   it('reports the rate stored on each invoice line (set by the statutory resolver), never a default', async () => {
     const stub = repoStub(jest.fn().mockResolvedValue([
       invoice({ items: [{ description: 'x', quantity: 1, unitPrice: 1000, discount: 0, vatRate: 0.05, tax: 50, total: 1050 }], totalAmount: 1000, totalDiscount: 0, totalTax: 50, finalPayable: 1050 }),

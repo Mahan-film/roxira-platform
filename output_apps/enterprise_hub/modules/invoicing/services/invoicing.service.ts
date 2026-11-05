@@ -121,8 +121,9 @@ export class InvoicingService {
     @Optional() vatRateResolver?: VatRateResolver,
     @Optional() private readonly partiesService?: PartiesService,
   ) {
-    // Without the store (unit tests that build the service by hand) only the tenant setting is read.
-    this.vatRates = vatRateResolver ?? new VatRateResolver(undefined, tenantsRepository);
+    // Without the store (unit tests that build the service by hand) no general rate exists: an
+    // invoice line without an explicit rate is refused (#126). Specs pass __fixtures__/vat-rate.fixture.
+    this.vatRates = vatRateResolver ?? new VatRateResolver();
   }
 
   private readonly vatRates: VatRateResolver;
@@ -179,8 +180,12 @@ export class InvoicingService {
    * نرمال‌سازی نرخ VAT: ورودی می‌تواند نسبت (۰٫۱) یا درصد (۱۰) باشد؛
    * خروجی همیشه نسبت در بازه ۰ تا ۱ است.
    */
-  private normalizeVatRate(value: number | undefined, fallback: number): number {
+  private normalizeVatRate(value: number | undefined, fallback: number | null): number {
     if (value === undefined || value === null) {
+      if (fallback === null) {
+        // defaultVatRateForJurisdiction returns null only when every line has its own rate.
+        throw new BadRequestException('نرخ مالیات ارزش افزوده سطر مشخص نیست.');
+      }
       return this.roundRate(fallback);
     }
     if (!Number.isFinite(value) || value < 0) {
@@ -199,12 +204,14 @@ export class InvoicingService {
     }
     let rate = value > 1 ? value / 100 : value;
     if (rate > 1) rate = 1;
-    return Math.round((rate + Number.EPSILON) * 10000) / 10000;
+    // Six decimals: the same precision the statutory store accepts for rates (statutory-catalogue RATE).
+    return Math.round((rate + Number.EPSILON) * 1_000_000) / 1_000_000;
   }
 
   /**
    * General VAT rate in force on the invoice date (see VatRateResolver): the statutory store by
-   * date, an organisation's own row in the store first, else the tenant setting. Never a code value.
+   * date, an organisation's own row in the store first; refused when no row covers the date (#126).
+   * Never a code value and never `tenants.default_vat_rate`.
    * The date is the Iran calendar day of `onDate` (Asia/Tehran), not the UTC day (#125).
    */
   private async resolveDefaultVatRate(tenantId: string, onDate: Date): Promise<number> {
@@ -249,15 +256,24 @@ export class InvoicingService {
     return requested;
   }
 
-  /** Default VAT rate by jurisdiction: INTL zero; IR the general rate on the invoice date. */
+  /**
+   * Default VAT rate by jurisdiction: INTL zero; IR the general rate on the invoice date.
+   * `null` when every line carries its own rate: the store is then not read, so a date with no
+   * store row does not refuse an invoice that never needs the general rate (#126).
+   */
   private async defaultVatRateForJurisdiction(
     tenantId: string,
     jurisdiction: InvoiceJurisdiction,
     onDate: Date,
-  ): Promise<number> {
-    return jurisdiction === InvoiceJurisdiction.INTL
-      ? INTL_DEFAULT_VAT_RATE
-      : this.resolveDefaultVatRate(tenantId, onDate);
+    items: InvoiceItemDto[],
+  ): Promise<number | null> {
+    if (jurisdiction === InvoiceJurisdiction.INTL) {
+      return INTL_DEFAULT_VAT_RATE;
+    }
+    if (items.every((item) => item.vatRate !== undefined && item.vatRate !== null)) {
+      return null;
+    }
+    return this.resolveDefaultVatRate(tenantId, onDate);
   }
 
   /**
@@ -315,7 +331,7 @@ export class InvoicingService {
   private async normalizeItems(
     tenantId: string,
     items: InvoiceItemDto[],
-    defaultVatRate: number,
+    defaultVatRate: number | null,
     currency: Currency = Currency.IRR,
   ): Promise<InvoiceItem[]> {
     const normalized: InvoiceItem[] = [];
@@ -514,6 +530,7 @@ export class InvoicingService {
       tenantId,
       jurisdiction,
       new Date(),
+      source.items,
     );
     const fxRate = this.resolveFxRate(currency, source.fxRate);
 
@@ -816,6 +833,7 @@ export class InvoicingService {
       tenantId,
       jurisdiction,
       new Date(),
+      source.items,
     );
     const items = await this.normalizeItems(tenantId, source.items, defaultVatRate, currency);
     return { items, totals: this.computeTotals(items, currency), currency };
@@ -997,6 +1015,7 @@ export class InvoicingService {
         tenantId,
         entity.jurisdiction,
         entity.issuedAt ? new Date(entity.issuedAt) : new Date(),
+        dto.items,
       );
       const items = await this.normalizeItems(
         tenantId,

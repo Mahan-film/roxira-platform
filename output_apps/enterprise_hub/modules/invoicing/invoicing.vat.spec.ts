@@ -13,6 +13,7 @@ import { InvoiceEntity } from './entities/invoice.entity';
 import { InvoiceStatus } from './enums/invoice-status.enum';
 import { InvoicingRepository } from './repositories/invoicing.repository';
 import { InvoicingService } from './services/invoicing.service';
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 
 const currencyService = {
   getRate: jest.fn(() => 1),
@@ -127,9 +128,7 @@ const buildService = (options?: {
         ) ?? null,
     ),
   } as unknown as InventoryRepository;
-  const tenantsRepository = {
-    findDefaultVatRate: jest.fn(async () => options?.defaultVatRate ?? 0.1),
-  } as unknown as TenantsRepository;
+  const tenantsRepository = {} as unknown as TenantsRepository;
 
   const service = new InvoicingService(
     repository as unknown as InvoicingRepository,
@@ -137,6 +136,9 @@ const buildService = (options?: {
     crmRepository,
     inventoryRepository,
     tenantsRepository,
+    undefined,
+    undefined,
+    fixtureVatRates(options?.defaultVatRate),
   );
 
   return { service, repository };

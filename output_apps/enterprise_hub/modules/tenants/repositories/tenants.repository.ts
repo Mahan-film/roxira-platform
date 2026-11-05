@@ -28,15 +28,6 @@ export class TenantsRepository {
     return this.repository.findOne({ where: { slug } });
   }
 
-  /** نرخ پیش‌فرض VAT سازمان؛ در نبود رکورد مقدار ۱۰٪ برمی‌گردد. */
-  async findDefaultVatRate(id: string): Promise<number> {
-    const tenant = await this.repository.findOne({
-      where: { id },
-      select: { id: true, defaultVatRate: true },
-    });
-    return tenant ? Number(tenant.defaultVatRate ?? 0.1) : 0.1;
-  }
-
   async updateDefaultVatRate(
     id: string,
     defaultVatRate: number,

@@ -33,6 +33,7 @@ import { PosSaleService } from './services/pos-sale.service';
 import { CreatePosSaleDto } from './dto/pos-sale.dto';
 import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -104,6 +105,7 @@ describePg('POS sales on PostgreSQL', () => {
       tenants,
       queue as never,
       identity,
+      fixtureVatRates(),
     );
     pos = new PosSaleService(invoicing, invoicingRepo, inventoryRepo, identity, tenants);
 

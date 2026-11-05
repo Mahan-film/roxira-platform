@@ -77,10 +77,12 @@ class InMemoryInvoices {
   }
 }
 
-const build = (rows: StatutoryParameterEntity[], tenantSetting: number | null = 0.03) => {
+const build = (rows: StatutoryParameterEntity[]) => {
   const store = statutoryStore(rows);
+  // Like the real tenants row: `default_vat_rate` is NOT NULL with default 0.1. It must never be
+  // used as the VAT rate (#126).
   const tenants = {
-    findDefaultVatRate: jest.fn(async () => tenantSetting),
+    findById: jest.fn(async (id: string) => ({ id, countryCode: 'IR', defaultVatRate: 0.1 })),
   } as unknown as TenantsRepository;
   const repository = new InMemoryInvoices();
   const service = new InvoicingService(
@@ -91,7 +93,7 @@ const build = (rows: StatutoryParameterEntity[], tenantSetting: number | null = 
     tenants,
     undefined,
     undefined,
-    new VatRateResolver(store, tenants),
+    new VatRateResolver(store),
   );
   return { service, store, repository };
 };
@@ -207,18 +209,50 @@ describe('VAT-01 — general VAT rate from the statutory store by invoice date',
     expect((await service.create(TENANT, dto())).items[0].vatRate).toBe(0.05);
   });
 
-  it('a date the store has no value for falls back to the tenant setting', async () => {
-    const { service, store } = build(twoRates(), 0.03);
-    at('2025-06-01T08:00:00Z'); // Jalali 1404: no vat_general_rate row in this store.
-    const created = await service.create(TENANT, dto());
-    expect(store.findForYear).toHaveBeenCalledWith(TENANT, 'IR', 1404);
-    expect(created.items[0].vatRate).toBe(0.03);
+  // #126: no silent fallback to tenants.default_vat_rate (always 0.1 in the real table).
+  it('refuses an invoice dated in a year the store has no rate for (store seeded only for 1405)', async () => {
+    const { service, store, repository } = build(seededRows(1405));
+    at('2027-04-01T08:00:00Z'); // Jalali 1406
+    const attempt = service.create(TENANT, dto());
+    await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
+    await expect(attempt).rejects.toThrow(/مالیات بر ارزش افزوده.*1406/);
+    expect(store.findForYear).toHaveBeenCalledWith(TENANT, 'IR', 1406);
+    expect(repository.rows).toHaveLength(0);
   });
 
-  it('refuses the invoice when neither the store nor the tenant setting has a rate', async () => {
-    const { service } = build([], null);
-    at('2026-05-01T08:00:00Z');
+  it('refuses a date before the first row of its year instead of using another value', async () => {
+    const { service } = build([param({ effectiveFrom: '2026-09-23', value: '0.08' })]);
+    at('2026-05-01T08:00:00Z'); // 1405, but no row in force yet
     await expect(service.create(TENANT, dto())).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuses a POS quote when no rate covers the sale date', async () => {
+    const { service } = build([]);
+    at('2026-05-01T08:00:00Z');
+    await expect(
+      service.quote(TENANT, {
+        items: [{ description: 'کالا', quantity: 1, unitPrice: 1000, discount: 0 }],
+        currency: Currency.IRR,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('an explicit line rate still works on a date with no store rate', async () => {
+    const { service } = build([]);
+    at('2027-04-01T08:00:00Z');
+    const created = await service.create(
+      TENANT,
+      dto({ items: [{ description: 'x', quantity: 1, unitPrice: 1000, discount: 0, vatRate: 0.09 }] }),
+    );
+    expect(created.items[0].vatRate).toBe(0.09);
+  });
+
+  it('keeps the six decimals the store accepts for a rate', async () => {
+    const { service } = build([param({ value: '0.123456' })]);
+    at('2026-05-01T08:00:00Z');
+    const created = await service.create(TENANT, dto({ items: [{ description: 'x', quantity: 1, unitPrice: 1_000_000, discount: 0 }] }));
+    expect(created.items[0].vatRate).toBe(0.123456);
+    expect(created.totalTax).toBe(123_456);
   });
 
   it('refuses a malformed rate in the store instead of guessing', async () => {
@@ -276,7 +310,7 @@ describe('VAT-01 — general VAT rate from the statutory store by invoice date',
   it('with the real 1405 seed, a 1405 invoice uses exactly the value the seed holds', async () => {
     const seeded = seededRows(1405).find((r) => r.paramKey === 'vat_general_rate');
     expect(seeded).toBeDefined();
-    const { service } = build(seededRows(1405), null);
+    const { service } = build(seededRows(1405));
     at('2026-06-01T08:00:00Z');
     const created = await service.create(TENANT, dto());
     expect(created.items[0].vatRate).toBe(Number(seeded!.value));
