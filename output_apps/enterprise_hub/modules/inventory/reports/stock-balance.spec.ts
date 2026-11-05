@@ -218,7 +218,8 @@ describe('stockBalance', () => {
 
     it('columns', () => {
       const table = stockBalanceTable(report, items, warehouses, jalali);
-      expect(table.columns).toHaveLength(5);
+      expect(table.columns).toHaveLength(6);
+      expect(table.columns[5].title).toBe('کسری');
       expect(table.columns[0].title).toBe('کد کالا');
       expect(table.columns[1].title).toBe('نام کالا');
       expect(table.columns.filter((c) => c.money)).toHaveLength(1);
@@ -229,7 +230,7 @@ describe('stockBalance', () => {
     it('first row', () => {
       const table = stockBalanceTable(report, items, warehouses, jalali);
       const firstRow = table.rows[0];
-      expect(firstRow.cells).toEqual(['A1', 'کالای الف', 'انبار مرکزی', '500', 60000n]);
+      expect(firstRow.cells).toEqual(['A1', 'کالای الف', 'انبار مرکزی', '500', 60000n, '']);
     });
 
     it('last row', () => {
@@ -237,7 +238,13 @@ describe('stockBalance', () => {
       const lastRow = table.rows[table.rows.length - 1];
       expect(lastRow.bold).toBe(true);
       const totalValue = 60000n + 36000n + 500n + 0n + 700n;
-      expect(lastRow.cells).toEqual(['', 'جمع ارزش', '', null, totalValue]);
+      expect(lastRow.cells).toEqual(['', 'جمع ارزش', '', null, totalValue, '']);
+    });
+
+    it('names the short item on its own row', () => {
+      const table = stockBalanceTable(report, items, warehouses, jalali);
+      const short = table.rows.find((r) => r.cells[0] === 'D1')!;
+      expect(short.cells).toEqual(['D1', 'کالای دی', 'انبار مرکزی', '0', 0n, '3']);
     });
   });
 

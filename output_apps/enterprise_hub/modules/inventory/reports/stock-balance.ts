@@ -1,6 +1,11 @@
 import { ReportColumn, ReportRow, ReportTable } from '../../accounting/reports/report-table';
 import { CardexMovement, cardex } from './cardex';
 
+/**
+ * Whole-unit quantities, like the cardex; fractional stock is #461 and must land before a route.
+ * A transfer-in leg must carry the cost of the layers its
+ * transfer-out consumed, one movement per layer; a missing unitCost values the stock at 0.
+ */
 export interface BalanceMovement extends CardexMovement {
   itemId: string;
   warehouseId: string;
@@ -164,6 +169,7 @@ export function stockBalanceTable(
     { title: 'انبار', width: 1.2 },
     { title: 'مقدار' },
     { title: 'ارزش (ریال)', width: 1.2, money: true },
+    { title: 'کسری', width: 0.7 },
   ];
 
   const rows: ReportRow[] = [];
@@ -178,6 +184,7 @@ export function stockBalanceTable(
         warehouse?.name ?? line.warehouseId,
         String(line.quantity),
         line.value,
+        line.shortageQty > 0n ? String(line.shortageQty) : '',
       ],
     });
   }
@@ -185,7 +192,7 @@ export function stockBalanceTable(
   const totalValue = report.lines.reduce((sum, line) => sum + line.value, 0n);
   rows.push({
     bold: true,
-    cells: ['', 'جمع ارزش', '', null, totalValue],
+    cells: ['', 'جمع ارزش', '', null, totalValue, ''],
   });
 
   return {
