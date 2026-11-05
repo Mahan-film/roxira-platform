@@ -16,6 +16,8 @@ import { CurrencyService } from '../currency/services/currency.service';
 import { FifoBatchEntity } from './entities/fifo-batch.entity';
 import { StockItemEntity } from './entities/stock-item.entity';
 import { WarehouseEntity } from './entities/warehouse.entity';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { InventoryRepository } from './repositories/inventory.repository';
 import { StockDocumentsRepository } from './repositories/stock-documents.repository';
 import { InventoryService } from './services/inventory.service';
@@ -67,7 +69,12 @@ describePg('stock documents on PostgreSQL', () => {
         ds,
       ),
     );
-    documents = new StockDocumentsService(new StockDocumentsRepository(ds), inventory, accounting);
+    documents = new StockDocumentsService(
+      new StockDocumentsRepository(ds),
+      inventory,
+      accounting,
+      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
+    );
     wh = (await inventory.createWarehouse(T, { name: 'اصلی', locationCode: 'M-1' })).id;
     for (const sku of ['D-1', 'D-2', 'D-3']) {
       await inventory.createStockItem(T, { sku, barcode: sku, name: `کالا ${sku}` } as never);
@@ -139,8 +146,18 @@ describePg('stock documents on PostgreSQL', () => {
       [loss.journalEntryId],
     );
     expect(lines).toHaveLength(2);
+    // The loss debits the stock adjustment account and credits inventory, both the accounts
+    // resolveAccounts picked for this tenant (its default 1030 inventory, a created 5301).
+    expect(lines.map((l) => l.code)).toEqual(['5301', '1030']);
     expect(Number(lines[0].debit)).toBeCloseTo(250.5);
     expect(Number(lines[1].credit)).toBeCloseTo(250.5);
+    // The engine records one idempotency row per posted stock document.
+    expect(
+      await q(
+        `SELECT 1 FROM fin_posting_sources WHERE tenant_id=$1 AND source_type='stock_document' AND source_id=$2`,
+        [T, String(loss.id)],
+      ),
+    ).toHaveLength(1);
     expect(await q(`SELECT journal_entry_id FROM fin_journal_entry_lines GROUP BY journal_entry_id HAVING SUM(debit) <> SUM(credit)`)).toEqual([]);
   });
 

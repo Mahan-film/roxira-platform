@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccountingModule } from '../accounting/accounting.module';
+import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InventoryController } from './controllers/inventory.controller';
 import { StockDocumentsController } from './controllers/stock-documents.controller';
@@ -32,6 +33,7 @@ import { InventoryService } from './services/inventory.service';
 @Module({
   imports: [
     AccountingModule,
+    PostingRulesModule,
     TypeOrmModule.forFeature([
       WarehouseEntity,
       StockItemEntity,

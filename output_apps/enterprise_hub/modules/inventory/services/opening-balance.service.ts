@@ -234,8 +234,8 @@ export class OpeningBalanceService {
       }
       const entry = await this.documents.postValueEntry(
         tenantId,
-        document.docNumber,
-        docDate,
+        { id, docNumber: document.docNumber, docDate },
+        'opening',
         `موجودی اول دوره ${document.docNumber}`,
         accounts,
         net,
