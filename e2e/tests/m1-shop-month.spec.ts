@@ -113,33 +113,60 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
   test('03 import customers and suppliers: 48 unique parties, 2 duplicates dropped [E5]', async ({ page }) => {
     const { header, rows } = readCsv(SAMPLE_COMPANY_FILES.parties);
-    const codes = rows.map((r) => r[header.indexOf('کد طرف حساب')]);
+    const cell = (row: string[], column: string) => row[header.indexOf(column)];
+    const codes = rows.map((r) => cell(r, 'کد طرف حساب'));
     expect(rows).toHaveLength(50);
     expect(new Set(codes).size).toBe(48); // the file: 30 customers + 20 suppliers, 2 rows repeated
-    const counts = await importFile(page, SAMPLE_COMPANY_FILES.parties, 'crm-leads', {
-      'کد طرف حساب': null, // GAP: the CRM lead has no party code
-      'نقش': null, // GAP: the CRM lead has no customer/supplier role
-      'نام و نام خانوادگی': 'fullName',
-      'شرکت': 'company',
+
+    // The distinct parties by code (first row wins) and their roles, computed from the file.
+    const distinct = new Map<string, string[]>();
+    for (const row of rows) if (!distinct.has(cell(row, 'کد طرف حساب'))) distinct.set(cell(row, 'کد طرف حساب'), row);
+    const roleOf = (row: string[]) => {
+      const text = cell(row, 'نقش').replace(/\u200c/g, ' ');
+      if (text === 'مشتری') return 'customer';
+      if (text === 'تأمین کننده') return 'supplier';
+      throw new Error(`unexpected role «${text}» in the fixture`);
+    };
+    const expectedRoles = { customer: 0, supplier: 0 };
+    for (const row of distinct.values()) expectedRoles[roleOf(row) as 'customer' | 'supplier'] += 1;
+    expect(expectedRoles).toEqual({ customer: 29, supplier: 19 }); // 30 + 20 minus the two repeated rows
+
+    const counts = await importFile(page, SAMPLE_COMPANY_FILES.parties, 'parties', {
+      'کد طرف حساب': 'code',
+      'نقش': 'role',
+      'نام و نام خانوادگی': 'name',
+      'شرکت': null, // the party master has no company column (follow-up)
       'رایانامه': 'email',
       'تلفن': 'phone',
-      'شناسه ملی / کد اقتصادی آزمایشی': null, // GAP: no national id on the lead
-      'مرحله فروش': 'pipelineStage',
-      'ارزش برآوردی (ریال)': 'estimatedValue',
-      'توضیحات': 'notes',
+      'شناسه ملی / کد اقتصادی آزمایشی': 'nationalId',
+      'مرحله فروش': null, // a CRM pipeline field, not a party field
+      'ارزش برآوردی (ریال)': null, // a CRM pipeline field
+      'توضیحات': null,
     });
     expect(counts).toEqual({ inserted: 48, skippedDuplicates: 2, failed: 0 });
 
-    const leads = await apiGet<{ total: number; data: Array<{ fullName: string; company: string | null }> }>(
-      page,
-      'crm/leads?limit=100',
-    );
-    expect(leads.total).toBe(48);
-    const expectedNames = [...new Set(rows.map((r) => persianise(r[header.indexOf('نام و نام خانوادگی')])))];
-    expect(leads.data.map((l) => l.fullName).sort()).toEqual(expectedNames.sort());
-    for (const lead of leads.data) {
-      expect(`${lead.fullName} ${lead.company ?? ''}`, 'Arabic ي/ك normalised').not.toMatch(/[يك]/);
+    const parties = await apiGet<{
+      total: number;
+      data: Array<{ code: string; name: string; role: string; nationalId: string | null; phone: string | null; email: string | null; active: boolean }>;
+    }>(page, 'parties?limit=200');
+    expect(parties.total).toBe(48);
+    expect(parties.data.map((p) => p.code).sort()).toEqual([...distinct.keys()].sort());
+    const ascii = (text: string) => text.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+    for (const [code, row] of distinct) {
+      const party = parties.data.find((p) => p.code === code);
+      expect(party, `party ${code}`).toBeDefined();
+      expect(party!.role, `role of ${code}`).toBe(roleOf(row));
+      expect(party!.nationalId, `national id of ${code}`).toBe(ascii(cell(row, 'شناسه ملی / کد اقتصادی آزمایشی')));
+      expect(party!.name, `name of ${code}`).toBe(persianise(cell(row, 'نام و نام خانوادگی')));
+      expect(party!.phone, `phone of ${code}`).toBe(ascii(cell(row, 'تلفن')));
+      expect(party!.email, `email of ${code}`).toBe(cell(row, 'رایانامه'));
+      expect(party!.active).toBe(true);
+      expect(`${party!.name}`, 'Arabic ي/ك normalised').not.toMatch(/[يك]/);
     }
+    expect(parties.data.filter((p) => p.role === 'customer')).toHaveLength(expectedRoles.customer);
+    expect(parties.data.filter((p) => p.role === 'supplier')).toHaveLength(expectedRoles.supplier);
+    expect(parties.data.filter((p) => p.code.startsWith('CUST-'))).toHaveLength(29);
+    expect(parties.data.filter((p) => p.code.startsWith('SUPP-'))).toHaveLength(19);
   });
 
   // Needs a product feature (issue: items import has no unit cost). See the gap list in docs/testing/M1_GATE.md.
