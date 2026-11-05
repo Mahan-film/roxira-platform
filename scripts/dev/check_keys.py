@@ -54,7 +54,6 @@ SIMPLE = [
     ("GROQ", "GROQ_API_KEY", "GET", "https://api.groq.com/openai/v1/models", _bearer, None),
     # UNSURE: SambaNova /v1/models auth behaviour (OpenAI-compatible, expected Bearer).
     ("SAMBANOVA", "SAMBANOVA_API_KEY", "GET", "https://api.sambanova.ai/v1/models", _bearer, None),
-    ("CEREBRAS", "CEREBRAS_API_KEY", "GET", "https://api.cerebras.ai/v1/models", _bearer, None),
     (
         "BRAVE",
         "BRAVE_SEARCH_API_KEY|BRAVE_API_KEY",
@@ -122,7 +121,6 @@ SIMPLE = [
         lambda k: {},
         None,
     ),
-    ("SMS_IR", "SMS_IR_API_KEY", "GET", "https://api.sms.ir/v1/credit", lambda k: {"x-api-key": k}, None),
     ("TELEGRAM", "NOTIFY_BOT_TOKEN", "GET", "https://api.telegram.org/bot{key}/getMe", lambda k: {}, None),
     (
         "TELEGRAM_CH",

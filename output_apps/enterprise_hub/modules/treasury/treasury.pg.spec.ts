@@ -8,6 +8,8 @@
  *   ROXIRA_TEST_PG_HOST=127.0.0.1 ROXIRA_TEST_PG_PORT=55460 npx jest modules/treasury/treasury.pg.spec.ts
  */
 import 'reflect-metadata';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
@@ -136,7 +138,7 @@ describePg('Treasury on PostgreSQL (non-superuser, FORCE RLS)', () => {
       repository,
       new TreasuryLedgerPostingAdapter(accounting),
       { listAccounts: async () => [] } as never,
-      new ChequesService(new ChequesRepository(scope), accounting),
+      new ChequesService(new ChequesRepository(scope), accounting, new PostingRulesService(new PostingRulesRepository(scope), accounting)),
       invoicing as never,
     );
   }, 240_000);

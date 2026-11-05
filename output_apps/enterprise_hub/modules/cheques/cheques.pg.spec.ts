@@ -1,4 +1,6 @@
 import { TenantScope } from '../access/services/tenant-scope';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 /**
  * Cheque lifecycle on a REAL PostgreSQL: migrations (including the Sayad / partial-payment one), FORCE RLS tables,
  * the TenantScope repository, and real balanced journal entries through AccountingService.
@@ -97,7 +99,7 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
     await ds.runMigrations();
     accounting = new AccountingService(new AccountingRepository(new TenantScope(ds)), currencyStub);
     const chequesRepo = new ChequesRepository(new TenantScope(ds));
-    service = new ChequesService(chequesRepo, accounting);
+    service = new ChequesService(chequesRepo, accounting, new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting));
     banking = new BankingService(
       new BankingRepository(ds.getRepository(BankAccountEntity), ds.getRepository(BankStatementLineEntity), ds),
       accounting,

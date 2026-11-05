@@ -34,6 +34,16 @@ lanes:
     aliases: [groq-strong, ds-flash]
     timeout_secs: 1200
 
+# Routing (issue #367, docs/ops/MODEL_ROUTING.md): chains and caps come from config/models.yaml `tasks:` /
+# `budgets:`; the order is cache, then free, then cheap, then strong (escalate when confidence < 0.80).
+# fleet.py reads this block (issue #367); batch tasks wait for the discount window ~20:00 Tehran.
+routing:
+  task: fleet              # models.yaml tasks.fleet: free, cheap_agent, executor
+  review_task: review_desk # models.yaml tasks.review_desk: other family than the author, via scripts/dev/llm_route.py
+  cache: true              # routing_policy.cache_key: identical prompts reuse the answer
+  offpeak: true            # defer routing.offpeak_tasks until routing_policy.next_offpeak()
+  review_at_offpeak: true  # the hourly review desk runs in the 19:30-03:30 Tehran window when not urgent
+
 review:
   # Reviewer must be a different vendor family than the author (scripts/dev/check_reviewer_family.py).
   # Key-pool groups are tried in order through scripts/dev/llm_pool.py (direct provider calls);

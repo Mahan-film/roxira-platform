@@ -4,7 +4,7 @@ All of this was done on 2026-11-03. No secret value is written in this file.
 
 ## Why
 
-- Live keys were in git history: Kavenegar, SMS.ir, Tavily (two keys), Brave, Exa, Jina, Firecrawl, Kira and AssemblyAI.
+- Live keys were in git history: Kavenegar, Tavily (two keys), Brave, Exa, Jina, Firecrawl, Kira and AssemblyAI.
 - Also in history: a Google OAuth client secret, and srv1 values for POSTGRES_PASSWORD, TWENTY_DB_PASSWORD and ZIBAL_MERCHANT.
 - GitHub keeps PR refs, so the old repo could not be made public.
 - The Team org has 1 seat, so `mahansudo` could not join the private repo.

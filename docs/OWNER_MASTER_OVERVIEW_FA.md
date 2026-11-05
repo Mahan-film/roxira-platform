@@ -39,7 +39,7 @@
 | Gemini / Kira | `GEMINI_API_KEY`، `KIRA_API_KEY` | `.env` سرور | صوت زنده و موتور fallback؛ Gemini CLI از Mac خطای 403 می‌دهد |
 | جست‌وجو | Brave، Exa، Firecrawl، Jina، Tavily (`TAVILY_KEYS`) | سرور و Actions | تحقیق و خزنده؛ جایگزین رایگان: SearXNG/ddgs (کد merge شده، نصب نشده) |
 | اشتراک‌ها | GitHub Team، ChatGPT Plus (Codex CLI، worker پیش‌فرض)، Claude | حساب شما | Codex بدون مصرف سهمیهٔ Claude کار می‌کند |
-| سرویس‌های ایرانی | زیبال، کاوه‌نگار، sms.ir | `.env` سرور | پرداخت و OTP |
+| سرویس‌های ایرانی | زیبال، کاوه‌نگار | `.env` سرور | پرداخت و OTP |
 
 نقش‌ها در `config/models.yaml`: `free`، `cheap` (deepseek-v4.1-flash، پیش‌فرض چت)، `strong` (deepseek-v4-pro، پیش‌نویس نهایی)، `stt/tts`، و نقش‌های سازنده `architect/executor/reviewer/mechanical`. قانون سخت: داده و پروندهٔ مشتری هرگز به مدل `:free` نمی‌رود.
 

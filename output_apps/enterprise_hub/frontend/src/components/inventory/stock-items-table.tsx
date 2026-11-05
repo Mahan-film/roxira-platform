@@ -2,6 +2,7 @@
 
 import { PackageSearch, TriangleAlert } from "lucide-react";
 
+import { MinQuantityEditor } from "@/components/inventory/min-quantity-editor";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,7 @@ export function StockItemsTable({
               <TableHead className="min-w-48">نام کالا</TableHead>
               <TableHead className="w-32">بارکد</TableHead>
               <TableHead className="w-28">موجودی</TableHead>
-              <TableHead className="w-28">حد کسری</TableHead>
+              <TableHead className="w-36">حداقل موجودی</TableHead>
               <TableHead className="w-36">ارزش FIFO</TableHead>
               <TableHead className="w-32">وضعیت</TableHead>
             </TableRow>
@@ -114,8 +115,8 @@ export function StockItemsTable({
                   >
                     {quantityLabel(item.quantity)}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {quantityLabel(item.minQuantity)}
+                  <TableCell>
+                    <MinQuantityEditor itemId={item.id} value={item.minQuantity} onSaved={onRefresh} />
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {formatRial(item.fifoValuation)}

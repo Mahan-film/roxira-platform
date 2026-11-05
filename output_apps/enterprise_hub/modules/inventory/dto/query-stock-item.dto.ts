@@ -1,6 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform, Type } from 'class-transformer';
+import { Transform, TransformFnParams, Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+
+/**
+ * A boolean query flag. Reads the raw value from `obj`: with the global `enableImplicitConversion`
+ * the `value` passed in is already `Boolean("false") === true`, so "false" would mean true.
+ */
+const queryFlag = ({ obj, key }: TransformFnParams): boolean => {
+  const raw: unknown = (obj as Record<string, unknown>)[key];
+  return raw === true || raw === 'true' || raw === '1';
+};
 
 /**
  * DTO فیلتر/صفحه‌بندی فهرست کالاهای انبار
@@ -33,7 +42,7 @@ export class QueryStockItemDto {
     default: false,
   })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(queryFlag)
   @IsBoolean()
   lowStockOnly?: boolean = false;
 
@@ -42,7 +51,7 @@ export class QueryStockItemDto {
     default: false,
   })
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @Transform(queryFlag)
   @IsBoolean()
   noStockOnly?: boolean = false;
 }

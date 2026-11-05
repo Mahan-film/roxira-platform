@@ -68,9 +68,9 @@ longer exist with `codebase-memory-mcp cli delete_project <name>`. Prevent recur
 ## 2. Keys and providers (names only; values never read)
 
 `~/Secrets/roxira/roxira.env` (names): OPENROUTER_API_KEY, MISTRAL_API_KEY, GROQ_API_KEY,
-SAMBANOVA_API_KEY, CEREBRAS_API_KEY, KIRA_API_KEY, OMNIROUTE_API_KEY (+ OMNIROUTE_BASE_URL),
+SAMBANOVA_API_KEY, KIRA_API_KEY, OMNIROUTE_API_KEY (+ OMNIROUTE_BASE_URL),
 JINA_API_KEY, EXA_API_KEY, BRAVE_SEARCH_API_KEY, FIRECRAWL_API_KEY, TAVILY_API_KEYS,
-ASSEMBLYAI_API_KEYS, plus app secrets (Zibal, Kavenegar, SMS_IR, Google OAuth, JWT, DB).
+ASSEMBLYAI_API_KEYS, plus app secrets (Zibal, Kavenegar, Google OAuth, JWT, DB).
 `~/.config/litellm/keys.env` (names): GROQ_KEY_1..3, MISTRAL_KEY_1..4, SILICONFLOW_KEY_1..3,
 OPENROUTER_API_KEY, LITELLM_MASTER_KEY.
 
@@ -81,7 +81,6 @@ OPENROUTER_API_KEY, LITELLM_MASTER_KEY.
 | Groq | yes (1 + 3) | LiteLLM `gptoss`/`qwen` (global opencode default model is `pool/gptoss`) | repo docs say 403 and excluded; the LiteLLM keys may differ: run `check_keys.py` |
 | SiliconFlow | 3 keys (LiteLLM only) | `glm`, `dspro` aliases | labelled "needs credit" |
 | SambaNova | yes | opencode.json provider with EMPTY model list | **configured but unusable** (no model ids) |
-| Cerebras | yes | nothing found in opencode/LiteLLM/Goose | **unused** (fast free tier; good for OmniRoute/LiteLLM) |
 | KIRA | yes | product code only | not a builder-tool provider |
 | Jina / Exa / Brave / Firecrawl / Tavily | yes | research scripts / SearXNG fallbacks | unused by agents as MCP tools |
 | AssemblyAI | yes | STT bake-off | n/a |
@@ -99,7 +98,7 @@ Broken
 6. Legacy root scripts (`autonomous_agent_factory.py`, `factory_engine.py`, `factory_dispatch_api.py`, daemons) hardcode `/opt/roxira_platform` and server paths. They are server-side artifacts, not Mac tooling.
 
 Configured but unused
-- Cerebras and SambaNova (free/fast capacity), Jina rerank/Exa/Brave/Firecrawl as agent tools.
+- SambaNova (free/fast capacity), Jina rerank/Exa/Brave/Firecrawl as agent tools.
 - OpenCode `serve`/`--attach` (listed as an open spike in STATE.md); OpenCode is only used as a one-shot `run`.
 - Goose recipes/scheduler (enabled, no recipe in the repo), Goose `summon` sub-agents.
 - Prompt caching: nothing in the builder lane sets cache hints; DeepSeek caches automatically on prefix match but our prompts vary at the front.
@@ -117,7 +116,7 @@ Configured but unused
 | Mechanical batch | OpenCode `build` agent, `openrouter/deepseek/deepseek-v4.1-flash` (fallback `pool/codestral`, `omniroute/team-coding`) via `scripts/dev/dispatch_opencode.sh` or `rx` | renames, docs, boilerplate DTOs, test scaffolds, lint fixes, <=3 files / <=80 lines | auth, billing, migrations (autonomy ladder L3/L4) |
 | Interactive pair edit | Aider with the same model | small human-in-the-loop refactors with git auto-commit off | unattended runs |
 | Recurring / MCP-heavy chores | Goose recipe (scheduler + summon) with DeepSeek Flash | nightly docs-drift check, tech-radar summary, `gh` triage, corpus-crawl orchestration; chosen because it has native recipes, scheduler and 70+ MCP extensions | code on sensitive paths |
-| Free tier | `:free` models, OmniRoute free combos, Cerebras/Groq | public-repo doc typos, formatting scans, summaries of public web pages | any customer/case data, ever (`dispatch_opencode.sh` refuses `:free` without `--public`) |
+| Free tier | `:free` models, OmniRoute free combos, Groq | public-repo doc typos, formatting scans, summaries of public web pages | any customer/case data, ever (`dispatch_opencode.sh` refuses `:free` without `--public`) |
 
 ### 4.2 How the hub dispatches to OpenCode headless and gets a diff
 
@@ -233,7 +232,7 @@ Top 5 fixes (ordered by value per effort)
 1. Clear the CBM lock (3 commands, 1.1) and prune old graph DBs.
 2. Top up OpenRouter, then split keys dev/eval/goose/prod with daily limits (section 5).
 3. Make `rx` and `dispatch_opencode.sh` read ids from one place (`config/models.yaml` executor role via `model_registry.py`), and drop `codex` from the default chain unless it is verified working.
-4. Repair OmniRoute: delete/disable the `dva` and `cfp` providers in the `auto/*` combos, add a Cerebras and SambaNova provider, define one healthy `team-coding-paid` combo; fix LiteLLM DNS.
+4. Repair OmniRoute: delete/disable the `dva` and `cfp` providers in the `auto/*` combos, add a SambaNova provider, define one healthy `team-coding-paid` combo; fix LiteLLM DNS.
 5. Retire or archive the legacy root daemons into `docs/archive` or a `legacy/` dir (owner-approved, per the zero-destruction rule), and run the `opencode serve` spike so batch runs share a warm session.
 
 ## 8. Owner approval needed

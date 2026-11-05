@@ -215,8 +215,6 @@ def review_attempts() -> list[Attempt]:
                       role="reviewer", paid=True, price=(0.28, 0.42)),
         openai_compat("groq/" + gpt_oss, "https://api.groq.com/openai/v1", "GROQ_API_KEY", gpt_oss,
                       role="reviewer", paid=False, public_only=True),
-        openai_compat("cerebras/gpt-oss-120b", os.environ.get("CEREBRAS_BASE_URL") or "https://api.cerebras.ai/v1",
-                      "CEREBRAS_API_KEY", "gpt-oss-120b", role="reviewer", paid=False, public_only=True),
         openai_compat("mistral/mistral-medium-latest", "https://api.mistral.ai/v1", "MISTRAL_API_KEY",
                       "mistral-medium-latest", role="reviewer", paid=False, public_only=True),
     ]

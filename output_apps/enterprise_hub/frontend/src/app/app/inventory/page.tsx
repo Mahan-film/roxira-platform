@@ -28,6 +28,7 @@ import {
 import { OpeningBalanceDrawer } from "@/components/inventory/opening-balance-drawer";
 import { StockBatchesPanel } from "@/components/inventory/stock-batches-panel";
 import { StockDocumentsList } from "@/components/inventory/stock-documents-list";
+import { ReorderPointTable } from "@/components/inventory/reorder-point-table";
 import { StockItemsTable } from "@/components/inventory/stock-items-table";
 import { WarehouseStockPanel } from "@/components/inventory/warehouse-stock-panel";
 import { WarehousesManager } from "@/components/inventory/warehouses-manager";
@@ -203,21 +204,32 @@ export default function SuiteInventoryPage() {
                 }}
               >
                 {key === "low" && <TriangleAlert />}
-                {key === "all" ? "همه" : key === "low" ? "کسری" : "بدون موجودی"}
+                {key === "all" ? "همه" : key === "low" ? "زیر نقطهٔ سفارش" : "بدون موجودی"}
               </Button>
             ))}
             <LoadingLine show={loading} />
             <span className="ms-auto text-xs text-muted-foreground">{formatNumber(total)} کالا</span>
           </div>
 
-          <StockItemsTable
-            items={items}
-            isLoading={loading}
-            errorMessage={null}
-            selectedSku={selectedSku}
-            onSelectItem={(sku) => setSelectedSku((cur) => (cur === sku ? null : sku))}
-            onRefresh={refresh}
-          />
+          {filter === "low" ? (
+            <ReorderPointTable
+              items={items}
+              isLoading={loading}
+              search={search || undefined}
+              selectedSku={selectedSku}
+              onSelectItem={(sku) => setSelectedSku((cur) => (cur === sku ? null : sku))}
+              onChanged={refresh}
+            />
+          ) : (
+            <StockItemsTable
+              items={items}
+              isLoading={loading}
+              errorMessage={null}
+              selectedSku={selectedSku}
+              onSelectItem={(sku) => setSelectedSku((cur) => (cur === sku ? null : sku))}
+              onRefresh={refresh}
+            />
+          )}
 
           {total > PAGE_SIZE && (
             <div className="flex items-center justify-between text-xs text-muted-foreground">

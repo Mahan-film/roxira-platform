@@ -118,6 +118,20 @@ def ordered(deps: list[kc.Deployment], rng: random.Random) -> list[kc.Deployment
     return out
 
 
+def dedupe_keys(deps: list[kc.Deployment], env: dict[str, str]) -> list[kc.Deployment]:
+    """Drop a deployment whose key VALUE equals an earlier slot of the same provider and model (two env slots
+    holding one key would share one rate limit, so the second is only a wasted retry). Values are never logged."""
+    seen: set[tuple[str, str, str]] = set()
+    out: list[kc.Deployment] = []
+    for d in deps:
+        sig = (d.provider, d.model, env.get(d.key_env, d.key_env))
+        if sig in seen:
+            continue
+        seen.add(sig)
+        out.append(d)
+    return out
+
+
 def _cool_kind(status: int) -> int | str:
     if status == 0:
         return "conn"
@@ -149,6 +163,7 @@ def chat(
     state = state or State(None)
     log = log or (lambda m: None)
     deps = ordered(kc.group_deployments(pool, group, set(env)), rng or random.Random())
+    deps = dedupe_keys(deps, env)
     if skip:  # e.g. the reviewer must not be the author's model family
         deps = [d for d in deps if not skip(d)]
     if not deps:
@@ -208,7 +223,7 @@ def health(pool: dict[str, Any], env: dict[str, str], gateway: str | None, post:
             st, _ = post(kc.fill_url(d.base_url, env, d.url_vars).rstrip("/") + "/chat/completions",
                          {"Authorization": f"Bearer {env[d.key_env]}", "Content-Type": "application/json"},
                          {"model": d.model, "messages": ping, "max_tokens": 5, **d.extra_body}, 30.0)
-            print(f"{d.provider:16s} {d.key_env:26s} {d.model:34s} {'ok' if st == 200 else '429' if st == 429 else 'fail'}")
+            print(f"{d.provider:16s} {d.key_env:26s} {d.model:34s} {'ok' if st == 200 else st or 'conn'}")
             bad += st != 200
     missing = [p for p, prov in pool["providers"].items() if kc.provider_key_names(prov) and not kc.provider_keys(prov, set(env))]
     for p in missing:

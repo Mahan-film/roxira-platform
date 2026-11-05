@@ -15,7 +15,6 @@ Results are from 2026-10-30, server 32 OK and 0 FAIL. "Mac only" means the serve
 | Groq | 3 | both | OK on server, 403 on Mac | Server agents, STT | Server only |
 | SambaNova | 1 | both | OK | Key pool | Long contract work |
 | Kira | 1 | both | Not tested | Key pool | Add a check |
-| Cerebras | 0 | none | No key | None | Add a key if the owner has one |
 | Tavily | 4 | server, 1 on Mac | OK | Research | Rotation, #855 |
 | Brave, Exa, Firecrawl, Jina | 1 each | both | OK | Research, rerank | Rotation, #855 |
 | AssemblyAI | 1 | Mac only | OK | Unused | Copy to server for STT fallback |
@@ -31,7 +30,7 @@ Results are from 2026-10-30, server 32 OK and 0 FAIL. "Mac only" means the serve
 | R2 | 1 pair | server | Not tested, backups use it | Backups | Keep |
 | Neon | 1 | server | Used by nightly job | Offsite backup | Keep |
 | Codeberg | 1 | server | OK, repo scope | Mirror | Keep |
-| Kavenegar, SMS.ir | 1 each | see test | OK | OTP SMS | Keep both as failover |
+| Kavenegar | 1 | see test | OK | OTP SMS | The only SMS provider |
 | Telegram | 2 bots | server | OK | Alerts, channel | Keep |
 | Google OAuth | 1 pair | both | Not tested | Sign-in | Keep |
 

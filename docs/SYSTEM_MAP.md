@@ -68,7 +68,7 @@ Other components:
 | --- | --- |
 | Voice | STT `openai/whisper-large-v3-turbo` (OpenRouter; AssemblyAI keys in template), TTS edge-tts `fa-IR-FaridNeural`; optional Gemini Live realtime (`voice_realtime` role, off by default, W20/#84). Docs `docs/W20_realtime_voice.md` |
 | Payments | Zibal live (`ZIBAL_MERCHANT` env-only, `ZIBAL_CALLBACK_URL`, `PAYMENTS_LIVE`; result page with receipts, activation retry, verify rate limits); verify via `payment_orders`. USDT-TRC20 self-custody checkout live (`CRYPTO_PAY_ENABLED=1`, poller `roxira-usdt-poll.timer` inside the app container, `docs/ops/CRYPTO_PAYMENTS.md`). Pricing (2026-10-20): Free / Basic $4 / Pro $10 / Premium $29, annual = 10x, toman = USD x max(Tetherland rate, 280,000 floor) + optional margin; older `PRICE_TOMAN_*` values are historical. Token packs are "coming soon" |
-| SMS / OTP | Kavenegar (templates `ghazi-verify`, `roxira-verify`); sms.ir key also wired |
+| SMS / OTP | Kavenegar (templates `ghazi-verify`, `roxira-verify`) |
 | Auth | JWT, Google OAuth (optional), WebAuthn passkeys in the NestJS backend; Smart Judge: phone OTP (auto-submit, WebOTP) and email+password accounts with verification via the self-hosted mail relay `roxira_mail` (Postfix + DKIM rx1) |
 | Model routing | Tiered per plan (free-only for free users; vip-product / vip-pro / vip-premium paid ladders, all ending in the free ladder): `docs/strategy/MODEL_ROUTING_DECISION_2026-10-17.md`; bake-off `scripts/eval/model_bakeoff.py` on srv1 |
 | Search/crawl | Brave, Exa, Firecrawl, Jina, Tavily used by radar/crawlers (keys below) |
@@ -98,7 +98,7 @@ Keys and secrets by NAME (values are never in this repo or in chat):
 | CRYPTO_PAY_ENABLED, CRYPTO_USDT_TRC20_ADDRESS, TRONGRID_API_KEY | prod `.env` | USDT checkout | n/a |
 | CHAT_PREMIUM_TOP_DAILY_LIMIT, SMARTJUDGE_ADMIN_PHONES | prod `.env` (config) | Opus answers/day for Premium; owner console admins | n/a |
 | TWENTY_API_KEY, TWENTY_API_URL | `/etc/roxira-crm.env` (not yet created) | CRM sync | n/a |
-| KAVENEGAR_API_KEY, SMS_IR_API_KEY | prod `.env` | OTP SMS | UNVERIFIED |
+| KAVENEGAR_API_KEY | prod `.env` | OTP SMS | UNVERIFIED |
 | JWT_SECRET, JWT_SECRET_KEY | prod `.env` | token signing | n/a |
 | POSTGRES_PASSWORD | prod `.env` | Postgres, PgBouncer | n/a |
 | BRAVE_API_KEY, EXA_API_KEY, FIRECRAWL_API_KEY, JINA_API_KEY, TAVILY_KEYS | prod `.env`; workflows reference them as GitHub secrets that do NOT exist | search/crawl/rerank | UNVERIFIED |

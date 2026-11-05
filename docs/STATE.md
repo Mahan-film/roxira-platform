@@ -23,7 +23,7 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - **Two people on one Mac**: GitHub `mahan-films` (org admin) and `mahansudo`. `bash scripts/dev/iam.sh <login>` (#976)
   switches gh + git author. `mahansudo` is now an admin collaborator of the public repo.
 - **Secrets**: hardcoded Kavenegar key and owner phone default removed from code (#975). Hash audit: the AI key pool
-  (Mistral, Groq, Gemini, Zilliz, Daytona, OpenRouter, SambaNova, Qdrant) is not in git history; Kavenegar, SMS.ir,
+  (Mistral, Groq, Gemini, Zilliz, Daytona, OpenRouter, SambaNova, Qdrant) is not in git history; Kavenegar,
   Tavily, Brave, Exa, Jina, Firecrawl, Kira and AssemblyAI keys ARE in history and still valid (owner keeps them for now).
 - **Public repo (DONE 2026-11-03)**: new public `Mahan-film/roxira-platform` built from a scrubbed history; the old
   repo is the private archive `roxira-platform-private`. Details, guard and checks: `docs/ops/PUBLIC_REPO_MIGRATION.md`.
@@ -191,10 +191,10 @@ Also: gemini-best quality-first ladder over all AI Studio keys (#699; add GEMINI
 - Python on the Mac has no CA bundle for Iranian sites or ghazihoushmand.ir: use `/usr/bin/curl` (the relay already falls back to it).
 - qavanin.ir answers with an ArvanCloud bot challenge: never bypass; it is not a relay source.
 - Free-tier agents finish big tasks incompletely about half the time: re-run on `ds-flash` with a note listing what is missing.
-- Agents key `OPENROUTER_API_KEY_AGENTS` has a $5 limit (≈$3 left on 2026-10-14); `CEREBRAS_API_KEY` is invalid.
+- Agents key `OPENROUTER_API_KEY_AGENTS` has a $5 limit (≈$3 left on 2026-10-14).
 
 ## Waiting on the owner
 - Off-site backup storage (HIGH, from the security audit); fix the roxira.ir DKIM record typo; set the Kavenegar template's last line to `@ghazihoushmand.ir #%token`; make one test USDT purchase; create the Twenty workspace + API key and enable the CRM sync timer (`docs/ops/CRM_SYNC.md`).
 - Send the lawyer review pack; bring the answers back.
-- Optional: more free keys from *other* accounts (Groq, Gemini, a valid Cerebras, NVIDIA) via `scripts/ops/set_server_env.sh NAME`.
+- Optional: more free keys from *other* accounts (Groq, Gemini, NVIDIA) via `scripts/ops/set_server_env.sh NAME`.
 - Decide: factory MVP shell vs per-customer apps; when to decommission the old server; Langfuse cloud account (free) if wanted.

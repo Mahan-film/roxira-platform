@@ -1,6 +1,6 @@
 # Seven-day zero-cash agent capacity plan — 1 Oct 2026
 
-**Bottom line:** make the existing local LiteLLM pool the default, Groq the main free cloud burst lane, Cerebras the second burst lane, and OpenRouter/OpenCode free models only as disposable fallbacks. Preserve Claude entirely for rare human-directed architecture/review. Do not depend on OpenAI or Google from Iran: both officially exclude Iran; using a VPN to evade that is account-risky and not a recommended operating policy. [OpenAI supported-country policy](https://help.openai.com/en/articles/5347006-openai-api-supported-countries-and-territories), [Google regions](https://ai.google.dev/gemini-api/docs/available-regions)
+**Bottom line:** make the existing local LiteLLM pool the default, Groq the main free cloud burst lane, and OpenRouter/OpenCode free models only as disposable fallbacks. Preserve Claude entirely for rare human-directed architecture/review. Do not depend on OpenAI or Google from Iran: both officially exclude Iran; using a VPN to evade that is account-risky and not a recommended operating policy. [OpenAI supported-country policy](https://help.openai.com/en/articles/5347006-openai-api-supported-countries-and-territories), [Google regions](https://ai.google.dev/gemini-api/docs/available-regions)
 
 ## Ranked lanes
 
@@ -8,7 +8,6 @@
 |---|---|---|---|---|
 | 1 | Existing LiteLLM pool: `dsflash`, `dspro`, `glm`, `gptoss`, `qwen`, `codestral`, `mmedium` | Sunk cost; exact limits depend on its upstreams. | If truly local/Mac-hosted, strongest privacy and works in CI/OpenCode. **UNVERIFIED** whether every configured endpoint is local. | Make this the primary router. Measure health, latency, and token caps first. |
 | 2 | Groq: GPT-OSS-120B / Qwen 3.8-27B | Free: 30 RPM, 1,000 RPD, 8k TPM, **200k TPD per organization/model**. Paid GPT-OSS-120B: **$0.15/$0.60**. Three keys only multiply capacity if they are separate organizations; limits are organization-level. [Limits](https://console.groq.com/docs/rate-limits), [models/prices](https://console.groq.com/docs/models) | Iran availability/sanctions position **UNVERIFIED**; may need reliable foreign egress because of filtering. API is OpenAI-compatible, good for CI/OpenCode. Default inference retains no prompt/output; optional ZDR; reliability/abuse logs can retain up to 30 days. [Data policy](https://console.groq.com/docs/your-data) | Best verified free cloud worker. Use for implementation, tests, and mechanical changes. |
-| 3 | Cerebras: GPT-OSS-120B; GLM-4.7 is limited | Free GPT-OSS-120B: 64k TPM, **1M TPD**, 30 RPM / 14.4k RPD; GLM-4.7 only 100 RPD. Free API key exists; current public materials also advertise a $5 trial credit. Paid capacity starts with $10. [Limits](https://inference-docs.cerebras.ai/support/rate-limits), [pricing](https://inference-docs.cerebras.ai/support/pricing) | Iran availability/privacy **UNVERIFIED**. OpenAI-compatible API: usable unattended. | Excellent burst fallback, especially code generation; rate-limit failures must be retried and routed away. |
 | 4 | SiliconFlow: DeepSeek-V4-Flash / Qwen 3.6 | Free models require real-name verification; free model calls are $0 with fixed per-model limits. Published chat ranges are 1k–10k RPM and 50k–5m TPM, but exact model quota must be read in Model Plaza. Paid DeepSeek-V4-Flash is **$0.22/$0.66**. [Limits](https://docs.siliconflow.cn/docs/userguide/faqs/rate-limit-and-upgradation), [pricing](https://www.siliconflow.com/pricing) | China-facing service, likely practical from Iran but reliability/privacy/legal terms **UNVERIFIED**. OpenAI-compatible and documented for OpenCode. | Use existing credits/free models only; good emergency throughput, never send customer/case data. |
 | 5 | OpenRouter `:free` models | 25+ free models, 50/day and 20 RPM; after **>$10 lifetime credit purchase**, 1,000/day and 20 RPM. Free-model upstream capacity is volatile. [Pricing](https://openrouter.ai/pricing/), [limits](https://openrouter.zendesk.com/hc/en-us/articles/39501163636379-OpenRouter-Rate-Limits-What-You-Need-to-Know) | Iran access **UNVERIFIED**. API works unattended. Prompts are forwarded to a selected/auto-routed provider; some providers train or retain prompts—pin provider/model and inspect policy. [Privacy](https://openrouter.ai/privacy) | Useful fallback only. With zero new spend, budget 50 calls/day, not production work. |
 | 6 | OpenCode Zen free rotation: Big Pickle, MiMo-V2.5, Hy3, Ling, Nemotron 3/3.5 | Currently $0 token price for listed free models; rate and daily caps **UNPUBLISHED/UNVERIFIED**. Its paid coding options include MiniMax M3 **$0.30/$1.20**, Kimi K2.7 Code **$0.95/$4**. [Zen catalog/prices](https://www.open-code.ai/en/docs/zen) | API endpoints are OpenAI-compatible, so non-interactive use is possible. Iran availability **UNVERIFIED**. Do **not** use “Muse Spark Contributor Free”: prompts/completions may train Meta models. | Rotate as a non-sensitive fallback, with hard retry caps and no credentials/customer data. |
@@ -24,12 +23,12 @@
 
 ## Concrete routing policy
 
-1. **Spec-writing and research:** local `mmedium`/`qwen`, then Cerebras GPT-OSS-120B. Use web retrieval separately; free LLMs may hallucinate citations.
-2. **Bounded feature/bug implementation:** Groq GPT-OSS-120B first; local `dspro` or `glm` for repo-aware edits; Cerebras on Groq 429.
+1. **Spec-writing and research:** local `mmedium`/`qwen`, then Groq GPT-OSS-120B. Use web retrieval separately; free LLMs may hallucinate citations.
+2. **Bounded feature/bug implementation:** Groq GPT-OSS-120B first; local `dspro` or `glm` for repo-aware edits; the next free provider on Groq 429.
 3. **Tests, lint fixes, migrations of repetitive code, codemods:** local `dsflash`/`qwen` first, then Groq Qwen/GPT-OSS. Keep diffs small and require CI.
-4. **Review:** use two independent low-cost models (local + Groq/Cerebras), then reserve the owner’s Claude subscription for only high-impact architecture/security review. Never use Claude as the production worker lane.
+4. **Review:** use two independent low-cost models (local + Groq), then reserve the owner’s Claude subscription for only high-impact architecture/security review. Never use Claude as the production worker lane.
 5. **Bulk mechanical edits:** local models only where possible; otherwise Groq, with chunking, deterministic scripts, and full tests.
-6. **Fallback order:** local → Groq → Cerebras → SiliconFlow free → OpenRouter `:free` → Zen free. Retry once with exponential backoff; then fail over. Do not silently route to a paid model.
+6. **Fallback order:** local → Groq → SiliconFlow free → OpenRouter `:free` → Zen free. Retry once with exponential backoff; then fail over. Do not silently route to a paid model.
 7. **Data policy:** no customer/case data to OpenRouter free, Zen free, SiliconFlow, DeepSeek, Kimi, or any `:free` route. This also matches the repository’s explicit rule against free-tier models for customer/case data.
 
 ## Seven-day capacity estimate
@@ -40,7 +39,6 @@ With local pool health confirmed and three genuinely separate Groq organizations
 
 - Local pool: **unbounded by cash; capacity is hardware/queue-limited**. Target 3–6 issues/day.
 - Groq: 600k free daily tokens across three organizations, practical target **3–6 rx issues/day**.
-- Cerebras: 1m free daily tokens, practical target **2–5 rx issues/day**.
 - OpenRouter/Zen/SiliconFlow/Cloudflare: reserve for retries and small jobs; count **0–2 additional issues/day**, not guaranteed.
 
 **Conservative operational target: 6–10 completed rx issues/day, 42–70 over seven days**, assuming CI passes and the local pool works. If the three Groq keys belong to one organization, reduce to **4–7/day (28–49/week)**. This excludes unsupported OpenAI/Gemini access and spends no new cash.

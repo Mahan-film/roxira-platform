@@ -120,7 +120,7 @@ export function toJournalLines(proposal: VoucherProposal) {
     accountCode: l.accountCode,
     debit: minorToDecimal(l.debit),
     credit: minorToDecimal(l.credit),
-    description: l.description,
+    ...(l.description ? { description: l.description } : {}),
     ...(l.partyCode ? { partyCode: l.partyCode } : {}),
   }));
 }
