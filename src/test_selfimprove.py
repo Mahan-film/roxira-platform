@@ -1,5 +1,6 @@
 """Offline tests for scripts/ops/selfimprove (anonymiser, budget, regressions, clustering, report). No network."""
 import importlib
+import json
 import pathlib
 import sys
 
@@ -104,9 +105,48 @@ def test_logstats():
     assert r["client_errors"] == {"fetch_failed": 1}
 
 
-def test_llm_policy(monkeypatch):
+def test_llm_policy(monkeypatch, tmp_path):
+    monkeypatch.setenv("ROXIRA_LLM_COST_LOG", str(tmp_path / "cost.jsonl"))
     llm = _mod("llm")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert llm.pick_model() == "deepseek/deepseek-v4.1-flash"
     b = _mod("budget")
     assert llm.ask(b.Ledger("/nonexistent/x", 0.3), "p", "t") is None  # no key -> no call
+
+
+def test_llm_ask_routes_free_first_and_charges_ledger(monkeypatch, tmp_path):
+    monkeypatch.setenv("ROXIRA_LLM_COST_LOG", str(tmp_path / "cost.jsonl"))
+    llm = _mod("llm")
+    lr = llm.llm_route
+    seen = []
+
+    def call(messages, max_tokens):
+        seen.append(messages)
+        return "answer", 1000, 500
+    atts = [lr.Attempt("fake/free", "free", False, call, price_per_1m=(0.0, 0.0), public_only=True)]
+    b = _mod("budget")
+    led = b.Ledger(str(tmp_path / "l.jsonl"), cap_usd=0.3)
+    assert llm.ask(led, "prompt", "what", system="sys", attempts=atts) == "answer"
+    assert seen and seen[0][0] == {"role": "system", "content": "sys"}
+    assert led.spent() == 0.0  # a free attempt costs nothing
+
+
+def test_llm_ask_falls_back_and_charges_paid_cost(monkeypatch, tmp_path):
+    monkeypatch.setenv("ROXIRA_LLM_COST_LOG", str(tmp_path / "cost.jsonl"))
+    llm = _mod("llm")
+    lr = llm.llm_route
+
+    def bad(messages, max_tokens):
+        raise lr.AttemptError("http429")
+
+    def good(messages, max_tokens):
+        return "ok", 1000, 500
+    atts = [lr.Attempt("fake/free", "free", False, bad, public_only=True),
+            lr.Attempt("fake/paid", "cheap_agent", True, good, price_per_1m=(0.0, 2.0))]
+    b = _mod("budget")
+    led = b.Ledger(str(tmp_path / "l.jsonl"), cap_usd=0.3)
+    assert llm.ask(led, "p", "w", attempts=atts) == "ok"
+    assert led.spent() == pytest.approx(0.001)  # 500 out * 2.0 / 1e6
+    logged = [json.loads(line) for line in (tmp_path / "cost.jsonl").read_text().splitlines()]
+    assert [r["attempt"] for r in logged] == ["fake/free", "fake/paid"]  # one line per call, serving attempt recorded
+    assert logged[-1]["ok"] is True and logged[-1]["task"] == "selfimprove" and not logged[0]["ok"]

@@ -229,6 +229,45 @@ def review_attempts() -> list[Attempt]:
     return out
 
 
+def attempts_for(task_name: str, *, extra: dict[str, Any] | None = None, timeout: float = 90.0) -> list[Attempt]:
+    """Ordered Attempt list for a task's chain in config/models.yaml (free first).
+
+    Model ids and prices come from the registry, never from a literal here. A step with a
+    positive price is paid (so its role cap is enforced); a zero-priced / :free step is
+    public_only, so a private payload skips it.
+    """
+    out: list[Attempt] = []
+    for step in model_registry.chain_for(task_name):
+        price = step.get("price_per_1m")
+        p_in = float((price or {}).get("in") or 0.0)
+        p_out = float((price or {}).get("out") or 0.0)
+        paid = price is None or p_in > 0.0 or p_out > 0.0
+        out.append(openai_compat("openrouter/" + step["id"], "https://openrouter.ai/api/v1",
+                                 "OPENROUTER_API_KEY", step["id"], role=step["role"], paid=paid,
+                                 price=(p_in, p_out), public_only=not paid, extra=extra, timeout=timeout))
+    return out
+
+
+def selfimprove_attempts() -> list[Attempt]:
+    """Chain for the self-improvement loop (task `selfimprove`: free, then cheap_agent)."""
+    return attempts_for("selfimprove", extra={"reasoning": {"enabled": False}})
+
+
+def radar_attempts() -> list[Attempt]:
+    """Chain for the tech radar (task `radar`: free, then cheap_agent)."""
+    return attempts_for("radar", extra={"reasoning": {"enabled": False}})
+
+
+def law_watch_attempts() -> list[Attempt]:
+    """Chain for law watch's ambiguous-item classifier (task `law_watch`: free, then cheap)."""
+    return attempts_for("law_watch", extra={"reasoning": {"enabled": False}})
+
+
+def auto_review_attempts() -> list[Attempt]:
+    """Chain for the health monitor's LLM probe (task `auto_review`: free, then cheap_agent)."""
+    return attempts_for("auto_review", extra={"reasoning": {"enabled": False}})
+
+
 def load_env_file(path: str = "~/Secrets/roxira/roxira.env") -> None:
     """Load NAME=value lines into os.environ (existing values win). Values are never printed."""
     p = pathlib.Path(path).expanduser()

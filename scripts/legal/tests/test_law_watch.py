@@ -87,6 +87,31 @@ def test_llm_budget_and_http_injected(tmp_path, monkeypatch):
     assert lw.llm_classify(rec, it, http_post=post) is None  # cap reached
 
 
+def test_llm_classify_routes_free_first_with_attempts(tmp_path, monkeypatch):
+    monkeypatch.setattr(lw, "STATE_DIR", tmp_path)
+    monkeypatch.setenv("ROXIRA_LLM_COST_LOG", str(tmp_path / "cost.jsonl"))
+    lr = lw.llm_route
+    calls = []
+
+    def bad(messages, max_tokens):
+        calls.append("free")
+        raise lr.AttemptError("http429")
+
+    def good(messages, max_tokens):
+        calls.append("paid")
+        return '{"change_type": "repeal", "law_name": "قانون مدنی", "articles": ["5"]}', 800, 50
+    atts = [lr.Attempt("fake/free", "free", False, bad, public_only=True),
+            lr.Attempt("fake/paid", "cheap", True, good, price_per_1m=(0.3, 1.2))]
+    it = item("اصلاح مقررات سازمان", [127])
+    out = lw.llm_classify(lw.classify_item(it, LAWS), it, attempts=atts)
+    assert out["change_type"] == "repeal" and out["ingest_eligible"] is False
+    assert calls == ["free", "paid"] and out["classification"]["signals"] == ["llm:fake/paid"]
+    assert json.loads((tmp_path / "llm_budget.json").read_text())["spent"] < lw.DAILY_LLM_CAP_USD
+    logged = [json.loads(line) for line in (tmp_path / "cost.jsonl").read_text().splitlines()]
+    assert [r["attempt"] for r in logged] == ["fake/free", "fake/paid"]  # one line per call, serving attempt recorded
+    assert logged[-1]["ok"] is True and logged[-1]["task"] == "law_watch" and not logged[0]["ok"]
+
+
 def test_poll_classify_stage_digest_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setattr(lw, "STATE_DIR", tmp_path / "state")
     posts = [

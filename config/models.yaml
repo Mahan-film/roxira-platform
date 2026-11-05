@@ -565,4 +565,5 @@ tasks:
   selfimprove:          {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
   radar:                {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
   law_watch:            {data_class: public, group: agent-strong-free, chain: [free, cheap]}
+  auto_review:          {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}
   marketing:            {data_class: public, group: agent-light-free, chain: [free, cheap_agent]}

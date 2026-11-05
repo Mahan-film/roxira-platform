@@ -27,6 +27,9 @@ import urllib.request
 from datetime import datetime, timezone
 
 BASE = pathlib.Path("/opt/roxira_platform")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts" / "dev"))
+import llm_route  # noqa: E402
+
 DATA = BASE / "data"
 LOG_PATH = DATA / "system_health.log"
 LOG_MAX_BYTES = 5 * 1024 * 1024
@@ -184,40 +187,18 @@ def check_qdrant() -> dict:
     except Exception as exc:
         return {"ok": False, "detail": str(exc)[:200]}
 # ─────────────────────────── بررسی LLM ───────────────────────────
-def _openrouter_key() -> str:
-    key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if key:
-        return key
-    env_p = BASE / ".env"
-    if env_p.exists():
-        for line in env_p.read_text(encoding="utf-8", errors="ignore").splitlines():
-            if line.startswith("OPENROUTER_API_KEY="):
-                return line.split("=", 1)[1].strip().strip("'\"")
-    return ""
-
-
 def check_llm() -> dict:
-    key = _openrouter_key()
-    if not key:
-        return {"ok": False, "detail": "OPENROUTER_API_KEY تنظیم نشده"}
-    payload = {
-        "model": "deepseek/deepseek-chat",
-        "messages": [{"role": "user", "content": "فقط کلمه OK را برگردان."}],
-        "max_tokens": 20,
-        "temperature": 0,
-    }
-    status, body, ms = http_post_json(
-        "https://openrouter.ai/api/v1/chat/completions", payload, timeout=60,
-        headers={"Authorization": f"Bearer {key}", "HTTP-Referer": "https://ghazihoushmand.ir"},
-    )
-    if status != 200:
-        return {"ok": False, "detail": f"HTTP {status} ({ms:.0f}ms): {body[:150]}"}
+    """Probe the LLM path through the shared router (task `auto_review`: free, then cheap_agent)."""
+    messages = [{"role": "user", "content": "فقط کلمه OK را برگردان."}]
+    t0 = time.monotonic()
     try:
-        msg = json.loads(body)["choices"][0]["message"]
-        content = (msg.get("content") or "").strip() or str(msg.get("reasoning") or "").strip()
-        return {"ok": bool(content), "detail": f"{ms:.0f}ms | content={content[:40]!r}"}
-    except Exception as exc:
-        return {"ok": False, "detail": f"bad body ({ms:.0f}ms): {str(exc)[:120]}"}
+        res = llm_route.route("auto_review", messages, llm_route.auto_review_attempts(),
+                              max_tokens=20, public=True)
+    except (llm_route.AllAttemptsFailed, llm_route.CapReached) as exc:
+        return {"ok": False, "detail": f"{type(exc).__name__}: {str(exc)[:150]}"}
+    ms = (time.monotonic() - t0) * 1000.0
+    content = (res.text or "").strip()
+    return {"ok": bool(content), "detail": f"{ms:.0f}ms | {res.served} | content={content[:40]!r}"}
 
 
 def check_llm_json_pipeline() -> dict:
