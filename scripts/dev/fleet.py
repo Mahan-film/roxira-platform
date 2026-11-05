@@ -195,8 +195,11 @@ def alive(pid: int | None) -> bool:
 
 def load_env() -> None:
     """Export the key file into os.environ for child processes (names only are ever logged)."""
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
+    # The key file plus the srv1 gateway file (LLM_GATEWAY_URL/KEY: the opencode `pool/agent-*` models need it).
+    for env_file in (ENV_FILE, Path.home() / "Secrets" / "roxira" / "llm-gateway.env"):
+        if not env_file.exists():
+            continue
+        for line in env_file.read_text().splitlines():
             m = re.match(r"^(?:export )?([A-Z][A-Z0-9_]*)=(.*)$", line.strip())
             if m and m.group(1) not in os.environ:
                 os.environ[m.group(1)] = m.group(2).strip().strip("'\"")
