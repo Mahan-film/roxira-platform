@@ -326,7 +326,9 @@ def lane_opencode(job: dict[str, Any], wt: Path, log: Path, cfg: dict[str, Any])
         paid = is_paid_alias(alias)
         if paid:
             if not free_rate_limited or free_other_failure:
-                return "config", "opencode"   # paid only when EVERY free model hit a genuine rate/quota error
+                # paid only when EVERY free model hit a genuine rate/quota error. A model that simply produced
+                # nothing is an ordinary failed job ("none"), not a lane-wide config problem.
+                return "none", "opencode"
             if not paid_allowed(cfg):
                 return "capped", "opencode"
         model = worker_model(lc, alias)
