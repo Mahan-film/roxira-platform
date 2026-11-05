@@ -225,7 +225,7 @@ export function InvoiceListTable({ invoices, loading, busyId, selected, onToggle
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="max-w-[18rem] whitespace-normal">
                     <PartyCell invoice={invoice} />
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
