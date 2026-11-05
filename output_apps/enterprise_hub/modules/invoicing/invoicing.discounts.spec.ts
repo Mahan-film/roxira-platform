@@ -3,6 +3,7 @@
  * The invoice discount is spread over the lines (largest remainder, exact to the rial) so each
  * line's tax = (gross - discount) × its own rate.
  */
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { Currency } from '../currency/enums/currency.enum';
@@ -42,6 +43,9 @@ const build = () => {
     undefined,
     undefined,
     { findDefaultVatRate: async () => 0.1 } as unknown as TenantsRepository,
+    undefined,
+    undefined,
+    fixtureVatRates(),
   );
   return { service, repo };
 };
