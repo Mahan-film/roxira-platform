@@ -266,7 +266,7 @@ describePg('POS sales on PostgreSQL', () => {
       }),
     );
     expect(result.invoice).toMatchObject({ totalDiscount: 290, invoiceDiscount: 190, totalTax: 81, finalPayable: 1791 });
-    expect(result.invoice.items.map((i) => i.discount)).toEqual([190, 100]);
+    expect(result.invoice.items.map((i) => i.discount)).toEqual([100, 0]);
     expect((await balance('درآمد فروش%')) - revenueBefore).toBe(-1710);
     expect((await balance('مالیات بر ارزش افزوده پرداختنی')) - vatBefore).toBe(-81);
     expect((await balance('موجودی نقد و بانک')) - cashBefore).toBe(1791);

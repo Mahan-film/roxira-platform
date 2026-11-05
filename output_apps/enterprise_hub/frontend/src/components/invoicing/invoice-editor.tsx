@@ -69,6 +69,8 @@ interface LineState {
   quantity: string;
   unitPrice: string;
   discount: string;
+  /** Read-only: this line's share of the invoice discount (not sent on save). */
+  invoiceDiscountShare?: number;
   /** نرخ مالیات این سطر به درصد (مثلاً ۱۰). */
   vatRate: string;
 }
@@ -134,7 +136,7 @@ function vatRateRatio(value: string): number {
 function computeLine(line: LineState) {
   const quantity = Number(line.quantity) || 0;
   const unitPrice = Number(line.unitPrice) || 0;
-  const discount = Number(line.discount) || 0;
+  const discount = (Number(line.discount) || 0) + (line.invoiceDiscountShare ?? 0);
   const gross = quantity * unitPrice;
   const taxable = Math.max(0, gross - discount);
   const tax = taxable * vatRateRatio(line.vatRate);
@@ -219,6 +221,7 @@ export function InvoiceEditor({
         quantity: String(item.quantity),
         unitPrice: String(item.unitPrice),
         discount: String(item.discount ?? 0),
+        invoiceDiscountShare: Number(item.invoiceDiscountShare ?? 0),
         vatRate: String(
           Number(item.vatRate ?? effectiveDefaultVatRate) * 100,
         ),

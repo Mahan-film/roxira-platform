@@ -542,6 +542,20 @@ export class InvoicingService {
     }
   }
 
+  /**
+   * The stored line discount includes the line's share of the invoice discount (posting and tax read
+   * it that way). The API shows the line's OWN discount in `discount` and the share apart, read-only
+   * in `invoiceDiscountShare`, so a GET sent back through PUT changes nothing.
+   */
+  private lineOwnDiscounts(entity: InvoiceEntity): InvoiceItem[] {
+    const scale = this.moneyScale(entity.currency);
+    return (entity.items ?? []).map((line) =>
+      line.invoiceDiscountShare === undefined
+        ? line
+        : { ...line, discount: this.roundTo(Number(line.discount) - Number(line.invoiceDiscountShare), scale) },
+    );
+  }
+
   private toResponseDto(entity: InvoiceEntity): InvoiceResponseDto {
     return {
       id: entity.id,
@@ -549,7 +563,7 @@ export class InvoicingService {
       customerId: entity.customerId ?? null,
       sellerInfo: entity.sellerInfo,
       buyerInfo: entity.buyerInfo,
-      items: entity.items,
+      items: this.lineOwnDiscounts(entity),
       currency: entity.currency,
       jurisdiction: entity.jurisdiction,
       exchangeRate: Number(entity.exchangeRate),

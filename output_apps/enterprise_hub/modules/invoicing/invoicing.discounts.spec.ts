@@ -111,8 +111,8 @@ describe('InvoicingService line and invoice discounts (E1.3)', () => {
         invoiceDiscount: 1000,
       }),
     );
-    expect(inv.items[0]).toMatchObject({ discount: 600, invoiceDiscountShare: 600, tax: 540, total: 5940 });
-    expect(inv.items[1]).toMatchObject({ discount: 400, invoiceDiscountShare: 400, tax: 0, total: 3600 });
+    expect(inv.items[0]).toMatchObject({ discount: 0, invoiceDiscountShare: 600, tax: 540, total: 5940 });
+    expect(inv.items[1]).toMatchObject({ discount: 0, invoiceDiscountShare: 400, tax: 0, total: 3600 });
     expect(inv).toMatchObject({ totalAmount: 10000, totalDiscount: 1000, invoiceDiscount: 1000, totalTax: 540, finalPayable: 9540 });
     // Net + VAT = payable, so the posting (receivable = net + VAT) balances.
     expect(inv.totalAmount - inv.totalDiscount + inv.totalTax).toBe(inv.finalPayable);
@@ -133,7 +133,8 @@ describe('InvoicingService line and invoice discounts (E1.3)', () => {
     );
     // net 2900, 10% = 290 spread 90/100/100
     expect(inv.items.map((i) => i.invoiceDiscountShare)).toEqual([90, 100, 100]);
-    expect(inv.items.map((i) => i.discount)).toEqual([190, 100, 100]);
+    // `discount` is the line's own discount; the share is apart and read-only.
+    expect(inv.items.map((i) => i.discount)).toEqual([100, 0, 0]);
     expect(inv.invoiceDiscount).toBe(290);
     expect(inv.totalDiscount).toBe(390);
     expect(inv.totalTax).toBe(81 + 90 + 90);
@@ -185,7 +186,44 @@ describe('InvoicingService line and invoice discounts (E1.3)', () => {
     expect(relined).toMatchObject({ totalAmount: 4000, invoiceDiscount: 200, totalTax: 380, finalPayable: 4180 });
 
     const rediscounted = await service.update(T, inv.id, { invoiceDiscountPercent: 50 });
-    expect(rediscounted.items[0]).toMatchObject({ discount: 2000, invoiceDiscountShare: 2000 });
+    expect(rediscounted.items[0]).toMatchObject({ discount: 0, invoiceDiscountShare: 2000 });
     expect(rediscounted).toMatchObject({ invoiceDiscount: 2000, totalTax: 200, finalPayable: 2200 });
+  });
+
+  it('a GET sent back through PUT changes nothing (line discount is the line own, the share is read-only)', async () => {
+    const { service } = build();
+    const created = await service.create(
+      T,
+      dto({
+        items: [
+          { description: 'a', quantity: 2, unitPrice: 5000, discount: 1000, vatRate: 10 },
+          { description: 'b', quantity: 1, unitPrice: 3000, vatRate: 0 },
+        ],
+        invoiceDiscount: 1200,
+      }),
+    );
+    // Hand computed: a gross 10000, own 1000, base 9000; b base 3000; net 12000.
+    // Share a = 1200 * 9000 / 12000 = 900, b = 300. a taxable 8100, tax 810, total 8910; b taxable 2700, tax 0, total 2700.
+    const expected = { totalAmount: 13000, totalDiscount: 2200, invoiceDiscount: 1200, totalTax: 810, finalPayable: 11610 };
+    expect(created).toMatchObject(expected);
+
+    const fetched = await service.findOne(T, created.id);
+    expect(fetched.items[0]).toMatchObject({ discount: 1000, invoiceDiscountShare: 900, tax: 810, total: 8910 });
+    expect(fetched.items[1]).toMatchObject({ discount: 0, invoiceDiscountShare: 300, tax: 0, total: 2700 });
+
+    // The editor sends back what it got, without the share.
+    const items = fetched.items.map((i) => ({
+      description: i.description,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      discount: i.discount,
+      vatRate: i.vatRate,
+    }));
+    const updated = await service.update(T, created.id, { items });
+    expect(updated).toMatchObject(expected);
+    expect(updated.items.map((i) => [i.discount, i.invoiceDiscountShare, i.tax, i.total])).toEqual([
+      [1000, 900, 810, 8910],
+      [0, 300, 0, 2700],
+    ]);
   });
 });
