@@ -22,8 +22,8 @@ Lane: **Mac** = posting_rules owner adopts it; **Laptop** = `mahansudo` lane, ha
 | 11 | **Payroll run** (`payroll.run`) | `hr/services/payroll-run.service.ts:587` (`buildJournalLines` 498) | salary expense 5010, employer insurance expense 5040, insurance payable 2030, wage tax payable 2040, other deductions 2060, salaries payable 2050 (`hr/constants/hr.constants.ts:174`) | entry number `PR-YYYYMM` (adopts existing) | **Mac** |
 | 12 | **Single payslip** (`payroll.payslip`) | `hr/services/hr.service.ts:881` | expense 5010, payable 2010, bank 1010 | entry number per payslip | **Mac** |
 | 13 | **Corporate tax provision** (`tax.provision`) | `tax_compliance/services/corporate-tax.service.ts:97` (proposal only, `posted:false`) | accounts passed in by the caller (`expenseAccountCode`, `payableAccountCode`) | none | **Mac** |
-| 14 | **Bank reconciliation draft** (`bank.receipt` / `bank.payment`) | `banking/recon/recon.service.ts:850` | bank account ledger code + counter account of the rule/category, passed as engine `overrides` (`bank` / `counter`) | engine source ledger `bank_recon_draft` = draft id (replay-safe) | **Mac** |
-| 15 | **Manual bank entry** (`bank.receipt` / `bank.payment`) | `banking/services/banking.service.ts:361` | bank account ledger code + counter chosen by the caller, passed as engine `overrides` (`bank` / `counter`) | engine source ledger `bank_entry` = statement line id (no client request id exists) | **Mac** |
+| 14 | **Bank reconciliation draft** (`bank.receipt` / `bank.payment`) | `banking/recon/recon.service.ts:862` | bank account ledger code + counter account of the rule/category, passed as engine `overrides` (`bank` / `counter`) | engine source ledger `bank_recon_draft` = draft id (replay-safe) | **Mac** |
+| 15 | **Manual bank entry** (`bank.receipt` / `bank.payment`) | `banking/services/banking.service.ts:396` | bank account ledger code + counter chosen by the caller, passed as engine `overrides` (`bank` / `counter`) | engine source ledger `bank_entry` = statement line id (replay-safe) | **Mac** |
 
 ## Findings that matter
 

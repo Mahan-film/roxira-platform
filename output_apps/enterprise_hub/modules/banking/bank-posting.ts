@@ -33,5 +33,12 @@ export function bankPostingLines(
     overrides: { bank: accounts.bank, counter: accounts.counter },
     partyCode,
   });
-  return { docType, lines: proposal.lines };
+
+  // The bank line must come first to match the legacy hardcoded implementation.
+  // legacyBankLines returns [bankLine, counterLine].
+  const bankLine = proposal.lines.find(l => l.role === 'bank');
+  const counterLine = proposal.lines.find(l => l.role === 'counter');
+  const lines = bankLine && counterLine ? [bankLine, counterLine] : proposal.lines;
+
+  return { docType, lines };
 }
