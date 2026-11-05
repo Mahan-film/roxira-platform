@@ -15,11 +15,13 @@ import { SUITE_EVENTS_QUEUE } from './constants/suite-events.constants';
 import { PosSalesController } from './controllers/pos-sales.controller';
 import { PosSaleService } from './services/pos-sale.service';
 import { InvoicingController } from './controllers/invoicing.controller';
+import { SalesReportController } from './controllers/sales-report.controller';
 import { InvoiceEntity } from './entities/invoice.entity';
 import { SuiteEventsProcessor } from './processors/suite-events.processor';
 import { InvoicingRepository } from './repositories/invoicing.repository';
 import { InvoicePostingService } from './services/invoice-posting.service';
 import { InvoicingService } from './services/invoicing.service';
+import { SalesReportService } from './services/sales-report.service';
 import { VatRateResolver } from './services/vat-rate.resolver';
 
 /**
@@ -45,7 +47,7 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     PartiesModule,
     BullModule.registerQueue({ name: SUITE_EVENTS_QUEUE }),
   ],
-  controllers: [InvoicingController, PosSalesController],
+  controllers: [InvoicingController, PosSalesController, SalesReportController],
   providers: [
     InvoicingService,
     InvoicingRepository,
@@ -56,6 +58,7 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     VatRateResolver,
     StatutoryRepository,
     TenantScope,
+    SalesReportService,
   ],
   exports: [InvoicingService],
 })

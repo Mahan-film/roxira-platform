@@ -1,5 +1,6 @@
-import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateFixedAssetDto, DepreciationRunDto } from '../dto/fixed-asset.dto';
+import { assetRegister, depreciationSchedule } from '../assets/asset-register';
 import { nextMonthCharge, periodIndex } from '../assets/depreciation';
 import { FixedAssetEntity } from '../entities/fixed-asset.entity';
 import { AccountLevel } from '../enums/accounting.enum';
@@ -212,5 +213,19 @@ export class FixedAssetService {
       result.totalCharged = minorToDecimal(total);
       return result;
     });
+  }
+
+  /** The register (#250): every asset of the tenant with cost, accumulated depreciation and book value. */
+  async register(tenantId: string) {
+    return assetRegister(await this.assets.list(tenantId));
+  }
+
+  /** The month-by-month plan of one asset, from its running totals. */
+  async schedule(tenantId: string, code: string) {
+    const asset = await this.assets.scoped(tenantId, (manager) => this.assets.findByCode(tenantId, code, manager));
+    if (!asset) {
+      throw new NotFoundException('دارایی یافت نشد.');
+    }
+    return depreciationSchedule(asset);
   }
 }

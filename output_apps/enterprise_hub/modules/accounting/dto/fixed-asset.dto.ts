@@ -89,3 +89,11 @@ export class DepreciationRunDto {
   @Max(12)
   month: number;
 }
+
+/** Query of the register and schedule routes: JSON by default, or a file download. */
+export class FixedAssetReportQueryDto {
+  @ApiPropertyOptional({ enum: ['xlsx', 'pdf'] })
+  @IsOptional()
+  @IsIn(['xlsx', 'pdf'])
+  format?: 'xlsx' | 'pdf';
+}

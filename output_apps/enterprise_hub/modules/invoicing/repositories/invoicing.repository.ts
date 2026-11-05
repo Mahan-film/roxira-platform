@@ -9,7 +9,8 @@ import {
   Repository,
 } from 'typeorm';
 import { InvoiceEntity } from '../entities/invoice.entity';
-import { InvoiceSubject } from '../enums/invoice-kind.enum';
+import { InvoiceDirection, InvoiceSubject } from '../enums/invoice-kind.enum';
+import { InvoiceStatus } from '../enums/invoice-status.enum';
 
 /**
  * لایه Repository - تنها نقطه دسترسی به پایگاه‌داده برای ماژول Invoicing.
@@ -186,6 +187,27 @@ export class InvoicingRepository {
     }
     const result = await this.repository.delete({ tenantId, id: In(ids) });
     return result.affected ?? 0;
+  }
+
+  /**
+   * Issued and paid sale invoices of the tenant for the sales report. `from` and `to` are Tehran days
+   * (YYYY-MM-DD), both inclusive; the period is by issue date.
+   */
+  async findSalesBetween(tenantId: string, from?: string, to?: string): Promise<InvoiceEntity[]> {
+    const query = this.repository
+      .createQueryBuilder('invoice')
+      .where('invoice.tenantId = :tenantId', { tenantId })
+      .andWhere('invoice.direction = :direction', { direction: InvoiceDirection.SALE })
+      .andWhere('invoice.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.PAID] });
+    if (from) {
+      query.andWhere('invoice.issuedAt >= :from', { from: new Date(`${from}T00:00:00+03:30`) });
+    }
+    if (to) {
+      const next = new Date(`${to}T00:00:00+03:30`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      query.andWhere('invoice.issuedAt < :next', { next });
+    }
+    return query.orderBy('invoice.issuedAt', 'ASC').addOrderBy('invoice.id', 'ASC').getMany();
   }
 
   async findAndCount(
