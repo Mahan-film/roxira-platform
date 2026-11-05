@@ -106,7 +106,7 @@ export function StockItemsTable({
                   onClick={() => onSelectItem(item.sku)}
                 >
                   <TableCell className="font-mono text-xs">{item.sku}</TableCell>
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell className="max-w-[18rem] whitespace-normal">
                     {item.name}
                     {item.barcode && (
                       <div dir="ltr" className="text-xs text-muted-foreground">
