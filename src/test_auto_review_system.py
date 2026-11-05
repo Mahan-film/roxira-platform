@@ -27,7 +27,7 @@ def test_check_llm_routes_free_first_and_reports_served(monkeypatch, tmp_path):
         calls.append("paid")
         return "OK", 10, 2
     atts = [lr.Attempt("fake/free", "free", False, bad, public_only=True),
-            lr.Attempt("fake/paid", "cheap_agent", True, good, price=(0.0, 0.0))]
+            lr.Attempt("fake/paid", "cheap_agent", True, good, price_per_1m=(0.0, 0.0))]
     monkeypatch.setattr(lr, "auto_review_attempts", lambda: atts)
     res = ar.check_llm()
     assert res["ok"] is True and "fake/paid" in res["detail"] and calls == ["free", "paid"]

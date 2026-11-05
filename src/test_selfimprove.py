@@ -123,7 +123,7 @@ def test_llm_ask_routes_free_first_and_charges_ledger(monkeypatch, tmp_path):
     def call(messages, max_tokens):
         seen.append(messages)
         return "answer", 1000, 500
-    atts = [lr.Attempt("fake/free", "free", False, call, price=(0.0, 0.0), public_only=True)]
+    atts = [lr.Attempt("fake/free", "free", False, call, price_per_1m=(0.0, 0.0), public_only=True)]
     b = _mod("budget")
     led = b.Ledger(str(tmp_path / "l.jsonl"), cap_usd=0.3)
     assert llm.ask(led, "prompt", "what", system="sys", attempts=atts) == "answer"
@@ -142,7 +142,7 @@ def test_llm_ask_falls_back_and_charges_paid_cost(monkeypatch, tmp_path):
     def good(messages, max_tokens):
         return "ok", 1000, 500
     atts = [lr.Attempt("fake/free", "free", False, bad, public_only=True),
-            lr.Attempt("fake/paid", "cheap_agent", True, good, price=(0.0, 2.0))]
+            lr.Attempt("fake/paid", "cheap_agent", True, good, price_per_1m=(0.0, 2.0))]
     b = _mod("budget")
     led = b.Ledger(str(tmp_path / "l.jsonl"), cap_usd=0.3)
     assert llm.ask(led, "p", "w", attempts=atts) == "ok"

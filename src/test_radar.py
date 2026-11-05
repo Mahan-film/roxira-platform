@@ -39,7 +39,7 @@ def _fake_attempts(*, content="[]", cost=0.0, fail=()):
                 raise lr.AttemptError(_kind)
             return content, 1000, 500
         p_out = cost * 1e6 / 500 if cost else 0.0
-        atts.append(lr.Attempt(f"fake/{i}", "cheap_agent", True, call, price=(0.0, p_out), public_only=False))
+        atts.append(lr.Attempt(f"fake/{i}", "cheap_agent", True, call, price_per_1m=(0.0, p_out), public_only=False))
     return atts, calls
 
 NOW = 1_790_000_000.0  # fixed clock

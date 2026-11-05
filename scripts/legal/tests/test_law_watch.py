@@ -101,7 +101,7 @@ def test_llm_classify_routes_free_first_with_attempts(tmp_path, monkeypatch):
         calls.append("paid")
         return '{"change_type": "repeal", "law_name": "قانون مدنی", "articles": ["5"]}', 800, 50
     atts = [lr.Attempt("fake/free", "free", False, bad, public_only=True),
-            lr.Attempt("fake/paid", "cheap", True, good, price=(0.3, 1.2))]
+            lr.Attempt("fake/paid", "cheap", True, good, price_per_1m=(0.3, 1.2))]
     it = item("اصلاح مقررات سازمان", [127])
     out = lw.llm_classify(lw.classify_item(it, LAWS), it, attempts=atts)
     assert out["change_type"] == "repeal" and out["ingest_eligible"] is False
