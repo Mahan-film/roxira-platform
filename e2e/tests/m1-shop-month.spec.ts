@@ -415,7 +415,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     // Name matching resolves the 'receivable' role to the first account whose name contains «دریافتنی»:
     // 1110 «اسناد دریافتنی نزد صندوق» (CI evidence, run 42103641294: the sales moved 1110 by +11,433,675,000
     // and 1201 not at all), not the trade receivables 1201. Pin the tenant mapping to 1201 (issue #504).
-    const receivableDocTypes = ['invoice.sale', 'invoice.sale.settle', 'invoice.sale.settle_card_first'] as const;
+    const receivableDocTypes = ['invoice.sale.issue', 'invoice.sale.settle', 'invoice.sale.settle_card_first'] as const;
     for (const docType of receivableDocTypes) {
       const status = await apiPut(page, `posting-rules/${docType}/roles/receivable`, { accountCode: '1201' });
       expect(status, `PUT posting-rules ${docType} receivable -> 1201`).toBe(204);
