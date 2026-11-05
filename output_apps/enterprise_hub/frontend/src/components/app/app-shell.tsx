@@ -75,7 +75,7 @@ const NAV_ITEMS: NavItem[] = [
   { group: GROUP_OPS, href: "/app/hr", label: "کارکنان (HR)", icon: UsersRound, nested: true, module: "hr" },
   { group: GROUP_OPS, href: "/app/inventory", label: "کالا و انبار", icon: Warehouse, nested: true, module: "inventory" },
   { group: GROUP_OPS, href: "/damages", label: "خسارت", icon: ShieldAlert, nested: true, module: "damages" },
-  { group: GROUP_DATA, href: "/app/import", label: "ورود داده (import)", icon: FileUp, nested: true, module: "data_import" },
+  { group: GROUP_DATA, href: "/app/import", label: "ورود از اکسل", icon: FileUp, nested: true, module: "data_import" },
   { group: GROUP_ADMIN, href: "/app/settings/members", label: "اعضا و نقش‌ها", icon: Settings, nested: true, module: "members" },
   { group: GROUP_ADMIN, href: "/app/settings/modules", label: "ماژول‌ها", icon: Puzzle, nested: true, module: "members" },
   { group: GROUP_ADMIN, href: "/app/settings/posting-rules", label: "ثبت خودکار سند", icon: Workflow, nested: true, module: "accounting" },
@@ -109,7 +109,7 @@ function SidebarContent({
     return can(item.module, "read");
   });
   return (
-    <div className="flex h-full flex-col gap-4 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-ring">
+    <div className="flex h-full min-h-0 flex-col gap-4 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-ring">
       <Link
         href="/app"
         onClick={onNavigate}
@@ -127,7 +127,11 @@ function SidebarContent({
       </Link>
 
       <OrgSwitcher />
-      <nav aria-label="منوی نرم‌افزار" className="flex flex-1 flex-col gap-1">
+      <nav
+        aria-label="منوی نرم‌افزار"
+        data-testid="app-sidebar-nav"
+        className="-mx-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-1"
+      >
         {navItems.map((item, index) => {
           const active = isActive(pathname, item);
           const Icon = item.icon;
@@ -158,7 +162,7 @@ function SidebarContent({
         })}
       </nav>
 
-      <div className="flex flex-col gap-2 border-t border-border pt-3">
+      <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
         {user && (
           <span className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
             <UserRound className="size-3.5" aria-hidden="true" />
@@ -235,6 +239,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
+  // The app is dark. Put the theme on <html> too, so body (bg-background) is dark and no white page
+  // shows past the shell (#277). Removed again when leaving /app for the light public site.
+  useEffect(() => {
+    const root = document.documentElement;
+    const hadDark = root.classList.contains("dark");
+    root.classList.add("dark");
+    return () => {
+      if (!hadDark) root.classList.remove("dark");
+    };
+  }, []);
+
   useEffect(() => {
     if (!drawerOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -256,7 +271,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <AccessProvider>
       <ImportHandoffProvider>
         <div className="dark flex min-h-screen flex-1 bg-background text-foreground">
-          <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-e border-border bg-card/60 p-4 lg:block">
+          <aside className="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto overscroll-contain border-e border-border bg-card/60 p-4 lg:block">
             <SidebarContent pathname={pathname} />
           </aside>
 
@@ -322,7 +337,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className="absolute inset-0 bg-black/60 focus:outline-none"
                 onClick={() => setDrawerOpen(false)}
               />
-              <div className="absolute inset-y-0 start-0 w-72 max-w-[85vw] border-e border-border bg-background p-4 shadow-2xl">
+              <div className="absolute inset-y-0 start-0 w-72 max-w-[85vw] overflow-y-auto overscroll-contain border-e border-border bg-background p-4 shadow-2xl">
                 <button
                   type="button"
                   onClick={() => setDrawerOpen(false)}
