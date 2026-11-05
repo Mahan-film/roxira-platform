@@ -1679,6 +1679,11 @@ async def _consult_idempotent(payload: dict, request, user: chat_auth.CurrentUse
             return _replay(cached)
         if await asyncio.to_thread(chat_auth.idem_claim, lock_key):
             try:
+                # The first attempt stores its result and then releases the lock, so it can finish
+                # between our cache read above and this claim. Look again now that we hold the lock.
+                cached = await asyncio.to_thread(chat_auth.idem_get, res_key)
+                if cached is not None:
+                    return _replay(cached)
                 resp = await _consult_core(payload, request, user, *([stream_cb] if stream_cb else []))
                 if _is_cacheable_success(resp):
                     try:
@@ -7243,6 +7248,12 @@ async def draft_assist(request: Request, body: DraftAssistRequest,
                     break
                 if await asyncio.to_thread(chat_auth.idem_claim, lock_key):
                     try:
+                        # Re-check under the lock: the first attempt may have stored and released
+                        # between our cache read and this claim.
+                        cached = await asyncio.to_thread(chat_auth.idem_get, res_key)
+                        if cached is not None:
+                            result = JSONResponse(cached, headers={"X-Idempotent-Replay": "1"})
+                            break
                         result = await _draft_assist_core(body, draft_type, messages, request, user, request_id, tier)
                         if isinstance(result, dict) and result.get("status") in _DRAFT_CACHEABLE:
                             try:
