@@ -16,6 +16,8 @@ import { CurrencyService } from '../currency/services/currency.service';
 import { FifoBatchEntity } from './entities/fifo-batch.entity';
 import { StockItemEntity } from './entities/stock-item.entity';
 import { WarehouseEntity } from './entities/warehouse.entity';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { InventoryRepository } from './repositories/inventory.repository';
 import { StockDocumentsRepository } from './repositories/stock-documents.repository';
 import { InventoryService } from './services/inventory.service';
@@ -70,7 +72,12 @@ describePg('opening balances on PostgreSQL', () => {
       ),
     );
     const repo = new StockDocumentsRepository(ds);
-    const documents = new StockDocumentsService(repo, inventory, accounting);
+    const documents = new StockDocumentsService(
+      repo,
+      inventory,
+      accounting,
+      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
+    );
     openings = new OpeningBalanceService(repo, documents, inventory);
     wh = (await inventory.createWarehouse(T, { name: 'انبار اصلی', locationCode: 'A-1' })).id;
     for (const sku of ['O-1', 'O-2', 'O-3', 'O-4']) {

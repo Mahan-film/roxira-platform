@@ -5,9 +5,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { minorToDecimal, toMinor } from '../../accounting/money';
+import { toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { Currency } from '../../currency/enums/currency.enum';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import {
   OPENING_STOCK_EQUITY_ACCOUNT,
   STOCK_ADJUSTMENT_ACCOUNT,
@@ -36,6 +37,12 @@ import {
   WarehouseMissingError,
 } from '../errors/inventory.errors';
 import { StockDocumentsRepository } from '../repositories/stock-documents.repository';
+import {
+  STOCK_SOURCE_TYPE,
+  stockPostingDocType,
+  stockPostingOverrides,
+  StockValueKind,
+} from '../posting/stock-posting';
 import { InventoryService } from './inventory.service';
 
 type LineInput = Omit<StockDocumentLineEntity, 'id' | 'tenantId' | 'documentId'>;
@@ -51,6 +58,7 @@ export class StockDocumentsService {
     private readonly repository: StockDocumentsRepository,
     @Optional() private readonly inventory?: InventoryService,
     @Optional() private readonly accounting?: AccountingService,
+    @Optional() private readonly postingRules?: PostingRulesService,
   ) {}
 
   private money(value: number): number {
@@ -390,7 +398,15 @@ export class StockDocumentsService {
         reference: dto.reason,
       }, lines);
       if (net !== 0n) {
-        const entry = await this.postValueEntry(tenantId, docNumber, docDate, `تعدیل موجودی ${docNumber}: ${dto.reason}`, accounts, net, manager);
+        const entry = await this.postValueEntry(
+          tenantId,
+          { id: document.id, docNumber, docDate },
+          'adjustment',
+          `تعدیل موجودی ${docNumber}: ${dto.reason}`,
+          accounts,
+          net,
+          manager,
+        );
         await manager.update('erp_stock_documents', { id: document.id, tenantId }, { journalEntryId: entry.id });
         document.journalEntryId = entry.id;
       }
@@ -399,41 +415,36 @@ export class StockDocumentsService {
   }
 
   /**
-   * One voucher for a net change in stock value: positive debits inventory and credits the
-   * counter account, negative the reverse.
+   * One voucher for a net change in stock value, posted through the posting rules engine:
+   * positive debits inventory and credits the counter account, negative the reverse.
    */
   async postValueEntry(
     tenantId: string,
-    docNumber: string,
-    docDate: string,
+    source: { id: number | string; docNumber: string; docDate: string },
+    kind: StockValueKind,
     description: string,
     accounts: string[],
     net: bigint,
     manager: EntityManager,
   ): Promise<{ id: number }> {
-    if (!this.accounting) {
-      throw new Error('StockDocumentsService needs AccountingService to post stock vouchers.');
+    if (!this.postingRules) {
+      throw new Error('StockDocumentsService needs PostingRulesService to post stock vouchers.');
     }
-    const [inventoryCode, counterCode] = accounts;
-    const amount = minorToDecimal(net < 0n ? -net : net);
-    const debitInventory = net > 0n;
-    return this.accounting.createJournalEntry(
+    const result = await this.postingRules.post(
       tenantId,
       {
-        entryNumber: `STK-${docNumber}`,
-        date: `${docDate}T12:00:00.000Z`,
+        docType: stockPostingDocType(kind, net),
+        sourceType: STOCK_SOURCE_TYPE,
+        sourceId: String(source.id),
+        date: `${source.docDate}T12:00:00.000Z`,
+        amounts: { amount: net < 0n ? -net : net },
         description,
-        lines: [
-          debitInventory
-            ? { accountCode: inventoryCode, debit: amount, description: 'موجودی کالا' }
-            : { accountCode: counterCode, debit: amount, description: 'کسری انبار' },
-          debitInventory
-            ? { accountCode: counterCode, credit: amount, description: 'مابه‌ازای ثبت موجودی' }
-            : { accountCode: inventoryCode, credit: amount, description: 'موجودی کالا' },
-        ],
+        entryNumber: `STK-${source.docNumber}`,
+        overrides: stockPostingOverrides(kind, accounts),
       },
       manager,
     );
+    return { id: result.entryId };
   }
 
   /** Account codes by spec: an existing account of the same type matching by name, then by code, else a new default. */
