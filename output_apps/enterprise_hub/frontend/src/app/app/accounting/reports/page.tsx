@@ -19,6 +19,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Label } from "@/components/ui/label";
+import { MoneyUnitSwitch } from "@/components/ui/money-unit-switch";
 import {
   getBalanceSheet,
   getCashFlow,
@@ -179,7 +180,12 @@ export default function AccountingReportsPage() {
         title="گزارش‌های حسابداری"
         description="تراز، دفاتر و صورت‌های مالی از اسناد ثبت‌شده"
         icon={<FileBarChart className="size-6 text-indigo-500" />}
-        actions={<ExportButtons report={tab} query={exportQuery} disabled={needsAccount || badEdges} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <MoneyUnitSwitch />
+            <ExportButtons report={tab} query={exportQuery} disabled={needsAccount || badEdges} />
+          </div>
+        }
       />
 
       <div role="tablist" aria-label="نوع گزارش" className="flex flex-wrap gap-1">
