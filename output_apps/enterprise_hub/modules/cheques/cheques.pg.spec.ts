@@ -99,10 +99,12 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
     await ds.runMigrations();
     accounting = new AccountingService(new AccountingRepository(new TenantScope(ds)), currencyStub);
     const chequesRepo = new ChequesRepository(new TenantScope(ds));
-    service = new ChequesService(chequesRepo, accounting, new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting));
+    const postingRules = new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting);
+    service = new ChequesService(chequesRepo, accounting, postingRules);
     banking = new BankingService(
       new BankingRepository(ds.getRepository(BankAccountEntity), ds.getRepository(BankStatementLineEntity), ds),
       accounting,
+      postingRules,
     );
     recon = new ChequeReconService(chequesRepo, banking);
     for (const tenantId of [T1, T2]) {

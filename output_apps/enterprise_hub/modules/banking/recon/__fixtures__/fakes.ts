@@ -247,6 +247,10 @@ export class FakeLedger {
 
   accounting = {
     findExistingAccountCodes: async (t: string, codes: string[]) => codes.filter((c) => (this.codes.get(t) ?? ['1010', '5090', '5010', '3030', '2020', '5020', '2030']).includes(c)),
+    listAccounts: async (t: string) => {
+      const codes = new Set([...(this.codes.get(t) ?? []), '1010', '5090', '5010', '3030', '2020', '5020', '2030']);
+      return [...codes].map((code) => ({ code, name: `n${code}`, accountType: 'ASSET', level: 'moein' }));
+    },
     listLedgerLines: async (t: string, _acc: number, opts: { toDate?: Date; lineIds?: number[] }) =>
       (this.lines.get(t) ?? []).filter((l) => (!opts.toDate || l.date <= opts.toDate) && (!opts.lineIds || opts.lineIds.includes(l.id))),
     createJournalEntry: async (t: string, dto: any) => {
@@ -259,10 +263,13 @@ export class FakeLedger {
       }
       const id = ++this.seq;
       const bank = this.bankAccounts.get(t)?.[0];
-      const lines = dto.lines.map((l: any, i: number) => ({ id: ++this.seq, accountId: i === 0 ? bank.ledgerAccountId : 999 }));
+      const bankCode = bank?.ledgerAccountCode;
+      const lines = dto.lines.map((l: any) => ({ id: ++this.seq, accountCode: l.accountCode, accountId: bankCode && l.accountCode === bankCode ? bank.ledgerAccountId : 999 }));
       this.entries.push({ tenant: t, id, number: dto.entryNumber, dto, lines });
-      const first = dto.lines[0];
-      this.addLine(t, { id: lines[0].id, journalEntryId: id, entryNumber: dto.entryNumber, date: dto.date, debit: Number(first.debit), credit: Number(first.credit) } as any);
+      const bankIndex = dto.lines.findIndex((l: any) => l.accountCode === bankCode);
+      const index = bankIndex >= 0 ? bankIndex : 0;
+      const first = dto.lines[index];
+      this.addLine(t, { id: lines[index].id, journalEntryId: id, entryNumber: dto.entryNumber, date: dto.date, debit: Number(first.debit), credit: Number(first.credit) } as any);
       return { id, lines };
     },
     reverseJournalEntry: async (t: string, id: number) => {
@@ -273,4 +280,35 @@ export class FakeLedger {
       return { id: ++this.seq };
     },
   };
+}
+
+/**
+ * In-memory PostingRulesRepository: the real engine runs against it (unit specs), so the source
+ * ledger, mappings and idempotency behave as in the database.
+ */
+export class FakePostingRulesRepository {
+  private sources = new Map<string, { entryId: number | null; entryNumber: string | null; reversalEntryId: number | null }>();
+  maps: Array<{ docType: string; role: string; accountCode: string }> = [];
+
+  runInTransaction<T>(_tenantId: string, work: (manager: unknown) => Promise<T>): Promise<T> {
+    return work({});
+  }
+  async listMappings(_tenantId: string, docTypes: string[]) {
+    return this.maps.filter((m) => docTypes.includes(m.docType));
+  }
+  async findSource(_tenantId: string, sourceType: string, sourceId: string, docType: string) {
+    return this.sources.get(`${sourceType}/${sourceId}/${docType}`) ?? null;
+  }
+  async claimSource(_tenantId: string, sourceType: string, sourceId: string, docType: string) {
+    const key = `${sourceType}/${sourceId}/${docType}`;
+    if (this.sources.has(key)) return false;
+    this.sources.set(key, { entryId: null, entryNumber: null, reversalEntryId: null });
+    return true;
+  }
+  async attachEntry(_tenantId: string, sourceType: string, sourceId: string, docType: string, entryId: number, entryNumber: string) {
+    Object.assign(this.sources.get(`${sourceType}/${sourceId}/${docType}`)!, { entryId, entryNumber });
+  }
+  async attachReversal(_tenantId: string, sourceType: string, sourceId: string, docType: string, reversalEntryId: number) {
+    Object.assign(this.sources.get(`${sourceType}/${sourceId}/${docType}`)!, { reversalEntryId });
+  }
 }

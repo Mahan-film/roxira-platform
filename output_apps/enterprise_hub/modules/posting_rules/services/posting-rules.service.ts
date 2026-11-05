@@ -23,11 +23,20 @@ export interface PostingRequest {
   overrides?: RoleAccounts;
 }
 
+/** One persisted line of the posted voucher, so a caller can link its own row to it. */
+export interface PostedJournalLine {
+  /** Accounting journal line id (`fin_journal_entry_lines.id`). */
+  journalLineId: number;
+  accountCode: string;
+}
+
 export interface PostingResult {
   entryId: number;
   entryNumber: string;
   /** True when the source document was already posted and nothing new was written. */
   replayed: boolean;
+  /** Lines of the voucher, in proposal order; empty on a replay (nothing new was written). */
+  lines: PostedJournalLine[];
 }
 
 /**
@@ -86,12 +95,12 @@ export class PostingRulesService {
   async post(tenantId: string, request: PostingRequest, manager?: EntityManager): Promise<PostingResult> {
     const run = async (m: EntityManager): Promise<PostingResult> => {
       const existing = await this.repository.findSource(tenantId, request.sourceType, request.sourceId, request.docType, m);
-      if (existing?.entryId) return { entryId: existing.entryId, entryNumber: existing.entryNumber ?? '', replayed: true };
+      if (existing?.entryId) return { entryId: existing.entryId, entryNumber: existing.entryNumber ?? '', replayed: true, lines: [] };
 
       const proposal = await this.propose(tenantId, request, m);
       if (!(await this.repository.claimSource(tenantId, request.sourceType, request.sourceId, request.docType, m))) {
         const raced = await this.repository.findSource(tenantId, request.sourceType, request.sourceId, request.docType, m);
-        if (raced?.entryId) return { entryId: raced.entryId, entryNumber: raced.entryNumber ?? '', replayed: true };
+        if (raced?.entryId) return { entryId: raced.entryId, entryNumber: raced.entryNumber ?? '', replayed: true, lines: [] };
         // claimed by a transaction that has not finished: never post a second voucher
         throw new ConflictException('ثبت سند این سند منبع در حال انجام است؛ دوباره تلاش کنید.');
       }
@@ -106,7 +115,16 @@ export class PostingRulesService {
         m,
       );
       await this.repository.attachEntry(tenantId, request.sourceType, request.sourceId, request.docType, entry.id, entry.entryNumber, m);
-      return { entryId: entry.id, entryNumber: entry.entryNumber, replayed: false };
+      return {
+        entryId: entry.id,
+        entryNumber: entry.entryNumber,
+        replayed: false,
+        // `createJournalEntry` returns the lines sorted by id, which is proposal order (insertion order).
+        lines: (entry.lines ?? []).map((line) => ({
+          journalLineId: line.id,
+          accountCode: line.accountCode,
+        })),
+      };
     };
     return manager ? run(manager) : this.repository.runInTransaction(tenantId, run);
   }
@@ -129,7 +147,12 @@ export class PostingRulesService {
     if (source.reversalEntryId) throw new ConflictException('سند حسابداری این سند منبع قبلاً برگشت خورده است.');
     const reversal = await this.accounting.reverseJournalEntry(tenantId, source.entryId, options);
     await this.repository.attachReversal(tenantId, sourceType, sourceId, docType, reversal.id);
-    return { entryId: reversal.id, entryNumber: reversal.entryNumber, replayed: false };
+    return {
+      entryId: reversal.id,
+      entryNumber: reversal.entryNumber,
+      replayed: false,
+      lines: (reversal.lines ?? []).map((line) => ({ journalLineId: line.id, accountCode: line.accountCode })),
+    };
   }
 
   // ------------------------------------------------------------------ settings

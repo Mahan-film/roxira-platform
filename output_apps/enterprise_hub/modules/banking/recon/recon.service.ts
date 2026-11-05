@@ -10,6 +10,8 @@ import { createHash } from 'crypto';
 import { sniffFileKind } from '../../data_import/parsers/file-kind';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { minorToDecimal } from '../../accounting/money';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
+import { bankDocType } from '../bank-posting';
 import { BankCode } from '../enums/banking.enum';
 import { BankingService } from '../services/banking.service';
 import {
@@ -94,6 +96,7 @@ export class ReconService {
     private readonly repo: ReconRepository,
     private readonly banking: BankingService,
     private readonly accounting: AccountingService,
+    private readonly postingRules: PostingRulesService,
   ) {}
 
   // ================================================================== settings
@@ -853,22 +856,28 @@ export class ReconService {
     if (account.ledgerAccountCode === draft.counter_account_code) {
       throw new BadRequestException('حساب مقابل نمی‌تواند همان حساب بانک باشد.');
     }
-    const isIn = draft.direction === 'in';
     return this.repo.runInTransaction(async (manager) => {
-      const entry = await this.accounting.createJournalEntry(
+      // Posting the draft again (e.g. the status was reopened) replays the engine's source row:
+      // the same voucher is returned and no second voucher is written.
+      const result = await this.postingRules.post(
         tenantId,
         {
+          docType: bankDocType(draft.direction),
+          sourceType: 'bank_recon_draft',
+          sourceId: String(draft.id),
           entryNumber: `RCN-${draft.id}`,
           date: draft.entry_date,
           description: draft.description,
-          lines: [
-            { accountCode: account.ledgerAccountCode, debit: isIn ? draft.amount : '0', credit: isIn ? '0' : draft.amount, description: draft.description },
-            { accountCode: draft.counter_account_code, debit: isIn ? '0' : draft.amount, credit: isIn ? draft.amount : '0', description: draft.description },
-          ],
+          amounts: { amount: rialToMinor(BigInt(draft.amount)) },
+          overrides: { bank: account.ledgerAccountCode, counter: draft.counter_account_code },
         },
         manager,
       );
-      const bankLine = entry.lines.find((line) => line.accountId === account.ledgerAccountId);
+      if (result.replayed) {
+        await this.repo.updateDraft(tenantId, draft.id, { status: 'posted', journal_entry_id: result.entryId }, manager);
+        return result.entryId;
+      }
+      const bankLine = result.lines.find((line) => line.accountCode === account.ledgerAccountCode);
       if (!bankLine) {
         throw new BadRequestException('سطر بانک در سند ساخته‌شده یافت نشد.');
       }
@@ -876,7 +885,7 @@ export class ReconService {
         sessionId: draft.session_id,
         groupId: `${draft.session_id}-draft-${draft.id}`,
         itemId: draft.item_id,
-        journalLineId: bankLine.id,
+        journalLineId: bankLine.journalLineId,
         stage: 'created',
         confidence: 1,
         status: 'confirmed',
@@ -884,9 +893,9 @@ export class ReconService {
         decidedBy: actor,
       }, manager);
       await this.repo.updateItem(tenantId, draft.item_id, { status: 'matched' }, manager);
-      await this.repo.updateDraft(tenantId, draft.id, { status: 'posted', journal_entry_id: entry.id }, manager);
-      await this.repo.audit(tenantId, actor, 'draft.post', 'draft', draft.id, { journalEntryId: entry.id, auto: draft.auto }, manager);
-      return entry.id;
+      await this.repo.updateDraft(tenantId, draft.id, { status: 'posted', journal_entry_id: result.entryId }, manager);
+      await this.repo.audit(tenantId, actor, 'draft.post', 'draft', draft.id, { journalEntryId: result.entryId, auto: draft.auto }, manager);
+      return result.entryId;
     });
   }
 

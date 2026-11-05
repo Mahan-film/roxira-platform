@@ -11,6 +11,8 @@ import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
 import { CreateJournalEntryDto } from '../accounting/dto/create-journal-entry.dto';
 import { LedgerLineView } from '../accounting/services/accounting.service';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
+import { FakePostingRulesRepository } from './recon/__fixtures__/fakes';
 import { BankingController } from './controllers/banking.controller';
 import { CreateBankAccountDto } from './dto/bank-account.dto';
 import { AutoMatchDto } from './dto/reconciliation.dto';
@@ -331,7 +333,7 @@ class FakeAccountingService {
         debit: Number(line.debit ?? 0),
         credit: Number(line.credit ?? 0),
       });
-      return { id, accountId: account.id };
+      return { id, accountId: account.id, accountCode: account.code };
     });
     return { id: journalEntryId, lines: created };
   }
@@ -345,7 +347,8 @@ function setup() {
   const repo = new InMemoryBankingRepository();
   const accounting = new FakeAccountingService();
   repo.accountingForTx = accounting;
-  const service = new BankingService(repo as never, accounting as never);
+  const postingRules = new PostingRulesService(new FakePostingRulesRepository() as never, accounting as never);
+  const service = new BankingService(repo as never, accounting as never, postingRules);
   return { repo, accounting, service };
 }
 

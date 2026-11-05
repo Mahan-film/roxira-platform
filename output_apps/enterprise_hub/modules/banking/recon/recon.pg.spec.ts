@@ -20,6 +20,8 @@ import { AccountingRepository } from '../../accounting/repositories/accounting.r
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { CurrencyService } from '../../currency/services/currency.service';
+import { PostingRulesRepository } from '../../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { BankAccountEntity } from '../entities/bank-account.entity';
 import { BankStatementLineEntity } from '../entities/bank-statement-line.entity';
 import { BankCode } from '../enums/banking.enum';
@@ -116,12 +118,14 @@ describePg('Reconciliation assistant on PostgreSQL', () => {
       new AccountingRepository(new TenantScope(ds)),
       currencyStub,
     );
+    const postingRules = new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting);
     banking = new BankingService(
       new BankingRepository(ds.getRepository(BankAccountEntity), ds.getRepository(BankStatementLineEntity), ds),
       accounting,
+      postingRules,
     );
     repo = new ReconRepository(ds);
-    recon = new ReconService(repo, banking, accounting);
+    recon = new ReconService(repo, banking, accounting, postingRules);
 
     for (const tenantId of [T1, T2]) {
       await q(`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $2) ON CONFLICT DO NOTHING`, [tenantId, tenantId.slice(0, 8)]).catch(() => undefined);
@@ -231,6 +235,22 @@ describePg('Reconciliation assistant on PostgreSQL', () => {
     expect(lines.reduce((sum, l) => sum + Number(l.debit) - Number(l.credit), 0)).toBe(0);
     const [{ n }] = await q(`SELECT count(*) AS n FROM fin_bank_recon_matches WHERE tenant_id = $1 AND status = 'confirmed' AND stage = 'created'`, [T1]);
     expect(n).toBe('1');
+  });
+
+  it('posting the same draft again replays the engine source and writes no second voucher', async () => {
+    const [posted] = await q<{ id: number; journal_entry_id: number }>(
+      `SELECT id, journal_entry_id FROM fin_bank_recon_drafts WHERE tenant_id = $1 AND status = 'posted' ORDER BY id LIMIT 1`,
+      [T1],
+    );
+    await q(`UPDATE fin_bank_recon_drafts SET status = 'draft', journal_entry_id = NULL WHERE tenant_id = $1 AND id = $2`, [T1, posted.id]);
+    const [again] = await recon.approveDrafts(T1, 'approver', [posted.id]);
+    expect(again.status).toBe('posted');
+    expect(again.journalEntryId).toBe(posted.journal_entry_id);
+    const entries = await q<{ n: string }>(
+      `SELECT count(*) AS n FROM fin_journal_entries WHERE tenant_id = $1 AND entry_number = $2`,
+      [T1, `RCN-${posted.id}`],
+    );
+    expect(entries[0].n).toBe('1');
   });
 
   it('one journal line cannot be confirmed against two statement rows (database guard)', async () => {

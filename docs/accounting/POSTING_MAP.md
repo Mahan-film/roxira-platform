@@ -22,8 +22,8 @@ Lane: **Mac** = posting_rules owner adopts it; **Laptop** = `mahansudo` lane, ha
 | 11 | **Payroll run** (`payroll.run`) | `hr/services/payroll-run.service.ts:587` (`buildJournalLines` 498) | salary expense 5010, employer insurance expense 5040, insurance payable 2030, wage tax payable 2040, other deductions 2060, salaries payable 2050 (`hr/constants/hr.constants.ts:174`) | entry number `PR-YYYYMM` (adopts existing) | **Mac** |
 | 12 | **Single payslip** (`payroll.payslip`) | `hr/services/hr.service.ts:881` | expense 5010, payable 2010, bank 1010 | entry number per payslip | **Mac** |
 | 13 | **Corporate tax provision** (`tax.provision`) | `tax_compliance/services/corporate-tax.service.ts:97` (proposal only, `posted:false`) | accounts passed in by the caller (`expenseAccountCode`, `payableAccountCode`) | none | **Mac** |
-| 14 | **Bank reconciliation draft** (`bank.recon`) | `banking/recon/recon.service.ts:858` | ledger account of the bank account + counter account of the rule/category | draft id | **Mac** |
-| 15 | **Manual bank entry** (`bank.entry`) | `banking/services/banking.service.ts:390` | ledger code of the bank account + counter chosen by the caller | none | **Mac** |
+| 14 | **Bank reconciliation draft** (`bank.receipt` / `bank.payment`) | `banking/recon/recon.service.ts:850` | bank account ledger code + counter account of the rule/category, passed as engine `overrides` (`bank` / `counter`) | engine source ledger `bank_recon_draft` = draft id (replay-safe) | **Mac** |
+| 15 | **Manual bank entry** (`bank.receipt` / `bank.payment`) | `banking/services/banking.service.ts:361` | bank account ledger code + counter chosen by the caller, passed as engine `overrides` (`bank` / `counter`) | engine source ledger `bank_entry` = statement line id (no client request id exists) | **Mac** |
 
 ## Findings that matter
 
@@ -37,7 +37,8 @@ Lane: **Mac** = posting_rules owner adopts it; **Laptop** = `mahansudo` lane, ha
    land and accumulated depreciation. New roles `cheques_receivable`, `cheques_in_collection`, `cheques_payable`
    fix this. Behaviour-preserving adoption keeps the old codes as the default for existing tenants (see
    POSTING_RULES.md, "Defaults").
-3. **No idempotency on cheques, bank, petty cash.** Only payroll and invoices adopt an existing entry by number.
+3. **Idempotency was missing on cheques, bank, petty cash.** Cheques and bank now post through the engine's source
+   ledger (one voucher per source document, a second call replays the first). Only petty cash still relies on a random id.
 4. **Account creation inside business services** (`ensureAccounts`, `ensurePayrollAccounts`, invoice-posting
    line 868, inventory 455) is replaced by an explicit "unmapped role" Persian error plus the settings page.
 5. **Dates:** payroll uses the Jalali month end; cheques use the event date; the rest use `new Date()`. The engine

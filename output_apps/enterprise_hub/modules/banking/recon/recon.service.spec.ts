@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { FakeLedger, FakeReconRepository } from './__fixtures__/fakes';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
+import { FakeLedger, FakePostingRulesRepository, FakeReconRepository } from './__fixtures__/fakes';
 import { gregorian, OPENING, statementCsv, TXNS } from './__fixtures__/statements';
 import { ReconService } from './recon.service';
 import { readGrid } from './parse/statement-parser';
@@ -24,8 +25,10 @@ function setup() {
   const repo = new FakeReconRepository();
   const ledger = new FakeLedger();
   ledger.addBank(A, mellatAccount());
-  const service = new ReconService(repo as never, ledger.banking as never, ledger.accounting as never);
-  return { repo, ledger, service };
+  const postingRepo = new FakePostingRulesRepository();
+  const postingRules = new PostingRulesService(postingRepo as never, ledger.accounting as never);
+  const service = new ReconService(repo as never, ledger.banking as never, ledger.accounting as never, postingRules);
+  return { repo, ledger, service, postingRepo, postingRules };
 }
 
 function seedBook(ledger: FakeLedger, tenant = A) {
@@ -216,12 +219,28 @@ describe('posting: batch approval, period locks, reversal-only correction', () =
     expect(results.every((r) => r.status === 'posted')).toBe(true);
     const entry = ledger.entries[0];
     expect(entry.number).toBe(`RCN-${drafts[0].id}`);
-    expect(entry.dto.lines[0].credit).toBe(drafts[0].amountRial); // fee: money out = credit bank
+    const bankLine = entry.dto.lines.find((l: { accountCode: string }) => l.accountCode === '1010');
+    expect(Number(bankLine.credit)).toBe(Number(drafts[0].amountRial)); // fee: money out = credit bank
     expect(repo.matches.filter((m) => m.stage === 'created' && m.status === 'confirmed')).toHaveLength(2);
     // Approving again does nothing.
     const again = await service.approveDrafts(A, 'approver', drafts.map((d) => d.id));
     expect(again.every((r) => r.status === 'skipped')).toBe(true);
     expect(ledger.entries).toHaveLength(2);
+  });
+
+  it('posting the same draft again returns the same entry (replayed), not a second voucher', async () => {
+    const { service, ledger, repo, drafts } = await withDrafts();
+    const [first] = await service.approveDrafts(A, 'approver', [drafts[0].id]);
+    expect(first.status).toBe('posted');
+    const posted = ledger.entries.length;
+    // Reopen the draft (as an operator correcting a matching slip would) and approve it again.
+    const row = repo.drafts.find((d) => d.id === drafts[0].id)!;
+    row.status = 'draft';
+    row.journal_entry_id = null;
+    const [replay] = await service.approveDrafts(A, 'approver', [drafts[0].id]);
+    expect(replay.status).toBe('posted');
+    expect(replay.journalEntryId).toBe(first.journalEntryId);
+    expect(ledger.entries).toHaveLength(posted);
   });
 
   it('a locked period fails that draft with the reason and does not stop the others', async () => {

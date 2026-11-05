@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountingModule } from '../accounting/accounting.module';
+import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 import { BankingController } from './controllers/banking.controller';
 import { BankAccountEntity } from './entities/bank-account.entity';
 import { BankStatementLineEntity } from './entities/bank-statement-line.entity';
@@ -18,13 +19,15 @@ import { BankingService } from './services/banking.service';
  * - Service: تطبیق خودکار/دستی، ساخت سند، خلاصه مغایرت.
  * - Repository: تنها لایه دسترسی به fin_bank_accounts و fin_bank_statement_lines.
  *
- * فقط به AccountingModule وابسته است (بدون چرخه)؛ DataImportModule برای ورود
- * صورتحساب از BankingService استفاده می‌کند.
+ * به AccountingModule و PostingRulesModule وابسته است (بدون چرخه)؛ PostingRulesModule به این
+ * ماژول وابسته نیست، بنابراین چرخه‌ای ساخته نمی‌شود. DataImportModule برای ورود صورتحساب از
+ * BankingService استفاده می‌کند.
  */
 @Module({
   imports: [
     TypeOrmModule.forFeature([BankAccountEntity, BankStatementLineEntity]),
     AccountingModule,
+    PostingRulesModule,
   ],
   controllers: [BankingController, ReconController],
   providers: [BankingService, BankingRepository, ReconService, ReconRepository],

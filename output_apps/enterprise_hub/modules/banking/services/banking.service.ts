@@ -7,11 +7,14 @@ import {
 import { randomUUID } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { AccountResponseDto } from '../../accounting/dto/account-response.dto';
+import { toMinor } from '../../accounting/money';
 import {
   AccountingService,
   LedgerLineView,
 } from '../../accounting/services/accounting.service';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { Currency } from '../../currency/enums/currency.enum';
+import { bankDocType } from '../bank-posting';
 import {
   DEFAULT_MATCH_WINDOW_DAYS,
   MATCH_AMOUNT_TOLERANCE,
@@ -88,6 +91,7 @@ export class BankingService {
   constructor(
     private readonly bankingRepository: BankingRepository,
     private readonly accountingService: AccountingService,
+    private readonly postingRules: PostingRulesService,
   ) {}
 
   // ------------------------------------------------------------------ accounts
@@ -385,43 +389,36 @@ export class BankingService {
       dto.description ?? line.description ?? 'سطر صورتحساب بانک'
     ).slice(0, 255);
 
-    // Journal entry + match commit together or not at all (no orphan entry on failure).
+    // Journal entry + match commit together or not at all (no orphan entry on failure). There is no
+    // client request id on this path, so the statement line is the idempotency key and the entry
+    // number keeps the legacy random suffix.
     await this.bankingRepository.runInTransaction(async (manager) => {
-      const entry = await this.accountingService.createJournalEntry(
+      const result = await this.postingRules.post(
         tenantId,
         {
+          docType: bankDocType(isDeposit ? 'in' : 'out'),
+          sourceType: 'bank_entry',
+          sourceId: String(line.id),
           entryNumber: `BNK-${line.id}-${randomUUID().slice(0, 8)}`,
           date: line.txnDate,
           description: line.reference
             ? `${description} (پیگیری ${line.reference})`
             : description,
-          lines: [
-            {
-              accountCode: ledger.code,
-              debit: isDeposit ? amount : 0,
-              credit: isDeposit ? 0 : amount,
-              description,
-            },
-            {
-              accountCode: dto.counterAccountCode,
-              debit: isDeposit ? 0 : amount,
-              credit: isDeposit ? amount : 0,
-              description,
-            },
-          ],
+          amounts: { amount: toMinor(amount) },
+          overrides: { bank: ledger.code, counter: dto.counterAccountCode },
         },
         manager,
       );
-      const bankLine = entry.lines.find((item) => item.accountId === ledger.id);
+      const bankLine = result.lines.find((item) => item.accountCode === ledger.code);
       if (!bankLine) {
         throw new BadRequestException('سطر بانک در سند ساخته‌شده یافت نشد.');
       }
       await this.applyMatch(
         tenantId,
         line.id,
-        bankLine.id,
+        bankLine.journalLineId,
         MatchMethod.CREATED,
-        entry.id,
+        result.entryId,
         manager,
       );
     });
