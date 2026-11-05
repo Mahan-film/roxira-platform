@@ -412,7 +412,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const chart = readCsv(SAMPLE_COMPANY_FILES.chartOfAccounts);
     const fileCodes = chart.rows.map((r) => r[chart.header.indexOf('کد حساب')]);
     const accountsBefore = await apiGet<Array<{ code: string }>>(page, 'accounting/accounts');
-    expect(new Set(accountsBefore.map((a) => a.code))).toEqual(new Set(fileCodes));
+    expect.soft(new Set(accountsBefore.map((a) => a.code)), 'accounts before posting').toEqual(new Set(fileCodes));
     const vouchersBefore = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
 
     // Issue strictly one at a time (date ascending, ties by number) so FIFO order holds.
@@ -453,7 +453,10 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     // settlement: payables opening + every unique purchase incl. VAT = 7,359,090,000. The settled
     // 1,938,310,000 comes back off below, landing 2101 on the README closing at the end of this step.
     const accountsAfterIssue = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
-    expect(new Set(accountsAfterIssue.map((a) => a.code)), 'posting created no account').toEqual(new Set(fileCodes));
+    expect.soft(
+      [...new Set(accountsAfterIssue.map((a) => `${a.code} ${(a as { name?: string }).name ?? ''}`.trim()))].filter((a) => !fileCodes.includes(a.split(' ')[0])),
+      'posting created no account: accounts outside the 18 imported in step 02 (code, name)',
+    ).toEqual([]);
     const payableAfterIssue = -rials(accountsAfterIssue.find((a) => a.code === '2101')!.balance);
     expect(payableAfterIssue).toBe(7_359_090_000n);
     expect(payableAfterIssue).toBe(README_TOTALS.payablesOpening + allPurchases);
@@ -590,7 +593,10 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     // End of step 07: 2101 = the README closing payables, exactly — 7,359,090,000 issued minus the
     // settled 1,938,310,000 paid.
     const accountsAtEnd = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
-    expect(new Set(accountsAtEnd.map((a) => a.code)), 'settlement created no account').toEqual(new Set(fileCodes));
+    expect.soft(
+      [...new Set(accountsAtEnd.map((a) => `${a.code} ${(a as { name?: string }).name ?? ''}`.trim()))].filter((a) => !fileCodes.includes(a.split(' ')[0])),
+      'settlement created no account: accounts outside the 18 imported in step 02 (code, name)',
+    ).toEqual([]);
     const payableAtEnd = -rials(accountsAtEnd.find((a) => a.code === '2101')!.balance);
     expect(payableAtEnd).toBe(README_TOTALS.payablesClosingUnique);
     expect(payableAtEnd).toBe(5_420_780_000n);
@@ -638,7 +644,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const chart = readCsv(SAMPLE_COMPANY_FILES.chartOfAccounts);
     const fileCodes = chart.rows.map((r) => r[chart.header.indexOf('کد حساب')]);
     const accountsBefore = await apiGet<Array<{ code: string }>>(page, 'accounting/accounts');
-    expect(new Set(accountsBefore.map((a) => a.code))).toEqual(new Set(fileCodes));
+    expect.soft(new Set(accountsBefore.map((a) => a.code)), 'accounts before posting').toEqual(new Set(fileCodes));
     const vouchersBefore = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
 
     // Issue strictly one at a time (date ascending, ties by number) so FIFO order holds.
@@ -679,7 +685,10 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     // + every unique sale incl. VAT = 13,273,675,000. The settled 3,820,162,500 comes back off below,
     // landing 1201 on the README closing at the end of this step.
     const accountsAfterIssue = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
-    expect(new Set(accountsAfterIssue.map((a) => a.code)), 'posting created no account').toEqual(new Set(fileCodes));
+    expect.soft(
+      [...new Set(accountsAfterIssue.map((a) => `${a.code} ${(a as { name?: string }).name ?? ''}`.trim()))].filter((a) => !fileCodes.includes(a.split(' ')[0])),
+      'posting created no account: accounts outside the 18 imported in step 02 (code, name)',
+    ).toEqual([]);
     const receivableAfterIssue = rials(accountsAfterIssue.find((a) => a.code === '1201')!.balance);
     expect(receivableAfterIssue).toBe(13_273_675_000n);
     expect(receivableAfterIssue).toBe(README_TOTALS.receivablesOpening + allSales);
@@ -813,7 +822,10 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     // End of step 08: 1201 = the README closing receivables, exactly — 13,273,675,000 issued minus
     // the settled 3,820,162,500 collected.
     const accountsAtEnd = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
-    expect(new Set(accountsAtEnd.map((a) => a.code)), 'settlement created no account').toEqual(new Set(fileCodes));
+    expect.soft(
+      [...new Set(accountsAtEnd.map((a) => `${a.code} ${(a as { name?: string }).name ?? ''}`.trim()))].filter((a) => !fileCodes.includes(a.split(' ')[0])),
+      'settlement created no account: accounts outside the 18 imported in step 02 (code, name)',
+    ).toEqual([]);
     const receivableAtEnd = rials(accountsAtEnd.find((a) => a.code === '1201')!.balance);
     expect(receivableAtEnd).toBe(README_TOTALS.receivablesClosingUnique);
     expect(receivableAtEnd).toBe(9_453_512_500n);
