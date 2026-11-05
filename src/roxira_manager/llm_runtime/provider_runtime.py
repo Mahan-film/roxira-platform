@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import pathlib
+import sys
+
 from dotenv import load_dotenv
-from openai import OpenAI
 
 
 PROJECT_ROOT = os.path.abspath(
@@ -16,6 +18,15 @@ load_dotenv(
     os.path.join(PROJECT_ROOT, ".env")
 )
 
+
+def _llm_route():
+    root = pathlib.Path(__file__).resolve().parents[3]
+    dev = str(root / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
 
 
 class ProviderRuntime:
@@ -38,52 +49,35 @@ class ProviderRuntime:
             )
 
 
-        self.client = OpenAI(
-
-            api_key=api_key,
-
-            base_url=os.getenv(
-                "OPENROUTER_BASE_URL",
-                "https://openrouter.ai/api/v1"
-            )
-
-        )
-
-
-
     def generate(
         self,
         model: str,
         prompt: str
     ):
 
+        llm_route = _llm_route()
+        messages = [
+            {
+                "role": "system",
+                "content": "You are ROXIRA Legal AI."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
 
-        response = self.client.chat.completions.create(
-
-            model=model,
-
-            messages=[
-                {
-                    "role":"system",
-                    "content":
-                    "You are ROXIRA Legal AI."
-                },
-                {
-                    "role":"user",
-                    "content":prompt
-                }
-            ],
-
-            temperature=0.2
-
+        result = llm_route.route(
+            "smartjudge_chat",
+            messages,
+            llm_route.attempts_for("smartjudge_chat"),
+            public=False,
         )
-
 
         return {
 
-            "model": model,
+            "model": result.served,
 
-            "output":
-            response.choices[0].message.content
+            "output": result.text
 
         }

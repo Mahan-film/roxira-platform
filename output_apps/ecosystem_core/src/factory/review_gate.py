@@ -46,8 +46,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
-
 VALID_VERDICTS = {"approve", "request_changes"}
 VALID_RISKS = {"low", "medium", "high"}
 
@@ -214,41 +212,68 @@ class ReviewResult:
     skip_reason: str = ""
 
 
+def _llm_route():
+    root = Path(__file__).resolve().parents[4]
+    dev = str(root / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
+
+
 def call_reviewer_model(
     prompt: str,
     api_key: str,
     model: str,
     timeout: float = 90.0,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """POST to OpenRouter chat completions. Returns (verdict_dict, usage_dict).
-    Never raises for a model/parse failure -- returns a fail-closed
-    request_changes verdict instead, since a broken reviewer must not silently
-    let a PR through. Network/timeout errors also fail closed the same way."""
-    body = json.dumps(
-        {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0,
-        }
-    ).encode("utf-8")
-    req = urllib.request.Request(OPENROUTER_CHAT_URL, data=body, method="POST")
-    req.add_header("Authorization", f"Bearer {api_key}")
-    req.add_header("Content-Type", "application/json")
+    """Route the reviewer call through scripts/dev/llm_route.py. Returns
+    (verdict_dict, usage_dict). Never raises for a model/parse failure --
+    returns a fail-closed request_changes verdict instead, since a broken
+    reviewer must not silently let a PR through. Network/timeout errors also
+    fail closed the same way."""
+    llm_route = _llm_route()
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+    captured: dict[str, Any] = {}
 
+    def _call(msgs: list[dict[str, str]], max_tokens: int) -> tuple[str, int, int]:
+        body = json.dumps({"model": model, "messages": msgs, "temperature": 0}).encode("utf-8")
+        req = urllib.request.Request(
+            llm_route.OPENROUTER_BASE_URL + "/chat/completions", data=body, method="POST"
+        )
+        req.add_header("Authorization", f"Bearer {api_key}")
+        req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise llm_route.AttemptError(f"http{exc.code}") from None
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            raise llm_route.AttemptError("timeout") from None
+        captured["payload"] = payload
+        try:
+            content = payload["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            raise llm_route.AttemptError("badjson") from None
+        usage_raw = payload.get("usage") or {}
+        return (
+            content,
+            int(usage_raw.get("prompt_tokens") or 0),
+            int(usage_raw.get("completion_tokens") or 0),
+        )
+
+    primary = llm_route.Attempt(f"openrouter/{model}", "reviewer", True, _call, (0.0, 0.0))
+    attempts = [primary] + llm_route.attempts_for("review_desk", timeout=timeout)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        llm_route.route("review_desk", messages, attempts, max_tokens=2500, public=True)
+    except (llm_route.AllAttemptsFailed, llm_route.CapReached) as exc:
         return fail_closed_verdict(f"reviewer call failed: {exc}"), {}
 
-    try:
-        content = payload["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError):
-        return fail_closed_verdict(f"reviewer response had no message content: {payload!r}"), {}
-
+    payload = captured.get("payload") or {}
     usage_raw = payload.get("usage") or {}
     usage = {
         "model": payload.get("model", model),
@@ -258,6 +283,11 @@ def call_reviewer_model(
         # as llm_router.py's _usage_record).
         "cost_usd": float(usage_raw.get("cost") or 0.0) if "cost" in usage_raw else None,
     }
+
+    try:
+        content = payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return fail_closed_verdict(f"reviewer response had no message content: {payload!r}"), {}
 
     try:
         verdict = parse_verdict(content)

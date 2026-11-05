@@ -1,6 +1,15 @@
+import pathlib
+import sys
 
 
-import os
+def _llm_route():
+    root = pathlib.Path(__file__).resolve().parents[3]
+    dev = str(root / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
 
 
 class AIProvider:
@@ -13,7 +22,7 @@ class AIProvider:
             "openrouter":
             {
                 "endpoint":
-                "https://openrouter.ai/api/v1"
+                _llm_route().OPENROUTER_BASE_URL
             },
 
             "deepseek":
@@ -29,6 +38,3 @@ class AIProvider:
     def get_endpoint(self,name):
 
         return self.providers.get(name)
-
-
-

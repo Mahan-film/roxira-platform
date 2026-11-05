@@ -1,34 +1,23 @@
+import asyncio
 import os
+import pathlib
+import sys
 import httpx
 import logging
 from typing import List, Dict, Any
 
 logger = logging.getLogger("LiveLegalGraphRAGEngine")
 
-# ماتریس زنجیره‌ای روتینگ بر اساس مدل‌های فعال ۲۰۲۶
-TIER_ROUTING = {
-    # سطح ۱: رایگان (Endpoint رایگان OpenRouter)
-    "free-ox-alpha": [
-        "nvidia/nemotron-3-ultra:free",
-        "minimax/minimax-m3:free",
-        "z-ai/glm-5.2:free",
-        "poolside/laguna-s-2.1:free"
-    ],
-    # سطح ۲: پیشرفته دادرسی (سرعت و کارایی فوق‌العاده)
-    "gemini-3-7-flash": [
-        "google/gemini-3.7-flash",
-        "deepseek/deepseek-v4-flash",
-        "z-ai/glm-5.3-flash",
-        "google/gemini-2.0-flash-001"
-    ],
-    # سطح ۳: عالی دیوان عالی، استدلال سنگین و انشای لوایح
-    "deepseek-v4-pro": [
-        "anthropic/claude-fable-5.1",
-        "deepseek/deepseek-v4-pro",
-        "anthropic/claude-sonnet-5",
-        "qwen/qwen-3.8-2.4t-a95b"
-    ]
-}
+
+def _llm_route():
+    root = pathlib.Path(__file__).resolve().parents[4]
+    dev = str(root / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
+
 
 class LiveLegalGraphRAGEngine:
     @classmethod
@@ -46,10 +35,6 @@ class LiveLegalGraphRAGEngine:
 
     @classmethod
     async def generate_live_reasoning(cls, query: str, requested_tier: str, mode: str = "general") -> str:
-        openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-        deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-        
-        target_models = TIER_ROUTING.get(requested_tier, TIER_ROUTING["gemini-3-7-flash"])
         legal_knowledge = await cls.get_legal_context(query)
 
         system_prompt = f"""شما سامانه رسمی «قاضی هوشمند» و دستیار ارشد دادرسی قضایی محاکم ایران هستید.
@@ -65,59 +50,20 @@ class LiveLegalGraphRAGEngine:
             {"role": "user", "content": f"موضوع دعوا / استعلام پرونده: {query}"}
         ]
 
+        llm_route = _llm_route()
         last_error = ""
-        # تلاش آبشاری روی فهرست مدل‌ها
-        for model_id in target_models:
-            if openrouter_key:
-                try:
-                    async with httpx.AsyncClient(timeout=35.0) as client:
-                        resp = await client.post(
-                            "https://openrouter.ai/api/v1/chat/completions",
-                            headers={
-                                "Authorization": f"Bearer {openrouter_key}",
-                                "HTTP-Referer": "https://ghazihoushmand.ir",
-                                "X-Title": "Ghazihoushmand Smart Judge",
-                                "Content-Type": "application/json"
-                            },
-                            json={
-                                "model": model_id,
-                                "messages": messages,
-                                "temperature": 0.2,
-                                "max_tokens": 3500,
-                                "provider": {"data_collection": "deny"}
-                            }
-                        )
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            content = data["choices"][0]["message"]["content"]
-                            return f"{content}\n\n⚖️ [استخراج شده توسط موتور هوشمند: {model_id}]"
-                        else:
-                            last_error = f"OpenRouter {model_id} (HTTP {resp.status_code})"
-                except Exception as ex:
-                    last_error = f"OpenRouter ({str(ex)})"
-
-            # اتصال مستقیم به سرور DeepSeek در صورت وجود کلید مستقیم
-            if deepseek_key and "deepseek" in model_id:
-                try:
-                    async with httpx.AsyncClient(timeout=25.0) as client:
-                        resp = await client.post(
-                            "https://api.deepseek.com/chat/completions",
-                            headers={
-                                "Authorization": f"Bearer {deepseek_key}",
-                                "Content-Type": "application/json"
-                            },
-                            json={
-                                "model": "deepseek-chat",
-                                "messages": messages,
-                                "temperature": 0.2
-                            }
-                        )
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            content = data["choices"][0]["message"]["content"]
-                            return f"{content}\n\n⚖️ [استخراج شده توسط سرور مستقیم DeepSeek]"
-                except Exception as ex:
-                    last_error = f"DeepSeek Direct ({str(ex)})"
+        try:
+            result = await asyncio.to_thread(
+                llm_route.route,
+                "smartjudge_chat",
+                messages,
+                llm_route.attempts_for("smartjudge_chat"),
+                max_tokens=3500,
+                public=False,
+            )
+            return f"{result.text}\n\n⚖️ [استخراج شده توسط موتور هوشمند: {result.served}]"
+        except (llm_route.AllAttemptsFailed, llm_route.CapReached) as exc:
+            last_error = str(exc)
 
         # بازگشت محلی پایگاه دانش در صورت قطع شبکه خارجی
         return f"""نظریه مشورتی خودکار سامانه قاضی هوشمند:

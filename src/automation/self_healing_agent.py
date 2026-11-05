@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 import os
-import time
-import json
-import httpx
 import pathlib
-import subprocess
+import sys
 from typing import Dict, Any
 
-SERVER_HEALTH_URL = os.environ.get("ROXIRA_HEALTH_URL", "https://ghazihoushmand.ir/")
-OPENROUTER_API_KEY = "" # از .env بارگذاری می‌شود
+import httpx
 
-ENV_FILE = pathlib.Path.cwd() / ".env"
-if ENV_FILE.is_file():
-    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
-        if line.startswith("OPENROUTER_API_KEY="):
-            OPENROUTER_API_KEY = line.split("=", 1)[1].strip().strip("'\"")
+SERVER_HEALTH_URL = os.environ.get("ROXIRA_HEALTH_URL", "https://ghazihoushmand.ir/")
+
+
+def _llm_route():
+    root = pathlib.Path(__file__).resolve().parents[2]
+    dev = str(root / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
+
 
 class AutonomousSelfHealingDaemon:
     """Watches server vitals, diagnoses stack traces via AI, and applies automated remediation."""
@@ -32,28 +35,23 @@ class AutonomousSelfHealingDaemon:
     @staticmethod
     def diagnose_and_heal(error_details: str) -> Dict[str, Any]:
         print("⚠️ [SELF-HEALING] Server Anomaly Detected. Calling AI Diagnostic Node...")
-        
+
         prompt = f"""سیستم سرور پروداکشن ROXIRA دچار ناهنجاری شده است:
 جزئیات خطا: {error_details}
 وظیفه: راهکار برطرف‌سازی خطای داکر/دیتابیس را به زبان فارسی و در قالب ۳ دستور لینوکس ارائه بده."""
 
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://roxira.net"
-        }
-        payload = {
-            "model": "deepseek/deepseek-v4-flash",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1
-        }
-
+        llm_route = _llm_route()
+        messages = [{"role": "user", "content": prompt}]
         try:
-            with httpx.Client(timeout=30.0) as client:
-                res = client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-                diag = res.json()["choices"][0]["message"]["content"]
-        except Exception as e:
-            diag = f"AI Diagnosis failed: {str(e)}"
+            result = llm_route.route(
+                "selfimprove",
+                messages,
+                llm_route.attempts_for("selfimprove", timeout=30.0),
+                public=True,
+            )
+            diag = result.text
+        except (llm_route.AllAttemptsFailed, llm_route.CapReached) as exc:
+            diag = f"AI Diagnosis failed: {exc}"
 
         return {"status": "DIAGNOSIS_COMPLETED", "ai_remediation_plan": diag}
 
@@ -66,6 +64,7 @@ class AutonomousSelfHealingDaemon:
             print("❌ Server Down. Initiating Self-Healing Cycle...")
             remediation = self.diagnose_and_heal("Connection Timeout on Port 80 / Nginx Gateway")
             print(remediation["ai_remediation_plan"])
+
 
 if __name__ == "__main__":
     daemon = AutonomousSelfHealingDaemon()

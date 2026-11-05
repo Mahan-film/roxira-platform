@@ -28,8 +28,6 @@ import os
 import re
 import sys
 import time
-import urllib.error
-import urllib.request
 import uuid
 from dataclasses import asdict, dataclass, field
 from enum import Enum
@@ -59,11 +57,20 @@ __all__ = [
 #: Tier name that routes a synthesize request through this orchestrator.
 AUTONOMOUS_SWARM_TIER = "AUTONOMOUS_SWARM"
 
-DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_OPENROUTER_MODEL = os.getenv("ROXIRA_SWARM_MODEL", "anthropic/claude-sonnet-5")
+DEFAULT_OPENROUTER_MODEL = os.getenv("ROXIRA_SWARM_MODEL", "")
 SWARM_TIMEOUT_SECONDS = float(os.getenv("ROXIRA_SWARM_TIMEOUT", "120"))
 SWARM_MAX_TOKENS = int(os.getenv("ROXIRA_SWARM_MAX_TOKENS", "4096"))
 SWARM_LLM_ENABLED = os.getenv("ROXIRA_SWARM_LLM", "1") != "0"
+
+
+def _llm_route():
+    root = Path(__file__).resolve().parents[4]
+    dev = str(root / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
 
 
 def is_swarm_tier(tier: Optional[str]) -> bool:
@@ -189,69 +196,47 @@ class SwarmResult:
 
 
 class OpenRouterClient:
-    """Minimal OpenRouter chat-completions client (stdlib only)."""
+    """Routed chat client: free first, then cheap, then strong (scripts/dev/llm_route.py)."""
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         model: str = DEFAULT_OPENROUTER_MODEL,
-        base_url: str = DEFAULT_OPENROUTER_BASE_URL,
+        base_url: Optional[str] = None,
         timeout: float = SWARM_TIMEOUT_SECONDS,
     ) -> None:
         self.api_key = api_key if api_key is not None else os.getenv("OPENROUTER_API_KEY", "")
         self.model = model
-        self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
     @property
     def configured(self) -> bool:
         return bool(self.api_key) and SWARM_LLM_ENABLED
 
-    def _payload(self, system: str, user: str, max_tokens: int) -> dict[str, Any]:
-        return {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.2,
-            "max_tokens": max_tokens,
-            "response_format": {"type": "json_object"},
-        }
-
-    def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
-        request = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://roxira.net",
-                "X-Title": "Roxira Swarm Orchestrator",
-            },
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", "replace")[:500]
-            raise OpenRouterError(f"HTTP {exc.code}: {detail}") from exc
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-            raise OpenRouterError(str(exc)) from exc
-
     async def complete_json(
         self, system: str, user: str, max_tokens: int = SWARM_MAX_TOKENS
     ) -> dict[str, Any]:
-        """Call the LLM and return its reply parsed as a JSON object."""
+        """Call the routed LLM chain and return its reply parsed as a JSON object."""
         if not self.configured:
             raise OpenRouterError("OPENROUTER_API_KEY is not configured")
-        raw = await asyncio.to_thread(self._post, self._payload(system, user, max_tokens))
+        llm_route = _llm_route()
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
         try:
-            content = raw["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise OpenRouterError(f"unexpected response shape: {str(raw)[:300]}") from exc
-        return extract_json_object(content)
+            result = await asyncio.to_thread(
+                llm_route.route,
+                "fleet",
+                messages,
+                llm_route.attempts_for("fleet", timeout=self.timeout),
+                max_tokens=max_tokens,
+                public=True,
+            )
+        except (llm_route.AllAttemptsFailed, llm_route.CapReached) as exc:
+            raise OpenRouterError(str(exc)) from exc
+        self.model = result.served
+        return extract_json_object(result.text)
 
 
 def extract_json_object(text: str) -> dict[str, Any]:

@@ -4,8 +4,6 @@ import sys
 import json
 import time
 import pathlib
-import urllib.request
-import urllib.error
 
 REPO_ROOT = pathlib.Path("/opt/roxira_platform")
 if str(REPO_ROOT) not in sys.path:
@@ -34,6 +32,15 @@ if env_file.exists():
 
 openrouter_key = os.getenv("OPENROUTER_API_KEY") or env_vars.get("OPENROUTER_API_KEY", "")
 deepseek_key = os.getenv("DEEPSEEK_API_KEY") or env_vars.get("DEEPSEEK_API_KEY", "")
+
+
+def _llm_route():
+    dev = str(REPO_ROOT / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
 
 sambanova = SambaNovaClient() if FACTORY_ENGINES_AVAILABLE else None
 worktrees = GitWorktreeManager() if FACTORY_ENGINES_AVAILABLE else None
@@ -211,28 +218,23 @@ def request_ai_code(name, cat, features):
     sys_prompt = f"Chief Architect for Roxira OS. Write complete deployable Python 3.12+ FastAPI code for {name} ({cat}) with features: {', '.join(features)}. Return ONLY python code."
     user_prompt = f"Generate code for module {name}."
 
-    if openrouter_key:
-        for model in ["google/gemini-2.0-flash-001", "deepseek/deepseek-chat"]:
-            try:
-                body = json.dumps({
-                    "model": model,
-                    "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                    "temperature": 0.1,
-                    "max_tokens": 4096
-                }).encode("utf-8")
-                req = urllib.request.Request(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    data=body,
-                    headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json", "HTTP-Referer": "https://roxira.net"}
-                )
-                with urllib.request.urlopen(req, timeout=60) as resp:
-                    res = json.loads(resp.read().decode("utf-8"))
-                    raw = res["choices"][0]["message"]["content"]
-                    lines = [l for l in raw.splitlines() if not l.strip().startswith("```")]
-                    return "\n".join(lines).strip()
-            except Exception:
-                continue
-    return None
+    llm_route = _llm_route()
+    messages = [
+        {"role": "system", "content": sys_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    try:
+        result = llm_route.route(
+            "fleet",
+            messages,
+            llm_route.attempts_for("fleet", timeout=60.0),
+            max_tokens=4096,
+            public=True,
+        )
+    except (llm_route.AllAttemptsFailed, llm_route.CapReached):
+        return None
+    lines = [l for l in result.text.splitlines() if not l.strip().startswith("```")]
+    return "\n".join(lines).strip()
 
 print("🚀 آغاز فرآیند خط تولید ماژول‌های Roxira OS...\n")
 

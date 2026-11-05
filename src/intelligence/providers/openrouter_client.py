@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import os
 import json
-import httpx
 import pathlib
+import sys
 from typing import Dict, Any, Optional
 
 ENV_FILE = pathlib.Path.cwd() / ".env"
+
+
+def _llm_route():
+    root = pathlib.Path(__file__).resolve().parents[3]
+    dev = str(root / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
+
 
 def get_api_key(key_name: str = "OPENROUTER_API_KEY") -> str:
     if os.environ.get(key_name):
@@ -17,8 +28,9 @@ def get_api_key(key_name: str = "OPENROUTER_API_KEY") -> str:
                 return line.split("=", 1)[1].strip().strip("'\"")
     return ""
 
+
 class OpenRouterClient:
-    BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+    """Routed chat client (free first, then cheap, then strong)."""
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or get_api_key("OPENROUTER_API_KEY")
@@ -32,38 +44,23 @@ class OpenRouterClient:
         json_mode: bool = False,
         timeout: float = 60.0
     ) -> Dict[str, Any]:
-        if not self.api_key:
-            return {"status": "ERROR", "error": "OPENROUTER_API_KEY is missing in .env"}
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://roxira.net",
-            "X-Title": "ROXIRA Intelligence Engine"
-        }
-
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": temperature,
-            "max_tokens": 4096
-        }
-
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        llm_route = _llm_route()
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+        try:
+            result = llm_route.route(
+                "fleet",
+                messages,
+                llm_route.attempts_for("fleet", timeout=timeout),
+                public=True,
+            )
+        except (llm_route.AllAttemptsFailed, llm_route.CapReached) as exc:
+            return {"status": "ERROR", "error": str(exc)}
 
         try:
-            with httpx.Client(timeout=timeout, verify=True) as client:
-                response = client.post(self.BASE_URL, headers=headers, json=payload)
-                if response.status_code != 200:
-                    return {"status": "ERROR", "http_code": response.status_code, "error": response.text}
-
-                res_json = response.json()
-                content = res_json["choices"][0]["message"]["content"]
-                parsed_data = json.loads(content) if json_mode else content
-                return {"status": "SUCCESS", "model": model, "content": parsed_data}
-        except Exception as e:
-            return {"status": "ERROR", "error": str(e)}
+            parsed_data = json.loads(result.text) if json_mode else result.text
+        except ValueError as exc:
+            return {"status": "ERROR", "error": f"invalid JSON: {exc}"}
+        return {"status": "SUCCESS", "model": result.served, "content": parsed_data}

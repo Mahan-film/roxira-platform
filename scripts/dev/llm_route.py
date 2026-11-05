@@ -30,6 +30,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "output_apps" / "generated_modules" / "smartjudge"))
 import model_registry  # noqa: E402
 
+#: The only place a direct OpenRouter base URL is allowed (docs/ops/MODEL_ROUTING.md).
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
 
 class AttemptError(Exception):
     def __init__(self, kind: str):
@@ -208,7 +211,7 @@ def review_attempts() -> list[Attempt]:
     gpt_oss = next(e["id"] for e in model_registry.role_entries("agent_runner") if e.get("alias") == "groq-strong")
     price = (0.045, 0.50)
     out = [
-        openai_compat("openrouter/" + ds, "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", ds, role="reviewer",
+        openai_compat("openrouter/" + ds, OPENROUTER_BASE_URL, "OPENROUTER_API_KEY", ds, role="reviewer",
                       paid=True, price=price, extra={"reasoning": {"enabled": False}, "provider": {"data_collection": "deny"}}),
         gateway_ssh("roxira-prod", "private", role="reviewer", paid=True, price=price),
         openai_compat("deepseek-api/deepseek-chat", "https://api.deepseek.com/v1", "DEEPSEEK_API_KEY", "deepseek-chat",
@@ -218,6 +221,30 @@ def review_attempts() -> list[Attempt]:
         openai_compat("mistral/mistral-medium-latest", "https://api.mistral.ai/v1", "MISTRAL_API_KEY",
                       "mistral-medium-latest", role="reviewer", paid=False, public_only=True),
     ]
+    return out
+
+
+def attempts_for(task: str, *, timeout: float = 90.0, extra: dict[str, Any] | None = None,
+                 key_env: str = "OPENROUTER_API_KEY") -> list[Attempt]:
+    """Ordered OpenRouter attempts for a task's chain in config/models.yaml.
+
+    Model ids and prices come only from the registry. Free / may-log steps are marked
+    public_only, so route(public=False) skips them for private payloads. Provider-native
+    ids (e.g. ``groq:whisper-large-v3``) are not OpenRouter chat ids and are skipped.
+    """
+    out: list[Attempt] = []
+    for step in model_registry.chain_for(task):
+        mid = str(step.get("id") or "")
+        if not mid or ":" in mid.split("/", 1)[0]:
+            continue
+        role = str(step.get("role") or "")
+        price = step.get("price_per_1m") or {}
+        p = (float(price.get("in") or 0.0), float(price.get("out") or 0.0))
+        free = mid.endswith(":free") or mid == "openrouter/free"
+        out.append(openai_compat(
+            f"openrouter/{mid}", OPENROUTER_BASE_URL, key_env, mid,
+            role=role, paid=not free, price=p, public_only=free, extra=extra, timeout=timeout,
+        ))
     return out
 
 

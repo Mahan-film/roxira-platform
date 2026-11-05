@@ -5,13 +5,19 @@ Autonomous Social Media & Brand Growth Engine (2026 Edition)
 رصد خودکار رویدادها، تحلیل پرونده‌های جنجالی، تولید کاروسل اینستاگرام
 و مقالات تحلیلی لینکدین برای برند شخصی و پلتفرم‌های قاضی هوشمند و روکسیرا.
 """
-import os
-import time
-import json
-import httpx
+import pathlib
+import sys
 
-OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+def _llm_route():
+    root = pathlib.Path(__file__).resolve().parents[2]
+    dev = str(root / "scripts" / "dev")
+    if dev not in sys.path:
+        sys.path.insert(0, dev)
+    import llm_route
+
+    return llm_route
+
 
 def generate_social_campaign(topic: str, platform: str = "linkedin") -> dict:
     prompt = f"""
@@ -26,30 +32,23 @@ def generate_social_campaign(topic: str, platform: str = "linkedin") -> dict:
     4. هشتگ‌های تخصصی پربازدید و ارقام انگلیسی استاندارد (0-9).
     """
 
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "google/gemini-flash-1.5",
-        "messages": [
-            {"role": "system", "content": "شما دستیار ارشد تولید محتوای سازمانی و بازاریابی B2B/B2C هستید."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 1000
-    }
-
+    llm_route = _llm_route()
+    messages = [
+        {"role": "system", "content": "شما دستیار ارشد تولید محتوای سازمانی و بازاریابی B2B/B2C هستید."},
+        {"role": "user", "content": prompt},
+    ]
     try:
-        with httpx.Client(timeout=15.0) as client:
-            res = client.post(OPENROUTER_URL, headers=headers, json=payload)
-            if res.status_code == 200:
-                data = res.json()
-                content = data["choices"][0]["message"]["content"]
-                return {"status": "success", "platform": platform, "content": content}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-    return {"status": "error", "message": "Failed to generate"}
+        result = llm_route.route(
+            "marketing",
+            messages,
+            llm_route.attempts_for("marketing", timeout=15.0),
+            max_tokens=1000,
+            public=True,
+        )
+    except (llm_route.AllAttemptsFailed, llm_route.CapReached) as exc:
+        return {"status": "error", "message": str(exc)}
+    return {"status": "success", "platform": platform, "content": result.text}
+
 
 if __name__ == "__main__":
     sample_topic = "چگونه هوش مصنوعی قاضی هوشمند پرونده‌های چک صیادی را در کمتر از ۳ دقیقه تحلیل و لایحه دفاعی تنظیم می‌کند؟"
