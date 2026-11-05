@@ -8,14 +8,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-CONF = Path(__file__).resolve().parents[2] / "output_apps" / "nginx_config" / "nginx.conf"
+CONF_DIR = Path(__file__).resolve().parents[2] / "output_apps" / "nginx_config"
 
 
 def test_regex_locations_with_braces_are_quoted() -> None:
     bad = []
-    for n, line in enumerate(CONF.read_text(encoding="utf-8").splitlines(), 1):
-        if re.match(r"^\s*location\s+~", line) and re.search(r"\{\d", line):
-            m = re.match(r"^\s*location\s+~\*?\s+(\S)", line)
-            if not m or m.group(1) not in "\"'":
-                bad.append(n)
-    assert not bad, f"unquoted regex with {{n}} quantifier at nginx.conf lines {bad}"
+    for conf in sorted(CONF_DIR.rglob("*.conf")):
+        for n, line in enumerate(conf.read_text(encoding="utf-8").splitlines(), 1):
+            if re.match(r"^\s*location\s+~", line) and re.search(r"\{\d", line):
+                m = re.match(r"^\s*location\s+~\*?\s+(\S)", line)
+                if not m or m.group(1) not in "\"'":
+                    bad.append(f"{conf.name}:{n}")
+    assert not bad, f"unquoted regex with {{n}} quantifier at {bad}"
