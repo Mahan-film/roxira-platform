@@ -1,0 +1,70 @@
+import {
+  Banknote,
+  BookOpenCheck,
+  Boxes,
+  Building2,
+  Calculator,
+  CalendarRange,
+  ChartColumn,
+  ChevronDown,
+  ClipboardList,
+  Contact,
+  Database,
+  FileUp,
+  KeyRound,
+  Landmark,
+  LayoutDashboard,
+  MessageSquareText,
+  Plus,
+  Puzzle,
+  ReceiptText,
+  Settings,
+  ShieldAlert,
+  ShieldCheck,
+  ShoppingCart,
+  UserPlus,
+  UsersRound,
+  Wallet,
+  Warehouse,
+  Workflow,
+  type LucideIcon,
+} from "lucide-react";
+
+/**
+ * Name -> lucide component map shared by the sidebar and the command palette.
+ * The menu data files store icon names as plain strings so they stay pure.
+ */
+export const NAV_ICONS: Record<string, LucideIcon> = {
+  Banknote,
+  BookOpenCheck,
+  Boxes,
+  Building2,
+  Calculator,
+  CalendarRange,
+  ChartColumn,
+  ChevronDown,
+  ClipboardList,
+  Contact,
+  Database,
+  FileUp,
+  KeyRound,
+  Landmark,
+  LayoutDashboard,
+  MessageSquareText,
+  Plus,
+  Puzzle,
+  ReceiptText,
+  Settings,
+  ShieldAlert,
+  ShieldCheck,
+  ShoppingCart,
+  UserPlus,
+  UsersRound,
+  Wallet,
+  Warehouse,
+  Workflow,
+};
+
+export function navIcon(name: string): LucideIcon {
+  return NAV_ICONS[name] ?? LayoutDashboard;
+}

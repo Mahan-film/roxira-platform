@@ -1,0 +1,91 @@
+{
+  "375": {
+    "groupButtons": 8,
+    "groups": [
+      "پیشخوان",
+      "طرف‌حساب‌ها و کالاها",
+      "فروش و پایانه فروشگاهی",
+      "انبارداری",
+      "خزانه‌داری",
+      "حسابداری و اموال",
+      "حقوق و دستمزد و مالیات",
+      "گزارش‌ها و تنظیمات"
+    ],
+    "links": 24,
+    "navScrolls": {
+      "scrollHeight": 1384,
+      "clientHeight": 533,
+      "scrolls": true
+    },
+    "pageHScroll": false,
+    "focusRing": "none",
+    "toggledGroup": "حسابداری و اموال",
+    "afterCollapse": "false",
+    "afterExpand": "true",
+    "url": "http://127.0.0.1:3961/app/hr/payroll",
+    "drawerClosedAfterNav": true,
+    "currentPage": [
+      "حقوق و دستمزد ماهانه"
+    ],
+    "createEntries": [
+      "سرنخ جدید\nسرنخ جدید",
+      "صورتحساب جدید\nصورتحساب جدید",
+      "کارمند جدید\nکارمند جدید",
+      "ورود فایل\nورود فایل"
+    ],
+    "createUrl": "http://127.0.0.1:3961/app/invoicing?new=1",
+    "searchTreasury": [
+      "بانک و تطبیق\nخزانه‌داری",
+      "چک‌ها\nخزانه‌داری",
+      "تنخواه\nخزانه‌داری"
+    ]
+  },
+  "1280": {
+    "groupButtons": 8,
+    "groups": [
+      "پیشخوان",
+      "طرف‌حساب‌ها و کالاها",
+      "فروش و پایانه فروشگاهی",
+      "انبارداری",
+      "خزانه‌داری",
+      "حسابداری و اموال",
+      "حقوق و دستمزد و مالیات",
+      "گزارش‌ها و تنظیمات"
+    ],
+    "links": 24,
+    "navScrolls": {
+      "scrollHeight": 1384,
+      "clientHeight": 489,
+      "scrolls": true
+    },
+    "pageHScroll": false,
+    "focusRing": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, lab(48.496 0 0) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+    "toggledGroup": "حسابداری و اموال",
+    "afterCollapse": "false",
+    "afterExpand": "true",
+    "url": "http://127.0.0.1:3961/app/hr/payroll",
+    "currentPage": [
+      "حقوق و دستمزد ماهانه"
+    ],
+    "createEntries": [
+      "سرنخ جدید\nسرنخ جدید",
+      "صورتحساب جدید\nصورتحساب جدید",
+      "کارمند جدید\nکارمند جدید",
+      "ورود فایل\nورود فایل"
+    ],
+    "createUrl": "http://127.0.0.1:3961/app/invoicing?new=1",
+    "searchTreasury": [
+      "بانک و تطبیق\nخزانه‌داری",
+      "چک‌ها\nخزانه‌داری",
+      "تنخواه\nخزانه‌داری"
+    ]
+  },
+  "restricted": [
+    "/app",
+    "/app/crm",
+    "/app/settings/security"
+  ],
+  "restrictedCreate": [
+    "سرنخ جدید\nسرنخ جدید"
+  ]
+}

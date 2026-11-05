@@ -2,26 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  BookOpenCheck,
-  Contact,
-  Database,
-  FileUp,
-  LayoutDashboard,
-  MessageSquareText,
-  Plus,
-  ReceiptText,
-  Search,
-  UserPlus,
-  UsersRound,
-  Warehouse,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Search, X, type LucideIcon } from "lucide-react";
 
 import { useAccess } from "@/components/app/access-provider";
 import { useImportHandoff } from "@/components/app/import-handoff";
-import type { AccessActionKey, AccessModuleKey } from "@/types/access";
+import { navIcon } from "@/components/app/nav-icons";
+import { QUICK_CREATE, visibleGroups } from "@/lib/nav-menu";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { cn } from "@/lib/utils";
 
@@ -60,9 +46,12 @@ function fuzzyScore(query: string, target: string): number {
 export function CommandPalette({
   open,
   onOpenChange,
+  mode = "all",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** "all" shows navigation plus create actions; "create" only the create actions. */
+  mode?: "all" | "create";
 }) {
   const router = useRouter();
   const { setPendingFile, setPendingTab } = useImportHandoff();
@@ -85,125 +74,48 @@ export function CommandPalette({
       onOpenChange(false);
       router.push("/app/import");
     };
-    const all: CommandAction[] = [
-      {
-        id: "dashboard",
-        labelFa: "داشبورد",
-        labelEn: "Dashboard",
-        keywords: ["خانه", "خلاصه", "home", "overview"],
-        icon: LayoutDashboard,
-        run: go("/app"),
-      },
-      {
-        id: "crm",
-        labelFa: "مشتریان (CRM)",
-        labelEn: "Customers (CRM)",
-        keywords: ["مشتری", "سرنخ", "فروش", "customer", "lead", "sales"],
-        icon: Contact,
-        run: go("/app/crm"),
-      },
-      {
-        id: "hr",
-        labelFa: "کارکنان (HR)",
-        labelEn: "Employees (HR)",
-        keywords: ["کارمند", "پرسنل", "منابع انسانی", "employee", "staff", "people"],
-        icon: UsersRound,
-        run: go("/app/hr"),
-      },
-      {
-        id: "inventory",
-        labelFa: "کالا و انبار",
-        labelEn: "Inventory",
-        keywords: ["کالا", "انبار", "موجودی", "product", "stock", "warehouse"],
-        icon: Warehouse,
-        run: go("/app/inventory"),
-      },
-      {
-        id: "accounting",
-        labelFa: "حساب‌ها",
-        labelEn: "Accounting",
-        keywords: ["حساب", "دفتر", "تراز", "ledger", "journal", "balance"],
-        icon: BookOpenCheck,
-        run: go("/app/accounting"),
-      },
-      {
-        id: "invoicing",
-        labelFa: "صورتحساب‌ها",
-        labelEn: "Invoices",
-        keywords: ["فاکتور", "صورتحساب", "invoice", "billing"],
-        icon: ReceiptText,
-        run: go("/app/invoicing"),
-      },
-      {
-        id: "import",
-        labelFa: "ورود از اکسل",
-        labelEn: "Import from Excel",
-        keywords: ["ورود", "اکسل", "import", "excel", "csv"],
-        icon: FileUp,
-        run: go("/app/import"),
-      },
-      {
-        id: "assistant",
-        labelFa: "دستیار هوشمند",
-        labelEn: "AI assistant",
-        keywords: ["دستیار", "پرسش", "هوش مصنوعی", "assistant", "ai", "ask"],
-        icon: MessageSquareText,
-        run: go("/app/assistant"),
-      },
-      {
-        id: "new-lead",
-        labelFa: "سرنخ جدید",
-        labelEn: "New lead",
-        keywords: ["مشتری جدید", "سرنخ", "new customer", "crm", "lead"],
-        icon: UserPlus,
-        run: go("/app/crm?new=1"),
-      },
-      {
-        id: "new-employee",
-        labelFa: "کارمند جدید",
-        labelEn: "New employee",
-        keywords: ["پرسنل جدید", "استخدام", "new staff", "hr", "employee"],
-        icon: UserPlus,
-        run: go("/app/hr?new=1"),
-      },
-      {
-        id: "new-invoice",
-        labelFa: "صورتحساب جدید",
-        labelEn: "New invoice",
-        keywords: ["فاکتور جدید", "صدور", "new bill", "invoice"],
-        icon: Plus,
-        run: go("/app/invoicing?new=1"),
-      },
-      {
-        id: "import-file",
-        labelFa: "ورود فایل",
-        labelEn: "Import file",
-        keywords: ["اکسل", "csv", "pdf", "عکس", "excel", "upload", "file"],
-        icon: FileUp,
-        run: goImport("file"),
-      },
-      {
-        id: "import-database",
-        labelFa: "انتقال کامل دیتابیس",
-        labelEn: "Whole-database migration",
-        keywords: ["دیتابیس", "مهاجرت", "sqlite", "sql", "zip", "database", "migration"],
-        icon: Database,
-        run: goImport("package"),
-      },
+    // Create actions: the QUICK_CREATE list, gated on the role's create rights.
+    // «ورود فایل» still routes through the import handoff to open the file tab.
+    const createActions: CommandAction[] = QUICK_CREATE.filter((entry) =>
+      can(entry.module, entry.action),
+    ).map((entry) => ({
+      id: entry.id,
+      labelFa: entry.label,
+      labelEn: "ثبت جدید",
+      keywords: entry.keywords,
+      icon: navIcon(entry.icon),
+      run: entry.id === "import-file" ? goImport("file") : go(entry.href),
+    }));
+    if (mode === "create") return createActions;
+    // Navigation actions generated from the same visible menu tree as the sidebar.
+    const navActions: CommandAction[] = visibleGroups(can, { assistantEnabled }).flatMap(
+      (group) =>
+        group.items.map((leaf) => ({
+          id: leaf.href,
+          labelFa: leaf.label,
+          labelEn: group.label,
+          keywords: [group.label, ...(leaf.keywords ?? [])],
+          icon: navIcon(leaf.icon),
+          run: go(leaf.href),
+        })),
+    );
+    return [
+      ...navActions,
+      ...createActions,
+      ...(can("data_import", "create")
+        ? [
+            {
+              id: "import-database",
+              labelFa: "انتقال کامل دیتابیس",
+              labelEn: "انتقال کامل دیتابیس",
+              keywords: ["دیتابیس", "مهاجرت", "sqlite", "sql", "zip", "database", "migration"],
+              icon: navIcon("Database"),
+              run: goImport("package"),
+            } satisfies CommandAction,
+          ]
+        : []),
     ];
-    // UX only: hide commands for modules the organisation does not have or the role cannot use.
-    const needs: Record<string, [AccessModuleKey, AccessActionKey]> = {
-      crm: ["crm", "read"], hr: ["hr", "read"], inventory: ["inventory", "read"], accounting: ["accounting", "read"],
-      invoicing: ["invoicing", "read"], import: ["data_import", "read"], assistant: ["assistant", "read"],
-      "new-lead": ["crm", "create"], "new-employee": ["hr", "create"], "new-invoice": ["invoicing", "create"],
-      "import-file": ["data_import", "create"], "import-database": ["data_import", "create"],
-    };
-    return all.filter((action) => {
-      if (!assistantEnabled && action.id === "assistant") return false;
-      const need = needs[action.id];
-      return !need || can(need[0], need[1]);
-    });
-  }, [assistantEnabled, can, onOpenChange, router, setPendingFile, setPendingTab]);
+  }, [assistantEnabled, can, mode, onOpenChange, router, setPendingFile, setPendingTab]);
 
   const results = useMemo(() => {
     const q = query.trim();

@@ -1,34 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Banknote,
-  BookOpenCheck,
-  ClipboardList,
-  FileUp,
-  KeyRound,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  MessageSquareText,
-  Puzzle,
-  ReceiptText,
-  Search,
-  Settings,
-  ShieldCheck,
-  UserRound,
-  UsersRound,
-  Warehouse,
-  Workflow,
-  X,
-  Contact,
-  Landmark,
-  Building2,
-  ShieldAlert,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronDown, LogOut, Menu, Plus, Search, UserRound, X } from "lucide-react";
 
 import { AccessProvider, useAccess } from "@/components/app/access-provider";
 import { CommandPalette } from "@/components/app/command-palette";
@@ -39,57 +14,10 @@ import { ImportHandoffProvider } from "@/components/app/import-handoff";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ClientErrorReporter } from "@/components/observability/client-error-reporter";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
+import { navIcon } from "@/components/app/nav-icons";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
+import { OPERATOR_ITEMS, activeHref, visibleGroups } from "@/lib/nav-menu";
 import { cn } from "@/lib/utils";
-import type { AccessModuleKey } from "@/types/access";
-
-interface NavItem {
-  group: string;
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  /** Highlight the item for every nested path, not only the exact one. */
-  nested: boolean;
-  /** Shown only when the organisation has this module and the role can read it (UX; the server decides). */
-  module?: AccessModuleKey;
-  /** Shown only to Roxira platform operators. */
-  platformAdmin?: boolean;
-}
-
-const GROUP_OVERVIEW = "نمای کلی";
-const GROUP_SALES = "فروش";
-const GROUP_FINANCE = "مالی";
-const GROUP_OPS = "عملیات";
-const GROUP_DATA = "داده";
-const GROUP_ADMIN = "مدیریت";
-
-const NAV_ITEMS: NavItem[] = [
-  { group: GROUP_OVERVIEW, href: "/app", label: "داشبورد", icon: LayoutDashboard, nested: false },
-  { group: GROUP_OVERVIEW, href: "/app/assistant", label: "دستیار هوشمند", icon: MessageSquareText, nested: false, module: "assistant" },
-  { group: GROUP_SALES, href: "/app/crm", label: "مشتریان (CRM)", icon: Contact, nested: true, module: "crm" },
-  { group: GROUP_SALES, href: "/app/invoicing", label: "صورتحساب‌ها", icon: ReceiptText, nested: true, module: "invoicing" },
-  { group: GROUP_FINANCE, href: "/app/accounting", label: "حساب‌ها", icon: BookOpenCheck, nested: true, module: "accounting" },
-  { group: GROUP_FINANCE, href: "/app/accounting/bank", label: "بانک و تطبیق", icon: Building2, nested: true, module: "banking" },
-  { group: GROUP_FINANCE, href: "/app/cheques", label: "چک‌ها", icon: Banknote, nested: true, module: "cheques" },
-  { group: GROUP_FINANCE, href: "/app/tax", label: "مالیات و مودیان", icon: Landmark, nested: true, module: "tax" },
-  { group: GROUP_OPS, href: "/app/hr", label: "کارکنان (HR)", icon: UsersRound, nested: true, module: "hr" },
-  { group: GROUP_OPS, href: "/app/inventory", label: "کالا و انبار", icon: Warehouse, nested: true, module: "inventory" },
-  { group: GROUP_OPS, href: "/damages", label: "خسارت", icon: ShieldAlert, nested: true, module: "damages" },
-  { group: GROUP_DATA, href: "/app/import", label: "ورود از اکسل", icon: FileUp, nested: true, module: "data_import" },
-  { group: GROUP_ADMIN, href: "/app/settings/members", label: "اعضا و نقش‌ها", icon: Settings, nested: true, module: "members" },
-  { group: GROUP_ADMIN, href: "/app/settings/modules", label: "ماژول‌ها", icon: Puzzle, nested: true, module: "members" },
-  { group: GROUP_ADMIN, href: "/app/settings/posting-rules", label: "ثبت خودکار سند", icon: Workflow, nested: true, module: "accounting" },
-  { group: GROUP_ADMIN, href: "/app/settings/audit", label: "گزارش رخدادها", icon: ClipboardList, nested: true, module: "audit" },
-  { group: GROUP_ADMIN, href: "/app/settings/security", label: "امنیت حساب", icon: ShieldCheck, nested: true },
-  { group: GROUP_ADMIN, href: "/app/admin/entitlements", label: "ماژول‌های مشتریان", icon: KeyRound, nested: true, platformAdmin: true },
-];
-
-function isActive(pathname: string, item: NavItem): boolean {
-  if (pathname === item.href) return true;
-  // The bank page lives under /app/accounting but has its own entry.
-  if (item.href === "/app/accounting" && pathname.startsWith("/app/accounting/bank")) return false;
-  return item.nested && pathname.startsWith(item.href + "/");
-}
 
 function SidebarContent({
   pathname,
@@ -101,13 +29,23 @@ function SidebarContent({
   const { user, logout } = useAuth();
   const assistantEnabled = useAssistantEnabled() === true;
   const { can } = useAccess();
-  const navItems = NAV_ITEMS.filter((item) => {
-    if (item.href === "/app/assistant" && !assistantEnabled) return false;
-    if (item.platformAdmin) return user?.role === "ADMIN";
-    if (item.href === "/app") return true;
-    if (!item.module) return true;
-    return can(item.module, "read");
-  });
+  const groups = visibleGroups(can, { assistantEnabled });
+  const hrefs = [
+    ...groups.flatMap((group) => group.items.map((item) => item.href)),
+    ...(user?.role === "ADMIN" ? OPERATOR_ITEMS.map((item) => item.href) : []),
+  ];
+  const active = activeHref(pathname, hrefs);
+  // All groups start expanded; collapsing is only in-memory, never persisted.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const idBase = useId();
+  const toggleGroup = (id: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-ring">
       <Link
@@ -132,34 +70,87 @@ function SidebarContent({
         data-testid="app-sidebar-nav"
         className="-mx-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-1"
       >
-        {navItems.map((item, index) => {
-          const active = isActive(pathname, item);
-          const Icon = item.icon;
-          const startsGroup = index === 0 || navItems[index - 1].group !== item.group;
+        {groups.map((group) => {
+          const GroupIcon = navIcon(group.icon);
+          const isOpen = !collapsed.has(group.id);
+          const panelId = `${idBase}-${group.id}-panel`;
           return (
-            <div key={item.href} className="flex flex-col gap-1">
-              {startsGroup && (
-                <span className="px-3 pt-3 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground/70">
-                  {item.group}
-                </span>
-              )}
-              <Link
-                href={item.href}
-                onClick={onNavigate}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  active
-                    ? "bg-indigo-500/15 font-bold text-indigo-300 ring-1 ring-indigo-500/30"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
+            <div key={group.id} className="flex flex-col">
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-controls={panelId}
+                onClick={() => toggleGroup(group.id)}
+                className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Icon className="size-4 shrink-0" aria-hidden="true" />
-                {item.label}
-              </Link>
+                <GroupIcon className="size-4 shrink-0" aria-hidden="true" />
+                <span className="flex-1 text-start">{group.label}</span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className={cn(
+                    "size-4 shrink-0 transition-transform",
+                    isOpen ? "" : "-rotate-90",
+                  )}
+                />
+              </button>
+              <ul id={panelId} hidden={!isOpen} className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const Icon = navIcon(item.icon);
+                  const itemActive = active === item.href;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={onNavigate}
+                        aria-current={itemActive ? "page" : undefined}
+                        className={cn(
+                          "flex items-center gap-2.5 rounded-xl px-3 py-2.5 ps-6 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          itemActive
+                            ? "bg-indigo-500/15 font-bold text-indigo-300 ring-1 ring-indigo-500/30"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                        )}
+                      >
+                        <Icon className="size-4 shrink-0" aria-hidden="true" />
+                        {item.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           );
         })}
+        {user?.role === "ADMIN" && OPERATOR_ITEMS.length > 0 && (
+          <div className="flex flex-col border-t border-border pt-2 mt-2">
+            <span className="px-3 pt-1 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground/70">
+              مدیریت پلتفرم
+            </span>
+            <ul className="flex flex-col gap-0.5">
+              {OPERATOR_ITEMS.map((item) => {
+                const Icon = navIcon(item.icon);
+                const itemActive = active === item.href;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      aria-current={itemActive ? "page" : undefined}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        itemActive
+                          ? "bg-indigo-500/15 font-bold text-indigo-300 ring-1 ring-indigo-500/30"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" aria-hidden="true" />
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </nav>
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
@@ -237,7 +228,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   const drawerOpen = openAt === pathname;
   const setDrawerOpen = (open: boolean) => setOpenAt(open ? pathname : null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteMode, setPaletteMode] = useState<"all" | "create">("all");
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // The search button and Ctrl+K open the palette in "all" mode; the create
+  // button opens it in "create" mode.
+  const openPalette = (mode: "all" | "create") => {
+    setPaletteMode(mode);
+    setPaletteOpen(true);
+  };
+  const handlePaletteOpenChange = (open: boolean) => {
+    if (open) setPaletteMode("all");
+    setPaletteOpen(open);
+  };
 
   // The app is dark. Put the theme on <html> too, so body (bg-background) is dark and no white page
   // shows past the shell (#277). Removed again when leaving /app for the light public site.
@@ -290,7 +293,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="text-sm font-bold lg:hidden">نرم‌افزار روکسیرا</span>
               <button
                 type="button"
-                onClick={() => setPaletteOpen(true)}
+                onClick={() => openPalette("all")}
                 aria-label="جست‌وجو و فرمان‌ها"
                 className="ms-auto inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
@@ -302,6 +305,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 >
                   Ctrl K
                 </kbd>
+              </button>
+              <button
+                type="button"
+                onClick={() => openPalette("create")}
+                aria-label="ثبت جدید"
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-xs font-bold text-indigo-300 transition-colors hover:bg-indigo-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-auto sm:gap-2 sm:px-3"
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                <span className="hidden sm:inline">ثبت جدید</span>
               </button>
             </header>
 
@@ -354,7 +366,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+          <CommandPalette open={paletteOpen} onOpenChange={handlePaletteOpenChange} mode={paletteMode} />
           <DropOverlay />
           <ClientErrorReporter />
         </div>
