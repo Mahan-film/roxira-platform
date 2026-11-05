@@ -25,6 +25,8 @@ function build() {
   let seq = 0;
   const accounts = new Map<string, Set<string>>();
   const failNextPosting = { on: false };
+  /** Manager each `listEvents` read was run with (undefined = a separate TenantScope connection). */
+  const eventReadManagers: unknown[] = [];
 
   const repo = {
     async runInTransaction<T>(_tenantId: string, work: (m: unknown) => Promise<T>): Promise<T> {
@@ -76,7 +78,8 @@ function build() {
       events.push(row);
       return row;
     },
-    async listEvents(tenantId: string, chequeId: number) {
+    async listEvents(tenantId: string, chequeId: number, manager?: unknown) {
+      eventReadManagers.push(manager);
       return events.filter((e) => e.tenantId === tenantId && e.chequeId === chequeId);
     },
   };
@@ -127,6 +130,7 @@ function build() {
     service,
     failNextPosting,
     accounts,
+    eventReadManagers,
     resetChart() {
       accounts.clear();
     },
@@ -523,6 +527,42 @@ describe('ChequesService partial payment (CHK-01)', () => {
     const c = await t.service.create(A, received({ sayadNumber: undefined }) as never);
     await expect(t.service.partialPayment(B, c.id, { amount: 1 })).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('a retried payment with the same idempotency key posts and settles once', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    const first = await t.service.partialPayment(A, c.id, { amount: 30, idempotencyKey: 'pay-1' });
+    const retry = await t.service.partialPayment(A, c.id, { amount: 30, idempotencyKey: 'pay-1' });
+    expect(first).toMatchObject({ settledAmount: 30, remainingAmount: 70 });
+    expect(retry).toMatchObject({ settledAmount: 30, remainingAmount: 70 });
+    expect(t.entries).toHaveLength(2); // creation + the one real partial payment
+    expect(t.events).toHaveLength(2);
+  });
+
+  it('a replayed payment is not refused by the remainder it already shrank', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.partialPayment(A, c.id, { amount: 80, idempotencyKey: 'pay-2' });
+    const retry = await t.service.partialPayment(A, c.id, { amount: 80, idempotencyKey: 'pay-2' });
+    expect(retry).toMatchObject({ settledAmount: 80, remainingAmount: 20 });
+    expect(t.entries).toHaveLength(2);
+  });
+
+  it('a different idempotency key is a new partial payment', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.partialPayment(A, c.id, { amount: 30, idempotencyKey: 'pay-a' });
+    const second = await t.service.partialPayment(A, c.id, { amount: 20, idempotencyKey: 'pay-b' });
+    expect(second).toMatchObject({ settledAmount: 50, remainingAmount: 50 });
+    expect(t.entries).toHaveLength(3);
+  });
+
+  it('reads the source sequence through the posting transaction, not a second connection', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.partialPayment(A, c.id, { amount: 30 });
+    expect(t.eventReadManagers.some((manager) => manager !== undefined && manager !== null)).toBe(true);
+  });
 });
 
 describe('ChequesService Sayad fields (CHK-01)', () => {
@@ -630,5 +670,38 @@ describe('ChequesService bounced report with ageing (CHK-01)', () => {
     expect((await t.service.bouncedReport(B, {})).items).toEqual([]);
     await t.service.transition(A, c.id, { status: ChequeStatus.RETURNED });
     expect((await t.service.bouncedReport(A, { asOf: '2026-11-01' })).items).toEqual([]);
+  });
+});
+
+describe('ChequesService party codes on receivable/payable lines (CHK-01)', () => {
+  const partyLines = (entry: Entry) => entry.lines.filter((l) => l.partyCode !== undefined);
+
+  it('drawer party rides only the receivable line of a received cheque', async () => {
+    const t = build();
+    await t.service.create(A, received({ sayadNumber: undefined, partyCode: 'C-7' }) as never);
+    expect(t.entries[0].lines.find((l) => l.accountCode === '1020')!.partyCode).toBe('C-7');
+    expect(partyLines(t.entries[0])).toHaveLength(1);
+  });
+
+  it('drawer party rides the payable line of an issued cheque', async () => {
+    const t = build();
+    await t.service.create(A, issued({ partyCode: 'V-7' }) as never);
+    expect(t.entries[0].lines.find((l) => l.accountCode === '2010')!.partyCode).toBe('V-7');
+    expect(partyLines(t.entries[0])).toHaveLength(1);
+  });
+
+  it('endorsement puts the third party code on the payable line', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, partyCode: 'C-7' }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.SPENT, spentToName: 'تأمین‌کننده', spentToCode: 'S-7' });
+    expect(t.entries[1].lines.find((l) => l.accountCode === '2010')!.partyCode).toBe('S-7');
+    expect(partyLines(t.entries[1])).toHaveLength(1);
+  });
+
+  it('posts no party code when the cheque has none', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, partyCode: undefined }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    for (const entry of t.entries) expect(partyLines(entry)).toEqual([]);
   });
 });

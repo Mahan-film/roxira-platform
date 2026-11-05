@@ -198,8 +198,8 @@ export class ChequesRepository {
     });
   }
 
-  listEvents(tenantId: string, chequeId: number): Promise<ChequeEventEntity[]> {
-    return this.scope.run(tenantId, (m) =>
+  listEvents(tenantId: string, chequeId: number, manager?: EntityManager): Promise<ChequeEventEntity[]> {
+    return this.within(tenantId, manager, (m) =>
       m.getRepository(ChequeEventEntity).find({ where: { tenantId, chequeId }, order: { id: 'ASC' } }),
     );
   }
