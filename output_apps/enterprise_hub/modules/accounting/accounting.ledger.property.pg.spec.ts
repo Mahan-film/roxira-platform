@@ -226,13 +226,69 @@ describePg('Ledger property tests on PostgreSQL', () => {
     );
   }, 600000);
 
-  // FINDING (#230 item 3): AccountingService.getAccountLedger computes openingBalance, totals and
-  // closingBalance from the lines of the requested PAGE (`limit`, default 100), not the whole range,
-  // so any account with more lines than the limit reports a wrong closing balance.
-  // Counterexample: three POSTED vouchers each [1010 credit 0.01, 1010 debit 0.01], limit 1:
-  // closingBalance = -0.01, expected 0.00. `it.failing` keeps CI green while the bug is open; once the
-  // service computes totals over the whole range, turn this into a plain `it`.
-  it.failing('closing balance does not depend on the page limit (KNOWN BUG)', async () => {
+  it('account ledger pages: totals are of the whole range, running balance carries across pages (hand-computed)', async () => {
+    const tenant = tenantFor(++runNo);
+    // Account 1010 movements, oldest first: +100.00, -30.00, +50.00, +20.00, -10.00
+    // running: 100.00, 70.00, 120.00, 140.00, 130.00
+    const moves: Array<[string, string, boolean]> = [
+      ['2026-01-10', '100.00', true],
+      ['2026-02-10', '30.00', false],
+      ['2026-03-10', '50.00', true],
+      ['2026-04-10', '20.00', true],
+      ['2026-05-10', '10.00', false],
+    ];
+    for (const [i, [date, amount, debit]] of moves.entries()) {
+      await accounting.createJournalEntry(tenant, {
+        entryNumber: `L-${i}`,
+        date,
+        description: 'hand',
+        lines: debit
+          ? [{ accountCode: '1010', debit: amount }, { accountCode: '4010', credit: amount }]
+          : [{ accountCode: '1010', credit: amount }, { accountCode: '4010', debit: amount }],
+      } as never);
+    }
+    // A draft never counts.
+    await accounting.createJournalEntry(tenant, {
+      entryNumber: 'L-DRAFT',
+      date: '2026-03-15',
+      description: 'draft',
+      status: JournalEntryStatus.DRAFT,
+      lines: [{ accountCode: '1010', debit: '999.00' }, { accountCode: '4010', credit: '999.00' }],
+    } as never);
+    const view = async (q: Record<string, unknown>) => {
+      const r = await accounting.getAccountLedger(tenant, '1010', q as never);
+      return {
+        opening: minorOf(r.openingBalance),
+        debit: minorOf(r.totalDebit),
+        credit: minorOf(r.totalCredit),
+        closing: minorOf(r.closingBalance),
+        numbers: r.entries.map((e) => e.entryNumber),
+        running: r.entries.map((e) => minorOf(e.runningBalance)),
+      };
+    };
+    // whole range, 2 per page
+    const whole = { opening: 0n, debit: 17000n, credit: 4000n, closing: 13000n };
+    expect(await view({ limit: 2, page: 1 })).toEqual({ ...whole, numbers: ['L-0', 'L-1'], running: [10000n, 7000n] });
+    expect(await view({ limit: 2, page: 2 })).toEqual({ ...whole, numbers: ['L-2', 'L-3'], running: [12000n, 14000n] });
+    expect(await view({ limit: 2, page: 3 })).toEqual({ ...whole, numbers: ['L-4'], running: [13000n] });
+    expect(await view({ limit: 2, page: 4 })).toEqual({ ...whole, numbers: [], running: [] });
+    // Feb 1 .. Apr 30: opening 100.00; in range +50 +20 debit 70.00, credit 30.00; closing 140.00
+    const win = { opening: 10000n, debit: 7000n, credit: 3000n, closing: 14000n };
+    expect(await view({ fromDate: '2026-02-01', toDate: '2026-04-30', limit: 2, page: 1 })).toEqual({
+      ...win,
+      numbers: ['L-1', 'L-2'],
+      running: [7000n, 12000n],
+    });
+    expect(await view({ fromDate: '2026-02-01', toDate: '2026-04-30', limit: 2, page: 2 })).toEqual({
+      ...win,
+      numbers: ['L-3'],
+      running: [14000n],
+    });
+  });
+
+  // Was an `it.failing` finding (#230 item 3): getAccountLedger computed opening, totals and closing
+  // from the lines of the requested page. Fixed in #502: PostgreSQL sums the whole range.
+  it('closing balance does not depend on the page limit', async () => {
     await fc.assert(
       fc.asyncProperty(fc.array(voucherArb.filter((v) => v.status === 'POSTED'), { minLength: 3, maxLength: 6 }), async (vouchers) => {
         const tenant = tenantFor(++runNo);

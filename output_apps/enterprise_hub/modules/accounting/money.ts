@@ -15,6 +15,7 @@ const DECIMAL_PATTERN = new RegExp(
 );
 /** Largest JSON number whose minor units are still an exactly representable integer. */
 const MAX_SAFE_NUMBER = Number.MAX_SAFE_INTEGER / FACTOR;
+const MAX_NUMBER_MINOR = 2n ** 51n;
 
 /** Exact JSON money value: a number when exact, otherwise a decimal string (see `fromMinor`). */
 export type Money = number | string;
@@ -77,7 +78,9 @@ export function minorToDecimal(minor: bigint): string {
  */
 export function fromMinor(minor: bigint): number | string {
   const abs = minor < 0n ? -minor : minor;
-  if (abs <= BigInt(Number.MAX_SAFE_INTEGER)) {
+  // Above 2^51 minor units a double no longer carries every cent (toMinor(fromMinor(x)) drifts by
+  // one from 2^52, proven by accounting.ledger.property.spec.ts), so those amounts go out as exact strings.
+  if (abs <= MAX_NUMBER_MINOR) {
     return Number(minor) / FACTOR;
   }
   return minorToDecimal(minor);

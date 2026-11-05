@@ -1351,15 +1351,34 @@ export class AccountingService {
       throw new NotFoundException(`حساب با کد ${code} یافت نشد.`);
     }
 
-    const rawRows = await this.accountingRepository.getAccountLedger(
-      tenantId,
-      account.id,
-    );
     const fromDate = query.fromDate ? new Date(query.fromDate) : undefined;
     const toDate = query.toDate ? new Date(query.toDate) : undefined;
+    const limit = query.limit ?? 100;
+    const offset = ((query.page ?? 1) - 1) * limit;
 
-    let runningMinor = 0n;
-    const computed = rawRows.map((row) => {
+    // Opening, totals and closing are computed by PostgreSQL over the WHOLE requested range, so
+    // they never depend on `limit` or `page`; only `entries` is a page of it.
+    const summary = await this.accountingRepository.getAccountLedgerSummary(
+      tenantId,
+      account.id,
+      fromDate,
+      toDate,
+    );
+    const page = await this.accountingRepository.getAccountLedgerPage(
+      tenantId,
+      account.id,
+      fromDate,
+      toDate,
+      offset,
+      limit,
+    );
+    const openingMinor = fromDb(summary.openingNet);
+    const debitMinor = fromDb(summary.debit);
+    const creditMinor = fromDb(summary.credit);
+    const closingMinor = openingMinor + debitMinor - creditMinor;
+    // A later page starts from the opening balance plus everything before it in the range.
+    let runningMinor = openingMinor + fromDb(page.precedingNet);
+    const entries = page.rows.map((row) => {
       const debit = fromDb(row.debit);
       const credit = fromDb(row.credit);
       runningMinor += debit - credit;
@@ -1375,37 +1394,16 @@ export class AccountingService {
       };
     });
 
-    const inRange = computed.filter((row) => {
-      const rowDate = new Date(row.date);
-      if (fromDate && rowDate < fromDate) return false;
-      if (toDate && rowDate > toDate) return false;
-      return true;
-    });
-
-    const limited = inRange.slice(0, query.limit);
-
-    const openingBeforeRange = computed
-      .filter((row) => (fromDate ? new Date(row.date) < fromDate : false))
-      .reduce((sum, row) => sum + row.debit - row.credit, 0n);
-
-    const openingMinor =
-      limited.length > 0
-        ? limited[0].running - (limited[0].debit - limited[0].credit)
-        : openingBeforeRange;
-
-    const closingMinor =
-      limited.length > 0 ? limited[limited.length - 1].running : openingBeforeRange;
-
     return {
       account: this.toAccountDto(account),
       openingBalance: fromMinor(openingMinor),
-      totalDebit: fromMinor(limited.reduce((sum, row) => sum + row.debit, 0n)),
-      totalCredit: fromMinor(limited.reduce((sum, row) => sum + row.credit, 0n)),
+      totalDebit: fromMinor(debitMinor),
+      totalCredit: fromMinor(creditMinor),
       closingBalance: fromMinor(closingMinor),
       baseCurrency: BASE_CURRENCY,
       // closingBalance is in rial (ledger amounts), not in the account's default currency.
       baseClosingBalance: this.toBaseCurrency(asNumber(closingMinor), Currency.IRR),
-      entries: limited.map((row) => ({
+      entries: entries.map((row) => ({
         id: row.id,
         journalEntryId: row.journalEntryId,
         entryNumber: row.entryNumber,

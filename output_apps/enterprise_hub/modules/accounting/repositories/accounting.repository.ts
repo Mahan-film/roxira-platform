@@ -778,6 +778,72 @@ export class AccountingRepository {
   }
 
   /**
+   * Totals of one account's POSTED lines computed by PostgreSQL over the WHOLE requested range:
+   * the net of everything dated before `fromDate` (opening), debit and credit inside
+   * [fromDate, toDate] and the number of lines in it. Independent of any page size.
+   */
+  async getAccountLedgerSummary(
+    tenantId: string,
+    accountId: number,
+    fromDate?: Date,
+    toDate?: Date,
+  ): Promise<{ openingNet: string; debit: string; credit: string; count: string }> {
+    return this.scope.within(tenantId, undefined, async (m) => {
+      const rows = await m.query(
+        `SELECT COALESCE(SUM(l.debit - l.credit) FILTER (WHERE $3::timestamp IS NOT NULL AND e.date < $3::timestamp), 0) AS "openingNet",
+                COALESCE(SUM(l.debit) FILTER (WHERE ($3::timestamp IS NULL OR e.date >= $3::timestamp) AND ($4::timestamp IS NULL OR e.date <= $4::timestamp)), 0) AS "debit",
+                COALESCE(SUM(l.credit) FILTER (WHERE ($3::timestamp IS NULL OR e.date >= $3::timestamp) AND ($4::timestamp IS NULL OR e.date <= $4::timestamp)), 0) AS "credit",
+                COUNT(*) FILTER (WHERE ($3::timestamp IS NULL OR e.date >= $3::timestamp) AND ($4::timestamp IS NULL OR e.date <= $4::timestamp)) AS "count"
+           FROM fin_journal_entry_lines l
+           JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+          WHERE l.tenant_id = $1 AND l.account_id = $2 AND e.status = 'POSTED'`,
+        [tenantId, accountId, fromDate ?? null, toDate ?? null],
+      );
+      return rows[0];
+    });
+  }
+
+  /**
+   * One page (LIMIT/OFFSET) of the ledger lines in [fromDate, toDate], ordered by date then line id,
+   * plus `precedingNet`: debit - credit of the in-range lines BEFORE the page, so a later page's
+   * running balance starts from the sum of the earlier rows, not from zero.
+   */
+  async getAccountLedgerPage(
+    tenantId: string,
+    accountId: number,
+    fromDate: Date | undefined,
+    toDate: Date | undefined,
+    offset: number,
+    limit: number,
+  ): Promise<{ rows: LedgerRawRow[]; precedingNet: string }> {
+    return this.scope.within(tenantId, undefined, async (m) => {
+      const from = `FROM fin_journal_entry_lines l
+           JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+          WHERE l.tenant_id = $1 AND l.account_id = $2 AND e.status = 'POSTED'
+            AND ($3::timestamp IS NULL OR e.date >= $3::timestamp)
+            AND ($4::timestamp IS NULL OR e.date <= $4::timestamp)
+          ORDER BY e.date ASC, l.id ASC`;
+      const rows = await m.query(
+        `SELECT l.id AS "id", l.journal_entry_id AS "journalEntryId", e.entry_number AS "entryNumber",
+                e.date AS "date", e.description AS "entryDescription", l.description AS "lineDescription",
+                l.debit AS "debit", l.credit AS "credit"
+           ${from} LIMIT $5 OFFSET $6`,
+        [tenantId, accountId, fromDate ?? null, toDate ?? null, limit, offset],
+      );
+      let precedingNet = '0';
+      if (offset > 0) {
+        const before = await m.query(
+          `SELECT COALESCE(SUM(x.d - x.c), 0) AS "net" FROM (
+             SELECT l.debit AS d, l.credit AS c ${from} LIMIT $5) x`,
+          [tenantId, accountId, fromDate ?? null, toDate ?? null, offset],
+        );
+        precedingNet = before[0].net;
+      }
+      return { rows: rows as LedgerRawRow[], precedingNet };
+    });
+  }
+
+  /**
    * گردش حساب یک کد مشخص به همراه اطلاعات سند، مرتب بر اساس تاریخ و شناسه.
    */
   async getAccountLedger(

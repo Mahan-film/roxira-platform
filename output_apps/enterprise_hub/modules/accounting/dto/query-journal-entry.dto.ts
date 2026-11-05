@@ -109,6 +109,13 @@ export class QueryAccountLedgerDto {
   @Min(1)
   @Max(500)
   limit: number = 100;
+
+  @ApiPropertyOptional({ default: 1, minimum: 1, description: 'شمارهٔ صفحهٔ ردیف‌ها؛ جمع‌ها و مانده‌ها همیشه برای کل بازه‌اند' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
 }
 
 /**
