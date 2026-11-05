@@ -1,4 +1,4 @@
-import { LedgerReport, ResolvedPeriod, TrialBalanceReport } from '../services/financial-reports.service';
+import { LedgerReport, PartyStatement, ResolvedPeriod, TrialBalanceReport } from '../services/financial-reports.service';
 import { AccountLevel, AccountType } from '../enums/accounting.enum';
 import { AgeingBucket, AgeingReport } from './ageing';
 import { ReportColumn, ReportRow, ReportTable } from './report-table';
@@ -192,6 +192,50 @@ export function ageingTable(report: AgeingReport): ReportTable {
         cells: ['', 'جمع', '', '', ...report.totals.amounts, report.totals.unapplied, report.totals.balance],
         bold: true,
       },
+    ],
+  };
+}
+
+/**
+ * Customer or supplier statement. Balances are shown on the party's natural side: what the
+ * customer owes us, or what we owe the supplier, is positive. The ageing of the open items at the
+ * period end follows the lines in the same columns.
+ */
+export function partyStatementTable(report: PartyStatement): ReportTable {
+  const sign = report.side === 'receivable' ? 1n : -1n;
+  const { ledger, ageing } = report;
+  const who = report.side === 'receivable' ? 'مشتری' : 'تأمین‌کننده';
+  const ageRows = ageing.rows.filter((row) => row.partyCode === ledger.partyCode);
+  const sumAt = (i: number) => ageRows.reduce((sum, row) => sum + row.amounts[i], 0n);
+  const unapplied = ageRows.reduce((sum, row) => sum + row.unapplied, 0n);
+  const advance = report.side === 'receivable' ? 'پیش‌دریافت' : 'پیش‌پرداخت';
+  return {
+    title: `صورت‌حساب ${who} ${ledger.partyCode ?? ''}`.trim(),
+    subtitle:
+      periodText(ledger.period) +
+      `، حساب‌های ${report.accountCodes.join('، ')}` +
+      (ledger.truncated ? '، فهرست کوتاه شده؛ جمع‌ها کامل است' : ''),
+    columns: [
+      { title: 'تاریخ', width: 0.8 },
+      { title: 'سند', width: 0.8 },
+      { title: 'حساب', width: 0.7 },
+      { title: 'شرح', width: 2.2 },
+      { title: 'بدهکار', money: true },
+      { title: 'بستانکار', money: true },
+      { title: 'مانده', money: true },
+    ],
+    rows: [
+      { cells: ['', '', '', 'مانده ابتدای دوره', null, null, sign * ledger.opening], bold: true },
+      ...ledger.lines.map((line) => ({
+        cells: [jalali(line.date), line.entryNumber, line.accountCode, line.description, line.debit, line.credit, sign * line.running],
+      })),
+      {
+        cells: ['', '', '', 'جمع و مانده پایان دوره', ledger.totalDebit, ledger.totalCredit, sign * ledger.closing],
+        bold: true,
+      },
+      { cells: ['', '', '', `سن مانده در ${jalali(ageing.asOf)}`, null, null, null], bold: true },
+      ...ageing.buckets.map((bucket, i) => ({ cells: ['', '', '', bucketTitle(bucket), null, null, sumAt(i)] })),
+      ...(unapplied !== 0n ? [{ cells: ['', '', '', advance, null, null, -unapplied] }] : []),
     ],
   };
 }

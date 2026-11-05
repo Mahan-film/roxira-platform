@@ -342,4 +342,42 @@ describePg('Financial reports on PostgreSQL', () => {
     // Another company's books hold none of these lines.
     expect((await reports.journalBook(OTHER, { from: '2026-03-21', to: '2027-03-20' })).lines).toEqual([]);
   }, 60000);
+
+  it('gives customer and supplier statements with running balance and ageing, per company (#242)', async () => {
+    const rows = (statement: Awaited<ReturnType<FinancialReportsService['partyStatement']>>) =>
+      statement.ledger.lines.map((l) => [l.entryNumber, l.debit, l.credit, l.running]);
+
+    const customer = await reports.partyStatement(COMPANY, { fiscalYearId: yearId, partyCode: 'CUS1' });
+    expect(customer.ledger.opening).toBe(0n);
+    expect(rows(customer)).toEqual([
+      ['J05', rial('1090000.50'), 0n, rial('1090000.50')],
+      ['J09', 0n, rial('600000.00'), rial('490000.50')],
+    ]);
+    expect(customer.ledger.closing).toBe(rial('490000.50'));
+    // Still open at the year end: 490,000.50 of the 2026-05-01 invoice, more than 90 days old.
+    expect(customer.ageing.rows.map((r) => [r.partyCode, r.amounts])).toEqual([['CUS1', [0n, 0n, 0n, rial('490000.50')]]]);
+
+    // A later date range starts from the balance brought forward.
+    const later = await reports.partyStatement(COMPANY, { from: '2026-06-01', to: '2027-03-20', partyCode: 'CUS1' });
+    expect(later.ledger.opening).toBe(rial('1090000.50'));
+    expect(rows(later)).toEqual([['J09', 0n, rial('600000.00'), rial('490000.50')]]);
+
+    const supplier = await reports.partyStatement(COMPANY, { fiscalYearId: yearId, partyCode: 'SUP1', side: 'payable' });
+    expect(rows(supplier)).toEqual([['J04', 0n, rial('400000.00'), -rial('400000.00')]]);
+    expect(supplier.ageing.rows[0].balance).toBe(rial('400000.00'));
+
+    const xlsx = await exporter.export(COMPANY, 'party-statement', { fiscalYearId: yearId, partyCode: 'CUS1', format: 'xlsx' });
+    expect(strFromU8(unzipSync(xlsx.body)['xl/worksheets/sheet1.xml'])).toContain('<v>490000.50</v>');
+    const pdf = await exporter.export(COMPANY, 'party-statement', { fiscalYearId: yearId, partyCode: 'CUS1', format: 'pdf' });
+    expect(pdf.body.subarray(0, 4).toString()).toBe('%PDF');
+
+    // Another company with the same party code sees only its own lines, and does not change ours.
+    await new ChartTemplateService(new AccountingRepository(new TenantScope(ds))).apply(OTHER, 'iran-trading');
+    await pair(OTHER, 'X01', '2026-05-01', '1020', '4020', '7.00', 'CUS1');
+    const other = await reports.partyStatement(OTHER, { from: '2026-03-21', to: '2027-03-20', partyCode: 'CUS1' });
+    expect(rows(other)).toEqual([['X01', rial('7.00'), 0n, rial('7.00')]]);
+    expect((await reports.partyStatement(COMPANY, { fiscalYearId: yearId, partyCode: 'CUS1' })).ledger.closing).toBe(
+      rial('490000.50'),
+    );
+  }, 60000);
 });

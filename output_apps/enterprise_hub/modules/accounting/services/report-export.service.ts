@@ -5,6 +5,7 @@ import { rowsPerPage, writePdf, writePdfs } from '../reports/pdf-writer';
 import { ReportTable } from '../reports/report-table';
 import {
   ageingTable,
+  partyStatementTable,
   balanceSheetTable,
   cashFlowTable,
   chartOfAccountsTable,
@@ -84,6 +85,19 @@ export class ReportExportService {
       case 'journal-book':
       case 'general-ledger-book':
         throw new Error(`${report} is a book; export() pages it`);
+      case 'party-statement':
+        if (!query.partyCode) {
+          throw new BadRequestException('کد تفصیلی (مشتری یا تأمین‌کننده) برای صورت‌حساب لازم است.');
+        }
+        return partyStatementTable(
+          await this.reports.partyStatement(tenantId, {
+            ...period,
+            partyCode: query.partyCode,
+            side: query.side,
+            accountCode: query.accountCode,
+            edges: query.edges,
+          }),
+        );
       case 'ageing':
         return ageingTable(
           await this.reports.ageing(tenantId, {

@@ -1,6 +1,6 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { AccountLevel } from '../enums/accounting.enum';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -117,6 +117,35 @@ export class AgeingQueryDto {
   edges?: number[];
 }
 
+/** Customer or supplier statement (E4.2): the party's lines and the ageing of its open items. */
+export class PartyStatementQueryDto extends ReportPeriodDto {
+  @ApiProperty({ description: 'Party (tafsili) code', example: 'C-1001' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  partyCode: string;
+
+  @ApiPropertyOptional({ enum: ['receivable', 'payable'], default: 'receivable' })
+  @IsOptional()
+  @IsIn(['receivable', 'payable'])
+  side?: 'receivable' | 'payable';
+
+  @ApiPropertyOptional({ description: 'Only this account subtree; default every receivable (payable) account' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  accountCode?: string;
+
+  @ApiPropertyOptional({ description: 'Ageing bucket edges in days, comma separated', example: '30,60,90' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.split(',').map((part) => Number(part.trim())) : value))
+  @ArrayMaxSize(12)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(3650, { each: true })
+  edges?: number[];
+}
+
 export const EXPORTABLE_REPORTS = [
   'trial-balance',
   'subsidiary',
@@ -126,6 +155,7 @@ export const EXPORTABLE_REPORTS = [
   'cash-flow',
   'equity-changes',
   'ageing',
+  'party-statement',
   'chart-of-accounts',
   'journal-book',
   'general-ledger-book',
