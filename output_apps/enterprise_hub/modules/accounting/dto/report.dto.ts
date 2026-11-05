@@ -56,7 +56,7 @@ export class CostCentreTrialBalanceQueryDto extends TrialBalanceQueryDto {
   @ApiPropertyOptional({ description: 'Limit to one cost centre and the centres under it', example: 'CC-100' })
   @IsOptional()
   @IsString()
-  @MaxLength(32)
+  @Matches(/^[A-Za-z0-9._-]{1,32}$/, { message: 'کد فقط حروف لاتین، عدد و . _ - تا ۳۲ نویسه' })
   costCenterCode?: string;
 }
 
