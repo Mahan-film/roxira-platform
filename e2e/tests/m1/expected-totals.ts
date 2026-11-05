@@ -103,7 +103,8 @@ export interface M1ClosingTotals {
   bankBalance: bigint;
 }
 
-function sumDelta(key: 'receivablesDelta' | 'stockDelta' | 'bankDelta'): bigint {
+/** Net effect of the hand-entered documents on one ledger balance (stockDelta: -14.9M + 14.9M = 0). */
+export function sumDelta(key: 'receivablesDelta' | 'stockDelta' | 'bankDelta'): bigint {
   return Object.values(M1_MONTH_OPERATIONS).reduce((acc, op) => acc + op[key], 0n);
 }
 
@@ -114,6 +115,10 @@ function sumDelta(key: 'receivablesDelta' | 'stockDelta' | 'bankDelta'): bigint 
 export const M1_EXPECTED_CLOSING: M1ClosingTotals = {
   receivables: README_TOTALS.receivablesClosingUnique + sumDelta('receivablesDelta'),
   payables: README_TOTALS.payablesClosingUnique,
-  stockValue: README_TOTALS.stockValue + sumDelta('stockDelta'),
+  // Derived, not the README opening: opening 252,026,700,000 + purchases 5,671,900,000 («مبلغ»,
+  // excl. VAT) - COGS 8,315,400,000 (FIFO cost of the sale lines) + stock ops delta 0 (-14.9M + 14.9M).
+  // fixtureClosingStockValue() (fixture-data.ts) replays the CSVs and the fixture self-check asserts
+  // this constant against it; not computed here because fixture-data imports this module (no cycle).
+  stockValue: 249_383_200_000n,
   bankBalance: README_TOTALS.bankClosingBalance + sumDelta('bankDelta'),
 };

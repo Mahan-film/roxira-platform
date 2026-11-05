@@ -1,7 +1,21 @@
 import { test, expect, fa, findSessionFile, loginAsTestTenant } from '../app/fixtures';
-import { M1_EXPECTED_CLOSING, M1_MONTH_OPERATIONS, README_TOTALS } from './m1/expected-totals';
-import { bankStatementRollForward, computeTotalsFromCsv, readCsv, readReadmeTotals, SAMPLE_COMPANY_FILES, toRial } from './m1/fixture-data';
-import { apiGet, importFile, persianise, rials } from './m1/import-ui';
+import type { Page } from '@playwright/test';
+import { M1_EXPECTED_CLOSING, M1_MONTH_OPERATIONS, README_TOTALS, sumDelta } from './m1/expected-totals';
+import {
+  bankStatementRollForward,
+  computeTotalsFromCsv,
+  fifoPurchaseAmountSum,
+  fifoStockTrace,
+  fixtureClosingStockValue,
+  fixtureOpeningBalance,
+  parseFixtureInvoices,
+  readCsv,
+  readReadmeTotals,
+  SAMPLE_COMPANY_FILES,
+  sortInvoices,
+  toRial,
+} from './m1/fixture-data';
+import { apiGet, apiPut, importFile, issueAndWait, payAndWait, persianise, rials } from './m1/import-ui';
 
 /**
  * M1 "Shop-ready" acceptance gate (issue #116, epic E0): one month of the fictional trading company in
@@ -40,10 +54,29 @@ test.describe('M1 gate · fixture self-check', () => {
   });
 
   test('expected month-end closing derives from README totals plus the hand-entered documents', () => {
+    // The stock closing is an independent replay of the CSVs (fixtureClosingStockValue in
+    // fixture-data.ts), not the README opening: opening stock + purchases («مبلغ», excl. VAT)
+    // - COGS (FIFO cost of the sale lines). expected-totals may not import fixture-data back
+    // (fixture-data imports it), so the assembly with the hand-entered stock operations happens here.
+    const invoices = parseFixtureInvoices();
+    const trace = fifoStockTrace(invoices);
+    expect(trace.oversold, 'no sale may exceed the running stock at its date (shortage 0 units)').toHaveLength(0);
+    expect(trace.totalOpeningValue).toBe(README_TOTALS.stockValue);
+    const purchasesValue = fifoPurchaseAmountSum(invoices);
+    const cogsValue = [...trace.consumedBySale.values()].reduce((acc, c) => acc + c, 0n);
+    const stockOpsDelta = sumDelta('stockDelta'); // -14,900,000 (POS sale) + 14,900,000 (return): cancels out
+    const replayClosing = fixtureClosingStockValue();
+    // Architect-verified figures, asserted as literals.
+    expect(purchasesValue).toBe(5_671_900_000n);
+    expect(cogsValue).toBe(8_315_400_000n);
+    expect(stockOpsDelta).toBe(0n);
+    expect(replayClosing).toBe(249_383_200_000n); // 252,026,700,000 + 5,671,900,000 - 8,315,400,000
+    expect(replayClosing + stockOpsDelta).toBe(M1_EXPECTED_CLOSING.stockValue);
+
     expect(M1_EXPECTED_CLOSING).toEqual({
       receivables: 9_396_312_500n,
       payables: 5_420_780_000n,
-      stockValue: 252_026_700_000n,
+      stockValue: 249_383_200_000n,
       bankBalance: 2_485_000_000n,
     });
   });
@@ -326,14 +359,657 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
   // ---- Post the month ----------------------------------------------------------------------------------
 
-  test.fixme('07 post purchase invoices: stock in, payables up [E2]', async ({ page }) => {
+  // The invoice fields steps 07 and 08 need from the list and by-id endpoints.
+  type ListedInvoice = {
+    id: string;
+    taxInvoiceNumber: string;
+    direction: string;
+    status: string;
+    journalEntryId: number | null;
+    postingError: string | null;
+    finalPayable: number;
+  };
+  const listInvoices = async (page: Page): Promise<ListedInvoice[]> => {
+    const all: ListedInvoice[] = [];
+    for (let page_ = 1; page_ <= 3; page_ += 1) {
+      all.push(...(await apiGet<{ data: ListedInvoice[] }>(page, `invoicing?limit=100&page=${page_}`)).data);
+    }
+    expect(all, 'every imported invoice is listed').toHaveLength(238);
+    return all;
+  };
+  /** One account's balance from `accounting/accounts` (debit-positive). */
+  const balanceOf = (accounts: Array<{ code: string; balance: number | string }>, code: string): bigint =>
+    rials(accounts.find((a) => a.code === code)!.balance);
+
+  test('07 post purchase invoices: stock in, payables up [E2]', async ({ page }) => {
+    test.setTimeout(1_800_000); // the API allows 100 requests/min per IP: ~600 calls take minutes
     await loginAsTestTenant(page, '/app/invoicing');
-    // 2101 = README_TOTALS.payablesClosingUnique after posting.
+
+    // The fixture treats cash as petty cash 1102; the bank 1101 only moves through the statement
+    // (step 12). Name matching alone picks the bank («بانک») for the 'cash' role, so pin the tenant
+    // mapping — it wins over name matching (mergeRoleAccounts in invoicing/services/invoice-voucher.ts).
+    const cashDocTypes = [
+      'invoice.purchase.settle',
+      'invoice.purchase.settle_card_first',
+      'invoice.sale.settle',
+      'invoice.sale.settle_card_first',
+    ] as const;
+    for (const docType of cashDocTypes) {
+      const status = await apiPut(page, `posting-rules/${docType}/roles/cash`, { accountCode: '1102' });
+      expect(status, `PUT posting-rules ${docType} cash -> 1102`).toBe(204);
+    }
+    const postingTemplates = await apiGet<
+      Array<{ docType: string; roles: Array<{ role: string; accountCode: string | null; source: string }> }>
+    >(page, 'posting-rules');
+    for (const docType of cashDocTypes) {
+      const cash = postingTemplates.find((t) => t.docType === docType)?.roles.find((r) => r.role === 'cash');
+      expect(cash, `${docType} lists a cash role`).toBeDefined();
+      expect(cash!.accountCode, `${docType} cash account`).toBe('1102');
+      expect(cash!.source, `${docType} cash mapping must win over the default`).not.toBe('default');
+    }
+    test.info().annotations.push({
+      type: 'posting-rules',
+      description: `cash -> 1102 pinned (source != default) for ${cashDocTypes.join(', ')}`,
+    });
+
+    // Name matching resolves the 'receivable' role to the first account whose name contains «دریافتنی»:
+    // 1110 «اسناد دریافتنی نزد صندوق» (CI evidence, run 42103641294: the sales moved 1110 by +11,433,675,000
+    // and 1201 not at all), not the trade receivables 1201. Pin the tenant mapping to 1201 (issue #504).
+    const receivableDocTypes = ['invoice.sale.issue', 'invoice.sale.settle', 'invoice.sale.settle_card_first'] as const;
+    for (const docType of receivableDocTypes) {
+      const status = await apiPut(page, `posting-rules/${docType}/roles/receivable`, { accountCode: '1201' });
+      expect(status, `PUT posting-rules ${docType} receivable -> 1201`).toBe(204);
+    }
+    const pinnedTemplates = await apiGet<
+      Array<{ docType: string; roles: Array<{ role: string; accountCode: string | null; source: string }> }>
+    >(page, 'posting-rules');
+    for (const docType of receivableDocTypes) {
+      const receivable = pinnedTemplates.find((t) => t.docType === docType)?.roles.find((r) => r.role === 'receivable');
+      expect(receivable?.accountCode, `${docType} receivable account`).toBe('1201');
+      expect(receivable?.source, `${docType} receivable mapping must win over the default`).not.toBe('default');
+    }
+
+    // Fixture-derived expectations (independent of any product output).
+    const invoices = parseFixtureInvoices();
+    const purchases = sortInvoices(invoices.filter((i) => i.direction === 'PURCHASE'));
+    expect(purchases).toHaveLength(95);
+    const unpaidPurchases = purchases.filter((i) => !i.settled).reduce((acc, i) => acc + i.totalInclVat, 0n);
+    const settled = purchases.filter((i) => i.settled);
+    const settledPurchases = settled.reduce((acc, i) => acc + i.totalInclVat, 0n);
+    const allPurchases = purchases.reduce((acc, i) => acc + i.totalInclVat, 0n);
+    // Hand-computed from the fixture, asserted as literals as a cross-check of the parsing above.
+    expect(unpaidPurchases).toBe(4_300_780_000n);
+    expect(settledPurchases).toBe(1_938_310_000n);
+    expect(allPurchases).toBe(6_239_090_000n);
+    // README tie-out: the README closing payables counts UNPAID purchases only. The settled remainder
+    // (1,938,310,000) is paid at the END of this step — 07 posts every imported invoice, then settles
+    // the «تسویه‌شده» ones, so 2101 lands exactly on the README closing. Leaving the settled ones as
+    // drafts would hide documents from the ledger and the stock register.
+    expect(README_TOTALS.payablesOpening + unpaidPurchases).toBe(README_TOTALS.payablesClosingUnique);
+    // Stock in: every purchase line excl. VAT («مبلغ»).
+    const purchaseAmountSum = purchases.reduce((acc, i) => acc + i.lines.reduce((a, l) => a + l.amount, 0n), 0n);
+    // Input VAT per invoice = total incl. VAT - its lines excl. VAT, summed over the 95.
+    const purchaseVatSum = purchases.reduce(
+      (acc, i) => acc + i.totalInclVat - i.lines.reduce((a, l) => a + l.amount, 0n),
+      0n,
+    );
+
+    // The drafts this step is about to post: exactly 95, all DRAFT.
+    const before = await listInvoices(page);
+    const draftPurchases = before.filter((i) => i.direction === 'PURCHASE');
+    expect(draftPurchases).toHaveLength(95);
+    expect(draftPurchases.filter((i) => i.status === 'DRAFT')).toHaveLength(95);
+
+    // Posting must use the chart imported in step 02 and never create accounts: the code set is exactly
+    // the 18 codes of chart-of-accounts.csv.
+    const chart = readCsv(SAMPLE_COMPANY_FILES.chartOfAccounts);
+    const fileCodes = chart.rows.map((r) => r[chart.header.indexOf('کد حساب')]);
+    const accountsBefore = await apiGet<Array<{ code: string; name?: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(
+      new Set(accountsBefore.map((a) => a.code)),
+      'accounts before posting are exactly the 18 imported in step 02',
+    ).toEqual(new Set(fileCodes));
+    const vouchersBefore = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+
+    // Issue strictly one at a time (date ascending, ties by number) so FIFO order holds.
+    const idByNumber = new Map(before.map((i) => [i.taxInvoiceNumber, i.id]));
+    let firstPosted: { invoice: (typeof purchases)[number]; entryId: number; finalPayable: bigint } | null = null;
+    for (const invoice of purchases) {
+      const issued = await issueAndWait(page, idByNumber.get(invoice.number)!, invoice.number);
+      if (!firstPosted && issued.journalEntryId !== null) {
+        firstPosted = { invoice, entryId: issued.journalEntryId, finalPayable: rials(issued.finalPayable) };
+      }
+    }
+
+    // After: every purchase is ISSUED with a voucher and no error; no purchase draft remains.
+    const after = await listInvoices(page);
+    const issuedPurchases = after.filter((i) => i.direction === 'PURCHASE');
+    expect(issuedPurchases).toHaveLength(95);
+    for (const invoice of purchases) {
+      const posted = issuedPurchases.find((i) => i.taxInvoiceNumber === invoice.number)!;
+      expect(posted.status, invoice.number).toBe('ISSUED');
+      expect(posted.postingError, invoice.number).toBeNull();
+      expect(posted.journalEntryId, invoice.number).not.toBeNull();
+    }
+
+    // One issue voucher per invoice, computed from the CSV (95 issues + the settlements paid below):
+    // stock, purchases and input VAT post on the same issue voucher, so no extra voucher is expected.
+    // A different real delta fails here with the numbers in the message.
+    const vouchersAfterIssue = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+    test.info().annotations.push({
+      type: 'vouchers',
+      description: `issuing ${purchases.length} purchase invoices moved the voucher count from ${vouchersBefore} to ${vouchersAfterIssue} (delta ${vouchersAfterIssue - vouchersBefore})`,
+    });
+    expect(
+      vouchersAfterIssue - vouchersBefore,
+      `one issue voucher per purchase invoice: ${purchases.length} invoices issued, real delta ${vouchersAfterIssue - vouchersBefore}`,
+    ).toBe(purchases.length);
+
+    // 2101 (credit-positive, hence -balance as step 05 does) measured right after issuing, before any
+    // settlement: payables opening + every unique purchase incl. VAT = 7,359,090,000. The settled
+    // 1,938,310,000 comes back off below, landing 2101 on the README closing at the end of this step.
+    const accountsAfterIssue = await apiGet<Array<{ code: string; name?: string; balance: number | string }>>(page, 'accounting/accounts');
+    // The engine creates the purchases account 5201 from the posting template although no purchase line
+    // needs it (stock == net, so the purchases row is zero). Assert the EXACT real set, code and name.
+    const createdAfterIssue = accountsAfterIssue
+      .filter((a) => !fileCodes.includes(a.code))
+      .map((a) => ({ code: a.code, name: a.name ?? '' }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+    expect(createdAfterIssue, 'the issue phase creates only the purchases account 5201').toEqual([
+      { code: '5201', name: 'خرید کالا و خدمات' },
+    ]);
+    const balanceAfterIssue = (code: string) => balanceOf(accountsAfterIssue, code);
+    const balanceBeforeIssue = (code: string) => balanceOf(accountsBefore, code);
+    const payableAfterIssue = -balanceAfterIssue('2101');
+    expect(payableAfterIssue).toBe(7_359_090_000n);
+    expect(payableAfterIssue).toBe(README_TOTALS.payablesOpening + allPurchases);
+    // Hand-computed deltas after the issue phase (balances are debit-positive).
+    expect(balanceAfterIssue('1301') - balanceBeforeIssue('1301'), 'stock in = purchase lines excl. VAT').toBe(
+      purchaseAmountSum,
+    );
+    expect(
+      -(balanceAfterIssue('2101') - balanceBeforeIssue('2101')),
+      'payables up by every purchase incl. VAT (credit)',
+    ).toBe(allPurchases);
+    expect(balanceAfterIssue('5201'), 'the created purchases account has no line using it').toBe(0n);
+    test.info().annotations.push({
+      type: 'account-created',
+      description: '5201 خرید کالا و خدمات was created although no voucher line uses it (balance 0)',
+    });
+
+    // Stock in: 1301 value = opening stock (README) + every purchase line excl. VAT.
+    const valuation = await apiGet<{ totalInventoryValue: number | string; rows: Array<{ sku: string; quantity: number; fifoValue: number | string }> }>(
+      page,
+      'inventory/valuation',
+    );
+    expect(rials(valuation.totalInventoryValue)).toBe(README_TOTALS.stockValue + purchaseAmountSum);
+
+    // Sampled items: ITM-1001 and one item of a multi-line purchase — quantity and FIFO value.
+    const itemsCsv = readCsv(SAMPLE_COMPANY_FILES.items);
+    const iSku = itemsCsv.header.indexOf('کد کالا');
+    const iQty = itemsCsv.header.indexOf('موجودی');
+    const iCost = itemsCsv.header.indexOf('بهای واحد (ریال)');
+    const openingOf = (sku: string) => {
+      const row = itemsCsv.rows.find((r) => r[iSku] === sku)!;
+      return { quantity: toRial(row[iQty]), unitCost: toRial(row[iCost]) };
+    };
+    const itemQuantity = async (sku: string) => {
+      const items: Array<{ sku: string; quantity: number }> = [];
+      for (let page_ = 1; page_ <= 3; page_ += 1) {
+        items.push(...(await apiGet<{ data: Array<{ sku: string; quantity: number }> }>(page, `inventory/items?limit=100&page=${page_}`)).data);
+      }
+      const item = items.find((i) => i.sku === sku);
+      expect(item, `item ${sku} is listed`).toBeDefined();
+      return item!.quantity;
+    };
+    const multi = purchases.find((i) => i.lines.length > 1)!;
+    const samples = ['ITM-1001', multi.lines[0].itemCode];
+    for (const sku of samples) {
+      const opening = openingOf(sku);
+      const lines = purchases.flatMap((i) => i.lines).filter((l) => l.itemCode === sku);
+      const expectedQuantity = opening.quantity + lines.reduce((acc, l) => acc + BigInt(l.quantity), 0n);
+      const expectedValue = opening.quantity * opening.unitCost + lines.reduce((acc, l) => acc + l.amount, 0n);
+      expect(BigInt(await itemQuantity(sku)), `quantity of ${sku} after the purchases`).toBe(expectedQuantity);
+      // The valuation endpoint reports a per-item fifoValue row, so the value is asserted too.
+      const row = valuation.rows.find((r) => r.sku === sku)!;
+      expect(rials(row.fifoValue), `FIFO value of ${sku} after the purchases`).toBe(expectedValue);
+    }
+
+    // The first posted voucher: purchases credit 2101 (payables) with the invoice's final payable,
+    // and the voucher is balanced. Every line's account code is attached as evidence.
+    expect(firstPosted, 'at least one purchase posted').not.toBeNull();
+    const voucher = await apiGet<{
+      lines: Array<{ accountCode: string; description?: string; debit: number | string; credit: number | string }>;
+      totalDebit: number | string;
+      totalCredit: number | string;
+    }>(page, `accounting/journal-entries/${firstPosted!.entryId}`);
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `${firstPosted!.invoice.number}: ${voucher.lines
+        .map((l) => `${l.accountCode} debit ${l.debit} credit ${l.credit}`)
+        .join('; ')}`,
+    });
+    expect(rials(voucher.totalDebit), 'the purchase voucher is balanced').toBe(rials(voucher.totalCredit));
+    const payableLine = voucher.lines.find((l) => l.accountCode === '2101');
+    expect(payableLine, 'the purchase voucher credits 2101').toBeDefined();
+    expect(rials(payableLine!.credit), `credit of 2101 in ${firstPosted!.invoice.number}`).toBe(firstPosted!.finalPayable);
+
+    // Input VAT: the account the product actually uses on the «مالیات بر ارزش افزوده خرید» line,
+    // read from the voucher rather than assumed; its whole-step delta is the fixture purchase VAT.
+    const inputVatLine = voucher.lines.find((l) => l.description === 'مالیات بر ارزش افزوده خرید');
+    expect(inputVatLine, 'the purchase voucher has the input-VAT line').toBeDefined();
+    const inputVatCode = inputVatLine!.accountCode;
+    const inputVatName = accountsAfterIssue.find((a) => a.code === inputVatCode)?.name ?? '';
+    test.info().annotations.push({
+      type: 'input-vat',
+      description: `input VAT account ${inputVatCode} ${inputVatName}`,
+    });
+    expect(
+      balanceAfterIssue(inputVatCode) - balanceBeforeIssue(inputVatCode),
+      `input VAT ${inputVatCode} up by the purchase VAT`,
+    ).toBe(purchaseVatSum);
+
+    // ---- Settle the «تسویه‌شده» purchases through the user's status path -----------------------------
+    // payAndWait mirrors the invoicing page's pay button (PATCH invoicing/:id/pay), one invoice at a
+    // time, in the same date order as the issues.
+    expect(settled, 'the fixture marks settled purchases to pay').not.toHaveLength(0);
+    const paidEntryByNumber = new Map<string, number>();
+    for (const invoice of settled) {
+      const paid = await payAndWait(page, idByNumber.get(invoice.number)!, invoice.number);
+      paidEntryByNumber.set(invoice.number, paid.paidJournalEntryId!);
+    }
+    const afterPaying = await listInvoices(page);
+    for (const invoice of settled) {
+      expect(afterPaying.find((i) => i.taxInvoiceNumber === invoice.number)!.status, invoice.number).toBe('PAID');
+    }
+
+    // Voucher delta after settling, computed from the CSV: one issue voucher per invoice + one
+    // settlement voucher per settled invoice (95 + 72 here). A different real delta fails with the
+    // real numbers in the message.
+    const vouchersAtEnd = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+    test.info().annotations.push({
+      type: 'vouchers',
+      description: `paying ${settled.length} settled purchases moved the voucher count to ${vouchersAtEnd} (total delta ${vouchersAtEnd - vouchersBefore} = ${purchases.length} issues + ${settled.length} settlements)`,
+    });
+    expect(
+      vouchersAtEnd - vouchersBefore,
+      `one issue voucher per purchase invoice plus one settlement voucher per settled purchase: ${purchases.length} + ${settled.length} expected, real delta ${vouchersAtEnd - vouchersBefore}`,
+    ).toBe(purchases.length + settled.length);
+
+    // Fetch EVERY settlement voucher: balanced, and never touching the bank 1101 — the README bank
+    // closing is the reconciled statement balance, moved only by the statement itself (step 12), so
+    // the counter side must be the pinned petty cash 1102, not 1101.
+    const settlementVouchers: Array<{
+      number: string;
+      lines: Array<{ accountCode: string; debit: number | string; credit: number | string }>;
+    }> = [];
+    for (const invoice of settled) {
+      const settleVoucher = await apiGet<{
+        lines: Array<{ accountCode: string; debit: number | string; credit: number | string }>;
+        totalDebit: number | string;
+        totalCredit: number | string;
+      }>(page, `accounting/journal-entries/${paidEntryByNumber.get(invoice.number)!}`);
+      settlementVouchers.push({ number: invoice.number, lines: settleVoucher.lines });
+      expect(rials(settleVoucher.totalDebit), `settlement voucher of ${invoice.number} is balanced`).toBe(
+        rials(settleVoucher.totalCredit),
+      );
+      expect(
+        settleVoucher.lines.filter((l) => l.accountCode === '1101'),
+        `settlement of ${invoice.number} must not touch the bank 1101`,
+      ).toHaveLength(0);
+      // The counter side is the pinned petty-cash account 1102, credited with exactly the settled amount.
+      const cashLine = settleVoucher.lines.find((l) => l.accountCode === '1102');
+      expect(cashLine, `settlement of ${invoice.number} has a 1102 line`).toBeDefined();
+      expect(rials(cashLine!.credit), `1102 credited by ${invoice.number}`).toBe(invoice.totalInclVat);
+      expect(rials(cashLine!.debit), `1102 not debited by ${invoice.number}`).toBe(0n);
+    }
+
+    // Evidence for the first settled invoice (date order): its settlement voucher, every line
+    // annotated, clearing 2101 with exactly the invoice amount.
+    const firstSettled = settled[0];
+    const firstSettlement = settlementVouchers[0]!;
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `settlement of ${firstSettled.number}: ${firstSettlement.lines
+        .map((l) => `${l.accountCode} debit ${l.debit} credit ${l.credit}`)
+        .join('; ')}`,
+    });
+    const cleared = firstSettlement.lines.find((l) => l.accountCode === '2101');
+    expect(cleared, `the settlement voucher of ${firstSettled.number} debits 2101`).toBeDefined();
+    expect(rials(cleared!.debit), `2101 cleared by ${firstSettled.number}`).toBe(firstSettled.totalInclVat);
+    // Which account is the counter side? The pinned petty cash 1102 (never the bank 1101).
+    const counterAccounts = new Set(
+      settlementVouchers.flatMap((v) => v.lines.map((l) => l.accountCode).filter((code) => code !== '2101')),
+    );
+    const cashName = accountsAfterIssue.find((a) => a.code === '1102')?.name ?? '';
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `${settlementVouchers.length} settlement vouchers clear 2101 and credit the counter account 1102 ${cashName}; counter-side codes: ${[...counterAccounts].join(', ')}`,
+    });
+
+    // End of step 07: 2101 = the README closing payables, exactly — 7,359,090,000 issued minus the
+    // settled 1,938,310,000 paid.
+    const accountsAtEnd = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const payableAtEnd = -rials(accountsAtEnd.find((a) => a.code === '2101')!.balance);
+    expect(payableAtEnd).toBe(README_TOTALS.payablesClosingUnique);
+    expect(payableAtEnd).toBe(5_420_780_000n);
+    expect(payableAtEnd).toBe(payableAfterIssue - settledPurchases);
   });
 
-  test.fixme('08 post sales invoices: stock out, receivables up [E1]', async ({ page }) => {
+  test('08 post sales invoices: stock out, receivables up [E1]', async ({ page }) => {
+    test.setTimeout(1_800_000); // the API allows 100 requests/min per IP: ~600 calls take minutes
     await loginAsTestTenant(page, '/app/invoicing');
-    // 1201 = README_TOTALS.receivablesClosingUnique after posting.
+
+    // Fixture-derived expectations, including an independent FIFO replay over opening stock,
+    // purchases and sales (a sale beyond the running stock moves no stock — its posting fails whole).
+    const invoices = parseFixtureInvoices();
+    const sales = sortInvoices(invoices.filter((i) => i.direction === 'SALE'));
+    expect(sales).toHaveLength(143);
+    const unpaidSales = sales.filter((i) => !i.settled).reduce((acc, i) => acc + i.totalInclVat, 0n);
+    const settled = sales.filter((i) => i.settled);
+    const settledSales = settled.reduce((acc, i) => acc + i.totalInclVat, 0n);
+    const allSales = sales.reduce((acc, i) => acc + i.totalInclVat, 0n);
+    // Revenue excl. VAT (sum of the sale lines' «مبلغ») and output VAT per invoice (total - lines).
+    const saleLineSum = sales.reduce((acc, i) => acc + i.lines.reduce((a, l) => a + l.amount, 0n), 0n);
+    const saleVatSum = sales.reduce(
+      (acc, i) => acc + i.totalInclVat - i.lines.reduce((a, l) => a + l.amount, 0n),
+      0n,
+    );
+    const purchaseVatSum = invoices
+      .filter((i) => i.direction === 'PURCHASE')
+      .reduce((acc, i) => acc + i.totalInclVat - i.lines.reduce((a, l) => a + l.amount, 0n), 0n);
+    const settledPurchases = invoices
+      .filter((i) => i.direction === 'PURCHASE' && i.settled)
+      .reduce((acc, i) => acc + i.totalInclVat, 0n);
+    // Hand-computed from the fixture, asserted as literals as a cross-check of the parsing above.
+    expect(unpaidSales).toBe(7_613_512_500n);
+    expect(settledSales).toBe(3_820_162_500n);
+    expect(allSales).toBe(11_433_675_000n);
+    // README tie-out: the README closing receivables counts UNPAID sales only. The settled remainder
+    // (3,820,162,500) is paid at the END of this step — 08 posts every imported sale invoice, then
+    // settles the «تسویه‌شده» ones, so 1201 lands exactly on the README closing.
+    expect(README_TOTALS.receivablesOpening + unpaidSales).toBe(README_TOTALS.receivablesClosingUnique);
+
+    const trace = fifoStockTrace(invoices);
+    expect(trace.totalOpeningValue).toBe(README_TOTALS.stockValue);
+    test.info().annotations.push({
+      type: 'oversold',
+      description: `${trace.oversold.length} sale line(s) exceed the running stock at their date: ${
+        trace.oversold.join('; ') || 'none'
+      }`,
+    });
+
+    // The drafts this step is about to post: exactly 143, all DRAFT (the 95 purchases are ISSUED).
+    const before = await listInvoices(page);
+    const draftSales = before.filter((i) => i.direction === 'SALE');
+    expect(draftSales).toHaveLength(143);
+    expect(draftSales.filter((i) => i.status === 'DRAFT')).toHaveLength(143);
+
+    // The chart the posts must use; step 07 already added the purchases account 5201 on top of it.
+    const chart = readCsv(SAMPLE_COMPANY_FILES.chartOfAccounts);
+    const fileCodes = chart.rows.map((r) => r[chart.header.indexOf('کد حساب')]);
+    const accountsBefore = await apiGet<Array<{ code: string; name?: string; balance: number | string }>>(page, 'accounting/accounts');
+    const vouchersBefore = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+
+    // Issue strictly one at a time (date ascending, ties by number) so FIFO order holds.
+    const idByNumber = new Map(before.map((i) => [i.taxInvoiceNumber, i.id]));
+    let firstPosted: { invoice: (typeof sales)[number]; entryId: number; finalPayable: bigint } | null = null;
+    for (const invoice of sales) {
+      const issued = await issueAndWait(page, idByNumber.get(invoice.number)!, invoice.number);
+      if (!firstPosted && issued.journalEntryId !== null) {
+        firstPosted = { invoice, entryId: issued.journalEntryId, finalPayable: rials(issued.finalPayable) };
+      }
+    }
+
+    // After: every sale is ISSUED with a voucher and no error; no sale draft remains.
+    const after = await listInvoices(page);
+    const issuedSales = after.filter((i) => i.direction === 'SALE');
+    expect(issuedSales).toHaveLength(143);
+    for (const invoice of sales) {
+      const posted = issuedSales.find((i) => i.taxInvoiceNumber === invoice.number)!;
+      expect(posted.status, invoice.number).toBe('ISSUED');
+      expect(posted.postingError, invoice.number).toBeNull();
+      expect(posted.journalEntryId, invoice.number).not.toBeNull();
+    }
+
+    // One issue voucher per invoice over step 07, computed from the CSV (143 issues + the settlements
+    // paid below): the engine books COGS and stock inside the same issue voucher, so no extra voucher
+    // is expected. A different real delta fails here with the numbers in the message.
+    const vouchersAfterIssue = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+    test.info().annotations.push({
+      type: 'vouchers',
+      description: `issuing ${sales.length} sale invoices moved the voucher count from ${vouchersBefore} to ${vouchersAfterIssue} (delta ${vouchersAfterIssue - vouchersBefore})`,
+    });
+    expect(
+      vouchersAfterIssue - vouchersBefore,
+      `one issue voucher per sale invoice: ${sales.length} invoices issued, real delta ${vouchersAfterIssue - vouchersBefore}`,
+    ).toBe(sales.length);
+
+    // 1201 (debit-positive) measured right after issuing, before any settlement: receivables opening
+    // + every unique sale incl. VAT = 13,273,675,000. The settled 3,820,162,500 comes back off below,
+    // landing 1201 on the README closing at the end of this step.
+    const accountsAfterIssue = await apiGet<Array<{ code: string; name?: string; balance: number | string }>>(page, 'accounting/accounts');
+    // Nothing further may be created: the exact same single purchases account step 07 added.
+    const createdAfterIssue = accountsAfterIssue
+      .filter((a) => !fileCodes.includes(a.code))
+      .map((a) => ({ code: a.code, name: a.name ?? '' }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+    expect(createdAfterIssue, 'the sale issue phase creates nothing beyond 5201').toEqual([
+      { code: '5201', name: 'خرید کالا و خدمات' },
+    ]);
+    const balanceAfterIssue = (code: string) => balanceOf(accountsAfterIssue, code);
+    const balanceBeforeIssue = (code: string) => balanceOf(accountsBefore, code);
+    const receivableAfterIssue = balanceAfterIssue('1201');
+    // Evidence for a mismatch: every account the sale issue phase moved (code name delta, debit-positive).
+    const movedBySales = accountsAfterIssue
+      .map((a) => ({ a, delta: balanceOf(accountsAfterIssue, a.code) - balanceOf(accountsBefore, a.code) }))
+      .filter((m) => accountsBefore.some((b) => b.code === m.a.code) && m.delta !== 0n)
+      .map((m) => `${m.a.code} ${m.a.name ?? ''} ${m.delta}`);
+    test.info().annotations.push({ type: 'moved-by-sales', description: movedBySales.join('; ') });
+    expect(receivableAfterIssue, `1201 after issuing; accounts the sales moved: ${movedBySales.join('; ')}`).toBe(13_273_675_000n);
+    expect(receivableAfterIssue).toBe(README_TOTALS.receivablesOpening + allSales);
+    // Hand-computed deltas after the issue phase (balances are debit-positive, credits are negative).
+    expect(
+      balanceAfterIssue('2201') - balanceBeforeIssue('2201'),
+      'output VAT (2201) up by the sale VAT (credit)',
+    ).toBe(-saleVatSum);
+    expect(balanceAfterIssue('2301') - balanceBeforeIssue('2301'), '2301 does not move').toBe(0n);
+    expect(
+      balanceAfterIssue('4101') - balanceBeforeIssue('4101'),
+      'revenue credits the sale lines excl. VAT',
+    ).toBe(-saleLineSum);
+
+    // Stock out: 1301 after 08 must equal the DERIVED closing stock (opening + purchases - COGS =
+    // 249,383,200,000) — the hand-entered POS/return ops still ahead move it by a net of 0, so this
+    // stays the month-end value checked at step 15. The FIFO layers must agree with the same replay.
+    const valuation = await apiGet<{ totalInventoryValue: number | string; rows: Array<{ sku: string; quantity: number; fifoValue: number | string }> }>(
+      page,
+      'inventory/valuation',
+    );
+    const consumed = [...trace.consumedBySale.values()].reduce((acc, c) => acc + c, 0n);
+    const closingFifoValue = [...trace.closingValueBySku.values()].reduce((acc, v) => acc + v, 0n);
+    expect(rials(valuation.totalInventoryValue), '1301 after the sales = the derived closing stock').toBe(
+      fixtureClosingStockValue(),
+    );
+    expect(rials(valuation.totalInventoryValue)).toBe(closingFifoValue);
+    expect(closingFifoValue + consumed).toBe(README_TOTALS.stockValue + fifoPurchaseAmountSum(invoices));
+
+    // Sampled items: ITM-1001 and one item of a multi-line purchase — quantity and FIFO value.
+    const itemQuantity = async (sku: string) => {
+      const items: Array<{ sku: string; quantity: number }> = [];
+      for (let page_ = 1; page_ <= 3; page_ += 1) {
+        items.push(...(await apiGet<{ data: Array<{ sku: string; quantity: number }> }>(page, `inventory/items?limit=100&page=${page_}`)).data);
+      }
+      const item = items.find((i) => i.sku === sku);
+      expect(item, `item ${sku} is listed`).toBeDefined();
+      return item!.quantity;
+    };
+    const multiPurchase = invoices.filter((i) => i.direction === 'PURCHASE' && i.lines.length > 1)[0];
+    const samples = ['ITM-1001', multiPurchase.lines[0].itemCode];
+    for (const sku of samples) {
+      expect(BigInt(await itemQuantity(sku)), `quantity of ${sku} after the sales`).toBe(
+        trace.closingQuantityBySku.get(sku)!,
+      );
+      // The valuation endpoint reports a per-item fifoValue row, so the value is asserted too.
+      const row = valuation.rows.find((r) => r.sku === sku)!;
+      expect(rials(row.fifoValue), `FIFO value of ${sku} after the sales`).toBe(trace.closingValueBySku.get(sku)!);
+    }
+
+    // The first posted voucher: sales debit 1201 (receivables) with the invoice's final payable,
+    // and the voucher is balanced. Every line's account code is attached as evidence.
+    expect(firstPosted, 'at least one sale posted').not.toBeNull();
+    const voucher = await apiGet<{
+      lines: Array<{ accountCode: string; description?: string; debit: number | string; credit: number | string }>;
+      totalDebit: number | string;
+      totalCredit: number | string;
+    }>(page, `accounting/journal-entries/${firstPosted!.entryId}`);
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `${firstPosted!.invoice.number}: ${voucher.lines
+        .map((l) => `${l.accountCode} debit ${l.debit} credit ${l.credit}`)
+        .join('; ')}`,
+    });
+    expect(rials(voucher.totalDebit), 'the sale voucher is balanced').toBe(rials(voucher.totalCredit));
+    const receivableLine = voucher.lines.find((l) => l.accountCode === '1201');
+    expect(receivableLine, 'the sale voucher debits 1201').toBeDefined();
+    expect(rials(receivableLine!.debit), `debit of 1201 in ${firstPosted!.invoice.number}`).toBe(firstPosted!.finalPayable);
+
+    // COGS: is stock out and COGS on the same issue voucher? (The voucher count below assumes they are.)
+    const hasStockOut = voucher.lines.some((l) => l.accountCode === '1301');
+    const hasCogs = voucher.lines.some((l) => l.accountCode === '5101');
+    test.info().annotations.push({
+      type: 'cogs',
+      description: `sale issue voucher ${firstPosted!.invoice.number}: 1301 ${hasStockOut ? 'present' : 'absent'}, 5101 ${hasCogs ? 'present' : 'absent'} -> COGS ${
+        hasStockOut && hasCogs ? 'on the issue voucher' : 'not on the same voucher'
+      }`,
+    });
+    // Output VAT: the product matches the account by name; the fixture's «مالیات بر ارزش افزوده
+    // پرداختنی» 2201 must win over the engine default 2301 (both names contain «مالیات»).
+    const outputVatLine = voucher.lines.find(
+      (l) =>
+        l.description === 'مالیات بر ارزش افزوده فروش' || l.description === 'مالیات بر ارزش افزوده پرداختنی',
+    );
+    expect(outputVatLine, 'the sale voucher has the output-VAT line').toBeDefined();
+    expect(outputVatLine!.accountCode, 'output VAT uses the fixture 2201, not the default 2301').toBe('2201');
+
+    // ---- Settle the «تسویه‌شده» sales through the user's status path ---------------------------------
+    // payAndWait mirrors the invoicing page's pay button (PATCH invoicing/:id/pay), one invoice at a
+    // time, in the same date order as the issues.
+    expect(settled, 'the fixture marks settled sales to collect').not.toHaveLength(0);
+    const paidEntryByNumber = new Map<string, number>();
+    for (const invoice of settled) {
+      const paid = await payAndWait(page, idByNumber.get(invoice.number)!, invoice.number);
+      paidEntryByNumber.set(invoice.number, paid.paidJournalEntryId!);
+    }
+    const afterPaying = await listInvoices(page);
+    for (const invoice of settled) {
+      expect(afterPaying.find((i) => i.taxInvoiceNumber === invoice.number)!.status, invoice.number).toBe('PAID');
+    }
+
+    // Voucher delta after settling, computed from the CSV: one issue voucher per invoice + one
+    // settlement voucher per settled invoice (143 + 46 here). A different real delta fails with the
+    // real numbers in the message.
+    const vouchersAtEnd = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+    test.info().annotations.push({
+      type: 'vouchers',
+      description: `paying ${settled.length} settled sales moved the voucher count to ${vouchersAtEnd} (total delta ${vouchersAtEnd - vouchersBefore} = ${sales.length} issues + ${settled.length} settlements)`,
+    });
+    expect(
+      vouchersAtEnd - vouchersBefore,
+      `one issue voucher per sale invoice plus one settlement voucher per settled sale: ${sales.length} + ${settled.length} expected, real delta ${vouchersAtEnd - vouchersBefore}`,
+    ).toBe(sales.length + settled.length);
+
+    // Fetch EVERY settlement voucher: balanced, and never touching the bank 1101 — collections settle
+    // through the pinned petty cash 1102; the bank only moves per the statement (step 12).
+    const settlementVouchers: Array<{
+      number: string;
+      lines: Array<{ accountCode: string; debit: number | string; credit: number | string }>;
+    }> = [];
+    for (const invoice of settled) {
+      const settleVoucher = await apiGet<{
+        lines: Array<{ accountCode: string; debit: number | string; credit: number | string }>;
+        totalDebit: number | string;
+        totalCredit: number | string;
+      }>(page, `accounting/journal-entries/${paidEntryByNumber.get(invoice.number)!}`);
+      settlementVouchers.push({ number: invoice.number, lines: settleVoucher.lines });
+      expect(rials(settleVoucher.totalDebit), `settlement voucher of ${invoice.number} is balanced`).toBe(
+        rials(settleVoucher.totalCredit),
+      );
+      expect(
+        settleVoucher.lines.filter((l) => l.accountCode === '1101'),
+        `settlement of ${invoice.number} must not touch the bank 1101`,
+      ).toHaveLength(0);
+      // The counter side is the pinned petty-cash account 1102, debited with exactly the collected amount.
+      const cashLine = settleVoucher.lines.find((l) => l.accountCode === '1102');
+      expect(cashLine, `settlement of ${invoice.number} has a 1102 line`).toBeDefined();
+      expect(rials(cashLine!.debit), `1102 debited by ${invoice.number}`).toBe(invoice.totalInclVat);
+      expect(rials(cashLine!.credit), `1102 not credited by ${invoice.number}`).toBe(0n);
+    }
+
+    // Evidence for the first settled invoice (date order): its settlement voucher, every line
+    // annotated, clearing 1201 with exactly the invoice amount.
+    const firstSettled = settled[0];
+    const firstSettlement = settlementVouchers[0]!;
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `settlement of ${firstSettled.number}: ${firstSettlement.lines
+        .map((l) => `${l.accountCode} debit ${l.debit} credit ${l.credit}`)
+        .join('; ')}`,
+    });
+    const cleared = firstSettlement.lines.find((l) => l.accountCode === '1201');
+    expect(cleared, `the settlement voucher of ${firstSettled.number} credits 1201`).toBeDefined();
+    expect(rials(cleared!.credit), `1201 cleared by ${firstSettled.number}`).toBe(firstSettled.totalInclVat);
+    // Which account is the counter side? The pinned petty cash 1102 (never the bank 1101).
+    const counterAccounts = new Set(
+      settlementVouchers.flatMap((v) => v.lines.map((l) => l.accountCode).filter((code) => code !== '1201')),
+    );
+    const cashName = accountsAfterIssue.find((a) => a.code === '1102')?.name ?? '';
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `${settlementVouchers.length} settlement vouchers clear 1201 and debit the counter account 1102 ${cashName}; counter-side codes: ${[...counterAccounts].join(', ')}`,
+    });
+
+    // End of step 08: 1201 = the README closing receivables, exactly — 13,273,675,000 issued minus
+    // the settled 3,820,162,500 collected; 2101 is the README closing payables from step 07.
+    const accountsAtEnd = await apiGet<Array<{ code: string; name?: string; balance: number | string }>>(page, 'accounting/accounts');
+    const receivableAtEnd = balanceOf(accountsAtEnd, '1201');
+    expect(receivableAtEnd).toBe(README_TOTALS.receivablesClosingUnique);
+    expect(receivableAtEnd).toBe(9_453_512_500n);
+    expect(receivableAtEnd).toBe(receivableAfterIssue - settledSales);
+    const payableAtEnd = -balanceOf(accountsAtEnd, '2101');
+    expect(payableAtEnd).toBe(5_420_780_000n);
+
+    // Input VAT was posted in step 07; read its account from a purchase voucher and check the final
+    // balance against the fixture opening: it must grow by exactly the purchase VAT.
+    const firstPurchaseEntry = before.find((i) => i.direction === 'PURCHASE' && i.journalEntryId !== null)!;
+    const purchaseVoucher = await apiGet<{
+      lines: Array<{ accountCode: string; description?: string; debit: number | string; credit: number | string }>;
+    }>(page, `accounting/journal-entries/${firstPurchaseEntry.journalEntryId}`);
+    const inputVatLine = purchaseVoucher.lines.find((l) => l.description === 'مالیات بر ارزش افزوده خرید');
+    expect(inputVatLine, 'a purchase voucher has the input-VAT line').toBeDefined();
+    const inputVatCode = inputVatLine!.accountCode;
+    const inputVatBalance = balanceOf(accountsAtEnd, inputVatCode);
+    expect(
+      inputVatBalance - fixtureOpeningBalance(inputVatCode, 'debit'),
+      `input VAT ${inputVatCode} grew by exactly the purchase VAT`,
+    ).toBe(purchaseVatSum);
+
+    // 1102 final = opening petty cash + settled sales - settled purchases (all from the fixture).
+    const pettyCashAtEnd = balanceOf(accountsAtEnd, '1102');
+    expect(pettyCashAtEnd).toBe(fixtureOpeningBalance('1102', 'debit') + settledSales - settledPurchases);
+    // Output VAT 2201 and reserve 2301 deltas from their (credit) fixture openings: only 2201 moves.
+    const outputVatAtEnd = balanceOf(accountsAtEnd, '2201');
+    expect(outputVatAtEnd + fixtureOpeningBalance('2201', 'credit'), '2201 output VAT credit delta').toBe(
+      -saleVatSum,
+    );
+    expect(balanceOf(accountsAtEnd, '2301') + fixtureOpeningBalance('2301', 'credit'), '2301 does not move').toBe(0n);
+    expect(balanceOf(accountsAtEnd, '4101') - fixtureOpeningBalance('4101', 'debit')).toBe(-saleLineSum);
+    expect(rials(valuation.totalInventoryValue)).toBe(fixtureClosingStockValue());
+
+    test.info().annotations.push({
+      type: 'end-of-08',
+      description: `1201 ${receivableAtEnd}; 2101 ${payableAtEnd}; stock ${rials(valuation.totalInventoryValue)}; 1102 ${pettyCashAtEnd}; 2201 ${outputVatAtEnd}; input VAT ${inputVatCode} ${inputVatBalance}`,
+    });
   });
 
   test.fixme('09 POS walk-in sale: 1 x ITM-1001 paid in cash [E1]', async ({ page }) => {
@@ -371,7 +1047,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
   test.fixme('15 stock value 1301 equals the expected closing [E2]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/inventory');
-    void M1_EXPECTED_CLOSING.stockValue; // 252,026,700,000
+    void M1_EXPECTED_CLOSING.stockValue; // 249,383,200,000 (opening + purchases - COGS)
   });
 
   test.fixme('16 bank 1101 equals the reconciled statement balance [E3]', async ({ page }) => {

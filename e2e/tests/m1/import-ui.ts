@@ -72,6 +72,23 @@ export async function importFile(
   };
 }
 
+/**
+ * The API throttles every IP to 100 requests per minute (security/global-guards.ts GLOBAL_THROTTLE). Posting
+ * 238 invoices one by one through the single-invoice API (there is no bulk issue) exceeds that, so a 429 is
+ * waited out (Retry-After, else 5 s) and the same request is repeated; any other status goes to the caller.
+ */
+async function withThrottleRetry(
+  page: Page,
+  send: () => Promise<import('@playwright/test').APIResponse>,
+): Promise<import('@playwright/test').APIResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await send();
+    if (response.status() !== 429 || attempt >= 40) return response;
+    const wait = Number(response.headers()['retry-after']);
+    await page.waitForTimeout((Number.isFinite(wait) && wait > 0 ? wait : 5) * 1000);
+  }
+}
+
 /** GET /enterprise-hub/<path> through the app's own proxy, authenticated as the test tenant's owner. */
 export async function apiGet<T>(page: Page, route: string): Promise<T> {
   const token = await page.evaluate((key) => {
@@ -79,11 +96,116 @@ export async function apiGet<T>(page: Page, route: string): Promise<T> {
     return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
   }, SESSION_STORAGE_KEY);
   expect(token, 'the test session is in localStorage').toBeTruthy();
-  const response = await page.request.get(`/api/backend/enterprise-hub/${route}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await withThrottleRetry(page, () =>
+    page.request.get(`/api/backend/enterprise-hub/${route}`, { headers: { Authorization: `Bearer ${token}` } }),
+  );
   expect(response.status(), `GET ${route}`).toBe(200);
   return (await response.json()) as T;
+}
+
+/** PATCH /enterprise-hub/<route> with a JSON body through the app's own proxy (test tenant's owner). */
+export async function apiPatch<T>(page: Page, route: string, body: unknown): Promise<T> {
+  const token = await page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+  }, SESSION_STORAGE_KEY);
+  expect(token, 'the test session is in localStorage').toBeTruthy();
+  const response = await withThrottleRetry(page, () =>
+    page.request.patch(`/api/backend/enterprise-hub/${route}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: body,
+    }),
+  );
+  expect(response.status(), `PATCH ${route}`).toBe(200);
+  return (await response.json()) as T;
+}
+
+/**
+ * PUT /enterprise-hub/<route> with a JSON body through the app's own proxy (test tenant's owner).
+ * Returns the HTTP status: the posting-rules role update answers 204 and the caller asserts it.
+ */
+export async function apiPut(page: Page, route: string, body: unknown): Promise<number> {
+  const token = await page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+  }, SESSION_STORAGE_KEY);
+  expect(token, 'the test session is in localStorage').toBeTruthy();
+  const response = await withThrottleRetry(page, () =>
+    page.request.put(`/api/backend/enterprise-hub/${route}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: body,
+    }),
+  );
+  expect(response.ok(), `PUT ${route}`).toBeTruthy();
+  return response.status();
+}
+
+export interface InvoicePostingResult {
+  status: string;
+  journalEntryId: number | null;
+  paidJournalEntryId: number | null;
+  postingError: string | null;
+  finalPayable: number;
+}
+
+/**
+ * Issues one invoice through the real API (`PATCH invoicing/:id` with status ISSUED) and waits for the
+ * asynchronous posting (a `suite-events` job) to finish: polls `GET invoicing/:id` every 250 ms for up
+ * to 30 s until `journalEntryId` or `postingError` appears. Fails with the invoice number and error.
+ * Call strictly one at a time so FIFO order holds.
+ */
+export async function issueAndWait(
+  page: Page,
+  invoiceId: string,
+  invoiceNumber: string,
+): Promise<InvoicePostingResult> {
+  await apiPatch(page, `invoicing/${invoiceId}`, { status: 'ISSUED' });
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const invoice = await apiGet<InvoicePostingResult>(page, `invoicing/${invoiceId}`);
+    if (invoice.journalEntryId !== null || invoice.postingError !== null) {
+      if (invoice.postingError !== null) {
+        throw new Error(`invoice ${invoiceNumber}: posting failed: ${invoice.postingError}`);
+      }
+      return invoice;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`invoice ${invoiceNumber}: no voucher and no error 30 s after issuing`);
+    }
+    await page.waitForTimeout(500);
+  }
+}
+
+/**
+ * Settles one invoice the way a user does: the invoicing page's pay button calls `payInvoice`
+ * (frontend/src/lib/api/invoicing-client.ts), i.e. `PATCH invoicing/:id/pay`
+ * (InvoicingController.pay -> InvoicingService.pay) — chosen over `PATCH invoicing/:id
+ * {status:'PAID'}` (InvoicingService.update) because that is the path the frontend actually uses.
+ * Waits for the asynchronous settlement (a `suite-events` job) by polling `GET invoicing/:id` every
+ * 250 ms for up to 30 s until `paidJournalEntryId` is non-null, with `postingError` required null
+ * (a failed settlement writes `postingError` instead of a voucher). Call strictly one at a time,
+ * in the same date order as the issues.
+ */
+export async function payAndWait(
+  page: Page,
+  invoiceId: string,
+  invoiceNumber: string,
+): Promise<InvoicePostingResult> {
+  await apiPatch(page, `invoicing/${invoiceId}/pay`, {});
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const invoice = await apiGet<InvoicePostingResult>(page, `invoicing/${invoiceId}`);
+    if (invoice.paidJournalEntryId !== null || invoice.postingError !== null) {
+      if (invoice.postingError !== null) {
+        throw new Error(`invoice ${invoiceNumber}: settlement failed: ${invoice.postingError}`);
+      }
+      return invoice;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`invoice ${invoiceNumber}: no settlement voucher and no error 30 s after paying`);
+    }
+    await page.waitForTimeout(500);
+  }
 }
 
 /** API money (a JSON number, or a decimal string) -> integer rials. A fraction other than .00 is an error. */
