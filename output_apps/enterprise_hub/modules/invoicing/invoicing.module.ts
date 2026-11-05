@@ -5,6 +5,7 @@ import { AccountingModule } from '../accounting/accounting.module';
 import { CrmModule } from '../crm/crm.module';
 import { CurrencyModule } from '../currency/currency.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 import { TenantScope } from '../access/services/tenant-scope';
 import { StatutoryParameterEntity } from '../hr/statutory/statutory-parameter.entity';
 import { StatutoryRepository } from '../hr/statutory/statutory.repository';
@@ -38,6 +39,7 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     CrmModule,
     InventoryModule,
     AccountingModule,
+    PostingRulesModule,
     TenantsModule,
     BullModule.registerQueue({ name: SUITE_EVENTS_QUEUE }),
   ],

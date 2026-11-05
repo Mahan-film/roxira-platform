@@ -31,6 +31,8 @@ import { InvoicePostingService } from './services/invoice-posting.service';
 import { InvoicingService } from './services/invoicing.service';
 import { PosSaleService } from './services/pos-sale.service';
 import { CreatePosSaleDto } from './dto/pos-sale.dto';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -80,7 +82,12 @@ describePg('POS sales on PostgreSQL', () => {
     );
     inventory = new InventoryService(inventoryRepo);
     const invoicingRepo = new InvoicingRepository(ds.getRepository(InvoiceEntity), ds);
-    const posting = new InvoicePostingService(invoicingRepo, inventory, accounting);
+    const posting = new InvoicePostingService(
+      invoicingRepo,
+      inventory,
+      accounting,
+      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
+    );
     const crm = new CrmRepository(ds.getRepository(CrmLeadEntity), ds.getRepository(ContactMessageEntity));
     const identity = new CustomerIdentityService(crm);
     const tenants = new TenantsRepository(ds.getRepository(TenantEntity));

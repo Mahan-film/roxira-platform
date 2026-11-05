@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { fakePostingRules } from './__fixtures__/fake-posting-rules';
 import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 import { BadRequestException } from '@nestjs/common';
 import { AccountResponseDto } from '../accounting/dto/account-response.dto';
@@ -110,6 +111,7 @@ function setup() {
     repo as unknown as InvoicingRepository,
     inventory as unknown as InventoryService,
     accounting as unknown as AccountingService,
+    fakePostingRules(accounting as unknown as AccountingService),
   );
   return { repo, service, posting, journals, inventory, queue };
 }
@@ -125,6 +127,9 @@ const dto = (over: Partial<CreateInvoiceDto> = {}): CreateInvoiceDto => ({
 
 const sum = (lines: Array<{ debit?: string; credit?: string }>) =>
   lines.reduce((a, l) => a + Number(l.debit ?? 0) - Number(l.credit ?? 0), 0);
+
+/** The side of a ledger line that carries the amount (engine lines set the unused side to 0.00). */
+const side = (l: { debit?: string; credit?: string }) => (Number(l.debit ?? 0) !== 0 ? l.debit : l.credit);
 
 const issue = (t: ReturnType<typeof setup>, id: string) =>
   t.posting.handle({ tenantId: TENANT, invoiceId: id, status: InvoiceStatus.ISSUED });
@@ -257,8 +262,8 @@ describe('invoice kinds', () => {
     );
     const [issued, reversed] = t.journals;
     expect(sum(reversed.lines)).toBe(0);
-    expect(reversed.lines.map((l) => [l.accountCode, l.credit ?? l.debit])).toEqual(
-      expect.arrayContaining(issued.lines.map((l) => [l.accountCode, l.credit ?? l.debit])),
+    expect(reversed.lines.map((l) => [l.accountCode, side(l)])).toEqual(
+      expect.arrayContaining(issued.lines.map((l) => [l.accountCode, side(l)])),
     );
     // The cancel document itself books nothing.
     await issue(t, cancelDoc.id);

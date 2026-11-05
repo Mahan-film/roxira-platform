@@ -33,6 +33,8 @@ import { PeriodLockEntity } from './entities/period-lock.entity';
 import { PeriodLockedException } from './exceptions/ledger.exceptions';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { AccountingService } from './services/accounting.service';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -137,7 +139,12 @@ describePg('Ledger on PostgreSQL', () => {
       ),
     );
     invoicing = new InvoicingRepository(ds.getRepository(InvoiceEntity), ds);
-    posting = new InvoicePostingService(invoicing, inventory, accounting);
+    posting = new InvoicePostingService(
+      invoicing,
+      inventory,
+      accounting,
+      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
+    );
   }, 120_000);
 
   afterAll(async () => {
