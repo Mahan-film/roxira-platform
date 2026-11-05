@@ -7,6 +7,8 @@ import { JWT_DEFAULT_EXPIRES_IN } from '../auth/constants/auth.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccountingModule } from '../accounting/accounting.module';
 import { BankingModule } from '../banking/banking.module';
+import { PartiesModule } from '../parties/parties.module';
+import { PartiesRegistry } from './registry/parties.registry';
 import { CrmModule } from '../crm/crm.module';
 import { HrModule } from '../hr/hr.module';
 import { InventoryModule } from '../inventory/inventory.module';
@@ -81,6 +83,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     AccountingModule,
     InvoicingModule,
     BankingModule,
+    PartiesModule,
     BullModule.registerQueue({ name: PACKAGE_QUEUE_NAME }, { name: BULK_QUEUE_NAME }),
     TypeOrmModule.forFeature([
       DataImportBatchEntity,
@@ -132,6 +135,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SalesInvoicesRegistry,
     CrmActivitiesRegistry,
     BankStatementRegistry,
+    PartiesRegistry,
     {
       provide: ENTITY_IMPORT_ADAPTERS,
       useFactory: (
@@ -144,6 +148,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
         salesInvoices: SalesInvoicesRegistry,
         crmActivities: CrmActivitiesRegistry,
         bankStatement: BankStatementRegistry,
+        parties: PartiesRegistry,
       ) => [
         crmLeads,
         hrEmployees,
@@ -154,6 +159,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
         salesInvoices,
         crmActivities,
         bankStatement,
+        parties,
       ],
       inject: [
         CrmLeadsRegistry,
@@ -165,6 +171,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
         SalesInvoicesRegistry,
         CrmActivitiesRegistry,
         BankStatementRegistry,
+        PartiesRegistry,
       ],
     },
     JwtAuthGuard,

@@ -1267,6 +1267,28 @@
     "read_only": true,
     "legacy_member": true
   },
+  "GET /enterprise-hub/parties/ (PartiesController.list)": {
+    "policy": "crm:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /enterprise-hub/parties/by-code/:code (PartiesController.getByCode)": {
+    "policy": "crm:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": true
+  },
   "GET /enterprise-hub/posting-rules/ (PostingRulesController.list)": {
     "policy": "accounting:read",
     "owner": true,
@@ -2951,6 +2973,17 @@
     "read_only": true,
     "legacy_member": true
   },
+  "POST /enterprise-hub/parties/ (PartiesController.create)": {
+    "policy": "crm:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": true
+  },
   "POST /enterprise-hub/radar/run-swarm (RadarController.runSwarm)": {
     "policy": "platformAdmin"
   },
@@ -3265,6 +3298,17 @@
     "hr": false,
     "read_only": false,
     "legacy_member": false
+  },
+  "PUT /enterprise-hub/parties/:id (PartiesController.update)": {
+    "policy": "crm:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": true
   },
   "PUT /enterprise-hub/posting-rules/:docType/roles/:role (PostingRulesController.set)": {
     "policy": "accounting:admin",
