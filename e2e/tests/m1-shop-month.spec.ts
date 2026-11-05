@@ -151,7 +151,9 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     }>(page, 'parties?limit=200');
     expect(parties.total).toBe(48);
     expect(parties.data.map((p) => p.code).sort()).toEqual([...distinct.keys()].sort());
-    const ascii = (text: string) => text.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+    // The file mixes Persian (۰-۹) and Arabic-Indic (٠-٩) digits; the importer stores ASCII digits.
+    const ascii = (text: string) =>
+      text.replace(/[۰-۹٠-٩]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩'.indexOf(d) % 10));
     for (const [code, row] of distinct) {
       const party = parties.data.find((p) => p.code === code);
       expect(party, `party ${code}`).toBeDefined();
