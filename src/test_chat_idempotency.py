@@ -141,6 +141,36 @@ def test_in_progress_request_is_awaited_not_recomputed(monkeypatch):
     assert [r for r in results if isinstance(r, dict)] == [{"status": "SUCCESS", "reply": "slow-answer"}]
 
 
+def test_result_stored_between_cache_read_and_claim_is_replayed_not_recomputed(monkeypatch):
+    """Deterministic interleaving: the first attempt finishes (stores, releases) after the second
+    attempt read the cache (miss) but before it claims the lock. The second must replay."""
+    calls = {"n": 0}
+
+    async def core(payload, request, user):
+        calls["n"] += 1
+        return {"status": "SUCCESS", "reply": "answer"}
+
+    monkeypatch.setattr(mod, "_consult_core", core)
+    req = SimpleNamespace(headers={}, client=SimpleNamespace(host="203.0.113.7"))
+    real_get = chat_auth.idem_get
+    seen_miss = {"done": False}
+
+    def get_with_stale_first_read(key):
+        if not seen_miss["done"]:
+            seen_miss["done"] = True
+            # Stale miss for the caller; meanwhile "the other attempt" completes and releases.
+            res_key, lock_key = chat_auth.idem_keys(RID, "anon", "q")
+            chat_auth.idem_store(res_key, {"status": "SUCCESS", "reply": "answer"})
+            return None
+        return real_get(key)
+
+    monkeypatch.setattr(chat_auth, "idem_get", get_with_stale_first_read)
+    payload = {"message": "q", "request_id": RID}
+    resp = asyncio.run(mod.interactive_consult(dict(payload), req, chat_auth.ANONYMOUS))
+    assert calls["n"] == 0
+    assert resp.headers["x-idempotent-replay"] == "1"
+
+
 def test_lru_is_bounded(monkeypatch):
     monkeypatch.setattr(chat_auth, "IDEM_MAX_ENTRIES", 3)
     for i in range(6):
