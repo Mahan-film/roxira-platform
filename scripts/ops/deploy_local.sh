@@ -121,8 +121,9 @@ compute_services() {
   return 0
 }
 
-# Test helpers and migrations/data/ (seed values imported by a migration) are not migrations themselves.
-migration_files() { grep -Ei '(^|/)migrations?/|\.sql$' <<<"$CHANGED" | grep -Ev '(^|/)test/|/migrations/data/' || true; }
+# Only the plural migrations/ folders hold DB migrations. Test helpers, migrations/data/ (seed values imported by a
+# migration) and source folders named migration/ (the data_import migration feature) are not migrations themselves.
+migration_files() { grep -Ei '(^|/)migrations/|\.sql$' <<<"$CHANGED" | grep -Ev '(^|/)test/|/migrations/data/' || true; }
 
 env_names_needed() {  # NAMES ONLY, from the new code
   {
