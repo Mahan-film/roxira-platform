@@ -7,8 +7,9 @@ import {
   ILike,
   In,
 } from 'typeorm';
-import { JournalEntryStatus, JournalEntryType } from '../enums/accounting.enum';
+import { FiscalYearStatus, JournalEntryStatus, JournalEntryType } from '../enums/accounting.enum';
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
+import { FiscalYearEntity } from '../entities/fiscal-year.entity';
 import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
 import { PeriodLockEntity } from '../entities/period-lock.entity';
@@ -694,6 +695,22 @@ export class AccountingRepository {
   ): Promise<PeriodLockEntity | null> {
     return this.scope.within(tenantId, undefined, async (m) => {
       return m.getRepository(PeriodLockEntity).findOne({ where: { id, tenantId } });
+    });
+  }
+
+  /**
+   * The CLOSED fiscal year that owns this period lock, if any: the lock of a closed year may
+   * only be lifted by reopening the year (FiscalYearService.reopen), never by the unlock API.
+   */
+  async findClosedFiscalYearForLock(
+    tenantId: string,
+    lockId: number,
+    manager?: EntityManager,
+  ): Promise<FiscalYearEntity | null> {
+    return this.scope.within(tenantId, manager, async (m) => {
+      return m.getRepository(FiscalYearEntity).findOne({
+        where: { tenantId, periodLockId: lockId, status: FiscalYearStatus.CLOSED },
+      });
     });
   }
 

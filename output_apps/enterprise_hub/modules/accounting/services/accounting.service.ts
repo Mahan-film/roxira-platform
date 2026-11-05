@@ -702,9 +702,7 @@ export class AccountingService {
       );
     } catch (error) {
       if (error instanceof LockedPeriodError) {
-        throw new PeriodLockedException(
-          `Posting refused: ${error.date} is inside a locked accounting period.`,
-        );
+        throw new PeriodLockedException(this.lockedPeriodMessage(error.date));
       }
       if (error instanceof UnknownDimensionError) {
         this.mapPeriodLock(error);
@@ -737,14 +735,17 @@ export class AccountingService {
     return this.toEntryDto(saved);
   }
 
+  /** One 423 message for every locked-period refusal, carrying the exact offending date. */
+  private lockedPeriodMessage(date: string): string {
+    return `ثبت سند در دورهٔ قفل‌شده مجاز نیست: تاریخ ${date} در دوره یا سال مالی بسته قرار دارد.`;
+  }
+
   private mapPeriodLock(error: unknown): never {
     if (error instanceof UnknownDimensionError) {
       throw new BadRequestException(`تفصیلی یا مرکز ${error.code} (${error.kind}) تعریف نشده یا غیرفعال است.`);
     }
     if (error instanceof LockedPeriodError) {
-      throw new PeriodLockedException(
-        `Posting refused: ${error.date} is inside a locked accounting period.`,
-      );
+      throw new PeriodLockedException(this.lockedPeriodMessage(error.date));
     }
     throw error;
   }
@@ -792,6 +793,9 @@ export class AccountingService {
       }
       const date = dto.date ? new Date(dto.date) : entry.date;
       try {
+        // Both ends of the move are checked: a voucher sitting in a locked period may not be
+        // edited out of it, and the new date must be open as well.
+        await this.accountingRepository.assertDateOpen(tenantId, entry.date, manager);
         await this.accountingRepository.assertDateOpen(tenantId, date, manager);
       } catch (error) {
         this.mapPeriodLock(error);
@@ -871,10 +875,15 @@ export class AccountingService {
     });
   }
 
-  /** Deletes a DRAFT or TEMPORARY voucher. A final voucher is only ever reversed. */
+  /** Deletes a DRAFT or TEMPORARY voucher dated in an open period. A final voucher is only ever reversed. */
   async deleteVoucher(tenantId: string, id: number): Promise<void> {
     await this.accountingRepository.transaction(tenantId, async (manager) => {
-      await this.lockEditableVoucher(tenantId, id, manager);
+      const entry = await this.lockEditableVoucher(tenantId, id, manager);
+      try {
+        await this.accountingRepository.assertDateOpen(tenantId, entry.date, manager);
+      } catch (error) {
+        this.mapPeriodLock(error);
+      }
       await this.accountingRepository.deleteEntry(tenantId, id, manager);
     });
   }
@@ -1089,6 +1098,12 @@ export class AccountingService {
     }
     if (existing.unlockedAt != null) {
       throw new ConflictException('این دوره قبلاً باز شده است.');
+    }
+    const closedYear = await this.accountingRepository.findClosedFiscalYearForLock(tenantId, id);
+    if (closedYear) {
+      throw new ConflictException(
+        'این قفل مربوط به سال مالی بسته‌شده است؛ ابتدا سال مالی را بازگشایی کنید.',
+      );
     }
     const updated = await this.accountingRepository.unlockPeriod(tenantId, id, {
       unlockedBy: actor,
