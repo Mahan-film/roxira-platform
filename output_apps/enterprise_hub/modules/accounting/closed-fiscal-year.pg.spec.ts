@@ -97,12 +97,9 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
     const repo = new AccountingRepository(new TenantScope(ds));
     accounting = new AccountingService(repo, currency);
     years = new FiscalYearService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(new TenantScope(ds)), accounting);
-    petty = new PettyCashService(new PettyCashRepository(ds), repo, accounting);
-    assets = new FixedAssetService(
-      new FixedAssetRepository(ds),
-      repo,
-      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
-    );
+    const engine = new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting);
+    petty = new PettyCashService(new PettyCashRepository(ds), repo, accounting, engine);
+    assets = new FixedAssetService(new FixedAssetRepository(ds), repo, engine);
     await new ChartTemplateService(repo).apply(T1, 'iran-trading');
   }, 120000);
 
