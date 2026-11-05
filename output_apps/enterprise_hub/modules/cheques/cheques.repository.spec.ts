@@ -57,6 +57,15 @@ describe('ChequesRepository tenant scoping', () => {
     expect(save).toHaveBeenCalled();
   });
 
+  it('reads the event sequence in the caller transaction when a manager is given', async () => {
+    run.mockClear();
+    const find = jest.fn(async (_o: unknown) => []);
+    const manager = { getRepository: () => ({ find }) };
+    await repository.listEvents(TENANT, 1, manager as never);
+    expect(run).not.toHaveBeenCalled();
+    expect(find).toHaveBeenCalledWith({ where: { tenantId: TENANT, chequeId: 1 }, order: { id: 'ASC' } });
+  });
+
   it('locks the row and scopes by tenant for in-transaction reads', async () => {
     const findOne = jest.fn(async () => null);
     const manager = { getRepository: () => ({ findOne }) };

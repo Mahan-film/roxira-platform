@@ -5,6 +5,7 @@ import {
   partialPaymentPosting as legacyPartial,
 } from './__fixtures__/legacy-cheque-lifecycle';
 import { creationPosting, findRule, linesFor, partialPaymentPosting } from './lifecycle/cheque-lifecycle';
+import { buildProposal } from '../posting_rules/domain/posting-engine';
 
 /**
  * Old vs new: the posting rules engine must give the same vouchers as the hardcoded cheque table
@@ -49,6 +50,34 @@ describe('cheque postings: legacy table vs posting rules engine', () => {
           if (oldPartial && newPartial) expect({ description: newPartial.description, lines: newPartial.lines }).toEqual(oldPartial);
         }
       }
+    }
+  });
+
+  it('the party code rides only the receivable/payable line, and nothing when absent', () => {
+    const partyRoles = (docType: string, partyCode?: string) =>
+      buildProposal({ docType, amounts: { amount: 100n }, partyCode })
+        .lines.filter((l) => l.partyCode !== undefined)
+        .map((l) => l.role);
+    // drawer/third party lands on the receivable line of a received cheque and the payable line otherwise
+    for (const docType of [
+      'cheque.received.create',
+      'cheque.received.redeposit',
+      'cheque.received.bounce',
+      'cheque.received.bounce_direct',
+      'cheque.received.return',
+    ]) {
+      expect(partyRoles(docType, 'P-1')).toEqual(['receivable']);
+    }
+    for (const docType of ['cheque.received.spend', 'cheque.issued.create', 'cheque.issued.return']) {
+      expect(partyRoles(docType, 'P-1')).toEqual(['payable']);
+    }
+    // clearance/deposit moves never carried a party in the legacy voucher
+    for (const docType of ['cheque.received.deposit', 'cheque.received.clear', 'cheque.received.clear_direct', 'cheque.issued.clear']) {
+      expect(partyRoles(docType, 'P-1')).toEqual([]);
+    }
+    // no party code in, no party code out
+    for (const docType of ['cheque.received.create', 'cheque.received.spend', 'cheque.issued.create']) {
+      expect(partyRoles(docType, undefined)).toEqual([]);
     }
   });
 });

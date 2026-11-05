@@ -8,7 +8,7 @@ import { EntityManager } from 'typeorm';
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { MoneyFormatError, fromDb, fromMinor, minorToDecimal, toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
-import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
+import { PostingResult, PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import {
   CHEQUE_ACCOUNT_DEFINITIONS,
   DEFAULT_DUE_WINDOW_DAYS,
@@ -127,7 +127,9 @@ export class ChequesService {
           manager,
         );
         const posting = creationPosting(cheque.direction, amountMinor);
-        const journalEntryId = await this.post(tenantId, cheque, 'new', issueDate, posting.description, posting.docType, amountMinor, manager);
+        const journalEntryId = (
+          await this.post(tenantId, cheque, 'new', issueDate, posting.description, posting.docType, amountMinor, manager)
+        ).entryId;
         await this.chequesRepository.addEvent(
           tenantId,
           { chequeId: cheque.id, fromStatus: null, toStatus: ChequeStatus.REGISTERED, eventDate: issueDate, journalEntryId, amount: minorToDecimal(amountMinor), note: null },
@@ -179,7 +181,7 @@ export class ChequesService {
       }
 
       const journalEntryId = rule.docType
-        ? await this.post(tenantId, cheque, dto.status, eventDate, rule.description, rule.docType, remaining, manager, dto.spentToCode)
+        ? (await this.post(tenantId, cheque, dto.status, eventDate, rule.description, rule.docType, remaining, manager, dto.spentToCode)).entryId
         : null;
       const closes = dto.status === ChequeStatus.CLEARED;
       await this.chequesRepository.updateStatus(
@@ -216,6 +218,10 @@ export class ChequesService {
    * The bank paid part of the face value. Posts the clearing entry for that part only; the cheque
    * keeps its status and the rest is still collectible (or can bounce later for the remainder).
    * A payment that would take the whole remainder is rejected: use the normal clear move.
+   *
+   * A client `idempotencyKey` makes the move replay-safe: a retry for the same key returns the first
+   * result (the voucher already posted, `settledAmount` unchanged) instead of posting and settling
+   * twice. It is namespaced under the cheque id so the same key on another cheque cannot collide.
    */
   async partialPayment(tenantId: string, id: number, dto: PartialPaymentDto): Promise<ChequeDetailResponseDto> {
     let paid: bigint;
@@ -238,13 +244,27 @@ export class ChequesService {
       if (!posting) {
         throw new BadRequestException(`پرداخت بخشی از چک در وضعیت «${cheque.status}» مجاز نیست.`);
       }
-      if (paid >= remaining) {
-        throw new BadRequestException('مبلغ پرداخت باید کمتر از مانده چک باشد؛ برای پرداخت کامل، وضعیت را «وصول/پاس» کنید.');
-      }
       if (eventDate < cheque.issueDate) {
         throw new BadRequestException('تاریخ رویداد نمی‌تواند پیش از تاریخ صدور چک باشد.');
       }
-      const journalEntryId = await this.post(tenantId, cheque, 'partial', eventDate, posting.description, posting.docType, paid, manager);
+      // Posting is idempotent per source key, so a replayed move is detected before the state
+      // checks that already moved (the remainder shrank after the first commit).
+      const posted = await this.post(
+        tenantId,
+        cheque,
+        'partial',
+        eventDate,
+        posting.description,
+        posting.docType,
+        paid,
+        manager,
+        undefined,
+        dto.idempotencyKey,
+      );
+      if (posted.replayed) return;
+      if (paid >= remaining) {
+        throw new BadRequestException('مبلغ پرداخت باید کمتر از مانده چک باشد؛ برای پرداخت کامل، وضعیت را «وصول/پاس» کنید.');
+      }
       await this.chequesRepository.updateStatus(tenantId, id, { settledAmount: minorToDecimal(settled + paid) }, manager);
       await this.chequesRepository.addEvent(
         tenantId,
@@ -253,7 +273,7 @@ export class ChequesService {
           fromStatus: cheque.status,
           toStatus: cheque.status,
           eventDate,
-          journalEntryId,
+          journalEntryId: posted.entryId,
           amount: minorToDecimal(paid),
           note: dto.note ?? 'پرداخت بخشی از وجه چک',
         },
@@ -375,10 +395,15 @@ export class ChequesService {
   // ------------------------------------------------------------------ internals
 
   /**
-   * Posts one entry for a cheque move through the posting rules engine; returns the journal entry
-   * id. The source key is the cheque plus its event sequence number, so a retry of the same move
+   * Posts one entry for a cheque move through the posting rules engine and returns the posting
+   * result. The source key is the cheque plus its event sequence number, so a retry of the same move
    * returns the same voucher while a later move of the same kind (bounce, re-deposit, bounce) posts
-   * a new one. An endorsed cheque settles a different party's payable than the drawer's.
+   * a new one. When the caller supplies an `idempotencyKey` (partial payments), it wins over the
+   * sequence so a retry after the first commit replays instead of posting again. An endorsed cheque
+   * settles a different party's payable than the drawer's.
+   *
+   * The sequence is read through the caller's transaction (`manager`), never on a second connection,
+   * so two concurrent moves of the same cheque cannot observe the same sequence.
    */
   private async post(
     tenantId: string,
@@ -390,14 +415,16 @@ export class ChequesService {
     amount: bigint,
     manager: EntityManager,
     spentToCode?: string,
-  ): Promise<number> {
-    const seq = (await this.chequesRepository.listEvents(tenantId, cheque.id)).length;
-    const result = await this.postingRules.post(
+    idempotencyKey?: string,
+  ): Promise<PostingResult> {
+    const seq = (await this.chequesRepository.listEvents(tenantId, cheque.id, manager)).length;
+    const sourceId = idempotencyKey ? `${cheque.id}:${idempotencyKey}` : `${cheque.id}:${seq}`;
+    return this.postingRules.post(
       tenantId,
       {
         docType,
         sourceType: 'cheque',
-        sourceId: `${cheque.id}:${seq}`,
+        sourceId,
         entryNumber: `CHQ-${cheque.id}-${marker}-${seq}`,
         date: `${date}T00:00:00.000Z`,
         description: `${title} — چک ${cheque.chequeNumber} (${cheque.partyName})`,
@@ -406,7 +433,6 @@ export class ChequesService {
       },
       manager,
     );
-    return result.entryId;
   }
 
   /**
