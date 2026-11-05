@@ -10,9 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { listBankAccounts } from "@/lib/api/banking-client";
 import { listCheques, partialPayment, transitionCheque, verifySayad } from "@/lib/api/cheques-client";
 import { canPartialPay, isValidNationalId, partialAmountError, sortByUrgency, statusesFor, toLatinDigits } from "@/lib/cheques-ui";
 import { formatJalaliDate, formatMoneyRial } from "@/lib/fa-format";
+import type { BankAccount } from "@/types/banking";
 import {
   ACTION_LABELS,
   DIRECTION_LABELS,
@@ -28,7 +30,7 @@ import { ChequeForm } from "./cheque-form";
 const SELECT_CLASS = "h-8 rounded-lg border border-input bg-background px-2 text-sm";
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-type Panel = { kind: "endorse" | "partial"; id: number } | null;
+type Panel = { kind: "endorse" | "partial" | "clear"; id: number } | null;
 
 export function ChequesList() {
   const [cheques, setCheques] = useState<Cheque[]>([]);
@@ -47,8 +49,18 @@ export function ChequesList() {
   const [endorseCode, setEndorseCode] = useState("");
   const [endorseNational, setEndorseNational] = useState("");
   const [partialText, setPartialText] = useState("");
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [bankAccountId, setBankAccountId] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => setRefreshKey((key) => key + 1), []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    listBankAccounts(controller.signal)
+      .then(setBankAccounts)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -95,6 +107,7 @@ export function ChequesList() {
       setEndorseCode("");
       setEndorseNational("");
       setPartialText("");
+      setBankAccountId("");
       refresh();
     } catch (err) {
       setError(loadErrorMessage(err));
@@ -103,11 +116,21 @@ export function ChequesList() {
     }
   }
 
-  const move = (cheque: Cheque, next: ChequeStatus, extra: { spentToName?: string; spentToCode?: string; spentToNationalId?: string } = {}) =>
+  const move = (
+    cheque: Cheque,
+    next: ChequeStatus,
+    extra: { spentToName?: string; spentToCode?: string; spentToNationalId?: string; bankAccountId?: number } = {},
+  ) =>
     run(
       () => transitionCheque(cheque.id, { status: next, eventDate: todayIso(), ...extra }),
       `چک ${cheque.chequeNumber}: «${STATUS_LABELS[cheque.direction][next]}» ثبت شد.`,
     );
+
+  const selectedBankAccountId = bankAccountId ? Number(bankAccountId) : undefined;
+
+  function submitClear(cheque: Cheque) {
+    void move(cheque, "cleared", { bankAccountId: selectedBankAccountId });
+  }
 
   function submitEndorse(cheque: Cheque) {
     const national = toLatinDigits(endorseNational).replace(/\s/g, "");
@@ -129,7 +152,12 @@ export function ChequesList() {
       return;
     }
     void run(
-      () => partialPayment(cheque.id, { amount: toLatinDigits(partialText).replace(/[,٬\s]/g, ""), eventDate: todayIso() }),
+      () =>
+        partialPayment(cheque.id, {
+          amount: toLatinDigits(partialText).replace(/[,٬\s]/g, ""),
+          eventDate: todayIso(),
+          bankAccountId: selectedBankAccountId,
+        }),
       `چک ${cheque.chequeNumber}: پرداخت بخشی ثبت شد.`,
     );
   }
@@ -259,9 +287,34 @@ export function ChequesList() {
                             <Button size="sm" variant="outline" onClick={() => setPanel(null)}>لغو</Button>
                           </div>
                         </div>
+                      ) : panel?.id === cheque.id && panel.kind === "clear" ? (
+                        <div className="flex flex-col gap-1">
+                          <select aria-label="حساب بانکی" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className={SELECT_CLASS}>
+                            <option value="">حساب پیش‌فرض (۱۰۱۰)</option>
+                            {bankAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name} — {account.ledgerAccountCode}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="flex gap-1">
+                            <Button size="sm" disabled={busy} onClick={() => submitClear(cheque)}>
+                              ثبت {ACTION_LABELS[cheque.direction].cleared}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setPanel(null)}>لغو</Button>
+                          </div>
+                        </div>
                       ) : panel?.id === cheque.id && panel.kind === "partial" ? (
                         <div className="flex flex-col gap-1">
                           <Input aria-label="مبلغ پرداخت بخشی" dir="ltr" inputMode="decimal" placeholder={`کمتر از ${formatMoneyRial(Number(cheque.remainingAmount))}`} value={partialText} onChange={(e) => setPartialText(e.target.value)} />
+                          <select aria-label="حساب بانکی" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className={SELECT_CLASS}>
+                            <option value="">حساب پیش‌فرض (۱۰۱۰)</option>
+                            {bankAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name} — {account.ledgerAccountCode}
+                              </option>
+                            ))}
+                          </select>
                           <div className="flex gap-1">
                             <Button size="sm" disabled={busy || !partialText.trim()} onClick={() => submitPartial(cheque)}>ثبت پرداخت بخشی</Button>
                             <Button size="sm" variant="outline" onClick={() => setPanel(null)}>لغو</Button>
@@ -277,13 +330,30 @@ export function ChequesList() {
                                 size="sm"
                                 variant="outline"
                                 disabled={busy}
-                                onClick={() => (next === "spent" ? setPanel({ kind: "endorse", id: cheque.id }) : void move(cheque, next))}
+                                onClick={() => {
+                                  if (next === "spent") {
+                                    setPanel({ kind: "endorse", id: cheque.id });
+                                  } else if (next === "cleared") {
+                                    setBankAccountId("");
+                                    setPanel({ kind: "clear", id: cheque.id });
+                                  } else {
+                                    void move(cheque, next);
+                                  }
+                                }}
                               >
                                 {ACTION_LABELS[cheque.direction][next] ?? next}
                               </Button>
                             ))}
                           {canPartialPay(cheque) && (
-                            <Button size="sm" variant="outline" disabled={busy} onClick={() => setPanel({ kind: "partial", id: cheque.id })}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => {
+                                setBankAccountId("");
+                                setPanel({ kind: "partial", id: cheque.id });
+                              }}
+                            >
                               پرداخت بخشی
                             </Button>
                           )}

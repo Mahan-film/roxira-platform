@@ -31,6 +31,10 @@ export class ChequeEventEntity {
   @Column({ type: 'integer', name: 'journal_entry_id', nullable: true })
   journalEntryId: number | null;
 
+  /** Bank account whose ledger account received the bank-side line; null = the legacy 1010. */
+  @Column({ type: 'integer', name: 'bank_account_id', nullable: true })
+  bankAccountId: number | null;
+
   @Column({ type: 'varchar', length: 512, nullable: true })
   note: string | null;
 

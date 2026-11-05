@@ -127,12 +127,16 @@ export interface TransitionChequeDto {
   spentToName?: string;
   spentToCode?: string;
   spentToNationalId?: string;
+  /** Bank account whose ledger account receives the bank-side line; omitted = 1010. */
+  bankAccountId?: number;
   note?: string;
 }
 
 export interface PartialPaymentDto {
   amount: string | number;
   eventDate?: string;
+  /** Bank account whose ledger account receives the bank-side line; omitted = 1010. */
+  bankAccountId?: number;
   note?: string;
 }
 

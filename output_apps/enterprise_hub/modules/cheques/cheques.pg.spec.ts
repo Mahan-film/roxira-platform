@@ -99,10 +99,15 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
     await ds.runMigrations();
     accounting = new AccountingService(new AccountingRepository(new TenantScope(ds)), currencyStub);
     const chequesRepo = new ChequesRepository(new TenantScope(ds));
-    service = new ChequesService(chequesRepo, accounting, new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting));
     banking = new BankingService(
       new BankingRepository(ds.getRepository(BankAccountEntity), ds.getRepository(BankStatementLineEntity), ds),
       accounting,
+    );
+    service = new ChequesService(
+      chequesRepo,
+      accounting,
+      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
+      banking,
     );
     recon = new ChequeReconService(chequesRepo, banking);
     for (const tenantId of [T1, T2]) {
@@ -298,6 +303,22 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
       expect((await recon.suggest(T2, { bankAccountId })).items).toEqual([]);
       const some = (await recon.suggest(T1, { bankAccountId })).items[0];
       await expect(recon.match(T2, { bankAccountId, eventId: some.eventId, statementLineId: 1 })).rejects.toThrow();
+    });
+
+    it('a clearing with bankAccountId posts to that account ledger and reconciles', async () => {
+      const c = await service.create(T1, base({ amount: '888000', issueDate: '2026-11-01', dueDate: '2026-11-10' }) as never);
+      await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED, eventDate: '2026-11-05' });
+      await service.transition(T1, c.id, { status: ChequeStatus.CLEARED, eventDate: '2026-11-10', bankAccountId: otherBankAccountId });
+      const [line] = await banking.importStatementLines(T1, otherBankAccountId, [stmt(30, '2026-11-10', 888000, 0)]);
+      const view = await recon.suggest(T1, { bankAccountId: otherBankAccountId });
+      const item = view.items.find((i) => i.chequeId === c.id)!;
+      expect(item.state).toBe('suggested');
+      expect(item.candidates.map((x) => x.statementLineId)).toEqual([line]);
+      const done = await recon.match(T1, { bankAccountId: otherBankAccountId, eventId: item.eventId, statementLineId: line });
+      expect(done.state).toBe('reconciled');
+      const dbEvent = await q<{ bank_account_id: number }>(
+        `SELECT bank_account_id FROM fin_cheque_events WHERE id = $1`, [item.eventId]);
+      expect(dbEvent[0].bank_account_id).toBe(otherBankAccountId);
     });
 
     it('the bounced report ages cheques from their bounce date and reports the unpaid remainder', async () => {
