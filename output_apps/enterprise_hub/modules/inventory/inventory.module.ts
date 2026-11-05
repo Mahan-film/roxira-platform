@@ -4,6 +4,7 @@ import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InventoryController } from './controllers/inventory.controller';
 import { StockDocumentsController } from './controllers/stock-documents.controller';
+import { StockReportsController } from './controllers/stock-reports.controller';
 import { StoresController } from './controllers/stores.controller';
 import { StockDocumentEntity, StockDocumentLineEntity } from './entities/stock-document.entity';
 import { StoreEntity } from './entities/store.entity';
@@ -11,6 +12,7 @@ import { StockDocumentsRepository } from './repositories/stock-documents.reposit
 import { OpeningBalanceController } from './controllers/opening-balance.controller';
 import { OpeningBalanceService } from './services/opening-balance.service';
 import { StockDocumentsService } from './services/stock-documents.service';
+import { StockReportService } from './services/stock-report.service';
 import { StoresService } from './services/stores.service';
 import { FifoBatchEntity } from './entities/fifo-batch.entity';
 import { StockItemEntity } from './entities/stock-item.entity';
@@ -48,6 +50,7 @@ import { InventoryService } from './services/inventory.service';
     StoresController,
     StockDocumentsController,
     OpeningBalanceController,
+    StockReportsController,
   ],
   providers: [
     InventoryService,
@@ -56,6 +59,7 @@ import { InventoryService } from './services/inventory.service';
     StockDocumentsService,
     StockDocumentsRepository,
     OpeningBalanceService,
+    StockReportService,
   ],
   exports: [InventoryService, InventoryRepository, StockDocumentsService, StockDocumentsRepository],
 })
