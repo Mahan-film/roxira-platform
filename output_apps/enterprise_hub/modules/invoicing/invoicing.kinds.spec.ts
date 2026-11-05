@@ -23,6 +23,10 @@ const TENANT = 'tenant-a';
 class Repo {
   rows: InvoiceEntity[] = [];
   private n = 0;
+  async lockForReturn() {
+    return null;
+  }
+
   async transaction<T>(work: (m: unknown) => Promise<T>) {
     return work({});
   }

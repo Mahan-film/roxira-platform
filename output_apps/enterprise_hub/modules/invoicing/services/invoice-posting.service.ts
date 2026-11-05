@@ -831,20 +831,23 @@ export class InvoicePostingService {
   /**
    * How the amount owed was settled, in rial minor units. Without recorded payments the whole
    * amount is one cash/bank settlement. With them, each method keeps its own amount and the last
-   * one absorbs any rounding so the parts add up to exactly what is owed.
+   * one absorbs any rounding so the parts add up to exactly what is owed. A refund (negative
+   * amount owed) is split the same way, with every part negative.
    */
   private splitPayments(invoice: InvoiceEntity, owed: bigint): Array<[string, bigint]> {
     const payments = invoice.payments ?? [];
     if (payments.length === 0) {
       return [['CASH', owed]];
     }
+    // A return owes a negative amount: its recorded payments are refunds of that size.
+    const sign = owed < 0n ? -1n : 1n;
     const parts: Array<[string, bigint]> = [];
     let assigned = 0n;
     payments.forEach((payment, index) => {
       const amount =
         index === payments.length - 1
           ? owed - assigned
-          : this.rialMinor(invoice, payment.amount);
+          : sign * this.rialMinor(invoice, payment.amount);
       assigned += amount;
       parts.push([payment.method, amount]);
     });

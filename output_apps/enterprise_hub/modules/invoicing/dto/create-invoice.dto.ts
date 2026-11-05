@@ -146,6 +146,12 @@ export class InvoiceItemDto {
   @Max(100)
   vatRate?: number;
 
+  @ApiPropertyOptional({ description: 'در برگشتی: شمارهٔ سطر صورتحساب مرجع (از صفر)' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  originalLine?: number;
+
   @ApiPropertyOptional({ description: 'مالیات سطر (بازمحاسبه سمت سرور)', example: 900000 })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
