@@ -40,7 +40,7 @@ FAMILY_ALIASES: dict[str, tuple[str, ...]] = {
     "moonshot": ("moonshot*", "kimi*"),
 }
 # Hosts and routers that only carry someone else's model: skipped when a later segment names the vendor.
-WRAPPERS = ("openrouter", "groq", "keypool", "together*", "fireworks", "cerebras", "sambanova", "nvidia-nim", "cloudflare*",
+WRAPPERS = ("openrouter", "groq", "keypool", "together*", "fireworks", "sambanova", "nvidia-nim", "cloudflare*",
             "huggingface", "@cf", "models", "accounts", "fireworks*", "inference", "hf")
 
 

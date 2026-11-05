@@ -18,7 +18,7 @@ release is older than six months unless nothing better exists.
   role tiers free/cheap/strong), NestJS + TypeScript enterprise app, Next.js + Tailwind + shadcn UI,
   Redis, Nginx, Docker Compose on one Hetzner VPS (Germany). The owner works from **Iran**: some
   vendors are blocked or refuse Iranian accounts (Anthropic API/claude.ai regions list, Groq 403,
-  GitHub risk). Payments via Zibal, SMS via Kavenegar/SMS.ir.
+  GitHub risk). Payments via Zibal, SMS via Kavenegar.
 - Builder tooling today (on a 16 GB Mac): Claude Code (Opus as strategist, Sonnet/Haiku subagents),
   OpenCode, Aider, Goose, RTK output compression, OmniRoute and LiteLLM gateways, OpenRouter
   (DeepSeek V4.1 Flash as default paid executor, $0.30/$1.20 per 1M tokens), Mistral/Groq/SiliconFlow

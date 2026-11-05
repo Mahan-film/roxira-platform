@@ -14,7 +14,6 @@ cp -p "$ENV_FILE" "$BACKUP_DIR/.env.bak.$(date +%Y%m%d%H%M%S)"
 
 # var -> container it is read from
 declare -A SRC=(
-  [SMS_IR_API_KEY]=roxira_app_prod
   [KAVENEGAR_API_KEY]=roxira_app_prod
   [OPENROUTER_API_KEY]=roxira_app_prod
   [KIRA_API_KEY]=roxira_app_prod

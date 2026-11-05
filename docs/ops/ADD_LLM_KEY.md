@@ -11,7 +11,6 @@ in `config/key_pool.yaml` has four slots: `NAME`, `NAME_2`, `NAME_3`, `NAME_4`. 
 | Gemini (AI Studio) | `GEMINI_API_KEY`, `_2`.. `_4` | separate Cloud projects = separate quota |
 | OpenRouter product | `OPENROUTER_API_KEY`, `_2`.. `_4` | product workspace only (used by `private`) |
 | OpenRouter agents | `OPENROUTER_API_KEY_AGENTS`, `_2`.. `_4` | agents workspace |
-| Cerebras | `CEREBRAS_API_KEY`, `_2`.. `_4` | free |
 | NVIDIA NIM | `NVIDIA_API_KEY`, `_2`.. `_4` | build.nvidia.com, free |
 | Cloudflare Workers AI | `CF_AI_TOKEN`, `_2`.. `_4` + `CF_ACCOUNT_ID` | token needs Workers AI permission |
 | DeepSeek | `DEEPSEEK_API_KEY`, `_2`.. `_4` | paid, never in `private` |

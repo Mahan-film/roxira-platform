@@ -12,7 +12,6 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 try:
-    from src.automation.cerebras_client import CerebrasClient
     from src.automation.sambanova_client import SambaNovaClient
     from src.automation.git_worktree_manager import GitWorktreeManager
     FACTORY_ENGINES_AVAILABLE = True
@@ -36,7 +35,6 @@ if env_file.exists():
 openrouter_key = os.getenv("OPENROUTER_API_KEY") or env_vars.get("OPENROUTER_API_KEY", "")
 deepseek_key = os.getenv("DEEPSEEK_API_KEY") or env_vars.get("DEEPSEEK_API_KEY", "")
 
-cerebras = CerebrasClient() if FACTORY_ENGINES_AVAILABLE else None
 sambanova = SambaNovaClient() if FACTORY_ENGINES_AVAILABLE else None
 worktrees = GitWorktreeManager() if FACTORY_ENGINES_AVAILABLE else None
 
@@ -285,27 +283,10 @@ for mod_key, data in MODULES.items():
     if not code:
         code = data["fallback_code"]
 
-    if cerebras is not None:
-        verdict = cerebras.check_syntax(code)
-        if (
-            not verdict["valid"]
-            and verdict.get("ai")
-            and verdict["ai"].get("status") == "SUCCESS"
-        ):
-            repair = cerebras.repair_code(code, verdict["issues"])
-            repaired_ok = (
-                repair.get("status") == "SUCCESS"
-                and cerebras.local_syntax_check(repair["content"])["valid"]
-            )
-            if repaired_ok:
-                code = repair["content"]
-                verdict = cerebras.check_syntax(code)
-        print(f"   🧠 Cerebras LSP: {verdict['status']} (valid={verdict['valid']})")
-    else:
-        try:
-            ast.parse(code)
-        except SyntaxError:
-            code = data["fallback_code"]
+    try:
+        ast.parse(code)
+    except SyntaxError:
+        code = data["fallback_code"]
 
     staged = isolated_validate(mod_key, code)
     if not staged["valid"]:

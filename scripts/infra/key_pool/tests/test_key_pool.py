@@ -340,9 +340,9 @@ def test_summarize_cheap_then_free_ladder_and_cheap_agent_order():
 
 # ---- every key of every provider (owner decision 2026-10-22) ----
 
-SLOT_PROVIDERS = ["groq", "sambanova", "mistral", "gemini", "cerebras", "nvidia-nim", "cloudflare-ai",
+SLOT_PROVIDERS = ["groq", "sambanova", "mistral", "gemini", "nvidia-nim", "cloudflare-ai",
                   "deepseek", "chutes", "together", "fireworks", "openrouter-private"]
-NEW_PROVIDERS = {"cerebras", "nvidia-nim", "cloudflare-ai", "deepseek", "chutes", "together", "fireworks"}
+NEW_PROVIDERS = {"nvidia-nim", "cloudflare-ai", "deepseek", "chutes", "together", "fireworks"}
 
 
 def _fb(cfg):
@@ -380,7 +380,7 @@ def test_new_providers_are_inert_without_keys():
 
 
 def test_rank_shares_load_across_all_keys_of_all_providers():
-    names = {"GROQ_API_KEY", "GROQ_API_KEY_2", "CEREBRAS_API_KEY", "NVIDIA_API_KEY", "NVIDIA_API_KEY_2", "GEMINI_API_KEY",
+    names = {"GROQ_API_KEY", "GROQ_API_KEY_2", "NVIDIA_API_KEY", "NVIDIA_API_KEY_2", "GEMINI_API_KEY",
              "KEYPOOL_MASTER_KEY"}
     cfg = render_litellm.render(pool(), names)
     fb = _fb(cfg)
@@ -388,12 +388,12 @@ def test_rank_shares_load_across_all_keys_of_all_providers():
     rank = next(n for n in chain if any(m["model_name"] == n and m["litellm_params"]["model"].startswith("groq/")
                                         for m in cfg["model_list"]))
     deps = [m for m in cfg["model_list"] if m["model_name"] == rank]
-    # unverified providers (Cerebras, NIM) share no customer-facing rank until they graduate (docs/infra/KEY_POOL.md)
+    # unverified providers (NIM) share no customer-facing rank until they graduate (docs/infra/KEY_POOL.md)
     assert {m["litellm_params"]["api_key"] for m in deps} == {"os.environ/GROQ_API_KEY", "os.environ/GROQ_API_KEY_2"}
     assert {m["litellm_params"]["model"].split("/")[0] for m in deps} == {"groq"}
     # while the agent ladder (public data only) does share the rank across them
     agent = [m for m in cfg["model_list"] if m["model_name"].startswith("best-all")]
-    assert {m["litellm_params"]["model"].split("/")[0] for m in agent} >= {"groq", "cerebras", "nvidia_nim"}
+    assert {m["litellm_params"]["model"].split("/")[0] for m in agent} >= {"groq", "nvidia_nim"}
     # simple-shuffle only looks at the first deployment's keys: every deployment must carry a weight
     assert all(isinstance(m["litellm_params"]["weight"], int) and m["litellm_params"]["weight"] > 0
                for m in cfg["model_list"])
@@ -441,7 +441,7 @@ def test_private_group_stays_product_keys_only_and_refuses_new_free_or_may_log()
     assert {d.key_env for d in deps} == {"OPENROUTER_API_KEY", "OPENROUTER_API_KEY_2", "OPENROUTER_API_KEY_3",
                                          "OPENROUTER_API_KEY_4"}
     assert all(d.provider == "openrouter-private" and d.extra_body["provider"]["data_collection"] == "deny" for d in deps)
-    for bad in ("deepseek", "cerebras", "nvidia-nim", "cloudflare-ai", "chutes", "together", "fireworks"):
+    for bad in ("deepseek", "nvidia-nim", "cloudflare-ai", "chutes", "together", "fireworks"):
         q = pool()
         q["groups"]["private"]["providers"] = ["openrouter-private", bad]
         with pytest.raises(kc.PoolError):
@@ -543,7 +543,7 @@ def test_unverified_providers_stay_out_of_customer_facing_groups():
         reach.add(g)
         todo.extend(fb.get(g, []))
     assert "candidates" not in reach
-    bad = {"cerebras", "nvidia_nim", "deepseek", "together_ai", "fireworks_ai"}
+    bad = {"nvidia_nim", "deepseek", "together_ai", "fireworks_ai"}
     for m in cfg["model_list"]:
         name = m["model_name"].split("__")[0]
         if name in reach:

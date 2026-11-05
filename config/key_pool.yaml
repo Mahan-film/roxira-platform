@@ -49,7 +49,7 @@
 #                      nemotron-super :free, nemotron-lightning :free). Falls back to agent-strong-free then paid.
 #   agent-free         backward-compatible alias of agent-strong-free (same deployments).
 #   agent-free-paid    paid DeepSeek Flash only; the shared last-resort fallback for the free groups.
-#   candidates         unverified new providers (Cerebras, NIM, Cloudflare, DeepSeek direct, Chutes, Together,
+#   candidates         unverified new providers (NIM, Cloudflare, DeepSeek direct, Chutes, Together,
 #                      Fireworks). Customer-facing groups (product-free, best-product*, vip-*, private) must NOT list
 #                      them and nothing customer-facing falls back here; they graduate per docs/infra/KEY_POOL.md.
 #   private            customer/case data. `require` makes the renderer and the client REFUSE to build the
@@ -184,16 +184,6 @@ providers:
   # Model ids: checked on 2026-10-22 against the providers' docs through web search (secondary sources);
   # the live /models lists could not be fetched from the build sandbox, so every id is `unverified` until
   # `python3 scripts/infra/key_pool/inventory.py --probe` returns ok for it on the server.
-  cerebras:
-    tier: free
-    data_policy: may_log   # terms not read by the owner yet
-    base_url: https://api.cerebras.ai/v1
-    litellm_prefix: cerebras
-    keys: [CEREBRAS_API_KEY, CEREBRAS_API_KEY_2, CEREBRAS_API_KEY_3, CEREBRAS_API_KEY_4]
-    models:
-      - {id: gpt-oss-120b}   # unverified (docs: reasoning in a separate field, like Groq)
-    limits: {rpm: 30, tpm: 60000, rpd: 14400, status: unverified}
-
   nvidia-nim:   # build.nvidia.com hosted endpoints (NVIDIA developer program, free credits / rate limit)
     tier: free
     data_policy: may_log
@@ -295,14 +285,13 @@ snippets:
 groups:
   agent-strong-free:
     description: Strong models for code, docs and dev tasks. Free providers only, paid DeepSeek Flash as last resort.
-    providers: [groq, sambanova, mistral, gemini, openrouter-free, cerebras, nvidia-nim, cloudflare-ai]
+    providers: [groq, sambanova, mistral, gemini, openrouter-free, nvidia-nim, cloudflare-ai]
     models:                            # restrict each provider to the strong tier
       groq: [{role: agent_runner, alias: groq-strong}]
       sambanova: [{id: gpt-oss-120b}]
       mistral: [{id: mistral-medium-latest}, {id: mistral-code-latest}]
       gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
-      cerebras: [{id: gpt-oss-120b}]
       nvidia-nim: [{id: openai/gpt-oss-120b}]
       cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b"}]
     fallback: [gemini-best]
@@ -323,14 +312,13 @@ groups:
 
   agent-free:   # backward-compatible alias of agent-strong-free (same deployments, same fallback)
     description: Alias of agent-strong-free kept for callers that still ask for `agent-free`.
-    providers: [groq, sambanova, mistral, gemini, openrouter-free, cerebras, nvidia-nim, cloudflare-ai]
+    providers: [groq, sambanova, mistral, gemini, openrouter-free, nvidia-nim, cloudflare-ai]
     models:
       groq: [{role: agent_runner, alias: groq-strong}]
       sambanova: [{id: gpt-oss-120b}]
       mistral: [{id: mistral-medium-latest}, {id: mistral-code-latest}]
       gemini: [{id: gemini-flash-latest}, {id: gemini-3.7-flash}]
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
-      cerebras: [{id: gpt-oss-120b}]
       nvidia-nim: [{id: openai/gpt-oss-120b}]
       cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b"}]
     fallback: [agent-free-paid]
@@ -489,7 +477,7 @@ groups:
   best-all:   # the same idea for agents and tools (public work only: free tiers may log)
     description: Cross-provider quality ladder for agents, ending on paid DeepSeek.
     ordered: true
-    providers: [gemini, groq, mistral, sambanova, cerebras, nvidia-nim, cloudflare-ai]
+    providers: [gemini, groq, mistral, sambanova, nvidia-nim, cloudflare-ai]
     models:
       gemini:
         - {id: gemini-4-argon, needs_billing: true, rank: 1}
@@ -502,7 +490,6 @@ groups:
         - {id: gemini-3.5-flash-lite, rank: 11}
       groq: [{role: agent_runner, alias: groq-strong, rank: 5}]
       sambanova: [{id: gpt-oss-120b, rank: 5}]
-      cerebras: [{id: gpt-oss-120b, rank: 5}]
       nvidia-nim: [{id: openai/gpt-oss-120b, rank: 5}]
       cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b", rank: 5}]
       mistral: [{id: mistral-medium-latest, rank: 7}, {id: mistral-code-latest, rank: 10}]
@@ -535,11 +522,10 @@ groups:
 
   candidates:   # NOT customer-facing: unverified providers wait here until they graduate (docs/infra/KEY_POOL.md).
                 # No product group falls back to this group; callers must ask for it by name (probes, bake-offs).
-    description: Unverified new providers (Cerebras, NVIDIA NIM, Cloudflare, DeepSeek direct, Chutes, Together, Fireworks). Public/dev data only.
+    description: Unverified new providers (NVIDIA NIM, Cloudflare, DeepSeek direct, Chutes, Together, Fireworks). Public/dev data only.
     ordered: true
-    providers: [cerebras, nvidia-nim, cloudflare-ai, deepseek, chutes, together, fireworks]
+    providers: [nvidia-nim, cloudflare-ai, deepseek, chutes, together, fireworks]
     models:
-      cerebras: [{id: gpt-oss-120b, rank: 1}]
       nvidia-nim: [{id: openai/gpt-oss-120b, rank: 1}]
       cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b", rank: 1}]
       deepseek: [{id: deepseek-chat, rank: 2}]
