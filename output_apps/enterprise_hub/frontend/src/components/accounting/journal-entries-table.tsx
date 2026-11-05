@@ -24,6 +24,7 @@ import {
   JOURNAL_ENTRY_STATUS_LABELS,
   type PaginatedJournalEntryResponse,
 } from "@/types/accounting";
+import { printVoucher } from "@/lib/print/open-print-window";
 
 const PAGE_SIZE = 10;
 
@@ -139,13 +140,14 @@ export function JournalEntriesTable({ refreshKey = 0 }: JournalEntriesTableProps
               <TableHead className="w-36">جمع بدهکار</TableHead>
               <TableHead className="w-36">جمع بستانکار</TableHead>
               <TableHead className="w-28">وضعیت</TableHead>
+              <TableHead className="w-16" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isPending ? (
               Array.from({ length: 5 }).map((_, index) => (
                 <TableRow key={`skeleton-${index}`}>
-                  {Array.from({ length: 7 }).map((__, cellIndex) => (
+                  {Array.from({ length: 8 }).map((__, cellIndex) => (
                     <TableCell key={cellIndex}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -195,11 +197,21 @@ export function JournalEntriesTable({ refreshKey = 0 }: JournalEntriesTableProps
                           {JOURNAL_ENTRY_STATUS_LABELS[entry.status]}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => printVoucher(entry, JOURNAL_ENTRY_STATUS_LABELS[entry.status])}
+                        >
+                          چاپ
+                        </Button>
+                      </TableCell>
                     </TableRow>
                     {isExpanded && (
                       <TableRow key={`${entry.id}-lines`} className="bg-muted/30">
                         <TableCell />
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={7}>
                           <div className="flex flex-col gap-2 py-1">
                             {entry.lines.map((line) => (
                               <div
@@ -237,7 +249,7 @@ export function JournalEntriesTable({ refreshKey = 0 }: JournalEntriesTableProps
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="py-10 text-center text-muted-foreground"
                 >
                   هیچ سند حسابداری ثبت نشده است.
