@@ -221,6 +221,18 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     amounts: ['amount'],
     lines: [dr('counter', 'amount', 'هزینه تنخواه'), cr('petty_cash', 'amount', 'تنخواه')],
   },
+  {
+    docType: 'pettycash.fund_charge',
+    title: 'شارژ تنخواه (حرکت صندوق)',
+    amounts: ['amount'],
+    lines: [dr('petty_cash', 'amount', ''), cr('counter', 'amount', '')],
+  },
+  {
+    docType: 'pettycash.fund_return',
+    title: 'برگشت وجه تنخواه (حرکت صندوق)',
+    amounts: ['amount'],
+    lines: [dr('counter', 'amount', ''), cr('petty_cash', 'amount', '')],
+  },
 ];
 
 const BY_TYPE = new Map(POSTING_TEMPLATES.map((t) => [t.docType, t]));

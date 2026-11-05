@@ -1,8 +1,10 @@
-import { TenantScope } from '../access/services/tenant-scope';
 /** Petty cash on a REAL PostgreSQL. Opt-in: skipped unless ROXIRA_TEST_PG_HOST is set. */
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyService } from '../currency/services/currency.service';
 import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
@@ -50,6 +52,7 @@ describePg('Petty cash on PostgreSQL', () => {
   let ds: DataSource;
   let accounting: AccountingService;
   let reports: FinancialReportsService;
+  let engine: PostingRulesService;
   let petty: PettyCashService;
 
   beforeAll(async () => {
@@ -62,7 +65,10 @@ describePg('Petty cash on PostgreSQL', () => {
     const repo = new AccountingRepository(new TenantScope(ds));
     accounting = new AccountingService(repo, currency);
     reports = new FinancialReportsService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(new TenantScope(ds)));
-    petty = new PettyCashService(new PettyCashRepository(ds), repo, accounting);
+    engine = new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting);
+    petty = new PettyCashService(new PettyCashRepository(ds), repo, accounting, {
+      post: (...a) => engine.post(...a),
+    });
     await new ChartTemplateService(repo).apply(T1, 'iran-trading');
     await accounting.createJournalEntry(T1, {
       entryNumber: 'SEED', date: '2026-04-01', description: 'seed',
@@ -84,6 +90,15 @@ describePg('Petty cash on PostgreSQL', () => {
     const movement = { date: '2026-04-02', accountCode: '1012' };
     await expect(petty.charge(T1, 'u', fund.id, { ...movement, amount: '100000.01' })).rejects.toMatchObject({ status: 409 });
     await petty.charge(T1, 'u', fund.id, { ...movement, amount: '100000' });
+    const chargeTx = (await petty.statement(T1, fund.id)).transactions.find(t => t.kind === 'CHARGE')!;
+    const chargeEntry = await ds.query('SELECT description FROM fin_journal_entries WHERE id = $1', [chargeTx.journalEntryId]);
+    expect(chargeEntry[0].description).toBe('شارژ تنخواه (کارگاه)');
+    const chargeLines = await ds.query(
+      'SELECT description FROM fin_journal_entry_lines WHERE journal_entry_id = $1 ORDER BY id',
+      [chargeTx.journalEntryId],
+    );
+    expect(chargeLines).toHaveLength(2);
+    expect(chargeLines.every((l: { description: string | null }) => l.description === null)).toBe(true);
 
     const receipt = { date: '2026-04-03', accountCode: '5030', description: 'لوازم' };
     const r1 = await petty.addExpense(T1, 'u', fund.id, { ...receipt, amount: '30000.50' });
@@ -98,6 +113,18 @@ describePg('Petty cash on PostgreSQL', () => {
     expect(state).toMatchObject({ balance: 100000, pending: 50000.5, available: 49999.5 });
     let trial = await reports.trialBalance(T1, { to: '2026-12-31' });
     expect(trial.rows.find((r) => r.code === '5030')).toBeUndefined();
+
+    const replayedResult = await engine.post(T1, {
+      docType: 'pettycash.fund_charge',
+      sourceType: 'petty_cash_tx',
+      sourceId: String(chargeTx.id),
+      date: '2026-04-02T12:00:00.000Z',
+      amounts: { amount: 10000000n },
+      description: 'شارژ تنخواه (کارگاه)',
+      entryNumber: `PC-${chargeTx.id}`,
+      overrides: { petty_cash: '101302', counter: '1012' },
+    });
+    expect(replayedResult.replayed).toBe(true);
 
     const settled = await petty.settle(T1, 'u', fund.id, {
       expenseIds: [r1.id, r2.id], date: '2026-04-10', replenishFromAccountCode: '1012',
