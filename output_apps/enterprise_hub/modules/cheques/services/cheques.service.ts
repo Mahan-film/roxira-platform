@@ -247,8 +247,6 @@ export class ChequesService {
       if (eventDate < cheque.issueDate) {
         throw new BadRequestException('تاریخ رویداد نمی‌تواند پیش از تاریخ صدور چک باشد.');
       }
-      // Posting is idempotent per source key, so a replayed move is detected before the state
-      // checks that already moved (the remainder shrank after the first commit).
       const posted = await this.post(
         tenantId,
         cheque,
@@ -261,7 +259,11 @@ export class ChequesService {
         undefined,
         dto.idempotencyKey,
       );
-      if (posted.replayed) return;
+      // The engine is idempotent per source key: a replay returns the first voucher, so leave the
+      // state as the first call left it (the remainder already shrank on the first commit).
+      if (posted.replayed) {
+        return;
+      }
       if (paid >= remaining) {
         throw new BadRequestException('مبلغ پرداخت باید کمتر از مانده چک باشد؛ برای پرداخت کامل، وضعیت را «وصول/پاس» کنید.');
       }
