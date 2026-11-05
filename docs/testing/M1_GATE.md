@@ -83,3 +83,13 @@ but no stock movements. If the importer moves stock for historical invoices, cha
 To turn a step green, change `test.fixme(` to `test(`, write the body against the page named in it, and update the
 State column here and the M1 gate row in `docs/strategy/REQUIREMENTS_STATUS.md`. The steps run serially, in order.
 A CI job for the gate comes from the Mac (issue #116 section 5).
+
+## Import steps 02-06 (T5, #466): status and product gaps
+
+| Step | Status | Note |
+|---|---|---|
+| 02 chart of accounts | real test | `accounting-accounts` registry, explicit column mapping, 18 accounts via API and chart page |
+| 03 parties | real test | imported as CRM leads (`crm-leads`): 48 inserted, 2 duplicates skipped. The lead has no party code, no customer/supplier role and no national id, so later steps cannot link a document to a party by code (gap A) |
+| 04 items | `fixme` | gap B: no unit cost on items import / `erp_stock_items`, stock value cannot reach 252,026,700,000 |
+| 05 opening balances | real test | one voucher of 14 lines, debit = credit = 259,026,700,000; 1201 and 2101 from README |
+| 06 invoices | `fixme` | gap C: invoice import is a one-line stub (no type, date, items, VAT, multi-line; placeholder buyer name). The file has 238 distinct invoice numbers; the README's 240 counts the 2 repeated rows |

@@ -1,6 +1,7 @@
-import { test, expect, findSessionFile, loginAsTestTenant } from '../app/fixtures';
+import { test, expect, fa, findSessionFile, loginAsTestTenant } from '../app/fixtures';
 import { M1_EXPECTED_CLOSING, M1_MONTH_OPERATIONS, README_TOTALS } from './m1/expected-totals';
-import { bankStatementRollForward, computeTotalsFromCsv, readReadmeTotals, SAMPLE_COMPANY_FILES } from './m1/fixture-data';
+import { bankStatementRollForward, computeTotalsFromCsv, readCsv, readReadmeTotals, SAMPLE_COMPANY_FILES } from './m1/fixture-data';
+import { apiGet, importFile, persianise, rials } from './m1/import-ui';
 
 /**
  * M1 "Shop-ready" acceptance gate (issue #116, epic E0): one month of the fictional trading company in
@@ -71,34 +72,128 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
   // ---- Import the fixture files (/app/import) ----------------------------------------------------------
 
-  test.fixme('02 import chart of accounts: 18 accounts [E5]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/import');
-    void SAMPLE_COMPANY_FILES.chartOfAccounts;
-    // Upload, map, commit; /app/accounting lists 18 accounts incl. 1101, 1201, 1301, 2101.
+  test('02 import chart of accounts: 18 accounts [E5]', async ({ page }) => {
+    const { header, rows } = readCsv(SAMPLE_COMPANY_FILES.chartOfAccounts);
+    expect(rows).toHaveLength(18);
+    const counts = await importFile(page, SAMPLE_COMPANY_FILES.chartOfAccounts, 'accounting-accounts', {
+      'کد حساب': 'code',
+      'نام حساب': 'name',
+      'ماهیت حساب': 'accountType',
+      'واحد پول': 'currency',
+    });
+    expect(counts).toEqual({ inserted: 18, skippedDuplicates: 0, failed: 0 });
+
+    const types: Record<string, string> = {
+      دارایی: 'ASSET',
+      بدهی: 'LIABILITY',
+      سرمایه: 'EQUITY',
+      درآمد: 'REVENUE',
+      هزینه: 'EXPENSE',
+    };
+    const accounts = await apiGet<Array<{ code: string; name: string; accountType: string; currency: string }>>(
+      page,
+      'accounting/accounts',
+    );
+    expect(accounts, 'exactly the 18 file accounts, no seeded default chart mixed in').toHaveLength(18);
+    for (const row of rows) {
+      const code = row[header.indexOf('کد حساب')];
+      const account = accounts.find((a) => a.code === code);
+      expect(account, `account ${code}`).toBeDefined();
+      expect(account!.name).toBe(row[header.indexOf('نام حساب')]);
+      expect(account!.accountType).toBe(types[row[header.indexOf('ماهیت حساب')]]);
+      expect(account!.currency).toBe('IRR');
+    }
+    for (const code of ['1101', '1201', '1301', '2101']) expect(accounts.map((a) => a.code)).toContain(code);
+
+    // The chart page lists the same 18 accounts.
+    await loginAsTestTenant(page, '/app/accounting');
+    const tree = page.locator('[data-slot="card"]').filter({ hasText: 'سرفصل حساب‌ها' });
+    await expect(tree.locator('tbody tr')).toHaveCount(18);
   });
 
-  test.fixme('03 import customers and suppliers: 48 unique parties, 2 duplicates dropped [E5]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/import');
-    void SAMPLE_COMPANY_FILES.parties;
-    // 30 customers + 20 suppliers in the file, rows 30 and 50 are duplicates; Arabic ي/ك normalised.
+  test('03 import customers and suppliers: 48 unique parties, 2 duplicates dropped [E5]', async ({ page }) => {
+    const { header, rows } = readCsv(SAMPLE_COMPANY_FILES.parties);
+    const codes = rows.map((r) => r[header.indexOf('کد طرف حساب')]);
+    expect(rows).toHaveLength(50);
+    expect(new Set(codes).size).toBe(48); // the file: 30 customers + 20 suppliers, 2 rows repeated
+    const counts = await importFile(page, SAMPLE_COMPANY_FILES.parties, 'crm-leads', {
+      'کد طرف حساب': null, // GAP: the CRM lead has no party code
+      'نقش': null, // GAP: the CRM lead has no customer/supplier role
+      'نام و نام خانوادگی': 'fullName',
+      'شرکت': 'company',
+      'رایانامه': 'email',
+      'تلفن': 'phone',
+      'شناسه ملی / کد اقتصادی آزمایشی': null, // GAP: no national id on the lead
+      'مرحله فروش': 'pipelineStage',
+      'ارزش برآوردی (ریال)': 'estimatedValue',
+      'توضیحات': 'notes',
+    });
+    expect(counts).toEqual({ inserted: 48, skippedDuplicates: 2, failed: 0 });
+
+    const leads = await apiGet<{ total: number; data: Array<{ fullName: string; company: string | null }> }>(
+      page,
+      'crm/leads?limit=100',
+    );
+    expect(leads.total).toBe(48);
+    const expectedNames = [...new Set(rows.map((r) => persianise(r[header.indexOf('نام و نام خانوادگی')])))];
+    expect(leads.data.map((l) => l.fullName).sort()).toEqual(expectedNames.sort());
+    for (const lead of leads.data) {
+      expect(`${lead.fullName} ${lead.company ?? ''}`, 'Arabic ي/ك normalised').not.toMatch(/[يك]/);
+    }
   });
 
+  // Needs a product feature (issue: items import has no unit cost). See the gap list in docs/testing/M1_GATE.md.
   test.fixme('04 import items: 300 items with stock and unit cost [E5]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/import');
     void SAMPLE_COMPANY_FILES.items;
-    // /app/inventory shows 300 items; stock value equals README_TOTALS.stockValue.
+    // GAP: the `inventory-items` registry (modules/data_import/registry/inventory-items.registry.ts) maps sku,
+    // barcode, name, quantity, minQuantity, batchNumber only. The file column «بهای واحد (ریال)» has no target and
+    // erp_stock_items (modules/inventory/entities/stock-item.entity.ts) has no cost column, so «stock value equals
+    // README_TOTALS.stockValue» (252,026,700,000) cannot hold after the import.
   });
 
-  test.fixme('05 import opening balances: one balanced opening voucher [E5]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/import');
-    void SAMPLE_COMPANY_FILES.openingBalances;
-    // Debit = credit = README_TOTALS.openingDebit; 1201 = receivablesOpening, 2101 = payablesOpening.
+  test('05 import opening balances: one balanced opening voucher [E5]', async ({ page }) => {
+    const { rows } = readCsv(SAMPLE_COMPANY_FILES.openingBalances);
+    expect(rows).toHaveLength(14);
+    const counts = await importFile(page, SAMPLE_COMPANY_FILES.openingBalances, 'accounting-opening-balances', {
+      'کد حساب': 'accountCode',
+      'بدهکار (ریال)': 'debit',
+      'بستانکار (ریال)': 'credit',
+      'تاریخ': 'date',
+      'شرح': 'description',
+    });
+    expect(counts).toEqual({ inserted: 14, skippedDuplicates: 0, failed: 0 });
+
+    const entries = await apiGet<{
+      total: number;
+      data: Array<{ totalDebit: number | string; totalCredit: number | string; lines: unknown[] }>;
+    }>(page, 'accounting/journal-entries?limit=10');
+    expect(entries.total, 'one opening voucher').toBe(1);
+    const [voucher] = entries.data;
+    expect(voucher.lines).toHaveLength(14);
+    expect(rials(voucher.totalDebit)).toBe(README_TOTALS.openingDebit);
+    expect(rials(voucher.totalCredit)).toBe(README_TOTALS.openingCredit);
+
+    const accounts = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const balanceOf = (code: string) => rials(accounts.find((a) => a.code === code)!.balance);
+    expect(balanceOf('1201')).toBe(README_TOTALS.receivablesOpening);
+    expect(balanceOf('2101')).toBe(-README_TOTALS.payablesOpening); // debit-positive: a payable is a credit
+
+    await loginAsTestTenant(page, '/app/accounting');
+    const row = page.locator('tr').filter({ hasText: 'مانده‌های افتتاحیه' }).first();
+    await expect(row).toContainText(fa(Number(README_TOTALS.openingDebit)));
   });
 
+  // Needs a product feature (issue: invoice import is a stub). See the gap list in docs/testing/M1_GATE.md.
   test.fixme('06 import invoices: 240 invoices, duplicate rows counted once [E5]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/import');
     void SAMPLE_COMPANY_FILES.invoices;
-    // 144 sales + 96 purchases; 6 blank-customer walk-in rows; must NOT reach the *ClosingRaw totals.
+    // GAP: `sales-invoices` registry + InvoicingService.importInvoices (modules/invoicing/services/invoicing.service.ts,
+    // ~line 1202) turn each row into a one-line invoice priced `amount`, with buyer «طرف حساب <code>» and no date,
+    // type, item, quantity or VAT. Rows with the same number are dropped as duplicates, so the 40 multi-line invoices
+    // keep one line each; purchases (143 rows) are stored as sales invoices. Also: the file holds 238 distinct numbers
+    // (360 rows, 2 repeated rows), while the README counts 240 including those 2 repeats.
+    // Expected once built: 238 invoices (143 sales + 95 purchases), receivables/payables *ClosingUnique, not *ClosingRaw.
   });
 
   // ---- Post the month ----------------------------------------------------------------------------------
