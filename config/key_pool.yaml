@@ -135,10 +135,10 @@ providers:
     data_policy: may_log   # free "Experiment" plan may train on prompts
     base_url: https://api.mistral.ai/v1
     litellm_prefix: mistral
-    # All 4 keys sit at budget-exhausted (402) since 2026-11-05: keep them in the chain, but a failing one sleeps
+    # Keys 1-4 sit at budget-exhausted (402) since 2026-11-05; keys 5 and 6 are the new contract (#464). All stay in the chain, but a failing one sleeps
     # 30 min instead of 60 s so the ladder does not waste a try on them every minute. Recovers by itself.
     litellm_params: {cooldown_time: 1800}
-    keys: [MISTRAL_API_KEY, MISTRAL_API_KEY_2, MISTRAL_API_KEY_3, MISTRAL_API_KEY_4]   # every set key is its own deployment
+    keys: [MISTRAL_API_KEY, MISTRAL_API_KEY_2, MISTRAL_API_KEY_3, MISTRAL_API_KEY_4, MISTRAL_API_KEY_5, MISTRAL_API_KEY_6]   # every set key is its own deployment
     models:   # ids verified with GET /v1/models (function_calling) on 2026-10-14
       - {id: mistral-medium-latest}
       - {id: mistral-code-latest}
@@ -410,7 +410,7 @@ groups:
         - {id: gemini-flash-lite-latest}
     fallback: [product-free]
 
-  best-product:   # owner 2026-10-16: ONE quality ladder over ALL our keys (Gemini x4, Groq x3, Mistral x4) for Smart
+  best-product:   # owner 2026-10-16: ONE quality ladder over ALL our keys (Gemini x4, Groq x3, Mistral x6) for Smart
                   # Judge. Each rank = one model on every key that has it; all must fail before the next rank.
                   # Fast per-attempt caps so a busy model hands over quickly (chat waits ~15 s for the first token).
     description: Cross-provider quality ladder for product answers, ending on the product key.
@@ -432,7 +432,7 @@ groups:
     litellm_params: {reasoning_effort: low, stream_timeout: 9, timeout: 30}
     fallback: [private]
 
-  best-product-free:   # owner 2026-10-16: ONE quality ladder over ALL our keys (Gemini x4, Groq x3, Mistral x4) for Smart
+  best-product-free:   # owner 2026-10-16: ONE quality ladder over ALL our keys (Gemini x4, Groq x3, Mistral x6) for Smart
                   # Judge. Each rank = one model on every key that has it; all must fail before the next rank.
                   # Fast per-attempt caps so a busy model hands over quickly (chat waits ~15 s for the first token).
     description: Cross-provider FREE ladder for non-subscribers; no paid step.
