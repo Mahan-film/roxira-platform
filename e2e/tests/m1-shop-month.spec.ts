@@ -277,21 +277,6 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     expect(new Set(numbers).size).toBe(238); // README: 360 rows, 2 exact repeats of INV-S-1403-0001 / INV-P-1403-0001
     expect(rows.filter((r) => cell(r, 'کد طرف حساب') === '')).toHaveLength(6); // walk-in rows
 
-    // Invoices need their items; step 04 (#470) owns the real item import, so import them here only when it has not run.
-    const items = await apiGet<{ total: number }>(page, 'inventory/items?limit=1');
-    if (items.total === 0) {
-      await importFile(page, SAMPLE_COMPANY_FILES.items, 'inventory-items', {
-        'کد کالا': 'sku',
-        'بارکد': 'barcode',
-        'نام کالا': 'name',
-        'موجودی': 'quantity',
-        'حداقل موجودی': 'minQuantity',
-        'بهای واحد (ریال)': null,
-        'ارزش موجودی (ریال)': null,
-        'شماره دسته': 'batchNumber',
-      });
-    }
-
     const counts = await importFile(page, SAMPLE_COMPANY_FILES.invoices, 'sales-invoices', {
       'شماره صورتحساب': 'number',
       'نوع صورتحساب': 'type',
