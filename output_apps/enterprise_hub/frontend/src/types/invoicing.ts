@@ -109,7 +109,10 @@ export interface InvoiceItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  /** The line's own discount only. */
   discount: number;
+  /** Read-only share of the invoice-level discount spread onto this line; never sent back. */
+  invoiceDiscountShare?: number;
   vatRate: number;
   tax: number;
   total: number;

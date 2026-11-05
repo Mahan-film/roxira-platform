@@ -62,12 +62,28 @@ import {
   ImportedPartyRef,
 } from './invoice-import';
 import { VatRateResolver } from './vat-rate.resolver';
+import { allocateDiscount, fromUnits, percentOf, toUnits } from './invoice-discount';
 
 /** What a caller adds to `create` beyond the invoice itself (POS sales). */
 export interface CreateInvoiceOptions {
   idempotencyKey?: string;
   requestHash?: string;
   payments?: Array<{ method: string; amount: number }>;
+}
+
+/** Invoice-level discount as sent: an amount or a percent (E1.3). */
+export interface InvoiceDiscountInput {
+  amount?: number;
+  percent?: number;
+}
+
+interface PreparedLine {
+  item: InvoiceItemDto;
+  itemId: number | null;
+  sku: string | null;
+  description: string;
+  gross: number;
+  lineDiscount: number;
 }
 
 /** مجموع‌های محاسبه‌شده سمت سرور برای اقلام صورتحساب. */
@@ -324,7 +340,8 @@ export class InvoicingService {
   /**
    * نرمال‌سازی و بازمحاسبه معتبر اقلام:
    *   gross    = quantity × unitPrice
-   *   taxable  = max(0, gross - discount)
+   *   discount = line discount (amount or percent of gross) + share of the invoice discount
+   *   taxable  = gross - discount  (VAT on the discounted base, E1.3)
    *   tax      = taxable × vatRate (نرخ ذخیره‌شده روی همان سطر)
    *   total    = taxable + tax
    */
@@ -333,8 +350,9 @@ export class InvoicingService {
     items: InvoiceItemDto[],
     defaultVatRate: number | null,
     currency: Currency = Currency.IRR,
+    invoiceDiscount?: InvoiceDiscountInput,
   ): Promise<InvoiceItem[]> {
-    const normalized: InvoiceItem[] = [];
+    const prepared: PreparedLine[] = [];
     const scale = this.moneyScale(currency);
 
     for (const item of items) {
@@ -386,27 +404,101 @@ export class InvoicingService {
         );
       }
 
-      const gross = item.quantity * item.unitPrice;
-      const discount = item.discount ?? 0;
-      const taxable = Math.max(0, gross - discount);
-      const vatRate = this.normalizeVatRate(item.vatRate, defaultVatRate);
+      prepared.push({
+        item,
+        itemId,
+        sku,
+        description,
+        gross: item.quantity * item.unitPrice,
+        lineDiscount: this.lineDiscount(item, scale),
+      });
+    }
+
+    const shares = this.invoiceDiscountShares(prepared, invoiceDiscount, scale);
+    const normalized: InvoiceItem[] = [];
+    prepared.forEach((line, index) => {
+      const share = fromUnits(shares[index], scale);
+      const discount = this.roundTo(line.lineDiscount + share, scale);
+      const taxable = Math.max(0, line.gross - discount);
+      const vatRate = this.normalizeVatRate(line.item.vatRate, defaultVatRate);
       const tax = this.roundTo(taxable * vatRate, scale);
       const total = this.roundTo(taxable + tax, scale);
 
       normalized.push({
-        itemId,
-        sku,
-        description,
-        quantity: item.quantity,
-        unitPrice: this.roundTo(item.unitPrice, scale),
-        discount: this.roundTo(discount, scale),
+        itemId: line.itemId,
+        sku: line.sku,
+        description: line.description,
+        quantity: line.item.quantity,
+        unitPrice: this.roundTo(line.item.unitPrice, scale),
+        discount,
+        ...(invoiceDiscount ? { invoiceDiscountShare: share } : {}),
         vatRate,
         tax,
         total,
       });
-    }
+    });
 
     return normalized;
+  }
+
+  /** The line's own discount: an amount or a percent of quantity × unit price, never above it. */
+  private lineDiscount(item: InvoiceItemDto, scale: number): number {
+    const gross = item.quantity * item.unitPrice;
+    const amount = item.discount ?? 0;
+    const percent = item.discountPercent ?? 0;
+    if (amount > 0 && percent > 0) {
+      throw new BadRequestException('تخفیف سطر را یا به مبلغ یا به درصد وارد کنید، نه هر دو.');
+    }
+    const discount =
+      percent > 0 ? fromUnits(percentOf(toUnits(gross, scale), percent), scale) : this.roundTo(amount, scale);
+    if (discount > this.roundTo(gross, scale)) {
+      throw new BadRequestException(
+        `تخفیف سطر (${discount}) از مبلغ سطر (${this.roundTo(gross, scale)}) بیشتر است.`,
+      );
+    }
+    return discount;
+  }
+
+  /**
+   * The invoice discount in minor units, spread over the lines in proportion to their amount net
+   * of their own discounts. It cannot exceed what is left to discount.
+   */
+  private invoiceDiscountShares(
+    lines: PreparedLine[],
+    input: InvoiceDiscountInput | undefined,
+    scale: number,
+  ): bigint[] {
+    const bases = lines.map((line) => {
+      const base = toUnits(line.gross, scale) - toUnits(line.lineDiscount, scale);
+      return base > 0n ? base : 0n;
+    });
+    const amount = input?.amount ?? 0;
+    const percent = input?.percent ?? 0;
+    if (amount > 0 && percent > 0) {
+      throw new BadRequestException('تخفیف فاکتور را یا به مبلغ یا به درصد وارد کنید، نه هر دو.');
+    }
+    const net = bases.reduce((sum, base) => sum + base, 0n);
+    const discount = percent > 0 ? percentOf(net, percent) : toUnits(amount, scale);
+    if (discount > net) {
+      throw new BadRequestException(
+        `تخفیف فاکتور (${fromUnits(discount, scale)}) از جمع خالص سطرها (${fromUnits(net, scale)}) بیشتر است.`,
+      );
+    }
+    return allocateDiscount(bases, discount);
+  }
+
+  private invoiceDiscountOf(
+    source: Pick<CreateInvoiceDto, 'invoiceDiscount' | 'invoiceDiscountPercent'>,
+  ): InvoiceDiscountInput | undefined {
+    if (!source.invoiceDiscount && !source.invoiceDiscountPercent) {
+      return undefined;
+    }
+    return { amount: source.invoiceDiscount, percent: source.invoiceDiscountPercent };
+  }
+
+  /** Sum of the invoice-level discount shares on stored lines (0 for older invoices). */
+  private invoiceDiscountTotal(items: InvoiceItem[]): number {
+    return items.reduce((sum, item) => sum + Number(item.invoiceDiscountShare ?? 0), 0);
   }
 
   private computeTotals(
@@ -450,6 +542,20 @@ export class InvoicingService {
     }
   }
 
+  /**
+   * The stored line discount includes the line's share of the invoice discount (posting and tax read
+   * it that way). The API shows the line's OWN discount in `discount` and the share apart, read-only
+   * in `invoiceDiscountShare`, so a GET sent back through PUT changes nothing.
+   */
+  private lineOwnDiscounts(entity: InvoiceEntity): InvoiceItem[] {
+    const scale = this.moneyScale(entity.currency);
+    return (entity.items ?? []).map((line) =>
+      line.invoiceDiscountShare === undefined
+        ? line
+        : { ...line, discount: this.roundTo(Number(line.discount) - Number(line.invoiceDiscountShare), scale) },
+    );
+  }
+
   private toResponseDto(entity: InvoiceEntity): InvoiceResponseDto {
     return {
       id: entity.id,
@@ -457,7 +563,7 @@ export class InvoicingService {
       customerId: entity.customerId ?? null,
       sellerInfo: entity.sellerInfo,
       buyerInfo: entity.buyerInfo,
-      items: entity.items,
+      items: this.lineOwnDiscounts(entity),
       currency: entity.currency,
       jurisdiction: entity.jurisdiction,
       exchangeRate: Number(entity.exchangeRate),
@@ -469,6 +575,10 @@ export class InvoicingService {
       baseCurrency: entity.baseCurrency,
       totalAmount: Number(entity.totalAmount),
       totalDiscount: Number(entity.totalDiscount),
+      invoiceDiscount: this.roundTo(
+        this.invoiceDiscountTotal(entity.items ?? []),
+        this.moneyScale(entity.currency),
+      ),
       totalTax: Number(entity.totalTax),
       finalPayable: Number(entity.finalPayable),
       baseTotalAmount: Number(entity.baseTotalAmount),
@@ -539,6 +649,7 @@ export class InvoicingService {
       source.items,
       defaultVatRate,
       currency,
+      this.invoiceDiscountOf(source),
     );
     const { customerId, buyerInfo, einvoiceType } = await this.resolveParties(
       tenantId,
@@ -721,9 +832,14 @@ export class InvoicingService {
         description: line.description,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
-        discount: line.discount,
+        discount: this.roundTo(
+          line.discount - (line.invoiceDiscountShare ?? 0),
+          this.moneyScale(related.currency),
+        ),
         vatRate: line.vatRate,
       })),
+      invoiceDiscount: this.invoiceDiscountTotal(related.items) || undefined,
+      invoiceDiscountPercent: undefined,
     };
   }
 
@@ -825,7 +941,10 @@ export class InvoicingService {
    */
   async quote(
     tenantId: string,
-    source: Pick<CreateInvoiceDto, 'items' | 'currency' | 'jurisdiction' | 'fxRate'>,
+    source: Pick<
+      CreateInvoiceDto,
+      'items' | 'currency' | 'jurisdiction' | 'fxRate' | 'invoiceDiscount' | 'invoiceDiscountPercent'
+    >,
   ): Promise<{ items: InvoiceItem[]; totals: InvoiceTotals; currency: Currency }> {
     const currency = source.currency ?? Currency.IRR;
     const jurisdiction = source.jurisdiction ?? this.defaultJurisdiction(currency);
@@ -835,7 +954,13 @@ export class InvoicingService {
       new Date(),
       source.items,
     );
-    const items = await this.normalizeItems(tenantId, source.items, defaultVatRate, currency);
+    const items = await this.normalizeItems(
+      tenantId,
+      source.items,
+      defaultVatRate,
+      currency,
+      this.invoiceDiscountOf(source),
+    );
     return { items, totals: this.computeTotals(items, currency), currency };
   }
 
@@ -1009,19 +1134,39 @@ export class InvoicingService {
       entity.fxRate = this.resolveFxRate(entity.currency, dto.fxRate);
     }
 
-    if (dto.items !== undefined) {
+    const discountChanged =
+      dto.invoiceDiscount !== undefined || dto.invoiceDiscountPercent !== undefined;
+    if (dto.items !== undefined || discountChanged) {
+      // Lines not sent are the stored ones, net of their old invoice-discount share; an invoice
+      // discount not sent keeps the stored amount (spread again over the new lines).
+      const scale = this.moneyScale(entity.currency);
+      const lines: InvoiceItemDto[] =
+        dto.items ??
+        entity.items.map((line) => ({
+          itemId: line.itemId ?? undefined,
+          sku: line.sku ?? undefined,
+          description: line.description,
+          quantity: Number(line.quantity),
+          unitPrice: Number(line.unitPrice),
+          discount: this.roundTo(Number(line.discount) - Number(line.invoiceDiscountShare ?? 0), scale),
+          vatRate: Number(line.vatRate),
+        }));
       // An issued invoice keeps the rate of its issue date; a draft takes today's.
       const defaultVatRate = await this.defaultVatRateForJurisdiction(
         tenantId,
         entity.jurisdiction,
         entity.issuedAt ? new Date(entity.issuedAt) : new Date(),
-        dto.items,
+        lines,
       );
+      const invoiceDiscount = discountChanged
+        ? this.invoiceDiscountOf(dto)
+        : this.invoiceDiscountOf({ invoiceDiscount: this.invoiceDiscountTotal(entity.items) });
       const items = await this.normalizeItems(
         tenantId,
-        dto.items,
+        lines,
         defaultVatRate,
         entity.currency,
+        invoiceDiscount,
       );
       const totals = this.computeTotals(items, entity.currency);
       entity.items = items;

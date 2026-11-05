@@ -65,6 +65,13 @@ export class PosLineDto {
   @Min(0)
   discount?: number;
 
+  @ApiPropertyOptional({ description: 'Line discount in percent of quantity × unit price; not with discount' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(100)
+  discountPercent?: number;
+
   @ApiPropertyOptional({ description: 'نرخ مالیات سطر؛ در نبود، تنظیم سازمان' })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 4 })
@@ -108,6 +115,19 @@ export class CreatePosSaleDto {
   @ValidateNested({ each: true })
   @Type(() => PosLineDto)
   lines: PosLineDto[];
+
+  @ApiPropertyOptional({ description: 'Discount on the whole sale (amount), spread over the lines before VAT' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  invoiceDiscount?: number;
+
+  @ApiPropertyOptional({ description: 'Discount on the whole sale in percent; not with invoiceDiscount' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(100)
+  invoiceDiscountPercent?: number;
 
   @ApiProperty({ type: [PosPaymentDto], description: 'جمع پرداخت‌ها باید دقیقاً برابر مبلغ قابل پرداخت باشد' })
   @IsArray()

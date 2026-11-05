@@ -41,7 +41,10 @@ export interface InvoiceItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  /** Total discount of the line: its own discount plus its share of the invoice discount. */
   discount: number;
+  /** Part of `discount` that came from the invoice-level discount (absent on older invoices). */
+  invoiceDiscountShare?: number;
   /** نرخ مالیات بر ارزش افزوده سطر (نسبت؛ ۰٫۱ = ۱۰٪). */
   vatRate: number;
   tax: number;

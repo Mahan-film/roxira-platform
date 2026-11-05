@@ -71,6 +71,12 @@ export class InvoiceResponseDto {
   @ApiProperty({ description: 'جمع کل تخفیف‌ها' })
   totalDiscount: number;
 
+  @ApiProperty({
+    description:
+      'Part of totalDiscount that is the invoice-level discount (already spread over the lines, VAT on the discounted base)',
+  })
+  invoiceDiscount: number;
+
   @ApiProperty({ description: 'جمع کل مالیات ارزش افزوده (نرخ هر سطر)' })
   totalTax: number;
 
