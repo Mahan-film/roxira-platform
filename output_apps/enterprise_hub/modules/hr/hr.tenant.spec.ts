@@ -14,6 +14,7 @@ import { ContractStatus, EmployeeStatus } from './enums/hr.enum';
 import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
 import { fakeStatutory } from './statutory/__fixtures__/seeded-rates';
+import { fakePostingRules } from './__fixtures__/fake-posting-rules';
 
 const requestWith = (user: unknown): AuthenticatedRequest =>
   ({ user }) as unknown as AuthenticatedRequest;
@@ -22,6 +23,10 @@ const requestWith = (user: unknown): AuthenticatedRequest =>
 class FakeAccountingService {
   calls: { tenantId: string; dto: { entryNumber: string } }[] = [];
   private sequence = 0;
+
+  async listAccounts(): Promise<{ code: string }[]> {
+    return [{ code: '5010' }, { code: '2010' }, { code: '1010' }];
+  }
 
   async createJournalEntry(
     tenantId: string,
@@ -352,7 +357,12 @@ const buildService = () => {
   return {
     repository,
     accountingService,
-    service: new HrService(repository, accountingService, fakeStatutory()),
+    service: new HrService(
+      repository,
+      accountingService,
+      fakeStatutory(),
+      fakePostingRules(accountingService),
+    ),
   };
 };
 

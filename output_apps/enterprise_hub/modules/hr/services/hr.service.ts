@@ -5,16 +5,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FindOptionsWhere } from 'typeorm';
+import { toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import {
   CONTRACT_NUMBER_PREFIX,
   EMPLOYEE_NUMBER_PREFIX,
   MONEY_SCALE,
-  PAYROLL_BANK_ACCOUNT_CODE,
-  PAYROLL_EXPENSE_ACCOUNT_CODE,
-  PAYROLL_PAYABLE_ACCOUNT_CODE,
   PAYSLIP_NUMBER_PREFIX,
 } from '../constants/hr.constants';
+import {
+  payrollPayslipProposalInput,
+  PayrollPayslipTotals,
+} from '../posting/payroll-posting-proposal';
 import { StatutoryService } from '../statutory/statutory.service';
 import {
   ContractResponseDto,
@@ -89,6 +92,7 @@ export class HrService {
     private readonly hrRepository: HrRepository,
     private readonly accountingService: AccountingService,
     private readonly statutory: StatutoryService,
+    private readonly postingRules: PostingRulesService,
   ) {}
 
   private round(value: number): number {
@@ -844,52 +848,27 @@ export class HrService {
       2,
     )}-${employee.employeeNumber}`;
     const entryNumber = `PY-${payslipNumber}`;
-    const payableTotal = this.round(
-      calculation.insuranceDeduction +
-        calculation.incomeTax +
-        calculation.otherDeductions,
-    );
+    const totals: PayrollPayslipTotals = {
+      grossPay: toMinor(calculation.grossPay),
+      insuranceDeduction: toMinor(calculation.insuranceDeduction),
+      incomeTax: toMinor(calculation.incomeTax),
+      otherDeductions: toMinor(calculation.otherDeductions),
+      netPay: toMinor(calculation.netPay),
+    };
+    const amounts = payrollPayslipProposalInput(totals)!.amounts;
 
-    const lines: {
-      accountCode: string;
-      debit?: number;
-      credit?: number;
-      description?: string;
-    }[] = [
-      {
-        accountCode: PAYROLL_EXPENSE_ACCOUNT_CODE,
-        debit: calculation.grossPay,
-        description: `هزینه حقوق و دستمزد ${employee.firstName} ${employee.lastName}`,
-      },
-    ];
-
-    if (payableTotal > 0) {
-      lines.push({
-        accountCode: PAYROLL_PAYABLE_ACCOUNT_CODE,
-        credit: payableTotal,
-        description: 'کسورات بیمه و مالیات پرداختنی',
-      });
-    }
-    if (calculation.netPay > 0) {
-      lines.push({
-        accountCode: PAYROLL_BANK_ACCOUNT_CODE,
-        credit: calculation.netPay,
-        description: 'خالص پرداختی حقوق',
-      });
-    }
-
-    const journalEntry = await this.accountingService.createJournalEntry(
-      tenantId,
-      {
-        entryNumber,
-        date: new Date().toISOString(),
-        description: `سند خودکار حقوق ${dto.periodYear}/${this.pad(
-          dto.periodMonth,
-          2,
-        )} — ${employee.firstName} ${employee.lastName} (${payslipNumber})`,
-        lines,
-      },
-    );
+    const journalEntry = await this.postingRules.post(tenantId, {
+      docType: 'payroll.payslip',
+      sourceType: 'payroll_payslip',
+      sourceId: payslipNumber,
+      date: new Date().toISOString(),
+      description: `سند خودکار حقوق ${dto.periodYear}/${this.pad(
+        dto.periodMonth,
+        2,
+      )} — ${employee.firstName} ${employee.lastName} (${payslipNumber})`,
+      entryNumber,
+      amounts,
+    });
 
     const saved = await this.hrRepository.createPayslip(tenantId, {
       payslipNumber,
@@ -910,7 +889,7 @@ export class HrService {
       otherDeductions: calculation.otherDeductions,
       netPay: calculation.netPay,
       status: PayslipStatus.ISSUED,
-      journalEntryId: journalEntry.id,
+      journalEntryId: journalEntry.entryId,
       journalEntryNumber: journalEntry.entryNumber,
       issuedAt: new Date(),
       createdAt: new Date(),

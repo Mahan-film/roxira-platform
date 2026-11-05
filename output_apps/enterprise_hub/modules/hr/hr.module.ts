@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccessModule } from '../access/access.module';
 import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
+import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 import { HrController } from './controllers/hr.controller';
 import { ContractAllowanceEntity } from './entities/contract-allowance.entity';
 import { EmployeeEntity } from './entities/employee.entity';
@@ -44,6 +45,7 @@ import { StatutoryService } from './statutory/statutory.service';
     ]),
     AccessModule,
     AccountingModule,
+    PostingRulesModule,
   ],
   controllers: [HrController, StatutoryController],
   providers: [

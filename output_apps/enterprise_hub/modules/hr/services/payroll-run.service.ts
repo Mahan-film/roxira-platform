@@ -13,8 +13,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { toMinor } from '../../accounting/money';
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { AccountingService } from '../../accounting/services/accounting.service';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
+import {
+  payrollRunProposalInput,
+  PayrollRunTotals,
+} from '../posting/payroll-posting-proposal';
 import {
   PAYROLL_RUN_ACCOUNTS,
   PAYROLL_RUN_ENTRY_PREFIX,
@@ -96,6 +102,7 @@ export class PayrollRunService {
     private readonly hrService: HrService,
     private readonly accountingService: AccountingService,
     private readonly statutory: StatutoryService,
+    private readonly postingRules: PostingRulesService,
   ) {}
 
   private async requireRates(
@@ -557,6 +564,19 @@ export class PayrollRunService {
     }
   }
 
+  /** Run totals in integer minor units, the currency the posting engine works in. */
+  private runTotalsMinor(run: PayrollRunEntity): PayrollRunTotals {
+    return {
+      totalGross: toMinor(Number(run.totalGross)),
+      totalEmployeeInsurance: toMinor(Number(run.totalEmployeeInsurance)),
+      totalEmployerInsurance: toMinor(Number(run.totalEmployerInsurance)),
+      totalUnemploymentInsurance: toMinor(Number(run.totalUnemploymentInsurance)),
+      totalIncomeTax: toMinor(Number(run.totalIncomeTax)),
+      totalOtherDeductions: toMinor(Number(run.totalOtherDeductions)),
+      totalNet: toMinor(Number(run.totalNet)),
+    };
+  }
+
   /** Post a DRAFT run as one balanced journal entry and freeze it. */
   async postRun(tenantId: string, id: number): Promise<PayrollRunResponseDto> {
     const run = await this.requireRun(tenantId, id);
@@ -573,6 +593,7 @@ export class PayrollRunService {
     await this.ensurePayrollAccounts(tenantId);
     const month = String(run.periodMonth).padStart(2, '0');
     const entryNumber = `${PAYROLL_RUN_ENTRY_PREFIX}-${run.periodYear}${month}`;
+    const amounts = payrollRunProposalInput(this.runTotalsMinor(run))!.amounts;
 
     // Journal entry + run/payslip status commit together. If an entry with this
     // number already exists for the tenant (e.g. a post that was interrupted
@@ -582,24 +603,30 @@ export class PayrollRunService {
         tenantId,
         entryNumber,
       );
-      const entry =
-        existing ??
-        (await this.accountingService.createJournalEntry(
+      let posted: { entryId: number; entryNumber: string };
+      if (existing) {
+        posted = { entryId: existing.id, entryNumber: existing.entryNumber };
+      } else {
+        posted = await this.postingRules.post(
           tenantId,
           {
-            entryNumber,
+            docType: 'payroll.run',
+            sourceType: 'payroll_run',
+            sourceId: String(run.id),
             date: isoDate(jalaliMonthEnd(run.periodYear, run.periodMonth)),
             description: `سند حقوق و دستمزد ${run.periodYear}/${month} (${run.employeeCount} نفر)`,
-            lines: this.buildJournalLines(run),
+            entryNumber,
+            amounts,
           },
           manager,
-        ));
+        );
+      }
 
       const now = new Date();
       Object.assign(run, {
         status: PayrollRunStatus.POSTED,
-        journalEntryId: entry.id,
-        journalEntryNumber: entry.entryNumber,
+        journalEntryId: posted.entryId,
+        journalEntryNumber: posted.entryNumber,
         postedAt: now,
         updatedAt: now,
       });
@@ -609,8 +636,8 @@ export class PayrollRunService {
         run.id,
         {
           status: PayslipStatus.ISSUED,
-          journalEntryId: entry.id,
-          journalEntryNumber: entry.entryNumber,
+          journalEntryId: posted.entryId,
+          journalEntryNumber: posted.entryNumber,
           issuedAt: now,
         },
         manager,

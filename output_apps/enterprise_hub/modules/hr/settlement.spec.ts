@@ -11,6 +11,7 @@ import { EmploymentContractEntity } from './entities/employment-contract.entity'
 import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
 import { fakeStatutory, TENANT_ROWS } from './statutory/__fixtures__/seeded-rates';
+import { fakePostingRules } from './__fixtures__/fake-posting-rules';
 import { StatutoryParameterEntity, StatutorySourceKind } from './statutory/statutory-parameter.entity';
 
 const A = 'tenant-a';
@@ -36,7 +37,13 @@ class FakeRepo {
   }
 }
 
-const service = () => new HrService(new FakeRepo() as unknown as HrRepository, {} as never, fakeStatutory());
+const service = () =>
+  new HrService(
+    new FakeRepo() as unknown as HrRepository,
+    {} as never,
+    fakeStatutory(),
+    fakePostingRules({} as never),
+  );
 
 describe('settlement preview', () => {
   afterEach(() => {

@@ -12,6 +12,8 @@ import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
 import { AuditService } from '../access/services/audit.service';
 import { AccountingService } from '../accounting/services/accounting.service';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { ContractAllowanceEntity } from './entities/contract-allowance.entity';
 import { EmployeeEntity } from './entities/employee.entity';
 import { EmploymentContractEntity } from './entities/employment-contract.entity';
@@ -60,14 +62,38 @@ describePg('monthly payroll on PostgreSQL', () => {
 
     const repository = new HrRepository(new TenantScope(ds), ds);
     const accounting = {
-      listAccounts: async () => [],
+      listAccounts: async () => [
+        { code: '5010' },
+        { code: '5040' },
+        { code: '2030' },
+        { code: '2040' },
+        { code: '2060' },
+        { code: '2050' },
+        { code: '2010' },
+        { code: '1010' },
+      ],
       createAccount: async () => undefined,
       findJournalEntryByNumber: async () => null,
-      createJournalEntry: async (_tenant: string, dto: (typeof entries)[number]) => {
+      createJournalEntry: async (
+        _tenant: string,
+        dto: {
+          entryNumber: string;
+          lines: {
+            accountCode?: string;
+            debit?: number | string;
+            credit?: number | string;
+          }[];
+        },
+      ) => {
+        const lines = dto.lines.map((line) => ({
+          accountCode: line.accountCode,
+          debit: Number(line.debit ?? 0),
+          credit: Number(line.credit ?? 0),
+        }));
         const sum = (key: 'debit' | 'credit') =>
-          dto.lines.reduce((total, line) => total + (line[key] ?? 0), 0);
+          lines.reduce((total, line) => total + line[key], 0);
         expect(sum('debit')).toBe(sum('credit'));
-        entries.push(dto);
+        entries.push({ entryNumber: dto.entryNumber, lines });
         const [row] = await ds.query(
           `INSERT INTO fin_journal_entries (tenant_id, entry_number, description)
            VALUES ($1, $2, 'test') RETURNING id`,
@@ -80,8 +106,18 @@ describePg('monthly payroll on PostgreSQL', () => {
       new StatutoryRepository(new TenantScope(ds)),
       { record: async () => undefined } as unknown as AuditService,
     );
-    const hr = new HrService(repository, accounting, statutory);
-    runs = new PayrollRunService(repository, hr, accounting, statutory);
+    const postingRules = new PostingRulesService(
+      new PostingRulesRepository(new TenantScope(ds)),
+      accounting,
+    );
+    const hr = new HrService(repository, accounting, statutory, postingRules);
+    runs = new PayrollRunService(
+      repository,
+      hr,
+      accounting,
+      statutory,
+      postingRules,
+    );
 
     const now = new Date();
     const employee = await ds.getRepository(EmployeeEntity).save({
