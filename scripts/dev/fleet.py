@@ -267,18 +267,86 @@ def dirty(wt: Path) -> bool:
     return bool(sh(["git", "status", "--porcelain"], wt).stdout.strip())
 
 
+# ---- free-first guard (owner rule 2026-11-05): config/auth errors on a free model stop the job; only a real
+# rate/quota error may escalate to a paid model, and paid calls stop at a daily USD cap.
+AUTH_ERR_RE = re.compile(r"(no api key passed in|authentication error|invalid api key|incorrect api key|unauthorized|\b401\b|"
+                         r"api key not found|missing .{0,30}(api[_ ]?key|env))", re.I)
+PAID_LIMIT_RE = re.compile(r"(key limit exceeded|daily limit|insufficient (credit|funds|balance)|payment required|\b402\b)", re.I)
+
+
+def is_paid_alias(alias: str) -> bool:
+    return alias == "executor" or "paid" in alias
+
+
+def paid_file(home: Path | None = None) -> Path:
+    return (home or HOME) / "paid.json"
+
+
+def paid_spent_today(home: Path | None = None) -> float:
+    try:
+        d = json.loads(paid_file(home).read_text())
+    except (OSError, ValueError):
+        return 0.0
+    return float(d.get(time.strftime("%F"), 0.0))
+
+
+def record_paid(usd: float, home: Path | None = None) -> None:
+    """Add to today's counter under an exclusive file lock (up to 4 writers run at once)."""
+    f = paid_file(home)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with open(f.with_suffix(".lock"), "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try:
+            d = json.loads(f.read_text())
+        except (OSError, ValueError):
+            d = {}
+        today = time.strftime("%F")
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps({today: float(d.get(today, 0.0)) + usd}))  # only today is kept
+        tmp.replace(f)
+
+
+def paid_allowed(cfg: dict[str, Any], home: Path | None = None) -> bool:
+    cap = float(cfg.get("paid", {}).get("daily_cap_usd", 2.0))
+    return paid_spent_today(home) < cap
+
+
+def seconds_to_midnight() -> int:
+    t = time.localtime()
+    return 86400 - (t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec)
+
+
 def lane_opencode(job: dict[str, Any], wt: Path, log: Path, cfg: dict[str, Any]) -> tuple[str, str]:
     """-> (status, author_model); status ok | rate | none | error."""
     lc = cfg["lanes"]["opencode"]
     hit_limit = False
+    free_rate_limited = 0       # free models that failed with a genuine rate/quota error
+    free_other_failure = 0      # free models that failed for any other reason (config, crash, empty answer)
     for alias in lc["models"][job.get("model_idx", 0):]:
+        paid = is_paid_alias(alias)
+        if paid:
+            if not free_rate_limited or free_other_failure:
+                return "config", "opencode"   # paid only when EVERY free model hit a genuine rate/quota error
+            if not paid_allowed(cfg):
+                return "capped", "opencode"
         model = worker_model(lc, alias)
         rc, out = run_logged(["opencode", "run", "--dir", str(wt), "-m", model, build_prompt(job)], wt, log, lc["timeout_secs"])
+        if paid:
+            record_paid(float(cfg.get("paid", {}).get("est_cost_per_call_usd", 0.15)))
+            if PAID_LIMIT_RE.search(out[-3000:]):
+                record_paid(float(cfg.get("paid", {}).get("daily_cap_usd", 2.0)))  # provider says the key is spent
+                return "capped", model
         if rc == 0 and dirty(wt):
             return "ok", model
+        if AUTH_ERR_RE.search(out[-3000:]) and not dirty(wt):
+            return "config", model   # stop: do not try the next (possibly paid) model
         if parse_rate_limit(out, cfg["rate_limit"]["pattern"]) or rc == 124:
-            hit_limit = True  # partial edits stay in the worktree; the next model or the resume finishes them
+            hit_limit = True
+            if not paid:
+                free_rate_limited += 1
             continue
+        if not paid:
+            free_other_failure += 1
         if dirty(wt):
             return "ok", model
     return ("rate" if hit_limit else "none"), "opencode"
@@ -397,6 +465,16 @@ class Fleet:
         status, author = LANES[job["lane"]](job, wt, log, self.cfg)
         if status == "rate":
             return self.rate_limited(n, job["lane"])
+        if status == "config":
+            with self.store.txn() as d:  # stop the whole lane for a while: a config/auth error is not fixed by retrying
+                d["cooldown"][job["lane"]] = time.time() + 6 * 3600
+            return self.save(n, status="failed", locked=False,
+                             note=f"CONFIG/AUTH error on the free tier, stopped without using paid models (see logs/{n}.log)")
+        if status == "capped":
+            with self.store.txn() as d:
+                d["cooldown"][job["lane"]] = time.time() + seconds_to_midnight()
+            return self.save(n, status="queued", lane=None, resume_at=time.time() + seconds_to_midnight(),
+                             note="paid cap reached; paused until tomorrow")
         if status != "ok":
             return self.save(n, status="failed", note=f"{job['lane']} lane produced no change (see logs/{n}.log)")
         bad = self.jest_gate(wt)
