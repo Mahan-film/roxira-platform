@@ -562,7 +562,8 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       expect(rials(settleVoucher.totalDebit), `settlement voucher of ${invoice.number} is balanced`).toBe(
         rials(settleVoucher.totalCredit),
       );
-      expect(
+      // Soft: every settlement voucher is checked and each 1101 hit is listed, the step still fails.
+      expect.soft(
         settleVoucher.lines.filter((l) => l.accountCode === '1101'),
         `settlement of ${invoice.number} must not touch the bank 1101`,
       ).toHaveLength(0);
@@ -791,7 +792,8 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       expect(rials(settleVoucher.totalDebit), `settlement voucher of ${invoice.number} is balanced`).toBe(
         rials(settleVoucher.totalCredit),
       );
-      expect(
+      // Soft: every settlement voucher is checked and each 1101 hit is listed, the step still fails.
+      expect.soft(
         settleVoucher.lines.filter((l) => l.accountCode === '1101'),
         `settlement of ${invoice.number} must not touch the bank 1101`,
       ).toHaveLength(0);
