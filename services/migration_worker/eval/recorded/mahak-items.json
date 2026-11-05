@@ -1,0 +1,9 @@
+{
+  "id": "mahak-items",
+  "preset": "mahak",
+  "mappable": true,
+  "table": "goods",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"items\",\"fields\":{\"code\":\"کد کالا\",\"name\":\"نام کالا\",\"unit\":\"واحد\"},\"confidence\":0.9}"
+}

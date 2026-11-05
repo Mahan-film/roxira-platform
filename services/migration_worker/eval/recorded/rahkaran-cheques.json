@@ -1,0 +1,9 @@
+{
+  "id": "rahkaran-cheques",
+  "preset": "hamkaran-rahkaran",
+  "mappable": true,
+  "table": "cheques",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "```json\n{\"target\":\"cheques\",\"fields\":{\"cheque_no\":\"شماره چک\",\"bank\":\"بانک\",\"due_date\":\"سررسید\",\"amount\":\"مبلغ\",\"status\":\"وضعیت\"},\"confidence\":0.9}\n```"
+}

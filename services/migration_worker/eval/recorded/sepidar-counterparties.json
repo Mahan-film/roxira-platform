@@ -1,0 +1,9 @@
+{
+  "id": "sepidar-counterparties",
+  "preset": "sepidar",
+  "mappable": true,
+  "table": "counterparties",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"parties\",\"fields\":{\"code\":\"کد طرف حساب\",\"name\":\"نام\",\"kind\":\"نوع (حقیقی/حقوقی)\"},\"confidence\":0.88}"
+}

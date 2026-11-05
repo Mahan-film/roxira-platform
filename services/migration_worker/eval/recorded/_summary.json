@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-11-05",
+  "modelGroups": ["agent-light-free"],
+  "calls": 15,
+  "accuracy": 0.9167,
+  "mappable": 12,
+  "correct": 11,
+  "unmappable": 3,
+  "note": "Recordings consumed by eval.test.mjs in replay mode (no network). Regenerate with: LITELLM_API_KEY=... node eval/run-eval.mjs --record"
+}

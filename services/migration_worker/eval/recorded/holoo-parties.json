@@ -1,0 +1,9 @@
+{
+  "id": "holoo-parties",
+  "preset": "holoo",
+  "mappable": true,
+  "table": "parties",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"parties\",\"fields\":{\"code\":\"کد\",\"name\":\"نام\",\"kind\":\"نوع شخص\"},\"confidence\":0.9}"
+}

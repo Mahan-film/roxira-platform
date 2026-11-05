@@ -1,0 +1,9 @@
+{
+  "id": "sepidar-items",
+  "preset": "sepidar",
+  "mappable": true,
+  "table": "items",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"items\",\"fields\":{\"code\":\"کد کالا\",\"name\":\"نام کالا\",\"unit\":\"واحد اصلی\"},\"confidence\":0.9}"
+}

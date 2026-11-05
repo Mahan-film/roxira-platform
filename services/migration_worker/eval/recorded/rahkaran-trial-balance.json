@@ -1,0 +1,9 @@
+{
+  "id": "rahkaran-trial-balance",
+  "preset": "hamkaran-rahkaran",
+  "mappable": true,
+  "table": "trial_balance",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"gl_trial_balance\",\"fields\":{\"account_code\":\"کد حساب\",\"debit\":\"گردش بدهکار\",\"credit\":\"گردش بستانکار\"},\"confidence\":0.9}"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "unmappable-audit-log",
+  "preset": "none",
+  "mappable": false,
+  "table": "audit_log",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":null}"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "unmappable-settings",
+  "preset": "none",
+  "mappable": false,
+  "table": "app_settings",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":null}"
+}

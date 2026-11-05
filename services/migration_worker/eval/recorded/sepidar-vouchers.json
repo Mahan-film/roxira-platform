@@ -1,0 +1,9 @@
+{
+  "id": "sepidar-vouchers",
+  "preset": "sepidar",
+  "mappable": true,
+  "table": "vouchers",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"gl_lines\",\"fields\":{\"account_code\":\"کد حساب\",\"voucher_no\":\"شماره سند\",\"date\":\"doc_date\",\"debit\":\"بدهکار\",\"credit\":\"بستانکار\",\"description\":\"شرح\"},\"confidence\":0.7}"
+}
