@@ -44,16 +44,16 @@ const DEFAULT_ACCOUNTS: Array<{
   parent?: string;
   reportLine?: string;
 }> = [
-  { code: '1010', name: 'صندوق', type: 'ASSET', level: 'DETAIL', reportLine: 'CURRENT_ASSETS' },
-  { code: '1020', name: 'بانک', type: 'ASSET', level: 'DETAIL', reportLine: 'CURRENT_ASSETS' },
-  { code: '1100', name: 'حساب‌های دریافتنی', type: 'ASSET', level: 'DETAIL', reportLine: 'CURRENT_ASSETS' },
-  { code: '1200', name: 'موجودی کالا', type: 'ASSET', level: 'DETAIL', reportLine: 'CURRENT_ASSETS' },
-  { code: '2100', name: 'حساب‌های پرداختنی', type: 'LIABILITY', level: 'DETAIL', reportLine: 'CURRENT_LIABILITIES' },
-  { code: '2200', name: 'مالیات ارزش افزوده فروش', type: 'LIABILITY', level: 'DETAIL', reportLine: 'CURRENT_LIABILITIES' },
-  { code: '3100', name: 'سرمایه', type: 'EQUITY', level: 'DETAIL', reportLine: 'EQUITY' },
-  { code: '4010', name: 'فروش', type: 'REVENUE', level: 'DETAIL', reportLine: 'REVENUE' },
-  { code: '5010', name: 'بهای تمام‌شده کالای فروش‌رفته', type: 'EXPENSE', level: 'DETAIL', reportLine: 'COST_OF_SALES' },
-  { code: '6010', name: 'هزینه‌های اداری', type: 'EXPENSE', level: 'DETAIL', reportLine: 'OPERATING_EXPENSES' },
+  { code: '1010', name: 'صندوق', type: 'ASSET', level: 'TAFSILI', reportLine: 'CURRENT_ASSETS' },
+  { code: '1020', name: 'بانک', type: 'ASSET', level: 'TAFSILI', reportLine: 'CURRENT_ASSETS' },
+  { code: '1100', name: 'حساب‌های دریافتنی', type: 'ASSET', level: 'TAFSILI', reportLine: 'CURRENT_ASSETS' },
+  { code: '1200', name: 'موجودی کالا', type: 'ASSET', level: 'TAFSILI', reportLine: 'CURRENT_ASSETS' },
+  { code: '2100', name: 'حساب‌های پرداختنی', type: 'LIABILITY', level: 'TAFSILI', reportLine: 'CURRENT_LIABILITIES' },
+  { code: '2200', name: 'مالیات ارزش افزوده فروش', type: 'LIABILITY', level: 'TAFSILI', reportLine: 'CURRENT_LIABILITIES' },
+  { code: '3100', name: 'سرمایه', type: 'EQUITY', level: 'TAFSILI', reportLine: 'EQUITY' },
+  { code: '4010', name: 'فروش', type: 'REVENUE', level: 'TAFSILI', reportLine: 'REVENUE' },
+  { code: '5010', name: 'بهای تمام‌شده کالای فروش‌رفته', type: 'EXPENSE', level: 'TAFSILI', reportLine: 'COST_OF_SALES' },
+  { code: '6010', name: 'هزینه‌های اداری', type: 'EXPENSE', level: 'TAFSILI', reportLine: 'OPERATING_EXPENSES' },
 ];
 
 export interface SeedOptions {
@@ -95,13 +95,13 @@ async function seedStockItems(ds: DataSource, tenantId: string, count: number, b
     const to = Math.min(from + batch - 1, count);
     await ds.query(
       `INSERT INTO erp_stock_items (tenant_id, sku, barcode, name, quantity, min_quantity)
-       SELECT $1,
+       SELECT $1::uuid,
               'SKU-' || lpad(g::text, 6, '0'),
               '626' || lpad(g::text, 10, '0'),
               'کالای آزمایشی ' || lpad(g::text, 6, '0'),
               CASE WHEN g % 10 = 0 THEN 0 WHEN g % 7 = 0 THEN 3 ELSE (g % 500 + 20)::double precision END,
               CASE WHEN g % 3 = 0 THEN 10 ELSE 0 END
-       FROM generate_series($2, $3) AS g
+       FROM generate_series($2::int, $3::int) AS g
        ON CONFLICT (tenant_id, sku) DO NOTHING`,
       [tenantId, from, to],
     );
@@ -114,13 +114,13 @@ async function seedInvoices(ds: DataSource, tenantId: string, count: number, bat
     const to = Math.min(from + batch - 1, count);
     await ds.query(
       `INSERT INTO invoices (
-         tenant_id, tax_invoice_number, seller_info, buyer_info, items, currency,
-         jurisdiction, exchange_rate, fx_rate, base_currency, "createdAt",
-         total_amount, total_discount, total_tax, final_payable,
-         base_total_amount, base_total_tax, base_final_payable,
-         status, issued_at, direction, einvoice_type, subject
+         tenant_id, "taxInvoiceNumber", "sellerInfo", "buyerInfo", items, currency,
+         jurisdiction, "exchangeRate", fx_rate, "baseCurrency",
+         "totalAmount", "totalDiscount", "totalTax", "finalPayable",
+         "baseTotalAmount", "baseTotalTax", "baseFinalPayable",
+         status, issued_at, direction, einvoice_type, subject, "createdAt"
        )
-       SELECT $1,
+       SELECT $1::uuid,
               'INV-' || lpad(g::text, 6, '0'),
               '{"name":"فروشنده آزمایشی"}'::jsonb,
               jsonb_build_object('name', 'مشتری آزمایشی ' || (g % 5000 + 1)),
@@ -135,8 +135,8 @@ async function seedInvoices(ds: DataSource, tenantId: string, count: number, bat
                    WHEN g % 5 = 2 THEN 'DRAFT' WHEN g % 5 = 3 THEN 'CANCELLED' ELSE 'PAID' END::text::"invoices_status_enum",
               CASE WHEN g % 5 IN (0, 1, 4) THEN now() - (g % 700) * interval '1 day' ELSE NULL END,
               'SALE', 1, 1, now() - (g % 700) * interval '1 day'
-       FROM generate_series($2, $3) AS g
-       ON CONFLICT (tenant_id, tax_invoice_number) DO NOTHING`,
+       FROM generate_series($2::int, $3::int) AS g
+       ON CONFLICT (tenant_id, "taxInvoiceNumber") DO NOTHING`,
       [tenantId, from, to],
     );
   }
@@ -163,45 +163,34 @@ async function seedVouchers(
       await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
       await m.query(
         `INSERT INTO fin_journal_entries (tenant_id, entry_number, date, description, status, entry_type)
-         SELECT $1, 'S-' || lpad(g::text, 6, '0'),
+         SELECT $1::uuid, 'S-' || lpad(g::text, 6, '0'),
                 -- spread over the two fiscal years, day-granular
                 TIMESTAMPTZ '2024-03-20' + ((g % 731) * interval '1 day') + interval '12 hours',
                 'سند آزمایشی شماره ' || g,
                 'POSTED', 'NORMAL'
-         FROM generate_series($2, $3) AS g
+         FROM generate_series($2::int, $3::int) AS g
          ON CONFLICT (tenant_id, entry_number) DO NOTHING`,
         [tenantId, from, to],
       );
+      // Both lines of every voucher in ONE statement, so the deferred balance trigger sees pairs.
       await m.query(
-        `INSERT INTO fin_journal_entry_lines
+        `WITH e AS (
+           SELECT id, tenant_id, right(entry_number, 6)::int AS n FROM fin_journal_entries
+            WHERE tenant_id = $1 AND entry_number BETWEEN $2 AND $3)
+         INSERT INTO fin_journal_entry_lines
            (tenant_id, journal_entry_id, account_id, debit, credit, currency, description)
-         SELECT e.tenant_id, e.id, a.id, e.amount, 0, 'IRR', 'بدهکار'
-           FROM (SELECT id, entry_number FROM fin_journal_entries
-                  WHERE tenant_id = $1 AND entry_number BETWEEN $2 AND $3) e
-           JOIN LATERAL (
-             SELECT id, ((right(e.entry_number, 6)::bigint % 6) * 1000000 + 500000)::numeric(18,2) AS amount
-             FROM fin_chart_of_accounts
-             WHERE tenant_id = $1 AND code = '1100'
-           ) a ON true`,
+         SELECT e.tenant_id, e.id, a.id, s.debit, s.credit, 'IRR', s.d
+           FROM e
+           CROSS JOIN LATERAL (VALUES
+             ('1100', ((e.n % 6) * 1000000 + 500000)::numeric(18,2), 0::numeric(18,2), 'بدهکار'),
+             ((ARRAY['4010','2100','1020','2200'])[1 + e.n % 4], 0::numeric(18,2),
+              ((e.n % 6) * 1000000 + 500000)::numeric(18,2), 'بستانکار')
+           ) AS s(code, debit, credit, d)
+           JOIN fin_chart_of_accounts a ON a.tenant_id = e.tenant_id AND a.code = s.code`,
         [tenantId, 'S-' + pad(from, 6), 'S-' + pad(to, 6)],
       );
       await m.query(
-        `INSERT INTO fin_journal_entry_lines
-           (tenant_id, journal_entry_id, account_id, debit, credit, currency, description)
-         SELECT e.tenant_id, e.id, a.id, 0, e.amount, 'IRR', 'بستانکار'
-           FROM (SELECT id, entry_number FROM fin_journal_entries
-                  WHERE tenant_id = $1 AND entry_number BETWEEN $2 AND $3) e
-           JOIN LATERAL (
-             SELECT c.id, ((right(e.entry_number, 6)::bigint % 6) * 1000000 + 500000)::numeric(18,2) AS amount
-             FROM fin_chart_of_accounts c
-             WHERE c.tenant_id = $1
-               -- credit side cycles over 4 accounts so 1100 stays clearly the busiest
-               AND c.code = (ARRAY['4010','2100','1020','2200'])[1 + right(e.entry_number, 6)::bigint % 4]
-           ) a ON true`,
-        [tenantId, 'S-' + pad(from, 6), 'S-' + pad(to, 6)],
-      );
-      await m.query(
-        `UPDATE fin_chart_of_accounts a SET balance = sub.net
+        `UPDATE fin_chart_of_accounts a SET balance = a.balance + sub.net
            FROM (
              SELECT l.account_id, COALESCE(SUM(l.debit - l.credit), 0) AS net
              FROM fin_journal_entry_lines l

@@ -262,7 +262,7 @@ describePerf('100k vouchers timing on PostgreSQL', () => {
     await explain(
       'invoices — search (stand-in for searchAndCount)',
       `SELECT * FROM invoices
-        WHERE tenant_id = $1 AND (buyer_info->>'name' ILIKE $2 OR tax_invoice_number ILIKE $2)
+        WHERE tenant_id = $1 AND ("buyerInfo"->>'name' ILIKE $2 OR "taxInvoiceNumber" ILIKE $2)
         ORDER BY "createdAt" DESC LIMIT 20 OFFSET 0`,
       [T1, '%مشتری آزمایشی 123%'],
     );
