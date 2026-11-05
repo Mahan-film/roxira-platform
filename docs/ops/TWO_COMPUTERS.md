@@ -159,7 +159,7 @@ laptop only reach it through an ssh tunnel; no public port is opened. Provider k
 
 - **Gateway.** `roxira_keypool` listens on srv1 `127.0.0.1:4000` (never public). Config: `config/key_pool.yaml`, rendered by
   `scripts/infra/key_pool/install.sh --apply` (docs/infra/KEY_POOL.md). Free first (Groq x3, Gemini x4, SambaNova, Cloudflare,
-  OpenRouter `:free`, Mistral x4), then DeepSeek Flash. A key that answers 429/403/400/timeout cools down and traffic moves on.
+  OpenRouter `:free`, Mistral x6), then DeepSeek Flash. A key that answers 429/403/400/timeout cools down and traffic moves on.
 - **Tunnel.** Local `127.0.0.1:4181` -> srv1 `127.0.0.1:4000`.
   - Mac: `bash scripts/infra/llm_tunnel/install_mac.sh` (launchd agent `ir.roxira.llm-tunnel`, keepalive, restarts itself).
   - Laptop (Linux/WSL2 with systemd): copy `scripts/infra/llm_tunnel/roxira-llm-tunnel.service` to `~/.config/systemd/user/`, then
