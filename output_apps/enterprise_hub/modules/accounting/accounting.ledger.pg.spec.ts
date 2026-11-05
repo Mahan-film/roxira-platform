@@ -433,7 +433,7 @@ describePg('Ledger on PostgreSQL', () => {
       expect(await stockLevel()).toBe(before); // the ledger refused; the deduction was rolled back
       const after = await invoicing.findById(T1, invoice.id);
       expect(after?.journalEntryId).toBeNull();
-      expect(after?.postingError).toMatch(/locked/i);
+      expect(after?.postingError).toMatch(/locked|قفل/i);
       await accounting.unlockPeriod(T1, 'user-1', lock.id, { reason: 'test cleanup' });
       // once the period is open the same event succeeds: stock deducted exactly once
       await posting.postIssued({ tenantId: T1, invoiceId: invoice.id, status: InvoiceStatus.ISSUED });
