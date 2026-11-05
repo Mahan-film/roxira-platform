@@ -858,7 +858,7 @@ All names, company titles, phone numbers (\`09000000xxx\`), national/economic ID
 - \`opening-balances.csv\` & \`opening-balances.xlsx\` — 14 balanced opening lines (\`debit = credit = ${totals.openingDebit}\`)
 - \`customers-suppliers.csv\`, \`customers-suppliers.xlsx\`, & \`customers-suppliers-win1256.csv\` — 50 rows (30 customers + 20 suppliers; includes Persian/Arabic digits, Arabic \`ي\`/\`ك\`, merged name & company, and 2 duplicate rows)
 - \`items.csv\` & \`items.xlsx\` — 300 inventory items (\`stock value = ${totals.stockValue}\`)
-- \`invoices.csv\` & \`invoices.xlsx\` — 240 sales & purchase invoices (144 sales + 96 purchases: 200 single-line + 40 multi-line with 2 to 6 items each, total 360 rows; includes 6 blank-customer walk-in rows, Persian/Arabic digits, Arabic \`ي\`/\`ك\`, and 2 duplicate rows)
+- \`invoices.csv\` & \`invoices.xlsx\` — 238 distinct sales & purchase invoices (143 sales + 95 purchases) in 360 rows (200 single-line + 40 multi-line with 2 to 6 items each; 2 rows are exact repeats of \`INV-S-1403-0001\` and \`INV-P-1403-0001\`, so they import as duplicates and add no line); includes 6 blank-customer walk-in rows, Persian/Arabic digits, and Arabic \`ي\`/\`ك\`
 - \`bank-statement.csv\` & \`bank-statement.xlsx\` — 100 bank statement lines
 - \`sample-company.xlsx\` — Multi-sheet workbook containing all 6 tables
 
