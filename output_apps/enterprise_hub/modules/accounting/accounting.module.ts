@@ -27,6 +27,7 @@ import { LedgerReportRepository } from './repositories/ledger-report.repository'
 import { PettyCashRepository } from './repositories/petty-cash.repository';
 import { AccountingService } from './services/accounting.service';
 import { ChartTemplateService } from './services/chart-template.service';
+import { CostCentreReportService } from './services/cost-centre-report.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { FiscalYearService } from './services/fiscal-year.service';
 import { PettyCashService } from './services/petty-cash.service';
@@ -71,6 +72,7 @@ import { ReportExportService } from './services/report-export.service';
     FixedAssetRepository,
     FixedAssetService,
     ChartTemplateService,
+    CostCentreReportService,
     FinancialReportsService,
     FiscalYearRepository,
     FiscalYearService,

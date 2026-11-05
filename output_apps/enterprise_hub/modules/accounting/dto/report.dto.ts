@@ -52,6 +52,14 @@ export class SubsidiaryQueryDto extends TrialBalanceQueryDto {
   accountCode?: string;
 }
 
+export class CostCentreTrialBalanceQueryDto extends TrialBalanceQueryDto {
+  @ApiPropertyOptional({ description: 'Limit to one cost centre and the centres under it', example: 'CC-100' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9._-]{1,32}$/, { message: 'کد فقط حروف لاتین، عدد و . _ - تا ۳۲ نویسه' })
+  costCenterCode?: string;
+}
+
 export class LedgerQueryDto extends ReportPeriodDto {
   @ApiPropertyOptional({ description: 'Account code; lines of the accounts under it are included', example: '10' })
   @IsString()

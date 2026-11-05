@@ -5,6 +5,7 @@ import { ModuleAccess, RequireAction } from '../../access/decorators';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
+  CostCentreTrialBalanceQueryDto,
   EXPORTABLE_REPORTS,
   ExportableReport,
   ExportReportQueryDto,
@@ -13,6 +14,7 @@ import {
   SubsidiaryQueryDto,
   TrialBalanceQueryDto,
 } from '../dto/report.dto';
+import { CostCentreReportService } from '../services/cost-centre-report.service';
 import { FinancialReportsService, moneyJson } from '../services/financial-reports.service';
 import { ReportExportService } from '../services/report-export.service';
 
@@ -24,6 +26,7 @@ export class ReportsController {
   constructor(
     private readonly reports: FinancialReportsService,
     private readonly exporter: ReportExportService,
+    private readonly costCentres: CostCentreReportService,
   ) {}
 
   @Get('trial-balance')
@@ -31,6 +34,14 @@ export class ReportsController {
   @ApiResponse({ status: HttpStatus.OK })
   async trialBalance(@Req() request: AuthenticatedRequest, @Query() query: TrialBalanceQueryDto) {
     return moneyJson(await this.reports.trialBalance(requireTenantId(request), query));
+  }
+
+  @Get('trial-balance-by-cost-centre')
+  @ApiOperation({ summary: 'تراز آزمایشی به تفکیک مرکز هزینه' })
+  @ApiResponse({ status: HttpStatus.OK })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'مرکز هزینه یافت نشد' })
+  async trialBalanceByCostCentre(@Req() request: AuthenticatedRequest, @Query() query: CostCentreTrialBalanceQueryDto) {
+    return moneyJson(await this.costCentres.trialBalance(requireTenantId(request), query));
   }
 
   @Get('subsidiary')

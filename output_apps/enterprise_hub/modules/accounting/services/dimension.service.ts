@@ -14,10 +14,22 @@ export class DimensionService {
   }
 
   async create(tenantId: string, dto: CreateDimensionDto): Promise<DimensionEntity> {
+    let parentId: number | null = null;
+    if (dto.parentCode) {
+      if (dto.kind !== DimensionKind.COST_CENTER) {
+        throw new BadRequestException('فقط مرکز هزینه می‌تواند مرکز بالادست داشته باشد.');
+      }
+      const parent = await this.repository.findByCode(tenantId, DimensionKind.COST_CENTER, dto.parentCode);
+      if (!parent) {
+        throw new BadRequestException(`مرکز هزینهٔ بالادست ${dto.parentCode} تعریف نشده است.`);
+      }
+      parentId = parent.id;
+    }
     const created = await this.repository.create(tenantId, {
       kind: dto.kind,
       code: dto.code,
       name: dto.name.trim(),
+      parentId,
     });
     if (!created) {
       throw new ConflictException(`کد ${dto.code} برای این نوع قبلاً ثبت شده است.`);

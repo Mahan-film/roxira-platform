@@ -13,6 +13,8 @@ export interface AccountBucketRow {
   accountId: number;
   code: string;
   partyCode?: string | null;
+  /** Set when the buckets are split by cost centre; null for untagged lines. */
+  costCenterId?: number | null;
   openingDebit: string;
   openingCredit: string;
   priorDebit: string;
@@ -68,10 +70,15 @@ export class LedgerReportRepository {
    */
   async accountBuckets(
     tenantId: string,
-    range: { yearStart: string; from: string; to: string; byParty?: boolean },
+    range: { yearStart: string; from: string; to: string; byParty?: boolean; byCostCenter?: boolean },
     manager?: EntityManager,
   ): Promise<AccountBucketRow[]> {
-    const party = range.byParty ? `, l.party_code` : '';
+    const party = range.byParty ? `, l.party_code` : range.byCostCenter ? `, l.cost_center_id` : '';
+    const partyColumn = range.byParty
+      ? `, l.party_code AS "partyCode"`
+      : range.byCostCenter
+        ? `, l.cost_center_id AS "costCenterId"`
+        : '';
     const sum = (column: string, condition: string): string =>
       `COALESCE(SUM(l.${column}) FILTER (WHERE ${condition}), 0)`;
     const opening = `${DAY} < $2 OR (${KIND} = 'OPENING' AND ${DAY} <= $4)`;
@@ -79,7 +86,7 @@ export class LedgerReportRepository {
     const period = `${KIND} = 'NORMAL' AND ${DAY} >= $3 AND ${DAY} <= $4`;
     const closing = `e.entry_type = 'CLOSING_TEMP' AND ${DAY} >= $2 AND ${DAY} <= $4`;
     const rows: AccountBucketRow[] = await this.scope.within(tenantId, manager, (m) => m.query(
-      `SELECT a.id AS "accountId", a.code AS "code"${party ? `, l.party_code AS "partyCode"` : ''},
+      `SELECT a.id AS "accountId", a.code AS "code"${partyColumn},
               ${sum('debit', opening)} AS "openingDebit", ${sum('credit', opening)} AS "openingCredit",
               ${sum('debit', prior)} AS "priorDebit", ${sum('credit', prior)} AS "priorCredit",
               ${sum('debit', period)} AS "periodDebit", ${sum('credit', period)} AS "periodCredit",
