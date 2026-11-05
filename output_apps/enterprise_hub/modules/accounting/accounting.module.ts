@@ -3,6 +3,7 @@ import { FixedAssetController } from './controllers/fixed-asset.controller';
 import { DepreciationLineEntity, FixedAssetEntity } from './entities/fixed-asset.entity';
 import { FixedAssetRepository } from './repositories/fixed-asset.repository';
 import { FIXED_ASSET_POSTING, FixedAssetPosting, FixedAssetService } from './services/fixed-asset.service';
+import { PETTY_CASH_POSTING, PettyCashPosting } from './services/petty-cash.service';
 import { ModuleRef } from '@nestjs/core';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { DimensionController } from './controllers/dimension.controller';
@@ -81,6 +82,10 @@ import { ReportExportService } from './services/report-export.service';
       useFactory: (ref: ModuleRef): FixedAssetPosting => ({
         post: (...args) => ref.get(PostingRulesService, { strict: false }).post(...args),
       }),
+    },
+    {
+      provide: PETTY_CASH_POSTING,
+      useExisting: FIXED_ASSET_POSTING,
     },
     ChartTemplateService,
     CostCentreReportService,

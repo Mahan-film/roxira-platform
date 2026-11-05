@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -30,6 +31,10 @@ import { AccountingRepository } from '../repositories/accounting.repository';
 import { PettyCashRepository } from '../repositories/petty-cash.repository';
 import { classify } from '../reports/statements';
 import { AccountingService } from './accounting.service';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
+
+export const PETTY_CASH_POSTING = Symbol('PETTY_CASH_POSTING');
+export type PettyCashPosting = Pick<PostingRulesService, 'post'>;
 
 const PETTY_CASH_PARENT = '1013';
 
@@ -70,6 +75,7 @@ export class PettyCashService {
     private readonly repository: PettyCashRepository,
     private readonly accountingRepository: AccountingRepository,
     private readonly accounting: AccountingService,
+    @Inject(PETTY_CASH_POSTING) private readonly posting: PettyCashPosting,
   ) {}
 
   private async toFundDto(
@@ -280,23 +286,23 @@ export class PettyCashService {
       },
       manager,
     );
-    const amount = minorToDecimal(data.amount);
-    const [debit, credit] =
-      kind === PettyCashKind.CHARGE ? [context.code, data.accountCode] : [data.accountCode, context.code];
-    const entry = await this.accounting.createJournalEntry(
+
+    const result = await this.posting.post(
       tenantId,
       {
-        entryNumber: `PC-${row.id}`,
+        docType: kind === PettyCashKind.CHARGE ? 'pettycash.fund_charge' : 'pettycash.fund_return',
+        sourceType: 'petty_cash_tx',
+        sourceId: String(row.id),
         date: entryDate(data.date),
+        amounts: { amount: data.amount },
         description: `${data.description} (${context.fund.name})`,
-        lines: [
-          { accountCode: debit, debit: amount },
-          { accountCode: credit, credit: amount },
-        ],
-      } as never,
+        entryNumber: `PC-${row.id}`,
+        overrides: { petty_cash: context.code, counter: data.accountCode },
+      },
       manager,
     );
-    return this.repository.saveTransaction(tenantId, { ...row, journalEntryId: entry.id }, manager);
+
+    return this.repository.saveTransaction(tenantId, { ...row, journalEntryId: result.entryId }, manager);
   }
 
   async charge(
@@ -415,7 +421,12 @@ export class PettyCashService {
     });
   }
 
-  /** Posts the receipts as one entry, then optionally refills the fund by the same total. */
+  /**
+   * Posts the receipts as one entry, then optionally refills the fund by the same total.
+   * Settlement stays on createJournalEntry on purpose: each receipt line carries its own text and
+   * the line count varies, while a posting template is a fixed list of lines and cannot repeat one
+   * per receipt. The optional refill goes through the engine via postMovement.
+   */
   async settle(
     tenantId: string,
     actor: string,
