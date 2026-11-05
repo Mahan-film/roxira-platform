@@ -13,8 +13,10 @@
  * settlement paid (by the item's `ref`); only what it does not explain settles oldest-first. Without
  * a source every settlement is FIFO, as before.
  *
- * Known limit: a reversal is a settlement like any other, so it settles the oldest open item, not
- * necessarily the one it reverses. Totals per party stay exact; only the bucket split can differ.
+ * Reversals: an invoice's own reversal (its `reversal_journal_entry_id`, tagged `settle:<id>` by the
+ * repository) settles that invoice. Any other reversal is a settlement like any other and settles
+ * the oldest open item (FIFO), not necessarily the one it reverses. Totals per party stay exact;
+ * only the bucket split can differ.
  */
 
 export type AgeingSide = 'receivable' | 'payable';
