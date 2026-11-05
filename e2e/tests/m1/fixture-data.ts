@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { README_ROW_LABELS, type SampleCompanyTotals } from './expected-totals';
+import { README_ROW_LABELS, README_TOTALS, type SampleCompanyTotals } from './expected-totals';
 
 /** e2e/fixtures/sample-company/ (synthetic data only). */
 export const SAMPLE_COMPANY_DIR = path.resolve(__dirname, '../../fixtures/sample-company');
@@ -163,6 +163,24 @@ export function parseFixtureInvoices(): FixtureInvoice[] {
     invoice.totalInclVat += toRial(cell(row, 'جمع نهایی (ریال)'));
   }
   return [...byNumber.values()];
+}
+
+/**
+ * Independent replay of the month-end stock value from the CSVs only: opening stock
+ * (README_TOTALS.stockValue, the items.csv quantity x unit-cost sum) + purchases («مبلغ», excl. VAT)
+ * - COGS (the FIFO cost the sale lines consume, from fifoStockTrace). The hand-entered stock
+ * operations of steps 09/10 add sumDelta('stockDelta') on top (= 0: -14.9M POS and +14.9M return);
+ * that part is assembled in the spec, because this module imports expected-totals, so expected-totals
+ * must not import this one back (no circular import).
+ */
+export function fixtureClosingStockValue(): bigint {
+  const invoices = parseFixtureInvoices();
+  const openingStock = README_TOTALS.stockValue;
+  const purchases = fifoPurchaseAmountSum(invoices);
+  const trace = fifoStockTrace(invoices);
+  const cogs = [...trace.consumedBySale.values()].reduce((acc, c) => acc + c, 0n);
+  const closingStock = openingStock + purchases - cogs;
+  return closingStock;
 }
 
 /** Invoice date ascending, ties broken by invoice number (the posting order of steps 07 and 08). */

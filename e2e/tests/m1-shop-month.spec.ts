@@ -1,11 +1,12 @@
 import { test, expect, fa, findSessionFile, loginAsTestTenant } from '../app/fixtures';
 import type { Page } from '@playwright/test';
-import { M1_EXPECTED_CLOSING, M1_MONTH_OPERATIONS, README_TOTALS } from './m1/expected-totals';
+import { M1_EXPECTED_CLOSING, M1_MONTH_OPERATIONS, README_TOTALS, sumDelta } from './m1/expected-totals';
 import {
   bankStatementRollForward,
   computeTotalsFromCsv,
   fifoPurchaseAmountSum,
   fifoStockTrace,
+  fixtureClosingStockValue,
   parseFixtureInvoices,
   readCsv,
   readReadmeTotals,
@@ -13,7 +14,7 @@ import {
   sortInvoices,
   toRial,
 } from './m1/fixture-data';
-import { apiGet, importFile, issueAndWait, persianise, rials } from './m1/import-ui';
+import { apiGet, importFile, issueAndWait, payAndWait, persianise, rials } from './m1/import-ui';
 
 /**
  * M1 "Shop-ready" acceptance gate (issue #116, epic E0): one month of the fictional trading company in
@@ -52,10 +53,29 @@ test.describe('M1 gate · fixture self-check', () => {
   });
 
   test('expected month-end closing derives from README totals plus the hand-entered documents', () => {
+    // The stock closing is an independent replay of the CSVs (fixtureClosingStockValue in
+    // fixture-data.ts), not the README opening: opening stock + purchases («مبلغ», excl. VAT)
+    // - COGS (FIFO cost of the sale lines). expected-totals may not import fixture-data back
+    // (fixture-data imports it), so the assembly with the hand-entered stock operations happens here.
+    const invoices = parseFixtureInvoices();
+    const trace = fifoStockTrace(invoices);
+    expect(trace.oversold, 'no sale may exceed the running stock at its date (shortage 0 units)').toHaveLength(0);
+    expect(trace.totalOpeningValue).toBe(README_TOTALS.stockValue);
+    const purchasesValue = fifoPurchaseAmountSum(invoices);
+    const cogsValue = [...trace.consumedBySale.values()].reduce((acc, c) => acc + c, 0n);
+    const stockOpsDelta = sumDelta('stockDelta'); // -14,900,000 (POS sale) + 14,900,000 (return): cancels out
+    const replayClosing = fixtureClosingStockValue();
+    // Architect-verified figures, asserted as literals.
+    expect(purchasesValue).toBe(5_671_900_000n);
+    expect(cogsValue).toBe(8_315_400_000n);
+    expect(stockOpsDelta).toBe(0n);
+    expect(replayClosing).toBe(249_383_200_000n); // 252,026,700,000 + 5,671,900,000 - 8,315,400,000
+    expect(replayClosing + stockOpsDelta).toBe(M1_EXPECTED_CLOSING.stockValue);
+
     expect(M1_EXPECTED_CLOSING).toEqual({
       receivables: 9_396_312_500n,
       payables: 5_420_780_000n,
-      stockValue: 252_026_700_000n,
+      stockValue: 249_383_200_000n,
       bankBalance: 2_485_000_000n,
     });
   });
@@ -366,15 +386,17 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const purchases = sortInvoices(invoices.filter((i) => i.direction === 'PURCHASE'));
     expect(purchases).toHaveLength(95);
     const unpaidPurchases = purchases.filter((i) => !i.settled).reduce((acc, i) => acc + i.totalInclVat, 0n);
-    const settledPurchases = purchases.filter((i) => i.settled).reduce((acc, i) => acc + i.totalInclVat, 0n);
+    const settled = purchases.filter((i) => i.settled);
+    const settledPurchases = settled.reduce((acc, i) => acc + i.totalInclVat, 0n);
     const allPurchases = purchases.reduce((acc, i) => acc + i.totalInclVat, 0n);
     // Hand-computed from the fixture, asserted as literals as a cross-check of the parsing above.
     expect(unpaidPurchases).toBe(4_300_780_000n);
     expect(settledPurchases).toBe(1_938_310_000n);
     expect(allPurchases).toBe(6_239_090_000n);
     // README tie-out: the README closing payables counts UNPAID purchases only. The settled remainder
-    // (1,938,310,000) is settled by the step 12 payments, so steps 07/08 post every imported invoice —
-    // leaving the settled ones as drafts would hide documents from the ledger and the stock register.
+    // (1,938,310,000) is paid at the END of this step — 07 posts every imported invoice, then settles
+    // the «تسویه‌شده» ones, so 2101 lands exactly on the README closing. Leaving the settled ones as
+    // drafts would hide documents from the ledger and the stock register.
     expect(README_TOTALS.payablesOpening + unpaidPurchases).toBe(README_TOTALS.payablesClosingUnique);
     // Stock in: every purchase line excl. VAT («مبلغ»).
     const purchaseAmountSum = purchases.reduce((acc, i) => acc + i.lines.reduce((a, l) => a + l.amount, 0n), 0n);
@@ -414,22 +436,27 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       expect(posted.journalEntryId, invoice.number).not.toBeNull();
     }
 
-    // One voucher per invoice: the total rises by exactly 95 over the opening + step 05 voucher.
-    // (If the engine books COGS/stock as a second voucher the real delta is in the annotation.)
-    const vouchersAfter = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+    // One issue voucher per invoice, computed from the CSV (95 issues + the settlements paid below):
+    // stock, purchases and input VAT post on the same issue voucher, so no extra voucher is expected.
+    // A different real delta fails here with the numbers in the message.
+    const vouchersAfterIssue = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
     test.info().annotations.push({
       type: 'vouchers',
-      description: `purchase posting moved the voucher count from ${vouchersBefore} to ${vouchersAfter}`,
+      description: `issuing ${purchases.length} purchase invoices moved the voucher count from ${vouchersBefore} to ${vouchersAfterIssue} (delta ${vouchersAfterIssue - vouchersBefore})`,
     });
-    expect(vouchersAfter - vouchersBefore, 'exactly one voucher per purchase invoice').toBe(95);
+    expect(
+      vouchersAfterIssue - vouchersBefore,
+      `one issue voucher per purchase invoice: ${purchases.length} invoices issued, real delta ${vouchersAfterIssue - vouchersBefore}`,
+    ).toBe(purchases.length);
 
-    // 2101 (credit-positive, hence -balance as step 05 does) = payables opening + every unique purchase
-    // incl. VAT, hand-computed literal; the settled 1,938,310,000 stays until step 12 settles it.
-    const accountsAfter = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
-    expect(new Set(accountsAfter.map((a) => a.code)), 'posting created no account').toEqual(new Set(fileCodes));
-    const payable = -rials(accountsAfter.find((a) => a.code === '2101')!.balance);
-    expect(payable).toBe(7_359_090_000n);
-    expect(payable).toBe(README_TOTALS.payablesOpening + allPurchases);
+    // 2101 (credit-positive, hence -balance as step 05 does) measured right after issuing, before any
+    // settlement: payables opening + every unique purchase incl. VAT = 7,359,090,000. The settled
+    // 1,938,310,000 comes back off below, landing 2101 on the README closing at the end of this step.
+    const accountsAfterIssue = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(new Set(accountsAfterIssue.map((a) => a.code)), 'posting created no account').toEqual(new Set(fileCodes));
+    const payableAfterIssue = -rials(accountsAfterIssue.find((a) => a.code === '2101')!.balance);
+    expect(payableAfterIssue).toBe(7_359_090_000n);
+    expect(payableAfterIssue).toBe(README_TOTALS.payablesOpening + allPurchases);
 
     // Stock in: 1301 value = opening stock (README) + every purchase line excl. VAT.
     const valuation = await apiGet<{ totalInventoryValue: number | string; rows: Array<{ sku: string; quantity: number; fifoValue: number | string }> }>(
@@ -487,6 +514,87 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const payableLine = voucher.lines.find((l) => l.accountCode === '2101');
     expect(payableLine, 'the purchase voucher credits 2101').toBeDefined();
     expect(rials(payableLine!.credit), `credit of 2101 in ${firstPosted!.invoice.number}`).toBe(firstPosted!.finalPayable);
+
+    // ---- Settle the «تسویه‌شده» purchases through the user's status path -----------------------------
+    // payAndWait mirrors the invoicing page's pay button (PATCH invoicing/:id/pay), one invoice at a
+    // time, in the same date order as the issues.
+    expect(settled, 'the fixture marks settled purchases to pay').not.toHaveLength(0);
+    const paidEntryByNumber = new Map<string, number>();
+    for (const invoice of settled) {
+      const paid = await payAndWait(page, idByNumber.get(invoice.number)!, invoice.number);
+      paidEntryByNumber.set(invoice.number, paid.paidJournalEntryId!);
+    }
+    const afterPaying = await listInvoices(page);
+    for (const invoice of settled) {
+      expect(afterPaying.find((i) => i.taxInvoiceNumber === invoice.number)!.status, invoice.number).toBe('PAID');
+    }
+
+    // Voucher delta after settling, computed from the CSV: one issue voucher per invoice + one
+    // settlement voucher per settled invoice (95 + 72 here). A different real delta fails with the
+    // real numbers in the message.
+    const vouchersAtEnd = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+    test.info().annotations.push({
+      type: 'vouchers',
+      description: `paying ${settled.length} settled purchases moved the voucher count to ${vouchersAtEnd} (total delta ${vouchersAtEnd - vouchersBefore} = ${purchases.length} issues + ${settled.length} settlements)`,
+    });
+    expect(
+      vouchersAtEnd - vouchersBefore,
+      `one issue voucher per purchase invoice plus one settlement voucher per settled purchase: ${purchases.length} + ${settled.length} expected, real delta ${vouchersAtEnd - vouchersBefore}`,
+    ).toBe(purchases.length + settled.length);
+
+    // Fetch EVERY settlement voucher: balanced, and never touching the bank 1101 — the README bank
+    // closing is the reconciled statement balance, moved only by the statement itself (step 12), so
+    // the counter side must be the resolved cash account (e.g. 1102), not 1101.
+    const settlementVouchers: Array<{
+      number: string;
+      lines: Array<{ accountCode: string; debit: number | string; credit: number | string }>;
+    }> = [];
+    for (const invoice of settled) {
+      const settleVoucher = await apiGet<{
+        lines: Array<{ accountCode: string; debit: number | string; credit: number | string }>;
+        totalDebit: number | string;
+        totalCredit: number | string;
+      }>(page, `accounting/journal-entries/${paidEntryByNumber.get(invoice.number)!}`);
+      settlementVouchers.push({ number: invoice.number, lines: settleVoucher.lines });
+      expect(rials(settleVoucher.totalDebit), `settlement voucher of ${invoice.number} is balanced`).toBe(
+        rials(settleVoucher.totalCredit),
+      );
+      expect(
+        settleVoucher.lines.filter((l) => l.accountCode === '1101'),
+        `settlement of ${invoice.number} must not touch the bank 1101`,
+      ).toHaveLength(0);
+    }
+
+    // Evidence for the first settled invoice (date order): its settlement voucher, every line
+    // annotated, clearing 2101 with exactly the invoice amount.
+    const firstSettled = settled[0];
+    const firstSettlement = settlementVouchers[0]!;
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `settlement of ${firstSettled.number}: ${firstSettlement.lines
+        .map((l) => `${l.accountCode} debit ${l.debit} credit ${l.credit}`)
+        .join('; ')}`,
+    });
+    const cleared = firstSettlement.lines.find((l) => l.accountCode === '2101');
+    expect(cleared, `the settlement voucher of ${firstSettled.number} debits 2101`).toBeDefined();
+    expect(rials(cleared!.debit), `2101 cleared by ${firstSettled.number}`).toBe(firstSettled.totalInclVat);
+    // Which account is the counter side? Expected: the resolved cash account (e.g. 1102), never 1101.
+    const counterAccounts = new Set(
+      settlementVouchers.flatMap((v) => v.lines.map((l) => l.accountCode).filter((code) => code !== '2101')),
+    );
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `${settlementVouchers.length} settlement vouchers clear 2101; counter side (resolved cash account, expected e.g. 1102): ${[...counterAccounts].join(', ')}`,
+    });
+
+    // End of step 07: 2101 = the README closing payables, exactly — 7,359,090,000 issued minus the
+    // settled 1,938,310,000 paid.
+    const accountsAtEnd = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(new Set(accountsAtEnd.map((a) => a.code)), 'settlement created no account').toEqual(new Set(fileCodes));
+    const payableAtEnd = -rials(accountsAtEnd.find((a) => a.code === '2101')!.balance);
+    expect(payableAtEnd).toBe(README_TOTALS.payablesClosingUnique);
+    expect(payableAtEnd).toBe(5_420_780_000n);
+    expect(payableAtEnd).toBe(payableAfterIssue - settledPurchases);
   });
 
   test('08 post sales invoices: stock out, receivables up [E1]', async ({ page }) => {
@@ -499,14 +607,16 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const sales = sortInvoices(invoices.filter((i) => i.direction === 'SALE'));
     expect(sales).toHaveLength(143);
     const unpaidSales = sales.filter((i) => !i.settled).reduce((acc, i) => acc + i.totalInclVat, 0n);
-    const settledSales = sales.filter((i) => i.settled).reduce((acc, i) => acc + i.totalInclVat, 0n);
+    const settled = sales.filter((i) => i.settled);
+    const settledSales = settled.reduce((acc, i) => acc + i.totalInclVat, 0n);
     const allSales = sales.reduce((acc, i) => acc + i.totalInclVat, 0n);
     // Hand-computed from the fixture, asserted as literals as a cross-check of the parsing above.
     expect(unpaidSales).toBe(7_613_512_500n);
     expect(settledSales).toBe(3_820_162_500n);
     expect(allSales).toBe(11_433_675_000n);
-    // README tie-out: the README closing receivables counts UNPAID sales only; the settled remainder
-    // (3,820,162,500) is settled by the step 11/12 receipts, so 08 posts every imported sale invoice.
+    // README tie-out: the README closing receivables counts UNPAID sales only. The settled remainder
+    // (3,820,162,500) is paid at the END of this step — 08 posts every imported sale invoice, then
+    // settles the «تسویه‌شده» ones, so 1201 lands exactly on the README closing.
     expect(README_TOTALS.receivablesOpening + unpaidSales).toBe(README_TOTALS.receivablesClosingUnique);
 
     const trace = fifoStockTrace(invoices);
@@ -552,30 +662,40 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       expect(posted.journalEntryId, invoice.number).not.toBeNull();
     }
 
-    // One voucher per invoice over step 07: exactly 143 more. (A second COGS voucher per sale, if any,
-    // shows up in the annotation; the assertion stays at one per invoice.)
-    const vouchersAfter = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+    // One issue voucher per invoice over step 07, computed from the CSV (143 issues + the settlements
+    // paid below): the engine books COGS and stock inside the same issue voucher, so no extra voucher
+    // is expected. A different real delta fails here with the numbers in the message.
+    const vouchersAfterIssue = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
     test.info().annotations.push({
       type: 'vouchers',
-      description: `sale posting moved the voucher count from ${vouchersBefore} to ${vouchersAfter}`,
+      description: `issuing ${sales.length} sale invoices moved the voucher count from ${vouchersBefore} to ${vouchersAfterIssue} (delta ${vouchersAfterIssue - vouchersBefore})`,
     });
-    expect(vouchersAfter - vouchersBefore, 'exactly one voucher per sale invoice').toBe(143);
+    expect(
+      vouchersAfterIssue - vouchersBefore,
+      `one issue voucher per sale invoice: ${sales.length} invoices issued, real delta ${vouchersAfterIssue - vouchersBefore}`,
+    ).toBe(sales.length);
 
-    // 1201 (debit-positive) = receivables opening + every unique sale incl. VAT, hand-computed literal;
-    // the settled 3,820,162,500 stays until steps 11/12 collect it.
-    const accountsAfter = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
-    expect(new Set(accountsAfter.map((a) => a.code)), 'posting created no account').toEqual(new Set(fileCodes));
-    const receivable = rials(accountsAfter.find((a) => a.code === '1201')!.balance);
-    expect(receivable).toBe(13_273_675_000n);
-    expect(receivable).toBe(README_TOTALS.receivablesOpening + allSales);
+    // 1201 (debit-positive) measured right after issuing, before any settlement: receivables opening
+    // + every unique sale incl. VAT = 13,273,675,000. The settled 3,820,162,500 comes back off below,
+    // landing 1201 on the README closing at the end of this step.
+    const accountsAfterIssue = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(new Set(accountsAfterIssue.map((a) => a.code)), 'posting created no account').toEqual(new Set(fileCodes));
+    const receivableAfterIssue = rials(accountsAfterIssue.find((a) => a.code === '1201')!.balance);
+    expect(receivableAfterIssue).toBe(13_273_675_000n);
+    expect(receivableAfterIssue).toBe(README_TOTALS.receivablesOpening + allSales);
 
-    // Stock out: 1301 value after 07 minus the FIFO cost of the issued quantities (independent replay).
+    // Stock out: 1301 after 08 must equal the DERIVED closing stock (opening + purchases - COGS =
+    // 249,383,200,000) — the hand-entered POS/return ops still ahead move it by a net of 0, so this
+    // stays the month-end value checked at step 15. The FIFO layers must agree with the same replay.
     const valuation = await apiGet<{ totalInventoryValue: number | string; rows: Array<{ sku: string; quantity: number; fifoValue: number | string }> }>(
       page,
       'inventory/valuation',
     );
     const consumed = [...trace.consumedBySale.values()].reduce((acc, c) => acc + c, 0n);
     const closingFifoValue = [...trace.closingValueBySku.values()].reduce((acc, v) => acc + v, 0n);
+    expect(rials(valuation.totalInventoryValue), '1301 after the sales = the derived closing stock').toBe(
+      fixtureClosingStockValue(),
+    );
     expect(rials(valuation.totalInventoryValue)).toBe(closingFifoValue);
     expect(closingFifoValue + consumed).toBe(README_TOTALS.stockValue + fifoPurchaseAmountSum(invoices));
 
@@ -618,6 +738,86 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const receivableLine = voucher.lines.find((l) => l.accountCode === '1201');
     expect(receivableLine, 'the sale voucher debits 1201').toBeDefined();
     expect(rials(receivableLine!.debit), `debit of 1201 in ${firstPosted!.invoice.number}`).toBe(firstPosted!.finalPayable);
+
+    // ---- Settle the «تسویه‌شده» sales through the user's status path ---------------------------------
+    // payAndWait mirrors the invoicing page's pay button (PATCH invoicing/:id/pay), one invoice at a
+    // time, in the same date order as the issues.
+    expect(settled, 'the fixture marks settled sales to collect').not.toHaveLength(0);
+    const paidEntryByNumber = new Map<string, number>();
+    for (const invoice of settled) {
+      const paid = await payAndWait(page, idByNumber.get(invoice.number)!, invoice.number);
+      paidEntryByNumber.set(invoice.number, paid.paidJournalEntryId!);
+    }
+    const afterPaying = await listInvoices(page);
+    for (const invoice of settled) {
+      expect(afterPaying.find((i) => i.taxInvoiceNumber === invoice.number)!.status, invoice.number).toBe('PAID');
+    }
+
+    // Voucher delta after settling, computed from the CSV: one issue voucher per invoice + one
+    // settlement voucher per settled invoice (143 + 46 here). A different real delta fails with the
+    // real numbers in the message.
+    const vouchersAtEnd = (await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10')).total;
+    test.info().annotations.push({
+      type: 'vouchers',
+      description: `paying ${settled.length} settled sales moved the voucher count to ${vouchersAtEnd} (total delta ${vouchersAtEnd - vouchersBefore} = ${sales.length} issues + ${settled.length} settlements)`,
+    });
+    expect(
+      vouchersAtEnd - vouchersBefore,
+      `one issue voucher per sale invoice plus one settlement voucher per settled sale: ${sales.length} + ${settled.length} expected, real delta ${vouchersAtEnd - vouchersBefore}`,
+    ).toBe(sales.length + settled.length);
+
+    // Fetch EVERY settlement voucher: balanced, and never touching the bank 1101 — collections settle
+    // through the resolved cash account (e.g. 1102); the bank only moves per the statement (step 12).
+    const settlementVouchers: Array<{
+      number: string;
+      lines: Array<{ accountCode: string; debit: number | string; credit: number | string }>;
+    }> = [];
+    for (const invoice of settled) {
+      const settleVoucher = await apiGet<{
+        lines: Array<{ accountCode: string; debit: number | string; credit: number | string }>;
+        totalDebit: number | string;
+        totalCredit: number | string;
+      }>(page, `accounting/journal-entries/${paidEntryByNumber.get(invoice.number)!}`);
+      settlementVouchers.push({ number: invoice.number, lines: settleVoucher.lines });
+      expect(rials(settleVoucher.totalDebit), `settlement voucher of ${invoice.number} is balanced`).toBe(
+        rials(settleVoucher.totalCredit),
+      );
+      expect(
+        settleVoucher.lines.filter((l) => l.accountCode === '1101'),
+        `settlement of ${invoice.number} must not touch the bank 1101`,
+      ).toHaveLength(0);
+    }
+
+    // Evidence for the first settled invoice (date order): its settlement voucher, every line
+    // annotated, clearing 1201 with exactly the invoice amount.
+    const firstSettled = settled[0];
+    const firstSettlement = settlementVouchers[0]!;
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `settlement of ${firstSettled.number}: ${firstSettlement.lines
+        .map((l) => `${l.accountCode} debit ${l.debit} credit ${l.credit}`)
+        .join('; ')}`,
+    });
+    const cleared = firstSettlement.lines.find((l) => l.accountCode === '1201');
+    expect(cleared, `the settlement voucher of ${firstSettled.number} credits 1201`).toBeDefined();
+    expect(rials(cleared!.credit), `1201 cleared by ${firstSettled.number}`).toBe(firstSettled.totalInclVat);
+    // Which account is the counter side? Expected: the resolved cash account (e.g. 1102), never 1101.
+    const counterAccounts = new Set(
+      settlementVouchers.flatMap((v) => v.lines.map((l) => l.accountCode).filter((code) => code !== '1201')),
+    );
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `${settlementVouchers.length} settlement vouchers clear 1201; counter side (resolved cash account, expected e.g. 1102): ${[...counterAccounts].join(', ')}`,
+    });
+
+    // End of step 08: 1201 = the README closing receivables, exactly — 13,273,675,000 issued minus
+    // the settled 3,820,162,500 collected.
+    const accountsAtEnd = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(new Set(accountsAtEnd.map((a) => a.code)), 'settlement created no account').toEqual(new Set(fileCodes));
+    const receivableAtEnd = rials(accountsAtEnd.find((a) => a.code === '1201')!.balance);
+    expect(receivableAtEnd).toBe(README_TOTALS.receivablesClosingUnique);
+    expect(receivableAtEnd).toBe(9_453_512_500n);
+    expect(receivableAtEnd).toBe(receivableAfterIssue - settledSales);
   });
 
   test.fixme('09 POS walk-in sale: 1 x ITM-1001 paid in cash [E1]', async ({ page }) => {
@@ -655,7 +855,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
   test.fixme('15 stock value 1301 equals the expected closing [E2]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/inventory');
-    void M1_EXPECTED_CLOSING.stockValue; // 252,026,700,000
+    void M1_EXPECTED_CLOSING.stockValue; // 249,383,200,000 (opening + purchases - COGS)
   });
 
   test.fixme('16 bank 1101 equals the reconciled statement balance [E3]', async ({ page }) => {
