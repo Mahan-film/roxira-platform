@@ -212,6 +212,7 @@ def test_migration_filter_ignores_test_helpers():
         "output_apps/enterprise_hub/test/migrations/verify.sh\n"
         "output_apps/enterprise_hub/migrations/1-A.ts\n"
         "output_apps/enterprise_hub/migrations/data/statutory-seed.ts\n"
+        "output_apps/enterprise_hub/modules/data_import/migration/manifest.ts\n"
         "src/a.py"
     )
     out = subprocess.run(
