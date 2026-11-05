@@ -72,6 +72,23 @@ export async function importFile(
   };
 }
 
+/**
+ * The API throttles every IP to 100 requests per minute (security/global-guards.ts GLOBAL_THROTTLE). Posting
+ * 238 invoices one by one through the single-invoice API (there is no bulk issue) exceeds that, so a 429 is
+ * waited out (Retry-After, else 5 s) and the same request is repeated; any other status goes to the caller.
+ */
+async function withThrottleRetry(
+  page: Page,
+  send: () => Promise<import('@playwright/test').APIResponse>,
+): Promise<import('@playwright/test').APIResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await send();
+    if (response.status() !== 429 || attempt >= 40) return response;
+    const wait = Number(response.headers()['retry-after']);
+    await page.waitForTimeout((Number.isFinite(wait) && wait > 0 ? wait : 5) * 1000);
+  }
+}
+
 /** GET /enterprise-hub/<path> through the app's own proxy, authenticated as the test tenant's owner. */
 export async function apiGet<T>(page: Page, route: string): Promise<T> {
   const token = await page.evaluate((key) => {
@@ -79,9 +96,9 @@ export async function apiGet<T>(page: Page, route: string): Promise<T> {
     return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
   }, SESSION_STORAGE_KEY);
   expect(token, 'the test session is in localStorage').toBeTruthy();
-  const response = await page.request.get(`/api/backend/enterprise-hub/${route}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await withThrottleRetry(page, () =>
+    page.request.get(`/api/backend/enterprise-hub/${route}`, { headers: { Authorization: `Bearer ${token}` } }),
+  );
   expect(response.status(), `GET ${route}`).toBe(200);
   return (await response.json()) as T;
 }
@@ -93,10 +110,12 @@ export async function apiPatch<T>(page: Page, route: string, body: unknown): Pro
     return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
   }, SESSION_STORAGE_KEY);
   expect(token, 'the test session is in localStorage').toBeTruthy();
-  const response = await page.request.patch(`/api/backend/enterprise-hub/${route}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: body,
-  });
+  const response = await withThrottleRetry(page, () =>
+    page.request.patch(`/api/backend/enterprise-hub/${route}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: body,
+    }),
+  );
   expect(response.status(), `PATCH ${route}`).toBe(200);
   return (await response.json()) as T;
 }
@@ -133,7 +152,7 @@ export async function issueAndWait(
     if (Date.now() > deadline) {
       throw new Error(`invoice ${invoiceNumber}: no voucher and no error 30 s after issuing`);
     }
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(500);
   }
 }
 
@@ -165,7 +184,7 @@ export async function payAndWait(
     if (Date.now() > deadline) {
       throw new Error(`invoice ${invoiceNumber}: no settlement voucher and no error 30 s after paying`);
     }
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(500);
   }
 }
 

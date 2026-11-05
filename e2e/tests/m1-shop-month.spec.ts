@@ -378,7 +378,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
   };
 
   test('07 post purchase invoices: stock in, payables up [E2]', async ({ page }) => {
-    test.setTimeout(900_000);
+    test.setTimeout(1_800_000); // the API allows 100 requests/min per IP: ~600 calls take minutes
     await loginAsTestTenant(page, '/app/invoicing');
 
     // Fixture-derived expectations (independent of any product output).
@@ -598,7 +598,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
   });
 
   test('08 post sales invoices: stock out, receivables up [E1]', async ({ page }) => {
-    test.setTimeout(900_000);
+    test.setTimeout(1_800_000); // the API allows 100 requests/min per IP: ~600 calls take minutes
     await loginAsTestTenant(page, '/app/invoicing');
 
     // Fixture-derived expectations, including an independent FIFO replay over opening stock,
