@@ -1,4 +1,4 @@
-import { fromMinor, scaledToDecimal } from '../../accounting/money';
+import { fromMinor, parseScaled, scaledToDecimal } from '../../accounting/money';
 import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceDirection } from '../enums/invoice-kind.enum';
 
@@ -121,14 +121,16 @@ function toMoneyMinor(value: unknown, label: string, errors: string[]): bigint |
     errors.push(`${label} باید عدد باشد («${String(value)}»).`);
     return null;
   }
-  const scaled = numeric * 100;
-  if (!Number.isInteger(scaled)) {
-    errors.push(`${label} «${String(value)}» بیش از دو رقم اعشار دارد و گرد نمی‌شود.`);
+  if (numeric < 0) {
+    errors.push(`${label} نمی‌تواند منفی باشد («${String(value)}»).`);
     return null;
   }
-  const minor = BigInt(scaled);
-  if (minor < 0n) {
-    errors.push(`${label} نمی‌تواند منفی باشد («${String(value)}»).`);
+  // Exact decimal parsing: 19.99 * 100 is not an integer in binary floating point.
+  let minor: bigint;
+  try {
+    minor = parseScaled(typeof value === 'number' ? value : String(value), 2);
+  } catch {
+    errors.push(`${label} «${String(value)}» بیش از دو رقم اعشار دارد و گرد نمی‌شود.`);
     return null;
   }
   if (minor > MAX_MONEY_MINOR) {
@@ -148,14 +150,17 @@ function toQuantityMicro(value: unknown, errors: string[]): bigint | null {
     errors.push(`تعداد باید عدد باشد («${String(value)}»).`);
     return null;
   }
-  const scaled = numeric * Number(QUANTITY_FACTOR);
-  if (!Number.isInteger(scaled)) {
+  let micro: bigint;
+  try {
+    micro = parseScaled(typeof value === 'number' ? value : String(value), INVOICE_IMPORT_QUANTITY_SCALE);
+  } catch {
     errors.push(
-      `تعداد «${String(value)}» بیش از ${INVOICE_IMPORT_QUANTITY_SCALE} رقم اعشار دارد و گرد نمی‌شود.`,
+      numeric < 0
+        ? `تعداد باید بیشتر از صفر باشد («${String(value)}»).`
+        : `تعداد «${String(value)}» بیش از ${INVOICE_IMPORT_QUANTITY_SCALE} رقم اعشار دارد و گرد نمی‌شود.`,
     );
     return null;
   }
-  const micro = BigInt(scaled);
   if (micro <= 0n) {
     errors.push(`تعداد باید بیشتر از صفر باشد («${String(value)}»).`);
     return null;

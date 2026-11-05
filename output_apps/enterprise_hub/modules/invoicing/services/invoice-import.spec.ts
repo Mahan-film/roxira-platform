@@ -33,6 +33,19 @@ const row = (over: Partial<InvoiceImportRow>): InvoiceImportRow => ({
 });
 
 describe('groupInvoiceRows', () => {
+  it('accepts decimals that binary floating point cannot scale exactly', () => {
+    const [money] = groupInvoiceRows([
+      row({ rowNumber: 2, number: 'INV-D1', quantity: 1, unitPrice: 19.99, amount: 19.99, vat: 0, totalRial: 19.99 }),
+    ], TENANT_PARTIES);
+    expect(money.valid).toBe(true);
+    expect(money.lines[0].unitPriceMinor).toBe(1999n);
+    const [qty] = groupInvoiceRows([
+      row({ rowNumber: 3, number: 'INV-D2', quantity: 1.1, unitPrice: 100, amount: 110, vat: 0, totalRial: 110 }),
+    ], TENANT_PARTIES);
+    expect(qty.valid).toBe(true);
+    expect(qty.lines[0].quantity).toBe(1.1);
+  });
+
   it('groups rows of one number into one multi-line invoice', () => {
     const plans = groupInvoiceRows([
       row({ rowNumber: 2, itemCode: 'ITM-1', quantity: 2, unitPrice: 1000, amount: 2000, vat: 200, totalRial: 2200 }),
