@@ -230,7 +230,9 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     await loginAsTestTenant(page, '/app/inventory');
     await expect(page.getByText(`${fa(300)} کالا`).first()).toBeVisible();
     await expect(page.getByText(`${fa(Number(README_TOTALS.stockValue))} ریال`).first()).toBeVisible();
-    await expect(page.getByText(firstSku, { exact: true }).first()).toBeVisible();
+    // The list is paged (50 per page, ordered by name), so find the first CSV item through the search box.
+    await page.getByLabel('جست‌وجوی کالا').fill(firstSku);
+    await expect(page.getByRole('cell', { name: firstSku, exact: true })).toBeVisible();
   });
 
   test('05 import opening balances: one balanced opening voucher [E5]', async ({ page }) => {
