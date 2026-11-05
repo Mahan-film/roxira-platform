@@ -1,5 +1,5 @@
 import { test, expect, expectNoErrorNotice, findSessionFile, loginAsTestTenant } from '../app/fixtures';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 /**
  * CHK-01 follow-up (issue #376): click through the real cheques pages at /app/cheques.
@@ -26,7 +26,7 @@ const RECEIVED_AMOUNT = '1000000';
 const PARTIAL_AMOUNT = '300000';
 
 /** The list/report row that carries this cheque number. */
-function rowFor(page: Page, chequeNumber: string) {
+function rowFor(page: Page, chequeNumber: string): Locator {
   return page.getByRole('row').filter({ hasText: chequeNumber });
 }
 
@@ -42,7 +42,8 @@ interface NewCheque {
 /** Open «چک جدید», fill the form and wait until the new cheque shows up in the list. */
 async function createCheque(page: Page, values: NewCheque): Promise<void> {
   await page.getByRole('button', { name: 'چک جدید' }).click();
-  const form = page.locator('form');
+  // The page has a single form; scope by its submit button so the locator stays unique.
+  const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'ثبت چک و سند حسابداری' }) });
   await expect(form).toBeVisible();
 
   if (values.direction === 'issued') {
@@ -51,16 +52,16 @@ async function createCheque(page: Page, values: NewCheque): Promise<void> {
   // The party label depends on the direction: «صادرکننده (مشتری)» vs «ذی‌نفع».
   await form.getByLabel(/مشتری|ذی.?نفع/).fill(values.party);
   if (values.sayad) {
-    await form.getByLabel('شناسه صیاد').fill(values.sayad);
+    await form.getByLabel(/شناسه صیاد/).fill(values.sayad);
   }
   if (values.receiverNationalId) {
     await form.getByLabel(/کد ملی/).fill(values.receiverNationalId);
   }
-  await form.getByLabel('شماره سری چک').fill(values.chequeNumber);
-  await form.getByLabel('مبلغ (ریال)').fill(values.amount);
+  await form.getByLabel(/شماره سری چک/).fill(values.chequeNumber);
+  await form.getByLabel(/مبلغ \(ریال\)/).fill(values.amount);
   // «تاریخ صدور» is pre-filled with today (Jalali); reuse it so «تاریخ سررسید» is always valid (>= issue).
-  const issue = await form.getByLabel('تاریخ صدور (شمسی)').inputValue();
-  await form.getByLabel('تاریخ سررسید (شمسی)').fill(issue);
+  const issue = await form.getByLabel(/تاریخ صدور/).inputValue();
+  await form.getByLabel(/تاریخ سررسید/).fill(issue);
 
   await form.getByRole('button', { name: 'ثبت چک و سند حسابداری' }).click();
   await expect(rowFor(page, values.chequeNumber)).toBeVisible();
