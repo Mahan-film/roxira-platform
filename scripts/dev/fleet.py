@@ -291,15 +291,19 @@ def paid_spent_today(home: Path | None = None) -> float:
 
 
 def record_paid(usd: float, home: Path | None = None) -> None:
+    """Add to today's counter under an exclusive file lock (up to 4 writers run at once)."""
     f = paid_file(home)
-    try:
-        d = json.loads(f.read_text())
-    except (OSError, ValueError):
-        d = {}
-    today = time.strftime("%F")
-    d = {today: float(d.get(today, 0.0)) + usd}  # keep only today
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(d))
+    with open(f.with_suffix(".lock"), "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try:
+            d = json.loads(f.read_text())
+        except (OSError, ValueError):
+            d = {}
+        today = time.strftime("%F")
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps({today: float(d.get(today, 0.0)) + usd}))  # only today is kept
+        tmp.replace(f)
 
 
 def paid_allowed(cfg: dict[str, Any], home: Path | None = None) -> bool:
