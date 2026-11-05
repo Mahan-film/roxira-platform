@@ -88,6 +88,7 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     title: 'ذخیره مالیات بر درآمد',
     amounts: ['provision'],
     lines: [dr('income_tax_expense', 'provision', 'هزینه مالیات بر درآمد'), cr('income_tax_payable', 'provision', 'مالیات بر درآمد پرداختنی')],
+    defaults: { income_tax_expense: '5220', income_tax_payable: '2021' },
   },
   {
     docType: 'asset.depreciation',

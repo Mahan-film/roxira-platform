@@ -4,7 +4,9 @@ import { isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
 import { isValidStatutoryValue, StatutoryKey } from '../../hr/statutory/statutory-catalogue';
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
 import { IRAN, resolveParameters } from '../../hr/statutory/statutory.service';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { CorporateTaxPreviewDto } from '../dto/corporate-tax-preview.dto';
+import { TAX_PROVISION_DOC_TYPE, taxProvisionLines, taxProvisionOverrides } from '../posting/tax-provision-proposal';
 
 export const CORPORATE_TAX_NOTES: readonly string[] = [
   'پیش‌نمایش است و هیچ سندی در دفتر کل ثبت نمی‌شود.',
@@ -52,7 +54,10 @@ const KEYS = ['corporate_tax_rate', 'corporate_tax_effective_floor'] as const;
 /** Provision computation for the corporate income tax workbench. Preview only, rates from the store. */
 @Injectable()
 export class CorporateTaxService {
-  constructor(private readonly statutory: StatutoryRepository) {}
+  constructor(
+    private readonly statutory: StatutoryRepository,
+    private readonly postingRules: PostingRulesService,
+  ) {}
 
   private async rates(tenantId: string, fiscalYear: number): Promise<CorporateTaxParameterUse[]> {
     const rows = await this.statutory.findForYear(tenantId, IRAN, fiscalYear);
@@ -91,13 +96,19 @@ export class CorporateTaxService {
     const provision = byRate > floorTax ? byRate : floorTax;
     const effective = profit > 0n ? ((provision * RATE_SCALE * 2n) / profit + 1n) / 2n : null;
 
-    const lines =
+    const overrides = taxProvisionOverrides(dto.expenseAccountCode, dto.payableAccountCode);
+    const voucher =
       provision > 0n
-        ? [
-            { accountCode: dto.expenseAccountCode ?? null, debit: minorToDecimal(provision), credit: '0.00', description: 'هزینه مالیات بر درآمد' },
-            { accountCode: dto.payableAccountCode ?? null, debit: '0.00', credit: minorToDecimal(provision), description: 'مالیات بر درآمد پرداختنی' },
-          ]
-        : [];
+        ? await this.postingRules.propose(tenantId, {
+            docType: TAX_PROVISION_DOC_TYPE,
+            sourceType: 'corporate_tax_provision',
+            sourceId: String(dto.fiscalYear),
+            date: isoDate(jalaliMonthEnd(dto.fiscalYear, 12)),
+            amounts: { provision },
+            description: 'ذخیره مالیات بر درآمد',
+            ...(overrides ? { overrides } : {}),
+          })
+        : null;
     return {
       status: 'preview',
       fiscalYear: dto.fiscalYear,
@@ -118,7 +129,7 @@ export class CorporateTaxService {
       provision: minorToDecimal(provision),
       floorApplied: floorTax > byRate,
       effectiveRate: effective === null ? null : scaledToDecimal(effective, 6),
-      voucher: { posted: false, lines },
+      voucher: { posted: false, lines: voucher ? taxProvisionLines(voucher) : [] },
       parameters,
       notes: [...CORPORATE_TAX_NOTES],
     };

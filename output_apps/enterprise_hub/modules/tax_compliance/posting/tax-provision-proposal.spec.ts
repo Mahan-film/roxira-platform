@@ -2,8 +2,9 @@ import { MoneyFormatError } from '../../accounting/money';
 import { DEFAULT_ROLE_ACCOUNTS } from '../../posting_rules/constants/posting-roles';
 import { buildProposal } from '../../posting_rules/domain/posting-engine';
 import { PostingRuleError } from '../../posting_rules/domain/posting-error';
+import { legacyVoucherLines } from '../__fixtures__/legacy-corporate-tax-voucher';
 import type { CorporateTaxPreview } from '../services/corporate-tax.service';
-import { TAX_PROVISION_DOC_TYPE, toTaxProvisionBuildInput } from './tax-provision-proposal';
+import { TAX_PROVISION_DOC_TYPE, taxProvisionLines, toTaxProvisionBuildInput } from './tax-provision-proposal';
 
 const preview = (over: Partial<CorporateTaxPreview> = {}): CorporateTaxPreview => ({
   status: 'preview',
@@ -79,6 +80,34 @@ describe('toTaxProvisionBuildInput', () => {
     ]);
   });
 
+  it('old vs new: explicit account codes give byte-identical voucher lines', () => {
+    const provision = 25_000_000n;
+    const old = legacyVoucherLines(provision, '5220', '2021');
+    const now = taxProvisionLines(buildProposal(toTaxProvisionBuildInput(preview())));
+    expect(now).toEqual(old);
+  });
+
+  it('old vs new: the fallback replaces the old null codes with the role defaults 5220 / 2021', () => {
+    const provision = 25_000_000n;
+    const old = legacyVoucherLines(provision);
+    const previewWithoutCodes = preview({
+      voucher: {
+        posted: false,
+        lines: [
+          { accountCode: null, debit: '250000.00', credit: '0.00', description: 'هزینه مالیات بر درآمد' },
+          { accountCode: null, debit: '0.00', credit: '250000.00', description: 'مالیات بر درآمد پرداختنی' },
+        ],
+      },
+    });
+    const now = taxProvisionLines(buildProposal(toTaxProvisionBuildInput(previewWithoutCodes)));
+    expect(old.map((l) => l.accountCode)).toEqual([null, null]);
+    expect(now.map((l) => l.accountCode)).toEqual([
+      DEFAULT_ROLE_ACCOUNTS.income_tax_expense,
+      DEFAULT_ROLE_ACCOUNTS.income_tax_payable,
+    ]);
+    expect(now.map((l) => ({ ...l, accountCode: null }))).toEqual(old);
+  });
+
   it('a zero provision maps to a zero amount and yields no posting lines', () => {
     const input = toTaxProvisionBuildInput(preview({ provision: '0.00', voucher: { posted: false, lines: [] } }));
     expect(input.amounts.provision).toBe(0n);
@@ -89,6 +118,7 @@ describe('toTaxProvisionBuildInput', () => {
       fail('should throw');
     } catch (error) {
       expect((error as PostingRuleError).code).toBe('EMPTY_VOUCHER');
+      expect((error as PostingRuleError).message).toContain('مبلغی برای ثبت ندارد');
     }
   });
 

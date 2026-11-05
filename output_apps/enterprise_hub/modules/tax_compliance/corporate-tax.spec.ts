@@ -1,7 +1,9 @@
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
+import { AccountLevel, AccountType } from '../accounting/enums/accounting.enum';
 import { isValidStatutoryValue, STATUTORY_KEYS } from '../hr/statutory/statutory-catalogue';
 import { StatutoryRepository } from '../hr/statutory/statutory.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { CorporateTaxController } from './controllers/corporate-tax.controller';
 import { CorporateTaxPreviewDto } from './dto/corporate-tax-preview.dto';
 import { applyRate, CorporateTaxService } from './services/corporate-tax.service';
@@ -21,9 +23,21 @@ const row = (key: string, value: string, over: Record<string, unknown> = {}) => 
   ...over,
 });
 
-const build = (rows: unknown[]) => {
+const account = (code: string, accountType: AccountType) => ({ code, name: `n${code}`, accountType, level: AccountLevel.MOEIN });
+
+/** Real posting-rules engine over the chart the tenant has; the service proposes, never posts. */
+const postingRules = (accounts = [account('5220', AccountType.EXPENSE), account('2021', AccountType.LIABILITY)]) => {
+  const repo = { listMappings: jest.fn().mockResolvedValue([]) };
+  const accounting = { listAccounts: jest.fn().mockResolvedValue(accounts) };
+  return new PostingRulesService(repo as never, accounting as never);
+};
+
+const build = (rows: unknown[], accounts?: ReturnType<typeof account>[]) => {
   const findForYear = jest.fn().mockResolvedValue(rows);
-  return { findForYear, service: new CorporateTaxService({ findForYear } as unknown as StatutoryRepository) };
+  return {
+    findForYear,
+    service: new CorporateTaxService({ findForYear } as unknown as StatutoryRepository, postingRules(accounts)),
+  };
 };
 
 const dto = (over: Partial<CorporateTaxPreviewDto> = {}): CorporateTaxPreviewDto => ({
@@ -59,6 +73,26 @@ describe('corporate tax provision preview (DTX-01)', () => {
     const [dr, cr] = p.voucher.lines;
     expect(dr.debit).toBe('210000.00');
     expect(cr.credit).toBe('210000.00');
+  });
+
+  it('proposes the voucher through the posting rules engine with the caller account codes', async () => {
+    const { service } = build(RATES, [
+      account('5999', AccountType.EXPENSE),
+      account('2099', AccountType.LIABILITY),
+    ]);
+    const p = await service.preview('tenant-a', dto({ expenseAccountCode: '5999', payableAccountCode: '2099' }));
+    expect(p.voucher.posted).toBe(false);
+    expect(p.voucher.lines.map((l) => l.accountCode)).toEqual(['5999', '2099']);
+    expect(p.voucher.lines).toEqual([
+      { accountCode: '5999', debit: '200000.00', credit: '0.00', description: 'هزینه مالیات بر درآمد' },
+      { accountCode: '2099', debit: '0.00', credit: '200000.00', description: 'مالیات بر درآمد پرداختنی' },
+    ]);
+  });
+
+  it('falls back to the role defaults (5220 / 2021) when the caller sends no account codes', async () => {
+    const { service } = build(RATES);
+    const p = await service.preview('tenant-a', dto());
+    expect(p.voucher.lines.map((l) => l.accountCode)).toEqual(['5220', '2021']);
   });
 
   it('the effective-rate floor raises a provision that losses had pushed too low', async () => {

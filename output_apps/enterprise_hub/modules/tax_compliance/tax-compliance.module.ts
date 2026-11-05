@@ -36,6 +36,7 @@ import { TaxComplianceRepository } from './repositories/tax-compliance.repositor
 import { MoadianApiClient } from './services/moadian-api.client';
 import { MoadianService } from './services/moadian.service';
 import { TaxComplianceService } from './services/tax-compliance.service';
+import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 
 /**
  * ماژول تطبیق سامانه مودیان و امضای الکترونیک صورتحساب‌ها.
@@ -62,6 +63,7 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     ]),
     InvoicingModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
+    PostingRulesModule,
   ],
   controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController, BusinessTaxController, RentalTaxController, DoctorWithholdingController],
   providers: [
