@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "note": "Synthetic source tables shaped after the four import presets under e2e/fixtures/import-presets/ (holoo, sepidar, mahak, hamkaran-rahkaran), plus three deliberately unmappable tables. No customer data: values are fabricated and phone-like samples are masked before any model call. Each case lists the expected target and the source columns that feed its fields.",
+  "presets": ["holoo", "sepidar", "mahak", "hamkaran-rahkaran"],
+  "cases": [
+    {
+      "id": "holoo-items",
+      "preset": "holoo",
+      "mappable": true,
+      "table": { "name": "items", "rows": 3, "columns": ["کد کالا", "نام کالا", "واحد", "آخرین قیمت خرید", "قیمت فروش", "موجودی"] },
+      "samples": [
+        { "کد کالا": "1001", "نام کالا": "کالای نمونه الف", "واحد": "عدد", "آخرین قیمت خرید": "120000", "قیمت فروش": "150000", "موجودی": "10" },
+        { "کد کالا": "1002", "نام کالا": "کالای نمونه ب", "واحد": "کیلوگرم", "آخرین قیمت خرید": "45000", "قیمت فروش": "60000", "موجودی": "25.5" }
+      ],
+      "expected": { "target": "items", "fields": { "code": "کد کالا", "name": "نام کالا", "unit": "واحد" } }
+    },
+    {
+      "id": "holoo-parties",
+      "preset": "holoo",
+      "mappable": true,
+      "table": { "name": "parties", "rows": 2, "columns": ["کد", "نام", "نوع شخص", "تلفن", "مانده"] },
+      "samples": [
+        { "کد": "10001", "نام": "مشتری نمونه یک", "نوع شخص": "حقیقی", "تلفن": "0000000001", "مانده": "250000" },
+        { "کد": "10002", "نام": "تأمین‌کننده نمونه دو", "نوع شخص": "حقوقی", "تلفن": "0000000002", "مانده": "-1800000" }
+      ],
+      "expected": { "target": "parties", "fields": { "code": "کد", "name": "نام", "kind": "نوع شخص" } }
+    },
+    {
+      "id": "holoo-trial-balance",
+      "preset": "holoo",
+      "mappable": true,
+      "table": { "name": "trial_balance", "rows": 3, "columns": ["کد حساب", "نام حساب", "بدهکار", "بستانکار"] },
+      "samples": [
+        { "کد حساب": "1011", "نام حساب": "صندوق", "بدهکار": "5000000", "بستانکار": "0" },
+        { "کد حساب": "2010", "نام حساب": "حساب‌های پرداختنی", "بدهکار": "0", "بستانکار": "9000000" }
+      ],
+      "expected": { "target": "gl_trial_balance", "fields": { "account_code": "کد حساب", "debit": "بدهکار", "credit": "بستانکار" } }
+    },
+    {
+      "id": "sepidar-counterparties",
+      "preset": "sepidar",
+      "mappable": true,
+      "table": { "name": "counterparties", "rows": 2, "columns": ["کد طرف حساب", "نام", "نوع (حقیقی/حقوقی)", "نقش", "شماره تلفن"] },
+      "samples": [
+        { "کد طرف حساب": "1", "نام": "مشتری نمونه سپیدار", "نوع (حقیقی/حقوقی)": "حقیقی", "نقش": "مشتری", "شماره تلفن": "0000000001" },
+        { "کد طرف حساب": "2", "نام": "تأمین‌کننده نمونه سپیدار", "نوع (حقیقی/حقوقی)": "حقوقی", "نقش": "تأمین‌کننده", "شماره تلفن": "0000000002" }
+      ],
+      "expected": { "target": "parties", "fields": { "code": "کد طرف حساب", "name": "نام", "kind": "نوع (حقیقی/حقوقی)" } }
+    },
+    {
+      "id": "sepidar-items",
+      "preset": "sepidar",
+      "mappable": true,
+      "table": { "name": "items", "rows": 2, "columns": ["کد کالا", "نام کالا", "واحد اصلی", "کد انبار", "قیمت فروش"] },
+      "samples": [
+        { "کد کالا": "5001", "نام کالا": "کالای نمونه سپیدار", "واحد اصلی": "عدد", "کد انبار": "1", "قیمت فروش": "200000" },
+        { "کد کالا": "5002", "نام کالا": "خدمت نمونه سپیدار", "واحد اصلی": "ساعت", "کد انبار": "1", "قیمت فروش": "350000" }
+      ],
+      "expected": { "target": "items", "fields": { "code": "کد کالا", "name": "نام کالا", "unit": "واحد اصلی" } }
+    },
+    {
+      "id": "sepidar-vouchers",
+      "preset": "sepidar",
+      "mappable": true,
+      "table": { "name": "vouchers", "rows": 2, "columns": ["شماره سند", "تاریخ", "کد حساب", "شرح", "بدهکار", "بستانکار"] },
+      "samples": [
+        { "شماره سند": "1", "تاریخ": "1404/01/05", "کد حساب": "1012", "شرح": "دریافت نمونه", "بدهکار": "500000", "بستانکار": "0" },
+        { "شماره سند": "1", "تاریخ": "1404/01/05", "کد حساب": "1020", "شرح": "دریافت نمونه", "بدهکار": "0", "بستانکار": "500000" }
+      ],
+      "expected": { "target": "gl_lines", "fields": { "account_code": "کد حساب", "voucher_no": "شماره سند", "date": "تاریخ", "debit": "بدهکار", "credit": "بستانکار", "description": "شرح" } }
+    },
+    {
+      "id": "mahak-items",
+      "preset": "mahak",
+      "mappable": true,
+      "table": { "name": "goods", "rows": 2, "columns": ["کد کالا", "نام کالا", "واحد", "قیمت خرید", "قیمت فروش", "موجودی اول دوره"] },
+      "samples": [
+        { "کد کالا": "301", "نام کالا": "محصول نمونه محک", "واحد": "عدد", "قیمت خرید": "70000", "قیمت فروش": "90000", "موجودی اول دوره": "12" },
+        { "کد کالا": "302", "نام کالا": "محصول نمونه دوم", "واحد": "بسته", "قیمت خرید": "15000", "قیمت فروش": "22000", "موجودی اول دوره": "40" }
+      ],
+      "expected": { "target": "items", "fields": { "code": "کد کالا", "name": "نام کالا", "unit": "واحد" } }
+    },
+    {
+      "id": "mahak-persons",
+      "preset": "mahak",
+      "mappable": true,
+      "table": { "name": "persons", "rows": 2, "columns": ["کد شخص", "نام", "نوع", "موبایل", "بدهکار", "بستانکار"] },
+      "samples": [
+        { "کد شخص": "201", "نام": "مشتری نمونه محک", "نوع": "مشتری", "موبایل": "0000000001", "بدهکار": "100000", "بستانکار": "0" },
+        { "کد شخص": "202", "نام": "تأمین‌کننده نمونه محک", "نوع": "تأمین‌کننده", "موبایل": "0000000002", "بدهکار": "0", "بستانکار": "300000" }
+      ],
+      "expected": { "target": "parties", "fields": { "code": "کد شخص", "name": "نام", "kind": "نوع" } }
+    },
+    {
+      "id": "mahak-stock-balances",
+      "preset": "mahak",
+      "mappable": true,
+      "table": { "name": "stock_balances", "rows": 2, "columns": ["کد کالا", "کد انبار", "موجودی اول دوره", "ارزش موجودی"] },
+      "samples": [
+        { "کد کالا": "301", "کد انبار": "1", "موجودی اول دوره": "12", "ارزش موجودی": "840000" },
+        { "کد کالا": "302", "کد انبار": "2", "موجودی اول دوره": "40", "ارزش موجودی": "600000" }
+      ],
+      "expected": { "target": "stock_balances", "fields": { "item_code": "کد کالا", "warehouse": "کد انبار", "qty": "موجودی اول دوره", "value": "ارزش موجودی" } }
+    },
+    {
+      "id": "rahkaran-trial-balance",
+      "preset": "hamkaran-rahkaran",
+      "mappable": true,
+      "table": { "name": "trial_balance", "rows": 2, "columns": ["کد حساب", "عنوان حساب", "گردش بدهکار", "گردش بستانکار", "مانده بدهکار", "مانده بستانکار"] },
+      "samples": [
+        { "کد حساب": "1011", "عنوان حساب": "صندوق", "گردش بدهکار": "5000000", "گردش بستانکار": "0", "مانده بدهکار": "5000000", "مانده بستانکار": "0" },
+        { "کد حساب": "2010", "عنوان حساب": "حساب‌های پرداختنی", "گردش بدهکار": "0", "گردش بستانکار": "3000000", "مانده بدهکار": "0", "مانده بستانکار": "3000000" }
+      ],
+      "expected": { "target": "gl_trial_balance", "fields": { "account_code": "کد حساب", "debit": "گردش بدهکار", "credit": "گردش بستانکار" } }
+    },
+    {
+      "id": "rahkaran-cheques",
+      "preset": "hamkaran-rahkaran",
+      "mappable": true,
+      "table": { "name": "cheques", "rows": 2, "columns": ["شماره چک", "بانک", "سررسید", "مبلغ", "وضعیت"] },
+      "samples": [
+        { "شماره چک": "4812345", "بانک": "ملت", "سررسید": "1404/02/10", "مبلغ": "25000000", "وضعیت": "در جریان" },
+        { "شماره چک": "4812346", "بانک": "صادرات", "سررسید": "1404/03/01", "مبلغ": "8000000", "وضعیت": "وصول" }
+      ],
+      "expected": { "target": "cheques", "fields": { "cheque_no": "شماره چک", "bank": "بانک", "due_date": "سررسید", "amount": "مبلغ", "status": "وضعیت" } }
+    },
+    {
+      "id": "rahkaran-open-items",
+      "preset": "hamkaran-rahkaran",
+      "mappable": true,
+      "table": { "name": "open_items", "rows": 2, "columns": ["کد مشتری", "شماره فاکتور", "تاریخ فاکتور", "سررسید", "مبلغ", "نوع"] },
+      "samples": [
+        { "کد مشتری": "10001", "شماره فاکتور": "F-100", "تاریخ فاکتور": "1404/01/12", "سررسید": "1404/02/12", "مبلغ": "250000", "نوع": "AR" },
+        { "کد مشتری": "10002", "شماره فاکتور": "F-101", "تاریخ فاکتور": "1404/01/15", "سررسید": "1404/02/15", "مبلغ": "1800000", "نوع": "AP" }
+      ],
+      "expected": { "target": "open_items", "fields": { "party_code": "کد مشتری", "doc_no": "شماره فاکتور", "date": "تاریخ فاکتور", "due_date": "سررسید", "amount": "مبلغ", "kind": "نوع" } }
+    },
+    {
+      "id": "unmappable-audit-log",
+      "preset": "none",
+      "mappable": false,
+      "table": { "name": "audit_log", "rows": 2, "columns": ["log_id", "actor", "action", "at", "detail"] },
+      "samples": [
+        { "log_id": "1", "actor": "admin", "action": "login", "at": "2024-08-02T10:30:00", "detail": "ok" },
+        { "log_id": "2", "actor": "clerk", "action": "export", "at": "2024-08-02T11:00:00", "detail": "denied" }
+      ],
+      "expected": { "target": null, "fields": {} }
+    },
+    {
+      "id": "unmappable-settings",
+      "preset": "none",
+      "mappable": false,
+      "table": { "name": "app_settings", "rows": 2, "columns": ["setting_key", "setting_value", "updated_at", "scope"] },
+      "samples": [
+        { "setting_key": "theme", "setting_value": "dark", "updated_at": "2024-08-02", "scope": "user" },
+        { "setting_key": "lang", "setting_value": "fa", "updated_at": "2024-08-03", "scope": "org" }
+      ],
+      "expected": { "target": null, "fields": {} }
+    },
+    {
+      "id": "unmappable-user-accounts",
+      "preset": "none",
+      "mappable": false,
+      "table": { "name": "user_accounts", "rows": 2, "columns": ["user_id", "role", "created_at", "flags"] },
+      "samples": [
+        { "user_id": "1", "role": "admin", "created_at": "2024-01-01", "flags": "0" },
+        { "user_id": "2", "role": "viewer", "created_at": "2024-02-01", "flags": "2" }
+      ],
+      "expected": { "target": null, "fields": {} }
+    }
+  ]
+}

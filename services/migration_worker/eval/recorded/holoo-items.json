@@ -1,0 +1,9 @@
+{
+  "id": "holoo-items",
+  "preset": "holoo",
+  "mappable": true,
+  "table": "items",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"items\",\"fields\":{\"code\":\"کد کالا\",\"name\":\"نام کالا\",\"unit\":\"واحد\"},\"confidence\":0.92}"
+}

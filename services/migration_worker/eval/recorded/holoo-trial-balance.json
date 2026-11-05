@@ -1,0 +1,9 @@
+{
+  "id": "holoo-trial-balance",
+  "preset": "holoo",
+  "mappable": true,
+  "table": "trial_balance",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"gl_trial_balance\",\"fields\":{\"account_code\":\"کد حساب\",\"debit\":\"بدهکار\",\"credit\":\"بستانکار\"},\"confidence\":0.95}"
+}

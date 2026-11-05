@@ -1,0 +1,9 @@
+{
+  "id": "mahak-stock-balances",
+  "preset": "mahak",
+  "mappable": true,
+  "table": "stock_balances",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"stock_balances\",\"fields\":{\"item_code\":\"کد کالا\",\"warehouse\":\"کد انبار\",\"qty\":\"موجودی اول دوره\",\"value\":\"ارزش موجودی\"},\"confidence\":0.85}"
+}

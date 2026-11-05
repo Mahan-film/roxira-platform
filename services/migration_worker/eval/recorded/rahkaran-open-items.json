@@ -1,0 +1,9 @@
+{
+  "id": "rahkaran-open-items",
+  "preset": "hamkaran-rahkaran",
+  "mappable": true,
+  "table": "open_items",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"open_items\",\"fields\":{\"party_code\":\"کد مشتری\",\"doc_no\":\"شماره فاکتور\",\"date\":\"تاریخ فاکتور\",\"due_date\":\"سررسید\",\"amount\":\"مبلغ\",\"kind\":\"نوع\"},\"confidence\":0.86}"
+}

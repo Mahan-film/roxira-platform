@@ -1,0 +1,9 @@
+{
+  "id": "unmappable-user-accounts",
+  "preset": "none",
+  "mappable": false,
+  "table": "user_accounts",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":null}"
+}

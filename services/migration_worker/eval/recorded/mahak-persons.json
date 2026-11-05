@@ -1,0 +1,9 @@
+{
+  "id": "mahak-persons",
+  "preset": "mahak",
+  "mappable": true,
+  "table": "persons",
+  "modelGroup": "agent-light-free",
+  "calls": 1,
+  "answer": "{\"target\":\"parties\",\"fields\":{\"code\":\"کد شخص\",\"name\":\"نام\",\"kind\":\"نوع\"},\"confidence\":0.9}"
+}

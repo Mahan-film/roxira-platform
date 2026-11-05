@@ -5,6 +5,9 @@
  * trusted: it is validated against the real columns and the target's required fields, and anything else is
  * reported as `needs-review` (the customer decides in the review step).
  */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { TARGETS } from './catalog.mjs';
 import { normalizeText } from './normalize.mjs';
 
@@ -131,18 +134,68 @@ export async function discoverSchema(tables, getSamples, ask) {
   return result;
 }
 
-/** Default model client: LiteLLM (OpenAI-compatible) key-pool groups, free first then free-paid. The key is read from the environment and never logged. */
-export function litellmClient(env = process.env, fetchImpl = fetch) {
+/** config/key_pool.yaml is the source of truth for the LiteLLM groups. Overridable for tests. */
+export const KEY_POOL_FILE = process.env.MIGRATION_KEY_POOL_FILE
+  ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'key_pool.yaml');
+
+/**
+ * Minimal reader for the top-level `groups:` mapping of config/key_pool.yaml: group name -> its
+ * `fallback:` list. A full YAML parser is not pulled in (this is the only key_pool field the
+ * worker needs, and the file is checked into the repo). Comment-only and nested lines are ignored.
+ */
+export function parseGroupFallbacks(yamlText) {
+  const groups = new Map();
+  let inGroups = false;
+  let current = null;
+  for (const raw of String(yamlText).split(/\r?\n/)) {
+    if (/^groups:\s*(#.*)?$/.test(raw)) { inGroups = true; continue; }
+    if (!inGroups) continue;
+    if (/^\S/.test(raw)) break; // the next top-level key: groups is done
+    const line = raw.replace(/#.*$/, '');
+    const key = /^  ([A-Za-z0-9][A-Za-z0-9_-]*):\s*$/.exec(line);
+    if (key) { current = key[1]; groups.set(current, { fallback: [] }); continue; }
+    const fb = /^    fallback:\s*\[([^\]]*)\]/.exec(line);
+    if (fb && current) groups.get(current).fallback = fb[1].split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return groups;
+}
+
+/**
+ * Default LiteLLM groups for schema discovery: the light free group, then the cheap paid fallback
+ * from the same `fallback:` chain in config/key_pool.yaml (agent-light-free, then agent-free-paid).
+ * MIGRATION_LLM_MODELS overrides it. No model id is ever hardcoded here (AGENTS.md section 3).
+ */
+export function defaultModelGroups(env = process.env) {
+  if (env.MIGRATION_LLM_MODELS) return env.MIGRATION_LLM_MODELS.split(',').map((m) => m.trim()).filter(Boolean);
+  const groups = parseGroupFallbacks(fs.readFileSync(KEY_POOL_FILE, 'utf8'));
+  const names = [...groups.keys()];
+  const primary = names.find((n) => /^agent-.*light.*free$/.test(n));
+  if (!primary) throw new Error(`config/key_pool.yaml: no agent light-free group found in ${KEY_POOL_FILE}`);
+  const paid = groups.get(primary).fallback.find((g) => /paid/.test(g))
+    ?? names.find((n) => /^agent-.*paid$/.test(n));
+  if (!paid) throw new Error(`config/key_pool.yaml: no paid fallback for ${primary} in ${KEY_POOL_FILE}`);
+  return [primary, paid];
+}
+
+/**
+ * Default model client: LiteLLM (OpenAI-compatible) key-pool groups, free first then free-paid (from
+ * config/key_pool.yaml). The key is read from the environment and never logged. `onCall` is an optional
+ * observer used by the eval to record which group answered; it never sees the key.
+ */
+export function litellmClient(env = process.env, fetchImpl = fetch, onCall = () => {}) {
   const base = env.MIGRATION_LLM_URL ?? 'http://127.0.0.1:4000/v1/chat/completions';
-  const models = (env.MIGRATION_LLM_MODELS ?? 'agent-light-free,agent-free-paid').split(',').map((m) => m.trim()).filter(Boolean);
+  const models = defaultModelGroups(env);
   return async (messages) => {
     let lastError = new Error('no model configured');
     for (const model of models) {
       try {
+        onCall({ phase: 'request', model });
         const res = await fetchImpl(base, { method: 'POST', headers: { 'content-type': 'application/json', ...(env.LITELLM_API_KEY ? { authorization: `Bearer ${env.LITELLM_API_KEY}` } : {}) }, body: JSON.stringify({ model, messages, temperature: 0, max_tokens: 800 }), signal: AbortSignal.timeout(60_000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()).choices?.[0]?.message?.content ?? '';
-      } catch (e) { lastError = e; }
+        const content = (await res.json()).choices?.[0]?.message?.content ?? '';
+        onCall({ phase: 'answer', model, content });
+        return content;
+      } catch (e) { onCall({ phase: 'error', model, error: e.message }); lastError = e; }
     }
     throw lastError;
   };
