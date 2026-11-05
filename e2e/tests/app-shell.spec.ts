@@ -21,7 +21,12 @@ for (const path of ['/', '/app/import']) {
   test(`app shell smoke: ${path}`, async ({ page }) => {
     const errors = await collectPageErrors(page);
 
-    const response = await page.goto(`${BASE}${path}`, { waitUntil: 'load' });
+    // srv1 cannot reach the Iranian e-namad host (connection hangs), so the seal <img> would keep
+    // the window `load` event pending for the whole test timeout. Fail that request fast; the
+    // badge itself is not what this gate checks.
+    await page.route(/^https:\/\/trustseal\.enamad\.ir\//, (route) => route.abort());
+
+    const response = await page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded' });
     expect(response, `no response for ${path}`).not.toBeNull();
     expect(response!.status(), `status for ${path}`).toBeLessThan(400);
 
