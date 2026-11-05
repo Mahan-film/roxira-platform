@@ -27,6 +27,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -37,6 +38,10 @@ import lane_budget  # noqa: E402
 
 NOTIFY = HERE.parent.parent / "ops" / "notify" / "notify.py"
 STATES = ("queued", "running", "done", "failed", "cancelled")
+# Wakeup file in the state dir: `add`/`retry` touch it so a `run` loop in another process notices at
+# once instead of sleeping out its full timeout. POLL_SLICE bounds how often wait() re-checks children.
+WAKEUP_FILE = "taskq_wakeup"
+POLL_SLICE = 0.1
 DEFAULT_LADDER = "best,free,ds-flash,strong"
 # Steps whose model calls go through the key-pool gateway, so the cost log sees them. ds-flash and strong call
 # OpenRouter directly from run_task.sh: their paid spend is NOT metered (reported as `unmetered` attempts).
@@ -112,6 +117,16 @@ def update(db: sqlite3.Connection, tid: int, **cols) -> None:
     keys = ", ".join(f"{k}=?" for k in cols)
     db.execute(f"UPDATE tasks SET {keys} WHERE id=?", (*cols.values(), tid))
     db.commit()
+
+
+def poke() -> None:
+    """Tell a running `taskq.py run` loop that the queue changed; never raises."""
+    try:
+        wake = state_dir() / WAKEUP_FILE
+        wake.parent.mkdir(parents=True, exist_ok=True)
+        wake.touch()
+    except OSError:
+        pass
 
 
 def alive(pid: int | None) -> bool:
@@ -231,6 +246,7 @@ class Worker:
         self.budget_told = False
         self.lane_told: dict[str, str] = {}  # lane -> UTC day it was reported over budget
         self.reviews: dict[int, subprocess.Popen] = {}
+        self.wakeup = threading.Event()  # same-process nudge; cross-process uses the wakeup file
 
     def recover(self) -> None:
         for t in self.db.execute("SELECT id FROM tasks WHERE status='done' AND review='running'").fetchall():
@@ -448,13 +464,47 @@ class Worker:
         queued = self.db.execute("SELECT COUNT(*) FROM tasks WHERE status='queued'").fetchone()[0]
         return bool(self.running) or bool(self.reviews) or bool(queued)
 
+    def wait(self, timeout: float) -> bool:
+        """Block up to `timeout` seconds; return True when woken early, False on timeout.
+
+        Instead of an unconditional sleep, this returns as soon as the queue can make progress:
+        a same-process self.wakeup event, the on-disk wakeup file changing (`taskq.py add`/`retry`
+        in another process), or a running task/review subprocess having exited so it can be reaped.
+        `timeout` (the old fixed sleep) stays the hard upper bound."""
+        wake = state_dir() / WAKEUP_FILE
+        try:
+            stamp = wake.stat().st_mtime_ns
+        except OSError:
+            stamp = None
+        deadline = time.monotonic() + timeout
+        while True:
+            if self.wakeup.is_set():
+                self.wakeup.clear()
+                return True
+            try:
+                if wake.stat().st_mtime_ns != stamp:
+                    return True
+            except OSError:
+                pass
+            if self.children_done():
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            self.wakeup.wait(min(remaining, POLL_SLICE))
+
+    def children_done(self) -> bool:
+        """True when a task or review subprocess has exited and is waiting to be reaped."""
+        return (any(info["proc"].poll() is not None for info in self.running.values())
+                or any(proc.poll() is not None for proc in self.reviews.values()))
+
     def loop(self, once: bool) -> None:
         self.recover()
         while True:
             busy = self.tick()
             if once and (not busy or (not self.running and not self.reviews and (not self.budget_left() or self.pick() is None))):
                 return
-            time.sleep(0.2 if once else 2)
+            self.wait(0.2 if once else 2)
 
 
 # ---------------------------------------------------------------- CLI
@@ -478,6 +528,7 @@ def cmd_add(db, a) -> int:
         (a.slug, str(Path(a.task_file).resolve()), json.dumps(a.scope), int(a.public), a.priority, a.accept, json.dumps(ladder),
          (a.lane or "").strip().lower(), now, now))
     db.commit()
+    poke()
     print(cur.lastrowid)
     return 0
 
@@ -532,6 +583,7 @@ def cmd_retry(db, a) -> int:
         print(f"task is {t['status']}; cancel it first", file=sys.stderr)
         return 1
     update(db, a.id, status="queued", step_idx=0, attempts=0, pid=None, reason=None, work_file=None, review=None, done_ts=None)
+    poke()
     return 0
 
 
