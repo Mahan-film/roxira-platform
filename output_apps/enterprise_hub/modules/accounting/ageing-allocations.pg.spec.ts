@@ -11,6 +11,8 @@ import { TenantScope } from '../access/services/tenant-scope';
 import { ChequesRepository } from '../cheques/repositories/cheques.repository';
 import { ChequesService } from '../cheques/services/cheques.service';
 import { CurrencyService } from '../currency/services/currency.service';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { InvoiceEntity } from '../invoicing/entities/invoice.entity';
 import { InvoiceDirection } from '../invoicing/enums/invoice-kind.enum';
 import { InvoiceStatus } from '../invoicing/enums/invoice-status.enum';
@@ -144,7 +146,11 @@ describePg('Ageing by treasury allocations on PostgreSQL (#237)', () => {
       new TreasuryRepository(scope),
       new TreasuryLedgerPostingAdapter(accounting),
       { listAccounts: async () => [] } as never,
-      new ChequesService(new ChequesRepository(scope), accounting),
+      new ChequesService(
+        new ChequesRepository(scope),
+        accounting,
+        new PostingRulesService(new PostingRulesRepository(scope), accounting),
+      ),
       invoicing as never,
     );
     const moduleRef = {
