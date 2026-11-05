@@ -108,6 +108,14 @@ export function computeTotalsFromCsv(): SampleCompanyTotals {
 
 // --- Invoices.csv parsing and FIFO stock trace for gate steps 07 and 08 (pure, no product calls) ---
 
+/** Opening balance of one account from opening-balances.csv, on the given side (the file's own column). */
+export function fixtureOpeningBalance(code: string, side: 'debit' | 'credit' = 'debit'): bigint {
+  const { header, rows } = readCsv(SAMPLE_COMPANY_FILES.openingBalances);
+  const account = column(header, 'کد حساب');
+  const amount = column(header, side === 'debit' ? 'بدهکار (ریال)' : 'بستانکار (ریال)');
+  return rows.filter((row) => row[account] === code).reduce((acc, row) => acc + toRial(row[amount]), 0n);
+}
+
 export interface FixtureInvoiceLine {
   itemCode: string;
   quantity: number;

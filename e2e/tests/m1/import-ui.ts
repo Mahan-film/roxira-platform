@@ -120,6 +120,26 @@ export async function apiPatch<T>(page: Page, route: string, body: unknown): Pro
   return (await response.json()) as T;
 }
 
+/**
+ * PUT /enterprise-hub/<route> with a JSON body through the app's own proxy (test tenant's owner).
+ * Returns the HTTP status: the posting-rules role update answers 204 and the caller asserts it.
+ */
+export async function apiPut(page: Page, route: string, body: unknown): Promise<number> {
+  const token = await page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+  }, SESSION_STORAGE_KEY);
+  expect(token, 'the test session is in localStorage').toBeTruthy();
+  const response = await withThrottleRetry(page, () =>
+    page.request.put(`/api/backend/enterprise-hub/${route}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: body,
+    }),
+  );
+  expect(response.ok(), `PUT ${route}`).toBeTruthy();
+  return response.status();
+}
+
 export interface InvoicePostingResult {
   status: string;
   journalEntryId: number | null;
