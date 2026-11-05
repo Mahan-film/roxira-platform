@@ -1,6 +1,6 @@
 import { test, expect, fa, findSessionFile, loginAsTestTenant } from '../app/fixtures';
 import { M1_EXPECTED_CLOSING, M1_MONTH_OPERATIONS, README_TOTALS } from './m1/expected-totals';
-import { bankStatementRollForward, computeTotalsFromCsv, readCsv, readReadmeTotals, SAMPLE_COMPANY_FILES } from './m1/fixture-data';
+import { bankStatementRollForward, computeTotalsFromCsv, readCsv, readReadmeTotals, SAMPLE_COMPANY_FILES, toRial } from './m1/fixture-data';
 import { apiGet, importFile, persianise, rials } from './m1/import-ui';
 
 /**
@@ -178,8 +178,8 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
     // Compute expectedValue = sum over rows of BigInt(quantity) * BigInt(unit cost)
     const expectedValue = rows.reduce((acc, row) => {
-      const quantity = BigInt(row[header.indexOf('موجودی')]);
-      const unitCost = BigInt(row[header.indexOf('بهای واحد (ریال)')]);
+      const quantity = toRial(row[header.indexOf('موجودی')]); // cells may hold Persian digits
+      const unitCost = toRial(row[header.indexOf('بهای واحد (ریال)')]);
       return acc + (quantity * unitCost);
     }, 0n);
     expect(expectedValue).toBe(README_TOTALS.stockValue);
@@ -216,7 +216,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     // Verify each item's quantity matches the CSV
     for (const row of rows) {
       const sku = row[header.indexOf('کد کالا')];
-      const csvQuantity = Number(row[header.indexOf('موجودی')]);
+      const csvQuantity = Number(toRial(row[header.indexOf('موجودی')]));
       const item = allItems.find((i) => i.sku === sku);
       expect(item, `Item ${sku} should exist`).toBeDefined();
       expect(item!.quantity, `Quantity for ${sku} should match`).toBe(csvQuantity);
