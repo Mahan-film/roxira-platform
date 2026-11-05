@@ -42,7 +42,7 @@ holds 3–4 keys per provider inside one account and sets each key's limit himse
   config is rendered, so a provider with no key is inert. Added slots: Groq `_4`, SambaNova `_2.._4`, OpenRouter
   agents `_2.._4` and product `_2.._4`.
 - New providers (each inert until a key is set; model ids marked unverified until the inventory probe passes on
-  the server): Cerebras, NVIDIA NIM (build.nvidia.com), Cloudflare Workers AI (`CF_ACCOUNT_ID` + `CF_AI_TOKEN*`),
+  the server): NVIDIA NIM (build.nvidia.com), Cloudflare Workers AI (`CF_ACCOUNT_ID` + `CF_AI_TOKEN*`),
   DeepSeek direct API, Chutes, Together, Fireworks. The last four are paid and only sit in paid steps.
 - Within a ladder rank, all keys of all providers serving that model share the load (weighted simple-shuffle;
   weight = the key's rpm unless the owner sets `limits_per_key`). A 429 or error cools that one deployment for 60 s

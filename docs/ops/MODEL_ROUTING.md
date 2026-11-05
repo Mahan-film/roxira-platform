@@ -92,7 +92,7 @@ They call `https://openrouter.ai/api/v1/chat/completions` directly with one key 
 | Mistral (4 keys), Groq (3), SambaNova (1), Gemini (4), Cloudflare (1) | OK |
 | OpenRouter | **403 from the Mac's Iranian IP** (needs the VPN; srv1 is not affected) |
 | OmniRoute | container not running on the Mac |
-| Cerebras, NVIDIA NIM, DeepSeek direct, Chutes, Together, Fireworks | no key set on the Mac |
+| NVIDIA NIM, DeepSeek direct, Chutes, Together, Fireworks | no key set on the Mac |
 
 Free quotas to plan around (from `config/key_pool.yaml`, all still `status: unverified`): Groq 30 rpm / 1000 rpd per key,
 Gemini AI Studio 10 rpm / 250 rpd per key, Mistral 60 rpm, OpenRouter `:free` about 1000 rpd with >= $10 credit.
@@ -131,11 +131,11 @@ A working key check (`check_keys.py`, a models listing) does not mean chat works
 | Gemini | `GEMINI_API_KEY` .. `_4` | 502/503 "high demand" today | gemini-best*, best-product |
 | OmniRoute | `OMNIROUTE_API_KEY` | answers (rank 9, last resort; upstream auth errors seen earlier) | agent-free-paid |
 | Cloudflare AI | `CF_AI_TOKEN` | not callable: `CF_ACCOUNT_ID` is not set | agent-*-free |
-| Cerebras, NVIDIA NIM, DeepSeek direct | no key | skipped | candidates |
+| NVIDIA NIM, DeepSeek direct | no key | skipped | candidates |
 
 Order inside a group is by rank; same-rank keys of every provider share the load; a 429/402/auth/5xx/connection error puts that
 key in cooldown and the next deployment takes over (`llm_pool.chat`, LiteLLM `cooldown_time` on the gateway). Duplicate key
 values are collapsed (`dedupe_keys`) because two slots with one value share one rate limit.
 **Forced-429 proof:** `pool_proof.py --failover groq` -> `GROQ_API_KEY_2 -> 429 (forced)`, then `GROQ_API_KEY_3 -> 200`, served by groq/gpt-oss-120b.
 
-srv1 runtime pool has these env names set (names only): Groq x3, Mistral x4, Gemini x4, OpenRouter x2, SambaNova, CF_AI_TOKEN, Brave, Exa, Tavily (`TAVILY_KEYS`), Jina, Firecrawl. It has no Cerebras, DeepSeek, NVIDIA or OmniRoute. Nothing was copied between machines.
+srv1 runtime pool has these env names set (names only): Groq x3, Mistral x4, Gemini x4, OpenRouter x2, SambaNova, CF_AI_TOKEN, Brave, Exa, Tavily (`TAVILY_KEYS`), Jina, Firecrawl. It has no DeepSeek, NVIDIA or OmniRoute. Nothing was copied between machines.

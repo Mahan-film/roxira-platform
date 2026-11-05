@@ -79,7 +79,7 @@ Every page also gets a global "+ ثبت جدید" quick-create button and a Ctrl
 ## 5. AI models: cache, then free, then cheap, then strong
 
 - **Cache first:** an exact and semantic cache keyed on the normalised request.
-- **Then free:** Groq, Cerebras, OpenRouter `:free`, and NVIDIA NIM. **Never send real customer documents or bank statements to free tiers that train on data.** Google AI Studio's free tier is for dev/test only. This tightens the #204 policy for production tenants once real customers arrive.
+- **Then free:** Groq, OpenRouter `:free`, and NVIDIA NIM. **Never send real customer documents or bank statements to free tiers that train on data.** Google AI Studio's free tier is for dev/test only. This tightens the #204 policy for production tenants once real customers arrive.
 - **Then cheap:** DeepSeek V4.1 Flash, DeepSeek V3.2 hosts, Gemini Flash-Lite (paid, zero data retention), Gemma 4 31B, and Devstral for code.
 - **Strong only when** the model's `confidence_score` is below 0.80.
 - **Prefix caching:** put the fixed chart-of-accounts and Moadian rules prompt at the start of every request.
@@ -96,5 +96,5 @@ Every page also gets a global "+ ثبت جدید" quick-create button and a Ctrl
 
 - Model prices and free quotas change often. The report itself lists several 2026 changes.
 - The internal schemas of Sepidar, Hamkaran, Mahak and Holoo are not public and differ between editions and versions.
-- Vision OCR is not available on Groq or Cerebras. Use Gemini Flash-Lite (paid) or DeepSeek V4.1 Flash multimodal.
+- Vision OCR is not available on Groq. Use Gemini Flash-Lite (paid) or DeepSeek V4.1 Flash multimodal.
 - Reachability of foreign AI APIs from Iranian networks. Keep a relay, and add a self-hosted fallback with open weights if needed.

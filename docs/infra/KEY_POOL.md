@@ -50,7 +50,7 @@ bash scripts/infra/key_pool/health.sh             # ok / 429 / fail per provider
 ## Every key, every provider (owner decision 2026-10-22)
 - Each provider has 4 key slots: `NAME`, `NAME_2`, `NAME_3`, `NAME_4`. Unset slots are skipped at render, so a
   provider with no key set is inert. Providers: Groq, SambaNova, Mistral, Gemini, OpenRouter (agents and product
-  workspaces), Cerebras, NVIDIA NIM, Cloudflare Workers AI, DeepSeek, Chutes, Together, Fireworks.
+  workspaces), NVIDIA NIM, Cloudflare Workers AI, DeepSeek, Chutes, Together, Fireworks.
 - Load sharing: in a ladder rank every key of every provider that serves that model is one LiteLLM deployment of
   the same group, picked by weighted simple-shuffle (weight = the key's rpm, or `weight`). A 429/error cools that
   deployment for 60 s; when the whole rank fails the router moves to the next rank, and the ladder ends as before.
@@ -72,7 +72,7 @@ bash scripts/infra/key_pool/health.sh             # ok / 429 / fail per provider
   `python3 -m pytest scripts/infra/key_pool/tests` (never over `src/`).
 
 ## Graduating a new provider to the product groups
-New providers (Cerebras, NVIDIA NIM, Cloudflare Workers AI, DeepSeek direct, Chutes, Together, Fireworks) are
+New providers (NVIDIA NIM, Cloudflare Workers AI, DeepSeek direct, Chutes, Together, Fireworks) are
 unverified. Until they graduate they sit only in the agent/builder groups (`agent-*`, `best-all`, `agent-free-paid`)
 and in the `candidates` group; they must NOT be listed in `product-free`, `best-product*`, `vip-*`,
 `summarize-cheap` or `private`, and no customer-facing group may fall back to `candidates`.

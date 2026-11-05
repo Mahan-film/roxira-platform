@@ -16,7 +16,6 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.automation.cerebras_client import CerebrasClient
 from src.automation.git_worktree_manager import GitWorktreeManager
 from src.automation.provider_base import get_env_var
 from src.automation.sambanova_client import SambaNovaClient
@@ -88,16 +87,14 @@ def main() -> int:
     print("=" * 60)
     _line("latency budget", f"{budget_ms:.0f} ms")
 
-    cerebras_ok = test_engine("Cerebras", CerebrasClient(), budget_ms)
     sambanova_ok = test_engine("SambaNova", SambaNovaClient(), budget_ms)
     worktree_ok = test_worktree_manager()
 
     print("\n" + "=" * 60)
-    _line("Cerebras connectivity", "PASS" if cerebras_ok else "FAIL")
     _line("SambaNova connectivity", "PASS" if sambanova_ok else "FAIL")
     _line("Worktree isolation", "PASS" if worktree_ok else "FAIL")
     print("=" * 60)
-    return 0 if (cerebras_ok and sambanova_ok and worktree_ok) else 1
+    return 0 if (sambanova_ok and worktree_ok) else 1
 
 
 if __name__ == "__main__":

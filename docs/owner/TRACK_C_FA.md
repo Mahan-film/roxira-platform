@@ -109,7 +109,7 @@ PY
 ```
 انتظار: همه‌ی خط‌ها `old`. هر خط `STILL-IN-USE` یعنی همان مقدار هنوز در `roxira.env` شماست: باید بچرخانید.
 
-۴) برای هر نوع کلید در داشبورد خودش بروید و «کلیدهای فعال» را ببینید؛ کلید قدیمی نباید در فهرست باشد (OpenRouter: Settings > Keys؛ پنل Kavenegar/SMS.ir؛ Google Cloud > APIs & Services > Credentials؛ Zibal). اگر کلیدی با تاریخ ساخت قدیمی هنوز هست: Delete/Revoke و کلید جدید بسازید.
+۴) برای هر نوع کلید در داشبورد خودش بروید و «کلیدهای فعال» را ببینید؛ کلید قدیمی نباید در فهرست باشد (OpenRouter: Settings > Keys؛ پنل Kavenegar؛ Google Cloud > APIs & Services > Credentials؛ Zibal). اگر کلیدی با تاریخ ساخت قدیمی هنوز هست: Delete/Revoke و کلید جدید بسازید.
 
 ۵) برای رازهای خودمان (JWT_SECRET، رمز دیتابیس) مقدار جدید را بدون چاپ روی سرور بگذارید (اسکریپت موجود):
 ```bash

@@ -139,7 +139,7 @@ Order: (1) owner-approved server steps: W6 eval, W7 bench, cleanup; (2) W14 Play
 
 - The server `5.75.200.67` (root) runs the repo at `/opt/roxira_platform`. Its working tree is clean and matches `origin/main`, so no hand edits are in place.
 - The daemon/worker git pushes to `main` stopped with PR #18 (verified 2026-09-24: the autodaemon ran at 19:26 UTC and did not commit). `venv/` and the dumps were removed in PR #13.
-- API keys in the server `.env` (names only): `OPENROUTER_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, `KAVENEGAR_API_KEY`, `SMS_IR_API_KEY`. There is no Anthropic key on the server. Research and agent runs that need keys run on the server, not in a local sandbox.
+- API keys in the server `.env` (names only): `OPENROUTER_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, `KAVENEGAR_API_KEY`. There is no Anthropic key on the server. Research and agent runs that need keys run on the server, not in a local sandbox.
 - Agent runtimes installed on the server: OpenCode 1.18 (`/usr/bin/opencode`, DeepSeek via OpenRouter, `"permission": "allow"`) and Goose 1.50. `gh` is not installed.
 - Before starting work, always run `git fetch && git checkout origin/main`. A local clone can be hundreds of commits behind.
 - Qdrant did not answer the audit script. `/judge/health` returns 405 and `/judge/chat` returns 422 on an empty body.

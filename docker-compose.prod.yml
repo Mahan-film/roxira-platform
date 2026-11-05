@@ -57,9 +57,6 @@ services:
       - QDRANT_CLOUD_API_KEY=${QDRANT_CLOUD_API_KEY:-}
       # سرویس مشترک embedding (TEI / BAAI/bge-m3) — یک نسخه برای اپ و اسکریپت‌های ساخت
       - EMBEDDING_URL=http://roxira_embeddings:80
-      # sms.ir (Fast/Verify) — سرویس ارسال کد تأیید (از .env مقداردهی می‌شود)
-      - SMS_IR_API_KEY=${SMS_IR_API_KEY:?set SMS_IR_API_KEY in .env}
-      - SMS_IR_TEMPLATE_ID=${SMS_IR_TEMPLATE_ID:-000000}
       # Kavenegar (Verify Lookup) — مسیر رسمی ارسال OTP خطوط ghazi-verify / roxira-verify
       - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY:?set KAVENEGAR_API_KEY in .env}
       - KAVENEGAR_TEMPLATE_GHAZI=${KAVENEGAR_TEMPLATE_GHAZI:-ghazi-verify}

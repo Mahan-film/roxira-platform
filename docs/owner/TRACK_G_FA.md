@@ -55,7 +55,7 @@ gh issue create --repo Mahan-film/roxira-platform --title "lawyers: disable fake
 |---|---|---|
 | متن پرسش و پاسخ | ارائه‌دهنده‌های مدل زبانی از مسیر OpenRouter (مثل DeepSeek/Google/Mistral) | مدل‌های `:free` هرگز داده‌ی پرونده نمی‌گیرند؛ درخواست حساس با `data_collection=deny` |
 | فایل پرونده | تحلیل متن (و OCR با مدل بینایی) | متن ۷ روز (`CASEFILE_RETENTION_DAYS`) |
-| شماره موبایل / OTP | سرویس پیامک (Kavenegar، SMS.ir) | تا پایان حساب |
+| شماره موبایل / OTP | سرویس پیامک (Kavenegar) | تا پایان حساب |
 | پرداخت | درگاه زیبال | رکورد سفارش در پایگاه‌داده |
 | ترافیک وب | Cloudflare (پروکسی) | طبق خود Cloudflare |
 | آمار قیف (G1) | فقط خودمان | بدون شناسه‌ی شخصی |

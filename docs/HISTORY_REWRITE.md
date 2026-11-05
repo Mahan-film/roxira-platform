@@ -79,7 +79,7 @@ pip install --user git-filter-repo
    ```bash
    git clone --bare git@github.com:Mahan-film/roxira-platform.git /tmp/scan.git
    cd /tmp/scan.git
-   git log -p --all | grep -EoI '(sk-[a-zA-Z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|postgres://[^ ]+|OPENROUTER_API_KEY=.*|KAVENEGAR_API_KEY=.*|SMS_IR_API_KEY=.*|JWT_SECRET=.*)' \
+   git log -p --all | grep -EoI '(sk-[a-zA-Z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|postgres://[^ ]+|OPENROUTER_API_KEY=.*|KAVENEGAR_API_KEY=.*|JWT_SECRET=.*)' \
      | sort -u > /tmp/found_secrets.txt
    # review /tmp/found_secrets.txt by hand, then build replacements.txt as:
    #   <literal-secret-value>==>REDACTED-<name>
