@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test src/lib/upgrade-inquiry.test.ts src/lib/ledger-status.test.ts src/lib/crm-party.test.ts src/lib/account-tree.test.ts src/lib/fa-format.test.ts src/lib/csv.test.ts src/lib/barcode-scan.test.ts src/lib/posting-rules.test.ts src/lib/enamad.test.ts src/lib/upload/resumable-upload.test.ts src/lib/cheques-ui.test.ts"
+    "test": "node --test src/lib/upgrade-inquiry.test.ts src/lib/ledger-status.test.ts src/lib/crm-party.test.ts src/lib/account-tree.test.ts src/lib/fa-format.test.ts src/lib/csv.test.ts src/lib/barcode-scan.test.ts src/lib/posting-rules.test.ts src/lib/enamad.test.ts src/lib/upload/resumable-upload.test.ts src/lib/cheques-ui.test.ts src/middleware.test.ts src/lib/api/session-logic.test.ts src/lib/import-routing.test.ts src/lib/print/accounting-voucher.test.ts src/lib/print/render-template.test.ts src/lib/reorder.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

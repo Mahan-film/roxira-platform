@@ -75,7 +75,7 @@ const NAV_ITEMS: NavItem[] = [
   { group: GROUP_OPS, href: "/app/hr", label: "کارکنان (HR)", icon: UsersRound, nested: true, module: "hr" },
   { group: GROUP_OPS, href: "/app/inventory", label: "کالا و انبار", icon: Warehouse, nested: true, module: "inventory" },
   { group: GROUP_OPS, href: "/damages", label: "خسارت", icon: ShieldAlert, nested: true, module: "damages" },
-  { group: GROUP_DATA, href: "/app/import", label: "ورود داده (import)", icon: FileUp, nested: true, module: "data_import" },
+  { group: GROUP_DATA, href: "/app/import", label: "ورود از اکسل", icon: FileUp, nested: true, module: "data_import" },
   { group: GROUP_ADMIN, href: "/app/settings/members", label: "اعضا و نقش‌ها", icon: Settings, nested: true, module: "members" },
   { group: GROUP_ADMIN, href: "/app/settings/modules", label: "ماژول‌ها", icon: Puzzle, nested: true, module: "members" },
   { group: GROUP_ADMIN, href: "/app/settings/posting-rules", label: "ثبت خودکار سند", icon: Workflow, nested: true, module: "accounting" },
