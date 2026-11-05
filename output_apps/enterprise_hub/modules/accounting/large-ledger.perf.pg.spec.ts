@@ -200,10 +200,10 @@ describePerf('100k vouchers timing on PostgreSQL', () => {
   it('account ledger: busiest account, one fiscal year and whole range, paged', async () => {
     const fy = fiscalYearRange(0);
     await measure('account ledger 1100 — whole range', () =>
-      accounting.getAccountLedger(T1, '1100', { limit: 100 }),
+      accounting.getAccountLedger(T1, '1100', { limit: 100 } as never),
     );
     await measure('account ledger 1100 — one fiscal year, limit 50', () =>
-      accounting.getAccountLedger(T1, '1100', { fromDate: fy.start, toDate: fy.end, limit: 50 }),
+      accounting.getAccountLedger(T1, '1100', { fromDate: fy.start, toDate: fy.end, limit: 50 } as never),
     );
     await explain(
       'account ledger — whole range',

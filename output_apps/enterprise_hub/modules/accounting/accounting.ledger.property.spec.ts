@@ -28,27 +28,24 @@ describe('money.ts round trips never drift', () => {
     );
   });
 
-  it('toMinor(fromMinor(x)) === x up to 2^51 minor units (about 22 trillion rials)', () => {
-    fc.assert(
-      fc.property(fc.bigInt({ min: -(2n ** 51n), max: 2n ** 51n }), (x) => {
-        expect(toMinor(fromMinor(x))).toBe(x);
-      }),
-      { numRuns: 2000 },
-    );
-  });
-
-  // FINDING (#230 item 3): fromMinor returns Number(minor) / 100 up to 2^53 minor units, but the
-  // decimal number is not exact from 2^52 up, so toMinor(fromMinor(x)) drifts by one minor unit.
-  // Counterexample (seed -897043614 family): x = -7043348018551001n comes back as -7043348018551002n.
-  // `it.failing` keeps the bug visible without breaking CI; when money.ts is fixed (string above
-  // 2^51), this test starts failing and must be turned into a plain `it`.
-  it.failing('toMinor(fromMinor(x)) === x over 0 .. 2^53-1 minor units (KNOWN DRIFT above 2^52)', () => {
+  it('toMinor(fromMinor(x)) === x over the whole bigint range, including both sides of the 2^51 switch', () => {
     fc.assert(
       fc.property(fc.bigInt({ min: -MAX_SAFE, max: MAX_SAFE }), (x) => {
         expect(toMinor(fromMinor(x))).toBe(x);
       }),
-      { numRuns: 3000, examples: [[-7043348018551001n]] },
+      {
+        numRuns: 5000,
+        // the counterexample that drifted before the fix, and the switch boundary
+        examples: [[-7043348018551001n], [2n ** 51n], [2n ** 51n + 1n], [-(2n ** 51n) - 1n], [MAX_SAFE], [-MAX_SAFE]],
+      },
     );
+  });
+
+  it('fromMinor is a JSON number up to 2^51 minor units and an exact decimal string above', () => {
+    expect(fromMinor(2n ** 51n)).toBe(Number(2n ** 51n) / 100);
+    expect(fromMinor(2n ** 51n + 1n)).toBe('22517998136852.49');
+    expect(fromMinor(-(2n ** 51n) - 1n)).toBe('-22517998136852.49');
+    expect(fromMinor(12345n)).toBe(123.45);
   });
 
   it('decimal strings with 0..2 fractional digits round-trip to the same value', () => {
