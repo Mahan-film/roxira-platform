@@ -63,13 +63,37 @@ function toAsciiDigits(value: string): string {
     .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
 }
 
+export function isJalaliLeapYear(jy: number): boolean {
+  return jalCal(jy).leap === 0;
+}
+
+export function jalaliMonthLength(jy: number, jm: number): number {
+  if (jm >= 1 && jm <= 6) return 31;
+  if (jm >= 7 && jm <= 11) return 30;
+  if (jm === 12) return isJalaliLeapYear(jy) ? 30 : 29;
+  return 0;
+}
+
+export function isoToJalaliParts(iso: string): {jy: number; jm: number; jd: number} | null {
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = Object.fromEntries(
+    JALALI_PARTS.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  return {
+    jy: Number(parts.year),
+    jm: Number(parts.month),
+    jd: Number(parts.day),
+  };
+}
+
 /** «۱۴۰۳/۰۷/۱۵» or «1403-7-15» -> «2024-10-06»; null when not a valid Jalali date. */
 export function jalaliToIso(value: string): string | null {
   const match = /^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/.exec(toAsciiDigits(value.trim()));
   if (!match) return null;
   const [jy, jm, jd] = [Number(match[1]), Number(match[2]), Number(match[3])];
   if (jy < 1200 || jy > 1600 || jm < 1 || jm > 12 || jd < 1) return null;
-  const monthLength = jm <= 6 ? 31 : jm <= 11 ? 30 : jalCal(jy).leap === 0 ? 30 : 29;
+  const monthLength = jalaliMonthLength(jy, jm);
   if (jd > monthLength) return null;
   const { gy, march } = jalCal(jy);
   const jdn = g2d(gy, 3, march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1;

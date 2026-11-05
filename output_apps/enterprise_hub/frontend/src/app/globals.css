@@ -78,6 +78,8 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  /* مبلغ منفی: قرمز کم‌رنگ با کنتراست ≥ 4.5:1 روی پس‌زمینه/کارت روشن */
+  --money-negative: oklch(0.48 0.15 25);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -135,6 +137,8 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  /* مبلغ منفی در تم تاریک: کنتراست ≥ 4.5:1 روی پس‌زمینه تاریک */
+  --money-negative: oklch(0.78 0.11 22);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -181,6 +185,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* اعداد و ارقام در سراسر اپ با عرض یکنواخت (جدول‌ها و ستون‌های مالی) */
+    font-variant-numeric: tabular-nums;
   }
   html {
     @apply font-sans;
@@ -197,6 +203,15 @@
 }
 
 @layer utilities {
+  /* اعداد با عرض یکنواخت (ستون‌های مالی، تاریخ‌ها) حتی خارج از جدول */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  /* رنگ مبلغ منفی: پرانتز حسابداری نشانه اصلی است، رنگ فقط کمکی */
+  .money-negative {
+    color: var(--money-negative);
+  }
+
   /* نوارهای اسکرول افقی (منوی موبایل، دکمه‌های اقدام سریع): بدون اسکرول‌بار
      ولی با محو تدریجی لبه‌ها تا قابل‌اسکرول بودن محتوای بریده‌شده مشخص باشد */
   .scroll-fade-x {
@@ -553,6 +568,8 @@
   --gh-cyan: #38bdf8;
   --gh-cyan-soft: rgb(56 189 248 / 0.12);
   --gh-danger: #fb7185;
+  /* مبلغ منفی در پوسته غازی: از --gh-danger مشتق شده (کنتراست کافی روی #05080f) */
+  --money-negative: var(--gh-danger);
   --gh-ok: #34d399;
   --gh-ring: #38bdf8;
   --gh-modal: #0a0f1a;

@@ -23,6 +23,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { JalaliDateInput } from "@/components/ui/jalali-date-input";
+import { MoneyInput } from "@/components/ui/money-input";
+import { Money } from "@/components/ui/money";
 import { isoToJalaliInput } from "@/lib/jalali";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -291,7 +293,7 @@ export function JournalEntryForm({
             </div>
             <div className="grid gap-2">
               <Label>تاریخ سند</Label>
-              <JalaliDateInput key={dateKey} value={date} onChange={setDate} />
+              <JalaliDateInput key={dateKey} value={date} onChange={setDate} presets />
             </div>
             <div className="grid gap-2">
               <Label>شرح سند</Label>
@@ -348,26 +350,28 @@ export function JournalEntryForm({
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Input
-                          inputMode="decimal"
+                        <MoneyInput
+                          helper={false}
+                          className="min-w-36"
                           value={line.debit}
                           placeholder="0"
-                          onChange={(event) =>
+                          onChange={(digits) =>
                             updateLine(line.uid, {
-                              debit: event.target.value,
+                              debit: digits,
                               credit: "",
                             })
                           }
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          inputMode="decimal"
+                        <MoneyInput
+                          helper={false}
+                          className="min-w-36"
                           value={line.credit}
                           placeholder="0"
-                          onChange={(event) =>
+                          onChange={(digits) =>
                             updateLine(line.uid, {
-                              credit: event.target.value,
+                              credit: digits,
                               debit: "",
                             })
                           }
@@ -404,11 +408,15 @@ export function JournalEntryForm({
           <div className="grid grid-cols-1 gap-3 rounded-lg border bg-muted/20 p-4 text-sm sm:grid-cols-3">
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">جمع بدهکار</span>
-              <span className="font-medium">{formatRial(totalDebit)}</span>
+              <span className="font-medium">
+                <Money value={totalDebit} unit="rial" suffix />
+              </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">جمع بستانکار</span>
-              <span className="font-medium">{formatRial(totalCredit)}</span>
+              <span className="font-medium">
+                <Money value={totalCredit} unit="rial" suffix />
+              </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">اختلاف تراز</span>

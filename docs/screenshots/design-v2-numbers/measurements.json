@@ -1,0 +1,230 @@
+{
+ "journal-1280": {
+  "date": "۱۴۰۵/۰۸/۱۴",
+  "moneyInputs": 4,
+  "debitShown": "۱۲٬۵۰۰٬۰۰۰",
+  "totals": "جمع بدهکار | ۱۲٬۵۰۰٬۰۰۰ ریال | جمع بستانکار | ۱۲٬۵۰۰٬۰۰۰ ریال | اختلاف تراز | ۰ ریال",
+  "submitCount": 1,
+  "alerts": [
+   ""
+  ],
+  "reqs": [
+   "POST t:3197/api/backend/enterprise-hub/accounting/journal-entries"
+  ],
+  "postedBody": "{\"entryNumber\":\"JV-1405-000001\",\"date\":\"2026-11-05T08:30:00.000Z\",\"description\":\"فروش نقدی\",\"lines\":[{\"accountCode\":\"1110\",\"debit\":12500000,\"credit\":0},{\"accountCode\":\"4110\",\"debit\":0,\"credit\":12500000}]}"
+ },
+ "journal-375": {
+  "date": "۱۴۰۵/۰۸/۱۴",
+  "moneyInputs": 4,
+  "debitShown": "۱۲٬۵۰۰٬۰۰۰",
+  "totals": "جمع بدهکار | ۱۲٬۵۰۰٬۰۰۰ ریال | جمع بستانکار | ۱۲٬۵۰۰٬۰۰۰ ریال | اختلاف تراز | ۰ ریال",
+  "submitCount": 1,
+  "alerts": [
+   ""
+  ],
+  "reqs": [
+   "POST t:3197/api/backend/enterprise-hub/accounting/journal-entries"
+  ],
+  "postedBody": "{\"entryNumber\":\"JV-1405-000001\",\"date\":\"2026-11-05T08:30:00.000Z\",\"description\":\"فروش نقدی\",\"lines\":[{\"accountCode\":\"1110\",\"debit\":12500000,\"credit\":0},{\"accountCode\":\"4110\",\"debit\":0,\"credit\":12500000}]}"
+ },
+ "1280-light": {
+  "hydrated": true,
+  "negText": "منفی (۱۲٬۵۰۰٬۰۰۰) ریال",
+  "negColors": {
+   "fg": [
+    161,
+    47,
+    47,
+    255
+   ],
+   "bg": [
+    255,
+    255,
+    255,
+    255
+   ],
+   "nums": "tabular-nums",
+   "text": "منفی (۱۲٬۵۰۰٬۰۰۰) ریال"
+  },
+  "negContrast": 7.09,
+  "tabular": "tabular-nums | body: tabular-nums",
+  "markers": [
+   "۱۲٬۵۰۰٬۰۰۰بد",
+   "۱۲٬۵۰۰٬۰۰۰بس",
+   "بی‌حساب",
+   "۹۸۷٬۶۵۴٬۳۲۱بد",
+   "۳٬۰۰۰بس"
+  ],
+  "zeroMarkerContrast": 4.74,
+  "moneyDisplay": "۱۲٬۵۰۰٬۰۰۰",
+  "helper": "معادل ۱٬۲۵۰٬۰۰۰ تومان | دوازده میلیون و پانصد هزار ریال",
+  "helperContrast": 4.74,
+  "after000": "۱۲٬۵۰۰٬۰۰۰٬۰۰۰ => raw 12500000000|",
+  "after0000": "125000000000000|",
+  "zeroHelper": "معادل ۰ تومان | صفر ریال",
+  "bigHelper": "معادل ۱۰۰٬۰۰۰٬۰۰۰٬۰۰۰ تومان | هزار میلیارد ریال",
+  "ctrlUp": "۵٬۰۰۰",
+  "mask": "۱۴۰۵/۰۸/۱۴",
+  "maskOut": "5000|2026-11-05",
+  "up": "۱۴۰۵/۰۸/۱۵",
+  "shiftDown": "۱۴۰۵/۰۷/۱۵",
+  "bad": "۱۴۰۴/۱۲/۳۰",
+  "badAlert": "تاریخ شمسی معتبر نیست",
+  "leap": "۱۴۰۳/۱۲/۳۰ => 5000|2025-03-20",
+  "leapNext": "۱۴۰۴/۰۱/۰۱",
+  "presetWinter": "۱۴۰۵/۱۰/۰۱ => 5000|2026-12-22",
+  "presetFiscal": "۱۴۰۵/۰۱/۰۱",
+  "overflowX": 0,
+  "focusRing": "dt | outline none 1px | box-shadow rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.707999 -0.00000712276 0.0000166297 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px | border lab(66.128 -0.0000298023 0.0000119209)"
+ },
+ "1280-dark": {
+  "hydrated": true,
+  "negText": "منفی (۱۲٬۵۰۰٬۰۰۰) ریال",
+  "negColors": {
+   "fg": [
+    246,
+    155,
+    152,
+    255
+   ],
+   "bg": [
+    10,
+    10,
+    10,
+    255
+   ],
+   "nums": "tabular-nums",
+   "text": "منفی (۱۲٬۵۰۰٬۰۰۰) ریال"
+  },
+  "negContrast": 9.48,
+  "tabular": "tabular-nums | body: tabular-nums",
+  "markers": [
+   "۱۲٬۵۰۰٬۰۰۰بد",
+   "۱۲٬۵۰۰٬۰۰۰بس",
+   "بی‌حساب",
+   "۹۸۷٬۶۵۴٬۳۲۱بد",
+   "۳٬۰۰۰بس"
+  ],
+  "zeroMarkerContrast": 7.66,
+  "moneyDisplay": "۱۲٬۵۰۰٬۰۰۰",
+  "helper": "معادل ۱٬۲۵۰٬۰۰۰ تومان | دوازده میلیون و پانصد هزار ریال",
+  "helperContrast": 7.66,
+  "after000": "۱۲٬۵۰۰٬۰۰۰٬۰۰۰ => raw 12500000000|",
+  "after0000": "125000000000000|",
+  "zeroHelper": "معادل ۰ تومان | صفر ریال",
+  "bigHelper": "معادل ۱۰۰٬۰۰۰٬۰۰۰٬۰۰۰ تومان | هزار میلیارد ریال",
+  "ctrlUp": "۵٬۰۰۰",
+  "mask": "۱۴۰۵/۰۸/۱۴",
+  "maskOut": "5000|2026-11-05",
+  "up": "۱۴۰۵/۰۸/۱۵",
+  "shiftDown": "۱۴۰۵/۰۷/۱۵",
+  "bad": "۱۴۰۴/۱۲/۳۰",
+  "badAlert": "تاریخ شمسی معتبر نیست",
+  "leap": "۱۴۰۳/۱۲/۳۰ => 5000|2025-03-20",
+  "leapNext": "۱۴۰۴/۰۱/۰۱",
+  "presetWinter": "۱۴۰۵/۱۰/۰۱ => 5000|2026-12-22",
+  "presetFiscal": "۱۴۰۵/۰۱/۰۱",
+  "overflowX": 0,
+  "focusRing": "dt | outline none 1px | box-shadow rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.555999 -0.00000530481 0.000012964 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px | border lab(48.496 0 0)"
+ },
+ "375-light": {
+  "hydrated": true,
+  "negText": "منفی (۱۲٬۵۰۰٬۰۰۰) ریال",
+  "negColors": {
+   "fg": [
+    161,
+    47,
+    47,
+    255
+   ],
+   "bg": [
+    255,
+    255,
+    255,
+    255
+   ],
+   "nums": "tabular-nums",
+   "text": "منفی (۱۲٬۵۰۰٬۰۰۰) ریال"
+  },
+  "negContrast": 7.09,
+  "tabular": "tabular-nums | body: tabular-nums",
+  "markers": [
+   "۱۲٬۵۰۰٬۰۰۰بد",
+   "۱۲٬۵۰۰٬۰۰۰بس",
+   "بی‌حساب",
+   "۹۸۷٬۶۵۴٬۳۲۱بد",
+   "۳٬۰۰۰بس"
+  ],
+  "zeroMarkerContrast": 4.74,
+  "moneyDisplay": "۱۲٬۵۰۰٬۰۰۰",
+  "helper": "معادل ۱٬۲۵۰٬۰۰۰ تومان | دوازده میلیون و پانصد هزار ریال",
+  "helperContrast": 4.74,
+  "after000": "۱۲٬۵۰۰٬۰۰۰٬۰۰۰ => raw 12500000000|",
+  "after0000": "125000000000000|",
+  "zeroHelper": "معادل ۰ تومان | صفر ریال",
+  "bigHelper": "معادل ۱۰۰٬۰۰۰٬۰۰۰٬۰۰۰ تومان | هزار میلیارد ریال",
+  "ctrlUp": "۵٬۰۰۰",
+  "mask": "۱۴۰۵/۰۸/۱۴",
+  "maskOut": "5000|2026-11-05",
+  "up": "۱۴۰۵/۰۸/۱۵",
+  "shiftDown": "۱۴۰۵/۰۷/۱۵",
+  "bad": "۱۴۰۴/۱۲/۳۰",
+  "badAlert": "تاریخ شمسی معتبر نیست",
+  "leap": "۱۴۰۳/۱۲/۳۰ => 5000|2025-03-20",
+  "leapNext": "۱۴۰۴/۰۱/۰۱",
+  "presetWinter": "۱۴۰۵/۱۰/۰۱ => 5000|2026-12-22",
+  "presetFiscal": "۱۴۰۵/۰۱/۰۱",
+  "overflowX": 0,
+  "focusRing": "dt | outline none 1px | box-shadow rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.707999 -0.00000712276 0.0000166297 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px | border lab(66.128 -0.0000298023 0.0000119209)"
+ },
+ "375-dark": {
+  "hydrated": true,
+  "negText": "منفی (۱۲٬۵۰۰٬۰۰۰) ریال",
+  "negColors": {
+   "fg": [
+    246,
+    155,
+    152,
+    255
+   ],
+   "bg": [
+    10,
+    10,
+    10,
+    255
+   ],
+   "nums": "tabular-nums",
+   "text": "منفی (۱۲٬۵۰۰٬۰۰۰) ریال"
+  },
+  "negContrast": 9.48,
+  "tabular": "tabular-nums | body: tabular-nums",
+  "markers": [
+   "۱۲٬۵۰۰٬۰۰۰بد",
+   "۱۲٬۵۰۰٬۰۰۰بس",
+   "بی‌حساب",
+   "۹۸۷٬۶۵۴٬۳۲۱بد",
+   "۳٬۰۰۰بس"
+  ],
+  "zeroMarkerContrast": 7.66,
+  "moneyDisplay": "۱۲٬۵۰۰٬۰۰۰",
+  "helper": "معادل ۱٬۲۵۰٬۰۰۰ تومان | دوازده میلیون و پانصد هزار ریال",
+  "helperContrast": 7.66,
+  "after000": "۱۲٬۵۰۰٬۰۰۰٬۰۰۰ => raw 12500000000|",
+  "after0000": "125000000000000|",
+  "zeroHelper": "معادل ۰ تومان | صفر ریال",
+  "bigHelper": "معادل ۱۰۰٬۰۰۰٬۰۰۰٬۰۰۰ تومان | هزار میلیارد ریال",
+  "ctrlUp": "۵٬۰۰۰",
+  "mask": "۱۴۰۵/۰۸/۱۴",
+  "maskOut": "5000|2026-11-05",
+  "up": "۱۴۰۵/۰۸/۱۵",
+  "shiftDown": "۱۴۰۵/۰۷/۱۵",
+  "bad": "۱۴۰۴/۱۲/۳۰",
+  "badAlert": "تاریخ شمسی معتبر نیست",
+  "leap": "۱۴۰۳/۱۲/۳۰ => 5000|2025-03-20",
+  "leapNext": "۱۴۰۴/۰۱/۰۱",
+  "presetWinter": "۱۴۰۵/۱۰/۰۱ => 5000|2026-12-22",
+  "presetFiscal": "۱۴۰۵/۰۱/۰۱",
+  "overflowX": 0,
+  "focusRing": "dt | outline none 1px | box-shadow rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.555999 -0.00000530481 0.000012964 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px | border lab(48.496 0 0)"
+ }
+}
