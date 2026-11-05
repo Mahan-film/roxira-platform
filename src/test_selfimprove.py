@@ -1,5 +1,6 @@
 """Offline tests for scripts/ops/selfimprove (anonymiser, budget, regressions, clustering, report). No network."""
 import importlib
+import json
 import pathlib
 import sys
 
@@ -146,3 +147,6 @@ def test_llm_ask_falls_back_and_charges_paid_cost(monkeypatch, tmp_path):
     led = b.Ledger(str(tmp_path / "l.jsonl"), cap_usd=0.3)
     assert llm.ask(led, "p", "w", attempts=atts) == "ok"
     assert led.spent() == pytest.approx(0.001)  # 500 out * 2.0 / 1e6
+    logged = [json.loads(line) for line in (tmp_path / "cost.jsonl").read_text().splitlines()]
+    assert [r["attempt"] for r in logged] == ["fake/free", "fake/paid"]  # one line per call, serving attempt recorded
+    assert logged[-1]["ok"] is True and logged[-1]["task"] == "selfimprove" and not logged[0]["ok"]

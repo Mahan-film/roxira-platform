@@ -171,6 +171,8 @@ def test_llm_falls_back_to_next_attempt_and_logs_cost(_isolate_cost_log):
     assert calls == [0, 1] and llm.models_used == ["fake/1"]
     lines = [json.loads(x) for x in _isolate_cost_log.read_text().splitlines()]
     assert [r["ok"] for r in lines] == [False, True] and lines[1]["cost_usd"] == pytest.approx(0.001)
+    assert [r["attempt"] for r in lines] == ["fake/0", "fake/1"]  # one line per call, serving attempt recorded
+    assert lines[1]["task"] == "radar"
 
 
 def test_llm_uses_cheap_role_model_never_free_or_gemini_pro():
