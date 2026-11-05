@@ -49,6 +49,7 @@ export interface InventoryImportItemInput {
   quantity?: number;
   minQuantity?: number;
   batchNumber?: string;
+  unitCost?: number;
 }
 
 /**
@@ -280,37 +281,82 @@ export class InventoryService {
   }
 
   /**
-   * درج کالاها از مسیر ورود داده.
-   * تشخیص تکراری SKU پیش از فراخوانی در لایه ورود داده انجام شده است.
-   * خروجی، شناسه کالاهای ایجادشده به‌ترتیب ورودی است.
+   * Imports one item. With quantity > 0 the item and its opening FIFO layer (cost per unit,
+   * the tenant's lowest-id active warehouse or none, batch = file batch or OPEN-<sku>) are created
+   * in one transaction. Posts NO journal entry: the opening-balances import posts 1301 itself.
+   * SKU duplicates are filtered earlier by the import layer; here they throw ConflictException.
    */
-  async importStockItems(
+  async importStockItemWithOpeningStock(
     tenantId: string,
-    inputs: InventoryImportItemInput[],
-  ): Promise<number[]> {
-    const createdIds: number[] = [];
-    for (const input of inputs) {
-      const existing = await this.inventoryRepository.findStockItemBySku(
-        tenantId,
-        input.sku,
+    input: InventoryImportItemInput,
+  ): Promise<number> {
+    const existing = await this.inventoryRepository.findStockItemBySku(
+      tenantId,
+      input.sku,
+    );
+    if (existing) {
+      throw new ConflictException(
+        `کالایی با شناسه ${input.sku} قبلاً در فهرست انبار ثبت شده است.`,
       );
-      if (existing) {
-        throw new ConflictException(
-          `کالایی با شناسه ${input.sku} قبلاً در فهرست انبار ثبت شده است.`,
+    }
+
+    const q = input.quantity ?? 0;
+    const unitCost = input.unitCost;
+
+    if (!Number.isFinite(q) || q < 0) {
+      throw new BadRequestException('موجودی اولیه باید عددی صفر یا مثبت باشد.');
+    }
+    // Stock is never rounded silently: more than QUANTITY_SCALE decimals is a row failure.
+    const scaledQuantity = q * 10 ** QUANTITY_SCALE;
+    if (Math.abs(scaledQuantity - Math.round(scaledQuantity)) > 1e-6) {
+      throw new BadRequestException(
+        `موجودی اولیه حداکثر ${QUANTITY_SCALE} رقم اعشار مجاز است.`,
+      );
+    }
+    if (q > 0 && unitCost === undefined) {
+      throw new BadRequestException('بهای واحد در صورت وجود موجودی اولیه الزامی است.');
+    }
+    // Amounts are whole rials; a cost on a row without quantity is not stored (no layer exists to hold it).
+    if (unitCost !== undefined && (!Number.isInteger(unitCost) || unitCost < 0)) {
+      throw new BadRequestException('بهای واحد باید یک عدد صحیح ریال و غیرمنفی باشد.');
+    }
+
+    const warehouses = await this.inventoryRepository.findAllWarehouses(tenantId);
+    const activeWarehouses = warehouses.filter((w) => w.isActive !== false);
+    const warehouseId =
+      activeWarehouses.length > 0
+        ? Math.min(...activeWarehouses.map((w) => w.id))
+        : null;
+
+    return this.inventoryRepository.transaction(async (manager) => {
+      const item = await this.inventoryRepository.createStockItem(
+        tenantId,
+        {
+          sku: input.sku,
+          barcode: input.barcode,
+          name: input.name,
+          quantity: 0,
+          minQuantity: this.roundQuantity(input.minQuantity ?? 0),
+          batchNumber: input.batchNumber ?? null,
+        },
+        manager,
+      );
+
+      if (q > 0) {
+        await this.receiveStock(
+          tenantId,
+          {
+            sku: input.sku,
+            quantity: q,
+            unitPurchaseCost: unitCost!,
+            ...(warehouseId !== null ? { warehouseId } : {}),
+            batchNumber: input.batchNumber ?? `OPEN-${input.sku}`,
+          },
+          manager,
         );
       }
-
-      const created = await this.inventoryRepository.createStockItem(tenantId, {
-        sku: input.sku,
-        barcode: input.barcode,
-        name: input.name,
-        quantity: this.roundQuantity(input.quantity ?? 0),
-        minQuantity: this.roundQuantity(input.minQuantity ?? 0),
-        batchNumber: input.batchNumber ?? null,
-      });
-      createdIds.push(created.id);
-    }
-    return createdIds;
+      return item.id;
+    });
   }
 
   /** SKU‌های موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری ورود). */

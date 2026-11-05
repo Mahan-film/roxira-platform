@@ -90,6 +90,6 @@ A CI job for the gate comes from the Mac (issue #116 section 5).
 |---|---|---|
 | 02 chart of accounts | real test | `accounting-accounts` registry, explicit column mapping, 18 accounts via API and chart page |
 | 03 parties | real test | imported into the party master (`parties`, table `erp_parties`): 48 inserted, 2 duplicates skipped; asserts code, role (29 customers, 19 suppliers), name, national id, phone and email per party from the CSV. Gap A is closed: a document can link to a party by code |
-| 04 items | `fixme` | gap B: no unit cost on items import / `erp_stock_items`, stock value cannot reach 252,026,700,000 |
+| 04 items | real test | gap B closed (#470): the `inventory-items` import takes unit cost; rows with quantity > 0 receive stock into a FIFO layer (`InventoryService.importStockItemWithOpeningStock`), no cost column on `erp_stock_items`. 300 items, valuation 252,026,700,000. It posts NO voucher: 1301 comes from step 05. Follow-up: a user with no opening voucher gets stock but no ledger value until a posting flow exists |
 | 05 opening balances | real test | one voucher of 14 lines, debit = credit = 259,026,700,000; 1201 and 2101 from README |
 | 06 invoices | `fixme` | gap C: invoice import is a one-line stub (no type, date, items, VAT, multi-line; placeholder buyer name). The file has 238 distinct invoice numbers; the README's 240 counts the 2 repeated rows |

@@ -104,6 +104,27 @@ export class InventoryItemsRegistry implements EntityImportAdapter {
         'لات',
       ],
     },
+    {
+      key: 'unitCost',
+      labelFa: 'بهای واحد (ریال)',
+      required: false,
+      // 'number', not 'money': the money normaliser rounds 12.5 to 13 silently. Here the cell keeps its
+      // value and the inventory service rejects anything that is not whole rials (a row failure).
+      type: 'number',
+      synonyms: [
+        'unitCost',
+        'unit cost',
+        'cost',
+        'unit price',
+        'purchase cost',
+        'fee',
+        'بهای واحد',
+        'بهای واحد (ریال)',
+        'قیمت واحد',
+        'بهای تمام شده',
+        'قیمت خرید',
+      ],
+    },
   ];
 
   constructor(private readonly inventoryService: InventoryService) {}
@@ -136,10 +157,11 @@ export class InventoryItemsRegistry implements EntityImportAdapter {
 
     for (const record of records) {
       try {
-        const ids = await this.inventoryService.importStockItems(tenantId, [
+        const id = await this.inventoryService.importStockItemWithOpeningStock(
+          tenantId,
           this.toInput(record),
-        ]);
-        inserted.push({ rowNumber: record.rowNumber, ownerId: ids[0] });
+        );
+        inserted.push({ rowNumber: record.rowNumber, ownerId: id });
       } catch (error) {
         failed.push({
           rowNumber: record.rowNumber,
@@ -181,6 +203,9 @@ export class InventoryItemsRegistry implements EntityImportAdapter {
     }
     if (values.batchNumber) {
       input.batchNumber = String(values.batchNumber).trim();
+    }
+    if (typeof values.unitCost === 'number') {
+      input.unitCost = values.unitCost;
     }
     return input;
   }

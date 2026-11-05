@@ -219,9 +219,15 @@ export class InventoryRepository {
   async createStockItem(
     tenantId: string,
     data: Partial<StockItemEntity>,
+    manager?: EntityManager,
   ): Promise<StockItemEntity> {
-    const entity = this.stockItems.create({ ...data, tenantId });
-    return this.stockItems.save(entity);
+    const repo = manager ? manager.getRepository(StockItemEntity) : this.stockItems;
+    const entity = repo.create({ ...data, tenantId });
+    return repo.save(entity);
+  }
+
+  async transaction<T>(work: (m: EntityManager) => Promise<T>): Promise<T> {
+    return this.dataSource.transaction(work);
   }
 
   async saveStockItem(

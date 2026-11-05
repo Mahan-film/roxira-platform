@@ -171,14 +171,66 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     expect(parties.data.filter((p) => p.code.startsWith('SUPP-'))).toHaveLength(19);
   });
 
-  // Needs a product feature (issue: items import has no unit cost). See the gap list in docs/testing/M1_GATE.md.
-  test.fixme('04 import items: 300 items with stock and unit cost [E5]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/import');
-    void SAMPLE_COMPANY_FILES.items;
-    // GAP: the `inventory-items` registry (modules/data_import/registry/inventory-items.registry.ts) maps sku,
-    // barcode, name, quantity, minQuantity, batchNumber only. The file column «بهای واحد (ریال)» has no target and
-    // erp_stock_items (modules/inventory/entities/stock-item.entity.ts) has no cost column, so «stock value equals
-    // README_TOTALS.stockValue» (252,026,700,000) cannot hold after the import.
+  // Items carry unit cost into FIFO layers (#470); the import posts no voucher, 1301 comes from step 05.
+  test('04 import items: 300 items with stock and unit cost [E5]', async ({ page }) => {
+    const { header, rows } = readCsv(SAMPLE_COMPANY_FILES.items);
+    expect(rows).toHaveLength(300);
+
+    // Compute expectedValue = sum over rows of BigInt(quantity) * BigInt(unit cost)
+    const expectedValue = rows.reduce((acc, row) => {
+      const quantity = BigInt(row[header.indexOf('موجودی')]);
+      const unitCost = BigInt(row[header.indexOf('بهای واحد (ریال)')]);
+      return acc + (quantity * unitCost);
+    }, 0n);
+    expect(expectedValue).toBe(README_TOTALS.stockValue);
+
+    // Import the items file
+    const counts = await importFile(page, SAMPLE_COMPANY_FILES.items, 'inventory-items', {
+      'کد کالا': 'sku',
+      'بارکد': 'barcode',
+      'نام کالا': 'name',
+      'موجودی': 'quantity',
+      'حداقل موجودی': 'minQuantity',
+      'بهای واحد (ریال)': 'unitCost',
+      'ارزش موجودی (ریال)': null, // Derived from quantity x cost, so ignored
+      'شماره دسته': 'batchNumber'
+    });
+    expect(counts).toEqual({ inserted: 300, skippedDuplicates: 0, failed: 0 });
+
+    // API checks
+    const valuation = await apiGet<{ itemCount: number; totalInventoryValue: number | string; totalOpenBatches: number; rows: unknown[] }>(page, 'inventory/valuation');
+    expect(valuation.itemCount).toBe(300);
+    expect(rials(valuation.totalInventoryValue)).toBe(README_TOTALS.stockValue);
+    expect(valuation.totalOpenBatches).toBe(300);
+
+    // Check inventory items
+    const firstSku = rows[0][header.indexOf('کد کالا')];
+    const itemsPage1 = await apiGet<{ total: number; data: Array<{ sku: string; quantity: number }> }>(page, 'inventory/items?limit=100&page=1');
+    const itemsPage2 = await apiGet<{ total: number; data: Array<{ sku: string; quantity: number }> }>(page, 'inventory/items?limit=100&page=2');
+    const itemsPage3 = await apiGet<{ total: number; data: Array<{ sku: string; quantity: number }> }>(page, 'inventory/items?limit=100&page=3');
+
+    const allItems = [...itemsPage1.data, ...itemsPage2.data, ...itemsPage3.data];
+    expect(allItems.length).toBe(300);
+    expect(itemsPage1.total).toBe(300);
+
+    // Verify each item's quantity matches the CSV
+    for (const row of rows) {
+      const sku = row[header.indexOf('کد کالا')];
+      const csvQuantity = Number(row[header.indexOf('موجودی')]);
+      const item = allItems.find((i) => i.sku === sku);
+      expect(item, `Item ${sku} should exist`).toBeDefined();
+      expect(item!.quantity, `Quantity for ${sku} should match`).toBe(csvQuantity);
+    }
+
+    // No journal entry was posted by the item import
+    const journalEntries = await apiGet<{ total: number }>(page, 'accounting/journal-entries?limit=10');
+    expect(journalEntries.total).toBe(0);
+
+    // UI checks
+    await loginAsTestTenant(page, '/app/inventory');
+    await expect(page.getByText(`${fa(300)} کالا`).first()).toBeVisible();
+    await expect(page.getByText(`${fa(Number(README_TOTALS.stockValue))} ریال`).first()).toBeVisible();
+    await expect(page.getByText(firstSku, { exact: true }).first()).toBeVisible();
   });
 
   test('05 import opening balances: one balanced opening voucher [E5]', async ({ page }) => {
