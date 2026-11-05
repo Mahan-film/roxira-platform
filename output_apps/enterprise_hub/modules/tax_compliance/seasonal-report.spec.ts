@@ -171,7 +171,7 @@ describe('agreement with the issued journal entry (PR 902 amounts)', () => {
   });
 
   it('matches InvoicePostingService.computeAmounts exactly', () => {
-    const posting = new InvoicePostingService({} as never, {} as never, {} as never) as unknown as {
+    const posting = new InvoicePostingService({} as never, {} as never, {} as never, {} as never) as unknown as {
       computeAmounts(i: InvoiceEntity): { receivableMinor: bigint; vatMinor: bigint; salesMinor: bigint };
     };
     expect(invoiceRialAmounts(fxInvoice)).toEqual(posting.computeAmounts(fxInvoice));

@@ -2,9 +2,11 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
 import { AccountResponseDto } from '../../accounting/dto/account-response.dto';
-import { JournalEntryLineDto } from '../../accounting/dto/create-journal-entry.dto';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { Currency } from '../../currency/enums/currency.enum';
+import { PostingRole } from '../../posting_rules/constants/posting-roles';
+import { RoleAccounts } from '../../posting_rules/domain/posting-engine';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { StockDocumentsRepository } from '../../inventory/repositories/stock-documents.repository';
 import { STOCK_DOCUMENT_PREFIX, StockDocumentType } from '../../inventory/enums/stock-document.enum';
 import { InventoryService } from '../../inventory/services/inventory.service';
@@ -31,6 +33,14 @@ import {
 import { InvoiceDirection, InvoiceSubject } from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 import { InvoicingRepository } from '../repositories/invoicing.repository';
+import {
+  documentDocType,
+  documentRows,
+  drCrAmounts,
+  mergeRoleAccounts,
+  settleDocType,
+  settleRows,
+} from './invoice-voucher';
 
 /** The signed rial amounts one invoice document posts, in minor units (rial x 100). */
 interface PostedAmounts {
@@ -67,6 +77,7 @@ export class InvoicePostingService {
     private readonly invoicingRepository: InvoicingRepository,
     private readonly inventoryService: InventoryService,
     private readonly accountingService: AccountingService,
+    private readonly postingRules: PostingRulesService,
     @Optional() private readonly stockDocuments?: StockDocumentsRepository,
   ) {}
 
@@ -122,6 +133,7 @@ export class InvoicePostingService {
         'document',
         this.movesStock(invoice),
       );
+      const overrides = await this.roleOverrides(invoice, 'issue', accounts);
       // One transaction: stock movement, journal entry and the posting marker commit together
       // or not at all, and the invoice row lock makes a concurrent run wait and then no-op.
       await this.invoicingRepository.transaction(async (manager) => {
@@ -138,23 +150,22 @@ export class InvoicePostingService {
         }
         const meta = await this.moveStockAndMeasure(locked, manager);
         const stockDocumentId = await this.recordStockDocument(locked, meta, manager);
-        const entry = await this.accountingService.createJournalEntry(
-          locked.tenantId,
-          {
-            entryNumber: this.entryNumber(locked, 'ISSUED'),
-            date: this.entryDate(locked.issuedAt),
-            description: `صدور صورتحساب ${locked.taxInvoiceNumber}`,
-            lines: this.documentLines(locked, this.fromMeta(meta), accounts, false),
-          },
+        const entry = await this.postVoucher(
+          locked,
+          'ISSUED',
+          this.entryDate(locked.issuedAt),
+          `صدور صورتحساب ${locked.taxInvoiceNumber}`,
+          this.documentRequest(locked, this.fromMeta(meta), false),
+          overrides,
           manager,
         );
         if (stockDocumentId !== null) {
-          await manager.update('erp_stock_documents', { id: stockDocumentId, tenantId: locked.tenantId }, { journalEntryId: entry.id });
+          await manager.update('erp_stock_documents', { id: stockDocumentId, tenantId: locked.tenantId }, { journalEntryId: entry.entryId });
         }
         await this.invoicingRepository.updatePosting(
           locked.tenantId,
           locked.id,
-          { journalEntryId: entry.id, postingError: null, postingMeta: meta },
+          { journalEntryId: entry.entryId, postingError: null, postingMeta: meta },
           manager,
         );
       });
@@ -193,6 +204,7 @@ export class InvoicePostingService {
 
     try {
       const accounts = await this.resolveAccountMap(invoice, 'payment', false);
+      const overrides = await this.roleOverrides(invoice, 'settle', accounts);
       await this.invoicingRepository.transaction(async (manager) => {
         const locked = await this.invoicingRepository.findByIdForPosting(
           invoice!.tenantId,
@@ -209,38 +221,23 @@ export class InvoicePostingService {
         const owed = this.postedOf(locked).receivable;
         const sale = this.directionOf(locked) === InvoiceDirection.SALE;
         // Sale: cash comes in, receivable falls. Purchase: payable falls, cash goes out.
-        const sign = sale ? 1n : -1n;
         const split = this.splitPayments(locked, owed);
-        const lines = this.toLines([
-          ...split.map(([method, amount]): [string, bigint, string] => [
-            method === 'CARD' ? accounts.posClearing : accounts.cash,
-            sign * amount,
-            sale
-              ? method === 'CARD'
-                ? 'دریافت از طریق پوز'
-                : 'دریافت نقدی/بانکی بابت صورتحساب'
-              : 'پرداخت نقدی/بانکی بابت صورتحساب',
-          ]),
-          [
-            sale ? accounts.receivable : accounts.payable,
-            -sign * owed,
-            sale ? 'تسویه حساب‌های دریافتنی' : 'تسویه حساب‌های پرداختنی',
-          ],
-        ]);
-        const entry = await this.accountingService.createJournalEntry(
-          locked.tenantId,
+        const entry = await this.postVoucher(
+          locked,
+          'PAID',
+          this.entryDate(locked.paidAt ?? locked.issuedAt),
+          `تسویه صورتحساب ${locked.taxInvoiceNumber}`,
           {
-            entryNumber: this.entryNumber(locked, 'PAID'),
-            date: this.entryDate(locked.paidAt ?? locked.issuedAt),
-            description: `تسویه صورتحساب ${locked.taxInvoiceNumber}`,
-            lines,
+            docType: settleDocType(sale, split),
+            amounts: drCrAmounts(settleRows(sale, split, owed)),
           },
+          overrides,
           manager,
         );
         await this.invoicingRepository.updatePosting(
           locked.tenantId,
           locked.id,
-          { paidJournalEntryId: entry.id, postingError: null },
+          { paidJournalEntryId: entry.entryId, postingError: null },
           manager,
         );
       });
@@ -279,6 +276,7 @@ export class InvoicePostingService {
         (invoice.postingMeta?.lines.length ?? 0) > 0 ||
           (!invoice.postingMeta && this.movesStock(invoice)),
       );
+      const overrides = await this.roleOverrides(invoice, 'cancel', accounts);
 
       await this.invoicingRepository.transaction(async (manager) => {
         const locked = await this.invoicingRepository.findByIdForPosting(
@@ -298,20 +296,19 @@ export class InvoicePostingService {
 
         const posted = this.postedOf(locked);
         await this.reverseStock(locked, manager);
-        const entry = await this.accountingService.createJournalEntry(
-          locked.tenantId,
-          {
-            entryNumber: this.entryNumber(locked, 'CANCEL'),
-            date: this.entryDate(locked.issuedAt),
-            description: `ابطال صورتحساب ${locked.taxInvoiceNumber}`,
-            lines: this.documentLines(locked, posted, accounts, true),
-          },
+        const entry = await this.postVoucher(
+          locked,
+          'CANCEL',
+          this.entryDate(locked.issuedAt),
+          `ابطال صورتحساب ${locked.taxInvoiceNumber}`,
+          this.documentRequest(locked, posted, true),
+          overrides,
           manager,
         );
         await this.invoicingRepository.updatePosting(
           locked.tenantId,
           locked.id,
-          { reversalJournalEntryId: entry.id, postingError: null },
+          { reversalJournalEntryId: entry.entryId, postingError: null },
           manager,
         );
       });
@@ -695,51 +692,79 @@ export class InvoicePostingService {
   }
 
   /**
-   * Journal lines for one document, as signed debits (a negative debit is a credit):
+   * Template and amounts of one document voucher, as signed debits (a negative debit is a credit):
    *   sale      AR +receivable, Sales -net, VAT payable -vat, Inventory +stock, COGS -stock
    *   purchase  Inventory +stock, Purchases +(net-stock), VAT credit +vat, AP -receivable
    * `reverse` mirrors every line, which is exactly what a cancellation books.
    */
-  private documentLines(
+  private documentRequest(
     invoice: InvoiceEntity,
     amounts: PostedAmounts,
-    accounts: AccountMap,
     reverse: boolean,
-  ): JournalEntryLineDto[] {
-    const sign = reverse ? -1n : 1n;
+  ): { docType: string; amounts: Record<string, bigint> } {
     const sale = this.directionOf(invoice) === InvoiceDirection.SALE;
-    const rows: Array<[string, bigint, string]> = sale
-      ? [
-          [accounts.receivable, amounts.receivable, `صدور صورتحساب ${invoice.taxInvoiceNumber}`],
-          [accounts.sales, -amounts.net, 'درآمد فروش'],
-          [accounts.vat, -amounts.vat, 'مالیات بر ارزش افزوده پرداختنی'],
-          [accounts.inventory, amounts.stock, 'تغییر موجودی کالا'],
-          [accounts.cogs, -amounts.stock, 'بهای تمام‌شده کالای فروش‌رفته'],
-        ]
-      : [
-          [accounts.inventory, amounts.stock, 'ورود کالا به انبار'],
-          [accounts.purchases, amounts.net - amounts.stock, 'خرید کالا و خدمات'],
-          [accounts.vatReceivable, amounts.vat, 'مالیات بر ارزش افزوده خرید'],
-          [accounts.payable, -amounts.receivable, `بدهی بابت صورتحساب ${invoice.taxInvoiceNumber}`],
-        ];
-    return this.toLines(rows.map(([code, debit, text]) => [code, debit * sign, text]));
+    return {
+      docType: documentDocType(sale, reverse),
+      amounts: drCrAmounts(documentRows(sale, amounts, reverse)),
+    };
   }
 
-  /** Signed debits to ledger lines; zero amounts are dropped. */
-  private toLines(rows: Array<[string, bigint, string]>): JournalEntryLineDto[] {
-    const lines: JournalEntryLineDto[] = [];
-    for (const [accountCode, debit, description] of rows) {
-      if (debit > 0n) {
-        lines.push({ accountCode, debit: minorToDecimal(debit), description });
-      } else if (debit < 0n) {
-        lines.push({ accountCode, credit: minorToDecimal(-debit), description });
-      }
-    }
-    // Debits first, then credits (stable): the order a bookkeeper reads a voucher in.
-    return [
-      ...lines.filter((line) => line.debit !== undefined),
-      ...lines.filter((line) => line.debit === undefined),
+  /** One voucher through the posting rules engine; idempotent per invoice and document type. */
+  private postVoucher(
+    invoice: InvoiceEntity,
+    suffix: string,
+    date: string,
+    description: string,
+    request: { docType: string; amounts: Record<string, bigint> },
+    overrides: RoleAccounts,
+    manager: EntityManager,
+  ) {
+    return this.postingRules.post(
+      invoice.tenantId,
+      {
+        docType: request.docType,
+        sourceType: 'invoice',
+        sourceId: invoice.id,
+        date,
+        amounts: request.amounts,
+        description,
+        entryNumber: this.entryNumber(invoice, suffix),
+        overrides,
+      },
+      manager,
+    );
+  }
+
+  /**
+   * Accounts per role: the ones resolved the legacy way (name match, else create 1201/4101/...), unless the
+   * tenant mapped that role on the posting-rules settings page (cancel follows the issue mapping).
+   */
+  private async roleOverrides(
+    invoice: InvoiceEntity,
+    phase: 'issue' | 'cancel' | 'settle',
+    accounts: Partial<AccountMap>,
+  ): Promise<RoleAccounts> {
+    const links: Array<[keyof AccountMap, PostingRole]> = [
+      ['receivable', 'receivable'],
+      ['sales', 'revenue'],
+      ['vat', 'vat_output'],
+      ['inventory', 'inventory'],
+      ['cogs', 'cogs'],
+      ['payable', 'payable'],
+      ['purchases', 'purchases'],
+      ['vatReceivable', 'vat_input'],
+      ['cash', 'cash'],
+      ['posClearing', 'pos_clearing'],
     ];
+    const legacy: Partial<Record<PostingRole, string>> = {};
+    for (const [key, role] of links) {
+      const code = accounts[key];
+      if (code) legacy[role] = code;
+    }
+    const sale = this.directionOf(invoice) === InvoiceDirection.SALE;
+    const docType = `invoice.${sale ? 'sale' : 'purchase'}.${phase === 'cancel' ? 'issue' : phase}`;
+    const described = (await this.postingRules.describe(invoice.tenantId)).find((d) => d.docType === docType);
+    return mergeRoleAccounts(legacy, described);
   }
 
   /** Stock value pulled toward the net so it never exceeds it (rounding only). */

@@ -27,12 +27,87 @@ const dr = (role: PostingRole, amount: string, description: string, party = fals
 const cr = (role: PostingRole, amount: string, description: string, party = false): TemplateLine => ({ role, side: 'credit', amount, description, party });
 
 /**
+ * Invoicing vouchers (#378). One invoice document posts one voucher whose lines can fall on either
+ * side (a return, a cancel and a corrective flip the sign), and the engine refuses negative amounts.
+ * So every row is a pair of amounts, `<key>Dr` and `<key>Cr` (one of them 0, the zero line is dropped):
+ * all debit rows first, then all credit rows, each in row order. That is exactly the order the old
+ * posting service produced ("debits first, then credits, stable"). Descriptions are the old ones, except
+ * the party rows of the issue and cancel vouchers: a template line text is static and cannot carry the
+ * invoice number, so those rows have no text and the ledger reports fall back to the voucher description
+ * («صدور صورتحساب <number>» / «ابطال صورتحساب <number>»), which does carry it.
+ * Defaults are the codes invoicing created before the engine (1201/4101/2301/2101/1401/5101/5201/1301/1010/1015).
+ */
+const INVOICE_LEGACY: Readonly<Partial<Record<PostingRole, string>>> = {
+  receivable: '1201',
+  revenue: '4101',
+  vat_output: '2301',
+  payable: '2101',
+  vat_input: '1401',
+  cogs: '5101',
+  purchases: '5201',
+  inventory: '1301',
+  cash: '1010',
+  pos_clearing: '1015',
+};
+
+type InvoiceRow = readonly [key: string, role: PostingRole, description: string, party?: boolean];
+
+function invoiceTemplate(docType: string, title: string, rows: readonly InvoiceRow[]): PostingTemplate {
+  return {
+    docType,
+    title,
+    amounts: rows.flatMap(([key]) => [`${key}Dr`, `${key}Cr`]),
+    lines: [
+      ...rows.map(([key, role, text, party]) => dr(role, `${key}Dr`, text, party)),
+      ...rows.map(([key, role, text, party]) => cr(role, `${key}Cr`, text, party)),
+    ],
+    defaults: INVOICE_LEGACY,
+  };
+}
+
+const SALE_ROWS: readonly InvoiceRow[] = [
+  ['receivable', 'receivable', '', true],
+  ['sales', 'revenue', 'درآمد فروش'],
+  ['vat', 'vat_output', 'مالیات بر ارزش افزوده پرداختنی'],
+  ['stock', 'inventory', 'تغییر موجودی کالا'],
+  ['cogs', 'cogs', 'بهای تمام‌شده کالای فروش‌رفته'],
+];
+const PURCHASE_ROWS: readonly InvoiceRow[] = [
+  ['stock', 'inventory', 'ورود کالا به انبار'],
+  ['purchases', 'purchases', 'خرید کالا و خدمات'],
+  ['vat', 'vat_input', 'مالیات بر ارزش افزوده خرید'],
+  ['payable', 'payable', '', true],
+];
+
+/** Settlement rows: cash/bank and POS clearing (card) in the order of the first payment, then the party. */
+function settleRows(sale: boolean, cardFirst: boolean): readonly InvoiceRow[] {
+  const cash: InvoiceRow = ['cash', 'cash', sale ? 'دریافت نقدی/بانکی بابت صورتحساب' : 'پرداخت نقدی/بانکی بابت صورتحساب'];
+  const card: InvoiceRow = ['card', 'pos_clearing', sale ? 'دریافت از طریق پوز' : 'پرداخت نقدی/بانکی بابت صورتحساب'];
+  const party: InvoiceRow = sale
+    ? ['party', 'receivable', 'تسویه حساب‌های دریافتنی', true]
+    : ['party', 'payable', 'تسویه حساب‌های پرداختنی', true];
+  return [...(cardFirst ? [card, cash] : [cash, card]), party];
+}
+
+export const INVOICE_TEMPLATES: readonly PostingTemplate[] = [
+  invoiceTemplate('invoice.sale.issue', 'صدور فاکتور فروش', SALE_ROWS),
+  invoiceTemplate('invoice.sale.cancel', 'ابطال فاکتور فروش', SALE_ROWS),
+  invoiceTemplate('invoice.purchase.issue', 'صدور فاکتور خرید', PURCHASE_ROWS),
+  invoiceTemplate('invoice.purchase.cancel', 'ابطال فاکتور خرید', PURCHASE_ROWS),
+  invoiceTemplate('invoice.sale.settle', 'تسویه فاکتور فروش و فروش پوز', settleRows(true, false)),
+  invoiceTemplate('invoice.sale.settle_card_first', 'تسویه فاکتور فروش (پوز اول)', settleRows(true, true)),
+  invoiceTemplate('invoice.purchase.settle', 'تسویه فاکتور خرید', settleRows(false, false)),
+  invoiceTemplate('invoice.purchase.settle_card_first', 'تسویه فاکتور خرید (پوز اول)', settleRows(false, true)),
+];
+
+/**
  * One template per document type. Adopting modules pass amounts; the engine maps roles to the
  * tenant's accounts, drops zero lines and refuses a voucher that does not balance.
  * New adopting modules add their template here (and a spec comparing it with their old output).
  */
 export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
   ...CHEQUE_TEMPLATES,
+  ...INVOICE_TEMPLATES,
   {
     docType: 'invoice.sale',
     title: 'فاکتور فروش',

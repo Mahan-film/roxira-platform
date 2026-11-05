@@ -31,6 +31,8 @@ import { InvoicePostingService } from './services/invoice-posting.service';
 import { InvoicingService } from './services/invoicing.service';
 import { PosSaleService } from './services/pos-sale.service';
 import { CreatePosSaleDto } from './dto/pos-sale.dto';
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -80,7 +82,12 @@ describePg('POS sales on PostgreSQL', () => {
     );
     inventory = new InventoryService(inventoryRepo);
     const invoicingRepo = new InvoicingRepository(ds.getRepository(InvoiceEntity), ds);
-    const posting = new InvoicePostingService(invoicingRepo, inventory, accounting);
+    const posting = new InvoicePostingService(
+      invoicingRepo,
+      inventory,
+      accounting,
+      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
+    );
     const crm = new CrmRepository(ds.getRepository(CrmLeadEntity), ds.getRepository(ContactMessageEntity));
     const identity = new CustomerIdentityService(crm);
     const tenants = new TenantsRepository(ds.getRepository(TenantEntity));
@@ -207,6 +214,20 @@ describePg('POS sales on PostgreSQL', () => {
     const b = await pos.createSale(T2, dto);
     expect(b.replayed).toBe(false);
     expect(b.invoice.id).not.toBe(a.invoice.id);
+  });
+
+  it('the receivable line has no text of its own, so the ledger shows the voucher description with the invoice number', async () => {
+    const { invoice } = await pos.createSale(T1, sale({ customer: { phone: '09120000777' } }));
+    const rows = await q<{ description: string | null; entry_description: string }>(
+      `SELECT l.description, e.description AS entry_description FROM fin_journal_entry_lines l
+         JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+         JOIN fin_chart_of_accounts a ON a.id = l.account_id
+        WHERE e.entry_number = $1 AND a.name LIKE '%دریافتنی%'`,
+      ['INV-' + invoice.id + '-ISSUED'],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].description).toBeNull();
+    expect(rows[0].entry_description).toContain(invoice.taxInvoiceNumber);
   });
 
   it('splits payments: card goes to POS clearing, cash to the cash account', async () => {

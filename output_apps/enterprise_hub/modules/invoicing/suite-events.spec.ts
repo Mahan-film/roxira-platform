@@ -1,5 +1,6 @@
 import { InvoiceJurisdiction } from './enums/invoice-jurisdiction.enum';
 import 'reflect-metadata';
+import { fakePostingRules } from './__fixtures__/fake-posting-rules';
 import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 import { Job, Queue } from 'bullmq';
 import { AccountResponseDto } from '../accounting/dto/account-response.dto';
@@ -245,6 +246,7 @@ const buildPosting = (invoices: InvoiceEntity[] = []) => {
     repo as unknown as InvoicingRepository,
     inventory.service,
     accounting.service,
+    fakePostingRules(accounting.service),
   );
   return { repo, inventory, accounting, posting };
 };

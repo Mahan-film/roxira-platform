@@ -8,6 +8,7 @@ import { InvoiceJurisdiction } from '../invoicing/enums/invoice-jurisdiction.enu
 import { EInvoiceType, InvoiceDirection, InvoiceSubject } from '../invoicing/enums/invoice-kind.enum';
 import { InvoiceStatus } from '../invoicing/enums/invoice-status.enum';
 import { InvoicePostingService } from '../invoicing/services/invoice-posting.service';
+import { fakePostingRules } from '../invoicing/__fixtures__/fake-posting-rules';
 import { buildVoucher } from '../invoice_capture/domain/voucher';
 import { vatReturnTable } from './reports/vat-return-export';
 import { SeasonalReportRepository } from './reports/seasonal-report.repository';
@@ -51,7 +52,7 @@ function ledger() {
       Object.assign(rows.find((r) => r.id === id) ?? {}, data);
     },
   };
-  const posting = new InvoicePostingService(repo as never, {} as never, accounting as never);
+  const posting = new InvoicePostingService(repo as never, {} as never, accounting as never, fakePostingRules(accounting as never));
   const post = async (invoice: InvoiceEntity) => {
     rows.push(invoice);
     await posting.handle({ tenantId: TENANT, invoiceId: invoice.id, status: InvoiceStatus.ISSUED });
