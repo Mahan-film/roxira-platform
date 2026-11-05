@@ -1,4 +1,4 @@
-import { ageing, AgeingInputError, AgeingLine, ageingBuckets } from './ageing';
+import { ageing, AgeingAllocationSource, AgeingInputError, AgeingLine, ageingBuckets } from './ageing';
 
 const line = (
   day: string,
@@ -132,6 +132,36 @@ describe('ageing', () => {
       expect(row.amounts.reduce((sum, value) => sum + value, 0n)).toBe(row.open);
       expect(row.open === 0n || row.unapplied === 0n).toBe(true);
     }
+  });
+
+  describe('with an allocation source (#237)', () => {
+    const invoices = [
+      { ...line('2026-07-01', 1000n, 0n), ref: 'INV-1' }, // 123 days
+      { ...line('2026-10-20', 500n, 0n), ref: 'INV-2' }, // 12 days
+    ];
+    const receipt = { ...line('2026-10-25', 0n, 500n), ref: 'RCV-1' };
+
+    it('a payment allocated to the newest invoice leaves the oldest in its old bucket', () => {
+      const source: AgeingAllocationSource = (settlement) =>
+        settlement.ref === 'RCV-1' ? [{ itemRef: 'INV-2', amount: 500n }] : [];
+      const row = ageing([...invoices, receipt], { side: 'receivable', asOf, allocations: source }).rows[0];
+      expect(row.amounts).toEqual([0n, 0n, 0n, 1000n]);
+      expect(row.oldestOpenDay).toBe('2026-07-01');
+      // FIFO, the default, would have paid half of the oldest instead.
+      expect(ageing([...invoices, receipt], { side: 'receivable', asOf }).rows[0].amounts).toEqual([500n, 0n, 0n, 500n]);
+    });
+
+    it('settles what the source does not cover, or an unknown ref, oldest first', () => {
+      const source: AgeingAllocationSource = () => [
+        { itemRef: 'INV-2', amount: 200n },
+        { itemRef: 'NO-SUCH', amount: 100n },
+      ];
+      const row = ageing([...invoices, { ...receipt, credit: 1600n }], { side: 'receivable', asOf, allocations: source })
+        .rows[0];
+      expect(row.amounts).toEqual([0n, 0n, 0n, 0n]);
+      expect(row.unapplied).toBe(100n);
+      expect(row.balance).toBe(-100n);
+    });
   });
 
   it('rejects an invalid asOf or line day', () => {

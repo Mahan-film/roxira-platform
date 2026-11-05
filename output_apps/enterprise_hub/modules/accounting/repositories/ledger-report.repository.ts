@@ -45,6 +45,8 @@ export interface AgeingLineRow {
   day: string;
   debit: string;
   credit: string;
+  /** Source document, for real allocations (#237): see `reports/ageing-allocations.ts`. */
+  ref?: string | null;
 }
 
 export interface LedgerFilter {
@@ -181,11 +183,21 @@ export class LedgerReportRepository {
   ): Promise<AgeingLineRow[]> {
     const party = filter.partyCode ? `AND l.party_code = $4` : '';
     return this.scope.run(tenantId, (m) => m.query(
-      `SELECT a.code AS "accountCode", a.name AS "accountName", l.party_code AS "partyCode",
-              to_char(${DAY}, 'YYYY-MM-DD') AS "day", l.debit AS "debit", l.credit AS "credit"
+      `WITH src AS (
+         -- 'inv:' sorts first, so an entry that is both an invoice's issue and paid posting is the invoice.
+         SELECT DISTINCT ON (entry_id) entry_id, ref FROM (
+           SELECT journal_entry_id AS entry_id, 'inv:' || id AS ref FROM invoices WHERE tenant_id = $1
+           UNION ALL SELECT paid_journal_entry_id, 'settle:' || id FROM invoices WHERE tenant_id = $1
+           UNION ALL SELECT reversal_journal_entry_id, 'settle:' || id FROM invoices WHERE tenant_id = $1
+           UNION ALL SELECT journal_entry_id, 'trs:' || id FROM fin_treasury_documents WHERE tenant_id = $1
+         ) refs WHERE entry_id IS NOT NULL ORDER BY entry_id, ref)
+       SELECT a.code AS "accountCode", a.name AS "accountName", l.party_code AS "partyCode",
+              to_char(${DAY}, 'YYYY-MM-DD') AS "day", l.debit AS "debit", l.credit AS "credit",
+              src.ref AS "ref"
          FROM fin_journal_entry_lines l
          JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
          JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
+         LEFT JOIN src ON src.entry_id = e.id
         WHERE l.tenant_id = $1 AND l.account_id = ANY($2) AND e.status = 'POSTED' AND ${NOT_PAIR}
           AND ${DAY} <= $3 ${party}
         ORDER BY ${DAY} ASC, e.id ASC, l.id ASC`,

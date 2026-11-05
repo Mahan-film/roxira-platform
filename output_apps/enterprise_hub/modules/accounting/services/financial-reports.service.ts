@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { fromDb, fromMinor } from '../money';
 import { AgeingQueryDto, LedgerQueryDto, ReportPeriodDto, SubsidiaryQueryDto, TrialBalanceQueryDto } from '../dto/report.dto';
 import { AccountType, ReportLine } from '../enums/accounting.enum';
@@ -27,6 +28,7 @@ import {
   trialBalanceRows,
 } from '../reports/statements';
 import { ageing, AgeingInputError, AgeingReport } from '../reports/ageing';
+import { AGEING_ALLOCATIONS, AllocationLister, allocationSource } from '../reports/ageing-allocations';
 import type { ChartAccountRow } from '../reports/report-tables';
 
 export interface ResolvedPeriod {
@@ -105,7 +107,19 @@ export class FinancialReportsService {
     private readonly accounting: AccountingRepository,
     private readonly fiscalYears: FiscalYearRepository,
     private readonly ledger: LedgerReportRepository,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
+
+  private readonly log = new Logger(FinancialReportsService.name);
+
+  /** Treasury's allocations when that module is loaded (it binds AGEING_ALLOCATIONS), else none. */
+  private allocationLister(): AllocationLister | null {
+    try {
+      return this.moduleRef?.get<AllocationLister>(AGEING_ALLOCATIONS, { strict: false }) ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   async resolvePeriod(tenantId: string, query: ReportPeriodDto): Promise<ResolvedPeriod> {
     for (const day of [query.from, query.to]) {
@@ -311,6 +325,14 @@ export class FinancialReportsService {
           partyCode: query.partyCode,
         })
       : [];
+    // Real settlements (#237): a receipt allocated to an invoice settles that invoice; the rest is FIFO.
+    const lister = rows.some((row) => row.ref) ? this.allocationLister() : null;
+    const allocations = allocationSource(
+      lister ? await lister.listAllocations(tenantId, { partyCode: query.partyCode, asOf: to }) : [],
+    );
+    if (!lister && rows.some((row) => row.ref?.startsWith('trs:'))) {
+      this.log.warn('Treasury lines found but no allocation source is bound; ageing them FIFO.');
+    }
     try {
       const report = ageing(
         rows.map((row) => ({
@@ -320,8 +342,9 @@ export class FinancialReportsService {
           day: row.day,
           debit: fromDb(row.debit),
           credit: fromDb(row.credit),
+          ref: row.ref ?? null,
         })),
-        { side, asOf: to, edges: query.edges },
+        { side, asOf: to, edges: query.edges, allocations },
       );
       return { ...report, accountCodes };
     } catch (error) {
