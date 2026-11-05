@@ -238,3 +238,9 @@ def test_provider_key_limit_trips_the_cap(monkeypatch, tmp_path):
     status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "executor"]))
     assert status == "capped"
     assert fleet.paid_spent_today(tmp_path) >= 2.0
+
+
+def test_one_free_429_plus_one_other_failure_does_not_reach_paid(monkeypatch, tmp_path):
+    called = _lane_env(monkeypatch, tmp_path, {"pool/a": "429 Too Many Requests", "pool/b": "segfault"})
+    status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "pool/b", "executor"]))
+    assert status == "config" and called == ["pool/a", "pool/b"]

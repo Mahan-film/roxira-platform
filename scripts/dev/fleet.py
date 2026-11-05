@@ -316,12 +316,13 @@ def lane_opencode(job: dict[str, Any], wt: Path, log: Path, cfg: dict[str, Any])
     """-> (status, author_model); status ok | rate | none | error."""
     lc = cfg["lanes"]["opencode"]
     hit_limit = False
-    free_rate_limited = False   # a free model failed with a genuine rate/quota error
+    free_rate_limited = 0       # free models that failed with a genuine rate/quota error
+    free_other_failure = 0      # free models that failed for any other reason (config, crash, empty answer)
     for alias in lc["models"][job.get("model_idx", 0):]:
         paid = is_paid_alias(alias)
         if paid:
-            if not free_rate_limited:
-                return "config", "opencode"   # never reach paid because of a config/auth/other failure
+            if not free_rate_limited or free_other_failure:
+                return "config", "opencode"   # paid only when EVERY free model hit a genuine rate/quota error
             if not paid_allowed(cfg):
                 return "capped", "opencode"
         model = worker_model(lc, alias)
@@ -338,8 +339,10 @@ def lane_opencode(job: dict[str, Any], wt: Path, log: Path, cfg: dict[str, Any])
         if parse_rate_limit(out, cfg["rate_limit"]["pattern"]) or rc == 124:
             hit_limit = True
             if not paid:
-                free_rate_limited = True
+                free_rate_limited += 1
             continue
+        if not paid:
+            free_other_failure += 1
         if dirty(wt):
             return "ok", model
     return ("rate" if hit_limit else "none"), "opencode"
