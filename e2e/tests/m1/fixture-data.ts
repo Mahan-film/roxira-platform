@@ -106,6 +106,156 @@ export function computeTotalsFromCsv(): SampleCompanyTotals {
   };
 }
 
+// --- Invoices.csv parsing and FIFO stock trace for gate steps 07 and 08 (pure, no product calls) ---
+
+export interface FixtureInvoiceLine {
+  itemCode: string;
+  quantity: number;
+  unitPrice: bigint;
+  /** Line total excl. VAT («مبلغ»). */
+  amount: bigint;
+}
+
+export interface FixtureInvoice {
+  number: string;
+  direction: 'SALE' | 'PURCHASE';
+  date: string;
+  /** «تسویه‌شده» (settled) versus «صادرشده» (issued/unpaid). */
+  settled: boolean;
+  lines: FixtureInvoiceLine[];
+  /** Line totals incl. VAT («جمع نهایی (ریال)») over the unique rows of the invoice. */
+  totalInclVat: bigint;
+}
+
+/** The 238 distinct invoices of invoices.csv: exact duplicate rows deduped, Persian digits parsed. */
+export function parseFixtureInvoices(): FixtureInvoice[] {
+  const { header, rows } = readCsv(SAMPLE_COMPANY_FILES.invoices);
+  const west = (t: string) =>
+    t
+      .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  const cell = (row: string[], name: string) => west(row[header.indexOf(name)].trim());
+  const unique = [...new Map(rows.map((r) => [r.join(','), r])).values()];
+  const byNumber = new Map<string, FixtureInvoice>();
+  for (const row of unique) {
+    const number = cell(row, 'شماره صورتحساب');
+    const type = cell(row, 'نوع صورتحساب');
+    let invoice = byNumber.get(number);
+    if (!invoice) {
+      invoice = {
+        number,
+        direction: type === SALE ? 'SALE' : type === PURCHASE ? 'PURCHASE' : (() => {
+          throw new Error(`unexpected invoice type «${type}» for ${number}`);
+        })(),
+        date: cell(row, 'تاریخ'),
+        settled: cell(row, 'وضعیت تسویه') === SETTLED,
+        lines: [],
+        totalInclVat: 0n,
+      };
+      byNumber.set(number, invoice);
+    }
+    invoice.lines.push({
+      itemCode: cell(row, 'کد کالا'),
+      quantity: Number(cell(row, 'تعداد')),
+      unitPrice: toRial(cell(row, 'بهای واحد (ریال)')),
+      amount: toRial(cell(row, 'مبلغ')),
+    });
+    invoice.totalInclVat += toRial(cell(row, 'جمع نهایی (ریال)'));
+  }
+  return [...byNumber.values()];
+}
+
+/** Invoice date ascending, ties broken by invoice number (the posting order of steps 07 and 08). */
+export function sortInvoices(invoices: FixtureInvoice[]): FixtureInvoice[] {
+  return [...invoices].sort((a, b) => (a.date === b.date ? (a.number < b.number ? -1 : 1) : a.date < b.date ? -1 : 1));
+}
+
+export interface FifoTrace {
+  /** «invoiceNumber sku xN» for every sale line that exceeds the running stock at its date. */
+  oversold: string[];
+  /** FIFO cost (rial) consumed by each sale invoice that did post. */
+  consumedBySale: Map<string, bigint>;
+  /** Remaining FIFO quantity and value per sku after every movement. */
+  closingQuantityBySku: Map<string, bigint>;
+  closingValueBySku: Map<string, bigint>;
+  /** Sum of items.csv quantity x unitCost; must equal README_TOTALS.stockValue. */
+  totalOpeningValue: bigint;
+}
+
+/** Sum of every purchase line excl. VAT («مبلغ») — the stock the purchases bring in. */
+export function fifoPurchaseAmountSum(invoices: FixtureInvoice[]): bigint {
+  return invoices
+    .filter((i) => i.direction === 'PURCHASE')
+    .reduce((acc, i) => acc + i.lines.reduce((a, l) => a + l.amount, 0n), 0n);
+}
+
+/**
+ * Independent FIFO replay over the fixture: the items.csv opening batch per sku (oldest), then purchase
+ * lines by invoice date ascending, consuming sale lines by invoice date ascending. A sale that exceeds
+ * the running stock at its date moves no stock (its posting fails whole in the product).
+ */
+export function fifoStockTrace(invoices: FixtureInvoice[]): FifoTrace {
+  const items = readCsv(SAMPLE_COMPANY_FILES.items);
+  const iSku = items.header.indexOf('کد کالا');
+  const iQty = items.header.indexOf('موجودی');
+  const iCost = items.header.indexOf('بهای واحد (ریال)');
+  const opening = new Map<string, { quantity: bigint; unitCost: bigint }>();
+  for (const row of items.rows) opening.set(row[iSku], { quantity: toRial(row[iQty]), unitCost: toRial(row[iCost]) });
+
+  const layers = new Map<string, Array<{ quantity: bigint; unitCost: bigint }>>();
+  for (const [sku, o] of opening) layers.set(sku, [{ quantity: o.quantity, unitCost: o.unitCost }]);
+
+  const oversold: string[] = [];
+  const consumedBySale = new Map<string, bigint>();
+  for (const invoice of sortInvoices(invoices)) {
+    if (invoice.direction === 'PURCHASE') {
+      for (const line of invoice.lines) {
+        const stack = layers.get(line.itemCode) ?? [];
+        stack.push({ quantity: BigInt(line.quantity), unitCost: line.unitPrice });
+        layers.set(line.itemCode, stack);
+      }
+      continue;
+    }
+    const demand = new Map<string, bigint>();
+    let covered = true;
+    for (const line of invoice.lines) {
+      let available = 0n;
+      for (const layer of layers.get(line.itemCode) ?? []) available += layer.quantity;
+      demand.set(line.itemCode, (demand.get(line.itemCode) ?? 0n) + BigInt(line.quantity));
+      if ((demand.get(line.itemCode) ?? 0n) > available) {
+        oversold.push(`${invoice.number} ${line.itemCode} x${line.quantity}`);
+        covered = false;
+      }
+    }
+    if (!covered) continue;
+    let cost = 0n;
+    for (const line of invoice.lines) {
+      let need = BigInt(line.quantity);
+      const stack = layers.get(line.itemCode)!;
+      while (need > 0n) {
+        const layer = stack[0];
+        const take = layer.quantity < need ? layer.quantity : need;
+        cost += take * layer.unitCost;
+        layer.quantity -= take;
+        need -= take;
+        if (layer.quantity === 0n) stack.shift();
+      }
+    }
+    consumedBySale.set(invoice.number, cost);
+  }
+
+  const closingQuantityBySku = new Map<string, bigint>();
+  const closingValueBySku = new Map<string, bigint>();
+  let totalOpeningValue = 0n;
+  for (const [sku, stack] of layers) {
+    closingQuantityBySku.set(sku, stack.reduce((acc, l) => acc + l.quantity, 0n));
+    closingValueBySku.set(sku, stack.reduce((acc, l) => acc + l.quantity * l.unitCost, 0n));
+    const o = opening.get(sku)!;
+    totalOpeningValue += o.quantity * o.unitCost;
+  }
+  return { oversold, consumedBySale, closingQuantityBySku, closingValueBySku, totalOpeningValue };
+}
+
 /** Bank statement running balance: opening 1101 + deposits - withdrawals must land on the last «مانده». */
 export function bankStatementRollForward(): { opening: bigint; computedClosing: bigint; statedClosing: bigint } {
   const opening = readCsv(SAMPLE_COMPANY_FILES.openingBalances);

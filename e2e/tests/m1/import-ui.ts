@@ -86,6 +86,56 @@ export async function apiGet<T>(page: Page, route: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** PATCH /enterprise-hub/<route> with a JSON body through the app's own proxy (test tenant's owner). */
+export async function apiPatch<T>(page: Page, route: string, body: unknown): Promise<T> {
+  const token = await page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+  }, SESSION_STORAGE_KEY);
+  expect(token, 'the test session is in localStorage').toBeTruthy();
+  const response = await page.request.patch(`/api/backend/enterprise-hub/${route}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: body,
+  });
+  expect(response.status(), `PATCH ${route}`).toBe(200);
+  return (await response.json()) as T;
+}
+
+export interface InvoicePostingResult {
+  status: string;
+  journalEntryId: number | null;
+  postingError: string | null;
+  finalPayable: number;
+}
+
+/**
+ * Issues one invoice through the real API (`PATCH invoicing/:id` with status ISSUED) and waits for the
+ * asynchronous posting (a `suite-events` job) to finish: polls `GET invoicing/:id` every 250 ms for up
+ * to 30 s until `journalEntryId` or `postingError` appears. Fails with the invoice number and error.
+ * Call strictly one at a time so FIFO order holds.
+ */
+export async function issueAndWait(
+  page: Page,
+  invoiceId: string,
+  invoiceNumber: string,
+): Promise<InvoicePostingResult> {
+  await apiPatch(page, `invoicing/${invoiceId}`, { status: 'ISSUED' });
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const invoice = await apiGet<InvoicePostingResult>(page, `invoicing/${invoiceId}`);
+    if (invoice.journalEntryId !== null || invoice.postingError !== null) {
+      if (invoice.postingError !== null) {
+        throw new Error(`invoice ${invoiceNumber}: posting failed: ${invoice.postingError}`);
+      }
+      return invoice;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`invoice ${invoiceNumber}: no voucher and no error 30 s after issuing`);
+    }
+    await page.waitForTimeout(250);
+  }
+}
+
 /** API money (a JSON number, or a decimal string) -> integer rials. A fraction other than .00 is an error. */
 export function rials(value: number | string): bigint {
   const text = typeof value === 'number' ? value.toFixed(2) : value;
