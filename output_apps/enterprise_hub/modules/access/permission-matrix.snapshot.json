@@ -1268,10 +1268,10 @@
     "legacy_member": true
   },
   "GET /enterprise-hub/parties/ (PartiesController.list)": {
-    "policy": "crm:read",
+    "policy": "crm:read|accounting:read",
     "owner": true,
     "admin": true,
-    "accountant": false,
+    "accountant": true,
     "sales": true,
     "cheque_reviewer": false,
     "hr": false,
@@ -1279,10 +1279,10 @@
     "legacy_member": true
   },
   "GET /enterprise-hub/parties/by-code/:code (PartiesController.getByCode)": {
-    "policy": "crm:read",
+    "policy": "crm:read|accounting:read",
     "owner": true,
     "admin": true,
-    "accountant": false,
+    "accountant": true,
     "sales": true,
     "cheque_reviewer": false,
     "hr": false,

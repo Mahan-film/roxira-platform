@@ -33,7 +33,7 @@ async function allowed(
   const method = HANDLERS.find(([h]) => h === handler)![1];
   const request = { method, originalUrl: '/enterprise-hub/parties', url: '/enterprise-hub/parties', user: { ...user } };
   const context = {
-    getHandler: () => (PartiesController.prototype as Record<string, unknown>)[handler as string],
+    getHandler: () => (PartiesController.prototype as unknown as Record<string, unknown>)[handler as string],
     getClass: () => PartiesController,
     switchToHttp: () => ({ getRequest: () => request }),
   } as unknown as ExecutionContext;
@@ -48,7 +48,7 @@ const roleKeys = SYSTEM_ROLES.map((r) => r.key);
 
 describe('party master access', () => {
   it('the read alternatives are only on list and getByCode, never class-level', () => {
-    const proto = PartiesController.prototype as Record<string, unknown>;
+    const proto = PartiesController.prototype as unknown as Record<string, object>;
     expect(Reflect.getMetadata(ACCESS_ALSO_KEY, proto['list'])).toEqual([AccessModule.ACCOUNTING]);
     expect(Reflect.getMetadata(ACCESS_ALSO_KEY, proto['getByCode'])).toEqual([AccessModule.ACCOUNTING]);
     expect(Reflect.getMetadata(ACCESS_ALSO_KEY, proto['create'])).toBeUndefined();
