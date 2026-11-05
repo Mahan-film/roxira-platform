@@ -9,7 +9,14 @@ import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { ROLES_KEY } from '../auth/decorators/roles.decorator';
 import { AccessGuard } from './access.guard';
 import { AccessAction, AccessModule, CORE_MODULES, SYSTEM_ROLES, SystemRole } from './catalogue';
-import { ACCESS_ACTION_KEY, ACCESS_MODULE_KEY, ANY_MEMBER_KEY, AUTH_ONLY_KEY, actionForMethod } from './decorators';
+import {
+  ACCESS_ACTION_KEY,
+  ACCESS_ALSO_KEY,
+  ACCESS_MODULE_KEY,
+  ANY_MEMBER_KEY,
+  AUTH_ONLY_KEY,
+  actionForMethod,
+} from './decorators';
 
 /**
  * Permission matrix over EVERY controller in the app: each route must declare
@@ -73,7 +80,7 @@ const routes = loadRoutes();
 const reflector = new Reflector();
 
 type Kind = 'public' | 'authOnly' | 'platformAdmin' | 'anyMember' | 'module' | 'none';
-function classify(r: Route): { kind: Kind; module?: AccessModule; action?: AccessAction } {
+function classify(r: Route): { kind: Kind; module?: AccessModule; also?: AccessModule[]; action?: AccessAction } {
   const targets = [r.handler, r.controller];
   if (reflector.getAllAndOverride(IS_PUBLIC_KEY, targets)) return { kind: 'public' };
   if (reflector.getAllAndOverride(AUTH_ONLY_KEY, targets)) return { kind: 'authOnly' };
@@ -84,7 +91,12 @@ function classify(r: Route): { kind: Kind; module?: AccessModule; action?: Acces
   if (!module) return { kind: 'none' };
   const action =
     reflector.getAllAndOverride<AccessAction>(ACCESS_ACTION_KEY, [r.handler]) ?? actionForMethod(r.method);
-  return { kind: 'module', module, action };
+  return {
+    kind: 'module',
+    module,
+    also: reflector.getAllAndOverride<AccessModule[] | undefined>(ACCESS_ALSO_KEY, [r.handler]) ?? [],
+    action,
+  };
 }
 
 const TENANT = 'tenant-1';
@@ -145,10 +157,11 @@ describe('permission matrix (every controller)', () => {
     it('matches the permission catalogue on every module route', async () => {
       const wrong: string[] = [];
       for (const r of moduleRoutes) {
-        const { module, action } = classify(r);
+        const { module, also, action } = classify(r);
         const ok = await allowed(r, (s) => s.grant('u1', TENANT, role));
         const def = SYSTEM_ROLES.find((x) => x.key === role)!;
-        const expected = def.permissions.includes(`${module!}:${action!}` as never);
+        const alternatives = [module!, ...(also ?? [])];
+        const expected = alternatives.some((m) => def.permissions.includes(`${m}:${action!}` as never));
         if (ok !== expected) wrong.push(`${r.id} expected ${expected} got ${ok}`);
       }
       expect(wrong).toEqual([]);
@@ -242,6 +255,30 @@ describe('permission matrix (every controller)', () => {
       }
     });
 
+    it('accountant reads the party master through accounting:read but cannot create or update parties', async () => {
+      const party = routes.filter((r) => r.controller.name === 'PartiesController');
+      const byHandler = (name: string) => party.find((r) => r.id.endsWith(`PartiesController.${name})`));
+      for (const handler of ['list', 'getByCode']) {
+        expect(await allowed(byHandler(handler)!, (s) => s.grant('u1', TENANT, SystemRole.ACCOUNTANT))).toBe(true);
+      }
+      for (const handler of ['create', 'update']) {
+        expect(await allowed(byHandler(handler)!, (s) => s.grant('u1', TENANT, SystemRole.ACCOUNTANT))).toBe(false);
+      }
+    });
+
+    it('no role other than accountant, owner, admin, sales, read_only and legacy_member reads parties; hr and cheque_reviewer do not', async () => {
+      const party = routes.filter((r) => r.controller.name === 'PartiesController');
+      const list = party.find((r) => r.id.endsWith('PartiesController.list)'));
+      for (const role of roleKeys) {
+        const ok = await allowed(list!, (s) => s.grant('u1', TENANT, role));
+        const expected = [
+          SystemRole.OWNER, SystemRole.ADMIN, SystemRole.ACCOUNTANT,
+          SystemRole.SALES, SystemRole.READ_ONLY, SystemRole.LEGACY_MEMBER,
+        ].includes(role as SystemRole);
+        expect(ok).toBe(expected);
+      }
+    });
+
     it('only owner and admin can manage members, roles and structure', async () => {
       for (const role of roleKeys) {
         const ok = await can(role, AccessModule.MEMBERS, AccessAction.ADMIN);
@@ -263,7 +300,12 @@ describe('permission matrix (every controller)', () => {
     const matrix: Record<string, Record<string, boolean | string>> = {};
     for (const r of routes) {
       const c = classify(r);
-      const row: Record<string, boolean | string> = { policy: c.kind === 'module' ? `${c.module}:${c.action}` : c.kind };
+      const row: Record<string, boolean | string> = {
+        policy:
+          c.kind === 'module'
+            ? [c.module, ...(c.also ?? [])].map((m) => `${m}:${c.action}`).join('|')
+            : c.kind,
+      };
       if (c.kind === 'module' || c.kind === 'anyMember') {
         for (const role of roleKeys) row[role] = await allowed(r, (s) => s.grant('u1', TENANT, role));
       }

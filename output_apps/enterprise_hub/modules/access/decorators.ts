@@ -5,6 +5,7 @@ export const ACCESS_MODULE_KEY = 'roxira:accessModule';
 export const ACCESS_ACTION_KEY = 'roxira:accessAction';
 export const AUTH_ONLY_KEY = 'roxira:authOnly';
 export const ANY_MEMBER_KEY = 'roxira:anyMember';
+export const ACCESS_ALSO_KEY = 'roxira:accessAlsoModules';
 
 /**
  * Class decorator: every handler of the controller belongs to this module.
@@ -31,3 +32,9 @@ export function actionForMethod(method: string): AccessAction {
 
 /** Any verified, active member of the active organisation; no module permission needed (e.g. "my organisation"). */
 export const AnyMember = (): ClassDecorator & MethodDecorator => SetMetadata(ANY_MEMBER_KEY, true);
+
+/**
+ * Adds alternative modules for the same action on this handler only. Never use at class level.
+ * It never widens a write unless the caller wrote it on a write handler.
+ */
+export const AlsoAllowModule = (...modules: AccessModule[]): MethodDecorator => SetMetadata(ACCESS_ALSO_KEY, modules);
