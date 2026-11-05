@@ -94,7 +94,7 @@ export const MONEY_UNITS: ReadonlyArray<{ unit: MoneyUnit; label: string }> = [
   { unit: "million", label: "میلیون ریال" },
 ];
 
-const UNIT_SUFFIX: Record<MoneyUnit, string> = { rial: "ریال", toman: "تومان", million: "میلیون ریال" };
+export const UNIT_SUFFIX: Record<MoneyUnit, string> = { rial: "ریال", toman: "تومان", million: "میلیون ریال" };
 
 /** Rials per display unit, and how many decimals of that unit are kept. */
 const UNIT_STEP: Record<MoneyUnit, { divisor: bigint; decimals: number }> = {
