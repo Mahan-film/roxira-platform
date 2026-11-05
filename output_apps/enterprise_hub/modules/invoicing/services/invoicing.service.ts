@@ -1137,13 +1137,6 @@ export class InvoicingService {
     const discountChanged =
       dto.invoiceDiscount !== undefined || dto.invoiceDiscountPercent !== undefined;
     if (dto.items !== undefined || discountChanged) {
-      // An issued invoice keeps the rate of its issue date; a draft takes today's.
-      const defaultVatRate = await this.defaultVatRateForJurisdiction(
-        tenantId,
-        entity.jurisdiction,
-        entity.issuedAt ? new Date(entity.issuedAt) : new Date(),
-        dto.items,
-      );
       // Lines not sent are the stored ones, net of their old invoice-discount share; an invoice
       // discount not sent keeps the stored amount (spread again over the new lines).
       const scale = this.moneyScale(entity.currency);
@@ -1158,6 +1151,13 @@ export class InvoicingService {
           discount: this.roundTo(Number(line.discount) - Number(line.invoiceDiscountShare ?? 0), scale),
           vatRate: Number(line.vatRate),
         }));
+      // An issued invoice keeps the rate of its issue date; a draft takes today's.
+      const defaultVatRate = await this.defaultVatRateForJurisdiction(
+        tenantId,
+        entity.jurisdiction,
+        entity.issuedAt ? new Date(entity.issuedAt) : new Date(),
+        lines,
+      );
       const invoiceDiscount = discountChanged
         ? this.invoiceDiscountOf(dto)
         : this.invoiceDiscountOf({ invoiceDiscount: this.invoiceDiscountTotal(entity.items) });
