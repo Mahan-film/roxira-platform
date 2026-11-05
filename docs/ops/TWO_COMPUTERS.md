@@ -151,18 +151,39 @@ Do not copy `restic-dr.pass` to the laptop. The restic backup lives only on the 
   Push branches there to hand work over. Push them to GitHub when it is back. The pre-push guard runs here too.
 - **Not recommended:** an SMB/network share holding a repo. Locking, line endings and file watching break, and it exposes one disk to the other.
 
-## Sharing the Mac's LLM key pool with the laptop
+## LLM gateway on srv1 (both computers, through an ssh tunnel)
 
-Owner decision 2026-11-05: the laptop's OpenCode agents use the Mac's pool, but the real provider keys never leave the Mac.
+Owner decision 2026-11-05 (replaces the LAN proxy of #418, which broke whenever the VPN exit IP changed): the LLM
+gateway is the `roxira_keypool` LiteLLM container on srv1 (stable German IP, so Groq and Gemini work). The Mac and the
+laptop only reach it through an ssh tunnel; no public port is opened. Provider keys live on srv1 only.
 
-- **Proxy.** `scripts/infra/pool_share/` runs LiteLLM (docker, image already on the Mac) plus a private Postgres container (virtual keys need a database) as the launchd agent `ir.roxira.pool-share` (`KeepAlive`, restarts on failure). The config is rendered from `config/key_pool.yaml` at every start, so it has the same role chains as the server pool (`agent-light-free`, `agent-free`, `agent-free-paid`, `best-all`) and writes the cost log to `~/Library/Logs/roxira-pool-share/requests.jsonl`.
-- **Network.** It listens on one LAN address only (`en0`, port 4180; never `0.0.0.0`). The container itself is published on `127.0.0.1:4181`, because Docker Desktop cannot publish on the LAN address reliably; `lan_forward.py` is a small TCP forwarder from the LAN address to it. Port 4180/4181 are free in AGENTS.md section 7. The macOS firewall is off on the Mac; if it is turned on, allow only `python3` / port 4180.
-- **Install on the Mac:** `bash scripts/infra/pool_share/install.sh` (`--uninstall` removes the agent). The master key and DB password are generated into `~/Secrets/roxira/` (mode 600) and are never printed.
-- **Laptop key.** `bash scripts/dev/pool_key_rotate.sh` creates the virtual key `laptop-mahansudo` (2 USD per day on paid models, 60 requests/min, LLM routes and the five agent roles only) and writes it to `~/Secrets/roxira/laptop-pool.key`. Running it again revokes the old key first. `--revoke-only` cuts the laptop off. Free calls cost 0; when the daily budget is used up the whole key pauses until the next day.
-- **Laptop side.** The owner moves `laptop-pool.key` once (AirDrop or USB) into `~/Secrets/roxira/pool.env` as `ROXIRA_POOL_KEY=...`, then points OpenCode at `http://<mac-lan-address>:4180/v1` as an OpenAI-compatible provider. The address is private, so it lives in the owner's handover note, not in this repo.
-- **Public data only.** The free tiers may log prompts. Never send customer data through this proxy.
-- **Away from the LAN.** Install Tailscale (free) on both machines, then start the agent with `POOL_SHARE_BIND=<mac tailscale address>`. Do not install it without the owner.
-- **Known limits.** ExpressVPN on the Mac must allow local network traffic (`allowLANTraffic`). From the Mac itself a connection to its own LAN address is reset by the VPN, so Mac-side admin calls use `127.0.0.1:4181`. Groq is blocked from Iran, Mistral keys were out of budget on 2026-11-05, so free traffic mostly lands on Gemini, SambaNova and OpenRouter `:free`, then paid.
+- **Gateway.** `roxira_keypool` listens on srv1 `127.0.0.1:4000` (never public). Config: `config/key_pool.yaml`, rendered by
+  `scripts/infra/key_pool/install.sh --apply` (docs/infra/KEY_POOL.md). Free first (Groq x3, Gemini x4, SambaNova, Cloudflare,
+  OpenRouter `:free`, Mistral x4), then DeepSeek Flash. A key that answers 429/403/400/timeout cools down and traffic moves on.
+- **Tunnel.** Local `127.0.0.1:4181` -> srv1 `127.0.0.1:4000`.
+  - Mac: `bash scripts/infra/llm_tunnel/install_mac.sh` (launchd agent `ir.roxira.llm-tunnel`, keepalive, restarts itself).
+  - Laptop (Linux/WSL2 with systemd): copy `scripts/infra/llm_tunnel/roxira-llm-tunnel.service` to `~/.config/systemd/user/`, then
+    `systemctl --user daemon-reload && systemctl --user enable --now roxira-llm-tunnel` and `loginctl enable-linger "$USER"`.
+    Windows without systemd: run `ssh -N -L 127.0.0.1:4181:127.0.0.1:4000 roxira-prod` from a Task Scheduler job "at log on"
+    (restart on failure), or the same line in a WSL autostart snippet. It needs `Host roxira-prod` (`scripts/ops/install_ssh_alias.sh`).
+  - Check: `curl -s http://127.0.0.1:4181/health/liveliness` prints `"I'm alive!"`.
+- **Virtual keys** (made on srv1 by `python3 scripts/infra/key_pool/virtual_keys.py`, stored in a DB container `roxira_keypool_db`):
+  `mac-agents` (3 USD per day of PAID spend) and `laptop-mahansudo-srv` (2 USD per day). Free models are priced 0, so free use is
+  unlimited. Both are limited to the agent groups (`agent-free`, `agent-strong-free`, `agent-light-free`, `agent-free-paid`,
+  `best-all`, `gemini-best`, `summarize-cheap`); never `private` or the product groups.
+- **Client files.** `~/Secrets/roxira/llm-gateway.env` (mode 600) holds `LLM_GATEWAY_URL=http://127.0.0.1:4181/v1` and
+  `LLM_GATEWAY_KEY=<virtual key>`. The Mac's file is written by the install step. The laptop's key is moved once, like `roxira.env`
+  (AirDrop/USB): the Mac drops `~/Desktop/laptop-gateway.env`; the laptop puts it at `~/Secrets/roxira/llm-gateway.env`, `chmod 600`.
+  Rotate: `ssh roxira-prod 'cd /opt/roxira_platform/scripts/infra/key_pool && python3 virtual_keys.py --rotate <alias>'`.
+- **Who uses it.** `scripts/dev/llm_pool.py` (fleet lanes, review desk) tries the gateway first, then providers directly;
+  `scripts/dev/dispatch_opencode.sh` (`pool/*` models); `scripts/dev/llm_route.py` (cross-family reviewer: gateway, then the
+  `private` group over ssh, then direct providers). Set `LLM_GATEWAY_OFF=1` to skip the gateway.
+- **OpenCode provider.** In `~/.config/opencode/opencode.json` set provider `pool` to `{"npm":"@ai-sdk/openai-compatible",
+  "options":{"baseURL":"http://127.0.0.1:4181/v1","apiKey":"{env:LLM_GATEWAY_KEY}"},"models":{"agent-strong-free":{},
+  "agent-light-free":{},"agent-free-paid":{}}}` and export the key from `llm-gateway.env` before `opencode`.
+- **Public data only.** The agent groups include free tiers that may log prompts. Never send customer data through them.
+- **Tunnel down?** Clients fall back to direct providers (they may fail on a changing VPN IP). Restart on the Mac:
+  `launchctl kickstart -k gui/$(id -u)/ir.roxira.llm-tunnel`.
 
 ## Line endings
 

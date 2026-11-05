@@ -36,6 +36,16 @@ bash scripts/infra/key_pool/health.sh             # ok / 429 / fail per provider
 `roxira_keypool` container already exists, restarts it so the changed config is loaded. The image tag in
 `gateway.image` is unverified: if `docker pull` fails, fix the tag in `key_pool.yaml` and re-run.
 
+## Virtual keys and the Mac/laptop tunnel (#430, owner 2026-11-05)
+- The gateway has its own Postgres container `roxira_keypool_db` (no published port, own volume, 256 MB cap) for LiteLLM's
+  key/spend tables only. `install.sh --apply` creates `generated/keypool-db.pass` and `generated/litellm.salt` once (mode 600).
+  The master key still works if the DB is down (`allow_requests_on_db_unavailable`), so the product runtime is unaffected.
+- `python3 scripts/infra/key_pool/virtual_keys.py` creates `gateway.virtual_keys` (`mac-agents` 3 USD/day, `laptop-mahansudo-srv`
+  2 USD/day, paid spend only) and writes the values to `generated/virtual-keys.env` (never printed). `--rotate <alias>` re-creates one.
+- The agents on the Mac and the laptop reach `127.0.0.1:4000` on srv1 through an ssh tunnel (local port 4181):
+  docs/ops/TWO_COMPUTERS.md. Mistral keys sit at 402 today: they stay in the chain with a 30-minute cooldown. 400/403 count as
+  a failed key (`allowed_fails_policy`), so a region/IP block moves traffic to the next key at once.
+
 ## Cost and latency log
 - `gateway.cost_log: true` makes the renderer add the LiteLLM callback
   `cost_logger.proxy_handler_instance`; the proxy writes one privacy-safe JSON line per call to

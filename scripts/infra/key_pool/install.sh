@@ -45,13 +45,21 @@ if [ "$APPLY" != 1 ]; then log "dry-run only. Re-run with --apply to install."; 
 umask 077
 mkdir -p "$GEN"
 cp "$TMPCFG" "$GEN/litellm.config.yaml"
-python3 - "$SRC_ENV" "$GEN/keypool.env" <<'PY'
+# DB password and LiteLLM salt: generated ONCE, kept in generated/ (mode 600, git-ignored), never printed.
+# The salt encrypts the provider keys LiteLLM stores for virtual keys: changing it later breaks them.
+[ -s "$GEN/keypool-db.pass" ] || { openssl rand -hex 24 > "$GEN/keypool-db.pass"; chmod 600 "$GEN/keypool-db.pass"; }
+[ -s "$GEN/litellm.salt" ] || { printf 'sk-%s' "$(openssl rand -hex 24)" > "$GEN/litellm.salt"; chmod 600 "$GEN/litellm.salt"; }
+python3 - "$SRC_ENV" "$GEN/keypool.env" "$GEN/keypool-db.pass" "$GEN/litellm.salt" <<'PY'
 import sys, keypool_config as k
 pool = k.load_pool()
 got = k.parse_env_names(sys.argv[1], k.all_key_names(pool))
 with open(sys.argv[2], "w") as fh:
     for n, v in got.items():
         fh.write(f"{n}={v}\n")
+    if pool.get("gateway", {}).get("database"):
+        pw = open(sys.argv[3]).read().strip()
+        fh.write(f"DATABASE_URL=postgresql://litellm:{pw}@keypool_db:5432/litellm\n")
+        fh.write(f"LITELLM_SALT_KEY={open(sys.argv[4]).read().strip()}\n")
 PY
 chmod 600 "$GEN/keypool.env"
 export KEYPOOL_IMAGE="$IMAGE"

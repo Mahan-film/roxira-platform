@@ -106,11 +106,18 @@ def render(pool: dict, names: set[str] | None = None, models_path=None, values: 
     if gw.get("cost_log"):
         # LiteLLM loads custom callbacks from the config dir; cost_logger.py is mounted there.
         settings["callbacks"] = ["cost_logger.proxy_handler_instance"]
+    general = {"master_key": f"os.environ/{gw.get('master_key_env', 'KEYPOOL_MASTER_KEY')}"}
+    if gw.get("database"):
+        # virtual keys + per-key daily budgets live in the keypool's own Postgres (compose service keypool_db).
+        # allow_requests_on_db_unavailable: the product runtime (master key) must never stop because the DB is down.
+        general["database_url"] = "os.environ/DATABASE_URL"
+        general["allow_requests_on_db_unavailable"] = True
+        general["store_prisma_audit_logs"] = False
     return {
         "model_list": model_list,
         "router_settings": router,
         "litellm_settings": settings,
-        "general_settings": {"master_key": f"os.environ/{gw.get('master_key_env', 'KEYPOOL_MASTER_KEY')}"},
+        "general_settings": general,
     }
 
 

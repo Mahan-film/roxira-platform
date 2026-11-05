@@ -551,3 +551,71 @@ def test_unverified_providers_stay_out_of_customer_facing_groups():
             assert "llm.chutes.ai" not in str(m["litellm_params"].get("api_base"))
             assert "cloudflare" not in str(m["litellm_params"].get("api_base"))
     assert any(m["model_name"].startswith("candidates") for m in cfg["model_list"])
+
+
+def test_gateway_database_virtual_keys_and_cooldown_policy():
+    """srv1 gateway (#430): DB-backed virtual keys never block the master key, 400/403 cool a key, Mistral sleeps long."""
+    pool = kc.load_pool()
+    names = {n for n in kc.all_key_names(pool)}
+    cfg = render_litellm.render(pool, names)
+    gs = cfg["general_settings"]
+    assert gs["database_url"] == "os.environ/DATABASE_URL"
+    assert gs["allow_requests_on_db_unavailable"] is True
+    pol = cfg["router_settings"]["allowed_fails_policy"]
+    assert pol["BadRequestErrorAllowedFails"] >= 1 and pol["AuthenticationErrorAllowedFails"] >= 1
+    mistral = [m for m in cfg["model_list"] if m["litellm_params"]["model"].startswith("mistral/")]
+    assert mistral and all(m["litellm_params"]["cooldown_time"] == 1800 for m in mistral)
+    groq = [m for m in cfg["model_list"] if m["litellm_params"]["model"].startswith("groq/")]
+    assert groq and all("cooldown_time" not in m["litellm_params"] for m in groq)
+
+
+def test_virtual_keys_are_agent_only_and_budgeted():
+    import virtual_keys
+    pool = kc.load_pool()
+    specs = pool["gateway"]["virtual_keys"]
+    assert set(specs) == {"mac-agents", "laptop-mahansudo-srv"}
+    assert specs["mac-agents"]["max_budget_usd"] == 3 and specs["laptop-mahansudo-srv"]["max_budget_usd"] == 2
+    for spec in specs.values():  # agents never get the customer-data or product groups
+        assert "private" not in spec["models"] and not any(m.startswith(("vip-", "product", "best-product")) for m in spec["models"])
+        assert all(m in pool["groups"] for m in spec["models"])
+    assert virtual_keys.env_name("laptop-mahansudo-srv") == "LLM_GATEWAY_KEY_LAPTOP_MAHANSUDO_SRV"
+
+
+def test_client_tries_srv1_gateway_first_then_direct():
+    """#430: with a virtual key the client calls the srv1 gateway (via the tunnel) before any direct provider."""
+    calls = []
+
+    def post(url, headers, body, timeout):
+        calls.append(url)
+        if "127.0.0.1:4181" in url:
+            return 200, {"model": "gpt-oss-120b", "choices": [{"message": {"content": "hi"}}]}
+        return 200, {"choices": [{"message": {"content": "direct"}}]}
+
+    env = {**FAKE_ENV, "LLM_GATEWAY_KEY": "sk-virtual"}
+    text, used = llm_pool.chat([{"role": "user", "content": "x"}], "agent-free", pool=pool(), env=env, post=post)
+    assert (text, used) == ("hi", "gateway/gpt-oss-120b") and len(calls) == 1
+
+
+def test_client_gateway_down_falls_back_to_direct_and_cools():
+    calls = []
+
+    def post(url, headers, body, timeout):
+        calls.append(url)
+        if "127.0.0.1:4181" in url:
+            return 0, None   # tunnel down
+        return 200, {"choices": [{"message": {"content": "direct"}}]}
+
+    env = {**FAKE_ENV, "LLM_GATEWAY_KEY": "sk-virtual"}
+    st = llm_pool.State(None)
+    for _ in range(2):
+        text, used = llm_pool.chat([{"role": "user", "content": "x"}], "agent-free", pool=pool(), env=env, post=post, state=st)
+        assert text == "direct" and not used.startswith("gateway/")
+    assert sum("4181" in c for c in calls) == 1   # second call skips the cooling gateway
+
+
+def test_client_without_virtual_key_skips_gateway(monkeypatch):
+    monkeypatch.delenv("LLM_GATEWAY_OFF", raising=False)
+    assert llm_pool.gateway_from_env(FAKE_ENV) is None
+    assert llm_pool.gateway_from_env({"LLM_GATEWAY_KEY": "k"}) == ("http://127.0.0.1:4181/v1", "k")
+    monkeypatch.setenv("LLM_GATEWAY_OFF", "1")
+    assert llm_pool.gateway_from_env({"LLM_GATEWAY_KEY": "k"}) is None

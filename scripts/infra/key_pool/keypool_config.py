@@ -249,7 +249,7 @@ def group_deployments(
                         rpm=_num(lim.get("rpm")), tpm=_num(lim.get("tpm")), weight=key_weight(lim), price=price,
                         url_vars=tuple(prov.get("env_vars", [])),
                         extra_body=merge_dicts(prov.get("extra_body") or {}, spec.get("extra_body") or {}),
-                        params=copy.deepcopy(spec.get("litellm_params") or {}),
+                        params=merge_dicts(copy.deepcopy(prov.get("litellm_params") or {}), copy.deepcopy(spec.get("litellm_params") or {})),
                     )
                 )
     validate_group(group, g, out)

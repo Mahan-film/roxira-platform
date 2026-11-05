@@ -207,10 +207,18 @@ def review_attempts() -> list[Attempt]:
     ds = next(e for e in model_registry.role_entries("reviewer") if str(e["id"]).startswith("deepseek/"))["id"]
     gpt_oss = next(e["id"] for e in model_registry.role_entries("agent_runner") if e.get("alias") == "groq-strong")
     price = (0.045, 0.50)
+    gw_url = os.environ.get("LLM_GATEWAY_URL") or "http://127.0.0.1:4181/v1"   # ssh tunnel to the srv1 gateway
     out = [
+        # srv1 gateway first (stable German IP: Groq/Gemini/OpenRouter work there, the Mac's VPN IP flips). Its agent
+        # groups mix free/may-log providers and the agents workspace, so they only ever get public diffs.
+        openai_compat("gateway/agent-free-paid", gw_url, "LLM_GATEWAY_KEY", "agent-free-paid", role="reviewer",
+                      paid=True, price=price, public_only=True),
+        gateway_ssh("roxira-prod", "private", role="reviewer", paid=True, price=price),
+        openai_compat("gateway/agent-strong-free", gw_url, "LLM_GATEWAY_KEY", "agent-strong-free", role="reviewer",
+                      paid=False, public_only=True),
+        # direct providers = last fallback (they break when this machine's VPN exit IP changes)
         openai_compat("openrouter/" + ds, "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", ds, role="reviewer",
                       paid=True, price=price, extra={"reasoning": {"enabled": False}, "provider": {"data_collection": "deny"}}),
-        gateway_ssh("roxira-prod", "private", role="reviewer", paid=True, price=price),
         openai_compat("deepseek-api/deepseek-chat", "https://api.deepseek.com/v1", "DEEPSEEK_API_KEY", "deepseek-chat",
                       role="reviewer", paid=True, price=(0.28, 0.42)),
         openai_compat("groq/" + gpt_oss, "https://api.groq.com/openai/v1", "GROQ_API_KEY", gpt_oss,
@@ -242,6 +250,7 @@ def main() -> int:
     ap.add_argument("--private", action="store_true", help="payload is not public: free / may-log attempts are skipped")
     a = ap.parse_args()
     load_env_file()
+    load_env_file("~/Secrets/roxira/llm-gateway.env")
     diff = pathlib.Path(a.diff).read_text(encoding="utf-8") if a.diff else sys.stdin.read()
     try:
         res = route("review_desk", [{"role": "user", "content": a.prompt + "\n" + diff}], review_attempts(),

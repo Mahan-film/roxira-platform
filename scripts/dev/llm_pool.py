@@ -24,6 +24,7 @@ import socket
 import sys
 import tempfile
 import time
+import types
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -69,10 +70,24 @@ def default_post(url: str, headers: dict[str, str], body: dict[str, Any], timeou
         return 0, None
 
 
+GATEWAY_ENV_FILE = "~/Secrets/roxira/llm-gateway.env"   # LLM_GATEWAY_URL + LLM_GATEWAY_KEY (a virtual key), mode 600
+GATEWAY_NAMES = ["LLM_GATEWAY_URL", "LLM_GATEWAY_KEY"]
+GATEWAY_DEFAULT_URL = "http://127.0.0.1:4181/v1"       # ssh tunnel to the srv1 gateway (docs/ops/TWO_COMPUTERS.md)
+
+
+def gateway_from_env(env: dict[str, str]) -> tuple[str, str] | None:
+    """(url, virtual key) of the srv1 gateway when this machine has a key; None otherwise (or LLM_GATEWAY_OFF=1)."""
+    key = env.get("LLM_GATEWAY_KEY", "")
+    if not key or os.environ.get("LLM_GATEWAY_OFF") == "1":
+        return None
+    return env.get("LLM_GATEWAY_URL") or GATEWAY_DEFAULT_URL, key
+
+
 def load_env(pool: dict[str, Any]) -> dict[str, str]:
     wanted = kc.all_key_names(pool)
+    wanted = wanted + [n for n in GATEWAY_NAMES if n not in wanted]
     env = {n: os.environ[n] for n in wanted if os.environ.get(n)}
-    for f in (os.environ.get("KEYPOOL_ENV_FILE"), "~/Secrets/roxira/roxira.env"):
+    for f in (os.environ.get("KEYPOOL_ENV_FILE"), GATEWAY_ENV_FILE, "~/Secrets/roxira/roxira.env"):
         if f:
             for n, v in kc.parse_env_names(f, wanted).items():
                 env.setdefault(n, v)
@@ -156,12 +171,34 @@ def chat(
     now: Callable[[], float] = time.time,
     log: Callable[[str], None] | None = None,
     skip: Callable[[kc.Deployment], bool] | None = None,
+    gateway: tuple[str, str] | None = None,
 ) -> tuple[str, str]:
-    """Direct provider rotation. Returns (text, 'provider/model'). Raises RuntimeError when all fail."""
+    """Gateway first (srv1 via ssh tunnel, when this machine has a virtual key), then direct provider rotation.
+    Returns (text, 'provider/model'). Raises RuntimeError when all fail."""
     pool = pool or kc.load_pool()
     env = env if env is not None else load_env(pool)
     state = state or State(None)
     log = log or (lambda m: None)
+    gateway = gateway or gateway_from_env(env)
+    if gateway:  # the srv1 IP is stable, so Groq/Gemini work there; direct calls from a changing VPN IP are the last resort
+        gk = f"gateway|{gateway[0]}"
+        if not state.hot(gk, now()):
+            status, data = post(gateway[0].rstrip("/") + "/chat/completions",
+                                {"Authorization": f"Bearer {gateway[1]}", "Content-Type": "application/json"},
+                                {"model": group, "messages": messages, "max_tokens": max_tokens}, timeout)
+            if status == 200 and data:
+                try:
+                    text = data["choices"][0]["message"]["content"] or ""
+                    served = str(data.get("model") or group)
+                    if skip and skip(types.SimpleNamespace(provider="gateway", model=served)):  # type: ignore[arg-type]
+                        log(f"gateway served {served}: author's family, trying direct")
+                    else:
+                        return text, f"gateway/{served}"
+                except (KeyError, IndexError, TypeError):
+                    pass
+            else:
+                log(f"gateway -> {status or 'no connection (tunnel down?)'}, trying providers directly")
+                state.cool(gk, 60 if status else 120, now())
     deps = ordered(kc.group_deployments(pool, group, set(env)), rng or random.Random())
     deps = dedupe_keys(deps, env)
     if skip:  # e.g. the reviewer must not be the author's model family
@@ -202,11 +239,12 @@ def via_gateway(url: str, key: str, messages: list[dict[str, str]], group: str, 
     return None
 
 
-def health(pool: dict[str, Any], env: dict[str, str], gateway: str | None, post: HttpPost = default_post) -> int:
+def health(pool: dict[str, Any], env: dict[str, str], gateway: str | None, post: HttpPost = default_post,
+           key: str | None = None) -> int:
     ping = [{"role": "user", "content": "Reply with: ok"}]
     bad = 0
     if gateway:
-        key = env.get(pool["gateway"]["master_key_env"], "")
+        key = key or env.get(pool["gateway"]["master_key_env"], "")
         for g in pool["groups"]:
             st, _ = post(gateway.rstrip("/") + "/chat/completions", {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                          {"model": g, "messages": ping, "max_tokens": 5}, 45.0)
@@ -237,7 +275,7 @@ def main() -> int:
     ap.add_argument("-g", "--group", default="agent-free")
     ap.add_argument("--max-tokens", type=int, default=512)
     ap.add_argument("--direct", action="store_true", help="skip the gateway")
-    ap.add_argument("--gateway", default=os.environ.get("AGENT_GATEWAY_URL"))
+    ap.add_argument("--gateway", default=os.environ.get("AGENT_GATEWAY_URL"), help="gateway URL (default: the tunnel in llm-gateway.env when a key is there)")
     ap.add_argument("--health", action="store_true")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--timeout", type=float, default=45.0)
@@ -245,20 +283,25 @@ def main() -> int:
     try:
         pool = kc.load_pool()
         env = load_env(pool)
+        if a.direct:
+            os.environ["LLM_GATEWAY_OFF"] = "1"   # chat() also tries the tunnel gateway unless told not to
         gw = None if a.direct else a.gateway
+        gk = None if a.direct else gateway_from_env(env)
+        if gw is None and gk:
+            gw = gk[0]
         if a.list:
             for d in kc.group_deployments(pool, a.group, set(env) or None):
                 print(f"{d.order} {d.provider} {d.key_env} {d.model} tier={d.tier} policy={d.data_policy}")
             return 0
         if a.health:
-            return health(pool, env, gw)
+            return health(pool, env, gw, key=gk[1] if gk else None)
         prompt = a.prompt if a.prompt is not None else sys.stdin.read()
         if not prompt.strip():
             print("llm_pool: empty prompt", file=sys.stderr)
             return 2
         msgs = [{"role": "user", "content": prompt}]
-        if gw:
-            text = via_gateway(gw, env.get(pool["gateway"]["master_key_env"], ""), msgs, a.group, a.max_tokens)
+        if gw and not gk:   # explicit URL with the master key; with a virtual key chat() below does gateway-first itself
+            text = via_gateway(gw, (gk[1] if gk else env.get(pool["gateway"]["master_key_env"], "")), msgs, a.group, a.max_tokens)
             if text is not None:
                 print(text)
                 return 0

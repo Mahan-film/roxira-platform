@@ -16,7 +16,8 @@
 #   -m MODEL   provider/model (default: openrouter/<config/models.yaml executor primary>)
 #   -R ROLE    take the model from a config/models.yaml role instead (executor, mechanical,
 #              cheap, free), via scripts/dev/model_for.py; a free role implies --public rules
-#              others: pool/dsflash, pool/codestral (LiteLLM key pool, may route to free tiers: needs --public),
+#              others: pool/agent-strong-free, pool/agent-light-free, pool/agent-free-paid (the srv1 LiteLLM gateway through the
+#                      ssh tunnel 127.0.0.1:4181, docs/ops/TWO_COMPUTERS.md; free tiers, needs --public),
 #                      omniroute/<id> (local gateway)
 #   -a AGENT   opencode agent (default: build; repo opencode.json defines
 #              plan/free/critical-reviewer/build)
@@ -65,6 +66,16 @@ command -v opencode >/dev/null || { echo "opencode not installed" >&2; exit 2; }
 
 ENV_FILE="${ROXIRA_ENV_FILE:-$HOME/Secrets/roxira/roxira.env}"
 if [ -f "$ENV_FILE" ]; then set -a; . "$ENV_FILE"; set +a; fi
+# srv1 gateway: LLM_GATEWAY_URL + LLM_GATEWAY_KEY (a virtual key with a daily paid budget), mode 600
+GW_FILE="${LLM_GATEWAY_ENV_FILE:-$HOME/Secrets/roxira/llm-gateway.env}"
+if [ -f "$GW_FILE" ]; then set -a; . "$GW_FILE"; set +a; fi
+export LLM_GATEWAY_URL="${LLM_GATEWAY_URL:-http://127.0.0.1:4181/v1}"
+case "$MODEL" in
+  pool/*)       [ -n "${LLM_GATEWAY_KEY:-}" ] || { echo "LLM_GATEWAY_KEY not set (create $GW_FILE, see docs/ops/TWO_COMPUTERS.md)" >&2; exit 2; }
+                if [ "$DRY" != 1 ] && ! curl -s -m 5 -o /dev/null "${LLM_GATEWAY_URL%/v1}/health/liveliness"; then
+                  echo "srv1 gateway unreachable at $LLM_GATEWAY_URL: start the tunnel (launchctl kickstart -k gui/\$(id -u)/ir.roxira.llm-tunnel)" >&2; exit 3
+                fi;;
+esac
 case "$MODEL" in
   openrouter/*) [ -n "${OPENROUTER_API_KEY:-}" ] || { echo "OPENROUTER_API_KEY not set" >&2; exit 2; };;
   mistral/*)    [ -n "${MISTRAL_API_KEY:-}" ] || { echo "MISTRAL_API_KEY not set" >&2; exit 2; };;
