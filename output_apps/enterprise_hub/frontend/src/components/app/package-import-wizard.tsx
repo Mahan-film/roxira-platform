@@ -21,6 +21,7 @@ import { ErrorNotice } from "@/components/app/app-ui";
 import { ImportSupportTable } from "@/components/app/import-support-table";
 import { ReconciliationPanel } from "@/components/app/import-reconciliation-panel";
 import { ImportReviewPanel } from "@/components/app/import-review-panel";
+import { useImportLimits } from "@/components/app/use-import-accept";
 import { collectDroppedFiles } from "@/lib/import-dropped-files";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  PACKAGE_ACCEPT,
   PACKAGE_ENTITY_LABELS,
   commitImportPackage,
   createImportPackageFromUploads,
@@ -56,6 +56,7 @@ import {
   type ImportPackageProgress,
 } from "@/lib/api/data-import-suite-client";
 import { formatJalaliDateTime, formatNumber } from "@/lib/fa-format";
+import { routeImportFile } from "@/lib/import-routing";
 import { cn } from "@/lib/utils";
 
 type PackagePhase = "upload" | "analyzing" | "review" | "committing" | "done";
@@ -83,10 +84,14 @@ function healthTone(level: "ok" | "warn" | "error"): string {
 export function PackageImportWizard({
   initialFile = null,
   onInitialFileUsed,
+  onBulkFile,
 }: {
   initialFile?: File | null;
   onInitialFileUsed?: () => void;
+  /** Receives a file over 5 MB when the server has the bulk streaming import enabled. */
+  onBulkFile?: (file: File) => void;
 } = {}) {
+  const { accept, bulkEnabled } = useImportLimits();
   const [phase, setPhase] = useState<PackagePhase>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [packageId, setPackageId] = useState<string | null>(null);
@@ -220,6 +225,17 @@ export function PackageImportWizard({
   }, [phase, packageId, loadBatches]);
 
   async function runUpload(targets: File[]) {
+    const large = targets.filter((target) => routeImportFile(target, bulkEnabled) === "bulk");
+    if (large.length > 0 && onBulkFile) {
+      if (targets.length === 1) {
+        onBulkFile(targets[0]);
+        return;
+      }
+      setError(
+        `«${large[0].name}» بزرگ یا فایل دیتابیس است و از «ورود حجیم» بالای همین صفحه بارگذاری می‌شود. آن را جدا بفرستید و بقیهٔ فایل‌ها را دوباره انتخاب کنید.`,
+      );
+      return;
+    }
     const invalid = validatePackageFiles(targets);
     if (invalid) {
       setError(invalid);
@@ -473,7 +489,7 @@ export function PackageImportWizard({
           <input
             ref={inputRef}
             type="file"
-            accept={PACKAGE_ACCEPT || undefined}
+            accept={accept}
             multiple
             className="sr-only"
             id="package-import-file"

@@ -28,6 +28,7 @@ import {
   API_PROXY_BASE_PATH,
   DATA_IMPORT_RESOURCE_PATH,
 } from "@/lib/api/config";
+import { FALLBACK_ACCEPT } from "@/lib/import-routing";
 
 const BASE = `${API_PROXY_BASE_PATH}/${DATA_IMPORT_RESOURCE_PATH}`;
 
@@ -91,7 +92,11 @@ export interface ImportBatch {
   undone: boolean;
 }
 
-export const IMPORT_ACCEPT = ".xlsx,.csv,.pdf,.jpg,.jpeg,.png";
+/**
+ * Static fallback of the file picker's `accept`; the pages use `useImportLimits()`, which builds it
+ * from `GET /data-import/formats` (the support matrix), so the picker offers every readable format.
+ */
+export const IMPORT_ACCEPT = FALLBACK_ACCEPT;
 
 /** سقف حجم صفحه‌گسترده (XLSX/CSV): ۱۰ مگابایت. */
 export const IMPORT_MAX_SHEET_BYTES = 10 * 1024 * 1024;
@@ -116,7 +121,7 @@ const ALLOWED_EXTENSIONS = [...SHEET_EXTENSIONS, ...DOC_EXTENSIONS];
 export function validateImportFile(file: File): string | null {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return "فرمت فایل پشتیبانی نمی‌شود. فقط xlsx، csv، pdf، jpg و png پذیرفته می‌شود.";
+    return `ورود تکی فقط xlsx، csv، pdf، jpg و png را می‌خواند؛ فایل «.${ext}» را در زبانهٔ «انتقال کامل دیتابیس» بفرستید یا جدول «فرمت‌های پشتیبانی‌شده» را ببینید.`;
   }
   if (file.size === 0) {
     return "فایل خالی است.";
@@ -141,9 +146,18 @@ export function importErrorMessage(error: unknown): string {
     ) {
       return "سرویس ورود داده در حال حاضر در دسترس نیست. کمی بعد دوباره تلاش کنید.";
     }
-    return error.details.join(" | ");
+    if (error.statusCode === 413) {
+      return "فایل از سقف حجم یک درخواست سرور بزرگ‌تر است. آن را در زبانهٔ «انتقال کامل دیتابیس» (بارگذاری تکه‌ای) یا در «ورود حجیم» بالای همین صفحه بفرستید.";
+    }
+    if (error.statusCode === 415) {
+      return "این قالب فایل خوانده نمی‌شود. خروجی xlsx یا csv بگیرید، یا جدول «فرمت‌های پشتیبانی‌شده» را ببینید.";
+    }
+    return error.details.join(" | ") || "درخواست انجام نشد. دوباره تلاش کنید.";
   }
-  return "ارتباط با سرور برقرار نشد. اینترنت خود را بررسی کنید و دوباره تلاش کنید.";
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "بارگذاری متوقف شد.";
+  }
+  return "ارتباط با سرور برقرار نشد. اینترنت خود را بررسی کنید و دوباره تلاش کنید؛ بارگذاری تکه‌ای از همان‌جا ادامه پیدا می‌کند.";
 }
 
 export function listImportEntities(
@@ -194,8 +208,6 @@ export function listImportBatches(
  * Database package import (whole-company migration)
  * ------------------------------------------------------------------ */
 
-/** پسوندهای مجاز بستهٔ دیتابیس. */
-export const PACKAGE_ACCEPT = "";
 
 /** سقف حجم هر فایل در بارگذاری تکه‌ای: ۱۲۰ مگابایت (هماهنگ با IMPORT_MAX_FILE_BYTES سرور). */
 export const PACKAGE_MAX_BYTES = 120 * 1024 * 1024;

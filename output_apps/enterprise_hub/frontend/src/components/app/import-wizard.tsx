@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 
 import { ErrorNotice } from "@/components/app/app-ui";
-import { isDatabaseFile, useImportHandoff, type ImportTab } from "@/components/app/import-handoff";
+import { useImportHandoff, type ImportTab } from "@/components/app/import-handoff";
 import { PackageImportWizard } from "@/components/app/package-import-wizard";
+import { useImportLimits } from "@/components/app/use-import-accept";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +26,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  IMPORT_ACCEPT,
   commitImport,
   importErrorMessage,
   listImportBatches,
@@ -41,6 +41,7 @@ import {
 } from "@/lib/api/data-import-suite-client";
 import { listBankAccounts } from "@/lib/api/banking-client";
 import { formatJalaliDateTime, formatNumber } from "@/lib/fa-format";
+import { routeImportFile } from "@/lib/import-routing";
 import { cn } from "@/lib/utils";
 import { BANK_LABELS, type BankAccount } from "@/types/banking";
 
@@ -80,25 +81,35 @@ const MODE_LABELS: Array<[ImportMode, string]> = [
   ["package", "انتقال کامل دیتابیس"],
 ];
 
-export function ImportWizard() {
+/**
+ * `onBulkFile` receives files over 5 MB: production nginx caps one request at 16 MB and the
+ * package import at 40 MB, so those go to the bulk streaming import above the wizard (#277).
+ */
+export function ImportWizard({ onBulkFile }: { onBulkFile?: (file: File) => void } = {}) {
   const { pendingFile, pendingTab, setPendingFile, setPendingTab } = useImportHandoff();
   const [mode, setMode] = useState<ImportMode>("file");
   const [handoff, setHandoff] = useState<File | null>(null);
+  const { bulkEnabled } = useImportLimits();
 
   // A file dropped anywhere in /app (or a palette command) is handed over here.
   useEffect(() => {
     if (!pendingFile && !pendingTab) return;
     /* eslint-disable react-hooks/set-state-in-effect */
     if (pendingFile) {
-      setHandoff(pendingFile);
-      setMode(isDatabaseFile(pendingFile) ? "package" : "file");
+      const route = routeImportFile(pendingFile, bulkEnabled);
+      if (route === "bulk" && onBulkFile) {
+        onBulkFile(pendingFile);
+      } else {
+        setHandoff(pendingFile);
+        setMode(route === "single" ? "file" : "package");
+      }
     } else if (pendingTab) {
       setMode(pendingTab);
     }
     setPendingFile(null);
     setPendingTab(null);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [pendingFile, pendingTab, setPendingFile, setPendingTab]);
+  }, [pendingFile, pendingTab, setPendingFile, setPendingTab, bulkEnabled, onBulkFile]);
 
   function openPackage(file: File) {
     setHandoff(file);
@@ -141,11 +152,13 @@ export function ImportWizard() {
           initialFile={handoff}
           onInitialFileUsed={() => setHandoff(null)}
           onPackageFile={openPackage}
+          onBulkFile={onBulkFile}
         />
       ) : (
         <PackageImportWizard
           initialFile={handoff}
           onInitialFileUsed={() => setHandoff(null)}
+          onBulkFile={onBulkFile}
         />
       )}
     </div>
@@ -156,11 +169,14 @@ function SingleFileImportWizard({
   initialFile = null,
   onInitialFileUsed,
   onPackageFile,
+  onBulkFile,
 }: {
   initialFile?: File | null;
   onInitialFileUsed?: () => void;
   onPackageFile: (file: File) => void;
+  onBulkFile?: (file: File) => void;
 }) {
+  const { accept, bulkEnabled } = useImportLimits();
   const [step, setStep] = useState<Step>("upload");
   const [entities, setEntities] = useState<ImportEntityDef[]>([]);
   const [entitiesError, setEntitiesError] = useState(false);
@@ -257,7 +273,13 @@ function SingleFileImportWizard({
   function handleFiles(files: FileList | null) {
     const first = files?.[0];
     if (!first) return;
-    if (isDatabaseFile(first)) {
+    // Only small spreadsheets, PDFs and images fit one request; the rest go up in chunks.
+    const route = routeImportFile(first, bulkEnabled);
+    if (route === "bulk" && onBulkFile) {
+      onBulkFile(first);
+      return;
+    }
+    if (route !== "single") {
       onPackageFile(first);
       return;
     }
@@ -407,7 +429,7 @@ function SingleFileImportWizard({
             <input
               ref={inputRef}
               type="file"
-              accept={IMPORT_ACCEPT}
+              accept={accept}
               className="sr-only"
               id="import-file"
               onChange={(e) => handleFiles(e.target.files)}
