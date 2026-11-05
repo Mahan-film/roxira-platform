@@ -54,6 +54,12 @@ review:
   max_diff_chars: 18000   # free tiers cap tokens/minute (Groq 8k TPM): larger diffs are cut
   max_repairs: 1
 
+# Paid models (executor / *paid*) run only after a genuine 429/quota error on every free model, and stop at
+# this daily cap (local counter in $FLEET_HOME/paid.json; a provider 'key limit exceeded' also trips it).
+paid:
+  daily_cap_usd: 2.0
+  est_cost_per_call_usd: 0.15
+
 rate_limit:
   base_backoff_secs: 900      # first wait after every model of a lane hit a limit
   max_backoff_secs: 14400

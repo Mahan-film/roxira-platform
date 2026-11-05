@@ -173,3 +173,68 @@ def test_plist_installer_escapes_xml():
     line = next(ln for ln in sh.splitlines() if ln.startswith("x() "))
     out = subprocess.run(["bash", "-c", f'{line}; x "a&b<c>d"'], capture_output=True, text=True).stdout
     assert out == "a&amp;b&lt;c&gt;d"
+
+
+# ---- free-first guard: config/auth errors never reach paid; paid stops at the daily cap
+def _lane_env(monkeypatch, tmp_path, outputs):
+    """Run lane_opencode with scripted per-model outputs; returns the list of models actually called."""
+    monkeypatch.setattr(fleet, "HOME", tmp_path)
+    called = []
+
+    def fake_run(cmd, cwd, log, timeout, env=None):
+        model = cmd[cmd.index("-m") + 1]
+        called.append(model)
+        return 1, outputs.get(model, "")
+
+    monkeypatch.setattr(fleet, "run_logged", fake_run)
+    monkeypatch.setattr(fleet, "dirty", lambda wt: False)
+    monkeypatch.setattr(fleet, "worker_model", lambda lc, alias: alias)
+    return called
+
+
+def _cfg(models):
+    cfg = dict(CFG)
+    cfg["lanes"] = {"opencode": {"models": models, "timeout_secs": 5}}
+    cfg["paid"] = {"daily_cap_usd": 2.0, "est_cost_per_call_usd": 0.15}
+    return cfg
+
+
+JOB = {"issue": 1, "title": "t", "body": "b"}
+
+
+def test_auth_error_on_free_model_stops_without_paid(monkeypatch, tmp_path):
+    called = _lane_env(monkeypatch, tmp_path, {"pool/a": "Error: Authentication Error, No api key passed in."})
+    status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "pool/b", "executor"]))
+    assert status == "config"
+    assert called == ["pool/a"]          # neither the next free model nor the paid one was tried
+    assert fleet.paid_spent_today(tmp_path) == 0.0
+
+
+def test_non_rate_failure_never_escalates_to_paid(monkeypatch, tmp_path):
+    called = _lane_env(monkeypatch, tmp_path, {"pool/a": "something odd", "pool/b": "something else"})
+    status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "pool/b", "executor"]))
+    assert status == "config" and "executor" not in called
+
+
+def test_genuine_429_on_free_escalates_to_paid_and_counts(monkeypatch, tmp_path):
+    called = _lane_env(monkeypatch, tmp_path, {"pool/a": "429 Too Many Requests", "pool/b": "rate limit reached"})
+    status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "pool/b", "executor"]))
+    assert called == ["pool/a", "pool/b", "executor"]
+    assert status in ("none", "rate")
+    assert fleet.paid_spent_today(tmp_path) == 0.15
+
+
+def test_paid_cap_blocks_the_paid_call(monkeypatch, tmp_path):
+    called = _lane_env(monkeypatch, tmp_path, {"pool/a": "429 Too Many Requests"})
+    fleet.record_paid(2.0, tmp_path)
+    status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "executor"]))
+    assert status == "capped"
+    assert called == ["pool/a"]          # executor never called
+    assert not fleet.paid_allowed(_cfg([]), tmp_path)
+
+
+def test_provider_key_limit_trips_the_cap(monkeypatch, tmp_path):
+    called = _lane_env(monkeypatch, tmp_path, {"pool/a": "429 quota", "executor": "Error: Key limit exceeded (daily limit)"})
+    status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "executor"]))
+    assert status == "capped"
+    assert fleet.paid_spent_today(tmp_path) >= 2.0
