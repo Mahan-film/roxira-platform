@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "source": {
+    "kind": "extractor",
+    "sqlMajor": 9,
+    "databaseName": "Holoo1",
+    "collation": "Persian_100_CI_AS",
+    "createdAt": "2005-01-01T00:00:00.000Z"
+  },
+  "tables": [
+    {
+      "schema": "dbo",
+      "name": "Kala",
+      "rows": 2,
+      "file": "t1.ndjson.gz",
+      "sha256": "06ef4ca59f75fbf45883fb80d125d1c766f33c6c3d031adec902fcab7bb3fe28",
+      "columns": [
+        {
+          "name": "code",
+          "type": "nvarchar"
+        },
+        {
+          "name": "name",
+          "type": "nvarchar"
+        },
+        {
+          "name": "price",
+          "type": "decimal"
+        },
+        {
+          "name": "unit",
+          "type": "nvarchar"
+        }
+      ]
+    },
+    {
+      "schema": "dbo",
+      "name": "Acc",
+      "rows": 2,
+      "file": "t2.ndjson.gz",
+      "sha256": "35b48968afe11a0ea69dd33a85449aa99226d940c9e0228d6ca7712972d1f586",
+      "columns": [
+        {
+          "name": "account_code",
+          "type": "nvarchar"
+        },
+        {
+          "name": "title",
+          "type": "nvarchar"
+        },
+        {
+          "name": "balance",
+          "type": "money"
+        }
+      ]
+    },
+    {
+      "schema": "dbo",
+      "name": "Doc",
+      "rows": 2,
+      "file": "t3.ndjson.gz",
+      "sha256": "9ee68b6144775d7f310d3e001f21c2a9ac135354e743e982aa421523399a822d",
+      "columns": [
+        {
+          "name": "doc_no",
+          "type": "nvarchar"
+        },
+        {
+          "name": "body",
+          "type": "ntext"
+        },
+        {
+          "name": "amount",
+          "type": "numeric"
+        },
+        {
+          "name": "note",
+          "type": "nvarchar"
+        }
+      ]
+    }
+  ]
+}

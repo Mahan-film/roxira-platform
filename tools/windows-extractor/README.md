@@ -42,5 +42,14 @@ later without changing anything downstream, because the manifest names the file 
 
 ## Stub
 `Extract-RoxiraTables.ps1` is a working outline in PowerShell: lists tables, streams each to NDJSON.gz with the type
-rules above, hashes files and writes the manifest. The **upload is deliberately not implemented** (a `TODO` marks where
-the part protocol goes). Never run it against a production database before it has been reviewed and tested on a copy.
+rules above, hashes files and writes the manifest, then uploads every output file with the resumable part upload
+(`POST /enterprise-hub/data-import/bulk/uploads`, `sign`, `PUT`, `complete`; the same protocol as
+`frontend/src/lib/upload/resumable-upload.ts`). The one-time code from the portal is passed as `-UploadCode`, sent as a
+`Bearer` token and never written to any output; without it the export is left on disk and nothing is uploaded.
+`Extract-RoxiraTables.Tests.ps1` (Pester 5) checks the safety rules and drives the upload against a mock HTTP server.
+It is **untested on Windows**: Pester is not installed in the development environment, so the Windows run stays a
+manual step. Never run it against a production database before it has been reviewed and tested on a copy.
+
+`sample-output/` is a tiny committed export (three tables: Persian text with Arabic ي/ك, a `decimal`/`money` column
+written as a JSON string, a NULL and a value with an embedded newline) with its `manifest.json`. It is the fixture for
+`services/migration_worker/verify-extractor-output.mjs` and for the transform test.
