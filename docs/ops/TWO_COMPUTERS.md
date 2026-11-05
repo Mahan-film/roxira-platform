@@ -151,6 +151,19 @@ Do not copy `restic-dr.pass` to the laptop. The restic backup lives only on the 
   Push branches there to hand work over. Push them to GitHub when it is back. The pre-push guard runs here too.
 - **Not recommended:** an SMB/network share holding a repo. Locking, line endings and file watching break, and it exposes one disk to the other.
 
+## Sharing the Mac's LLM key pool with the laptop
+
+Owner decision 2026-11-05: the laptop's OpenCode agents use the Mac's pool, but the real provider keys never leave the Mac.
+
+- **Proxy.** `scripts/infra/pool_share/` runs LiteLLM (docker, image already on the Mac) plus a private Postgres container (virtual keys need a database) as the launchd agent `ir.roxira.pool-share` (`KeepAlive`, restarts on failure). The config is rendered from `config/key_pool.yaml` at every start, so it has the same role chains as the server pool (`agent-light-free`, `agent-free`, `agent-free-paid`, `best-all`) and writes the cost log to `~/Library/Logs/roxira-pool-share/requests.jsonl`.
+- **Network.** It listens on one LAN address only (`en0`, port 4180; never `0.0.0.0`). The container itself is published on `127.0.0.1:4181`, because Docker Desktop cannot publish on the LAN address reliably; `lan_forward.py` is a small TCP forwarder from the LAN address to it. Port 4180/4181 are free in AGENTS.md section 7. The macOS firewall is off on the Mac; if it is turned on, allow only `python3` / port 4180.
+- **Install on the Mac:** `bash scripts/infra/pool_share/install.sh` (`--uninstall` removes the agent). The master key and DB password are generated into `~/Secrets/roxira/` (mode 600) and are never printed.
+- **Laptop key.** `bash scripts/dev/pool_key_rotate.sh` creates the virtual key `laptop-mahansudo` (2 USD per day on paid models, 60 requests/min, LLM routes and the five agent roles only) and writes it to `~/Secrets/roxira/laptop-pool.key`. Running it again revokes the old key first. `--revoke-only` cuts the laptop off. Free calls cost 0; when the daily budget is used up the whole key pauses until the next day.
+- **Laptop side.** The owner moves `laptop-pool.key` once (AirDrop or USB) into `~/Secrets/roxira/pool.env` as `ROXIRA_POOL_KEY=...`, then points OpenCode at `http://<mac-lan-address>:4180/v1` as an OpenAI-compatible provider. The address is private, so it lives in the owner's handover note, not in this repo.
+- **Public data only.** The free tiers may log prompts. Never send customer data through this proxy.
+- **Away from the LAN.** Install Tailscale (free) on both machines, then start the agent with `POOL_SHARE_BIND=<mac tailscale address>`. Do not install it without the owner.
+- **Known limits.** ExpressVPN on the Mac must allow local network traffic (`allowLANTraffic`). From the Mac itself a connection to its own LAN address is reset by the VPN, so Mac-side admin calls use `127.0.0.1:4181`. Groq is blocked from Iran, Mistral keys were out of budget on 2026-11-05, so free traffic mostly lands on Gemini, SambaNova and OpenRouter `:free`, then paid.
+
 ## Line endings
 
 `.gitattributes` (PR #71) keeps every checkout LF and leaves test fixtures byte-exact. Several fixtures are CRLF or Windows-1256 on purpose. Do not set `core.autocrlf=true`.
