@@ -2,7 +2,9 @@ import { AccessModule } from '../access/access.module';
 import { FixedAssetController } from './controllers/fixed-asset.controller';
 import { DepreciationLineEntity, FixedAssetEntity } from './entities/fixed-asset.entity';
 import { FixedAssetRepository } from './repositories/fixed-asset.repository';
-import { FixedAssetService } from './services/fixed-asset.service';
+import { FIXED_ASSET_POSTING, FixedAssetPosting, FixedAssetService } from './services/fixed-asset.service';
+import { ModuleRef } from '@nestjs/core';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { DimensionController } from './controllers/dimension.controller';
 import { DimensionEntity } from './entities/dimension.entity';
 import { DimensionRepository } from './repositories/dimension.repository';
@@ -70,6 +72,15 @@ import { ReportExportService } from './services/report-export.service';
     TenantScope,
     FixedAssetRepository,
     FixedAssetService,
+    // PostingRulesModule imports AccountingModule, so importing it here would be a cycle: the engine
+    // is resolved lazily from the application container at call time instead.
+    {
+      provide: FIXED_ASSET_POSTING,
+      inject: [ModuleRef],
+      useFactory: (ref: ModuleRef): FixedAssetPosting => ({
+        post: (...args) => ref.get(PostingRulesService, { strict: false }).post(...args),
+      }),
+    },
     ChartTemplateService,
     FinancialReportsService,
     FiscalYearRepository,
