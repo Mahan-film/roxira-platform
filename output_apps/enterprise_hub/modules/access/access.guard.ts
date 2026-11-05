@@ -14,6 +14,7 @@ import { denied } from './access-errors';
 import { AccessAction, AccessModule, CORE_MODULES, permissionOf } from './catalogue';
 import {
   ACCESS_ACTION_KEY,
+  ACCESS_ALSO_KEY,
   ACCESS_MODULE_KEY,
   ANY_MEMBER_KEY,
   AUTH_ONLY_KEY,
@@ -84,16 +85,19 @@ export class AccessGuard implements CanActivate {
     }
 
     if (module && !anyMember) {
-      if (!CORE_MODULES.includes(module) && !ctx.entitledModules.has(module)) {
-        throw denied('MODULE_NOT_ENTITLED', 'This module is not enabled for your organisation.');
-      }
-
       const action =
         this.reflector.getAllAndOverride<AccessAction | undefined>(ACCESS_ACTION_KEY, [context.getHandler()]) ??
         actionForMethod(request.method);
-      if (!ctx.permissions.has(permissionOf(module, action))) {
-        throw denied('FORBIDDEN_ACTION', 'Your role does not allow this action.');
+      const also = this.reflector.getAllAndOverride<AccessModule[] | undefined>(ACCESS_ALSO_KEY, [
+        context.getHandler(),
+      ]);
+      let primaryDenial = this.denialFor(ctx, module, action);
+      if (primaryDenial && also?.length) {
+        // Alternative modules grant the same action only; any one passing is enough.
+        const altPassed = also.some((alt) => !this.denialFor(ctx, alt, action));
+        if (altPassed) primaryDenial = undefined;
       }
+      if (primaryDenial) throw primaryDenial;
     }
 
     if (ctx.require2fa && !user.mfa) {
@@ -102,6 +106,21 @@ export class AccessGuard implements CanActivate {
 
     this.bind(request, ctx);
     return true;
+  }
+
+  /** Same two checks (entitlement unless core, role permission) against one module; null when allowed. */
+  private denialFor(
+    ctx: AccessContext,
+    module: AccessModule,
+    action: AccessAction,
+  ): Error | undefined {
+    if (!CORE_MODULES.includes(module) && !ctx.entitledModules.has(module)) {
+      return denied('MODULE_NOT_ENTITLED', 'This module is not enabled for your organisation.');
+    }
+    if (!ctx.permissions.has(permissionOf(module, action))) {
+      return denied('FORBIDDEN_ACTION', 'Your role does not allow this action.');
+    }
+    return undefined;
   }
 
   private bind(request: AccessRequest, ctx: AccessContext): void {
