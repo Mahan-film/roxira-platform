@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, StreamableFile } from '@nestjs/common';
 import { ExportableReport, ExportReportQueryDto } from '../dto/report.dto';
 import { Book, bookPages, bookSheet, generalLedgerBook, journalBook } from '../reports/legal-books';
 import { rowsPerPage, writePdf, writePdfs } from '../reports/pdf-writer';
@@ -121,14 +121,25 @@ export class ReportExportService {
       const pages = bookPages(book, rowsPerPage(book.columns.length + (book.withBalance ? 3 : 2)));
       return { body: await writePdfs(pages), filename: `${report}.pdf`, contentType: 'application/pdf' };
     }
-    const table = book ? bookSheet(book) : await this.table(tenantId, report, query);
-    if (query.format === 'pdf') {
-      return { body: await writePdf(table), filename: `${report}.pdf`, contentType: 'application/pdf' };
+    return this.render(book ? bookSheet(book) : await this.table(tenantId, report, query), query.format, report);
+  }
+
+  /** Renders a ready table (a report core's output) as XLSX or PDF; the one path every report file takes. */
+  async render(table: ReportTable, format: 'xlsx' | 'pdf' | undefined, name: string): Promise<ExportedReport> {
+    if (format === 'pdf') {
+      return { body: await writePdf(table), filename: `${name}.pdf`, contentType: 'application/pdf' };
     }
     return {
       body: writeXlsx(table),
-      filename: `${report}.xlsx`,
+      filename: `${name}.xlsx`,
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     };
+  }
+
+  /** Sets the download headers on the response and wraps the bytes for Nest. */
+  download(file: ExportedReport, response: { setHeader(name: string, value: string): void }): StreamableFile {
+    response.setHeader('Content-Type', file.contentType);
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    return new StreamableFile(file.body);
   }
 }
