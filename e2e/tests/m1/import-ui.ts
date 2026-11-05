@@ -61,8 +61,9 @@ export async function importFile(
 
   await expect(page.getByText('ورود داده انجام شد')).toBeVisible({ timeout: 120_000 });
   const count = async (label: string) => {
-    const tile = page.locator('div.rounded-xl').filter({ has: page.getByText(label, { exact: true }) });
-    return parseFa(await tile.locator('div.text-2xl').innerText());
+    // The number is the sibling just above its label inside one tile.
+    const number = page.getByText(label, { exact: true }).locator('xpath=preceding-sibling::div[1]');
+    return parseFa(await number.innerText());
   };
   return {
     inserted: await count('ثبت‌شده'),
