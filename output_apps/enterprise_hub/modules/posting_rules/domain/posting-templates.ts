@@ -71,6 +71,15 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
       cr('other_deductions_payable', 'otherDeductions', 'سایر کسورات حقوق'),
       cr('payroll_payable', 'net', 'خالص حقوق پرداختنی به کارکنان'),
     ],
+    // Codes the HR module hardcoded before adopting the engine (see hr/constants/hr.constants.ts).
+    defaults: {
+      payroll_expense: '5010',
+      employer_insurance_expense: '5040',
+      insurance_payable: '2030',
+      wage_tax_payable: '2040',
+      other_deductions_payable: '2060',
+      payroll_payable: '2050',
+    },
   },
   {
     docType: 'payroll.payslip',

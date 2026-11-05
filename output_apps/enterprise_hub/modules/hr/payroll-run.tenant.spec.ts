@@ -27,6 +27,7 @@ import { HrService } from './services/hr.service';
 import { PayrollRunService } from './services/payroll-run.service';
 import { reconcilePayrollRun } from './services/payroll-reconciliation';
 import { fakeStatutory } from './statutory/__fixtures__/seeded-rates';
+import { fakePostingRules } from './__fixtures__/fake-posting-rules';
 
 /** Accounting fake: keeps a per-tenant chart and rejects unbalanced entries. */
 class FakeAccountingService {
@@ -70,16 +71,25 @@ class FakeAccountingService {
     tenantId: string,
     dto: {
       entryNumber: string;
-      lines: { accountCode: string; debit?: number; credit?: number }[];
+      lines: {
+        accountCode: string;
+        debit?: number | string;
+        credit?: number | string;
+      }[];
     },
   ): Promise<{ id: number; entryNumber: string }> {
-    const debit = dto.lines.reduce((sum, line) => sum + (line.debit ?? 0), 0);
-    const credit = dto.lines.reduce((sum, line) => sum + (line.credit ?? 0), 0);
+    const lines = dto.lines.map((line) => ({
+      accountCode: line.accountCode,
+      debit: Number(line.debit ?? 0),
+      credit: Number(line.credit ?? 0),
+    }));
+    const debit = lines.reduce((sum, line) => sum + line.debit, 0);
+    const credit = lines.reduce((sum, line) => sum + line.credit, 0);
     if (Math.abs(debit - credit) > 0.5) {
       throw new BadRequestException('unbalanced');
     }
     const chart = this.chart(tenantId);
-    if (dto.lines.some((line) => !chart.has(line.accountCode))) {
+    if (lines.some((line) => !chart.has(line.accountCode))) {
       throw new BadRequestException('missing account');
     }
     if (
@@ -90,7 +100,7 @@ class FakeAccountingService {
     ) {
       throw new ConflictException('duplicate entry');
     }
-    this.entries.push({ tenantId, ...dto });
+    this.entries.push({ tenantId, entryNumber: dto.entryNumber, lines });
     return { id: this.entries.length, entryNumber: dto.entryNumber };
   }
 }
@@ -332,16 +342,21 @@ class InMemoryPayrollRepository {
 const setup = () => {
   const repo = new InMemoryPayrollRepository();
   const accounting = new FakeAccountingService();
+  const postingRules = fakePostingRules(
+    accounting as unknown as AccountingService,
+  );
   const hrService = new HrService(
     repo as unknown as HrRepository,
     accounting as unknown as AccountingService,
     fakeStatutory(),
+    postingRules,
   );
   const service = new PayrollRunService(
     repo as unknown as HrRepository,
     hrService,
     accounting as unknown as AccountingService,
     fakeStatutory(),
+    postingRules,
   );
   return { repo, accounting, hrService, service };
 };
