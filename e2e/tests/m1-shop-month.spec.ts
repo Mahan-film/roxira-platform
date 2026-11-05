@@ -267,16 +267,76 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     await expect(row).toContainText(fa(Number(README_TOTALS.openingDebit)));
   });
 
-  // Needs a product feature (issue: invoice import is a stub). See the gap list in docs/testing/M1_GATE.md.
-  test.fixme('06 import invoices: 240 invoices, duplicate rows counted once [E5]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/import');
-    void SAMPLE_COMPANY_FILES.invoices;
-    // GAP: `sales-invoices` registry + InvoicingService.importInvoices (modules/invoicing/services/invoicing.service.ts,
-    // ~line 1202) turn each row into a one-line invoice priced `amount`, with buyer «طرف حساب <code>» and no date,
-    // type, item, quantity or VAT. Rows with the same number are dropped as duplicates, so the 40 multi-line invoices
-    // keep one line each; purchases (143 rows) are stored as sales invoices. Also: the file holds 238 distinct numbers
-    // (360 rows, 2 repeated rows), while the README counts 240 including those 2 repeats.
-    // Expected once built: 238 invoices (143 sales + 95 purchases), receivables/payables *ClosingUnique, not *ClosingRaw.
+  test('06 import invoices: 238 distinct invoices (143 sales + 95 purchases), repeated rows counted once [E5]', async ({ page }) => {
+    const { header, rows } = readCsv(SAMPLE_COMPANY_FILES.invoices);
+    const west = (t: string) =>
+      t.replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0)).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+    const cell = (row: string[], column: string) => west(row[header.indexOf(column)].trim());
+    const numbers = rows.map((r) => cell(r, 'شماره صورتحساب'));
+    expect(rows).toHaveLength(360);
+    expect(new Set(numbers).size).toBe(238); // README: 360 rows, 2 exact repeats of INV-S-1403-0001 / INV-P-1403-0001
+    expect(rows.filter((r) => cell(r, 'کد طرف حساب') === '')).toHaveLength(6); // walk-in rows
+
+    // Invoices need their items; step 04 (#470) owns the real item import, so import them here only when it has not run.
+    const items = await apiGet<{ total: number }>(page, 'inventory/items?limit=1');
+    if (items.total === 0) {
+      await importFile(page, SAMPLE_COMPANY_FILES.items, 'inventory-items', {
+        'کد کالا': 'sku',
+        'بارکد': 'barcode',
+        'نام کالا': 'name',
+        'موجودی': 'quantity',
+        'حداقل موجودی': 'minQuantity',
+        'بهای واحد (ریال)': null,
+        'ارزش موجودی (ریال)': null,
+        'شماره دسته': 'batchNumber',
+      });
+    }
+
+    const counts = await importFile(page, SAMPLE_COMPANY_FILES.invoices, 'sales-invoices', {
+      'شماره صورتحساب': 'number',
+      'نوع صورتحساب': 'type',
+      'تاریخ': 'date',
+      'کد طرف حساب': 'partyCode',
+      'نام طرف حساب': null, // the party comes from the master by code
+      'کد کالا': 'itemCode',
+      'تعداد': 'quantity',
+      'بهای واحد (ریال)': 'unitPrice',
+      'مبلغ': 'amount',
+      'مالیات ارزش افزوده': 'vat',
+      'جمع نهایی (ریال)': 'totalRial',
+      'ارز': 'currency',
+      'نرخ تسعیر': 'fxRate',
+      'وضعیت تسویه': null, // import creates drafts; posting and settlement come in later steps
+    });
+    expect(counts).toMatchObject({ skippedDuplicates: 2, failed: 0 }); // 358 line rows become 238 invoices
+
+    type Invoice = {
+      taxInvoiceNumber: string;
+      direction: string;
+      status: string;
+      items: unknown[];
+      buyerInfo?: { name?: string };
+    };
+    const all: Invoice[] = [];
+    for (let page_ = 1; page_ <= 3; page_ += 1) {
+      all.push(...(await apiGet<{ data: Invoice[] }>(page, `invoicing?limit=100&page=${page_}`)).data);
+    }
+    expect(all).toHaveLength(238);
+    expect(all.filter((i) => i.direction === 'SALE')).toHaveLength(143);
+    expect(all.filter((i) => i.direction === 'PURCHASE')).toHaveLength(95);
+    expect(new Set(all.map((i) => i.status))).toEqual(new Set(['DRAFT'])); // not posted: steps 07 and 08 post them
+
+    // A multi-line invoice keeps every distinct line; the repeated row is not a second line.
+    const linesOf = (n: string) => new Set(rows.filter((r) => cell(r, 'شماره صورتحساب') === n).map((r) => r.join('|'))).size;
+    const multi = [...new Set(numbers)].find((n) => linesOf(n) > 1)!;
+    expect(all.find((i) => i.taxInvoiceNumber === multi)!.items).toHaveLength(linesOf(multi));
+    expect(all.find((i) => i.taxInvoiceNumber === 'INV-S-1403-0001')!.items).toHaveLength(1);
+
+    // Blank-party rows are walk-in sales, not a placeholder party.
+    const walkIns = new Set(rows.filter((r) => cell(r, 'کد طرف حساب') === '').map((r) => cell(r, 'شماره صورتحساب')));
+    for (const n of walkIns) expect(all.find((i) => i.taxInvoiceNumber === n)!.buyerInfo?.name).toBe('مشتری گذری');
+    expect(all.some((i) => i.buyerInfo?.name?.startsWith('طرف حساب'))).toBe(false);
+    // Receivable/payable closing totals are proved at steps 13 and 14, after posting.
   });
 
   // ---- Post the month ----------------------------------------------------------------------------------

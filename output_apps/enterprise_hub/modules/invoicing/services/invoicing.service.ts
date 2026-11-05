@@ -9,6 +9,7 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { FindOptionsWhere, ILike } from 'typeorm';
+import { fromMinor } from '../../accounting/money';
 import { CustomerIdentityService, WALK_IN_NAME } from '../../crm/services/customer-identity.service';
 import { invoiceRuleFor } from '../country/invoice-country-rules';
 import { CrmRepository } from '../../crm/repositories/crm.repository';
@@ -16,6 +17,7 @@ import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
 import { CurrencyService } from '../../currency/services/currency.service';
 import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
+import { PartiesService } from '../../parties/services/parties.service';
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
 import {
   DEFAULT_TAX_INVOICE_NUMBER_PREFIX,
@@ -52,6 +54,13 @@ import {
   InvoicingRepository,
 } from '../repositories/invoicing.repository';
 import { tehranIsoDate } from '../../hr/services/jalali-period';
+import {
+  groupInvoiceRows,
+  InvoiceImportPlan,
+  InvoiceImportRow,
+  InvoiceImportRowResult,
+  ImportedPartyRef,
+} from './invoice-import';
 import { VatRateResolver } from './vat-rate.resolver';
 
 /** What a caller adds to `create` beyond the invoice itself (POS sales). */
@@ -71,16 +80,19 @@ interface InvoiceTotals {
 
 /** ورودی درج یک صورتحساب از مسیر ورود بستهٔ دیتابیس. */
 export interface InvoicingImportInput {
+  rowNumber?: number;
   number: string;
   type?: string;
   date?: string;
   partyCode?: string;
+  itemCode?: string;
+  quantity?: number;
+  unitPrice?: number;
   currency?: string;
   amount?: number;
   fxRate?: number;
   vat?: number;
   totalRial?: number;
-  status?: string;
 }
 
 /**
@@ -107,6 +119,7 @@ export class InvoicingService {
     private readonly suiteEventsQueue?: Queue,
     @Optional() private readonly customerIdentity?: CustomerIdentityService,
     @Optional() vatRateResolver?: VatRateResolver,
+    @Optional() private readonly partiesService?: PartiesService,
   ) {
     // Without the store (unit tests that build the service by hand) only the tenant setting is read.
     this.vatRates = vatRateResolver ?? new VatRateResolver(undefined, tenantsRepository);
@@ -1195,57 +1208,209 @@ export class InvoicingService {
   /**
    * درج صورتحساب‌ها از مسیر ورود بستهٔ دیتابیس.
    *
-   * هر ردیف به یک اقلام خلاصه نگاشت می‌شود؛ مبلغ از ستون‌های مبلغ/جمع نهایی
-   * گرفته می‌شود. فیلدهای چندارزی صورتحساب در تسک موازی اضافه می‌شوند و تا آن
-   * زمان فقط ارزهای پشتیبانی‌شدهٔ سرویس پذیرفته می‌شود.
+   * ردیف‌های هم‌شماره یک صورتحساب چندسطری می‌سازند؛ تکرار دقیق یک ردیف فقط یک
+   * بار شمرده می‌شود. همهٔ سطرها پیش از درج با واحد پول صحیح (money.ts)
+   * اعتبارسنجی می‌شوند و هر صورتحساب با وضعیت DRAFT و بدون هیچ رویداد ثبت
+   * (posting) ساخته می‌شود؛ صدور/ثبت سند در گام‌های بعدی گردش وضعیت انجام می‌شود.
    */
   async importInvoices(
     tenantId: string,
     inputs: InvoicingImportInput[],
-  ): Promise<string[]> {
-    const ids: string[] = [];
-    const supported = new Set<string>(Object.values(Currency));
+  ): Promise<InvoiceImportRowResult[]> {
+    const rows: InvoiceImportRow[] = inputs.map((input, index) => ({
+      rowNumber: input.rowNumber ?? index + 2,
+      number: String(input.number ?? ''),
+      type: input.type,
+      date: input.date,
+      partyCode: input.partyCode,
+      itemCode: input.itemCode,
+      quantity: input.quantity,
+      unitPrice: input.unitPrice,
+      amount: input.amount,
+      vat: input.vat,
+      totalRial: input.totalRial,
+      currency: input.currency,
+      fxRate: input.fxRate,
+    }));
 
-    for (const input of inputs) {
-      const unitPrice = Math.max(
-        input.amount ?? input.totalRial ?? 0,
-        0.01,
-      );
-      const currency =
-        input.currency && supported.has(input.currency)
-          ? (input.currency as Currency)
-          : undefined;
-
-      const dto: CreateInvoiceDto = {
-        taxInvoiceNumber: input.number,
-        sellerInfo: { name: 'نامشخص' },
-        buyerInfo: {
-          name: input.partyCode ? `طرف حساب ${input.partyCode}` : 'نامشخص',
-        },
-        items: [
-          {
-            description: `ورود بسته (${input.number})`,
-            quantity: 1,
-            unitPrice,
-          },
-        ],
+    const resultByRow = new Map<number, InvoiceImportRowResult>();
+    const results: InvoiceImportRowResult[] = rows.map((row) => {
+      const result: InvoiceImportRowResult = {
+        rowNumber: row.rowNumber,
+        invoiceNumber: String(row.number ?? '').trim(),
+        invoiceId: null,
+        error: null,
+        duplicate: false,
+        existingDuplicate: false,
       };
-      if (currency) {
-        dto.currency = currency;
-      }
-      if (
-        input.fxRate !== undefined &&
-        Number.isFinite(input.fxRate) &&
-        input.fxRate > 0
-      ) {
-        dto.fxRate = input.fxRate;
-      }
+      resultByRow.set(result.rowNumber, result);
+      return result;
+    });
 
-      const created = await this.create(tenantId, dto);
-      ids.push(created.id);
+    const plans = groupInvoiceRows(rows, await this.importLookups(tenantId, rows));
+
+    const existingNumbers = new Set(
+      await this.findExistingInvoiceNumbers(
+        tenantId,
+        plans.map((plan) => plan.invoiceNumber),
+      ),
+    );
+
+    for (const plan of plans) {
+      const rowResults = plan.rowNumbers
+        .map((rowNumber) => resultByRow.get(rowNumber))
+        .filter((result): result is InvoiceImportRowResult => Boolean(result));
+      for (const duplicate of plan.duplicateRows) {
+        const result = resultByRow.get(duplicate.rowNumber);
+        if (result) {
+          result.duplicate = true;
+        }
+      }
+      if (rowResults.length === 0 || rowResults[0].duplicate) {
+        continue;
+      }
+      if (existingNumbers.has(plan.invoiceNumber)) {
+        for (const result of rowResults) {
+          result.existingDuplicate = true;
+        }
+        continue;
+      }
+      if (!plan.valid) {
+        for (const [rowNumber, message] of plan.rowErrors) {
+          const result = resultByRow.get(rowNumber);
+          if (result) {
+            result.error = message;
+          }
+        }
+        continue;
+      }
+      try {
+        const created = await this.create(tenantId, await this.importedDtoFromPlan(tenantId, plan));
+        if (plan.date) {
+          const entity = await this.invoicingRepository.findById(tenantId, created.id);
+          if (entity && !entity.issuedAt) {
+            entity.issuedAt = plan.date;
+            await this.invoicingRepository.save(tenantId, entity);
+          }
+        }
+        for (const line of plan.lines) {
+          const result = resultByRow.get(line.rowNumber);
+          if (result) {
+            result.invoiceId = created.id;
+          }
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : 'درج صورتحساب ناموفق بود.';
+        for (const result of rowResults) {
+          result.error = message;
+        }
+      }
     }
 
-    return ids;
+    return results;
+  }
+
+  private async importLookups(
+    tenantId: string,
+    rows: InvoiceImportRow[],
+  ): Promise<{
+    partyByCode: Map<string, ImportedPartyRef>;
+    existingSkus: Set<string>;
+  }> {
+    const partyCodes = new Set<string>();
+    const skus = new Set<string>();
+    for (const row of rows) {
+      const partyCode = String(row.partyCode ?? '').trim();
+      if (partyCode) {
+        partyCodes.add(partyCode);
+      }
+      const sku = String(row.itemCode ?? '').trim();
+      if (sku) {
+        skus.add(sku);
+      }
+    }
+
+    const partyByCode = new Map<string, ImportedPartyRef>();
+    if (this.partiesService && partyCodes.size > 0) {
+      const existing = await this.partiesService
+        .findExistingCodes(tenantId, Array.from(partyCodes))
+        .catch(() => []);
+      for (const code of existing) {
+        try {
+          const party = await this.partiesService.getByCode(tenantId, code);
+          partyByCode.set(code, {
+            id: party.id,
+            code: party.code,
+            name: party.name,
+            nationalId: party.nationalId,
+            economicCode: party.economicCode,
+          });
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    const existingSkus = new Set<string>();
+    if (skus.size > 0 && this.inventoryRepository) {
+      const skuList = Array.from(skus);
+      if (typeof this.inventoryRepository.findStockItemSkus === 'function') {
+        for (const sku of await this.inventoryRepository.findStockItemSkus(tenantId, skuList)) {
+          existingSkus.add(sku);
+        }
+      } else {
+        for (const sku of skuList) {
+          const item = await this.inventoryRepository.findStockItemBySku(tenantId, sku);
+          if (item?.sku) {
+            existingSkus.add(item.sku);
+          }
+        }
+      }
+    }
+
+    return { partyByCode, existingSkus };
+  }
+
+  private async importedDtoFromPlan(
+    tenantId: string,
+    plan: InvoiceImportPlan,
+  ): Promise<CreateInvoiceDto> {
+    const direction = plan.direction ?? InvoiceDirection.SALE;
+    const dto: CreateInvoiceDto = {
+      taxInvoiceNumber: plan.invoiceNumber,
+      direction,
+      sellerInfo:
+        direction === InvoiceDirection.PURCHASE && plan.party
+          ? this.importedPartyInfo(plan.party)
+          : { name: await this.ownName(tenantId) },
+      items: plan.lines.map((line) => ({
+        sku: line.sku,
+        quantity: line.quantity,
+        unitPrice: Number(fromMinor(line.unitPriceMinor)),
+        vatRate: line.vatRate,
+      })),
+    };
+    if (direction === InvoiceDirection.SALE && plan.party) {
+      dto.buyerInfo = this.importedPartyInfo(plan.party);
+    }
+    if (plan.currency) {
+      dto.currency = plan.currency;
+    }
+    if (plan.fxRate !== null) {
+      dto.fxRate = plan.fxRate;
+    }
+    return dto;
+  }
+
+  private importedPartyInfo(party: ImportedPartyRef): InvoicePartyInfoDto {
+    return {
+      name: party.name,
+      ...(party.nationalId?.trim() ? { nationalId: party.nationalId.trim() } : {}),
+      ...(party.economicCode?.trim() ? { economicCode: party.economicCode.trim() } : {}),
+    };
   }
 
   /** حذف صورتحساب‌های یک دسته ورود داده (undo). */
