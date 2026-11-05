@@ -82,6 +82,30 @@ gateway:
     timeout: 60
     cooldown_time: 60                  # seconds a deployment sits out after a 429 / failure
     enable_pre_call_checks: true
+    # Groq answers 403 and Gemini 400 ("location not supported") when the caller IP is wrong; OpenRouter flips.
+    # LiteLLM only cools 429/401/5xx by default: count 400/403 (and timeouts) too so a bad key/region leaves the
+    # rotation at once and traffic moves on (owner 2026-11-05, gateway on srv1).
+    allowed_fails_policy:
+      BadRequestErrorAllowedFails: 1
+      AuthenticationErrorAllowedFails: 1
+      TimeoutErrorAllowedFails: 2
+      RateLimitErrorAllowedFails: 1
+      InternalServerErrorAllowedFails: 2
+  # Virtual keys need a database. A dedicated Postgres container (roxira_keypool_db, no published port, own volume)
+  # holds only LiteLLM's key/spend tables, never prod data. The master key stays the product runtime's password;
+  # requests still pass if the DB is down. Clients use the virtual keys below through an SSH tunnel to
+  # 127.0.0.1:4000 on srv1 (docs/ops/TWO_COMPUTERS.md); no public port.
+  database: true
+  virtual_keys:
+    # max_budget_usd counts PAID spend only: free deployments are priced at 0 (see _params), so free is unlimited.
+    mac-agents:
+      max_budget_usd: 3
+      budget_duration: 1d
+      models: [agent-free, agent-strong-free, agent-light-free, agent-free-paid, best-all, gemini-best, summarize-cheap]
+    laptop-mahansudo-srv:
+      max_budget_usd: 2
+      budget_duration: 1d
+      models: [agent-free, agent-strong-free, agent-light-free, agent-free-paid, best-all, gemini-best, summarize-cheap]
 
 providers:
   groq:
@@ -111,6 +135,9 @@ providers:
     data_policy: may_log   # free "Experiment" plan may train on prompts
     base_url: https://api.mistral.ai/v1
     litellm_prefix: mistral
+    # All 4 keys sit at budget-exhausted (402) since 2026-11-05: keep them in the chain, but a failing one sleeps
+    # 30 min instead of 60 s so the ladder does not waste a try on them every minute. Recovers by itself.
+    litellm_params: {cooldown_time: 1800}
     keys: [MISTRAL_API_KEY, MISTRAL_API_KEY_2, MISTRAL_API_KEY_3, MISTRAL_API_KEY_4]   # every set key is its own deployment
     models:   # ids verified with GET /v1/models (function_calling) on 2026-10-14
       - {id: mistral-medium-latest}

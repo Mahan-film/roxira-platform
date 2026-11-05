@@ -74,7 +74,10 @@ def test_review_chain_has_no_claude_or_forbidden_model(lr):
     for a in lr.review_attempts():
         assert "claude" not in a.name and "anthropic" not in a.name
         assert not lr.model_registry.is_forbidden_model_id(a.name)
-    assert lr.review_attempts()[0].name.startswith("openrouter/deepseek")
+    names = [a.name for a in lr.review_attempts()]
+    # srv1 gateway (through the ssh tunnel) first; direct OpenRouter DeepSeek stays in the chain as a last fallback
+    assert names[0].startswith("gateway/") and any(n.startswith("openrouter/deepseek") for n in names)
+    assert names.index("gateway-ssh/roxira-prod/private") < min(i for i, n in enumerate(names) if n.startswith("openrouter/"))
 
 
 def test_cap_reached_is_a_distinct_error_when_only_cap_blocked(lr, tmp_path):

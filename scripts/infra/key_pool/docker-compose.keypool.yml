@@ -3,10 +3,32 @@
 # config/key_pool.yaml, copied from the server .env) and generated/litellm.config.yaml.
 # Start via install.sh --apply, not by hand. Image tag comes from config/key_pool.yaml.
 services:
+  # Virtual keys / budgets for the gateway. Own container + volume, NO published port, not on the prod bridge:
+  # it holds only LiteLLM's key and spend tables. Password: generated/keypool-db.pass (install.sh, mode 600).
+  keypool_db:
+    image: postgres:16-alpine
+    container_name: roxira_keypool_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_DB: litellm
+      POSTGRES_PASSWORD_FILE: /run/secrets/keypool_db_pass
+    volumes:
+      - keypool_pgdata:/var/lib/postgresql/data
+      - ./generated/keypool-db.pass:/run/secrets/keypool_db_pass:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
   keypool:
     image: ${KEYPOOL_IMAGE:?set by install.sh}
     container_name: roxira_keypool
     restart: unless-stopped
+    depends_on:
+      keypool_db:
+        condition: service_healthy
     env_file: ./generated/keypool.env
     command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
     volumes:
@@ -31,6 +53,9 @@ services:
       # shared prod bridge: reach the local TEI embeddings container `roxira_embeddings`
       # by name (docker-compose.prod.yml project -> roxira_platform_roxira_net).
       - roxira_net
+
+volumes:
+  keypool_pgdata:
 
 networks:
   roxira_net:

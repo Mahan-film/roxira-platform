@@ -1,0 +1,17 @@
+# systemd USER unit for the laptop (Linux / WSL2 with systemd): ssh tunnel to the srv1 LLM gateway.
+#   mkdir -p ~/.config/systemd/user && cp roxira-llm-tunnel.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now roxira-llm-tunnel
+#   loginctl enable-linger "$USER"      # keep it running without an open session
+# Needs `Host roxira-prod` in ~/.ssh/config (scripts/ops/install_ssh_alias.sh). Local port 4181 -> srv1 127.0.0.1:4000.
+[Unit]
+Description=ssh tunnel to the Roxira LLM gateway on srv1 (127.0.0.1:4181)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=15 -L 127.0.0.1:4181:127.0.0.1:4000 roxira-prod
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
