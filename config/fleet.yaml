@@ -42,6 +42,7 @@ routing:
   review_task: review_desk # models.yaml tasks.review_desk: other family than the author, via scripts/dev/llm_route.py
   cache: true              # routing_policy.cache_key: identical prompts reuse the answer
   offpeak: true            # defer routing.offpeak_tasks until routing_policy.next_offpeak()
+  offpeak_tasks: [fleet]   # the batch build task waits for 16:00-00:00 UTC (19:30-03:30 Tehran)
   review_at_offpeak: true  # the hourly review desk runs in the 19:30-03:30 Tehran window when not urgent
 
 review:
