@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { fromDb, fromMinor } from '../money';
-import { AgeingQueryDto, LedgerQueryDto, ReportPeriodDto, SubsidiaryQueryDto, TrialBalanceQueryDto } from '../dto/report.dto';
+import { AgeingQueryDto, LedgerQueryDto, PartyStatementQueryDto, ReportPeriodDto, SubsidiaryQueryDto, TrialBalanceQueryDto } from '../dto/report.dto';
 import { AccountLevel, AccountType, ReportLine } from '../enums/accounting.enum';
 import { AccountingRepository } from '../repositories/accounting.repository';
 import { FiscalYearRepository } from '../repositories/fiscal-year.repository';
@@ -59,6 +59,14 @@ export interface TrialBalanceReport {
   totals: Omit<TrialBalanceRow, 'code' | 'name' | 'level'>;
   /** Null on a subsidiary report: parties are only part of the ledger, so its sides need not match. */
   balanced: boolean | null;
+}
+
+export interface PartyStatement {
+  side: 'receivable' | 'payable';
+  accountCodes: string[];
+  /** Debit-minus-credit balances, as in the account ledger. */
+  ledger: Omit<LedgerReport, 'accountCode' | 'accountName'>;
+  ageing: AgeingReport;
 }
 
 export interface LedgerReport {
@@ -438,12 +446,27 @@ export class FinancialReportsService {
     const period = await this.resolvePeriod(tenantId, query);
     const accounts = await this.accounts(tenantId);
     const scope = this.subtree(accounts, query.accountCode);
+    return {
+      accountCode: query.accountCode,
+      accountName: scope[0].name,
+      ...(await this.ledgerOf(tenantId, period, scope, query.partyCode, query.limit ?? 1000)),
+    };
+  }
+
+  /** Opening, lines with a running balance, and closing of `scope`'s POSTED lines in the period. */
+  private async ledgerOf(
+    tenantId: string,
+    period: ResolvedPeriod,
+    scope: ReportAccount[],
+    partyCode: string | undefined,
+    limit: number,
+  ): Promise<Omit<LedgerReport, 'accountCode' | 'accountName'>> {
     const filter = {
       accountIds: scope.map((account) => account.id),
-      partyCode: query.partyCode,
+      partyCode,
       from: period.from,
       to: period.to,
-      limit: query.limit ?? 1000,
+      limit,
     };
     const [totals, lines] = await Promise.all([
       this.ledger.ledgerTotals(tenantId, filter),
@@ -455,9 +478,7 @@ export class FinancialReportsService {
     let running = opening;
     return {
       period,
-      accountCode: query.accountCode,
-      accountName: scope[0].name,
-      partyCode: query.partyCode ?? null,
+      partyCode: partyCode ?? null,
       opening,
       totalDebit,
       totalCredit,
@@ -481,6 +502,37 @@ export class FinancialReportsService {
         };
       }),
     };
+  }
+
+  /**
+   * Statement of one customer (receivable side) or supplier (payable side): the party's lines on
+   * every receivable (or payable) account, or on one account's subtree, with opening, running and
+   * closing balance, and the ageing of what is still open at the period end.
+   */
+  async partyStatement(tenantId: string, query: PartyStatementQueryDto): Promise<PartyStatement> {
+    const side = query.side ?? 'receivable';
+    const period = await this.resolvePeriod(tenantId, query);
+    const accounts = await this.accounts(tenantId);
+    const line = side === 'receivable' ? ReportLine.RECEIVABLE : ReportLine.PAYABLE;
+    const scope = query.accountCode
+      ? this.subtree(accounts, query.accountCode)
+      : accounts.filter((account) => classify(account).line === line);
+    if (scope.length === 0) {
+      throw new BadRequestException(
+        side === 'receivable' ? 'هیچ حساب دریافتنی در سرفصل‌ها نیست.' : 'هیچ حساب پرداختنی در سرفصل‌ها نیست.',
+      );
+    }
+    const [ledger, ageingReport] = await Promise.all([
+      this.ledgerOf(tenantId, period, scope, query.partyCode, 5000),
+      this.ageing(tenantId, {
+        side,
+        to: period.to,
+        accountCode: query.accountCode,
+        partyCode: query.partyCode,
+        edges: query.edges,
+      }),
+    ]);
+    return { side, accountCodes: scope.map((account) => account.code).sort(), ledger, ageing: ageingReport };
   }
 
   /** A balance sheet is a position: it always reports from the start of the year. */

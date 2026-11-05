@@ -51,6 +51,7 @@ const TABS = [
   { key: "cash-flow", label: "جریان نقد" },
   { key: "equity-changes", label: "تغییرات حقوق مالکانه" },
   { key: "ageing", label: "گزارش سنی" },
+  { key: "party-statement", label: "صورت‌حساب طرف حساب" },
   { key: "chart-of-accounts", label: "سرفصل حساب‌ها" },
   { key: "journal-book", label: "دفتر روزنامه" },
   { key: "general-ledger-book", label: "دفتر کل (چاپی)" },
@@ -59,9 +60,9 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 /** Reports with an Excel/PDF export but no on-screen view yet (their JSON endpoints come later). */
-type ExportOnlyTab = "ageing" | "chart-of-accounts" | "journal-book" | "general-ledger-book";
+type ExportOnlyTab = "ageing" | "party-statement" | "chart-of-accounts" | "journal-book" | "general-ledger-book";
 const isExportOnly = (tab: TabKey): tab is ExportOnlyTab =>
-  tab === "ageing" || tab === "chart-of-accounts" || isBook(tab);
+  tab === "ageing" || tab === "party-statement" || tab === "chart-of-accounts" || isBook(tab);
 /** Legal books (#249): page-numbered PDF with totals carried page to page. */
 const isBook = (tab: TabKey) => tab === "journal-book" || tab === "general-ledger-book";
 
@@ -105,6 +106,7 @@ export default function AccountingReportsPage() {
   }, []);
 
   const needsAccount = tab === "ledger" && !accountCode.trim();
+  const needsParty = tab === "party-statement" && !partyCode.trim();
   const badEdges = tab === "ageing" && !EDGES_PATTERN.test(ageingEdges);
 
   const exportQuery = useMemo(() => {
@@ -113,6 +115,14 @@ export default function AccountingReportsPage() {
         side: ageingSide,
         to: ageingTo || undefined,
         edges: ageingEdges.replace(/[\s]/g, "").replace(/،/g, ","),
+        accountCode: accountCode.trim() || undefined,
+        partyCode: partyCode.trim() || undefined,
+      };
+    }
+    if (tab === "party-statement") {
+      return {
+        ...query,
+        side: ageingSide,
         accountCode: accountCode.trim() || undefined,
         partyCode: partyCode.trim() || undefined,
       };
@@ -188,7 +198,7 @@ export default function AccountingReportsPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <MoneyUnitSwitch />
-            <ExportButtons report={tab} query={exportQuery} disabled={needsAccount || badEdges} />
+            <ExportButtons report={tab} query={exportQuery} disabled={needsAccount || needsParty || badEdges} />
           </div>
         }
       />
@@ -212,21 +222,23 @@ export default function AccountingReportsPage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        {(!isExportOnly(tab) || isBook(tab)) && <PeriodControls years={years} query={query} onChange={setQuery} />}
+        {(!isExportOnly(tab) || isBook(tab) || tab === "party-statement") && <PeriodControls years={years} query={query} onChange={setQuery} />}
+        {(tab === "ageing" || tab === "party-statement") && (
+          <div className="grid gap-1">
+            <Label htmlFor="ageing-side">نوع</Label>
+            <select
+              id="ageing-side"
+              className={FIELD_CLASS}
+              value={ageingSide}
+              onChange={(event) => setAgeingSide(event.target.value as "receivable" | "payable")}
+            >
+              <option value="receivable">{tab === "ageing" ? "دریافتنی‌ها" : "مشتری (دریافتنی)"}</option>
+              <option value="payable">{tab === "ageing" ? "پرداختنی‌ها" : "تأمین‌کننده (پرداختنی)"}</option>
+            </select>
+          </div>
+        )}
         {tab === "ageing" && (
           <>
-            <div className="grid gap-1">
-              <Label htmlFor="ageing-side">نوع</Label>
-              <select
-                id="ageing-side"
-                className={FIELD_CLASS}
-                value={ageingSide}
-                onChange={(event) => setAgeingSide(event.target.value as "receivable" | "payable")}
-              >
-                <option value="receivable">دریافتنی‌ها</option>
-                <option value="payable">پرداختنی‌ها</option>
-              </select>
-            </div>
             <div className="grid gap-1">
               <Label htmlFor="ageing-to">در تاریخ</Label>
               <JalaliDateInput id="ageing-to" value={ageingTo} onChange={(to) => setAgeingTo(to)} />
@@ -272,13 +284,13 @@ export default function AccountingReportsPage() {
             </select>
           </div>
         )}
-        {(tab === "ledger" || tab === "subsidiary" || tab === "ageing") && (
+        {(tab === "ledger" || tab === "subsidiary" || tab === "ageing" || tab === "party-statement") && (
           <div className="grid gap-1">
             <Label htmlFor="report-account">کد حساب</Label>
             <Input id="report-account" dir="ltr" className="w-32" value={accountCode} onChange={(event) => setAccountCode(event.target.value)} />
           </div>
         )}
-        {(tab === "ledger" || tab === "ageing") && (
+        {(tab === "ledger" || tab === "ageing" || tab === "party-statement") && (
           <div className="grid gap-1">
             <Label htmlFor="report-party">کد تفصیلی</Label>
             <Input id="report-party" dir="ltr" className="w-32" value={partyCode} onChange={(event) => setPartyCode(event.target.value)} />
@@ -304,6 +316,13 @@ export default function AccountingReportsPage() {
               ? "همه ردیف‌های اسناد قطعی دوره به ترتیب تاریخ و سند، با شماره ردیف پیوسته."
               : "گردش هر حساب کل (یا سطح انتخابی) به تفکیک سند، با مانده ابتدا، مانده جاری و مانده پایان؛ هر حساب از صفحه تازه."}{" "}
             هر صفحه شماره «صفحه n از N» و جمع نقل از صفحه قبل و نقل به صفحه بعد دارد. فایل PDF را چاپ کنید.
+          </p>
+        )}
+        {tab === "party-statement" && (
+          <p className="px-4 py-6 text-sm text-muted-foreground">
+            {needsParty
+              ? "کد تفصیلی مشتری یا تأمین‌کننده را وارد کنید."
+              : "گردش طرف حساب در دوره با مانده ابتدا و پایان، و سن مانده باز در پایان دوره. بدون کد حساب، همه حساب‌های دریافتنی (یا پرداختنی) لحاظ می‌شوند. خروجی را با دکمه‌های Excel یا PDF بگیرید."}
           </p>
         )}
         {tab === "chart-of-accounts" && (
