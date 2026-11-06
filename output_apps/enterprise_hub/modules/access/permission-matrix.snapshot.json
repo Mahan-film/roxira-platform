@@ -1289,6 +1289,72 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/inventory/purchasing/orders (PurchaseController.listOrders)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/purchasing/orders/:id (PurchaseController.getOrder)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/purchasing/receipts (PurchaseController.listReceipts)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/purchasing/receipts/:id (PurchaseController.getReceipt)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/purchasing/requests (PurchaseController.listRequests)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/purchasing/settings (PurchaseController.getSettings)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/reports/cardex (StockReportsController.cardex)": {
     "policy": "inventory:read|accounting:read",
     "owner": true,
@@ -3182,6 +3248,94 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/inventory/purchasing/orders (PurchaseController.createOrder)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/orders/:id/approve (PurchaseController.approveOrder)": {
+    "policy": "inventory:approve",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/orders/:id/cancel (PurchaseController.cancelOrder)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/orders/:id/close (PurchaseController.closeOrder)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/orders/:id/receipts (PurchaseController.createReceipt)": {
+    "policy": "inventory:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/requests (PurchaseController.createRequest)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/requests/:id/cancel (PurchaseController.cancelRequest)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/requests/:id/convert (PurchaseController.convertRequest)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/inventory/stores/ (StoresController.create)": {
     "policy": "inventory:create",
     "owner": true,
@@ -3642,6 +3796,17 @@
   },
   "PUT /enterprise-hub/inventory/openings/:id/lines (OpeningBalanceController.replaceLines)": {
     "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/inventory/purchasing/settings (PurchaseController.updateSettings)": {
+    "policy": "inventory:admin",
     "owner": true,
     "admin": true,
     "accountant": false,

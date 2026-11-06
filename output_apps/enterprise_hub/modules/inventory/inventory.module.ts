@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
 import { AccountingModule } from '../accounting/accounting.module';
+import { TenantScope } from '../access/services/tenant-scope';
 import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 import { SalesModule } from '../sales/sales.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InventoryController } from './controllers/inventory.controller';
 import { StockDocumentsController } from './controllers/stock-documents.controller';
 import { StockReportsController } from './controllers/stock-reports.controller';
+import { PurchaseController } from './purchasing/purchase.controller';
+import { PurchaseCycleService } from './purchasing/purchase-cycle.service';
+import { PurchaseRepository } from './purchasing/purchase.repository';
 import { StoresController } from './controllers/stores.controller';
 import { StockDocumentEntity, StockDocumentLineEntity } from './entities/stock-document.entity';
 import { StoreEntity } from './entities/store.entity';
@@ -55,6 +59,7 @@ import { InventoryService } from './services/inventory.service';
     StockDocumentsController,
     OpeningBalanceController,
     StockReportsController,
+    PurchaseController,
   ],
   providers: [
     InventoryService,
@@ -64,7 +69,17 @@ import { InventoryService } from './services/inventory.service';
     StockDocumentsRepository,
     OpeningBalanceService,
     StockReportService,
+    PurchaseCycleService,
+    PurchaseRepository,
+    TenantScope,
   ],
-  exports: [InventoryService, InventoryRepository, StockDocumentsService, StockDocumentsRepository],
+  exports: [
+    InventoryService,
+    InventoryRepository,
+    StockDocumentsService,
+    StockDocumentsRepository,
+    PurchaseCycleService,
+    PurchaseRepository,
+  ],
 })
 export class InventoryModule {}
