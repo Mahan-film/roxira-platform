@@ -1,0 +1,31 @@
+# Brief #478: M1 gate steps 07 and 08 (post purchase and sales invoices)
+
+Worktree: /home/mahan/Developer/roxira-wt/478-m1-gate-post-invoices-steps-07-08-t5 (branch already based on the #473 invoice import). Do NOT commit, push, or edit package.json, lockfiles, `.github`, `modules/posting_rules`, `modules/treasury`. Synthetic data only. Only edit:
+- `e2e/tests/m1-shop-month.spec.ts` (steps 07 and 08: change `test.fixme(` to `test(` and fill bodies)
+- `e2e/tests/m1/import-ui.ts` (add helpers: `apiPatch`, an issue-and-wait helper)
+- `e2e/tests/m1/expected-totals.ts` / `fixture-data.ts` only if a pure helper is needed
+- `docs/strategy/REQUIREMENTS_STATUS.md` (one row, evidence = these step names)
+Do not read whole big files: use grep and line ranges. Read first: the comments on steps 06-08, 13, 14, 15 of the spec, `e2e/tests/m1/expected-totals.ts`, `import-ui.ts`, step 06's body (how it pages /invoicing and parses invoices.csv), step 04/05 (how they call `inventory/valuation`, `inventory/items`, `accounting/accounts`).
+
+## Product path (no bulk issue action exists)
+There is no bulk issue on /app/invoicing. Use the existing single-invoice API through the session, like step 06 does: `PATCH enterprise-hub/invoicing/:id` with body `{ "status": "ISSUED" }` (UpdateInvoiceDto extends CreateInvoiceDto partial; see `InvoicingService.update`, ~line 924). Posting runs asynchronously: the update enqueues a `suite-events` job and `InvoicePostingService` creates the voucher, setting `journalEntryId` or `postingError` on the invoice. So after each PATCH, poll `GET invoicing/:id` (every 250 ms, up to 30 s) until `journalEntryId` is non-null or `postingError` is non-null; fail with the invoice number and error. Do issue strictly one at a time (await each before the next) so FIFO order holds. Never post through the ledger or any test-only path.
+
+## Order
+Step 07: all 95 DRAFT PURCHASE invoices, sorted by invoice date ascending (date from invoices.csv by number; tie-break by number). Step 08: all 143 DRAFT SALE invoices, same sort. Each step must first assert the drafts it is about to post: exactly 95 / 143 with status DRAFT, and after: every one has status ISSUED, `postingError` null, `journalEntryId` non-null, and no DRAFT of that direction remains. Use `test.setTimeout(900_000)` on these two steps.
+
+## Expected values (derive from the fixture in the test; never copy numbers from product output)
+Dedupe invoices.csv rows by full-row identity (2 exact repeats), parse Persian/Arabic digits (reuse step 06's `west`). Column `جمع نهایی (ریال)` = line total incl. VAT, `مبلغ` = line total excl. VAT, `وضعیت تسویه` is `صادرشده` (unpaid) or `تسویه‌شده` (settled, has a ZWNJ). Type `خرید` = purchase, `فروش` = sale. I computed by hand (use as a cross-check of your code, and assert them as literals too, with a comment):
+- unpaid purchases total incl. VAT = 4,300,780,000; settled purchases = 1,938,310,000; all unique purchases = 6,239,090,000
+- unpaid sales total = 7,613,512,500; settled sales = 3,820,162,500; all unique sales = 11,433,675,000
+- README: `payablesClosingUnique` (5,420,780,000) = payablesOpening (1,120,000,000) + UNPAID purchases only; `receivablesClosingUnique` (9,453,512,500) = receivablesOpening (1,840,000,000) + UNPAID sales only. So the README closing needs the settled invoices settled by payments (steps 11/12), not part of 07/08.
+The import leaves every invoice DRAFT with no settlement status, so 07/08 post ALL invoices (leaving settled ones out would hide documents):
+- After 07: `2101` balance (credit-positive: `-balanceOf`, as step 05 does) = payablesOpening + all unique purchases total (7,359,090,000). Also assert from the fixture that `payablesOpening + unpaidPurchases === README_TOTALS.payablesClosingUnique` (README tie-out), and comment that the settled remainder must be settled by step 12.
+- After 08: `1201` = receivablesOpening + all unique sales (13,273,675,000), and `receivablesOpening + unpaidSales === README_TOTALS.receivablesClosingUnique`.
+- Stock: after 07, inventory valuation totalInventoryValue = README_TOTALS.stockValue + sum of unique purchase lines `مبلغ` (excl. VAT). After 08 it drops by the FIFO cost of the issued quantities (compute in the test with an independent FIFO function over: items.csv opening batch (quantity x unitCost, oldest), then purchase lines by date ascending; consume sale lines by date ascending). For a sampled item (ITM-1001 plus one item on a multi-line purchase) assert quantity via `inventory/items` and FIFO value via `inventory/valuation` rows. If the valuation row lacks a per-item value, assert quantity only and say so.
+- Sales exceeding stock: compute from the fixture, with an independent loop, how many sale lines exceed running stock at their date; attach with `test.info().annotations.push({ type: 'oversold', description })`. If an invoice fails posting because of it, put the invoice numbers and `postingError` text in the failure message; do NOT skip or swallow any error.
+- Accounts: read `accounting/accounts` codes before step 07 and after 08; assert the set of codes did not grow (posting must use the chart imported in step 02, not create accounts). Fetch the voucher (find the by-id journal entry endpoint in the accounting controller) of the first posted purchase and first posted sale; annotate account codes with debit/credit amounts; assert the sale voucher debits 1201 and the purchase voucher credits 2101 with the invoice's finalPayable; debit = credit on each.
+- Voucher count: journal-entries `total` rises by exactly 95 (07) then 143 (08) over the previous count (one voucher per invoice). If the engine also posts COGS/stock as a second voucher, the real count goes in the failure message; do not change the assertion silently.
+Never weaken an assertion or adapt it to product output. If an assertion will fail against the product, keep the fixture-derived value and tell me in your final output which assertions you expect to fail and why.
+
+## Local checks
+No server is available. Only type-check if possible (`cd e2e && npx tsc --noEmit -p .`; node_modules may be missing, then be careful) and `npx playwright test m1-shop-month --list`. Do not run the gate. Finish by printing a short list of what you changed.

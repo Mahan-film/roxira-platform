@@ -1,0 +1,35 @@
+# Brief #247: gross profit per invoice, item and customer (do NOT commit, do NOT push)
+Worktree: this one (already contains the #244 refactor: reports/invoice-docs.ts exports countedDocs(docs, direction), rootOf, quantityText, foreignText, ReportDoc, RIAL, QUANTITY_SCALE, foreignTotal, groupDocs). Touch ONLY: reports/invoice-docs.ts (small additive change), new reports/gross-profit-report.ts, new reports/gross-profit-report.spec.ts. sales-report.spec.ts and purchases-report.spec.ts must pass unchanged. No routes, no recomputing cost from item master or current FIFO.
+
+## How the cost is recorded (read services/invoice-posting.service.ts moveStockAndMeasure, ~line 340-420, and InvoicePostingMeta in entities/invoice.entity.ts)
+When a sale is posted, `invoice.postingMeta.lines[]` = {sku, quantity, unitCost, value, moved:'OUT'|'IN', warehouseId}. `value` is the FIFO cost in RIAL (a JS number with at most 2 decimals). A SALE original has OUT lines; a SALE return has IN lines at the cost the sale recorded; a corrective moves nothing (lines empty); postingMeta may be null (not posted / old). COGS = the sum of what the postings recorded; NEVER recompute from unitPrice or current cost. Convert with `toMinor(line.value)` from ../../accounting/money (bigint minor units).
+
+## 1. invoice-docs.ts additive change
+Add `export function liveDocs(docs: readonly ReportDoc[], direction): Array<{ doc: ReportDoc; root: string }>`: the issued/paid docs of that direction whose chain (rootOf) is not cancelled, excluding CANCEL docs themselves (every counted or cost-carrying doc). Rebuild countedDocs on top of it only if that keeps behaviour identical; otherwise leave countedDocs alone and add liveDocs next to it sharing the helpers. Extend ReportDoc's Pick with 'postingMeta' and 'taxInvoiceNumber' (check the field name in entities/invoice.entity.ts; if the existing sales/purchases spec fixtures then fail type-checking, make these two optional via Partial in a new `GrossProfitDoc = ReportDoc & Pick<InvoiceEntity,'postingMeta'|'taxInvoiceNumber'>` type in gross-profit-report.ts instead and leave ReportDoc untouched; prefer the second).
+
+## 2. gross-profit-report.ts
+```
+export type ProfitGroupBy = 'invoice' | 'item' | 'customer';
+export interface ProfitGroup { key: string; revenueMinor: bigint; cogsMinor: bigint; profitMinor: bigint; marginBp: bigint | null; }
+export function grossProfitReport(docs: readonly GrossProfitDoc[], groupBy: ProfitGroupBy): ProfitGroup[]
+export function marginText(marginBp: bigint | null): string   // 1234n -> '12.34%', -500n -> '-5.00%', null -> ''
+export function grossProfitTable(groups, groupBy, subtitle = ''): ReportTable
+```
+Revenue: exactly as salesReport: countedDocs(docs, SALE) with sign, invoiceRateLines(invoice, invoiceRialAmounts(invoice)) baseMinor (net of VAT, rial, foreign converted at the invoice's own rate). A corrective replaces its baseline, a return subtracts, a cancel removes the chain (all already in countedDocs).
+Cost: for EVERY doc in liveDocs(docs, SALE) (so the original of a corrected chain still carries its cost although its revenue is replaced; a cancelled chain carries nothing): for each postingMeta line (null meta -> none): signed = line.moved === 'OUT' ? +toMinor(line.value) : -toMinor(line.value). A return therefore reverses cost (IN lines) as well as revenue. Item key for cost = meta line sku (a sale line's key in the revenue grouping is item.sku || item.description; unlinked lines have no meta line so cost 0 for them).
+Grouping keys: 'item' -> item.sku || item.description (revenue) and line.sku (cost). 'customer' -> doc.buyerInfo?.name || 'بدون نام' for both revenue and cost of that doc. 'invoice' -> the chain root's taxInvoiceNumber: find root doc by id among the input docs (the original); label = root.taxInvoiceNumber, falling back to the root id when the root is not in the input. A return, a corrective and the original all roll up into the original's row.
+profit = revenue - cogs. marginBp = null when revenue === 0n, else round-half-away-from-zero of profit*10000/revenue with bigint math only (write a small helper; document the rule; for negative revenue or profit keep the sign sensible: compute on absolute values then apply sign of profit*revenue). Sort: 'fa' localeCompare of key. No floats anywhere in money; the only `number` use is passing line.value to toMinor.
+Table: title 'سود ناخالص به تفکیک فاکتور' / 'به تفکیک کالا' / 'به تفکیک مشتری'; key column 'شماره فاکتور' / 'کالا' / 'مشتری'; columns: key (width 2), 'فروش خالص (ریال)' money, 'بهای تمام‌شده (ریال)' money, 'سود ناخالص (ریال)' money, 'حاشیه سود' (text via marginText). Total row bold: 'جمع', sums, margin of the totals. Cells string|bigint|null.
+
+## 3. Spec (hand-computed; truth). Fixture like sales-report.spec.ts: line(sku, qty, unitPrice, tax), doc({...}) with extra fields taxInvoiceNumber and postingMeta = { stockValue, lines:[{sku, quantity, unitCost, value, moved:'OUT', warehouseId:null}] }. Amounts in minor = rial*100.
+a) Sale S1 (taxInvoiceNumber 'F-1'): A 5 @ 1000 tax 500, B 1 @ 500 tax 50; meta OUT A value 3000 (unitCost 600), OUT B value 200. Revenue A 500000n, B 50000n; cogs A 300000n, B 20000n. By item: A profit 200000n margin 4000n (40.00%); B profit 30000n margin 6000n (60.00%). By invoice: 'F-1' revenue 550000n cogs 320000n profit 230000n margin 4182n (230000/550000 = 0.418181.. -> 4182 bp = '41.82%'). By customer: same totals under 'شرکت نمونه'.
+b) Partial return R1 of S1 (relatedInvoiceId S1.id, subject RETURN): A 2 @ 1000 tax 200, meta IN A quantity 2 unitCost 600 value 1200. Invoice F-1 -> revenue 550000-200000=350000n, cogs 320000-120000=200000n, profit 150000n, margin 4286n (150000/350000 = .428571 -> 4286). Item A: revenue 300000n cogs 180000n profit 120000n margin 4000n.
+c) Corrective: S2 A 5@1000 tax500 meta OUT A value 3000; corrective C2 (relatedInvoiceId S2.id) A 4@1000 tax400 with postingMeta lines [] -> revenue is the corrective's 400000n, cogs STILL 300000n (the original's recorded cost; the corrective moved nothing), profit 100000n. Prove the original's revenue is not double counted.
+d) Cancel: S3 + CANCEL doc against it -> no group appears for it (revenue and cost both gone); an unrelated S4 stays.
+e) Cost is never recomputed: a sale whose postingMeta is null has revenue and cogs 0n, profit = revenue, margin 10000n; a sale whose meta value differs from qty*unitPrice shows the meta value.
+f) Foreign: USD fxRate 600000, 2 x 10.5 tax 2.1, meta OUT value 5000 -> revenue 1260000000n (2*10.5*600000=12,600,000 rial -> minor 1260000000n), cogs 500000n, profit 1259500000n.
+g) Margin zero revenue gives null and ''. marginText(1234n)='12.34%', marginText(-500n)='-5.00%', marginText(5n)='0.05%'.
+h) Table: Persian title, 3 money columns, bold total row with summed cells.
+
+## Run
+From output_apps/enterprise_hub: `/home/mahan/Developer/roxira-wt/_fleet/heavy.sh npx jest --maxWorkers=2 modules/invoicing/reports`. Never edit an expected number to make a test pass: report the disagreement.

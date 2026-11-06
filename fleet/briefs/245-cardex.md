@@ -1,0 +1,8 @@
+Issue #245: stock cardex per item and warehouse (row R-10 in docs/accounting/research/MUST_HAVE_REPORTS.md). Backend core only, no controller route in this PR (the route needs the permission snapshot hotspot and comes later).
+Read first: output_apps/enterprise_hub/modules/accounting/reports/report-table.ts and ageing.spec.ts for style; modules/inventory/enums/stock-movement-type.enum.ts, repositories/stock-documents.repository.ts and the existing FIFO valuation code in modules/inventory.
+Build under output_apps/enterprise_hub/modules/inventory/reports/:
+1. cardex.ts: pure function cardex(movements, opening) returning chronological rows (date, document, in qty, out qty, unit cost, running qty, running value) plus opening and closing, using FIFO layers consistent with the existing valuation; bigint rials. Per warehouse or all warehouses.
+2. cardex.spec.ts with an in-memory fixture: opening balance, two receipts at different costs, an issue crossing a FIFO layer, a transfer that nets to zero across all warehouses, exact closing value.
+3. A ReportTable builder with Persian labels for the existing PDF and XLSX writers, with a spec.
+Acceptance: from output_apps/enterprise_hub run npx jest --maxWorkers=2 modules/inventory/reports. Update the matching row in docs/strategy/REQUIREMENTS_STATUS.md with file paths and test names.
+Rules: repo is public; synthetic data only. Do not touch package.json, lockfiles, app.module.ts, app-shell.tsx, permission-matrix snapshot, migrations or .github. Do not touch modules/posting_rules, treasury or cheques. Do not commit or push. Create no helper or debug scripts. Money is integer rials with bigint/money.ts, never floats. Dates shown in Jalali. Only claim tests ran if you saw them pass.

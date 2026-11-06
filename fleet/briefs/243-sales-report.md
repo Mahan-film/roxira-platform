@@ -1,0 +1,8 @@
+Issue #243: sales report by item, customer or salesperson (row R-08 in docs/accounting/research/MUST_HAVE_REPORTS.md). Backend core only, no controller route in this PR (the route needs the permission snapshot hotspot and comes later).
+Read first: output_apps/enterprise_hub/modules/accounting/reports/report-table.ts, report-tables.ts, ageing.ts and ageing.spec.ts for style; modules/invoicing entities for issued invoices, returns and corrective documents; invoicing repository query patterns.
+Build under output_apps/enterprise_hub/modules/invoicing/reports/:
+1. sales-report.ts: pure function salesReport(lines, groupBy: 'item'|'customer'|'salesperson') returning groups with quantity, net amount, VAT in bigint rials; returns and corrective documents subtract. Only issued documents count; drafts and cancelled do not.
+2. sales-report.spec.ts with an in-memory fixture covering each groupBy, a partial return, a draft being excluded, and exact totals.
+3. A ReportTable builder with Persian labels that the existing PDF and XLSX writers can take, with a spec.
+Acceptance: from output_apps/enterprise_hub run npx jest --maxWorkers=2 modules/invoicing/reports. Update the matching row in docs/strategy/REQUIREMENTS_STATUS.md with file paths and test names.
+Rules: repo is public; synthetic data only. Do not touch package.json, lockfiles, app.module.ts, app-shell.tsx, permission-matrix snapshot, migrations or .github. Do not touch modules/posting_rules, treasury or cheques. Do not commit or push. Create no helper or debug scripts. Money is integer rials with bigint/money.ts, never floats. Dates shown in Jalali. Only claim tests ran if you saw them pass.

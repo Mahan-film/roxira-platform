@@ -1,0 +1,22 @@
+# Brief #478 round 3. Worktree /home/mahan/Developer/roxira-wt/478-m1-gate-post-invoices-steps-07-08-t5. Do NOT commit/push. Edit only e2e/tests/m1-shop-month.spec.ts and e2e/tests/m1/import-ui.ts (and fixture-data.ts if a pure helper is needed). Use grep and line ranges; do not read whole files. Never weaken an assertion; remove every `expect.soft` in steps 07 and 08 (make them hard `expect`).
+
+Context from CI: settling invoices posts the 'cash' role to bank 1101 (name matching picks 'بانک'). The fixture treats cash as petty cash 1102; the bank moves only via the statement. The product has a tenant mapping that wins over name matching (mergeRoleAccounts in invoicing/services/invoice-voucher.ts): `PUT /enterprise-hub/posting-rules/:docType/roles/:role` body `{ "accountCode": "1102" }` (controller returns 204; assert `response.ok()` and status 204). The API throttles 100 req/min/IP; your helpers already wait out 429 (withThrottleRetry in import-ui.ts): reuse it.
+
+## A. import-ui.ts
+Add `apiPut(page, route, body)` like `apiPatch` (use withThrottleRetry), returning the status, expecting ok.
+
+## B. Start of step 07 (right after loginAsTestTenant)
+Map role `cash` to `1102` for docTypes `invoice.purchase.settle`, `invoice.purchase.settle_card_first`, `invoice.sale.settle`, `invoice.sale.settle_card_first` (4 PUTs; assert 204 each). Then GET `posting-rules` (list of templates with roles, accountCode, source) and assert for those four docTypes the `cash` role has accountCode '1102' and source !== 'default' (if the mapping does not win this is a product bug: the later hard assertion will fail with evidence, keep it hard).
+
+## C. Settlement vouchers (both steps)
+Keep the hard assertion that no settlement voucher touches 1101 (per settled invoice). Add: each settlement voucher has a line on 1102 with the exact invoice amount (finalPayable incl VAT): purchase settlement CREDITS 1102 (and debits 2101), sale settlement DEBITS 1102 (and credits 1201). Annotate the counter account.
+
+## D. Replace the "no account created beyond the 18" assertions in 07/08
+Keep only the precondition: before step 07 accounts == the 18 file codes (hard). Remove the after-issue/after-settlement `fileCodes` equality checks. Instead, after step 07's issue phase assert the EXACT set of accounts created (code + name) equals [ { code: '5201', name: 'خرید کالا و خدمات' } ] (the engine creates the purchases account; it is not in the fixture chart). If the real set differs this fails with the real set: keep it. After step 08's issue phase assert nothing further was created beyond that same set.
+Balances (use balance deltas, i.e. balance after minus balance recorded before that step's issuing, from `accounting/accounts`; debit-positive), computed by hand from the fixture, not from the product:
+- Step 07 after issuing: delta(1301) = + sum of purchase line `مبلغ` (excl VAT); delta(2101) credit = all purchases incl VAT (already asserted via absolute); the input-VAT account = the account on the first purchase voucher's line with description 'مالیات بر ارزش افزوده خرید' (read from that voucher; annotate its code and name): its delta must equal + sum of purchase VAT (per invoice VAT = totalInclVat - sum of line amounts; sum over the 95); 5201's balance must be 0 (no voucher line needs it; annotate "account created although no line uses it").
+- Step 08 after issuing: output VAT: fetch the first sale voucher, the credit line with description 'مالیات بر ارزش افزوده فروش': assert its accountCode is '2201' (the fixture's «مالیات بر ارزش افزوده پرداختنی»; 2301 «ذخیره مالیات و بیمه پرداختنی» also matches the name rule 'مالیات'). Hard assertion. delta(2201) = -(sum of sale VAT) (credit); delta(2301) = 0; delta(4101) = -(sum of sale line `مبلغ`).
+- Also the sale issue vouchers: determine whether COGS is on the issue voucher (lines on 5101 and 1301 present on the same voucher) and annotate; keep the voucher-count assertion as is (fails with real numbers if COGS is a separate voucher).
+After the settlement phase of step 08, record and annotate the final values and assert: 1201 = 9,453,512,500, 2101 = 5,420,780,000, 1102 final = (1102 balance before step 07) + settledSales - settledPurchases (all from the fixture), 2201 delta = -(sale VAT sum), input-VAT delta = + purchase VAT sum, and valuation totalInventoryValue = fixtureClosingStockValue() (already asserted). Put a single annotation 'end-of-08' with 1201, 2101, stock, 1102, 2201, input-VAT account code and balance.
+
+Print a short list of what changed when done.
