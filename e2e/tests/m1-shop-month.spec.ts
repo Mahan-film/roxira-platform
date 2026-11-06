@@ -592,7 +592,8 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     });
     expect(inputVatCode, 'input VAT lands on the new account 1402, not on prepayments 1401').toBe('1402');
     expect(
-      balanceAfterIssue(inputVatCode) - balanceBeforeIssue(inputVatCode),
+      // 1402 did not exist before the issue phase: it starts at 0.
+      balanceAfterIssue(inputVatCode) - (accountsBefore.some((b) => b.code === inputVatCode) ? balanceBeforeIssue(inputVatCode) : 0n),
       `input VAT ${inputVatCode} up by the purchase VAT`,
     ).toBe(purchaseVatSum);
     // Hand-computed from invoices.csv (sum of total incl. VAT minus lines for the 95 purchases): 827,190,000.
