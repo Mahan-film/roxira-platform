@@ -9,6 +9,7 @@ import { DataSource } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { ContractSide } from '../enums/contracting.enum';
 import { ContractRepository } from '../repositories/contract.repository';
+import { ProjectRepository } from '../repositories/project.repository';
 import { MovementRepository } from '../repositories/movement.repository';
 import { StatementRepository } from '../repositories/statement.repository';
 
@@ -44,6 +45,7 @@ describePg('Contract movements on PostgreSQL (non-superuser, FORCE RLS)', () => 
   let contracts: ContractRepository;
   let statements: StatementRepository;
   let movements: MovementRepository;
+  let projects: ProjectRepository;
   let contractA: number;
 
   const input = (over: Record<string, unknown> = {}) => ({
@@ -66,6 +68,7 @@ describePg('Contract movements on PostgreSQL (non-superuser, FORCE RLS)', () => 
     contracts = new ContractRepository(scope);
     statements = new StatementRepository(scope);
     movements = new MovementRepository(scope);
+    projects = new ProjectRepository(scope);
     contractA = (await contracts.create(A, { code: 'K1', title: 'قرارداد', side: ContractSide.CONTRACTOR, partyCode: 'C1', projectId: null, contractDate: '2026-11-01', amount: '1000000000.00', advanceAmount: '0.00', insuranceType: null } as never)).id;
   }, 240_000);
 
@@ -130,5 +133,26 @@ describePg('Contract movements on PostgreSQL (non-superuser, FORCE RLS)', () => 
     await expect(inTx(B, (m) => movements.insert(B, mv(), m))).rejects.toThrow(/FK_erp_contract_movements_contract/);
     await expect(inTx(A, (m) => movements.insert(A, mv({ amount: '0.00' }), m))).rejects.toThrow(/CHK_erp_contract_movements_amount/);
     expect(await app.query(`SELECT 1 FROM erp_contract_movements`)).toEqual([]);
+  });
+
+  it('posted statement totals per project split billed (contractor) and subcontracts (employer), within a date range', async () => {
+    const p = await projects.create(A, { code: 'PX', name: 'پروژه', budget: '1000000000.00' });
+    const mk = (code: string, side: ContractSide) => contracts.create(A, { code, title: 't', side, partyCode: 'X', projectId: p.id, contractDate: '2026-11-01', amount: '1000000000.00', advanceAmount: '0.00', insuranceType: null } as never);
+    const sale = await mk('PXS', ContractSide.CONTRACTOR);
+    const sub = await mk('PXB', ContractSide.EMPLOYER);
+    const post = async (contractId: number, number: number, date: string, cum: string, prev: string, period: string, posted = true) => {
+      const st = await statements.insert(A, { contractId, number, statementDate: date, cumulativeAmount: cum, previousAmount: prev, periodAmount: period } as never);
+      if (posted) {
+        await statements.approveWith(A, st.id, { retentionAmount: '0.00', insuranceAmount: '0.00', advanceRecoveryAmount: '0.00', termsSnapshot: [] });
+        await statements.markPosted(A, st.id, { journalEntryId: 1, journalEntryNumber: 'E' });
+      }
+    };
+    await post(sale.id, 1, '2026-11-01', '300000000.00', '0.00', '300000000.00');
+    await post(sale.id, 2, '2026-12-01', '800000000.00', '300000000.00', '500000000.00');
+    await post(sale.id, 3, '2026-12-05', '900000000.00', '800000000.00', '100000000.00', false); // draft: ignored
+    await post(sub.id, 1, '2026-11-10', '120000000.00', '0.00', '120000000.00');
+    expect(await statements.postedTotalsByProject(A, {})).toEqual(new Map([[p.id, { billed: 80000000000n, subcontracts: 12000000000n }]]));
+    expect(await statements.postedTotalsByProject(A, { to: '2026-11-30' })).toEqual(new Map([[p.id, { billed: 30000000000n, subcontracts: 12000000000n }]]));
+    expect((await statements.postedTotalsByProject(B, {})).size).toBe(0);
   });
 });
