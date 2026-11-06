@@ -5,9 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { minorToDecimal } from '../../accounting/money';
-import { CreateJournalEntryDto, JournalEntryLineDto } from '../../accounting/dto/create-journal-entry.dto';
-import { AccountingService } from '../../accounting/services/accounting.service';
+import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
+import { mergeRoleAccounts } from '../../invoicing/services/invoice-voucher';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { InventoryService } from '../services/inventory.service';
 import { StockDocumentsService } from '../services/stock-documents.service';
@@ -125,6 +124,22 @@ function toSettingsResponse(settings: PurchaseSettings): PurchaseSettingsRespons
  * `purchase-order.domain.ts` and the journal shape in `purchase-posting.adapter.ts`; this service
  * only loads, validates, persists and translates domain errors to HTTP errors.
  */
+/** Posting engine document type and source of a goods receipt voucher (one voucher per receipt id). */
+export const RECEIPT_DOC_TYPE = 'purchase.receipt';
+export const RECEIPT_SOURCE_TYPE = 'goods_receipt';
+
+/**
+ * Minor units (bigint) as the inventory module's number with 2 decimals. Fails closed when the
+ * double would not round-trip to the same minor units, so stock layers never drift from the ledger.
+ */
+export function minorToStockNumber(minor: bigint): number {
+  const value = Number(minor) / 100;
+  if (BigInt(Math.round(value * 100)) !== minor) {
+    throw new BadRequestException('Amount is too large for a stock layer.');
+  }
+  return value;
+}
+
 @Injectable()
 export class PurchaseCycleService {
   constructor(
@@ -132,7 +147,7 @@ export class PurchaseCycleService {
     private readonly repository: PurchaseRepository,
     private readonly inventory: InventoryService,
     private readonly stockDocuments: StockDocumentsService,
-    private readonly accounting: AccountingService,
+    private readonly postingRules: PostingRulesService,
   ) {}
 
   /** Domain errors become 400 for a bad line/unknown line, 409 for every other rule refusal. */
@@ -413,8 +428,8 @@ export class PurchaseCycleService {
           tenantId,
           {
             sku: line.sku,
-            quantity: Number(line.quantity) / 100,
-            unitPurchaseCost: Number(line.unitCost) / 100,
+            quantity: minorToStockNumber(line.quantity),
+            unitPurchaseCost: minorToStockNumber(line.unitCost),
             warehouseId: order.warehouseId ?? undefined,
             receivedAt: receivedAt.toISOString(),
             reference: number,
@@ -490,26 +505,25 @@ export class PurchaseCycleService {
       resolvePurchaseRole(PurchaseAccountRole.INVENTORY),
       resolvePurchaseRole(PurchaseAccountRole.GRNI),
     ]);
-
-    const lines: JournalEntryLineDto[] = posting.lines.map((line) => {
-      const entryLine: JournalEntryLineDto = {
-        accountCode: line.role === PurchaseAccountRole.INVENTORY ? inventoryCode : grniCode,
-        description: line.description,
-      };
-      if (line.debit > 0n) entryLine.debit = minorToDecimal(line.debit);
-      if (line.credit > 0n) entryLine.credit = minorToDecimal(line.credit);
-      if (line.partyCode) entryLine.partyCode = line.partyCode;
-      return entryLine;
-    });
-
-    const dto: CreateJournalEntryDto = {
-      entryNumber: `GRN-${receipt.number}`,
-      date: receivedAt.toISOString(),
-      description: posting.description,
-      lines,
-    };
-    const entry = await this.accounting.createJournalEntry(tenantId, dto, manager);
-    return String(entry.id);
+    const described = (await this.postingRules.describe(tenantId)).find((d) => d.docType === RECEIPT_DOC_TYPE);
+    // Accounts resolved by name above; a mapping the tenant made on the posting-rules page wins.
+    const overrides = mergeRoleAccounts({ inventory: inventoryCode, grni: grniCode }, described);
+    const result = await this.postingRules.post(
+      tenantId,
+      {
+        docType: RECEIPT_DOC_TYPE,
+        sourceType: RECEIPT_SOURCE_TYPE,
+        sourceId: receipt.id,
+        date: receivedAt.toISOString(),
+        amounts: { amount: receipt.totalValue },
+        description: posting.description,
+        partyCode: order.supplierCode,
+        entryNumber: `GRN-${receipt.number}`,
+        overrides,
+      },
+      manager,
+    );
+    return String(result.entryId);
   }
 
   // ---------------------------------------------------------------- settings
