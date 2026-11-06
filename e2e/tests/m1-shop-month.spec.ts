@@ -1306,6 +1306,21 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       type: 'recon-checks',
       description: `status ${session.status}; checks: ${session.checks.map((c) => `${c.code}/${c.severity}[${c.choices.map((x) => x.id).join('|')}]`).join('; ') || 'none'}`,
     });
+    // The statement's Persian header row is not a known bank profile, so the file asks for a column mapping;
+    // the person maps the columns once (0-based, as in the file: date, time, description, withdrawal, deposit,
+    // balance, reference).
+    if (session.status === 'needs_mapping') {
+      session = await apiPost<Session>(
+        page,
+        `banking/recon/sessions/${session.id}/mapping`,
+        { columnMap: { date: 0, time: 1, description: 2, withdrawal: 3, deposit: 4, balance: 5, reference: 6 } },
+        200,
+      );
+      test.info().annotations.push({
+        type: 'recon-checks-after-mapping',
+        description: `status ${session.status}; checks: ${session.checks.map((c) => `${c.code}/${c.severity}[${c.choices.map((x) => x.id).join('|')}]`).join('; ') || 'none'}`,
+      });
+    }
     // Only the account confirmation is answered here (the file carries no account number); any other open
     // question fails the step with its text rather than being answered blindly.
     for (const check of session.checks.filter((c) => c.code === 'account_match')) {
