@@ -1355,6 +1355,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/inventory/purchasing/invoices (SupplierInvoiceController.listInvoices)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/purchasing/invoices/:id (SupplierInvoiceController.getInvoice)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/purchasing/orders (PurchaseController.listOrders)": {
     "policy": "inventory:read",
     "owner": true,
@@ -3336,6 +3358,28 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/inventory/purchasing/invoices/:id/accept (SupplierInvoiceController.acceptInvoice)": {
+    "policy": "inventory:approve",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/invoices/:id/post (SupplierInvoiceController.postInvoice)": {
+    "policy": "inventory:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/inventory/purchasing/orders (PurchaseController.createOrder)": {
     "policy": "inventory:create",
     "owner": true,
@@ -3382,6 +3426,17 @@
   },
   "POST /enterprise-hub/inventory/purchasing/orders/:id/receipts (PurchaseController.createReceipt)": {
     "policy": "inventory:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/purchasing/orders/:orderId/invoices (SupplierInvoiceController.createInvoice)": {
+    "policy": "inventory:create",
     "owner": true,
     "admin": true,
     "accountant": false,

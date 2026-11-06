@@ -14,6 +14,7 @@ export const POSTING_ROLES = {
   cogs: { label: 'بهای تمام‌شده کالای فروش‌رفته', types: [AccountType.EXPENSE] },
   inventory: { label: 'موجودی کالا', types: [AccountType.ASSET] },
   grni: { label: 'کالای دریافتی صورتحساب‌نشده', types: [AccountType.LIABILITY] },
+  price_variance: { label: 'تفاوت بهای خرید', types: [AccountType.EXPENSE] },
   stock_adjustment: { label: 'اضافه و کسری انبار', types: [AccountType.EXPENSE, AccountType.EQUITY] },
   opening_equity: { label: 'مابه‌ازای موجودی اول دوره', types: [AccountType.EQUITY] },
   cash: { label: 'صندوق', types: [AccountType.ASSET] },

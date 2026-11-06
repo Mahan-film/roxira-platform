@@ -99,4 +99,44 @@ describe('buildProposal', () => {
     const p = buildProposal({ docType: t, amounts: { gross: 100n, deductions: 30n, net: 70n } });
     expect(p.lines.map((l) => l.accountCode)).toEqual(['5010', '2010', '1010']);
   });
+
+  it('builds the matched supplier invoice (GRNI, price variance, VAT, payable) balanced', () => {
+    const p = buildProposal({
+      docType: 'purchase.invoice',
+      amounts: {
+        grni: 50_000_000n,
+        variance_debit: 1_000_000n,
+        variance_credit: 0n,
+        vat: 4_590_000n,
+        payable: 55_590_000n,
+      },
+      partyCode: 'SUP-1',
+    });
+    expect(p.lines.map((l) => [l.accountCode, l.debit, l.credit])).toEqual([
+      ['2013', 50_000_000n, 0n],
+      ['5120', 1_000_000n, 0n],
+      ['1045', 4_590_000n, 0n],
+      ['2010', 0n, 55_590_000n],
+    ]);
+    expect(p.lines[3].partyCode).toBe('SUP-1');
+    expect(p.total).toBe(55_590_000n);
+  });
+
+  it('posts a negative purchase price variance as a credit to the variance account', () => {
+    const p = buildProposal({
+      docType: 'purchase.invoice',
+      amounts: {
+        grni: 50_000_000n,
+        variance_debit: 0n,
+        variance_credit: 1_000_000n,
+        vat: 0n,
+        payable: 49_000_000n,
+      },
+    });
+    expect(p.lines.map((l) => [l.accountCode, l.debit, l.credit])).toEqual([
+      ['2013', 50_000_000n, 0n],
+      ['5120', 0n, 1_000_000n],
+      ['2010', 0n, 49_000_000n],
+    ]);
+  });
 });

@@ -189,6 +189,19 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     defaults: { grni: '2013' },
   },
   {
+    docType: 'purchase.invoice',
+    title: 'صورتحساب خرید با تطبیق سه‌طرفه',
+    amounts: ['grni', 'variance_debit', 'variance_credit', 'vat', 'payable'],
+    lines: [
+      dr('grni', 'grni', 'کالای دریافتی صورتحساب‌نشده'),
+      dr('price_variance', 'variance_debit', 'تفاوت بهای خرید'),
+      cr('price_variance', 'variance_credit', 'تفاوت بهای خرید'),
+      dr('vat_input', 'vat', 'مالیات بر ارزش افزوده خرید'),
+      cr('payable', 'payable', 'بدهکاری به تأمین‌کننده', true),
+    ],
+    defaults: { grni: '2013', price_variance: '5120' },
+  },
+  {
     docType: 'stock.opening',
     title: 'موجودی اول دوره',
     amounts: ['amount'],
