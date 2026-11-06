@@ -2,7 +2,7 @@ import { Controller, Get, HttpStatus, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ReportExportService } from '../../accounting/services/report-export.service';
 import { AccessModule } from '../../access/catalogue';
-import { ModuleAccess } from '../../access/decorators';
+import { AlsoAllowModule, ModuleAccess } from '../../access/decorators';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import { CardexQueryDto, StockBalanceQueryDto } from '../dto/stock-report.dto';
@@ -20,6 +20,7 @@ export class StockReportsController {
   ) {}
 
   @Get('cardex')
+  @AlsoAllowModule(AccessModule.ACCOUNTING)
   @ApiOperation({ summary: 'کاردکس یک کالا (JSON، یا فایل با format)' })
   @ApiResponse({ status: HttpStatus.OK })
   async cardex(
@@ -35,6 +36,7 @@ export class StockReportsController {
   }
 
   @Get('stock-balance')
+  @AlsoAllowModule(AccessModule.ACCOUNTING)
   @ApiOperation({ summary: 'موجودی کالا یا کالاهای زیر نقطه سفارش (JSON، یا فایل با format)' })
   @ApiResponse({ status: HttpStatus.OK })
   async stockBalance(
