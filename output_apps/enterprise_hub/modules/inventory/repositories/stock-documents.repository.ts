@@ -6,7 +6,8 @@ import { StockDocumentEntity, StockDocumentLineEntity } from '../entities/stock-
 import { StockItemEntity } from '../entities/stock-item.entity';
 import { StoreEntity } from '../entities/store.entity';
 import { WarehouseEntity } from '../entities/warehouse.entity';
-import { StockDocumentType } from '../enums/stock-document.enum';
+import { StockDocumentStatus, StockDocumentType } from '../enums/stock-document.enum';
+import { MovementDoc } from '../reports/stock-movements';
 import {
   InsufficientStockError,
   StockItemMissingError,
@@ -231,6 +232,67 @@ export class StockDocumentsRepository {
       .skip(filter.skip)
       .take(filter.take)
       .getManyAndCount();
+  }
+
+  /**
+   * Posted documents with their lines, oldest first, for the reports' FIFO replay. `upTo` (a Tehran
+   * day) keeps documents on or before it; `sku` keeps only that SKU's lines and the documents that
+   * have one. Scoped by `tenantId`.
+   */
+  async findPostedDocuments(tenantId: string, upTo?: string, sku?: string): Promise<MovementDoc[]> {
+    const query = this.dataSource
+      .getRepository(StockDocumentEntity)
+      .createQueryBuilder('d')
+      .where('d.tenantId = :tenantId', { tenantId })
+      .andWhere('d.status = :status', { status: StockDocumentStatus.POSTED });
+    if (upTo) {
+      query.andWhere('d.docDate <= :upTo', { upTo });
+    }
+    const documents = await query.orderBy('d.docDate', 'ASC').addOrderBy('d.id', 'ASC').getMany();
+    if (documents.length === 0) {
+      return [];
+    }
+
+    const lineQuery = this.dataSource
+      .getRepository(StockDocumentLineEntity)
+      .createQueryBuilder('l')
+      .where('l.tenantId = :tenantId', { tenantId })
+      .andWhere('l.documentId IN (:...ids)', { ids: documents.map((document) => document.id) })
+      .orderBy('l.id', 'ASC');
+    if (sku) {
+      lineQuery.andWhere('l.sku = :sku', { sku });
+    }
+    const lines = await lineQuery.getMany();
+
+    const byDocument = new Map<number, MovementDoc['lines']>();
+    for (const line of lines) {
+      const bucket = byDocument.get(line.documentId) ?? [];
+      bucket.push({
+        id: line.id,
+        sku: line.sku,
+        quantity: Number(line.quantity),
+        unitCost: Number(line.unitCost),
+      });
+      byDocument.set(line.documentId, bucket);
+    }
+
+    const result: MovementDoc[] = [];
+    for (const document of documents) {
+      const documentLines = byDocument.get(document.id);
+      if (!documentLines) {
+        continue;
+      }
+      result.push({
+        id: document.id,
+        docType: document.docType,
+        docDate: String(document.docDate).slice(0, 10),
+        docNumber: document.docNumber,
+        fromWarehouseId: document.fromWarehouseId ?? null,
+        toWarehouseId: document.toWarehouseId ?? null,
+        lines: documentLines,
+      });
+    }
+    return result;
   }
 
   // ---------------------------------------------------------------------------

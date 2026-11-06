@@ -16,12 +16,16 @@ import { PosSalesController } from './controllers/pos-sales.controller';
 import { PosSaleService } from './services/pos-sale.service';
 import { InvoicingController } from './controllers/invoicing.controller';
 import { SalesReportController } from './controllers/sales-report.controller';
+import { PurchasesReportController } from './controllers/purchases-report.controller';
+import { GrossProfitReportController } from './controllers/gross-profit-report.controller';
 import { InvoiceEntity } from './entities/invoice.entity';
 import { SuiteEventsProcessor } from './processors/suite-events.processor';
 import { InvoicingRepository } from './repositories/invoicing.repository';
 import { InvoicePostingService } from './services/invoice-posting.service';
 import { InvoicingService } from './services/invoicing.service';
 import { SalesReportService } from './services/sales-report.service';
+import { PurchasesReportService } from './services/purchases-report.service';
+import { GrossProfitReportService } from './services/gross-profit-report.service';
 import { VatRateResolver } from './services/vat-rate.resolver';
 
 /**
@@ -47,7 +51,7 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     PartiesModule,
     BullModule.registerQueue({ name: SUITE_EVENTS_QUEUE }),
   ],
-  controllers: [InvoicingController, PosSalesController, SalesReportController],
+  controllers: [InvoicingController, PosSalesController, SalesReportController, PurchasesReportController, GrossProfitReportController],
   providers: [
     InvoicingService,
     InvoicingRepository,
@@ -59,6 +63,8 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     StatutoryRepository,
     TenantScope,
     SalesReportService,
+    PurchasesReportService,
+    GrossProfitReportService,
   ],
   exports: [InvoicingService],
 })
