@@ -35,6 +35,8 @@ export interface InvoiceAccountSpec {
   accountType: AccountType;
   /** زیررشته‌های نام که تطابق با حساب موجود را ممکن می‌کنند. */
   match: string[];
+  /** زیررشته‌هایی که حساب را از تطابق خارج می‌کنند (مثلاً «اسناد»: اسناد مانده تجاری نیستند). */
+  exclude?: string[];
 }
 
 /** حساب‌های دریافتنی (AR) — دارایی، پیش‌فرض کد ۱۲۰۱. */
@@ -43,6 +45,7 @@ export const RECEIVABLE_ACCOUNT: InvoiceAccountSpec = {
   name: 'حساب‌های دریافتنی تجاری',
   accountType: AccountType.ASSET,
   match: ['دریافتنی'],
+  exclude: ['اسناد', 'سایر', 'مشکوک'],
 };
 
 /** درآمد فروش — پیش‌فرض کد ۴۱۰۱. */
@@ -51,6 +54,7 @@ export const SALES_ACCOUNT: InvoiceAccountSpec = {
   name: 'درآمد فروش',
   accountType: AccountType.REVENUE,
   match: ['فروش'],
+  exclude: ['برگشت', 'تخفیف'],
 };
 
 /** مالیات بر ارزش افزوده پرداختنی — پیش‌فرض کد ۲۳۰۱. */
@@ -59,6 +63,7 @@ export const VAT_ACCOUNT: InvoiceAccountSpec = {
   name: 'مالیات بر ارزش افزوده پرداختنی',
   accountType: AccountType.LIABILITY,
   match: ['مالیات'],
+  exclude: ['ذخیره', 'حقوق', 'بیمه', 'عملکرد', 'خرید'],
 };
 
 /** نقد و بانک — دارایی، پیش‌فرض کد ۱۰۱۰. */
@@ -67,6 +72,7 @@ export const CASH_BANK_ACCOUNT: InvoiceAccountSpec = {
   name: 'موجودی نقد و بانک',
   accountType: AccountType.ASSET,
   match: ['بانک', 'صندوق'],
+  exclude: ['اسناد', 'تنخواه'],
 };
 
 /** موجودی کالا — دارایی، پیش‌فرض کد ۱۳۰۱. */
@@ -99,6 +105,7 @@ export const PAYABLE_ACCOUNT: InvoiceAccountSpec = {
   name: 'حساب‌های پرداختنی تجاری',
   accountType: AccountType.LIABILITY,
   match: ['پرداختنی تجاری', 'حساب‌های پرداختنی'],
+  exclude: ['اسناد', 'سایر'],
 };
 
 /** مالیات بر ارزش افزوده خرید (اعتبار مالیاتی) — دارایی، پیش‌فرض کد ۱۴۰۱. */

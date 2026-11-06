@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
-import { AccountResponseDto } from '../../accounting/dto/account-response.dto';
+import { decideRoleAccount } from '../../accounting/services/role-account-resolver';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { Currency } from '../../currency/enums/currency.enum';
 import { PostingRole } from '../../posting_rules/constants/posting-roles';
@@ -126,14 +126,14 @@ export class InvoicePostingService {
     }
 
     try {
-      // Accounts are resolved (and created if missing) before the transaction: that step is
-      // idempotent and must not be rolled back together with a failed posting.
-      const accounts = await this.resolveAccountMap(
+      // Accounts are only planned (read-only) before the transaction. A missing one is created
+      // inside it, after the amounts are known, and only if a voucher line for it is non-zero.
+      const plan = await this.resolveAccountMap(
         invoice,
         'document',
         this.movesStock(invoice),
       );
-      const overrides = await this.roleOverrides(invoice, 'issue', accounts);
+      const overrides = await this.roleOverrides(invoice, 'issue', plan.codes);
       // One transaction: stock movement, journal entry and the posting marker commit together
       // or not at all, and the invoice row lock makes a concurrent run wait and then no-op.
       await this.invoicingRepository.transaction(async (manager) => {
@@ -150,12 +150,14 @@ export class InvoicePostingService {
         }
         const meta = await this.moveStockAndMeasure(locked, manager);
         const stockDocumentId = await this.recordStockDocument(locked, meta, manager);
+        const request = this.documentRequest(locked, this.fromMeta(meta), false);
+        await this.ensurePlanned(locked, plan, overrides, request.amounts);
         const entry = await this.postVoucher(
           locked,
           'ISSUED',
           this.entryDate(locked.issuedAt),
           `صدور صورتحساب ${locked.taxInvoiceNumber}`,
-          this.documentRequest(locked, this.fromMeta(meta), false),
+          request,
           overrides,
           manager,
         );
@@ -203,8 +205,8 @@ export class InvoicePostingService {
     }
 
     try {
-      const accounts = await this.resolveAccountMap(invoice, 'payment', false);
-      const overrides = await this.roleOverrides(invoice, 'settle', accounts);
+      const plan = await this.resolveAccountMap(invoice, 'payment', false);
+      const overrides = await this.roleOverrides(invoice, 'settle', plan.codes);
       await this.invoicingRepository.transaction(async (manager) => {
         const locked = await this.invoicingRepository.findByIdForPosting(
           invoice!.tenantId,
@@ -222,15 +224,17 @@ export class InvoicePostingService {
         const sale = this.directionOf(locked) === InvoiceDirection.SALE;
         // Sale: cash comes in, receivable falls. Purchase: payable falls, cash goes out.
         const split = this.splitPayments(locked, owed);
+        const request = {
+          docType: settleDocType(sale, split),
+          amounts: drCrAmounts(settleRows(sale, split, owed)),
+        };
+        await this.ensurePlanned(locked, plan, overrides, request.amounts);
         const entry = await this.postVoucher(
           locked,
           'PAID',
           this.entryDate(locked.paidAt ?? locked.issuedAt),
           `تسویه صورتحساب ${locked.taxInvoiceNumber}`,
-          {
-            docType: settleDocType(sale, split),
-            amounts: drCrAmounts(settleRows(sale, split, owed)),
-          },
+          request,
           overrides,
           manager,
         );
@@ -270,13 +274,13 @@ export class InvoicePostingService {
     }
 
     try {
-      const accounts = await this.resolveAccountMap(
+      const plan = await this.resolveAccountMap(
         invoice,
         'document',
         (invoice.postingMeta?.lines.length ?? 0) > 0 ||
           (!invoice.postingMeta && this.movesStock(invoice)),
       );
-      const overrides = await this.roleOverrides(invoice, 'cancel', accounts);
+      const overrides = await this.roleOverrides(invoice, 'cancel', plan.codes);
 
       await this.invoicingRepository.transaction(async (manager) => {
         const locked = await this.invoicingRepository.findByIdForPosting(
@@ -296,12 +300,14 @@ export class InvoicePostingService {
 
         const posted = this.postedOf(locked);
         await this.reverseStock(locked, manager);
+        const request = this.documentRequest(locked, posted, true);
+        await this.ensurePlanned(locked, plan, overrides, request.amounts);
         const entry = await this.postVoucher(
           locked,
           'CANCEL',
           this.entryDate(locked.issuedAt),
           `ابطال صورتحساب ${locked.taxInvoiceNumber}`,
-          this.documentRequest(locked, posted, true),
+          request,
           overrides,
           manager,
         );
@@ -744,20 +750,8 @@ export class InvoicePostingService {
     phase: 'issue' | 'cancel' | 'settle',
     accounts: Partial<AccountMap>,
   ): Promise<RoleAccounts> {
-    const links: Array<[keyof AccountMap, PostingRole]> = [
-      ['receivable', 'receivable'],
-      ['sales', 'revenue'],
-      ['vat', 'vat_output'],
-      ['inventory', 'inventory'],
-      ['cogs', 'cogs'],
-      ['payable', 'payable'],
-      ['purchases', 'purchases'],
-      ['vatReceivable', 'vat_input'],
-      ['cash', 'cash'],
-      ['posClearing', 'pos_clearing'],
-    ];
     const legacy: Partial<Record<PostingRole, string>> = {};
-    for (const [key, role] of links) {
+    for (const [key, role] of ROLE_LINKS) {
       const code = accounts[key];
       if (code) legacy[role] = code;
     }
@@ -787,7 +781,7 @@ export class InvoicePostingService {
     invoice: InvoiceEntity,
     phase: 'document' | 'payment',
     stockMoves: boolean,
-  ): Promise<AccountMap> {
+  ): Promise<AccountPlan> {
     const sale = this.directionOf(invoice) === InvoiceDirection.SALE;
     const wanted: Array<[keyof AccountMap, InvoiceAccountSpec]> =
       phase === 'payment'
@@ -817,15 +811,65 @@ export class InvoicePostingService {
         wanted.push(['cogs', COGS_ACCOUNT]);
       }
     }
-    const codes = await this.resolveAccounts(
-      invoice.tenantId,
-      wanted.map(([, spec]) => spec),
-    );
-    const map: Partial<AccountMap> = {};
-    wanted.forEach(([key], index) => {
-      map[key] = codes[index];
-    });
-    return map as AccountMap;
+    const accounts = await this.accountingService.listAccounts(invoice.tenantId);
+    const plan: AccountPlan = { codes: {}, pending: {} };
+    const claimed = new Set<string>();
+    for (const [key, spec] of wanted) {
+      const decision = decideRoleAccount(accounts, spec, claimed);
+      plan.codes[key] = decision.code;
+      if (decision.action === 'create') {
+        claimed.add(decision.code);
+        plan.pending[key] = { spec, code: decision.code };
+      }
+    }
+    return plan;
+  }
+
+  /**
+   * Creates the planned-but-missing accounts whose voucher line is non-zero, so a purchase of
+   * stock-only lines never conjures 5201. Idempotent: an account that already exists (replay, or a
+   * concurrent run) is kept; a tenant mapping that replaced the planned code needs nothing created.
+   */
+  private async ensurePlanned(
+    invoice: InvoiceEntity,
+    plan: AccountPlan,
+    overrides: RoleAccounts,
+    amounts: Record<string, bigint>,
+  ): Promise<void> {
+    // Voucher row names per role, as documentRows / settleRows name them.
+    const rows: Record<keyof AccountMap, string[]> = {
+      receivable: ['receivable', 'party'],
+      payable: ['payable', 'party'],
+      sales: ['sales'],
+      vat: ['vat'],
+      vatReceivable: ['vat'],
+      inventory: ['stock'],
+      cogs: ['cogs'],
+      purchases: ['purchases'],
+      cash: ['cash'],
+      posClearing: ['card'],
+    };
+    const nonZero = (name: string) => (amounts[`${name}Dr`] ?? 0n) !== 0n || (amounts[`${name}Cr`] ?? 0n) !== 0n;
+    const neededKeys: Array<keyof AccountMap> = [];
+    for (const [key, role] of ROLE_LINKS) {
+      const pending = plan.pending[key];
+      if (pending && overrides[role] === pending.code && rows[key].some(nonZero)) neededKeys.push(key);
+    }
+    for (const key of neededKeys) {
+      const { spec, code } = plan.pending[key]!;
+      try {
+        await this.accountingService.createAccount(invoice.tenantId, {
+          code,
+          name: spec.name,
+          accountType: spec.accountType,
+          currency: Currency.IRR,
+        });
+      } catch (error) {
+        // Created meanwhile (replay or concurrent run): fine if it is there now, else surface it.
+        const accounts = await this.accountingService.listAccounts(invoice.tenantId);
+        if (!accounts.some((a) => a.code === code)) throw error;
+      }
+    }
   }
 
   /**
@@ -872,58 +916,6 @@ export class InvoicePostingService {
       typeof line.sku === 'string' &&
       line.sku.length > 0
     );
-  }
-
-  /**
-   * حل کد حساب‌ها: ابتدا تطابق نام در همان ماهیت، سپس تطابق کد، و در نهایت
-   * ساخت حساب پیش‌فرض در صورت نبود. ترتیب دقیقاً مطابق قرارداد رویداد است.
-   */
-  private async resolveAccounts(
-    tenantId: string,
-    specs: InvoiceAccountSpec[],
-  ): Promise<string[]> {
-    const accounts = await this.accountingService.listAccounts(tenantId);
-    const codes: string[] = [];
-
-    for (const spec of specs) {
-      const existing = this.findAccountCode(accounts, spec);
-      if (existing) {
-        codes.push(existing);
-        continue;
-      }
-
-      try {
-        const created = await this.accountingService.createAccount(tenantId, {
-          code: spec.code,
-          name: spec.name,
-          accountType: spec.accountType,
-          currency: Currency.IRR,
-        });
-        accounts.push(created);
-        codes.push(created.code);
-      } catch {
-        // ساخت هم‌زمان توسط درخواست دیگر؛ به کد پیش‌فرض بسنده می‌کنیم.
-        codes.push(spec.code);
-      }
-    }
-
-    return codes;
-  }
-
-  private findAccountCode(
-    accounts: AccountResponseDto[],
-    spec: InvoiceAccountSpec,
-  ): string | null {
-    const byName = accounts.find(
-      (account) =>
-        account.accountType === spec.accountType &&
-        spec.match.some((fragment) => account.name.includes(fragment)),
-    );
-    if (byName) {
-      return byName.code;
-    }
-    const byCode = accounts.find((account) => account.code === spec.code);
-    return byCode ? byCode.code : null;
   }
 
   /** Rial minor units: invoice-currency amount x fx rate (6 decimals), rounded half-up. */
@@ -980,6 +972,26 @@ export class InvoicePostingService {
   private round(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100;
   }
+}
+
+/** AccountMap key -> posting role. */
+const ROLE_LINKS: ReadonlyArray<[keyof AccountMap, PostingRole]> = [
+  ['receivable', 'receivable'],
+  ['sales', 'revenue'],
+  ['vat', 'vat_output'],
+  ['inventory', 'inventory'],
+  ['cogs', 'cogs'],
+  ['payable', 'payable'],
+  ['purchases', 'purchases'],
+  ['vatReceivable', 'vat_input'],
+  ['cash', 'cash'],
+  ['posClearing', 'pos_clearing'],
+];
+
+/** The planned accounts per role; `pending` ones do not exist yet and are created on first use. */
+interface AccountPlan {
+  codes: Partial<AccountMap>;
+  pending: Partial<Record<keyof AccountMap, { spec: InvoiceAccountSpec; code: string }>>;
 }
 
 interface AccountMap {
