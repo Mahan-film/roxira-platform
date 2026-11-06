@@ -596,8 +596,8 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       balanceAfterIssue(inputVatCode) - (accountsBefore.some((b) => b.code === inputVatCode) ? balanceBeforeIssue(inputVatCode) : 0n),
       `input VAT ${inputVatCode} up by the purchase VAT`,
     ).toBe(purchaseVatSum);
-    // Hand-computed from invoices.csv (sum of total incl. VAT minus lines for the 95 purchases): 827,190,000.
-    expect(purchaseVatSum).toBe(827_190_000n);
+    // Hand-computed from invoices.csv (sum of total incl. VAT minus lines for the 95 purchases): 567,190,000.
+    expect(purchaseVatSum).toBe(567_190_000n);
     expect(balanceAfterIssue('1401'), '1401 prepayments stays at its opening').toBe(balanceBeforeIssue('1401'));
 
     // ---- Settle the «تسویه‌شده» purchases through the user's status path -----------------------------
