@@ -50,3 +50,10 @@ Twice daily on #227 with the line: `OpenCode PRs / Claude PRs / est. cost`. Last
 - `fleet-state.sh` runs every 15 min by systemd user timer `roxira-fleet-state`: publishes scripts, notes and briefs (never logs or keys) to branch `fleet-state`. Another computer takes over with `MAC_TAKEOVER.md`.
 - Mac: no port 22 open on the LAN at 11-06 16:30. Needs Remote Login plus `~/.ssh/roxira_mac.pub`; then add a `mac.sh` runner like `remote.sh`.
 - Windows sleep is 15 min on AC, 10 on battery: owner to change. Coordinator must not change system settings.
+
+## Research result 11-06 18:55 (official docs: remote-control, cross-session-messaging, costs)
+- Same account means the same Pro quota: the Mac adds hardware, not tokens. Plan upgrade is still the only way to more Claude.
+- Mac routes: (a) SSH + OpenCode with API keys: zero Claude tokens, preferred for builds and tests. (b) `claude remote-control` on the Mac: appears in ListAgents, reachable by SendMessage (plain text) from a Remote Control session. Peer rows seen now: both offline.
+- Quota order: fresh session over long one (/clear costs nothing, compaction reads everything); subagents draw on the same quota; delegate noisy output; keep Haiku for mechanical work.
+- T1 agent a5069bcb0e286e98c retired at 95% 5-hour use, above the 150k rule. Restart slice 3 (#537) with a fresh Haiku agent after the 20:20 Tehran reset. Worktree 536-t1-delivery holds attempt 2.
+- After reset: read diffs of #550 #552 #554 (not reviewed, built by DeepSeek); #515 in merge loop; #524 M1 CI running on a new head; re-slot #526 #535 #518 #519.

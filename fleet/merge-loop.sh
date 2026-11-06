@@ -2,7 +2,8 @@
 # merge-loop.sh <pr>...: run merge-batch every 3 min until all merged, or 90 min pass, or a real conflict appears.
 R=Mahan-film/roxira-platform; F=/home/mahan/Developer/roxira-wt/_fleet
 for i in $(seq 1 30); do
-  OPEN=(); for n in "$@"; do [ "$(gh pr view $n -R $R --json state --jq .state)" = OPEN ] && OPEN+=($n); done
+  # A network failure gives an empty state: count it as still open, never as merged.
+  OPEN=(); for n in "$@"; do s="$(gh pr view $n -R $R --json state --jq .state 2>/dev/null)"; [ "$s" = MERGED ] || [ "$s" = CLOSED ] || OPEN+=($n); done
   [ ${#OPEN[@]} = 0 ] && { echo "all merged: $*"; exit 0; }
   Q=$(gh api graphql -f query='query{repository(owner:"Mahan-film",name:"roxira-platform"){mergeQueue{entries(first:20){nodes{pullRequest{number}}}}}}' --jq '[.data.repository.mergeQueue.entries.nodes[].pullRequest.number]|join(" ")')
   TODO=(); for n in "${OPEN[@]}"; do [[ " $Q " == *" $n "* ]] || TODO+=($n); done
