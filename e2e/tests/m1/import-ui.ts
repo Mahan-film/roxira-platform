@@ -136,7 +136,10 @@ export async function apiPost<T>(page: Page, route: string, body: unknown, expec
       data: body,
     }),
   );
-  expect(response.status(), `POST ${route}`).toBe(expectedStatus);
+  if (response.status() !== expectedStatus) {
+    // Put the server's own message in the report: a bare status code hides why a request was refused.
+    throw new Error(`POST ${route}: expected ${expectedStatus}, got ${response.status()}: ${(await response.text()).slice(0, 600)}`);
+  }
   return (await response.json()) as T;
 }
 
