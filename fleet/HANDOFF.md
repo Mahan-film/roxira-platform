@@ -44,3 +44,9 @@ Hotspot queue: nav entry for /app/contracting, test lines for contracting-ui and
 
 ## Reports
 Twice daily on #227 with the line: `OpenCode PRs / Claude PRs / est. cost`. Last posted 11-05 18:45 Tehran; next one is overdue.
+
+## Cost and continuity (11-06)
+- `~/.claude/settings.json`: autoCompactWindow 200000, autoContinueAtUsageLimit true, prompt suggestions off, default subagent model haiku, SessionStart hook pointing here. Applies from the next session start.
+- `fleet-state.sh` runs every 15 min by systemd user timer `roxira-fleet-state`: publishes scripts, notes and briefs (never logs or keys) to branch `fleet-state`. Another computer takes over with `MAC_TAKEOVER.md`.
+- Mac: no port 22 open on the LAN at 11-06 16:30. Needs Remote Login plus `~/.ssh/roxira_mac.pub`; then add a `mac.sh` runner like `remote.sh`.
+- Windows sleep is 15 min on AC, 10 on battery: owner to change. Coordinator must not change system settings.
