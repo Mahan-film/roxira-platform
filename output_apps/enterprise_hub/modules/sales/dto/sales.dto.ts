@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { BadRequestException } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -20,6 +21,33 @@ import { Money } from '../../accounting/money';
 import { SalesOrderStatus, SalesQuotationStatus } from '../enums/sales-status.enum';
 
 export const MAX_SALES_LINES = 200;
+
+/** Most items one availability request may ask about. */
+export const MAX_AVAILABILITY_ITEMS = 200;
+
+/**
+ * Pure parser of the `itemIds` query value ("1,2,3"): positive integers only, at most
+ * `MAX_AVAILABILITY_ITEMS` ids, duplicates collapse. Anything else is a 400.
+ */
+export function parseItemIds(raw: string | undefined): number[] {
+  if (raw === undefined || raw.trim() === '') {
+    throw new BadRequestException('شناسه‌های کالا (itemIds) الزامی است.');
+  }
+  const parts = raw.split(',');
+  if (parts.length > MAX_AVAILABILITY_ITEMS) {
+    throw new BadRequestException(`حداکثر ${MAX_AVAILABILITY_ITEMS} شناسه کالا مجاز است.`);
+  }
+  const ids: number[] = [];
+  for (const part of parts) {
+    const text = part.trim();
+    if (!/^\d{1,9}$/.test(text)) {
+      throw new BadRequestException('شناسه‌های کالا باید اعداد صحیح مثبت و جداشده با کاما باشند.');
+    }
+    const id = Number(text);
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
 
 const MONEY = { oneOf: [{ type: 'number' }, { type: 'string' }], example: '100000.00' };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -268,4 +296,27 @@ export class SalesOrderResponseDto {
 export class SalesOrderListResponseDto {
   @ApiProperty({ type: [SalesOrderResponseDto] }) data: SalesOrderResponseDto[];
   @ApiProperty() total: number;
+}
+
+// ---------------------------------------------------------------------- availability
+
+/** Query of `GET sales/availability?itemIds=1,2,3`. */
+export class QueryItemAvailabilityDto {
+  @ApiProperty({ description: 'شناسه‌های کالا جداشده با کاما (حداکثر ۲۰۰)' })
+  @IsString()
+  @MaxLength(2000)
+  itemIds: string;
+}
+
+export class ItemAvailabilityResponseDto {
+  @ApiProperty() itemId: number;
+  @ApiProperty() sku: string;
+  @ApiProperty() name: string;
+  @ApiProperty({ description: 'موجودی فیزیکی (on-hand)' }) onHand: number;
+  @ApiProperty({ description: 'رزرو سفارش‌های تأییدشده' }) reserved: number;
+  @ApiProperty({ description: 'موجودی در دسترس (on-hand منهای رزرو؛ می‌تواند منفی باشد)' }) available: number;
+}
+
+export class ItemAvailabilityListResponseDto {
+  @ApiProperty({ type: [ItemAvailabilityResponseDto] }) data: ItemAvailabilityResponseDto[];
 }

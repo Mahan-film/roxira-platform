@@ -236,6 +236,28 @@ export class SalesRepository {
     });
   }
 
+  /**
+   * Reserved quantity (موجودی رزرو) per item id, exact as numeric text: the open (not yet
+   * delivered) quantity of lines on CONFIRMED orders of this tenant. DRAFT and CANCELLED orders
+   * reserve nothing. Runs inside TenantScope; never queries `erp_stock_items`.
+   */
+  reservedByItem(tenantId: string, itemIds?: number[], manager?: EntityManager): Promise<Map<number, string>> {
+    return this.within(tenantId, manager, async (m) => {
+      const rows: Array<{ item_id: number; reserved: string }> = await m.query(
+        `SELECT l.item_id, SUM(l.quantity - l.delivered_quantity) AS reserved
+           FROM erp_sales_order_lines l
+           JOIN erp_sales_orders o ON o.id = l.order_id AND o.tenant_id = l.tenant_id
+          WHERE l.tenant_id = $1
+            AND o.status = 'CONFIRMED'
+            AND l.quantity > l.delivered_quantity
+            ${itemIds && itemIds.length > 0 ? 'AND l.item_id = ANY($2::int[])' : ''}
+          GROUP BY l.item_id`,
+        itemIds && itemIds.length > 0 ? [tenantId, itemIds] : [tenantId],
+      );
+      return new Map(rows.map((row) => [Number(row.item_id), String(row.reserved)]));
+    });
+  }
+
   // ------------------------------------------------------------------ cross-module checks (within the scope)
 
   /** Item ids from `ids` that exist as stock items of this tenant. */

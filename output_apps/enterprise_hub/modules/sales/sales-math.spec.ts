@@ -43,3 +43,16 @@ describe('sales-math', () => {
     expect(sumLineTotals([])).toBe(0n);
   });
 });
+
+describe('doubleToHundredths (DB double precision, tolerant)', () => {
+  it('rounds like roundQuantity and never throws', () => {
+    const { doubleToHundredths } = require('./sales-math');
+    expect(doubleToHundredths(0.30000000000000004)).toBe(30n);
+    expect(doubleToHundredths(-1.5)).toBe(-150n);
+    expect(doubleToHundredths(1.125)).toBe(113n);
+    expect(doubleToHundredths(0)).toBe(0n);
+    expect(doubleToHundredths(NaN)).toBe(0n);
+    expect(doubleToHundredths('10')).toBe(1000n);
+    expect(doubleToHundredths(null)).toBe(0n);
+  });
+});

@@ -6,6 +6,7 @@ import { SalesController } from './controllers/sales.controller';
 import { SalesOrderLineEntity, SalesOrderEntity } from './entities/sales-order.entity';
 import { SalesQuotationLineEntity, SalesQuotationEntity } from './entities/sales-quotation.entity';
 import { SalesRepository } from './repositories/sales.repository';
+import { SalesAvailabilityService } from './services/sales-availability.service';
 import { SalesService } from './services/sales.service';
 
 /**
@@ -25,7 +26,7 @@ import { SalesService } from './services/sales.service';
     ]),
   ],
   controllers: [SalesController],
-  providers: [SalesService, SalesRepository, TenantScope],
-  exports: [SalesService],
+  providers: [SalesService, SalesRepository, SalesAvailabilityService, TenantScope],
+  exports: [SalesService, SalesAvailabilityService],
 })
 export class SalesModule {}

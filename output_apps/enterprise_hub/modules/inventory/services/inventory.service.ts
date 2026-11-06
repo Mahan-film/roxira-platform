@@ -3,8 +3,12 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { parseScaled } from '../../accounting/money';
+import { doubleToHundredths } from '../../sales/sales-math';
+import { SalesAvailabilityService } from '../../sales/services/sales-availability.service';
 import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
 import { CreateWarehouseDto, UpdateWarehouseDto } from '../dto/create-warehouse.dto';
@@ -61,7 +65,11 @@ export interface InventoryImportItemInput {
  */
 @Injectable()
 export class InventoryService {
-  constructor(private readonly inventoryRepository: InventoryRepository) {}
+  constructor(
+    private readonly inventoryRepository: InventoryRepository,
+    /** Sales reservations (#527 T1). Optional so existing constructors keep working: without it reserved is 0. */
+    @Optional() private readonly reservations?: SalesAvailabilityService,
+  ) {}
 
   private roundMoney(value: number): number {
     const factor = 10 ** MONEY_SCALE;
@@ -73,9 +81,23 @@ export class InventoryService {
     return Math.round((value + Number.EPSILON) * factor) / factor;
   }
 
-  /** Same rule as `REORDER_STOCK_SQL` in the repository; switch both when available stock lands (#227 T1). */
+  /** Same rule as `REORDER_STOCK_SQL` in the repository (available stock = on-hand minus reserved). */
   private isLowStock(quantity: number, minQuantity: number): boolean {
     return minQuantity > 0 && quantity <= minQuantity;
+  }
+
+  /** Reserved hundredths per item id; empty when the sales module is not wired in. */
+  private async reservedHundredths(
+    tenantId: string,
+    itemIds?: number[],
+  ): Promise<Map<number, bigint>> {
+    if (!this.reservations) return new Map();
+    const raw = await this.reservations.reservedMap(tenantId, itemIds);
+    const map = new Map<number, bigint>();
+    for (const [id, text] of raw) {
+      map.set(id, parseScaled(text, 2));
+    }
+    return map;
   }
 
   private generateBatchNumber(sku: string): string {
@@ -101,18 +123,21 @@ export class InventoryService {
   private toStockItemResponse(
     entity: StockItemEntity,
     fifoValuation: number,
+    reservedH = 0n,
   ): StockItemResponseDto {
+    // مقادیر در صدک (bigint) کم/زیاد می‌شوند تا هیچ تفاضل اعشاری شناور ذخیره یا مقایسه نشود.
+    const onHand = doubleToHundredths(entity.quantity);
+    const available = onHand - reservedH;
     return {
       id: entity.id,
       sku: entity.sku,
       barcode: entity.barcode,
       name: entity.name,
-      quantity: this.roundQuantity(Number(entity.quantity)),
+      quantity: Number(onHand) / 100,
+      reservedQuantity: Number(reservedH) / 100,
+      availableQuantity: Number(available) / 100,
       minQuantity: this.roundQuantity(Number(entity.minQuantity)),
-      isLowStock: this.isLowStock(
-        Number(entity.quantity),
-        Number(entity.minQuantity),
-      ),
+      isLowStock: this.isLowStock(Number(available) / 100, Number(entity.minQuantity)),
       batchNumber: entity.batchNumber,
       fifoValuation: this.roundMoney(fifoValuation),
     };
@@ -417,7 +442,12 @@ export class InventoryService {
 
     const saved = await this.inventoryRepository.saveStockItem(tenantId, entity);
     const valuation = await this.computeItemValuationMap(tenantId);
-    return this.toStockItemResponse(saved, valuation.get(saved.sku) ?? 0);
+    const reserved = await this.reservedHundredths(tenantId, [saved.id]);
+    return this.toStockItemResponse(
+      saved,
+      valuation.get(saved.sku) ?? 0,
+      reserved.get(saved.id) ?? 0n,
+    );
   }
 
   async getStockItem(
@@ -432,7 +462,12 @@ export class InventoryService {
       throw new NotFoundException(`کالای با شناسه ${id} یافت نشد.`);
     }
     const valuation = await this.computeItemValuationMap(tenantId);
-    return this.toStockItemResponse(entity, valuation.get(entity.sku) ?? 0);
+    const reserved = await this.reservedHundredths(tenantId, [entity.id]);
+    return this.toStockItemResponse(
+      entity,
+      valuation.get(entity.sku) ?? 0,
+      reserved.get(entity.id) ?? 0n,
+    );
   }
 
   async getStockItemBySku(
@@ -447,7 +482,12 @@ export class InventoryService {
       throw new NotFoundException(`کالایی با شناسه ${sku} یافت نشد.`);
     }
     const valuation = await this.computeItemValuationMap(tenantId);
-    return this.toStockItemResponse(entity, valuation.get(entity.sku) ?? 0);
+    const reserved = await this.reservedHundredths(tenantId, [entity.id]);
+    return this.toStockItemResponse(
+      entity,
+      valuation.get(entity.sku) ?? 0,
+      reserved.get(entity.id) ?? 0n,
+    );
   }
 
   async listStockItems(
@@ -461,18 +501,25 @@ export class InventoryService {
     lowStockCount: number;
     noStockCount: number;
   }> {
+    // رزرو همه کالاهای مستأجر، پیش از پرس‌وجوی صفحه: قانون نقطه سفارش دوباره روی موجودی در
+    // دسترس (on-hand منهای رزرو) اعمال می‌شود، نه روی موجودی فیزیکی.
+    const reservedMap = await this.reservedHundredths(tenantId);
     const [entities, total] =
       await this.inventoryRepository.findStockItemsAndCount(tenantId, {
         search: query.search,
         lowStockOnly: query.lowStockOnly ?? false,
         noStockOnly: query.noStockOnly ?? false,
+        reserved: [...reservedMap].map(([itemId, hundredths]) => ({
+          itemId,
+          quantity: (Number(hundredths) / 100).toFixed(2),
+        })),
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       });
 
     const valuation = await this.computeItemValuationMap(tenantId);
     const data = entities.map((entity) =>
-      this.toStockItemResponse(entity, valuation.get(entity.sku) ?? 0),
+      this.toStockItemResponse(entity, valuation.get(entity.sku) ?? 0, reservedMap.get(entity.id) ?? 0n),
     );
 
     return {
@@ -614,6 +661,7 @@ export class InventoryService {
       this.inventoryRepository.findAllStockItems(tenantId),
       this.inventoryRepository.getBatchAggregates(tenantId),
     ]);
+    const reservedMap = await this.reservedHundredths(tenantId);
 
     const aggregateBySku = new Map(
       aggregates.map((row) => [row.sku, row]),
@@ -624,12 +672,16 @@ export class InventoryService {
       const batchQuantity = aggregate ? Number(aggregate.batchQuantity) : 0;
       const fifoValue = aggregate ? Number(aggregate.fifoValue) : 0;
       const openBatchCount = aggregate ? Number(aggregate.openBatchCount) : 0;
-      const quantity = Number(item.quantity);
+      const onHand = doubleToHundredths(item.quantity);
+      const reserved = reservedMap.get(item.id) ?? 0n;
+      const available = onHand - reserved;
 
       return {
         sku: item.sku,
         name: item.name,
-        quantity: this.roundQuantity(quantity),
+        quantity: Number(onHand) / 100,
+        reservedQuantity: Number(reserved) / 100,
+        availableQuantity: Number(available) / 100,
         batchQuantity: this.roundQuantity(batchQuantity),
         fifoValue: this.roundMoney(fifoValue),
         weightedAverageUnitCost:
@@ -637,7 +689,7 @@ export class InventoryService {
             ? this.roundMoney(fifoValue / batchQuantity)
             : 0,
         openBatchCount,
-        isLowStock: this.isLowStock(quantity, Number(item.minQuantity)),
+        isLowStock: this.isLowStock(Number(available) / 100, Number(item.minQuantity)),
       };
     });
 

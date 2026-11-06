@@ -56,3 +56,15 @@ export function computeLine(qtyHundredths: bigint, unitPriceMinor: bigint, disco
 export function sumLineTotals(totals: readonly bigint[]): bigint {
   return totals.reduce<bigint>((sum, value) => sum + value, 0n);
 }
+
+/**
+ * Hundredths of a quantity read from a DB `double precision` column (`erp_stock_items.quantity`).
+ * Tolerant on purpose: same rounding as `InventoryService.roundQuantity`, so float noise
+ * (0.30000000000000004), negatives and values with more than two decimals never throw; a
+ * non-finite value counts as 0. Use `parseScaled` only for numeric text.
+ */
+export function doubleToHundredths(value: unknown): bigint {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0n;
+  return BigInt(Math.round((n + Number.EPSILON) * 100));
+}

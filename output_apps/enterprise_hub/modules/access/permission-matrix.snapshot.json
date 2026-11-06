@@ -1463,6 +1463,17 @@
   "GET /enterprise-hub/radar/swarm-status (RadarController.getSwarmStatus)": {
     "policy": "platformAdmin"
   },
+  "GET /enterprise-hub/sales/availability (SalesController.getItemAvailability)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/sales/orders (SalesController.listOrders)": {
     "policy": "invoicing:read|accounting:read",
     "owner": true,

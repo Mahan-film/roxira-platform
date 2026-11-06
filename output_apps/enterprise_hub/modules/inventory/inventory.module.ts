@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccountingModule } from '../accounting/accounting.module';
 import { PostingRulesModule } from '../posting_rules/posting-rules.module';
+import { SalesModule } from '../sales/sales.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InventoryController } from './controllers/inventory.controller';
 import { StockDocumentsController } from './controllers/stock-documents.controller';
@@ -36,6 +37,9 @@ import { InventoryService } from './services/inventory.service';
   imports: [
     AccountingModule,
     PostingRulesModule,
+    // رزرو فروش (#527 T1): سرویس دسترس‌پذیری فروش برای محاسبه موجودی آزاد. SalesModule چیزی از
+    // انبارداری وارد نمی‌کند، پس چرخه‌ای ایجاد نمی‌شود.
+    SalesModule,
     TypeOrmModule.forFeature([
       WarehouseEntity,
       StockItemEntity,
