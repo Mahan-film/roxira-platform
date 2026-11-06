@@ -115,7 +115,7 @@ jobs:
         # DEGRADED/FAILED cap-abort leaves a diagnostic trace; the JSON never
         # contains a secret (the pipeline logs/records model ids and cost only).
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tech-radar-weekly-${{ github.run_id }}
           path: ${{ runner.temp }}/tech-radar/*.json

@@ -196,7 +196,7 @@ jobs:
 
       - name: Upload full research report as an artifact
         if: steps.preflight.outputs.ok == 'true' && always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: factory-research-${{ env.ISSUE_NUMBER }}-${{ github.run_id }}
           path: |
@@ -207,7 +207,7 @@ jobs:
 
       - name: Upload run ledger artifact
         if: steps.preflight.outputs.ok == 'true' && always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: factory-ledger-${{ env.ISSUE_NUMBER }}
           path: ${{ runner.temp }}/ledger.jsonl
