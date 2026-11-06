@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { parseScaled } from '../../accounting/money';
+import { doubleToHundredths } from '../../sales/sales-math';
 import { SalesAvailabilityService } from '../../sales/services/sales-availability.service';
 import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
@@ -125,7 +126,7 @@ export class InventoryService {
     reservedH = 0n,
   ): StockItemResponseDto {
     // مقادیر در صدک (bigint) کم/زیاد می‌شوند تا هیچ تفاضل اعشاری شناور ذخیره یا مقایسه نشود.
-    const onHand = parseScaled(String(entity.quantity), 2);
+    const onHand = doubleToHundredths(entity.quantity);
     const available = onHand - reservedH;
     return {
       id: entity.id,
@@ -671,7 +672,7 @@ export class InventoryService {
       const batchQuantity = aggregate ? Number(aggregate.batchQuantity) : 0;
       const fifoValue = aggregate ? Number(aggregate.fifoValue) : 0;
       const openBatchCount = aggregate ? Number(aggregate.openBatchCount) : 0;
-      const onHand = parseScaled(String(item.quantity), 2);
+      const onHand = doubleToHundredths(item.quantity);
       const reserved = reservedMap.get(item.id) ?? 0n;
       const available = onHand - reserved;
 

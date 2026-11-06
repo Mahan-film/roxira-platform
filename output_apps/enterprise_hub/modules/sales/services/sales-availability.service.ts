@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { parseScaled } from '../../accounting/money';
+import { doubleToHundredths } from '../sales-math';
 import { SalesRepository } from '../repositories/sales.repository';
 
 /** Available stock of one item: on hand minus reserved (موجودی آزاد). */
@@ -65,7 +66,7 @@ export class SalesAvailabilityService {
       for (const itemId of itemIds) {
         const item = stockById.get(itemId);
         if (!item) continue;
-        const onHand = hundredths(item.quantity);
+        const onHand = doubleToHundredths(item.quantity);
         const reservedQuantity = hundredths(reserved.get(itemId) ?? '0');
         result.push({
           itemId,

@@ -19,6 +19,11 @@ import { PartiesService } from '../parties/services/parties.service';
 import { SalesRepository } from './repositories/sales.repository';
 import { SalesService } from './services/sales.service';
 import { SalesAvailabilityService } from './services/sales-availability.service';
+import { ConfigModule } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
+import { getDataSourceToken, TypeOrmModule } from '@nestjs/typeorm';
+import { InventoryModule } from '../inventory/inventory.module';
+import { SalesModule } from './sales.module';
 import { InventoryService } from '../inventory/services/inventory.service';
 import { InventoryRepository } from '../inventory/repositories/inventory.repository';
 import { WarehouseEntity } from '../inventory/entities/warehouse.entity';
@@ -193,5 +198,85 @@ describePg('Reservation and available stock on PostgreSQL (derived, non-superuse
       [T1, o1Id, B],
     );
     expect((await availability.availability(T1, [B]))[0]).toMatchObject({ reserved: 0, available: 20 });
+  });
+
+  it('dirty double-precision on-hand rows render rounded like roundQuantity and never throw', async () => {
+    const dirty: Array<[string, string, number]> = [
+      ['D-FLOAT', '0.30000000000000004', 0.3],
+      ['D-NEG', '-1.5', -1.5],
+      ['D-3DEC', '1.125', 1.13],
+      ['D-ZERO', '0', 0],
+      ['D-NAN', "'NaN'", 0],
+    ];
+    for (const [sku, literal] of dirty) {
+      const value = literal.startsWith("'") ? `${literal}::float8` : `${literal}::float8`;
+      await owner.query(
+        `INSERT INTO erp_stock_items (tenant_id, sku, barcode, name, quantity, min_quantity) VALUES ($1, $2, $2, $2, ${value}, 0)`,
+        [T1, sku],
+      );
+    }
+    const list = await withSales.listStockItems(T1, { page: 1, limit: 100 } as never);
+    for (const [sku, literal, expected] of dirty) {
+      const row = list.data.find((i) => i.sku === sku)!;
+      expect(row.quantity).toBe(expected);
+      expect(row.availableQuantity).toBe(expected);
+      const old = Number(literal.replace(/'/g, ''));
+      if (Number.isFinite(old)) {
+        expect(row.quantity).toBe(Math.round((old + Number.EPSILON) * 100) / 100); // same as the old roundQuantity
+      }
+    }
+    const valuation = await withSales.getFifoValuation(T1);
+    expect(valuation.rows.find((r) => r.sku === 'D-3DEC')!.quantity).toBe(1.13);
+    const ids = list.data.filter((i) => i.sku.startsWith('D-')).map((i) => i.id);
+    const avail = await availability.availability(T1, ids);
+    expect(avail.map((r) => r.available).sort((a, b) => a - b)).toEqual([-1.5, 0, 0, 0.3, 1.13]);
+    await owner.query(`DELETE FROM erp_stock_items WHERE tenant_id = $1 AND sku LIKE 'D-%'`, [T1]);
+  });
+
+  it('module wiring: InventoryService gets the reservation service from SalesModule and there is no import cycle', async () => {
+    // Metadata the Nest container reads: InventoryModule imports SalesModule, which exports the
+    // service; InventoryService declares it as an @Optional() second constructor parameter.
+    const imports = (m: unknown): unknown[] => (Reflect.getMetadata('imports', m as object) ?? []).filter(Boolean);
+    expect(imports(InventoryModule)).toContain(SalesModule);
+    expect(Reflect.getMetadata('exports', SalesModule)).toContain(SalesAvailabilityService);
+    expect(Reflect.getMetadata('design:paramtypes', InventoryService)[1]).toBe(SalesAvailabilityService);
+    // No cycle: nothing reachable from SalesModule's imports is InventoryModule.
+    const seen = new Set<unknown>();
+    const walk = (m: unknown): void => {
+      if (seen.has(m)) return;
+      seen.add(m);
+      imports(m).forEach(walk);
+    };
+    walk(SalesModule);
+    expect(seen.has(InventoryModule)).toBe(false);
+    // Real container: SalesModule (real) plus InventoryService (real class) must receive the instance.
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        TypeOrmModule.forRoot({ ...options(db, role, APP_PW), autoLoadEntities: false } as never),
+        SalesModule,
+      ],
+      providers: [
+        InventoryService,
+        {
+          provide: InventoryRepository,
+          useFactory: (ds: DataSource) =>
+            new InventoryRepository(
+              ds.getRepository(WarehouseEntity),
+              ds.getRepository(StockItemEntity),
+              ds.getRepository(FifoBatchEntity),
+              ds,
+            ),
+          inject: [getDataSourceToken()],
+        },
+      ],
+    }).compile();
+    const inventory = moduleRef.get(InventoryService);
+    expect((inventory as unknown as { reservations?: unknown }).reservations).toBeInstanceOf(SalesAvailabilityService);
+    // After the previous tests O1 still reserves 2 of A (O2 cancelled): the container-built service applies it.
+    const all = await inventory.listStockItems(T1, { page: 1, limit: 100 } as never);
+    const a = all.data.find((i) => i.sku === 'A')!;
+    expect([a.quantity, a.reservedQuantity, a.availableQuantity]).toEqual([10, 2, 8]);
+    await moduleRef.close();
   });
 });
