@@ -95,6 +95,8 @@ export interface QueryJournalEntryDto {
   limit?: number;
   status?: JournalEntryStatus;
   entryNumber?: string;
+  fromDate?: string; // YYYY-MM-DD
+  toDate?: string; // YYYY-MM-DD
 }
 
 export interface PaginatedJournalEntryResponse {
