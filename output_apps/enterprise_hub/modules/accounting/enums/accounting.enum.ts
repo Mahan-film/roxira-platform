@@ -112,6 +112,8 @@ export enum ReportLine {
   FINANCE_COST = 'FINANCE_COST',
   NON_OPERATING_INCOME = 'NON_OPERATING_INCOME',
   INCOME_TAX = 'INCOME_TAX',
+  /** Off-balance memorandum accounts (حساب‌های انتظامی): on no statement. */
+  MEMORANDUM = 'MEMORANDUM',
 }
 
 export enum PettyCashFundStatus {

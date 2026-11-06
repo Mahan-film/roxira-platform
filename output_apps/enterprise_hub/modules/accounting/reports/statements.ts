@@ -126,6 +126,7 @@ export const LINE_TITLES: Readonly<Record<ReportLine, string>> = {
   [L.FINANCE_COST]: 'هزینه‌های مالی',
   [L.NON_OPERATING_INCOME]: 'سایر درآمدها و هزینه‌های غیرعملیاتی',
   [L.INCOME_TAX]: 'هزینه مالیات بر درآمد',
+  [L.MEMORANDUM]: 'حساب‌های انتظامی',
 };
 
 const CURRENT_ASSETS = [L.CASH, L.BANK, L.PETTY_CASH, L.SHORT_TERM_INVESTMENT, L.RECEIVABLE, L.INVENTORY, L.PREPAYMENT, L.OTHER_CURRENT_ASSET];
