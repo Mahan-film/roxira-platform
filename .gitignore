@@ -49,7 +49,7 @@ data/raw/
 .DS_Store
 .idea/
 .vscode/
-node_modules/
+node_modules
 dist/
 .aider*
 twenty_data/
