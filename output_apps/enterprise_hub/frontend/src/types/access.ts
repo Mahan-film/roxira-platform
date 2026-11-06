@@ -20,7 +20,7 @@ export const SELLABLE_MODULES: AccessModuleKey[] = [
 
 export const MODULE_LABELS: Record<AccessModuleKey, string> = {
   accounting: "حسابداری",
-  banking: "بانک و تطبیق",
+  banking: "حساب‌های بانکی",
   cheques: "چک",
   invoicing: "صورتحساب",
   tax: "مالیات و مودیان",

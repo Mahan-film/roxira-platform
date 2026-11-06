@@ -342,7 +342,7 @@ test.describe('prod feature tour', () => {
 
     await gotoApp(page, '/app/accounting/bank');
     await expect(page.locator('option', { hasText: `QA bank ${sfx}` }).first()).toBeAttached({ timeout: 20_000 });
-    await page.getByRole('tab', { name: 'مغایرت‌گیری هوشمند' }).click().catch(() => undefined);
+    await page.getByRole('tab', { name: 'مغایرت‌گیری بانکی' }).click().catch(() => undefined);
 
     const summary = await a.ok('GET', `enterprise-hub/banking/accounts/${bank.id}/summary`);
     expect(summary).toBeTruthy();
