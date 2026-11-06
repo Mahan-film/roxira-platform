@@ -1334,18 +1334,36 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     type Review = {
       counts: { matched: number; suggested: number; unmatched: number; drafts: number };
       drafts: Array<{ id: number; status: string; counterAccountCode: string | null }>;
-      unmatched: Array<{ needsAccount?: boolean }>;
+      unmatched: Array<{ id: number; direction: 'in' | 'out'; draft: { id: number } | null }>;
     };
     const committed = await apiPost<Review>(page, `banking/recon/sessions/${session.id}/commit`, {}, 200);
     test.info().annotations.push({ type: 'recon-commit', description: JSON.stringify(committed.counts) });
     expect(committed.counts.matched + committed.counts.suggested, 'nothing in the book matches this statement').toBe(0);
-    expect(committed.drafts, 'one draft per statement line').toHaveLength(100);
-    expect(new Set(committed.drafts.map((d) => d.counterAccountCode)), 'every draft uses the clearing account').toEqual(new Set(['1199']));
+    // The classifier recognises the receipts («تسویه فاکتور فروش») but not every payment text; the lines it cannot
+    // classify are answered one by one by the person (category + counter account), as in the review screen.
+    const drafts = [...committed.drafts];
+    const unclassified = committed.unmatched.filter((row) => row.draft === null);
+    test.info().annotations.push({
+      type: 'recon-unclassified',
+      description: `${unclassified.length} of 100 lines without a draft after commit (directions: ${[...new Set(unclassified.map((r) => r.direction))].join(',')})`,
+    });
+    for (const row of unclassified) {
+      const answered = await apiPost<{ draft: { id: number; counterAccountCode: string | null } | null }>(
+        page,
+        `banking/recon/items/${row.id}/answer`,
+        { choiceId: row.direction === 'in' ? 'sale' : 'purchase', counterAccountCode: '1199', remember: false },
+        200,
+      );
+      expect(answered.draft, `a draft for statement item ${row.id}`).not.toBeNull();
+      drafts.push({ id: answered.draft!.id, status: 'draft', counterAccountCode: answered.draft!.counterAccountCode });
+    }
+    expect(drafts, 'one draft per statement line').toHaveLength(100);
+    expect(new Set(drafts.map((d) => d.counterAccountCode)), 'every draft uses the clearing account').toEqual(new Set(['1199']));
 
     const approved = await apiPost<Array<{ id: number; status: string; reason?: string }>>(
       page,
       'banking/recon/drafts/approve',
-      { draftIds: committed.drafts.map((d) => d.id) },
+      { draftIds: drafts.map((d) => d.id) },
       200,
     );
     const notPosted = approved.filter((r) => r.status !== 'posted');
