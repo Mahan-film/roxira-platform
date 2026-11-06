@@ -27,13 +27,16 @@ import { ApiClientError } from "@/lib/api/http-client";
 import {
   type SeasonalCsvKind,
   downloadSeasonalCsv,
+  downloadVatReturn,
   getMoadianStatus,
   getMoadianSubmission,
   getSeasonalTransactions,
   getSeasonalVat,
+  getVatReturn,
   submitToMoadian,
 } from "@/lib/api/moadian-seasonal-client";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
+import { nextDeadlineView, type NextDeadlineInput } from "@/lib/tax-deadline";
 import { InvoiceStatus, type InvoiceResponseDto } from "@/types/invoicing";
 import {
   MOADIAN_STATUS_LABELS,
@@ -49,6 +52,32 @@ const MAX_POLLS = 24;
 const QUARTER_LABELS = ["بهار", "تابستان", "پاییز", "زمستان"];
 const selectClass =
   "h-9 rounded-md border border-input bg-background px-3 text-sm";
+
+function DeadlineCard({ input }: { input: NextDeadlineInput }) {
+  const view = nextDeadlineView(input);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">مهلت بعدی</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1 text-sm">
+        {view.state === "loading" && <LoadingLine show />}
+        {view.state === "empty" && (
+          <p className="text-muted-foreground">اطلاعی برای این فصل نیست</p>
+        )}
+        {view.state === "ready" && (
+          <>
+            <p>
+              پایان فصل: {view.dateLabel}
+              {view.amountLabel ? ` — قابل پرداخت: ${view.amountLabel}` : ""}
+            </p>
+            <p className="text-xs text-muted-foreground">{view.note}</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function currentJalali(): { year: number; quarter: number } {
   const parts = new Intl.DateTimeFormat("en-US-u-ca-persian-nu-latn", {
@@ -261,7 +290,7 @@ function MoadianCard() {
           </Button>
         </div>
 
-        {error && <ErrorNotice title="خطا" message={error} />}
+        {error && <ErrorNotice title="خطا در ارسال به مودیان" message={error} />}
 
         {submission && (
           <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
@@ -312,7 +341,7 @@ function MoadianCard() {
   );
 }
 
-function SeasonalCard() {
+function SeasonalCard({ onDeadline }: { onDeadline: (input: NextDeadlineInput) => void }) {
   const [{ year: initialYear, quarter: initialQuarter }] = useState(currentJalali);
   const [year, setYear] = useState(initialYear);
   const [quarter, setQuarter] = useState(initialQuarter);
@@ -346,6 +375,10 @@ function SeasonalCard() {
       });
     return () => controller.abort();
   }, [year, quarter]);
+
+  useEffect(() => {
+    onDeadline({ periodTo: vat?.period.to ?? null, payable: ret?.payable ?? null, loading });
+  }, [vat, ret, loading, onDeadline]);
 
   async function downloadReturn(format: "xlsx" | "pdf") {
     try {
@@ -419,7 +452,7 @@ function SeasonalCard() {
           </Button>
         </div>
         <LoadingLine show={loading} />
-        {error && <ErrorNotice title="خطا" message={error} />}
+        {error && <ErrorNotice title="خطا در دریافت اظهارنامه ارزش افزوده" message={error} />}
 
         {ret && (
           <Alert variant={ret.ledger.reconciled ? "default" : "destructive"}>
@@ -525,6 +558,9 @@ function SeasonalCard() {
 }
 
 export default function TaxPage() {
+  const [tab, setTab] = useState<"vat" | "moadian">("vat");
+  const [deadline, setDeadline] = useState<NextDeadlineInput>({ loading: true });
+
   return (
     <EnterpriseRouteGuard>
       <div className="flex flex-col gap-6">
@@ -532,8 +568,37 @@ export default function TaxPage() {
           title="مالیات و مودیان"
           description="ارسال صورتحساب به سامانه مودیان (پیش‌فرض خاموش) و گزارش فصلی ارزش افزوده و معاملات."
         />
-        <MoadianCard />
-        <SeasonalCard />
+        <DeadlineCard input={deadline} />
+        <div role="tablist" aria-label="بخش‌های مالیات" className="flex flex-wrap gap-2">
+          <Button
+            id="tax-tab-vat"
+            role="tab"
+            aria-selected={tab === "vat"}
+            aria-controls="tax-panel-vat"
+            size="sm"
+            variant={tab === "vat" ? "default" : "outline"}
+            onClick={() => setTab("vat")}
+          >
+            ارزش افزوده
+          </Button>
+          <Button
+            id="tax-tab-moadian"
+            role="tab"
+            aria-selected={tab === "moadian"}
+            aria-controls="tax-panel-moadian"
+            size="sm"
+            variant={tab === "moadian" ? "default" : "outline"}
+            onClick={() => setTab("moadian")}
+          >
+            سامانه مودیان
+          </Button>
+        </div>
+        <div role="tabpanel" id="tax-panel-vat" aria-labelledby="tax-tab-vat" hidden={tab !== "vat"}>
+          <SeasonalCard onDeadline={setDeadline} />
+        </div>
+        <div role="tabpanel" id="tax-panel-moadian" aria-labelledby="tax-tab-moadian" hidden={tab !== "moadian"}>
+          <MoadianCard />
+        </div>
       </div>
     </EnterpriseRouteGuard>
   );
