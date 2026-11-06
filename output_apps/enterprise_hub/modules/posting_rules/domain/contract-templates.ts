@@ -33,4 +33,8 @@ export const CONTRACT_TEMPLATES: readonly PostingTemplate[] = [
     cr('insurance_payable', 'insurance', 'کسور بیمه پیمانکار'),
     cr('advance_paid', 'advance', 'استهلاک پیش‌پرداخت'),
   ]),
+  t('contract.advance.contractor', 'پیش‌دریافت از کارفرما', ['amount'], [dr('receivable', 'amount', 'طلب از کارفرما بابت پیش‌دریافت', true), cr('advance_received', 'amount', 'پیش‌دریافت قرارداد')]),
+  t('contract.advance.employer', 'پیش‌پرداخت به پیمانکار', ['amount'], [dr('advance_paid', 'amount', 'پیش‌پرداخت قرارداد'), cr('payable', 'amount', 'بدهی به پیمانکار بابت پیش‌پرداخت', true)]),
+  t('contract.retention_release.contractor', 'آزادسازی سپرده حسن انجام کار نزد کارفرما', ['amount'], [dr('receivable', 'amount', 'طلب از کارفرما بابت آزادسازی سپرده', true), cr('retention_receivable', 'amount', 'آزادسازی سپرده حسن انجام کار')]),
+  t('contract.retention_release.employer', 'آزادسازی سپرده حسن انجام کار پیمانکار', ['amount'], [dr('retention_payable', 'amount', 'آزادسازی سپرده حسن انجام کار'), cr('payable', 'amount', 'بدهی به پیمانکار بابت آزادسازی سپرده', true)]),
 ];

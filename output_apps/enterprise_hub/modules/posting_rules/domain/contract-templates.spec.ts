@@ -33,4 +33,12 @@ describe('contract statement templates', () => {
     expect(() => buildProposal({ docType: 'contract.statement.employer', mapping: MAP, amounts: { gross: 100n, retention: 0n, insurance: 0n, advance: 0n, net: 90n } })).toThrow();
     expect(() => buildProposal({ docType: 'contract.statement.employer', mapping: { purchases: '5201', payable: '2101' }, amounts: { gross: 100n, retention: 10n, insurance: 0n, advance: 0n, net: 90n } })).toThrow();
   });
+
+  it('advance and retention release post one balanced pair each, on the right side of the party', () => {
+    // 100,000,000 advance: contractor books the employer as debtor, employer books the contractor as creditor
+    expect(lines(buildProposal({ docType: 'contract.advance.contractor', mapping: MAP, partyCode: 'C1', amounts: { amount: 100_000_000n } }))).toEqual([['1201', 100_000_000n, 0n], ['2250', 0n, 100_000_000n]]);
+    expect(lines(buildProposal({ docType: 'contract.advance.employer', mapping: MAP, partyCode: 'S1', amounts: { amount: 100_000_000n } }))).toEqual([['1260', 100_000_000n, 0n], ['2101', 0n, 100_000_000n]]);
+    expect(lines(buildProposal({ docType: 'contract.retention_release.contractor', mapping: MAP, partyCode: 'C1', amounts: { amount: 40_000_000n } }))).toEqual([['1201', 40_000_000n, 0n], ['1250', 0n, 40_000_000n]]);
+    expect(lines(buildProposal({ docType: 'contract.retention_release.employer', mapping: MAP, partyCode: 'S1', amounts: { amount: 40_000_000n } }))).toEqual([['2260', 40_000_000n, 0n], ['2101', 0n, 40_000_000n]]);
+  });
 });

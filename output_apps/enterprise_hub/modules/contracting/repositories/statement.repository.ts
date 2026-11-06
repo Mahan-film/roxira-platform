@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { fromDb } from '../../accounting/money';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { ProgressStatementEntity } from '../entities/progress-statement.entity';
 import { StatementStatus } from '../enums/contracting.enum';
@@ -62,8 +63,25 @@ export class StatementRepository {
     });
   }
 
-  setApproved(tenantId: string, id: number, manager?: EntityManager) {
-    return this.transition(tenantId, id, StatementStatus.DRAFT, { status: StatementStatus.APPROVED, approvedAt: () => 'now()' }, manager);
+  /** draft -> approved, storing the deductions computed at approval and the figures they came from. */
+  approveWith(
+    tenantId: string,
+    id: number,
+    d: { retentionAmount: string; insuranceAmount: string; advanceRecoveryAmount: string; termsSnapshot: unknown },
+    manager?: EntityManager,
+  ) {
+    return this.transition(tenantId, id, StatementStatus.DRAFT, { status: StatementStatus.APPROVED, approvedAt: () => 'now()', ...d }, manager);
+  }
+
+  /** Advance recovered by the statements before this number, in minor units. */
+  recoveredBefore(tenantId: string, contractId: number, number: number, manager?: EntityManager): Promise<bigint> {
+    return this.within(tenantId, manager, async (m) => {
+      const [row] = await m.query(
+        `SELECT COALESCE(SUM("advance_recovery_amount"), 0)::text AS total FROM "erp_progress_statements" WHERE "tenant_id" = $1 AND "contract_id" = $2 AND "number" < $3`,
+        [tenantId, contractId, number],
+      );
+      return fromDb(row.total);
+    });
   }
 
   markPosted(tenantId: string, id: number, entry: { journalEntryId: number; journalEntryNumber: string }, manager?: EntityManager) {

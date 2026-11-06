@@ -1,12 +1,15 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { fromDb, fromMinor, minorToDecimal } from '../../accounting/money';
 import { PostingRuleError } from '../../posting_rules/domain/posting-error';
+import { StatutoryService } from '../../hr/statutory/statutory.service';
+import { MovementRepository } from '../repositories/movement.repository';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { CreateStatementDto, StatementResponseDto } from '../dto/statement.dto';
 import { ProgressStatementEntity } from '../entities/progress-statement.entity';
 import { ContractSide, ContractStatus, StatementStatus } from '../enums/contracting.enum';
 import { ContractRepository } from '../repositories/contract.repository';
 import { StatementRepository } from '../repositories/statement.repository';
+import { computeDeductions, UnclearTermError } from '../statements/deductions';
 import { netPayable, nextPeriod, StatementError } from '../statements/statement-math';
 import { moneyToColumn } from './project.service';
 
@@ -39,6 +42,7 @@ export function toStatementResponse(s: ProgressStatementEntity, replayed?: boole
     journalEntryNumber: s.journalEntryNumber ?? null,
     approvedAt: s.approvedAt ?? null,
     postedAt: s.postedAt ?? null,
+    termsUsed: (s.termsSnapshot as StatementResponseDto['termsUsed']) ?? [],
     ...(replayed === undefined ? {} : { replayed }),
   };
 }
@@ -49,6 +53,8 @@ export class StatementService {
     private readonly repository: StatementRepository,
     private readonly contracts: ContractRepository,
     private readonly postingRules: PostingRulesService,
+    private readonly statutory: StatutoryService,
+    private readonly movements: MovementRepository,
   ) {}
 
   async list(tenantId: string, contractId: number): Promise<StatementResponseDto[]> {
@@ -101,11 +107,44 @@ export class StatementService {
     });
   }
 
-  async approve(tenantId: string, id: number): Promise<StatementResponseDto> {
-    const approved = await this.repository.setApproved(tenantId, id);
-    if (approved) return toStatementResponse(approved);
-    if (!(await this.repository.findById(tenantId, id))) throw new NotFoundException(NOT_FOUND);
-    throw new ConflictException('فقط صورت وضعیت پیش‌نویس قابل تأیید است.');
+  /**
+   * draft -> approved. The deductions are computed here, once, from the statutory figures in force on
+   * the statement date; an unclear figure refuses the approval (never read as 0). They are stored with
+   * the figures they came from, and posting later uses exactly these amounts.
+   */
+  approve(tenantId: string, id: number): Promise<StatementResponseDto> {
+    return this.repository.runInTransaction(tenantId, async (manager) => {
+      const s = await this.repository.findById(tenantId, id, manager);
+      if (!s) throw new NotFoundException(NOT_FOUND);
+      if (s.status !== StatementStatus.DRAFT) throw new ConflictException('فقط صورت وضعیت پیش‌نویس قابل تأیید است.');
+      await this.repository.lockContract(tenantId, s.contractId, manager);
+      const contract = await this.contracts.findById(tenantId, s.contractId, manager);
+      if (!contract) throw new NotFoundException(CONTRACT_NOT_FOUND);
+      const terms = await this.statutory.contractTermsOn(tenantId, String(s.statementDate));
+      let d;
+      try {
+        d = computeDeductions({
+          period: minor(s.periodAmount),
+          cumulative: minor(s.cumulativeAmount),
+          contractAmount: minor(contract.amount),
+          insuranceType: contract.insuranceType,
+          advancePosted: await this.movements.sum(tenantId, s.contractId, 'advance', manager),
+          advanceRecovered: await this.repository.recoveredBefore(tenantId, s.contractId, s.number, manager),
+          terms,
+        });
+      } catch (error) {
+        if (error instanceof UnclearTermError) throw new UnprocessableEntityException(error.message);
+        throw error;
+      }
+      const approved = await this.repository.approveWith(
+        tenantId,
+        id,
+        { retentionAmount: minorToDecimal(d.retention), insuranceAmount: minorToDecimal(d.insurance), advanceRecoveryAmount: minorToDecimal(d.advance), termsSnapshot: d.used },
+        manager,
+      );
+      if (!approved) throw new ConflictException('وضعیت صورت وضعیت هم‌زمان تغییر کرد.');
+      return toStatementResponse(approved);
+    });
   }
 
   async remove(tenantId: string, id: number): Promise<void> {
