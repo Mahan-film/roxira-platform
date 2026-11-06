@@ -3,13 +3,18 @@ import test from "node:test";
 
 import {
   canPartialPay,
+  chipTone,
+  countByStatus,
+  dueStripRows,
   isValidNationalId,
   isValidSayadNumber,
+  newestEventWithEntry,
   partialAmountError,
   sortByUrgency,
   statusesFor,
   toMinorUnits,
   toLatinDigits,
+  voucherNoticeText,
 } from "./cheques-ui.ts";
 
 test("sayad: 16 digits, not one repeated digit", () => {
@@ -74,4 +79,64 @@ test("comparisons stay exact beyond 2^53 (no float rounding)", () => {
   assert.equal(partialAmountError("9007199254740992", "9007199254740993"), null);
   assert.notEqual(partialAmountError("9007199254740993", "9007199254740993"), null);
   assert.equal(canPartialPay({ direction: "received", status: "deposited", remainingAmount: "0.00" }), false);
+});
+
+test("countByStatus counts rows per status", () => {
+  assert.deepEqual(
+    countByStatus([{ status: "registered" }, { status: "registered" }, { status: "bounced" }]),
+    { registered: 2, bounced: 1 },
+  );
+  assert.deepEqual(countByStatus([]), {});
+});
+
+test("dueStripRows keeps one direction, urgency-sorted, limited", () => {
+  const items = [
+    { id: 1, dueDate: "2026-11-12", status: "registered" as const, direction: "received" as const },
+    { id: 2, dueDate: "2026-11-08", status: "registered" as const, direction: "received" as const },
+    { id: 3, dueDate: "2026-11-10", status: "registered" as const, direction: "received" as const },
+    { id: 4, dueDate: "2026-11-09", status: "registered" as const, direction: "issued" as const },
+  ];
+  assert.deepEqual(
+    dueStripRows(items, "received", "2026-11-06", 5).map((r) => r.id),
+    [2, 3, 1],
+  );
+  assert.deepEqual(dueStripRows(items.filter((r) => r.direction === "issued"), "issued", "2026-11-06", 5).map((r) => r.id), [4]);
+  assert.deepEqual(dueStripRows(items, "received", "2026-11-06", 2).map((r) => r.id), [2, 3]);
+});
+
+test("voucherNoticeText: with and without an entry number", () => {
+  assert.equal(
+    voucherNoticeText({ chequeNumber: "1024", statusLabel: "وصول‌شده", entryNumber: "1405-0231" }),
+    "چک 1024: «وصول‌شده» ثبت شد. سند حسابداری 1405-0231 صادر شد.",
+  );
+  assert.equal(
+    voucherNoticeText({ chequeNumber: "1024", statusLabel: "وصول‌شده", entryNumber: null }),
+    "چک 1024: «وصول‌شده» ثبت شد. سند حسابداری صادر شد.",
+  );
+});
+
+test("chipTone: success for cleared, danger for bounced/returned, info for deposited/delivered, neutral otherwise", () => {
+  assert.equal(chipTone("cleared"), "success");
+  assert.equal(chipTone("bounced"), "danger");
+  assert.equal(chipTone("returned"), "danger");
+  assert.equal(chipTone("deposited"), "info");
+  assert.equal(chipTone("delivered"), "info");
+  assert.equal(chipTone("registered"), "neutral");
+  assert.equal(chipTone("spent"), "neutral");
+});
+
+test("newestEventWithEntry picks the latest event that has a journal entry (any input order)", () => {
+  const events = [
+    { id: 10, eventDate: "2026-11-06", journalEntryId: 501 },
+    { id: 11, eventDate: "2026-11-07", journalEntryId: null },
+    { id: 9, eventDate: "2026-11-05", journalEntryId: 499 },
+  ];
+  assert.deepEqual(newestEventWithEntry(events), { id: 10, eventDate: "2026-11-06", journalEntryId: 501 });
+  assert.deepEqual(newestEventWithEntry([{ id: 12, eventDate: "2026-11-06", journalEntryId: null }, { id: 8, eventDate: "2026-11-06", journalEntryId: 300 }]), {
+    id: 8,
+    eventDate: "2026-11-06",
+    journalEntryId: 300,
+  });
+  assert.equal(newestEventWithEntry([{ id: 1, eventDate: "2026-11-06", journalEntryId: null }]), null);
+  assert.equal(newestEventWithEntry([]), null);
 });

@@ -96,3 +96,51 @@ export function sortByUrgency<T extends { dueDate: string; status: ChequeStatus 
   const rank = (r: T) => (open(r) ? (r.dueDate < today ? 0 : 1) : 2);
   return [...rows].sort((a, b) => rank(a) - rank(b) || a.dueDate.localeCompare(b.dueDate));
 }
+
+/** Count of rows per status, for the status filter chips. */
+export function countByStatus(rows: Array<Pick<Cheque, "status">>): Partial<Record<ChequeStatus, number>> {
+  const counts: Partial<Record<ChequeStatus, number>> = {};
+  for (const row of rows) counts[row.status] = (counts[row.status] ?? 0) + 1;
+  return counts;
+}
+
+/** One direction, urgency-sorted, first `limit` rows for the due-this-week strip. */
+export function dueStripRows<T extends { dueDate: string; status: ChequeStatus; direction: ChequeDirection }>(
+  items: T[],
+  direction: ChequeDirection,
+  today: string,
+  limit = 5,
+): T[] {
+  return sortByUrgency(
+    items.filter((item) => item.direction === direction),
+    today,
+  ).slice(0, limit);
+}
+
+/**
+ * Notice after a status change. Without a voucher number the sentence stays complete — never invent one.
+ * Example with a number: «چک 1024: «وصول‌شده» ثبت شد. سند حسابداری 1405-0231 صادر شد.»
+ */
+export function voucherNoticeText(args: { chequeNumber: string; statusLabel: string; entryNumber: string | null }): string {
+  const base = `چک ${args.chequeNumber}: «${args.statusLabel}» ثبت شد.`;
+  return args.entryNumber ? `${base} سند حسابداری ${args.entryNumber} صادر شد.` : `${base} سند حسابداری صادر شد.`;
+}
+
+export type ChipTone = "neutral" | "info" | "success" | "danger";
+
+/** Chip tone for a status; the chip always also shows its text label, so colour is never the only signal. */
+export function chipTone(status: ChequeStatus): ChipTone {
+  if (status === "cleared") return "success";
+  if (status === "bounced" || status === "returned") return "danger";
+  if (status === "deposited" || status === "delivered") return "info";
+  return "neutral";
+}
+
+/** Newest event that posted a voucher (events may arrive in any order: sort by eventDate, then id). */
+export function newestEventWithEntry(events: Array<{ id: number; eventDate: string; journalEntryId: number | null }>): (typeof events)[number] | null {
+  const withEntry = events.filter((event) => event.journalEntryId !== null);
+  if (withEntry.length === 0) return null;
+  return withEntry.reduce((newest, event) =>
+    event.eventDate.localeCompare(newest.eventDate) > 0 || (event.eventDate === newest.eventDate && event.id > newest.id) ? event : newest,
+  );
+}
