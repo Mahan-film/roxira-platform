@@ -1334,7 +1334,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     type Review = {
       counts: { matched: number; suggested: number; unmatched: number; drafts: number };
       drafts: Array<{ id: number; status: string; counterAccountCode: string | null }>;
-      unmatched: Array<{ id: number; direction: 'in' | 'out'; draft: { id: number } | null }>;
+      unmatched: Array<{ id: number; depositRial: string; draft: { id: number } | null }>;
     };
     const committed = await apiPost<Review>(page, `banking/recon/sessions/${session.id}/commit`, {}, 200);
     test.info().annotations.push({ type: 'recon-commit', description: JSON.stringify(committed.counts) });
@@ -1345,13 +1345,13 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const unclassified = committed.unmatched.filter((row) => row.draft === null);
     test.info().annotations.push({
       type: 'recon-unclassified',
-      description: `${unclassified.length} of 100 lines without a draft after commit (directions: ${[...new Set(unclassified.map((r) => r.direction))].join(',')})`,
+      description: `${unclassified.length} of 100 lines without a draft after commit (deposits among them: ${unclassified.filter((r) => BigInt(r.depositRial) > 0n).length})`,
     });
     for (const row of unclassified) {
       const answered = await apiPost<{ draft: { id: number; counterAccountCode: string | null } | null }>(
         page,
         `banking/recon/items/${row.id}/answer`,
-        { choiceId: row.direction === 'in' ? 'sale' : 'purchase', counterAccountCode: '1199', remember: false },
+        { choiceId: BigInt(row.depositRial) > 0n ? 'sale' : 'purchase', counterAccountCode: '1199', remember: false },
         200,
       );
       expect(answered.draft, `a draft for statement item ${row.id}`).not.toBeNull();
