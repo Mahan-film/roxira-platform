@@ -6,6 +6,8 @@ export interface StockAccountSpec {
   name: string;
   accountType: AccountType;
   match: string[];
+  /** Name fragments that rule an account out. */
+  exclude?: string[];
 }
 
 export const STOCK_INVENTORY_ACCOUNT: StockAccountSpec = {

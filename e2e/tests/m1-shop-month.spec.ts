@@ -412,22 +412,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       description: `cash -> 1102 pinned (source != default) for ${cashDocTypes.join(', ')}`,
     });
 
-    // Name matching resolves the 'receivable' role to the first account whose name contains «دریافتنی»:
-    // 1110 «اسناد دریافتنی نزد صندوق» (CI evidence, run 42103641294: the sales moved 1110 by +11,433,675,000
-    // and 1201 not at all), not the trade receivables 1201. Pin the tenant mapping to 1201 (issue #504).
-    const receivableDocTypes = ['invoice.sale.issue', 'invoice.sale.settle', 'invoice.sale.settle_card_first'] as const;
-    for (const docType of receivableDocTypes) {
-      const status = await apiPut(page, `posting-rules/${docType}/roles/receivable`, { accountCode: '1201' });
-      expect(status, `PUT posting-rules ${docType} receivable -> 1201`).toBe(204);
-    }
-    const pinnedTemplates = await apiGet<
-      Array<{ docType: string; roles: Array<{ role: string; accountCode: string | null; source: string }> }>
-    >(page, 'posting-rules');
-    for (const docType of receivableDocTypes) {
-      const receivable = pinnedTemplates.find((t) => t.docType === docType)?.roles.find((r) => r.role === 'receivable');
-      expect(receivable?.accountCode, `${docType} receivable account`).toBe('1201');
-      expect(receivable?.source, `${docType} receivable mapping must win over the default`).not.toBe('default');
-    }
+    // No receivable mapping: the resolver must pick trade receivables 1201 by itself, not notes 1110 (#504).
 
     // Fixture-derived expectations (independent of any product output).
     const invoices = parseFixtureInvoices();
@@ -509,14 +494,15 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     // settlement: payables opening + every unique purchase incl. VAT = 7,359,090,000. The settled
     // 1,938,310,000 comes back off below, landing 2101 on the README closing at the end of this step.
     const accountsAfterIssue = await apiGet<Array<{ code: string; name?: string; balance: number | string }>>(page, 'accounting/accounts');
-    // The engine creates the purchases account 5201 from the posting template although no purchase line
-    // needs it (stock == net, so the purchases row is zero). Assert the EXACT real set, code and name.
+    // Every purchase line is stock (stock == net, the purchases row is zero), so no purchases account 5201
+    // is created (#497 a). 1401 exists in the chart as «پیش‌پرداخت خرید و اجاره», so input VAT gets its own
+    // new account under the next free code, 1402 (#504). Assert the EXACT real set, code and name.
     const createdAfterIssue = accountsAfterIssue
       .filter((a) => !fileCodes.includes(a.code))
       .map((a) => ({ code: a.code, name: a.name ?? '' }))
       .sort((a, b) => a.code.localeCompare(b.code));
-    expect(createdAfterIssue, 'the issue phase creates only the purchases account 5201').toEqual([
-      { code: '5201', name: 'خرید کالا و خدمات' },
+    expect(createdAfterIssue, 'the issue phase creates only the input-VAT account 1402').toEqual([
+      { code: '1402', name: 'مالیات بر ارزش افزوده خرید (اعتبار مالیاتی)' },
     ]);
     const balanceAfterIssue = (code: string) => balanceOf(accountsAfterIssue, code);
     const balanceBeforeIssue = (code: string) => balanceOf(accountsBefore, code);
@@ -531,10 +517,10 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       -(balanceAfterIssue('2101') - balanceBeforeIssue('2101')),
       'payables up by every purchase incl. VAT (credit)',
     ).toBe(allPurchases);
-    expect(balanceAfterIssue('5201'), 'the created purchases account has no line using it').toBe(0n);
+    expect(accountsAfterIssue.some((a) => a.code === '5201'), 'no purchases account: no line uses it').toBe(false);
     test.info().annotations.push({
       type: 'account-created',
-      description: '5201 خرید کالا و خدمات was created although no voucher line uses it (balance 0)',
+      description: '1402 مالیات بر ارزش افزوده خرید (اعتبار مالیاتی) created for input VAT; 5201 not created',
     });
 
     // Stock in: 1301 value = opening stock (README) + every purchase line excl. VAT.
@@ -604,10 +590,14 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       type: 'input-vat',
       description: `input VAT account ${inputVatCode} ${inputVatName}`,
     });
+    expect(inputVatCode, 'input VAT lands on the new account 1402, not on prepayments 1401').toBe('1402');
     expect(
       balanceAfterIssue(inputVatCode) - balanceBeforeIssue(inputVatCode),
       `input VAT ${inputVatCode} up by the purchase VAT`,
     ).toBe(purchaseVatSum);
+    // Hand-computed from invoices.csv (sum of total incl. VAT minus lines for the 95 purchases): 827,190,000.
+    expect(purchaseVatSum).toBe(827_190_000n);
+    expect(balanceAfterIssue('1401'), '1401 prepayments stays at its opening').toBe(balanceBeforeIssue('1401'));
 
     // ---- Settle the «تسویه‌شده» purchases through the user's status path -----------------------------
     // payAndWait mirrors the invoicing page's pay button (PATCH invoicing/:id/pay), one invoice at a
@@ -745,7 +735,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     expect(draftSales).toHaveLength(143);
     expect(draftSales.filter((i) => i.status === 'DRAFT')).toHaveLength(143);
 
-    // The chart the posts must use; step 07 already added the purchases account 5201 on top of it.
+    // The chart the posts must use; step 07 already added the input-VAT account 1402 on top of it.
     const chart = readCsv(SAMPLE_COMPANY_FILES.chartOfAccounts);
     const fileCodes = chart.rows.map((r) => r[chart.header.indexOf('کد حساب')]);
     const accountsBefore = await apiGet<Array<{ code: string; name?: string; balance: number | string }>>(page, 'accounting/accounts');
@@ -789,13 +779,13 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     // + every unique sale incl. VAT = 13,273,675,000. The settled 3,820,162,500 comes back off below,
     // landing 1201 on the README closing at the end of this step.
     const accountsAfterIssue = await apiGet<Array<{ code: string; name?: string; balance: number | string }>>(page, 'accounting/accounts');
-    // Nothing further may be created: the exact same single purchases account step 07 added.
+    // Nothing further may be created: the exact same single input-VAT account step 07 added.
     const createdAfterIssue = accountsAfterIssue
       .filter((a) => !fileCodes.includes(a.code))
       .map((a) => ({ code: a.code, name: a.name ?? '' }))
       .sort((a, b) => a.code.localeCompare(b.code));
-    expect(createdAfterIssue, 'the sale issue phase creates nothing beyond 5201').toEqual([
-      { code: '5201', name: 'خرید کالا و خدمات' },
+    expect(createdAfterIssue, 'the sale issue phase creates nothing beyond 1402').toEqual([
+      { code: '1402', name: 'مالیات بر ارزش افزوده خرید (اعتبار مالیاتی)' },
     ]);
     const balanceAfterIssue = (code: string) => balanceOf(accountsAfterIssue, code);
     const balanceBeforeIssue = (code: string) => balanceOf(accountsBefore, code);
@@ -988,6 +978,9 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const inputVatLine = purchaseVoucher.lines.find((l) => l.description === 'مالیات بر ارزش افزوده خرید');
     expect(inputVatLine, 'a purchase voucher has the input-VAT line').toBeDefined();
     const inputVatCode = inputVatLine!.accountCode;
+    expect(inputVatCode, 'input VAT is booked on 1402').toBe('1402');
+    expect(balanceOf(accountsAtEnd, '1401'), '1401 stays at its opening 260,000,000').toBe(fixtureOpeningBalance('1401', 'debit'));
+    expect(fixtureOpeningBalance('1401', 'debit')).toBe(260_000_000n);
     const inputVatBalance = balanceOf(accountsAtEnd, inputVatCode);
     expect(
       inputVatBalance - fixtureOpeningBalance(inputVatCode, 'debit'),

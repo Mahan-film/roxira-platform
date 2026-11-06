@@ -1,3 +1,4 @@
+import { decideRoleAccount } from '../../accounting/services/role-account-resolver';
 import {
   BadRequestException,
   Injectable,
@@ -447,7 +448,11 @@ export class StockDocumentsService {
     return { id: result.entryId };
   }
 
-  /** Account codes by spec: an existing account of the same type matching by name, then by code, else a new default. */
+  /**
+   * Account codes by spec, chosen by `decideRoleAccount`: a matching postable account of the same
+   * type (default code first, else lowest), else a new account under the default code, or under
+   * the next free code when the default code is taken by an unrelated account.
+   */
   async resolveAccounts(tenantId: string, specs: StockAccountSpec[]): Promise<string[]> {
     if (!this.accounting) {
       throw new Error('StockDocumentsService needs AccountingService to resolve accounts.');
@@ -455,24 +460,22 @@ export class StockDocumentsService {
     const existing = await this.accounting.listAccounts(tenantId);
     const codes: string[] = [];
     for (const spec of specs) {
-      const found =
-        existing.find((a) => a.accountType === spec.accountType && spec.match.some((m) => a.name.includes(m))) ??
-        existing.find((a) => a.code === spec.code);
-      if (found) {
-        codes.push(found.code);
+      const decision = decideRoleAccount(existing, spec);
+      if (decision.action === 'use') {
+        codes.push(decision.code);
         continue;
       }
       try {
         const created = await this.accounting.createAccount(tenantId, {
-          code: spec.code,
-          name: spec.name,
-          accountType: spec.accountType,
+          code: decision.code,
+          name: decision.name,
+          accountType: decision.accountType,
           currency: Currency.IRR,
         });
         existing.push(created);
         codes.push(created.code);
       } catch {
-        codes.push(spec.code);
+        codes.push(decision.code);
       }
     }
     return codes;
