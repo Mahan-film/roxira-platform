@@ -14,10 +14,13 @@ import {
 } from '../errors/inventory.errors';
 
 /**
- * Stock compared with the minimum on the "below reorder point" list (E2.1). Today this is on-hand
- * quantity; #227 T1 will switch it to available stock (on hand minus reservations) here only.
+ * Stock compared with the minimum on the "below reorder point" list (E2.1): AVAILABLE stock,
+ * on-hand (`item.quantity`) minus the reserved quantity of the same item (`:rIds`/`:rQtys` carry
+ * the tenant's per-item reservations as parallel arrays; an item without a reservation stays at
+ * its full on-hand quantity). The arithmetic happens in SQL numeric — never in floats.
  */
-export const REORDER_STOCK_SQL = 'item.quantity';
+export const REORDER_STOCK_SQL =
+  '(item.quantity - COALESCE((SELECT x.q FROM unnest(CAST(:rIds AS int[]), CAST(:rQtys AS numeric[])) AS x(id, q) WHERE x.id = item.id), 0))';
 
 /** ورودی پرسیستنس ورود کالا در یک Transaction. */
 export interface InboundPersistInput {
@@ -331,6 +334,8 @@ export class InventoryRepository {
       lowStockOnly: boolean;
       /** Only items with no open FIFO layer (nothing on the shelf, e.g. imported but never received). */
       noStockOnly?: boolean;
+      /** Per-item reserved quantity (numeric text) subtracted from on-hand for the reorder rule. */
+      reserved?: Array<{ itemId: number; quantity: string }>;
       skip: number;
       take: number;
     },
@@ -347,7 +352,11 @@ export class InventoryRepository {
       );
     }
     if (options.lowStockOnly) {
-      query.andWhere(`item.minQuantity > 0 AND ${REORDER_STOCK_SQL} <= item.minQuantity`);
+      const reserved = options.reserved ?? [];
+      query
+        .andWhere(`item.minQuantity > 0 AND ${REORDER_STOCK_SQL} <= item.minQuantity`)
+        .setParameter('rIds', reserved.map((row) => row.itemId))
+        .setParameter('rQtys', reserved.map((row) => row.quantity));
     }
     if (options.noStockOnly) {
       query.andWhere(

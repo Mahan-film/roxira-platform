@@ -10,8 +10,14 @@ export class FifoValuationRowDto {
   @ApiProperty({ description: 'نام کالا' })
   name: string;
 
-  @ApiProperty({ description: 'موجودی کل کالا' })
+  @ApiProperty({ description: 'موجودی کل کالا (on-hand)' })
   quantity: number;
+
+  @ApiProperty({ description: 'رزرو سفارش‌های فروش تأییدشده' })
+  reservedQuantity: number;
+
+  @ApiProperty({ description: 'موجودی در دسترس (on-hand منهای رزرو)' })
+  availableQuantity: number;
 
   @ApiProperty({ description: 'موجودی ثبت‌شده در لایه‌های FIFO' })
   batchQuantity: number;

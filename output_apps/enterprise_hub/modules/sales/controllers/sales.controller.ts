@@ -9,6 +9,8 @@ import {
   ConvertQuotationDto,
   CreateSalesOrderDto,
   CreateSalesQuotationDto,
+  ItemAvailabilityListResponseDto,
+  QueryItemAvailabilityDto,
   QuerySalesOrderDto,
   QuerySalesQuotationDto,
   SalesOrderListResponseDto,
@@ -17,7 +19,9 @@ import {
   SalesQuotationResponseDto,
   UpdateSalesOrderDto,
   UpdateSalesQuotationDto,
+  parseItemIds,
 } from '../dto/sales.dto';
+import { SalesAvailabilityService } from '../services/sales-availability.service';
 import { SalesService } from '../services/sales.service';
 
 /**
@@ -31,7 +35,10 @@ import { SalesService } from '../services/sales.service';
 @ModuleAccess(AccessModule.INVOICING)
 @Controller('enterprise-hub/sales')
 export class SalesController {
-  constructor(private readonly sales: SalesService) {}
+  constructor(
+    private readonly sales: SalesService,
+    private readonly availability: SalesAvailabilityService,
+  ) {}
 
   private userIdOf(request: AuthenticatedRequest): string {
     return String(request.user?.sub ?? 'unknown').slice(0, 64);
@@ -166,5 +173,20 @@ export class SalesController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<SalesOrderResponseDto> {
     return this.sales.cancelOrder(requireTenantId(request), id);
+  }
+
+  // ------------------------------------------------------------------ availability
+
+  @Get('availability')
+  @ApiOperation({ summary: 'موجودی در دسترس کالاها (on-hand منهای رزرو سفارش‌های تأییدشده)' })
+  @ApiResponse({ status: HttpStatus.OK, type: ItemAvailabilityListResponseDto })
+  @AlsoAllowModule(AccessModule.ACCOUNTING)
+  getItemAvailability(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryItemAvailabilityDto,
+  ): Promise<ItemAvailabilityListResponseDto> {
+    return this.availability
+      .availability(requireTenantId(request), parseItemIds(query.itemIds))
+      .then((data) => ({ data }));
   }
 }

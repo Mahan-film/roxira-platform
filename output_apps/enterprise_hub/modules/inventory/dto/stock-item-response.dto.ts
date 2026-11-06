@@ -16,13 +16,19 @@ export class StockItemResponseDto {
   @ApiProperty({ description: 'نام کالا' })
   name: string;
 
-  @ApiProperty({ description: 'موجودی کل کالا در همه انبارها' })
+  @ApiProperty({ description: 'موجودی کل کالا در همه انبارها (on-hand)' })
   quantity: number;
+
+  @ApiProperty({ description: 'رزرو سفارش‌های فروش تأییدشده (سهمی که هنوز تحویل نشده)' })
+  reservedQuantity: number;
+
+  @ApiProperty({ description: 'موجودی در دسترس (on-hand منهای رزرو؛ می‌تواند منفی باشد)' })
+  availableQuantity: number;
 
   @ApiProperty({ description: 'آستانه حداقل موجودی' })
   minQuantity: number;
 
-  @ApiProperty({ description: 'آیا موجودی زیر/برابر آستانه کسری است؟' })
+  @ApiProperty({ description: 'آیا موجودی در دسترس زیر/برابر آستانه کسری است؟' })
   isLowStock: boolean;
 
   @ApiProperty({ description: 'شماره دسته پیش‌فرض', nullable: true })
