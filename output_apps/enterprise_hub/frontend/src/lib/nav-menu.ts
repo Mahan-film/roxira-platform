@@ -165,8 +165,8 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: "Settings",
     items: [
       {
-        href: "/app/accounting/reports",
-        label: "گزارش‌های حسابداری",
+        href: "/app/reports",
+        label: "گزارش‌ها",
         icon: "ChartColumn",
         module: "accounting",
       },

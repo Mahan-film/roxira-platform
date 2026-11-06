@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { FileBarChart } from "lucide-react";
 
 import { ErrorNotice, LoadingLine, PageHeader, loadErrorMessage } from "@/components/app/app-ui";
@@ -20,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Label } from "@/components/ui/label";
 import { MoneyUnitSwitch } from "@/components/ui/money-unit-switch";
+import { parseReportTab } from "@/lib/reports-hub";
 import {
   getBalanceSheet,
   getCashFlow,
@@ -76,8 +78,15 @@ type Loaded =
   | { tab: "cash-flow"; data: CashFlowReport }
   | { tab: "equity-changes"; data: EquityChangesReport };
 
-export default function AccountingReportsPage() {
+function ReportsView() {
   const [tab, setTab] = useState<TabKey>("trial-balance");
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const t = parseReportTab(searchParams.get("tab"));
+    if (t) setTab(t as TabKey);
+  }, [searchParams]);
+
   const [years, setYears] = useState<FiscalYear[]>([]);
   const [query, setQuery] = useState<ReportQuery>({});
   const [columns, setColumns] = useState<TrialBalanceColumns>(6);
@@ -338,5 +347,13 @@ export default function AccountingReportsPage() {
         {loaded?.tab === "equity-changes" && <EquityChangesView report={loaded.data} />}
       </Card>
     </EnterpriseRouteGuard>
+  );
+}
+
+export default function AccountingReportsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ReportsView />
+    </Suspense>
   );
 }
