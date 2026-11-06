@@ -33,6 +33,7 @@ import { InvoiceCaptureModule } from './modules/invoice_capture/invoice-capture.
 import { PublicApiModule } from './modules/public_api/public-api.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
 import { PostingRulesModule } from './modules/posting_rules/posting-rules.module';
+import { SalesModule } from './modules/sales/sales.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
   (file) => {
@@ -105,6 +106,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     PublicApiModule,
     CalendarModule,
     PostingRulesModule,
+    SalesModule,
   ],
 })
 export class AppModule {}
