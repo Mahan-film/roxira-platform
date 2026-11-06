@@ -91,6 +91,22 @@ export interface Cheque {
   description: string | null;
 }
 
+/** One status-change row returned by the transition endpoint (ChequeDetailResponseDto). */
+export interface ChequeEvent {
+  id: number;
+  fromStatus: ChequeStatus | null;
+  toStatus: ChequeStatus;
+  eventDate: string;
+  journalEntryId: number | null;
+  amount: number | string | null;
+  note: string | null;
+}
+
+/** A cheque plus its event history, as returned by POST /:id/transition. */
+export interface ChequeDetail extends Cheque {
+  events: ChequeEvent[];
+}
+
 export interface DueCheque extends Cheque {
   daysUntilDue: number;
   overdue: boolean;

@@ -3,6 +3,7 @@ import { API_PROXY_BASE_PATH, CHEQUES_RESOURCE_PATH } from "@/lib/api/config";
 import type {
   BouncedCheques,
   Cheque,
+  ChequeDetail,
   ChequeRecon,
   ChequeDirection,
   ChequeStatus,
@@ -40,13 +41,13 @@ export function createCheque(payload: CreateChequeDto, signal?: AbortSignal): Pr
   return apiRequest<Cheque>(CHEQUES_ENDPOINT, { method: "POST", body: payload, signal });
 }
 
-/** POST /enterprise-hub/cheques/:id/transition */
+/** POST /enterprise-hub/cheques/:id/transition — returns the cheque plus its events (ChequeDetailResponseDto). */
 export function transitionCheque(
   id: number,
   payload: TransitionChequeDto,
   signal?: AbortSignal,
-): Promise<Cheque> {
-  return apiRequest<Cheque>(`${CHEQUES_ENDPOINT}/${id}/transition`, {
+): Promise<ChequeDetail> {
+  return apiRequest<ChequeDetail>(`${CHEQUES_ENDPOINT}/${id}/transition`, {
     method: "POST",
     body: payload,
     signal,
