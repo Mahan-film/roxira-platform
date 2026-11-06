@@ -100,6 +100,14 @@ export interface GoodsReceipt {
 export interface PurchaseSettings {
   /** Allowed over-receipt per order line, in basis points of the ordered quantity (100 = 1%). */
   overReceiptToleranceBp: number;
+  /** Allowed price difference for the 3-way match, in basis points of the PO price. */
+  priceToleranceBp?: number;
+  /** Allowed price difference for the 3-way match, in minor units per line. */
+  priceToleranceAbs?: bigint;
 }
 
-export const DEFAULT_PURCHASE_SETTINGS: PurchaseSettings = { overReceiptToleranceBp: 0 };
+export const DEFAULT_PURCHASE_SETTINGS: PurchaseSettings = {
+  overReceiptToleranceBp: 0,
+  priceToleranceBp: 0,
+  priceToleranceAbs: 0n,
+};

@@ -182,6 +182,13 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     lines: [dr('depreciation_expense', 'charge', 'هزینه استهلاک'), cr('accumulated_depreciation', 'charge', 'استهلاک انباشته')],
   },
   {
+    docType: 'purchase.receipt',
+    title: 'رسید کالا (بدون صورتحساب)',
+    amounts: ['amount'],
+    lines: [dr('inventory', 'amount', 'موجودی کالا'), cr('grni', 'amount', 'کالای دریافتی صورتحساب‌نشده', true)],
+    defaults: { grni: '2013' },
+  },
+  {
     docType: 'stock.opening',
     title: 'موجودی اول دوره',
     amounts: ['amount'],

@@ -24,6 +24,7 @@ Lane: **Mac** = posting_rules owner adopts it; **Laptop** = `mahansudo` lane, ha
 | 13 | **Corporate tax provision** (`tax.provision`) | `tax_compliance/services/corporate-tax.service.ts:97` (proposal only, `posted:false`) | accounts passed in by the caller (`expenseAccountCode`, `payableAccountCode`) | none | **Mac** |
 | 14 | **Bank reconciliation draft** (`bank.recon`) | `banking/recon/recon.service.ts:858` | ledger account of the bank account + counter account of the rule/category | draft id | **Mac** |
 | 15 | **Manual bank entry** (`bank.entry`) | `banking/services/banking.service.ts:390` | ledger code of the bank account + counter chosen by the caller | none | **Mac** |
+| 16 | **Goods receipt** (`purchase.receipt`, #227 T2) | `inventory/purchasing/purchase-cycle.service.ts` `postReceipt` (`PostingRulesService.post`) | role `grni` (new, liability) resolved by name match / created via `StockDocumentsService.resolveAccounts` with the tenant mapping winning (`mergeRoleAccounts`); inventory as row 4. Dr inventory, Cr GRNI at PO price; the supplier code goes on the GRNI line (`party: true` in the template, `partyCode` on the request) | sourceType `goods_receipt`, id = receipt id, entry number `GRN-<receipt number>`; a repeated idempotency key returns the first receipt without posting, and the engine replays by source | Laptop |
 
 ## Findings that matter
 
