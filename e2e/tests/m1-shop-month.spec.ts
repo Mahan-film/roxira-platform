@@ -1,4 +1,5 @@
 import { test, expect, fa, findSessionFile, loginAsTestTenant, SESSION_STORAGE_KEY } from '../app/fixtures';
+import * as fs from 'node:fs';
 import type { Page } from '@playwright/test';
 import { M1_EXPECTED_CLOSING, M1_MONTH_OPERATIONS, README_TOTALS, sumDelta } from './m1/expected-totals';
 import {
@@ -1257,10 +1258,98 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     expect(balanceOf(accountsAfter, '1101') - balanceOf(accountsBefore, '1101'), 'the bank 1101 does not move').toBe(0n);
   });
 
-  test.fixme('12 bank reconciliation with bank-statement.csv: 100 lines matched [E3]', async ({ page }) => {
+  test('12 bank reconciliation with bank-statement.csv: 100 lines matched [E3]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/accounting/bank/reconcile');
-    void SAMPLE_COMPANY_FILES.bankStatement;
-    // Every statement line matched or posted; no unreconciled lines left.
+    // The statement is unmatched by design in this fixture: its 100 lines are not the invoices settled in
+    // steps 07-11 (the book has no 1101 movement in the period), and their text says «تسویه فاکتور فروش» /
+    // «پرداخت به تأمین‌کننده». Posting them to 1201 / 2101 would break the README closings (steps 13, 14),
+    // so, as a real user must, the owner picks the counter account: a clearing account 1199 created through
+    // the real chart API, and the tenant's recon category-to-account settings point the two categories at it.
+    const deposits = 1_270_000_000n;
+    const withdrawals = 1_285_000_000n;
+    const lines = readCsv(SAMPLE_COMPANY_FILES.bankStatement);
+    expect(lines.rows).toHaveLength(100);
+
+    const accountsBefore = await apiGet<Array<{ id: number; code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const bankLedger = accountsBefore.find((a) => a.code === '1101');
+    expect(bankLedger, 'ledger account 1101 exists').toBeDefined();
+    expect(balanceOf(accountsBefore, '1101'), '1101 opens at the fixture opening').toBe(fixtureOpeningBalance('1101', 'debit'));
+
+    await apiPost(page, 'accounting/accounts', { code: '1199', name: 'حساب واسط تطبیق بانکی', accountType: 'ASSET' });
+    const bankAccount = await apiPost<{ id: number }>(page, 'banking/accounts', {
+      name: 'بانک ملت - جاری ریالی نمونه',
+      bankCode: 'mellat',
+      accountNumber: '1000000000001',
+      ledgerAccountId: bankLedger!.id,
+      openingBalance: Number(fixtureOpeningBalance('1101', 'debit')),
+    });
+    const settingsStatus = await apiPut(page, 'banking/recon/settings', { categoryAccounts: { sale: '1199', purchase: '1199' } });
+    expect(settingsStatus, 'PUT banking/recon/settings').toBe(200);
+
+    // Upload the file through the real route, then answer whatever the prerequisite checks ask.
+    const token = await page.evaluate((key) => {
+      const raw = window.localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+    }, SESSION_STORAGE_KEY);
+    const headers = { Authorization: `Bearer ${token}` };
+    const uploaded = await page.request.post(`/api/backend/enterprise-hub/banking/recon/sessions?bankAccountId=${bankAccount.id}`, {
+      headers,
+      multipart: {
+        file: { name: 'bank-statement.csv', mimeType: 'text/csv', buffer: fs.readFileSync(SAMPLE_COMPANY_FILES.bankStatement) },
+      },
+    });
+    expect(uploaded.status(), `upload: ${(await uploaded.text()).slice(0, 500)}`).toBe(201);
+    type Check = { code: string; severity: string; message: string; choices: Array<{ id: string; label: string }> };
+    type Session = { id: number; status: string; checks: Check[] };
+    let session = (await uploaded.json()) as Session;
+    test.info().annotations.push({
+      type: 'recon-checks',
+      description: `status ${session.status}; checks: ${session.checks.map((c) => `${c.code}/${c.severity}[${c.choices.map((x) => x.id).join('|')}]`).join('; ') || 'none'}`,
+    });
+    // Only the account confirmation is answered here (the file carries no account number); any other open
+    // question fails the step with its text rather than being answered blindly.
+    for (const check of session.checks.filter((c) => c.code === 'account_match')) {
+      const choice = check.choices.find((c) => c.id === `account:${bankAccount.id}`);
+      if (choice) {
+        session = await apiPost<Session>(page, `banking/recon/sessions/${session.id}/answers`, { code: 'account_match', choice: choice.id }, 200);
+      }
+    }
+    expect(session.status, `prerequisites: ${session.checks.map((c) => `${c.code}: ${c.message}`).join(' | ')}`).toBe('ready');
+
+    type Review = {
+      counts: { matched: number; suggested: number; unmatched: number; drafts: number };
+      drafts: Array<{ id: number; status: string; counterAccountCode: string | null }>;
+      unmatched: Array<{ needsAccount?: boolean }>;
+    };
+    const committed = await apiPost<Review>(page, `banking/recon/sessions/${session.id}/commit`, {}, 200);
+    test.info().annotations.push({ type: 'recon-commit', description: JSON.stringify(committed.counts) });
+    expect(committed.counts.matched + committed.counts.suggested, 'nothing in the book matches this statement').toBe(0);
+    expect(committed.drafts, 'one draft per statement line').toHaveLength(100);
+    expect(new Set(committed.drafts.map((d) => d.counterAccountCode)), 'every draft uses the clearing account').toEqual(new Set(['1199']));
+
+    const approved = await apiPost<Array<{ id: number; status: string; reason?: string }>>(
+      page,
+      'banking/recon/drafts/approve',
+      { draftIds: committed.drafts.map((d) => d.id) },
+      200,
+    );
+    const notPosted = approved.filter((r) => r.status !== 'posted');
+    expect(notPosted, `drafts not posted: ${JSON.stringify(notPosted.slice(0, 3))}`).toHaveLength(0);
+    expect(approved).toHaveLength(100);
+
+    const review = await apiGet<Review>(page, `banking/recon/sessions/${session.id}/review`);
+    test.info().annotations.push({ type: 'recon-review', description: JSON.stringify(review.counts) });
+    expect(review.counts.unmatched, 'no statement line left unreconciled').toBe(0);
+    expect(review.counts.suggested, 'no suggested match left open').toBe(0);
+
+    const accountsAfter = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(balanceOf(accountsAfter, '1199'), '1199 net debit = withdrawals - deposits').toBe(withdrawals - deposits);
+    expect(balanceOf(accountsAfter, '1199')).toBe(15_000_000n);
+    expect(balanceOf(accountsAfter, '1101'), '1101 = the statement closing').toBe(M1_EXPECTED_CLOSING.bankBalance);
+    expect(balanceOf(accountsAfter, '1201'), '1201 unchanged by the clearing postings').toBe(balanceOf(accountsBefore, '1201'));
+    expect(-balanceOf(accountsAfter, '2101'), '2101 unchanged by the clearing postings').toBe(-balanceOf(accountsBefore, '2101'));
+    expect(balanceOf(accountsAfter, '1201')).toBe(M1_EXPECTED_CLOSING.receivables);
+    expect(-balanceOf(accountsAfter, '2101')).toBe(M1_EXPECTED_CLOSING.payables);
   });
 
   // ---- Month-end assertions against the README totals --------------------------------------------------
@@ -1289,9 +1378,11 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     expect(ledger, `ledger 1301 ${ledger} vs FIFO valuation ${fifo}`).toBe(fifo);
   });
 
-  test.fixme('16 bank 1101 equals the reconciled statement balance [E3]', async ({ page }) => {
+  test('16 bank 1101 equals the reconciled statement balance [E3]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/accounting/bank');
-    void M1_EXPECTED_CLOSING.bankBalance; // 2,485,000,000
+    const accounts = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(balanceOf(accounts, '1101'), '1101 closing = statement closing').toBe(M1_EXPECTED_CLOSING.bankBalance);
+    expect(M1_EXPECTED_CLOSING.bankBalance).toBe(2_485_000_000n);
   });
 
   test('17 trial balance is balanced: total debit = total credit [E3]', async ({ page }) => {

@@ -70,15 +70,15 @@ but no stock movements. If the importer moves stock for historical invoices, cha
 | 06 | Import invoices (240, duplicate rows counted once) | E5 | fixme |
 | 07 | Post purchase invoices | E2 | fixme |
 | 08 | Post sales invoices | E1 | fixme |
-| 09 | POS walk-in sale | E1 (E1.4) | fixme |
-| 10 | Sales return linked to the original invoice | E1 (E1.2) | fixme |
-| 11 | Cheque received and held | E1 (E1.4) | fixme |
-| 12 | Bank reconciliation with `bank-statement.csv` | E3 | fixme |
-| 13 | Receivables equal the expected closing | E4 | fixme |
-| 14 | Payables equal the expected closing | E4 | fixme |
-| 15 | Stock value equals the expected closing | E2 | fixme |
-| 16 | Bank balance equals the reconciled statement | E3 | fixme |
-| 17 | Trial balance is balanced | E3 | fixme |
+| 09 | POS walk-in sale | E1 (E1.4) | real test: POS sale through `invoicing/pos-sales`; cash to 1102, bank untouched |
+| 10 | Sales return linked to the original invoice | E1 (E1.2) | real test: return through the plain RETURN invoice (subject 4, linked to the sale): the quick-sale return refuses imported invoices (no customerId, #548) |
+| 11 | Cheque received and held | E1 (E1.4) | real test: cheque `received` registered, not deposited; the cheque template receivable role is pinned to 1201 (its default 1020 is not in this chart) |
+| 12 | Bank reconciliation with `bank-statement.csv` | E3 | real test: statement unmatched by design; owner creates clearing account 1199, points recon category accounts at it, approves 100 drafts; 1199 net debit 15,000,000 |
+| 13 | Receivables equal the expected closing | E4 | real test: 1201 = 9,396,312,500 |
+| 14 | Payables equal the expected closing | E4 | real test: 2101 = 5,420,780,000 |
+| 15 | Stock value equals the expected closing | E2 | real test: ledger 1301 = FIFO valuation = 249,383,200,000 |
+| 16 | Bank balance equals the reconciled statement | E3 | real test: 1101 = 2,485,000,000 |
+| 17 | Trial balance is balanced | E3 | real test: trial balance debit = credit and «تراز» on the accounting page |
 
 To turn a step green, change `test.fixme(` to `test(`, write the body against the page named in it, and update the
 State column here and the M1 gate row in `docs/strategy/REQUIREMENTS_STATUS.md`. The steps run serially, in order.
