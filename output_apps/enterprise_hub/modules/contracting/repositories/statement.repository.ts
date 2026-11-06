@@ -94,4 +94,27 @@ export class StatementRepository {
       return (res.affected ?? 0) > 0;
     });
   }
+
+  /** Posted statements per project: contractor side = billed, employer side = subcontracts (minor units). */
+  postedTotalsByProject(tenantId: string, range: { from?: string; to?: string }): Promise<Map<number, { billed: bigint; subcontracts: bigint }>> {
+    return this.within(tenantId, undefined, async (m) => {
+      const rows: Array<{ project_id: number; side: string; total: string }> = await m.query(
+        `SELECT c."project_id", c."side", COALESCE(SUM(s."period_amount"), 0)::text AS total
+           FROM "erp_progress_statements" s
+           JOIN "erp_contracts" c ON c."tenant_id" = s."tenant_id" AND c."id" = s."contract_id"
+          WHERE s."tenant_id" = $1 AND s."status" = 'posted' AND c."project_id" IS NOT NULL
+            AND ($2::date IS NULL OR s."statement_date" >= $2::date) AND ($3::date IS NULL OR s."statement_date" <= $3::date)
+          GROUP BY c."project_id", c."side"`,
+        [tenantId, range.from ?? null, range.to ?? null],
+      );
+      const out = new Map<number, { billed: bigint; subcontracts: bigint }>();
+      for (const r of rows) {
+        const entry = out.get(r.project_id) ?? { billed: 0n, subcontracts: 0n };
+        if (r.side === 'contractor') entry.billed += fromDb(r.total);
+        else entry.subcontracts += fromDb(r.total);
+        out.set(r.project_id, entry);
+      }
+      return out;
+    });
+  }
 }

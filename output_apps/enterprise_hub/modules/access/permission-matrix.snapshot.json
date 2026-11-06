@@ -799,6 +799,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/contracting/reports/profitability (ProfitabilityController.report)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/contracting/statements/:id (StatementsController.getById)": {
     "policy": "accounting:read",
     "owner": true,
