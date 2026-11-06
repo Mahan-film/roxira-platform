@@ -20,3 +20,10 @@ export enum ContractInsuranceType {
   CIVIL_EXECUTIVE = 'CIVIL_EXECUTIVE',
   CIVIL_CONSULTING = 'CIVIL_CONSULTING',
 }
+
+export enum StatementStatus {
+  DRAFT = 'draft',
+  APPROVED = 'approved',
+  POSTED = 'posted',
+}
+
