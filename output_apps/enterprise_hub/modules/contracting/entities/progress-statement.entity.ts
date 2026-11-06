@@ -54,6 +54,9 @@ export class ProgressStatementEntity {
   @Column({ type: 'varchar', length: 64, name: 'journal_entry_number', nullable: true })
   journalEntryNumber: string | null;
 
+  @Column({ type: 'jsonb', name: 'terms_snapshot', nullable: true })
+  termsSnapshot: unknown | null;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 

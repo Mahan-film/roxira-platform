@@ -30,5 +30,7 @@ export class StatementResponseDto {
   @ApiPropertyOptional({ nullable: true, type: String }) journalEntryNumber: string | null;
   @ApiPropertyOptional({ nullable: true, type: Date }) approvedAt: Date | null;
   @ApiPropertyOptional({ nullable: true, type: Date }) postedAt: Date | null;
+  @ApiProperty({ description: 'مقادیر قانونی به‌کار‌رفته در کسورات؛ legalFact فقط برای مقدار تأییدشده پلتفرم true است و رقم ثبت‌شده سازمان هرگز حقیقت قانونی تأییدشده نمایش داده نمی‌شود', type: [Object] })
+  termsUsed: Array<{ key: string; label: string; rate: string; version: number; source: string; verified: boolean; tenantOverride: boolean; legalFact: boolean }>;
   @ApiPropertyOptional({ description: 'true when the statement was already posted and nothing new was written' }) replayed?: boolean;
 }

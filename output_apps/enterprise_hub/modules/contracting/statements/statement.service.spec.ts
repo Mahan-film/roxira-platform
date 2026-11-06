@@ -10,7 +10,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   journalEntryId: null, journalEntryNumber: null, approvedAt: null, postedAt: null, ...over,
 });
 
-function build(opts: { contract?: Record<string, unknown>; last?: any; found?: any } = {}) {
+function build(opts: { contract?: Record<string, unknown>; last?: any; found?: any; retentionRate?: string | null } = {}) {
   const inserted: any[] = [];
   const repository: any = {
     runInTransaction: (_t: string, work: (m: unknown) => unknown) => work({}),
@@ -23,8 +23,18 @@ function build(opts: { contract?: Record<string, unknown>; last?: any; found?: a
   const contracts: any = {
     findById: jest.fn(async () => ({ id: 1, code: 'K1', side: ContractSide.CONTRACTOR, partyCode: 'C1', status: ContractStatus.ACTIVE, amount: '1000000000.00', ...opts.contract })),
   };
+  const term = (key: string, rate: string | null) => ({ key, rate, unclear: rate === null, verified: false, version: 1, effectiveFrom: '2026-03-21', source: 's', tenantOverride: false });
+  const statutory: any = {
+    contractTermsOn: jest.fn(async () => ({
+      retention: term('contract_retention_rate', opts.retentionRate === undefined ? '0.1' : opts.retentionRate),
+      insuranceByType: {}, unemploymentAddon: term('contract_unemployment_addon_fraction', null),
+    })),
+  };
+  repository.approveWith = jest.fn(async (_t: string, id: number, d: any) => row({ id, status: StatementStatus.APPROVED, ...d }));
+  repository.recoveredBefore = jest.fn(async () => 0n);
+  const movements: any = { sum: jest.fn(async () => 0n) };
   const postingRules: any = { post: jest.fn(async () => ({ entryId: 9, entryNumber: 'progress_statement-5', replayed: false })) };
-  return { service: new StatementService(repository, contracts, postingRules), inserted, postingRules, repository };
+  return { service: new StatementService(repository, contracts, postingRules, statutory, movements), inserted, postingRules, repository };
 }
 
 describe('StatementService.create', () => {
@@ -69,5 +79,22 @@ describe('StatementService.post', () => {
     const { service, postingRules } = build({ found: row({ status: StatementStatus.APPROVED }), contract: { side: ContractSide.EMPLOYER } });
     await service.post(T, 5);
     expect(postingRules.post.mock.calls[0][1].docType).toBe('contract.statement.employer');
+  });
+});
+
+describe('StatementService.approve', () => {
+  it('stores retention 10% of 300,000,000 = 30,000,000 and no insurance for a contract without insurance type', async () => {
+    const { service, repository } = build({ found: row() });
+    const out = await service.approve(T, 5);
+    expect(repository.approveWith.mock.calls[0][2]).toMatchObject({ retentionAmount: '30000000.00', insuranceAmount: '0.00', advanceRecoveryAmount: '0.00' });
+    expect(out.status).toBe('approved');
+  });
+  it('refuses when the retention figure is unclear, naming it, and approves nothing', async () => {
+    const { service, repository } = build({ found: row(), retentionRate: null });
+    await expect(service.approve(T, 5)).rejects.toThrow('سپرده حسن انجام کار');
+    expect(repository.approveWith).not.toHaveBeenCalled();
+  });
+  it('refuses a statement that is not a draft', async () => {
+    await expect(build({ found: row({ status: StatementStatus.APPROVED }) }).service.approve(T, 5)).rejects.toBeInstanceOf(ConflictException);
   });
 });

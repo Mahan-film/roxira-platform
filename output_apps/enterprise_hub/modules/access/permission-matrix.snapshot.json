@@ -744,6 +744,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/contracting/contracts/:contractId/movements (MovementsController.list)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/contracting/contracts/:contractId/statements (StatementsController.list)": {
     "policy": "accounting:read",
     "owner": true,
@@ -2656,6 +2667,28 @@
   },
   "POST /enterprise-hub/contracting/contracts/ (ContractsController.create)": {
     "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/contracting/contracts/:contractId/advances (MovementsController.advance)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/contracting/contracts/:contractId/retention-releases (MovementsController.release)": {
+    "policy": "accounting:post",
     "owner": true,
     "admin": true,
     "accountant": true,

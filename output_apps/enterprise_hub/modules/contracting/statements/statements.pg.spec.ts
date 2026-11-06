@@ -100,8 +100,8 @@ describePg('Progress statements on PostgreSQL (non-superuser, FORCE RLS)', () =>
 
   it('draft -> approved -> posted once; a second approve or a delete after approval finds nothing', async () => {
     const [first] = await statements.listByContract(A, contractA);
-    expect((await statements.setApproved(A, first.id))!.status).toBe('approved');
-    expect(await statements.setApproved(A, first.id)).toBeNull();
+    expect((await statements.approveWith(A, first.id, { retentionAmount: '30000000.00', insuranceAmount: '0.00', advanceRecoveryAmount: '0.00', termsSnapshot: [] }))!.status).toBe('approved');
+    expect(await statements.approveWith(A, first.id, { retentionAmount: '30000000.00', insuranceAmount: '0.00', advanceRecoveryAmount: '0.00', termsSnapshot: [] })).toBeNull();
     expect(await statements.deleteDraft(A, first.id)).toBe(false);
     expect((await statements.markPosted(A, first.id, { journalEntryId: 9, journalEntryNumber: 'E-9' }))!.status).toBe('posted');
     expect(await statements.markPosted(A, first.id, { journalEntryId: 10, journalEntryNumber: 'E-10' })).toBeNull();
