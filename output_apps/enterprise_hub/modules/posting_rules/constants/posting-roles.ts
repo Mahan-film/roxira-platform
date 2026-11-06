@@ -34,6 +34,10 @@ export const POSTING_ROLES = {
   income_tax_expense: { label: 'هزینه مالیات بر درآمد', types: [AccountType.EXPENSE] },
   income_tax_payable: { label: 'مالیات بر درآمد پرداختنی', types: [AccountType.LIABILITY] },
   retention_receivable: { label: 'سپرده حسن انجام کار دریافتنی', types: [AccountType.ASSET] },
+  retention_payable: { label: 'سپرده حسن انجام کار پرداختنی', types: [AccountType.LIABILITY] },
+  advance_received: { label: 'پیش‌دریافت قرارداد', types: [AccountType.LIABILITY] },
+  advance_paid: { label: 'پیش‌پرداخت قرارداد', types: [AccountType.ASSET] },
+  contract_insurance_expense: { label: 'هزینه بیمه کسرشده از صورت وضعیت', types: [AccountType.EXPENSE] },
 } as const;
 
 export type PostingRole = keyof typeof POSTING_ROLES;

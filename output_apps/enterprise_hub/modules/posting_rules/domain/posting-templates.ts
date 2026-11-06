@@ -1,5 +1,6 @@
 import { PostingRole } from '../constants/posting-roles';
 import { CHEQUE_TEMPLATES } from './cheque-templates';
+import { CONTRACT_TEMPLATES } from './contract-templates';
 
 export type PostingSide = 'debit' | 'credit';
 
@@ -107,6 +108,7 @@ export const INVOICE_TEMPLATES: readonly PostingTemplate[] = [
  */
 export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
   ...CHEQUE_TEMPLATES,
+  ...CONTRACT_TEMPLATES,
   ...INVOICE_TEMPLATES,
   {
     docType: 'invoice.sale',

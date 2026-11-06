@@ -28,7 +28,8 @@ describe('posting templates', () => {
   it('every role used by a template has a default or is documented as tenant-mapped', () => {
     const used = new Set(POSTING_TEMPLATES.flatMap((t) => t.lines.map((l) => l.role)));
     const noDefault = [...used].filter((r) => !DEFAULT_ROLE_ACCOUNTS[r] && !POSTING_TEMPLATES.some((t) => t.defaults?.[r]));
-    expect(noDefault).toEqual(['counter']);
+    // `counter` is chosen per document; the contract roles (T3) have no global account, the tenant maps them before the first post.
+    expect([...noDefault].sort()).toEqual(['advance_paid', 'advance_received', 'contract_insurance_expense', 'counter', 'retention_payable', 'retention_receivable']);
   });
 });
 
