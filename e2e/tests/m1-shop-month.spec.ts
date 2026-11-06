@@ -1126,15 +1126,46 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const accountsBefore = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
     const valuationBefore = await apiGet<{ totalInventoryValue: number | string }>(page, 'inventory/valuation');
 
-    // CUST-001 is a known customer and the sale is unpaid, so the credit refund is allowed. originalLine is 0-based.
-    const created = await apiPost<{ invoice: { id: string }; replayed: boolean }>(page, 'invoicing/pos-sales', {
-      idempotencyKey: 'm1-ret-1',
-      returnOf: { invoiceId: originalId, refund: 'CREDIT' },
-      lines: [{ originalLine: 0, quantity: 1 }],
+    // The imported sale carries CUST-001 only as buyerInfo (no customerId), and it is unpaid, so the quick-sale
+    // return (pos-sales returnOf: CREDIT needs a known customer, ORIGINAL needs a PAID sale) refuses it with 400.
+    // The product path left is the plain invoice form: a RETURN-subject invoice linked to the sale.
+    const original = await apiGet<{
+      sellerInfo: unknown;
+      buyerInfo: unknown;
+      currency: string;
+      fxRate: number | string;
+      jurisdiction?: string;
+      warehouseId?: number | null;
+      einvoiceType?: unknown;
+      items: Array<{ itemId?: string; sku?: string; description: string; unitPrice: number; vatRate?: number; quantity: number }>;
+    }>(page, `invoicing/${originalId}`);
+    expect(original.items[0].quantity, 'the original sold 2 units').toBe(2);
+    const line = original.items[0];
+    const returnBody = (quantity: number) => ({
+      subject: 4,
+      relatedInvoiceId: originalId,
+      direction: 'SALE',
+      sellerInfo: original.sellerInfo,
+      buyerInfo: original.buyerInfo,
+      currency: original.currency,
+      ...(original.jurisdiction ? { jurisdiction: original.jurisdiction } : {}),
+      ...(original.warehouseId ? { warehouseId: original.warehouseId } : {}),
+      items: [
+        {
+          ...(line.itemId ? { itemId: line.itemId } : {}),
+          ...(line.sku ? { sku: line.sku } : {}),
+          description: line.description,
+          quantity,
+          unitPrice: line.unitPrice,
+          ...(line.vatRate !== undefined ? { vatRate: line.vatRate } : {}),
+          originalLine: 0,
+        },
+      ],
+      status: 'ISSUED',
     });
-    expect(created.replayed, 'the first return is not a replay').toBe(false);
+    const created = await apiPost<{ id: string }>(page, 'invoicing', returnBody(1));
 
-    const returned = await waitForInvoice(page, created.invoice.id);
+    const returned = await waitForInvoice(page, created.id);
     expect(returned.subject, 'the return invoice has subject RETURN (4)').toBe(4);
     expect(returned.relatedInvoiceId, 'the return is linked to the original sale').toBe(originalId);
     expect(rials(returned.finalPayable), 'one unit returned at the original price').toBe(salesReturn.total);
@@ -1170,13 +1201,9 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
     }, SESSION_STORAGE_KEY);
     expect(token, 'the test session is in localStorage').toBeTruthy();
-    const refused = await page.request.post('/api/backend/enterprise-hub/invoicing/pos-sales', {
+    const refused = await page.request.post('/api/backend/enterprise-hub/invoicing', {
       headers: { Authorization: `Bearer ${token}` },
-      data: {
-        idempotencyKey: 'm1-ret-2',
-        returnOf: { invoiceId: originalId, refund: 'CREDIT' },
-        lines: [{ originalLine: 0, quantity: 2 }],
-      },
+      data: returnBody(2),
     });
     expect(refused.status(), 'a return beyond the quantity left is refused with 400').toBe(400);
   });
