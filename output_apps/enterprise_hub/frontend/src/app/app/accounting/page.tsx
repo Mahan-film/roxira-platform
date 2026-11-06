@@ -83,7 +83,7 @@ export default function SuiteAccountingPage() {
             </Link>
             <Link href="/app/accounting/bank" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <Landmark aria-hidden="true" />
-              بانک و مغایرت‌گیری
+              حساب‌های بانکی
             </Link>
           </div>
         }

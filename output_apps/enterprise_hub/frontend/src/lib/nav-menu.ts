@@ -99,7 +99,7 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [
       {
         href: "/app/accounting/bank",
-        label: "بانک و تطبیق",
+        label: "حساب‌های بانکی",
         icon: "Building2",
         module: "banking",
       },

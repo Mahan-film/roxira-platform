@@ -12,13 +12,13 @@ export default function BankReconcilePage() {
   return (
     <EnterpriseRouteGuard>
       <PageHeader
-        title="مغایرت‌گیری هوشمند"
+        title="مغایرت‌گیری بانکی"
         description="صورتحساب بانک را بارگذاری کنید؛ کارمزدها خودکار شناسایی می‌شوند و فقط موارد مبهم پرسیده می‌شود."
         icon={<Sparkles className="size-6 text-indigo-500" />}
         actions={
           <Link href="/app/accounting/bank" className={buttonVariants({ variant: "outline", size: "sm" })}>
             <ArrowRight aria-hidden="true" />
-            بانک
+            حساب‌های بانکی
           </Link>
         }
       />
