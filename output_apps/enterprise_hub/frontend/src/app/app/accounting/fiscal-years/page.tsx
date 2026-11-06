@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CalendarRange } from "lucide-react";
 
 import { ErrorNotice, PageHeader, loadErrorMessage } from "@/components/app/app-ui";
+import { FiscalCloseChecklist } from "@/components/accounting/fiscal-close-checklist";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ export default function FiscalYearsPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [closeReady, setCloseReady] = useState(false);
 
   const reload = async () => {
     const [yearList, templateList] = await Promise.all([listFiscalYears(), listChartTemplates()]);
@@ -223,6 +225,7 @@ export default function FiscalYearsPage() {
             <CardTitle>بستن سال مالی {closing.name}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3">
+            <FiscalCloseChecklist year={closing} onReadyChange={setCloseReady} />
             <p className="text-sm text-muted-foreground">
               پیش از بستن، هزینه مالیات عملکرد و اندوخته قانونی را ثبت کنید. سند بستن حساب‌های موقت، اختتامیه و افتتاحیه
               سال بعد صادر و این سال قفل می‌شود.
@@ -230,11 +233,12 @@ export default function FiscalYearsPage() {
             {!nextExists && <YearFields idPrefix="next" value={nextYear} onChange={setNextYear} />}
             <div className="flex gap-2">
               <Button
-                disabled={busy || (!nextExists && (!nextYear.name.trim() || !nextYear.startDate || !nextYear.endDate))}
+                disabled={busy || !closeReady || (!nextExists && (!nextYear.name.trim() || !nextYear.startDate || !nextYear.endDate))}
                 onClick={() =>
                   run(async () => {
                     const result = await closeFiscalYear(closing.id, nextExists ? undefined : nextYear);
                     setClosing(null);
+                    setCloseReady(false);
                     setNextYear(EMPTY_YEAR);
                     return `سال بسته شد. اسناد صادرشده: ${result.entryNumbers.join("، ") || "هیچ"}`;
                   })
@@ -242,7 +246,14 @@ export default function FiscalYearsPage() {
               >
                 تأیید و بستن
               </Button>
-              <Button variant="ghost" disabled={busy} onClick={() => setClosing(null)}>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setClosing(null);
+                  setCloseReady(false);
+                }}
+              >
                 انصراف
               </Button>
             </div>

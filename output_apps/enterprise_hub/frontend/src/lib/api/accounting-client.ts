@@ -70,6 +70,8 @@ export async function listJournalEntries(
         limit: params.limit,
         status: params.status,
         entryNumber: params.entryNumber,
+        fromDate: params.fromDate,
+        toDate: params.toDate,
       },
       signal,
     },

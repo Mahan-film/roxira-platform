@@ -76,6 +76,20 @@ export const closeFiscalYear = (
   });
 export const reopenFiscalYear = (id: number, reason: string) =>
   apiRequest<FiscalYear>(`${BASE}/fiscal-years/${id}/reopen`, { method: "POST", body: { reason } });
+
+export interface PeriodLock {
+  id: number;
+  periodStart: string;
+  periodEnd: string;
+  reason: string | null;
+  lockedBy: string;
+  lockedAt: string;
+  active: boolean;
+  unlockedAt: string | null;
+}
+
+export const listPeriodLocks = (signal?: AbortSignal) =>
+  apiRequest<PeriodLock[]>(`${BASE}/period-locks`, { signal });
 export const listChartTemplates = (signal?: AbortSignal) =>
   apiRequest<ChartTemplate[]>(`${BASE}/chart-templates`, { signal });
 export const applyChartTemplate = (key: string) =>
