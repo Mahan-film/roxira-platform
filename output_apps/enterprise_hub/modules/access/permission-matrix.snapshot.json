@@ -1342,6 +1342,50 @@
   "GET /enterprise-hub/radar/swarm-status (RadarController.getSwarmStatus)": {
     "policy": "platformAdmin"
   },
+  "GET /enterprise-hub/sales/orders (SalesController.listOrders)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/sales/orders/:id (SalesController.getOrder)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/sales/quotations (SalesController.listQuotations)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/sales/quotations/:id (SalesController.getQuotation)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/tax-compliance/keys/active (TaxComplianceController.getActiveKey)": {
     "policy": "tax:read",
     "owner": true,
@@ -3023,6 +3067,72 @@
   "POST /enterprise-hub/radar/trigger-scout (RadarController.triggerScout)": {
     "policy": "platformAdmin"
   },
+  "POST /enterprise-hub/sales/orders (SalesController.createOrder)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/sales/orders/:id/cancel (SalesController.cancelOrder)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/sales/orders/:id/confirm (SalesController.confirmOrder)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/sales/quotations (SalesController.createQuotation)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/sales/quotations/:id/convert (SalesController.convertQuotation)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/sales/quotations/:id/status (SalesController.changeQuotationStatus)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/tax-compliance/business-tax/preview (BusinessTaxController.preview)": {
     "policy": "tax:export",
     "owner": true,
@@ -3349,6 +3459,28 @@
     "admin": true,
     "accountant": false,
     "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/sales/orders/:id (SalesController.updateOrder)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/sales/quotations/:id (SalesController.updateQuotation)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
