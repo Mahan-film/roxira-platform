@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -17,11 +18,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { listJournalEntries } from "@/lib/api/accounting-client";
+import { listJournalEntries, copyJournalEntry } from "@/lib/api/accounting-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { formatPersianDate, formatRial } from "@/lib/format";
 import {
   JOURNAL_ENTRY_STATUS_LABELS,
+  JournalEntryStatus,
+  type JournalEntryResponse,
   type PaginatedJournalEntryResponse,
 } from "@/types/accounting";
 import { printVoucher } from "@/lib/print/open-print-window";
@@ -30,13 +33,15 @@ const PAGE_SIZE = 10;
 
 interface JournalEntriesTableProps {
   refreshKey?: number;
+  /** Opens the edit form for a non-final voucher chosen from the row menu. */
+  onEdit?: (entry: JournalEntryResponse) => void;
 }
 
 /**
  * جدول دفتر روزنامه (General Journal) با صفحه‌بندی و نمایش بازشوی سطرهای
  * بدهکار/بستانکار هر سند. متصل به `GET /enterprise-hub/accounting/journal-entries`.
  */
-export function JournalEntriesTable({ refreshKey = 0 }: JournalEntriesTableProps) {
+export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTableProps) {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
@@ -44,6 +49,8 @@ export function JournalEntriesTable({ refreshKey = 0 }: JournalEntriesTableProps
     null,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [copyingId, setCopyingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -74,6 +81,28 @@ export function JournalEntriesTable({ refreshKey = 0 }: JournalEntriesTableProps
       });
     },
     [fetchRecords],
+  );
+
+  const handleCopy = useCallback(
+    async (entry: JournalEntryResponse) => {
+      setCopyMessage(null);
+      setErrorMessage(null);
+      setCopyingId(entry.id);
+      try {
+        const copy = await copyJournalEntry(entry.id);
+        setCopyMessage(`سند «${copy.entryNumber}» به‌صورت پیش‌نویس کپی شد.`);
+        refresh();
+      } catch (error) {
+        if (error instanceof ApiClientError) {
+          setErrorMessage(error.details.join(" | "));
+        } else {
+          setErrorMessage("کپی سند انجام نشد؛ ارتباط با سرور برقرار نشد.");
+        }
+      } finally {
+        setCopyingId(null);
+      }
+    },
+    [refresh],
   );
 
   useEffect(() => {
@@ -126,6 +155,13 @@ export function JournalEntriesTable({ refreshKey = 0 }: JournalEntriesTableProps
         <Alert variant="destructive">
           <AlertTitle>خطا در دریافت اسناد</AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
+
+      {copyMessage && (
+        <Alert>
+          <AlertTitle>کپی سند</AlertTitle>
+          <AlertDescription>{copyMessage}</AlertDescription>
         </Alert>
       )}
 
@@ -198,14 +234,32 @@ export function JournalEntriesTable({ refreshKey = 0 }: JournalEntriesTableProps
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => printVoucher(entry, JOURNAL_ENTRY_STATUS_LABELS[entry.status])}
-                        >
-                          چاپ
-                        </Button>
+                        <RowActionsMenu
+                          label="عملیات سند"
+                          actions={[
+                            {
+                              label: "چاپ",
+                              onSelect: () =>
+                                printVoucher(
+                                  entry,
+                                  JOURNAL_ENTRY_STATUS_LABELS[entry.status],
+                                ),
+                            },
+                            {
+                              label: "کپی سند",
+                              disabled: copyingId === entry.id,
+                              onSelect: () => void handleCopy(entry),
+                            },
+                            {
+                              label: "ویرایش",
+                              disabled:
+                                !onEdit ||
+                                entry.status === JournalEntryStatus.POSTED ||
+                                entry.status === JournalEntryStatus.VOID,
+                              onSelect: () => onEdit?.(entry),
+                            },
+                          ]}
+                        />
                       </TableCell>
                     </TableRow>
                     {isExpanded && (

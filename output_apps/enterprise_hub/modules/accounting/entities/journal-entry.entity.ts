@@ -53,6 +53,14 @@ export class JournalEntryEntity {
   @Column({ type: 'integer', name: 'reverses_entry_id', nullable: true })
   reversesEntryId: number | null;
 
+  /**
+   * Optimistic edit lock. Incremented by every content/status update through a guarded UPDATE
+   * (`WHERE ... AND version = expected`), so a stale form is refused with 409 instead of
+   * silently overwriting the other user's save.
+   */
+  @Column({ type: 'integer', default: 1 })
+  version: number;
+
   @Column({
     type: 'varchar',
     length: 16,

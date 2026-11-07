@@ -35,6 +35,7 @@ import {
   LockedPeriodError,
   PeriodLockedException,
   UnknownDimensionError,
+  VoucherVersionConflictError,
 } from '../exceptions/ledger.exceptions';
 import {
   LockPeriodDto,
@@ -210,6 +211,7 @@ export class AccountingService {
       date: entity.date,
       description: entity.description,
       status: entity.status,
+      version: entity.version,
       currency: entryCurrency,
       totalDebit: fromMinor(debitMinor),
       totalCredit: fromMinor(creditMinor),
@@ -740,6 +742,13 @@ export class AccountingService {
     return `ثبت سند در دورهٔ قفل‌شده مجاز نیست: تاریخ ${date} در دوره یا سال مالی بسته قرار دارد.`;
   }
 
+  /** 409 for a stale optimistic lock: another user saved the voucher after this form was loaded. */
+  private versionConflict(): ConflictException {
+    return new ConflictException(
+      'این سند را کاربر دیگری تغییر داده است؛ صفحه را تازه کنید.',
+    );
+  }
+
   private mapPeriodLock(error: unknown): never {
     if (error instanceof UnknownDimensionError) {
       throw new BadRequestException(`تفصیلی یا مرکز ${error.code} (${error.kind}) تعریف نشده یا غیرفعال است.`);
@@ -808,8 +817,12 @@ export class AccountingService {
           { entryNumber: dto.entryNumber, date, description: dto.description },
           lineInputs,
           manager,
+          dto.expectedVersion ?? null,
         );
       } catch (error) {
+        if (error instanceof VoucherVersionConflictError) {
+          throw this.versionConflict();
+        }
         this.mapPeriodLock(error);
       }
       const saved = await this.accountingRepository.findEntryById(tenantId, id, manager);
@@ -825,6 +838,7 @@ export class AccountingService {
     tenantId: string,
     id: number,
     target: JournalEntryStatus,
+    expectedVersion?: number | null,
   ): Promise<JournalEntryResponseDto> {
     return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
@@ -856,7 +870,21 @@ export class AccountingService {
           this.mapPeriodLock(error);
         }
       }
-      await this.accountingRepository.setEntryStatus(tenantId, entry, target, lineInputs, manager);
+      try {
+        await this.accountingRepository.setEntryStatus(
+          tenantId,
+          entry,
+          target,
+          lineInputs,
+          manager,
+          expectedVersion ?? null,
+        );
+      } catch (error) {
+        if (error instanceof VoucherVersionConflictError) {
+          throw this.versionConflict();
+        }
+        throw error;
+      }
       if (target === JournalEntryStatus.POSTED) {
         await this.ledgerAudit?.record(
           {

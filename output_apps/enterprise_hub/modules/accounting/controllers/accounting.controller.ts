@@ -23,6 +23,7 @@ import { AccountLedgerResponseDto } from '../dto/account-ledger-response.dto';
 import { AccountResponseDto } from '../dto/account-response.dto';
 import { CreateAccountDto } from '../dto/create-account.dto';
 import { CreateJournalEntryDto } from '../dto/create-journal-entry.dto';
+import { CopyJournalEntryDto } from '../dto/copy-journal-entry.dto';
 import {
   LockPeriodDto,
   PeriodLockResponseDto,
@@ -41,6 +42,7 @@ import {
 } from '../dto/query-journal-entry.dto';
 import { TrialBalanceResponseDto } from '../dto/trial-balance-response.dto';
 import { AccountingService } from '../services/accounting.service';
+import { VoucherToolsService } from '../services/voucher-tools.service';
 
 /**
  * کنترلر دفتر کل و حسابداری دوطرفه.
@@ -56,7 +58,10 @@ import { AccountingService } from '../services/accounting.service';
 @ModuleAccess(AccessModule.ACCOUNTING)
 @Controller('enterprise-hub/accounting')
 export class AccountingController {
-  constructor(private readonly accountingService: AccountingService) {}
+  constructor(
+    private readonly accountingService: AccountingService,
+    private readonly voucherToolsService: VoucherToolsService,
+  ) {}
 
   /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
   private tenantIdOf(request: AuthenticatedRequest): string {
@@ -134,6 +139,29 @@ export class AccountingController {
   }
 
   @RequireAction(AccessAction.CREATE)
+  @Post('journal-entries/:id/copy')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'کپی سند به‌صورت پیش‌نویس',
+    description:
+      'سند جدیدی با همان سطرها و شرح، شماره تازه و وضعیت پیش‌نویس می‌سازد؛ سند مبدأ تغییر نمی‌کند و کپی هرگز قطعی نمی‌شود.',
+  })
+  @ApiResponse({ status: HttpStatus.CREATED, type: JournalEntryResponseDto })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'سند یافت نشد' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'شماره سند کپی تکراری' })
+  async copyJournalEntry(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CopyJournalEntryDto,
+  ): Promise<JournalEntryResponseDto> {
+    return this.voucherToolsService.copyVoucher(
+      this.tenantIdOf(request),
+      id,
+      dto,
+    );
+  }
+
+  @RequireAction(AccessAction.CREATE)
   @Put('journal-entries/:id')
   @ApiOperation({
     summary: 'ویرایش سند پیش‌نویس یا موقت',
@@ -164,7 +192,12 @@ export class AccountingController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ChangeVoucherStatusDto,
   ): Promise<JournalEntryResponseDto> {
-    return this.accountingService.changeVoucherStatus(this.tenantIdOf(request), id, dto.status);
+    return this.accountingService.changeVoucherStatus(
+      this.tenantIdOf(request),
+      id,
+      dto.status,
+      dto.expectedVersion,
+    );
   }
 
   @RequireAction(AccessAction.CREATE)
