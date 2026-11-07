@@ -12,7 +12,7 @@ import { StockDocumentsService } from '../../../inventory/services/stock-documen
 import { STOCK_INVENTORY_ACCOUNT } from '../../../inventory/constants/stock-accounts';
 import { COGS_ACCOUNT } from '../../../invoicing/constants/suite-events.constants';
 import { PostingRulesService } from '../../../posting_rules/services/posting-rules.service';
-import { COGS_DOC_TYPE, COGS_ENTRY_PREFIX, hundredthsToNumber, unitCostMinor } from '../../delivery/delivery-math';
+import { COGS_ENTRY_PREFIX, hundredthsToNumber, unitCostMinor } from '../../delivery/delivery-math';
 import { parseQuantityHundredths } from '../../sales-math';
 import { CreateReturnDto, ReturnLineRequestDto, ReturnResponseDto } from '../dto/sales-return.dto';
 import { LockedReturnLine, SalesReturnRepository } from '../repositories/sales-return.repository';
@@ -22,6 +22,7 @@ const QUANTITY_SCALE = 2;
 const IDEMPOTENCY_PREFIX = 'RET-';
 /** Source type of the COGS reversal voucher: one voucher per return invoice (sourceId = its id). */
 const COGS_RETURN_SOURCE_TYPE = 'sales_return';
+const COGS_RETURN_DOC_TYPE = 'invoice.sale_cogs_return';
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const INVALID_DATE = 'تاریخ برگشت نامعتبر است (YYYY-MM-DD).';
@@ -236,15 +237,14 @@ export class SalesReturnService {
       await this.posting.post(
         tenantId,
         {
-          docType: COGS_DOC_TYPE,
+          docType: COGS_RETURN_DOC_TYPE,
           sourceType: COGS_RETURN_SOURCE_TYPE,
           sourceId: created.id,
           date: dto.returnDate,
           amounts: { cost: cogsMinor },
           description: `ابطال بهای تمام‌شده برگشت ${created.taxInvoiceNumber}`,
           entryNumber: `${COGS_ENTRY_PREFIX}R-${created.taxInvoiceNumber}`.slice(0, 64),
-          // The template debits `cogs` and credits `inventory`; swapping the accounts reverses it.
-          overrides: { cogs: inventoryCode, inventory: cogsCode },
+          overrides: { inventory: inventoryCode, cogs: cogsCode },
         },
         manager,
       );
