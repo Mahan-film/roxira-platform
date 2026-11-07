@@ -21,6 +21,8 @@ import { InvoiceStatus } from '../enums/invoice-status.enum';
  */
 export interface InvoicePartyInfo {
   name: string;
+  /** Code of the party record (tafsili). Set by documents created from the sales cycle; posting carries it on the receivable line. */
+  partyCode?: string;
   nationalId?: string;
   economicCode?: string;
   registrationNumber?: string;

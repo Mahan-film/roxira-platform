@@ -16,6 +16,7 @@ import {
   sortInvoices,
   toRial,
 } from './m1/fixture-data';
+import { T1_GATE } from './m1/sales-cycle-expected';
 import { apiGet, apiPost, apiPut, importFile, issueAndWait, payAndWait, persianise, rials } from './m1/import-ui';
 
 /**
@@ -377,6 +378,14 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     }
     expect(all, 'every imported invoice is listed').toHaveLength(238);
     return all;
+  };
+  const sessionToken = async (page: Page): Promise<string> => {
+    const token = await page.evaluate((key) => {
+      const raw = window.localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+    }, SESSION_STORAGE_KEY);
+    expect(token, 'the test session is in localStorage').toBeTruthy();
+    return token as string;
   };
   /** One account's balance from `accounting/accounts` (debit-positive). */
   const balanceOf = (accounts: Array<{ code: string; balance: number | string }>, code: string): bigint =>
@@ -1224,7 +1233,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       chequeNumber: 'M1-CHQ-0001',
       amount: Number(cheque.amount),
       issueDate: '2024-05-02',
-      dueDate: '2024-06-01',
+      dueDate: '2026-05-01',
       partyName: 'بهرام آذرخش نمونه',
       partyCode: cheque.partyCode,
       bankName: 'بانک ملت نمونه',
@@ -1431,5 +1440,228 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     await expect(balance).toBeVisible();
     await expect(balance).toContainText('تراز');
     await expect(balance).not.toContainText('ناتراز');
+  });
+
+  // ---- Sales cycle gate (#227 T1 slice 6): quote -> order -> 2 deliveries -> 1 invoice -> partial return ------
+  // One synthetic item and customer of their own; the figures are derived by hand in m1/sales-cycle-expected.ts.
+  // These steps run last and alone on this tenant, so account deltas over the whole run are exact.
+  const t1 = {
+    itemId: 0,
+    warehouseId: 0,
+    orderId: 0,
+    orderLineId: 0,
+    delivery1Line: 0,
+    delivery2Line: 0,
+    invoiceId: '',
+    returnId: '',
+    accountsBefore: [] as Array<{ code: string; balance: number | string }>,
+  };
+  const availabilityOf = async (page: Page) => {
+    const { data } = await apiGet<{ data: Array<{ onHand: number; reserved: number; available: number }> }>(
+      page,
+      `sales/availability?itemIds=${t1.itemId}`,
+    );
+    return data[0];
+  };
+  const openLayersValue = async (page: Page): Promise<bigint> => {
+    const batches = await apiGet<Array<{ remainingValue: number | string }>>(
+      page,
+      `inventory/items/${T1_GATE.sku}/batches`,
+    );
+    return batches.reduce((sum, batch) => sum + BigInt(Math.round(Number(batch.remainingValue))), 0n);
+  };
+  const fulfilmentOf = (page: Page) =>
+    apiGet<{ status: string; lines: Array<{ ordered: number; delivered: number; backorder: number }> }>(
+      page,
+      `sales/orders/${t1.orderId}/fulfilment`,
+    );
+
+  test('18 sales cycle: stock in two FIFO layers, quote accepted, order confirmed and reserved [E1]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    await apiPost(page, 'parties', { code: T1_GATE.partyCode, name: 'مشتری آزمون چرخه فروش', role: 'customer' });
+    const warehouse = await apiPost<{ id: number }>(page, 'inventory/warehouses', {
+      name: 'انبار آزمون چرخه فروش',
+      locationCode: 'T1-GATE-W',
+    });
+    t1.warehouseId = Number(warehouse.id);
+    const item = await apiPost<{ id: number }>(page, 'inventory/items', {
+      sku: T1_GATE.sku,
+      barcode: T1_GATE.barcode,
+      name: 'کالای آزمون چرخه فروش',
+    });
+    t1.itemId = Number(item.id);
+    for (const [index, layer] of [T1_GATE.layer1, T1_GATE.layer2].entries()) {
+      await apiPost(page, 'inventory/movements/inbound', {
+        sku: T1_GATE.sku,
+        quantity: layer.quantity,
+        unitPurchaseCost: layer.unitCost,
+        warehouseId: t1.warehouseId,
+        batchNumber: `T1-L${index + 1}`,
+      });
+    }
+    expect(await availabilityOf(page), 'ten units in, nothing reserved').toMatchObject({ onHand: 10, reserved: 0, available: 10 });
+    t1.accountsBefore = await apiGet(page, 'accounting/accounts');
+
+    const quote = await apiPost<{ id: number; totalAmount: number | string; status: string }>(page, 'sales/quotations', {
+      partyCode: T1_GATE.partyCode,
+      quoteDate: '2026-05-01',
+      lines: [{ itemId: t1.itemId, quantity: T1_GATE.orderQuantity, unitPrice: T1_GATE.unitPrice }],
+    });
+    expect(rials(quote.totalAmount), '8.00 x 1,000,000').toBe(T1_GATE.quoteTotal);
+    await apiPost(page, `sales/quotations/${quote.id}/status`, { status: 'SENT' });
+    await apiPost(page, `sales/quotations/${quote.id}/status`, { status: 'ACCEPTED' });
+    const order = await apiPost<{ id: number; status: string; quotationId: number; totalAmount: number | string; lines: Array<{ id: number }> }>(
+      page,
+      `sales/quotations/${quote.id}/convert`,
+      { warehouseId: t1.warehouseId, orderDate: '2026-05-02' },
+    );
+    expect(order.quotationId, 'the order comes from the quote').toBe(quote.id);
+    expect(rials(order.totalAmount), 'the order total equals the quote').toBe(T1_GATE.quoteTotal);
+    t1.orderId = order.id;
+    t1.orderLineId = order.lines[0].id;
+    await apiPost(page, `sales/orders/${t1.orderId}/confirm`, {});
+    expect(await availabilityOf(page), 'confirming reserves 8: available falls, on hand does not').toMatchObject({
+      onHand: 10,
+      reserved: 8,
+      available: 2,
+    });
+  });
+
+  test('19 sales cycle: two partial deliveries take FIFO cost and leave a backorder [E1]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    const deliver = async (quantity: number, date: string, key: string) =>
+      apiPost<{ id: number; totalCost: number | string; journalEntryId: number | null; lines: Array<{ id: number; unitCost: number | string }> }>(
+        page,
+        `sales/orders/${t1.orderId}/deliveries`,
+        { deliveryDate: date, idempotencyKey: key, lines: [{ orderLineId: t1.orderLineId, quantity }] },
+        200,
+      );
+
+    const d1 = await deliver(T1_GATE.delivery1.quantity, '2026-05-04', 't1-gate-d1');
+    expect(rials(d1.totalCost), '3 x 500,000 from layer 1').toBe(T1_GATE.delivery1.cost);
+    t1.delivery1Line = d1.lines[0].id;
+    const v1 = await journalVoucher(page, d1.journalEntryId!);
+    expect(debitOf(v1.lines, '5101'), 'delivery 1 books cost of goods sold').toBe(T1_GATE.delivery1.cost);
+    expect(creditOf(v1.lines, '1301'), 'and takes it out of stock').toBe(T1_GATE.delivery1.cost);
+    expect(await availabilityOf(page)).toMatchObject({ onHand: 7, reserved: 5, available: 2 });
+
+    const d2 = await deliver(T1_GATE.delivery2.quantity, '2026-05-05', 't1-gate-d2');
+    expect(rials(d2.totalCost), '1 x 500,000 + 3 x 700,000').toBe(T1_GATE.delivery2.cost);
+    expect(rials(d2.lines[0].unitCost), 'a unit of delivery 2 costs 650,000').toBe(T1_GATE.delivery2.unitCost);
+    t1.delivery2Line = d2.lines[0].id;
+    const v2 = await journalVoucher(page, d2.journalEntryId!);
+    expect(debitOf(v2.lines, '5101')).toBe(T1_GATE.delivery2.cost);
+    expect(creditOf(v2.lines, '1301')).toBe(T1_GATE.delivery2.cost);
+    expect(await availabilityOf(page)).toMatchObject({ onHand: 3, reserved: 1, available: 2 });
+
+    const fulfilment = await fulfilmentOf(page);
+    expect(fulfilment.status, 'partly delivered').toBe('PARTIAL');
+    expect(fulfilment.lines[0]).toMatchObject({ ordered: 8, delivered: 7, backorder: 1 });
+    const backorders = await apiGet<{ data: Array<{ orderId: number; backorder: number }> }>(page, 'sales/backorders');
+    expect(backorders.data.find((row) => row.orderId === t1.orderId)?.backorder, 'one unit on backorder').toBe(1);
+    expect(await openLayersValue(page), '3 units of layer 2 are left').toBe(2_100_000n);
+  });
+
+  test('20 sales cycle: one invoice bills both deliveries, revenue and VAT only [E1]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    const invoice = await apiPost<{ invoiceId: string; partyCode: string; totalAmount: number | string; totalTax: number | string; finalPayable: number | string; lines: unknown[] }>(
+      page,
+      'sales/invoices/from-deliveries',
+      {
+        invoiceDate: '2026-05-06',
+        idempotencyKey: 't1-gate-inv',
+        deliveryLines: [
+          { deliveryLineId: t1.delivery1Line, quantity: T1_GATE.delivery1.quantity },
+          { deliveryLineId: t1.delivery2Line, quantity: T1_GATE.delivery2.quantity },
+        ],
+      },
+    );
+    t1.invoiceId = invoice.invoiceId;
+    expect(invoice.partyCode).toBe(T1_GATE.partyCode);
+    expect(rials(invoice.totalAmount), '7 x 1,000,000').toBe(T1_GATE.invoice.net);
+    expect(rials(invoice.totalTax), 'VAT 10%').toBe(T1_GATE.invoice.vat);
+    expect(rials(invoice.finalPayable)).toBe(T1_GATE.invoice.payable);
+
+    const posted = await waitForInvoice(page, t1.invoiceId);
+    expect(rials(posted.finalPayable)).toBe(T1_GATE.invoice.payable);
+    const voucher = await journalVoucher(page, posted.journalEntryId!);
+    test.info().annotations.push({ type: 'voucher', description: `T1 invoice: ${voucherLineText(voucher)}` });
+    expect(debitOf(voucher.lines, '1201'), 'receivable').toBe(T1_GATE.invoice.payable);
+    expect(creditOf(voucher.lines, '4101'), 'revenue').toBe(T1_GATE.invoice.net);
+    expect(creditOf(voucher.lines, '2201'), 'output VAT').toBe(T1_GATE.invoice.vat);
+    expect(debitOf(voucher.lines, '5101') + creditOf(voucher.lines, '1301'), 'the invoice books no cost or stock again').toBe(0n);
+    expect(await availabilityOf(page), 'invoicing does not move stock').toMatchObject({ onHand: 3 });
+    const invoicing = await apiGet<{ status: string; lines: Array<{ delivered: number; invoiced: number; remaining: number }> }>(
+      page,
+      `sales/orders/${t1.orderId}/invoicing`,
+    );
+    expect(invoicing.lines[0]).toMatchObject({ delivered: 7, invoiced: 7 });
+    const again = await apiPost<{ invoiceId: string; replayed: boolean }>(
+      page,
+      'sales/invoices/from-deliveries',
+      {
+        invoiceDate: '2026-05-06',
+        idempotencyKey: 't1-gate-inv',
+        deliveryLines: [
+          { deliveryLineId: t1.delivery1Line, quantity: T1_GATE.delivery1.quantity },
+          { deliveryLineId: t1.delivery2Line, quantity: T1_GATE.delivery2.quantity },
+        ],
+      },
+    );
+    expect(again.replayed && again.invoiceId === t1.invoiceId, 'the same key returns the same invoice').toBe(true);
+  });
+
+  test('21 sales cycle: partial return of 2 units credits the customer and restocks at cost [E1]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    const returned = await apiPost<{ id: string; finalPayable: number | string; relatedInvoiceId: string }>(
+      page,
+      `sales/invoices/${t1.invoiceId}/returns`,
+      {
+        returnDate: '2026-05-10',
+        idempotencyKey: 't1-gate-ret',
+        lines: [{ deliveryLineId: t1.delivery2Line, quantity: T1_GATE.salesReturn.quantity }],
+      },
+    );
+    t1.returnId = returned.id;
+    expect(returned.relatedInvoiceId).toBe(t1.invoiceId);
+    expect(rials(returned.finalPayable), '2 x 1,000,000 + 10% VAT').toBe(T1_GATE.salesReturn.payable);
+
+    const posted = await waitForInvoice(page, t1.returnId);
+    const voucher = await journalVoucher(page, posted.journalEntryId!);
+    test.info().annotations.push({ type: 'voucher', description: `T1 return: ${voucherLineText(voucher)}` });
+    expect(creditOf(voucher.lines, '1201'), 'credit note credits the receivable').toBe(T1_GATE.salesReturn.payable);
+    expect(debitOf(voucher.lines, '4101'), 'revenue reversed').toBe(T1_GATE.salesReturn.net);
+    expect(debitOf(voucher.lines, '2201'), 'VAT reversed').toBe(T1_GATE.salesReturn.vat);
+    expect(await availabilityOf(page), 'two units back on the shelf').toMatchObject({ onHand: T1_GATE.finalOnHand });
+
+    const tooMuch = await page.request.post(`/api/backend/enterprise-hub/sales/invoices/${t1.invoiceId}/returns`, {
+      headers: { Authorization: `Bearer ${await sessionToken(page)}` },
+      data: { returnDate: '2026-05-11', lines: [{ deliveryLineId: t1.delivery2Line, quantity: 3 }] },
+    });
+    expect(tooMuch.status(), 'only 2 of the 4 are still returnable: 3 is refused with 409').toBe(409);
+  });
+
+  test('22 sales cycle: ledger, stock and customer balance match the hand numbers [E1]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    const after = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const moved = (code: string) => balanceOf(after, code) - balanceOf(t1.accountsBefore, code);
+    expect(moved('1201'), 'receivables up by 7,700,000 - 2,200,000').toBe(T1_GATE.customerBalance);
+    expect(moved('4101'), 'revenue (credit) 7,000,000 - 2,000,000').toBe(-(T1_GATE.invoice.net - T1_GATE.salesReturn.net));
+    expect(moved('2201'), 'VAT payable (credit) 700,000 - 200,000').toBe(-(T1_GATE.invoice.vat - T1_GATE.salesReturn.vat));
+    expect(moved('5101'), 'cost of goods sold 1,500,000 + 2,600,000 - 1,300,000').toBe(T1_GATE.netCogs);
+    expect(moved('1301'), 'stock account down by the same cost').toBe(-T1_GATE.netCogs);
+
+    expect(await availabilityOf(page), 'stock: 10 in, 7 out, 2 back; 1 still reserved').toMatchObject({
+      onHand: T1_GATE.finalOnHand,
+      reserved: 1,
+      available: 4,
+    });
+    expect(await openLayersValue(page), 'FIFO layers: 3 x 700,000 + 2 x 650,000').toBe(T1_GATE.finalStockValue);
+
+    const ledger = await apiGet<{ closing: number | string }>(
+      page,
+      `accounting/reports/ledger?accountCode=1201&partyCode=${T1_GATE.partyCode}&from=2026-03-21&to=2027-03-20`,
+    );
+    expect(rials(ledger.closing), 'the customer owes 5,500,000 in the party ledger').toBe(T1_GATE.customerBalance);
   });
 });
