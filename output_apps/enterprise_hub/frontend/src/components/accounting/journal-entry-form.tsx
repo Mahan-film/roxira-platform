@@ -121,7 +121,15 @@ export function JournalEntryForm({
 
   // Load the edited voucher into the form whenever the target changes.
   useEffect(() => {
-    if (!entry) return;
+    if (!entry) {
+      // Leaving edit mode must not leave the old voucher in the new-voucher form.
+      setEntryNumber("");
+      setDescription("");
+      setLines([createEmptyLine("line-0"), createEmptyLine("line-1")]);
+      setSubmitError(null);
+      setConflictError(null);
+      return;
+    }
     setEntryNumber(entry.entryNumber);
     setDescription(entry.description);
     setDate(entry.date.slice(0, 10));
