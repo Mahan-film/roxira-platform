@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { parseScaled } from '../../accounting/money';
 import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
 import { FifoBatchEntity } from '../entities/fifo-batch.entity';
 import { StoreEntity } from '../entities/store.entity';
@@ -53,6 +54,13 @@ export interface ConsumedLayer {
   quantity: number;
   unitPurchaseCost: number;
   warehouseId: number | null;
+}
+
+/** لایه FIFO قفل‌شده برای تخصیص هزینه سربار؛ مقادیر دقیق صدک. */
+export interface LockedFifoLayer {
+  id: number;
+  /** Hundredths of a unit still in the layer, exact bigint. */
+  quantityRemaining: bigint;
 }
 
 /** نتیجه پرسیستنس خروج کالا. */
@@ -586,6 +594,63 @@ export class InventoryRepository {
 
       return { item: savedItem, layers };
     }, outerManager);
+  }
+
+  /**
+   * Locks the FIFO layers of one allocation run in id order (deadlock-free against another run
+   * that locks an overlapping set) and returns their remaining quantity in exact hundredths.
+   * Landed cost uses this so a late cost reads the layer it will raise atomically.
+   */
+  async lockFifoBatchesByIds(
+    tenantId: string,
+    ids: number[],
+    manager?: EntityManager,
+  ): Promise<Map<number, LockedFifoLayer>> {
+    const result = new Map<number, LockedFifoLayer>();
+    if (ids.length === 0) {
+      return result;
+    }
+    const rows: Array<Record<string, unknown>> = await this.runInTransaction(
+      async (m) =>
+        m.query(
+          `SELECT "id", "quantity_remaining" FROM "inventory_fifo_batches"
+            WHERE "tenant_id" = $1 AND "id" = ANY($2::int[])
+            ORDER BY "id" ASC
+            FOR UPDATE`,
+          [tenantId, ids],
+        ),
+      manager,
+    );
+    for (const row of rows) {
+      result.set(Number(row.id), {
+        id: Number(row.id),
+        quantityRemaining: parseScaled(String(row.quantity_remaining), QUANTITY_SCALE),
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Raises one FIFO layer's unit cost by `deltaMinor` minor units per whole unit (= deltaMinor/100
+   * rial, exactly representable in the numeric(18,2) column), tenant scoped and in the caller's
+   * transaction. Landed cost is the only caller.
+   */
+  async raiseLayerUnitCostByMinor(
+    tenantId: string,
+    batchId: number,
+    deltaMinor: bigint,
+    manager?: EntityManager,
+  ): Promise<void> {
+    await this.runInTransaction(
+      async (m) =>
+        m.query(
+          `UPDATE "inventory_fifo_batches"
+              SET "unit_purchase_cost" = "unit_purchase_cost" + ($3::numeric / 100)
+            WHERE "tenant_id" = $1 AND "id" = $2`,
+          [tenantId, batchId, deltaMinor.toString()],
+        ),
+      manager,
+    );
   }
 
   private async assertWarehouseExists(
