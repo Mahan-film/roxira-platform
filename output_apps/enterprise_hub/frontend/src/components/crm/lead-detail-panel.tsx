@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CustomerPartyTabs } from "@/components/crm/customer-party-tabs";
 import {
   addContactRecord,
   addLeadNote,
@@ -282,6 +283,7 @@ export function LeadDetailPanel({
           </Badge>
         </div>
       </CardHeader>
+      <CustomerPartyTabs lead={lead} />
 
       <CardContent className="flex flex-col gap-6">
         {errorMessage && (
