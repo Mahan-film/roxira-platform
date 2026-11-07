@@ -1,38 +1,21 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { SalesModule } from '../sales.module';
-import { InvoicingModule } from '../../invoicing/invoicing.module';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { InventoryModule } from '../../inventory/inventory.module';
+import { InvoicingModule } from '../../invoicing/invoicing.module';
 import { PostingRulesModule } from '../../posting_rules/posting-rules.module';
 import { SalesReturnController } from './controllers/sales-return.controller';
+import { SalesReturnRepository } from './repositories/sales-return.repository';
 import { SalesReturnService } from './services/sales-return.service';
-import { SalesDeliveryRepository } from '../delivery/repositories/sales-delivery.repository';
-import { SalesDeliveryLineEntity } from '../delivery/entities/sales-delivery.entity';
-import { SalesDeliveryEntity } from '../delivery/entities/sales-delivery.entity';
 
 /**
- * Returns module: creates RETURN invoices for sales delivery invoices.
- * 
- * Validates that delivery lines belong to the invoice, checks quantity constraints,
- * creates RETURN invoices through the existing invoicing path, posts stock receipt
- * at the original cost and posts COGS reversal.
+ * Partial returns of delivery invoices (#565 T1 slice 5). Imports InvoicingModule (the invoice
+ * service and repository the RETURN invoice is created through), InventoryModule (stock back at
+ * the delivery cost, account resolution) and PostingRulesModule (the COGS reversal voucher).
  */
 @Module({
-  imports: [
-    SalesModule,
-    InvoicingModule,
-    InventoryModule,
-    PostingRulesModule,
-    TypeOrmModule.forFeature([
-      SalesDeliveryEntity,
-      SalesDeliveryLineEntity,
-    ]),
-  ],
+  imports: [InvoicingModule, InventoryModule, PostingRulesModule],
   controllers: [SalesReturnController],
-  providers: [SalesReturnService, SalesDeliveryRepository],
+  providers: [SalesReturnService, SalesReturnRepository, TenantScope],
   exports: [SalesReturnService],
 })
 export class SalesReturnModule {}
-export { SalesReturnController } from './controllers/sales-return.controller';
-export { SalesReturnService } from './services/sales-return.service';
-export { CreateReturnDto, ReturnResponseDto } from './dto/sales-return.dto';

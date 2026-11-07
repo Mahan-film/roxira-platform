@@ -1,33 +1,41 @@
-import { createHash } from 'crypto';
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { parseScaled, toMinor, minorToDecimal, fromMinor } from '../../../accounting/money';
-import { SalesDeliveryRepository } from '../delivery/repositories/sales-delivery.repository';
-import { SalesDeliveryLineEntity } from '../delivery/entities/sales-delivery.entity';
-import { CreateReturnDto, ReturnResponseDto, ReturnLineResponseDto } from '../dto/sales-return.dto';
-import { InvoiceDirection, InvoiceSubject } from '../../invoicing/enums/invoice-kind.enum';
-import { InvoiceStatus } from '../../invoicing/enums/invoice-status.enum';
-import { InvoicingRepository } from '../../invoicing/repositories/invoicing.repository';
-import { InvoicingService } from '../../invoicing/services/invoicing.service';
-import { InventoryService } from '../../inventory/services/inventory.service';
-import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
-import { PostingRole } from '../../posting_rules/constants/posting-roles';
-import { COGS_SOURCE_TYPE, unitCostMinor as calcUnitCostMinor } from '../delivery/delivery-math';
-import { COGS_DOC_TYPE, COGS_ENTRY_PREFIX } from '../delivery/delivery-math';
-import { STOCK_INVENTORY_ACCOUNT } from '../../inventory/constants/stock-accounts';
-import { COGS_ACCOUNT } from '../../invoicing/constants/suite-events.constants';
-import { documentRows, drCrAmounts, documentDocType } from '../../invoicing/services/invoice-voucher';
-import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
+import { fromMinor, minorToDecimal, parseScaled, toMinor } from '../../../accounting/money';
+import { CreateInvoiceDto, InvoiceItemDto } from '../../../invoicing/dto/create-invoice.dto';
+import { InvoiceEntity, InvoiceItem } from '../../../invoicing/entities/invoice.entity';
+import { InvoiceDirection, InvoiceSubject } from '../../../invoicing/enums/invoice-kind.enum';
+import { InvoiceStatus } from '../../../invoicing/enums/invoice-status.enum';
+import { InvoicingRepository } from '../../../invoicing/repositories/invoicing.repository';
+import { InvoicingService } from '../../../invoicing/services/invoicing.service';
+import { InventoryService } from '../../../inventory/services/inventory.service';
+import { StockDocumentsService } from '../../../inventory/services/stock-documents.service';
+import { STOCK_INVENTORY_ACCOUNT } from '../../../inventory/constants/stock-accounts';
+import { COGS_ACCOUNT } from '../../../invoicing/constants/suite-events.constants';
+import { PostingRulesService } from '../../../posting_rules/services/posting-rules.service';
+import { COGS_DOC_TYPE, COGS_ENTRY_PREFIX, hundredthsToNumber, unitCostMinor } from '../../delivery/delivery-math';
+import { parseQuantityHundredths } from '../../sales-math';
+import { CreateReturnDto, ReturnLineRequestDto, ReturnResponseDto } from '../dto/sales-return.dto';
+import { LockedReturnLine, SalesReturnRepository } from '../repositories/sales-return.repository';
 
 const QUANTITY_SCALE = 2;
-const IDEMPOTENCY_CONSTRAINT = 'idempotency';
+/** Invoices carry one shared idempotency column; the prefix keeps return keys in their own namespace. */
+const IDEMPOTENCY_PREFIX = 'RET-';
+/** Source type of the COGS reversal voucher: one voucher per return invoice (sourceId = its id). */
+const COGS_RETURN_SOURCE_TYPE = 'sales_return';
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+const INVALID_DATE = 'تاریخ برگشت نامعتبر است (YYYY-MM-DD).';
+const INVALID_QUANTITY = 'مقدار برگشتی نامعتبر است (عدد مثبت با حداکثر دو رقم اعشار).';
+const DUPLICATE_LINE = 'یک خط حواله بیش از یک بار در درخواست آمده است.';
+const INVOICE_NOT_FOUND = 'صورتحساب یافت نشد.';
+const NOT_A_DELIVERY_INVOICE = 'فقط صورتحساب فروش اصلی که از حواله تحویل صادر شده قابل برگشت است.';
+const NOT_ISSUED = 'صورتحساب مرجع باید صادرشده باشد.';
+const LINE_NOT_ON_INVOICE = (id: number) => `خط حواله ${id} به این صورتحساب تعلق ندارد.`;
+const OVER_RETURN = (id: number, requested: string, open: string) =>
+  `مقدار برگشتی خط ${id} (${requested}) بیش از باقی‌مانده قابل برگشت از این صورتحساب (${open}) است.`;
+const KEY_TAKEN = 'این کلید ایدمپوتنسی قبلاً برای برگشت صورتحساب دیگری ثبت شده است.';
+
+/** Pg unique violation (23505) whose constraint name contains `part`. */
 function isUniqueViolationOn(error: unknown, part: string): boolean {
   const e = error as { code?: string; constraint?: string; driverError?: { code?: string; constraint?: string } };
   const code = e?.code ?? e?.driverError?.code;
@@ -35,579 +43,304 @@ function isUniqueViolationOn(error: unknown, part: string): boolean {
   return code === '23505' && constraint.includes(part);
 }
 
-interface ReturnLineDetail {
-  deliveryLine: SalesDeliveryLineEntity;
-  quantityHundredths: bigint;
+/** Hundredths as decimal text with two places, e.g. 200n -> "2.00". */
+function scaledText(hundredths: bigint): string {
+  const negative = hundredths < 0n;
+  const abs = negative ? -hundredths : hundredths;
+  return `${negative ? '-' : ''}${abs / 100n}.${(abs % 100n).toString().padStart(2, '0')}`;
+}
+
+interface RequestedLine {
+  deliveryLineId: number;
+  quantity: bigint;
+}
+
+interface PlannedReturn {
+  line: LockedReturnLine;
+  quantity: bigint;
+  /** Unit cost of the delivery line in minor units (rial x 100): the cost the stock comes back at. */
   unitCostMinor: bigint;
-  lineCostMinor: bigint;
-  originalInvoiceLine: {
-    unitPrice: number;
-    vatRate: number;
-    discount: number;
-    description: string;
-    sku: string | null;
-    itemId: number | null;
-  };
+  /** Stock value of this return line in minor units, round half up. */
+  valueMinor: bigint;
+  /** The original invoice line the return line mirrors (price and VAT rate are taken from it). */
+  invoiceLine: InvoiceItem;
 }
 
-interface PostedAmounts {
-  receivable: bigint;
-  vat: bigint;
-  net: bigint;
-  stock: bigint;
-}
-
+/**
+ * Partial return of a delivery invoice (#565 T1 slice 5). One tenant transaction:
+ *  1. lock the original invoice row (serialises returns of one sale) and re-check the idempotency key;
+ *  2. lock the requested delivery lines `FOR UPDATE`; each must be billed on this invoice (400);
+ *  3. refuse a quantity above what this invoice billed minus what its earlier returns took back (409);
+ *  4. create the RETURN invoice through the invoicing service, with the price and VAT rate of the
+ *     original invoice line, so revenue and VAT reverse at that rate, not today's. The invoice
+ *     carries no SKU or item id, so the invoicing path moves no stock and posts no COGS itself;
+ *  5. receive the stock at the delivery line's unit cost (delivery line lineCost / delivered qty);
+ *  6. post the COGS reversal once per return, through the posting engine (source `sales_return`,
+ *     id = the return invoice id), at the sum of those stock values;
+ *  7. bump `returned_quantity` on the delivery lines and link the return to them.
+ * A repeated key returns the stored return. A concurrent twin either waits on the invoice lock and
+ * replays, or loses the idempotency unique index and replays after the rollback.
+ */
 @Injectable()
 export class SalesReturnService {
-  private readonly logger = new Logger(SalesReturnService.name);
-
   constructor(
-    private readonly deliveries: SalesDeliveryRepository,
-    private readonly invoicingRepo: InvoicingRepository,
-    private readonly invoicingService: InvoicingService,
-    private readonly inventoryService: InventoryService,
-    private readonly postingRules: PostingRulesService,
+    private readonly returns: SalesReturnRepository,
+    private readonly invoicing: InvoicingService,
+    private readonly invoicingRepository: InvoicingRepository,
+    private readonly inventory: InventoryService,
+    private readonly stockDocuments: StockDocumentsService,
+    private readonly posting: PostingRulesService,
   ) {}
 
-  /**
-   * Creates a RETURN invoice for a sales delivery invoice.
-   * One transaction: lock delivery lines, validate quantity, create RETURN invoice,
-   * return stock at original delivery line cost, post COGS reversal, bump returned_quantity.
-   */
-  async createReturn(
+  async createReturn(tenantId: string, invoiceId: string, dto: CreateReturnDto, _userId?: string): Promise<ReturnResponseDto> {
+    if (!DATE.test(dto.returnDate) || Number.isNaN(new Date(`${dto.returnDate}T00:00:00Z`).getTime())) {
+      throw new BadRequestException(INVALID_DATE);
+    }
+    const requested = parseLines(dto.lines);
+    const key = dto.idempotencyKey ? `${IDEMPOTENCY_PREFIX}${dto.idempotencyKey}` : null;
+    const deferred: Array<() => Promise<void>> = [];
+    let result: ReturnResponseDto;
+    try {
+      result = await this.returns.runInTransaction(tenantId, (manager) =>
+        this.createInTransaction(tenantId, manager, invoiceId, dto, requested, key, deferred),
+      );
+    } catch (error) {
+      if (key && isUniqueViolationOn(error, 'idempotency')) {
+        const replay = await this.replayAfterRace(tenantId, invoiceId, key);
+        if (replay) return replay;
+      }
+      throw error;
+    }
+    for (const send of deferred) {
+      await send();
+    }
+    return result;
+  }
+
+  private async createInTransaction(
     tenantId: string,
+    manager: EntityManager,
     invoiceId: string,
     dto: CreateReturnDto,
-    userId?: string,
+    requested: RequestedLine[],
+    key: string | null,
+    deferred: Array<() => Promise<void>>,
   ): Promise<ReturnResponseDto> {
-    // Check idempotency key first (outside transaction for early return)
-    if (dto.idempotencyKey) {
-      const existing = await this.invoicingRepo.findByIdempotencyKey(tenantId, dto.idempotencyKey);
-      if (existing) {
-        return this.toResponseDto(existing);
-      }
+    // 1. The original invoice, locked; a repeated key replays the return it already made.
+    const original = await this.invoicingRepository.lockForReturn(tenantId, invoiceId, manager);
+    if (!original) throw new NotFoundException(INVOICE_NOT_FOUND);
+    if (key) {
+      const existingId = await this.returns.findInvoiceIdByIdempotencyKey(tenantId, manager, key);
+      if (existingId) return this.replayIn(tenantId, manager, invoiceId, existingId);
+    }
+    if (
+      (original.direction ?? InvoiceDirection.SALE) !== InvoiceDirection.SALE ||
+      (original.subject ?? InvoiceSubject.ORIGINAL) !== InvoiceSubject.ORIGINAL
+    ) {
+      throw new BadRequestException(NOT_A_DELIVERY_INVOICE);
+    }
+    if (original.status !== InvoiceStatus.ISSUED && original.status !== InvoiceStatus.PAID) {
+      throw new BadRequestException(NOT_ISSUED);
     }
 
-    return await this.invoicingRepo.transaction(async (manager) => {
-      // 1. Lock delivery lines FOR UPDATE and validate
-      const { deliveryLines, errors } = await this.deliveries.lockDeliveryLinesForReturn(
-        tenantId,
-        invoiceId,
-        dto.lines,
-        manager,
-      );
+    // 2. Lines must be billed on this invoice; then the delivery lines are locked.
+    const links = await this.returns.linksOfInvoice(tenantId, manager, invoiceId);
+    const linkByLine = new Map(links.map((link) => [link.deliveryLineId, link]));
+    for (const line of requested) {
+      if (!linkByLine.has(line.deliveryLineId)) throw new BadRequestException(LINE_NOT_ON_INVOICE(line.deliveryLineId));
+    }
+    const locked = await this.returns.lockDeliveryLines(
+      tenantId,
+      manager,
+      requested.map((line) => line.deliveryLineId),
+    );
+    const lineById = new Map(locked.map((line) => [line.id, line]));
 
-      if (errors.length > 0) {
-        const error = errors[0];
-        if (error.code === '400') {
-          throw new BadRequestException(error.message);
-        }
-        if (error.code === '409') {
-          throw new ConflictException(error.message);
-        }
-        throw new BadRequestException(error.message);
+    // 3. Quantity: billed on this invoice minus returned against it by earlier returns.
+    const returnedHere = await this.returns.returnedOnInvoice(
+      tenantId,
+      manager,
+      invoiceId,
+      InvoiceSubject.RETURN,
+      InvoiceStatus.CANCELLED,
+    );
+    const plan: PlannedReturn[] = requested.map((req) => {
+      const line = lineById.get(req.deliveryLineId);
+      const link = linkByLine.get(req.deliveryLineId);
+      if (!line || !link) throw new BadRequestException(LINE_NOT_ON_INVOICE(req.deliveryLineId));
+      const billed = parseScaled(link.quantity, QUANTITY_SCALE);
+      const open = billed - (returnedHere.get(req.deliveryLineId) ?? 0n);
+      if (req.quantity > open) {
+        throw new ConflictException(OVER_RETURN(req.deliveryLineId, scaledText(req.quantity), scaledText(open)));
       }
+      const invoiceLine = original.items?.[link.invoiceLineNo - 1];
+      if (!invoiceLine) throw new BadRequestException(LINE_NOT_ON_INVOICE(req.deliveryLineId));
 
-      // 2. Get the original invoice (the one we're returning against)
-      const originalInvoice = await this.invoicingRepo.findById(tenantId, invoiceId);
-      if (!originalInvoice) {
-        throw new NotFoundException('صورتحساب مرجع یافت نشد.');
-      }
-      if (
-        (originalInvoice.direction ?? InvoiceDirection.SALE) !== InvoiceDirection.SALE ||
-        (originalInvoice.subject ?? InvoiceSubject.ORIGINAL) !== InvoiceSubject.ORIGINAL
-      ) {
-        throw new BadRequestException('فقط صورتحساب فروش اصلی قابل برگشت است.');
-      }
-
-      // 3. Build return line details with original invoice line data
-      const lineDetails = await this.buildReturnLineDetails(
-        tenantId,
-        manager,
-        originalInvoice,
-        deliveryLines,
-        dto.lines,
-      );
-
-      // 4. Calculate return invoice totals (revenue/VAT reversal at original rates)
-      const returnItems = this.buildReturnInvoiceItems(lineDetails);
-      const totals = this.computeReturnTotals(returnItems, originalInvoice.currency);
-
-      // 5. Create RETURN invoice in this transaction
-      const returnInvoice = await this.createReturnInvoiceInTransaction(
-        tenantId,
-        manager,
-        originalInvoice,
-        returnItems,
-        totals,
-        dto,
-        userId,
-      );
-
-      // 6. Return stock to warehouse at original delivery line unit cost
-      // 7. Post COGS reversal at original delivery line cost
-      const totalCogsReversalMinor = await this.processStockReturnAndCogsReversal(
-        tenantId,
-        manager,
-        returnInvoice,
-        lineDetails,
-        dto.returnDate,
-      );
-
-      // 8. Update returned_quantity on delivery lines
-      await this.updateReturnedQuantities(tenantId, manager, lineDetails);
-
-      // 9. Update return invoice with posting meta
-      await this.updateReturnInvoicePostingMeta(
-        tenantId,
-        manager,
-        returnInvoice,
-        lineDetails,
-        totalCogsReversalMinor,
-      );
-
-      // 10. Post the RETURN invoice voucher (revenue/VAT reversal) synchronously
-      const entryId = await this.postReturnInvoiceVoucher(
-        tenantId,
-        manager,
-        returnInvoice,
-        totals,
-        dto.returnDate,
-      );
-
-      // Update invoice with journal entry ID
-      await manager.getRepository(InvoiceEntity).update(
-        { tenantId, id: returnInvoice.id },
-        { journalEntryId: entryId },
-      );
-
-      // Reload the invoice with updated posting info
-      const savedInvoice = await this.invoicingRepo.findByIdForPosting(tenantId, returnInvoice.id, manager);
-      return this.toResponseDto(savedInvoice!);
+      const deliveredHundredths = parseScaled(line.quantity, QUANTITY_SCALE);
+      const perUnit = unitCostMinor(toMinor(line.lineCost), deliveredHundredths);
+      // value = unit cost (minor per unit) x quantity (hundredths) / 100, round half up
+      const valueMinor = (perUnit * req.quantity + 50n) / 100n;
+      return { line, quantity: req.quantity, unitCostMinor: perUnit, valueMinor, invoiceLine };
     });
-  }
 
-  /**
-   * Builds detailed return line information including delivery line cost and original invoice line data.
-   */
-  private async buildReturnLineDetails(
-    tenantId: string,
-    manager: EntityManager,
-    originalInvoice: InvoiceEntity,
-    deliveryLines: SalesDeliveryLineEntity[],
-    requestLines: Array<{ deliveryLineId: number; quantity: number }>,
-  ): Promise<ReturnLineDetail[]> {
-    const deliveryLineMap = new Map(deliveryLines.map((dl) => [dl.id, dl]));
+    // 4. The RETURN invoice, through the invoicing service (revenue and VAT reversal follow its path).
+    const created = await this.invoicing.create(
+      tenantId,
+      this.returnInvoiceDto(original, invoiceId, plan),
+      {
+        idempotencyKey: key ?? undefined,
+        issuedAt: new Date(`${dto.returnDate}T00:00:00+03:30`),
+        manager,
+        deferEvents: deferred,
+      },
+    );
 
-    // Map original invoice lines by SKU for matching
-    const invoiceLineBySku = new Map<string, any>();
-    for (const line of originalInvoice.items ?? []) {
-      if (line.sku && !invoiceLineBySku.has(line.sku)) {
-        invoiceLineBySku.set(line.sku, line);
-      }
-    }
+    await this.returns.insertReturnLinks(
+      tenantId,
+      manager,
+      created.id,
+      plan.map((p, index) => ({
+        deliveryId: p.line.deliveryId,
+        deliveryLineId: p.line.id,
+        orderLineId: p.line.orderLineId,
+        invoiceLineNo: index + 1,
+        quantity: scaledText(p.quantity),
+      })),
+    );
 
-    const details: ReturnLineDetail[] = [];
-
-    for (const reqLine of requestLines) {
-      const deliveryLine = deliveryLineMap.get(reqLine.deliveryLineId);
-      if (!deliveryLine) {
-        throw new BadRequestException(`خط برگشتی ${reqLine.deliveryLineId} به صورتحساب مرجع تعلق ندارد.`);
-      }
-
-      const quantityHundredths = parseScaled(reqLine.quantity, QUANTITY_SCALE);
-      if (quantityHundredths <= 0n) {
-        throw new BadRequestException('مقدار برگشتی باید مثبت باشد.');
-      }
-
-      // Calculate unit cost from delivery line (in minor units)
-      const lineCostMinor = toMinor(deliveryLine.lineCost);
-      const deliveryQuantityHundredths = parseScaled(deliveryLine.quantity, QUANTITY_SCALE);
-      const unitCostMinor = calcUnitCostMinor(lineCostMinor, deliveryQuantityHundredths);
-
-      // Find matching original invoice line by SKU
-      const originalInvoiceLine = deliveryLine.sku
-        ? invoiceLineBySku.get(deliveryLine.sku)
-        : null;
-
-      if (!originalInvoiceLine) {
-        throw new BadRequestException(`سطر صورتحساب اصلی برای کالای ${deliveryLine.sku} یافت نشد.`);
-      }
-
-      // Validate quantity against invoiced - already returned
-      const invoicedQuantity = parseScaled(deliveryLine.invoicedQuantity, QUANTITY_SCALE);
-      const returnedQuantity = parseScaled(deliveryLine.returnedQuantity, QUANTITY_SCALE);
-      const maxReturnable = invoicedQuantity - returnedQuantity;
-      if (quantityHundredths > maxReturnable) {
-        throw new ConflictException(
-          `مقدار برگشتی خط ${reqLine.deliveryLineId} از باقی‌ماندهٔ قابل برگشت (${Number(maxReturnable) / 100}) بیشتر است.`,
-        );
-      }
-
-      details.push({
-        deliveryLine,
-        quantityHundredths,
-        unitCostMinor,
-        lineCostMinor: (unitCostMinor * quantityHundredths + 50n) / 100n, // round half up
-        originalInvoiceLine: {
-          unitPrice: originalInvoiceLine.unitPrice,
-          vatRate: originalInvoiceLine.vatRate,
-          discount: originalInvoiceLine.discount ?? 0,
-          description: originalInvoiceLine.description,
-          sku: originalInvoiceLine.sku,
-          itemId: originalInvoiceLine.itemId,
-        },
-      });
-    }
-
-    return details;
-  }
-
-  /**
-   * Builds return invoice items mirroring original invoice lines (price, VAT, proportional discount).
-   */
-  private buildReturnInvoiceItems(details: ReturnLineDetail[]): any[] {
-    return details.map((detail) => {
-      const { originalInvoiceLine, quantityHundredths } = detail;
-      const quantity = Number(quantityHundredths) / 100;
-
-      // Proportional discount: (returned_qty / invoiced_qty) * line_discount
-      const invoicedQty = originalInvoiceLine.quantity;
-      const discountRatio = invoicedQty > 0 ? quantity / invoicedQty : 0;
-      const discount = Math.round((originalInvoiceLine.discount ?? 0) * discountRatio * 100) / 100;
-
-      const taxable = quantity * originalInvoiceLine.unitPrice - discount;
-      const tax = Math.round(taxable * originalInvoiceLine.vatRate * 100) / 100;
-      const total = Math.round((taxable + tax) * 100) / 100;
-
-      return {
-        ...(originalInvoiceLine.itemId ? { itemId: originalInvoiceLine.itemId } : {}),
-        ...(originalInvoiceLine.sku ? { sku: originalInvoiceLine.sku } : {}),
-        description: originalInvoiceLine.description,
-        quantity,
-        unitPrice: originalInvoiceLine.unitPrice,
-        discount,
-        vatRate: originalInvoiceLine.vatRate,
-        tax,
-        total,
-        originalLine: originalInvoiceLine.originalLine,
-      };
-    });
-  }
-
-  /**
-   * Computes totals for the return invoice.
-   */
-  private computeReturnTotals(items: any[], currency: string): {
-    totalAmount: number;
-    totalDiscount: number;
-    totalTax: number;
-    finalPayable: number;
-  } {
-    let totalAmount = 0;
-    let totalDiscount = 0;
-    let totalTax = 0;
-    let finalPayable = 0;
-
-    for (const item of items) {
-      totalAmount += item.quantity * item.unitPrice;
-      totalDiscount += item.discount;
-      totalTax += item.tax;
-      finalPayable += item.total;
-    }
-
-    const scale = currency === 'IRR' ? 0 : currency === 'IRT' ? 1 : 2;
-    const factor = 10 ** scale;
-
-    return {
-      totalAmount: Math.round(totalAmount * factor) / factor,
-      totalDiscount: Math.round(totalDiscount * factor) / factor,
-      totalTax: Math.round(totalTax * factor) / factor,
-      finalPayable: Math.round(finalPayable * factor) / factor,
-    };
-  }
-
-  /**
-   * Creates the RETURN invoice in the current transaction.
-   */
-  private async createReturnInvoiceInTransaction(
-    tenantId: string,
-    manager: EntityManager,
-    originalInvoice: InvoiceEntity,
-    returnItems: any[],
-    totals: { totalAmount: number; totalDiscount: number; totalTax: number; finalPayable: number },
-    dto: CreateReturnDto,
-    userId?: string,
-  ): Promise<InvoiceEntity> {
-    const taxInvoiceNumber = `RET-${originalInvoice.taxInvoiceNumber}-${Date.now()}`;
-
-    const invoiceEntity = {
-      taxInvoiceNumber,
-      direction: InvoiceDirection.SALE,
-      einvoiceType: originalInvoice.einvoiceType ?? 1,
-      subject: InvoiceSubject.RETURN,
-      relatedInvoiceId: originalInvoice.id,
-      warehouseId: originalInvoice.warehouseId ?? null,
-      customerId: originalInvoice.customerId ?? null,
-      sellerInfo: originalInvoice.sellerInfo,
-      buyerInfo: originalInvoice.buyerInfo,
-      items: returnItems,
-      currency: originalInvoice.currency,
-      jurisdiction: originalInvoice.jurisdiction,
-      exchangeRate: originalInvoice.exchangeRate,
-      fxRate: originalInvoice.fxRate,
-      amountFx: totals.finalPayable,
-      baseCurrency: originalInvoice.baseCurrency,
-      totalAmount: totals.totalAmount,
-      totalDiscount: totals.totalDiscount,
-      totalTax: totals.totalTax,
-      finalPayable: totals.finalPayable,
-      baseTotalAmount: Math.round(totals.totalAmount * Number(originalInvoice.exchangeRate) * 100) / 100,
-      baseTotalTax: Math.round(totals.totalTax * Number(originalInvoice.exchangeRate) * 100) / 100,
-      baseFinalPayable: Math.round(totals.finalPayable * Number(originalInvoice.exchangeRate) * 100) / 100,
-      status: InvoiceStatus.ISSUED,
-      issuedAt: new Date(),
-      idempotencyKey: dto.idempotencyKey ?? null,
-      requestHash: dto.idempotencyKey ? this.hashRequest(dto) : null,
-      payments: null,
-    };
-
-    const repo = manager.getRepository(InvoiceEntity);
-    const saved = await repo.save(repo.create({ ...invoiceEntity, tenantId }));
-    return saved;
-  }
-
-  private hashRequest(dto: CreateReturnDto): string {
-    const { idempotencyKey: _key, ...body } = dto;
-    return createHash('sha256').update(JSON.stringify(body)).digest('hex');
-  }
-
-  /**
-   * Returns stock to warehouse at original delivery line unit cost and posts COGS reversal.
-   */
-  private async processStockReturnAndCogsReversal(
-    tenantId: string,
-    manager: EntityManager,
-    returnInvoice: InvoiceEntity,
-    details: ReturnLineDetail[],
-    returnDate: string,
-  ): Promise<bigint> {
-    let totalCogsReversalMinor = 0n;
-    const warehouseId = returnInvoice.warehouseId;
-
-    for (const detail of details) {
-      const { deliveryLine, quantityHundredths, unitCostMinor, lineCostMinor } = detail;
-      const quantity = Number(quantityHundredths) / 100;
-
-      // 1. Receive stock back at original delivery line unit cost
-      await this.inventoryService.receiveStock(
+    // 5. Stock back at the delivery line's unit cost; 7. returned quantity on the delivery line.
+    let cogsMinor = 0n;
+    for (const p of plan) {
+      await this.inventory.receiveStock(
         tenantId,
         {
-          sku: deliveryLine.sku,
-          quantity,
-          unitPurchaseCost: Number(minorToDecimal(unitCostMinor)),
-          warehouseId: warehouseId ?? undefined,
-          reference: `برگشت از صورتحساب ${returnInvoice.taxInvoiceNumber}`,
-          receivedAt: returnDate,
+          sku: p.line.sku,
+          quantity: hundredthsToNumber(p.quantity),
+          unitPurchaseCost: Number(minorToDecimal(p.unitCostMinor)),
+          warehouseId: p.line.warehouseId,
+          reference: `برگشت از حواله ${p.line.deliveryNumber}`,
+          receivedAt: dto.returnDate,
         },
         manager,
       );
-
-      // 2. Post COGS reversal through posting engine at same cost
-      const sourceId = `${returnInvoice.id}-dl${deliveryLine.id}`;
-      const cogsAmountMinor = lineCostMinor;
-      totalCogsReversalMinor += cogsAmountMinor;
-
-      if (cogsAmountMinor > 0n) {
-        // Get account mapping for COGS template
-        const described = await this.postingRules.describe(tenantId);
-        const cogsTemplate = described.find((d) => d.docType === COGS_DOC_TYPE);
-        const overrides: Partial<Record<PostingRole, string>> = {};
-        if (cogsTemplate) {
-          for (const role of cogsTemplate.roles) {
-            if (role.accountCode) {
-              overrides[role.role as PostingRole] = role.accountCode;
-            }
-          }
-        }
-
-        await this.postingRules.post(
-          tenantId,
-          {
-            docType: COGS_DOC_TYPE,
-            sourceType: COGS_SOURCE_TYPE,
-            sourceId,
-            date: returnDate,
-            amounts: { cost: -cogsAmountMinor }, // Negative for reversal (credit cogs, debit inventory)
-            description: `ابطال بهای تمام‌شده برگشت ${returnInvoice.taxInvoiceNumber} خط ${deliveryLine.lineNo}`,
-            entryNumber: `${COGS_ENTRY_PREFIX}-${returnInvoice.id}-${deliveryLine.id}`.slice(0, 64),
-            overrides,
-          },
-          manager,
-        );
-      }
+      await this.returns.bumpReturned(tenantId, manager, p.line.id, scaledText(p.quantity));
+      cogsMinor += p.valueMinor;
     }
 
-    return totalCogsReversalMinor;
-  }
-
-  /**
-   * Updates returned_quantity on delivery lines.
-   */
-  private async updateReturnedQuantities(
-    tenantId: string,
-    manager: EntityManager,
-    details: ReturnLineDetail[],
-  ): Promise<void> {
-    for (const detail of details) {
-      const currentReturned = parseScaled(detail.deliveryLine.returnedQuantity, QUANTITY_SCALE);
-      const newReturned = currentReturned + detail.quantityHundredths;
-
-      await manager.getRepository(SalesDeliveryLineEntity).update(
-        { tenantId, id: detail.deliveryLine.id },
-        { returnedQuantity: minorToDecimal(newReturned) },
+    // 6. COGS reversal through the posting engine, once per return.
+    if (cogsMinor > 0n) {
+      const [inventoryCode, cogsCode] = await this.stockDocuments.resolveAccounts(tenantId, [
+        STOCK_INVENTORY_ACCOUNT,
+        COGS_ACCOUNT,
+      ]);
+      await this.posting.post(
+        tenantId,
+        {
+          docType: COGS_DOC_TYPE,
+          sourceType: COGS_RETURN_SOURCE_TYPE,
+          sourceId: created.id,
+          date: dto.returnDate,
+          amounts: { cost: cogsMinor },
+          description: `ابطال بهای تمام‌شده برگشت ${created.taxInvoiceNumber}`,
+          entryNumber: `${COGS_ENTRY_PREFIX}R-${created.taxInvoiceNumber}`.slice(0, 64),
+          // The template debits `cogs` and credits `inventory`; swapping the accounts reverses it.
+          overrides: { cogs: inventoryCode, inventory: cogsCode },
+        },
+        manager,
       );
     }
+
+    return {
+      id: created.id,
+      taxInvoiceNumber: created.taxInvoiceNumber,
+      relatedInvoiceId: invoiceId,
+      items: plan.map((p) => ({ deliveryLineId: p.line.id, quantity: hundredthsToNumber(p.quantity) })),
+      finalPayable: created.finalPayable,
+      status: created.status,
+    };
   }
 
   /**
-   * Updates the return invoice with posting meta (stock value and COGS reversal).
+   * The RETURN invoice. Items mirror the original lines at their stored unit price and VAT rate,
+   * with the discount in proportion to the returned quantity. No SKU or item id on purpose: the
+   * invoicing path would otherwise move stock and post COGS for the line again.
    */
-  private async updateReturnInvoicePostingMeta(
+  private returnInvoiceDto(original: InvoiceEntity, invoiceId: string, plan: PlannedReturn[]): CreateInvoiceDto {
+    const items: InvoiceItemDto[] = plan.map((p) => {
+      const line = p.invoiceLine;
+      const billed = parseScaled(String(line.quantity), QUANTITY_SCALE);
+      const discountMinor = toMinor(line.discount ?? 0);
+      const returnedDiscount = billed > 0n ? (discountMinor * p.quantity + billed / 2n) / billed : 0n;
+      return {
+        description: line.description,
+        quantity: hundredthsToNumber(p.quantity),
+        unitPrice: Number(fromMinor(toMinor(line.unitPrice))),
+        discount: Number(fromMinor(returnedDiscount)),
+        vatRate: line.vatRate,
+      };
+    });
+    return {
+      subject: InvoiceSubject.RETURN,
+      relatedInvoiceId: invoiceId,
+      direction: InvoiceDirection.SALE,
+      einvoiceType: original.einvoiceType,
+      sellerInfo: original.sellerInfo,
+      buyerInfo: original.buyerInfo ?? undefined,
+      customerId: original.customerId ?? undefined,
+      warehouseId: original.warehouseId ?? undefined,
+      currency: original.currency,
+      jurisdiction: original.jurisdiction,
+      fxRate: Number(original.fxRate),
+      status: InvoiceStatus.ISSUED,
+      items,
+    } as CreateInvoiceDto;
+  }
+
+  /** Repeated key after a unique violation: replay in a fresh transaction, or nothing if it vanished. */
+  private async replayAfterRace(tenantId: string, invoiceId: string, key: string): Promise<ReturnResponseDto | null> {
+    return this.returns.runInTransaction(tenantId, async (manager) => {
+      const id = await this.returns.findInvoiceIdByIdempotencyKey(tenantId, manager, key);
+      return id ? this.replayIn(tenantId, manager, invoiceId, id) : null;
+    });
+  }
+
+  /** The stored return of a key, with the same original invoice; another invoice's key is a conflict. */
+  private async replayIn(
     tenantId: string,
     manager: EntityManager,
-    returnInvoice: InvoiceEntity,
-    details: ReturnLineDetail[],
-    totalCogsReversalMinor: bigint,
-  ): Promise<void> {
-    const stockLines = details.map((detail) => ({
-      sku: detail.deliveryLine.sku,
-      quantity: Number(detail.quantityHundredths) / 100,
-      unitCost: Number(minorToDecimal(detail.unitCostMinor)),
-      value: Number(minorToDecimal(detail.lineCostMinor)),
-      moved: 'IN' as const,
-      warehouseId: returnInvoice.warehouseId,
-    }));
-
-    const stockValue = details.reduce(
-      (sum, d) => sum + Number(minorToDecimal(d.lineCostMinor)),
-      0,
-    );
-
-    const receivableMinor = toMinor(returnInvoice.finalPayable);
-    const vatMinor = toMinor(returnInvoice.totalTax);
-    const netMinor = receivableMinor - vatMinor;
-    const stockMinor = -totalCogsReversalMinor; // positive for stock IN
-
-    const postingMeta = {
-      stockValue,
-      lines: stockLines,
-      posted: {
-        receivable: (-receivableMinor).toString(),
-        vat: (-vatMinor).toString(),
-        net: (-netMinor).toString(),
-        stock: stockMinor.toString(),
-      },
-    };
-
-    await manager.getRepository(InvoiceEntity).update(
-      { tenantId, id: returnInvoice.id },
-      { postingMeta },
-    );
-  }
-
-  /**
-   * Posts the RETURN invoice voucher (revenue/VAT reversal) synchronously.
-   * Returns the journal entry ID.
-   */
-  private async postReturnInvoiceVoucher(
-    tenantId: string,
-    manager: EntityManager,
-    returnInvoice: InvoiceEntity,
-    totals: { totalAmount: number; totalDiscount: number; totalTax: number; finalPayable: number },
-    returnDate: string,
-  ): Promise<number> {
-    const receivableMinor = toMinor(totals.finalPayable);
-    const vatMinor = toMinor(totals.totalTax);
-    const netMinor = receivableMinor - vatMinor;
-    const stockMinor = 0n; // Stock movement is handled separately via COGS reversal
-
-    // For RETURN, reverse all amounts
-    const amounts: PostedAmounts = {
-      receivable: -receivableMinor,
-      vat: -vatMinor,
-      net: -netMinor,
-      stock: -stockMinor,
-    };
-
-    // Build amounts for the invoice.sale.issue template with reverse=true
-    const docType = documentDocType(true, true); // sale, reverse = 'invoice.sale.cancel'
-    // But for RETURN we use the same template as issue but with reversed amounts
-    // Actually the template is the same, just amounts are negative
-
-    const signedRows = documentRows(true, {
-      receivable: receivableMinor,
-      vat: vatMinor,
-      net: netMinor,
-      stock: stockMinor,
-    }, true); // reverse = true
-
-    const templateAmounts = drCrAmounts(signedRows);
-
-    // Get account overrides for invoice.sale.issue (same as RETURN)
-    const described = await this.postingRules.describe(tenantId);
-    const issueTemplate = described.find((d) => d.docType === 'invoice.sale.issue');
-    const overrides: Partial<Record<PostingRole, string>> = {};
-    if (issueTemplate) {
-      for (const role of issueTemplate.roles) {
-        if (role.accountCode) {
-          overrides[role.role as PostingRole] = role.accountCode;
-        }
-      }
-    }
-
-    const result = await this.postingRules.post(
-      tenantId,
-      {
-        docType: 'invoice.sale.issue', // Use issue template with reversed amounts
-        sourceType: 'invoice',
-        sourceId: returnInvoice.id,
-        date: returnDate,
-        amounts: templateAmounts,
-        description: `برگشت صورتحساب ${returnInvoice.taxInvoiceNumber}`,
-        entryNumber: `INV-${returnInvoice.id}-ISSUED`.slice(0, 64),
-        overrides,
-      },
-      manager,
-    );
-
-    return result.entryId;
-  }
-
-  /**
-   * Converts an InvoiceEntity to ReturnResponseDto.
-   */
-  private toResponseDto(invoice: InvoiceEntity): ReturnResponseDto {
-    const items: ReturnLineResponseDto[] = [];
-
-    if (invoice.items) {
-      for (const item of invoice.items) {
-        items.push({
-          deliveryLineId: item.originalLine ? item.originalLine + 1 : 0,
-          quantity: item.quantity,
-          unitCost: item.unitPrice,
-          value: item.total,
-        });
-      }
-    }
-
+    invoiceId: string,
+    returnId: string,
+  ): Promise<ReturnResponseDto> {
+    const invoice = await manager.findOne(InvoiceEntity, { where: { id: returnId, tenantId } });
+    if (!invoice || invoice.relatedInvoiceId !== invoiceId) throw new ConflictException(KEY_TAKEN);
+    const links = await this.returns.linksOfInvoice(tenantId, manager, returnId);
     return {
       id: invoice.id,
       taxInvoiceNumber: invoice.taxInvoiceNumber,
-      relatedInvoiceId: invoice.relatedInvoiceId ?? '',
-      items,
-      finalPayable: invoice.finalPayable,
+      relatedInvoiceId: invoiceId,
+      items: links.map((link) => ({
+        deliveryLineId: link.deliveryLineId,
+        quantity: Number(link.quantity),
+      })),
+      finalPayable: Number(invoice.finalPayable),
       status: invoice.status,
     };
   }
+}
+
+/** Validates the request lines before anything is locked or written. */
+function parseLines(lines: ReturnLineRequestDto[]): RequestedLine[] {
+  if (new Set(lines.map((line) => line.deliveryLineId)).size !== lines.length) {
+    throw new BadRequestException(DUPLICATE_LINE);
+  }
+  return lines.map((line) => {
+    let quantity: bigint;
+    try {
+      quantity = parseQuantityHundredths(line.quantity);
+    } catch {
+      throw new BadRequestException(INVALID_QUANTITY);
+    }
+    if (quantity <= 0n) throw new BadRequestException(INVALID_QUANTITY);
+    return { deliveryLineId: line.deliveryLineId, quantity };
+  });
 }
